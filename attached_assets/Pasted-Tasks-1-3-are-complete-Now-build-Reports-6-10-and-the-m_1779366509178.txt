@@ -1,0 +1,53 @@
+Tasks 1–3 are complete. Now build Reports 6–10 and the main report selector UI.
+
+Build these 5 optional reports using the same PDFDocument wrapper and components:
+
+REPORT 6: LeverageSolvencyPDF.jsx
+Ratios: fundingStructure, equityMultiplier, debtToEquity, debtToAssets, interestBurden
+Include: total debt breakdown table, debt maturity profile (bar chart by year using View positioning), equity bridge showing retained earnings growth
+
+REPORT 7: AssetProductivityPDF.jsx  
+Ratios: assetTurnover, roa, fixedCapitalUtilization, assetReinvestmentRatio, capexIntensity
+Include: DuPont decomposition visual (ROE = Net Margin × Asset Turnover × Equity Multiplier shown as a tree diagram), Capex vs depreciation trend
+
+REPORT 8: LaborProductivityPDF.jsx
+Ratios: gpToLabor, salesPerEmployee, revenueGrowth
+Include: revenue per employee trend, gross profit per R1 of labor cost visual, growth rate vs inflation comparison
+
+REPORT 9: RatioMovementPDF.jsx
+All 31 ratios shown in a compact table with columns:
+Ratio Name | Current | 3 Months Ago | 6 Months Ago | 12 Months Ago | Trend (arrow)
+Rows where trend is negative for 3+ consecutive periods are highlighted amber
+Rows where trend is negative for all periods are highlighted red
+
+REPORT 10: BenchmarkReportPDF.jsx
+All ratios with an industry benchmark column
+Props include: industryCode, industryName
+Each ratio shown with: current value | sector median | sector top quartile | position (below median / above median / top quartile)
+Include a summary: "X of Y ratios are above sector median"
+
+---
+
+MAIN REPORT SELECTOR UI:
+Build a page at /reports that shows:
+
+1. A clean card grid of all 10 reports — each card shows:
+   - Report name and number
+   - One-line description  
+   - "Essential" or "Optional" badge
+   - A "Generate PDF" button
+   - A "Preview" button that opens a modal with the PDF rendered inline
+
+2. A "Generate All Reports" button that downloads all 10 as a ZIP file using jszip
+
+3. A report settings panel on the right:
+   - SME name input
+   - Reporting period selector (month/year)
+   - Industry selector (for benchmark report)
+   - Toggle: include prior period comparison yes/no
+
+4. The accountant firm branding (logo or firm name, colours) pulls through from the AccountantProfile context set up in Task 1
+
+5. A "Brand Settings" link that goes to /settings/brand
+
+Make the UI clean, minimal, and professional — consistent with the Milōn design language.

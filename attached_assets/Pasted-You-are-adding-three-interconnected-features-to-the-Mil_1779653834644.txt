@@ -1,0 +1,752 @@
+You are adding three interconnected features to the Milōn financial 
+intelligence platform. Read this entire prompt before writing a single 
+line of code. These three features must work as one cohesive system.
+
+═══════════════════════════════════════════════════════════════
+FEATURE OVERVIEW
+═══════════════════════════════════════════════════════════════
+
+1. ACCOUNTANT SIGN-OFF — Each intervention step can be formally 
+   signed off by the accountant. The sign-off appears on the step 
+   in a professional, understated way.
+
+2. ACCOUNTANT CUSTOM STEPS — The accountant can write their own 
+   intervention steps for a specific SME client, assisted by AI. 
+   These appear in a dedicated "Accountant Additions" section 
+   visible to the SME owner — but ONLY if at least one custom 
+   step exists.
+
+3. AI STEP CONSULTATION — The accountant can query an AI model 
+   to brainstorm and generate additional intervention steps 
+   specific to this client's financial situation. The accountant 
+   reviews, edits, and selects which AI suggestions to add.
+
+═══════════════════════════════════════════════════════════════
+DATABASE — ADD THESE TABLES TO SUPABASE
+═══════════════════════════════════════════════════════════════
+
+-- Table 1: Sign-offs on standard playbook steps
+CREATE TABLE intervention_signoffs (
+  id                    uuid primary key default gen_random_uuid(),
+  sme_id                uuid references sme_profiles(id) on delete cascade,
+  submission_period     date,
+  ratio_key             text not null,
+  step_number           integer not null,
+  signed_off            boolean default false,
+  signed_off_by_id      uuid references auth.users(id),
+  signed_off_by_name    text,
+  signed_off_by_title   text,
+  firm_name             text,
+  signed_off_at         timestamp with time zone,
+  accountant_note       text,
+  created_at            timestamp with time zone default now(),
+  UNIQUE(sme_id, submission_period, ratio_key, step_number)
+);
+
+-- Table 2: Custom steps added by accountant
+CREATE TABLE intervention_custom_steps (
+  id                    uuid primary key default gen_random_uuid(),
+  sme_id                uuid references sme_profiles(id) on delete cascade,
+  submission_period     date,
+  ratio_key             text,
+  step_title            text not null,
+  step_description      text not null,
+  timeframe             text check (timeframe in (
+                          'immediate','week_1_2','month_1',
+                          'month_1_3','month_3_6','year_1'
+                        )),
+  effort                text check (effort in ('low','medium','high')),
+  impact                text check (impact in ('low','medium','high')),
+  category              text check (category in (
+                          'revenue','cost','cash','structure',
+                          'operations','risk','people'
+                        )),
+  display_order         integer default 0,
+  is_ai_generated       boolean default false,
+  ai_prompt_used        text,
+  signed_off            boolean default false,
+  signed_off_by_name    text,
+  signed_off_by_title   text,
+  firm_name             text,
+  signed_off_at         timestamp with time zone,
+  visible_to_sme        boolean default true,
+  created_by            uuid references auth.users(id),
+  created_at            timestamp with time zone default now(),
+  updated_at            timestamp with time zone default now()
+);
+
+-- Table 3: AI consultation sessions
+CREATE TABLE intervention_ai_sessions (
+  id                    uuid primary key default gen_random_uuid(),
+  sme_id                uuid references sme_profiles(id) on delete cascade,
+  submission_period     date,
+  ratio_key             text,
+  accountant_prompt     text not null,
+  ai_response           jsonb,
+  model_used            text,
+  steps_adopted         integer default 0,
+  created_by            uuid references auth.users(id),
+  created_at            timestamp with time zone default now()
+);
+
+-- Row Level Security
+ALTER TABLE intervention_signoffs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE intervention_custom_steps ENABLE ROW LEVEL SECURITY;
+ALTER TABLE intervention_ai_sessions ENABLE ROW LEVEL SECURITY;
+
+-- Accountants can read and write their own clients' data
+-- SME owners can only read their own data
+-- Add appropriate RLS policies matching your existing auth pattern
+
+═══════════════════════════════════════════════════════════════
+PART 1 — ACCOUNTANT SIGN-OFF SYSTEM
+═══════════════════════════════════════════════════════════════
+
+BUILD: SignOffButton component
+FILE: /src/components/interventions/SignOffButton.jsx
+
+This component appears on every intervention step card.
+It has two visual states — unsigned and signed.
+
+UNSIGNED STATE:
+A subtle button that does not dominate the step card.
+Style: outlined, secondary, small
+Text: "Sign off this step"
+Icon: a small pen or signature icon on the left
+Position: bottom right of the step card
+Only visible when the current user is an accountant
+(check user role from auth context)
+
+SIGNED STATE:
+Replace the button entirely with a sign-off badge.
+This badge must feel professional and authoritative —
+like a formal endorsement stamp, not a UI checkbox.
+
+The signed badge layout:
+┌─────────────────────────────────────────────────┐
+│  ✦  Signed off by Sarah Mitchell CA(SA)         │
+│     Mitchell & Associates · 24 May 2026         │
+└─────────────────────────────────────────────────┘
+
+Styling:
+- Thin left border in the accountant's firm accent color
+  (pull from accountantProfile.accentColor)
+- Background: very light tint of the accent color (5% opacity)
+- "Signed off by" in small caps, muted color, font-size 11px
+- Accountant name in medium weight, slightly larger, dark color
+- Title and firm on the second line, muted, font-size 11px
+- Date on the right, muted, font-size 10px
+- A small verified checkmark icon (✓) before "Signed off by"
+- No border radius — keep it sharp and formal
+
+On click (unsigned state):
+- Show a confirmation modal before saving
+- Modal title: "Sign off this step"
+- Modal body: 
+  "You are formally endorsing this intervention step for 
+  [SME Name]. This sign-off will be visible to the client 
+  and included in generated reports."
+- Optional text field: "Add a note (optional)" — 
+  placeholder: "e.g. Discuss this with your operations manager first"
+- Confirm button: "Sign off" in the firm's accent color
+- Cancel button: "Cancel"
+
+On confirm:
+- Save to intervention_signoffs table
+- Update the UI optimistically — show signed state immediately
+- Do not require a page refresh
+
+Undo sign-off:
+- Signed state shows a very small "Remove sign-off" text link 
+  below the badge, visible only to the accountant
+- Clicking it shows a confirmation: 
+  "Are you sure you want to remove your sign-off? 
+   The client will no longer see your endorsement on this step."
+- On confirm: delete the record and revert to unsigned state
+
+═══════════════════════════════════════════════════════════════
+ACCOUNTANT NOTE ON SIGNED STEPS
+═══════════════════════════════════════════════════════════════
+
+If the accountant added a note during sign-off, show it 
+beneath the sign-off badge:
+
+┌─────────────────────────────────────────────────┐
+│  ✓  Signed off by Sarah Mitchell CA(SA)         │
+│     Mitchell & Associates · 24 May 2026         │
+│                                                 │
+│  Note: "Raise this with your bank before        │
+│  month-end — I can join that call if needed."   │
+└─────────────────────────────────────────────────┘
+
+Note styling:
+- Italic, muted color, font-size 11px
+- Indented slightly from the left border
+- Wrapped in soft quotation marks
+
+═══════════════════════════════════════════════════════════════
+SIGN-OFF SUMMARY ON THE INTERVENTION PANEL HEADER
+═══════════════════════════════════════════════════════════════
+
+At the top of the intervention steps panel for each ratio, 
+show a small progress indicator:
+
+"3 of 10 steps signed off by Mitchell & Associates"
+
+Styling: small, muted, right-aligned in the panel header
+Update in real time as steps are signed off
+
+═══════════════════════════════════════════════════════════════
+PART 2 — ACCOUNTANT CUSTOM STEPS
+═══════════════════════════════════════════════════════════════
+
+BUILD: CustomStepManager component
+FILE: /src/components/interventions/CustomStepManager.jsx
+
+This component lives at the bottom of the intervention panel 
+for each ratio. It is only visible to accountants.
+
+ACCOUNTANT VIEW — ADD STEP BUTTON:
+A button below the standard playbook steps:
+Text: "+ Add your own step for this client"
+Style: dashed border, secondary, full width of the panel
+This button opens the CustomStepDrawer
+
+BUILD: CustomStepDrawer component
+FILE: /src/components/interventions/CustomStepDrawer.jsx
+
+A slide-in drawer from the right side of the screen.
+Width: 480px on desktop, full screen on mobile.
+
+DRAWER HEADER:
+Title: "Add a custom step"
+Subtitle: "[SME Name] · [Ratio Name]"
+Close button top right
+
+DRAWER HAS TWO TABS:
+Tab 1: "Write it yourself"
+Tab 2: "Ask AI for suggestions"
+
+────────────────────────────────────────────────────
+TAB 1 — WRITE IT YOURSELF
+────────────────────────────────────────────────────
+
+A form with these fields:
+
+Step Title *
+- Text input
+- Placeholder: "e.g. Negotiate extended terms with Massmart account"
+- Helper text: "5–10 words, start with an action verb"
+- Character limit: 80 characters shown as a counter
+
+Step Description *
+- Textarea, 4 rows
+- Placeholder: "Describe the specific action, why it matters for 
+  this client, and what outcome to measure..."
+- Helper text: "2–4 sentences. Be specific to this client's situation."
+- Character limit: 500 characters
+
+Timeframe *
+- Dropdown: Immediate | Week 1–2 | Month 1 | Months 1–3 | 
+            Months 3–6 | Year 1
+
+Effort
+- Segmented control: Low · Medium · High
+- Default: Medium
+
+Impact
+- Segmented control: Low · Medium · High  
+- Default: Medium
+
+Category
+- Dropdown: Revenue | Cost | Cash | Structure | 
+            Operations | Risk | People
+
+Visible to client
+- Toggle, default ON
+- Helper text: "Turn off to save this as a private note 
+  visible only to you"
+
+Sign off immediately
+- Checkbox, default checked
+- Label: "Sign off this step when saving"
+- Helper text: "You can always sign off later"
+
+SAVE BUTTON: "Save step"
+CANCEL: "Cancel"
+
+On save:
+- Insert into intervention_custom_steps
+- If "sign off immediately" was checked, auto-populate 
+  the sign-off fields with the accountant's details
+- Close the drawer
+- Immediately show the new step in the SME owner's view 
+  under "Accountant Additions" section
+- Show a success toast: "Custom step added and signed off"
+
+────────────────────────────────────────────────────
+TAB 2 — ASK AI FOR SUGGESTIONS
+────────────────────────────────────────────────────
+
+This tab allows the accountant to consult AI for 
+intervention ideas specific to this client.
+
+CONTEXT PANEL (read-only, shown at top of tab):
+A collapsed info box showing the AI what it already knows:
+"AI context for this session"
+Shows:
+- SME Name and industry
+- Ratio being addressed: "[Ratio Name]"  
+- Current value: "[X]" — Health tier: "[Critical/At Risk]"
+- Health score: [X]/100
+- Last period comparison: [up/down X points]
+Collapsed by default, expandable
+
+PROMPT INPUT:
+Label: "What do you want to explore?"
+Textarea, 3 rows
+Placeholder examples (rotate through):
+"What should this client do about their debtor days 
+ given they serve large retail chains?"
+"Suggest steps specific to a Cape Town manufacturing 
+ business with seasonal revenue"
+"What working capital options exist for a business 
+ that can't get bank funding?"
+
+Helper text below: 
+"Be specific about the client's situation for better suggestions.
+ The AI already has their financial context."
+
+GENERATE BUTTON: "Get suggestions"
+Style: filled, accent color, full width
+
+LOADING STATE:
+Show a subtle animated state:
+"Consulting AI..." with a small spinner
+This typically takes 3–8 seconds
+
+AI RESPONSE DISPLAY:
+After generation, show up to 5 suggested steps.
+Each suggestion displayed as a card:
+
+┌────────────────────────────────────────────────┐
+│  Suggested step 1 of 5                         │
+│                                                │
+│  Negotiate 60-day terms with top three         │
+│  retail chain customers immediately            │
+│                                                │
+│  Given [SME Name]'s debtor days of 67 and      │
+│  their concentration in large retail accounts, │
+│  requesting extended payment terms directly    │
+│  with the buying department — rather than      │
+│  accounts payable — often yields 15–30 day     │
+│  extensions without formal credit review.      │
+│  Document every commitment in writing.         │
+│                                                │
+│  Timeframe: Week 1–2  Effort: Low  Impact: High│
+│  Category: Cash                                │
+│                                                │
+│  [Edit before adding]  [Add this step]         │
+└────────────────────────────────────────────────┘
+
+"Add this step" button:
+- Adds the step directly to intervention_custom_steps
+- Marks is_ai_generated as true
+- Saves the prompt used in ai_prompt_used field
+- Button changes to a green checkmark "Added" state
+- Does not close the drawer so accountant can add more
+
+"Edit before adding" button:
+- Opens the step in Tab 1 form pre-populated with 
+  the AI suggestion values
+- Accountant can modify before saving
+
+Below all suggestions:
+"Not what you were looking for? Refine your question above 
+ and generate again."
+A small "Regenerate" link
+
+After adding steps, show:
+"You have added X steps to [SME Name]'s plan"
+And a "Done" button that closes the drawer
+
+═══════════════════════════════════════════════════════════════
+AI CALL FOR STEP SUGGESTIONS — IMPLEMENTATION
+═══════════════════════════════════════════════════════════════
+
+Route this through a server-side function to keep API keys 
+server-side. Use Gemini Flash as the model.
+
+const generateInterventionSuggestions = async ({
+  smeContext,
+  ratioContext,
+  accountantPrompt
+}) => {
+
+  const systemContext = `
+    SME Name: ${smeContext.name}
+    Industry: ${smeContext.industry || 'not specified'}
+    Location: ${smeContext.location || 'South Africa'}
+    Annual Revenue: R${smeContext.revenue?.toLocaleString('en-ZA') || 'unknown'}
+    
+    Ratio being addressed: ${ratioContext.ratio_name}
+    Current value: ${ratioContext.current_value}
+    Health tier: ${ratioContext.health_tier}
+    Health score: ${ratioContext.health_score}/100
+    Prior period score: ${ratioContext.prior_period_score}/100
+    Trend: ${ratioContext.health_score > ratioContext.prior_period_score ? 'Improving' : 'Deteriorating'}
+  `;
+
+  const prompt = `
+    You are a South African SME financial advisor helping an 
+    accountant identify specific intervention steps for their client.
+    
+    CLIENT CONTEXT:
+    ${systemContext}
+    
+    ACCOUNTANT'S QUESTION:
+    "${accountantPrompt}"
+    
+    Generate exactly 5 specific, practical intervention steps 
+    tailored to this client's exact situation.
+    
+    Each step must:
+    - Be specific to THIS client's numbers and context
+    - Reference the actual ratio value where relevant
+    - Be appropriate for a South African SME
+    - Be more specific than the generic playbook steps
+    - Reflect the accountant's question and context
+    
+    Return ONLY valid JSON. No markdown, no explanation:
+    
+    {
+      "steps": [
+        {
+          "step_title": "string — 5-10 words, imperative verb, specific",
+          "step_description": "string — 2-4 sentences, specific to this client",
+          "timeframe": "immediate|week_1_2|month_1|month_1_3|month_3_6|year_1",
+          "effort": "low|medium|high",
+          "impact": "low|medium|high",
+          "category": "revenue|cost|cash|structure|operations|risk|people",
+          "reasoning": "string — one sentence explaining why this is relevant 
+                        to this specific client's situation"
+        }
+      ]
+    }
+  `;
+
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: 0.7,
+          responseMimeType: 'application/json'
+        }
+      })
+    }
+  );
+
+  const data = await response.json();
+  const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+  
+  if (!rawText) throw new Error('No response from AI');
+  
+  try {
+    const parsed = JSON.parse(rawText);
+    
+    // Save the session for audit trail
+    await supabase.from('intervention_ai_sessions').insert({
+      sme_id: smeContext.id,
+      submission_period: smeContext.current_period,
+      ratio_key: ratioContext.ratio_key,
+      accountant_prompt: accountantPrompt,
+      ai_response: parsed,
+      model_used: 'gemini-1.5-flash',
+      created_by: currentUser.id
+    });
+    
+    return parsed.steps;
+    
+  } catch {
+    throw new Error('Could not parse AI response');
+  }
+};
+
+═══════════════════════════════════════════════════════════════
+PART 3 — SME OWNER VIEW: "ACCOUNTANT ADDITIONS" SECTION
+═══════════════════════════════════════════════════════════════
+
+BUILD: AccountantAdditionsSection component
+FILE: /src/components/interventions/AccountantAdditionsSection.jsx
+
+This section appears on the SME owner's intervention view 
+for each ratio — but ONLY when at least one custom step 
+with visible_to_sme = true exists for that ratio.
+
+Do not show an empty section. Do not show a placeholder.
+If there are no custom steps, render nothing.
+
+SECTION HEADER:
+┌─────────────────────────────────────────────────────────┐
+│  Additional recommendations from                        │
+│  Mitchell & Associates                                  │
+└─────────────────────────────────────────────────────────┘
+
+Styling:
+- Subtle visual separation from the standard playbook steps
+- A thin top border in the accountant's accent color
+- Section label: small caps, muted color
+- Firm name: medium weight, slightly larger
+- The whole section has a very subtle background tint 
+  differentiating it from the standard steps
+- This makes it feel personal and premium — 
+  "your accountant added these specifically for you"
+
+CUSTOM STEP CARDS:
+Each custom step shown with the same card style as 
+standard intervention steps but with:
+- A small "Custom recommendation" label in the top right 
+  corner of the card — subtle, not prominent
+- The sign-off badge if the step has been signed off
+- The accountant note if one was added
+- All the standard fields: title, description, 
+  timeframe badge, effort badge, impact badge, category badge
+
+No "step number" shown on custom steps — they are not 
+part of the numbered playbook sequence.
+
+ORDER:
+Custom steps ordered by display_order, then created_at.
+The accountant can reorder them in their management view.
+
+═══════════════════════════════════════════════════════════════
+PART 4 — ACCOUNTANT MANAGEMENT VIEW
+═══════════════════════════════════════════════════════════════
+
+On the accountant side, for each SME client's intervention panel:
+
+STANDARD STEPS show:
+- The step card as normal
+- Sign-off button or signed badge
+- A small management menu (three dots) with options:
+  "Edit sign-off note"
+  "Remove sign-off"
+
+CUSTOM STEPS section shows (accountant view only):
+- All custom steps including those hidden from SME
+- Each card shows:
+  * Edit button — opens the CustomStepDrawer in edit mode
+  * Delete button — with confirmation modal
+  * Visibility toggle — "Visible to client" on/off
+  * Reorder handle — drag to reorder
+
+BULK ACTIONS BAR (accountant view):
+At the top of the intervention panel:
+"Sign off all steps" button — 
+  Signs off all unsigned steps in one action
+  Shows a confirmation: 
+  "You are signing off all [X] steps for [SME Name]. 
+   This endorsement will be visible to your client."
+
+═══════════════════════════════════════════════════════════════
+PART 5 — PDF REPORT INTEGRATION
+═══════════════════════════════════════════════════════════════
+
+UPDATE the existing InterventionPriorityPDF.jsx to include:
+
+1. SIGNED-OFF INDICATOR ON EACH STEP:
+   For steps that have been signed off, show the sign-off 
+   badge at the bottom of the InsightBox:
+   
+   ─────────────────────────────────────────────────
+   ✓  Signed off by Sarah Mitchell CA(SA)
+      Mitchell & Associates  ·  24 May 2026
+   
+   "Raise this with your bank before month-end."
+   ─────────────────────────────────────────────────
+   
+   Style: thin left rule in accent color, italic note text,
+   muted colors, small font — professional and understated
+
+2. ACCOUNTANT ADDITIONS SECTION IN PDF:
+   After the standard steps, if custom steps exist:
+   
+   Add a new page section with header:
+   "Additional Recommendations"
+   "Prepared specifically for [SME Name] by [Firm Name]"
+   
+   Then each custom step in the same InsightBox format
+   All with sign-off badges where applicable
+
+3. UNSIGNED STEPS NOTE:
+   At the bottom of the report, if any steps are unsigned:
+   A small footnote: 
+   "X of Y steps are pending accountant review 
+    and are not yet formally endorsed."
+
+═══════════════════════════════════════════════════════════════
+PART 6 — REAL-TIME SYNC
+═══════════════════════════════════════════════════════════════
+
+Use Supabase real-time subscriptions so that when the 
+accountant signs off a step or adds a custom step, the 
+SME owner's view updates immediately without a page refresh.
+
+// In the SME dashboard, subscribe to changes
+const setupRealtimeSubscriptions = (smeId, period) => {
+  
+  const signoffChannel = supabase
+    .channel(`signoffs-${smeId}`)
+    .on('postgres_changes', {
+      event: '*',
+      schema: 'public',
+      table: 'intervention_signoffs',
+      filter: `sme_id=eq.${smeId}`
+    }, (payload) => {
+      // Update the relevant step card in the UI
+      updateSignoffState(payload);
+    })
+    .subscribe();
+
+  const customStepsChannel = supabase
+    .channel(`custom-steps-${smeId}`)
+    .on('postgres_changes', {
+      event: '*',
+      schema: 'public',
+      table: 'intervention_custom_steps',
+      filter: `sme_id=eq.${smeId}`
+    }, (payload) => {
+      // Add, update, or remove custom step in the UI
+      updateCustomSteps(payload);
+    })
+    .subscribe();
+
+  return () => {
+    supabase.removeChannel(signoffChannel);
+    supabase.removeChannel(customStepsChannel);
+  };
+};
+
+═══════════════════════════════════════════════════════════════
+PART 7 — USAGE TRACKING FOR FUTURE BILLING
+═══════════════════════════════════════════════════════════════
+
+Track AI consultation usage per accountant firm per month.
+This supports the future metered billing model.
+
+CREATE TABLE ai_usage_tracking (
+  id                uuid primary key default gen_random_uuid(),
+  accountant_id     uuid references auth.users(id),
+  firm_id           uuid,
+  month             date,
+  feature           text,
+  units_used        integer default 0,
+  created_at        timestamp with time zone default now(),
+  UNIQUE(accountant_id, month, feature)
+);
+
+-- Increment on each AI suggestion generation
+-- Use an upsert so the counter grows correctly:
+
+await supabase.rpc('increment_ai_usage', {
+  p_accountant_id: currentUser.id,
+  p_feature: 'custom_step_generation',
+  p_month: new Date().toISOString().slice(0, 7) + '-01'
+});
+
+-- Create the increment function in Supabase:
+CREATE OR REPLACE FUNCTION increment_ai_usage(
+  p_accountant_id uuid,
+  p_feature text,
+  p_month date
+) RETURNS void AS $$
+BEGIN
+  INSERT INTO ai_usage_tracking 
+    (accountant_id, month, feature, units_used)
+  VALUES 
+    (p_accountant_id, p_month, p_feature, 1)
+  ON CONFLICT (accountant_id, month, feature)
+  DO UPDATE SET units_used = ai_usage_tracking.units_used + 1;
+END;
+$$ LANGUAGE plpgsql;
+
+═══════════════════════════════════════════════════════════════
+VISUAL AND UX REQUIREMENTS
+═══════════════════════════════════════════════════════════════
+
+TONE AND FEEL:
+The sign-off system must feel like a professional 
+endorsement — think of how a legal document or 
+medical prescription carries authority through 
+understated formality, not through flashy design.
+
+Avoid:
+- Bright green "APPROVED" stamps
+- Checkboxes that look like a to-do list
+- Any language that sounds like a software UI 
+  ("clicked approved", "status: signed")
+
+Use:
+- Formal language: "Signed off by", "Endorsed by"
+- Professional credentials where available: CA(SA), SAIPA, CIMA
+- Timestamps in a refined format: "24 May 2026" not "2026-05-24"
+- Subtle color — the accent tint, not a bold approval color
+- Typography that conveys authority — 
+  small caps for labels, medium weight for names
+
+THE ACCOUNTANT ADDITIONS SECTION:
+Must feel like a personal service — 
+"your accountant looked at your specific situation 
+and added these recommendations just for you."
+Not like a generic add-on or plugin section.
+
+EMPTY STATES:
+- If an accountant has no custom steps for a client: 
+  show nothing in the SME view
+- In the accountant view: show the "+ Add your own step" 
+  button clearly
+- If AI generates no results: 
+  "Try rephrasing your question with more specific 
+   details about this client's situation"
+
+ERROR STATES:
+- AI generation fails: 
+  "Could not generate suggestions right now. 
+   You can write a step manually using the other tab."
+- Sign-off save fails: 
+  "Could not save sign-off. Please try again."
+  Revert optimistic UI update if save fails
+
+═══════════════════════════════════════════════════════════════
+TESTING CHECKLIST
+═══════════════════════════════════════════════════════════════
+
+Before considering this feature complete, verify:
+
+□ Accountant can sign off a standard step and the badge 
+  appears immediately without page refresh
+□ Signed-off badge shows correct name, firm, and timestamp
+□ Accountant note appears correctly under the badge
+□ Sign-off can be removed by the accountant
+□ SME owner cannot sign off steps (role check works)
+□ Accountant can write a custom step from scratch
+□ Custom step appears in SME owner view immediately
+□ Custom step does not appear if visible_to_sme is false
+□ Accountant Additions section does not render at all 
+  if no visible custom steps exist
+□ AI suggestion generation returns 5 relevant steps
+□ AI suggestions reference the client's actual ratio values
+□ Accountant can edit an AI suggestion before adding it
+□ Accountant can add multiple AI suggestions in one session
+□ Custom steps appear in the PDF report correctly
+□ Sign-off badges appear in the PDF report correctly
+□ AI usage is tracked in ai_usage_tracking table
+□ Real-time sync works — accountant sign-off appears on 
+  SME screen without refresh
+□ All database tables have correct RLS policies
+□ The drawer closes properly and state resets on close
+□ Mobile layout works for the drawer on small screens

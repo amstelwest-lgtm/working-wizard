@@ -1,0 +1,113 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+.vibe-terminal {
+  font-family: 'IBM Plex Mono', monospace;
+  background-color: #0a0a0a;
+  color: #a3a3a3;
+  min-height: 100vh;
+}
+
+.vibe-terminal * {
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+/* Custom scrollbar for terminal */
+.vibe-terminal ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.vibe-terminal ::-webkit-scrollbar-track {
+  background: #0a0a0a;
+  border-left: 1px solid #1e1e1e;
+}
+.vibe-terminal ::-webkit-scrollbar-thumb {
+  background: #1e1e1e;
+}
+.vibe-terminal ::-webkit-scrollbar-thumb:hover {
+  background: #333;
+}
+
+/* --- Neon Vibes --- */
+.vibe-neon {
+  font-family: 'Inter', sans-serif;
+  background-color: #07081A;
+  background-image: radial-gradient(circle at 50% 0%, #1a1040 0%, #07081A 70%);
+  color: #f8fafc;
+  min-height: 100vh;
+}
+
+.vibe-neon .neon-card {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-radius: 1rem;
+  transition: all 0.3s ease;
+}
+
+.vibe-neon .neon-card:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(0, 212, 255, 0.2);
+  box-shadow: 0 0 20px rgba(0, 212, 255, 0.03);
+}
+
+.vibe-neon .neon-text-gradient {
+  background: linear-gradient(135deg, #00D4FF 0%, #7C3AED 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.vibe-neon .neon-bg-gradient {
+  background: linear-gradient(135deg, #00D4FF 0%, #7C3AED 100%);
+}
+
+.vibe-neon .neon-border-gradient {
+  position: relative;
+}
+
+.vibe-neon .neon-border-gradient::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg, #00D4FF 0%, #7C3AED 100%);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+.vibe-neon .neon-health-green {
+  background: linear-gradient(90deg, #10B981 0%, #00D4FF 100%);
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.4);
+}
+
+.vibe-neon .neon-health-amber {
+  background: linear-gradient(90deg, #F59E0B 0%, #FCD34D 100%);
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.4);
+}
+
+.vibe-neon .neon-health-red {
+  background: linear-gradient(90deg, #EF4444 0%, #F87171 100%);
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.4);
+}
+
+/* Custom scrollbar for neon */
+.vibe-neon ::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.vibe-neon ::-webkit-scrollbar-track {
+  background: rgba(0,0,0,0.2);
+}
+.vibe-neon ::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.1);
+  border-radius: 4px;
+}
+.vibe-neon ::-webkit-scrollbar-thumb:hover {
+  background: rgba(255,255,255,0.2);
+}

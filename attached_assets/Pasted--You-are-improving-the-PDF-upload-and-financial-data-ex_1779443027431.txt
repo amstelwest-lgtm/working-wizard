@@ -1,0 +1,793 @@
+
+You are improving the PDF upload and financial data extraction system
+for a financial intelligence platform called Milōn.
+
+CONTEXT:
+Users (accountants and SME owners) upload PDF financial statements —
+bank statements, income statements, balance sheets, management accounts,
+or full annual financial statements. The platform extracts specific
+financial figures to calculate 31 financial health ratios organised
+across four pillars: Profit, Assets, Financing, and Cash.
+
+The current PDF parsing is broken. Replace it entirely with an
+AI-powered extraction pipeline as described below.
+
+═══════════════════════════════════════════════════════════════
+PART 1 — TECH STACK DECISION
+═══════════════════════════════════════════════════════════════
+
+Do NOT use pdf-parse, pdfjs-dist, pdf.js, or any raw text extraction
+library as the primary extraction method. These fail on:
+- Bank statements where columns are positioned with whitespace
+- Scanned/image-based PDFs with no text layer
+- Multi-column layouts where text streams incorrectly
+- Inconsistent formatting across different SA banks and accounting firms
+- Currency formatting variations (R 1,234.56 vs R1 234,56 vs 1,234.56 CR)
+
+USE instead: Claude API with native PDF document support.
+Claude reads PDFs as documents — not as extracted text — and understands
+semantic meaning of financial line items regardless of formatting, layout,
+or whether the PDF is text-based or scanned.
+
+═══════════════════════════════════════════════════════════════
+PART 2 — EXTRACTION PIPELINE (5 STEPS)
+═══════════════════════════════════════════════════════════════
+
+──────────────────────────────────────────────────────────────
+STEP 1: PDF to Base64
+──────────────────────────────────────────────────────────────
+
+When a PDF is uploaded, convert it to base64 in the browser:
+
+const fileToBase64 = (file) => new Promise((resolve, reject) => {
+  const reader = new FileReader();
+  reader.onload = () => resolve(reader.result.split(',')[1]);
+  reader.onerror = reject;
+  reader.readAsDataURL(file);
+});
+
+──────────────────────────────────────────────────────────────
+STEP 2: Send to Claude API with native PDF support
+──────────────────────────────────────────────────────────────
+
+const extractFinancialData = async (base64PDF, fileName) => {
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 4000,
+      messages: [{
+        role: 'user',
+        content: [
+          {
+            type: 'document',
+            source: {
+              type: 'base64',
+              media_type: 'application/pdf',
+              data: base64PDF
+            }
+          },
+          {
+            type: 'text',
+            text: `You are a financial data extraction specialist
+            for South African SME financial statements.
+           
+            Extract ALL financial figures from this document.
+           
+            EXTRACTION RULES:
+            - Return ONLY a valid JSON object. No explanation,
+              no markdown, no backticks, no preamble whatsoever.
+            - All monetary values must be numbers only — no R, $,
+              commas, or currency symbols
+            - Negative values (losses, expenses shown in brackets)
+              must be returned as negative numbers
+            - If a value cannot be found or is genuinely ambiguous,
+              return null for that field — do not guess
+            - If comparative/prior period figures exist, extract both
+            - If values appear in thousands (R'000 or "000"), multiply
+              ALL values by 1000 before returning and set
+              values_appear_in_thousands to true
+            - Look for figures under any reasonable label variant:
+              "Turnover" or "Sales" = revenue
+              "Cost of Sales" or "Cost of Goods Sold" = cogs
+              "Trade and other receivables" = debtors
+              "Trade and other payables" = creditors
+              "Property plant and equipment" = fixed_assets
+              "Profit before tax" = ebt
+              "Profit after tax" = net_income
+              "Staff costs" or "Payroll" = labor_cost
+              And any other reasonable South African accounting
+              label equivalents
+            - For top_expenses: use the ACTUAL line item labels
+              from the document — do not rename them
+            - For top_income_sources: extract revenue breakdown
+              lines if shown — product lines, service categories,
+              geographic segments etc
+            - Verify arithmetic where possible: gross profit should
+              equal revenue minus cogs; set reconciliation flags
+              accordingly
+            - South African statements may use comma as decimal
+              separator (1.234,56) — handle both formats
+            - Director remuneration is often shown in notes, not
+              the main statement — check notes pages
+            - Shareholder loans may appear as both assets
+              (loan to director) and liabilities (loan from director)
+              — capture both
+           
+            Return this EXACT JSON structure with no deviations:
+           
+            {
+              "document_metadata": {
+                "company_name": string | null,
+                "registration_number": string | null,
+                "period_start_date": "YYYY-MM-DD" | null,
+                "period_end_date": "YYYY-MM-DD" | null,
+                "period_months": number | null,
+                "prior_period_start_date": "YYYY-MM-DD" | null,
+                "prior_period_end_date": "YYYY-MM-DD" | null,
+                "document_type": "bank_statement | income_statement | balance_sheet | management_accounts | full_annual_financials | unknown",
+                "financial_statement_type": "audited | reviewed | compiled | management_accounts | bank_statement | unknown",
+                "prepared_by": string | null,
+                "auditor_firm": string | null,
+                "approval_date": "YYYY-MM-DD" | null,
+                "industry_description": string | null,
+                "functional_currency": "ZAR | USD | EUR | GBP | other",
+                "foreign_currency_exposure": boolean | null,
+                "headcount": number | null,
+                "accounting_basis": "accrual | cash | unknown",
+                "values_appear_in_thousands": boolean,
+                "contains_income_statement": boolean,
+                "contains_balance_sheet": boolean,
+                "contains_cash_flow_statement": boolean,
+                "contains_notes": boolean
+              },
+
+              "current_period": {
+               
+                "income_statement": {
+                  "revenue": number | null,
+                  "cogs": number | null,
+                  "gross_profit": number | null,
+                  "other_income": number | null,
+                  "fixed_costs": number | null,
+                  "labor_cost": number | null,
+                  "depreciation": number | null,
+                  "amortisation": number | null,
+                  "depreciation_amortisation_total": number | null,
+                  "ebitda": number | null,
+                  "ebit": number | null,
+                  "interest_expense": number | null,
+                  "interest_income": number | null,
+                  "ebt": number | null,
+                  "tax": number | null,
+                  "net_income": number | null,
+                  "director_remuneration": number | null,
+                  "dividends_declared": number | null
+                },
+
+                "balance_sheet": {
+                  "total_assets": number | null,
+                  "fixed_assets": number | null,
+                  "goodwill": number | null,
+                  "intangible_assets": number | null,
+                  "right_of_use_assets": number | null,
+                  "current_assets": number | null,
+                  "inventory": number | null,
+                  "wip": number | null,
+                  "debtors": number | null,
+                  "provision_bad_debts": number | null,
+                  "cash": number | null,
+                  "other_current_assets": number | null,
+                  "total_liabilities": number | null,
+                  "current_liabilities": number | null,
+                  "creditors": number | null,
+                  "short_term_debt": number | null,
+                  "lease_liabilities_current": number | null,
+                  "other_current_liabilities": number | null,
+                  "non_current_liabilities": number | null,
+                  "long_term_debt": number | null,
+                  "lease_liabilities_non_current": number | null,
+                  "deferred_tax_liability": number | null,
+                  "deferred_tax_asset": number | null,
+                  "equity": number | null,
+                  "share_capital": number | null,
+                  "retained_earnings_opening": number | null,
+                  "retained_earnings_closing": number | null,
+                  "shareholder_loans_asset": number | null,
+                  "shareholder_loans_liability": number | null,
+                  "contingent_liabilities_notes": string | null
+                },
+
+                "cash_flow_statement": {
+                  "operating_cash_flow": number | null,
+                  "working_capital_movement_debtors": number | null,
+                  "working_capital_movement_inventory": number | null,
+                  "working_capital_movement_creditors": number | null,
+                  "capex": number | null,
+                  "asset_disposal_proceeds": number | null,
+                  "investing_cash_flow": number | null,
+                  "debt_drawdowns": number | null,
+                  "debt_repayments": number | null,
+                  "dividends_paid": number | null,
+                  "financing_cash_flow": number | null,
+                  "net_cash_movement": number | null,
+                  "cash_opening_balance": number | null,
+                  "cash_closing_balance": number | null
+                }
+              },
+
+              "prior_period": {
+                "revenue": number | null,
+                "gross_profit": number | null,
+                "net_income": number | null,
+                "total_assets": number | null,
+                "equity": number | null,
+                "cash": number | null,
+                "debtors": number | null,
+                "inventory": number | null,
+                "creditors": number | null,
+                "operating_cash_flow": number | null
+              },
+
+              "top_expenses": [
+                {
+                  "rank": number,
+                  "category": string,
+                  "amount": number,
+                  "percentage_of_revenue": number | null,
+                  "notes": string | null
+                }
+              ],
+
+              "top_income_sources": [
+                {
+                  "rank": number,
+                  "description": string,
+                  "amount": number,
+                  "percentage_of_total": number | null,
+                  "notes": string | null
+                }
+              ],
+
+              "data_quality": {
+                "gross_profit_reconciles": boolean | null,
+                "net_income_reconciles": boolean | null,
+                "balance_sheet_balances": boolean | null,
+                "cash_flow_reconciles": boolean | null,
+                "retained_earnings_reconciles": boolean | null,
+                "prior_period_available": boolean,
+                "confidence_by_section": {
+                  "income_statement": "high | medium | low | not_found",
+                  "balance_sheet": "high | medium | low | not_found",
+                  "cash_flow": "high | medium | low | not_found",
+                  "expenses_detail": "high | medium | low | not_found",
+                  "income_detail": "high | medium | low | not_found",
+                  "notes": "high | medium | low | not_found"
+                },
+                "overall_confidence": "high | medium | low",
+                "extraction_notes": string
+              }
+            }`
+          }
+        ]
+      }]
+    })
+  });
+
+  const data = await response.json();
+  const rawText = data.content
+    .map(item => item.type === 'text' ? item.text : '')
+    .filter(Boolean)
+    .join('');
+
+  try {
+    return JSON.parse(rawText);
+  } catch {
+    const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      try {
+        return JSON.parse(jsonMatch[0]);
+      } catch {
+        throw new Error('Could not parse extraction response from AI');
+      }
+    }
+    throw new Error('No valid JSON found in extraction response');
+  }
+};
+
+──────────────────────────────────────────────────────────────
+STEP 3: Handle edge cases and fallbacks
+──────────────────────────────────────────────────────────────
+
+const handleExtractionWithFallback = async (file) => {
+ 
+  // File type check
+  if (file.type !== 'application/pdf') {
+    return {
+      error: 'Please upload a PDF file.',
+      fallback: false
+    };
+  }
+ 
+  // File size check — Claude accepts up to 32MB
+  if (file.size > 32 * 1024 * 1024) {
+    return {
+      error: 'PDF exceeds the 32MB limit. Please compress the file or split it into smaller documents.',
+      fallback: false
+    };
+  }
+
+  // Warn on large files that will be slow
+  const estimatedSeconds = Math.ceil(file.size / (1024 * 1024) * 3);
+ 
+  try {
+    const base64 = await fileToBase64(file);
+    const result = await extractFinancialData(base64, file.name);
+    return { success: true, data: result, estimatedSeconds };
+  } catch (error) {
+    console.error('Extraction error:', error);
+    return {
+      error: 'Could not automatically extract data from this document. ' +
+             'This may be a heavily formatted or encrypted PDF. ' +
+             'Please enter the values manually using the form below.',
+      fallback: true
+    };
+  }
+};
+
+──────────────────────────────────────────────────────────────
+STEP 4: Multi-document support
+──────────────────────────────────────────────────────────────
+
+Support uploading up to 3 PDFs simultaneously. This covers the common
+SA SME scenario where income statement, balance sheet, and cash flow
+statement are separate documents from different sources.
+
+Build a mergeExtractions function that:
+- Takes an array of up to 3 extraction results
+- Merges them with later uploads overwriting earlier ones for
+  duplicate fields
+- Tracks which document each value came from
+  (source_document: "document_1" | "document_2" | "document_3")
+- Flags any conflicts where two documents provide different values
+  for the same field — show these as warnings in the review UI
+
+const mergeExtractions = (extractions) => {
+  const merged = { current_period: {}, source_map: {}, conflicts: [] };
+ 
+  extractions.forEach((extraction, index) => {
+    const docLabel = `document_${index + 1}`;
+   
+    Object.entries(extraction.current_period || {}).forEach(([section, values]) => {
+      if (!merged.current_period[section]) {
+        merged.current_period[section] = {};
+      }
+     
+      Object.entries(values || {}).forEach(([field, value]) => {
+        if (value !== null && value !== undefined) {
+          const existingValue = merged.current_period[section][field];
+         
+          if (existingValue !== null &&
+              existingValue !== undefined &&
+              existingValue !== value) {
+            merged.conflicts.push({
+              field: `${section}.${field}`,
+              value_1: existingValue,
+              source_1: merged.source_map[`${section}.${field}`],
+              value_2: value,
+              source_2: docLabel
+            });
+          }
+         
+          merged.current_period[section][field] = value;
+          merged.source_map[`${section}.${field}`] = docLabel;
+        }
+      });
+    });
+  });
+ 
+  return merged;
+};
+
+──────────────────────────────────────────────────────────────
+STEP 5: Normalisation layer
+──────────────────────────────────────────────────────────────
+
+CRITICAL: All ratio calculations must run against normalised values,
+not raw extracted values. A 6-month management pack next to a 12-month
+annual set will produce completely wrong ratios if not normalised first.
+
+Build a normaliseExtraction function that:
+
+const normaliseExtraction = (extraction) => {
+  const periodMonths = extraction.document_metadata?.period_months || 12;
+  const annualisationFactor = 12 / periodMonths;
+ 
+  // Fields that should be annualised if period is not 12 months
+  const flowFields = [
+    'revenue', 'cogs', 'gross_profit', 'fixed_costs', 'labor_cost',
+    'depreciation', 'amortisation', 'depreciation_amortisation_total',
+    'ebitda', 'ebit', 'interest_expense', 'ebt', 'tax', 'net_income',
+    'director_remuneration', 'dividends_declared', 'operating_cash_flow',
+    'capex', 'dividends_paid'
+  ];
+ 
+  // Fields that should NOT be annualised (point-in-time balance sheet items)
+  const stockFields = [
+    'total_assets', 'fixed_assets', 'current_assets', 'inventory',
+    'debtors', 'cash', 'total_liabilities', 'current_liabilities',
+    'creditors', 'equity', 'wip'
+  ];
+ 
+  const normalised = JSON.parse(JSON.stringify(extraction));
+ 
+  if (periodMonths !== 12) {
+    // Annualise flow fields
+    flowFields.forEach(field => {
+      const value = normalised.current_period?.income_statement?.[field]
+                 || normalised.current_period?.cash_flow_statement?.[field];
+      if (value !== null && value !== undefined) {
+        // Apply annualisation to the correct section
+        ['income_statement', 'cash_flow_statement'].forEach(section => {
+          if (normalised.current_period?.[section]?.[field] !== undefined) {
+            normalised.current_period[section][field] =
+              normalised.current_period[section][field] * annualisationFactor;
+          }
+        });
+      }
+    });
+   
+    normalised.normalisation_applied = true;
+    normalised.original_period_months = periodMonths;
+    normalised.annualisation_factor = annualisationFactor;
+  }
+ 
+  return normalised;
+};
+
+═══════════════════════════════════════════════════════════════
+PART 3 — UPLOAD UI
+═══════════════════════════════════════════════════════════════
+
+Build a PDFUploadZone component with the following behaviour:
+
+UPLOAD AREA:
+- Drag and drop zone — accepts PDF only, up to 3 files
+- Shows file name and size after each upload
+- Shows a remove button per file
+- Accepts files via click-to-browse or drag and drop
+- Shows a small info tooltip:
+  "We use AI to read your statement. Your document is
+   processed securely and is never stored on our servers."
+
+PROCESSING STATES:
+Show a progress message that updates through these stages:
+"Uploading document..."
+→ "Reading document structure..."
+→ "Extracting financial figures..."
+→ "Verifying calculations..."
+→ "Done — please review the extracted values"
+
+Processing typically takes 5–20 seconds depending on PDF complexity.
+Show an animated progress indicator during processing.
+If the file is over 5MB, show:
+"Large file detected — this may take up to 30 seconds"
+
+ERROR STATES:
+- Wrong file type: "Please upload a PDF file"
+- File too large: "PDF exceeds 32MB limit. Please compress or split."
+- Extraction failed: "Could not read this document automatically.
+  Please enter values manually." with a button to open manual entry
+- Partial extraction (some nulls): Show a warning count
+  "12 of 26 fields extracted — please complete the remaining fields manually"
+
+CONFIDENCE INDICATOR:
+After extraction, show a confidence badge prominently:
+- HIGH confidence: green badge "High confidence extraction"
+- MEDIUM confidence: amber badge "Medium confidence — please review carefully"  
+- LOW confidence: red badge "Low confidence — manual review required"
+
+═══════════════════════════════════════════════════════════════
+PART 4 — EXTRACTION REVIEW MODAL
+═══════════════════════════════════════════════════════════════
+
+After extraction, show an ExtractionReviewModal before ANY values
+are populated into the ratio input form. Never silently populate
+financial data without user confirmation. This is non-negotiable.
+
+The modal has the following structure:
+
+HEADER SECTION:
+- Company name (if extracted)
+- Period covered (e.g. "Year ended 28 February 2024")
+- Document type badge
+- Financial statement type badge (Audited / Reviewed / Compiled / Management)
+- Overall confidence badge
+- If confidence is LOW or MEDIUM: amber warning banner
+  "Please review all extracted values carefully before proceeding.
+   AI extraction may contain errors on complex or unusual documents."
+
+CONFLICT WARNING:
+If multi-document merge produced conflicts, show a red banner:
+"Conflicting values detected in X fields.
+ Please resolve each conflict before proceeding."
+With a list of each conflicted field showing both values
+and a radio button to select which to use.
+
+NORMALISATION NOTICE:
+If the period was not 12 months and annualisation was applied, show:
+"This document covers [X] months. Flow statement values have been
+ annualised to 12 months for ratio calculation purposes.
+ Original values are shown in brackets."
+
+DATA QUALITY FLAGS:
+Show reconciliation results as a small table:
+- Gross profit reconciles: ✓ or ✗
+- Net income reconciles: ✓ or ✗  
+- Balance sheet balances: ✓ or ✗
+- Cash flow reconciles: ✓ or ✗
+If any flag is ✗, show the discrepancy amount.
+
+EXTRACTED VALUES DISPLAY:
+Organise fields into four collapsible sections:
+1. Income Statement
+2. Balance Sheet  
+3. Cash Flow Statement
+4. Additional Detail (top expenses, top income sources, metadata)
+
+Within each section, each field row shows:
+- Field label (friendly name)
+- Extracted value formatted as currency (R X,XXX,XXX)
+  or as number for non-currency fields
+- If from a specific document in a multi-doc upload:
+  a small "Doc 1" / "Doc 2" / "Doc 3" label
+- Green tick icon if value was successfully extracted
+- Amber question mark icon if value is null
+- An edit icon that makes the field inline-editable
+- If annualised: show original value in brackets in grey
+
+TOP EXPENSES SECTION:
+Show as a small ranked list:
+Rank | Category | Amount | % of Revenue
+Allow the user to edit category names and amounts.
+
+TOP INCOME SOURCES SECTION:
+Show as a small ranked list:
+Rank | Description | Amount | % of Total
+Only show if values were found — hide section if empty array.
+
+FOOTER ACTIONS:
+- Primary button: "Confirm and populate form"
+  Maps all confirmed values to the ratio input fields
+- Secondary button: "Edit and re-extract"
+  Goes back to upload area
+- Tertiary link: "Skip — enter manually"
+  Closes modal and opens blank manual entry form
+
+═══════════════════════════════════════════════════════════════
+PART 5 — DATABASE STORAGE
+═══════════════════════════════════════════════════════════════
+
+Store ALL extraction data in the following Supabase table structure:
+
+financial_submissions (
+  id                        uuid primary key default gen_random_uuid(),
+  sme_id                    uuid references sme_profiles(id),
+  submitted_at              timestamp with time zone default now(),
+  submitted_by              uuid references auth.users(id),
+ 
+  -- Period
+  period_start              date,
+  period_end                date,
+  period_months             integer,
+ 
+  -- Core ratio input fields (typed columns for fast querying)
+  revenue                   numeric,
+  prior_revenue             numeric,
+  cogs                      numeric,
+  gross_profit              numeric,
+  fixed_costs               numeric,
+  labor_cost                numeric,
+  ebit                      numeric,
+  interest_expense          numeric,
+  ebt                       numeric,
+  tax                       numeric,
+  net_income                numeric,
+  total_assets              numeric,
+  fixed_assets              numeric,
+  current_assets            numeric,
+  current_liabilities       numeric,
+  total_liabilities         numeric,
+  equity                    numeric,
+  inventory                 numeric,
+  debtors                   numeric,
+  creditors                 numeric,
+  wip                       numeric,
+  cash                      numeric,
+  capex                     numeric,
+  operating_cash_flow       numeric,
+  ebitda                    numeric,
+  depreciation              numeric,
+  headcount                 integer,
+ 
+  -- Normalised values (annualised if period != 12 months)
+  normalised_values         jsonb,
+  normalisation_applied     boolean default false,
+  annualisation_factor      numeric,
+ 
+  -- Full raw AI extraction (everything Claude returned)
+  raw_extraction            jsonb,
+ 
+  -- Document metadata
+  document_type             text,
+  financial_statement_type  text,
+  extraction_confidence     text,
+  extraction_notes          text,
+  company_name_extracted    text,
+  period_label              text,
+ 
+  -- Data quality flags
+  gross_profit_reconciles   boolean,
+  balance_sheet_balances    boolean,
+  cash_flow_reconciles      boolean,
+ 
+  -- Entry method flags
+  manually_entered          boolean default false,
+  ai_extracted              boolean default false,
+  multi_document_merge      boolean default false,
+  document_count            integer default 1,
+ 
+  -- Review flags
+  reviewed_by_accountant    boolean default false,
+  reviewed_at               timestamp with time zone,
+  reviewed_by               uuid references auth.users(id)
+)
+
+Also create:
+
+expense_extractions (
+  id              uuid primary key default gen_random_uuid(),
+  submission_id   uuid references financial_submissions(id),
+  rank            integer,
+  category        text,
+  amount          numeric,
+  pct_of_revenue  numeric,
+  notes           text
+)
+
+income_extractions (
+  id              uuid primary key default gen_random_uuid(),
+  submission_id   uuid references financial_submissions(id),
+  rank            integer,
+  description     text,
+  amount          numeric,
+  pct_of_total    numeric,
+  notes           text
+)
+
+STORAGE POLICY:
+- Store the raw PDF base64 in memory only during processing
+- Never persist the raw PDF or base64 to any database or storage bucket
+- Only the extracted JSON and typed field values are persisted
+- Add a privacy notice to the UI confirming this
+
+═══════════════════════════════════════════════════════════════
+PART 6 — IMPORTANT IMPLEMENTATION NOTES
+═══════════════════════════════════════════════════════════════
+
+API KEY:
+The Anthropic API key is already configured in this project.
+Do not add a new one or expose it client-side.
+Route the extraction call through a server function or
+edge function to keep the key server-side only.
+
+NUMBER PARSING:
+South African financial statements use both:
+- Period decimal: 1,234,567.89
+- Comma decimal: 1.234.567,89
+Handle both in your JSON parsing layer after Claude returns the data.
+Claude will normalise to period decimal in its JSON response but
+add a safety parser:
+
+const parseFinancialNumber = (value) => {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'number') return value;
+  const str = String(value).replace(/[R$\s]/g, '');
+  // Handle comma decimal format
+  if (/^\d{1,3}(\.\d{3})*(,\d+)?$/.test(str)) {
+    return parseFloat(str.replace(/\./g, '').replace(',', '.'));
+  }
+  return parseFloat(str.replace(/,/g, ''));
+};
+
+CURRENCY FORMATTING:
+Format all displayed monetary values as:
+R ${value.toLocaleString('en-ZA', {
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 0
+})}
+
+TESTING:
+Test the complete pipeline with at least four document types:
+1. A South African bank statement (FNB, ABSA, Nedbank, or Standard Bank)
+2. A compiled income statement and balance sheet from an accountant
+3. An audited annual financial statement
+4. A scanned/image-based PDF (tests Claude vision capability)
+
+Confirm that:
+- All four document types produce a parseable JSON response
+- The review modal displays correctly for each
+- Null fields are clearly indicated
+- The "confirm and populate" action correctly maps to all ratio input fields
+- The database insert captures all fields including raw_extraction JSONB
+- The expense and income extraction tables are populated where data exists
+
+PERFORMANCE:
+- Show loading state immediately on file drop — do not wait for
+  base64 conversion before showing progress
+- For files over 10MB, show estimated processing time
+- Set a 60-second timeout on the API call with a user-facing message:
+  "This is taking longer than expected.
+   Please wait or try a smaller file."
+- Cache the extraction result in component state so the user can
+  go back and re-review without re-calling the API
+
+
+but replace the claude extraction call with this:
+
+const extractFinancialData = async (base64PDF, fileName) => {
+ 
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{
+          parts: [
+            {
+              inline_data: {
+                mime_type: 'application/pdf',
+                data: base64PDF
+              }
+            },
+            {
+              text: `You are a financial data extraction specialist
+              for South African SME financial statements.
+             
+              Extract ALL financial figures from this document.
+             
+              Return ONLY a valid JSON object.
+              No explanation, no markdown, no backticks,
+              no preamble whatsoever.
+             
+              [... same extraction prompt and JSON schema as before ...]`
+            }
+          ]
+        }],
+        generationConfig: {
+          temperature: 0.1,
+          responseMimeType: 'application/json'
+        }
+      })
+    }
+  );
+
+  const data = await response.json();
+ 
+  // Gemini response structure is different from Claude
+  const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+ 
+  if (!rawText) {
+    throw new Error('No response from Gemini');
+  }
+
+  try {
+    return JSON.parse(rawText);
+  } catch {
+    const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+    if (jsonMatch) return JSON.parse(jsonMatch[0]);
+    throw new Error('Could not parse extraction response');
+  }
+};

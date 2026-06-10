@@ -1,0 +1,168 @@
+Add a "Share Milōn" button in two places:
+1. Inside the main app (visible to logged-in users)
+2. On the pre-login landing/login screen (visible to everyone)
+
+Read this entire prompt before writing any code.
+
+═══════════════════════════════════════════════════════════════
+CONTEXT
+═══════════════════════════════════════════════════════════════
+
+The share button already exists as a mobile-only floating 
+action button. We now want it in two additional fixed 
+locations that are visible on ALL screen sizes — both 
+mobile and desktop — not just as a floating button.
+
+The existing floating share button (mobile only, bottom right)
+stays exactly as it is. Do not touch it.
+
+We are adding TWO NEW share button placements:
+
+═══════════════════════════════════════════════════════════════
+PLACEMENT 1 — INSIDE THE MAIN APP (logged-in users)
+═══════════════════════════════════════════════════════════════
+
+Location: The top navigation bar / header of the app
+Position: Right side of the header, next to the EXPORT 
+          and PORTAL buttons visible in the screenshots
+
+The button should:
+- Match the existing header button style exactly
+  (same border, same size, same dark theme as EXPORT/PORTAL)
+- Label: "Share"
+- Icon: Share2 icon from lucide-react, left of the label
+- Visible on both mobile and desktop
+- On mobile it sits in the header icon row alongside 
+  the other icon buttons
+- On desktop it appears as a labelled button like 
+  EXPORT and PORTAL
+
+On click — trigger the same share logic already built:
+1. If navigator.share is available (mobile) → 
+   native share sheet
+2. If not available → open the ShareModal bottom sheet
+
+Share content:
+  title: "Milōn — Financial Intelligence for SMEs"
+  text: "I use Milōn to track my business financial health. 
+         31 ratios across Profit, Assets, Financing and Cash 
+         — with specific steps to improve each one."
+  url: window.location.origin
+
+═══════════════════════════════════════════════════════════════
+PLACEMENT 2 — PRE-LOGIN / LANDING SCREEN
+═══════════════════════════════════════════════════════════════
+
+Location: The login or landing page that users see 
+          before they are authenticated
+
+Position: Top right corner of the page header
+          OR bottom of the login card — 
+          wherever fits the existing layout naturally.
+          Use your judgement based on the actual layout.
+
+The button should:
+- Be subtle and secondary — it must not compete with 
+  the login/sign-up CTA which is the primary action
+- Style: text link with a small share icon, or a 
+  ghost/outlined button — NOT a filled primary button
+- Label: "Share this app" or "Tell a colleague"
+- Visible on both mobile and desktop
+
+On click — same share logic:
+1. navigator.share if available
+2. ShareModal as fallback
+
+Share content for pre-login:
+  title: "Milōn — Financial Intelligence for SMEs"
+  text: "Check out Milōn — a financial intelligence platform 
+         for SMEs and their accountants. Track business health, 
+         get specific actions to improve it."
+  url: window.location.origin
+
+═══════════════════════════════════════════════════════════════
+SHARE MODAL — VERIFY IT STILL WORKS
+═══════════════════════════════════════════════════════════════
+
+The ShareModal component was built previously.
+Before adding the new buttons, confirm:
+
+□ ShareModal component exists and imports correctly
+□ The WhatsApp share link works
+□ The email share link works  
+□ The copy link function works
+□ The InstallInstructions screen works
+□ The modal closes when the overlay is tapped
+
+If any of these are broken, fix them first before 
+adding the new button placements.
+
+If the ShareModal does not exist yet, build it now:
+
+WhatsApp URL:
+https://wa.me/?text=Check%20out%20Mil%C5%8Dn%20%E2%80%94%20a%20financial%20intelligence%20platform%20for%20SMEs%3A%20${encodeURIComponent(window.location.origin)}
+
+Email mailto:
+mailto:?subject=Check out Milōn — Financial Intelligence for SMEs&body=Hi,%0D%0A%0D%0AI thought you might find this useful — Milōn is a financial intelligence platform that tracks business health across 31 ratios and gives specific steps to improve each one.%0D%0A%0D%0ACheck it out: ${window.location.origin}%0D%0A%0D%0A
+
+Copy link:
+navigator.clipboard.writeText(window.location.origin)
+
+═══════════════════════════════════════════════════════════════
+IMPLEMENTATION NOTES
+═══════════════════════════════════════════════════════════════
+
+- Do NOT duplicate the ShareModal component — 
+  import and reuse the existing one
+- Do NOT duplicate the share logic — 
+  extract it into a single useShare hook if not already done:
+
+  // hooks/useShare.js
+  export const useShare = () => {
+    const [modalOpen, setModalOpen] = useState(false);
+    
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL 
+                || window.location.origin;
+    
+    const shareData = {
+      title: 'Milōn — Financial Intelligence for SMEs',
+      text: 'Track your business financial health with 31 ratios across Profit, Assets, Financing and Cash.',
+      url: appUrl
+    };
+    
+    const handleShare = async () => {
+      if (navigator.share && navigator.canShare(shareData)) {
+        try {
+          await navigator.share(shareData);
+          return;
+        } catch (error) {
+          if (error.name === 'AbortError') return;
+        }
+      }
+      setModalOpen(true);
+    };
+    
+    return { handleShare, modalOpen, setModalOpen, appUrl };
+  };
+
+- Both new buttons import useShare and call handleShare
+- The ShareModal is rendered once at the app root level,
+  not duplicated in each button component
+
+═══════════════════════════════════════════════════════════════
+TESTING CHECKLIST
+═══════════════════════════════════════════════════════════════
+
+□ Share button appears in the main app header
+□ Share button appears on the pre-login/login screen
+□ Both buttons trigger the native share sheet on mobile
+□ Both buttons open the ShareModal on desktop
+□ WhatsApp share opens with correct pre-filled message
+□ Email share opens mail client with correct content
+□ Copy link copies the correct URL and shows feedback
+□ The existing floating mobile share button still works
+□ No duplicate ShareModal components in the codebase
+□ The pre-login share button does not distract from 
+  the primary login/sign-up action
+□ Both buttons match the visual style of their 
+  respective screens

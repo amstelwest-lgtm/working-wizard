@@ -1,0 +1,322 @@
+Add a "Share App" button to the mobile view of the Milōn web app.
+This is a simple feature — do not overcomplicate it.
+
+═══════════════════════════════════════════════════════════════
+WHAT TO BUILD
+═══════════════════════════════════════════════════════════════
+
+1. A Share button visible only on mobile screens
+2. A share sheet modal with three options:
+   - Share via WhatsApp
+   - Share via Email
+   - Copy link
+3. A "How to install this app" instruction screen
+   accessible from the share modal
+
+═══════════════════════════════════════════════════════════════
+THE SHARE BUTTON
+═══════════════════════════════════════════════════════════════
+
+Position: Fixed, bottom right of the screen
+Only visible on screens below 768px width
+Use CSS: @media (max-width: 768px) { display: flex } 
+         @media (min-width: 769px) { display: none }
+
+Button style:
+- Circular floating action button (FAB)
+- 52px × 52px
+- Background: your app's accent color
+- Icon: a share icon (use the lucide-react Share2 icon)
+- Subtle drop shadow
+- z-index: 50 so it floats above content
+- Bottom: 24px, Right: 24px
+
+Do not show this button if the user is already viewing 
+the app in standalone mode (already installed as PWA).
+Check with:
+  const isInstalled = window.matchMedia(
+    '(display-mode: standalone)'
+  ).matches;
+If isInstalled is true, hide the share button entirely.
+
+═══════════════════════════════════════════════════════════════
+THE SHARE MODAL
+═══════════════════════════════════════════════════════════════
+
+Clicking the button opens a bottom sheet modal.
+(Slides up from the bottom of the screen — 
+not a centred modal — this feels native on mobile)
+
+Modal header:
+Title: "Share Milōn"
+Subtitle: "Invite your accountant or share with a colleague"
+A close button (×) top right
+
+Three share options displayed as large tappable rows:
+
+ROW 1 — WhatsApp
+Icon: WhatsApp logo (use a green WhatsApp SVG icon)
+Label: "Share via WhatsApp"
+Sublabel: "Send a link to a contact"
+Action: Opens this URL in a new tab:
+  https://wa.me/?text=Hey%2C%20I%27ve%20been%20using%20Mil%C5%8Dn%20to%20track%20my%20business%20financial%20health.%20Check%20it%20out%3A%20[YOUR_APP_URL]
+
+Replace [YOUR_APP_URL] with the actual deployed app URL.
+Pull this from an environment variable: 
+  process.env.NEXT_PUBLIC_APP_URL 
+  or window.location.origin as fallback
+
+ROW 2 — Email
+Icon: Mail icon (lucide-react Mail)
+Label: "Share via Email"
+Sublabel: "Send to someone's inbox"
+Action: Opens mailto link:
+  mailto:?subject=Check out Milōn — Financial Intelligence for SMEs&body=Hi,%0D%0A%0D%0AI've been using Milōn to monitor my business financial health and thought you might find it useful.%0D%0A%0D%0AMilōn tracks 31 financial ratios across Profit, Assets, Financing and Cash — and gives you specific steps to improve each one.%0D%0A%0D%0ACheck it out here: [YOUR_APP_URL]%0D%0A%0D%0A
+
+ROW 3 — Copy Link
+Icon: Copy icon (lucide-react Copy)
+Label: "Copy link"
+Sublabel: "Paste it anywhere"
+Action: 
+  navigator.clipboard.writeText(window.location.origin)
+  Then change the row's icon to a green checkmark
+  And change the sublabel to "Link copied!" for 2 seconds
+  Then revert back to original state
+
+DIVIDER between the three rows — a thin line
+
+BOTTOM OF MODAL:
+A text link below the three options:
+"How to install this app on your phone →"
+Tapping this closes the share modal and opens the 
+Install Instructions screen (see below)
+
+═══════════════════════════════════════════════════════════════
+USE NATIVE SHARE API IF AVAILABLE
+═══════════════════════════════════════════════════════════════
+
+Modern mobile browsers support the Web Share API.
+If available, use it — it opens the phone's native 
+share sheet which feels the most natural.
+
+const handleShare = async () => {
+  
+  const shareData = {
+    title: 'Milōn — Financial Intelligence',
+    text: 'Track your business financial health with 31 ratios across Profit, Assets, Financing and Cash.',
+    url: window.location.origin
+  };
+
+  // Use native share if available (most modern mobile browsers)
+  if (navigator.share && navigator.canShare(shareData)) {
+    try {
+      await navigator.share(shareData);
+      return; // Native share handled it — don't show modal
+    } catch (error) {
+      if (error.name === 'AbortError') return; // User cancelled
+      // Fall through to custom modal if native share fails
+    }
+  }
+  
+  // Fallback: show the custom bottom sheet modal
+  setShareModalOpen(true);
+};
+
+So the flow is:
+1. User taps Share button
+2. If navigator.share is available → native share sheet opens
+3. If not available → custom bottom sheet modal opens
+4. The custom modal is the fallback for older browsers 
+   and desktop browsers that don't support Web Share API
+
+═══════════════════════════════════════════════════════════════
+INSTALL INSTRUCTIONS SCREEN
+═══════════════════════════════════════════════════════════════
+
+FILE: /src/components/InstallInstructions.jsx
+
+This is a full-screen overlay (not a modal) that slides 
+in from the right. Has a back arrow top left to close it.
+
+Header:
+Title: "Add to your home screen"
+Subtitle: "Use Milōn like a native app — no app store needed"
+
+Show TWO instruction sets with a tab switcher at the top:
+Tab 1: iPhone / Safari
+Tab 2: Android / Chrome
+
+────────────────────────────────────────────────
+IPHONE / SAFARI INSTRUCTIONS
+────────────────────────────────────────────────
+
+A numbered step list. Each step has:
+- A step number in a coloured circle
+- A short bold instruction
+- A one-line explanation below it
+- An icon illustrating the action
+
+Step 1:
+Icon: Safari browser icon (or a globe icon)
+Instruction: "Open in Safari"
+Explanation: "Make sure you're viewing this page 
+in Safari, not Chrome or another browser"
+
+Step 2:
+Icon: The iOS share icon (box with arrow pointing up)
+Instruction: "Tap the Share button"
+Explanation: "Find it at the bottom of your screen 
+in the Safari toolbar"
+
+Step 3:
+Icon: A plus-in-square icon
+Instruction: "Tap 'Add to Home Screen'"
+Explanation: "Scroll down in the share menu 
+until you see this option"
+
+Step 4:
+Icon: A checkmark or home screen icon
+Instruction: "Tap 'Add'"
+Explanation: "Milōn will appear on your home screen 
+like any other app"
+
+────────────────────────────────────────────────
+ANDROID / CHROME INSTRUCTIONS
+────────────────────────────────────────────────
+
+Step 1:
+Icon: Chrome browser icon (or a circle icon)
+Instruction: "Open in Chrome"
+Explanation: "Make sure you're using Chrome browser"
+
+Step 2:
+Icon: Three vertical dots (⋮)
+Instruction: "Tap the menu button"
+Explanation: "Find the three dots in the top 
+right corner of Chrome"
+
+Step 3:
+Icon: Phone with a plus icon
+Instruction: "Tap 'Add to Home screen'"
+Explanation: "You may also see 'Install app' 
+depending on your Android version"
+
+Step 4:
+Icon: Checkmark
+Instruction: "Tap 'Add'"
+Explanation: "Milōn will appear on your home screen 
+and in your app drawer"
+
+────────────────────────────────────────────────
+BOTTOM OF INSTALL SCREEN
+────────────────────────────────────────────────
+
+A soft info box at the bottom:
+Icon: Info circle
+Text: "Milōn works offline once installed. 
+Your data syncs automatically when you reconnect."
+
+Then below that, a share prompt:
+"Know someone who could use this?"
+A button: "Share Milōn" — tapping this goes back 
+to the share options
+
+═══════════════════════════════════════════════════════════════
+COMPONENT STRUCTURE
+═══════════════════════════════════════════════════════════════
+
+Create these files:
+
+/src/components/share/ShareButton.jsx
+  - The floating action button
+  - Handles the navigator.share logic
+  - Shows/hides based on screen size and installed state
+
+/src/components/share/ShareModal.jsx  
+  - The bottom sheet modal
+  - WhatsApp, Email, Copy link rows
+  - Link to install instructions
+
+/src/components/share/InstallInstructions.jsx
+  - Full screen overlay
+  - iPhone and Android tab instructions
+
+/src/components/share/index.js
+  - Exports all three
+
+Import ShareButton into your main App.jsx or layout 
+component and render it at the root level so it floats 
+above all pages:
+
+// In App.jsx or Layout.jsx
+import { ShareButton } from './components/share';
+
+return (
+  <div>
+    {/* your existing app */}
+    <ShareButton appUrl={process.env.NEXT_PUBLIC_APP_URL} />
+  </div>
+);
+
+═══════════════════════════════════════════════════════════════
+BOTTOM SHEET ANIMATION
+═══════════════════════════════════════════════════════════════
+
+The modal should animate in from the bottom.
+Use a simple CSS transition — no animation library needed:
+
+// Closed state
+transform: translateY(100%);
+opacity: 0;
+
+// Open state  
+transform: translateY(0);
+opacity: 1;
+
+transition: transform 0.3s ease-out, opacity 0.2s ease-out;
+
+Add a dark overlay behind the modal:
+background: rgba(0, 0, 0, 0.5);
+Tapping the overlay closes the modal.
+
+The modal itself should have:
+- White background
+- Border radius 16px on top left and top right only
+- Padding: 24px
+- A small drag handle at the top centre:
+  A 32px wide, 4px tall, rounded pill in a muted grey
+  This is a visual affordance that it can be swiped down
+  (you don't need to implement swipe-to-close, 
+  just the visual handle)
+- Max height: 80vh with overflow scroll if content is taller
+
+═══════════════════════════════════════════════════════════════
+ENVIRONMENT VARIABLE
+═══════════════════════════════════════════════════════════════
+
+Add to your .env file:
+NEXT_PUBLIC_APP_URL=https://your-app-url.replit.app
+
+Or whatever your actual deployed URL is.
+If this variable is not set, fall back to:
+window.location.origin
+
+═══════════════════════════════════════════════════════════════
+TESTING CHECKLIST
+═══════════════════════════════════════════════════════════════
+
+□ Share button is visible on mobile (< 768px)
+□ Share button is hidden on desktop (> 768px)
+□ Share button is hidden if app is already installed as PWA
+□ Native share sheet opens on modern mobile browsers
+□ Custom modal opens as fallback on unsupported browsers
+□ WhatsApp link opens WhatsApp with pre-filled message
+□ Email link opens mail app with pre-filled subject and body
+□ Copy link copies the URL and shows "Link copied!" feedback
+□ Install instructions show correct tab for iPhone/Android
+□ Back button on install instructions works correctly
+□ Modal closes when overlay is tapped
+□ All animations are smooth — no jank on mobile
+□ The floating button does not cover important UI elements
+  (if it overlaps a bottom nav bar, adjust the 
+   bottom position to sit above it)
