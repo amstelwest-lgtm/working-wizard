@@ -144,7 +144,7 @@ async function callGeminiPDF(base64: string, fileName: string): Promise<RawExtra
 
   try {
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -162,7 +162,6 @@ async function callGeminiPDF(base64: string, fileName: string): Promise<RawExtra
             ],
           }],
           generationConfig: {
-            temperature: 0.1,
             responseMimeType: "application/json",
           },
         }),
@@ -446,7 +445,7 @@ async function aiExtractText(text: string, fileName: string): Promise<Record<str
   const endpoint = openaiKey
     ? "https://api.openai.com/v1/chat/completions"
     : "https://ai.gateway.lovable.dev/v1/chat/completions";
-  const model = openaiKey ? "gpt-4o-mini" : "google/gemini-2.5-flash";
+  const model = openaiKey ? "gpt-4o-mini" : "google/gemini-3.6-flash";
 
   try {
     const res = await fetch(endpoint, {

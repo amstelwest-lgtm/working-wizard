@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { GEMINI_MODEL_GATEWAY } from "@/lib/gemini-config";
 
 export type NewsItem = {
   headline: string;
@@ -50,7 +51,7 @@ Respond ONLY with a valid JSON array — no preamble, no markdown fencing, no ex
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: GEMINI_MODEL_GATEWAY,
         messages: [{ role: "user", content: prompt }],
       }),
     });

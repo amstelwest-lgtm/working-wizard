@@ -81,11 +81,13 @@ function fmt(v: number, f: RatioRow["format"]) {
 }
 
 function healthCls(h: number) {
+  if (!isFinite(h)) return "bg-slate-500 text-white";
   if (h >= 70) return "bg-emerald-600 text-white";
   if (h >= 40) return "bg-amber-500 text-white";
   return "bg-rose-600 text-white";
 }
 function healthLabel(h: number) {
+  if (!isFinite(h)) return "No data";
   if (h >= 70) return "Healthy";
   if (h >= 40) return "Watch";
   return "Action";
@@ -449,7 +451,7 @@ Your Milōn accountant`;
 
       const tableRows = rows.map((r) => {
         const health = !isFinite(r.health) ? "—" : r.health >= 70 ? "Healthy" : r.health >= 40 ? "Watch" : "Action";
-        return [r.friendly, r.technical, fmt(r.value, r.format), r.benchmark, `${Math.round(r.health)}%`, health];
+        return [r.friendly, r.technical, fmt(r.value, r.format), r.benchmark, isFinite(r.health) ? `${Math.round(r.health)}%` : "—", health];
       });
 
       autoTable(pdf, {

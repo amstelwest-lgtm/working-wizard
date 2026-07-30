@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { assertClientScope } from "@/lib/assert-client-scope";
+import { GEMINI_MODEL_GATEWAY } from "@/lib/gemini-config";
 
 const InputSchema = z.object({
   clientId: z.string().uuid().optional(),
@@ -55,7 +56,7 @@ ${JSON.stringify(ctx, null, 2)}`;
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: GEMINI_MODEL_GATEWAY,
         messages: [
           { role: "system", content: sys },
           { role: "user", content: user },

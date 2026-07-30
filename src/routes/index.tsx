@@ -1,471 +1,908 @@
-import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
-import { ArrowRight, Eye, EyeOff, Mail, User, UserPlus } from "lucide-react";
+// @ts-ignore — raw import fine for dynamic CSS injection
+import landingCSS from "../styles/landing.css?raw";
 
 export const Route = createFileRoute("/")({
   component: LandingPage,
   head: () => ({
-    meta: [{ title: "Milōn · Operating Finance" }],
+    meta: [
+      { title: "MILŌN — Know your numbers. Sleep at night." },
+      { name: "description", content: "MILŌN is the financial health platform for South African SMEs and their accountants. One score. 31 ratios. 13-week cashflow. 930+ fixes ranked for you." },
+    ],
   }),
 });
 
-const PARTICLES = [
-  { top: "9%",  left: "7%",  s: 2,   d: 0,   dur: 9  },
-  { top: "21%", left: "17%", s: 1.4, d: 1.6, dur: 11 },
-  { top: "6%",  left: "54%", s: 1,   d: 3.1, dur: 13 },
-  { top: "16%", left: "73%", s: 1.8, d: 0.4, dur: 8  },
-  { top: "4%",  left: "86%", s: 1.3, d: 2.2, dur: 10 },
-  { top: "33%", left: "3%",  s: 1,   d: 4.1, dur: 7  },
-  { top: "44%", left: "93%", s: 1.8, d: 1.1, dur: 14 },
-  { top: "56%", left: "11%", s: 1.4, d: 2.7, dur: 9  },
-  { top: "61%", left: "89%", s: 1,   d: 3.6, dur: 8  },
-  { top: "73%", left: "4%",  s: 1.8, d: 0.9, dur: 12 },
-  { top: "79%", left: "79%", s: 1.4, d: 1.9, dur: 10 },
-  { top: "87%", left: "24%", s: 1,   d: 4.6, dur: 11 },
-  { top: "91%", left: "61%", s: 1.8, d: 2.9, dur: 7  },
-  { top: "14%", left: "39%", s: 1.2, d: 3.3, dur: 15 },
-  { top: "66%", left: "36%", s: 1.6, d: 0.2, dur: 12 },
-  { top: "27%", left: "63%", s: 1.1, d: 4.3, dur: 9  },
-  { top: "83%", left: "49%", s: 1.4, d: 1.3, dur: 11 },
-  { top: "50%", left: "51%", s: 0.9, d: 5.1, dur: 8  },
-];
+/* ─────────────────────────────────────────────────────────────── */
 
 function LandingPage() {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
 
-  const params = new URLSearchParams(
-    typeof window !== "undefined" ? window.location.search : "",
-  );
-  const inviteClientId = params.get("invite") ?? "";
-  const inviteEmail    = params.get("email")  ?? "";
-  const forceMode      = params.get("mode");
+  /* ── sign-in modal state ── */
+  const [signinOpen, setSigninOpen]     = useState(false);
+  const [siEmail, setSiEmail]           = useState("");
+  const [siPassword, setSiPassword]     = useState("");
+  const [siBusy, setSiBusy]             = useState(false);
+  const [siError, setSiError]           = useState("");
 
-  const [tab, setTab]                   = useState<"signin" | "signup">(
-    forceMode === "signup" || inviteClientId ? "signup" : "signin",
-  );
-  const [email, setEmail]               = useState(inviteEmail);
-  const [password, setPassword]         = useState("");
-  const [fullName, setFullName]         = useState("");
-  const [businessName, setBusinessName] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [rememberMe, setRememberMe]     = useState(false);
-  const [busy, setBusy]                 = useState(false);
-  const [signupDone, setSignupDone]     = useState(false);
+  /* ── register form state ── */
+  const [regRole, setRegRole]           = useState("Business owner");
+  const [regName, setRegName]           = useState("");
+  const [regEmail, setRegEmail]         = useState("");
+  const [regPassword, setRegPassword]   = useState("");
+  const [regBusiness, setRegBusiness]   = useState("");
+  const [regPlan, setRegPlan]           = useState("Orbit — R699/mo");
+  const [regBusy, setRegBusy]           = useState(false);
+  const [regDone, setRegDone]           = useState(false);
 
-  useEffect(() => {
-    const html = document.documentElement;
-    const hadDark = html.classList.contains("dark");
-    html.classList.add("dark");
-    const meta = document.querySelector('meta[name="theme-color"]');
-    const prev = meta?.getAttribute("content") ?? "#ffffff";
-    meta?.setAttribute("content", "#05070B");
-    return () => {
-      if (!hadDark) html.classList.remove("dark");
-      meta?.setAttribute("content", prev);
-    };
-  }, []);
-
+  /* ── redirect if already signed in ── */
   useEffect(() => {
     if (!loading && user) navigate({ to: "/app" });
   }, [user, loading, navigate]);
 
+  /* ── inject landing CSS + data-theme, clean up on unmount ── */
+  useEffect(() => {
+    const el = document.createElement("style");
+    el.id = "milon-landing-css";
+    el.textContent = landingCSS;
+    document.head.appendChild(el);
+    document.documentElement.dataset.theme = "dark";
+    document.documentElement.classList.add("dark");
+    return () => {
+      document.head.removeChild(el);
+      delete document.documentElement.dataset.theme;
+    };
+  }, []);
+
+  /* ── vanilla-JS animations (scroll progress, reveal, count-up, quiz) ── */
+  useEffect(() => {
+    const REDUCE = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    /* scroll progress + nav */
+    const prog    = document.getElementById("progress") as HTMLElement | null;
+    const topnav  = document.getElementById("topnav")   as HTMLElement | null;
+    function onScroll() {
+      const max = document.body.scrollHeight - innerHeight;
+      if (prog)   prog.style.width = (max > 0 ? Math.min(100, (scrollY / max) * 100) : 0) + "%";
+      if (topnav) topnav.classList.toggle("scrolled", scrollY > 10);
+    }
+    addEventListener("scroll", onScroll, { passive: true });
+    onScroll();
+
+    /* intersection reveal */
+    const io = new IntersectionObserver(
+      es => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); } }),
+      { threshold: 0.13 }
+    );
+    document.querySelectorAll(".reveal,.stagger").forEach(el => io.observe(el));
+
+    /* count-up */
+    function fmt(n: number, f?: string) {
+      return f === "space" ? String(n).replace(/\B(?=(\d{3})+(?!\d))/g, "\u202f") : String(n);
+    }
+    const cio = new IntersectionObserver(es => es.forEach(e => {
+      if (!e.isIntersecting) return;
+      const el = e.target as HTMLElement;
+      const to = +(el.dataset.to || 0), f = el.dataset.fmt;
+      cio.unobserve(el);
+      if (REDUCE) { el.textContent = fmt(to, f); return; }
+      const t0 = performance.now(), dur = 1400;
+      (function tick(t: number) {
+        const p = Math.min(1, (t - t0) / dur), ease = 1 - Math.pow(1 - p, 3);
+        el.textContent = fmt(Math.round(to * ease), f);
+        if (p < 1) requestAnimationFrame(tick);
+      })(t0);
+    }), { threshold: 0.6 });
+    document.querySelectorAll(".count").forEach(el => cio.observe(el));
+
+    /* dashboard animation */
+    const dash = document.getElementById("dash");
+    if (dash) {
+      const dio = new IntersectionObserver(es => es.forEach(e => {
+        if (!e.isIntersecting) return;
+        dio.unobserve(dash);
+        dash.classList.add("in");
+        const g = document.getElementById("gaugeFill");
+        if (g) requestAnimationFrame(() => { g.style.strokeDashoffset = String(402 * (1 - 0.78)); });
+        dash.querySelectorAll(".pill-row .bar i").forEach((b: any, i) => {
+          setTimeout(() => { b.style.width = b.dataset.w; }, 200 + i * 140);
+        });
+      }), { threshold: 0.35 });
+      dio.observe(dash);
+    }
+
+    /* pillar bars */
+    const pg = document.getElementById("pillarGrid");
+    if (pg) {
+      const pio = new IntersectionObserver(es => es.forEach(e => {
+        if (!e.isIntersecting) return;
+        pio.unobserve(pg);
+        pg.querySelectorAll(".score .bar i").forEach((b: any, i) => {
+          setTimeout(() => { b.style.width = b.dataset.w; }, 350 + i * 160);
+        });
+      }), { threshold: 0.3 });
+      pio.observe(pg);
+    }
+
+    /* marquee duplicate */
+    const mq = document.getElementById("marquee");
+    if (mq && !REDUCE) mq.innerHTML += mq.innerHTML;
+
+    /* persona card glow */
+    document.querySelectorAll(".persona-card").forEach((c: any) => {
+      c.addEventListener("pointermove", (e: PointerEvent) => {
+        const r = c.getBoundingClientRect();
+        c.style.setProperty("--mx", (e.clientX - r.left) + "px");
+        c.style.setProperty("--my", (e.clientY - r.top) + "px");
+      });
+    });
+
+    /* theme toggle */
+    const tbtn = document.getElementById("themeToggle");
+    if (tbtn) tbtn.onclick = () => {
+      const isDark = document.documentElement.dataset.theme === "dark";
+      document.documentElement.dataset.theme = isDark ? "light" : "dark";
+      tbtn.textContent = isDark ? "☾" : "☀";
+    };
+
+    /* ── quiz engine ── */
+    const QUIZ: Record<string, Array<{ q: string; hint: string; opts: string[][]; key: string; reward: string }>> = {
+      owner: [
+        { q: "What does your business do?", hint: "This places your first planet.", opts: [["🛍","Retail / E-commerce"],["🔧","Services"],["🏗","Construction"],["🍽","Hospitality"],["🏭","Manufacturing"],["🚚","Transport / Logistics"]], key: "industry", reward: "✦ Industry mapped — your sun just ignited." },
+        { q: "How do customers pay you?", hint: "This shapes your cash orbit.", opts: [["⚡","Upfront / on the spot"],["📅","On account — 30+ days"],["🔁","Monthly retainers"],["🧩","A mix of everything"]], key: "cashcycle", reward: "✦ Cash cycle charted — second planet in orbit." },
+        { q: "What keeps you up at night?", hint: "Be honest. We've heard it all.", opts: [["💧","Cash runs dry before month-end"],["❓","I don't know if I'm actually profitable"],["⛓","Debt is eating my margins"],["🐢","Customers pay me late"]], key: "pain", reward: "✦ Pain point locked. Now we can aim." },
+        { q: "Roughly, your annual turnover?", hint: "This sets your peer group.", opts: [["🌱","Under R1m"],["🌿","R1m – R5m"],["🌳","R5m – R20m"],["🌲","R20m+"]], key: "size", reward: "✦ Constellation complete." },
+      ],
+      accountant: [
+        { q: "What does your practice mostly do today?", hint: "This places your first star.", opts: [["📋","Compliance & tax"],["📊","Bookkeeping & payroll"],["💼","Some advisory already"],["🚀","Full CFO services"]], key: "industry", reward: "✦ Practice profile started." },
+        { q: "How many SME clients do you serve?", hint: "This sizes your constellation.", opts: [["✦","1 – 10"],["✦✦","11 – 50"],["✦✦✦","51 – 150"],["🌌","150+"]], key: "cashcycle", reward: "✦ Client universe mapped." },
+        { q: "What's your biggest frustration?", hint: "The thing that steals your margin.", opts: [["⏳","Clients only call in a crisis"],["💸","Can't charge for the advice I give"],["🗂","Data arrives late and messy"],["📉","Compliance fees keep shrinking"]], key: "pain", reward: "✦ Pain point locked. This is fixable." },
+        { q: "What would change your practice most?", hint: "Your north star.", opts: [["💰","Recurring advisory revenue"],["🛰","Live oversight of every client"],["🏷","Reports with my brand on them"],["🤝","Deeper client relationships"]], key: "size", reward: "✦ Constellation complete." },
+      ],
+    };
+    const REFLECT: Record<string, Record<string, string[]>> = {
+      owner: {
+        "💧": ["cash flow", "Your cash dries up before the month does. You're not alone — cash kills more SA businesses than losses do. <b>MILŌN's 13-week cashflow forecast shows you the shortfall weeks before it lands — and gives you the exact moves to close it.</b>"],
+        "❓": ["profit clarity", "You're working hard but flying blind on whether it's actually profitable. <b>MILŌN turns your numbers into one health score and 31 plain-language ratios — so you know, every week, if the harvest is real.</b>"],
+        "⛓": ["debt pressure", "Debt is quietly eating what you earn. <b>MILŌN tracks your debt drag and interest burden live, and ranks the highest-impact moves to lighten the load.</b>"],
+        "🐢": ["slow payers", "Late payers are using you as a free bank. <b>MILŌN flags your cash-trapped days, shows the cost in rand, and gives you the playbook to get paid faster.</b>"],
+      },
+      accountant: {
+        "⏳": ["crisis-only clients", "Your clients only call when it's already on fire. <b>MILŌN gives you a live radar over every client — risk flags reach you before the panic call does.</b>"],
+        "💸": ["unbilled advice", "You give away advisory value inside compliance fees. <b>MILŌN packages your insight into a branded, recurring retainer clients can see and gladly pay for.</b>"],
+        "🗂": ["messy data", "You can't advise on data that arrives late and broken. <b>MILŌN keeps client numbers live and structured — comment on the actual figures, in context, instantly.</b>"],
+        "📉": ["fee compression", "Compliance is a shrinking island. <b>MILŌN is your bridge to advisory — 10 white-label reports and a system that sells your expertise for you.</b>"],
+      },
+    };
+    let qRole = "owner", step = 0, answers: Record<string, { em: string; label: string }> = {};
+
+    function startQuiz(r: string) {
+      qRole = r; step = 0; answers = {};
+      document.body.className = "persona-" + r;
+      const quiz = document.getElementById("quiz");
+      if (quiz) { quiz.classList.add("active"); quiz.scrollIntoView({ behavior: "smooth" }); }
+      renderStep();
+    }
+    function renderStep() {
+      const steps = QUIZ[qRole], holder = document.getElementById("qsteps");
+      const qbar  = document.getElementById("qbar");
+      if (qbar) qbar.style.width = (step / steps.length) * 100 + "%";
+      if (step >= steps.length) { renderResult(); return; }
+      const s = steps[step];
+      if (holder) holder.innerHTML = `<div class="q-step on">
+        <h3>${s.q}</h3>
+        <p class="hint">${s.hint} <span style="color:var(--gold)">Question ${step + 1} of ${steps.length}</span></p>
+        <div class="opt-grid">${s.opts.map(o => `<button class="opt" onclick="window.__mq_pick('${s.key}','${o[0]}','${o[1].replace(/'/g, "\\'")}',this)"><span class="em">${o[0]}</span>${o[1]}</button>`).join("")}</div>
+      </div>`;
+      const qreward = document.getElementById("qreward");
+      if (qreward) qreward.textContent = "";
+    }
+    function pick(key: string, em: string, label: string, el: Element) {
+      document.querySelectorAll(".opt").forEach(b => b.classList.remove("picked"));
+      el.classList.add("picked");
+      answers[key] = { em, label };
+      const qreward = document.getElementById("qreward");
+      if (qreward) qreward.textContent = QUIZ[qRole][step].reward;
+      setTimeout(() => { step++; renderStep(); }, 850);
+    }
+    function renderResult() {
+      const qbar = document.getElementById("qbar");
+      if (qbar) qbar.style.width = "100%";
+      const a = answers;
+      const r = REFLECT[qRole][a.pain?.em] || Object.values(REFLECT[qRole])[0];
+      const lines = qRole === "owner"
+        ? `<p>Industry: <b>${a.industry?.label}</b></p><p>Cash cycle: <b>${a.cashcycle?.label}</b></p><p>Size band: <b>${a.size?.label}</b></p>`
+        : `<p>Practice focus: <b>${a.industry?.label}</b></p><p>Client base: <b>${a.cashcycle?.label}</b></p><p>North star: <b>${a.size?.label}</b></p>`;
+      const holder = document.getElementById("qsteps");
+      if (holder) holder.innerHTML = `<div class="q-step on">
+        <p class="eyebrow">Your business, sketched</p>
+        <h3>Here's what we see.</h3>
+        <div class="mini-biz">
+          <div class="mini-orrery">
+            <div class="ring r1"></div><div class="ring r2"></div><div class="ring r3"></div>
+            <div class="core"></div>
+            <div class="dot" style="top:6%;left:48%"></div>
+            <div class="dot" style="top:42%;left:84%"></div>
+            <div class="dot" style="top:74%;left:14%"></div>
+          </div>
+          <div class="profile-lines">${lines}<p>Biggest worry: <b>${a.pain?.label}</b></p></div>
+        </div>
+        <div class="reflect"><span class="serif gold-text">"${a.pain?.label}."</span><br>${r[1]}</div>
+        <p class="hint">Your full diagnostic — health score, cash runway, and your first three moves — is one step away.</p>
+        <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:8px">
+          <a class="btn btn-gold" href="#register">Unlock my full diagnostic ✦</a>
+          <button class="btn btn-ghost" onclick="window.__mq_start('${qRole}')">Redo questions</button>
+        </div>
+      </div>`;
+      const qreward = document.getElementById("qreward");
+      if (qreward) qreward.textContent = "";
+    }
+    function pickPlan(p: string) {
+      const sel = document.getElementById("regPlan") as HTMLSelectElement | null;
+      if (sel) [...sel.options].forEach(o => { if (o.value.startsWith(p)) sel.value = o.value; });
+    }
+
+    (window as any).__mq_start = startQuiz;
+    (window as any).__mq_pick  = pick;
+    (window as any).__mq_plan  = pickPlan;
+
+    return () => {
+      removeEventListener("scroll", onScroll);
+      io.disconnect();
+      cio.disconnect();
+      delete (window as any).__mq_start;
+      delete (window as any).__mq_pick;
+      delete (window as any).__mq_plan;
+    };
+  }, []);
+
+  /* ── sign-in handler ── */
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
-    setBusy(true);
+    setSiError("");
+    setSiBusy(true);
     try {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      const { error } = await supabase.auth.signInWithPassword({ email: siEmail, password: siPassword });
       if (error) throw error;
+      setSigninOpen(false);
       navigate({ to: "/app" });
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Sign in failed");
-    } finally { setBusy(false); }
+      setSiError(err instanceof Error ? err.message : "Sign in failed");
+    } finally { setSiBusy(false); }
   };
 
-  const handleSignUp = async (e: React.FormEvent) => {
+  /* ── register handler ── */
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    setBusy(true);
+    if (regRole === "Accountant / Advisory firm") {
+      navigate({ to: "/auth" });
+      return;
+    }
+    if (!regPassword || regPassword.length < 6) {
+      toast.error("Password must be at least 6 characters.");
+      return;
+    }
+    setRegBusy(true);
     try {
       const { data, error } = await supabase.auth.signUp({
-        email, password,
+        email: regEmail, password: regPassword,
         options: {
           emailRedirectTo: `${window.location.origin}/app`,
           data: {
-            full_name: fullName.trim(),
-            business_name: businessName.trim() || fullName.trim(),
+            full_name: regName.trim(),
+            business_name: regBusiness.trim() || regName.trim(),
             signup_type: "customer",
-            invite_client_id: inviteClientId || null,
+            plan: regPlan,
           },
         },
       });
       if (error) throw error;
       if (data.session && data.user) {
-        if (inviteClientId) {
-          await supabase.from("client_memberships").upsert(
-            { client_id: inviteClientId, user_id: data.user.id, role: "client" },
-            { onConflict: "client_id,user_id" },
-          );
-        } else {
-          const { data: existing } = await supabase
-            .from("clients").select("id").eq("owner_user_id", data.user.id).limit(1).maybeSingle();
-          if (!existing) {
-            await supabase.from("clients").insert({
-              name: businessName.trim() || fullName.trim() || email,
-              owner_user_id: data.user.id,
-            });
-          }
+        const { data: existing } = await supabase
+          .from("clients").select("id").eq("owner_user_id", data.user.id).limit(1).maybeSingle();
+        if (!existing) {
+          await supabase.from("clients").insert({
+            name: regBusiness.trim() || regName.trim() || regEmail,
+            owner_user_id: data.user.id,
+          });
         }
         navigate({ to: "/app" });
         return;
       }
-      if (inviteClientId) localStorage.setItem("pending_invite_client_id", inviteClientId);
-      setSignupDone(true);
+      setRegDone(true);
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Sign up failed");
-    } finally { setBusy(false); }
+      toast.error(err instanceof Error ? err.message : "Registration failed.");
+    } finally { setRegBusy(false); }
   };
 
-  if (signupDone) {
+  if (loading) return null;
+
+  /* ── email confirmation screen ── */
+  if (regDone) {
     return (
-      <div style={{ minHeight: "100vh", background: "#05070B", display: "flex", alignItems: "center", justifyContent: "center", padding: "0 16px" }}>
-        <div style={{
-          width: "100%", maxWidth: 400, borderRadius: 28, padding: "40px 32px",
-          background: "rgba(17,20,29,.80)", backdropFilter: "blur(24px)",
-          border: "1px solid rgba(201,169,106,.15)", boxShadow: "0 25px 80px rgba(0,0,0,.6)",
-          textAlign: "center",
-        }}>
-          <div style={{ width: 52, height: 52, borderRadius: "50%", background: "rgba(201,169,106,.1)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px" }}>
-            <Mail size={22} style={{ color: "#C9A96A" }} />
+      <div style={{ minHeight:"100vh", background:"#050507", display:"flex", alignItems:"center", justifyContent:"center", padding:"0 16px" }}>
+        <div style={{ width:"100%", maxWidth:420, borderRadius:28, padding:"44px 36px", background:"rgba(13,13,20,.96)", border:"1px solid rgba(212,175,55,.2)", boxShadow:"0 30px 80px rgba(0,0,0,.6)", textAlign:"center" }}>
+          <div style={{ width:52, height:52, borderRadius:"50%", background:"rgba(212,175,55,.1)", display:"grid", placeItems:"center", margin:"0 auto 22px" }}>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#d4af37" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>
+            </svg>
           </div>
-          <h2 style={{ fontSize: 18, fontWeight: 600, color: "#F5F4F1", margin: 0 }}>Check your email</h2>
-          <p style={{ marginTop: 10, fontSize: 13, color: "#6B7280", lineHeight: 1.6 }}>
-            We sent a confirmation link to{" "}
-            <span style={{ color: "#C9A96A" }}>{email}</span>. Click it to activate your account.
+          <h2 style={{ fontSize:20, fontWeight:700, color:"#f2ecdc", margin:"0 0 10px" }}>Check your email</h2>
+          <p style={{ fontSize:14, color:"#9b958a", lineHeight:1.6 }}>
+            We sent a confirmation link to <span style={{ color:"#d4af37" }}>{regEmail}</span>. Click it to activate your account.
           </p>
-          <button onClick={() => setSignupDone(false)} style={{ marginTop: 24, fontSize: 12, color: "#6B7280", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>
-            ← Back to sign in
+          <button onClick={() => setRegDone(false)} style={{ marginTop:26, fontSize:12, color:"#9b958a", background:"none", border:"none", cursor:"pointer", textDecoration:"underline" }}>
+            ← Back
           </button>
         </div>
       </div>
     );
   }
 
+  /* ═══════════════════════════ MAIN RENDER ═══════════════════════════ */
   return (
-    <div style={{ minHeight: "100vh", background: "#05070B", position: "relative", overflow: "hidden" }}>
-      <style>{`
-        @keyframes gp-float {
-          0%   { transform: translateY(0px)   scale(1);   opacity: 0.35; }
-          100% { transform: translateY(-16px) scale(1.25);opacity: 0.75; }
-        }
-        @keyframes milon-fadein {
-          from { opacity: 0; transform: translateY(14px); }
-          to   { opacity: 1; transform: translateY(0);    }
-        }
-        @keyframes card-float {
-          0%,100% { transform: translateY(0px);  }
-          50%      { transform: translateY(-5px); }
-        }
-        .milon-fadein   { animation: milon-fadein 620ms cubic-bezier(.22,1,.36,1) both; }
-        .milon-card     { animation: card-float 5s ease-in-out infinite, milon-fadein 620ms cubic-bezier(.22,1,.36,1) both; }
-        .milon-input {
-          display: block; width: 100%; height: 60px; border-radius: 18px;
-          background: rgba(255,255,255,.03);
-          border: 1px solid rgba(255,255,255,.08);
-          padding: 0 20px; color: #F5F4F1; font-size: 14px;
-          transition: border-color 250ms, box-shadow 250ms;
-          outline: none; box-sizing: border-box;
-        }
-        .milon-input::placeholder { color: #6B7280; }
-        .milon-input:focus {
-          border-color: #C9A96A;
-          box-shadow: 0 0 0 1px rgba(201,169,106,.15), 0 0 25px rgba(201,169,106,.18);
-        }
-        .milon-btn {
-          display: block; width: 100%; height: 60px; border-radius: 18px; border: none;
-          background: linear-gradient(135deg, #D8B46A 0%, #C9A96A 55%, #A56A00 100%);
-          color: #05070B; font-weight: 700; font-size: 15px; letter-spacing: .04em;
-          cursor: pointer; box-shadow: 0 10px 40px rgba(201,169,106,.28);
-          transition: transform 200ms, filter 200ms; margin-top: 8px;
-        }
-        .milon-btn:hover:not(:disabled) { transform: scale(1.02); filter: brightness(1.07); }
-        .milon-btn:disabled { opacity: .55; cursor: not-allowed; }
-        .acct-pill {
-          height: 48px; display: inline-flex; align-items: center; gap: 8px;
-          padding: 0 22px; border-radius: 100px;
-          background: rgba(20,20,20,.75); backdrop-filter: blur(12px);
-          border: 1px solid rgba(201,169,106,.25);
-          color: #C9A96A; font-size: 13px; font-weight: 500;
-          text-decoration: none; transition: box-shadow 200ms, border-color 200ms;
-        }
-        .acct-pill:hover {
-          box-shadow: 0 0 22px rgba(201,169,106,.20);
-          border-color: rgba(201,169,106,.48);
-        }
-        .tab-btn {
-          flex: 1; height: 44px; border-radius: 16px; border: none; cursor: pointer;
-          font-size: 13px; font-weight: 600; letter-spacing: .02em;
-          display: flex; align-items: center; justify-content: center; gap: 6px;
-          transition: all 200ms;
-        }
-        .tab-btn-active {
-          background: linear-gradient(90deg, #A56A00, #C9A96A);
-          color: #05070B; box-shadow: 0 4px 18px rgba(201,169,106,.28);
-        }
-        .tab-btn-inactive { background: transparent; color: #6B7280; }
-        .tab-btn-inactive:hover { color: #A0A7B5; }
-      `}</style>
-
-      {/* Gold particles */}
-      <div style={{ position: "fixed", inset: 0, pointerEvents: "none", overflow: "hidden" }}>
-        {PARTICLES.map((p, i) => (
-          <div key={i} style={{
-            position: "absolute", top: p.top, left: p.left,
-            width: p.s, height: p.s, borderRadius: "50%",
-            background: "radial-gradient(circle, #D8B46A, rgba(201,169,106,.5))",
-            animation: `gp-float ${p.dur}s ease-in-out ${p.d}s infinite alternate`,
-          }} />
-        ))}
-      </div>
-
-      {/* Ambient radial glow */}
-      <div style={{
-        position: "fixed", top: 0, left: "50%", transform: "translateX(-50%)",
-        width: 720, height: 520, pointerEvents: "none",
-        background: "radial-gradient(ellipse at 50% 20%, rgba(201,169,106,.12) 0%, transparent 65%)",
-        filter: "blur(32px)",
-      }} />
-
-      {/* Subtle starfield */}
-      <div style={{
-        position: "fixed", inset: 0, pointerEvents: "none",
-        backgroundImage: [
-          "radial-gradient(circle at 14% 22%, rgba(255,255,255,.016) 1px, transparent 1px)",
-          "radial-gradient(circle at 71% 17%, rgba(255,255,255,.012) 1px, transparent 1px)",
-          "radial-gradient(circle at 39% 79%, rgba(255,255,255,.014) 1px, transparent 1px)",
-          "radial-gradient(circle at 87% 68%, rgba(255,255,255,.010) 1px, transparent 1px)",
-          "radial-gradient(circle at 4%  59%, rgba(255,255,255,.012) 1px, transparent 1px)",
-          "radial-gradient(circle at 58% 44%, rgba(255,255,255,.008) 1px, transparent 1px)",
-          "radial-gradient(circle at 29% 54%, rgba(255,255,255,.010) 1px, transparent 1px)",
-          "radial-gradient(circle at 94% 39%, rgba(255,255,255,.014) 1px, transparent 1px)",
-          "radial-gradient(circle at 52% 8%,  rgba(255,255,255,.010) 1px, transparent 1px)",
-          "radial-gradient(circle at 76% 88%, rgba(255,255,255,.012) 1px, transparent 1px)",
-        ].join(","),
-      }} />
-
-      {/* Top bar */}
-      <header className="milon-fadein" style={{ position: "relative", zIndex: 10, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "20px 40px", animationDelay: "0ms" }}>
-        <img src="/milon-wordmark.png" alt="Milōn" style={{ height: 20, width: "auto", opacity: 0.55 }} />
-        <Link to="/auth" className="acct-pill">
-          Accountant Portal
-          <ArrowRight size={13} />
-        </Link>
-      </header>
-
-      {/* Main */}
-      <main style={{ position: "relative", zIndex: 10, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "16px 16px 64px", minHeight: "calc(100vh - 80px)" }}>
-
-        {/* Hero */}
-        <div className="milon-fadein" style={{ display: "flex", flexDirection: "column", alignItems: "center", marginBottom: 36, animationDelay: "80ms" }}>
-          {/* Orbit rings + centaur */}
-          <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center", width: 220, height: 220 }}>
-            <div style={{ position: "absolute", width: 220, height: 220, borderRadius: "50%", border: "1px solid rgba(201,169,106,.06)" }} />
-            <div style={{ position: "absolute", width: 170, height: 170, borderRadius: "50%", border: "1px solid rgba(201,169,106,.09)" }} />
-            <div style={{ position: "absolute", width: 126, height: 126, borderRadius: "50%", border: "1px solid rgba(201,169,106,.13)" }} />
-            {/* Gold node on outer ring */}
-            <div style={{ position: "absolute", top: "6%", left: "50%", width: 5, height: 5, marginLeft: -2.5, borderRadius: "50%", background: "#C9A96A", boxShadow: "0 0 8px rgba(201,169,106,.7)", opacity: 0.8 }} />
-            <div style={{ position: "absolute", bottom: "8%", left: "30%", width: 3.5, height: 3.5, borderRadius: "50%", background: "#C9A96A", opacity: 0.5 }} />
-            <img
-              src="/milon-logo.png"
-              alt="Milōn centaur"
-              style={{
-                position: "relative", zIndex: 1,
-                height: 96, width: "auto",
-                filter: "drop-shadow(0 0 28px rgba(201,169,106,.40)) drop-shadow(0 0 64px rgba(201,169,106,.18))",
-              }}
-            />
-          </div>
-
-          {/* Tagline */}
-          <div style={{ marginTop: 16, textAlign: "center" }}>
-            <p style={{ margin: 0, fontSize: 11, letterSpacing: "0.35em", color: "#A0A7B5", fontWeight: 500, textTransform: "uppercase" }}>
-              Operating Finance
+    <>
+      {/* ── sign-in modal ── */}
+      {signinOpen && (
+        <div className="milon-signin-modal" onClick={() => setSigninOpen(false)}>
+          <div className="milon-signin-box" onClick={e => e.stopPropagation()}>
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:24 }}>
+              <h2>Sign in to MILŌN</h2>
+              <button onClick={() => setSigninOpen(false)} style={{ width:36, height:36, borderRadius:"50%", border:"1px solid var(--line)", background:"transparent", color:"var(--ink-dim)", cursor:"pointer", fontSize:20, display:"grid", placeItems:"center" }}>×</button>
+            </div>
+            <form onSubmit={handleSignIn}>
+              <div className="field">
+                <label>Email</label>
+                <input type="email" required placeholder="you@business.co.za" value={siEmail} onChange={e => setSiEmail(e.target.value)} />
+              </div>
+              <div className="field">
+                <label>Password</label>
+                <input type="password" required placeholder="••••••••" value={siPassword} onChange={e => setSiPassword(e.target.value)} />
+              </div>
+              {siError && <p style={{ fontSize:13, color:"var(--risk)", margin:"8px 0" }}>{siError}</p>}
+              <button type="submit" className="btn btn-gold" disabled={siBusy} style={{ width:"100%", justifyContent:"center", marginTop:18 }}>
+                {siBusy ? "Signing in…" : "Sign in ✦"}
+              </button>
+            </form>
+            <p style={{ marginTop:18, fontSize:12, color:"var(--ink-dim)", textAlign:"center" }}>
+              Accountant?{" "}
+              <a href="/auth" style={{ color:"var(--gold)", textDecoration:"none" }}>Sign in to the accountant portal →</a>
             </p>
-            {/* Gold divider */}
-            <div style={{ width: 80, height: 1, background: "linear-gradient(90deg, transparent, rgba(201,169,106,.7), transparent)", margin: "12px auto 0" }} />
+            <p style={{ marginTop:8, fontSize:12, color:"var(--ink-dim)", textAlign:"center" }}>
+              New here?{" "}
+              <button onClick={() => { setSigninOpen(false); document.getElementById("register")?.scrollIntoView({ behavior:"smooth" }); }}
+                style={{ background:"none", border:"none", color:"var(--gold)", cursor:"pointer", fontSize:12, padding:0 }}>
+                Get your free health score
+              </button>
+            </p>
           </div>
         </div>
+      )}
 
-        {/* Invite banner */}
-        {inviteClientId && (
-          <div style={{ width: "100%", maxWidth: 420, borderRadius: 16, border: "1px solid rgba(201,169,106,.28)", background: "rgba(201,169,106,.05)", padding: "12px 20px", textAlign: "center", marginBottom: 16 }}>
-            <p style={{ fontSize: 12, color: "#C9A96A" }}>
-              You've been invited to Milōn — create your account below.
-            </p>
-          </div>
-        )}
+      {/* ── atmosphere ── */}
+      <div id="atmos" aria-hidden="true">
+        <div className="glow g1" /><div className="glow g2" /><div className="glow g3" />
+        <div className="grid" />
+        <div className="stars" />
+      </div>
+      <div id="progress" aria-hidden="true" />
 
-        {/* Auth card */}
-        <div
-          className="milon-card"
-          style={{
-            width: "90%", maxWidth: 420,
-            borderRadius: 32,
-            background: "rgba(17,20,29,.72)",
-            backdropFilter: "blur(24px)",
-            border: "1px solid rgba(201,169,106,.15)",
-            boxShadow: "0 25px 80px rgba(0,0,0,.55), inset 0 0 0 1px rgba(201,169,106,.04)",
-            padding: "32px 28px 28px",
-            animationDelay: "160ms",
-          }}
-        >
-          {/* Tabs */}
-          <div style={{ display: "flex", gap: 4, padding: 4, background: "rgba(255,255,255,.04)", borderRadius: 20, marginBottom: 24 }}>
-            <button
-              type="button"
-              onClick={() => setTab("signin")}
-              className={`tab-btn ${tab === "signin" ? "tab-btn-active" : "tab-btn-inactive"}`}
-            >
-              <User size={13} />
+      {/* ── nav ── */}
+      <nav id="topnav">
+        <div className="wrap">
+          <a className="logo" href="#hero">
+            <svg viewBox="0 0 40 40" fill="none" height="34" width="34">
+              <circle cx="20" cy="20" r="18" stroke="url(#ng1)" strokeWidth="1.4"/>
+              <path d="M11 27 L17 13 L23 22 L27 11" stroke="url(#ng1)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              <defs>
+                <linearGradient id="ng1" x1="0" y1="0" x2="40" y2="40">
+                  <stop stopColor="#fdee79"/><stop offset="1" stopColor="#ac8400"/>
+                </linearGradient>
+              </defs>
+            </svg>
+            <span className="logo-word gold-text">MILŌN</span>
+          </a>
+          <div className="links">
+            <a href="#persona">Start</a>
+            <a href="#method">The MILŌN Method</a>
+            <a href="#features">Platform</a>
+            <a href="#pricing">Pricing</a>
+            <button id="themeToggle" title="Toggle light / dark">☀</button>
+            <button className="btn btn-gold" style={{ padding:"10px 22px", fontSize:13 }} onClick={() => { setSiError(""); setSigninOpen(true); }}>
               Sign in
             </button>
-            <button
-              type="button"
-              onClick={() => setTab("signup")}
-              className={`tab-btn ${tab === "signup" ? "tab-btn-active" : "tab-btn-inactive"}`}
-            >
-              <UserPlus size={13} />
-              Create account
-            </button>
+          </div>
+        </div>
+      </nav>
+
+      {/* ══════════════════════════ HERO ══════════════════════════ */}
+      <section id="hero">
+        <div className="wrap">
+          <div>
+            <span className="hero-badge h-anim d1"><span className="pulse" />The financial health platform</span>
+            <h1 className="h-anim d2">Know your numbers.<br /><span className="gold-text">Sleep at night.</span></h1>
+            <p className="sub h-anim d3">
+              Most owners find out about a cash crisis when it's already here. MILŌN shows you your business's health as one simple score — where the problem lives, what it's costing you, and exactly what to do next. A CFO in your pocket. And your accountant's AI sidekick.
+            </p>
+            <div className="hero-cta h-anim d4">
+              <a className="btn btn-gold" href="#persona">Get my free health score</a>
+              <button className="btn btn-ghost" onClick={() => setTimeout(() => (window as any).__mq_start?.("accountant"), 300)}>
+                I'm an accountant — show me the margin
+              </button>
+            </div>
+            <div className="hero-stats h-anim d5">
+              <div><b><span className="count" data-to="1">0</span></b><span>Score that tells the truth</span></div>
+              <div><b><span className="count" data-to="13">0</span>&nbsp;wks</b><span>You see cash trouble coming</span></div>
+              <div><b><span className="count" data-to="930">0</span>+</b><span>Proven fixes, ranked for you</span></div>
+              <div><b>R<span className="count" data-to="1200" data-fmt="space">0</span>+</b><span>Advisory uplift per client /mo</span></div>
+            </div>
           </div>
 
-          {tab === "signin" ? (
-            <form onSubmit={handleSignIn} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-              <InputField label="Email" type="email" value={email} onChange={setEmail} placeholder="you@company.com" icon={<Mail size={15} />} />
-              <PasswordField value={password} onChange={setPassword} show={showPassword} onToggle={() => setShowPassword(v => !v)} />
-
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
-                  <div
-                    onClick={() => setRememberMe(v => !v)}
-                    style={{
-                      width: 16, height: 16, borderRadius: 4, flexShrink: 0,
-                      border: `1px solid ${rememberMe ? "#C9A96A" : "rgba(255,255,255,.18)"}`,
-                      background: rememberMe ? "rgba(201,169,106,.18)" : "transparent",
-                      transition: "all 200ms", cursor: "pointer",
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                    }}
-                  >
-                    {rememberMe && (
-                      <svg width="9" height="7" viewBox="0 0 9 7" fill="none">
-                        <path d="M1 3.5L3.5 6L8 1" stroke="#C9A96A" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                    )}
-                  </div>
-                  <span style={{ fontSize: 12, color: "#6B7280" }}>Remember me</span>
-                </label>
-                <button type="button" style={{ fontSize: 12, color: "#C9A96A", background: "none", border: "none", cursor: "pointer", padding: 0 }}>
-                  Forgot password?
-                </button>
+          {/* dashboard mockup */}
+          <div className="dash-stage h-anim d3">
+            <div className="dash" id="dash">
+              <div className="dash-top">
+                <span className="brand">MILŌN</span>
+                <span className="live-pill"><i />Live · synced 2 min ago</span>
               </div>
-
-              <button type="submit" disabled={busy} className="milon-btn">
-                {busy ? "Signing in…" : "Sign in"}
-              </button>
-            </form>
-          ) : (
-            <form onSubmit={handleSignUp} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-              <InputField label="Your name" type="text" value={fullName} onChange={setFullName} placeholder="Jane Smith" required />
-              {!inviteClientId && (
-                <InputField label="Business name" type="text" value={businessName} onChange={setBusinessName} placeholder="Acme (Pty) Ltd" />
-              )}
-              <InputField label="Email" type="email" value={email} onChange={setEmail} placeholder="you@company.com" required icon={<Mail size={15} />} />
-              <PasswordField value={password} onChange={setPassword} show={showPassword} onToggle={() => setShowPassword(v => !v)} minLength={8} />
-              <button type="submit" disabled={busy} className="milon-btn">
-                {busy ? "Creating account…" : "Create account"}
-              </button>
-              <p style={{ textAlign: "center", fontSize: 11, color: "#6B7280", marginTop: -8 }}>
-                By signing up you agree to our terms of service.
-              </p>
-            </form>
-          )}
-        </div>
-
-        {/* Bottom accountant CTA */}
-        <div className="milon-fadein" style={{ marginTop: 28, textAlign: "center", animationDelay: "280ms" }}>
-          <p style={{ fontSize: 12, color: "#6B7280", margin: 0 }}>Are you an accountant?</p>
-          <Link
-            to="/auth"
-            style={{ display: "inline-flex", alignItems: "center", gap: 5, marginTop: 6, fontSize: 13, color: "#C9A96A", fontWeight: 500, textDecoration: "none", transition: "opacity 200ms" }}
-          >
-            Access Accountant Portal
-            <ArrowRight size={12} />
-          </Link>
-        </div>
-      </main>
-
-      <footer style={{ position: "relative", zIndex: 10, textAlign: "center", paddingBottom: 20, fontSize: 11, color: "#1E2530" }}>
-        © {new Date().getFullYear()} Milōn · Operating Finance
-      </footer>
-    </div>
-  );
-}
-
-function InputField({
-  label, type, value, onChange, placeholder, required, icon,
-}: {
-  label: string; type: string; value: string; onChange: (v: string) => void;
-  placeholder?: string; required?: boolean; icon?: React.ReactNode;
-}) {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-      <label style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.14em", color: "#A0A7B5", textTransform: "uppercase" }}>
-        {label}
-      </label>
-      <div style={{ position: "relative" }}>
-        {icon && (
-          <div style={{ position: "absolute", left: 18, top: "50%", transform: "translateY(-50%)", color: "#6B7280", pointerEvents: "none" }}>
-            {icon}
+              <div className="dash-main">
+                <div className="gauge">
+                  <svg width="150" height="150" viewBox="0 0 150 150">
+                    <defs>
+                      <linearGradient id="gaugeGrad" x1="0" y1="0" x2="1" y2="1">
+                        <stop offset="0" stopColor="#fdee79"/><stop offset=".6" stopColor="#d4af37"/><stop offset="1" stopColor="#ac8400"/>
+                      </linearGradient>
+                      <linearGradient id="cashGrad" x1="0" y1="0" x2="1" y2="0">
+                        <stop offset="0" stopColor="#ac8400"/><stop offset=".5" stopColor="#d4af37"/><stop offset="1" stopColor="#fdee79"/>
+                      </linearGradient>
+                      <linearGradient id="cashFill" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0" stopColor="rgba(212,175,55,.28)"/><stop offset="1" stopColor="rgba(212,175,55,0)"/>
+                      </linearGradient>
+                    </defs>
+                    <circle className="track" cx="75" cy="75" r="64" fill="none" strokeWidth="9"/>
+                    <circle className="fill" id="gaugeFill" cx="75" cy="75" r="64" fill="none" strokeWidth="9" strokeDasharray="402" strokeDashoffset="402"/>
+                  </svg>
+                  <div className="val"><div><b className="count" data-to="78">0</b><span>Health score</span></div></div>
+                </div>
+                <div className="pillars">
+                  <div className="pill-row"><span className="nm">Financing</span><span className="bar"><i data-w="82%" /></span><b className="num">82</b></div>
+                  <div className="pill-row"><span className="nm">Assets</span><span className="bar"><i data-w="74%" /></span><b className="num">74</b></div>
+                  <div className="pill-row"><span className="nm">Profit</span><span className="bar"><i data-w="81%" /></span><b className="num">81</b></div>
+                  <div className="pill-row warn"><span className="nm">Cash</span><span className="bar"><i data-w="61%" /></span><b className="num">61</b></div>
+                </div>
+              </div>
+              <div className="dash-chart">
+                <div className="lbl"><b>13-week cash forecast</b><span>R thousands</span></div>
+                <svg className="cash-svg" viewBox="0 0 520 120" preserveAspectRatio="none" aria-hidden="true">
+                  <line x1="0" y1="96" x2="520" y2="96" stroke="rgba(212,175,55,.14)" strokeWidth="1" strokeDasharray="3 5"/>
+                  <path className="cash-fill" d="M0 58 C40 50,70 44,105 48 C140 52,165 66,200 78 C235 90,258 96,290 92 C322 88,345 70,385 56 C425 42,470 34,520 28 L520 120 L0 120 Z"/>
+                  <path className="cash-line" d="M0 58 C40 50,70 44,105 48 C140 52,165 66,200 78 C235 90,258 96,290 92 C322 88,345 70,385 56 C425 42,470 34,520 28"/>
+                  <circle className="dip-ring" cx="272" cy="94" r="4"/>
+                  <circle className="dip-dot"  cx="272" cy="94" r="4"/>
+                </svg>
+                <div className="alert-chip">
+                  <span className="dot" />
+                  <span><b>Cash dip — Week 6.</b> <span>Action plan ready: 3 moves close the gap.</span></span>
+                </div>
+              </div>
+            </div>
+            <div className="float-card fc-1">
+              <span className="tag">Accountant note</span>
+              <p>Debtor days crept up to <b>52</b>. Chase your top 3 invoices this week — that's <b>R184k</b> unlocked.</p>
+            </div>
+            <div className="float-card fc-2">
+              <b>+9 pts</b>
+              <span>Health score · this quarter</span>
+            </div>
           </div>
-        )}
-        <input
-          type={type} value={value} onChange={e => onChange(e.target.value)}
-          required={required} placeholder={placeholder}
-          className="milon-input"
-          style={{ paddingLeft: icon ? 44 : 20 }}
-        />
-      </div>
-    </div>
-  );
-}
+        </div>
+      </section>
 
-function PasswordField({
-  value, onChange, show, onToggle, minLength,
-}: {
-  value: string; onChange: (v: string) => void; show: boolean; onToggle: () => void; minLength?: number;
-}) {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-      <label style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.14em", color: "#A0A7B5", textTransform: "uppercase" }}>
-        Password
-      </label>
-      <div style={{ position: "relative" }}>
-        <input
-          type={show ? "text" : "password"} value={value}
-          onChange={e => onChange(e.target.value)}
-          required minLength={minLength ?? 6} placeholder="••••••••"
-          className="milon-input"
-          style={{ paddingRight: 52 }}
-        />
-        <button
-          type="button" onClick={onToggle} tabIndex={-1}
-          style={{ position: "absolute", right: 18, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "#6B7280", padding: 0, display: "flex" }}
-        >
-          {show ? <EyeOff size={16} /> : <Eye size={16} />}
-        </button>
+      {/* ══════════════════════════ TRUST STRIP ══════════════════════════ */}
+      <div className="trust">
+        <div className="wrap">
+          <div className="item">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color:"var(--gold)" }}>
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            </svg>
+            <span>End-to-end encrypted</span>
+          </div>
+          <div className="item">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color:"var(--gold)" }}>
+              <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+            </svg>
+            <span>Live sync, every 2 min</span>
+          </div>
+          <div className="item">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color:"var(--gold)" }}>
+              <polyline points="20 6 9 17 4 12"/>
+            </svg>
+            <span>SAICA-referenced ratios</span>
+          </div>
+          <div className="item">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color:"var(--gold)" }}>
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+            </svg>
+            <span>Built for SA SMEs</span>
+          </div>
+          <div className="item">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color:"var(--gold)" }}>
+              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+            </svg>
+            <span>Powered by Gemini AI</span>
+          </div>
+        </div>
       </div>
-    </div>
+
+      {/* ══════════════════════════ PERSONA ══════════════════════════ */}
+      <section id="persona">
+        <div className="wrap">
+          <div className="section-head center reveal">
+            <span className="eyebrow">Start here</span>
+            <h2>Who are you in this story?</h2>
+            <p className="sub">MILŌN serves two constellations. Choose yours and we'll show you exactly what you're about to gain.</p>
+          </div>
+          <div className="persona-grid stagger">
+            <div className="persona-card" onClick={() => (window as any).__mq_start?.("owner")}>
+              <div className="icon">
+                <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+              </div>
+              <h3>Business Owner</h3>
+              <p>You built something real. Now you want to know if the numbers are lying to you — and what to do about it.</p>
+              <div className="go">Take the 90-second diagnostic <i>→</i></div>
+            </div>
+            <div className="persona-card" onClick={() => (window as any).__mq_start?.("accountant")}>
+              <div className="icon">
+                <svg viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+              </div>
+              <h3>Accountant / Advisory Firm</h3>
+              <p>Your compliance work is flawless. Now clients want strategic insight — and they'll pay monthly for it.</p>
+              <div className="go">See the advisory revenue model <i>→</i></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ══════════════════════════ QUIZ ══════════════════════════ */}
+      <section id="quiz">
+        <div className="wrap">
+          <div className="quiz-shell">
+            <div className="quiz-progress"><i id="qbar" /></div>
+            <div id="qsteps" />
+            <div className="quiz-reward" id="qreward" />
+          </div>
+        </div>
+      </section>
+
+      {/* ══════════════════════════ METHOD ══════════════════════════ */}
+      <section id="method">
+        <div className="wrap">
+          <div className="section-head center reveal">
+            <span className="eyebrow">The MILŌN Method</span>
+            <h2>Four pillars. One score. No excuses.</h2>
+            <p className="sub">Every business has four financial organs. MILŌN scores each one every time you upload financials, and tells you exactly which is dragging your orbit.</p>
+          </div>
+          <div className="pillar-grid stagger" id="pillarGrid">
+            <div className="pillar-card">
+              <div className="node" />
+              <div className="metaphor">The Sun</div>
+              <h3>Profitability</h3>
+              <p>Gross margin, net margin, EBITDA, and return on equity — the heat that keeps your orbit alive.</p>
+              <div className="score">
+                <span>Demo</span>
+                <span className="bar"><i data-w="81%" /></span>
+                <b>81</b>
+              </div>
+            </div>
+            <div className="pillar-card">
+              <div className="node" />
+              <div className="metaphor">The River</div>
+              <h3>Cash Flow</h3>
+              <p>Operating cash, 13-week forecast, debtor days, creditor days, and cash conversion cycle.</p>
+              <div className="score">
+                <span>Demo</span>
+                <span className="bar"><i data-w="61%" /></span>
+                <b>61</b>
+              </div>
+            </div>
+            <div className="pillar-card warn">
+              <div className="node" />
+              <div className="metaphor">The Skeleton</div>
+              <h3>Asset Productivity</h3>
+              <p>Working capital, inventory turns, fixed-asset efficiency — how well the structure bears weight.</p>
+              <div className="score">
+                <span>Demo</span>
+                <span className="bar"><i data-w="74%" /></span>
+                <b>74</b>
+              </div>
+            </div>
+            <div className="pillar-card">
+              <div className="node" />
+              <div className="metaphor">The Backbone</div>
+              <h3>Financing & Solvency</h3>
+              <p>Debt-to-equity, interest cover, gearing, leverage — the load-bearing structure of your business.</p>
+              <div className="score">
+                <span>Demo</span>
+                <span className="bar"><i data-w="82%" /></span>
+                <b>82</b>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ══════════════════════════ MARQUEE ══════════════════════════ */}
+      <div className="marquee-band">
+        <p className="cap">31 ratios calculated on every upload</p>
+        <div className="marquee" id="marquee">
+          <span>Gross Margin</span>
+          <span>Net Margin</span>
+          <span>EBITDA Margin</span>
+          <span>Return on Assets</span>
+          <span>Return on Equity</span>
+          <span>Current Ratio</span>
+          <span>Quick Ratio</span>
+          <span>Debt-to-Equity</span>
+          <span>Interest Cover</span>
+          <span>Operating Cash Ratio</span>
+          <span>13-Week Cash Forecast</span>
+          <span>Debtor Days</span>
+          <span>Creditor Days</span>
+          <span>Inventory Turnover</span>
+          <span>Cash Conversion Cycle</span>
+          <span>Working Capital Ratio</span>
+          <span>Asset Turnover</span>
+          <span>Fixed Asset Efficiency</span>
+          <span>Gearing Ratio</span>
+          <span>Leverage Ratio</span>
+          <span>Break-even Point</span>
+          <span>Revenue per Employee</span>
+          <span>Labour Productivity</span>
+          <span>Cost Structure</span>
+          <span>Revenue Growth</span>
+          <span>Profit per Rand Earned</span>
+          <span>Cash Burn Rate</span>
+          <span>Runway Weeks</span>
+          <span>Net Working Capital</span>
+          <span>Capital Efficiency</span>
+          <span>Equity Multiplier</span>
+        </div>
+      </div>
+
+      {/* ══════════════════════════ PROBLEM ══════════════════════════ */}
+      <section id="problem" style={{ paddingTop:80, paddingBottom:80 }}>
+        <div className="wrap">
+          <div className="section-head reveal">
+            <span className="eyebrow">The real problem</span>
+            <h2>Most businesses<br />don't fail. They <span className="gold-text serif">drift.</span></h2>
+          </div>
+          <p className="sub reveal" style={{ marginTop:24 }}>
+            South African SMEs operate with accountants they see once a quarter, software that reports the past, and no model for what comes next. The result: smart owners, flying blind. MILŌN is the instrument panel that was missing.
+          </p>
+          <div className="steps stagger" style={{ marginTop:56 }}>
+            <div className="step-card">
+              <span className="n">01</span>
+              <h3>You upload your financials</h3>
+              <p>Your accountant uploads your income statement, balance sheet, and cash flow — or you do. One PDF, extracted by AI in seconds.</p>
+              <span className="time">Under 60 seconds</span>
+            </div>
+            <div className="step-card">
+              <span className="n">02</span>
+              <h3>MILŌN scores your business</h3>
+              <p>31 ratios, 4 pillar scores, one overall health score — mapped against 120 SA industry benchmarks.</p>
+              <span className="time">Instantly</span>
+            </div>
+            <div className="step-card">
+              <span className="n">03</span>
+              <h3>You get your next move</h3>
+              <p>930+ ranked fixes, an AI-drafted advisory report, and a 13-week cashflow — all in plain language.</p>
+              <span className="time">Every month</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div className="divider"><div className="wrap"><i /></div></div>
+
+      {/* ══════════════════════════ FEATURES ══════════════════════════ */}
+      <section id="features">
+        <div className="wrap">
+          <div className="section-head center reveal">
+            <span className="eyebrow">The Platform</span>
+            <h2>Two portals. One constellation.</h2>
+            <p className="sub">Business owners get clarity. Accountants get leverage. Together, the relationship becomes a recurring-revenue advisory practice.</p>
+          </div>
+          <div className="feat-cols stagger">
+            <div className="feat-card">
+              <div className="who">For Business Owners</div>
+              <h3>Your financial cockpit</h3>
+              <ul>
+                <li><b>Live health score</b> — one number, updated every time your data changes</li>
+                <li><b>13-week cashflow forecast</b> — see shortfalls weeks before they hit</li>
+                <li><b>Playbook of 930+ fixes</b> — ranked by impact, filtered to your situation</li>
+                <li><b>Four pillar breakdown</b> — profitability, cash, assets, solvency</li>
+                <li><b>Accountant notes in-context</b> — advice lands on the exact number it refers to</li>
+                <li><b>PDF financial extraction</b> — upload a statement, AI does the rest</li>
+              </ul>
+            </div>
+            <div className="feat-card">
+              <div className="who" style={{ color:"var(--gold-bright)" }}>For Accountants</div>
+              <h3>Your advisory engine</h3>
+              <ul>
+                <li><b>Multi-client dashboard</b> — live health across your entire portfolio</li>
+                <li><b>AI advisory drafter</b> — Gemini writes the report; you refine and send</li>
+                <li><b>10 white-label report formats</b> — your brand, your margin</li>
+                <li><b>Risk radar</b> — flag deteriorating clients before the crisis call</li>
+                <li><b>Industry news digest</b> — always have sector context ready</li>
+                <li><b>Recurring retainer model</b> — R1 200+ uplift per client per month</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ══════════════════════════ PRICING ══════════════════════════ */}
+      <section id="pricing">
+        <div className="wrap">
+          <div className="section-head center reveal">
+            <span className="eyebrow">Pricing</span>
+            <h2>Start free. <span className="gold-text">Scale when it pays for itself.</span></h2>
+            <p className="sub">Every plan includes the core health score and cashflow forecast. Upgrade when you're ready for the full constellation.</p>
+          </div>
+
+          {/* accountant pricing — shown via body class set by quiz */}
+          <div className="acc-pricing" id="accPricing">
+            <div style={{ fontWeight:700, fontSize:12, letterSpacing:".3em", textTransform:"uppercase", color:"var(--gold)", marginBottom:10 }}>Accountant / Advisory Firm Pricing</div>
+            <p style={{ color:"var(--ink-dim)", fontSize:14, marginBottom:18 }}>
+              White-label the whole platform. Charge your clients a monthly advisory retainer. MILŌN is your engine.
+            </p>
+            <ul style={{ listStyle:"none", display:"flex", flexDirection:"column", gap:10 }}>
+              <li style={{ display:"flex", gap:10, fontSize:14, color:"var(--ink-dim)" }}><span style={{ color:"var(--gold)" }}>✦</span>Up to 150 clients — R4 500/mo flat</li>
+              <li style={{ display:"flex", gap:10, fontSize:14, color:"var(--ink-dim)" }}><span style={{ color:"var(--gold)" }}>✦</span>Unlimited clients — R7 200/mo</li>
+              <li style={{ display:"flex", gap:10, fontSize:14, color:"var(--ink-dim)" }}><span style={{ color:"var(--gold)" }}>✦</span>White-label onboarding support included</li>
+              <li style={{ display:"flex", gap:10, fontSize:14, color:"var(--ink-dim)" }}><span style={{ color:"var(--gold)" }}>✦</span>Your branding on every report and portal</li>
+            </ul>
+            <div style={{ marginTop:22 }}>
+              <a className="btn btn-gold" href="/auth">Set up your firm account →</a>
+            </div>
+          </div>
+
+          <div className="price-grid stagger">
+            <div className="price-card">
+              <h3>Spark</h3>
+              <div className="amount">Free<small></small></div>
+              <div className="per">Forever · no credit card</div>
+              <ul>
+                <li>Full health score on first upload</li>
+                <li>4 pillar scores</li>
+                <li>Top 5 fixes from the playbook</li>
+                <li>One-time cashflow snapshot</li>
+                <li>Accountant can invite you</li>
+              </ul>
+              <button className="btn btn-ghost" onClick={() => { setRegPlan("Spark — Free"); document.getElementById("register")?.scrollIntoView({ behavior:"smooth" }); }}>
+                Start free ✦
+              </button>
+            </div>
+
+            <div className="price-card hot">
+              <span className="tag">Most popular</span>
+              <h3>Orbit</h3>
+              <div className="amount">R699<small>/mo</small></div>
+              <div className="per">Billed monthly · cancel anytime</div>
+              <ul>
+                <li>Everything in Spark, plus:</li>
+                <li>Live 13-week cashflow forecast</li>
+                <li>All 31 ratios, ranked and explained</li>
+                <li>Full playbook (930+ fixes)</li>
+                <li>Accountant advisory notes in-context</li>
+                <li>Monthly comparison report</li>
+              </ul>
+              <button className="btn btn-gold" onClick={() => { setRegPlan("Orbit — R699/mo"); document.getElementById("register")?.scrollIntoView({ behavior:"smooth" }); }}>
+                Get Orbit ✦
+              </button>
+            </div>
+
+            <div className="price-card">
+              <h3>Constellation</h3>
+              <div className="amount">R1 299<small>/mo</small></div>
+              <div className="per">Billed monthly · cancel anytime</div>
+              <ul>
+                <li>Everything in Orbit, plus:</li>
+                <li>AI advisory report draft (monthly)</li>
+                <li>Industry news digest</li>
+                <li>Priority support</li>
+                <li>Custom benchmark group</li>
+                <li>Early access to new features</li>
+              </ul>
+              <button className="btn btn-ghost" onClick={() => { setRegPlan("Constellation — R1 299/mo"); document.getElementById("register")?.scrollIntoView({ behavior:"smooth" }); }}>
+                Get Constellation
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ══════════════════════════ REGISTER ══════════════════════════ */}
+      <section id="register" style={{ paddingBottom:80 }}>
+        <div className="wrap">
+          <div className="section-head center reveal">
+            <span className="eyebrow">Get started</span>
+            <h2>Your first health score<br />is <span className="gold-text">free and instant.</span></h2>
+            <p className="sub">Upload your financials and MILŌN scores your business in under 60 seconds.</p>
+          </div>
+
+          <div className="reg-shell reveal">
+            <form onSubmit={handleRegister}>
+              <label htmlFor="regRoleField">I am a</label>
+              <select id="regRoleField" value={regRole} onChange={e => setRegRole(e.target.value)}>
+                <option>Business owner</option>
+                <option>Accountant / Advisory firm</option>
+              </select>
+
+              {regRole === "Accountant / Advisory firm" ? (
+                <p style={{ marginTop:18, color:"var(--ink-dim)", fontSize:14, lineHeight:1.6 }}>
+                  Accountant accounts are set up through our dedicated firm portal.{" "}
+                  <a href="/auth" style={{ color:"var(--gold)" }}>Click here to register your firm →</a>
+                </p>
+              ) : (
+                <>
+                  <label htmlFor="regNameField">Full name</label>
+                  <input id="regNameField" type="text" required placeholder="Thabo Nkosi" value={regName} onChange={e => setRegName(e.target.value)} />
+
+                  <label htmlFor="regEmailField">Work email</label>
+                  <input id="regEmailField" type="email" required placeholder="thabo@mybusiness.co.za" value={regEmail} onChange={e => setRegEmail(e.target.value)} />
+
+                  <label htmlFor="regPasswordField">Password</label>
+                  <input id="regPasswordField" type="password" required placeholder="At least 6 characters" minLength={6} value={regPassword} onChange={e => setRegPassword(e.target.value)} />
+
+                  <label htmlFor="regBusinessField">Business name</label>
+                  <input id="regBusinessField" type="text" placeholder="Nkosi Engineering (Pty) Ltd" value={regBusiness} onChange={e => setRegBusiness(e.target.value)} />
+
+                  <label htmlFor="regPlan">Plan</label>
+                  <select id="regPlan" value={regPlan} onChange={e => setRegPlan(e.target.value)}>
+                    <option value="Spark — Free">Spark — Free forever</option>
+                    <option value="Orbit — R699/mo">Orbit — R699/mo</option>
+                    <option value="Constellation — R1 299/mo">Constellation — R1 299/mo</option>
+                  </select>
+
+                  <button type="submit" className="btn btn-gold" disabled={regBusy} style={{ width:"100%", justifyContent:"center", marginTop:28 }}>
+                    {regBusy ? "Creating your account…" : "Get my free health score ✦"}
+                  </button>
+                  <p style={{ textAlign:"center", fontSize:11, color:"var(--ink-dim)", marginTop:14, lineHeight:1.5 }}>
+                    No credit card for Spark. Upgrade anytime. Cancel anytime.
+                  </p>
+                </>
+              )}
+            </form>
+          </div>
+        </div>
+      </section>
+
+      {/* ══════════════════════════ FOOTER ══════════════════════════ */}
+      <footer>
+        <div className="wrap">
+          <div>
+            <span className="logo-word gold-text">MILŌN</span>
+            <span style={{ fontSize:12, color:"var(--ink-dim)" }}>The financial health platform<br />for South African SMEs</span>
+          </div>
+          <nav className="fnav" aria-label="Footer navigation">
+            <a href="#persona">Start</a>
+            <a href="#method">The Method</a>
+            <a href="#features">Platform</a>
+            <a href="#pricing">Pricing</a>
+            <a href="/auth">Accountant portal</a>
+            <button onClick={() => setSigninOpen(true)} style={{ background:"none", border:"none", color:"var(--ink-dim)", cursor:"pointer", fontSize:13, padding:0, fontFamily:"inherit" }}>Sign in</button>
+          </nav>
+          <div className="copy">
+            <span>© {new Date().getFullYear()} MILŌN Financial Technologies (Pty) Ltd. All rights reserved.</span>
+            <span>Built for South Africa · Powered by Gemini AI</span>
+          </div>
+        </div>
+      </footer>
+    </>
   );
 }

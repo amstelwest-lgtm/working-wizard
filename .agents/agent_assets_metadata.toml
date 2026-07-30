@@ -18,3 +18,15 @@ id = "q9aWMz46zzD4QMFU_t7bM"
 uri = "file://public/favicon-32.png"
 type = "image"
 title = "Favicon (32px)"
+
+[[outputs]]
+id = "t5HcJIfZmAezMnkqSiBoF"
+uri = "file://accountant-reports-all-code.txt"
+type = "text"
+title = "Milōn — All Accountant Report Code"
+
+[[outputs]]
+id = "uRaxgEPVTPh51C31NE86S"
+uri = "file://milon-source.zip"
+type = "unspecified"
+title = "Milōn — Full Source Code"

@@ -9,6 +9,7 @@
 import { View, Text, StyleSheet } from "@react-pdf/renderer";
 import type { AccountantProfile } from "@/contexts/accountant-profile";
 import { PDFDocument, type SmeData } from "@/components/pdf/pdf-document";
+import { scoreTier } from "@/lib/ratios";
 import { RatioRow } from "@/components/pdf/ratio-row";
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -54,13 +55,6 @@ function formatRand(value: number): string {
 
 function pctStr(value: number): string {
   return `${(value * 100).toFixed(1)}%`;
-}
-
-function scoreTier(score?: number): "critical" | "at_risk" | "healthy" {
-  if (!score) return "at_risk";
-  if (score >= 70) return "healthy";
-  if (score >= 40) return "at_risk";
-  return "critical";
 }
 
 const TIER_COLORS: Record<string, string> = {

@@ -9,6 +9,7 @@
 import { View, Text, StyleSheet } from "@react-pdf/renderer";
 import type { AccountantProfile } from "@/contexts/accountant-profile";
 import { PDFDocument, type SmeData } from "@/components/pdf/pdf-document";
+import { scoreTier } from "@/lib/ratios";
 import { MetricBox } from "@/components/pdf/metric-box";
 import { RatioRow } from "@/components/pdf/ratio-row";
 
@@ -52,12 +53,6 @@ export type CashCyclePDFProps = {
 function formatRand(value: number): string {
   const abs = Math.abs(Math.round(value));
   return (value < 0 ? "-R " : "R ") + abs.toLocaleString("en-ZA");
-}
-
-function scoreTier(score: number): "critical" | "at_risk" | "healthy" {
-  if (score >= 70) return "healthy";
-  if (score >= 40) return "at_risk";
-  return "critical";
 }
 
 /** Fallback score if health_scores not provided */

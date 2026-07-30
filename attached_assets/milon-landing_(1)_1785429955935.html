@@ -1,0 +1,968 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MILŌN — Business Intelligence for South African SMEs & Accountants | Cashflow Forecasting, Financial Health Score</title>
+<meta name="description" content="MILŌN is the future of business intelligence for South African SMEs and accountants. Live financial health score, 13-week cashflow forecasting, 31 financial ratios, advisory tools, white-label reports. Your business in your pocket.">
+<meta name="keywords" content="SME business intelligence South Africa, cashflow forecast tool, business health score, financial dashboard SME, accountant advisory software, white label financial reports, small business financial analysis, business diagnostic tool">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800&family=Cormorant+Garamond:ital,wght@1,500;1,600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#050507;
+  --bg-2:#0a0a10;
+  --bg-3:#0f0f18;
+  --ink:#f2ecdc;
+  --ink-dim:#9b958a;
+  --gold-deep:#ac8400;
+  --gold:#d4af37;
+  --gold-bright:#fdee79;
+  --gold-grad:linear-gradient(120deg,#ac8400 0%,#d4af37 35%,#fdee79 55%,#d4af37 75%,#ac8400 100%);
+  --line:rgba(212,175,55,.16);
+  --line-soft:rgba(212,175,55,.09);
+  --card:rgba(255,255,255,.024);
+  --glass:rgba(13,13,20,.72);
+  --risk:#e25c5c;
+  --warn:#e8b34b;
+  --ok:#5ccf8a;
+  --shadow-gold:0 0 60px rgba(212,175,55,.12);
+  --ease:cubic-bezier(.22,.9,.24,1);
+}
+html[data-theme="light"]{
+  --bg:#f7f4ec;
+  --bg-2:#ffffff;
+  --bg-3:#f0ecdf;
+  --ink:#1b1608;
+  --ink-dim:#6b6354;
+  --line:rgba(140,110,10,.25);
+  --line-soft:rgba(140,110,10,.13);
+  --card:rgba(52,40,0,.04);
+  --glass:rgba(255,255,255,.8);
+  --shadow-gold:0 0 60px rgba(172,132,0,.10);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  font-family:'Noto Sans',sans-serif;
+  background:var(--bg);
+  color:var(--ink);
+  overflow-x:hidden;
+  line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+}
+::selection{background:rgba(212,175,55,.3)}
+
+/* ---------- Ambient background: aurora + grid + faint stars ---------- */
+#atmos{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+#atmos .grid{position:absolute;inset:0;
+  background-image:
+    linear-gradient(var(--line-soft) 1px,transparent 1px),
+    linear-gradient(90deg,var(--line-soft) 1px,transparent 1px);
+  background-size:72px 72px;
+  -webkit-mask-image:radial-gradient(ellipse 90% 60% at 50% 0%,#000 20%,transparent 78%);
+          mask-image:radial-gradient(ellipse 90% 60% at 50% 0%,#000 20%,transparent 78%);
+  opacity:.5}
+#atmos .glow{position:absolute;border-radius:50%;filter:blur(90px);opacity:.5;will-change:transform}
+#atmos .g1{width:56vw;height:56vw;top:-24vw;left:-14vw;background:radial-gradient(circle,rgba(212,175,55,.20),transparent 65%);animation:drift1 26s ease-in-out infinite alternate}
+#atmos .g2{width:46vw;height:46vw;top:8vh;right:-18vw;background:radial-gradient(circle,rgba(253,238,121,.10),transparent 62%);animation:drift2 32s ease-in-out infinite alternate}
+#atmos .g3{width:60vw;height:60vw;bottom:-32vw;left:22vw;background:radial-gradient(circle,rgba(172,132,0,.13),transparent 66%);animation:drift1 38s ease-in-out infinite alternate-reverse}
+@keyframes drift1{to{transform:translate(6vw,4vh) scale(1.08)}}
+@keyframes drift2{to{transform:translate(-5vw,6vh) scale(.94)}}
+#atmos .stars{position:absolute;inset:0;opacity:.55;
+  background-image:
+    radial-gradient(1px 1px at 12% 18%,rgba(253,238,121,.8),transparent),
+    radial-gradient(1px 1px at 34% 62%,rgba(253,238,121,.5),transparent),
+    radial-gradient(1.4px 1.4px at 58% 30%,rgba(253,238,121,.7),transparent),
+    radial-gradient(1px 1px at 73% 74%,rgba(253,238,121,.45),transparent),
+    radial-gradient(1.2px 1.2px at 88% 12%,rgba(253,238,121,.65),transparent),
+    radial-gradient(1px 1px at 44% 88%,rgba(253,238,121,.4),transparent),
+    radial-gradient(1.3px 1.3px at 22% 44%,rgba(253,238,121,.55),transparent),
+    radial-gradient(1px 1px at 66% 52%,rgba(253,238,121,.5),transparent);
+  background-size:900px 900px;
+  animation:twinkle 7s ease-in-out infinite alternate}
+@keyframes twinkle{to{opacity:.25}}
+html[data-theme="light"] #atmos .stars{opacity:.12}
+html[data-theme="light"] #atmos .glow{opacity:.35}
+
+/* ---------- Scroll progress ---------- */
+#progress{position:fixed;top:0;left:0;height:2px;width:0%;z-index:60;background:var(--gold-grad);background-size:200% auto;box-shadow:0 0 12px rgba(253,238,121,.6)}
+
+/* ---------- Shared ---------- */
+.wrap{max-width:1180px;margin:0 auto;padding:0 28px;position:relative;z-index:2}
+section{position:relative;z-index:2;padding:120px 0}
+.eyebrow{display:inline-flex;align-items:center;gap:10px;font-size:11px;letter-spacing:.45em;text-transform:uppercase;color:var(--gold);font-weight:600;margin-bottom:18px}
+.eyebrow::before{content:"";width:26px;height:1px;background:var(--gold-grad)}
+h1,h2,h3{font-weight:700;letter-spacing:.01em}
+h2{font-size:clamp(28px,4vw,46px);line-height:1.12;margin-bottom:18px}
+.serif{font-family:'Cormorant Garamond',serif;font-style:italic;font-weight:600}
+.gold-text{background:var(--gold-grad);background-size:200% auto;-webkit-background-clip:text;background-clip:text;color:transparent;animation:shimmer 6s linear infinite}
+@keyframes shimmer{to{background-position:200% center}}
+.sub{color:var(--ink-dim);font-size:17px;max-width:640px}
+.btn{position:relative;display:inline-flex;align-items:center;gap:10px;padding:15px 34px;border-radius:999px;font-weight:600;font-size:15px;letter-spacing:.04em;cursor:pointer;border:none;text-decoration:none;transition:transform .3s var(--ease),box-shadow .3s var(--ease),background-position .5s;font-family:inherit;overflow:hidden}
+.btn-gold{background:var(--gold-grad);background-size:200% auto;color:#1b1300;box-shadow:0 6px 30px rgba(212,175,55,.35)}
+.btn-gold::after{content:"";position:absolute;top:0;left:-80%;width:45%;height:100%;background:linear-gradient(105deg,transparent,rgba(255,255,255,.5),transparent);transform:skewX(-20deg);transition:left .6s var(--ease)}
+.btn-gold:hover{transform:translateY(-2px);box-shadow:0 12px 46px rgba(212,175,55,.5);background-position:120% center}
+.btn-gold:hover::after{left:130%}
+.btn-ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+.btn-ghost:hover{border-color:var(--gold);color:var(--gold);transform:translateY(-2px)}
+.btn:focus-visible{outline:2px solid var(--gold-bright);outline-offset:3px}
+a:focus-visible,button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--gold-bright);outline-offset:2px}
+
+.reveal{opacity:0;transform:translateY(36px);transition:opacity .9s var(--ease),transform .9s var(--ease)}
+.reveal.in{opacity:1;transform:none}
+.stagger>*{opacity:0;transform:translateY(30px);transition:opacity .8s var(--ease),transform .8s var(--ease)}
+.stagger.in>*{opacity:1;transform:none}
+.stagger.in>*:nth-child(1){transition-delay:.05s}
+.stagger.in>*:nth-child(2){transition-delay:.15s}
+.stagger.in>*:nth-child(3){transition-delay:.25s}
+.stagger.in>*:nth-child(4){transition-delay:.35s}
+.stagger.in>*:nth-child(5){transition-delay:.45s}
+
+.section-head{max-width:720px}
+.section-head.center{margin:0 auto;text-align:center}
+.section-head.center .eyebrow{justify-content:center}
+.section-head.center .eyebrow::before{display:none}
+.section-head.center .sub{margin:0 auto}
+
+/* hairline divider between sections */
+.divider{position:relative;z-index:2;max-width:1180px;margin:0 auto;padding:0 28px}
+.divider i{display:block;height:1px;background:linear-gradient(90deg,transparent,var(--line) 18%,var(--line) 82%,transparent)}
+
+/* ---------- Nav ---------- */
+nav{position:fixed;top:0;left:0;right:0;z-index:50;backdrop-filter:blur(16px);background:color-mix(in srgb,var(--bg) 72%,transparent);border-bottom:1px solid transparent;transition:border-color .4s,background .4s}
+nav.scrolled{border-bottom-color:var(--line);background:color-mix(in srgb,var(--bg) 86%,transparent)}
+nav .wrap{display:flex;align-items:center;justify-content:space-between;height:72px;transition:height .4s var(--ease)}
+nav.scrolled .wrap{height:62px}
+.logo{display:flex;align-items:center;gap:12px;text-decoration:none;color:var(--ink)}
+.logo svg{height:34px;width:auto}
+.logo-word{font-weight:800;letter-spacing:.32em;font-size:18px}
+nav .links{display:flex;gap:28px;align-items:center;font-size:13.5px;letter-spacing:.06em}
+nav .links a{color:var(--ink-dim);text-decoration:none;transition:color .2s;position:relative}
+nav .links a:not(.btn)::after{content:"";position:absolute;left:0;bottom:-6px;width:0;height:1px;background:var(--gold-grad);transition:width .3s var(--ease)}
+nav .links a:not(.btn):hover{color:var(--gold)}
+nav .links a:not(.btn):hover::after{width:100%}
+#themeToggle{width:40px;height:40px;border-radius:50%;border:1px solid var(--line);background:transparent;color:var(--gold);cursor:pointer;font-size:16px;display:grid;place-items:center;transition:border-color .3s,transform .3s}
+#themeToggle:hover{border-color:var(--gold);transform:rotate(20deg)}
+@media(max-width:760px){nav .links a:not(.btn){display:none}}
+
+/* ---------- Hero ---------- */
+#hero{min-height:100vh;display:flex;align-items:center;padding-top:130px;padding-bottom:80px}
+#hero .wrap{display:grid;grid-template-columns:1.02fr .98fr;gap:64px;align-items:center}
+#hero h1{font-size:clamp(38px,5.4vw,66px);line-height:1.07;margin:22px 0 24px}
+.hero-badge{display:inline-flex;gap:9px;align-items:center;border:1px solid var(--line);border-radius:999px;padding:7px 16px;font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:var(--gold);background:var(--card)}
+.hero-badge .pulse{width:7px;height:7px;border-radius:50%;background:var(--gold-bright);box-shadow:0 0 0 0 rgba(253,238,121,.6);animation:pulseDot 2.2s infinite}
+@keyframes pulseDot{70%{box-shadow:0 0 0 9px rgba(253,238,121,0)}100%{box-shadow:0 0 0 0 rgba(253,238,121,0)}}
+.hero-cta{display:flex;gap:16px;margin-top:36px;flex-wrap:wrap}
+.hero-stats{display:flex;gap:0;margin-top:52px;flex-wrap:wrap}
+.hero-stats>div{padding:0 34px;border-left:1px solid var(--line)}
+.hero-stats>div:first-child{padding-left:0;border-left:none}
+.hero-stats b{display:block;font-size:27px;color:var(--gold);font-weight:800;font-variant-numeric:tabular-nums}
+.hero-stats span{font-size:11.5px;color:var(--ink-dim);letter-spacing:.1em;text-transform:uppercase}
+
+/* hero entrance */
+.h-anim{opacity:0;transform:translateY(28px);animation:heroUp 1s var(--ease) forwards}
+.h-anim.d1{animation-delay:.05s}.h-anim.d2{animation-delay:.18s}.h-anim.d3{animation-delay:.32s}.h-anim.d4{animation-delay:.46s}.h-anim.d5{animation-delay:.6s}
+@keyframes heroUp{to{opacity:1;transform:none}}
+
+/* ---------- Hero dashboard mock ---------- */
+.dash-stage{position:relative;perspective:1400px}
+.dash-stage::before{content:"";position:absolute;inset:-8% -6%;background:radial-gradient(ellipse at 55% 42%,rgba(212,175,55,.16),transparent 62%);filter:blur(10px);pointer-events:none}
+.dash{position:relative;border-radius:24px;padding:26px 26px 22px;
+  background:linear-gradient(var(--glass),var(--glass)) padding-box,
+             linear-gradient(150deg,rgba(253,238,121,.55),rgba(212,175,55,.15) 32%,rgba(212,175,55,.05) 60%,rgba(253,238,121,.3)) border-box;
+  border:1px solid transparent;
+  backdrop-filter:blur(18px);
+  box-shadow:0 30px 80px rgba(0,0,0,.55),0 0 60px rgba(212,175,55,.08),inset 0 1px 0 rgba(255,255,255,.05);
+  animation:dashFloat 9s ease-in-out infinite;
+  transform-style:preserve-3d}
+@keyframes dashFloat{50%{transform:translateY(-10px) rotateX(1.2deg) rotateY(-1.2deg)}}
+.dash-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px}
+.dash-top .brand{font-size:12px;font-weight:800;letter-spacing:.32em;color:var(--gold)}
+.live-pill{display:inline-flex;align-items:center;gap:7px;font-size:10px;letter-spacing:.24em;text-transform:uppercase;color:var(--ok);border:1px solid rgba(92,207,138,.3);border-radius:99px;padding:4px 12px;background:rgba(92,207,138,.06)}
+.live-pill i{width:6px;height:6px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 0 rgba(92,207,138,.5);animation:pulseDot 2s infinite}
+.dash-main{display:grid;grid-template-columns:auto 1fr;gap:26px;align-items:center}
+.gauge{position:relative;width:150px;height:150px;flex-shrink:0}
+.gauge svg{transform:rotate(-90deg)}
+.gauge .track{stroke:rgba(212,175,55,.12)}
+.gauge .fill{stroke:url(#gaugeGrad);stroke-linecap:round;filter:drop-shadow(0 0 8px rgba(253,238,121,.5));transition:stroke-dashoffset 1.8s var(--ease)}
+.gauge .val{position:absolute;inset:0;display:grid;place-items:center;text-align:center}
+.gauge .val b{font-size:40px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums;background:var(--gold-grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+.gauge .val span{display:block;font-size:9.5px;letter-spacing:.26em;text-transform:uppercase;color:var(--ink-dim);margin-top:5px}
+.pillars{display:flex;flex-direction:column;gap:13px;min-width:0}
+.pill-row{display:grid;grid-template-columns:86px 1fr 34px;gap:12px;align-items:center;font-size:12px}
+.pill-row .nm{color:var(--ink-dim);letter-spacing:.08em;text-transform:uppercase;font-size:10.5px;font-weight:600}
+.pill-row .bar{height:5px;border-radius:99px;background:rgba(212,175,55,.1);overflow:hidden}
+.pill-row .bar i{display:block;height:100%;width:0;border-radius:99px;background:var(--gold-grad);transition:width 1.6s var(--ease)}
+.pill-row.warn .bar i{background:linear-gradient(90deg,#a86a1e,var(--warn))}
+.pill-row .num{text-align:right;font-weight:700;font-variant-numeric:tabular-nums;color:var(--ink)}
+.pill-row.warn .num{color:var(--warn)}
+.dash-chart{margin-top:22px;padding-top:20px;border-top:1px solid var(--line-soft)}
+.dash-chart .lbl{display:flex;justify-content:space-between;align-items:baseline;font-size:10.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--ink-dim);margin-bottom:12px}
+.dash-chart .lbl b{color:var(--ink);letter-spacing:.1em}
+.cash-svg{width:100%;height:auto;display:block}
+.cash-line{fill:none;stroke:url(#cashGrad);stroke-width:2.4;stroke-linecap:round;
+  stroke-dasharray:620;stroke-dashoffset:620;transition:stroke-dashoffset 2.6s var(--ease) .4s}
+.dash.in .cash-line{stroke-dashoffset:0}
+.cash-fill{fill:url(#cashFill);opacity:0;transition:opacity 1.4s ease 1.6s}
+.dash.in .cash-fill{opacity:1}
+.dip-dot{fill:var(--warn);filter:drop-shadow(0 0 6px rgba(232,179,75,.8))}
+.dip-ring{fill:none;stroke:var(--warn);opacity:.55;animation:dipPing 2.4s ease-out infinite}
+@keyframes dipPing{0%{r:4;opacity:.55}100%{r:15;opacity:0}}
+.alert-chip{display:flex;align-items:center;gap:10px;margin-top:16px;font-size:12.5px;color:var(--ink);
+  border:1px solid rgba(232,179,75,.3);background:rgba(232,179,75,.07);border-radius:12px;padding:10px 14px}
+.alert-chip .dot{width:8px;height:8px;border-radius:50%;background:var(--warn);flex-shrink:0}
+.alert-chip b{color:var(--warn)}
+.alert-chip span{color:var(--ink-dim)}
+/* floating micro-cards */
+.float-card{position:absolute;border-radius:16px;padding:13px 17px;font-size:12px;line-height:1.45;
+  background:linear-gradient(var(--glass),var(--glass)) padding-box,
+             linear-gradient(150deg,rgba(253,238,121,.4),rgba(212,175,55,.1)) border-box;
+  border:1px solid transparent;backdrop-filter:blur(14px);
+  box-shadow:0 18px 50px rgba(0,0,0,.5);z-index:3}
+.fc-1{top:-26px;right:-14px;max-width:230px;animation:floatA 8s ease-in-out infinite}
+.fc-2{bottom:-24px;left:-18px;animation:floatB 7s ease-in-out infinite}
+@keyframes floatA{50%{transform:translateY(-9px)}}
+@keyframes floatB{50%{transform:translateY(8px)}}
+.fc-1 .tag,.fc-2 .tag{font-size:9.5px;letter-spacing:.22em;text-transform:uppercase;color:var(--gold);font-weight:700;display:block;margin-bottom:4px}
+.fc-1 p{color:var(--ink-dim)}.fc-1 p b{color:var(--ink)}
+.fc-2 b{font-size:20px;color:var(--ok);font-variant-numeric:tabular-nums}
+.fc-2 span{display:block;font-size:10.5px;color:var(--ink-dim);letter-spacing:.08em;text-transform:uppercase}
+@media(max-width:980px){#hero .wrap{grid-template-columns:1fr}.dash-stage{max-width:560px;margin:24px auto 0}.fc-1{right:0}.fc-2{left:0}}
+@media(max-width:520px){.dash-main{grid-template-columns:1fr;justify-items:center}.pillars{width:100%}.fc-1{display:none}}
+
+/* ---------- Trust strip ---------- */
+.trust{position:relative;z-index:2;padding:26px 0}
+.trust .wrap{display:flex;justify-content:center;align-items:center;gap:44px;flex-wrap:wrap;color:var(--ink-dim);font-size:12.5px;letter-spacing:.14em;text-transform:uppercase}
+.trust .item{display:flex;align-items:center;gap:10px;opacity:.85}
+.trust .item svg{flex-shrink:0}
+.trust b{color:var(--ink);font-weight:600;letter-spacing:.14em}
+
+/* ---------- Persona choice ---------- */
+.persona-grid{display:grid;grid-template-columns:1fr 1fr;gap:26px;margin-top:48px}
+.persona-card{position:relative;border:1px solid var(--line);border-radius:22px;padding:44px 38px;background:var(--card);cursor:pointer;transition:transform .4s var(--ease),border-color .4s,box-shadow .4s;overflow:hidden}
+.persona-card::before{content:"";position:absolute;inset:0;background:radial-gradient(420px circle at var(--mx,50%) var(--my,0%),rgba(212,175,55,.09),transparent 65%);opacity:0;transition:opacity .4s}
+.persona-card:hover::before{opacity:1}
+.persona-card:hover{transform:translateY(-7px);border-color:var(--gold);box-shadow:var(--shadow-gold)}
+.persona-card .icon{width:52px;height:52px;border-radius:14px;display:grid;place-items:center;margin-bottom:22px;
+  background:linear-gradient(150deg,rgba(212,175,55,.14),rgba(212,175,55,.04));border:1px solid var(--line)}
+.persona-card .icon svg{stroke:var(--gold);stroke-width:1.6;fill:none;width:26px;height:26px;stroke-linecap:round;stroke-linejoin:round}
+.persona-card h3{font-size:24px;margin-bottom:10px}
+.persona-card p{color:var(--ink-dim);font-size:15px}
+.persona-card .go{margin-top:24px;color:var(--gold);font-weight:600;font-size:14px;letter-spacing:.08em;display:inline-flex;align-items:center;gap:8px}
+.persona-card .go i{transition:transform .3s var(--ease);font-style:normal}
+.persona-card:hover .go i{transform:translateX(6px)}
+@media(max-width:760px){.persona-grid{grid-template-columns:1fr}}
+
+/* ---------- Quiz ---------- */
+#quiz{display:none;padding-top:40px}
+#quiz.active{display:block}
+.quiz-shell{max-width:760px;margin:0 auto;border-radius:26px;padding:48px 44px;
+  background:linear-gradient(var(--glass),var(--glass)) padding-box,
+             linear-gradient(150deg,rgba(253,238,121,.4),rgba(212,175,55,.08) 45%,rgba(253,238,121,.25)) border-box;
+  border:1px solid transparent;backdrop-filter:blur(14px);box-shadow:0 24px 70px rgba(0,0,0,.4)}
+.quiz-progress{height:4px;border-radius:99px;background:rgba(212,175,55,.12);overflow:hidden;margin-bottom:34px}
+.quiz-progress i{display:block;height:100%;width:0%;background:var(--gold-grad);transition:width .5s var(--ease);border-radius:99px}
+.q-step{display:none;animation:fadeUp .5s var(--ease)}
+.q-step.on{display:block}
+@keyframes fadeUp{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}
+.q-step h3{font-size:24px;margin-bottom:8px}
+.q-step .hint{color:var(--ink-dim);font-size:14px;margin-bottom:26px}
+.opt-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px}
+.opt{border:1px solid var(--line);border-radius:16px;padding:20px 16px;cursor:pointer;background:transparent;color:var(--ink);font-family:inherit;font-size:14.5px;font-weight:500;text-align:center;transition:all .25s var(--ease)}
+.opt .em{display:block;font-size:26px;margin-bottom:8px}
+.opt:hover{border-color:var(--gold);transform:translateY(-3px);box-shadow:var(--shadow-gold)}
+.opt.picked{border-color:var(--gold);background:rgba(212,175,55,.1)}
+.quiz-reward{font-size:12.5px;color:var(--gold);letter-spacing:.08em;margin-top:20px;min-height:18px;font-weight:600}
+.mini-biz{display:grid;grid-template-columns:200px 1fr;gap:34px;align-items:center;margin:10px 0 26px}
+.mini-orrery{position:relative;width:200px;height:200px}
+.mini-orrery .ring{position:absolute;inset:0;border:1px dashed var(--line);border-radius:50%}
+.mini-orrery .ring.r2{inset:18%}.mini-orrery .ring.r3{inset:36%}
+.mini-orrery .core{position:absolute;inset:40%;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fdee79,#d4af37 60%,#6b5200);box-shadow:0 0 36px rgba(212,175,55,.5)}
+.mini-orrery .dot{position:absolute;width:22px;height:22px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff,#d4af37);box-shadow:0 0 14px rgba(212,175,55,.7)}
+.profile-lines p{margin-bottom:10px;font-size:15px}
+.profile-lines b{color:var(--gold)}
+.reflect{border-left:2px solid var(--gold);padding:14px 20px;margin:22px 0;background:rgba(212,175,55,.05);border-radius:0 14px 14px 0;font-size:15.5px}
+.reflect .serif{font-size:18px}
+@media(max-width:660px){.mini-biz{grid-template-columns:1fr;justify-items:center}}
+
+/* ---------- Method (golden tree → pillars) ---------- */
+#method .pillar-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:20px;margin-top:56px;position:relative}
+#method .pillar-grid::before{content:"";position:absolute;top:37px;left:6%;right:6%;height:1px;background:linear-gradient(90deg,transparent,var(--line),var(--line),transparent);z-index:0}
+.pillar-card{position:relative;z-index:1;border:1px solid var(--line);border-radius:20px;padding:34px 26px 30px;background:color-mix(in srgb,var(--bg-2) 70%,transparent);backdrop-filter:blur(8px);transition:transform .4s var(--ease),border-color .4s,box-shadow .4s}
+.pillar-card:hover{transform:translateY(-7px);border-color:var(--gold);box-shadow:var(--shadow-gold)}
+.pillar-card .node{width:14px;height:14px;border-radius:50%;background:var(--gold-grad);box-shadow:0 0 16px rgba(212,175,55,.7);margin-bottom:22px}
+.pillar-card .metaphor{font-family:'Cormorant Garamond',serif;font-style:italic;font-size:23px;color:var(--gold-bright);line-height:1;margin-bottom:4px}
+.pillar-card h3{font-size:15px;letter-spacing:.2em;text-transform:uppercase;color:var(--ink);margin-bottom:14px}
+.pillar-card p{font-size:13.5px;color:var(--ink-dim);line-height:1.55;margin-bottom:20px}
+.pillar-card .score{display:flex;align-items:center;gap:10px;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-dim)}
+.pillar-card .score .bar{flex:1;height:4px;border-radius:99px;background:rgba(212,175,55,.1);overflow:hidden}
+.pillar-card .score .bar i{display:block;height:100%;width:0;background:var(--gold-grad);border-radius:99px;transition:width 1.4s var(--ease) .3s}
+.pillar-card.warn .score .bar i{background:linear-gradient(90deg,#a86a1e,var(--warn))}
+.pillar-card .score b{font-variant-numeric:tabular-nums;color:var(--ink)}
+.pillar-card.warn .score b{color:var(--warn)}
+@media(max-width:960px){#method .pillar-grid{grid-template-columns:1fr 1fr}#method .pillar-grid::before{display:none}}
+@media(max-width:560px){#method .pillar-grid{grid-template-columns:1fr}}
+
+/* ---------- Ratio marquee ---------- */
+.marquee-band{position:relative;z-index:2;padding:34px 0;border-top:1px solid var(--line-soft);border-bottom:1px solid var(--line-soft);overflow:hidden;
+  -webkit-mask-image:linear-gradient(90deg,transparent,#000 8%,#000 92%,transparent);
+          mask-image:linear-gradient(90deg,transparent,#000 8%,#000 92%,transparent)}
+.marquee-band .cap{text-align:center;font-size:10.5px;letter-spacing:.4em;text-transform:uppercase;color:var(--gold);margin-bottom:18px;font-weight:600}
+.marquee{display:flex;width:max-content;animation:scrollX 44s linear infinite}
+.marquee:hover{animation-play-state:paused}
+.marquee span{display:inline-flex;align-items:center;gap:20px;padding-right:20px;white-space:nowrap;font-size:14px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-dim)}
+.marquee span::after{content:"✦";color:var(--gold);font-size:10px}
+@keyframes scrollX{to{transform:translateX(-50%)}}
+
+/* ---------- Problem / features cards ---------- */
+.feat-cols{display:grid;grid-template-columns:1fr 1fr;gap:30px;margin-top:50px}
+.feat-card{position:relative;border:1px solid var(--line);border-radius:24px;padding:42px 38px;background:var(--card);overflow:hidden;transition:border-color .4s,transform .4s var(--ease)}
+.feat-card::before{content:"";position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(253,238,121,.5),transparent);opacity:0;transition:opacity .4s}
+.feat-card:hover{border-color:rgba(212,175,55,.4);transform:translateY(-4px)}
+.feat-card:hover::before{opacity:1}
+.feat-card h3{font-size:22px;margin-bottom:6px}
+.feat-card .who{font-size:12px;letter-spacing:.3em;text-transform:uppercase;color:var(--gold);margin-bottom:18px;font-weight:700}
+.feat-card ul{list-style:none;display:flex;flex-direction:column;gap:14px;margin-top:18px}
+.feat-card li{display:flex;gap:12px;font-size:14.5px;color:var(--ink-dim)}
+.feat-card li::before{content:"✦";color:var(--gold);flex-shrink:0;line-height:1.6}
+.feat-card li b{color:var(--ink);font-weight:600}
+@media(max-width:860px){.feat-cols{grid-template-columns:1fr}}
+
+/* ---------- How it works ---------- */
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:22px;margin-top:56px}
+.step-card{position:relative;border:1px solid var(--line);border-radius:22px;padding:38px 32px;background:var(--card);overflow:hidden;transition:transform .4s var(--ease),border-color .4s}
+.step-card:hover{transform:translateY(-6px);border-color:var(--gold)}
+.step-card .n{font-family:'Cormorant Garamond',serif;font-style:italic;font-size:64px;line-height:1;background:var(--gold-grad);-webkit-background-clip:text;background-clip:text;color:transparent;display:block;margin-bottom:16px}
+.step-card h3{font-size:19px;margin-bottom:10px}
+.step-card p{font-size:14px;color:var(--ink-dim)}
+.step-card .time{display:inline-block;margin-top:18px;font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--gold);border:1px solid var(--line);border-radius:99px;padding:5px 14px}
+@media(max-width:860px){.steps{grid-template-columns:1fr}}
+
+/* ---------- Pricing ---------- */
+.acc-pricing{display:none;max-width:760px;margin:40px auto 0;border-radius:22px;padding:34px 36px;
+  background:linear-gradient(180deg,rgba(212,175,55,.09),var(--card)) padding-box,
+             linear-gradient(150deg,rgba(253,238,121,.5),rgba(212,175,55,.12)) border-box;
+  border:1px solid transparent;box-shadow:var(--shadow-gold)}
+body.persona-accountant .acc-pricing{display:block}
+.price-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-top:54px}
+.price-card{border:1px solid var(--line);border-radius:26px;padding:42px 34px;background:var(--card);position:relative;transition:transform .4s var(--ease),box-shadow .4s,border-color .4s;display:flex;flex-direction:column}
+.price-card:hover{transform:translateY(-8px);border-color:var(--gold);box-shadow:var(--shadow-gold)}
+.price-card.hot{border:1px solid transparent;
+  background:linear-gradient(180deg,rgba(212,175,55,.09),color-mix(in srgb,var(--bg-2) 80%,transparent)) padding-box,
+             linear-gradient(160deg,rgba(253,238,121,.7),rgba(212,175,55,.18) 45%,rgba(253,238,121,.5)) border-box;
+  box-shadow:0 20px 60px rgba(0,0,0,.4),0 0 50px rgba(212,175,55,.12)}
+.price-card.hot:hover{transform:translateY(-10px);box-shadow:0 26px 70px rgba(0,0,0,.5),0 0 70px rgba(212,175,55,.2)}
+.price-card .tag{position:absolute;top:-13px;left:50%;transform:translateX(-50%);background:var(--gold-grad);color:#1b1300;font-size:11px;font-weight:800;letter-spacing:.18em;text-transform:uppercase;padding:6px 18px;border-radius:99px;white-space:nowrap;box-shadow:0 6px 20px rgba(212,175,55,.4)}
+.price-card h3{font-size:20px;letter-spacing:.1em;text-transform:uppercase}
+.price-card .amount{margin:18px 0 4px;font-size:44px;font-weight:800;font-variant-numeric:tabular-nums}
+.price-card .amount small{font-size:15px;color:var(--ink-dim);font-weight:400}
+.price-card .per{font-size:12.5px;color:var(--ink-dim);margin-bottom:24px}
+.price-card ul{list-style:none;display:flex;flex-direction:column;gap:12px;flex:1}
+.price-card li{display:flex;gap:10px;font-size:14px;color:var(--ink-dim)}
+.price-card li::before{content:"✦";color:var(--gold)}
+.price-card .btn{margin-top:30px;justify-content:center}
+@media(max-width:900px){.price-grid{grid-template-columns:1fr;max-width:480px;margin-left:auto;margin-right:auto}}
+
+/* ---------- Register ---------- */
+.reg-shell{max-width:560px;margin:50px auto 0;border-radius:26px;padding:46px 42px;
+  background:linear-gradient(var(--glass),var(--glass)) padding-box,
+             linear-gradient(150deg,rgba(253,238,121,.4),rgba(212,175,55,.08) 45%,rgba(253,238,121,.25)) border-box;
+  border:1px solid transparent;backdrop-filter:blur(14px);box-shadow:0 24px 70px rgba(0,0,0,.4)}
+.reg-shell label{display:block;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-dim);margin:18px 0 7px}
+.reg-shell input,.reg-shell select{width:100%;padding:14px 18px;border-radius:12px;border:1px solid var(--line);background:var(--bg-2);color:var(--ink);font-family:inherit;font-size:15px;transition:border-color .3s,box-shadow .3s}
+.reg-shell input:focus,.reg-shell select:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px rgba(212,175,55,.15)}
+
+/* ---------- Footer ---------- */
+footer{position:relative;z-index:2;border-top:1px solid var(--line);padding:56px 0 44px;color:var(--ink-dim);font-size:13px}
+footer .wrap{display:flex;justify-content:space-between;align-items:flex-start;gap:32px;flex-wrap:wrap}
+footer .logo-word{font-size:15px;display:block;margin-bottom:10px;color:var(--gold)}
+footer .fnav{display:flex;gap:26px;flex-wrap:wrap}
+footer .fnav a{color:var(--ink-dim);text-decoration:none;transition:color .2s}
+footer .fnav a:hover{color:var(--gold)}
+footer .copy{width:100%;margin-top:26px;padding-top:22px;border-top:1px solid var(--line-soft);display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;font-size:12px}
+
+/* ---------- Reduced motion ---------- */
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.2s !important}
+  html{scroll-behavior:auto}
+  .marquee{animation:none;flex-wrap:wrap;width:100%}
+  .reveal,.stagger>*,.h-anim{opacity:1;transform:none}
+  .cash-line{stroke-dashoffset:0}
+  .cash-fill{opacity:1}
+}
+</style>
+</head>
+<body>
+<div id="atmos" aria-hidden="true">
+  <div class="glow g1"></div><div class="glow g2"></div><div class="glow g3"></div>
+  <div class="grid"></div>
+  <div class="stars"></div>
+</div>
+<div id="progress" aria-hidden="true"></div>
+
+<nav id="topnav">
+  <div class="wrap">
+    <a class="logo" href="#hero">
+      <svg viewBox="0 0 40 40" fill="none"><circle cx="20" cy="20" r="18" stroke="url(#g1)" stroke-width="1.4"/><path d="M11 27 L17 13 L23 22 L27 11" stroke="url(#g1)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><defs><linearGradient id="g1" x1="0" y1="0" x2="40" y2="40"><stop stop-color="#fdee79"/><stop offset="1" stop-color="#ac8400"/></linearGradient></defs></svg>
+      <span class="logo-word gold-text">MILŌN</span>
+    </a>
+    <div class="links">
+      <a href="#persona">Start</a>
+      <a href="#method">The MILŌN Method</a>
+      <a href="#features">Platform</a>
+      <a href="#pricing">Pricing</a>
+      <button id="themeToggle" title="Toggle light / dark">☀</button>
+      <a class="btn btn-gold" style="padding:10px 22px;font-size:13px" href="#pricing">Get started</a>
+    </div>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section id="hero">
+  <div class="wrap">
+    <div>
+      <span class="hero-badge h-anim d1"><span class="pulse"></span>The financial health platform</span>
+      <h1 class="h-anim d2">Know your numbers.<br><span class="gold-text">Sleep at night.</span></h1>
+      <p class="sub h-anim d3">Most owners find out about a cash crisis when it's already here. MILŌN shows you your business's health as one simple score — where the problem lives, what it's costing you, and exactly what to do next. A CFO in your pocket. And your accountant's AI sidekick.</p>
+      <div class="hero-cta h-anim d4">
+        <a class="btn btn-gold" href="#persona">Get my free health score</a>
+        <a class="btn btn-ghost" href="#persona" onclick="setTimeout(()=>startQuiz('accountant'),300)">I'm an accountant — show me the margin</a>
+      </div>
+      <div class="hero-stats h-anim d5">
+        <div><b><span class="count" data-to="1">0</span></b><span>Score that tells the truth</span></div>
+        <div><b><span class="count" data-to="13">0</span>&nbsp;wks</b><span>You see cash trouble coming</span></div>
+        <div><b><span class="count" data-to="930">0</span>+</b><span>Proven fixes, ranked for you</span></div>
+        <div><b>R<span class="count" data-to="1200" data-fmt="space">0</span>+</b><span>Advisory uplift per client /mo</span></div>
+      </div>
+    </div>
+    <div class="dash-stage h-anim d3">
+      <div class="dash" id="dash">
+        <div class="dash-top">
+          <span class="brand">MILŌN</span>
+          <span class="live-pill"><i></i>Live · synced 2 min ago</span>
+        </div>
+        <div class="dash-main">
+          <div class="gauge">
+            <svg width="150" height="150" viewBox="0 0 150 150">
+              <defs>
+                <linearGradient id="gaugeGrad" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0" stop-color="#fdee79"/><stop offset=".6" stop-color="#d4af37"/><stop offset="1" stop-color="#ac8400"/>
+                </linearGradient>
+                <linearGradient id="cashGrad" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0" stop-color="#ac8400"/><stop offset=".5" stop-color="#d4af37"/><stop offset="1" stop-color="#fdee79"/>
+                </linearGradient>
+                <linearGradient id="cashFill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stop-color="rgba(212,175,55,.28)"/><stop offset="1" stop-color="rgba(212,175,55,0)"/>
+                </linearGradient>
+              </defs>
+              <circle class="track" cx="75" cy="75" r="64" fill="none" stroke-width="9"/>
+              <circle class="fill" id="gaugeFill" cx="75" cy="75" r="64" fill="none" stroke-width="9"
+                stroke-dasharray="402" stroke-dashoffset="402"/>
+            </svg>
+            <div class="val"><div><b class="count" data-to="78">0</b><span>Health score</span></div></div>
+          </div>
+          <div class="pillars">
+            <div class="pill-row"><span class="nm">Financing</span><span class="bar"><i data-w="82%"></i></span><b class="num">82</b></div>
+            <div class="pill-row"><span class="nm">Assets</span><span class="bar"><i data-w="74%"></i></span><b class="num">74</b></div>
+            <div class="pill-row"><span class="nm">Profit</span><span class="bar"><i data-w="81%"></i></span><b class="num">81</b></div>
+            <div class="pill-row warn"><span class="nm">Cash</span><span class="bar"><i data-w="61%"></i></span><b class="num">61</b></div>
+          </div>
+        </div>
+        <div class="dash-chart">
+          <div class="lbl"><b>13-week cash forecast</b><span>R thousands</span></div>
+          <svg class="cash-svg" viewBox="0 0 520 120" preserveAspectRatio="none" aria-hidden="true">
+            <line x1="0" y1="96" x2="520" y2="96" stroke="rgba(212,175,55,.14)" stroke-width="1" stroke-dasharray="3 5"/>
+            <path class="cash-fill" d="M0 58 C40 50, 70 44, 105 48 C140 52, 165 66, 200 78 C235 90, 258 96, 290 92 C322 88, 345 70, 385 56 C425 42, 470 34, 520 28 L520 120 L0 120 Z"/>
+            <path class="cash-line" d="M0 58 C40 50, 70 44, 105 48 C140 52, 165 66, 200 78 C235 90, 258 96, 290 92 C322 88, 345 70, 385 56 C425 42, 470 34, 520 28"/>
+            <circle class="dip-ring" cx="272" cy="94" r="4"/>
+            <circle class="dip-dot" cx="272" cy="94" r="4"/>
+          </svg>
+          <div class="alert-chip"><span class="dot"></span><span><b>Cash dip — Week 6.</b> <span>Action plan ready: 3 moves close the gap.</span></span></div>
+        </div>
+      </div>
+      <div class="float-card fc-1">
+        <span class="tag">Accountant note</span>
+        <p>Debtor days crept up to <b>52</b>. Chase your top 3 invoices this week — that's <b>R184k</b> unlocked.</p>
+      </div>
+      <div class="float-card fc-2">
+        <b>+9 pts</b>
+        <span>Health score · this quarter</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- TRUST STRIP -->
+<div class="trust reveal">
+  <div class="wrap">
+    <div class="item"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#d4af37" stroke-width="1.6" stroke-linecap="round"><path d="M12 3v18M5 8l7-5 7 5M5 16l7 5 7-5"/></svg><span>Connects to <b>Xero</b></span></div>
+    <div class="item"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#d4af37" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M8 12h8M12 8v8"/></svg><span>Connects to <b>QuickBooks</b></span></div>
+    <div class="item"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#d4af37" stroke-width="1.6" stroke-linecap="round"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg><span><b>Bank-grade</b> encryption</span></div>
+    <div class="item"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#d4af37" stroke-width="1.6" stroke-linecap="round"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/></svg><span><b>POPIA</b>-aligned by design</span></div>
+    <div class="item"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#d4af37" stroke-width="1.6" stroke-linecap="round"><path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/></svg><span>Built for <b>South African</b> SMEs</span></div>
+  </div>
+</div>
+
+<!-- PERSONA -->
+<section id="persona">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="eyebrow reveal">Begin your orbit</p>
+      <h2 class="reveal">Who is looking at the stars tonight?</h2>
+      <p class="sub reveal">Four questions. Sixty seconds. We'll sketch your world back to you — and show you what we'd fix first.</p>
+    </div>
+    <div class="persona-grid stagger">
+      <div class="persona-card" onclick="startQuiz('owner')">
+        <div class="icon"><svg viewBox="0 0 24 24"><path d="M3 21h18M5 21V8l7-5 7 5v13M9 21v-6h6v6"/></svg></div>
+        <h3>I run a business</h3>
+        <p>You work too hard to be guessing. Find out what your numbers have been trying to tell you — in plain English, in one score, on your phone.</p>
+        <div class="go">Diagnose my business — free <i>→</i></div>
+      </div>
+      <div class="persona-card" onclick="startQuiz('accountant')">
+        <div class="icon"><svg viewBox="0 0 24 24"><path d="M12 3v18M12 6l-7 3 2 6a5 5 0 0 0 10 0zM12 6l7 3-2 6"/><path d="M17 15a5 5 0 0 0 4 0"/></svg></div>
+        <h3>I'm an accountant</h3>
+        <p>Your clients already trust you. MILŌN turns that trust into R1 200–R3 000 of advisory revenue per client, per month — without proportional hours.</p>
+        <div class="go">Show me the margin <i>→</i></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- QUIZ -->
+<section id="quiz">
+  <div class="wrap">
+    <div class="quiz-shell">
+      <div class="quiz-progress"><i id="qbar"></i></div>
+      <div id="qsteps"></div>
+      <div class="quiz-reward" id="qreward"></div>
+    </div>
+  </div>
+</section>
+
+<!-- METHOD (golden tree narrative) -->
+<section id="method">
+  <div class="wrap">
+    <div class="section-head center">
+      <p class="eyebrow reveal">The MILŌN method</p>
+      <h2 class="reveal">Every business is a <span class="gold-text serif">golden tree.</span></h2>
+      <p class="sub reveal">You don't need 31 ratios. You need to know if your tree is healthy — and which part is sick. That's your Health Score: one number, four living parts, zero jargon.</p>
+    </div>
+    <div class="pillar-grid stagger" id="pillarGrid">
+      <div class="pillar-card">
+        <div class="node"></div>
+        <div class="metaphor">Roots</div>
+        <h3>Financing</h3>
+        <p>What anchors you: equity, loans, the structure beneath the surface. Weak roots topple strong trees.</p>
+        <div class="score"><span class="bar"><i data-w="82%"></i></span><b>82</b></div>
+      </div>
+      <div class="pillar-card">
+        <div class="node"></div>
+        <div class="metaphor">Trunk</div>
+        <h3>Assets</h3>
+        <p>What you own and how hard it works. Equipment, stock, debtors — the strength that carries everything up.</p>
+        <div class="score"><span class="bar"><i data-w="74%"></i></span><b>74</b></div>
+      </div>
+      <div class="pillar-card">
+        <div class="node"></div>
+        <div class="metaphor">Fruit</div>
+        <h3>Profit</h3>
+        <p>What the tree exists for. We track 31 ratios so you know if the harvest is real — or rotting.</p>
+        <div class="score"><span class="bar"><i data-w="81%"></i></span><b>81</b></div>
+      </div>
+      <div class="pillar-card warn">
+        <div class="node"></div>
+        <div class="metaphor">Water</div>
+        <h3>Cash</h3>
+        <p>Moving through everything, always. Most healthy-looking trees die of thirst. Our 13-week forecast makes sure yours doesn't.</p>
+        <div class="score"><span class="bar"><i data-w="61%"></i></span><b>61</b></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- RATIO MARQUEE -->
+<div class="marquee-band reveal" aria-hidden="true">
+  <p class="cap">31 ratios · translated into plain English</p>
+  <div class="marquee" id="marquee">
+    <span>Current ratio</span><span>Debtor days</span><span>Gross margin</span><span>Cash runway</span><span>Interest cover</span><span>Stock turn</span><span>Net margin</span><span>Creditor days</span><span>Quick ratio</span><span>Return on equity</span><span>Debt-to-equity</span><span>Working capital cycle</span><span>Break-even point</span><span>Revenue per employee</span><span>Operating cashflow ratio</span><span>Asset turnover</span>
+  </div>
+</div>
+
+<!-- PROBLEM -->
+<section id="problem">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="eyebrow reveal">The 2am question</p>
+      <h2 class="reveal">"Why is there money in the bank<br>but I still feel <span class="gold-text serif">broke?</span>"</h2>
+      <p class="sub reveal" style="margin-bottom:36px">If you've ever asked it, you already know: the bank balance lies. Profit on paper isn't cash in hand. And by the time the numbers reach you — month-end, quarter-end, year-end — the decision that needed them has already been made. Blind.</p>
+    </div>
+    <div class="feat-cols stagger">
+      <div class="feat-card">
+        <h3>What it costs owners</h3>
+        <ul>
+          <li>Decisions made on gut feel, discovered wrong months later</li>
+          <li>Cash crunches that "came out of nowhere" — but were visible 9 weeks earlier</li>
+          <li>Working harder every year without knowing if it's actually working</li>
+          <li>That low-grade hum of dread every time the phone shows the bank app</li>
+        </ul>
+      </div>
+      <div class="feat-card">
+        <h3>What it costs accountants</h3>
+        <ul>
+          <li>Being called after the fire, when all you can do is explain the ashes</li>
+          <li>Giving away advisory gold inside a compliance fee</li>
+          <li>Clients who think you're a cost — because they only see you at deadline time</li>
+          <li>Knowing you could have seen it coming, if the data hadn't arrived late and broken</li>
+        </ul>
+      </div>
+    </div>
+    <p class="sub reveal" style="margin-top:36px">The problem was never the numbers. It's that nobody translated them in time. <b style="color:var(--gold)">MILŌN is the translator — and the early-warning system.</b></p>
+  </div>
+</section>
+
+<div class="divider"><i></i></div>
+
+<!-- HOW IT WORKS -->
+<section id="how">
+  <div class="wrap">
+    <div class="section-head center">
+      <p class="eyebrow reveal">How it works</p>
+      <h2 class="reveal">From blind to briefed<br>in one afternoon.</h2>
+    </div>
+    <div class="steps stagger">
+      <div class="step-card">
+        <span class="n">01</span>
+        <h3>Connect</h3>
+        <p>Link Xero or QuickBooks in a few clicks. Your numbers flow in live — no spreadsheets, no exports, no admin.</p>
+        <span class="time">± 5 minutes</span>
+      </div>
+      <div class="step-card">
+        <span class="n">02</span>
+        <h3>Diagnose</h3>
+        <p>Your Health Score appears with all four pillars scored, the 13-week cash forecast drawn, and your biggest risk flagged in plain English.</p>
+        <span class="time">Instant</span>
+      </div>
+      <div class="step-card">
+        <span class="n">03</span>
+        <h3>Act</h3>
+        <p>A ranked action plan built from your actual numbers. Fix what matters first, assign it to your team, and watch the score climb.</p>
+        <span class="time">Every week after</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FEATURES -->
+<section id="features">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="eyebrow reveal">The platform</p>
+      <h2 class="reveal">A doctor for your business.<br>An engine for your practice.</h2>
+    </div>
+    <div class="feat-cols stagger">
+      <div class="feat-card">
+        <div class="who">For business owners</div>
+        <h3>A CFO in your pocket — without the salary</h3>
+        <ul>
+          <li><b>Finally understand your numbers</b> — in plain English. No accountant-speak, no shame in asking, no pretending in meetings.</li>
+          <li><b>Know exactly where the problem lives</b> — not "margins are down" but <i>which</i> part of your business is sick, and what it's costing you in rand.</li>
+          <li><b>See where your cash is going — and how to get it back.</b> The 13-week forecast shows the crunch 9 weeks before it hits. No more "it came out of nowhere."</li>
+          <li><b>A step-by-step plan built from your actual numbers</b> — ranked by impact, so Monday morning you know exactly what to do first.</li>
+          <li><b>Test decisions before you commit</b> — model the new hire, the price increase, the equipment purchase. See the future before you sign for it.</li>
+          <li><b>Watch your health score climb</b> as you implement — daily and weekly pulse checks that turn fixing your business into visible progress.</li>
+          <li><b>Your accountant, in the loop, live</b> — they see what you see and flag what you'd miss. No more waiting for month-end.</li>
+        </ul>
+      </div>
+      <div class="feat-card">
+        <div class="who">For accountants</div>
+        <h3>Turn every compliance client into an advisory client</h3>
+        <ul>
+          <li><b>Add R1 200–R3 000 per client, per month</b> — without proportional hours. The system does the analysis; you do the trusted-advisor part.</li>
+          <li><b>A repeatable advisory process you can sell from day one</b> — no building methodology, no reinventing per client. Show up with a system.</li>
+          <li><b>Show a new client their health score in the first meeting</b> — the advisory conversation opens itself. You'll never pitch advisory again; you'll demonstrate it.</li>
+          <li><b>Be the accountant who saw it coming</b> — early-warning flags reach you before the panic call. That's the moment clients decide you're irreplaceable.</li>
+          <li><b>Every client's health at a glance</b> — one dashboard, your whole book, live. Comment on the actual figures; clients get notified instantly.</li>
+          <li><b>Your brand on everything</b> — every report, every dashboard, every deliverable. Clients see your name next to the insight.</li>
+          <li><b>Xero & QuickBooks connected</b> — data always ready, admin always zero. Forecasting and scenarios without the spreadsheet weekends.</li>
+          <li><b>AI that empowers your expertise — never replaces it.</b> MILŌN finds the signal; you provide the judgement clients actually pay for.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PRICING -->
+<section id="pricing">
+  <div class="wrap">
+    <div class="section-head center">
+      <p class="eyebrow reveal">Choose your constellation</p>
+      <h2 class="reveal">Less than a bookkeeper.<br>Sees more than a CFO.</h2>
+      <p class="sub reveal">Per business, per month. Cancel anytime. Your free diagnostic comes first — see your health score before you pay a cent.</p>
+    </div>
+    <div class="acc-pricing reveal" id="accPricing">
+      <div class="who" style="font-size:12px;letter-spacing:.3em;text-transform:uppercase;color:var(--gold);font-weight:700;margin-bottom:10px">Accountant practice model</div>
+      <h3 style="font-size:22px;margin-bottom:10px">One base fee. Your margin, your call.</h3>
+      <p style="color:var(--ink-dim);font-size:15px;margin-bottom:14px">Your practice joins for a flat <b style="color:var(--gold)">R699/month</b> — full practice dashboard, every client's health at a glance, white-label reports, the works. Each SME you bring on subscribes at the normal plan price below, and <b style="color:var(--ink)">you decide who carries it</b>:</p>
+      <ul style="list-style:none;display:flex;flex-direction:column;gap:10px">
+        <li style="display:flex;gap:10px;font-size:14.5px;color:var(--ink-dim)"><span style="color:var(--gold)">✦</span><span><b style="color:var(--ink)">Absorb it</b> — bundle MILŌN into your advisory retainer at R1 200–R3 000/month and keep the margin. The platform costs you R699; the insight sells for multiples of that.</span></li>
+        <li style="display:flex;gap:10px;font-size:14.5px;color:var(--ink-dim)"><span style="color:var(--gold)">✦</span><span><b style="color:var(--ink)">Pass it on</b> — your client pays their own subscription, you earn on the advisory layer with zero platform cost per client.</span></li>
+      </ul>
+      <p style="color:var(--ink-dim);font-size:13.5px;margin-top:14px">Either way: your brand on every report, and the billing decision stays yours.</p>
+    </div>
+    <div class="price-grid stagger">
+      <div class="price-card">
+        <h3>Spark</h3>
+        <div class="amount">R299<small>/mo</small></div>
+        <div class="per">per business, per month</div>
+        <ul>
+          <li>Your live Health Score — the truth, daily</li>
+          <li>The four pillars, in plain English</li>
+          <li>Weekly pulse: are we getting better or worse?</li>
+          <li>Monthly health report you'll actually read</li>
+          <li>Email support</li>
+        </ul>
+        <a class="btn btn-ghost" href="#register" onclick="pickPlan('Spark')">Start with Spark</a>
+      </div>
+      <div class="price-card hot">
+        <div class="tag">Most chosen</div>
+        <h3>Orbit</h3>
+        <div class="amount">R699<small>/mo</small></div>
+        <div class="per">per business, per month</div>
+        <ul>
+          <li>Everything in Spark</li>
+          <li>13-week cash forecast — see the crunch 9 weeks early</li>
+          <li>Your ranked action plan: what to fix first, and why</li>
+          <li>Deep-dive view when you want the full picture</li>
+          <li>Assign fixes to your team, track them to done</li>
+          <li>Your accountant in the loop, live</li>
+          <li>5 board-ready reports</li>
+        </ul>
+        <a class="btn btn-gold" href="#register" onclick="pickPlan('Orbit')">Start with Orbit</a>
+      </div>
+      <div class="price-card">
+        <h3>Constellation</h3>
+        <div class="amount">R1199<small>/mo</small></div>
+        <div class="per">per business, per month</div>
+        <ul>
+          <li>Everything in Orbit</li>
+          <li>Test big decisions before you commit — 3-year scenario engine</li>
+          <li>All 10 reports, fully white-labelled</li>
+          <li>Industry Pulse: what's moving in your sector, weekly</li>
+          <li>Multi-business / practice dashboard</li>
+          <li>Priority support & white-glove onboarding</li>
+        </ul>
+        <a class="btn btn-ghost" href="#register" onclick="pickPlan('Constellation')">Go Constellation</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- REGISTER -->
+<section id="register">
+  <div class="wrap">
+    <div class="section-head center">
+      <p class="eyebrow reveal">Join MILŌN</p>
+      <h2 class="reveal">In 60 seconds you'll know more about your business<br>than you did all year.</h2>
+      <p class="sub reveal">Free diagnostic first. No card. No risk. Just your health score — and the truth.</p>
+    </div>
+    <div class="reg-shell reveal">
+      <label>I am a</label>
+      <select id="regRole" onchange="document.body.className=this.selectedIndex?'persona-accountant':'persona-owner'"><option>Business owner</option><option>Accountant / Advisory firm</option></select>
+      <label>Full name</label>
+      <input type="text" placeholder="Milo of Croton">
+      <label>Email</label>
+      <input type="email" placeholder="you@business.co.za">
+      <label>Business / Firm name</label>
+      <input type="text" placeholder="Your business">
+      <div class="acc-pricing" style="margin:18px 0 0;padding:18px 20px;border-radius:14px" id="accRegNote">
+        <p style="font-size:13.5px;color:var(--ink-dim);margin:0"><b style="color:var(--gold)">Practice base fee: R699/month.</b> Client subscriptions below are billed per business — choose at onboarding whether your practice absorbs each client's fee or passes it on. You stay in control of the billing.</p>
+      </div>
+      <label>Plan</label>
+      <select id="regPlan"><option>Spark — R299/mo</option><option selected>Orbit — R699/mo</option><option>Constellation — R1199/mo</option></select>
+      <button class="btn btn-gold" style="width:100%;justify-content:center;margin-top:30px" onclick="alert('Hook this button to your Stripe checkout / Supabase signup flow.')">Register & subscribe ✦</button>
+      <p style="font-size:12px;color:var(--ink-dim);text-align:center;margin-top:14px">Free diagnostic first. No card required to begin.</p>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div>
+      <span class="logo-word">MILŌN</span>
+      The passion to perform.<br>Business intelligence for South African SMEs & accountants.
+    </div>
+    <div class="fnav">
+      <a href="#persona">Start</a>
+      <a href="#method">The MILŌN Method</a>
+      <a href="#features">Platform</a>
+      <a href="#pricing">Pricing</a>
+      <a href="#register">Register</a>
+    </div>
+    <div class="copy">
+      <span>© 2026 MILŌN. All rights reserved.</span>
+      <span>Made under southern skies ✦ Cape Town</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+const REDUCE=matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* ---------------- Scroll progress + nav state ---------------- */
+const prog=document.getElementById('progress'),topnav=document.getElementById('topnav');
+function onScroll(){
+  const max=document.body.scrollHeight-innerHeight;
+  prog.style.width=(max>0?Math.min(100,scrollY/max*100):0)+'%';
+  topnav.classList.toggle('scrolled',scrollY>10);
+}
+addEventListener('scroll',onScroll,{passive:true});onScroll();
+
+/* ---------------- Reveal on scroll (single + staggered) ---------------- */
+const io=new IntersectionObserver(es=>es.forEach(e=>{
+  if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target);}
+}),{threshold:.15});
+document.querySelectorAll('.reveal,.stagger').forEach(el=>io.observe(el));
+
+/* ---------------- Count-up numbers ---------------- */
+function fmt(n,f){return f==='space'?String(n).replace(/\B(?=(\d{3})+(?!\d))/g,'\u202f'):String(n)}
+const countIO=new IntersectionObserver(es=>es.forEach(e=>{
+  if(!e.isIntersecting)return;
+  const el=e.target,to=+el.dataset.to,f=el.dataset.fmt;
+  countIO.unobserve(el);
+  if(REDUCE){el.textContent=fmt(to,f);return}
+  const t0=performance.now(),dur=1400;
+  (function tick(t){
+    const p=Math.min(1,(t-t0)/dur),ease=1-Math.pow(1-p,3);
+    el.textContent=fmt(Math.round(to*ease),f);
+    if(p<1)requestAnimationFrame(tick);
+  })(t0);
+}),{threshold:.6});
+document.querySelectorAll('.count').forEach(el=>countIO.observe(el));
+
+/* ---------------- Dashboard: gauge, pillar bars, cash line ---------------- */
+const dash=document.getElementById('dash');
+if(dash){
+  const dashIO=new IntersectionObserver(es=>es.forEach(e=>{
+    if(!e.isIntersecting)return;
+    dashIO.unobserve(dash);
+    dash.classList.add('in');
+    // gauge: 78/100 of circumference (2πr ≈ 402)
+    const g=document.getElementById('gaugeFill');
+    requestAnimationFrame(()=>{g.style.strokeDashoffset=402*(1-0.78)});
+    // pillar bars (hero + method section share [data-w])
+    dash.querySelectorAll('.pill-row .bar i').forEach((b,i)=>{
+      setTimeout(()=>{b.style.width=b.dataset.w},200+i*140);
+    });
+  }),{threshold:.35});
+  dashIO.observe(dash);
+}
+/* method pillar bars */
+const pg=document.getElementById('pillarGrid');
+if(pg){
+  const pgIO=new IntersectionObserver(es=>es.forEach(e=>{
+    if(!e.isIntersecting)return;
+    pgIO.unobserve(pg);
+    pg.querySelectorAll('.score .bar i').forEach((b,i)=>{
+      setTimeout(()=>{b.style.width=b.dataset.w},350+i*160);
+    });
+  }),{threshold:.3});
+  pgIO.observe(pg);
+}
+
+/* ---------------- Marquee: duplicate content for seamless loop ---------------- */
+const mq=document.getElementById('marquee');
+if(mq&&!REDUCE){mq.innerHTML+=mq.innerHTML;}
+
+/* ---------------- Persona card cursor glow ---------------- */
+document.querySelectorAll('.persona-card').forEach(c=>{
+  c.addEventListener('pointermove',e=>{
+    const r=c.getBoundingClientRect();
+    c.style.setProperty('--mx',(e.clientX-r.left)+'px');
+    c.style.setProperty('--my',(e.clientY-r.top)+'px');
+  });
+});
+
+/* ---------------- Theme toggle ---------------- */
+const root=document.documentElement,tbtn=document.getElementById('themeToggle');
+tbtn.onclick=()=>{const d=root.dataset.theme==='dark';root.dataset.theme=d?'light':'dark';tbtn.textContent=d?'☾':'☀'};
+
+/* ---------------- Quiz engine ---------------- */
+const QUIZ={
+ owner:[
+  {q:"What does your business do?",hint:"This places your first planet.",opts:[["🛍","Retail / E-commerce"],["🔧","Services"],["🏗","Construction"],["🍽","Hospitality"],["🏭","Manufacturing"],["🚚","Transport / Logistics"]],key:'industry',reward:"✦ Industry mapped — your sun just ignited."},
+  {q:"How do customers pay you?",hint:"This shapes your cash orbit.",opts:[["⚡","Upfront / on the spot"],["📅","On account — 30+ days"],["🔁","Monthly retainers"],["🧩","A mix of everything"]],key:'cashcycle',reward:"✦ Cash cycle charted — second planet in orbit."},
+  {q:"What keeps you up at night?",hint:"Be honest. We've heard it all.",opts:[["💧","Cash runs dry before month-end"],["❓","I don't know if I'm actually profitable"],["⛓","Debt is eating my margins"],["🐢","Customers pay me late"]],key:'pain',reward:"✦ Pain point locked. Now we can aim."},
+  {q:"Roughly, your annual turnover?",hint:"This sets your peer group — who we benchmark you against.",opts:[["🌱","Under R1m"],["🌿","R1m – R5m"],["🌳","R5m – R20m"],["🌲","R20m+"]],key:'size',reward:"✦ Constellation complete."}
+ ],
+ accountant:[
+  {q:"What does your practice mostly do today?",hint:"This places your first star.",opts:[["📋","Compliance & tax"],["📊","Bookkeeping & payroll"],["💼","Some advisory already"],["🚀","Full CFO services"]],key:'industry',reward:"✦ Practice profile started."},
+  {q:"How many SME clients do you serve?",hint:"This sizes your constellation.",opts:[["✦","1 – 10"],["✦✦","11 – 50"],["✦✦✦","51 – 150"],["🌌","150+"]],key:'cashcycle',reward:"✦ Client universe mapped."},
+  {q:"What's your biggest frustration?",hint:"The thing that steals your margin.",opts:[["⏳","Clients only call in a crisis"],["💸","Can't charge for the advice I give"],["🗂","Data arrives late and messy"],["📉","Compliance fees keep shrinking"]],key:'pain',reward:"✦ Pain point locked. This is fixable."},
+  {q:"What would change your practice most?",hint:"Your north star.",opts:[["💰","Recurring advisory revenue"],["🛰","Live oversight of every client"],["🏷","Reports with my brand on them"],["🤝","Deeper client relationships"]],key:'size',reward:"✦ Constellation complete."}
+ ]
+};
+const REFLECT={
+ owner:{
+  "💧":["cash flow","Your cash dries up before the month does. You're not alone — cash kills more SA businesses than losses do. <b>MILŌN's 13-week cashflow forecast shows you the shortfall weeks before it lands — and gives you the exact moves to close it.</b>"],
+  "❓":["profit clarity","You're working hard but flying blind on whether it's actually profitable. <b>MILŌN turns your numbers into one health score and 31 plain-language ratios — so you know, every week, if the harvest is real.</b>"],
+  "⛓":["debt pressure","Debt is quietly eating what you earn. <b>MILŌN tracks your debt drag and interest burden live, and ranks the highest-impact moves to lighten the load.</b>"],
+  "🐢":["slow payers","Late payers are using you as a free bank. <b>MILŌN flags your cash-trapped days, shows the cost in rand, and gives you the playbook to get paid faster.</b>"]
+ },
+ accountant:{
+  "⏳":["crisis-only clients","Your clients only call when it's already on fire. <b>MILŌN gives you a live radar over every client — risk flags reach you before the panic call does.</b>"],
+  "💸":["unbilled advice","You give away advisory value inside compliance fees. <b>MILŌN packages your insight into a branded, recurring retainer clients can see and gladly pay for.</b>"],
+  "🗂":["messy data","You can't advise on data that arrives late and broken. <b>MILŌN keeps client numbers live and structured — comment on the actual figures, in context, instantly.</b>"],
+  "📉":["fee compression","Compliance is a shrinking island. <b>MILŌN is your bridge to advisory — 10 white-label reports and a system that sells your expertise for you.</b>"]
+ }
+};
+let role='owner',step=0,answers={};
+function startQuiz(r){role=r;step=0;answers={};document.body.className='persona-'+r;document.getElementById('quiz').classList.add('active');renderStep();document.getElementById('quiz').scrollIntoView({behavior:'smooth'})}
+function renderStep(){
+ const steps=QUIZ[role],holder=document.getElementById('qsteps');
+ document.getElementById('qbar').style.width=(step/(steps.length))*100+'%';
+ if(step>=steps.length){renderResult();return}
+ const s=steps[step];
+ holder.innerHTML=`<div class="q-step on"><h3>${s.q}</h3><p class="hint">${s.hint} <span style="color:var(--gold)">Question ${step+1} of ${steps.length}</span></p>
+ <div class="opt-grid">${s.opts.map(o=>`<button class="opt" onclick="pick('${s.key}','${o[0]}','${o[1].replace(/'/g,"\\'")}',this)"><span class="em">${o[0]}</span>${o[1]}</button>`).join('')}</div></div>`;
+ document.getElementById('qreward').textContent='';
+}
+function pick(key,em,label,el){
+ document.querySelectorAll('.opt').forEach(b=>b.classList.remove('picked'));el.classList.add('picked');
+ answers[key]={em,label};
+ document.getElementById('qreward').textContent=QUIZ[role][step].reward;
+ setTimeout(()=>{step++;renderStep()},850);
+}
+function renderResult(){
+ document.getElementById('qbar').style.width='100%';
+ const a=answers,r=REFLECT[role][a.pain.em]||Object.values(REFLECT[role])[0];
+ const ownerLines=role==='owner'
+  ?`<p>Industry: <b>${a.industry.label}</b></p><p>Cash cycle: <b>${a.cashcycle.label}</b></p><p>Size band: <b>${a.size.label}</b></p>`
+  :`<p>Practice focus: <b>${a.industry.label}</b></p><p>Client base: <b>${a.cashcycle.label}</b></p><p>North star: <b>${a.size.label}</b></p>`;
+ document.getElementById('qsteps').innerHTML=`
+ <div class="q-step on">
+  <p class="eyebrow">Your business, sketched</p>
+  <h3>Here's what we see.</h3>
+  <div class="mini-biz">
+    <div class="mini-orrery">
+      <div class="ring r1"></div><div class="ring r2"></div><div class="ring r3"></div>
+      <div class="core"></div>
+      <div class="dot" style="top:6%;left:48%"></div>
+      <div class="dot" style="top:42%;left:84%"></div>
+      <div class="dot" style="top:74%;left:14%"></div>
+    </div>
+    <div class="profile-lines">${ownerLines}<p>Biggest worry: <b>${a.pain.label}</b></p></div>
+  </div>
+  <div class="reflect"><span class="serif gold-text">"${a.pain.label}."</span><br>${r[1]}</div>
+  <p class="hint">Your full diagnostic — health score, cash runway, and your first three moves — is one step away. Most owners say this is the first time their business ever made sense.</p>
+  <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:8px">
+    <a class="btn btn-gold" href="#pricing">Unlock my full diagnostic ✦</a>
+    <button class="btn btn-ghost" onclick="startQuiz(role)">Redo questions</button>
+  </div>
+ </div>`;
+ document.getElementById('qreward').textContent='';
+}
+function pickPlan(p){const sel=document.getElementById('regPlan');[...sel.options].forEach(o=>{if(o.text.startsWith(p))sel.value=o.text})}
+</script>
+</body>
+</html>

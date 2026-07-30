@@ -8,9 +8,12 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 import { AccountantRatiosPanel } from "@/components/accountant-ratios";
+import { AdvisoryDrafter } from "@/components/advisory-drafter";
 import { CashForecastPanel } from "@/components/cash-forecast";
 import { TasksPanel } from "@/components/tasks-panel";
 import { SplashScreen } from "@/components/splash-screen";
+import { UploadFinancials } from "@/components/upload-financials";
+import type { ExtractionResult } from "@/lib/financialSchema";
 
 export const Route = createFileRoute("/_authenticated/clients/$clientId")({
   component: ClientView,
@@ -130,6 +133,8 @@ function ClientView() {
             <TabsTrigger value="ratios">Ratios</TabsTrigger>
             <TabsTrigger value="cashflow">13-Week Cash Forecast</TabsTrigger>
             <TabsTrigger value="tasks">Tasks</TabsTrigger>
+            <TabsTrigger value="upload">Upload Financials</TabsTrigger>
+            <TabsTrigger value="advisory">Advisory Drafter</TabsTrigger>
           </TabsList>
           <TabsContent value="ratios" className="mt-4">
             <AccountantRatiosPanel clientId={client.id} clientName={client.name} />
@@ -139,6 +144,26 @@ function ClientView() {
           </TabsContent>
           <TabsContent value="tasks" className="mt-4">
             <TasksPanel clientId={client.id} clientName={client.name} />
+          </TabsContent>
+          <TabsContent value="upload" className="mt-4">
+            <div className="rounded-xl border border-white/10 bg-card p-6 space-y-3">
+              <div>
+                <h3 className="font-semibold">Upload financial statement PDF</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Gemini reads the PDF and extracts the income statement and balance sheet.
+                  Review every figure before confirming — numbers are never saved automatically.
+                </p>
+              </div>
+              <UploadFinancials
+                onConfirm={(result: ExtractionResult) => {
+                  // TODO: wire result into Supabase snapshot save
+                  console.log("Financials confirmed for", client.name, result);
+                }}
+              />
+            </div>
+          </TabsContent>
+          <TabsContent value="advisory" className="mt-4">
+            <AdvisoryDrafter clientId={client.id} clientName={client.name} />
           </TabsContent>
         </Tabs>
 

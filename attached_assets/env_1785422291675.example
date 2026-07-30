@@ -1,0 +1,6 @@
+# Copy to .env (or set as a Replit Secret) and paste your key.
+# Get one at https://aistudio.google.com/apikey
+GEMINI_API_KEY=your_key_here
+
+# Optional: port for the Express server (Replit sets this automatically)
+# PORT=3000

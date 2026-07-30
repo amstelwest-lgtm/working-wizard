@@ -9,6 +9,7 @@
 import { View, Text, StyleSheet } from "@react-pdf/renderer";
 import type { AccountantProfile } from "@/contexts/accountant-profile";
 import { PDFDocument, type SmeData } from "@/components/pdf/pdf-document";
+import { scoreTier } from "@/lib/ratios";
 import { MetricBox } from "@/components/pdf/metric-box";
 import { RatioRow } from "@/components/pdf/ratio-row";
 
@@ -53,10 +54,6 @@ function formatRand(v: number): string {
 }
 
 function pctStr(v: number) { return `${(v * 100).toFixed(1)}%`; }
-function scoreTier(s: number): "critical" | "at_risk" | "healthy" {
-  return s >= 70 ? "healthy" : s >= 40 ? "at_risk" : "critical";
-}
-
 // ── Styles ─────────────────────────────────────────────────────────────────
 
 const S = StyleSheet.create({

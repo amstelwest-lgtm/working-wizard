@@ -80,7 +80,9 @@ import { SplashScreen } from "@/components/splash-screen";
 import { WalkthroughWizard } from "@/components/walkthrough-wizard";
 import { QboConnectCard } from "@/components/qbo-connect";
 import { Button } from "@/components/ui/button";
-import { HoloGlobe, type RatioInfo } from "@/components/holo-globe";
+import { type RatioInfo } from "@/components/holo-globe";
+import { SphereHero } from "@/components/sphere-hero";
+import { buildSpherePillars } from "@/components/sphere-hero-adapter";
 import { SimplifiedRatios } from "@/components/simplified-ratios";
 import { useViewMode } from "@/contexts/view-mode";
 
@@ -1513,7 +1515,7 @@ function Index() {
         const vm = valueMap[k];
         const health = healthMap[k];
         const status = !isFinite(health) ? "—" : health >= 80 ? "Good" : health >= 50 ? "Fair" : "Needs work";
-        return [meta.friendly, meta.techName, fmtPdf(vm.value, vm.format), `${Math.round(health)}%`, status];
+        return [meta.friendly, meta.techName, fmtPdf(vm.value, vm.format), isFinite(health) ? `${Math.round(health)}%` : "—", status];
       });
 
       autoTable(pdf, {
@@ -1835,6 +1837,13 @@ function Index() {
     return pillarAvgs.length ? pillarAvgs.reduce((a, b) => a + b, 0) / pillarAvgs.length : NaN;
   })();
 
+  const spherePillars = buildSpherePillars({
+    overallHealth: avgHealth,
+    pillarHealths,
+    healthMap,
+    ratioMeta: RATIO_META,
+  });
+
   // Ask-AI handler for the overview tab
   const handleAskAI = async () => {
     if (!aiQuestion.trim()) return;
@@ -2154,16 +2163,17 @@ function Index() {
                   Live &middot; {new Date().toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })}
                 </span>
               </div>
-              {/* Holographic orbital business-model globe */}
-              <div className="w-full max-w-[640px]">
-                <HoloGlobe
-                  size={620}
-                  ratioLookup={ratioLookup}
-                  extras={{ breakevenRevenue, avgHealth, businessName: actingClientName ?? undefined }}
-                  simplified={viewMode === "simplified"}
-                  onSelect={({ tab, section }) => {
-                    setActiveTab(tab);
-                    if (section) setHighlightId(section);
+              {/* Sphere hero — financial health visualisation */}
+              <div className="w-full flex justify-center">
+                <SphereHero
+                  overallHealth={avgHealth}
+                  pillars={spherePillars}
+                  topPriority={{
+                    title: "Improve cash conversion cycle",
+                    description: "Focus on reducing debtor days to improve cash flow.",
+                  }}
+                  onTopPriority={() => {
+                    setActiveTab("cash");
                   }}
                 />
               </div>
@@ -2507,8 +2517,8 @@ function Index() {
                       : fmt === "x" ? `${rawVal.toFixed(2)}×`
                       : fmt === "days" ? `${Math.round(rawVal)} d`
                       : rawVal.toLocaleString("en-ZA", { maximumFractionDigits: 0 });
-                    const hCls = health >= 70 ? "text-emerald-400" : health >= 40 ? "text-amber-400" : "text-rose-400";
-                    const hLabelCls = health >= 70 ? "text-emerald-500/70" : health >= 40 ? "text-amber-500/70" : "text-rose-500/70";
+                    const hCls = !isFinite(health) ? "text-slate-400" : health >= 70 ? "text-emerald-400" : health >= 40 ? "text-amber-400" : "text-rose-400";
+                    const hLabelCls = !isFinite(health) ? "text-slate-500/70" : health >= 70 ? "text-emerald-500/70" : health >= 40 ? "text-amber-500/70" : "text-rose-500/70";
                     return (
                       <tr
                         key={k}
