@@ -1,0 +1,274 @@
+/*
+ * Accountant Portal — visual language extracted verbatim from the approved
+ * design file (attached_assets/accountant-portal_1785701924424.html).
+ * Do NOT change colors, spacing, or selectors here without designer sign-off
+ * — this file is the single source of truth for both the dashboard and the
+ * client-detail route so their look stays pixel-identical to the approved
+ * design and consistent with each other.
+ *
+ * Import this once per route (e.g. `import "@/styles/accountant-portal.css"`)
+ * in `dashboard.tsx` and `clients.$clientId.tsx`.
+ */
+:root{
+  --bg:#050507; --bg-2:#0a0a10; --bg-3:#101018;
+  --ink:#f2ecdc; --ink-dim:#9b958a; --ink-faint:#6b665c;
+  --gold-deep:#ac8400; --gold:#d4af37; --gold-bright:#fdee79;
+  --gold-grad:linear-gradient(120deg,#ac8400,#d4af37 40%,#fdee79 60%,#d4af37 80%,#ac8400);
+  --line:rgba(212,175,55,.16); --line-soft:rgba(212,175,55,.08);
+  --card:rgba(255,255,255,.024); --glass:rgba(13,13,20,.78);
+  --risk:#e25c5c; --warn:#e8b34b; --ok:#5ccf8a;
+  --ease:cubic-bezier(.22,.9,.24,1);
+  --shadow-gold:0 0 50px rgba(212,175,55,.1);
+}
+html[data-theme="light"]{
+  --bg:#f6f3ea; --bg-2:#ffffff; --bg-3:#efeadb;
+  --ink:#1b1608; --ink-dim:#6b6354; --ink-faint:#98917f;
+  --line:rgba(140,110,10,.22); --line-soft:rgba(140,110,10,.1);
+  --card:rgba(52,40,0,.035); --glass:rgba(255,255,255,.86);
+  --shadow-gold:0 0 50px rgba(172,132,0,.08);
+}
+.accountant-portal{font-family:'Noto Sans',sans-serif;background:var(--bg);color:var(--ink);line-height:1.55;-webkit-font-smoothing:antialiased;min-height:100vh}
+.accountant-portal ::selection{background:rgba(212,175,55,.3)}
+.accountant-portal button{font-family:inherit;cursor:pointer}
+.accountant-portal a{color:inherit}
+
+/* ambient */
+#atmos{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+#atmos .grid{position:absolute;inset:0;background-image:linear-gradient(var(--line-soft) 1px,transparent 1px),linear-gradient(90deg,var(--line-soft) 1px,transparent 1px);background-size:72px 72px;-webkit-mask-image:radial-gradient(ellipse 90% 55% at 50% 0%,#000 15%,transparent 75%);mask-image:radial-gradient(ellipse 90% 55% at 50% 0%,#000 15%,transparent 75%);opacity:.45}
+#atmos .glow{position:absolute;border-radius:50%;filter:blur(100px);opacity:.4}
+#atmos .g1{width:50vw;height:50vw;top:-26vw;left:-10vw;background:radial-gradient(circle,rgba(212,175,55,.18),transparent 65%)}
+#atmos .g2{width:44vw;height:44vw;top:20vh;right:-20vw;background:radial-gradient(circle,rgba(253,238,121,.08),transparent 60%)}
+html[data-theme="light"] #atmos .glow{opacity:.3}
+
+.accountant-portal .serif{font-family:'Cormorant Garamond',serif;font-style:italic;font-weight:600}
+.accountant-portal .gold-text{background:var(--gold-grad);background-size:200% auto;-webkit-background-clip:text;background-clip:text;color:transparent}
+.accountant-portal .shell{position:relative;z-index:1;max-width:1280px;margin:0 auto;padding:0 28px 90px}
+
+/* ===== top bar ===== */
+.accountant-portal .topbar{position:sticky;top:0;z-index:40;display:flex;align-items:center;gap:18px;height:66px;margin:0 -28px 34px;padding:0 28px;background:color-mix(in srgb,var(--bg) 82%,transparent);backdrop-filter:blur(16px);border-bottom:1px solid var(--line-soft)}
+.accountant-portal .topbar .brand{display:flex;align-items:center;gap:11px;font-weight:800;letter-spacing:.3em;font-size:15px}
+.accountant-portal .topbar .brand img{height:30px;filter:drop-shadow(0 0 8px rgba(212,175,55,.35))}
+.accountant-portal .topbar .firm-chip{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:99px;padding:5px 14px;font-size:12px;letter-spacing:.1em;color:var(--ink-dim)}
+.accountant-portal .topbar .firm-chip b{color:var(--gold);letter-spacing:.18em}
+.accountant-portal .topbar .spacer{flex:1}
+.accountant-portal .tb-btn{display:inline-flex;align-items:center;gap:8px;padding:9px 18px;border-radius:99px;border:1px solid var(--line);background:transparent;color:var(--ink);font-size:13px;font-weight:600;letter-spacing:.03em;transition:all .25s var(--ease)}
+.accountant-portal .tb-btn:hover{border-color:var(--gold);color:var(--gold);transform:translateY(-1px)}
+.accountant-portal .tb-btn.gold{background:var(--gold-grad);background-size:200% auto;color:#1b1300;border:none;box-shadow:0 4px 20px rgba(212,175,55,.3)}
+.accountant-portal .tb-btn.gold:hover{color:#1b1300;box-shadow:0 8px 30px rgba(212,175,55,.45);background-position:120% center}
+.accountant-portal .tb-btn svg{width:15px;height:15px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round}
+
+/* ===== generic card ===== */
+.accountant-portal .card{position:relative;border:1px solid var(--line);border-radius:20px;background:var(--card);backdrop-filter:blur(8px);transition:border-color .3s,transform .3s var(--ease),box-shadow .3s}
+.accountant-portal .card.pad{padding:26px 28px}
+.accountant-portal .card:hover{border-color:rgba(212,175,55,.32)}
+.accountant-portal .card.hero-card{border:1px solid transparent;background:linear-gradient(160deg,rgba(212,175,55,.08),color-mix(in srgb,var(--bg-2) 72%,transparent)) padding-box,linear-gradient(150deg,rgba(253,238,121,.6),rgba(212,175,55,.12) 45%,rgba(253,238,121,.4)) border-box;box-shadow:0 18px 50px rgba(0,0,0,.35),var(--shadow-gold)}
+html[data-theme="light"] .accountant-portal .card.hero-card{box-shadow:0 18px 50px rgba(120,90,10,.12),var(--shadow-gold)}
+.accountant-portal .eyebrow{font-size:10.5px;letter-spacing:.4em;text-transform:uppercase;color:var(--gold);font-weight:700;margin-bottom:10px;display:block}
+.accountant-portal .h-sec{font-size:22px;font-weight:700;margin-bottom:4px}
+.accountant-portal .sub{color:var(--ink-dim);font-size:14px}
+
+/* ===== stats strip ===== */
+.accountant-portal .stats-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:26px}
+.accountant-portal .stat{border:1px solid var(--line);border-radius:18px;padding:20px 22px;background:var(--card);transition:transform .3s var(--ease),border-color .3s}
+.accountant-portal .stat:hover{transform:translateY(-3px);border-color:var(--gold)}
+.accountant-portal .stat .k{font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-dim);margin-bottom:8px;display:flex;align-items:center;gap:7px}
+.accountant-portal .stat .k svg{width:13px;height:13px;stroke:var(--gold);stroke-width:1.8;fill:none;stroke-linecap:round}
+.accountant-portal .stat .v{font-size:30px;font-weight:800;font-variant-numeric:tabular-nums;line-height:1}
+.accountant-portal .stat .v small{font-size:13px;color:var(--ink-dim);font-weight:500}
+.accountant-portal .stat .d{font-size:11.5px;margin-top:7px;color:var(--ink-dim)}
+.accountant-portal .stat .d.up{color:var(--ok)}.accountant-portal .stat .d.warn{color:var(--warn)}
+@media(max-width:900px){.accountant-portal .stats-strip{grid-template-columns:1fr 1fr}}
+
+/* ===== reports spotlight ===== */
+.accountant-portal .spotlight{display:grid;grid-template-columns:1.05fr .95fr;gap:26px;align-items:stretch;margin-bottom:30px}
+.accountant-portal .spot-copy{display:flex;flex-direction:column;justify-content:center;padding:34px 36px}
+.accountant-portal .spot-copy h2{font-size:clamp(22px,2.6vw,30px);line-height:1.15;margin-bottom:12px}
+.accountant-portal .spot-copy p{color:var(--ink-dim);font-size:14.5px;max-width:46ch}
+.accountant-portal .spot-actions{display:flex;gap:12px;margin-top:24px;flex-wrap:wrap}
+.accountant-portal .spot-metrics{display:flex;gap:26px;margin-top:26px;padding-top:20px;border-top:1px solid var(--line-soft)}
+.accountant-portal .spot-metrics b{display:block;font-size:22px;color:var(--gold);font-variant-numeric:tabular-nums}
+.accountant-portal .spot-metrics span{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-dim)}
+.accountant-portal .report-fan{position:relative;min-height:280px;display:grid;place-items:center;overflow:hidden;border-radius:20px}
+.accountant-portal .report-fan::before{content:"";position:absolute;inset:0;background:radial-gradient(ellipse at 50% 60%,rgba(212,175,55,.12),transparent 65%)}
+.accountant-portal .doc{position:absolute;width:150px;height:200px;border-radius:10px;background:linear-gradient(170deg,#15120a,#0b0a06);border:1px solid rgba(212,175,55,.35);box-shadow:0 18px 40px rgba(0,0,0,.55),inset 0 1px 0 rgba(253,238,121,.15);padding:14px 13px;transition:transform .45s var(--ease),box-shadow .45s}
+html[data-theme="light"] .accountant-portal .doc{background:linear-gradient(170deg,#fffef8,#f3ecd8);box-shadow:0 18px 40px rgba(120,90,10,.2),inset 0 1px 0 #fff}
+.accountant-portal .doc .dt{font-size:7.5px;letter-spacing:.28em;color:var(--gold);text-transform:uppercase;font-weight:700}
+.accountant-portal .doc .dh{font-size:11px;font-weight:700;margin:6px 0 8px;line-height:1.25}
+.accountant-portal .doc .bar{height:4px;border-radius:99px;background:rgba(212,175,55,.14);margin:5px 0;overflow:hidden}
+.accountant-portal .doc .bar i{display:block;height:100%;border-radius:99px;background:var(--gold-grad)}
+.accountant-portal .doc .ln{height:3px;border-radius:99px;background:color-mix(in srgb,var(--ink) 14%,transparent);margin:4px 0}
+.accountant-portal .doc .ring{width:40px;height:40px;margin:8px auto 4px}
+.accountant-portal .doc-1{transform:rotate(-9deg) translate(-84px,10px);z-index:1}
+.accountant-portal .doc-2{transform:rotate(-.5deg) translateY(-6px) scale(1.1);z-index:3}
+.accountant-portal .doc-3{transform:rotate(9deg) translate(84px,12px);z-index:2}
+.accountant-portal .report-fan:hover .doc-1{transform:rotate(-12deg) translate(-98px,6px)}
+.accountant-portal .report-fan:hover .doc-2{transform:rotate(0) translateY(-14px) scale(1.14)}
+.accountant-portal .report-fan:hover .doc-3{transform:rotate(12deg) translate(98px,8px)}
+.accountant-portal .wl-chip{position:absolute;bottom:16px;left:50%;transform:translateX(-50%);white-space:nowrap;font-size:10.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--gold);border:1px solid var(--line);border-radius:99px;padding:6px 16px;background:color-mix(in srgb,var(--bg) 70%,transparent);backdrop-filter:blur(6px)}
+@media(max-width:920px){.accountant-portal .spotlight{grid-template-columns:1fr}.accountant-portal .report-fan{min-height:260px}}
+
+/* ===== buttons ===== */
+.accountant-portal .btn{display:inline-flex;align-items:center;gap:9px;padding:12px 24px;border-radius:99px;font-weight:600;font-size:13.5px;letter-spacing:.03em;border:none;transition:all .3s var(--ease);text-decoration:none}
+.accountant-portal .btn svg{width:15px;height:15px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round}
+.accountant-portal .btn.gold{background:var(--gold-grad);background-size:200% auto;color:#1b1300;box-shadow:0 5px 24px rgba(212,175,55,.3)}
+.accountant-portal .btn.gold:hover{transform:translateY(-2px);box-shadow:0 10px 36px rgba(212,175,55,.45);background-position:120% center}
+.accountant-portal .btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+.accountant-portal .btn.ghost:hover{border-color:var(--gold);color:var(--gold);transform:translateY(-2px)}
+.accountant-portal .btn.mini{padding:8px 15px;font-size:12px;gap:7px}
+.accountant-portal .btn.mini svg{width:13px;height:13px}
+
+/* ===== clients table ===== */
+.accountant-portal .clients-head{display:flex;align-items:center;gap:16px;margin:8px 0 16px}
+.accountant-portal .clients-head h2{font-size:20px}
+.accountant-portal .clients-head .search{flex:1;max-width:300px;position:relative}
+.accountant-portal .clients-head input{width:100%;padding:10px 16px 10px 38px;border-radius:99px;border:1px solid var(--line);background:var(--card);color:var(--ink);font-family:inherit;font-size:13px;transition:border-color .3s}
+.accountant-portal .clients-head input:focus{outline:none;border-color:var(--gold)}
+.accountant-portal .clients-head .search svg{position:absolute;left:14px;top:50%;transform:translateY(-50%);width:14px;height:14px;stroke:var(--ink-dim);stroke-width:1.8;fill:none;stroke-linecap:round}
+.accountant-portal .ctable{width:100%;border-collapse:separate;border-spacing:0 10px}
+.accountant-portal .ctable th{text-align:left;font-size:10.5px;letter-spacing:.22em;text-transform:uppercase;color:var(--ink-dim);font-weight:600;padding:0 18px 2px}
+.accountant-portal .ctable td{padding:16px 18px;background:var(--card);border-top:1px solid var(--line);border-bottom:1px solid var(--line);vertical-align:middle;font-size:14px;transition:background .25s}
+.accountant-portal .ctable td:first-child{border-left:1px solid var(--line);border-radius:16px 0 0 16px}
+.accountant-portal .ctable td:last-child{border-right:1px solid var(--line);border-radius:0 16px 16px 0}
+.accountant-portal .ctable tr.row{cursor:pointer;transition:transform .25s var(--ease)}
+.accountant-portal .ctable tr.row:hover td{background:rgba(212,175,55,.05);border-color:rgba(212,175,55,.35)}
+.accountant-portal .cname{font-weight:700;font-size:15px}
+.accountant-portal .ctype{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-dim)}
+.accountant-portal .num{font-variant-numeric:tabular-nums;font-weight:600}
+.accountant-portal .chip{display:inline-flex;align-items:center;gap:6px;font-size:10.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;border-radius:99px;padding:4px 12px}
+.accountant-portal .chip i{width:6px;height:6px;border-radius:50%;background:currentColor}
+.accountant-portal .chip.ok{color:var(--ok);background:rgba(92,207,138,.09);border:1px solid rgba(92,207,138,.28)}
+.accountant-portal .chip.warn{color:var(--warn);background:rgba(232,179,75,.09);border:1px solid rgba(232,179,75,.3)}
+.accountant-portal .chip.risk{color:var(--risk);background:rgba(226,92,92,.09);border:1px solid rgba(226,92,92,.3)}
+.accountant-portal .ring{position:relative;width:46px;height:46px;flex-shrink:0}
+.accountant-portal .ring svg{transform:rotate(-90deg)}
+.accountant-portal .ring .tr{stroke:rgba(212,175,55,.12)}
+.accountant-portal .ring .fl{stroke-linecap:round;transition:stroke-dashoffset 1.4s var(--ease)}
+.accountant-portal .ring b{position:absolute;inset:0;display:grid;place-items:center;font-size:13px;font-weight:800;font-variant-numeric:tabular-nums}
+.accountant-portal .cell-health{display:flex;align-items:center;gap:12px}
+.accountant-portal .spark{width:84px;height:26px}
+.accountant-portal .spark path{fill:none;stroke-width:1.8;stroke-linecap:round}
+.accountant-portal .row-actions{display:flex;gap:8px;justify-content:flex-end}
+.accountant-portal .icon-btn{width:34px;height:34px;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--ink-dim);display:grid;place-items:center;transition:all .25s}
+.accountant-portal .icon-btn:hover{border-color:var(--gold);color:var(--gold);transform:translateY(-2px)}
+.accountant-portal .icon-btn svg{width:15px;height:15px;stroke:currentColor;stroke-width:1.7;fill:none;stroke-linecap:round;stroke-linejoin:round}
+@media(max-width:860px){.accountant-portal .hide-sm{display:none}}
+
+/* ===== playbook library ===== */
+.accountant-portal .pb-section{margin-top:40px}
+.accountant-portal .pb-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;margin-top:20px}
+.accountant-portal .pb-cat{grid-column:1/-1;font-size:10.5px;letter-spacing:.34em;text-transform:uppercase;color:var(--gold);font-weight:700;margin-top:14px}
+.accountant-portal .pb-cat:first-child{margin-top:0}
+.accountant-portal .pb-card{border:1px solid var(--line);border-radius:16px;padding:18px 20px;background:var(--card);cursor:pointer;text-align:left;color:var(--ink);transition:all .3s var(--ease)}
+.accountant-portal .pb-card:hover{transform:translateY(-4px);border-color:var(--gold);box-shadow:var(--shadow-gold)}
+.accountant-portal .pb-card .t{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:9px}
+.accountant-portal .pb-card .t b{font-size:14.5px}
+.accountant-portal .pb-card .bar{height:4px;border-radius:99px;background:rgba(212,175,55,.1);overflow:hidden}
+.accountant-portal .pb-card .bar i{display:block;height:100%;border-radius:99px}
+.accountant-portal .pb-card .m{display:flex;justify-content:space-between;font-size:11px;color:var(--ink-dim);margin-top:8px}
+.accountant-portal .pb-card .m a{color:var(--gold);text-decoration:none;font-weight:600}
+
+/* ===== drawer (playbook detail) ===== */
+.veil{position:fixed;inset:0;z-index:70;background:rgba(3,3,6,.66);backdrop-filter:blur(6px);opacity:0;pointer-events:none;transition:opacity .35s}
+.veil.open{opacity:1;pointer-events:auto}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(560px,94vw);z-index:71;background:var(--bg-2);border-left:1px solid var(--line);box-shadow:-30px 0 80px rgba(0,0,0,.5);transform:translateX(102%);transition:transform .45s var(--ease);display:flex;flex-direction:column}
+.drawer.open{transform:none}
+.drawer-head{padding:26px 30px 20px;border-bottom:1px solid var(--line-soft);position:relative}
+.drawer-head .cat{font-size:10px;letter-spacing:.34em;text-transform:uppercase;color:var(--gold);font-weight:700}
+.drawer-head h3{font-size:24px;margin:6px 0 4px}
+.drawer-head .close{position:absolute;top:20px;right:20px;width:34px;height:34px;border-radius:50%;border:1px solid var(--line);background:transparent;color:var(--ink-dim);display:grid;place-items:center;font-size:14px;transition:all .25s}
+.drawer-head .close:hover{color:var(--gold);border-color:var(--gold)}
+.drawer-score{display:flex;align-items:center;gap:16px;margin-top:14px}
+.drawer-body{flex:1;overflow-y:auto;padding:24px 30px 40px}
+.def-block{border-left:2px solid var(--gold);background:rgba(212,175,55,.05);border-radius:0 12px 12px 0;padding:14px 18px;font-size:14px;color:var(--ink-dim);margin-bottom:12px}
+.def-block b{color:var(--ink)}
+.formula{font-size:12.5px;letter-spacing:.05em;color:var(--gold);background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 14px;margin-bottom:22px;font-variant-numeric:tabular-nums}
+.steps-h{font-size:11px;letter-spacing:.3em;text-transform:uppercase;color:var(--gold);font-weight:700;margin:22px 0 14px}
+.step{display:flex;gap:14px;padding:14px 0;border-bottom:1px solid var(--line-soft)}
+.step:last-child{border-bottom:none}
+.step .n{width:26px;height:26px;flex-shrink:0;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:800;color:#1b1300;background:var(--gold-grad)}
+.step b{display:block;font-size:14px;margin-bottom:3px}
+.step p{font-size:13px;color:var(--ink-dim)}
+.step .tags{display:flex;gap:7px;margin-top:7px;flex-wrap:wrap}
+.tag{font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;font-weight:700;border-radius:99px;padding:3px 10px;border:1px solid var(--line);color:var(--ink-dim)}
+.tag.gold{color:var(--gold);border-color:rgba(212,175,55,.4)}
+
+/* ===== client view ===== */
+.accountant-portal .crumb{display:flex;align-items:center;gap:14px;margin-bottom:22px;font-size:13px;color:var(--ink-dim)}
+.accountant-portal .crumb a{color:var(--gold);text-decoration:none;display:inline-flex;align-items:center;gap:7px;font-weight:600}
+.accountant-portal .crumb a:hover{text-decoration:underline}
+.accountant-portal .crumb .aud{font-size:10px;letter-spacing:.2em;text-transform:uppercase;border:1px solid rgba(92,207,138,.3);color:var(--ok);border-radius:99px;padding:3px 10px}
+.accountant-portal .client-head{display:flex;align-items:center;gap:26px;flex-wrap:wrap;padding:26px 30px;margin-bottom:22px}
+.accountant-portal .client-head .idb{display:flex;align-items:center;gap:18px;flex:1;min-width:240px}
+.accountant-portal .client-head h1{font-size:26px;letter-spacing:.02em}
+.accountant-portal .client-head .meta{display:flex;gap:34px;flex-wrap:wrap}
+.accountant-portal .client-head .meta b{display:block;font-size:17px;font-variant-numeric:tabular-nums}
+.accountant-portal .client-head .meta span{font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-dim)}
+.accountant-portal .big-ring{width:74px;height:74px}
+.accountant-portal .big-ring b{font-size:21px}
+
+.accountant-portal .tabs{display:flex;gap:6px;margin-bottom:22px;border-bottom:1px solid var(--line-soft);overflow-x:auto}
+.accountant-portal .tab{padding:12px 20px;border:none;background:transparent;color:var(--ink-dim);font-size:13.5px;font-weight:600;letter-spacing:.03em;position:relative;white-space:nowrap;transition:color .25s}
+.accountant-portal .tab::after{content:"";position:absolute;left:14px;right:14px;bottom:-1px;height:2px;background:var(--gold-grad);transform:scaleX(0);transition:transform .3s var(--ease)}
+.accountant-portal .tab:hover{color:var(--ink)}
+.accountant-portal .tab.on{color:var(--gold)}
+.accountant-portal .tab.on::after{transform:scaleX(1)}
+.accountant-portal .tab .star{color:var(--gold-bright);font-size:10px;vertical-align:top;margin-left:4px}
+.accountant-portal .tabpane{display:none;animation:paneIn .4s var(--ease)}
+.accountant-portal .tabpane.on{display:block}
+@keyframes paneIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+
+.accountant-portal .action-bar{display:flex;align-items:center;gap:12px;padding:18px 24px;margin-bottom:22px;flex-wrap:wrap}
+.accountant-portal .action-bar .lbl{font-size:13px;color:var(--ink-dim);margin-right:auto}
+.accountant-portal .action-bar .lbl b{color:var(--ink)}
+
+/* collapsible */
+.accountant-portal .collapse{overflow:hidden}
+.accountant-portal .collapse .c-head{display:flex;align-items:center;gap:14px;padding:20px 26px;cursor:pointer;user-select:none}
+.accountant-portal .collapse .c-head h3{font-size:16px;flex:1}
+.accountant-portal .collapse .c-head .hint{font-size:12px;color:var(--ink-dim)}
+.accountant-portal .collapse .c-head .chev{width:30px;height:30px;border-radius:50%;border:1px solid var(--line);display:grid;place-items:center;color:var(--gold);transition:transform .35s var(--ease)}
+.accountant-portal .collapse.open .c-head .chev{transform:rotate(180deg)}
+.accountant-portal .collapse .c-body{max-height:0;transition:max-height .5s var(--ease);}
+.accountant-portal .collapse.open .c-body{max-height:2400px}
+.accountant-portal .c-inner{padding:4px 26px 26px}
+.accountant-portal .autosave{font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--ok);border:1px solid rgba(92,207,138,.3);border-radius:99px;padding:3px 10px}
+.accountant-portal .fin-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px 18px}
+.accountant-portal .fin-grid label{display:block;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-dim);margin-bottom:6px}
+.accountant-portal .fin-grid input{width:100%;padding:11px 14px;border-radius:11px;border:1px solid var(--line);background:var(--bg-2);color:var(--ink);font-family:inherit;font-size:14px;font-variant-numeric:tabular-nums;transition:border-color .25s,box-shadow .25s}
+.accountant-portal .fin-grid input:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px rgba(212,175,55,.14)}
+@media(max-width:900px){.accountant-portal .fin-grid{grid-template-columns:1fr 1fr}}
+
+/* ratio summary rows */
+.accountant-portal .ratio-rows{display:flex;flex-direction:column;gap:10px;margin-top:16px}
+.accountant-portal .ratio-row{display:grid;grid-template-columns:1.2fr 90px 1fr 110px 28px;gap:16px;align-items:center;border:1px solid var(--line);border-radius:14px;padding:14px 20px;background:var(--card);cursor:pointer;transition:all .3s var(--ease);color:var(--ink);text-align:left}
+.accountant-portal .ratio-row:hover{border-color:var(--gold);transform:translateX(4px);box-shadow:var(--shadow-gold)}
+.accountant-portal .ratio-row .rn{font-weight:700;font-size:14px}
+.accountant-portal .ratio-row .rc{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-dim)}
+.accountant-portal .ratio-row .rv{font-size:17px;font-weight:800;font-variant-numeric:tabular-nums}
+.accountant-portal .ratio-row .bar{height:5px;border-radius:99px;background:rgba(212,175,55,.1);overflow:hidden}
+.accountant-portal .ratio-row .bar i{display:block;height:100%;border-radius:99px}
+.accountant-portal .ratio-row .arr{color:var(--gold);transition:transform .3s}
+.accountant-portal .ratio-row:hover .arr{transform:translateX(4px)}
+@media(max-width:760px){.accountant-portal .ratio-row{grid-template-columns:1fr 80px 28px}.accountant-portal .ratio-row .bar,.accountant-portal .ratio-row .chip{display:none}}
+
+/* cash forecast */
+.accountant-portal .cf-wrap{padding:26px 30px}
+.accountant-portal .cf-head{display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:10px;margin-bottom:20px}
+.accountant-portal .cf-legend{display:flex;gap:20px;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-dim)}
+.accountant-portal .cf-legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+.accountant-portal .cf-chart{width:100%;height:auto}
+.accountant-portal .cf-note{display:flex;gap:10px;align-items:center;margin-top:16px;font-size:13px;border:1px solid rgba(232,179,75,.3);background:rgba(232,179,75,.06);border-radius:12px;padding:12px 16px}
+.accountant-portal .cf-note .dot{width:8px;height:8px;border-radius:50%;background:var(--warn)}
+.accountant-portal .cf-note b{color:var(--warn)}
+
+/* reports gallery */
+.accountant-portal .rep-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px;margin-top:18px}
+.accountant-portal .rep-card{border:1px solid var(--line);border-radius:18px;padding:22px;background:var(--card);transition:all .3s var(--ease);display:flex;flex-direction:column;gap:10px}
+.accountant-portal .rep-card:hover{transform:translateY(-5px);border-color:var(--gold);box-shadow:var(--shadow-gold)}
+.accountant-portal .rep-card .ic{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;background:linear-gradient(150deg,rgba(212,175,55,.16),rgba(212,175,55,.04));border:1px solid var(--line)}
+.accountant-portal .rep-card .ic svg{width:20px;height:20px;stroke:var(--gold);stroke-width:1.6;fill:none;stroke-linecap:round;stroke-linejoin:round}
+.accountant-portal .rep-card b{font-size:14.5px}
+.accountant-portal .rep-card p{font-size:12px;color:var(--ink-dim);flex:1}
+.accountant-portal .rep-card .acts{display:flex;gap:8px}
+.accountant-portal .footer-note{margin-top:60px;text-align:center;font-size:12px;color:var(--ink-faint)}
+@media (prefers-reduced-motion:reduce){.accountant-portal *{transition-duration:.01ms!important;animation-duration:.01ms!important}}
