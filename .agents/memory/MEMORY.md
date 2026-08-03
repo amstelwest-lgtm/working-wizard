@@ -2,3 +2,4 @@
 - [AI gateway pattern](ai-gateway.md) — uses Lovable AI gateway (not Gemini directly); LOVABLE_API_KEY env var; endpoint ai.gateway.lovable.dev/v1; model google/gemini-2.5-flash
 - [Context provider placement](provider-placement.md) — global contexts (Analytics, Notes) must go in __root.tsx so hooks work in any route component
 - [GitHub push playbook](github-push-playbook.md) — git push always fails (pack corruption + sandbox blocks); use GitHub API via Node.js bash script as reliable fallback
+- [Supabase project URL/key drift](supabase-project-drift.md) — vite.config.ts define maps non-VITE_-prefixed SUPABASE_URL/KEY into the client bundle; verify actual runtime value, don't trust .env or VITE_ vars alone

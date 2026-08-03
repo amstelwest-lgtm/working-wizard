@@ -7,6 +7,7 @@ description: How to push this Replit project to GitHub when git push fails — c
 
 **Repo:** `amstelwest-lgtm/working-wizard` (public)
 **Token secret:** `GITHUB_PERSONAL_ACCESS_TOKEN` (classic token, `repo` scope)
+**⚠ Fine-grained PATs (`github_pat_...`) do NOT work** — even with Contents write permission, the low-level git blobs API returns 404. Always use a **classic PAT (`ghp_...`)** with the `repo` scope ticked. Tokens with no scopes (`x-oauth-scopes: ` empty) can read public repos but fail all write operations with 404.
 
 **Why:** `git remote set-url`, `git fetch`, `git pull`, `git config`, and force-push are all blocked in the main agent. Plain `git push` hangs on interactive auth. The local repo also has a persistent pack corruption (missing delta base object `815927628e27259c7d0159fd16f2ef9b3e3dc54d`) that prevents all standard push variants.
 

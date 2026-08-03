@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MILŌN — Health Orb (light-mode fix preview)</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f4f0e6; --ink:#1b1608; --ink-dim:#7a6a4a;
+}
+html[data-theme="dark"]{ --bg:#070709; --ink:#f2ecdc; --ink-dim:#9b958a; }
+*{margin:0;box-sizing:border-box}
+body{font-family:'Noto Sans',sans-serif;background:var(--bg);color:var(--ink);min-height:100vh;display:grid;place-items:center;transition:background .4s}
+.stage{text-align:center}
+.toggle{position:fixed;top:20px;right:20px;padding:10px 18px;border-radius:99px;border:1px solid rgba(150,120,20,.4);background:transparent;color:inherit;font:inherit;font-weight:600;cursor:pointer}
+.eyebrow{font-size:11px;letter-spacing:.3em;text-transform:uppercase;color:var(--ink-dim);margin-bottom:36px}
+
+/* ============================================================
+   HEALTH SCORE ORB  — copy this whole block into MILŌN
+   ============================================================ */
+.health-orb{
+  position:relative;width:300px;height:300px;border-radius:50%;
+  display:grid;place-items:center;text-align:center;margin:0 auto;
+  /* DARK MODE (default look): dark sphere with warm gold rim-light */
+  background:radial-gradient(circle at 50% 38%, #2a2410 0%, #141006 46%, #0b0805 100%);
+  box-shadow:
+    0 0 90px 10px rgba(212,175,55,.28),
+    inset 0 2px 30px rgba(253,238,121,.12),
+    inset 0 -20px 60px rgba(0,0,0,.6);
+  transition:background .45s, box-shadow .45s;
+}
+.health-orb::before{ /* soft top highlight (the "shine") */
+  content:"";position:absolute;inset:0;border-radius:50%;pointer-events:none;
+  background:radial-gradient(circle at 42% 26%, rgba(253,238,121,.35), transparent 46%);
+}
+.health-orb::after{ /* crisp 1px gold rim */
+  content:"";position:absolute;inset:-1px;border-radius:50%;padding:1px;pointer-events:none;
+  background:linear-gradient(160deg, rgba(253,238,121,.7), rgba(212,175,55,.15) 40%, rgba(253,238,121,.45));
+  -webkit-mask:linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite:xor; mask-composite:exclude;
+}
+.orb-inner{position:relative;z-index:1}
+.orb-caption{font-size:12px;letter-spacing:.24em;text-transform:uppercase;color:rgba(242,236,220,.6);margin-bottom:6px}
+.orb-score{font-size:82px;font-weight:800;line-height:1;color:#fdee79}
+.orb-band{font-size:14px;letter-spacing:.28em;text-transform:uppercase;color:#d4af37;font-weight:700;margin-top:8px}
+
+/* LIGHT MODE: luminous gold/pearl sphere, dark ink number */
+html[data-theme="light"] .health-orb{
+  background:radial-gradient(circle at 50% 34%, #fffdf3 0%, #f6e6ad 40%, #ecce78 70%, #dcb046 100%);
+  box-shadow:
+    0 22px 60px rgba(170,130,20,.28),
+    0 0 70px 6px rgba(212,175,55,.30),
+    inset 0 3px 26px rgba(255,255,255,.9),
+    inset 0 -24px 55px rgba(150,110,10,.28);
+}
+html[data-theme="light"] .health-orb::before{
+  background:radial-gradient(circle at 40% 24%, rgba(255,255,255,.95), transparent 48%);
+}
+html[data-theme="light"] .health-orb::after{
+  background:linear-gradient(160deg, rgba(255,255,255,.95), rgba(212,175,55,.4) 45%, rgba(170,130,20,.55));
+}
+html[data-theme="light"] .orb-caption{color:#7a6a4a}
+html[data-theme="light"] .orb-score{color:#3f2f06}   /* deep bronze ink */
+html[data-theme="light"] .orb-band{color:#a8791a}
+/* ============================================================ */
+</style>
+</head>
+<body>
+<button class="toggle" onclick="var h=document.documentElement;h.dataset.theme=h.dataset.theme==='light'?'dark':'light'">Toggle light / dark</button>
+<div class="stage">
+  <p class="eyebrow">Business overview · Simplified</p>
+  <div class="health-orb">
+    <div class="orb-inner">
+      <div class="orb-caption">Business Health Score</div>
+      <div class="orb-score">63</div>
+      <div class="orb-band">Fair</div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
