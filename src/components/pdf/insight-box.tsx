@@ -1,6 +1,12 @@
-import { View, Text, StyleSheet } from "@react-pdf/renderer";
+/**
+ * InsightBox — severity-coded action card for the intervention roadmap:
+ * numbered step, severity strip + chip, title, description, meta chips.
+ *
+ * SSR safety: react-pdf primitives — only import via dynamic import().
+ */
 
-type HealthTier = "critical" | "at_risk" | "healthy";
+import { View, Text, StyleSheet } from "@react-pdf/renderer";
+import { C, TIER_META, type Tier } from "./theme";
 
 type Props = {
   stepNumber: number;
@@ -10,110 +16,64 @@ type Props = {
   timeframe: string;
   effort: string;
   impact: string;
-  healthTier: HealthTier;
+  healthTier: Tier;
   accentColor?: string;
-};
-
-const TIER_COLOR: Record<HealthTier, string> = {
-  critical: "#ef4444",
-  at_risk: "#f59e0b",
-  healthy: "#10b981",
 };
 
 const styles = StyleSheet.create({
   outer: {
     flexDirection: "row",
-    backgroundColor: "#f8fafc",
+    backgroundColor: C.white,
+    borderWidth: 0.75,
+    borderColor: C.line,
     borderRadius: 6,
-    marginBottom: 12,
+    marginBottom: 10,
     overflow: "hidden",
   },
-  leftStrip: {
-    width: 4,
-    borderRadius: 2,
-  },
-  content: {
-    flex: 1,
-    paddingHorizontal: 14,
-    paddingTop: 12,
-    paddingBottom: 13,
-  },
+  leftStrip: { width: 3.5 },
+  content: { flex: 1, paddingHorizontal: 14, paddingTop: 11, paddingBottom: 12 },
   headerRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 7,
+    marginBottom: 6,
     gap: 8,
   },
   circle: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
     justifyContent: "center",
     alignItems: "center",
   },
-  circleText: {
-    fontSize: 9,
-    color: "#ffffff",
-    fontFamily: "Helvetica-Bold",
-  },
+  circleText: { fontSize: 8.5, color: C.white, fontFamily: "Helvetica-Bold" },
   ratioLabel: {
-    fontSize: 7.5,
-    color: "#6b7280",
+    fontSize: 6.5,
+    color: C.muted,
     fontFamily: "Helvetica",
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
+    flex: 1,
   },
-  title: {
-    fontSize: 10.5,
-    fontFamily: "Helvetica-Bold",
-    color: "#111827",
-    marginBottom: 6,
-  },
+  severityChip: { borderRadius: 3, paddingHorizontal: 6, paddingVertical: 2.5 },
+  severityText: { fontSize: 5.5, fontFamily: "Helvetica-Bold", letterSpacing: 0.5 },
+  title: { fontSize: 10, fontFamily: "Helvetica-Bold", color: C.ink, marginBottom: 5 },
   description: {
     fontSize: 8.5,
-    color: "#4b5563",
-    lineHeight: 1.5,
+    color: C.body,
+    lineHeight: 1.55,
     fontFamily: "Helvetica",
   },
-  badgesRow: {
-    flexDirection: "row",
-    marginTop: 10,
-    gap: 8,
-  },
-  badge: {
-    borderRadius: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  badgeLabel: {
-    fontSize: 6.5,
+  badgesRow: { flexDirection: "row", marginTop: 9, gap: 14 },
+  meta: { flexDirection: "row", alignItems: "baseline", gap: 4 },
+  metaLabel: {
+    fontSize: 6,
     fontFamily: "Helvetica",
-    marginBottom: 1,
+    color: C.faint,
     textTransform: "uppercase",
-    letterSpacing: 0.2,
+    letterSpacing: 0.4,
   },
-  badgeValue: {
-    fontSize: 8,
-    fontFamily: "Helvetica-Bold",
-  },
+  metaValue: { fontSize: 7.5, fontFamily: "Helvetica-Bold", color: C.body },
 });
-
-function Badge({
-  label,
-  value,
-  bg,
-  fg,
-}: {
-  label: string;
-  value: string;
-  bg: string;
-  fg: string;
-}) {
-  return (
-    <View style={[styles.badge, { backgroundColor: bg }]}>
-      <Text style={[styles.badgeLabel, { color: fg }]}>{label}</Text>
-      <Text style={[styles.badgeValue, { color: fg }]}>{value}</Text>
-    </View>
-  );
-}
 
 export function InsightBox({
   stepNumber,
@@ -124,28 +84,40 @@ export function InsightBox({
   effort,
   impact,
   healthTier,
-  accentColor = "#0f3460",
+  accentColor = C.blueDeep,
 }: Props) {
-  const tierColor = TIER_COLOR[healthTier] ?? "#6b7280";
+  const tier = TIER_META[healthTier] ?? TIER_META.at_risk;
 
   return (
-    <View style={styles.outer}>
-      <View style={[styles.leftStrip, { backgroundColor: tierColor }]} />
+    <View style={styles.outer} wrap={false}>
+      <View style={[styles.leftStrip, { backgroundColor: tier.color }]} />
       <View style={styles.content}>
         <View style={styles.headerRow}>
           <View style={[styles.circle, { backgroundColor: accentColor }]}>
             <Text style={styles.circleText}>{stepNumber}</Text>
           </View>
           <Text style={styles.ratioLabel}>{ratioName}</Text>
+          <View style={[styles.severityChip, { backgroundColor: tier.soft }]}>
+            <Text style={[styles.severityText, { color: tier.deep }]}>{tier.label}</Text>
+          </View>
         </View>
 
         <Text style={styles.title}>{stepTitle}</Text>
         <Text style={styles.description}>{description}</Text>
 
         <View style={styles.badgesRow}>
-          <Badge label="Timeframe" value={timeframe} bg="#dbeafe" fg="#1d4ed8" />
-          <Badge label="Effort" value={effort} bg="#fef3c7" fg="#92400e" />
-          <Badge label="Impact" value={impact} bg="#d1fae5" fg="#065f46" />
+          <View style={styles.meta}>
+            <Text style={styles.metaLabel}>Timeframe</Text>
+            <Text style={styles.metaValue}>{timeframe}</Text>
+          </View>
+          <View style={styles.meta}>
+            <Text style={styles.metaLabel}>Effort</Text>
+            <Text style={styles.metaValue}>{effort}</Text>
+          </View>
+          <View style={styles.meta}>
+            <Text style={styles.metaLabel}>Impact</Text>
+            <Text style={styles.metaValue}>{impact}</Text>
+          </View>
         </View>
       </View>
     </View>

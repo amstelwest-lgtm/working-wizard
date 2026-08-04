@@ -1,17 +1,14 @@
 /**
- * ReportFooter — react-pdf/renderer component.
+ * ReportFooter — professional footer with confidentiality note, page numbers
+ * and dual branding (firm name + "Prepared with Milōn" mark).
  *
- * IMPORTANT: This file uses @react-pdf/renderer primitives (View, Text).
- * It must NEVER be imported at the top level of any SSR-rendered route.
- * Always import it with React.lazy() or a dynamic import() inside a client-only
- * component guarded by typeof window !== "undefined".
- *
- * Usage inside a <Document><Page> tree (add fixed={true} for sticky footer):
- *   <ReportFooter profile={profile} fixed />
+ * SSR safety: react-pdf primitives — only import via dynamic import().
  */
 
 import { View, Text, StyleSheet } from "@react-pdf/renderer";
 import type { AccountantProfile } from "@/contexts/accountant-profile";
+import { C, resolveTheme } from "./theme";
+import { MilonMark } from "./glyphs";
 
 type Props = {
   profile: AccountantProfile;
@@ -25,62 +22,56 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     paddingHorizontal: 40,
-    paddingBottom: 20,
-    paddingTop: 12,
+    paddingBottom: 18,
+    paddingTop: 10,
   },
-  borderLine: {
-    height: 1,
-    marginBottom: 10,
-  },
+  hairline: { height: 0.75, backgroundColor: C.line, marginBottom: 8 },
   row: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
   },
-  poweredBy: {
+  confidential: { fontSize: 6.5, fontFamily: "Helvetica", color: C.faint, flex: 2 },
+  pageNumber: {
     fontSize: 7,
     fontFamily: "Helvetica",
-    color: "#9ca3af",
-  },
-  milonBold: {
-    fontFamily: "Helvetica-Bold",
-    color: "#9ca3af",
-  },
-  pageNumber: {
-    fontSize: 7.5,
-    fontFamily: "Helvetica",
-    color: "#6b7280",
+    color: C.muted,
     textAlign: "center",
     flex: 1,
   },
-  firmName: {
-    fontSize: 7,
-    fontFamily: "Helvetica",
-    color: "#9ca3af",
-    textAlign: "right",
-  },
+  brandBlock: { flex: 2, alignItems: "flex-end" },
+  firmName: { fontSize: 6.5, fontFamily: "Helvetica-Bold", color: C.muted },
+  milonRow: { flexDirection: "row", alignItems: "flex-end", marginTop: 1, gap: 3 },
+  milon: { fontSize: 6.5, fontFamily: "Helvetica", color: C.faint },
 });
 
 export function ReportFooter({ profile, fixed }: Props) {
-  const accentHex = profile.accentColor || "#0f3460";
-  const firmLabel = profile.firmName || "";
+  const theme = resolveTheme(profile);
 
   return (
     <View style={styles.wrapper} fixed={fixed}>
-      <View style={[styles.borderLine, { backgroundColor: accentHex }]} />
+      <View style={styles.hairline} />
       <View style={styles.row}>
-        <Text style={styles.poweredBy}>
-          Powered by <Text style={styles.milonBold}>Milōn</Text>
+        <Text style={styles.confidential}>
+          Confidential — prepared for the addressee only
         </Text>
 
         <Text
           style={styles.pageNumber}
           render={({ pageNumber, totalPages }) =>
-            `Page ${pageNumber} of ${totalPages}`
+            `${pageNumber} / ${totalPages}`
           }
         />
 
-        <Text style={styles.firmName}>{firmLabel}</Text>
+        <View style={styles.brandBlock}>
+          {theme.firmName ? (
+            <Text style={styles.firmName}>{theme.firmName}</Text>
+          ) : null}
+          <View style={styles.milonRow}>
+            <Text style={styles.milon}>Prepared with</Text>
+            <MilonMark fontSize={6.5} />
+          </View>
+        </View>
       </View>
     </View>
   );

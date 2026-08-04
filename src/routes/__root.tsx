@@ -98,6 +98,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,500;1,600&family=DM+Sans:wght@300;400;500&family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700&family=Noto+Sans:wght@300;400;500;600;700;800&display=swap" },
       { rel: "stylesheet", href: appCss },
+      { rel: "stylesheet", href: "/ask-ai.css" },
       { rel: "manifest", href: "/manifest.webmanifest" },
       { rel: "icon", href: "/favicon-32.png", type: "image/png", sizes: "32x32" },
       { rel: "icon", href: "/icon-192.png", type: "image/png", sizes: "192x192" },
@@ -111,6 +112,20 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
             // the server so hydration failures can be diagnosed from logs.
             children: `
 (function () {
+  // Defer ResizeObserver callbacks to the next animation frame. This
+  // prevents the benign "ResizeObserver loop completed with undelivered
+  // notifications" browser warning (fired when observed elements resize
+  // within the callback, e.g. animated chart containers) from ever being
+  // raised — it is otherwise picked up by error overlays as a fake crash.
+  if (typeof window.ResizeObserver === "function") {
+    var NativeRO = window.ResizeObserver;
+    window.ResizeObserver = function (cb) {
+      return new NativeRO(function (entries, observer) {
+        window.requestAnimationFrame(function () { cb(entries, observer); });
+      });
+    };
+    window.ResizeObserver.prototype = NativeRO.prototype;
+  }
   function send(kind, payload) {
     try {
       var body = JSON.stringify({ kind: kind, url: location.href, ua: navigator.userAgent, payload: payload }).slice(0, 20000);
@@ -118,8 +133,14 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     } catch (e) {}
   }
   window.addEventListener("error", function (e) {
-    send("window.error", { message: String(e.message), stack: e.error && e.error.stack ? String(e.error.stack) : null, source: e.filename + ":" + e.lineno + ":" + e.colno });
-  });
+    var kind = "window.error";
+    // Benign browser warning fired during layout animations (charts/cards
+    // resizing) — not a real error, but still log it for diagnosis.
+    if (String(e.message).indexOf("ResizeObserver loop") !== -1) { e.stopImmediatePropagation(); kind = "window.error.filtered"; }
+    var errRepr;
+    try { errRepr = e.error instanceof Error ? null : (typeof e.error) + ":" + JSON.stringify(e.error); } catch (x) { errRepr = String(e.error); }
+    send(kind, { message: String(e.message), stack: e.error && e.error.stack ? String(e.error.stack) : null, errRepr: errRepr, source: e.filename + ":" + e.lineno + ":" + e.colno });
+  }, true);
   window.addEventListener("unhandledrejection", function (e) {
     var r = e.reason || {};
     send("unhandledrejection", { message: String(r.message || r), stack: r.stack ? String(r.stack) : null });

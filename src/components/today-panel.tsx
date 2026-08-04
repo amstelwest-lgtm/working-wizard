@@ -1,22 +1,16 @@
-import { useMemo, useState } from "react";
-import { useServerFn } from "@tanstack/react-start";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import { askYourNumbers } from "@/lib/ai.functions";
+import { useMemo, useEffect, useRef } from "react";
 import {
   AlertTriangle,
   ArrowRight,
   ChevronRight,
-  Sparkles,
   TrendingUp,
   Wallet,
   ListChecks,
   Target,
-  Send,
   Activity,
   Users,
 } from "lucide-react";
-import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 
 export type TodayAlert = {
   id: string;
@@ -178,51 +172,35 @@ export function TodayPanel(props: Props) {
     clientId, clientName, businessType, cashRunwayWeeks,
     ratios, healthMap, financials, topTasks, topNextSteps,
   } = props;
-  const ask = useServerFn(askYourNumbers);
-  const [question, setQuestion] = useState("");
-  const [answer, setAnswer] = useState<string>("");
-  const [loading, setLoading] = useState(false);
-  const [askOpen, setAskOpen] = useState(false);
+
+  const askAiRef = useRef<HTMLElement>(null);
 
   const alerts = useMemo(() => deriveAlerts(cashRunwayWeeks, ratios, healthMap), [cashRunwayWeeks, ratios, healthMap]);
   const nba = topNextSteps[0];
 
-  const ratioSnapshot = useMemo(() => {
-    const out: Record<string, number | string> = {};
-    for (const [k, v] of Object.entries(ratios)) {
-      if (isFinite(v.value)) out[k] = v.format === "pct" ? Number((v.value * 100).toFixed(2)) : Number(v.value.toFixed(2));
-    }
-    return out;
-  }, [ratios]);
-
-  const submit = async () => {
-    if (!question.trim()) return;
-    setLoading(true);
-    setAnswer("");
-    try {
-      const res = await ask({
-        data: {
-          clientId: clientId ?? undefined,
-          question: question.trim(),
-          context: {
-            clientName: clientName ?? undefined,
-            businessType: businessType ?? undefined,
-            cashRunwayWeeks: cashRunwayWeeks ?? null,
-            ratios: ratioSnapshot,
-            financials: Object.fromEntries(
-              Object.entries(financials).filter(([, v]) => v !== undefined && v !== null && v !== ""),
-            ),
-            alerts: alerts.map((a) => `${a.title}: ${a.detail}`),
+  // Mount the Ask AI widget once (re-mounts if clientId changes)
+  useEffect(() => {
+    const el = askAiRef.current;
+    if (!el || !clientId) return;
+    el.dataset.clientId = clientId;
+    (window as unknown as Record<string, unknown>).__askAiClientId = clientId;
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+    // @ts-ignore — ask-ai.js is a public static asset, not a TS module
+    import(/* @vite-ignore */ "/ask-ai.js").then((mod: { mountAskAi?: (el: HTMLElement, opts: unknown) => void }) => {
+      if (typeof mod.mountAskAi === "function") {
+        mod.mountAskAi(el, {
+          endpoint: `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ask-ai`,
+          getToken: async () => {
+            const { data } = await supabase.auth.getSession();
+            return data.session?.access_token ?? null;
           },
-        },
-      });
-      setAnswer(res.answer || "No answer.");
-    } catch (e: any) {
-      toast.error(e?.message ?? "Ask failed");
-    } finally {
-      setLoading(false);
-    }
-  };
+        });
+      }
+    }).catch(() => {
+      // Widget script not available — silent fail
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clientId]);
 
   const sevDot = (s: TodayAlert["severity"]) =>
     s === "high" ? "var(--accent-red)" : s === "medium" ? "#d97706" : "var(--accent-blue)";
@@ -387,65 +365,12 @@ export function TodayPanel(props: Props) {
         </ul>
       </section>
 
-      {/* Ask your numbers — collapsed search bar */}
-      <section className="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900" style={{ boxShadow: "0 1px 2px rgba(15,23,42,0.04)" }}>
-        {!askOpen ? (
-          <button
-            type="button"
-            onClick={() => setAskOpen(true)}
-            className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800/50"
-          >
-            <Sparkles className="h-4 w-4" style={{ color: "var(--accent-gold)" }} />
-            Ask anything about your numbers…
-          </button>
-        ) : (
-          <div className="space-y-3 p-4">
-            <div className="inline-flex items-center gap-2 text-[12px] font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-200">
-              <Sparkles className="h-3.5 w-3.5" style={{ color: "var(--accent-gold)" }} />
-              Ask your numbers
-            </div>
-            <Textarea
-              value={question}
-              onChange={(e) => setQuestion(e.target.value)}
-              placeholder="e.g. Can I afford to hire a junior next month? What's killing my margin?"
-              className="min-h-[80px]"
-              autoFocus
-            />
-            <div className="flex flex-wrap gap-2">
-              {[
-                "Can I afford a new hire this quarter?",
-                "What's my biggest cash leak?",
-                "Where am I weakest vs industry?",
-              ].map((q) => (
-                <button
-                  key={q}
-                  onClick={() => setQuestion(q)}
-                  className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] text-slate-700 hover:border-slate-300 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
-                >
-                  {q}
-                </button>
-              ))}
-            </div>
-            <div className="flex items-center gap-2">
-              <Button onClick={submit} disabled={loading || !question.trim()}>
-                <Send className="mr-2 h-4 w-4" /> {loading ? "Thinking…" : "Ask"}
-              </Button>
-              <button
-                type="button"
-                onClick={() => { setAskOpen(false); setAnswer(""); }}
-                className="text-[12px] text-slate-500 hover:text-slate-900 dark:hover:text-slate-100"
-              >
-                Cancel
-              </button>
-            </div>
-            {answer && (
-              <div className="whitespace-pre-wrap rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-800 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100">
-                {answer}
-              </div>
-            )}
-          </div>
-        )}
-      </section>
+      {/* Ask your numbers — edge-function chat widget */}
+      <section
+        ref={askAiRef}
+        className="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900"
+        style={{ boxShadow: "0 1px 2px rgba(15,23,42,0.04)" }}
+      />
     </div>
   );
 }

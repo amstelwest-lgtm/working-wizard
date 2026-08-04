@@ -14,6 +14,7 @@ import type { RatioInputs, HealthTier } from "@/lib/ratios";
 import { scoreFromFlatFinancials, scoreFromRatioInputs } from "@/lib/health-score";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
 import "@/styles/accountant-portal.css";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
@@ -757,6 +758,7 @@ function ClientView() {
             </span>
           )}
           <span className="spacer" />
+          <ThemeToggle />
           <button className="tb-btn gold" onClick={handleGenerateReport}>
             <svg viewBox="0 0 24 24">
               <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
@@ -1050,7 +1052,7 @@ function ClientView() {
                 <div className="h-sec">13-week cash forecast</div>
               </div>
             </div>
-            <CashForecastPanel clientId={client.id} />
+            <CashForecastPanel clientId={client.id} clientName={client.name} />
           </div>
         </div>
 

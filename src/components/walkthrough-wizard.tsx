@@ -41,9 +41,9 @@ const OWNER_STEPS: Step[] = [
     body: "We rank what to fix first for the biggest impact. Each week, start here — it's the fastest way to move your score.",
   },
   {
-    tab: "ratios",
+    tab: "today-complex",
     targetId: "wizard-ratio-inputs",
-    section: "Ratios",
+    section: "Overview · Complex",
     title: "Keep your figures current",
     body: "Enter your latest revenue, costs and balance sheet figures. Every ratio and benchmark recalculates instantly as you type. Update these whenever things change — the rest is automatic.",
   },

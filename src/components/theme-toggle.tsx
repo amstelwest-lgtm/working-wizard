@@ -5,8 +5,12 @@ const STORAGE_KEY = "compass.theme";
 
 function applyTheme(t: "light" | "dark") {
   const root = document.documentElement;
+  // Tailwind / shadcn dark mode (used by reports page)
   if (t === "dark") root.classList.add("dark");
   else root.classList.remove("dark");
+  // accountant-portal.css uses data-theme attribute
+  if (t === "light") root.setAttribute("data-theme", "light");
+  else root.removeAttribute("data-theme");
 }
 
 export function ThemeToggle({ className = "" }: { className?: string }) {

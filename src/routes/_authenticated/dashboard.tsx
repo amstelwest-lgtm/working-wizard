@@ -8,6 +8,7 @@ import { scoreFromFlatFinancials, buildTrend, scoreTier, type TrendPoint } from 
 import { useServerFn } from "@tanstack/react-start";
 import { getQboStatuses } from "@/lib/qbo.functions";
 import "@/styles/accountant-portal.css";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   component: Dashboard,
@@ -497,6 +498,7 @@ function Dashboard() {
             </svg>
             Reports studio
           </button>
+          <ThemeToggle />
           <button className="tb-btn" onClick={handleSignOut}>
             <svg viewBox="0 0 24 24">
               <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />

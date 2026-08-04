@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { toast } from "sonner";
 import {
   Download, Eye, Loader2, FileText, Lightbulb, BarChart2,
@@ -13,7 +13,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Progress } from "@/components/ui/progress";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
 import type { AccountantProfile } from "@/contexts/accountant-profile";
+import { computeRatios, scoreTier } from "@/lib/ratios";
+import type { RatioInputs } from "@/lib/ratios";
 import { PlaybookDrawer } from "@/components/playbook-drawer";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { supabase } from "@/integrations/supabase/client";
 
 import type { RatioResult } from "@/reports/health-scorecard";
@@ -160,6 +163,657 @@ const MOCK_BENCHMARK: BenchmarkRow[] = [
   { ratio_key: "ccc", ratio_name: "Cash Conversion Cycle", pillar: "cash", current_value: 78, formatted_current: "78d", health_score: 38, health_tier: "critical", sector_median: 55, sector_top_quartile: 38, formatted_median: "55d", formatted_top_quartile: "38d", lower_is_better: true },
 ];
 
+// ── Client report data ─────────────────────────────────────────────────────
+
+type ClientReportData = {
+  hasData: boolean;
+  clientName: string;
+  cashRunwayWeeks: number | null;
+  financials: Record<string, string>;
+  rawRatios: Record<string, number>;
+  ratioResults: RatioResult[];
+  workingCapital: WorkingCapitalData | null;
+  profitability: ProfitabilityData | null;
+  leverage: LeverageSolvencyData | null;
+  assets: AssetProductivityData | null;
+  labor: LaborProductivityData | null;
+  movement: RatioMovementRow[];
+  movementPeriodLabels: {
+    current: string;
+    three_months: string;
+    six_months: string;
+    twelve_months: string;
+  };
+  benchmark: BenchmarkRow[];
+  cashForecast: CashForecastWeek[] | null;
+};
+
+const DEFAULT_MOVEMENT_LABELS = {
+  current: "Current",
+  three_months: "3 Months Ago",
+  six_months: "6 Months Ago",
+  twelve_months: "12 Months Ago",
+};
+
+const EMPTY_CLIENT_DATA: ClientReportData = {
+  hasData: false, clientName: "", cashRunwayWeeks: null,
+  financials: {}, rawRatios: {}, ratioResults: [],
+  workingCapital: null, profitability: null, leverage: null,
+  assets: null, labor: null,
+  movement: [], movementPeriodLabels: DEFAULT_MOVEMENT_LABELS,
+  benchmark: [], cashForecast: null,
+};
+
+// ── Data-builder helpers ────────────────────────────────────────────────────
+
+function getNum(fin: Record<string, string>, key: string): number {
+  const v = fin[key];
+  return v && v.trim() !== "" ? parseFloat(v) : NaN;
+}
+
+function scoreForRatio(name: string, val: number): number {
+  if (!Number.isFinite(val)) return 50;
+  if (name === "Net Margin")               return Math.min(100, Math.max(0, (val / 0.15) * 100));
+  if (name === "Operating Margin")         return Math.min(100, Math.max(0, (val / 0.20) * 100));
+  if (name === "Gross Margin")             return Math.min(100, Math.max(0, (val / 0.40) * 100));
+  if (name === "Return on Assets")         return Math.min(100, Math.max(0, (val / 0.12) * 100));
+  if (name === "Return on Equity")         return Math.min(100, Math.max(0, (val / 0.20) * 100));
+  if (name === "Asset Turnover")           return Math.min(100, Math.max(0, (val / 1.5)  * 100));
+  if (name === "Debtor Days")              return Math.min(100, Math.max(0, ((90 - val) / 90) * 100));
+  if (name === "Inventory Days")           return Math.min(100, Math.max(0, ((90 - val) / 90) * 100));
+  if (name === "Creditor Days")            return Math.min(100, Math.max(0, (val / 60) * 100));
+  if (name === "Working Capital Days")     return Math.min(100, Math.max(0, ((90 - val) / 90) * 100));
+  if (name === "OCF / EBITDA")             return Math.min(100, Math.max(0, val * 100));
+  if (name === "Interest Burden")          return Math.min(100, Math.max(0, val * 100));
+  if (name === "Equity Multiplier")        return Math.min(100, Math.max(0, ((4 - val) / 3) * 100));
+  if (name === "Gross Profit / Labor")     return Math.min(100, Math.max(0, (val / 0.6) * 100));
+  if (name === "Sales-per-Employee Ratio") return Math.min(100, Math.max(0, (val / 300_000) * 100));
+  return 50;
+}
+
+function fmtRatioVal(name: string, val: number): string {
+  if (!Number.isFinite(val)) return "—";
+  if (name.includes("Days")) return `${Math.round(val)}d`;
+  if (name === "Asset Turnover" || name === "Equity Multiplier" ||
+      name === "Degree of Operating Leverage" || name === "OCF / EBITDA")
+    return `${val.toFixed(2)}×`;
+  return `${(val * 100).toFixed(1)}%`;
+}
+
+function pillarForRatio(name: string): "profit" | "assets" | "financing" | "cash" {
+  if (name.includes("Margin") || name.includes("Growth") ||
+      name.includes("Leverage") || name.includes("Labor") || name.includes("Customer"))
+    return "profit";
+  if (name.includes("Days") || name.includes("Capital") || name.includes("OCF"))
+    return "cash";
+  if ((name.includes("Equity") && !name.includes("Return")) ||
+      name.includes("Multiplier") || name.includes("Burden") || name.includes("Debt"))
+    return "financing";
+  return "assets";
+}
+
+function buildRatioResults(rawRatios: Record<string, number>): RatioResult[] {
+  return Object.entries(rawRatios)
+    .filter(([, v]) => Number.isFinite(v))
+    .map(([name, val]) => {
+      const score = Math.round(scoreForRatio(name, val));
+      return {
+        ratio_key: name.toLowerCase().replace(/[^a-z0-9]/g, "_"),
+        ratio_name: name,
+        pillar: pillarForRatio(name),
+        current_value: val,
+        health_score: score,
+        health_tier: scoreTier(score),
+        formatted_value: fmtRatioVal(name, val),
+      };
+    });
+}
+
+// Static ZA-SME baseline benchmarks (industry-neutral)
+const BENCH_META: Record<string, {
+  median: number; top: number; lower?: boolean;
+  unit: string; pillar: "profit" | "assets" | "financing" | "cash";
+}> = {
+  "Gross Margin":         { median: 0.32, top: 0.45, unit: "%", pillar: "profit" },
+  "Operating Margin":     { median: 0.12, top: 0.22, unit: "%", pillar: "profit" },
+  "Net Margin":           { median: 0.07, top: 0.15, unit: "%", pillar: "profit" },
+  "Asset Turnover":       { median: 1.10, top: 1.45, unit: "×", pillar: "assets" },
+  "Return on Assets":     { median: 0.09, top: 0.16, unit: "%", pillar: "assets" },
+  "Inventory Days":       { median: 45,   top: 30,   lower: true, unit: "d",  pillar: "assets" },
+  "Equity Multiplier":    { median: 2.3,  top: 1.8,  lower: true, unit: "×",  pillar: "financing" },
+  "Debtor Days":          { median: 45,   top: 30,   lower: true, unit: "d",  pillar: "cash" },
+  "Working Capital Days": { median: 55,   top: 38,   lower: true, unit: "d",  pillar: "cash" },
+  "OCF / EBITDA":         { median: 0.70, top: 0.90, unit: "×",  pillar: "cash" },
+};
+
+function fmtBenchVal(val: number, unit: string): string {
+  if (unit === "%") return `${(val * 100).toFixed(1)}%`;
+  if (unit === "×") return `${val.toFixed(2)}×`;
+  return `${Math.round(val)}d`;
+}
+
+function buildBenchmarkRows(rawRatios: Record<string, number>, ratioResults: RatioResult[]): BenchmarkRow[] {
+  return Object.entries(BENCH_META)
+    .filter(([name]) => Number.isFinite(rawRatios[name]))
+    .map(([name, b]) => {
+      const val = rawRatios[name];
+      const rr  = ratioResults.find((r) => r.ratio_name === name);
+      const score = rr?.health_score ?? Math.round(scoreForRatio(name, val));
+      return {
+        ratio_key: name.toLowerCase().replace(/[^a-z0-9]/g, "_"),
+        ratio_name: name,
+        pillar: b.pillar,
+        current_value: val,
+        formatted_current: fmtBenchVal(val, b.unit),
+        health_score: score,
+        health_tier: scoreTier(score),
+        sector_median: b.median,
+        sector_top_quartile: b.top,
+        formatted_median: fmtBenchVal(b.median, b.unit),
+        formatted_top_quartile: fmtBenchVal(b.top, b.unit),
+        lower_is_better: b.lower,
+      } as BenchmarkRow;
+    });
+}
+
+// Ratio Movement row definitions
+const MOVEMENT_META: Array<{
+  name: string; key: string;
+  pillar: "profit" | "assets" | "financing" | "cash";
+  unit: string; lower?: boolean;
+}> = [
+  { name: "Gross Margin",         key: "gross_margin",          pillar: "profit",    unit: "%" },
+  { name: "Operating Margin",     key: "operating_margin",      pillar: "profit",    unit: "%" },
+  { name: "Net Margin",           key: "net_margin",            pillar: "profit",    unit: "%" },
+  { name: "Asset Turnover",       key: "asset_turnover",        pillar: "assets",    unit: "×" },
+  { name: "Return on Assets",     key: "return_on_assets",      pillar: "assets",    unit: "%" },
+  { name: "Inventory Days",       key: "inventory_days",        pillar: "assets",    unit: "d", lower: true },
+  { name: "Equity Multiplier",    key: "equity_multiplier",     pillar: "financing", unit: "×", lower: true },
+  { name: "Debtor Days",          key: "debtor_days",           pillar: "cash",      unit: "d", lower: true },
+  { name: "Working Capital Days", key: "working_capital_days",  pillar: "cash",      unit: "d", lower: true },
+  { name: "OCF / EBITDA",         key: "ocf_ebitda",            pillar: "cash",      unit: "×" },
+];
+
+type DatedSnapshot = {
+  period_label: string;
+  period_date: string;          // ISO YYYY-MM-DD
+  ratios: Record<string, number>;
+};
+
+/**
+ * Finds the snapshot whose period_date is closest to `targetDate` and within
+ * `toleranceDays` of it. Returns null when no snapshot qualifies.
+ */
+function closestSnapshot(
+  snapshots: DatedSnapshot[],
+  targetDate: Date,
+  toleranceDays: number,
+): DatedSnapshot | null {
+  let best: DatedSnapshot | null = null;
+  let bestDiff = Infinity;
+  for (const s of snapshots) {
+    const d = new Date(s.period_date);
+    const diff = Math.abs(d.getTime() - targetDate.getTime()) / 86_400_000; // ms→days
+    if (diff <= toleranceDays && diff < bestDiff) {
+      best = s;
+      bestDiff = diff;
+    }
+  }
+  return best;
+}
+
+function buildMovementRows(
+  rawRatios: Record<string, number>,
+  snapshots: DatedSnapshot[],
+  refDate: Date,
+): { rows: RatioMovementRow[]; labels: ClientReportData["movementPeriodLabels"] } {
+  // Target dates for each comparison column
+  const t3m  = new Date(refDate); t3m.setMonth(t3m.getMonth() - 3);
+  const t6m  = new Date(refDate); t6m.setMonth(t6m.getMonth() - 6);
+  const t12m = new Date(refDate); t12m.setFullYear(t12m.getFullYear() - 1);
+
+  // ±45 days window for 3m/6m; ±60 days for 12m
+  const s3m  = closestSnapshot(snapshots, t3m,  45);
+  const s6m  = closestSnapshot(snapshots, t6m,  45);
+  const s12m = closestSnapshot(snapshots, t12m, 60);
+
+  const labels: ClientReportData["movementPeriodLabels"] = {
+    current:      "Current",
+    three_months: s3m  ? s3m.period_label  : "3 Months Ago",
+    six_months:   s6m  ? s6m.period_label  : "6 Months Ago",
+    twelve_months:s12m ? s12m.period_label : "12 Months Ago",
+  };
+
+  const rows = MOVEMENT_META
+    .filter(({ name }) => Number.isFinite(rawRatios[name]))
+    .map(({ name, key, pillar, unit, lower }) => ({
+      ratio_key: key,
+      ratio_name: name,
+      pillar,
+      unit,
+      current:       rawRatios[name],
+      three_months:  s3m  && s3m.ratios[name]  != null ? Number(s3m.ratios[name])  : null,
+      six_months:    s6m  && s6m.ratios[name]  != null ? Number(s6m.ratios[name])  : null,
+      twelve_months: s12m && s12m.ratios[name] != null ? Number(s12m.ratios[name]) : null,
+      lower_is_better: lower,
+    } as RatioMovementRow));
+
+  return { rows, labels };
+}
+
+function buildWorkingCapitalData(
+  fin: Record<string, string>,
+  rawRatios: Record<string, number>,
+): WorkingCapitalData | null {
+  const revenue = getNum(fin, "revenue");
+  if (!Number.isFinite(revenue) || revenue <= 0) return null;
+  const dd = Number.isFinite(rawRatios["Debtor Days"])    ? rawRatios["Debtor Days"]    : 0;
+  const id = Number.isFinite(rawRatios["Inventory Days"]) ? rawRatios["Inventory Days"] : 0;
+  const cd = Number.isFinite(rawRatios["Creditor Days"])  ? rawRatios["Creditor Days"]  : 0;
+  if (!Number.isFinite(rawRatios["Debtor Days"]) && !Number.isFinite(rawRatios["Inventory Days"])) return null;
+  const ccc = dd + id - cd;
+  const wcFunding = ccc / 365;
+  return {
+    debtor_days: dd, inventory_days: id, wip_days: 0, creditor_days: cd,
+    cash_conversion_cycle: ccc,
+    working_capital_funding: wcFunding,
+    working_capital_utilization: Math.min(1, Math.max(0, wcFunding * 2)),
+    working_capital_days: ccc,
+    annual_revenue: revenue,
+    cash_trapped_rands: revenue * Math.max(0, wcFunding),
+    health_scores: {
+      debtor_days:              Math.round(scoreForRatio("Debtor Days", dd)),
+      inventory_days:           Math.round(scoreForRatio("Inventory Days", id)),
+      creditor_days:            Math.round(scoreForRatio("Creditor Days", cd)),
+      wip_days:                 68,
+      working_capital_days:     Math.round(scoreForRatio("Working Capital Days", ccc)),
+      working_capital_funding:  Math.round(Math.min(100, Math.max(0, (1 - wcFunding) * 100))),
+      working_capital_utilization: Math.round(Math.min(100, Math.max(0, (1 - wcFunding) * 90))),
+    },
+  };
+}
+
+function buildProfitabilityData(fin: Record<string, string>): ProfitabilityData | null {
+  const revenue = getNum(fin, "revenue");
+  const cogs    = getNum(fin, "cogs");
+  const ebit    = getNum(fin, "ebit");
+  const ebt     = getNum(fin, "ebt");
+  const net     = getNum(fin, "netIncome");
+  if (!Number.isFinite(revenue) || !Number.isFinite(ebit) || !Number.isFinite(net)) return null;
+  const gp    = Number.isFinite(cogs) ? revenue - cogs : revenue * 0.5;
+  const gmPct = gp / revenue;
+  const omPct = ebit / revenue;
+  const ebtVal = Number.isFinite(ebt) ? ebt : ebit;
+  const ibPct  = ebit > 0 ? Math.max(0, (ebit - ebtVal) / ebit) : 0;
+  const tax    = Math.max(0, ebtVal - net);
+  const tbPct  = ebtVal > 0 ? tax / ebtVal : 0;
+  const nmPct  = net / revenue;
+  return {
+    revenue, gross_profit: gp, gross_margin_pct: gmPct,
+    gross_margin_score: Math.round(scoreForRatio("Gross Margin", gmPct)),
+    gross_margin_tier:  scoreTier(Math.round(scoreForRatio("Gross Margin", gmPct))),
+    operating_profit: ebit, operating_margin_pct: omPct,
+    operating_margin_score: Math.round(scoreForRatio("Operating Margin", omPct)),
+    operating_margin_tier:  scoreTier(Math.round(scoreForRatio("Operating Margin", omPct))),
+    ebt: ebtVal,
+    interest_burden_pct:   ibPct,
+    interest_burden_score: Math.round(scoreForRatio("Interest Burden", 1 - ibPct)),
+    tax, tax_burden_pct: tbPct,
+    tax_burden_score: Math.round(Math.max(0, 100 - tbPct * 100)),
+    net_profit: net, net_margin_pct: nmPct,
+    net_margin_score: Math.round(scoreForRatio("Net Margin", nmPct)),
+    net_margin_tier:  scoreTier(Math.round(scoreForRatio("Net Margin", nmPct))),
+  };
+}
+
+function buildLeverageData(
+  fin: Record<string, string>,
+  rawRatios: Record<string, number>,
+): LeverageSolvencyData | null {
+  const equity      = getNum(fin, "equity");
+  const totalAssets = getNum(fin, "totalAssets");
+  const net         = getNum(fin, "netIncome");
+  if (!Number.isFinite(equity) || !Number.isFinite(totalAssets)) return null;
+  const totalDebt = Math.max(0, totalAssets - equity);
+  const d2a = totalDebt / totalAssets;
+  const d2e = equity > 0 ? totalDebt / equity : NaN;
+  const em  = rawRatios["Equity Multiplier"];
+  const ib  = rawRatios["Interest Burden"];
+  return {
+    total_debt: totalDebt, total_equity: equity,
+    net_profit: Number.isFinite(net) ? net : 0,
+    drawings: 0,
+    prior_equity: equity * 0.92,
+    debt_lines: totalDebt > 0 ? [{
+      label: "Total Borrowings",
+      amount: totalDebt,
+      annual_rate_pct: 12.5,
+      maturity_year: new Date().getFullYear() + 3,
+    }] : [],
+    health_scores: {
+      fundingStructure: Math.round(Math.min(100, Math.max(0, (1 - d2a) * 100))),
+      equityMultiplier: Number.isFinite(em) ? Math.round(scoreForRatio("Equity Multiplier", em)) : 50,
+      debtToEquity:     Number.isFinite(d2e) ? Math.round(Math.min(100, Math.max(0, ((2 - d2e) / 2) * 100))) : 50,
+      debtToAssets:     Math.round(Math.min(100, Math.max(0, (1 - d2a) * 100))),
+      interestBurden:   Number.isFinite(ib) ? Math.round(ib * 100) : 50,
+    },
+  };
+}
+
+function buildAssetData(rawRatios: Record<string, number>): AssetProductivityData | null {
+  const at = rawRatios["Asset Turnover"];
+  const em = rawRatios["Equity Multiplier"];
+  const nm = rawRatios["Net Margin"];
+  if (!Number.isFinite(at) || !Number.isFinite(em) || !Number.isFinite(nm)) return null;
+  const roa = nm * at;
+  const roe = roa * em;
+  return {
+    roe, net_margin: nm, asset_turnover: at, equity_multiplier: em,
+    capex_periods: [],
+    health_scores: {
+      assetTurnover:           Math.round(scoreForRatio("Asset Turnover", at)),
+      roa:                     Math.round(scoreForRatio("Return on Assets", roa)),
+      fixedCapitalUtilization: 60,
+      assetReinvestmentRatio:  60,
+      capexIntensity:          65,
+    },
+    ratios: {
+      assetTurnover:           { value: `${at.toFixed(2)}×` },
+      roa:                     { value: `${(roa * 100).toFixed(1)}%` },
+      fixedCapitalUtilization: { value: "—" },
+      assetReinvestmentRatio:  { value: "—" },
+      capexIntensity:          { value: "—" },
+    },
+  };
+}
+
+function buildLaborData(
+  fin: Record<string, string>,
+  rawRatios: Record<string, number>,
+): LaborProductivityData | null {
+  const revenue   = getNum(fin, "revenue");
+  const laborCost = getNum(fin, "laborCost");
+  const employees = getNum(fin, "employees");
+  const cogs      = getNum(fin, "cogs");
+  if (!Number.isFinite(revenue) || !Number.isFinite(employees) ||
+      !Number.isFinite(laborCost) || employees <= 0 || laborCost <= 0) return null;
+  const gp        = Number.isFinite(cogs) ? revenue - cogs : revenue * 0.5;
+  const rpe       = revenue / employees;
+  const gpPerLabor = gp / laborCost;
+  return {
+    employee_count: Math.round(employees),
+    total_labor_cost: laborCost,
+    total_revenue: revenue,
+    total_gp: gp,
+    revenue_per_employee: rpe,
+    rpe_prior: rpe * 0.95,
+    gp_per_labor_rand: gpPerLabor,
+    revenue_growth: Number.isFinite(rawRatios["Net Margin"]) ? 0.08 : 0,
+    inflation_rate: 0.057,
+    periods: [{ label: "Current Period", revenue, employees: Math.round(employees), labor_cost: laborCost }],
+    health_scores: {
+      gpToLabor:        Math.round(Math.min(100, Math.max(0, (gpPerLabor / 0.6) * 100))),
+      salesPerEmployee: Math.round(Math.min(100, Math.max(0, (rpe / 300_000) * 100))),
+      revenueGrowth:    Number.isFinite(rawRatios["Net Margin"]) ? Math.round(scoreForRatio("Net Margin", rawRatios["Net Margin"])) : 50,
+    },
+  };
+}
+
+// ── Cash forecast from saved CashForecastPanel data ───────────────────────
+//
+// Replicates the distribute() + computeScenario() logic in
+// src/components/cash-forecast.tsx so the PDF uses exactly the same
+// weekly figures the accountant configured in the panel.
+
+type CfFrequency = "recurring-weekly" | "recurring-monthly" | "once-off" | "split-weeks" | "split-months";
+
+type CfLineItem = {
+  id: string; name: string; amount: string;
+  frequency: CfFrequency; startWeek: number; splitCount: number;
+};
+
+type SavedCashflow = {
+  startDate?: string; openingBalance?: string;
+  revenue?: CfLineItem[]; expenses?: CfLineItem[]; other?: CfLineItem[];
+  revAdj?: number; expAdj?: number; collectDelay?: number;
+  headcountDelta?: number; avgSalary?: string; fixedCostDelta?: string;
+  revGrowthPct?: number; capexAmount?: string; capexWeek?: number;
+};
+
+const CF_WEEKS = 13;
+
+function cfDistribute(line: CfLineItem): number[] {
+  const out = new Array(CF_WEEKS).fill(0);
+  const amt = parseFloat(line.amount) || 0;
+  if (amt === 0) return out;
+  const start = Math.max(1, Math.min(CF_WEEKS, line.startWeek)) - 1;
+  switch (line.frequency) {
+    case "recurring-weekly":
+      for (let i = start; i < CF_WEEKS; i++) out[i] = amt;
+      break;
+    case "recurring-monthly":
+      for (let i = start; i < CF_WEEKS; i += 4) out[i] = amt;
+      break;
+    case "once-off":
+      out[start] = amt;
+      break;
+    case "split-weeks": {
+      const n = Math.max(1, line.splitCount);
+      const per = amt / n;
+      for (let i = start; i < Math.min(CF_WEEKS, start + n); i++) out[i] = per;
+      break;
+    }
+    case "split-months": {
+      const n = Math.max(1, line.splitCount);
+      const per = amt / n;
+      for (let i = 0; i < n; i++) {
+        const w = start + i * 4;
+        if (w < CF_WEEKS) out[w] = per;
+      }
+      break;
+    }
+  }
+  return out;
+}
+
+function buildCashForecastFromSavedCashflow(
+  cf: SavedCashflow,
+  cashRunwayWeeks: number | null,
+): CashForecastWeek[] | null {
+  const revenue  = cf.revenue  ?? [];
+  const expenses = cf.expenses ?? [];
+  const other    = cf.other    ?? [];
+
+  // Require at least one non-zero line item — empty panel = no real data
+  const hasAmount = [...revenue, ...expenses, ...other].some(
+    (l) => parseFloat(l.amount) > 0
+  );
+  if (!hasAmount) return null;
+
+  const revAdj       = (cf.revAdj ?? 100) / 100;
+  const expAdj       = (cf.expAdj ?? 100) / 100;
+  const collectDelay = Math.max(0, Math.min(CF_WEEKS - 1, Math.round(cf.collectDelay ?? 0)));
+  const headDelta    = cf.headcountDelta ?? 0;
+  const avgSal       = parseFloat(cf.avgSalary ?? "0") || 0;
+  const fixedDelta   = parseFloat(cf.fixedCostDelta ?? "0") || 0;
+  const revGrowth    = cf.revGrowthPct ?? 0;
+  const capexAmt     = parseFloat(cf.capexAmount ?? "0") || 0;
+  const capexWk      = cf.capexWeek ?? 1;
+
+  const shiftVals = (vals: number[]) => {
+    if (!collectDelay) return vals;
+    const out = new Array(CF_WEEKS).fill(0);
+    for (let i = 0; i < CF_WEEKS; i++) {
+      const j = i + collectDelay;
+      if (j < CF_WEEKS) out[j] += vals[i];
+    }
+    return out;
+  };
+  const growthMul = (i: number) => Math.pow(1 + revGrowth / 100, i);
+
+  const inflow  = new Array(CF_WEEKS).fill(0) as number[];
+  const outflow = new Array(CF_WEEKS).fill(0) as number[];
+
+  revenue.forEach((l) => {
+    shiftVals(cfDistribute(l).map((v) => v * revAdj)).forEach((v, i) => (inflow[i] += v * growthMul(i)));
+  });
+  [...expenses, ...other].forEach((l) => {
+    cfDistribute(l).map((v) => v * expAdj).forEach((v, i) => (outflow[i] += v));
+  });
+  // Scenario adjustments (mirrors CashForecastPanel.computeScenario)
+  if (headDelta !== 0) {
+    const weekly = (headDelta * avgSal) / 4.33;
+    for (let i = 0; i < CF_WEEKS; i++) outflow[i] += Math.abs(weekly);
+  }
+  if (fixedDelta !== 0) {
+    const weekly = fixedDelta / 4.33;
+    for (let i = 0; i < CF_WEEKS; i++) outflow[i] += weekly;
+  }
+  if (capexAmt !== 0) {
+    const w = Math.max(1, Math.min(CF_WEEKS, capexWk)) - 1;
+    outflow[w] += capexAmt;
+  }
+
+  const opening = parseFloat(cf.openingBalance ?? "0") || 0;
+  const runway  = cashRunwayWeeks ?? CF_WEEKS;
+  const weeks: CashForecastWeek[] = [];
+  let balance = opening;
+  for (let i = 0; i < CF_WEEKS; i++) {
+    const receipts = Math.round(inflow[i]);
+    const payments = Math.round(outflow[i]);
+    const net_movement = receipts - payments;
+    const closing = balance + net_movement;
+    weeks.push({
+      period_label: `Week ${i + 1}`,
+      opening_balance: Math.round(balance),
+      total_receipts: receipts,
+      total_payments: payments,
+      net_movement,
+      closing_balance: Math.round(closing),
+      scenario: "moderate",
+      runway_weeks: Math.max(0, runway - i),
+    });
+    balance = closing;
+  }
+  return weeks;
+}
+
+// Build real interventions from the playbook-data.json filtered by the
+// client's actual at-risk/critical ratios (camelCase ratio_key format).
+async function buildInterventions(ratioResults: RatioResult[]): Promise<Intervention[]> {
+  // Map the snake_case ratio_key from ratioResults back to camelCase playbook keys
+  const KEY_MAP: Record<string, string> = {
+    gross_margin:         "grossMargin",
+    net_margin:           "netMargin",
+    operating_margin:     "operatingMargin",
+    return_on_assets:     "roa",
+    asset_turnover:       "assetTurnover",
+    debtor_days:          "debtorDays",
+    inventory_days:       "inventoryDays",
+    creditor_days:        "creditorDays",
+    equity_multiplier:    "equityMultiplier",
+    working_capital_days: "workingCapitalFunding",
+    ocf_ebitda:           "ocfToEbitda",
+    ocf___ebitda:         "ocfToEbitda",
+    gross_profit___labor: "gpToLabor",
+    sales_per_employee_ratio: "salesPerEmployee",
+    fixed_cost_ratio:     "fixedCostRatio",
+    interest_burden:      "interestBurden",
+  };
+
+  const rawPlaybook = await import("@/lib/playbook-data.json");
+  const allSteps = (rawPlaybook.default ?? rawPlaybook) as Intervention[];
+
+  const atRiskRatios = ratioResults.filter(
+    (r) => r.health_tier === "critical" || r.health_tier === "at_risk"
+  );
+
+  const result: Intervention[] = [];
+  for (const rr of atRiskRatios) {
+    const playbookKey = KEY_MAP[rr.ratio_key] ?? rr.ratio_key;
+    const steps = allSteps.filter(
+      (s) => s.ratio_key === playbookKey && s.health_tier === rr.health_tier
+    );
+    // Only include step 1 per ratio to keep the report concise
+    if (steps.length > 0) {
+      result.push({ ...steps[0], ratio_name: rr.ratio_name, health_tier: rr.health_tier });
+    }
+  }
+  return result.length > 0 ? result : MOCK_INTERVENTIONS;
+}
+
+async function loadClientReportData(clientId: string): Promise<ClientReportData> {
+  const [clientRes, snapshotRes] = await Promise.all([
+    supabase.from("clients")
+      .select("id, name, cash_runway_weeks, financials, cashflow")
+      .eq("id", clientId)
+      .maybeSingle(),
+    supabase.from("client_financial_snapshots")
+      .select("period_label, period_date, ratios")
+      .eq("client_id", clientId)
+      .order("period_date", { ascending: false })
+      .limit(20),  // fetch enough history to cover 12-month windows
+  ]);
+
+  const clientRow = clientRes.data;
+  const baseEmpty = {
+    ...EMPTY_CLIENT_DATA,
+    clientName: clientRow?.name ?? "",
+    cashRunwayWeeks: clientRow?.cash_runway_weeks ?? null,
+  };
+  if (!clientRow?.financials) return baseEmpty;
+
+  const rawFin = clientRow.financials as Record<string, string | number | null>;
+  const fin = Object.fromEntries(
+    Object.entries(rawFin).map(([k, v]) => [k, v != null ? String(v) : ""])
+  );
+  if (!fin["revenue"] || fin["revenue"].trim() === "") return { ...baseEmpty, financials: fin };
+
+  const ratioInputs: RatioInputs = {
+    revenue: fin["revenue"] ?? "", cogs: fin["cogs"] ?? "",
+    ebit: fin["ebit"] ?? "", ebt: fin["ebt"] ?? "",
+    netIncome: fin["netIncome"] ?? "", ebitda: fin["ebitda"] ?? "",
+    operatingCashflow: fin["operatingCashflow"] ?? "",
+    totalAssets: fin["totalAssets"] ?? "", equity: fin["equity"] ?? "",
+    receivables: fin["receivables"] ?? "", inventory: fin["inventory"] ?? "",
+    payables: fin["payables"] ?? "", fixedCosts: fin["fixedCosts"] ?? "",
+    variableCosts: fin["variableCosts"] ?? "", top5Revenue: fin["top5Revenue"] ?? "",
+    laborCost: fin["laborCost"] ?? "", employees: fin["employees"] ?? "",
+    founderHours: fin["founderHours"] ?? "",
+  };
+  const rawRatios = computeRatios(ratioInputs);
+  const ratioResults = buildRatioResults(rawRatios);
+  const snapshots: DatedSnapshot[] = (snapshotRes.data ?? []).map((s) => ({
+    period_label: s.period_label,
+    period_date:  s.period_date as string,
+    ratios: (s.ratios as Record<string, number>) ?? {},
+  }));
+
+  const { rows: movementRows, labels: movementLabels } =
+    buildMovementRows(rawRatios, snapshots, new Date());
+
+  return {
+    hasData: true,
+    clientName: clientRow.name,
+    cashRunwayWeeks: clientRow.cash_runway_weeks,
+    financials: fin,
+    rawRatios,
+    ratioResults,
+    workingCapital: buildWorkingCapitalData(fin, rawRatios),
+    profitability:  buildProfitabilityData(fin),
+    leverage:       buildLeverageData(fin, rawRatios),
+    assets:         buildAssetData(rawRatios),
+    labor:          buildLaborData(fin, rawRatios),
+    movement:       movementRows,
+    movementPeriodLabels: movementLabels,
+    benchmark:      buildBenchmarkRows(rawRatios, ratioResults),
+    cashForecast:   buildCashForecastFromSavedCashflow(
+      (clientRow as unknown as { cashflow: SavedCashflow | null }).cashflow ?? {},
+      clientRow.cash_runway_weeks,
+    ),
+  };
+}
+
 // ── PDF generation helpers ─────────────────────────────────────────────────
 
 function triggerDownload(blob: Blob, filename: string) {
@@ -191,49 +845,130 @@ function makeSafeFilename(s: Settings, reportName: string): string {
 
 type GenFn = (s: Settings, profile: AccountantProfile) => Promise<Blob>;
 
-const GEN: Record<string, GenFn> = {
-  scorecard: async (s, p) => {
-    const { HealthScorecardPDF } = await import("@/reports/health-scorecard");
-    return renderToBlob(HealthScorecardPDF, { smeData: makeSme(s), ratioResults: MOCK_RATIOS, accountantProfile: p });
-  },
-  intervention: async (s, p) => {
-    const { InterventionPriorityPDF } = await import("@/reports/intervention-priority");
-    return renderToBlob(InterventionPriorityPDF, { smeData: makeSme(s), interventions: MOCK_INTERVENTIONS, accountantProfile: p });
-  },
-  forecast: async (s, p) => {
-    const { CashForecastPDF } = await import("@/reports/cash-forecast");
-    return renderToBlob(CashForecastPDF, { smeData: makeSme(s), cashForecast: MOCK_FORECAST, scenario: "moderate", accountantProfile: p });
-  },
-  cycle: async (s, p) => {
-    const { CashCyclePDF } = await import("@/reports/cash-cycle");
-    return renderToBlob(CashCyclePDF, { smeData: makeSme(s), workingCapitalData: MOCK_WC, accountantProfile: p });
-  },
-  waterfall: async (s, p) => {
-    const { ProfitabilityWaterfallPDF } = await import("@/reports/profitability-waterfall");
-    return renderToBlob(ProfitabilityWaterfallPDF, { smeData: makeSme(s), profitabilityData: MOCK_PROFIT, accountantProfile: p });
-  },
-  leverage: async (s, p) => {
-    const { LeverageSolvencyPDF } = await import("@/reports/leverage-solvency");
-    return renderToBlob(LeverageSolvencyPDF, { smeData: makeSme(s), data: MOCK_LEVERAGE, accountantProfile: p });
-  },
-  assets: async (s, p) => {
-    const { AssetProductivityPDF } = await import("@/reports/asset-productivity");
-    return renderToBlob(AssetProductivityPDF, { smeData: makeSme(s), data: MOCK_ASSETS, accountantProfile: p });
-  },
-  labor: async (s, p) => {
-    const { LaborProductivityPDF } = await import("@/reports/labor-productivity");
-    return renderToBlob(LaborProductivityPDF, { smeData: makeSme(s), data: MOCK_LABOR, accountantProfile: p });
-  },
-  movement: async (s, p) => {
-    const { RatioMovementPDF } = await import("@/reports/ratio-movement");
-    return renderToBlob(RatioMovementPDF, { smeData: makeSme(s), ratios: MOCK_MOVEMENT, accountantProfile: p });
-  },
-  benchmark: async (s, p) => {
-    const { BenchmarkReportPDF } = await import("@/reports/benchmark-report");
-    const industry = INDUSTRIES.find((i) => i.code === s.industryCode) ?? INDUSTRIES[0];
-    return renderToBlob(BenchmarkReportPDF, { smeData: makeSme(s), industryCode: industry.code, industryName: industry.name, benchmarkRows: MOCK_BENCHMARK, accountantProfile: p });
-  },
-};
+/** Period label with a "Demo Data" suffix when real figures are unavailable. */
+function makeSmeWithNote(s: Settings, isDemo: boolean): { name: string; period: string } {
+  return {
+    name: s.smeName || "Demo Client",
+    period: isDemo
+      ? `${s.periodMonth} ${s.periodYear} · Demo Data — upload financials for real figures`
+      : `${s.periodMonth} ${s.periodYear}`,
+  };
+}
+
+function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
+  const cd = clientData?.hasData ? clientData : null;
+
+  return {
+    scorecard: async (s, p) => {
+      const { HealthScorecardPDF } = await import("@/reports/health-scorecard");
+      const isDemo = !cd || cd.ratioResults.length === 0;
+      return renderToBlob(HealthScorecardPDF, {
+        smeData: makeSmeWithNote(s, isDemo),
+        ratioResults: isDemo ? MOCK_RATIOS : cd.ratioResults,
+        accountantProfile: p,
+        isDemo,
+      });
+    },
+    intervention: async (s, p) => {
+      const { InterventionPriorityPDF } = await import("@/reports/intervention-priority");
+      const isDemo = !cd || cd.ratioResults.length === 0;
+      const interventions = isDemo
+        ? MOCK_INTERVENTIONS
+        : await buildInterventions(cd.ratioResults);
+      return renderToBlob(InterventionPriorityPDF, {
+        smeData: makeSmeWithNote(s, isDemo),
+        interventions,
+        accountantProfile: p,
+        isDemo,
+      });
+    },
+    forecast: async (s, p) => {
+      const { CashForecastPDF } = await import("@/reports/cash-forecast");
+      const isDemo = !cd || !cd.cashForecast;
+      return renderToBlob(CashForecastPDF, {
+        smeData: makeSmeWithNote(s, isDemo),
+        cashForecast: isDemo ? MOCK_FORECAST : cd!.cashForecast!,
+        scenario: "moderate",
+        accountantProfile: p,
+        isDemo,
+      });
+    },
+    cycle: async (s, p) => {
+      const { CashCyclePDF } = await import("@/reports/cash-cycle");
+      const isDemo = !cd || !cd.workingCapital;
+      return renderToBlob(CashCyclePDF, {
+        smeData: makeSmeWithNote(s, isDemo),
+        workingCapitalData: isDemo ? MOCK_WC : cd!.workingCapital!,
+        accountantProfile: p,
+        isDemo,
+      });
+    },
+    waterfall: async (s, p) => {
+      const { ProfitabilityWaterfallPDF } = await import("@/reports/profitability-waterfall");
+      const isDemo = !cd || !cd.profitability;
+      return renderToBlob(ProfitabilityWaterfallPDF, {
+        smeData: makeSmeWithNote(s, isDemo),
+        profitabilityData: isDemo ? MOCK_PROFIT : cd!.profitability!,
+        accountantProfile: p,
+        isDemo,
+      });
+    },
+    leverage: async (s, p) => {
+      const { LeverageSolvencyPDF } = await import("@/reports/leverage-solvency");
+      const isDemo = !cd || !cd.leverage;
+      return renderToBlob(LeverageSolvencyPDF, {
+        smeData: makeSmeWithNote(s, isDemo),
+        data: isDemo ? MOCK_LEVERAGE : cd!.leverage!,
+        accountantProfile: p,
+        isDemo,
+      });
+    },
+    assets: async (s, p) => {
+      const { AssetProductivityPDF } = await import("@/reports/asset-productivity");
+      const isDemo = !cd || !cd.assets;
+      return renderToBlob(AssetProductivityPDF, {
+        smeData: makeSmeWithNote(s, isDemo),
+        data: isDemo ? MOCK_ASSETS : cd!.assets!,
+        accountantProfile: p,
+        isDemo,
+      });
+    },
+    labor: async (s, p) => {
+      const { LaborProductivityPDF } = await import("@/reports/labor-productivity");
+      const isDemo = !cd || !cd.labor;
+      return renderToBlob(LaborProductivityPDF, {
+        smeData: makeSmeWithNote(s, isDemo),
+        data: isDemo ? MOCK_LABOR : cd!.labor!,
+        accountantProfile: p,
+        isDemo,
+      });
+    },
+    movement: async (s, p) => {
+      const { RatioMovementPDF } = await import("@/reports/ratio-movement");
+      const isDemo = !cd || cd.movement.length === 0;
+      return renderToBlob(RatioMovementPDF, {
+        smeData: makeSmeWithNote(s, isDemo),
+        ratios: isDemo ? MOCK_MOVEMENT : cd!.movement,
+        periodLabels: isDemo ? undefined : cd!.movementPeriodLabels,
+        accountantProfile: p,
+        isDemo,
+      });
+    },
+    benchmark: async (s, p) => {
+      const { BenchmarkReportPDF } = await import("@/reports/benchmark-report");
+      const industry = INDUSTRIES.find((i) => i.code === s.industryCode) ?? INDUSTRIES[0];
+      const isDemo = !cd || cd.benchmark.length === 0;
+      return renderToBlob(BenchmarkReportPDF, {
+        smeData: makeSmeWithNote(s, isDemo),
+        industryCode: industry.code,
+        industryName: industry.name,
+        benchmarkRows: isDemo ? MOCK_BENCHMARK : cd!.benchmark,
+        accountantProfile: p,
+        isDemo,
+      });
+    },
+  };
+}
 
 // ── Report metadata ────────────────────────────────────────────────────────
 
@@ -275,18 +1010,19 @@ type PreviewState = {
 // ── Report card ────────────────────────────────────────────────────────────
 
 function ReportCard({
-  report, isGenerating, isPreviewing, isClient,
+  report, isGenerating, isPreviewing, isClient, dataLoading,
   onGenerate, onPreview,
 }: {
   report: ReportMeta;
   isGenerating: boolean;
   isPreviewing: boolean;
   isClient: boolean;
+  dataLoading: boolean;
   onGenerate: () => void;
   onPreview: () => void;
 }) {
   return (
-    <div className="flex flex-col rounded-xl border border-slate-800 bg-slate-900/50 transition-colors hover:border-slate-700">
+    <div className="report-card group flex flex-col rounded-xl border border-border bg-card shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:border-[#c9962b]/60 hover:shadow-md">
       <div className="p-4 pb-3 flex-1">
         <div className="flex items-start gap-3">
           <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${report.iconBg}`}>
@@ -294,14 +1030,14 @@ function ReportCard({
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 mb-1 flex-wrap">
-              <span className="text-[10px] font-semibold text-slate-600">#{report.id}</span>
-              <span className={`rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${report.category === "essential" ? "bg-blue-950/60 text-blue-400" : "bg-slate-800 text-slate-400"}`}>
+              <span className="text-[10px] font-semibold text-muted-foreground">#{report.id}</span>
+              <span className={`rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${report.category === "essential" ? "bg-[#c9962b]/10 text-[#a8791a] dark:text-[#e5c66b]" : "bg-muted text-muted-foreground"}`}>
                 {report.category}
               </span>
-              <span className="text-[10px] text-slate-600">{report.pages}</span>
+              <span className="text-[10px] text-muted-foreground">{report.pages}</span>
             </div>
-            <h3 className="text-sm font-semibold leading-snug text-slate-100 mb-1">{report.name}</h3>
-            <p className="text-[11px] leading-relaxed text-slate-500">{report.description}</p>
+            <h3 className="text-sm font-semibold leading-snug text-foreground mb-1">{report.name}</h3>
+            <p className="text-[11px] leading-relaxed text-muted-foreground">{report.description}</p>
           </div>
         </div>
       </div>
@@ -310,18 +1046,18 @@ function ReportCard({
         <Button
           variant="outline"
           size="sm"
-          className="flex-1 border-slate-700 bg-transparent text-slate-300 hover:bg-slate-800 hover:text-slate-100 text-xs gap-1.5"
+          className="flex-1 border-border bg-transparent text-foreground hover:bg-muted hover:text-foreground text-xs gap-1.5"
           onClick={onPreview}
-          disabled={!isClient || isPreviewing}
+          disabled={!isClient || isPreviewing || dataLoading}
         >
           {isPreviewing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Eye className="h-3.5 w-3.5" />}
-          Preview
+          {dataLoading ? "Loading…" : "Preview"}
         </Button>
         <Button
           size="sm"
-          className={`flex-1 text-xs gap-1.5 text-white ${report.btnBg}`}
+          className="flex-1 text-xs gap-1.5 bg-[#c9962b] text-white hover:bg-[#b8851f]"
           onClick={onGenerate}
-          disabled={!isClient || isGenerating}
+          disabled={!isClient || isGenerating || dataLoading}
         >
           {isGenerating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
           Download
@@ -340,18 +1076,18 @@ function SettingsPanel({
   onChange: (patch: Partial<Settings>) => void;
   profile: AccountantProfile;
 }) {
-  const inputCls = "w-full rounded-lg border border-slate-700 bg-slate-800/60 px-3 py-2 text-sm text-slate-200 placeholder-slate-500 focus:border-slate-500 focus:outline-none";
+  const inputCls = "w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-[#c9962b] focus:outline-none focus:ring-1 focus:ring-[#c9962b]/40";
 
   return (
-    <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-5 space-y-5 sticky top-6">
+    <div className="rounded-xl border border-border bg-card p-5 space-y-5 shadow-sm sticky top-6">
       <div className="flex items-center gap-2">
-        <Settings className="h-4 w-4 text-slate-400" />
-        <h2 className="text-sm font-semibold text-slate-200">Report Settings</h2>
+        <Settings className="h-4 w-4 text-[#c9962b]" />
+        <h2 className="text-sm font-semibold text-foreground">Report Settings</h2>
       </div>
 
       {/* SME Name */}
       <div>
-        <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-slate-500">Client / SME Name</label>
+        <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Client / SME Name</label>
         <input
           className={inputCls}
           value={settings.smeName}
@@ -362,22 +1098,22 @@ function SettingsPanel({
 
       {/* Reporting period */}
       <div>
-        <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-slate-500">Reporting Period</label>
+        <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Reporting Period</label>
         <div className="grid grid-cols-2 gap-2">
           <Select value={settings.periodMonth} onValueChange={(v) => onChange({ periodMonth: v })}>
-            <SelectTrigger className="border-slate-700 bg-slate-800/60 text-slate-200 text-sm h-9">
+            <SelectTrigger className="border-input bg-background text-foreground text-sm h-9">
               <SelectValue />
             </SelectTrigger>
-            <SelectContent className="bg-slate-900 border-slate-700">
-              {MONTHS.map((m) => <SelectItem key={m} value={m} className="text-slate-200 focus:bg-slate-800">{m}</SelectItem>)}
+            <SelectContent className="bg-popover border-border">
+              {MONTHS.map((m) => <SelectItem key={m} value={m} className="text-popover-foreground focus:bg-muted">{m}</SelectItem>)}
             </SelectContent>
           </Select>
           <Select value={settings.periodYear} onValueChange={(v) => onChange({ periodYear: v })}>
-            <SelectTrigger className="border-slate-700 bg-slate-800/60 text-slate-200 text-sm h-9">
+            <SelectTrigger className="border-input bg-background text-foreground text-sm h-9">
               <SelectValue />
             </SelectTrigger>
-            <SelectContent className="bg-slate-900 border-slate-700">
-              {YEARS.map((y) => <SelectItem key={y} value={y} className="text-slate-200 focus:bg-slate-800">{y}</SelectItem>)}
+            <SelectContent className="bg-popover border-border">
+              {YEARS.map((y) => <SelectItem key={y} value={y} className="text-popover-foreground focus:bg-muted">{y}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
@@ -385,13 +1121,13 @@ function SettingsPanel({
 
       {/* Industry */}
       <div>
-        <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-slate-500">Industry (Benchmark Report)</label>
+        <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Industry (Benchmark Report)</label>
         <Select value={settings.industryCode} onValueChange={(v) => onChange({ industryCode: v })}>
-          <SelectTrigger className="border-slate-700 bg-slate-800/60 text-slate-200 text-sm h-9 w-full">
+          <SelectTrigger className="border-input bg-background text-foreground text-sm h-9 w-full">
             <SelectValue />
           </SelectTrigger>
-          <SelectContent className="bg-slate-900 border-slate-700">
-            {INDUSTRIES.map((i) => <SelectItem key={i.code} value={i.code} className="text-slate-200 focus:bg-slate-800 text-xs">{i.name}</SelectItem>)}
+          <SelectContent className="bg-popover border-border">
+            {INDUSTRIES.map((i) => <SelectItem key={i.code} value={i.code} className="text-popover-foreground focus:bg-muted text-xs">{i.name}</SelectItem>)}
           </SelectContent>
         </Select>
       </div>
@@ -399,8 +1135,8 @@ function SettingsPanel({
       {/* Prior period toggle */}
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-xs font-semibold text-slate-300">Include Prior Period</p>
-          <p className="text-[10px] text-slate-500 mt-0.5">Show comparison columns in tables</p>
+          <p className="text-xs font-semibold text-foreground">Include Prior Period</p>
+          <p className="text-[10px] text-muted-foreground mt-0.5">Show comparison columns in tables</p>
         </div>
         <Switch
           checked={settings.includePrior}
@@ -409,17 +1145,17 @@ function SettingsPanel({
         />
       </div>
 
-      <hr className="border-slate-800" />
+        <hr className="border-border" />
 
       {/* Brand preview */}
       <div>
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 mb-2">Report Branding</p>
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">Report Branding</p>
         {profile.firmName ? (
-          <div className="flex items-center gap-3 rounded-lg border border-slate-800 bg-slate-800/40 px-3 py-2.5">
+          <div className="flex items-center gap-3 rounded-lg border border-border bg-muted/40 px-3 py-2.5">
             <div className="h-8 w-8 shrink-0 rounded" style={{ backgroundColor: profile.accentColor }} />
             <div>
-              <p className="text-xs font-semibold text-slate-200">{profile.firmName}</p>
-              {profile.tagline && <p className="text-[10px] text-slate-500">{profile.tagline}</p>}
+              <p className="text-xs font-semibold text-foreground">{profile.firmName}</p>
+              {profile.tagline && <p className="text-[10px] text-muted-foreground">{profile.tagline}</p>}
             </div>
           </div>
         ) : (
@@ -428,7 +1164,7 @@ function SettingsPanel({
             <p className="text-[10px] text-amber-500/70 mt-0.5">PDFs will use default Milōn branding</p>
           </div>
         )}
-        <Link to="/settings/brand" className="mt-2 flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-200 transition-colors">
+        <Link to="/settings/brand" className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors">
           <ExternalLink className="h-3 w-3" />Brand Settings
         </Link>
       </div>
@@ -441,12 +1177,12 @@ function SettingsPanel({
 function PreviewModal({ state, onClose, onDownload }: { state: PreviewState | null; onClose: () => void; onDownload: () => void }) {
   return (
     <Dialog open={state !== null} onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className="max-w-5xl h-[88vh] flex flex-col bg-slate-950 border-slate-800 p-0 gap-0">
-        <DialogHeader className="flex-row items-center justify-between px-5 py-3 border-b border-slate-800 shrink-0 space-y-0">
-          <DialogTitle className="text-sm font-semibold text-slate-200">
+      <DialogContent className="max-w-5xl h-[88vh] flex flex-col bg-background border-border p-0 gap-0">
+        <DialogHeader className="flex-row items-center justify-between px-5 py-3 border-b border-border shrink-0 space-y-0">
+          <DialogTitle className="text-sm font-semibold text-foreground">
             {state?.name ?? "Report Preview"}
           </DialogTitle>
-          <Button size="sm" variant="outline" className="gap-1.5 border-slate-700 text-slate-300 hover:bg-slate-800 text-xs" onClick={onDownload}>
+          <Button size="sm" variant="outline" className="gap-1.5 border-border text-foreground hover:bg-muted text-xs" onClick={onDownload}>
             <Download className="h-3.5 w-3.5" />Download
           </Button>
         </DialogHeader>
@@ -455,8 +1191,8 @@ function PreviewModal({ state, onClose, onDownload }: { state: PreviewState | nu
           {state?.loading ? (
             <div className="flex h-full items-center justify-center">
               <div className="text-center">
-                <Loader2 className="h-8 w-8 animate-spin text-slate-500 mx-auto mb-3" />
-                <p className="text-sm text-slate-600">Generating PDF…</p>
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground mx-auto mb-3" />
+                <p className="text-sm text-muted-foreground">Generating PDF…</p>
               </div>
             </div>
           ) : state?.blobUrl ? (
@@ -538,22 +1274,22 @@ function PlaybookRatioCard({ ratio, onClick }: { ratio: PlaybookRatio; onClick: 
   return (
     <button
       onClick={onClick}
-      className="w-full text-left rounded-lg border border-slate-800 bg-slate-900/40 hover:bg-slate-800/60 hover:border-slate-700 transition-colors p-3 group"
+      className="w-full text-left rounded-lg border border-border bg-card hover:bg-muted/60 hover:border-[#c9962b]/50 transition-colors p-3 group"
     >
       <div className="flex items-start justify-between gap-2 mb-2">
-        <p className="text-xs font-medium text-slate-200 leading-snug">{ratio.ratio_name}</p>
+        <p className="text-xs font-medium text-foreground leading-snug">{ratio.ratio_name}</p>
         <span className={`flex-shrink-0 inline-flex items-center rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${TIER_CHIP[ratio.health_tier]}`}>
           {ratio.health_tier === "at_risk" ? "At Risk" : ratio.health_tier === "critical" ? "Critical" : "Healthy"}
         </span>
       </div>
       {/* Score bar */}
-      <div className="h-1 rounded-full bg-slate-800 mb-2">
+      <div className="h-1 rounded-full bg-muted mb-2">
         <div
           className={`h-1 rounded-full transition-all ${TIER_DOT[ratio.health_tier]}`}
           style={{ width: `${ratio.health_score}%` }}
         />
       </div>
-      <p className="text-[10px] text-slate-500 group-hover:text-slate-400 transition-colors">Score {ratio.health_score} · View steps →</p>
+      <p className="text-[10px] text-muted-foreground group-hover:text-foreground transition-colors">Score {ratio.health_score} · View steps →</p>
     </button>
   );
 }
@@ -587,8 +1323,8 @@ function ReportsPage() {
   const [isClient, setIsClient] = useState(false);
   const [settings, setSettings] = useState<Settings>({
     smeName: clientParam ?? "Acme Trading (Pty) Ltd",
-    periodMonth: "June",
-    periodYear: "2025",
+    periodMonth: MONTHS[new Date().getMonth()],
+    periodYear: String(new Date().getFullYear()),
     industryCode: INDUSTRIES[0].code,
     includePrior: true,
   });
@@ -598,6 +1334,8 @@ function ReportsPage() {
   const [zipProgress, setZipProgress] = useState<{ done: number; total: number } | null>(null);
   const [playbookOpen, setPlaybookOpen] = useState(false);
   const [selectedPlaybook, setSelectedPlaybook] = useState<PlaybookRatio | null>(null);
+  const [clientData, setClientData] = useState<ClientReportData | null>(null);
+  const [dataLoading, setDataLoading] = useState(false);
 
   function openPlaybook(ratio: PlaybookRatio) {
     setSelectedPlaybook(ratio);
@@ -605,6 +1343,32 @@ function ReportsPage() {
   }
 
   useEffect(() => { setIsClient(true); }, []);
+
+  // Load real client financials whenever clientId changes.
+  // Clear stale data *immediately* so exports cannot use the previous client's
+  // figures while the new request is in flight.
+  useEffect(() => {
+    if (!clientId) { setClientData(null); return; }
+    let cancelled = false;
+    setClientData(null);   // clear before async starts
+    setDataLoading(true);
+    loadClientReportData(clientId).then((data) => {
+      if (cancelled) return;
+      setClientData(data);
+      // Keep smeName in sync with the client's real name if it differs
+      if (data.clientName) {
+        setSettings((prev) => ({ ...prev, smeName: data.clientName }));
+      }
+    }).catch((err) => {
+      console.error("Failed to load client report data:", err);
+    }).finally(() => {
+      if (!cancelled) setDataLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [clientId]);
+
+  // Build the GEN map from real client data (or null = demo data)
+  const GEN = useMemo(() => buildGEN(clientData), [clientData]);
 
   // Clean up blob URL on close
   const closePreview = useCallback(() => {
@@ -616,7 +1380,7 @@ function ReportsPage() {
   // ── Generate single PDF ──────────────────────────────────────────────────
 
   async function handleGenerate(report: ReportMeta) {
-    if (!isClient) return;
+    if (!isClient || dataLoading) return;
     setLoadingKey(report.key);
     try {
       const blob = await GEN[report.key](settings, profile);
@@ -634,7 +1398,7 @@ function ReportsPage() {
   // ── Preview single PDF ───────────────────────────────────────────────────
 
   async function handlePreview(report: ReportMeta) {
-    if (!isClient) return;
+    if (!isClient || dataLoading) return;
     if (previewState?.blobUrl) URL.revokeObjectURL(previewState.blobUrl);
     setPreviewKey(report.key);
     setPreviewState({ key: report.key, name: report.name, blobUrl: null, loading: true });
@@ -653,7 +1417,7 @@ function ReportsPage() {
   // ── Generate all as ZIP ──────────────────────────────────────────────────
 
   async function handleGenerateAll() {
-    if (!isClient) return;
+    if (!isClient || dataLoading) return;
     setZipProgress({ done: 0, total: REPORTS.length });
     try {
       const { default: JSZip } = await import("jszip");
@@ -688,17 +1452,18 @@ function ReportsPage() {
   const optional = REPORTS.filter((r) => r.category === "optional");
 
   return (
-    <main className="min-h-screen bg-[#07090f] text-slate-50 px-4 py-8">
+    <main className="reports-studio min-h-[100dvh] bg-background text-foreground px-4 py-8 sm:px-6">
       <div className="mx-auto max-w-[1400px]">
 
         {/* Back nav */}
-        <div className="mb-6">
+        <div className="mb-7 flex items-center justify-between">
           <Link
             to="/dashboard"
-            className="inline-flex items-center gap-1.5 text-sm text-slate-400 hover:text-slate-200 transition-colors"
+            className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
           >
             <ArrowLeft className="h-4 w-4" />Back to Dashboard
           </Link>
+          <ThemeToggle />
         </div>
 
         {/* Header */}
@@ -706,31 +1471,58 @@ function ReportsPage() {
           <div>
             <div className="flex items-center gap-2 mb-1">
               <Zap className="h-4 w-4 text-[#c9962b]" />
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Milōn Report Suite</span>
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Milōn Report Suite</span>
             </div>
-            <h1 className="text-2xl font-semibold tracking-tight text-slate-100">Financial Reports</h1>
-            <p className="mt-1 text-sm text-slate-400">
+            <h1 className="text-2xl font-semibold tracking-tight text-foreground">Financial Reports</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
               10 white-label PDF reports — configure settings then generate or preview individual reports.
             </p>
+            {/* Client data status badge */}
+            {clientId && (
+              <div className="mt-2 flex items-center gap-1.5">
+                {dataLoading ? (
+                  <>
+                    <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                    <span className="text-[11px] text-muted-foreground">Loading client data…</span>
+                  </>
+                ) : clientData?.hasData ? (
+                  <>
+                    <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                    <span className="text-[11px] text-emerald-600 dark:text-emerald-400">
+                      Live data — {clientData.clientName}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <span className="inline-block h-1.5 w-1.5 rounded-full bg-amber-500" />
+                    <span className="text-[11px] text-amber-700 dark:text-amber-400">
+                      No financials uploaded — reports show demo data
+                    </span>
+                  </>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="flex flex-col items-end gap-2">
             {zipProgress ? (
               <div className="w-60">
-                <p className="text-xs text-slate-400 mb-1.5">Generating {zipProgress.done}/{zipProgress.total} reports…</p>
-                <Progress value={zipPct} className="h-2 bg-slate-800" />
+                <p className="text-xs text-muted-foreground mb-1.5">Generating {zipProgress.done}/{zipProgress.total} reports…</p>
+                <Progress value={zipPct} className="h-2 bg-muted" />
               </div>
             ) : (
               <Button
                 className="gap-2 bg-[#c9962b] hover:bg-[#b8851f] font-semibold text-white"
                 onClick={handleGenerateAll}
-                disabled={!isClient}
+                disabled={!isClient || dataLoading}
               >
-                <Download className="h-4 w-4" />
-                Generate All as ZIP
+                {dataLoading
+                  ? <><Loader2 className="h-4 w-4 animate-spin" />Loading client data…</>
+                  : <><Download className="h-4 w-4" />Generate All as ZIP</>
+                }
               </Button>
             )}
-            <Link to="/reports/demo" className="text-xs text-slate-500 hover:text-slate-300 transition-colors">
+            <Link to="/reports/demo" className="text-xs text-muted-foreground hover:text-foreground transition-colors">
               View demo preview →
             </Link>
           </div>
@@ -744,8 +1536,8 @@ function ReportsPage() {
             {/* Essential */}
             <section>
               <div className="mb-3 flex items-center gap-2">
-                <span className="rounded-full bg-blue-900/40 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-blue-400">Essential — {essential.length} Reports</span>
-                <div className="flex-1 border-t border-slate-800" />
+                <span className="rounded-full bg-[#c9962b]/10 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[#a8791a] dark:text-[#e5c66b]">Essential — {essential.length} Reports</span>
+                <div className="flex-1 border-t border-border" />
               </div>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 {essential.map((r) => (
@@ -755,6 +1547,7 @@ function ReportsPage() {
                     isGenerating={loadingKey === r.key}
                     isPreviewing={previewKey === r.key}
                     isClient={isClient}
+                    dataLoading={dataLoading}
                     onGenerate={() => handleGenerate(r)}
                     onPreview={() => handlePreview(r)}
                   />
@@ -765,8 +1558,8 @@ function ReportsPage() {
             {/* Optional */}
             <section>
               <div className="mb-3 flex items-center gap-2">
-                <span className="rounded-full bg-slate-800 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Optional — {optional.length} Reports</span>
-                <div className="flex-1 border-t border-slate-800" />
+                <span className="rounded-full bg-muted px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Optional — {optional.length} Reports</span>
+                <div className="flex-1 border-t border-border" />
               </div>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 {optional.map((r) => (
@@ -776,6 +1569,7 @@ function ReportsPage() {
                     isGenerating={loadingKey === r.key}
                     isPreviewing={previewKey === r.key}
                     isClient={isClient}
+                    dataLoading={dataLoading}
                     onGenerate={() => handleGenerate(r)}
                     onPreview={() => handlePreview(r)}
                   />
@@ -789,9 +1583,9 @@ function ReportsPage() {
                 <span className="rounded-full bg-violet-900/40 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-violet-400">
                   Playbooks — {PLAYBOOK_RATIOS.length} Action Plans
                 </span>
-                <div className="flex-1 border-t border-slate-800" />
+                <div className="flex-1 border-t border-border" />
               </div>
-              <p className="text-xs text-slate-500 mb-5">
+              <p className="text-xs text-muted-foreground mb-5">
                 Step-by-step recovery and optimisation plans for every ratio, tailored to the current health tier. Click any ratio to open its 10-step playbook.
               </p>
               <div className="space-y-5">

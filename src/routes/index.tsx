@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
+import { SIGNUP_ACCESS_CODE, notifySignup } from "@/lib/signup-notify";
 // @ts-ignore — raw import fine for dynamic CSS injection
 import landingCSS from "../styles/landing.css?raw";
 
@@ -45,6 +46,7 @@ function LandingPage() {
   const [regName, setRegName]           = useState("");
   const [regEmail, setRegEmail]         = useState("");
   const [regPassword, setRegPassword]   = useState("");
+  const [regCode, setRegCode]           = useState("");
   const [regBusiness, setRegBusiness]   = useState("");
   const [regPlan, setRegPlan]           = useState("Orbit — R699/mo");
   const [regBusy, setRegBusy]           = useState(false);
@@ -317,6 +319,10 @@ function LandingPage() {
       toast.error("Password must be at least 6 characters.");
       return;
     }
+    if (regCode.trim() !== SIGNUP_ACCESS_CODE) {
+      toast.error("Invalid access code. Contact us to get access.");
+      return;
+    }
     setRegBusy(true);
     try {
       const { data, error } = await supabase.auth.signUp({
@@ -332,6 +338,7 @@ function LandingPage() {
         },
       });
       if (error) throw error;
+      notifySignup("Business owner", regEmail, regName.trim());
       if (data.session && data.user) {
         const { data: existing } = await supabase
           .from("clients").select("id").eq("owner_user_id", data.user.id).limit(1).maybeSingle();
@@ -483,6 +490,7 @@ function LandingPage() {
           </a>
           <div className="links">
             <a href="#persona">Start</a>
+            <a href="#register">Sign up</a>
             <a href="#method">The MILŌN Method</a>
             <a href="#features">Platform</a>
             <a href="#pricing">Pricing</a>
@@ -912,7 +920,7 @@ function LandingPage() {
 
           {/* Client-only: prevents browser password-manager extensions (LastPass etc.)
               from injecting DOM nodes during SSR hydration and crashing React */}
-          {mounted && <div className="reg-shell reveal">
+          {mounted && <div className="reg-shell">
             <form onSubmit={handleRegister}>
               <label htmlFor="regRoleField">I am a</label>
               <select id="regRoleField" value={regRole} onChange={e => setRegRole(e.target.value)}>
@@ -935,6 +943,9 @@ function LandingPage() {
 
                   <label htmlFor="regPasswordField">Password</label>
                   <input id="regPasswordField" type="password" required placeholder="At least 6 characters" minLength={6} value={regPassword} onChange={e => setRegPassword(e.target.value)} />
+
+                  <label htmlFor="regCodeField">Access code</label>
+                  <input id="regCodeField" type="text" required placeholder="Provided by your MILŌN contact" value={regCode} onChange={e => setRegCode(e.target.value)} />
 
                   <label htmlFor="regBusinessField">Business name</label>
                   <input id="regBusinessField" type="text" placeholder="Nkosi Engineering (Pty) Ltd" value={regBusiness} onChange={e => setRegBusiness(e.target.value)} />

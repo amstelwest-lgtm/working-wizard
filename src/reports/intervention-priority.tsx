@@ -1,16 +1,19 @@
 /**
- * InterventionPriorityPDF — Priority Intervention Plan report.
- * Renders top interventions sorted critical-first, then step_number asc.
- * Flows across 2-3 pages automatically.
+ * InterventionPriorityPDF — Intervention Priority Report, redesigned as a
+ * prioritized action roadmap with severity-coded cards.
  *
- * IMPORTANT: Only import via dynamic import() — never at the top level of an
- * SSR-rendered module.
+ * SSR safety: Only import via dynamic import().
  */
 
 import { View, Text, StyleSheet } from "@react-pdf/renderer";
 import type { AccountantProfile } from "@/contexts/accountant-profile";
 import { PDFDocument, type SmeData } from "@/components/pdf/pdf-document";
 import { InsightBox } from "@/components/pdf/insight-box";
+import { ReportTitle } from "@/components/pdf/report-title";
+import { SectionHeader } from "@/components/pdf/section-header";
+import { ExecSummary, type HeadlineFigure } from "@/components/pdf/exec-summary";
+import { C, resolveTheme } from "@/components/pdf/theme";
+import { interventionNarrative } from "./narrative";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -31,55 +34,23 @@ export type InterventionPriorityPDFProps = {
   smeData: SmeData;
   interventions: Intervention[];
   accountantProfile: AccountantProfile;
+  isDemo?: boolean;
 };
 
 // ── Styles ─────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
-  titleSection: {
-    marginBottom: 20,
+const S = StyleSheet.create({
+  waveDesc: { fontSize: 7.5, fontFamily: "Helvetica", color: C.muted, marginBottom: 8, lineHeight: 1.5 },
+  empty: {
+    borderRadius: 6,
+    borderWidth: 0.75,
+    borderColor: C.line,
+    borderLeftWidth: 2.5,
+    borderLeftColor: C.green,
+    backgroundColor: C.greenSoft,
+    padding: 14,
   },
-  reportTitle: {
-    fontSize: 22,
-    fontFamily: "Helvetica-Bold",
-    color: "#111827",
-    marginBottom: 5,
-  },
-  reportSubtitle: {
-    fontSize: 9.5,
-    fontFamily: "Helvetica",
-    color: "#6b7280",
-    marginBottom: 16,
-  },
-  summaryBar: {
-    flexDirection: "row",
-    borderRadius: 8,
-    overflow: "hidden",
-    marginBottom: 24,
-  },
-  summaryChunk: {
-    flex: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    alignItems: "center",
-  },
-  summaryNum: {
-    fontSize: 24,
-    fontFamily: "Helvetica-Bold",
-    color: "#ffffff",
-    marginBottom: 3,
-  },
-  summaryLabel: {
-    fontSize: 7.5,
-    fontFamily: "Helvetica",
-    color: "#ffffff",
-    opacity: 0.85,
-    textTransform: "uppercase",
-    letterSpacing: 0.4,
-  },
-  stepsSection: {
-    gap: 0,
-  },
+  emptyText: { fontSize: 8.5, fontFamily: "Helvetica", color: C.body, lineHeight: 1.55 },
 });
 
 // ── Main component ─────────────────────────────────────────────────────────
@@ -88,73 +59,123 @@ export function InterventionPriorityPDF({
   smeData,
   interventions,
   accountantProfile,
+  isDemo,
 }: InterventionPriorityPDFProps) {
-  const accentColor = accountantProfile.accentColor || "#0f3460";
+  const theme = resolveTheme(accountantProfile);
 
-  // Sort: critical first, then at_risk, then by step_number asc
-  const TIER_ORDER: Record<string, number> = { critical: 0, at_risk: 1, healthy: 2 };
-  const sorted = [...interventions].sort((a, b) => {
-    const tierDiff =
-      (TIER_ORDER[a.health_tier] ?? 3) - (TIER_ORDER[b.health_tier] ?? 3);
-    if (tierDiff !== 0) return tierDiff;
-    return a.step_number - b.step_number;
+  const critical = interventions.filter((x) => x.health_tier === "critical");
+  const atRisk = interventions.filter((x) => x.health_tier === "at_risk");
+  const rest = interventions.filter(
+    (x) => x.health_tier !== "critical" && x.health_tier !== "at_risk",
+  );
+
+  const figures: HeadlineFigure[] = [
+    { label: "Action Steps", value: `${interventions.length}` },
+    {
+      label: "Critical Priority",
+      value: `${critical.length}`,
+      direction: critical.length > 0 ? "down" : "flat",
+      good: critical.length === 0,
+      note: "start immediately",
+    },
+    {
+      label: "Watch Priority",
+      value: `${atRisk.length}`,
+      good: atRisk.length === 0,
+      note: "next 30–60 days",
+    },
+    {
+      label: "Strengthen",
+      value: `${rest.length}`,
+      good: true,
+      note: "protect what works",
+    },
+  ];
+
+  const narrative = interventionNarrative({
+    critical: critical.length,
+    atRisk: atRisk.length,
+    total: interventions.length,
   });
 
-  const criticalCount = sorted.filter((i) => i.health_tier === "critical").length;
-  const atRiskCount = sorted.filter((i) => i.health_tier === "at_risk").length;
-  const totalCount = sorted.length;
-
-  // Format month/year label from the period string
-  const periodLabel = smeData.period;
+  let counter = 0;
+  const renderCards = (items: Intervention[]) =>
+    items.map((iv) => {
+      counter += 1;
+      return (
+        <InsightBox
+          key={`${iv.ratio_key}-${iv.step_number}-${counter}`}
+          stepNumber={counter}
+          ratioName={iv.ratio_name}
+          stepTitle={iv.step_title}
+          description={iv.step_description}
+          timeframe={iv.timeframe}
+          effort={iv.effort}
+          impact={iv.impact}
+          healthTier={iv.health_tier}
+          accentColor={theme.accent}
+        />
+      );
+    });
 
   return (
     <PDFDocument
-      title={`Priority Intervention Plan — ${smeData.name}`}
-      subject="Priority Intervention Plan"
+      title={`Intervention Roadmap — ${smeData.name}`}
+      subject="Intervention Priority Report"
       smeData={smeData}
       accountantProfile={accountantProfile}
+      isDemo={isDemo}
     >
-      {/* Title block */}
-      <View style={styles.titleSection}>
-        <Text style={styles.reportTitle}>Priority Intervention Plan</Text>
-        <Text style={styles.reportSubtitle}>
-          Top actions for {smeData.name} — {periodLabel}
-        </Text>
+      <ReportTitle
+        kicker="Advisory Report 05"
+        title="Intervention Roadmap"
+        subtitle="The prioritized action plan — what to fix first, what it takes, and what it's worth"
+        isDemo={isDemo}
+      />
 
-        {/* Summary bar */}
-        <View style={styles.summaryBar}>
-          <View style={[styles.summaryChunk, { backgroundColor: "#ef4444" }]}>
-            <Text style={styles.summaryNum}>{criticalCount}</Text>
-            <Text style={styles.summaryLabel}>Critical Actions</Text>
-          </View>
-          <View style={[styles.summaryChunk, { backgroundColor: "#f59e0b" }]}>
-            <Text style={styles.summaryNum}>{atRiskCount}</Text>
-            <Text style={styles.summaryLabel}>At-Risk Actions</Text>
-          </View>
-          <View style={[styles.summaryChunk, { backgroundColor: accentColor }]}>
-            <Text style={styles.summaryNum}>{totalCount}</Text>
-            <Text style={styles.summaryLabel}>Total Steps</Text>
-          </View>
+      <ExecSummary figures={figures} narrative={narrative} />
+
+      {interventions.length === 0 && (
+        <View style={S.empty}>
+          <Text style={S.emptyText}>
+            No intervention steps are required at present — every tracked ratio is in healthy
+            territory. Keep the current disciplines in place and revisit after the next period
+            upload.
+          </Text>
         </View>
-      </View>
+      )}
 
-      {/* Intervention steps — react-pdf auto-wraps across pages */}
-      <View style={styles.stepsSection}>
-        {sorted.map((intervention, index) => (
-          <InsightBox
-            key={`${intervention.ratio_key}-${intervention.step_number}-${index}`}
-            stepNumber={index + 1}
-            ratioName={intervention.ratio_name}
-            stepTitle={intervention.step_title}
-            description={intervention.step_description}
-            timeframe={intervention.timeframe}
-            effort={intervention.effort}
-            impact={intervention.impact}
-            healthTier={intervention.health_tier}
-            accentColor={accentColor}
-          />
-        ))}
-      </View>
+      {critical.length > 0 && (
+        <View>
+          <SectionHeader title="Wave 1 — Act Now" color={C.red} />
+          <Text style={S.waveDesc}>
+            These steps address ratios in critical territory. Begin within the next two weeks —
+            each carries outsized impact on business survival and stability.
+          </Text>
+          {renderCards(critical)}
+        </View>
+      )}
+
+      {atRisk.length > 0 && (
+        <View>
+          <SectionHeader title="Wave 2 — Stabilise" color={C.amber} />
+          <Text style={S.waveDesc}>
+            These steps target ratios under pressure. Schedule them over the next 30–60 days, once
+            Wave 1 is underway.
+          </Text>
+          {renderCards(atRisk)}
+        </View>
+      )}
+
+      {rest.length > 0 && (
+        <View>
+          <SectionHeader title="Wave 3 — Strengthen" color={C.green} />
+          <Text style={S.waveDesc}>
+            Ratios here are healthy — these steps protect and extend the advantage.
+          </Text>
+          {renderCards(rest)}
+        </View>
+      )}
     </PDFDocument>
   );
 }

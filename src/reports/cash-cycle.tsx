@@ -1,17 +1,24 @@
 /**
  * CashCyclePDF — Cash Flow Cycle Report.
- * Page 1: Cycle diagram + 4 metric boxes. Page 2: Cash trapped callout + ratio rows.
+ * Page 1: exec summary + day-axis timeline diagram of the conversion cycle.
+ * Page 2: cash-trapped callout + working-capital ratio rows.
  *
  * SSR safety: Only import via dynamic import() — never at top level of an
  * SSR-rendered module.
  */
 
+import { Fragment } from "react";
 import { View, Text, StyleSheet } from "@react-pdf/renderer";
 import type { AccountantProfile } from "@/contexts/accountant-profile";
 import { PDFDocument, type SmeData } from "@/components/pdf/pdf-document";
 import { scoreTier } from "@/lib/ratios";
 import { MetricBox } from "@/components/pdf/metric-box";
 import { RatioRow } from "@/components/pdf/ratio-row";
+import { ReportTitle } from "@/components/pdf/report-title";
+import { SectionHeader } from "@/components/pdf/section-header";
+import { ExecSummary, type HeadlineFigure } from "@/components/pdf/exec-summary";
+import { C, fmtRand, fmtRandCompact, fmtPct, resolveTheme } from "@/components/pdf/theme";
+import { cashCycleNarrative } from "./narrative";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -46,351 +53,148 @@ export type CashCyclePDFProps = {
   smeData: SmeData;
   workingCapitalData: WorkingCapitalData;
   accountantProfile: AccountantProfile;
+  isDemo?: boolean;
 };
 
 // ── Helpers ────────────────────────────────────────────────────────────────
-
-function formatRand(value: number): string {
-  const abs = Math.abs(Math.round(value));
-  return (value < 0 ? "-R " : "R ") + abs.toLocaleString("en-ZA");
-}
 
 /** Fallback score if health_scores not provided */
 function daysScore(days: number, goodBelow: number): number {
   if (days <= goodBelow) return 85;
   if (days <= goodBelow * 1.5) return 60;
-  return 35;
+  if (days <= goodBelow * 2) return 40;
+  return 20;
 }
 
-function cccColor(days: number): string {
-  if (days <= 45) return "#10b981";
-  if (days <= 75) return "#f59e0b";
-  return "#ef4444";
-}
+// ── Timeline diagram ───────────────────────────────────────────────────────
 
-// ── Cash Cycle Diagram ─────────────────────────────────────────────────────
+const TL_W = 515;
+const TL_ROW_H = 26;
 
-const diagramStyles = StyleSheet.create({
-  wrapper: { marginBottom: 16 },
-  flowRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  endBox: {
-    width: 52,
-    borderRadius: 5,
-    padding: 7,
-    alignItems: "center",
+const tl = StyleSheet.create({
+  wrap: { marginBottom: 6 },
+  axis: { position: "relative", height: 16 },
+  axisLine: { position: "absolute", left: 0, right: 0, top: 10, height: 0.75, backgroundColor: C.line },
+  axisTick: { position: "absolute", top: 7, width: 0.75, height: 7, backgroundColor: C.line },
+  axisLabel: { position: "absolute", top: 0, fontSize: 5.5, fontFamily: "Helvetica", color: C.faint },
+  row: { position: "relative", height: TL_ROW_H },
+  segBar: {
+    position: "absolute",
+    top: 5,
+    height: 12,
+    borderRadius: 3,
     justifyContent: "center",
   },
-  endLabel: {
-    fontSize: 6.5,
-    fontFamily: "Helvetica-Bold",
-    textAlign: "center",
-  },
-  arrow: {
-    width: 10,
-    fontSize: 11,
-    textAlign: "center",
-    color: "#9ca3af",
-    fontFamily: "Helvetica",
-  },
-  stageBox: {
-    borderRadius: 5,
-    padding: 6,
-    alignItems: "center",
+  segLabelIn: { fontSize: 6, fontFamily: "Helvetica-Bold", color: C.white, paddingLeft: 6 },
+  segLabelOut: { position: "absolute", top: 8, fontSize: 6, fontFamily: "Helvetica-Bold", color: C.body },
+  rowName: { position: "absolute", top: 19, fontSize: 5.5, fontFamily: "Helvetica", color: C.faint },
+  gapLine: { position: "absolute", top: 0, bottom: 0, width: 0.6, backgroundColor: C.faint, opacity: 0.5 },
+  cccRow: { position: "relative", height: 34, marginTop: 4 },
+  cccBar: {
+    position: "absolute",
+    top: 6,
+    height: 16,
+    borderRadius: 3,
     justifyContent: "center",
-  },
-  stageLabel: {
-    fontSize: 6,
-    fontFamily: "Helvetica-Bold",
-    color: "#ffffff",
-    letterSpacing: 0.3,
-    marginBottom: 3,
-    textTransform: "uppercase",
-  },
-  stageDays: {
-    fontSize: 14,
-    fontFamily: "Helvetica-Bold",
-    color: "#ffffff",
-  },
-  creditorRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    marginBottom: 10,
-  },
-  creditorBox: {
-    borderRadius: 5,
-    backgroundColor: "#fef3c7",
-    padding: 7,
     alignItems: "center",
   },
-  creditorLabel: {
-    fontSize: 6,
-    fontFamily: "Helvetica-Bold",
-    color: "#92400e",
-    textTransform: "uppercase",
-    letterSpacing: 0.3,
-    marginBottom: 2,
-  },
-  creditorDays: {
-    fontSize: 13,
-    fontFamily: "Helvetica-Bold",
-    color: "#92400e",
-  },
-  creditorSub: {
-    fontSize: 6,
-    color: "#b45309",
-    fontFamily: "Helvetica",
-    marginTop: 1,
-  },
-  offsetNote: {
-    flex: 1,
-    paddingLeft: 12,
-    paddingTop: 8,
-  },
-  offsetText: {
-    fontSize: 8,
-    color: "#6b7280",
-    fontFamily: "Helvetica",
-    lineHeight: 1.5,
-  },
-  cccBox: {
-    borderRadius: 7,
-    padding: 14,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginTop: 4,
-  },
-  cccLeft: {},
-  cccTitle: {
-    fontSize: 9,
-    fontFamily: "Helvetica-Bold",
-    color: "#ffffff",
-    marginBottom: 4,
-  },
-  cccFormula: {
-    fontSize: 7,
-    color: "#ffffff",
-    opacity: 0.8,
-    fontFamily: "Helvetica",
-  },
-  cccDays: {
-    fontSize: 32,
-    fontFamily: "Helvetica-Bold",
-    color: "#ffffff",
-  },
-  ccsDayLabel: {
-    fontSize: 9,
-    color: "#ffffff",
-    opacity: 0.8,
-    fontFamily: "Helvetica",
-    marginTop: 2,
-    textAlign: "right",
-  },
+  cccText: { fontSize: 7, fontFamily: "Helvetica-Bold", color: C.white },
+  cccCaption: { position: "absolute", top: 25, fontSize: 5.5, fontFamily: "Helvetica-Bold", color: C.redDeep },
+  legendNote: { fontSize: 7, fontFamily: "Helvetica", color: C.muted, lineHeight: 1.5, marginTop: 8 },
 });
 
-function CashCycleDiagram({
-  inventoryDays,
-  wipDays,
-  debtorDays,
-  creditorDays,
-  ccc,
-  accentColor,
-}: {
-  inventoryDays: number;
-  wipDays: number;
-  debtorDays: number;
-  creditorDays: number;
-  ccc: number;
-  accentColor: string;
-}) {
-  // Stage widths proportional to days (within available width)
-  const PURCHASE_W = 52;
-  const CASH_W = 52;
-  const ARROW_W = 10;
-  const ARROW_COUNT = 4;
-  const AVAILABLE = 515 - PURCHASE_W - CASH_W - ARROW_W * ARROW_COUNT;
-  const totalCycleDays = inventoryDays + wipDays + debtorDays || 1;
-  const invW = (inventoryDays / totalCycleDays) * AVAILABLE;
-  const wipW = (wipDays / totalCycleDays) * AVAILABLE;
-  const debW = (debtorDays / totalCycleDays) * AVAILABLE;
+function CycleTimeline({ d, accent }: { d: WorkingCapitalData; accent: string }) {
+  const opDays = d.inventory_days + d.wip_days + d.debtor_days; // operating cycle length
+  const total = Math.max(opDays, d.creditor_days, 1);
+  const x = (days: number) => (days / total) * TL_W;
 
-  // Creditor box width matches inventory section
-  const credW = Math.min(invW + wipW + ARROW_W, AVAILABLE * 0.7);
-  const cccBg = cccColor(ccc);
+  // Axis ticks every ~15/30 days depending on scale
+  const step = total > 120 ? 30 : 15;
+  const ticks: number[] = [];
+  for (let t = 0; t <= total; t += step) ticks.push(t);
+
+  const ccc = Math.max(0, d.cash_conversion_cycle);
+  const segs = [
+    { name: "Inventory", days: d.inventory_days, start: 0, color: accent },
+    { name: "Work in Progress", days: d.wip_days, start: d.inventory_days, color: C.blue },
+    { name: "Debtors", days: d.debtor_days, start: d.inventory_days + d.wip_days, color: C.blueLight },
+  ].filter((s) => s.days > 0);
 
   return (
-    <View style={diagramStyles.wrapper}>
-      {/* Main flow */}
-      <View style={diagramStyles.flowRow}>
-        {/* PURCHASE */}
-        <View
-          style={[
-            diagramStyles.endBox,
-            { backgroundColor: "#f3f4f6", width: PURCHASE_W },
-          ]}
-        >
-          <Text style={[diagramStyles.endLabel, { color: "#374151" }]}>
-            PURCHASE
-          </Text>
-        </View>
-
-        <Text style={diagramStyles.arrow}>→</Text>
-
-        {/* Inventory */}
-        <View
-          style={[
-            diagramStyles.stageBox,
-            { width: invW, backgroundColor: accentColor },
-          ]}
-        >
-          <Text style={diagramStyles.stageLabel}>Inventory</Text>
-          <Text style={diagramStyles.stageDays}>{inventoryDays}d</Text>
-        </View>
-
-        <Text style={diagramStyles.arrow}>→</Text>
-
-        {/* WIP */}
-        <View
-          style={[
-            diagramStyles.stageBox,
-            { width: wipW, backgroundColor: accentColor, opacity: 0.85 },
-          ]}
-        >
-          <Text style={diagramStyles.stageLabel}>WIP</Text>
-          <Text style={diagramStyles.stageDays}>{wipDays}d</Text>
-        </View>
-
-        <Text style={diagramStyles.arrow}>→</Text>
-
-        {/* Debtors */}
-        <View
-          style={[
-            diagramStyles.stageBox,
-            { width: debW, backgroundColor: "#f59e0b" },
-          ]}
-        >
-          <Text style={diagramStyles.stageLabel}>Debtors</Text>
-          <Text style={diagramStyles.stageDays}>{debtorDays}d</Text>
-        </View>
-
-        <Text style={diagramStyles.arrow}>→</Text>
-
-        {/* CASH IN */}
-        <View
-          style={[
-            diagramStyles.endBox,
-            { backgroundColor: "#d1fae5", width: CASH_W },
-          ]}
-        >
-          <Text style={[diagramStyles.endLabel, { color: "#065f46" }]}>
-            CASH{"\n"}IN
-          </Text>
-        </View>
+    <View style={tl.wrap}>
+      {/* Day axis */}
+      <View style={tl.axis}>
+        <View style={tl.axisLine} />
+        {ticks.map((t) => (
+          <Fragment key={t}>
+            <View style={[tl.axisTick, { left: x(t) }]} />
+            <Text style={[tl.axisLabel, { left: Math.max(0, x(t) - 8), width: 24 }]}>{t}d</Text>
+          </Fragment>
+        ))}
       </View>
 
-      {/* Creditor offset row */}
-      <View
-        style={[
-          diagramStyles.creditorRow,
-          { paddingLeft: PURCHASE_W + ARROW_W },
-        ]}
-      >
-        <View style={[diagramStyles.creditorBox, { width: credW }]}>
-          <Text style={diagramStyles.creditorLabel}>Credit Period</Text>
-          <Text style={diagramStyles.creditorDays}>{creditorDays}d</Text>
-          <Text style={diagramStyles.creditorSub}>offset ↓</Text>
-        </View>
-        <View style={diagramStyles.offsetNote}>
-          <Text style={diagramStyles.offsetText}>
-            Your creditor terms give you {creditorDays} days before payment is
-            due — this offsets your cash cycle by {creditorDays} days.
-          </Text>
-        </View>
+      {/* Operating cycle segments */}
+      <View style={tl.row}>
+        {segs.map((s) => {
+          const w = Math.max(3, x(s.days));
+          const wide = w > 58;
+          return (
+            <Fragment key={s.name}>
+              <View style={[tl.segBar, { left: x(s.start), width: w, backgroundColor: s.color }]}>
+                {wide ? <Text style={tl.segLabelIn}>{`${s.name} · ${Math.round(s.days)}d`}</Text> : null}
+              </View>
+              {!wide ? (
+                <Text style={[tl.segLabelOut, { left: x(s.start) + w + 3 }]}>{`${Math.round(s.days)}d`}</Text>
+              ) : null}
+              <Text style={[tl.rowName, { left: x(s.start) }]}>{wide ? "" : s.name}</Text>
+            </Fragment>
+          );
+        })}
       </View>
 
-      {/* CCC total */}
-      <View style={[diagramStyles.cccBox, { backgroundColor: cccBg }]}>
-        <View style={diagramStyles.cccLeft}>
-          <Text style={diagramStyles.cccTitle}>Cash Conversion Cycle</Text>
-          <Text style={diagramStyles.cccFormula}>
-            {inventoryDays}d inventory + {wipDays}d WIP + {debtorDays}d
-            debtors − {creditorDays}d creditors
+      {/* Creditor days (money you hold) */}
+      <View style={tl.row}>
+        <View style={[tl.segBar, { left: 0, width: Math.max(3, x(d.creditor_days)), backgroundColor: C.green }]}>
+          {x(d.creditor_days) > 80 ? (
+            <Text style={tl.segLabelIn}>{`Creditors pay-out delay · ${Math.round(d.creditor_days)}d`}</Text>
+          ) : null}
+        </View>
+        {x(d.creditor_days) <= 80 ? (
+          <Text style={[tl.segLabelOut, { left: x(d.creditor_days) + 3 }]}>
+            {`Creditors · ${Math.round(d.creditor_days)}d`}
           </Text>
-        </View>
-        <View style={{ alignItems: "flex-end" }}>
-          <Text style={diagramStyles.cccDays}>{ccc}</Text>
-          <Text style={diagramStyles.ccsDayLabel}>days</Text>
-        </View>
+        ) : null}
       </View>
+
+      {/* Funding gap = CCC */}
+      <View style={tl.cccRow}>
+        <View style={[tl.gapLine, { left: x(d.creditor_days) }]} />
+        <View style={[tl.gapLine, { left: x(opDays) }]} />
+        <View
+          style={[
+            tl.cccBar,
+            {
+              left: x(Math.min(d.creditor_days, opDays)),
+              width: Math.max(4, x(ccc)),
+              backgroundColor: ccc > 0 ? C.red : C.green,
+            },
+          ]}
+        >
+          <Text style={tl.cccText}>{`Funding gap · ${Math.round(d.cash_conversion_cycle)} days`}</Text>
+        </View>
+        <Text style={[tl.cccCaption, { left: x(Math.min(d.creditor_days, opDays)) }]}>
+          Cash Conversion Cycle — days the business must fund itself
+        </Text>
+      </View>
+
+      <Text style={tl.legendNote}>
+        Cash leaves the business on day 0 (stock purchased) and only returns once debtors pay on
+        day {Math.round(opDays)}. Suppliers are paid on day {Math.round(d.creditor_days)} — the red
+        band is the gap the business must finance from its own cash or borrowings.
+      </Text>
     </View>
   );
 }
-
-// ── Cash trapped callout ───────────────────────────────────────────────────
-
-const page2Styles = StyleSheet.create({
-  trappedBox: {
-    borderRadius: 8,
-    padding: 18,
-    marginBottom: 20,
-  },
-  trappedTitle: {
-    fontSize: 9,
-    fontFamily: "Helvetica-Bold",
-    color: "#ffffff",
-    opacity: 0.85,
-    marginBottom: 6,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  trappedAmount: {
-    fontSize: 28,
-    fontFamily: "Helvetica-Bold",
-    color: "#ffffff",
-    marginBottom: 8,
-  },
-  trappedSub: {
-    fontSize: 8.5,
-    color: "#ffffff",
-    opacity: 0.8,
-    lineHeight: 1.5,
-    fontFamily: "Helvetica",
-  },
-  sectionTitle: {
-    fontSize: 10,
-    fontFamily: "Helvetica-Bold",
-    color: "#374151",
-    marginBottom: 8,
-    marginTop: 4,
-    paddingBottom: 5,
-    borderBottomWidth: 1,
-    borderBottomColor: "#e5e7eb",
-  },
-});
-
-// ── Styles ─────────────────────────────────────────────────────────────────
-
-const styles = StyleSheet.create({
-  titleSection: { marginBottom: 16 },
-  title: {
-    fontSize: 20,
-    fontFamily: "Helvetica-Bold",
-    color: "#111827",
-    marginBottom: 4,
-  },
-  subtitle: {
-    fontSize: 9.5,
-    color: "#6b7280",
-    fontFamily: "Helvetica",
-    marginBottom: 16,
-  },
-  metricsGrid: { gap: 10, marginTop: 16 },
-  metricsRow: { flexDirection: "row", gap: 10 },
-});
 
 // ── Main component ─────────────────────────────────────────────────────────
 
@@ -398,195 +202,161 @@ export function CashCyclePDF({
   smeData,
   workingCapitalData: d,
   accountantProfile,
+  isDemo,
 }: CashCyclePDFProps) {
-  const accentColor = accountantProfile.accentColor || "#0f3460";
+  const theme = resolveTheme(accountantProfile);
   const hs = d.health_scores ?? {};
   const dailyRevenue = d.annual_revenue / 365;
 
-  // Derive health scores with fallbacks
-  const debtorScore = hs.debtor_days ?? daysScore(d.debtor_days, 30);
-  const invScore = hs.inventory_days ?? daysScore(d.inventory_days, 30);
-  const wipScore = hs.wip_days ?? daysScore(d.wip_days, 14);
-  const credScore = Math.min(
-    100,
-    hs.creditor_days ?? (d.creditor_days >= 30 ? 80 : 50),
-  );
-  const wcDaysScore = hs.working_capital_days ?? daysScore(d.working_capital_days, 45);
-  const wcFundScore =
-    hs.working_capital_funding ??
-    (d.working_capital_funding < 0.2
-      ? 80
-      : d.working_capital_funding < 0.35
-        ? 55
-        : 30);
-  const wcUtilScore =
-    hs.working_capital_utilization ??
-    (d.working_capital_utilization < 0.5
-      ? 80
-      : d.working_capital_utilization < 0.7
-        ? 60
-        : 35);
+  const cccDelta = d.ccc_prior !== undefined ? d.cash_conversion_cycle - d.ccc_prior : undefined;
 
-  const ccc = d.cash_conversion_cycle;
-  const cccChange =
-    d.ccc_prior !== undefined ? d.ccc_prior - ccc : undefined; // positive = improved
+  const figures: HeadlineFigure[] = [
+    {
+      label: "Cash Conversion Cycle",
+      value: `${Math.round(d.cash_conversion_cycle)} d`,
+      direction: cccDelta === undefined ? undefined : cccDelta < 0 ? "down" : cccDelta > 0 ? "up" : "flat",
+      good: cccDelta === undefined ? d.cash_conversion_cycle <= 60 : cccDelta <= 0,
+      note: cccDelta !== undefined ? `${cccDelta > 0 ? "+" : ""}${Math.round(cccDelta)}d vs prior` : undefined,
+    },
+    {
+      label: "Cash Trapped",
+      value: fmtRandCompact(d.cash_trapped_rands),
+      good: false,
+      note: "locked in working capital",
+    },
+    {
+      label: "Debtor Days",
+      value: `${Math.round(d.debtor_days)} d`,
+      direction: d.debtor_days_prior === undefined ? undefined : d.debtor_days < d.debtor_days_prior ? "down" : "up",
+      good: d.debtor_days_prior === undefined ? d.debtor_days <= 45 : d.debtor_days <= d.debtor_days_prior,
+    },
+    {
+      label: "1-Day Improvement",
+      value: fmtRandCompact(dailyRevenue),
+      good: true,
+      note: "cash released per day saved",
+    },
+  ];
 
-  const debtorChange =
-    d.debtor_days_prior !== undefined
-      ? d.debtor_days_prior - d.debtor_days
-      : undefined;
-  const invChange =
-    d.inventory_days_prior !== undefined
-      ? d.inventory_days_prior - d.inventory_days
-      : undefined;
-  const credChange =
-    d.creditor_days_prior !== undefined
-      ? d.creditor_days - d.creditor_days_prior
-      : undefined;
+  const narrative = cashCycleNarrative({
+    ccc: Math.round(d.cash_conversion_cycle),
+    cccPrior: d.ccc_prior !== undefined ? Math.round(d.ccc_prior) : undefined,
+    cashTrapped: d.cash_trapped_rands,
+    dailyRevenue,
+  });
 
   const ratioRows = [
-    {
-      key: "debtorDays",
-      name: "Debtor Days",
-      value: `${d.debtor_days} d`,
-      score: debtorScore,
-      prior: debtorScore + (debtorChange ?? 0),
-    },
-    {
-      key: "inventoryDays",
-      name: "Inventory Days",
-      value: `${d.inventory_days} d`,
-      score: invScore,
-      prior: invScore + (invChange ?? 0),
-    },
-    {
-      key: "wipDays",
-      name: "WIP Days",
-      value: `${d.wip_days} d`,
-      score: wipScore,
-      prior: wipScore,
-    },
-    {
-      key: "creditorDays",
-      name: "Creditor Days",
-      value: `${d.creditor_days} d`,
-      score: credScore,
-      prior: credScore - (credChange ?? 0),
-    },
-    {
-      key: "workingCapitalDays",
-      name: "Working Capital Days",
-      value: `${d.working_capital_days} d`,
-      score: wcDaysScore,
-      prior: wcDaysScore + 5,
-    },
-    {
-      key: "workingCapitalFunding",
-      name: "WC Funding Ratio",
-      value: `${(d.working_capital_funding * 100).toFixed(1)}%`,
-      score: wcFundScore,
-      prior: wcFundScore - 5,
-    },
-    {
-      key: "workingCapitalUtilization",
-      name: "WC Utilization",
-      value: `${(d.working_capital_utilization * 100).toFixed(1)}%`,
-      score: wcUtilScore,
-      prior: wcUtilScore + 3,
-    },
+    { name: "Debtor Days", value: `${Math.round(d.debtor_days)} d`, score: hs.debtor_days ?? daysScore(d.debtor_days, 40) },
+    { name: "Inventory Days", value: `${Math.round(d.inventory_days)} d`, score: hs.inventory_days ?? daysScore(d.inventory_days, 45) },
+    ...(d.wip_days > 0
+      ? [{ name: "WIP Days", value: `${Math.round(d.wip_days)} d`, score: hs.wip_days ?? daysScore(d.wip_days, 15) }]
+      : []),
+    { name: "Creditor Days", value: `${Math.round(d.creditor_days)} d`, score: hs.creditor_days ?? 70 },
+    { name: "Working Capital Days", value: `${Math.round(d.working_capital_days)} d`, score: hs.working_capital_days ?? daysScore(d.working_capital_days, 60) },
+    { name: "WC Funding Intensity", value: fmtPct(d.working_capital_funding), score: hs.working_capital_funding ?? 50 },
+    { name: "WC Utilization", value: fmtPct(d.working_capital_utilization), score: hs.working_capital_utilization ?? 60 },
   ];
 
   return (
     <PDFDocument
-      title={`Cash Flow Cycle Report — ${smeData.name}`}
+      title={`Cash Flow Cycle — ${smeData.name}`}
       subject="Cash Flow Cycle Report"
       smeData={smeData}
       accountantProfile={accountantProfile}
+      isDemo={isDemo}
     >
-      {/* ── PAGE 1: Diagram + metrics ── */}
-      <View style={styles.titleSection}>
-        <Text style={styles.title}>Cash Flow Cycle Report</Text>
-        <Text style={styles.subtitle}>
-          Understanding where your cash is trapped
-        </Text>
-      </View>
-
-      <CashCycleDiagram
-        inventoryDays={d.inventory_days}
-        wipDays={d.wip_days}
-        debtorDays={d.debtor_days}
-        creditorDays={d.creditor_days}
-        ccc={ccc}
-        accentColor={accentColor}
+      {/* ── PAGE 1 ── */}
+      <ReportTitle
+        kicker="Advisory Report 04"
+        title="Cash Flow Cycle"
+        subtitle="How long each rand is trapped between paying suppliers and collecting from customers"
+        isDemo={isDemo}
       />
 
-      {/* 2×2 metric grid */}
-      <View style={styles.metricsGrid}>
-        <View style={styles.metricsRow}>
-          <MetricBox
-            label="Debtor Days"
-            value={`${d.debtor_days} d`}
-            change={debtorChange}
-            accentColor="#f59e0b"
-          />
-          <MetricBox
-            label="Inventory Days"
-            value={`${d.inventory_days} d`}
-            change={invChange}
-            accentColor={accentColor}
-          />
-        </View>
-        <View style={styles.metricsRow}>
-          <MetricBox
-            label="Creditor Days"
-            value={`${d.creditor_days} d`}
-            change={credChange}
-            accentColor="#10b981"
-          />
-          <MetricBox
-            label="Cash Conversion Cycle"
-            value={`${ccc} days`}
-            change={cccChange}
-            accentColor={cccColor(ccc)}
-          />
-        </View>
+      <ExecSummary figures={figures} narrative={narrative} />
+
+      <SectionHeader title="Conversion Cycle Timeline" color={theme.accent} />
+      <CycleTimeline d={d} accent={theme.accent} />
+
+      <View style={{ flexDirection: "row", gap: 10, marginTop: 8 }}>
+        <MetricBox
+          label="Inventory Days"
+          value={`${Math.round(d.inventory_days)} d`}
+          change={
+            d.inventory_days_prior !== undefined && d.inventory_days_prior !== 0
+              ? ((d.inventory_days - d.inventory_days_prior) / d.inventory_days_prior) * 100
+              : undefined
+          }
+          lowerIsBetter
+          accentColor={theme.accent}
+        />
+        <MetricBox
+          label="Debtor Days"
+          value={`${Math.round(d.debtor_days)} d`}
+          change={
+            d.debtor_days_prior !== undefined && d.debtor_days_prior !== 0
+              ? ((d.debtor_days - d.debtor_days_prior) / d.debtor_days_prior) * 100
+              : undefined
+          }
+          lowerIsBetter
+          accentColor={C.blue}
+        />
+        <MetricBox
+          label="Creditor Days"
+          value={`${Math.round(d.creditor_days)} d`}
+          change={
+            d.creditor_days_prior !== undefined && d.creditor_days_prior !== 0
+              ? ((d.creditor_days - d.creditor_days_prior) / d.creditor_days_prior) * 100
+              : undefined
+          }
+          accentColor={C.green}
+        />
+        <MetricBox
+          label="Cycle"
+          value={`${Math.round(d.cash_conversion_cycle)} d`}
+          change={
+            d.ccc_prior !== undefined && d.ccc_prior !== 0
+              ? ((d.cash_conversion_cycle - d.ccc_prior) / d.ccc_prior) * 100
+              : undefined
+          }
+          lowerIsBetter
+          accentColor={d.cash_conversion_cycle > 60 ? C.red : C.green}
+        />
       </View>
 
-      {/* ── PAGE 2: Cash trapped + ratio rows ── */}
+      {/* ── PAGE 2 ── */}
       <View break>
-        {/* Cash trapped callout */}
+        <SectionHeader title="Cash Trapped in the Cycle" color={theme.accent} />
         <View
-          style={[
-            page2Styles.trappedBox,
-            { backgroundColor: cccColor(ccc) },
-          ]}
+          style={{
+            borderRadius: 6,
+            borderWidth: 0.75,
+            borderColor: C.line,
+            borderLeftWidth: 2.5,
+            borderLeftColor: C.red,
+            backgroundColor: C.soft,
+            padding: 14,
+            marginBottom: 6,
+          }}
         >
-          <Text style={page2Styles.trappedTitle}>
-            Cash Trapped in Working Capital
+          <Text style={{ fontSize: 16, fontFamily: "Helvetica-Bold", color: C.redDeep, marginBottom: 4 }}>
+            {fmtRand(d.cash_trapped_rands)}
           </Text>
-          <Text style={page2Styles.trappedAmount}>
-            {formatRand(d.cash_trapped_rands)}
-          </Text>
-          <Text style={page2Styles.trappedSub}>
-            At your current annual revenue of {formatRand(d.annual_revenue)},
-            every 1-day improvement in your cash cycle releases{" "}
-            {formatRand(dailyRevenue)} in cash. Reducing your cash conversion
-            cycle by just 5 days would free up {formatRand(dailyRevenue * 5)}.
+          <Text style={{ fontSize: 8.5, fontFamily: "Helvetica", color: C.body, lineHeight: 1.55 }}>
+            is currently locked up funding the {Math.round(d.cash_conversion_cycle)}-day gap between
+            paying suppliers and collecting from customers. Shortening the cycle by just one day
+            releases approximately {fmtRand(dailyRevenue)} of cash back into the business.
           </Text>
         </View>
 
-        {/* Ratio rows */}
-        <Text style={page2Styles.sectionTitle}>
-          Working Capital Ratio Analysis
-        </Text>
+        <SectionHeader title="Working Capital Ratio Analysis" color={theme.accent} />
         {ratioRows.map((r, i) => (
           <RatioRow
-            key={r.key}
+            key={r.name}
             ratioName={r.name}
             formattedValue={r.value}
             healthScore={r.score}
             healthTier={scoreTier(r.score)}
-            priorScore={r.prior}
             isAlternate={i % 2 === 1}
           />
         ))}

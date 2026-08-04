@@ -1,17 +1,23 @@
 /**
- * LaborProductivityPDF — Labour Productivity Report.
- * Page 1: Metrics + revenue-per-employee trend + GP-per-labor visual.
- * Page 2: Growth vs inflation comparison + 3 ratio rows.
+ * LaborProductivityPDF — Labor Productivity Report.
+ * Page 1: exec summary + headline metrics + revenue vs labor cost trend.
+ * Page 2: period table + ratio rows.
  *
  * SSR safety: Only import via dynamic import().
  */
 
+import { Fragment } from "react";
 import { View, Text, StyleSheet } from "@react-pdf/renderer";
 import type { AccountantProfile } from "@/contexts/accountant-profile";
 import { PDFDocument, type SmeData } from "@/components/pdf/pdf-document";
 import { scoreTier } from "@/lib/ratios";
 import { MetricBox } from "@/components/pdf/metric-box";
 import { RatioRow } from "@/components/pdf/ratio-row";
+import { ReportTitle } from "@/components/pdf/report-title";
+import { SectionHeader } from "@/components/pdf/section-header";
+import { ExecSummary, type HeadlineFigure } from "@/components/pdf/exec-summary";
+import { C, fmtRand, fmtRandCompact, fmtPct, resolveTheme } from "@/components/pdf/theme";
+import { laborNarrative } from "./narrative";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -44,154 +50,84 @@ export type LaborProductivityPDFProps = {
   smeData: SmeData;
   data: LaborProductivityData;
   accountantProfile: AccountantProfile;
+  isDemo?: boolean;
 };
 
-// ── Helpers ────────────────────────────────────────────────────────────────
+// ── Trend chart (grouped bars: revenue vs labor cost) ─────────────────────
 
-function formatRand(v: number): string {
-  const abs = Math.abs(Math.round(v));
-  return (v < 0 ? "-R " : "R ") + abs.toLocaleString("en-ZA");
-}
+const CH_W = 515;
+const CH_H = 110;
+const CH_LABEL_H = 22;
 
-function pctStr(v: number) { return `${(v * 100).toFixed(1)}%`; }
-// ── Styles ─────────────────────────────────────────────────────────────────
-
-const S = StyleSheet.create({
-  title: { fontSize: 20, fontFamily: "Helvetica-Bold", color: "#111827", marginBottom: 4 },
-  subtitle: { fontSize: 9, color: "#6b7280", fontFamily: "Helvetica", marginBottom: 16 },
-  sectionTitle: { fontSize: 9, fontFamily: "Helvetica-Bold", color: "#374151", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 10, paddingBottom: 4, borderBottomWidth: 1, borderBottomColor: "#e5e7eb" },
-  metricsRow: { flexDirection: "row", gap: 10, marginBottom: 18 },
-  // Bar chart
-  chartContainer: { position: "relative", backgroundColor: "#f9fafb", borderRadius: 6 },
-  bar: { position: "absolute", borderRadius: 3 },
-  barLabel: { position: "absolute", fontSize: 6.5, textAlign: "center", fontFamily: "Helvetica", color: "#6b7280" },
-  barValueLabel: { position: "absolute", fontSize: 6, textAlign: "center", fontFamily: "Helvetica", color: "#374151" },
-  // GP per labor
-  gpRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 6 },
-  gpLabel: { width: 130, fontSize: 8, fontFamily: "Helvetica", color: "#374151" },
-  gpTrack: { flex: 1, height: 18, backgroundColor: "#f3f4f6", borderRadius: 4, overflow: "hidden" },
-  gpFill: { height: 18, borderRadius: 4 },
-  gpValue: { width: 50, fontSize: 8.5, fontFamily: "Helvetica-Bold", color: "#111827", textAlign: "right" },
-  // Growth comparison
-  growthRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 8 },
-  growthLabel: { width: 140, fontSize: 8.5, fontFamily: "Helvetica", color: "#374151" },
-  growthTrack: { flex: 1, height: 20, backgroundColor: "#f3f4f6", borderRadius: 4, overflow: "hidden" },
-  growthFill: { height: 20, borderRadius: 4 },
-  growthPct: { width: 44, fontSize: 9, fontFamily: "Helvetica-Bold", textAlign: "right" },
-  // Insight box
-  insightBox: { backgroundColor: "#f9fafb", borderRadius: 6, borderWidth: 1, borderColor: "#e5e7eb", padding: 12, marginTop: 16, marginBottom: 16 },
-  insightText: { fontSize: 8, color: "#6b7280", fontFamily: "Helvetica", lineHeight: 1.5 },
-  insightHighlight: { fontSize: 9, fontFamily: "Helvetica-Bold", color: "#111827", marginBottom: 4 },
+const ch = StyleSheet.create({
+  container: { position: "relative", height: CH_H + CH_LABEL_H, marginBottom: 4 },
+  gridLine: { position: "absolute", left: 0, right: 0, height: 0.5, backgroundColor: C.hairline },
+  bar: { position: "absolute", borderTopLeftRadius: 2, borderTopRightRadius: 2 },
+  label: { position: "absolute", bottom: 3, fontSize: 6, textAlign: "center", fontFamily: "Helvetica", color: C.muted },
+  empLabel: { position: "absolute", fontSize: 5.5, textAlign: "center", fontFamily: "Helvetica-Bold", color: C.ink },
+  legend: { flexDirection: "row", gap: 16, marginTop: 4, marginBottom: 10 },
+  legendItem: { flexDirection: "row", alignItems: "center", gap: 4 },
+  legendDot: { width: 7, height: 7, borderRadius: 2 },
+  legendText: { fontSize: 6.5, color: C.muted, fontFamily: "Helvetica" },
+  empty: {
+    backgroundColor: C.soft,
+    borderRadius: 5,
+    borderWidth: 0.75,
+    borderColor: C.line,
+    padding: 16,
+    alignItems: "center",
+    marginBottom: 10,
+  },
+  emptyText: { fontSize: 8, color: C.muted, fontFamily: "Helvetica", textAlign: "center", lineHeight: 1.5 },
 });
 
-// ── Revenue per employee bar chart ─────────────────────────────────────────
+function LaborTrend({ periods, accent }: { periods: LaborPeriod[]; accent: string }) {
+  if (periods.length < 2) {
+    return (
+      <View style={ch.empty}>
+        <Text style={ch.emptyText}>
+          The revenue-vs-labor-cost trend appears once at least two periods are uploaded.
+        </Text>
+      </View>
+    );
+  }
 
-const RPE_W = 515;
-const RPE_H = 100;
-const RPE_LABEL_H = 22;
-
-function RevenuePerEmployeeChart({ periods, accentColor }: { periods: LaborPeriod[]; accentColor: string }) {
-  const rpeValues = periods.map((p) => (p.employees > 0 ? p.revenue / p.employees : 0));
-  const maxVal = Math.max(...rpeValues, 1);
+  const maxVal = Math.max(...periods.flatMap((p) => [p.revenue, p.labor_cost]), 1);
   const n = periods.length;
-  const slot = RPE_W / n;
-  const barW = slot - 12;
-  const totalH = RPE_H + RPE_LABEL_H;
+  const slot = CH_W / n;
+  const barW = (slot - 12) / 2;
 
   return (
-    <View style={{ marginBottom: 16 }}>
-      <Text style={S.sectionTitle}>Revenue per Employee (Trend)</Text>
-      <View style={[S.chartContainer, { height: totalH }]}>
+    <View>
+      <View style={ch.container}>
         {[0.25, 0.5, 0.75].map((p, i) => (
-          <View key={i} style={{ position: "absolute", left: 0, right: 0, bottom: RPE_LABEL_H + p * RPE_H, height: 0.5, backgroundColor: "#e5e7eb" }} />
+          <View key={i} style={[ch.gridLine, { bottom: CH_LABEL_H + p * CH_H }]} />
         ))}
-        {periods.map((period, i) => {
-          const rpe = rpeValues[i];
-          const barH = Math.max(4, (rpe / maxVal) * RPE_H);
+        {periods.map((p, i) => {
+          const revH = Math.max(2, (p.revenue / maxVal) * CH_H);
+          const labH = Math.max(2, (p.labor_cost / maxVal) * CH_H);
           const left = i * slot + 6;
           return (
-            <View key={i}>
-              <View style={[S.bar, { bottom: RPE_LABEL_H, left, width: barW, height: barH, backgroundColor: accentColor }]} />
-              <Text style={[S.barValueLabel, { bottom: RPE_LABEL_H + barH + 2, left, width: barW }]}>
-                {Math.round(rpe / 1000)}k
+            <Fragment key={i}>
+              <View style={[ch.bar, { left, bottom: CH_LABEL_H, width: barW, height: revH, backgroundColor: accent }]} />
+              <View style={[ch.bar, { left: left + barW + 3, bottom: CH_LABEL_H, width: barW, height: labH, backgroundColor: C.blueLight }]} />
+              <Text style={[ch.empLabel, { left: i * slot, width: slot, bottom: CH_LABEL_H + revH + 3 }]}>
+                {p.employees} staff
               </Text>
-              <Text style={[S.barLabel, { bottom: 3, left: i * slot, width: slot }]}>{period.label}</Text>
-            </View>
+              <Text style={[ch.label, { left: i * slot, width: slot }]}>{p.label}</Text>
+            </Fragment>
           );
         })}
       </View>
-    </View>
-  );
-}
-
-// ── GP per R1 of labor horizontal visual ───────────────────────────────────
-
-function GpPerLaborVisual({ gp, laborCost, accentColor }: { gp: number; laborCost: number; accentColor: string }) {
-  const gpPerRand = laborCost > 0 ? gp / laborCost : 0;
-  const clampPct = Math.max(0, Math.min(1, gpPerRand));
-  const color = gpPerRand >= 0.5 ? "#10b981" : gpPerRand >= 0.3 ? "#f59e0b" : "#ef4444";
-
-  return (
-    <View style={{ marginBottom: 16 }}>
-      <Text style={S.sectionTitle}>Gross Profit per R1 of Labour Cost</Text>
-      <View style={S.gpRow}>
-        <Text style={S.gpLabel}>GP earned per R1 of wages</Text>
-        <View style={S.gpTrack}>
-          <View style={[S.gpFill, { width: `${(clampPct * 100).toFixed(0)}%`, backgroundColor: color }]} />
+      <View style={ch.legend}>
+        <View style={ch.legendItem}>
+          <View style={[ch.legendDot, { backgroundColor: accent }]} />
+          <Text style={ch.legendText}>Revenue</Text>
         </View>
-        <Text style={[S.gpValue, { color }]}>R{gpPerRand.toFixed(2)}</Text>
-      </View>
-      <View style={S.gpRow}>
-        <Text style={S.gpLabel}>Total Gross Profit</Text>
-        <View style={S.gpTrack}>
-          <View style={[S.gpFill, { width: "100%", backgroundColor: "#e5e7eb" }]} />
+        <View style={ch.legendItem}>
+          <View style={[ch.legendDot, { backgroundColor: C.blueLight }]} />
+          <Text style={ch.legendText}>Labor cost</Text>
         </View>
-        <Text style={[S.gpValue, { color: "#374151" }]}>{formatRand(gp)}</Text>
-      </View>
-      <View style={S.gpRow}>
-        <Text style={S.gpLabel}>Total Labour Cost</Text>
-        <View style={S.gpTrack}>
-          <View style={[S.gpFill, { width: `${Math.min(100, (laborCost / gp) * 100).toFixed(0)}%`, backgroundColor: "#ef4444", opacity: 0.7 }]} />
-        </View>
-        <Text style={[S.gpValue, { color: "#374151" }]}>{formatRand(laborCost)}</Text>
-      </View>
-    </View>
-  );
-}
-
-// ── Growth vs inflation comparison ────────────────────────────────────────
-
-function GrowthComparison({ growth, inflation, accentColor }: { growth: number; inflation: number; accentColor: string }) {
-  const realGrowth = growth - inflation;
-  const maxPct = Math.max(growth, inflation, 0.02);
-  const growthColor = growth > inflation ? "#10b981" : "#ef4444";
-
-  const rows = [
-    { label: "Revenue Growth", pct: growth, color: growthColor },
-    { label: "Inflation Rate (CPI)", pct: inflation, color: "#f59e0b" },
-    { label: "Real Revenue Growth", pct: realGrowth, color: realGrowth > 0 ? "#10b981" : "#ef4444" },
-  ];
-
-  return (
-    <View style={{ marginBottom: 16 }}>
-      <Text style={S.sectionTitle}>Growth vs Inflation Comparison</Text>
-      {rows.map((row) => (
-        <View key={row.label} style={S.growthRow}>
-          <Text style={S.growthLabel}>{row.label}</Text>
-          <View style={S.growthTrack}>
-            <View style={[S.growthFill, { width: `${Math.max(2, (Math.abs(row.pct) / maxPct) * 100).toFixed(0)}%`, backgroundColor: row.color }]} />
-          </View>
-          <Text style={[S.growthPct, { color: row.color }]}>{row.pct >= 0 ? "+" : ""}{pctStr(row.pct)}</Text>
-        </View>
-      ))}
-      <View style={S.insightBox}>
-        <Text style={S.insightHighlight}>
-          {realGrowth > 0 ? `Real growth of ${pctStr(realGrowth)} — revenue is outpacing inflation.` : `Revenue growth is below inflation — real purchasing power is declining.`}
-        </Text>
-        <Text style={S.insightText}>
-          Revenue grew at {pctStr(growth)} against a CPI of {pctStr(inflation)}. Real growth of {pctStr(realGrowth)} indicates {realGrowth > 0.03 ? "solid" : realGrowth > 0 ? "marginal" : "negative"} expansion in purchasing power terms.
-          {realGrowth <= 0 ? " Consider price increases to at minimum recover inflation impact on margins." : ""}
-        </Text>
       </View>
     </View>
   );
@@ -199,39 +135,139 @@ function GrowthComparison({ growth, inflation, accentColor }: { growth: number; 
 
 // ── Main component ─────────────────────────────────────────────────────────
 
-export function LaborProductivityPDF({ smeData, data, accountantProfile }: LaborProductivityPDFProps) {
-  const accent = accountantProfile.accentColor || "#0f3460";
-  const hs = data.health_scores;
-  const rpePctChange = data.rpe_prior > 0 ? ((data.revenue_per_employee - data.rpe_prior) / data.rpe_prior) * 100 : undefined;
-  const laborPctRevenue = data.total_revenue > 0 ? (data.total_labor_cost / data.total_revenue) * 100 : 0;
+export function LaborProductivityPDF({
+  smeData,
+  data: d,
+  accountantProfile,
+  isDemo,
+}: LaborProductivityPDFProps) {
+  const theme = resolveTheme(accountantProfile);
+  const hs = d.health_scores;
+  const realGrowth = d.revenue_growth - d.inflation_rate;
+  const rpeChange = d.rpe_prior !== 0 ? ((d.revenue_per_employee - d.rpe_prior) / d.rpe_prior) * 100 : undefined;
+  const laborShare = d.total_revenue !== 0 ? d.total_labor_cost / d.total_revenue : NaN;
+
+  const figures: HeadlineFigure[] = [
+    {
+      label: "Revenue / Employee",
+      value: fmtRandCompact(d.revenue_per_employee),
+      direction: rpeChange === undefined ? undefined : rpeChange >= 0 ? "up" : "down",
+      good: rpeChange === undefined ? undefined : rpeChange >= 0,
+      note: rpeChange !== undefined ? `${rpeChange >= 0 ? "+" : ""}${rpeChange.toFixed(1)}% vs prior` : undefined,
+    },
+    {
+      label: "GP per R1 of Wages",
+      value: `R${d.gp_per_labor_rand.toFixed(2)}`,
+      good: d.gp_per_labor_rand >= 0.5,
+    },
+    {
+      label: "Headcount",
+      value: `${d.employee_count}`,
+      note: `${fmtPct(laborShare)} of revenue on wages`,
+    },
+    {
+      label: "Real Growth",
+      value: fmtPct(realGrowth),
+      direction: realGrowth >= 0 ? "up" : "down",
+      good: realGrowth >= 0,
+      note: "revenue growth less inflation",
+    },
+  ];
+
+  const narrative = laborNarrative({
+    revenuePerEmployee: d.revenue_per_employee,
+    gpPerLaborRand: d.gp_per_labor_rand,
+    realGrowth,
+  });
+
   const ratioRows = [
-    { name: "GP per R1 of Labour Cost", value: `R${data.gp_per_labor_rand.toFixed(2)}`, score: hs.gpToLabor },
-    { name: "Revenue per Employee", value: formatRand(data.revenue_per_employee), score: hs.salesPerEmployee },
-    { name: "Revenue Growth Rate", value: pctStr(data.revenue_growth), score: hs.revenueGrowth },
+    { name: "GP-to-Labor Ratio", value: `R${d.gp_per_labor_rand.toFixed(2)} / R1`, score: hs.gpToLabor },
+    { name: "Sales per Employee", value: fmtRandCompact(d.revenue_per_employee), score: hs.salesPerEmployee },
+    { name: "Real Revenue Growth", value: fmtPct(realGrowth), score: hs.revenueGrowth },
   ];
 
   return (
-    <PDFDocument title={`Labour Productivity — ${smeData.name}`} subject="Labour Productivity Report" smeData={smeData} accountantProfile={accountantProfile}>
+    <PDFDocument
+      title={`Labor Productivity — ${smeData.name}`}
+      subject="Labor Productivity Report"
+      smeData={smeData}
+      accountantProfile={accountantProfile}
+      isDemo={isDemo}
+    >
       {/* ── PAGE 1 ── */}
-      <Text style={S.title}>Labour Productivity Report</Text>
-      <Text style={S.subtitle}>Revenue per employee, GP-to-labour efficiency, and growth benchmarks</Text>
+      <ReportTitle
+        kicker="Advisory Report 08"
+        title="Labor Productivity"
+        subtitle="What each employee and each rand of wages contributes to revenue and profit"
+        isDemo={isDemo}
+      />
 
-      <View style={S.metricsRow}>
-        <MetricBox label="Revenue per Employee" value={formatRand(data.revenue_per_employee)} change={rpePctChange} accentColor={accent} />
-        <MetricBox label="Labour % of Revenue" value={`${laborPctRevenue.toFixed(1)}%`} accentColor={laborPctRevenue < 40 ? "#10b981" : laborPctRevenue < 60 ? "#f59e0b" : "#ef4444"} />
-        <MetricBox label="GP per R1 Labour" value={`R${data.gp_per_labor_rand.toFixed(2)}`} accentColor={data.gp_per_labor_rand >= 0.5 ? "#10b981" : "#f59e0b"} />
+      <ExecSummary figures={figures} narrative={narrative} />
+
+      <View style={{ flexDirection: "row", gap: 10, marginBottom: 6 }}>
+        <MetricBox label="Total Revenue" value={fmtRand(d.total_revenue)} accentColor={theme.accent} />
+        <MetricBox label="Total Labor Cost" value={fmtRand(d.total_labor_cost)} accentColor={C.blue} note={fmtPct(laborShare) + " of revenue"} />
+        <MetricBox label="Gross Profit" value={fmtRand(d.total_gp)} accentColor={C.green} />
       </View>
 
-      <RevenuePerEmployeeChart periods={data.periods} accentColor={accent} />
-      <GpPerLaborVisual gp={data.total_gp} laborCost={data.total_labor_cost} accentColor={accent} />
+      <SectionHeader title="Revenue vs Labor Cost Trend" color={theme.accent} />
+      <LaborTrend periods={d.periods} accent={theme.accent} />
 
       {/* ── PAGE 2 ── */}
       <View break>
-        <GrowthComparison growth={data.revenue_growth} inflation={data.inflation_rate} accentColor={accent} />
+        <SectionHeader title="Period Detail" color={theme.accent} />
+        <View style={{ borderRadius: 5, overflow: "hidden", borderWidth: 0.75, borderColor: C.line, marginBottom: 10 }}>
+          <View style={{ flexDirection: "row", paddingHorizontal: 12, paddingVertical: 8, backgroundColor: theme.accent }}>
+            {["Period", "Revenue", "Employees", "Labor Cost", "Rev / Employee"].map((h, i) => (
+              <Text
+                key={h}
+                style={{
+                  flex: i === 0 ? 1.4 : 1.2,
+                  fontSize: 6.5,
+                  fontFamily: "Helvetica-Bold",
+                  color: C.white,
+                  letterSpacing: 0.4,
+                  textTransform: "uppercase",
+                  textAlign: i === 0 ? "left" : "right",
+                }}
+              >
+                {h}
+              </Text>
+            ))}
+          </View>
+          {d.periods.map((p, i) => (
+            <View
+              key={i}
+              style={{
+                flexDirection: "row",
+                paddingHorizontal: 12,
+                paddingVertical: 7,
+                borderTopWidth: 0.5,
+                borderTopColor: C.hairline,
+                backgroundColor: i % 2 === 1 ? C.soft : C.white,
+              }}
+            >
+              <Text style={{ flex: 1.4, fontSize: 8, fontFamily: "Helvetica-Bold", color: C.ink }}>{p.label}</Text>
+              <Text style={{ flex: 1.2, fontSize: 8, fontFamily: "Helvetica", color: C.body, textAlign: "right" }}>{fmtRand(p.revenue)}</Text>
+              <Text style={{ flex: 1.2, fontSize: 8, fontFamily: "Helvetica", color: C.body, textAlign: "right" }}>{p.employees}</Text>
+              <Text style={{ flex: 1.2, fontSize: 8, fontFamily: "Helvetica", color: C.body, textAlign: "right" }}>{fmtRand(p.labor_cost)}</Text>
+              <Text style={{ flex: 1.2, fontSize: 8, fontFamily: "Helvetica", color: C.body, textAlign: "right" }}>
+                {p.employees > 0 ? fmtRandCompact(p.revenue / p.employees) : "—"}
+              </Text>
+            </View>
+          ))}
+        </View>
 
-        <Text style={[S.sectionTitle, { marginTop: 8 }]}>Labour Ratio Analysis</Text>
+        <SectionHeader title="Labor Ratio Analysis" color={theme.accent} />
         {ratioRows.map((r, i) => (
-          <RatioRow key={r.name} ratioName={r.name} formattedValue={r.value} healthScore={r.score} healthTier={scoreTier(r.score)} isAlternate={i % 2 === 1} />
+          <RatioRow
+            key={r.name}
+            ratioName={r.name}
+            formattedValue={r.value}
+            healthScore={r.score}
+            healthTier={scoreTier(r.score)}
+            isAlternate={i % 2 === 1}
+          />
         ))}
       </View>
     </PDFDocument>

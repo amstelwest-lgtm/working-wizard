@@ -280,7 +280,7 @@ function ReportsDemoPage() {
       import("@react-pdf/renderer"),
       import("@/reports/health-scorecard"),
     ]);
-    const blob = await pdf((HealthScorecardPDF as (p: unknown) => unknown)({ smeData: MOCK_SME_DATA, ratioResults: MOCK_RATIO_RESULTS, accountantProfile: profile }) as Parameters<typeof pdf>[0]).toBlob();
+    const blob = await pdf((HealthScorecardPDF as (p: unknown) => unknown)({ smeData: MOCK_SME_DATA, ratioResults: MOCK_RATIO_RESULTS, accountantProfile: profile, isDemo: true }) as Parameters<typeof pdf>[0]).toBlob();
     triggerDownload(blob, makeFilename("HealthScorecard"));
     toast.success("Health Scorecard downloaded.");
   });
@@ -290,7 +290,7 @@ function ReportsDemoPage() {
       import("@react-pdf/renderer"),
       import("@/reports/intervention-priority"),
     ]);
-    const blob = await pdf((InterventionPriorityPDF as (p: unknown) => unknown)({ smeData: MOCK_SME_DATA, interventions: MOCK_INTERVENTIONS, accountantProfile: profile }) as Parameters<typeof pdf>[0]).toBlob();
+    const blob = await pdf((InterventionPriorityPDF as (p: unknown) => unknown)({ smeData: MOCK_SME_DATA, interventions: MOCK_INTERVENTIONS, accountantProfile: profile, isDemo: true }) as Parameters<typeof pdf>[0]).toBlob();
     triggerDownload(blob, makeFilename("InterventionPlan"));
     toast.success("Intervention Plan downloaded.");
   });
@@ -300,7 +300,7 @@ function ReportsDemoPage() {
       import("@react-pdf/renderer"),
       import("@/reports/cash-forecast"),
     ]);
-    const blob = await pdf((CashForecastPDF as (p: unknown) => unknown)({ smeData: MOCK_SME_DATA, cashForecast: MOCK_CASH_FORECAST, scenario: "moderate", accountantProfile: profile }) as Parameters<typeof pdf>[0]).toBlob();
+    const blob = await pdf((CashForecastPDF as (p: unknown) => unknown)({ smeData: MOCK_SME_DATA, cashForecast: MOCK_CASH_FORECAST, scenario: "moderate", accountantProfile: profile, isDemo: true }) as Parameters<typeof pdf>[0]).toBlob();
     triggerDownload(blob, makeFilename("CashForecast_13Week"));
     toast.success("Cash Forecast downloaded.");
   });
@@ -310,7 +310,7 @@ function ReportsDemoPage() {
       import("@react-pdf/renderer"),
       import("@/reports/cash-cycle"),
     ]);
-    const blob = await pdf((CashCyclePDF as (p: unknown) => unknown)({ smeData: MOCK_SME_DATA, workingCapitalData: MOCK_WC_DATA, accountantProfile: profile }) as Parameters<typeof pdf>[0]).toBlob();
+    const blob = await pdf((CashCyclePDF as (p: unknown) => unknown)({ smeData: MOCK_SME_DATA, workingCapitalData: MOCK_WC_DATA, accountantProfile: profile, isDemo: true }) as Parameters<typeof pdf>[0]).toBlob();
     triggerDownload(blob, makeFilename("CashCycleReport"));
     toast.success("Cash Cycle Report downloaded.");
   });
@@ -320,7 +320,7 @@ function ReportsDemoPage() {
       import("@react-pdf/renderer"),
       import("@/reports/profitability-waterfall"),
     ]);
-    const blob = await pdf((ProfitabilityWaterfallPDF as (p: unknown) => unknown)({ smeData: MOCK_SME_DATA, profitabilityData: MOCK_PROFIT_DATA, accountantProfile: profile }) as Parameters<typeof pdf>[0]).toBlob();
+    const blob = await pdf((ProfitabilityWaterfallPDF as (p: unknown) => unknown)({ smeData: MOCK_SME_DATA, profitabilityData: MOCK_PROFIT_DATA, accountantProfile: profile, isDemo: true }) as Parameters<typeof pdf>[0]).toBlob();
     triggerDownload(blob, makeFilename("ProfitabilityWaterfall"));
     toast.success("Profitability Waterfall downloaded.");
   });

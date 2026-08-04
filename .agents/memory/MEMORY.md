@@ -3,3 +3,7 @@
 - [Context provider placement](provider-placement.md) — global contexts (Analytics, Notes) must go in __root.tsx so hooks work in any route component
 - [GitHub push playbook](github-push-playbook.md) — git push always fails (pack corruption + sandbox blocks); use GitHub API via Node.js bash script as reliable fallback
 - [Supabase project URL/key drift](supabase-project-drift.md) — vite.config.ts define maps non-VITE_-prefixed SUPABASE_URL/KEY into the client bundle; verify actual runtime value, don't trust .env or VITE_ vars alone
+- [react-pdf gotchas](react-pdf-gotchas.md) — absolute chart children need Fragment keys not View wrappers; Helvetica WinAnsi lacks ▲▼→−ō (draw glyphs as Views); theme in components/pdf/theme.ts
+- [ResizeObserver fake crash](resizeobserver-fake-crash.md) — benign loop warning flagged as artifact crash; fixed via rAF-deferring ResizeObserver shim in dev script, not error-event filtering
+- [Ask AI edge function patterns](ask-ai-edge-function.md) — service-role GRANT needed for revoked RPCs; advisory-lock rate limit; display-name→camelCase ratio mapping; benchmark pct units; monetary metrics excluded
+- [E2E tester login](testing-auth-bypass.md) — Supabase signup is gated; mint confirmed users via admin API (service key from management API); test login wf-tester-33@example.com / Test1234!

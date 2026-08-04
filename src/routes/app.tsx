@@ -4,14 +4,14 @@ import { useServerFn } from "@tanstack/react-start";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { ArrowLeft, Upload, Loader2, Sparkles, Send, Building2, Shield, Plug2 } from "lucide-react";
+import { ArrowLeft, Upload, Loader2, Building2, Shield, Plug2 } from "lucide-react";
 import { HeaderShareButton } from "@/components/share";
 import { extractFinancials } from "@/lib/extract-financials.functions";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { askYourNumbers } from "@/lib/ai.functions";
+// askYourNumbers import removed — superseded by ask-ai edge function
 import {
   Dialog,
   DialogContent,
@@ -83,7 +83,6 @@ import { Button } from "@/components/ui/button";
 import { type RatioInfo } from "@/components/holo-globe";
 import { SphereHero } from "@/components/sphere-hero";
 import { buildSpherePillars } from "@/components/sphere-hero-adapter";
-import { SimplifiedRatios } from "@/components/simplified-ratios";
 import { useViewMode } from "@/contexts/view-mode";
 
 export const Route = createFileRoute("/app")({
@@ -1256,15 +1255,10 @@ function Index() {
   }, []);
 
   const doExtract = useServerFn(extractFinancials);
-  const askAI = useServerFn(askYourNumbers);
   const uploadRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [showInputs, setShowInputs] = useState(false);
   const [highlightId, setHighlightId] = useState<string | null>(null);
-  const [aiQuestion, setAiQuestion] = useState("");
-  const [aiAnswer, setAiAnswer] = useState("");
-  const [aiLoading, setAiLoading] = useState(false);
-  const [aiOpen, setAiOpen] = useState(false);
   const [userRole, setUserRole] = useState<string | null>(null);
   const [adminOpen, setAdminOpen] = useState(false);
   const track = useTrack();
@@ -1470,6 +1464,42 @@ function Index() {
     }, 700);
     return () => clearTimeout(t);
   }, [v, weeklyInputs, actingClientId, hydratedClientId]);
+
+  // Mount the Ask AI widget wherever a mount container is present
+  // (overview tab + profitability waterfall tab). Re-runs on tab change
+  // because inactive tab content is unmounted by Radix.
+  useEffect(() => {
+    let cancelled = false;
+    const containers = ["ask-ai-overview", "ask-ai-waterfall"]
+      .map((id) => document.getElementById(id))
+      .filter((el): el is HTMLElement => !!el && !el.dataset.askAiMounted);
+    if (containers.length === 0) return;
+    if (effectiveClientId) {
+      (window as unknown as Record<string, unknown>).__askAiClientId = effectiveClientId;
+    }
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+    // @ts-ignore — plain JS module without type declarations
+    import("../lib/ask-ai.js").then((mod: { mountAskAi?: (el: HTMLElement, opts: unknown) => void }) => {
+      // A newer effect run (client switch / tab change) supersedes this one —
+      // don't mount with a stale clientId.
+      if (cancelled || typeof mod.mountAskAi !== "function") return;
+      for (const el of containers) {
+        if (effectiveClientId) el.dataset.clientId = effectiveClientId;
+        el.dataset.askAiMounted = "1";
+        mod.mountAskAi(el, {
+          endpoint: `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ask-ai`,
+          getToken: async () => {
+            const { data } = await supabase.auth.getSession();
+            return data.session?.access_token ?? null;
+          },
+        });
+      }
+    }).catch(() => {
+      // Widget not yet deployed — silent fail
+    });
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [effectiveClientId, activeTab, viewMode]);
 
   const exitImpersonation = async () => {
     if (actingClientId) {
@@ -1853,39 +1883,6 @@ function Index() {
     ratioMeta: RATIO_META,
   });
 
-  // Ask-AI handler for the overview tab
-  const handleAskAI = async () => {
-    if (!aiQuestion.trim()) return;
-    setAiLoading(true);
-    setAiAnswer("");
-    try {
-      const snapshot: Record<string, number> = {};
-      (Object.keys(valueMap) as (keyof typeof valueMap)[]).forEach((k) => {
-        const v = valueMap[k];
-        if (isFinite(v.value)) snapshot[k] = Number(v.value.toFixed(4));
-      });
-      const res = await askAI({
-        data: {
-          clientId: effectiveClientId ?? undefined,
-          question: aiQuestion.trim(),
-          context: {
-            clientName: actingClientName ?? undefined,
-            businessType: clientMeta?.business_type ?? undefined,
-            cashRunwayWeeks: clientMeta?.cash_runway_weeks ?? null,
-            ratios: snapshot,
-            financials: {},
-            alerts: [],
-          },
-        },
-      });
-      setAiAnswer(res.answer || "No answer.");
-    } catch (e: unknown) {
-      toast.error((e as Error)?.message ?? "Ask failed");
-    } finally {
-      setAiLoading(false);
-    }
-  };
-
   // Next-steps prioritisation: Pareto (impact weighting) × Eisenhower (urgency from health) × Cynefin (problem domain).
   const nextSteps = (Object.keys(RATIO_META) as RatioKey[])
     .map((k) => {
@@ -1952,7 +1949,19 @@ function Index() {
     <FinancialInputsContext.Provider value={financialInputsCtxValue}>
     <main className="min-h-screen overflow-x-hidden bg-slate-950 text-slate-100">
       <SplashScreen />
-      {!actingClientId && <WalkthroughWizard onTabChange={setActiveTab} userRole={userRole ?? undefined} />}
+      {!actingClientId && (
+        <WalkthroughWizard
+          onTabChange={(tab) => {
+            if (tab === "today-complex") {
+              setViewMode("complex");
+              setActiveTab("today");
+            } else {
+              setActiveTab(tab);
+            }
+          }}
+          userRole={userRole ?? undefined}
+        />
+      )}
       {actingClientId && (
         <div className="border-b border-amber-600/40 bg-amber-500/15 print:hidden">
           <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2 px-4 py-2 text-xs text-amber-100 sm:px-6">
@@ -2123,11 +2132,11 @@ function Index() {
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="mb-5 grid h-auto w-full grid-cols-5 gap-0 rounded-none border-0 border-b border-[#b7872a]/20 bg-transparent p-0">
             {[
-              { value: "today", label: "Overview" },
-              { value: "dashboard", label: "Ratios" },
-              { value: "cash", label: "Cash" },
-              { value: "next", label: "Moves" },
-              { value: "tasks", label: "Tasks" },
+              { value: "today", label: "Business Health" },
+              { value: "waterfall", label: "Profit" },
+              { value: "cash", label: "Cash Forecast" },
+              { value: "next", label: "Next moves" },
+              { value: "tasks", label: "Action Plan" },
             ].map((t) => (
               <TabsTrigger
                 key={t.value}
@@ -2162,11 +2171,12 @@ function Index() {
           </div>
 
           <TabsContent value="today">
+            {viewMode === "simplified" ? (
             <div className="flex flex-col items-center gap-4 pb-8">
               {/* LIVE timestamp badge row */}
               <div className="flex w-full max-w-[640px] items-center justify-between">
                 <span className="text-[9px] font-semibold uppercase tracking-[0.22em] text-slate-400 dark:text-slate-600">
-                  Business Overview
+                  Business Health
                 </span>
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/8 px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-400">
                   <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
@@ -2188,109 +2198,29 @@ function Index() {
                 />
               </div>
 
-              {/* Ask your numbers — ink-and-gold AI chat */}
-              <div className="w-full max-w-[640px]">
-                <div
-                  className="rounded-xl border border-[#b7872a]/30 bg-white dark:bg-[#0a1020]/80"
-                  style={{ fontFamily: "ui-monospace, SF Mono, Menlo, monospace" }}
-                >
-                  {!aiOpen ? (
-                    <button
-                      type="button"
-                      onClick={() => setAiOpen(true)}
-                      className="flex w-full items-center gap-3 px-4 py-3.5 text-left"
-                    >
-                      <Sparkles className="h-4 w-4 shrink-0 text-[#b8860b] dark:text-[#d4a550]" />
-                      <span className="text-[12px] tracking-[0.12em] text-slate-500 dark:text-[#f1e6c8]/60">
-                        Ask anything about your numbers…
-                      </span>
-                    </button>
-                  ) : (
-                    <div className="space-y-3 p-4">
-                      <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.28em] text-[#b8860b] dark:text-[#d4a550]/80">
-                        <Sparkles className="h-3.5 w-3.5 text-[#b8860b] dark:text-[#d4a550]" />
-                        Ask your numbers
-                      </div>
-                      <Textarea
-                        value={aiQuestion}
-                        onChange={(e) => setAiQuestion(e.target.value)}
-                        onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleAskAI(); }}
-                        placeholder="e.g. Can I afford to hire a junior next month? What's killing my margin?"
-                        className="min-h-[72px] border-[#b7872a]/30 bg-slate-50 text-slate-900 placeholder:text-slate-400 focus-visible:ring-[#d4a550]/40 text-[12px] dark:bg-[#060a18] dark:text-[#f1e6c8] dark:placeholder:text-[#f1e6c8]/30"
-                        autoFocus
-                      />
-                      <div className="flex flex-wrap gap-2">
-                        {[
-                          "Can I afford a new hire?",
-                          "What's my biggest cash leak?",
-                          "Where am I weakest vs industry?",
-                        ].map((q) => (
-                          <button
-                            key={q}
-                            type="button"
-                            onClick={() => setAiQuestion(q)}
-                            className="rounded-full border border-[#b7872a]/30 px-3 py-1 text-[10px] tracking-[0.1em] text-slate-500 transition-colors hover:border-[#d4a550]/60 hover:text-[#b8860b] dark:text-[#f1e6c8]/60 dark:hover:text-[#f7d98a]"
-                          >
-                            {q}
-                          </button>
-                        ))}
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <button
-                          type="button"
-                          onClick={handleAskAI}
-                          disabled={aiLoading || !aiQuestion.trim()}
-                          className="inline-flex items-center gap-2 rounded-md border border-[#d4a550]/50 bg-[#d4a550]/10 px-4 py-2 text-[11px] tracking-[0.18em] text-[#b8860b] transition-colors hover:bg-[#d4a550]/20 disabled:opacity-40 dark:text-[#f7d98a]"
-                        >
-                          <Send className="h-3.5 w-3.5" />
-                          {aiLoading ? "Thinking…" : "Ask"}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => { setAiOpen(false); setAiAnswer(""); setAiQuestion(""); }}
-                          className="text-[11px] tracking-[0.14em] text-slate-400 transition-colors hover:text-slate-600 dark:text-[#f1e6c8]/40 dark:hover:text-[#f1e6c8]/70"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                      {aiAnswer && (
-                        <div className="rounded-lg border border-[#b7872a]/25 bg-slate-50 p-3 text-[12px] leading-relaxed text-slate-700 whitespace-pre-wrap dark:bg-[#060a18] dark:text-[#f1e6c8]/80">
-                          {aiAnswer}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
+              {/* Ask your numbers — edge-function chat widget */}
+              <div
+                id="ask-ai-overview"
+                className="w-full max-w-[640px] rounded-xl border border-[#b7872a]/30 bg-white dark:bg-[#0a1020]/80"
+              />
               {businessType && (
                 <IndustryPulse industry={businessType.label} />
               )}
             </div>
-          </TabsContent>
-
-          <TabsContent value="dashboard">
+            ) : (
+            <div>
             <div className="mb-4 flex items-center gap-3 pb-3">
               <span className="text-[9px] font-semibold uppercase tracking-[0.25em] text-[#b8860b] dark:text-[#d4a550]/80">Financial Ratios</span>
               <span className="h-px flex-1 bg-gradient-to-r from-[#b7872a]/30 to-transparent" />
             </div>
-        {viewMode === "simplified" ? (
-          <SimplifiedRatios
-            sections={[
-              { id: "profit",    label: "Profit",     health: pillarHealths.profit,    series: seriesFor("grossMargin") },
-              { id: "assets",    label: "Assets",     health: pillarHealths.assets,    series: seriesFor("assetTurnover") },
-              { id: "cash",      label: "Cash",       health: pillarHealths.cash,      series: seriesFor("currentRatio") },
-              { id: "financing", label: "Financing",  health: pillarHealths.financing, series: seriesFor("debtToAssets") },
-            ]}
-          />
-        ) : (
         <div className="space-y-3">
           {/* Inputs panel — collapsible */}
-          <Card id="wizard-ratio-inputs" className="border border-slate-800 bg-slate-900/60 shadow-sm print:hidden">
-            <CardHeader className="border-b border-slate-800 pb-3">
+          <Card id="wizard-ratio-inputs" className="border border-amber-900/15 bg-white/90 shadow-[0_14px_40px_rgba(109,79,22,0.08)] print:hidden dark:border-slate-800 dark:bg-slate-900/60 dark:shadow-none">
+            <CardHeader className="border-b border-amber-900/10 pb-3 dark:border-slate-800">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <CardTitle className="text-sm font-semibold text-slate-100">Financial Inputs</CardTitle>
-                  <CardDescription className="text-xs text-slate-400 mt-0.5">
+                  <CardTitle className="text-sm font-semibold text-slate-950 dark:text-slate-100">Financial Inputs</CardTitle>
+                  <CardDescription className="mt-0.5 text-xs text-slate-600 dark:text-slate-400">
                     {showInputs ? "Enter figures in any consistent currency — ratios update instantly." : "Upload a statement or expand to enter figures manually."}
                   </CardDescription>
                 </div>
@@ -2305,7 +2235,7 @@ function Index() {
                   <Button
                     size="sm"
                     variant="outline"
-                    className="gap-1.5 border-slate-600 bg-slate-800 text-slate-200 hover:bg-slate-700 text-xs"
+                    className="gap-1.5 border-amber-700/30 bg-amber-50 text-amber-900 hover:bg-amber-100 text-xs dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
                     disabled={uploading}
                     onClick={() => uploadRef.current?.click()}
                   >
@@ -2315,7 +2245,7 @@ function Index() {
                   <Button
                     size="sm"
                     variant="ghost"
-                    className="text-slate-400 hover:text-slate-100 text-xs px-2"
+                    className="px-2 text-xs text-slate-600 hover:text-slate-950 dark:text-slate-400 dark:hover:text-slate-100"
                     onClick={() => setShowInputs((s) => !s)}
                   >
                     {showInputs ? "▲ Hide" : "▼ Edit inputs"}
@@ -2349,9 +2279,9 @@ function Index() {
                     ] as Array<{ k: keyof Inputs; l: string }>
                   ).map(({ k, l }) => (
                     <div key={k} className="flex items-center gap-2 min-w-0">
-                      <Label className="w-36 shrink-0 text-xs text-slate-400 truncate">{l}</Label>
+                      <Label className="w-36 shrink-0 truncate text-xs text-slate-700 dark:text-slate-400">{l}</Label>
                       <Input
-                        className="h-7 text-xs bg-slate-950/60 border-slate-700 min-w-0"
+                        className="h-7 min-w-0 border-amber-900/15 bg-amber-50/40 text-slate-950 text-xs dark:border-slate-700 dark:bg-slate-950/60 dark:text-slate-100"
                         value={v[k]}
                         onChange={(e) => set(k)(e.target.value)}
                       />
@@ -2486,27 +2416,27 @@ function Index() {
               rows: Array<{ key: RatioKey; indent?: boolean } | { sub: string }>;
             }>
           ).map((section) => (
-            <div key={section.id} className="rounded-lg border border-slate-800 overflow-hidden">
-              <div className="px-4 py-2.5 bg-slate-800/60 border-b border-slate-700/50 flex items-baseline gap-3">
-                <span className="font-semibold text-slate-100 text-sm">{section.title}</span>
-                <span className="text-xs text-slate-400 hidden sm:inline">{section.desc}</span>
+            <div key={section.id} className="overflow-hidden rounded-xl border border-amber-900/15 bg-white/80 shadow-[0_10px_30px_rgba(109,79,22,0.06)] dark:border-slate-800 dark:bg-slate-900/50 dark:shadow-none">
+              <div className="flex items-baseline gap-3 border-b border-amber-900/10 bg-amber-50/60 px-4 py-3 dark:border-slate-700/50 dark:bg-slate-800/60">
+                <span className="text-sm font-semibold text-slate-950 dark:text-slate-100">{section.title}</span>
+                <span className="hidden text-xs text-slate-600 dark:text-slate-400 sm:inline">{section.desc}</span>
               </div>
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-slate-800/80 bg-slate-900/30">
-                    <th className="px-4 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-500 w-44">Metric</th>
-                    <th className="px-4 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-500 hidden md:table-cell">Description</th>
-                    <th className="px-4 py-2 text-center text-[10px] font-semibold uppercase tracking-wider text-slate-500 w-20">Trend</th>
-                    <th className="px-4 py-2 text-center text-[10px] font-semibold uppercase tracking-wider text-slate-500 w-20">vs Industry</th>
-                    <th className="px-4 py-2 text-right text-[10px] font-semibold uppercase tracking-wider text-slate-500 w-24">Health</th>
+                  <tr className="border-b border-amber-900/10 bg-amber-50/25 dark:border-slate-800/80 dark:bg-slate-900/30">
+                    <th className="w-44 px-4 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-500">Metric</th>
+                    <th className="hidden px-4 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-500 md:table-cell">Description</th>
+                    <th className="w-20 px-4 py-2 text-center text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-500">Trend</th>
+                    <th className="w-20 px-4 py-2 text-center text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-500">vs Industry</th>
+                    <th className="w-24 px-4 py-2 text-right text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-500">Health</th>
                   </tr>
                 </thead>
                 <tbody>
                   {section.rows.map((row, ri) => {
                     if ("sub" in row) {
                       return (
-                        <tr key={`sub-${ri}`} className="border-t border-slate-700/20 bg-slate-800/25">
-                          <td colSpan={5} className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400 pl-8">
+                        <tr key={`sub-${ri}`} className="border-t border-amber-900/10 bg-amber-50/30 dark:border-slate-700/20 dark:bg-slate-800/25">
+                          <td colSpan={5} className="pl-8 px-4 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-400">
                             ↳ {row.sub}
                           </td>
                         </tr>
@@ -2534,14 +2464,14 @@ function Index() {
                         key={k}
                         data-row-id={k}
                         onClick={() => setOpenRatio(k)}
-                        className={`border-b border-slate-800/40 cursor-pointer transition-colors ${row.indent ? "bg-slate-800/10" : ""} ${k === highlightId ? "ring-2 ring-inset ring-[#f7d98a] bg-[rgba(247,217,138,0.08)]" : "hover:bg-slate-800/50"}`}
+                        className={`cursor-pointer border-b border-amber-900/10 transition-colors dark:border-slate-800/40 ${row.indent ? "bg-amber-50/25 dark:bg-slate-800/10" : ""} ${k === highlightId ? "bg-[#f7d98a]/15 ring-2 ring-inset ring-[#b7872a] dark:bg-[rgba(247,217,138,0.08)]" : "hover:bg-amber-50/60 dark:hover:bg-slate-800/50"}`}
                       >
                         <td className="px-4 py-3">
-                          <div className="font-medium text-slate-100 text-[13px] leading-tight">{meta.friendly}</div>
-                          <div className="text-[10px] text-slate-500 font-mono mt-0.5">{meta.techName}</div>
+                          <div className="text-[13px] font-medium leading-tight text-slate-950 dark:text-slate-100">{meta.friendly}</div>
+                          <div className="mt-0.5 font-mono text-[10px] text-slate-600 dark:text-slate-500">{meta.techName}</div>
                           <div className={`text-xs font-semibold tabular-nums mt-0.5 ${hCls}`}>{fmtd}</div>
                         </td>
-                        <td className="px-4 py-3 text-xs text-slate-400 hidden md:table-cell leading-relaxed" style={{ maxWidth: 240 }}>{meta.hint}</td>
+                        <td className="hidden px-4 py-3 text-xs leading-relaxed text-slate-600 dark:text-slate-400 md:table-cell" style={{ maxWidth: 240 }}>{meta.hint}</td>
                         <td className="px-4 py-3 text-center">
                           {series.length >= 2 ? (
                             <div className="flex flex-col items-center gap-0.5">
@@ -2579,23 +2509,36 @@ function Index() {
             </div>
           ))}
 
-          {/* Profitability Waterfall — complex view only */}
-          <ProfitabilityWaterfall
-            fallback={{
-              revenue:    n.revenue,
-              cogs:       n.cogs,
-              fixedCosts: n.fixedCosts,
-              interest:   n.ebit - n.ebt,
-              tax:        n.ebt - n.netIncome,
-            }}
-          />
         </div>
-        )}
+            </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="waterfall">
+            <div className="mb-4 flex items-center gap-3 pb-3">
+              <span className="text-[9px] font-semibold uppercase tracking-[0.25em] text-[#b8860b] dark:text-[#d4a550]/80">Profitability Waterfall</span>
+              <span className="h-px flex-1 bg-gradient-to-r from-[#b7872a]/30 to-transparent" />
+            </div>
+            <ProfitabilityWaterfall
+              clientName={actingClientName ?? undefined}
+              fallback={{
+                revenue:    n.revenue,
+                cogs:       n.cogs,
+                fixedCosts: n.fixedCosts,
+                interest:   n.ebit - n.ebt,
+                tax:        n.ebt - n.netIncome,
+              }}
+            />
+            {/* Ask your numbers — edge-function chat widget */}
+            <div
+              id="ask-ai-waterfall"
+              className="mx-auto mt-4 w-full max-w-[640px] rounded-xl border border-[#b7872a]/30 bg-white dark:bg-[#0a1020]/80"
+            />
           </TabsContent>
 
           <TabsContent value="next">
             <div className="mb-4 flex items-center gap-3 pb-3">
-              <span className="text-[9px] font-semibold uppercase tracking-[0.25em] text-[#b8860b] dark:text-[#d4a550]/80">Strategic Moves</span>
+              <span className="text-[9px] font-semibold uppercase tracking-[0.25em] text-[#b8860b] dark:text-[#d4a550]/80">Next Moves</span>
               <span className="h-px flex-1 bg-gradient-to-r from-[#b7872a]/30 to-transparent" />
             </div>
             <div id="wizard-moves-list">
@@ -2616,13 +2559,13 @@ function Index() {
               <span className="h-px flex-1 bg-gradient-to-r from-[#b7872a]/30 to-transparent" />
             </div>
             <Suspense fallback={<div className="p-6 text-sm text-slate-400">Loading cash forecast…</div>}>
-              <CashForecastPanel clientId={effectiveClientId ?? undefined} simplified={viewMode === "simplified"} />
+              <CashForecastPanel clientId={effectiveClientId ?? undefined} clientName={actingClientName ?? undefined} simplified={viewMode === "simplified"} />
             </Suspense>
           </TabsContent>
 
           <TabsContent value="tasks">
             <div className="mb-4 flex items-center gap-3 pb-3">
-              <span className="text-[9px] font-semibold uppercase tracking-[0.25em] text-[#b8860b] dark:text-[#d4a550]/80">Tasks</span>
+              <span className="text-[9px] font-semibold uppercase tracking-[0.25em] text-[#b8860b] dark:text-[#d4a550]/80">Action Plan</span>
               <span className="h-px flex-1 bg-gradient-to-r from-[#b7872a]/30 to-transparent" />
             </div>
             <div id="wizard-tasks-panel">

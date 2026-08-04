@@ -274,7 +274,7 @@ export function SphereHero({
         <button
           type="button"
           onClick={() => go(level === 3 ? 2 : 1)}
-          className="flex items-center gap-2 rounded-lg px-2 py-1 text-sm text-slate-300 transition hover:text-amber-300"
+          className="flex items-center gap-2 rounded-lg px-2 py-1 text-sm text-slate-600 transition hover:text-amber-700 dark:text-slate-300 dark:hover:text-amber-300"
         >
           <ArrowLeft className="h-4 w-4" />
           {level === 3 ? "Back to pillars" : "Back to overview"}
@@ -319,7 +319,7 @@ export function SphereHero({
                 key={p.id}
                 type="button"
                 onClick={() => go(2)}
-                className="flex flex-col items-center gap-1 rounded-xl py-2 transition hover:bg-slate-900/60"
+                className="flex flex-col items-center gap-1 rounded-xl py-2 transition hover:bg-amber-50 dark:hover:bg-slate-900/60"
               >
                 <span className="flex h-9 w-9 items-center justify-center rounded-full border border-amber-500/30">
                   <Icon className="h-4 w-4 text-amber-400" />
@@ -344,7 +344,7 @@ export function SphereHero({
               return (
                 <div
                   key={p.id}
-                  className="animate-in fade-in zoom-in-75 flex flex-col items-center rounded-2xl border border-slate-800/80 bg-slate-950/40 p-4 duration-500"
+                  className="animate-in fade-in zoom-in-75 flex flex-col items-center rounded-2xl border border-amber-900/15 bg-white/80 p-4 shadow-[0_12px_30px_rgba(121,91,27,0.08)] duration-500 dark:border-slate-800/80 dark:bg-slate-950/40 dark:shadow-none"
                   style={{ animationDelay: `${i * 70}ms`, animationFillMode: "both" }}
                 >
                   <Sphere
@@ -397,12 +397,12 @@ export function SphereHero({
               return (
                 <div
                   key={d.key}
-                  className="animate-in fade-in slide-in-from-bottom-2 rounded-xl border border-slate-800/80 bg-slate-950/50 p-3 duration-400"
+                  className="animate-in fade-in slide-in-from-bottom-2 rounded-xl border border-amber-900/15 bg-white/85 p-3 shadow-[0_8px_24px_rgba(121,91,27,0.07)] duration-400 dark:border-slate-800/80 dark:bg-slate-950/50 dark:shadow-none"
                   style={{ animationDelay: `${i * 60}ms`, animationFillMode: "both" }}
                 >
                   <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-medium text-slate-100">{d.label}</p>
+                      <p className="truncate text-sm font-medium text-slate-900 dark:text-slate-100">{d.label}</p>
                       {d.description && (
                         <p className="truncate text-xs text-slate-500">{d.description}</p>
                       )}
@@ -412,7 +412,7 @@ export function SphereHero({
                       <p className={`text-[9px] font-semibold tracking-widest ${TIER_TEXT[t]}`}>{TIER_LABEL[t]}</p>
                     </div>
                   </div>
-                  <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-slate-800">
+                  <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
                     <div
                       className="h-full rounded-full transition-all duration-700"
                       style={{
@@ -431,11 +431,11 @@ export function SphereHero({
 
       {/* ── Top priority card (levels 1 & 3) ── */}
       {topPriority && level !== 2 && (
-        <div className="mt-6 w-full max-w-md rounded-2xl border border-amber-500/20 bg-gradient-to-br from-slate-900/80 to-slate-950/80 p-4">
+        <div className="mt-6 w-full max-w-md rounded-2xl border border-amber-700/20 bg-gradient-to-br from-amber-50/90 to-white p-4 shadow-[0_14px_34px_rgba(121,91,27,0.09)] dark:from-slate-900/80 dark:to-slate-950/80 dark:shadow-none">
           <p className="text-[10px] font-semibold uppercase tracking-[0.25em] text-amber-400">Top priority</p>
           <div className="mt-1 flex items-center justify-between gap-3">
             <div>
-              <p className="text-sm font-semibold text-slate-100">{topPriority.title}</p>
+              <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{topPriority.title}</p>
               <p className="mt-0.5 text-xs text-slate-400">{topPriority.description}</p>
             </div>
             <button

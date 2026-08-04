@@ -1,6 +1,7 @@
 /**
  * HealthScorecardPDF — Financial Health Scorecard report.
- * Fits on 2 A4 pages maximum.
+ * Page 1: exec summary, overall score, pillar grid, DuPont pointer strip.
+ * Page 2: full ratio detail per pillar.
  *
  * IMPORTANT: Only import via dynamic import() — never at the top level of an
  * SSR-rendered module.
@@ -9,9 +10,14 @@
 import { View, Text, StyleSheet } from "@react-pdf/renderer";
 import type { AccountantProfile } from "@/contexts/accountant-profile";
 import { PDFDocument, type SmeData } from "@/components/pdf/pdf-document";
+import { C, TIER_META, tierForScore, scoreColor } from "@/components/pdf/theme";
 import { HealthScoreGauge } from "@/components/pdf/health-score-gauge";
 import { SectionHeader } from "@/components/pdf/section-header";
 import { RatioRow } from "@/components/pdf/ratio-row";
+import { ReportTitle } from "@/components/pdf/report-title";
+import { ExecSummary, type HeadlineFigure } from "@/components/pdf/exec-summary";
+import { DuPontStrip } from "@/components/pdf/dupont";
+import { diagnoseDuPont, healthNarrative } from "./narrative";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -31,6 +37,7 @@ export type HealthScorecardPDFProps = {
   smeData: SmeData;
   ratioResults: RatioResult[];
   accountantProfile: AccountantProfile;
+  isDemo?: boolean;
 };
 
 // ── Constants ──────────────────────────────────────────────────────────────
@@ -44,32 +51,11 @@ const PILLAR_LABEL: Record<string, string> = {
   cash: "Cash Flow",
 };
 
-const PILLAR_COLOR: Record<string, string> = {
-  profit: "#b45309",
-  assets: "#1d4ed8",
-  financing: "#7c3aed",
-  cash: "#047857",
+const TIER_DESC: Record<string, string> = {
+  healthy: "The business is performing well across most financial indicators.",
+  at_risk: "Several areas need attention to prevent further deterioration.",
+  critical: "Immediate action required — key metrics indicate significant financial stress.",
 };
-
-function tierInfo(score: number): { label: string; color: string; desc: string } {
-  if (score >= 70)
-    return {
-      label: "HEALTHY",
-      color: "#10b981",
-      desc: "The business is performing well across most financial indicators.",
-    };
-  if (score >= 40)
-    return {
-      label: "AT RISK",
-      color: "#f59e0b",
-      desc: "Several areas need attention to prevent further deterioration.",
-    };
-  return {
-    label: "CRITICAL",
-    color: "#ef4444",
-    desc: "Immediate action required — key metrics indicate significant financial stress.",
-  };
-}
 
 function avg(nums: number[]): number {
   if (!nums.length) return 0;
@@ -79,119 +65,62 @@ function avg(nums: number[]): number {
 // ── Styles ─────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  // Page 1 — overall score
-  scorePage: {
-    alignItems: "center",
-    paddingTop: 24,
-    paddingBottom: 16,
-  },
-  overallLabel: {
-    fontSize: 9,
-    fontFamily: "Helvetica",
-    color: "#6b7280",
-    letterSpacing: 1.2,
-    textTransform: "uppercase",
-    marginBottom: 6,
-  },
-  overallNumber: {
-    fontSize: 68,
-    fontFamily: "Helvetica-Bold",
-    lineHeight: 1,
-    marginBottom: 10,
-  },
-  gaugeRow: {
-    width: "80%",
-    marginBottom: 12,
-  },
-  tierRow: {
+  scoreBand: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    marginBottom: 6,
+    gap: 24,
+    marginBottom: 18,
+    paddingVertical: 6,
   },
+  scoreLeft: { alignItems: "center", width: 150 },
+  overallNumber: { fontSize: 54, fontFamily: "Helvetica-Bold", lineHeight: 1 },
+  outOf: { fontSize: 7.5, fontFamily: "Helvetica", color: C.faint, marginTop: 2 },
   tierBadge: {
-    borderRadius: 4,
+    borderRadius: 3,
     paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingVertical: 3.5,
+    marginTop: 8,
   },
   tierBadgeText: {
-    fontSize: 9,
-    fontFamily: "Helvetica-Bold",
-    color: "#ffffff",
-    letterSpacing: 0.8,
-  },
-  tierDesc: {
-    fontSize: 8.5,
-    fontFamily: "Helvetica",
-    color: "#6b7280",
-    textAlign: "center",
-  },
-  // Pillar grid
-  pillarGrid: {
-    marginTop: 28,
-    width: "100%",
-  },
-  pillarGridRow: {
-    flexDirection: "row",
-    gap: 12,
-    marginBottom: 12,
-  },
-  pillarBox: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
-    borderRadius: 8,
-    padding: 14,
-    backgroundColor: "#fafafa",
-  },
-  pillarTopBar: {
-    height: 3,
-    borderRadius: 2,
-    marginBottom: 10,
-  },
-  pillarName: {
     fontSize: 8,
     fontFamily: "Helvetica-Bold",
-    color: "#6b7280",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    marginBottom: 4,
+    color: C.white,
+    letterSpacing: 1,
   },
-  pillarScore: {
-    fontSize: 28,
+  scoreRight: { flex: 1 },
+  gaugeRow: { marginBottom: 8 },
+  gaugeScale: { flexDirection: "row", justifyContent: "space-between", marginBottom: 10 },
+  gaugeScaleText: { fontSize: 5.5, fontFamily: "Helvetica", color: C.faint },
+  tierDesc: { fontSize: 8.5, fontFamily: "Helvetica", color: C.body, lineHeight: 1.5 },
+  // Pillar grid
+  pillarGridRow: { flexDirection: "row", gap: 10, marginBottom: 10 },
+  pillarBox: {
+    flex: 1,
+    borderWidth: 0.75,
+    borderColor: C.line,
+    borderRadius: 6,
+    paddingHorizontal: 13,
+    paddingTop: 11,
+    paddingBottom: 12,
+    backgroundColor: C.white,
+  },
+  pillarName: {
+    fontSize: 6.5,
     fontFamily: "Helvetica-Bold",
-    marginBottom: 8,
+    color: C.muted,
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
+    marginBottom: 5,
   },
-  pillarGaugeRow: {
-    marginBottom: 10,
-  },
-  pillarCountRow: {
-    flexDirection: "row",
-    gap: 8,
-    marginTop: 4,
-  },
-  countChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 3,
-  },
-  countDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  countText: {
-    fontSize: 7,
-    fontFamily: "Helvetica",
-    color: "#6b7280",
-  },
-  // Page 2 — pillar detail
-  pillarSection: {
-    marginBottom: 16,
-  },
-  divider: {
-    height: 12,
-  },
+  pillarScoreRow: { flexDirection: "row", alignItems: "baseline", gap: 3, marginBottom: 7 },
+  pillarScore: { fontSize: 22, fontFamily: "Helvetica-Bold" },
+  pillarOutOf: { fontSize: 6.5, fontFamily: "Helvetica", color: C.faint },
+  pillarGaugeRow: { marginBottom: 8 },
+  pillarCountRow: { flexDirection: "row", gap: 8, flexWrap: "wrap" },
+  countChip: { flexDirection: "row", alignItems: "center", gap: 3 },
+  countDot: { width: 5, height: 5, borderRadius: 2.5 },
+  countText: { fontSize: 6.5, fontFamily: "Helvetica", color: C.muted },
+  pillarSection: { marginBottom: 10 },
 });
 
 // ── Pillar box ─────────────────────────────────────────────────────────────
@@ -200,40 +129,39 @@ function PillarBox({
   pillar,
   score,
   counts,
-  color,
 }: {
   pillar: string;
   score: number;
   counts: { critical: number; at_risk: number; healthy: number };
-  color: string;
 }) {
   const rounded = Math.round(score);
-  const { color: scoreColor } = tierInfo(rounded);
 
   return (
     <View style={styles.pillarBox}>
-      <View style={[styles.pillarTopBar, { backgroundColor: color }]} />
       <Text style={styles.pillarName}>{PILLAR_LABEL[pillar]}</Text>
-      <Text style={[styles.pillarScore, { color: scoreColor }]}>{rounded}</Text>
+      <View style={styles.pillarScoreRow}>
+        <Text style={[styles.pillarScore, { color: scoreColor(rounded) }]}>{rounded}</Text>
+        <Text style={styles.pillarOutOf}>/ 100</Text>
+      </View>
       <View style={styles.pillarGaugeRow}>
         <HealthScoreGauge score={score} height={5} />
       </View>
       <View style={styles.pillarCountRow}>
         {counts.critical > 0 && (
           <View style={styles.countChip}>
-            <View style={[styles.countDot, { backgroundColor: "#ef4444" }]} />
+            <View style={[styles.countDot, { backgroundColor: C.red }]} />
             <Text style={styles.countText}>{counts.critical} critical</Text>
           </View>
         )}
         {counts.at_risk > 0 && (
           <View style={styles.countChip}>
-            <View style={[styles.countDot, { backgroundColor: "#f59e0b" }]} />
-            <Text style={styles.countText}>{counts.at_risk} at risk</Text>
+            <View style={[styles.countDot, { backgroundColor: C.amber }]} />
+            <Text style={styles.countText}>{counts.at_risk} watch</Text>
           </View>
         )}
         {counts.healthy > 0 && (
           <View style={styles.countChip}>
-            <View style={[styles.countDot, { backgroundColor: "#10b981" }]} />
+            <View style={[styles.countDot, { backgroundColor: C.green }]} />
             <Text style={styles.countText}>{counts.healthy} healthy</Text>
           </View>
         )}
@@ -248,10 +176,11 @@ export function HealthScorecardPDF({
   smeData,
   ratioResults,
   accountantProfile,
+  isDemo,
 }: HealthScorecardPDFProps) {
   const overallScore = Math.round(avg(ratioResults.map((r) => r.health_score || 0)));
-  const overall = tierInfo(overallScore);
-  const accentColor = accountantProfile.accentColor || "#0f3460";
+  const overallTier = tierForScore(overallScore);
+  const overallColor = TIER_META[overallTier].color;
 
   const pillarData = PILLARS.map((pillar) => {
     const ratios = ratioResults.filter((r) => r.pillar === pillar);
@@ -264,76 +193,148 @@ export function HealthScorecardPDF({
     return { pillar, score, counts, ratios };
   });
 
+  // DuPont levers pulled from the ratio set (graceful when missing).
+  // Accepts both camelCase and snake_case keys; derives missing levers where
+  // arithmetic allows (netMargin = ROA ÷ asset turnover; ROE = product).
+  const byKey = (...keys: string[]) =>
+    ratioResults.find((r) => keys.includes(r.ratio_key))?.current_value ?? NaN;
+  const assetTurnover = byKey("assetTurnover", "asset_turnover");
+  const equityMultiplier = byKey("equityMultiplier", "equity_multiplier");
+  let netMargin = byKey("netMargin", "net_margin");
+  if (!Number.isFinite(netMargin)) {
+    const roa = byKey("roa", "return_on_assets");
+    if (Number.isFinite(roa) && Number.isFinite(assetTurnover) && assetTurnover !== 0) {
+      netMargin = roa / assetTurnover;
+    }
+  }
+  let roe = byKey("returnOnEquity", "roe_ratio", "return_on_equity");
+  if (
+    !Number.isFinite(roe) &&
+    Number.isFinite(netMargin) &&
+    Number.isFinite(assetTurnover) &&
+    Number.isFinite(equityMultiplier)
+  ) {
+    roe = netMargin * assetTurnover * equityMultiplier;
+  }
+  const levers = { roe, netMargin, assetTurnover, equityMultiplier };
+  const hasDuPont =
+    Number.isFinite(levers.netMargin) &&
+    Number.isFinite(levers.assetTurnover) &&
+    Number.isFinite(levers.equityMultiplier);
+  const dupont = diagnoseDuPont(levers);
+
+  // Executive summary figures
+  const worstPillar = [...pillarData].sort((a, b) => a.score - b.score)[0];
+  const bestPillar = [...pillarData].sort((a, b) => b.score - a.score)[0];
+  const priorAvg = ratioResults.some((r) => r.prior_period_score !== undefined)
+    ? avg(ratioResults.map((r) => r.prior_period_score ?? r.health_score))
+    : undefined;
+  const figures: HeadlineFigure[] = [
+    {
+      label: "Overall Score",
+      value: `${overallScore}`,
+      direction:
+        priorAvg === undefined
+          ? undefined
+          : overallScore > priorAvg + 1
+            ? "up"
+            : overallScore < priorAvg - 1
+              ? "down"
+              : "flat",
+      good: priorAvg === undefined ? undefined : overallScore >= priorAvg,
+      note: "out of 100",
+    },
+    {
+      label: "Strongest Pillar",
+      value: `${Math.round(bestPillar.score)}`,
+      good: true,
+      direction: "up",
+      note: PILLAR_LABEL[bestPillar.pillar],
+    },
+    {
+      label: "Weakest Pillar",
+      value: `${Math.round(worstPillar.score)}`,
+      good: tierForScore(worstPillar.score) === "healthy",
+      direction: tierForScore(worstPillar.score) === "healthy" ? "up" : "down",
+      note: PILLAR_LABEL[worstPillar.pillar],
+    },
+    {
+      label: "Ratios in Critical",
+      value: `${ratioResults.filter((r) => r.health_tier === "critical").length}`,
+      good: ratioResults.every((r) => r.health_tier !== "critical"),
+      note: `of ${ratioResults.length} tracked`,
+    },
+  ];
+
+  const narrative = healthNarrative(
+    overallScore,
+    pillarData.map((p) => ({ label: PILLAR_LABEL[p.pillar], score: p.score })),
+    dupont,
+  );
+
   return (
     <PDFDocument
       title={`Financial Health Scorecard — ${smeData.name}`}
       subject="Financial Health Scorecard"
       smeData={smeData}
       accountantProfile={accountantProfile}
+      isDemo={isDemo}
     >
-      {/* ── PAGE 1: Summary ── */}
-      <View style={styles.scorePage}>
-        <Text style={styles.overallLabel}>Overall Financial Health Score</Text>
+      {/* ── PAGE 1 ── */}
+      <ReportTitle
+        kicker="Advisory Report 01"
+        title="Financial Health Scorecard"
+        subtitle="One score, four pillars, fourteen ratios — the state of the business at a glance"
+        isDemo={isDemo}
+      />
 
-        <Text style={[styles.overallNumber, { color: overall.color }]}>
-          {overallScore}
-        </Text>
+      <ExecSummary figures={figures} narrative={narrative} />
 
-        <View style={styles.gaugeRow}>
-          <HealthScoreGauge score={overallScore} height={10} />
-        </View>
-
-        <View style={styles.tierRow}>
-          <View style={[styles.tierBadge, { backgroundColor: overall.color }]}>
-            <Text style={styles.tierBadgeText}>{overall.label}</Text>
+      {/* Overall score band */}
+      <View style={styles.scoreBand}>
+        <View style={styles.scoreLeft}>
+          <Text style={[styles.overallNumber, { color: overallColor }]}>{overallScore}</Text>
+          <Text style={styles.outOf}>OVERALL SCORE / 100</Text>
+          <View style={[styles.tierBadge, { backgroundColor: overallColor }]}>
+            <Text style={styles.tierBadgeText}>{TIER_META[overallTier].label}</Text>
           </View>
         </View>
-
-        <Text style={styles.tierDesc}>{overall.desc}</Text>
+        <View style={styles.scoreRight}>
+          <View style={styles.gaugeRow}>
+            <HealthScoreGauge score={overallScore} height={9} />
+          </View>
+          <View style={styles.gaugeScale}>
+            <Text style={styles.gaugeScaleText}>0 · CRITICAL</Text>
+            <Text style={styles.gaugeScaleText}>40 · WATCH</Text>
+            <Text style={styles.gaugeScaleText}>65 · HEALTHY</Text>
+            <Text style={styles.gaugeScaleText}>100</Text>
+          </View>
+          <Text style={styles.tierDesc}>{TIER_DESC[overallTier]}</Text>
+        </View>
       </View>
 
       {/* 2×2 pillar grid */}
-      <View style={styles.pillarGrid}>
-        <View style={styles.pillarGridRow}>
-          <PillarBox
-            pillar="profit"
-            score={pillarData[0].score}
-            counts={pillarData[0].counts}
-            color={PILLAR_COLOR.profit}
-          />
-          <PillarBox
-            pillar="assets"
-            score={pillarData[1].score}
-            counts={pillarData[1].counts}
-            color={PILLAR_COLOR.assets}
-          />
-        </View>
-        <View style={styles.pillarGridRow}>
-          <PillarBox
-            pillar="financing"
-            score={pillarData[2].score}
-            counts={pillarData[2].counts}
-            color={PILLAR_COLOR.financing}
-          />
-          <PillarBox
-            pillar="cash"
-            score={pillarData[3].score}
-            counts={pillarData[3].counts}
-            color={PILLAR_COLOR.cash}
-          />
-        </View>
+      <View style={styles.pillarGridRow}>
+        <PillarBox pillar="profit" score={pillarData[0].score} counts={pillarData[0].counts} />
+        <PillarBox pillar="assets" score={pillarData[1].score} counts={pillarData[1].counts} />
       </View>
+      <View style={styles.pillarGridRow}>
+        <PillarBox pillar="financing" score={pillarData[2].score} counts={pillarData[2].counts} />
+        <PillarBox pillar="cash" score={pillarData[3].score} counts={pillarData[3].counts} />
+      </View>
+
+      {/* DuPont pointer strip */}
+      {hasDuPont && (
+        <View style={{ marginTop: 6 }}>
+          <DuPontStrip levers={levers} diagnosis={dupont} />
+        </View>
+      )}
 
       {/* ── PAGE 2: Ratio detail ── */}
       <View break>
-        {pillarData.map(({ pillar, score, ratios }, pi) => (
+        {pillarData.map(({ pillar, score, ratios }) => (
           <View key={pillar} style={styles.pillarSection}>
-            {pi > 0 && <View style={styles.divider} />}
-            <SectionHeader
-              title={PILLAR_LABEL[pillar]}
-              score={score}
-              color={PILLAR_COLOR[pillar]}
-            />
+            <SectionHeader title={PILLAR_LABEL[pillar]} score={score} />
             {ratios.map((r, i) => (
               <RatioRow
                 key={r.ratio_key}

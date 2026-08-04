@@ -1,7 +1,7 @@
 /**
  * BenchmarkReportPDF — Industry Benchmark Report.
- * Shows all ratios vs sector median and top quartile with position badges.
- * Page 1: Summary + full benchmark table (auto-paginated).
+ * Each ratio on one line: value, benchmark band (median → top quartile), and
+ * a position indicator, grouped by pillar.
  *
  * SSR safety: Only import via dynamic import().
  */
@@ -9,6 +9,12 @@
 import { View, Text, StyleSheet } from "@react-pdf/renderer";
 import type { AccountantProfile } from "@/contexts/accountant-profile";
 import { PDFDocument, type SmeData } from "@/components/pdf/pdf-document";
+import { ReportTitle } from "@/components/pdf/report-title";
+import { SectionHeader } from "@/components/pdf/section-header";
+import { ExecSummary, type HeadlineFigure } from "@/components/pdf/exec-summary";
+import { BenchmarkBar } from "@/components/pdf/benchmark-bar";
+import { C, resolveTheme } from "@/components/pdf/theme";
+import { benchmarkNarrative } from "./narrative";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -33,6 +39,7 @@ export type BenchmarkReportPDFProps = {
   industryName: string;
   benchmarkRows: BenchmarkRow[];
   accountantProfile: AccountantProfile;
+  isDemo?: boolean;
 };
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -48,173 +55,59 @@ function getPosition(row: BenchmarkRow): Position {
   return "below_median";
 }
 
-const POSITION_CONFIG: Record<Position, { label: string; bg: string; fg: string }> = {
-  top_quartile: { label: "TOP QUARTILE", bg: "#10b981", fg: "#ffffff" },
-  above_median: { label: "ABOVE MEDIAN", bg: "#3b82f6", fg: "#ffffff" },
-  below_median: { label: "BELOW MEDIAN", bg: "#f59e0b", fg: "#ffffff" },
+const POS_META: Record<Position, { label: string; fg: string; bg: string }> = {
+  top_quartile: { label: "TOP QUARTILE", fg: C.greenDeep, bg: C.greenSoft },
+  above_median: { label: "ABOVE MEDIAN", fg: C.blueDeep, bg: C.blueSoft },
+  below_median: { label: "BELOW MEDIAN", fg: C.redDeep, bg: C.redSoft },
 };
 
-const PILLAR_COLORS: Record<string, string> = {
-  profit: "#b45309",
-  assets: "#1d4ed8",
-  financing: "#7c3aed",
-  cash: "#047857",
+const PILLAR_LABEL: Record<string, string> = {
+  profit: "Profit Drivers",
+  assets: "Asset Productivity",
+  financing: "Leverage & Finance",
+  cash: "Cash Flow",
 };
 
-const PILLAR_LABELS: Record<string, string> = {
-  profit: "PROFIT",
-  assets: "ASSETS",
-  financing: "FINANCING",
-  cash: "CASH",
-};
+/** Normalise value, median, topQ onto a 0..1 track (direction-corrected). */
+function normalise(row: BenchmarkRow): { pos: number; bandStart: number; bandEnd: number } {
+  const vals = [row.current_value, row.sector_median, row.sector_top_quartile];
+  let lo = Math.min(...vals);
+  let hi = Math.max(...vals);
+  const pad = (hi - lo || Math.abs(hi) || 1) * 0.25;
+  lo -= pad;
+  hi += pad;
+  const span = hi - lo || 1;
+  const t = (v: number) => (v - lo) / span;
+  // For lower-is-better ratios, flip so "right" is always better.
+  const flip = (x: number) => (row.lower_is_better ? 1 - x : x);
+  return {
+    pos: flip(t(row.current_value)),
+    bandStart: flip(t(row.sector_median)),
+    bandEnd: flip(t(row.sector_top_quartile)),
+  };
+}
 
 // ── Styles ─────────────────────────────────────────────────────────────────
 
 const S = StyleSheet.create({
-  title: { fontSize: 20, fontFamily: "Helvetica-Bold", color: "#111827", marginBottom: 4 },
-  subtitle: { fontSize: 9, color: "#6b7280", fontFamily: "Helvetica", marginBottom: 4 },
-  industryBadge: { alignSelf: "flex-start", borderRadius: 5, paddingHorizontal: 10, paddingVertical: 4, marginBottom: 14 },
-  industryText: { fontSize: 8, fontFamily: "Helvetica-Bold", color: "#ffffff", letterSpacing: 0.3 },
-  // Summary banner
-  summaryBox: {
-    borderRadius: 8,
-    padding: 14,
-    marginBottom: 16,
+  headerRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 12, paddingVertical: 5 },
+  headerCell: { fontSize: 6, fontFamily: "Helvetica-Bold", color: C.faint, textTransform: "uppercase", letterSpacing: 0.4 },
+  row: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
+    paddingVertical: 7.5,
+    paddingHorizontal: 12,
+    borderBottomWidth: 0.5,
+    borderBottomColor: C.hairline,
   },
-  summaryLeft: {},
-  summaryTitle: { fontSize: 9, fontFamily: "Helvetica-Bold", color: "#ffffff", marginBottom: 4 },
-  summaryDesc: { fontSize: 8, color: "#ffffff", opacity: 0.8, fontFamily: "Helvetica", lineHeight: 1.4 },
-  summaryNum: { fontSize: 36, fontFamily: "Helvetica-Bold", color: "#ffffff" },
-  summaryNumLabel: { fontSize: 8, color: "#ffffff", opacity: 0.8, fontFamily: "Helvetica", textAlign: "right" },
-  // Position summary chips
-  chipsRow: { flexDirection: "row", gap: 8, marginBottom: 16 },
-  chip: { flex: 1, borderRadius: 6, padding: 10, alignItems: "center" },
-  chipCount: { fontSize: 20, fontFamily: "Helvetica-Bold", color: "#ffffff", marginBottom: 2 },
-  chipLabel: { fontSize: 6.5, fontFamily: "Helvetica-Bold", color: "#ffffff", opacity: 0.9, textAlign: "center" },
-  // Table
-  pillarHeader: { flexDirection: "row", alignItems: "center", paddingHorizontal: 10, paddingVertical: 6, marginTop: 8 },
-  pillarText: { fontSize: 7.5, fontFamily: "Helvetica-Bold", color: "#ffffff", letterSpacing: 0.5 },
-  tblHeader: { flexDirection: "row", paddingHorizontal: 10, paddingVertical: 7, backgroundColor: "#374151" },
-  tblHCell: { fontSize: 6.5, fontFamily: "Helvetica-Bold", color: "#ffffff", letterSpacing: 0.2 },
-  tblRow: { flexDirection: "row", paddingHorizontal: 10, paddingVertical: 7, borderBottomWidth: 0.5, borderBottomColor: "#f3f4f6" },
-  cell: { fontSize: 7.5, fontFamily: "Helvetica", color: "#374151", textAlign: "right" },
-  nameCell: { fontSize: 7.5, fontFamily: "Helvetica", color: "#1f2937", flex: 2.5 },
-  posBadge: { borderRadius: 3, paddingHorizontal: 5, paddingVertical: 2, alignItems: "center" },
-  posText: { fontSize: 5.5, fontFamily: "Helvetica-Bold", letterSpacing: 0.2 },
+  name: { fontSize: 8, fontFamily: "Helvetica", color: C.body },
+  val: { fontSize: 8, fontFamily: "Helvetica-Bold", color: C.ink, textAlign: "right" },
+  bench: { fontSize: 7.5, fontFamily: "Helvetica", color: C.muted, textAlign: "right" },
+  barCell: { width: 96, alignItems: "flex-end", paddingLeft: 6 },
+  posChip: { borderRadius: 3, paddingHorizontal: 4, paddingVertical: 2, alignItems: "center", width: 62, marginLeft: 8 },
+  posText: { fontSize: 4.8, fontFamily: "Helvetica-Bold", letterSpacing: 0.3 },
+  scaleNote: { fontSize: 6.5, fontFamily: "Helvetica", color: C.faint, marginTop: 10, lineHeight: 1.5 },
 });
-
-// ── Summary section ────────────────────────────────────────────────────────
-
-function SummarySection({ rows, accentColor }: { rows: BenchmarkRow[]; accentColor: string }) {
-  const positions = rows.map(getPosition);
-  const topQ = positions.filter((p) => p === "top_quartile").length;
-  const above = positions.filter((p) => p === "above_median").length;
-  const below = positions.filter((p) => p === "below_median").length;
-  const aboveOrTopQ = topQ + above;
-  const total = rows.length;
-
-  const overallColor = aboveOrTopQ >= total * 0.7 ? "#10b981" : aboveOrTopQ >= total * 0.4 ? "#f59e0b" : "#ef4444";
-
-  return (
-    <View>
-      <View style={[S.summaryBox, { backgroundColor: overallColor }]}>
-        <View style={[S.summaryLeft, { flex: 1 }]}>
-          <Text style={S.summaryTitle}>Industry Benchmark Summary</Text>
-          <Text style={S.summaryDesc}>
-            {aboveOrTopQ} of {total} ratios are at or above the sector median.
-            {topQ > 0 ? ` ${topQ} ratio${topQ > 1 ? "s" : ""} reach${topQ === 1 ? "es" : ""} the top quartile.` : ""}
-          </Text>
-        </View>
-        <View style={{ alignItems: "flex-end" }}>
-          <Text style={S.summaryNum}>{aboveOrTopQ}/{total}</Text>
-          <Text style={S.summaryNumLabel}>above median</Text>
-        </View>
-      </View>
-
-      <View style={S.chipsRow}>
-        <View style={[S.chip, { backgroundColor: "#10b981" }]}>
-          <Text style={S.chipCount}>{topQ}</Text>
-          <Text style={S.chipLabel}>Top Quartile</Text>
-        </View>
-        <View style={[S.chip, { backgroundColor: "#3b82f6" }]}>
-          <Text style={S.chipCount}>{above}</Text>
-          <Text style={S.chipLabel}>Above Median</Text>
-        </View>
-        <View style={[S.chip, { backgroundColor: "#f59e0b" }]}>
-          <Text style={S.chipCount}>{below}</Text>
-          <Text style={S.chipLabel}>Below Median</Text>
-        </View>
-      </View>
-    </View>
-  );
-}
-
-// ── Benchmark table ────────────────────────────────────────────────────────
-
-function BenchmarkTable({ rows, accentColor }: { rows: BenchmarkRow[]; accentColor: string }) {
-  const pillars: Array<"profit" | "assets" | "financing" | "cash"> = [
-    "profit",
-    "assets",
-    "financing",
-    "cash",
-  ];
-
-  return (
-    <View>
-      <View style={S.tblHeader}>
-        <Text style={[S.tblHCell, { flex: 2.5 }]}>Ratio</Text>
-        <Text style={[S.tblHCell, { width: 70, textAlign: "right" }]}>Your Value</Text>
-        <Text style={[S.tblHCell, { width: 70, textAlign: "right" }]}>Sector Median</Text>
-        <Text style={[S.tblHCell, { width: 70, textAlign: "right" }]}>Top Quartile</Text>
-        <Text style={[S.tblHCell, { width: 76, textAlign: "center" }]}>Position</Text>
-      </View>
-
-      {pillars.map((pillar) => {
-        const pillarRows = rows.filter((r) => r.pillar === pillar);
-        if (pillarRows.length === 0) return null;
-        const color = PILLAR_COLORS[pillar] ?? "#374151";
-
-        return (
-          <View key={pillar}>
-            <View style={[S.pillarHeader, { backgroundColor: color }]}>
-              <Text style={S.pillarText}>{PILLAR_LABELS[pillar]}</Text>
-            </View>
-            {pillarRows.map((row, ri) => {
-              const pos = getPosition(row);
-              const posConfig = POSITION_CONFIG[pos];
-              return (
-                <View
-                  key={row.ratio_key}
-                  style={[S.tblRow, { backgroundColor: ri % 2 === 1 ? "#f9fafb" : "#ffffff" }]}
-                >
-                  <Text style={S.nameCell}>{row.ratio_name}</Text>
-                  <Text
-                    style={[
-                      S.cell,
-                      { width: 70, fontFamily: "Helvetica-Bold", color: "#111827" },
-                    ]}
-                  >
-                    {row.formatted_current}
-                  </Text>
-                  <Text style={[S.cell, { width: 70 }]}>{row.formatted_median}</Text>
-                  <Text style={[S.cell, { width: 70 }]}>{row.formatted_top_quartile}</Text>
-                  <View style={{ width: 76, alignItems: "center", justifyContent: "center" }}>
-                    <View style={[S.posBadge, { backgroundColor: posConfig.bg }]}>
-                      <Text style={[S.posText, { color: posConfig.fg }]}>{posConfig.label}</Text>
-                    </View>
-                  </View>
-                </View>
-              );
-            })}
-          </View>
-        );
-      })}
-    </View>
-  );
-}
 
 // ── Main component ─────────────────────────────────────────────────────────
 
@@ -224,26 +117,103 @@ export function BenchmarkReportPDF({
   industryName,
   benchmarkRows,
   accountantProfile,
+  isDemo,
 }: BenchmarkReportPDFProps) {
-  const accent = accountantProfile.accentColor || "#0f3460";
+  const theme = resolveTheme(accountantProfile);
+
+  const positions = benchmarkRows.map(getPosition);
+  const topQ = positions.filter((p) => p === "top_quartile").length;
+  const above = positions.filter((p) => p === "above_median").length;
+  const below = positions.filter((p) => p === "below_median").length;
+
+  const figures: HeadlineFigure[] = [
+    { label: "Ratios Compared", value: `${benchmarkRows.length}`, note: industryName },
+    { label: "Top Quartile", value: `${topQ}`, direction: "up", good: topQ > 0 },
+    { label: "Above Median", value: `${above}`, good: true },
+    {
+      label: "Below Median",
+      value: `${below}`,
+      direction: below > 0 ? "down" : "flat",
+      good: below === 0,
+    },
+  ];
+
+  const narrative = benchmarkNarrative({
+    topQ,
+    above,
+    below,
+    total: benchmarkRows.length,
+    industryName,
+  });
+
+  const pillars = (["profit", "assets", "financing", "cash"] as const).filter((p) =>
+    benchmarkRows.some((r) => r.pillar === p),
+  );
 
   return (
     <PDFDocument
-      title={`Benchmark Report — ${smeData.name}`}
-      subject="Industry Benchmark Report"
+      title={`Industry Benchmark — ${smeData.name}`}
+      subject={`Benchmark Report — ${industryName} (${industryCode})`}
       smeData={smeData}
       accountantProfile={accountantProfile}
+      isDemo={isDemo}
     >
-      <Text style={S.title}>Industry Benchmark Report</Text>
-      <Text style={S.subtitle}>
-        How {smeData.name} compares to industry peers — {smeData.period}
-      </Text>
-      <View style={[S.industryBadge, { backgroundColor: accent }]}>
-        <Text style={S.industryText}>{industryName} ({industryCode})</Text>
-      </View>
+      <ReportTitle
+        kicker={`Advisory Report 10 · ${industryName}`}
+        title="Industry Benchmark"
+        subtitle="Every ratio positioned against the sector median and top quartile"
+        isDemo={isDemo}
+      />
 
-      <SummarySection rows={benchmarkRows} accentColor={accent} />
-      <BenchmarkTable rows={benchmarkRows} accentColor={accent} />
+      <ExecSummary figures={figures} narrative={narrative} />
+
+      {pillars.map((pillar) => {
+        const rows = benchmarkRows.filter((r) => r.pillar === pillar);
+        return (
+          <View key={pillar}>
+            <SectionHeader title={PILLAR_LABEL[pillar]} color={theme.accent} />
+            <View style={S.headerRow}>
+              <Text style={[S.headerCell, { flex: 2 }]}>Ratio</Text>
+              <Text style={[S.headerCell, { flex: 1, textAlign: "right" }]}>You</Text>
+              <Text style={[S.headerCell, { flex: 1, textAlign: "right" }]}>Median</Text>
+              <Text style={[S.headerCell, { flex: 1, textAlign: "right" }]}>Top 25%</Text>
+              <Text style={[S.headerCell, { width: 96, textAlign: "right", paddingLeft: 6 }]}>Position</Text>
+              <View style={{ width: 70 }} />
+            </View>
+            {rows.map((row, i) => {
+              const pos = getPosition(row);
+              const meta = POS_META[pos];
+              const n = normalise(row);
+              return (
+                <View key={row.ratio_key} style={[S.row, { backgroundColor: i % 2 === 1 ? C.soft : C.white }]}>
+                  <Text style={[S.name, { flex: 2 }]}>{row.ratio_name}</Text>
+                  <Text style={[S.val, { flex: 1 }]}>{row.formatted_current}</Text>
+                  <Text style={[S.bench, { flex: 1 }]}>{row.formatted_median}</Text>
+                  <Text style={[S.bench, { flex: 1 }]}>{row.formatted_top_quartile}</Text>
+                  <View style={S.barCell}>
+                    <BenchmarkBar
+                      position={n.pos}
+                      bandStart={n.bandStart}
+                      bandEnd={n.bandEnd}
+                      width={90}
+                      markerColor={pos === "below_median" ? C.red : pos === "top_quartile" ? C.green : C.blue}
+                    />
+                  </View>
+                  <View style={[S.posChip, { backgroundColor: meta.bg }]}>
+                    <Text style={[S.posText, { color: meta.fg }]}>{meta.label}</Text>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        );
+      })}
+
+      <Text style={S.scaleNote}>
+        Position bars are direction-corrected: further right is always better, regardless of
+        whether a higher or lower value is desirable for the ratio. The shaded band spans the
+        sector median to top quartile.
+      </Text>
     </PDFDocument>
   );
 }

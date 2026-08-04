@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -12,10 +12,37 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Trash2, Maximize2, X, Download, SlidersHorizontal, Upload } from "lucide-react";
+import {
+  Plus,
+  Trash2,
+  Download,
+  SlidersHorizontal,
+  Upload,
+  ChevronDown,
+  ChevronUp,
+  TrendingUp,
+  TrendingDown,
+  AlertTriangle,
+  CheckCircle2,
+  Table2,
+  Settings2,
+  Wallet,
+} from "lucide-react";
 import { Slider } from "@/components/ui/slider";
-import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, Legend, ReferenceLine } from "recharts";
-// jsPDF + autoTable are dynamically imported inside exportPDF to avoid blocking initial hydration.
+import {
+  ResponsiveContainer,
+  ComposedChart,
+  Area,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid,
+  ReferenceLine,
+} from "recharts";
+import { useAccountantProfile } from "@/contexts/accountant-profile";
+// @react-pdf/renderer + the branded report are dynamically imported inside
+// exportPDF to avoid blocking initial hydration.
 
 type Frequency =
   | "recurring-weekly"
@@ -109,6 +136,121 @@ function fmtR(n: number) {
   return `R ${n.toLocaleString("en-ZA", { maximumFractionDigits: 0 })}`;
 }
 
+function fmtCompact(n: number) {
+  const abs = Math.abs(n);
+  const sign = n < 0 ? "-" : "";
+  if (abs >= 1_000_000) return `${sign}R\u00a0${(abs / 1_000_000).toFixed(abs >= 10_000_000 ? 0 : 1)}m`;
+  if (abs >= 1_000) return `${sign}R\u00a0${(abs / 1_000).toFixed(abs >= 100_000 ? 0 : 1)}k`;
+  return `${sign}R\u00a0${Math.round(abs).toLocaleString("en-ZA")}`;
+}
+
+// ── Brand palette (matches profitability waterfall / accountant reports) ─────
+const GOLD = "#d4a550";
+const GOLD_DARK = "#b8860b";
+const RED = "#e05c5c";
+
+// ── Shared card shell — light + dark, gold top rule ─────────────────────────
+const CARD_SHELL =
+  "relative overflow-hidden border border-amber-900/15 bg-[radial-gradient(circle_at_90%_0%,rgba(212,165,80,0.13),transparent_34%),linear-gradient(135deg,#fffdf8,#f8f5ed)] shadow-[0_20px_60px_rgba(109,79,22,0.10)] dark:border-slate-800 dark:bg-[radial-gradient(circle_at_90%_0%,rgba(212,165,80,0.12),transparent_34%),linear-gradient(135deg,#111827,#0b1220)] dark:shadow-[0_20px_60px_rgba(0,0,0,0.25)]";
+const GOLD_RULE =
+  "pointer-events-none absolute left-0 top-0 h-1 w-full bg-gradient-to-r from-[#b7872a] via-[#f1d28b] to-transparent";
+const INPUT_CLS =
+  "border-amber-900/15 bg-white/70 text-slate-900 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-100";
+const LABEL_CLS =
+  "text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400";
+
+// ── Collapsible section card ─────────────────────────────────────────────────
+function SectionCard({
+  id,
+  icon: Icon,
+  title,
+  subtitle,
+  defaultOpen = false,
+  headerRight,
+  children,
+}: {
+  id?: string;
+  icon: React.ComponentType<{ className?: string }>;
+  title: string;
+  subtitle?: string;
+  defaultOpen?: boolean;
+  headerRight?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <Card id={id} className={CARD_SHELL}>
+      <div className={GOLD_RULE} />
+      <CardHeader className="border-b border-amber-900/10 pb-4 dark:border-slate-800">
+        <div className="flex items-center justify-between gap-3">
+          <button
+            type="button"
+            className="flex flex-1 items-center gap-3 text-left"
+            onClick={() => setOpen((o) => !o)}
+          >
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#d4a550]/15 text-[#b8860b] dark:text-[#d4a550]">
+              <Icon className="h-4 w-4" />
+            </span>
+            <span className="min-w-0">
+              <CardTitle className="text-base font-semibold tracking-tight text-slate-950 dark:text-slate-100">
+                {title}
+              </CardTitle>
+              {subtitle && (
+                <span className="mt-0.5 block text-xs text-slate-600 dark:text-slate-400">
+                  {subtitle}
+                </span>
+              )}
+            </span>
+          </button>
+          <div className="flex items-center gap-2">
+            {headerRight}
+            <button
+              type="button"
+              className="p-1 text-[#d4a550]"
+              onClick={() => setOpen((o) => !o)}
+              aria-label={open ? "Collapse" : "Expand"}
+            >
+              {open ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            </button>
+          </div>
+        </div>
+      </CardHeader>
+      {open && <CardContent className="pt-5">{children}</CardContent>}
+    </Card>
+  );
+}
+
+// ── KPI stat block ───────────────────────────────────────────────────────────
+function Stat({
+  label,
+  value,
+  sub,
+  tone = "neutral",
+}: {
+  label: string;
+  value: string;
+  sub?: React.ReactNode;
+  tone?: "neutral" | "good" | "bad";
+}) {
+  return (
+    <div className="rounded-xl border border-amber-900/10 bg-white/60 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/50">
+      <div className={LABEL_CLS}>{label}</div>
+      <div
+        className={`mt-1 truncate text-xl font-extrabold tracking-tight ${
+          tone === "good"
+            ? "text-[#3f9c72] dark:text-[#5cc492]"
+            : tone === "bad"
+              ? "text-[#c0392b] dark:text-[#ef6b6b]"
+              : "text-slate-950 dark:text-white"
+        }`}
+      >
+        {value}
+      </div>
+      {sub && <div className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">{sub}</div>}
+    </div>
+  );
+}
+
 function LineEditor({
   line,
   onChange,
@@ -121,34 +263,38 @@ function LineEditor({
   tone: "revenue" | "expense";
 }) {
   const accent =
-    tone === "revenue" ? "border-emerald-700/40 bg-emerald-950/30" : "border-rose-800/40 bg-rose-950/20";
+    tone === "revenue"
+      ? "border-l-[3px] border-l-[#4caf82]"
+      : "border-l-[3px] border-l-[#e05c5c]";
   const showSplit = line.frequency === "split-weeks" || line.frequency === "split-months";
   return (
-    <div className={`grid gap-2 rounded-lg border p-3 md:grid-cols-12 ${accent}`}>
+    <div
+      className={`grid gap-2 rounded-lg border border-amber-900/10 bg-white/60 p-3 dark:border-slate-800 dark:bg-slate-900/50 md:grid-cols-12 ${accent}`}
+    >
       <div className="md:col-span-3">
-        <Label className="text-[10px] uppercase tracking-wider text-slate-400">Line item</Label>
+        <Label className={LABEL_CLS}>Line item</Label>
         <Input
           value={line.name}
           onChange={(e) => onChange({ ...line, name: e.target.value })}
-          className="bg-slate-950/60 text-slate-100"
+          className={INPUT_CLS}
         />
       </div>
       <div className="md:col-span-2">
-        <Label className="text-[10px] uppercase tracking-wider text-slate-400">Amount (R)</Label>
+        <Label className={LABEL_CLS}>Amount (R)</Label>
         <Input
           type="number"
           value={line.amount}
           onChange={(e) => onChange({ ...line, amount: e.target.value })}
-          className="bg-slate-950/60 text-slate-100"
+          className={INPUT_CLS}
         />
       </div>
       <div className="md:col-span-3">
-        <Label className="text-[10px] uppercase tracking-wider text-slate-400">Frequency</Label>
+        <Label className={LABEL_CLS}>Frequency</Label>
         <Select
           value={line.frequency}
           onValueChange={(v) => onChange({ ...line, frequency: v as Frequency })}
         >
-          <SelectTrigger className="bg-slate-950/60 text-slate-100">
+          <SelectTrigger className={INPUT_CLS}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -161,20 +307,20 @@ function LineEditor({
         </Select>
       </div>
       <div className="md:col-span-2">
-        <Label className="text-[10px] uppercase tracking-wider text-slate-400">Start week</Label>
+        <Label className={LABEL_CLS}>Start week</Label>
         <Input
           type="number"
           min={1}
           max={WEEKS}
           value={line.startWeek}
           onChange={(e) => onChange({ ...line, startWeek: parseInt(e.target.value) || 1 })}
-          className="bg-slate-950/60 text-slate-100"
+          className={INPUT_CLS}
         />
       </div>
       <div className="md:col-span-2">
         {showSplit ? (
           <>
-            <Label className="text-[10px] uppercase tracking-wider text-slate-400">
+            <Label className={LABEL_CLS}>
               {line.frequency === "split-weeks" ? "# weeks" : "# months"}
             </Label>
             <Input
@@ -182,7 +328,7 @@ function LineEditor({
               min={1}
               value={line.splitCount}
               onChange={(e) => onChange({ ...line, splitCount: parseInt(e.target.value) || 1 })}
-              className="bg-slate-950/60 text-slate-100"
+              className={INPUT_CLS}
             />
           </>
         ) : (
@@ -193,7 +339,7 @@ function LineEditor({
             variant="ghost"
             size="sm"
             onClick={onRemove}
-            className="mt-1 h-7 w-full text-rose-300 hover:bg-rose-900/30 hover:text-rose-200"
+            className="mt-1 h-7 w-full text-[#c0392b] hover:bg-[#e05c5c]/10 hover:text-[#c0392b] dark:text-[#ef6b6b] dark:hover:text-[#ef6b6b]"
           >
             <Trash2 className="h-3 w-3" /> Remove
           </Button>
@@ -203,7 +349,9 @@ function LineEditor({
   );
 }
 
-export function CashForecastPanel({ clientId, simplified }: { clientId?: string; simplified?: boolean } = {}) {
+export function CashForecastPanel({ clientId, clientName, simplified }: { clientId?: string; clientName?: string; simplified?: boolean } = {}) {
+  const { profile } = useAccountantProfile();
+  const [exporting, setExporting] = useState(false);
   const [startDate, setStartDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [openingBalance, setOpeningBalance] = useState("0");
   const [revenue, setRevenue] = useState<LineItem[]>(DEFAULT_REVENUE);
@@ -219,6 +367,12 @@ export function CashForecastPanel({ clientId, simplified }: { clientId?: string;
   const [capexAmount, setCapexAmount] = useState("0");
   const [capexWeek, setCapexWeek] = useState(1);
   const [loaded, setLoaded] = useState(!clientId);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    const t = requestAnimationFrame(() => setMounted(true));
+    return () => cancelAnimationFrame(t);
+  }, []);
 
   useEffect(() => {
     if (!clientId) return;
@@ -357,161 +511,447 @@ export function CashForecastPanel({ clientId, simplified }: { clientId?: string;
     setList(c);
   };
 
-  const [fullscreen, setFullscreen] = useState(false);
   const lowestBal = Math.min(...calc.closing);
+  const lowestWeek = calc.closing.indexOf(lowestBal) + 1;
+  const closingW13 = calc.closing[WEEKS - 1];
+  const trajectory = closingW13 - calc.opening;
+  const scenarioActive =
+    revAdj !== 100 || expAdj !== 100 || collectDelay !== 0 || headcountDelta !== 0 ||
+    (parseFloat(fixedCostDelta) || 0) !== 0 || revGrowthPct !== 0 || (parseFloat(capexAmount) || 0) !== 0;
 
+  const chartData = weeks.map((w, i) => ({
+    week: `W${i + 1}`,
+    label: w,
+    base: Math.round(baseCalc.closing[i]),
+    scenario: Math.round(calc.closing[i]),
+  }));
+
+  /**
+   * Professional PDF export — renders the branded react-pdf CashForecastPDF
+   * report (same one used on the accountant side) from the active scenario's
+   * computed figures and downloads it.
+   */
   const exportPDF = async () => {
-    const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
-      import("jspdf"),
-      import("jspdf-autotable"),
-    ]);
-    const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
-    doc.setFontSize(16);
-    doc.text("13-Week Cash Forecast", 40, 40);
-    doc.setFontSize(10);
-    doc.setTextColor(90);
-    doc.text(
-      `Start: ${startDate}   Opening: ${fmtR(calc.opening)}   Closing W13: ${fmtR(calc.closing[WEEKS - 1])}   Lowest: ${fmtR(lowestBal)}`,
-      40,
-      58,
-    );
-    doc.text(
-      `Scenario  -  Revenue: ${revAdj}%   Expenses: ${expAdj}%   Collection delay: ${collectDelay}w`,
-      40,
-      72,
-    );
-    const head = [["Item", ...weeks.map((w, i) => `W${i + 1}\n${w}`)]];
-    const body: (string | number)[][] = [];
-    calc.revRows.forEach((r) => body.push([r.name, ...r.vals.map((v) => (v ? fmtR(v) : "—"))]));
-    body.push(["Total inflow", ...calc.inflow.map((v) => fmtR(v))]);
-    calc.expRows.forEach((r) =>
-      body.push([r.name, ...r.vals.map((v) => (v ? `(${fmtR(v)})` : "—"))]),
-    );
-    body.push(["Total outflow", ...calc.outflow.map((v) => `(${fmtR(v)})`)]);
-    body.push(["Net cash", ...calc.net.map((v) => fmtR(v))]);
-    body.push(["Closing balance", ...calc.closing.map((v) => fmtR(v))]);
-    autoTable(doc, {
-      head,
-      body,
-      startY: 90,
-      styles: { fontSize: 7, cellPadding: 3 },
-      headStyles: { fillAlignment: "center", fillColor: [30, 41, 59], textColor: 255 } as never,
-      columnStyles: { 0: { cellWidth: 110, fontStyle: "bold" } },
-      didParseCell: (d) => {
-        const last = body.length - 1;
-        if (d.section === "body" && d.row.index === last) {
-          d.cell.styles.fillColor = [12, 74, 110];
-          d.cell.styles.textColor = 255;
-          d.cell.styles.fontStyle = "bold";
-        }
-      },
-    });
-    doc.save(`cash-forecast-${startDate}.pdf`);
+    setExporting(true);
+    try {
+      const [{ pdf }, { CashForecastPDF }] = await Promise.all([
+        import("@react-pdf/renderer"),
+        import("@/reports/cash-forecast"),
+      ]);
+
+      const forecastWeeks = weeks.map((_, i) => ({
+        period_label: `Week ${i + 1}`,
+        opening_balance: Math.round(i === 0 ? calc.opening : calc.closing[i - 1]),
+        total_receipts: Math.round(calc.inflow[i]),
+        total_payments: Math.round(calc.outflow[i]),
+        net_movement: Math.round(calc.net[i]),
+        closing_balance: Math.round(calc.closing[i]),
+        scenario: "moderate" as const,
+        runway_weeks: Math.max(0, WEEKS - i),
+      }));
+
+      const assumptions = [
+        `Forecast starts ${startDate} with an opening bank balance of ${fmtR(calc.opening)}.`,
+        `Revenue assumed at ${revAdj}% of entered amounts${revGrowthPct !== 0 ? `, growing ${revGrowthPct > 0 ? "+" : ""}${revGrowthPct}% per week (compounding)` : ""}.`,
+        `Expenses assumed at ${expAdj}% of entered amounts.`,
+        collectDelay > 0
+          ? `Customer collections are delayed by ${collectDelay} week${collectDelay === 1 ? "" : "s"}.`
+          : "Customer collections land in the week they are invoiced.",
+        ...(headcountDelta !== 0
+          ? [`Headcount change of ${headcountDelta > 0 ? "+" : ""}${headcountDelta} at ${fmtR(parseFloat(avgSalary) || 0)} average monthly salary.`]
+          : []),
+        ...((parseFloat(capexAmount) || 0) !== 0
+          ? [`One-off capex of ${fmtR(parseFloat(capexAmount) || 0)} in week ${capexWeek}.`]
+          : []),
+      ];
+
+      const now = new Date();
+      const period = now.toLocaleDateString("en-ZA", { month: "long", year: "numeric" });
+      const name = clientName?.trim() || "Your Business";
+
+      const blob = await pdf(
+        CashForecastPDF({
+          smeData: { name, period },
+          cashForecast: forecastWeeks,
+          scenario: "moderate",
+          accountantProfile: profile,
+          minimumThreshold: 0,
+          assumptions,
+        }) as Parameters<typeof pdf>[0],
+      ).toBlob();
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${name.replace(/\s+/g, "_")}_${period.replace(/\s+/g, "_")}_CashForecast.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+    } catch (err) {
+      toast.error(`PDF export failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setExporting(false);
+    }
   };
 
-  // ── Simplified view: 4-week snapshot (net movement + closing balance only) ──
+  // ── Shared hero chart ──────────────────────────────────────────────────────
+  const heroChart = (height: number) => (
+    <div style={{ height }} className="w-full">
+      <ResponsiveContainer width="100%" height="100%">
+        <ComposedChart data={chartData} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+          <defs>
+            <linearGradient id="cfGoldFill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={GOLD} stopOpacity={0.35} />
+              <stop offset="100%" stopColor={GOLD} stopOpacity={0.02} />
+            </linearGradient>
+          </defs>
+          <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.25)" />
+          <XAxis dataKey="week" stroke="#94a3b8" fontSize={10} tickLine={false} axisLine={false} />
+          <YAxis
+            stroke="#94a3b8"
+            fontSize={10}
+            tickLine={false}
+            axisLine={false}
+            tickFormatter={(v) => fmtCompact(v)}
+            width={54}
+          />
+          <Tooltip
+            contentStyle={{
+              background: "rgba(17,24,39,0.95)",
+              border: "1px solid rgba(212,165,80,0.4)",
+              borderRadius: 10,
+              fontSize: 12,
+              color: "#f1f5f9",
+            }}
+            labelStyle={{ color: "#d4a550", fontWeight: 700 }}
+            formatter={(v: number, name: string) => [fmtR(v), name === "base" ? "Base" : "Scenario"]}
+            labelFormatter={(l, payload) => {
+              const p = payload?.[0]?.payload as { label?: string } | undefined;
+              return p?.label ? `${l} · ${p.label}` : String(l);
+            }}
+          />
+          <ReferenceLine y={0} stroke={RED} strokeDasharray="3 3" strokeOpacity={0.7} />
+          {scenarioActive && (
+            <Line
+              type="monotone"
+              dataKey="base"
+              name="base"
+              stroke="#94a3b8"
+              strokeDasharray="5 5"
+              dot={false}
+              strokeWidth={1.5}
+              isAnimationActive
+              animationDuration={900}
+            />
+          )}
+          <Area
+            type="monotone"
+            dataKey="scenario"
+            name="scenario"
+            stroke={GOLD}
+            strokeWidth={2.5}
+            fill="url(#cfGoldFill)"
+            dot={false}
+            activeDot={{ r: 4, fill: GOLD_DARK, stroke: "#fff", strokeWidth: 1.5 }}
+            isAnimationActive
+            animationDuration={mounted ? 700 : 1100}
+          />
+        </ComposedChart>
+      </ResponsiveContainer>
+    </div>
+  );
+
+  const shortfall = lowestBal < 0;
+
+  const heroBadge = (
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wide ${
+        shortfall
+          ? "border-[#e05c5c] bg-[#e05c5c]/10 text-[#c0392b] dark:text-[#ef6b6b]"
+          : "border-[#4caf82] bg-[#4caf82]/10 text-[#3f9c72] dark:text-[#5cc492]"
+      }`}
+    >
+      {shortfall ? <AlertTriangle className="h-3 w-3" /> : <CheckCircle2 className="h-3 w-3" />}
+      {shortfall ? `Shortfall W${lowestWeek}` : "In the black"}
+    </span>
+  );
+
+  // ── Simplified mode: glanceable hero ─────────────────────────────────────
   if (simplified) {
-    const SIMPLE_WEEKS = 4;
-    const weekLabels = weeks.slice(0, SIMPLE_WEEKS);
-    const net4    = calc.net.slice(0, SIMPLE_WEEKS);
-    const close4  = calc.closing.slice(0, SIMPLE_WEEKS);
     return (
-      <div className="space-y-4">
-        <Card className="border-2 border-slate-700/40 bg-slate-900/70 shadow-xl">
-          <CardHeader className="border-b border-slate-700/30 pb-3">
-            <CardTitle className="text-slate-100 text-sm">4-Week Cash Snapshot</CardTitle>
-            <CardDescription className="text-slate-400 text-xs">
-              Net movement and closing balance · Opening: {fmtR(calc.opening)}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="pt-4">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="border-b border-slate-700/40 text-slate-400">
-                  <th className="py-2 pr-3 text-left">Row</th>
-                  {weekLabels.map((w, i) => (
-                    <th key={i} className="py-2 text-right">
-                      W{i + 1}
-                      <div className="text-[9px] font-normal text-slate-500">{w}</div>
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                <tr className="border-b border-slate-800/40 font-semibold text-slate-100">
-                  <td className="py-2 pr-3">Net movement</td>
-                  {net4.map((v, i) => (
-                    <td key={i} className={`py-2 text-right ${v < 0 ? "text-rose-300" : "text-emerald-300"}`}>
-                      {fmtR(v)}
-                    </td>
-                  ))}
-                </tr>
-                <tr className="bg-sky-950/30 font-bold text-sky-100">
-                  <td className="py-2 pr-3">Closing balance</td>
-                  {close4.map((v, i) => (
-                    <td key={i} className={`py-2 text-right ${v < 0 ? "text-rose-300" : "text-sky-200"}`}>
-                      {fmtR(v)}
-                    </td>
-                  ))}
-                </tr>
-              </tbody>
-            </table>
-          </CardContent>
-        </Card>
-      </div>
+      <Card className={CARD_SHELL}>
+        <div className={GOLD_RULE} />
+        <CardHeader className="border-b border-amber-900/10 pb-4 dark:border-slate-800">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <CardTitle className="text-xl font-semibold tracking-tight text-slate-950 dark:text-slate-100">
+                Cash Outlook
+              </CardTitle>
+              <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">
+                13-week closing balance trajectory · opening {fmtR(calc.opening)}
+              </p>
+            </div>
+            {heroBadge}
+          </div>
+        </CardHeader>
+        <CardContent className="pt-5">
+          <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <Stat
+              label="Closing · Week 13"
+              value={fmtCompact(closingW13)}
+              tone={closingW13 < 0 ? "bad" : "neutral"}
+              sub={
+                <span className="inline-flex items-center gap-1">
+                  {trajectory >= 0 ? (
+                    <TrendingUp className="h-3 w-3 text-[#3f9c72]" />
+                  ) : (
+                    <TrendingDown className="h-3 w-3 text-[#c0392b]" />
+                  )}
+                  {trajectory >= 0 ? "+" : ""}
+                  {fmtCompact(trajectory)} over 13 weeks
+                </span>
+              }
+            />
+            <Stat
+              label="Lowest balance"
+              value={fmtCompact(lowestBal)}
+              tone={shortfall ? "bad" : "good"}
+              sub={`Week ${lowestWeek} · ${weeks[lowestWeek - 1]}`}
+            />
+            <Stat
+              label="Net cash · next 4 weeks"
+              value={fmtCompact(calc.net.slice(0, 4).reduce((a, b) => a + b, 0))}
+              tone={calc.net.slice(0, 4).reduce((a, b) => a + b, 0) < 0 ? "bad" : "good"}
+              sub="Inflows minus outflows"
+            />
+          </div>
+          {heroChart(180)}
+        </CardContent>
+      </Card>
     );
   }
 
+  // ── Complex mode ──────────────────────────────────────────────────────────
   return (
-    <div className={fullscreen ? "fixed inset-0 z-[100] overflow-auto bg-slate-950 p-3 sm:p-5" : "space-y-5"}>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="md:hidden text-xs text-sky-300">
-          {fullscreen ? "Tip: rotate your phone to landscape." : ""}
-        </div>
-        <div className="ml-auto flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={exportPDF}
-            className="border-emerald-700/50 bg-emerald-950/40 text-emerald-200 hover:bg-emerald-900/50"
-          >
-            <Download className="h-3 w-3" /> Export PDF
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setFullscreen((f) => !f)}
-            className="border-sky-700/50 bg-sky-950/40 text-sky-200 hover:bg-sky-900/50"
-          >
-            {fullscreen ? (<><X className="h-3 w-3" /> Exit full screen</>) : (<><Maximize2 className="h-3 w-3" /> Full screen</>)}
-          </Button>
-        </div>
-      </div>
-      <div className="space-y-5">
-      <Card id="wizard-cash-table" className="border-2 border-slate-700/40 bg-slate-900/70 shadow-xl">
-        <CardHeader className="border-b border-slate-700/30">
-          <CardTitle className="text-slate-100">Weekly Forecast</CardTitle>
-          <CardDescription className="text-slate-400">
-            Closing balance per week. Red = shortfall, act early.
-          </CardDescription>
+    <div className="space-y-5">
+      {/* Hero: summary + chart */}
+      <Card className={CARD_SHELL}>
+        <div className={GOLD_RULE} />
+        <CardHeader className="border-b border-amber-900/10 pb-4 dark:border-slate-800">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <CardTitle className="text-xl font-semibold tracking-tight text-slate-950 dark:text-slate-100">
+                13-Week Cash Forecast
+              </CardTitle>
+              <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">
+                Forecast every cent in and out of the bank · catch a shortfall before it hits
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              {heroBadge}
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 gap-1.5 border-[#d4a550]/40 bg-[#d4a550]/10 px-2.5 text-[10px] text-[#b8860b] hover:bg-[#d4a550]/20 dark:text-[#d4a550]"
+                disabled={exporting}
+                onClick={exportPDF}
+              >
+                <Download className="h-3 w-3" /> {exporting ? "Preparing…" : "Export PDF"}
+              </Button>
+            </div>
+          </div>
         </CardHeader>
-        <CardContent className="overflow-x-auto pt-5">
+        <CardContent className="pt-5">
+          <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <Stat label="Opening balance" value={fmtCompact(calc.opening)} sub={`Start ${startDate}`} />
+            <Stat
+              label="Closing · Week 13"
+              value={fmtCompact(closingW13)}
+              tone={closingW13 < 0 ? "bad" : "neutral"}
+              sub={
+                scenarioActive ? (
+                  <span
+                    className={
+                      closingW13 - baseCalc.closing[WEEKS - 1] >= 0
+                        ? "text-[#3f9c72] dark:text-[#5cc492]"
+                        : "text-[#c0392b] dark:text-[#ef6b6b]"
+                    }
+                  >
+                    {closingW13 - baseCalc.closing[WEEKS - 1] >= 0 ? "+" : ""}
+                    {fmtCompact(closingW13 - baseCalc.closing[WEEKS - 1])} vs base
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1">
+                    {trajectory >= 0 ? (
+                      <TrendingUp className="h-3 w-3 text-[#3f9c72]" />
+                    ) : (
+                      <TrendingDown className="h-3 w-3 text-[#c0392b]" />
+                    )}
+                    {trajectory >= 0 ? "+" : ""}
+                    {fmtCompact(trajectory)} over 13 weeks
+                  </span>
+                )
+              }
+            />
+            <Stat
+              label="Lowest balance"
+              value={fmtCompact(lowestBal)}
+              tone={shortfall ? "bad" : "good"}
+              sub={`Week ${lowestWeek} · ${weeks[lowestWeek - 1]}`}
+            />
+            <Stat
+              label="Total net movement"
+              value={fmtCompact(calc.net.reduce((a, b) => a + b, 0))}
+              tone={calc.net.reduce((a, b) => a + b, 0) < 0 ? "bad" : "good"}
+              sub={`Inflows ${fmtCompact(calc.inflow.reduce((a, b) => a + b, 0))} · Outflows ${fmtCompact(calc.outflow.reduce((a, b) => a + b, 0))}`}
+            />
+          </div>
+          <div className="mb-1 flex items-center justify-between">
+            <div className={LABEL_CLS}>Closing balance trajectory</div>
+            {scenarioActive && (
+              <div className="text-[10px] text-slate-500 dark:text-slate-400">
+                Dashed = base · Gold = scenario
+              </div>
+            )}
+          </div>
+          {heroChart(240)}
+        </CardContent>
+      </Card>
+
+      {/* Scenario sliders */}
+      <SectionCard
+        id="wizard-cash-scenario"
+        icon={SlidersHorizontal}
+        title="Scenario Studio"
+        subtitle="Stress-test the forecast — what if revenue drops 20% or customers pay 2 weeks late?"
+        defaultOpen
+        headerRight={
+          scenarioActive ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-[10px] text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100"
+              onClick={(e) => {
+                e.stopPropagation();
+                setRevAdj(100); setExpAdj(100); setCollectDelay(0);
+                setHeadcountDelta(0); setAvgSalary("0"); setFixedCostDelta("0");
+                setRevGrowthPct(0); setCapexAmount("0"); setCapexWeek(1);
+              }}
+            >
+              Reset all
+            </Button>
+          ) : undefined
+        }
+      >
+        <div className="grid gap-5 md:grid-cols-3">
+          <div>
+            <div className="mb-2 flex items-center justify-between text-xs">
+              <Label className={LABEL_CLS}>Revenue</Label>
+              <span
+                className={`font-bold ${
+                  revAdj < 100
+                    ? "text-[#c0392b] dark:text-[#ef6b6b]"
+                    : revAdj > 100
+                      ? "text-[#3f9c72] dark:text-[#5cc492]"
+                      : "text-slate-700 dark:text-slate-200"
+                }`}
+              >
+                {revAdj}%
+              </span>
+            </div>
+            <Slider value={[revAdj]} min={50} max={150} step={5} onValueChange={(v) => setRevAdj(v[0])} />
+          </div>
+          <div>
+            <div className="mb-2 flex items-center justify-between text-xs">
+              <Label className={LABEL_CLS}>Expenses</Label>
+              <span
+                className={`font-bold ${
+                  expAdj > 100
+                    ? "text-[#c0392b] dark:text-[#ef6b6b]"
+                    : expAdj < 100
+                      ? "text-[#3f9c72] dark:text-[#5cc492]"
+                      : "text-slate-700 dark:text-slate-200"
+                }`}
+              >
+                {expAdj}%
+              </span>
+            </div>
+            <Slider value={[expAdj]} min={50} max={150} step={5} onValueChange={(v) => setExpAdj(v[0])} />
+          </div>
+          <div>
+            <div className="mb-2 flex items-center justify-between text-xs">
+              <Label className={LABEL_CLS}>Collection delay</Label>
+              <span className={`font-bold ${collectDelay > 0 ? "text-[#c0392b] dark:text-[#ef6b6b]" : "text-slate-700 dark:text-slate-200"}`}>
+                +{collectDelay}w
+              </span>
+            </div>
+            <Slider value={[collectDelay]} min={0} max={6} step={1} onValueChange={(v) => setCollectDelay(v[0])} />
+          </div>
+          <div className="mt-2 grid gap-5 border-t border-amber-900/10 pt-4 dark:border-slate-800 md:col-span-3 md:grid-cols-3">
+            <div>
+              <Label className={LABEL_CLS}>Headcount Δ (people)</Label>
+              <div className="mt-1 flex items-center gap-2">
+                <Button size="sm" variant="outline" className="h-8 w-8 p-0" onClick={() => setHeadcountDelta(headcountDelta - 1)}>−</Button>
+                <Input type="number" value={headcountDelta} onChange={(e) => setHeadcountDelta(parseInt(e.target.value) || 0)} className={`${INPUT_CLS} text-center`} />
+                <Button size="sm" variant="outline" className="h-8 w-8 p-0" onClick={() => setHeadcountDelta(headcountDelta + 1)}>+</Button>
+              </div>
+              <Label className={`mt-2 block ${LABEL_CLS}`}>Avg monthly salary (R)</Label>
+              <Input type="number" value={avgSalary} onChange={(e) => setAvgSalary(e.target.value)} className={INPUT_CLS} />
+            </div>
+            <div>
+              <Label className={LABEL_CLS}>Fixed cost Δ (monthly R, +/-)</Label>
+              <Input type="number" value={fixedCostDelta} onChange={(e) => setFixedCostDelta(e.target.value)} className={INPUT_CLS} />
+              <div className="mb-1 mt-3 flex items-center justify-between text-xs">
+                <Label className={LABEL_CLS}>Revenue growth / week</Label>
+                <span
+                  className={`font-bold ${
+                    revGrowthPct < 0
+                      ? "text-[#c0392b] dark:text-[#ef6b6b]"
+                      : revGrowthPct > 0
+                        ? "text-[#3f9c72] dark:text-[#5cc492]"
+                        : "text-slate-700 dark:text-slate-200"
+                  }`}
+                >
+                  {revGrowthPct > 0 ? "+" : ""}{revGrowthPct}%
+                </span>
+              </div>
+              <Slider value={[revGrowthPct]} min={-10} max={10} step={0.5} onValueChange={(v) => setRevGrowthPct(v[0])} />
+            </div>
+            <div>
+              <Label className={LABEL_CLS}>One-off capex (R)</Label>
+              <Input type="number" value={capexAmount} onChange={(e) => setCapexAmount(e.target.value)} className={INPUT_CLS} />
+              <Label className={`mt-2 block ${LABEL_CLS}`}>In week #</Label>
+              <Input type="number" min={1} max={WEEKS} value={capexWeek} onChange={(e) => setCapexWeek(parseInt(e.target.value) || 1)} className={INPUT_CLS} />
+            </div>
+          </div>
+        </div>
+      </SectionCard>
+
+      {/* Weekly forecast table */}
+      <SectionCard
+        id="wizard-cash-table"
+        icon={Table2}
+        title="Weekly Detail"
+        subtitle="Full line-by-line forecast · red = shortfall, act early"
+      >
+        <div className="overflow-x-auto">
           <table className="w-full min-w-[900px] text-xs">
             <thead>
-              <tr className="border-b border-slate-700/40 text-slate-400">
-                <th className="sticky left-0 bg-slate-900/70 px-2 py-2 text-left">Item</th>
+              <tr className="border-b border-amber-900/15 text-slate-500 dark:border-slate-700 dark:text-slate-400">
+                <th className="sticky left-0 bg-[#fdfaf3] px-2 py-2 text-left dark:bg-[#101827]">Item</th>
                 {weeks.map((w, i) => (
                   <th key={i} className="px-2 py-2 text-right">
                     W{i + 1}
-                    <div className="text-[9px] font-normal text-slate-500">{w}</div>
+                    <div className="text-[9px] font-normal text-slate-400 dark:text-slate-500">{w}</div>
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {calc.revRows.map((r, i) => (
-                <tr key={`r${i}`} className="border-b border-slate-800/40 text-emerald-200">
-                  <td className="sticky left-0 bg-slate-900/70 px-2 py-1">{r.name}</td>
+                <tr key={`r${i}`} className="border-b border-amber-900/10 text-slate-700 dark:border-slate-800 dark:text-slate-300">
+                  <td className="sticky left-0 bg-[#fdfaf3] px-2 py-1 dark:bg-[#101827]">{r.name}</td>
                   {r.vals.map((v, j) => (
                     <td key={j} className="px-2 py-1 text-right">
                       {v ? fmtR(v) : "—"}
@@ -519,8 +959,8 @@ export function CashForecastPanel({ clientId, simplified }: { clientId?: string;
                   ))}
                 </tr>
               ))}
-              <tr className="border-b border-slate-700/60 bg-emerald-950/20 font-semibold text-emerald-200">
-                <td className="sticky left-0 bg-slate-900/90 px-2 py-1">Total inflow</td>
+              <tr className="border-b border-amber-900/15 bg-[#4caf82]/10 font-semibold text-[#3f9c72] dark:border-slate-700 dark:text-[#5cc492]">
+                <td className="sticky left-0 bg-[#f2f8f2] px-2 py-1 dark:bg-[#0e1a20]">Total inflow</td>
                 {calc.inflow.map((v, j) => (
                   <td key={j} className="px-2 py-1 text-right">
                     {fmtR(v)}
@@ -528,8 +968,8 @@ export function CashForecastPanel({ clientId, simplified }: { clientId?: string;
                 ))}
               </tr>
               {calc.expRows.map((r, i) => (
-                <tr key={`e${i}`} className="border-b border-slate-800/40 text-rose-200">
-                  <td className="sticky left-0 bg-slate-900/70 px-2 py-1">{r.name}</td>
+                <tr key={`e${i}`} className="border-b border-amber-900/10 text-slate-700 dark:border-slate-800 dark:text-slate-300">
+                  <td className="sticky left-0 bg-[#fdfaf3] px-2 py-1 dark:bg-[#101827]">{r.name}</td>
                   {r.vals.map((v, j) => (
                     <td key={j} className="px-2 py-1 text-right">
                       {v ? `(${fmtR(v)})` : "—"}
@@ -537,31 +977,31 @@ export function CashForecastPanel({ clientId, simplified }: { clientId?: string;
                   ))}
                 </tr>
               ))}
-              <tr className="border-b border-slate-700/60 bg-rose-950/20 font-semibold text-rose-200">
-                <td className="sticky left-0 bg-slate-900/90 px-2 py-1">Total outflow</td>
+              <tr className="border-b border-amber-900/15 bg-[#e05c5c]/10 font-semibold text-[#c0392b] dark:border-slate-700 dark:text-[#ef6b6b]">
+                <td className="sticky left-0 bg-[#faf1f0] px-2 py-1 dark:bg-[#1a1216]">Total outflow</td>
                 {calc.outflow.map((v, j) => (
                   <td key={j} className="px-2 py-1 text-right">
                     ({fmtR(v)})
                   </td>
                 ))}
               </tr>
-              <tr className="border-b border-slate-700/60 font-semibold text-slate-100">
-                <td className="sticky left-0 bg-slate-900/90 px-2 py-1">Net cash</td>
+              <tr className="border-b border-amber-900/15 font-semibold text-slate-900 dark:border-slate-700 dark:text-slate-100">
+                <td className="sticky left-0 bg-[#fdfaf3] px-2 py-1 dark:bg-[#101827]">Net cash</td>
                 {calc.net.map((v, j) => (
                   <td
                     key={j}
-                    className={`px-2 py-1 text-right ${v < 0 ? "text-rose-300" : "text-emerald-300"}`}
+                    className={`px-2 py-1 text-right ${v < 0 ? "text-[#c0392b] dark:text-[#ef6b6b]" : "text-[#3f9c72] dark:text-[#5cc492]"}`}
                   >
                     {fmtR(v)}
                   </td>
                 ))}
               </tr>
-              <tr className="bg-sky-950/30 font-bold text-sky-100">
-                <td className="sticky left-0 bg-slate-900/90 px-2 py-1">Closing balance</td>
+              <tr className="bg-[#d4a550]/15 font-bold text-slate-950 dark:text-white">
+                <td className="sticky left-0 bg-[#f7efdd] px-2 py-1 dark:bg-[#1c1a12]">Closing balance</td>
                 {calc.closing.map((v, j) => (
                   <td
                     key={j}
-                    className={`px-2 py-1 text-right ${v < 0 ? "text-rose-300" : "text-sky-200"}`}
+                    className={`px-2 py-1 text-right ${v < 0 ? "text-[#c0392b] dark:text-[#ef6b6b]" : ""}`}
                   >
                     {fmtR(v)}
                   </td>
@@ -569,291 +1009,148 @@ export function CashForecastPanel({ clientId, simplified }: { clientId?: string;
               </tr>
             </tbody>
           </table>
-        </CardContent>
-      </Card>
+        </div>
+      </SectionCard>
 
-      <Card id="wizard-cash-scenario" className="border-2 border-amber-700/40 bg-slate-900/70 shadow-xl">
-        <CardHeader className="border-b border-slate-700/30">
-          <CardTitle className="flex items-center gap-2 text-amber-200">
-            <SlidersHorizontal className="h-4 w-4" /> Scenario Sliders
-          </CardTitle>
-          <CardDescription className="text-slate-400">
-            Stress-test the forecast. What if revenue drops 20%? What if customers pay 2 weeks late?
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-5 pt-5 md:grid-cols-3">
-          <div>
-            <div className="mb-2 flex items-center justify-between text-xs">
-              <Label className="uppercase tracking-wider text-slate-400">Revenue</Label>
-              <span className={`font-bold ${revAdj < 100 ? "text-rose-300" : revAdj > 100 ? "text-emerald-300" : "text-slate-200"}`}>{revAdj}%</span>
-            </div>
-            <Slider value={[revAdj]} min={50} max={150} step={5} onValueChange={(v) => setRevAdj(v[0])} />
-          </div>
-          <div>
-            <div className="mb-2 flex items-center justify-between text-xs">
-              <Label className="uppercase tracking-wider text-slate-400">Expenses</Label>
-              <span className={`font-bold ${expAdj > 100 ? "text-rose-300" : expAdj < 100 ? "text-emerald-300" : "text-slate-200"}`}>{expAdj}%</span>
-            </div>
-            <Slider value={[expAdj]} min={50} max={150} step={5} onValueChange={(v) => setExpAdj(v[0])} />
-          </div>
-          <div>
-            <div className="mb-2 flex items-center justify-between text-xs">
-              <Label className="uppercase tracking-wider text-slate-400">Collection delay</Label>
-              <span className={`font-bold ${collectDelay > 0 ? "text-rose-300" : "text-slate-200"}`}>+{collectDelay}w</span>
-            </div>
-            <Slider value={[collectDelay]} min={0} max={6} step={1} onValueChange={(v) => setCollectDelay(v[0])} />
-          </div>
-          <div className="md:col-span-3 mt-2 border-t border-slate-700/40 pt-4 grid gap-5 md:grid-cols-3">
-            <div>
-              <Label className="text-[10px] uppercase tracking-wider text-slate-400">Headcount Δ (people)</Label>
-              <div className="mt-1 flex items-center gap-2">
-                <Button size="sm" variant="outline" className="h-8 w-8 p-0" onClick={() => setHeadcountDelta(headcountDelta - 1)}>−</Button>
-                <Input type="number" value={headcountDelta} onChange={(e) => setHeadcountDelta(parseInt(e.target.value) || 0)} className="bg-slate-950/60 text-slate-100 text-center" />
-                <Button size="sm" variant="outline" className="h-8 w-8 p-0" onClick={() => setHeadcountDelta(headcountDelta + 1)}>+</Button>
-              </div>
-              <Label className="mt-2 block text-[10px] uppercase tracking-wider text-slate-400">Avg monthly salary (R)</Label>
-              <Input type="number" value={avgSalary} onChange={(e) => setAvgSalary(e.target.value)} className="bg-slate-950/60 text-slate-100" />
-            </div>
-            <div>
-              <Label className="text-[10px] uppercase tracking-wider text-slate-400">Fixed cost Δ (monthly R, +/-)</Label>
-              <Input type="number" value={fixedCostDelta} onChange={(e) => setFixedCostDelta(e.target.value)} className="bg-slate-950/60 text-slate-100" />
-              <div className="mt-3 mb-1 flex items-center justify-between text-xs">
-                <Label className="uppercase tracking-wider text-slate-400">Revenue growth / week</Label>
-                <span className={`font-bold ${revGrowthPct < 0 ? "text-rose-300" : revGrowthPct > 0 ? "text-emerald-300" : "text-slate-200"}`}>{revGrowthPct > 0 ? "+" : ""}{revGrowthPct}%</span>
-              </div>
-              <Slider value={[revGrowthPct]} min={-10} max={10} step={0.5} onValueChange={(v) => setRevGrowthPct(v[0])} />
-            </div>
-            <div>
-              <Label className="text-[10px] uppercase tracking-wider text-slate-400">One-off capex (R)</Label>
-              <Input type="number" value={capexAmount} onChange={(e) => setCapexAmount(e.target.value)} className="bg-slate-950/60 text-slate-100" />
-              <Label className="mt-2 block text-[10px] uppercase tracking-wider text-slate-400">In week #</Label>
-              <Input type="number" min={1} max={WEEKS} value={capexWeek} onChange={(e) => setCapexWeek(parseInt(e.target.value) || 1)} className="bg-slate-950/60 text-slate-100" />
-            </div>
-          </div>
-
-          <div className="md:col-span-3 mt-2 border-t border-slate-700/40 pt-4">
-            <div className="mb-2 flex items-center justify-between">
-              <Label className="text-[10px] uppercase tracking-wider text-slate-400">Closing balance: base vs scenario</Label>
-              <div className="text-[10px] text-slate-500">Dashed = base · Solid = scenario</div>
-            </div>
-            <div className="h-56 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart
-                  data={weeks.map((w, i) => ({ week: `W${i + 1}`, label: w, base: Math.round(baseCalc.closing[i]), scenario: Math.round(calc.closing[i]) }))}
-                  margin={{ top: 8, right: 12, left: 0, bottom: 0 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                  <XAxis dataKey="week" stroke="#94a3b8" fontSize={10} />
-                  <YAxis stroke="#94a3b8" fontSize={10} tickFormatter={(v) => `R${(v / 1000).toFixed(0)}k`} />
-                  <Tooltip
-                    contentStyle={{ background: "#0f172a", border: "1px solid #334155", borderRadius: 8, fontSize: 12 }}
-                    formatter={(v: number) => fmtR(v)}
-                  />
-                  <ReferenceLine y={0} stroke="#f43f5e" strokeDasharray="2 2" />
-                  <Legend wrapperStyle={{ fontSize: 11 }} />
-                  <Line type="monotone" dataKey="base" name="Base" stroke="#94a3b8" strokeDasharray="5 5" dot={false} strokeWidth={2} />
-                  <Line type="monotone" dataKey="scenario" name="Scenario" stroke="#38bdf8" dot={false} strokeWidth={2.5} />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          <div className="md:col-span-3 flex flex-wrap items-center justify-between gap-3 border-t border-slate-700/40 pt-4">
-            <div className="flex flex-wrap gap-3 text-xs">
-              <div className="rounded-md border border-sky-700/40 bg-sky-950/30 px-3 py-1.5">
-                <span className="text-slate-400">Closing W13: </span>
-                <span className="font-bold text-slate-100">{fmtR(calc.closing[WEEKS - 1])}</span>
-                <span className={`ml-2 ${calc.closing[WEEKS - 1] - baseCalc.closing[WEEKS - 1] >= 0 ? "text-emerald-300" : "text-rose-300"}`}>
-                  ({calc.closing[WEEKS - 1] - baseCalc.closing[WEEKS - 1] >= 0 ? "+" : ""}{fmtR(calc.closing[WEEKS - 1] - baseCalc.closing[WEEKS - 1])} vs base)
-                </span>
-              </div>
-              <div className="rounded-md border border-amber-700/40 bg-amber-950/30 px-3 py-1.5">
-                <span className="text-slate-400">Lowest balance: </span>
-                <span className={`font-bold ${Math.min(...calc.closing) < 0 ? "text-rose-300" : "text-emerald-300"}`}>{fmtR(Math.min(...calc.closing))}</span>
-              </div>
-            </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                setRevAdj(100); setExpAdj(100); setCollectDelay(0);
-                setHeadcountDelta(0); setAvgSalary("0"); setFixedCostDelta("0");
-                setRevGrowthPct(0); setCapexAmount("0"); setCapexWeek(1);
+      {/* Setup + inputs */}
+      <SectionCard
+        id="wizard-cash-setup"
+        icon={Settings2}
+        title="Forecast Setup"
+        subtitle="Start date, opening balance and CSV import"
+        headerRight={
+          <>
+            <input
+              type="file"
+              accept=".csv,.txt"
+              className="hidden"
+              id="cf-csv-import"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                file.text().then((raw) => {
+                  const rows = raw.split(/\r?\n/).map((r) => r.split(",").map((c) => c.trim().replace(/^"|"$/g, "")));
+                  const newRev: typeof DEFAULT_REVENUE = [];
+                  const newExp: typeof DEFAULT_EXPENSES = [];
+                  for (const row of rows) {
+                    if (row.length < 2) continue;
+                    const name = row[0];
+                    const amt = parseFloat(row[1].replace(/[^0-9.\-]/g, ""));
+                    if (!name || !isFinite(amt)) continue;
+                    const typeHint = (row[2] ?? "").toLowerCase();
+                    const isExpense = amt < 0 || typeHint.startsWith("exp") || typeHint.startsWith("cost");
+                    const line: LineItem = { id: newId(), name, amount: String(Math.abs(amt)), frequency: "recurring-monthly", startWeek: 1, splitCount: 3 };
+                    if (isExpense) newExp.push(line); else newRev.push(line);
+                  }
+                  if (newRev.length) setRevenue(newRev);
+                  if (newExp.length) setExpenses(newExp);
+                  if (!newRev.length && !newExp.length) {
+                    toast.warning("No valid rows found. Use format: Name, Amount, [revenue|expense]");
+                  } else {
+                    toast.success(`Imported ${newRev.length} revenue + ${newExp.length} expense lines`);
+                  }
+                  e.target.value = "";
+                });
               }}
-              className="text-slate-400 hover:text-slate-100"
+            />
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 gap-1.5 border-[#d4a550]/40 bg-[#d4a550]/10 px-2.5 text-[10px] text-[#b8860b] hover:bg-[#d4a550]/20 dark:text-[#d4a550]"
+              onClick={(e) => {
+                e.stopPropagation();
+                document.getElementById("cf-csv-import")?.click();
+              }}
             >
-              Reset all scenarios
+              <Upload className="h-3 w-3" /> Import CSV
+            </Button>
+          </>
+        }
+      >
+        <div className="grid gap-3 md:grid-cols-2">
+          <div>
+            <Label className={LABEL_CLS}>Forecast start date</Label>
+            <Input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className={INPUT_CLS}
+            />
+          </div>
+          <div>
+            <Label className={LABEL_CLS}>Opening bank balance (R)</Label>
+            <Input
+              type="number"
+              value={openingBalance}
+              onChange={(e) => setOpeningBalance(e.target.value)}
+              className={INPUT_CLS}
+            />
+          </div>
+        </div>
+      </SectionCard>
+
+      <SectionCard
+        icon={Wallet}
+        title="Money In & Out"
+        subtitle="Revenue and expense line items — pick how each lands across the 13 weeks"
+      >
+        <div className="space-y-6">
+          <div className="space-y-3">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-[#3f9c72] dark:text-[#5cc492]">
+              Revenue inputs
+            </div>
+            {revenue.map((l, i) => (
+              <LineEditor
+                key={l.id}
+                line={l}
+                tone="revenue"
+                onChange={(n) => updateAt(revenue, setRevenue, i, n)}
+                onRemove={revenue.length > 1 ? () => setRevenue(revenue.filter((_, x) => x !== i)) : undefined}
+              />
+            ))}
+            <Button
+              variant="outline"
+              onClick={() => setRevenue([...revenue, makeLine("New revenue line")])}
+              className="w-full border-[#4caf82]/40 bg-[#4caf82]/5 text-[#3f9c72] hover:bg-[#4caf82]/15 dark:text-[#5cc492]"
+            >
+              <Plus className="h-4 w-4" /> Add revenue line
             </Button>
           </div>
-        </CardContent>
-      </Card>
-      <Card id="wizard-cash-setup" className="border-2 border-slate-700/40 bg-slate-900/70 shadow-xl">
-        <CardHeader className="border-b border-slate-700/30">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <CardTitle className="text-slate-100">13-Week Cash Forecast</CardTitle>
-              <CardDescription className="text-slate-400">
-                Forecast every cent of cash in and out of the bank for the next 13 weeks. Catch a
-                shortfall before it hits.
-              </CardDescription>
-            </div>
-            <div>
-              <input
-                type="file"
-                accept=".csv,.txt"
-                className="hidden"
-                id="cf-csv-import"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (!file) return;
-                  file.text().then((raw) => {
-                    const rows = raw.split(/\r?\n/).map((r) => r.split(",").map((c) => c.trim().replace(/^"|"$/g, "")));
-                    const newRev: typeof DEFAULT_REVENUE = [];
-                    const newExp: typeof DEFAULT_EXPENSES = [];
-                    for (const row of rows) {
-                      if (row.length < 2) continue;
-                      const name = row[0];
-                      const amt = parseFloat(row[1].replace(/[^0-9.\-]/g, ""));
-                      if (!name || !isFinite(amt)) continue;
-                      const typeHint = (row[2] ?? "").toLowerCase();
-                      const isExpense = amt < 0 || typeHint.startsWith("exp") || typeHint.startsWith("cost");
-                      const line: LineItem = { id: newId(), name, amount: String(Math.abs(amt)), frequency: "recurring-monthly", startWeek: 1, splitCount: 3 };
-                      if (isExpense) newExp.push(line); else newRev.push(line);
-                    }
-                    if (newRev.length) setRevenue(newRev);
-                    if (newExp.length) setExpenses(newExp);
-                    if (!newRev.length && !newExp.length) {
-                      toast.warning("No valid rows found. Use format: Name, Amount, [revenue|expense]");
-                    } else {
-                      toast.success(`Imported ${newRev.length} revenue + ${newExp.length} expense lines`);
-                    }
-                    e.target.value = "";
-                  });
-                }}
-              />
-              <Button
-                size="sm"
-                variant="outline"
-                className="gap-1.5 border-slate-600 bg-slate-800 text-slate-200 hover:bg-slate-700 text-xs"
-                onClick={() => document.getElementById("cf-csv-import")?.click()}
-              >
-                <Upload className="h-3.5 w-3.5" />
-                Import CSV
-              </Button>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4 pt-5">
-          <div className="grid gap-3 md:grid-cols-3">
-            <div>
-              <Label className="text-xs uppercase tracking-wider text-slate-400">
-                Forecast start date
-              </Label>
-              <Input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="bg-slate-950/60 text-slate-100"
-              />
-            </div>
-            <div>
-              <Label className="text-xs uppercase tracking-wider text-slate-400">
-                Opening bank balance (R)
-              </Label>
-              <Input
-                type="number"
-                value={openingBalance}
-                onChange={(e) => setOpeningBalance(e.target.value)}
-                className="bg-slate-950/60 text-slate-100"
-              />
-            </div>
-            <div className="rounded-lg border border-sky-800/40 bg-sky-950/30 p-3">
-              <div className="text-[10px] uppercase tracking-wider text-sky-300">
-                Projected closing (week 13)
-              </div>
-              <div className="text-xl font-bold text-slate-100">
-                {fmtR(calc.closing[WEEKS - 1])}
-              </div>
-              <div
-                className={`text-xs ${lowestBal < 0 ? "text-rose-300" : "text-emerald-300"}`}
-              >
-                Lowest balance: {fmtR(lowestBal)}{" "}
-                {lowestBal < 0 ? "⚠ shortfall" : "✓ in the black"}
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
 
-      <Card className="border-2 border-emerald-800/40 bg-slate-900/70 shadow-xl">
-        <CardHeader className="border-b border-slate-700/30">
-          <CardTitle className="text-emerald-300">Revenue Inputs</CardTitle>
-          <CardDescription className="text-slate-400">
-            Add every cash inflow. Pick how it lands across the 13 weeks.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3 pt-5">
-          {revenue.map((l, i) => (
-            <LineEditor
-              key={l.id}
-              line={l}
-              tone="revenue"
-              onChange={(n) => updateAt(revenue, setRevenue, i, n)}
-              onRemove={revenue.length > 1 ? () => setRevenue(revenue.filter((_, x) => x !== i)) : undefined}
-            />
-          ))}
-          <Button
-            variant="outline"
-            onClick={() => setRevenue([...revenue, makeLine("New revenue line")])}
-            className="w-full border-emerald-700/50 bg-emerald-950/30 text-emerald-200 hover:bg-emerald-900/40"
-          >
-            <Plus className="h-4 w-4" /> Add revenue line
-          </Button>
-        </CardContent>
-      </Card>
-
-      <Card className="border-2 border-rose-800/40 bg-slate-900/70 shadow-xl">
-        <CardHeader className="border-b border-slate-700/30">
-          <CardTitle className="text-rose-300">Expense Inputs</CardTitle>
-          <CardDescription className="text-slate-400">
-            5 main expense slots, plus catch-all "other expenses". Add as many lines as you need.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3 pt-5">
-          <div className="text-[10px] font-bold uppercase tracking-wider text-rose-300/70">
-            Main expenses
+          <div className="space-y-3 border-t border-amber-900/10 pt-5 dark:border-slate-800">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-[#c0392b] dark:text-[#ef6b6b]">
+              Main expenses
+            </div>
+            {expenses.map((l, i) => (
+              <LineEditor
+                key={l.id}
+                line={l}
+                tone="expense"
+                onChange={(n) => updateAt(expenses, setExpenses, i, n)}
+              />
+            ))}
+            <div className="mt-4 text-[10px] font-bold uppercase tracking-wider text-[#c0392b] dark:text-[#ef6b6b]">
+              Other expenses
+            </div>
+            {other.map((l, i) => (
+              <LineEditor
+                key={l.id}
+                line={l}
+                tone="expense"
+                onChange={(n) => updateAt(other, setOther, i, n)}
+                onRemove={other.length > 1 ? () => setOther(other.filter((_, x) => x !== i)) : undefined}
+              />
+            ))}
+            <Button
+              variant="outline"
+              onClick={() => setOther([...other, makeLine("Other expense")])}
+              className="w-full border-[#e05c5c]/40 bg-[#e05c5c]/5 text-[#c0392b] hover:bg-[#e05c5c]/15 dark:text-[#ef6b6b]"
+            >
+              <Plus className="h-4 w-4" /> Add other expense line
+            </Button>
           </div>
-          {expenses.map((l, i) => (
-            <LineEditor
-              key={l.id}
-              line={l}
-              tone="expense"
-              onChange={(n) => updateAt(expenses, setExpenses, i, n)}
-            />
-          ))}
-          <div className="mt-4 text-[10px] font-bold uppercase tracking-wider text-rose-300/70">
-            Other expenses
-          </div>
-          {other.map((l, i) => (
-            <LineEditor
-              key={l.id}
-              line={l}
-              tone="expense"
-              onChange={(n) => updateAt(other, setOther, i, n)}
-              onRemove={other.length > 1 ? () => setOther(other.filter((_, x) => x !== i)) : undefined}
-            />
-          ))}
-          <Button
-            variant="outline"
-            onClick={() => setOther([...other, makeLine("Other expense")])}
-            className="w-full border-rose-700/50 bg-rose-950/30 text-rose-200 hover:bg-rose-900/40"
-          >
-            <Plus className="h-4 w-4" /> Add other expense line
-          </Button>
-        </CardContent>
-      </Card>
-
-      </div>
+        </div>
+      </SectionCard>
     </div>
   );
 }

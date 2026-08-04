@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
+import { SIGNUP_ACCESS_CODE, notifySignup } from "@/lib/signup-notify";
 
 export const Route = createFileRoute("/auth")({
   component: AuthPage,
@@ -25,7 +26,13 @@ function AuthPage() {
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
   const [firmName, setFirmName] = useState("");
+  const [accessCode, setAccessCode] = useState("");
   const [busy, setBusy] = useState(false);
+
+  /* Client-only form gate — browser password managers (LastPass etc.) inject
+     DOM nodes into password forms, causing fatal SSR hydration mismatches. */
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
 
   useEffect(() => {
     if (!loading && user) navigate({ to: "/dashboard" });
@@ -33,6 +40,10 @@ function AuthPage() {
 
   const handle = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (mode === "signup" && accessCode.trim() !== SIGNUP_ACCESS_CODE) {
+      toast.error("Invalid access code. Contact us to get access.");
+      return;
+    }
     setBusy(true);
     try {
       if (mode === "signup") {
@@ -45,6 +56,7 @@ function AuthPage() {
           },
         });
         if (error) throw error;
+        notifySignup("Accountant firm", email, fullName);
         if (!data.session) {
           toast.success("Account created — check your email to confirm before signing in.");
           return;
@@ -128,7 +140,7 @@ function AuthPage() {
               <TabsTrigger value="signin">Sign in</TabsTrigger>
               <TabsTrigger value="signup">Create firm</TabsTrigger>
             </TabsList>
-            <form onSubmit={handle} className="space-y-3 mt-4">
+            {mounted && <form onSubmit={handle} className="space-y-3 mt-4">
               {mode === "signup" && (
                 <>
                   <div>
@@ -138,6 +150,10 @@ function AuthPage() {
                   <div>
                     <Label>Firm name</Label>
                     <Input value={firmName} onChange={(e) => setFirmName(e.target.value)} placeholder="Acme & Partners" required />
+                  </div>
+                  <div>
+                    <Label>Access code</Label>
+                    <Input value={accessCode} onChange={(e) => setAccessCode(e.target.value)} placeholder="Provided by your MILŌN contact" required />
                   </div>
                 </>
               )}
@@ -152,7 +168,7 @@ function AuthPage() {
               <Button type="submit" className="w-full" disabled={busy}>
                 {busy ? "Please wait…" : mode === "signin" ? "Sign in" : "Create firm account"}
               </Button>
-            </form>
+            </form>}
             <TabsContent value="signin" />
             <TabsContent value="signup" />
           </Tabs>

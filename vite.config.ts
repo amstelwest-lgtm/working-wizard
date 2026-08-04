@@ -24,6 +24,13 @@ export default defineConfig({
       host: "0.0.0.0",
       allowedHosts: true,
     },
+    build: {
+      rollupOptions: {
+        // ask-ai.js is a public-directory vanilla-JS widget loaded at runtime.
+        // Declaring it external prevents Rollup from trying to bundle it during build.
+        external: ["/ask-ai.js"],
+      },
+    },
     // Override stale .env VITE_* values with the live process.env at dev/build time.
     // process.env is populated by Replit's env system with the correct project values.
     define: {

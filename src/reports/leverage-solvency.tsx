@@ -1,10 +1,9 @@
 /**
  * LeverageSolvencyPDF — Leverage & Solvency Report.
- * Page 1: Debt summary + breakdown table + 5 financing ratio rows.
- * Page 2: Debt maturity bar chart + equity bridge.
+ * Page 1: exec summary + funding structure visual + leverage ratio rows.
+ * Page 2: debt facility breakdown + equity movement.
  *
- * SSR safety: Only import via dynamic import() — never at top level of an
- * SSR-rendered module.
+ * SSR safety: Only import via dynamic import().
  */
 
 import { View, Text, StyleSheet } from "@react-pdf/renderer";
@@ -13,6 +12,11 @@ import { PDFDocument, type SmeData } from "@/components/pdf/pdf-document";
 import { scoreTier } from "@/lib/ratios";
 import { MetricBox } from "@/components/pdf/metric-box";
 import { RatioRow } from "@/components/pdf/ratio-row";
+import { ReportTitle } from "@/components/pdf/report-title";
+import { SectionHeader } from "@/components/pdf/section-header";
+import { ExecSummary, type HeadlineFigure } from "@/components/pdf/exec-summary";
+import { C, fmtRand, fmtRandCompact, fmtPct, resolveTheme } from "@/components/pdf/theme";
+import { leverageNarrative } from "./narrative";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -43,139 +47,91 @@ export type LeverageSolvencyPDFProps = {
   smeData: SmeData;
   data: LeverageSolvencyData;
   accountantProfile: AccountantProfile;
+  isDemo?: boolean;
 };
 
-// ── Helpers ────────────────────────────────────────────────────────────────
+// ── Funding structure bar ──────────────────────────────────────────────────
 
-function formatRand(v: number): string {
-  const abs = Math.abs(Math.round(v));
-  return (v < 0 ? "-R " : "R ") + abs.toLocaleString("en-ZA");
-}
-
-// ── Styles ─────────────────────────────────────────────────────────────────
-
-const S = StyleSheet.create({
-  title: { fontSize: 20, fontFamily: "Helvetica-Bold", color: "#111827", marginBottom: 4 },
-  subtitle: { fontSize: 9, color: "#6b7280", fontFamily: "Helvetica", marginBottom: 16 },
-  metricsRow: { flexDirection: "row", gap: 10, marginBottom: 18 },
-  sectionTitle: { fontSize: 9, fontFamily: "Helvetica-Bold", color: "#374151", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8, marginTop: 16, paddingBottom: 4, borderBottomWidth: 1, borderBottomColor: "#e5e7eb" },
-  // Debt table
-  tblHeader: { flexDirection: "row", paddingHorizontal: 10, paddingVertical: 7 },
-  tblHCell: { fontSize: 7, fontFamily: "Helvetica-Bold", color: "#ffffff" },
-  tblRow: { flexDirection: "row", paddingHorizontal: 10, paddingVertical: 8, borderBottomWidth: 0.5, borderBottomColor: "#f3f4f6" },
-  tblCell: { fontSize: 8, fontFamily: "Helvetica", color: "#374151" },
-  tblBold: { fontFamily: "Helvetica-Bold", color: "#111827" },
-  // Equity bridge
-  bridgeRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 0.5, borderBottomColor: "#f3f4f6" },
-  bridgeLabel: { fontSize: 8.5, fontFamily: "Helvetica", color: "#374151" },
-  bridgeValue: { fontSize: 9, fontFamily: "Helvetica-Bold", color: "#111827" },
-  // Chart
-  chartContainer: { position: "relative", backgroundColor: "#f9fafb", borderRadius: 6 },
-  chartBar: { position: "absolute", borderRadius: 3 },
-  chartLabel: { position: "absolute", bottom: 3, fontSize: 7, textAlign: "center", fontFamily: "Helvetica", color: "#6b7280" },
-  chartAmt: { position: "absolute", fontSize: 6.5, textAlign: "center", fontFamily: "Helvetica", color: "#374151" },
+const fs = StyleSheet.create({
+  barRow: { flexDirection: "row", height: 26, borderRadius: 5, overflow: "hidden", marginBottom: 8 },
+  seg: { justifyContent: "center", paddingLeft: 10 },
+  segText: { fontSize: 7.5, fontFamily: "Helvetica-Bold", color: C.white },
+  legend: { flexDirection: "row", gap: 18, marginBottom: 4 },
+  legendItem: { flexDirection: "row", alignItems: "center", gap: 5 },
+  legendDot: { width: 8, height: 8, borderRadius: 2 },
+  legendLabel: { fontSize: 7, fontFamily: "Helvetica", color: C.muted },
+  legendValue: { fontSize: 7, fontFamily: "Helvetica-Bold", color: C.ink },
 });
 
-// ── Debt breakdown table ───────────────────────────────────────────────────
-
-function DebtTable({ lines, accentColor }: { lines: DebtLine[]; accentColor: string }) {
-  const headers = [
-    { label: "Facility", flex: 3 },
-    { label: "Amount", flex: 1.5, align: "right" as const },
-    { label: "Rate", flex: 0.8, align: "right" as const },
-    { label: "Maturity", flex: 0.8, align: "right" as const },
-  ];
-  const totalDebt = lines.reduce((s, l) => s + l.amount, 0);
+function FundingBar({ debt, equity, accent }: { debt: number; equity: number; accent: string }) {
+  const total = debt + equity || 1;
+  const debtPct = debt / total;
   return (
     <View>
-      <View style={[S.tblHeader, { backgroundColor: accentColor }]}>
-        {headers.map((h, i) => (
-          <Text key={i} style={[S.tblHCell, { flex: h.flex, textAlign: h.align ?? "left" }]}>{h.label}</Text>
-        ))}
+      <View style={fs.barRow}>
+        <View style={[fs.seg, { flex: Math.max(0.0001, debtPct), backgroundColor: C.blueDeep }]}>
+          {debtPct > 0.18 && <Text style={fs.segText}>Debt {fmtPct(debtPct)}</Text>}
+        </View>
+        <View style={[fs.seg, { flex: Math.max(0.0001, 1 - debtPct), backgroundColor: accent === C.blueDeep ? C.blue : accent }]}>
+          {1 - debtPct > 0.18 && <Text style={fs.segText}>Equity {fmtPct(1 - debtPct)}</Text>}
+        </View>
       </View>
-      {lines.map((line, ri) => (
-        <View key={ri} style={[S.tblRow, { backgroundColor: ri % 2 === 1 ? "#f9fafb" : "#ffffff" }]}>
-          <Text style={[S.tblCell, { flex: 3 }]}>{line.label}</Text>
-          <Text style={[S.tblCell, { flex: 1.5, textAlign: "right" }]}>{formatRand(line.amount)}</Text>
-          <Text style={[S.tblCell, { flex: 0.8, textAlign: "right" }]}>{line.annual_rate_pct > 0 ? `${line.annual_rate_pct.toFixed(1)}%` : "0%"}</Text>
-          <Text style={[S.tblCell, { flex: 0.8, textAlign: "right" }]}>{line.maturity_year}</Text>
+      <View style={fs.legend}>
+        <View style={fs.legendItem}>
+          <View style={[fs.legendDot, { backgroundColor: C.blueDeep }]} />
+          <Text style={fs.legendLabel}>Debt</Text>
+          <Text style={fs.legendValue}>{fmtRand(debt)}</Text>
+        </View>
+        <View style={fs.legendItem}>
+          <View style={[fs.legendDot, { backgroundColor: accent === C.blueDeep ? C.blue : accent }]} />
+          <Text style={fs.legendLabel}>Equity</Text>
+          <Text style={fs.legendValue}>{fmtRand(equity)}</Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+// ── Debt facilities table ──────────────────────────────────────────────────
+
+const dt = StyleSheet.create({
+  wrapper: { borderRadius: 5, overflow: "hidden", borderWidth: 0.75, borderColor: C.line, marginBottom: 10 },
+  headerRow: { flexDirection: "row", paddingHorizontal: 12, paddingVertical: 8 },
+  headerCell: { fontSize: 6.5, fontFamily: "Helvetica-Bold", color: C.white, letterSpacing: 0.4, textTransform: "uppercase" },
+  row: { flexDirection: "row", paddingHorizontal: 12, paddingVertical: 7.5, borderTopWidth: 0.5, borderTopColor: C.hairline },
+  cell: { fontSize: 8, fontFamily: "Helvetica", color: C.body },
+  totalRow: { flexDirection: "row", paddingHorizontal: 12, paddingVertical: 8, borderTopWidth: 0.75, borderTopColor: C.line, backgroundColor: C.soft },
+  totalCell: { fontSize: 8, fontFamily: "Helvetica-Bold", color: C.ink },
+});
+
+function DebtTable({ lines, accent }: { lines: DebtLine[]; accent: string }) {
+  const total = lines.reduce((s, l) => s + l.amount, 0);
+  return (
+    <View style={dt.wrapper}>
+      <View style={[dt.headerRow, { backgroundColor: accent }]}>
+        <Text style={[dt.headerCell, { flex: 2.5 }]}>Facility</Text>
+        <Text style={[dt.headerCell, { flex: 1.3, textAlign: "right" }]}>Balance</Text>
+        <Text style={[dt.headerCell, { flex: 1, textAlign: "right" }]}>Rate</Text>
+        <Text style={[dt.headerCell, { flex: 1, textAlign: "right" }]}>Maturity</Text>
+        <Text style={[dt.headerCell, { flex: 1, textAlign: "right" }]}>Share</Text>
+      </View>
+      {lines.map((l, i) => (
+        <View key={i} style={[dt.row, { backgroundColor: i % 2 === 1 ? C.soft : C.white }]}>
+          <Text style={[dt.cell, { flex: 2.5, fontFamily: "Helvetica-Bold", color: C.ink }]}>{l.label}</Text>
+          <Text style={[dt.cell, { flex: 1.3, textAlign: "right" }]}>{fmtRand(l.amount)}</Text>
+          <Text style={[dt.cell, { flex: 1, textAlign: "right" }]}>
+            {l.annual_rate_pct > 0 ? `${l.annual_rate_pct.toFixed(1)}%` : "—"}
+          </Text>
+          <Text style={[dt.cell, { flex: 1, textAlign: "right" }]}>{l.maturity_year}</Text>
+          <Text style={[dt.cell, { flex: 1, textAlign: "right" }]}>
+            {total > 0 ? fmtPct(l.amount / total) : "—"}
+          </Text>
         </View>
       ))}
-      <View style={[S.tblRow, { backgroundColor: "#f3f4f6" }]}>
-        <Text style={[S.tblCell, S.tblBold, { flex: 3 }]}>Total Debt</Text>
-        <Text style={[S.tblCell, S.tblBold, { flex: 1.5, textAlign: "right" }]}>{formatRand(totalDebt)}</Text>
-        <Text style={[S.tblCell, { flex: 0.8, textAlign: "right" }]}> </Text>
-        <Text style={[S.tblCell, { flex: 0.8, textAlign: "right" }]}> </Text>
-      </View>
-    </View>
-  );
-}
-
-// ── Debt maturity bar chart ────────────────────────────────────────────────
-
-const CHART_W = 515;
-const CHART_H = 100;
-const LABEL_H = 20;
-
-function MaturityChart({ lines, accentColor }: { lines: DebtLine[]; accentColor: string }) {
-  const currentYear = new Date().getFullYear();
-  const years = Array.from({ length: 5 }, (_, i) => currentYear + i);
-  const matMap = new Map<number, number>();
-  for (const l of lines) matMap.set(l.maturity_year, (matMap.get(l.maturity_year) ?? 0) + l.amount);
-  const maturities = years.map((y) => ({ year: y, amount: matMap.get(y) ?? 0 }));
-  const maxAmt = Math.max(...maturities.map((m) => m.amount), 1);
-  const slot = CHART_W / 5;
-  const barW = slot - 16;
-  const totalH = CHART_H + LABEL_H;
-
-  return (
-    <View>
-      <Text style={S.sectionTitle}>Debt Maturity Profile (Next 5 Years)</Text>
-      <View style={[S.chartContainer, { height: totalH }]}>
-        {[0.25, 0.5, 0.75].map((p, i) => (
-          <View key={i} style={{ position: "absolute", left: 0, right: 0, bottom: LABEL_H + p * CHART_H, height: 0.5, backgroundColor: "#e5e7eb" }} />
-        ))}
-        {maturities.map((m, i) => {
-          const barH = m.amount > 0 ? Math.max(4, (m.amount / maxAmt) * CHART_H) : 4;
-          const left = i * slot + 8;
-          const color = m.amount === 0 ? "#e5e7eb" : m.amount > maxAmt * 0.6 ? "#ef4444" : m.amount > maxAmt * 0.3 ? "#f59e0b" : accentColor;
-          return (
-            <View key={i}>
-              <View style={[S.chartBar, { bottom: LABEL_H, left, width: barW, height: barH, backgroundColor: color }]} />
-              {m.amount > 0 && (
-                <Text style={[S.chartAmt, { bottom: LABEL_H + barH + 2, left, width: barW }]}>
-                  {Math.round(m.amount / 1000)}k
-                </Text>
-              )}
-              <Text style={[S.chartLabel, { left, width: barW }]}>{m.year}</Text>
-            </View>
-          );
-        })}
-      </View>
-    </View>
-  );
-}
-
-// ── Equity bridge ──────────────────────────────────────────────────────────
-
-function EquityBridge({ data, accentColor }: { data: LeverageSolvencyData; accentColor: string }) {
-  const closingEquity = data.prior_equity + data.net_profit - data.drawings;
-  const rows = [
-    { label: "Opening Equity", value: formatRand(data.prior_equity), color: "#374151", isBold: false },
-    { label: "+ Net Profit (Retained)", value: `+ ${formatRand(data.net_profit)}`, color: "#10b981", isBold: false },
-    { label: "− Owner Drawings / Dividends", value: `(${formatRand(data.drawings)})`, color: "#ef4444", isBold: false },
-    { label: "Closing Equity", value: formatRand(closingEquity), color: accentColor, isBold: true },
-  ];
-  return (
-    <View>
-      <Text style={[S.sectionTitle, { marginTop: 24 }]}>Equity Bridge</Text>
-      <View style={{ borderWidth: 1, borderColor: "#e5e7eb", borderRadius: 6, overflow: "hidden" }}>
-        {rows.map((row, i) => (
-          <View key={i} style={[S.bridgeRow, { backgroundColor: row.isBold ? "#f9fafb" : i % 2 === 1 ? "#fafafa" : "#ffffff" }]}>
-            <Text style={[S.bridgeLabel, row.isBold ? { fontFamily: "Helvetica-Bold", fontSize: 9 } : {}]}>{row.label}</Text>
-            <Text style={[S.bridgeValue, { color: row.color }]}>{row.value}</Text>
-          </View>
-        ))}
+      <View style={dt.totalRow}>
+        <Text style={[dt.totalCell, { flex: 2.5 }]}>Total Debt</Text>
+        <Text style={[dt.totalCell, { flex: 1.3, textAlign: "right" }]}>{fmtRand(total)}</Text>
+        <Text style={{ flex: 3 }} />
       </View>
     </View>
   );
@@ -183,43 +139,134 @@ function EquityBridge({ data, accentColor }: { data: LeverageSolvencyData; accen
 
 // ── Main component ─────────────────────────────────────────────────────────
 
-export function LeverageSolvencyPDF({ smeData, data, accountantProfile }: LeverageSolvencyPDFProps) {
-  const accent = accountantProfile.accentColor || "#0f3460";
-  const hs = data.health_scores;
-  const debtToAssets = data.total_debt / (data.total_debt + data.total_equity);
-  const debtToEquity = data.total_debt / data.total_equity;
+export function LeverageSolvencyPDF({
+  smeData,
+  data: d,
+  accountantProfile,
+  isDemo,
+}: LeverageSolvencyPDFProps) {
+  const theme = resolveTheme(accountantProfile);
+  const hs = d.health_scores;
+
+  const totalAssets = d.total_debt + d.total_equity;
+  const debtToEquity = d.total_equity !== 0 ? d.total_debt / d.total_equity : NaN;
+  const debtToAssets = totalAssets !== 0 ? d.total_debt / totalAssets : NaN;
+  const equityMultiplier = d.total_equity !== 0 ? totalAssets / d.total_equity : NaN;
+  const weightedRate =
+    d.debt_lines.length > 0 && d.total_debt > 0
+      ? d.debt_lines.reduce((s, l) => s + l.amount * l.annual_rate_pct, 0) / d.total_debt
+      : 0;
+  const equityMovement = d.total_equity - d.prior_equity;
+  const retained = d.net_profit - d.drawings;
+
+  const figures: HeadlineFigure[] = [
+    {
+      label: "Debt-to-Equity",
+      value: Number.isFinite(debtToEquity) ? `${debtToEquity.toFixed(2)}×` : "n/m",
+      good: Number.isFinite(debtToEquity) ? debtToEquity <= 1.5 : undefined,
+    },
+    {
+      label: "Total Debt",
+      value: fmtRandCompact(d.total_debt),
+      note: `avg. rate ${weightedRate.toFixed(1)}%`,
+    },
+    {
+      label: "Total Equity",
+      value: fmtRandCompact(d.total_equity),
+      direction: equityMovement >= 0 ? "up" : "down",
+      good: equityMovement >= 0,
+      note: `${equityMovement >= 0 ? "+" : ""}${fmtRandCompact(equityMovement)} this period`,
+    },
+    {
+      label: "Retained This Period",
+      value: fmtRandCompact(retained),
+      good: retained >= 0,
+      note: "profit less drawings",
+    },
+  ];
+
+  const narrative = leverageNarrative({
+    debtToEquity: Number.isFinite(debtToEquity) ? debtToEquity : 0,
+    totalDebt: d.total_debt,
+    totalEquity: d.total_equity,
+  });
+
   const ratioRows = [
-    { name: "Funding Structure", value: `${(debtToAssets * 100).toFixed(1)}%`, score: hs.fundingStructure },
-    { name: "Equity Multiplier", value: `${(1 + debtToEquity).toFixed(2)}×`, score: hs.equityMultiplier },
-    { name: "Debt-to-Equity", value: `${debtToEquity.toFixed(2)}×`, score: hs.debtToEquity },
-    { name: "Debt-to-Assets", value: `${(debtToAssets * 100).toFixed(1)}%`, score: hs.debtToAssets },
-    { name: "Interest Burden", value: `${(100 - hs.interestBurden * 0.7).toFixed(1)}%`, score: hs.interestBurden },
+    { name: "Funding Structure (Debt %)", value: fmtPct(debtToAssets), score: hs.fundingStructure },
+    { name: "Equity Multiplier", value: Number.isFinite(equityMultiplier) ? `${equityMultiplier.toFixed(2)}×` : "n/m", score: hs.equityMultiplier },
+    { name: "Debt-to-Equity", value: Number.isFinite(debtToEquity) ? `${debtToEquity.toFixed(2)}×` : "n/m", score: hs.debtToEquity },
+    { name: "Debt-to-Assets", value: fmtPct(debtToAssets), score: hs.debtToAssets },
+    { name: "Interest Burden", value: `${weightedRate.toFixed(1)}%`, score: hs.interestBurden },
   ];
 
   return (
-    <PDFDocument title={`Leverage & Solvency — ${smeData.name}`} subject="Leverage & Solvency Report" smeData={smeData} accountantProfile={accountantProfile}>
+    <PDFDocument
+      title={`Leverage & Solvency — ${smeData.name}`}
+      subject="Leverage & Solvency Report"
+      smeData={smeData}
+      accountantProfile={accountantProfile}
+      isDemo={isDemo}
+    >
       {/* ── PAGE 1 ── */}
-      <Text style={S.title}>Leverage & Solvency Report</Text>
-      <Text style={S.subtitle}>Analysis of funding structure, debt levels, and long-term financial stability</Text>
+      <ReportTitle
+        kicker="Advisory Report 06"
+        title="Leverage & Solvency"
+        subtitle="How the business is funded, what the debt costs, and whether the structure is sustainable"
+        isDemo={isDemo}
+      />
 
-      <View style={S.metricsRow}>
-        <MetricBox label="Total Debt" value={formatRand(data.total_debt)} accentColor="#ef4444" />
-        <MetricBox label="Total Equity" value={formatRand(data.total_equity)} accentColor="#10b981" />
-        <MetricBox label="Debt / Equity Ratio" value={`${debtToEquity.toFixed(2)}×`} accentColor={hs.debtToEquity >= 70 ? "#10b981" : hs.debtToEquity >= 40 ? "#f59e0b" : "#ef4444"} />
-      </View>
+      <ExecSummary figures={figures} narrative={narrative} />
 
-      <Text style={S.sectionTitle}>Debt Facility Breakdown</Text>
-      <DebtTable lines={data.debt_lines} accentColor={accent} />
+      <SectionHeader title="Funding Structure" color={theme.accent} />
+      <FundingBar debt={d.total_debt} equity={d.total_equity} accent={theme.accent} />
 
-      <Text style={[S.sectionTitle, { marginTop: 18 }]}>Financing Ratio Analysis</Text>
+      <SectionHeader title="Leverage Ratio Analysis" color={theme.accent} />
       {ratioRows.map((r, i) => (
-        <RatioRow key={r.name} ratioName={r.name} formattedValue={r.value} healthScore={r.score} healthTier={scoreTier(r.score)} isAlternate={i % 2 === 1} />
+        <RatioRow
+          key={r.name}
+          ratioName={r.name}
+          formattedValue={r.value}
+          healthScore={r.score}
+          healthTier={scoreTier(r.score)}
+          isAlternate={i % 2 === 1}
+        />
       ))}
 
       {/* ── PAGE 2 ── */}
       <View break>
-        <MaturityChart lines={data.debt_lines} accentColor={accent} />
-        <EquityBridge data={data} accentColor={accent} />
+        <SectionHeader title="Debt Facility Breakdown" color={theme.accent} />
+        {d.debt_lines.length > 0 ? (
+          <DebtTable lines={d.debt_lines} accent={theme.accent} />
+        ) : (
+          <View
+            style={{
+              backgroundColor: C.soft,
+              borderRadius: 5,
+              borderWidth: 0.75,
+              borderColor: C.line,
+              padding: 16,
+              marginBottom: 10,
+            }}
+          >
+            <Text style={{ fontSize: 8, fontFamily: "Helvetica", color: C.muted, lineHeight: 1.5 }}>
+              Individual debt facilities will appear here once loan details are captured. The
+              totals above are derived from the balance sheet.
+            </Text>
+          </View>
+        )}
+
+        <SectionHeader title="Equity Movement" color={theme.accent} />
+        <View style={{ flexDirection: "row", gap: 10 }}>
+          <MetricBox label="Opening Equity" value={fmtRand(d.prior_equity)} accentColor={theme.accent} />
+          <MetricBox label="Net Profit" value={fmtRand(d.net_profit)} accentColor={C.green} />
+          <MetricBox label="Drawings" value={`(${fmtRand(Math.abs(d.drawings))})`} accentColor={C.red} />
+          <MetricBox
+            label="Closing Equity"
+            value={fmtRand(d.total_equity)}
+            accentColor={equityMovement >= 0 ? C.green : C.red}
+            note={`${equityMovement >= 0 ? "+" : ""}${fmtRandCompact(equityMovement)} movement`}
+          />
+        </View>
       </View>
     </PDFDocument>
   );

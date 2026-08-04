@@ -2,6 +2,7 @@ import { Document, Page, View } from "@react-pdf/renderer";
 import type { AccountantProfile } from "@/contexts/accountant-profile";
 import { ReportHeader } from "./report-header";
 import { ReportFooter } from "./report-footer";
+import { DemoWatermark } from "./watermark";
 
 export type SmeData = {
   name: string;
@@ -13,6 +14,8 @@ type Props = {
   subject?: string;
   smeData: SmeData;
   accountantProfile: AccountantProfile;
+  /** When true, every page carries an elegant "illustrative data" watermark. */
+  isDemo?: boolean;
   children: React.ReactNode;
 };
 
@@ -30,15 +33,16 @@ export function PDFDocument({
   subject,
   smeData,
   accountantProfile,
+  isDemo,
   children,
 }: Props) {
   return (
     <Document
       title={title}
       subject={subject}
-      author={accountantProfile.firmName || "Milōn"}
-      creator="Milōn"
-      producer="Milōn PDF Engine"
+      author={accountantProfile.firmName || "Milon"}
+      creator="Milon"
+      producer="Milon PDF Engine"
     >
       <Page
         size="A4"
@@ -47,6 +51,8 @@ export function PDFDocument({
           backgroundColor: "#ffffff",
         }}
       >
+        {isDemo ? <DemoWatermark /> : null}
+
         {/* Fixed header — renders at the top of every page */}
         <ReportHeader
           fixed
