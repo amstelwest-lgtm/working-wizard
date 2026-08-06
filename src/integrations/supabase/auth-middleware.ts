@@ -77,15 +77,24 @@ export const requireSupabaseAuth = createMiddleware({ type: 'function' }).server
     let validatedActingAsClientId: string | null = null;
 
     if (actingAsClientId) {
-      const { data: auditRow } = await supabase
+      // Use limit(1) + array check rather than .maybeSingle(): more than one
+      // still-open (ended_at IS NULL) audit row can legitimately accumulate for
+      // the same (firm_user_id, client_id) pair if a firm user re-enters a
+      // client's view before an earlier session is explicitly ended (e.g. closing
+      // the tab instead of navigating away). .maybeSingle() throws on >1 row
+      // match, which surfaced as every server function call being wrongly
+      // rejected as "Invalid or expired impersonation scope" for a still-valid
+      // session — checking for at least one open row is the correct scope check.
+      const { data: auditRows } = await supabase
         .from('impersonation_audit')
         .select('id')
         .eq('firm_user_id', authData.claims.sub)
         .eq('client_id', actingAsClientId)
         .is('ended_at', null)
-        .maybeSingle();
+        .order('started_at', { ascending: false })
+        .limit(1);
 
-      if (!auditRow) {
+      if (!auditRows || auditRows.length === 0) {
         throw new Response('Forbidden: Invalid or expired impersonation scope', { status: 403 });
       }
       validatedActingAsClientId = actingAsClientId;
@@ -95,7 +104,7 @@ export const requireSupabaseAuth = createMiddleware({ type: 'function' }).server
     // function whose input contains a `clientId` field must target that exact
     // client — mismatch is rejected here before the handler runs.
     if (validatedActingAsClientId) {
-      const inputClientId = (payload as Record<string, unknown>)?.clientId;
+      const inputClientId = (payload as unknown as Record<string, unknown> | undefined)?.clientId;
       if (typeof inputClientId === 'string' && inputClientId !== validatedActingAsClientId) {
         throw new Response(
           'Forbidden: request clientId is outside the current impersonation scope',

@@ -1,4 +1,4 @@
-modules = ["web", "python-3.11", "postgresql-16", "nodejs-22"]
+modules = ["web", "python-3.11", "nodejs-22", "postgresql-16"]
 [agent]
 expertMode = true
 stack = "BEST_EFFORT_FALLBACK"
@@ -21,6 +21,10 @@ args = "Start application"
 [[workflows.workflow.tasks]]
 task = "workflow.run"
 args = "artifacts/mockup-sandbox: Component Preview Server"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "render-reports"
 
 [[workflows.workflow]]
 name = "Start application"
@@ -46,6 +50,17 @@ isCanvasWorkflow = true
 task = "shell.exec"
 args = "cd artifacts/mockup-sandbox && PORT=8000 BASE_PATH=/__mockup/ npm run dev"
 waitForPort = 8000
+
+[[workflows.workflow]]
+name = "render-reports"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pnpm run test:reports"
+
+[workflows.workflow.metadata]
+isValidation = true
 
 [[ports]]
 localPort = 5000
@@ -90,3 +105,4 @@ VITE_SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOi
 VITE_SUPABASE_PROJECT_ID = "jxclnsbsqpixxqlbcapl"
 QBO_REDIRECT_URI = "https://1a73994f-b2bc-4e4b-bfc6-28296039be42-00-1a1iktfxwkhvs.janeway.replit.dev/api/qbo/callback"
 QBO_ENVIRONMENT = "sandbox"
+RESEND_FROM_EMAIL = "alerts@milon.co.za"

@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -41,6 +41,10 @@ import {
   ReferenceLine,
 } from "recharts";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
+import { useServerFn } from "@tanstack/react-start";
+import { listClientReviewSignoffs } from "@/lib/review-signoffs.functions";
+import type { ClientReviewSignoff } from "@/lib/review-signoffs.functions";
+import { ReviewSignoffBadge, ReviewSignoffButton, computeIsStale } from "@/components/review-signoff";
 // @react-pdf/renderer + the branded report are dynamically imported inside
 // exportPDF to avoid blocking initial hydration.
 
@@ -349,9 +353,23 @@ function LineEditor({
   );
 }
 
-export function CashForecastPanel({ clientId, clientName, simplified }: { clientId?: string; clientName?: string; simplified?: boolean } = {}) {
+export function CashForecastPanel({
+  clientId,
+  clientName,
+  simplified,
+  canSign,
+}: {
+  clientId?: string;
+  clientName?: string;
+  simplified?: boolean;
+  /** Accountant view only: show the interactive sign-off control instead of the read-only badge. */
+  canSign?: boolean;
+} = {}) {
   const { profile } = useAccountantProfile();
+  const fetchReviewSignoffs = useServerFn(listClientReviewSignoffs);
   const [exporting, setExporting] = useState(false);
+  const [forecastSignoff, setForecastSignoff] = useState<ClientReviewSignoff | null>(null);
+  const [lastForecastAt, setLastForecastAt] = useState<string | null>(null);
   const [startDate, setStartDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [openingBalance, setOpeningBalance] = useState("0");
   const [revenue, setRevenue] = useState<LineItem[]>(DEFAULT_REVENUE);
@@ -368,6 +386,10 @@ export function CashForecastPanel({ clientId, clientName, simplified }: { client
   const [capexWeek, setCapexWeek] = useState(1);
   const [loaded, setLoaded] = useState(!clientId);
   const [mounted, setMounted] = useState(false);
+  // Guards against the autosave effect firing the instant hydration finishes —
+  // otherwise merely opening the forecast bumps last_forecast_at and falsely
+  // invalidates an accountant's sign-off with no real data change.
+  const skipNextAutosave = useRef(false);
 
   useEffect(() => {
     const t = requestAnimationFrame(() => setMounted(true));
@@ -376,8 +398,21 @@ export function CashForecastPanel({ clientId, clientName, simplified }: { client
 
   useEffect(() => {
     if (!clientId) return;
-    supabase.from("clients").select("cashflow").eq("id", clientId).maybeSingle()
+    fetchReviewSignoffs({ data: { clientId } })
+      .then(({ signoffs }) => {
+        setForecastSignoff(signoffs.find((s) => s.scope === "cash_forecast") ?? null);
+      })
+      .catch(() => {
+        // Sign-off state is a trust-signal enhancement, never block the forecast itself.
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clientId]);
+
+  useEffect(() => {
+    if (!clientId) return;
+    supabase.from("clients").select("cashflow, last_forecast_at").eq("id", clientId).maybeSingle()
       .then(({ data }) => {
+        setLastForecastAt((data as { last_forecast_at?: string | null } | null)?.last_forecast_at ?? null);
         const cf = data?.cashflow as {
           startDate?: string; openingBalance?: string;
           revenue?: LineItem[]; expenses?: LineItem[]; other?: LineItem[];
@@ -401,19 +436,26 @@ export function CashForecastPanel({ clientId, clientName, simplified }: { client
           if (cf.capexAmount != null) setCapexAmount(cf.capexAmount);
           if (cf.capexWeek != null) setCapexWeek(cf.capexWeek);
         }
+        skipNextAutosave.current = true;
         setLoaded(true);
       });
   }, [clientId]);
 
   useEffect(() => {
     if (!clientId || !loaded) return;
+    if (skipNextAutosave.current) {
+      skipNextAutosave.current = false;
+      return;
+    }
     const t = setTimeout(async () => {
       const payload = { startDate, openingBalance, revenue, expenses, other, revAdj, expAdj, collectDelay, headcountDelta, avgSalary, fixedCostDelta, revGrowthPct, capexAmount, capexWeek };
+      const forecastUpdatedAt = new Date().toISOString();
       const { error } = await supabase
         .from("clients")
-        .update({ cashflow: payload as never, last_forecast_at: new Date().toISOString() })
+        .update({ cashflow: payload as never, last_forecast_at: forecastUpdatedAt })
         .eq("id", clientId);
       if (error) toast.error(`Cash forecast save failed: ${error.message}`);
+      else setLastForecastAt(forecastUpdatedAt);
     }, 800);
     return () => clearTimeout(t);
   }, [clientId, loaded, startDate, openingBalance, revenue, expenses, other, revAdj, expAdj, collectDelay, headcountDelta, avgSalary, fixedCostDelta, revGrowthPct, capexAmount, capexWeek]);
@@ -663,6 +705,7 @@ export function CashForecastPanel({ clientId, clientName, simplified }: { client
   );
 
   const shortfall = lowestBal < 0;
+  const forecastStale = computeIsStale(forecastSignoff, lastForecastAt);
 
   const heroBadge = (
     <span
@@ -692,10 +735,25 @@ export function CashForecastPanel({ clientId, clientName, simplified }: { client
                 13-week closing balance trajectory · opening {fmtR(calc.opening)}
               </p>
             </div>
-            {heroBadge}
+            <div className="flex flex-col items-end gap-1.5">
+              {heroBadge}
+              <ReviewSignoffBadge signoff={forecastSignoff} scope="cash_forecast" isStale={forecastStale} compact />
+            </div>
           </div>
         </CardHeader>
         <CardContent className="pt-5">
+          {canSign && clientId && (
+            <div className="mb-4 flex justify-end">
+              <ReviewSignoffButton
+                clientId={clientId}
+                clientName={clientName}
+                scope="cash_forecast"
+                signoff={forecastSignoff}
+                isStale={forecastStale}
+                onChange={setForecastSignoff}
+              />
+            </div>
+          )}
           <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
             <Stat
               label="Closing · Week 13"
@@ -750,6 +808,7 @@ export function CashForecastPanel({ clientId, clientName, simplified }: { client
             </div>
             <div className="flex items-center gap-2">
               {heroBadge}
+              <ReviewSignoffBadge signoff={forecastSignoff} scope="cash_forecast" isStale={forecastStale} compact />
               <Button
                 size="sm"
                 variant="outline"
@@ -763,6 +822,18 @@ export function CashForecastPanel({ clientId, clientName, simplified }: { client
           </div>
         </CardHeader>
         <CardContent className="pt-5">
+          {canSign && clientId && (
+            <div className="mb-4 flex justify-end">
+              <ReviewSignoffButton
+                clientId={clientId}
+                clientName={clientName}
+                scope="cash_forecast"
+                signoff={forecastSignoff}
+                isStale={forecastStale}
+                onChange={setForecastSignoff}
+              />
+            </div>
+          )}
           <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Stat label="Opening balance" value={fmtCompact(calc.opening)} sub={`Start ${startDate}`} />
             <Stat

@@ -4,9 +4,12 @@ import { useServerFn } from "@tanstack/react-start";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { ArrowLeft, Upload, Loader2, Building2, Shield, Plug2 } from "lucide-react";
+import { ArrowLeft, Upload, Loader2, Building2, Shield, Plug2, Database, ChevronDown, Check, ArrowUpRight, BookOpen, Target, Layers3, Pencil } from "lucide-react";
 import { HeaderShareButton } from "@/components/share";
-import { extractFinancials } from "@/lib/extract-financials.functions";
+import { extractFinancials, extractPDFsWithAI } from "@/lib/extract-financials.functions";
+import { extractionToInputs, ExtractionReviewModal } from "@/components/extraction-review-modal";
+import { BankStatementDrafter } from "@/components/bank-statement-drafter";
+import type { MergedExtractionResult } from "@/lib/extraction-types";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -24,6 +27,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { KpiTrendline, pctDelta } from "@/components/kpi-trendline";
 import { BenchmarkBar } from "@/components/benchmark-bar";
 import { AssignButton } from "@/components/assign-button";
+import { AddToPlanButton } from "@/components/add-to-plan-button";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { computeRatios, BUSINESS_TYPE_TO_BENCHMARK } from "@/lib/ratios";
 import { FinancialInputsContext, type WeeklyInputs, type WeeklyRow, DEFAULT_WEEKLY_ROW } from "@/contexts/financial-inputs";
@@ -72,8 +76,8 @@ const RATIO_KEY_TO_SNAPSHOT: Record<string, string> = {
 const CashForecastPanel = lazy(() =>
   import("@/components/cash-forecast").then((m) => ({ default: m.CashForecastPanel })),
 );
-const TasksPanel = lazy(() =>
-  import("@/components/tasks-panel").then((m) => ({ default: m.TasksPanel })),
+const ActionPlanPanel = lazy(() =>
+  import("@/components/action-plan"),
 );
 import { TodayPanel, type TodayTask } from "@/components/today-panel";
 import { SplashScreen } from "@/components/splash-screen";
@@ -84,6 +88,9 @@ import { type RatioInfo } from "@/components/holo-globe";
 import { SphereHero } from "@/components/sphere-hero";
 import { buildSpherePillars } from "@/components/sphere-hero-adapter";
 import { useViewMode } from "@/contexts/view-mode";
+import { listClientReviewSignoffs } from "@/lib/review-signoffs.functions";
+import type { ClientReviewSignoff } from "@/lib/review-signoffs.functions";
+import { ReviewSignoffBadge, computeIsStale } from "@/components/review-signoff";
 
 export const Route = createFileRoute("/app")({
   component: Index,
@@ -128,25 +135,29 @@ type Inputs = {
   priorAccumDep: string;
 };
 
+// All fields start empty — no demo/placeholder data pre-filled.
+// Real values are only set after the user imports or manually enters figures.
+// Ratios computed from empty/zero inputs produce NaN/0 which the health-score
+// average ignores, so a partial dataset yields an honest partial score.
 const defaults: Inputs = {
-  netIncome: "120",
-  ebt: "160",
-  ebit: "200",
-  revenue: "1000",
-  totalAssets: "800",
-  equity: "400",
-  cogs: "600",
-  receivables: "150",
-  inventory: "120",
-  payables: "90",
-  fixedCosts: "300",
-  variableCosts: "500",
-  top5Revenue: "400",
-  laborCost: "250",
-  employees: "10",
-  operatingCashflow: "180",
-  ebitda: "240",
-  founderHours: "2400",
+  netIncome: "",
+  ebt: "",
+  ebit: "",
+  revenue: "",
+  totalAssets: "",
+  equity: "",
+  cogs: "",
+  receivables: "",
+  inventory: "",
+  payables: "",
+  fixedCosts: "",
+  variableCosts: "",
+  top5Revenue: "",
+  laborCost: "",
+  employees: "",
+  operatingCashflow: "",
+  ebitda: "",
+  founderHours: "",
   priorRevenue: "",
   currentAssets: "",
   currentLiabilities: "",
@@ -1219,6 +1230,91 @@ const BUSINESS_TYPES: BusinessType[] = [
   { id: "hybrid",        label: "Hybrid Business",           icon: "🧩", model: "hybrid",        blurb: "Mixed economic model — multiple streams (e.g. product + service + SaaS)." },
 ];
 
+// ─── CSV/Excel flat-extraction → MergedExtractionResult ──────────────────────
+// Converts the legacy flat key-value map from extractFinancials into the nested
+// MergedExtractionResult shape so CSV/Excel uploads can reuse ExtractionReviewModal.
+function flatExtractionToMergedResult(
+  financials: Record<string, string>,
+  fileName: string,
+): import("@/lib/extraction-types").MergedExtractionResult {
+  const n = (key: string): number | null => {
+    const v = financials[key];
+    if (!v) return null;
+    const num = parseFloat(v);
+    return isFinite(num) ? num : null;
+  };
+  return {
+    document_metadata: {
+      company_name: null, registration_number: null,
+      period_start_date: null, period_end_date: null, period_months: null,
+      prior_period_start_date: null, prior_period_end_date: null,
+      document_type: "unknown", financial_statement_type: "unknown",
+      prepared_by: null, auditor_firm: null, approval_date: null,
+      industry_description: null, functional_currency: "ZAR",
+      foreign_currency_exposure: null, headcount: n("employees"),
+      accounting_basis: "unknown", values_appear_in_thousands: false,
+      contains_income_statement: true, contains_balance_sheet: true,
+      contains_cash_flow_statement: false, contains_notes: false,
+    },
+    current_period: {
+      income_statement: {
+        revenue: n("revenue"), cogs: n("cogs"), gross_profit: null,
+        other_income: null, fixed_costs: n("fixedCosts"), labor_cost: n("laborCost"),
+        depreciation: null, amortisation: null, depreciation_amortisation_total: null,
+        ebitda: n("ebitda"), ebit: n("ebit"), interest_expense: null,
+        interest_income: null, ebt: n("ebt"), tax: null,
+        net_income: n("netIncome"), director_remuneration: null, dividends_declared: null,
+      },
+      balance_sheet: {
+        total_assets: n("totalAssets"), fixed_assets: null, goodwill: null,
+        intangible_assets: null, right_of_use_assets: null, current_assets: null,
+        inventory: n("inventory"), wip: null, debtors: n("receivables"),
+        provision_bad_debts: null, cash: null, other_current_assets: null,
+        total_liabilities: null, current_liabilities: null, creditors: n("payables"),
+        short_term_debt: null, lease_liabilities_current: null,
+        other_current_liabilities: null, non_current_liabilities: null,
+        long_term_debt: null, lease_liabilities_non_current: null,
+        deferred_tax_liability: null, deferred_tax_asset: null,
+        equity: n("equity"), share_capital: null,
+        retained_earnings_opening: null, retained_earnings_closing: null,
+        shareholder_loans_asset: null, shareholder_loans_liability: null,
+        contingent_liabilities_notes: null,
+      },
+      cash_flow_statement: {
+        operating_cash_flow: n("operatingCashflow"),
+        working_capital_movement_debtors: null,
+        working_capital_movement_inventory: null,
+        working_capital_movement_creditors: null,
+        capex: null, asset_disposal_proceeds: null, investing_cash_flow: null,
+        debt_drawdowns: null, debt_repayments: null, dividends_paid: null,
+        financing_cash_flow: null, net_cash_movement: null,
+        cash_opening_balance: null, cash_closing_balance: null,
+      },
+    },
+    prior_period: {
+      revenue: null, gross_profit: null, net_income: null, total_assets: null,
+      equity: null, cash: null, debtors: null, inventory: null,
+      creditors: null, operating_cash_flow: null,
+    },
+    top_expenses: [], top_income_sources: [],
+    data_quality: {
+      gross_profit_reconciles: null, net_income_reconciles: null,
+      balance_sheet_balances: null, cash_flow_reconciles: null,
+      retained_earnings_reconciles: null, prior_period_available: false,
+      confidence_by_section: {
+        income_statement: "medium", balance_sheet: "medium",
+        cash_flow: "not_found", expenses_detail: "not_found",
+        income_detail: "not_found", notes: "not_found",
+      },
+      overall_confidence: "medium",
+      extraction_notes: "Extracted from CSV / Excel using pattern matching and AI. Please verify all values.",
+    },
+    source_map: {}, conflicts: [],
+    normalisation_applied: false,
+    document_count: 1, file_names: [fileName],
+  };
+}
+
 function eisenhowerOf(health: number, impact: number): "Do" | "Decide" | "Delegate" | "Delete" {
   const urgent = health < 60;
   const important = impact >= 7;
@@ -1255,10 +1351,17 @@ function Index() {
   }, []);
 
   const doExtract = useServerFn(extractFinancials);
+  const doExtractPdf = useServerFn(extractPDFsWithAI);
   const uploadRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  const [extractionForReview, setExtractionForReview] = useState<MergedExtractionResult | null>(null);
+  const [reviewOpen, setReviewOpen] = useState(false);
+  // Extra CSV/Excel-only fields not carried through MergedExtractionResult (applied alongside modal confirm)
+  const [pendingCsvExtras, setPendingCsvExtras] = useState<Partial<Inputs> | null>(null);
   const [showInputs, setShowInputs] = useState(false);
   const [highlightId, setHighlightId] = useState<string | null>(null);
+  // Move key to focus in the Action Plan tab (set by Next Moves → Assign)
+  const [planFocusKey, setPlanFocusKey] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
   const [adminOpen, setAdminOpen] = useState(false);
   const track = useTrack();
@@ -1282,7 +1385,19 @@ function Index() {
         }
         payload = { fileName: file.name, text: parts.join("\n") };
       } else if (ext === "pdf" || file.type === "application/pdf") {
-        toast.info("PDF statements now use AI extraction — open any client in your accountant dashboard and click \"Upload statement\" to use the new pipeline.");
+        const base64 = await new Promise<string>((res, rej) => {
+          const reader = new FileReader();
+          reader.onload = () => res((reader.result as string).split(",")[1]);
+          reader.onerror = () => rej(new Error("Could not read file"));
+          reader.readAsDataURL(file);
+        });
+        const extraction = (await doExtractPdf({
+          data: { files: [{ base64, fileName: file.name }] },
+        })) as MergedExtractionResult;
+        // Open review modal — user confirms before values are applied
+        setExtractionForReview(extraction);
+        setShowFinData(false);
+        setReviewOpen(true);
         return;
       } else {
         toast.error("Unsupported file type. Use PDF, CSV, or Excel.");
@@ -1295,8 +1410,17 @@ function Index() {
       if (filledKeys.length === 0) {
         toast.warning("Couldn't extract figures from that file. Try a text-based PDF or CSV.");
       } else {
-        setV((prev) => ({ ...prev, ...extracted } as Inputs));
-        toast.success(`Auto-filled ${filledKeys.length} field${filledKeys.length === 1 ? "" : "s"} from ${file.name}`);
+        // Capture fields not surfaced in MergedExtractionResult so they aren't lost
+        const csvExtras: Partial<Inputs> = {};
+        if (extracted.variableCosts) csvExtras.variableCosts = extracted.variableCosts;
+        if (extracted.top5Revenue)   csvExtras.top5Revenue   = extracted.top5Revenue;
+        if (extracted.founderHours)  csvExtras.founderHours  = extracted.founderHours;
+        if (Object.keys(csvExtras).length) setPendingCsvExtras(csvExtras);
+        // Open review modal so owner can verify values before they are applied
+        const reviewResult = flatExtractionToMergedResult(extracted, file.name);
+        setExtractionForReview(reviewResult);
+        setShowFinData(false);
+        setReviewOpen(true);
       }
     } catch (e) {
       toast.error(`Upload failed: ${(e as Error).message}`);
@@ -1320,6 +1444,8 @@ function Index() {
   const [v, setV] = useState<Inputs>(defaults);
   const [weeklyInputs, setWeeklyInputs] = useState<WeeklyInputs>({ weeks: {} });
   const [hydratedClientId, setHydratedClientId] = useState<string | null>(null);
+  // True only when the DB returned non-null financials — prevents demo defaults from masquerading as real data
+  const [hasRealFinancials, setHasRealFinancials] = useState(false);
   const [history, setHistory] = useState<Array<{ period_label: string; period_date: string; ratios: Record<string, number> }>>([]);
 
   const [effectiveClientId, setEffectiveClientId] = useState<string | null>(null);
@@ -1344,27 +1470,43 @@ function Index() {
       const metaInvite = (u.user.user_metadata?.invite_client_id as string | null) ?? null;
       const inviteClientId = pendingInvite ?? metaInvite;
       if (inviteClientId) {
-        const { error } = await supabase.from("client_memberships").upsert(
-          { client_id: inviteClientId, user_id: u.user.id, role: "client" },
+        // Attempt to write the membership row.  For users invited via adminSignUp
+        // this row already exists (written server-side) so the upsert is a no-op.
+        // For legacy magic-link invites it may or may not succeed depending on RLS.
+        // NOTE: user_roles is NOT written here — the RLS hardening migration
+        // (20260707000000_rls_hardening.sql) removed authenticated INSERT/DELETE
+        // on user_roles.  Roles are always written server-side by adminSignUp /
+        // signUpInvitedMember.  An in-session setUserRole() call happens in the
+        // separate userRole useEffect so the UI still gates correctly.
+        await supabase.from("client_memberships").upsert(
+          { client_id: inviteClientId, user_id: u.user.id, role: "client_member" },
           { onConflict: "client_id,user_id" },
         );
-        if (!error) {
-          localStorage.removeItem("pending_invite_client_id");
-          if (!cancelled) setEffectiveClientId(inviteClientId);
-          return;
-        }
+        localStorage.removeItem("pending_invite_client_id");
+        if (!cancelled) setEffectiveClientId(inviteClientId);
+        return;
       }
 
-      // 4. Self-signup with no invite — create a client record from their profile
+      // 4. Self-signup with no invite — create a client record from their profile.
+      // Uses ensure_own_client() (SECURITY DEFINER RPC) because the direct INSERT
+      // RLS policy "clients insert own" does not evaluate correctly via PostgREST
+      // for INSERT WITH CHECK in this Supabase project configuration.
       const meta = u.user.user_metadata as { full_name?: string; business_name?: string; signup_type?: string } | null;
       if (meta?.signup_type === "customer") {
         const clientName = meta.business_name || meta.full_name || u.user.email || "My Business";
-        const { data: created } = await supabase
-          .from("clients")
-          .insert({ name: clientName, owner_user_id: u.user.id })
-          .select("id")
-          .single();
-        if (!cancelled) setEffectiveClientId(created?.id ?? null);
+        const { data: clientId, error: rpcErr } = await supabase.rpc("ensure_own_client", { p_name: clientName });
+        if (!cancelled) {
+          if (rpcErr) {
+            // Surface the failure so the owner isn't left with a silent blank dashboard.
+            // They can refresh to retry; the RPC is idempotent (returns existing record if any).
+            console.error("[effectiveClientId] ensure_own_client failed:", rpcErr.message);
+            toast.error(
+              "We couldn't finish setting up your account. Refresh the page to try again.",
+              { duration: 10000 },
+            );
+          }
+          setEffectiveClientId(clientId ?? null);
+        }
         return;
       }
 
@@ -1384,15 +1526,37 @@ function Index() {
       .then(({ data }) => { if (data) setHistory(data as never); });
   }, [effectiveClientId]);
 
-  const [clientMeta, setClientMeta] = useState<{ business_type: string | null; cash_runway_weeks: number | null } | null>(null);
+  const [clientMeta, setClientMeta] = useState<{ business_type: string | null; cash_runway_weeks: number | null; financials_updated_at?: string | null } | null>(null);
   const [openTasks, setOpenTasks] = useState<TodayTask[]>([]);
   const [activeTab, setActiveTab] = useState<string>("today");
+  const fetchReviewSignoffs = useServerFn(listClientReviewSignoffs);
+  const [financialsSignoff, setFinancialsSignoff] = useState<ClientReviewSignoff | null>(null);
+  useEffect(() => {
+    if (!effectiveClientId) { setFinancialsSignoff(null); return; }
+    fetchReviewSignoffs({ data: { clientId: effectiveClientId } })
+      .then(({ signoffs }) => {
+        setFinancialsSignoff(signoffs.find((s) => s.scope === "financials") ?? null);
+      })
+      .catch(() => {
+        // Sign-off state is a trust-signal enhancement, never block the dashboard.
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [effectiveClientId]);
   useEffect(() => {
     if (!effectiveClientId) { setClientMeta(null); setOpenTasks([]); return; }
-    supabase.from("clients").select("business_type, cash_runway_weeks").eq("id", effectiveClientId).maybeSingle()
-      .then(({ data }) => {
-        setClientMeta((data as never) ?? null);
-        if (data?.business_type) setBusinessTypeId(data.business_type as string);
+    supabase.from("clients").select("business_type, cash_runway_weeks, financials_updated_at").eq("id", effectiveClientId).maybeSingle()
+      .then((res) => {
+        const data = res.data as { business_type: string | null; cash_runway_weeks: number | null; financials_updated_at: string | null } | null;
+        setClientMeta(data ?? null);
+        if (data?.business_type) {
+          setBusinessTypeId(data.business_type as string);
+        } else if (!actingClientId && userRole !== null && userRole !== "client_member") {
+          // First-run: owner has no business type yet — open the selector as required.
+          // Skip for invited members (client_member) — they should see the client's data
+          // as-is without being asked to set up a business type they don't own.
+          setFirstRunStep("pick-type");
+          setShowOnboarding(true);
+        }
       });
     supabase
       .from("employee_tasks")
@@ -1409,19 +1573,47 @@ function Index() {
           })),
         );
       });
-  }, [effectiveClientId]);
+  }, [effectiveClientId, userRole]);
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user: u } }) => {
+    supabase.auth.getUser().then(async ({ data: { user: u } }) => {
       if (!u) return;
-      supabase
+      const { data: roleRow } = await supabase
         .from("user_roles")
         .select("role")
         .eq("user_id", u.id)
-        .maybeSingle()
-        .then(({ data }) => {
-          if (data?.role) setUserRole(data.role);
-        });
+        .maybeSingle();
+
+      if (roleRow?.role) {
+        setUserRole(roleRow.role);
+        return;
+      }
+
+      // Fallback for existing users who predate the role-normalisation migration:
+      // infer the app role from ownership / membership tables and back-fill user_roles.
+      const { data: ownedClient } = await supabase
+        .from("clients")
+        .select("id")
+        .eq("owner_user_id", u.id)
+        .limit(1)
+        .maybeSingle();
+      if (ownedClient) {
+        // Infer role for this session; do not attempt a DB write — the RLS
+        // hardening migration removed authenticated INSERT on user_roles.
+        // Server-side signup (adminSignUp) is responsible for writing the row.
+        setUserRole("client_owner");
+        return;
+      }
+      const { data: mem } = await supabase
+        .from("client_memberships")
+        .select("client_id")
+        .eq("user_id", u.id)
+        .limit(1)
+        .maybeSingle();
+      if (mem) {
+        // Same: infer only, no client-side DB write.
+        setUserRole("client_member");
+      }
     });
   }, []);
 
@@ -1443,40 +1635,99 @@ function Index() {
     setActingClientName(sessionStorage.getItem("acting_as_client_name"));
   }, []);
 
+  // Keys that indicate real user-entered financials (excludes weeklyInputs and other metadata)
+  const FINANCIAL_INPUT_KEYS = Object.keys(defaults) as (keyof Inputs)[];
+
+  // Guards against the autosave effect firing the instant hydration finishes —
+  // otherwise merely opening the dashboard bumps financials_updated_at and
+  // falsely invalidates an accountant's sign-off with no real data change.
+  const skipNextFinancialsAutosave = useRef(false);
+
+  // Load financials for whoever is the effective client (owner or impersonation)
   useEffect(() => {
-    if (!actingClientId) return;
-    supabase.from("clients").select("financials").eq("id", actingClientId).maybeSingle()
+    if (!effectiveClientId) return;
+    setHasRealFinancials(false); // reset on client switch until confirmed
+    setV(defaults);              // reset inputs so no previous client's data bleeds through
+    setWeeklyInputs({ weeks: {} });
+    supabase.from("clients").select("financials").eq("id", effectiveClientId).maybeSingle()
       .then(({ data }) => {
         if (data?.financials) {
           const fin = data.financials as Partial<Inputs> & { weeklyInputs?: WeeklyInputs };
-          setV({ ...defaults, ...fin });
-          if (fin.weeklyInputs) setWeeklyInputs(fin.weeklyInputs);
+          // Only treat as real data if at least one recognised financial key is present and non-empty.
+          // Empty objects ({}) or objects containing only weeklyInputs do not qualify.
+          const hasRealKeys = FINANCIAL_INPUT_KEYS.some(
+            (k) => fin[k] !== undefined && fin[k] !== "",
+          );
+          if (hasRealKeys) {
+            setV({ ...defaults, ...fin });
+            if (fin.weeklyInputs) setWeeklyInputs(fin.weeklyInputs);
+            setHasRealFinancials(true);
+            // Only arm the skip flag when hydration actually populated real data —
+            // that's the only case where the autosave effect will run right after
+            // hydration. Arming it unconditionally leaves a stale flag that
+            // swallows the FIRST genuine save on an empty client (e.g. figures
+            // applied from the bank-statement drafter would never persist).
+            skipNextFinancialsAutosave.current = true;
+          }
+          // else: keep defaults + hasRealFinancials=false (unscored empty state)
         }
-        setHydratedClientId(actingClientId);
+        setHydratedClientId(effectiveClientId);
       });
-  }, [actingClientId]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [effectiveClientId]);
 
+  // Debounced autosave — fires for both owners and firm impersonation.
+  // Gated on hasRealFinancials so the initial demo defaults are never written to the DB
+  // before the owner has entered or imported any real figures.
   useEffect(() => {
-    if (!actingClientId || hydratedClientId !== actingClientId) return;
+    if (!effectiveClientId || hydratedClientId !== effectiveClientId) return;
+    if (!hasRealFinancials) return; // never autosave placeholder defaults
+    if (skipNextFinancialsAutosave.current) {
+      skipNextFinancialsAutosave.current = false;
+      return;
+    }
+    setSaveStatus("saving");
     const t = setTimeout(async () => {
-      const { error } = await supabase.from("clients").update({ financials: { ...v, weeklyInputs } as never }).eq("id", actingClientId);
-      if (error) toast.error(`Save failed: ${error.message}`);
+      const financialsUpdatedAt = new Date().toISOString();
+      const { data: updated, error } = await supabase
+        .from("clients")
+        .update({ financials: { ...v, weeklyInputs } as never, financials_updated_at: financialsUpdatedAt })
+        .eq("id", effectiveClientId)
+        .select("id");
+      if (error) {
+        toast.error(`Save failed: ${error.message}`);
+        setSaveStatus("idle");
+      } else if (!updated?.length) {
+        // RLS silently rejects writes that fail the policy — 0 rows returned means
+        // the update was blocked (no owner_user_id match or missing client record).
+        toast.error("Save failed: your changes were not written to the database. Please refresh and try again.");
+        setSaveStatus("idle");
+      } else {
+        setClientMeta((m) => (m ? { ...m, financials_updated_at: financialsUpdatedAt } : m));
+        setSaveStatus("saved");
+        setTimeout(() => setSaveStatus("idle"), 2500);
+      }
     }, 700);
     return () => clearTimeout(t);
-  }, [v, weeklyInputs, actingClientId, hydratedClientId]);
+  }, [v, weeklyInputs, effectiveClientId, hydratedClientId, hasRealFinancials]);
 
   // Mount the Ask AI widget wherever a mount container is present
   // (overview tab + profitability waterfall tab). Re-runs on tab change
   // because inactive tab content is unmounted by Radix.
   useEffect(() => {
     let cancelled = false;
-    const containers = ["ask-ai-overview", "ask-ai-waterfall"]
+    const allContainers = ["ask-ai-overview", "ask-ai-waterfall"]
       .map((id) => document.getElementById(id))
-      .filter((el): el is HTMLElement => !!el && !el.dataset.askAiMounted);
-    if (containers.length === 0) return;
+      .filter((el): el is HTMLElement => !!el);
+    // Always refresh the client context on already-mounted containers —
+    // submit() reads dataset.clientId at request time, so a stale value would
+    // send questions for the previously selected client.
     if (effectiveClientId) {
       (window as unknown as Record<string, unknown>).__askAiClientId = effectiveClientId;
+      for (const el of allContainers) el.dataset.clientId = effectiveClientId;
     }
+    const containers = allContainers.filter((el) => !el.dataset.askAiMounted);
+    if (containers.length === 0) return;
     // eslint-disable-next-line @typescript-eslint/ban-ts-comment
     // @ts-ignore — plain JS module without type declarations
     import("../lib/ask-ai.js").then((mod: { mountAskAi?: (el: HTMLElement, opts: unknown) => void }) => {
@@ -1499,7 +1750,7 @@ function Index() {
     });
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [effectiveClientId, activeTab, viewMode]);
+  }, [effectiveClientId, activeTab, viewMode, hasRealFinancials]);
 
   const exitImpersonation = async () => {
     if (actingClientId) {
@@ -1521,64 +1772,6 @@ function Index() {
     sessionStorage.removeItem("acting_as_client_id");
     sessionStorage.removeItem("acting_as_client_name");
     navigate({ to: "/dashboard" });
-  };
-
-  const handleExport = async () => {
-    try {
-      toast("Generating PDF…");
-      const { jsPDF } = await import("jspdf");
-      const autoTable = (await import("jspdf-autotable")).default;
-      const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-
-      const date = new Date().toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
-      const businessLabel = businessType?.label ?? "All business types";
-
-      pdf.setFontSize(18);
-      pdf.setFont("helvetica", "bold");
-      pdf.text("Financial Health Report", 14, 20);
-      pdf.setFontSize(10);
-      pdf.setFont("helvetica", "normal");
-      pdf.text(`Generated: ${date}`, 14, 28);
-      pdf.text(`Business type: ${businessLabel}`, 14, 33);
-
-      const fmtPdf = (value: number, format: "x" | "pct" | "days" | "money") => {
-        if (!isFinite(value) || value === 0) return "—";
-        if (format === "pct") return `${(value * 100).toFixed(1)}%`;
-        if (format === "days") return `${value.toFixed(0)} days`;
-        if (format === "x") return `${value.toFixed(2)}x`;
-        return value.toLocaleString(undefined, { maximumFractionDigits: 0 });
-      };
-
-      const rows = (Object.keys(RATIO_META) as RatioKey[]).map((k) => {
-        const meta = RATIO_META[k];
-        const vm = valueMap[k];
-        const health = healthMap[k];
-        const status = !isFinite(health) ? "—" : health >= 80 ? "Good" : health >= 50 ? "Fair" : "Needs work";
-        return [meta.friendly, meta.techName, fmtPdf(vm.value, vm.format), isFinite(health) ? `${Math.round(health)}%` : "—", status];
-      });
-
-      autoTable(pdf, {
-        startY: 40,
-        head: [["Ratio", "Technical Name", "Value", "Health", "Status"]],
-        body: rows,
-        styles: { fontSize: 9, cellPadding: 3 },
-        headStyles: { fillColor: [30, 58, 138], textColor: 255, fontStyle: "bold" },
-        alternateRowStyles: { fillColor: [245, 247, 250] },
-        columnStyles: {
-          0: { fontStyle: "bold", cellWidth: 42 },
-          1: { cellWidth: 40 },
-          2: { halign: "right", cellWidth: 25 },
-          3: { halign: "right", cellWidth: 18 },
-          4: { cellWidth: 22 },
-        },
-      });
-
-      pdf.save(`ledgerline-${new Date().toISOString().slice(0, 10)}.pdf`);
-      toast.success("PDF downloaded");
-    } catch (e) {
-      console.error("PDF export failed:", e);
-      toast.error("PDF export failed — please try again.");
-    }
   };
 
   const [openRatio, setOpenRatio] = useState<RatioKey | null>(null);
@@ -1618,10 +1811,22 @@ function Index() {
 
   const benchmarkFor = (k: RatioKey): Benchmark | null => benchmarks[k] ?? null;
   const [showOnboarding, setShowOnboarding] = useState(false);
+  // firstRunStep: null = not first run (or done); 'pick-type' = must choose business type; 'first-data' = nudge to upload data
+  const [firstRunStep, setFirstRunStep] = useState<null | "pick-type" | "first-data">(null);
+  const [btSaving, setBtSaving] = useState(false);
+  const [btSaveError, setBtSaveError] = useState<string | null>(null);
   const [showQboDialog, setShowQboDialog] = useState(false);
+  const [showFinData, setShowFinData] = useState(false);
+  const [showBankDrafter, setShowBankDrafter] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const businessType = businessTypeId ? BUSINESS_TYPES.find((b) => b.id === businessTypeId) ?? null : null;
   const model: ModelTuning = businessType ? MODEL_TUNING[businessType.model] : MODEL_TUNING.hybrid;
-  const set = (k: keyof Inputs) => (val: string) => setV((s) => ({ ...s, [k]: val }));
+  // Marks real financials so autosave and the scored view activate after first user edit
+  const markRealFinancials = () => setHasRealFinancials(true);
+  const set = (k: keyof Inputs) => (val: string) => {
+    setV((s) => ({ ...s, [k]: val }));
+    markRealFinancials();
+  };
 
   const n = useMemo(() => {
     const num = (s: string) => (s === "" ? 0 : parseFloat(s) || 0);
@@ -1927,6 +2132,8 @@ function Index() {
           [weekKey]: { ...(prev.weeks[weekKey] ?? DEFAULT_WEEKLY_ROW), [field]: value },
         },
       }));
+      // Weekly cash data feeds the forecast panel only — it does not feed ratio scoring,
+      // so it must not mark real financials or trigger the scored dashboard.
     },
     [],
   );
@@ -1981,37 +2188,64 @@ function Index() {
       )}
       <div id="board-pack" className="mx-auto max-w-6xl px-4 py-5 sm:px-6 lg:py-7">
         {/* App bar */}
-        <header className="mb-4 flex items-center justify-between gap-3 border-b border-[#b7872a]/20 pb-4">
+        <header className="relative mb-5 overflow-hidden rounded-2xl border border-slate-200/80 bg-white/90 px-3 py-3 shadow-[0_12px_35px_rgba(15,23,42,0.06)] backdrop-blur-xl dark:border-slate-800/90 dark:bg-[#0d1420]/90 dark:shadow-[0_18px_45px_rgba(0,0,0,0.22)] sm:px-4 sm:py-3.5">
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#d4a550]/80 to-transparent" />
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex min-w-0 items-center gap-3">
+            <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-[#d4a550]/30 bg-[#d4a550]/10">
+              <Database className="h-4 w-4 text-[#a8791a] dark:text-[#d4a550]" />
+            </div>
             <img
               src="/milon-wordmark.png"
               alt="Milōn"
-              className="h-6 w-auto shrink-0 dark:brightness-110"
+              className="h-5 w-auto shrink-0 dark:brightness-110 sm:h-6"
               style={{ filter: "brightness(0.85) saturate(1.2)" }}
             />
             <div className="mt-0.5 truncate text-[10px] font-medium uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">
               {actingClientName ?? "Operating finance"}
             </div>
+            <ReviewSignoffBadge
+              signoff={financialsSignoff}
+              scope="financials"
+              isStale={computeIsStale(financialsSignoff, clientMeta?.financials_updated_at ?? null)}
+              compact
+            />
           </div>
-          <div className="flex shrink-0 items-center gap-1.5 print:hidden">
-            {/* Business Profile pill */}
-            <button
-              onClick={() => setShowOnboarding(true)}
-              className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.18em] text-slate-500 transition-colors hover:border-[#b7872a]/50 hover:text-[#b8860b] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400 dark:hover:border-[#b7872a]/60 dark:hover:text-[#d4a550]"
-              title="Business Profile"
-            >
-              <Building2 className="h-3 w-3 shrink-0" />
-              <span className="hidden sm:inline">{businessType ? businessType.label : "Profile"}</span>
-            </button>
+          <div className="flex flex-wrap items-center gap-1.5 print:hidden lg:justify-end">
+            {/* Business Profile pill — owners can change type; members see it read-only */}
+            {userRole !== "client_member" ? (
+              <button
+                onClick={() => setShowOnboarding(true)}
+                className="inline-flex h-9 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50/80 px-3 text-[9px] font-semibold uppercase tracking-[0.16em] text-slate-600 transition-all hover:-translate-y-0.5 hover:border-[#b7872a]/50 hover:bg-[#d4a550]/10 dark:border-slate-700/80 dark:bg-slate-900/70 dark:text-slate-300"
+                title={businessType ? `Business type: ${businessType.label} — click to change` : "Set your business type"}
+              >
+                <Building2 className="h-3 w-3 shrink-0" />
+                {businessType ? (
+                  <>
+                    <span className="hidden sm:inline">{businessType.label}</span>
+                    <Pencil className="hidden h-2.5 w-2.5 opacity-40 sm:block" />
+                  </>
+                ) : (
+                  <span className="hidden sm:inline text-[#8a6508] dark:text-[#d4a550]">Set business type</span>
+                )}
+              </button>
+            ) : businessType ? (
+              <div className="inline-flex h-9 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50/80 px-3 text-[9px] font-semibold uppercase tracking-[0.16em] text-slate-600 dark:border-slate-700/80 dark:bg-slate-900/70 dark:text-slate-300"
+                title={`Business type: ${businessType.label}`}>
+                <Building2 className="h-3 w-3 shrink-0" />
+                <span className="hidden sm:inline">{businessType.label}</span>
+              </div>
+            ) : null}
             {/* Risk Profile popover */}
             <Popover>
               <PopoverTrigger asChild>
                 <button
-                  className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.18em] text-slate-500 transition-colors hover:border-[#b7872a]/50 hover:text-[#b8860b] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400 dark:hover:border-[#b7872a]/60 dark:hover:text-[#d4a550]"
+                  className="inline-flex h-9 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50/80 px-3 text-[9px] font-semibold uppercase tracking-[0.16em] text-slate-600 transition-all hover:-translate-y-0.5 hover:border-[#b7872a]/50 hover:bg-[#d4a550]/10 dark:border-slate-700/80 dark:bg-slate-900/70 dark:text-slate-300"
                   title="Risk Profile"
                 >
                   <Shield className="h-3 w-3 shrink-0" />
-                  <span className="hidden sm:inline capitalize">{risk}</span>
+              <span className="hidden sm:inline">Risk · <span className="capitalize">{risk}</span></span>
+              <ChevronDown className="hidden h-3 w-3 opacity-50 sm:block" />
                 </button>
               </PopoverTrigger>
               <PopoverContent className="w-44 border border-slate-700 bg-slate-900 p-2 shadow-xl" align="end">
@@ -2033,19 +2267,24 @@ function Index() {
                 </div>
               </PopoverContent>
             </Popover>
-            {/* QuickBooks */}
-            <button
-              onClick={() => setShowQboDialog(true)}
-              className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.18em] text-slate-500 transition-colors hover:border-[#b7872a]/50 hover:text-[#b8860b] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400 dark:hover:border-[#b7872a]/60 dark:hover:text-[#d4a550]"
-              title="QuickBooks Integration"
-            >
-              <Plug2 className="h-3 w-3 shrink-0" />
-              <span className="hidden lg:inline">QuickBooks</span>
-            </button>
+            {/* Financial data — upload statement or connect accounting software (owners only) */}
+            {userRole !== "client_member" && (
+              <button
+                onClick={() => setShowFinData(true)}
+                className="inline-flex h-9 items-center gap-2 rounded-xl border border-[#b7872a]/50 bg-gradient-to-b from-[#d4a550]/20 to-[#b7872a]/10 px-3 text-[9px] font-semibold uppercase tracking-[0.16em] text-[#8a6508] shadow-[0_2px_10px_rgba(212,165,80,0.18)] transition-all hover:-translate-y-0.5 hover:border-[#b7872a]/80 hover:from-[#d4a550]/30 hover:to-[#b7872a]/20 dark:text-[#e1b85e]"
+                title="Upload financial statements or connect QuickBooks / Xero"
+              >
+                <Upload className="h-3.5 w-3.5 shrink-0" />
+                <span className="text-left leading-none">
+                  <span className="block">Upload financials</span>
+                  <span className="mt-1 hidden text-[8px] font-medium normal-case tracking-normal opacity-70 md:block">PDF upload or QuickBooks / Xero</span>
+                </span>
+              </button>
+            )}
             {userRole === "firm_admin" && (
               <button
                 onClick={() => setAdminOpen(true)}
-                className="inline-flex items-center gap-1.5 rounded-md border border-[#d4a550]/30 bg-[#d4a550]/10 px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.18em] text-[#d4a550] transition-colors hover:border-[#d4a550]/60 hover:bg-[#d4a550]/20"
+                className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-[#d4a550]/30 bg-[#d4a550]/10 px-3 text-[9px] font-semibold uppercase tracking-[0.16em] text-[#8a6508] transition-all hover:-translate-y-0.5 hover:border-[#d4a550]/60 hover:bg-[#d4a550]/20 dark:text-[#d4a550]"
                 title="Admin Dashboard"
               >
                 ⬡ <span className="hidden sm:inline">Admin</span>
@@ -2054,36 +2293,44 @@ function Index() {
             <ThemeToggle />
             <HeaderShareButton />
             <button
-              onClick={handleExport}
-              className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.18em] text-slate-500 transition-colors hover:border-[#b7872a]/50 hover:text-[#b8860b] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400 dark:hover:border-[#b7872a]/60 dark:hover:text-[#d4a550]"
-              title="Export as PDF"
-            >
-              Export
-            </button>
-            <button
               onClick={() => signOut().then(() => { window.location.href = "/"; })}
-              className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.18em] text-slate-500 transition-colors hover:border-[#b7872a]/50 hover:text-[#b8860b] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400 dark:hover:border-[#b7872a]/60 dark:hover:text-[#d4a550]"
+              className="inline-flex h-9 items-center rounded-xl border border-slate-200 bg-slate-50/80 px-3 text-[9px] font-semibold uppercase tracking-[0.16em] text-slate-600 transition-all hover:-translate-y-0.5 hover:border-[#b7872a]/50 hover:bg-[#d4a550]/10 dark:border-slate-700/80 dark:bg-slate-900/70 dark:text-slate-300"
               title="Sign out"
             >
               Sign out
             </button>
           </div>
+          </div>
         </header>
 
 
-        {/* Optional onboarding — user can change business model anytime, but is never gated. */}
+        {/* Business type selector — required on first run, optional thereafter */}
         <Dialog
           open={showOnboarding}
-          onOpenChange={setShowOnboarding}
+          onOpenChange={(open) => {
+            // Block dismiss during first-run until they pick a type
+            if (!open && firstRunStep === "pick-type") return;
+            setShowOnboarding(open);
+          }}
         >
-          <DialogContent className="[display:flex] h-[calc(100dvh-1rem)] max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] max-w-3xl flex-col overflow-hidden border border-slate-800 bg-slate-950 p-4 text-slate-50 sm:h-auto sm:max-h-[90vh] sm:p-6">
+          <DialogContent
+            onInteractOutside={firstRunStep === "pick-type" ? (e) => e.preventDefault() : undefined}
+            onEscapeKeyDown={firstRunStep === "pick-type" ? (e) => e.preventDefault() : undefined}
+            className={`[display:flex] h-[calc(100dvh-1rem)] max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] max-w-3xl flex-col overflow-hidden border border-slate-800 bg-slate-950 p-4 text-slate-50 sm:h-auto sm:max-h-[90vh] sm:p-6 ${firstRunStep === "pick-type" ? "[&>button:first-of-type]:hidden" : ""}`}
+          >
             <DialogHeader className="shrink-0 pr-8">
+              {firstRunStep === "pick-type" && (
+                <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#d4a550]">
+                  Step 1 of 2 · Set up your profile
+                </p>
+              )}
               <DialogTitle className="text-2xl text-slate-100">
-                Select Your Business Type
+                {firstRunStep === "pick-type" ? "What type of business do you run?" : "Change your business type"}
               </DialogTitle>
               <DialogDescription className="text-slate-400">
-                Required. Every benchmark, KPI target, cash-flow expectation and health score
-                adapts to your underlying economic model.
+                {firstRunStep === "pick-type"
+                  ? "Every benchmark, KPI target, cash-flow expectation and health score adapts to your business model. Pick the closest match."
+                  : "Benchmarks and health scores recalculate immediately when you pick a new type. No data is lost."}
               </DialogDescription>
             </DialogHeader>
             <div className="-mx-1 min-h-0 flex-1 touch-pan-y overflow-y-scroll overscroll-contain px-1 [-webkit-overflow-scrolling:touch]">
@@ -2093,28 +2340,43 @@ function Index() {
                 return (
                   <button
                     key={bt.id}
-                    onClick={() => {
+                    disabled={btSaving}
+                    onClick={async () => {
+                      setBtSaveError(null);
+                      // Optimistically update UI immediately
                       setBusinessTypeId(bt.id);
-                      setShowOnboarding(false);
                       if (effectiveClientId) {
-                        supabase
+                        setBtSaving(true);
+                        const { error } = await supabase
                           .from("clients")
                           .update({ business_type: bt.id })
-                          .eq("id", effectiveClientId)
-                          .then(({ error }) => {
-                            if (error) console.error("Failed to persist business type:", error);
-                          });
+                          .eq("id", effectiveClientId);
+                        setBtSaving(false);
+                        if (error) {
+                          // Revert optimistic update and stay on dialog so user can retry
+                          setBusinessTypeId(null);
+                          setBtSaveError("Could not save your selection — please try again.");
+                          return;
+                        }
+                      }
+                      // Persistence confirmed (or no client yet) — advance
+                      setShowOnboarding(false);
+                      if (firstRunStep === "pick-type") {
+                        setFirstRunStep("first-data");
                       }
                     }}
-                    className={`group rounded-lg border p-3 text-left transition-all ${
+                    className={`group rounded-lg border p-3 text-left transition-all disabled:opacity-60 disabled:cursor-wait ${
                       selected
-                        ? "border-slate-300 bg-slate-800"
+                        ? "border-[#d4a550]/60 bg-[#d4a550]/10"
                         : "border-slate-800 bg-slate-900 hover:border-slate-600 hover:bg-slate-800"
                     }`}
                   >
                     <div className="flex items-center gap-2">
                       <span className="text-xl">{bt.icon}</span>
                       <span className="font-semibold text-slate-100">{bt.label}</span>
+                      {btSaving && selected && (
+                        <Loader2 className="ml-auto h-3.5 w-3.5 animate-spin text-[#d4a550]" />
+                      )}
                     </div>
                     <p className="mt-1 text-[11px] text-slate-400">{bt.blurb}</p>
                     <p className="mt-2 text-[10px] uppercase tracking-wider text-slate-500">
@@ -2124,6 +2386,84 @@ function Index() {
                 );
               })}
             </div>
+            {btSaveError && (
+              <p className="mt-2 rounded-md border border-red-800/50 bg-red-950/30 px-3 py-2 text-xs text-red-400">
+                {btSaveError}
+              </p>
+            )}
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* First-data nudge — shown after business type is set on first run */}
+        <Dialog open={firstRunStep === "first-data"} onOpenChange={() => setFirstRunStep(null)}>
+          <DialogContent className="border border-slate-800 bg-slate-950 text-slate-50 max-w-md">
+            <DialogHeader>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#d4a550]">
+                Step 2 of 2 · Bring in your numbers
+              </p>
+              <DialogTitle className="text-xl text-slate-100 mt-1">
+                Now let's get your data in
+              </DialogTitle>
+              <DialogDescription className="text-slate-400">
+                Upload a financial statement and MILŌN will calculate your health score instantly. You can also skip this and enter figures manually later.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex flex-col gap-3 pt-2">
+              <button
+                onClick={() => {
+                  setFirstRunStep(null);
+                  setShowFinData(true);
+                  // Give the fin-data dialog a tick to mount, then trigger the file picker
+                  setTimeout(() => uploadRef.current?.click(), 150);
+                }}
+                className="flex items-center gap-3 rounded-lg border border-slate-700 bg-slate-900 p-4 text-left hover:border-[#d4a550]/50 hover:bg-slate-800 transition-all"
+              >
+                <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#d4a550]/10 text-[#d4a550]">
+                  <Upload className="h-4 w-4" />
+                </span>
+                <div>
+                  <p className="font-semibold text-slate-100 text-sm">Upload a financial statement</p>
+                  <p className="text-[11px] text-slate-400 mt-0.5">PDF, Excel or CSV · AI extracts figures automatically</p>
+                </div>
+              </button>
+              <button
+                onClick={() => {
+                  setFirstRunStep(null);
+                  setShowQboDialog(true);
+                }}
+                className="flex items-center gap-3 rounded-lg border border-slate-700 bg-slate-900 p-4 text-left hover:border-[#d4a550]/50 hover:bg-slate-800 transition-all"
+              >
+                <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400">
+                  <Plug2 className="h-4 w-4" />
+                </span>
+                <div>
+                  <p className="font-semibold text-slate-100 text-sm">Connect QuickBooks</p>
+                  <p className="text-[11px] text-slate-400 mt-0.5">Sync live accounting data automatically</p>
+                </div>
+              </button>
+              <button
+                onClick={() => {
+                  setFirstRunStep(null);
+                  setShowFinData(true);
+                  setShowInputs(true); // open the manual fields immediately
+                }}
+                className="flex items-center gap-3 rounded-lg border border-slate-700 bg-slate-900 p-4 text-left hover:border-[#d4a550]/50 hover:bg-slate-800 transition-all"
+              >
+                <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-700 text-slate-400">
+                  <Database className="h-4 w-4" />
+                </span>
+                <div>
+                  <p className="font-semibold text-slate-100 text-sm">Enter figures manually</p>
+                  <p className="text-[11px] text-slate-400 mt-0.5">Type in your numbers directly</p>
+                </div>
+              </button>
+              <button
+                onClick={() => setFirstRunStep(null)}
+                className="text-xs text-slate-500 hover:text-slate-400 underline pt-1 text-center"
+              >
+                Skip for now — I'll add data later
+              </button>
             </div>
           </DialogContent>
         </Dialog>
@@ -2141,7 +2481,7 @@ function Index() {
               <TabsTrigger
                 key={t.value}
                 value={t.value}
-                className="min-w-0 truncate rounded-none border-0 border-b-2 border-transparent bg-transparent px-1 py-2.5 text-[9px] font-semibold uppercase tracking-[0.18em] text-slate-400 shadow-none transition-all data-[state=active]:border-[#d4a550] data-[state=active]:bg-transparent data-[state=active]:text-[#b8860b] data-[state=active]:shadow-none dark:text-slate-500 dark:data-[state=active]:text-[#d4a550] sm:text-[10px]"
+                className="min-w-0 whitespace-normal break-words rounded-none border-0 border-b-2 border-transparent bg-transparent px-1 py-2.5 text-center text-[9px] font-semibold uppercase leading-snug tracking-[0.18em] text-slate-400 shadow-none transition-all data-[state=active]:border-[#d4a550] data-[state=active]:bg-transparent data-[state=active]:text-[#b8860b] data-[state=active]:shadow-none dark:text-slate-500 dark:data-[state=active]:text-[#d4a550] sm:text-[10px]"
               >
                 {t.label}
               </TabsTrigger>
@@ -2174,37 +2514,112 @@ function Index() {
             {viewMode === "simplified" ? (
             <div className="flex flex-col items-center gap-4 pb-8">
               {/* LIVE timestamp badge row */}
-              <div className="flex w-full max-w-[640px] items-center justify-between">
-                <span className="text-[9px] font-semibold uppercase tracking-[0.22em] text-slate-400 dark:text-slate-600">
+              <div className="flex w-full max-w-[640px] items-center justify-between lg:max-w-none">
+                <span className="flex items-center gap-2 text-[9px] font-semibold uppercase tracking-[0.22em] text-slate-400 dark:text-slate-600">
                   Business Health
+                  <ReviewSignoffBadge
+                    signoff={financialsSignoff}
+                    scope="financials"
+                    isStale={computeIsStale(financialsSignoff, clientMeta?.financials_updated_at ?? null)}
+                    compact
+                  />
                 </span>
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/8 px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-400">
-                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
-                  Live &middot; {new Date().toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })}
-                </span>
-              </div>
-              {/* Sphere hero — financial health visualisation */}
-              <div className="w-full flex justify-center">
-                <SphereHero
-                  overallHealth={avgHealth}
-                  pillars={spherePillars}
-                  topPriority={{
-                    title: "Improve cash conversion cycle",
-                    description: "Focus on reducing debtor days to improve cash flow.",
-                  }}
-                  onTopPriority={() => {
-                    setActiveTab("cash");
-                  }}
-                />
+                {hasRealFinancials ? (
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/8 px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-400">
+                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
+                    Live &middot; {new Date().toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })}
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-700 bg-slate-800/60 px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                    No data yet
+                  </span>
+                )}
               </div>
 
-              {/* Ask your numbers — edge-function chat widget */}
-              <div
-                id="ask-ai-overview"
-                className="w-full max-w-[640px] rounded-xl border border-[#b7872a]/30 bg-white dark:bg-[#0a1020]/80"
-              />
-              {businessType && (
-                <IndustryPulse industry={businessType.label} />
+              {/* No-data empty state — shown until owner uploads or enters real financials */}
+              {!hasRealFinancials && !actingClientId ? (
+                <div className="flex w-full flex-col items-center gap-6 py-8">
+                  {/* Placeholder orb ring */}
+                  <div className="relative flex h-48 w-48 items-center justify-center">
+                    <div className="absolute inset-0 rounded-full border-2 border-dashed border-[#d4a550]/20" />
+                    <div className="absolute inset-6 rounded-full border border-[#d4a550]/10" />
+                    <div className="flex flex-col items-center gap-1">
+                      <span className="text-3xl font-bold text-slate-600">—</span>
+                      <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-600">No score yet</span>
+                    </div>
+                  </div>
+                  <div className="max-w-sm text-center">
+                    <h3 className="text-base font-semibold text-slate-200">Add your financials to see your score</h3>
+                    <p className="mt-1.5 text-sm text-slate-400">
+                      Upload a financial statement or enter your figures manually. MILŌN will calculate your health score and your highest-impact first move instantly.
+                    </p>
+                  </div>
+                  {userRole !== "client_member" ? (
+                    <div className="flex flex-col sm:flex-row gap-3 w-full max-w-sm">
+                      <button
+                        onClick={() => { setShowFinData(true); setTimeout(() => uploadRef.current?.click(), 150); }}
+                        className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-[#b7872a] hover:bg-[#d4a550] px-4 py-3 text-sm font-semibold text-white transition-all"
+                      >
+                        <Upload className="h-4 w-4" />
+                        Upload statement
+                      </button>
+                      <button
+                        onClick={() => { setShowFinData(true); setShowInputs(true); }}
+                        className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-900 hover:bg-slate-800 px-4 py-3 text-sm font-semibold text-slate-300 transition-all"
+                      >
+                        <Database className="h-4 w-4" />
+                        Enter manually
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-slate-400 text-center max-w-sm">
+                      Financial data hasn't been added yet. The owner will set this up.
+                    </p>
+                  )}
+                  {businessType && (
+                    <div className="flex w-full justify-center mt-2">
+                      <IndustryPulse industry={businessType.label} vertical />
+                    </div>
+                  )}
+                </div>
+              ) : (
+              /* Orb + Industry Pulse — side-by-side on wide screens, stacked on mobile */
+              <div className={`grid w-full gap-6 ${businessType ? "lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start" : ""}`}>
+                <div className="flex w-full flex-col items-center gap-4">
+                  {/* Sphere hero — financial health visualisation */}
+                  <div className="w-full flex justify-center">
+                    <SphereHero
+                      overallHealth={avgHealth}
+                      pillars={spherePillars}
+                      topPriority={
+                        nextSteps[0]
+                          ? {
+                              title: nextSteps[0].title,
+                              description: `Your ${nextSteps[0].ratioName} is your highest-impact lever right now — health score ${Math.round(nextSteps[0].health)}%.`,
+                            }
+                          : {
+                              title: "Upload your financial data",
+                              description: "Add your figures to get a personalised score and first move.",
+                            }
+                      }
+                      onTopPriority={() => {
+                        setActiveTab("today");
+                      }}
+                    />
+                  </div>
+
+                  {/* Ask your numbers — edge-function chat widget */}
+                  <div
+                    id="ask-ai-overview"
+                    className="w-full max-w-[640px] rounded-xl border border-[#b7872a]/30 bg-white dark:bg-[#0a1020]/80"
+                  />
+                </div>
+                {businessType && (
+                  <div className="flex w-full justify-center lg:justify-start lg:pt-8">
+                    <IndustryPulse industry={businessType.label} vertical />
+                  </div>
+                )}
+              </div>
               )}
             </div>
             ) : (
@@ -2213,88 +2628,27 @@ function Index() {
               <span className="text-[9px] font-semibold uppercase tracking-[0.25em] text-[#b8860b] dark:text-[#d4a550]/80">Financial Ratios</span>
               <span className="h-px flex-1 bg-gradient-to-r from-[#b7872a]/30 to-transparent" />
             </div>
-        <div className="space-y-3">
-          {/* Inputs panel — collapsible */}
-          <Card id="wizard-ratio-inputs" className="border border-amber-900/15 bg-white/90 shadow-[0_14px_40px_rgba(109,79,22,0.08)] print:hidden dark:border-slate-800 dark:bg-slate-900/60 dark:shadow-none">
-            <CardHeader className="border-b border-amber-900/10 pb-3 dark:border-slate-800">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <CardTitle className="text-sm font-semibold text-slate-950 dark:text-slate-100">Financial Inputs</CardTitle>
-                  <CardDescription className="mt-0.5 text-xs text-slate-600 dark:text-slate-400">
-                    {showInputs ? "Enter figures in any consistent currency — ratios update instantly." : "Upload a statement or expand to enter figures manually."}
-                  </CardDescription>
-                </div>
-                <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                  <input
-                    ref={uploadRef}
-                    type="file"
-                    accept=".pdf,.csv,.xlsx,.xls,.txt"
-                    className="hidden"
-                    onChange={(e) => { const f = e.target.files?.[0]; if (f) handleStatementUpload(f); }}
-                  />
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="gap-1.5 border-amber-700/30 bg-amber-50 text-amber-900 hover:bg-amber-100 text-xs dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
-                    disabled={uploading}
-                    onClick={() => uploadRef.current?.click()}
-                  >
-                    {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
-                    {uploading ? "Reading…" : "Upload statement"}
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="px-2 text-xs text-slate-600 hover:text-slate-950 dark:text-slate-400 dark:hover:text-slate-100"
-                    onClick={() => setShowInputs((s) => !s)}
-                  >
-                    {showInputs ? "▲ Hide" : "▼ Edit inputs"}
-                  </Button>
-                </div>
+            {!hasRealFinancials && !actingClientId && (
+              <div className="mb-4 flex items-center gap-3 rounded-lg border border-amber-700/40 bg-amber-950/20 px-4 py-2.5 text-xs text-amber-300">
+                <span className="text-amber-400">⚠</span>
+                <span>
+                  <span className="font-semibold">No financial data yet</span> — ratios below show zero or undefined until figures are added.{" "}
+                  {userRole !== "client_member" ? (
+                    <>
+                      <button onClick={() => { setShowFinData(true); setTimeout(() => uploadRef.current?.click(), 150); }} className="underline hover:text-amber-200">
+                        Upload your statement
+                      </button>{" "}
+                      or{" "}
+                      <button onClick={() => { setShowFinData(true); setShowInputs(true); }} className="underline hover:text-amber-200">enter figures manually</button>{" "}
+                      to see your real score.
+                    </>
+                  ) : (
+                    "The owner will add financial data."
+                  )}
+                </span>
               </div>
-            </CardHeader>
-            {showInputs && (
-              <CardContent className="pt-4 pb-4">
-                <div className="grid gap-x-6 gap-y-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                  {(
-                    [
-                      { k: "revenue", l: "Revenue" }, { k: "cogs", l: "COGS" },
-                      { k: "ebit", l: "EBIT" }, { k: "ebt", l: "EBT" },
-                      { k: "netIncome", l: "Net Income" }, { k: "ebitda", l: "EBITDA" },
-                      { k: "operatingCashflow", l: "Operating Cash Flow" },
-                      { k: "totalAssets", l: "Total Assets" }, { k: "equity", l: "Equity" },
-                      { k: "receivables", l: "Receivables" }, { k: "inventory", l: "Inventory" },
-                      { k: "payables", l: "Payables" }, { k: "fixedCosts", l: "Fixed Costs" },
-                      { k: "variableCosts", l: "Variable Costs" }, { k: "laborCost", l: "Labor Cost" },
-                      { k: "top5Revenue", l: "Top-5 Customer Rev." }, { k: "employees", l: "Employees" },
-                      { k: "founderHours", l: "Founder Hours/yr" },
-                      { k: "priorRevenue", l: "Prior Period Revenue" },
-                      { k: "currentAssets", l: "Current Assets" },
-                      { k: "currentLiabilities", l: "Current Liabilities" },
-                      { k: "capex", l: "Capital Expenditure" },
-                      { k: "ppeGross", l: "PPE at Cost (Gross)" },
-                      { k: "accumulatedDepreciation", l: "Accumulated Depreciation" },
-                      { k: "priorPpeGross", l: "Prior Year PPE (Gross)" },
-                      { k: "priorAccumDep", l: "Prior Year Accum. Dep." },
-                    ] as Array<{ k: keyof Inputs; l: string }>
-                  ).map(({ k, l }) => (
-                    <div key={k} className="flex items-center gap-2 min-w-0">
-                      <Label className="w-36 shrink-0 truncate text-xs text-slate-700 dark:text-slate-400">{l}</Label>
-                      <Input
-                        className="h-7 min-w-0 border-amber-900/15 bg-amber-50/40 text-slate-950 text-xs dark:border-slate-700 dark:bg-slate-950/60 dark:text-slate-100"
-                        value={v[k]}
-                        onChange={(e) => set(k)(e.target.value)}
-                      />
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
             )}
-          </Card>
-
-          {/* Weekly inputs — collapsible table feeding the waterfall */}
-          <WeeklyInputTable role={actingClientId ? "accountant" : "owner"} />
-
+        <div className="space-y-3">
           {/* Break-even callout */}
           {isFinite(breakevenRevenue) && breakevenRevenue > 0 && (
             <div className="rounded-md border border-amber-800/40 bg-amber-950/20 px-4 py-2 text-xs text-amber-200 flex items-center gap-2">
@@ -2519,15 +2873,35 @@ function Index() {
               <span className="text-[9px] font-semibold uppercase tracking-[0.25em] text-[#b8860b] dark:text-[#d4a550]/80">Profitability Waterfall</span>
               <span className="h-px flex-1 bg-gradient-to-r from-[#b7872a]/30 to-transparent" />
             </div>
+            {/* Weekly inputs — collapsible table feeding the waterfall */}
+            <div className="mb-4">
+              <WeeklyInputTable />
+            </div>
             <ProfitabilityWaterfall
               clientName={actingClientName ?? undefined}
-              fallback={{
-                revenue:    n.revenue,
-                cogs:       n.cogs,
-                fixedCosts: n.fixedCosts,
-                interest:   n.ebit - n.ebt,
-                tax:        n.ebt - n.netIncome,
-              }}
+              fallback={(() => {
+                // Mirror the accountant-side residual derivation so that
+                // PDF-extracted statements (which leave fixedCosts blank)
+                // still render meaningful operating-expense and net-profit bars.
+                const hasFin = (key: keyof typeof v) => (v[key] ?? "") !== "";
+                const wfGrossProfit = n.revenue - n.cogs;
+                const wfOpex = hasFin("fixedCosts")
+                  ? n.fixedCosts
+                  : hasFin("ebit")
+                  ? wfGrossProfit - n.ebit
+                  : 0;
+                const wfInterest =
+                  hasFin("ebit") && hasFin("ebt") ? n.ebit - n.ebt : 0;
+                const wfTax =
+                  hasFin("ebt") && hasFin("netIncome") ? n.ebt - n.netIncome : 0;
+                return {
+                  revenue:    n.revenue,
+                  cogs:       n.cogs,
+                  fixedCosts: wfOpex,
+                  interest:   wfInterest,
+                  tax:        wfTax,
+                };
+              })()}
             />
             {/* Ask your numbers — edge-function chat widget */}
             <div
@@ -2543,12 +2917,18 @@ function Index() {
             </div>
             <div id="wizard-moves-list">
               <NextStepsPanel
-                steps={viewMode === "simplified" ? nextSteps.slice(0, 3) : nextSteps}
+                steps={nextSteps}
+                simplified={viewMode === "simplified"}
                 done={doneSteps}
                 onToggleDone={toggleDone}
                 onOpenSop={(k) => setOpenSop(k)}
                 clientId={effectiveClientId}
                 clientName={actingClientName ?? undefined}
+                isOwner={userRole !== "client_member"}
+                onGoToPlan={(k) => {
+                  setPlanFocusKey(k);
+                  setActiveTab("tasks");
+                }}
               />
             </div>
           </TabsContent>
@@ -2559,7 +2939,12 @@ function Index() {
               <span className="h-px flex-1 bg-gradient-to-r from-[#b7872a]/30 to-transparent" />
             </div>
             <Suspense fallback={<div className="p-6 text-sm text-slate-400">Loading cash forecast…</div>}>
-              <CashForecastPanel clientId={effectiveClientId ?? undefined} clientName={actingClientName ?? undefined} simplified={viewMode === "simplified"} />
+              <CashForecastPanel
+                clientId={effectiveClientId ?? undefined}
+                clientName={actingClientName ?? undefined}
+                simplified={viewMode === "simplified"}
+                canSign={(userRole === "accountant" || userRole === "firm_admin") && !!actingClientId}
+              />
             </Suspense>
           </TabsContent>
 
@@ -2571,7 +2956,25 @@ function Index() {
             <div id="wizard-tasks-panel">
               <Suspense fallback={<div className="p-6 text-sm text-slate-400">Loading tasks…</div>}>
                 {effectiveClientId ? (
-                  <TasksPanel clientId={effectiveClientId} clientName={actingClientName ?? undefined} readOnly={false} />
+                  <ActionPlanPanel
+                    clientId={effectiveClientId}
+                    clientName={actingClientName ?? undefined}
+                    simplified={viewMode === "simplified"}
+                    isOwner={userRole !== "client_member"}
+                    moves={nextSteps.map((s) => ({
+                      key: s.key,
+                      title: s.title,
+                      ratioName: s.ratioName,
+                      impactLine: s.impactLine,
+                      health: isFinite(s.health) ? s.health : 50,
+                    }))}
+                    onViewAnalysis={() => {
+                      setViewMode("complex");
+                      setActiveTab("today");
+                    }}
+                    focusMoveKey={planFocusKey}
+                    onFocusHandled={() => setPlanFocusKey(null)}
+                  />
                 ) : (
                   <div className="p-6 text-sm text-slate-400">No client linked yet.</div>
                 )}
@@ -2698,6 +3101,171 @@ function Index() {
         </DialogContent>
       </Dialog>
 
+      {/* Financial data dialog — upload financials or connect accounting software */}
+      <Dialog open={showFinData} onOpenChange={setShowFinData}>
+        <DialogContent className="max-h-[85vh] max-w-3xl overflow-y-auto border border-amber-900/15 bg-white text-slate-950 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-50">
+          <DialogHeader>
+            <div className="flex items-center gap-3">
+              <DialogTitle className="text-[15px] font-semibold uppercase tracking-[0.15em]">
+                Financial Data
+              </DialogTitle>
+              {saveStatus === "saving" && (
+                <span className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wider text-slate-400">
+                  <Loader2 className="h-3 w-3 animate-spin" /> Saving…
+                </span>
+              )}
+              {saveStatus === "saved" && (
+                <span className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+                  <Check className="h-3 w-3" /> Saved
+                </span>
+              )}
+            </div>
+            <DialogDescription className="text-xs text-slate-600 dark:text-slate-400">
+              Bring in your figures — upload financial statements, or connect your accounting software.
+            </DialogDescription>
+          </DialogHeader>
+          <input
+            ref={uploadRef}
+            type="file"
+            accept=".pdf,.csv,.xlsx,.xls,.txt"
+            className="hidden"
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) handleStatementUpload(f); }}
+          />
+          <div className="grid gap-3 sm:grid-cols-2">
+            <button
+              disabled={uploading}
+              onClick={() => uploadRef.current?.click()}
+              className="flex flex-col items-start gap-1.5 rounded-lg border border-amber-700/30 bg-amber-50 p-4 text-left transition-colors hover:border-amber-700/60 hover:bg-amber-100 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-[#b7872a]/60 dark:hover:bg-slate-800"
+            >
+              <span className="flex items-center gap-2 text-sm font-semibold text-amber-900 dark:text-slate-100">
+                {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                {uploading ? "Reading…" : "Upload PDF financials"}
+              </span>
+              <span className="text-xs text-slate-600 dark:text-slate-400">
+                PDF, CSV or Excel financial statements — figures are read automatically.
+              </span>
+            </button>
+            <button
+              onClick={() => { setShowFinData(false); setShowQboDialog(true); }}
+              className="flex flex-col items-start gap-1.5 rounded-lg border border-amber-700/30 bg-amber-50 p-4 text-left transition-colors hover:border-amber-700/60 hover:bg-amber-100 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-[#b7872a]/60 dark:hover:bg-slate-800"
+            >
+              <span className="flex items-center gap-2 text-sm font-semibold text-amber-900 dark:text-slate-100">
+                <Plug2 className="h-4 w-4" />
+                Connect QuickBooks / Xero
+              </span>
+              <span className="text-xs text-slate-600 dark:text-slate-400">
+                Auto-fill figures from live accounting data. QuickBooks available now; Xero coming soon.
+              </span>
+            </button>
+            <button
+              onClick={() => { setShowFinData(false); setShowBankDrafter(true); }}
+              className="flex flex-col items-start gap-1.5 rounded-lg border border-amber-700/30 bg-amber-50 p-4 text-left transition-colors hover:border-amber-700/60 hover:bg-amber-100 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-[#b7872a]/60 dark:hover:bg-slate-800 sm:col-span-2"
+            >
+              <span className="flex items-center gap-2 text-sm font-semibold text-amber-900 dark:text-slate-100">
+                <Database className="h-4 w-4" />
+                Draft financials from bank statements
+              </span>
+              <span className="text-xs text-slate-600 dark:text-slate-400">
+                No financial statements yet? Upload bank statements (PDF or CSV) and AI drafts a basic
+                income statement — revenue, cost of sales, expenses and profit — for you to review.
+              </span>
+            </button>
+          </div>
+          <div>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="px-2 text-xs text-slate-600 hover:text-slate-950 dark:text-slate-400 dark:hover:text-slate-100"
+              onClick={() => setShowInputs((s) => !s)}
+            >
+              {showInputs ? "▲ Hide manual entry" : "▼ Enter figures manually"}
+            </Button>
+            {showInputs && (
+              <div className="mt-3 grid gap-x-6 gap-y-2 sm:grid-cols-2">
+                {(
+                  [
+                    { k: "revenue", l: "Revenue" }, { k: "cogs", l: "COGS" },
+                    { k: "ebit", l: "EBIT" }, { k: "ebt", l: "EBT" },
+                    { k: "netIncome", l: "Net Income" }, { k: "ebitda", l: "EBITDA" },
+                    { k: "operatingCashflow", l: "Operating Cash Flow" },
+                    { k: "totalAssets", l: "Total Assets" }, { k: "equity", l: "Equity" },
+                    { k: "receivables", l: "Receivables" }, { k: "inventory", l: "Inventory" },
+                    { k: "payables", l: "Payables" }, { k: "fixedCosts", l: "Fixed Costs" },
+                    { k: "variableCosts", l: "Variable Costs" }, { k: "laborCost", l: "Labor Cost" },
+                    { k: "top5Revenue", l: "Top-5 Customer Rev." }, { k: "employees", l: "Employees" },
+                    { k: "founderHours", l: "Founder Hours/yr" },
+                    { k: "priorRevenue", l: "Prior Period Revenue" },
+                    { k: "currentAssets", l: "Current Assets" },
+                    { k: "currentLiabilities", l: "Current Liabilities" },
+                    { k: "capex", l: "Capital Expenditure" },
+                    { k: "ppeGross", l: "PPE at Cost (Gross)" },
+                    { k: "accumulatedDepreciation", l: "Accumulated Depreciation" },
+                    { k: "priorPpeGross", l: "Prior Year PPE (Gross)" },
+                    { k: "priorAccumDep", l: "Prior Year Accum. Dep." },
+                  ] as Array<{ k: keyof Inputs; l: string }>
+                ).map(({ k, l }) => (
+                  <div key={k} className="flex items-center gap-2 min-w-0">
+                    <Label className="w-36 shrink-0 truncate text-xs text-slate-700 dark:text-slate-400">{l}</Label>
+                    <Input
+                      className="h-7 min-w-0 border-amber-900/15 bg-amber-50/40 text-slate-950 text-xs dark:border-slate-700 dark:bg-slate-950/60 dark:text-slate-100"
+                      value={v[k]}
+                      onChange={(e) => set(k)(e.target.value)}
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bank statement → draft financials (AI) */}
+      <BankStatementDrafter
+        open={showBankDrafter}
+        onClose={() => setShowBankDrafter(false)}
+        onApply={({ fields, annualised }) => {
+          setV((prev) => ({ ...prev, ...fields } as Inputs));
+          setHasRealFinancials(true);
+          setShowBankDrafter(false);
+          toast.success(
+            annualised
+              ? "Draft figures applied (annualised) — saved automatically. Have your accountant review them."
+              : "Draft figures applied for the statement period — saved automatically. Have your accountant review them.",
+          );
+        }}
+      />
+
+      {/* PDF extraction review modal — user reviews/corrects before values are applied */}
+      {extractionForReview && (
+        <ExtractionReviewModal
+          result={extractionForReview}
+          open={reviewOpen}
+          onClose={() => { setReviewOpen(false); setExtractionForReview(null); }}
+          onConfirm={(mapped) => {
+            const entries = Object.entries(mapped).filter(
+              ([k, val]) => val !== undefined && k in defaults,
+            );
+            // Merge CSV/Excel-only extras (variableCosts, top5Revenue, founderHours)
+            // that aren't surfaced in the review modal but were extracted from the file
+            const extras = pendingCsvExtras ?? {};
+            const allEntries = [
+              ...entries,
+              ...Object.entries(extras).filter(([k]) => k in defaults),
+            ];
+            if (allEntries.length > 0) {
+              setV((prev) => ({ ...prev, ...Object.fromEntries(allEntries) } as Inputs));
+              setHasRealFinancials(true);
+              toast.success(`${entries.length} field${entries.length === 1 ? "" : "s"} imported from your statement — figures saved automatically.`);
+            } else {
+              toast.warning("No matching fields found in the extraction result.");
+            }
+            setPendingCsvExtras(null);
+            setReviewOpen(false);
+            setExtractionForReview(null);
+          }}
+        />
+      )}
+
       {/* QuickBooks connect dialog */}
       <Dialog open={showQboDialog} onOpenChange={setShowQboDialog}>
         <DialogContent className="max-w-2xl border border-slate-800 bg-slate-950 text-slate-50">
@@ -2718,6 +3286,7 @@ function Index() {
                   Object.entries(inputs).map(([k, val]) => [k, String(val)]),
                 ),
               }));
+              setHasRealFinancials(true);
               setShowQboDialog(false);
             }}
           />
@@ -2748,7 +3317,7 @@ function Index() {
                       {i + 1}
                     </span>
                     <span className="min-w-0 flex-1 text-sm text-slate-200">{s}</span>
-                    {effectiveClientId && (
+                    {effectiveClientId && userRole !== "client_member" && (
                       <AssignButton
                         clientId={effectiveClientId}
                         clientName={actingClientName ?? undefined}
@@ -3032,77 +3601,58 @@ type NextStep = {
 
 function NextStepsPanel({
   steps,
+  simplified,
   done,
   onToggleDone,
   onOpenSop,
   clientId,
   clientName,
+  isOwner = true,
+  onGoToPlan,
 }: {
   steps: NextStep[];
+  simplified: boolean;
   done: Set<RatioKey>;
   onToggleDone: (k: RatioKey) => void;
   onOpenSop: (k: RatioKey) => void;
   clientId?: string | null;
   clientName?: string;
+  isOwner?: boolean;
+  onGoToPlan?: (moveKey: string) => void;
 }) {
-  const top5 = steps.slice(0, 5);
-  const rest = steps.slice(5);
   const completed = steps.filter((s) => done.has(s.key)).length;
+  const open = steps.length - completed;
+  const avgHealth = steps.filter((s) => Number.isFinite(s.health)).reduce((a, s, _, arr) => a + s.health / arr.length, 0);
+  const highestImpact = steps.filter((s) => !done.has(s.key)).sort((a, b) => b.impact - a.impact)[0];
   return (
     <div className="space-y-5">
-      <Card className="border border-slate-800 bg-slate-900/60 shadow-sm">
-        <CardHeader className="border-b border-slate-800 pb-4">
-          <div className="flex items-start justify-between gap-3">
+      <Card className="overflow-hidden border-[#b7872a]/25 bg-white shadow-[0_12px_40px_rgba(15,23,42,.06)] dark:bg-[#111827]/80 dark:shadow-none">
+        <CardHeader className="border-b border-[#b7872a]/15 bg-[#fbf8f1] pb-5 dark:bg-[#151b28]">
+          <div className="flex flex-wrap items-end justify-between gap-5">
             <div>
-              <CardTitle className="text-slate-100">Strategic Next Steps</CardTitle>
-              <CardDescription className="text-slate-400">
-                Filtered through <span className="text-sky-300">Cynefin</span> (problem type),{" "}
-                <span className="text-sky-300">Eisenhower</span> (urgent × important) and{" "}
-                <span className="text-sky-300">Pareto</span> (vital few). Tap a step for the SOP
-                playbook, mark it done as you ship.
+              <div className="mb-2 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[.24em] text-[#9d741d] dark:text-[#d5aa58]"><Target className="h-3.5 w-3.5" /> Advisory queue</div>
+              <CardTitle className="font-display text-2xl text-[#172033] dark:text-[#f6f1e7]">{simplified ? "Your next best moves" : "Operating priorities"}</CardTitle>
+              <CardDescription className="mt-1 max-w-2xl text-[#667085] dark:text-slate-400">
+                {simplified ? "A short list for the week ahead. Start at the top and keep the momentum." : "A decision-grade view of the levers most likely to improve financial health."}
               </CardDescription>
             </div>
-            <span className="shrink-0 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-emerald-200">
-              ✓ {completed} / {steps.length}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="rounded-full border border-[#b7872a]/30 bg-[#b7872a]/10 px-3 py-1.5 text-xs font-semibold text-[#8a651b] dark:text-[#e5be72]"><Check className="mr-1 inline h-3.5 w-3.5" />{completed} of {steps.length} complete</span>
+            </div>
           </div>
+          {!simplified && (
+            <div className="mt-5 grid gap-2 sm:grid-cols-3">
+              <Insight label="Open moves" value={`${open}`} detail="still to ship" icon={<Layers3 />} />
+              <Insight label="Average health" value={Number.isFinite(avgHealth) ? `${avgHealth.toFixed(0)}%` : "—"} detail="across available levers" icon={<Target />} />
+              <Insight label="Lead with" value={highestImpact ? `Impact ${highestImpact.impact}/10` : "All clear"} detail={highestImpact?.ratioName ?? "moves completed"} icon={<ArrowUpRight />} />
+            </div>
+          )}
         </CardHeader>
-        <CardContent className="space-y-3 pt-5">
-          {top5.map((s, i) => (
-            <NextStepRow
-              key={s.key}
-              step={s}
-              rank={i + 1}
-              highlighted
-              isDone={done.has(s.key)}
-              onToggleDone={() => onToggleDone(s.key)}
-              onOpenSop={() => onOpenSop(s.key)}
-              clientId={clientId}
-              clientName={clientName}
-            />
-          ))}
-        </CardContent>
-      </Card>
-
-      <Card className="border border-slate-800 bg-slate-900/60 shadow-sm">
-        <CardHeader className="border-b border-slate-800 pb-4">
-          <CardTitle className="text-slate-100">Supporting Moves (6–10)</CardTitle>
-          <CardDescription className="text-slate-400">
-            Useful, but lower combined impact-and-urgency than the top 5.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3 pt-5">
-          {rest.map((s, i) => (
-            <NextStepRow
-              key={s.key}
-              step={s}
-              rank={i + 6}
-              isDone={done.has(s.key)}
-              onToggleDone={() => onToggleDone(s.key)}
-              onOpenSop={() => onOpenSop(s.key)}
-              clientId={clientId}
-              clientName={clientName}
-            />
+        <CardContent className="space-y-2 p-4 sm:p-5">
+          {steps.map((s, i) => (
+            <NextStepRow key={s.key} step={s} rank={i + 1} simplified={simplified} highlighted={!simplified && i < 3}
+              isDone={done.has(s.key)} onToggleDone={() => onToggleDone(s.key)} onOpenSop={() => onOpenSop(s.key)}
+              clientId={clientId} clientName={clientName} isOwner={isOwner} onGoToPlan={onGoToPlan} />
           ))}
         </CardContent>
       </Card>
@@ -3110,54 +3660,66 @@ function NextStepsPanel({
   );
 }
 
+function Insight({ label, value, detail, icon }: { label: string; value: string; detail: string; icon: React.ReactNode }) {
+  return <div className="rounded-lg border border-[#b7872a]/15 bg-white/70 p-3 dark:bg-[#0c1320]">
+    <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-slate-500"><span className="text-[#b7872a]">{icon}</span>{label}</div>
+    <div className="mt-1 text-lg font-semibold text-[#172033] dark:text-slate-100">{value}</div>
+    <div className="text-[10px] text-slate-500">{detail}</div>
+  </div>;
+}
+
 function NextStepRow({
   step,
   rank,
   highlighted,
+  simplified,
   isDone,
   onToggleDone,
   onOpenSop,
   clientId,
   clientName,
+  isOwner = true,
+  onGoToPlan,
 }: {
   step: NextStep;
   rank: number;
   highlighted?: boolean;
+  simplified: boolean;
   isDone: boolean;
   onToggleDone: () => void;
   onOpenSop: () => void;
   clientId?: string | null;
   clientName?: string;
+  isOwner?: boolean;
+  onGoToPlan?: (moveKey: string) => void;
 }) {
   const t = tierColor(step.health);
   const cynefinColor: Record<NextStep["cynefin"], string> = {
-    Clear: "border-emerald-500/40 bg-emerald-500/10 text-emerald-200",
-    Complicated: "border-sky-500/40 bg-sky-500/10 text-sky-200",
-    Complex: "border-violet-500/40 bg-violet-500/10 text-violet-200",
-    Chaotic: "border-red-500/50 bg-red-500/10 text-red-200",
+    Clear: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+    Complicated: "border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300",
+    Complex: "border-violet-500/30 bg-violet-500/10 text-violet-700 dark:text-violet-300",
+    Chaotic: "border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-300",
   };
   const eisenhowerColor: Record<NextStep["eisenhower"], string> = {
-    Do: "border-red-500/50 bg-red-500/15 text-red-200",
-    Decide: "border-sky-500/50 bg-sky-500/15 text-slate-200",
-    Delegate: "border-sky-500/40 bg-sky-500/10 text-sky-200",
-    Delete: "border-slate-500/40 bg-slate-500/10 text-slate-300",
+    Do: "border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-300",
+    Decide: "border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300",
+    Delegate: "border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300",
+    Delete: "border-slate-500/30 bg-slate-500/10 text-slate-600 dark:text-slate-300",
   };
   return (
     <div
       className={`relative rounded-lg border p-4 transition-colors ${
-        isDone
-          ? "border-emerald-700/40 bg-emerald-950/20 opacity-70"
-          : highlighted
-            ? `border-slate-700 bg-slate-900`
-            : "border-slate-800 bg-slate-900/40"
+        isDone ? "border-emerald-500/25 bg-emerald-500/[0.04] opacity-65" :
+          highlighted ? "border-[#b7872a]/35 bg-[#fffdf7] dark:bg-[#171c29]" :
+          "border-slate-200 bg-white hover:border-[#b7872a]/30 dark:border-slate-700/70 dark:bg-[#111827]/60"
       }`}
     >
       <div className="flex items-start gap-3">
         <div
-          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 font-mono text-sm font-bold ${
+          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full border font-mono text-xs font-bold ${
             highlighted
-              ? "border-sky-400 bg-sky-500/20 text-slate-200"
-              : "border-slate-600 bg-slate-900 text-slate-400"
+              ? "border-[#b7872a] bg-[#b7872a]/10 text-[#8a651b] dark:text-[#e5be72]"
+              : "border-slate-300 bg-slate-50 text-slate-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-400"
           }`}
         >
           {rank}
@@ -3167,27 +3729,24 @@ function NextStepRow({
           className="min-w-0 flex-1 cursor-pointer text-left"
         >
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-lg">{step.icon}</span>
             <span
               className={`text-sm font-semibold ${
-                isDone ? "text-slate-400 line-through" : "text-slate-50"
+                isDone ? "text-slate-400 line-through" : "text-[#172033] dark:text-slate-100"
               }`}
             >
               {step.title}
             </span>
-            <span className="rounded border border-emerald-500/30 bg-emerald-500/5 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-300">
-              ▸ SOP
-            </span>
+            {!simplified && <span className="rounded border border-[#b7872a]/30 bg-[#b7872a]/5 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-[#9d741d] dark:text-[#d5aa58]"><BookOpen className="mr-1 inline h-3 w-3" />SOP</span>}
           </div>
           <p className="mt-1 text-[11px] uppercase tracking-wider text-slate-500">
             Lever: {step.ratioName}
           </p>
-          {highlighted && !isDone && (
-            <p className="mt-2 rounded-md border border-sky-500/30 bg-sky-500/5 p-2 text-xs italic text-slate-100">
-              💡 {step.impactLine}
+          {!simplified && highlighted && !isDone && (
+            <p className="mt-2 rounded-md border border-[#b7872a]/20 bg-[#b7872a]/5 p-2 text-xs italic text-slate-700 dark:text-slate-200">
+              {step.impactLine}
             </p>
           )}
-          <div className="mt-3 flex flex-wrap gap-1.5">
+          {!simplified && <div className="mt-3 flex flex-wrap gap-1.5">
             <span className={`rounded border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${eisenhowerColor[step.eisenhower]}`}>
               Eisenhower · {step.eisenhower}
             </span>
@@ -3200,7 +3759,7 @@ function NextStepRow({
             <span className={`rounded border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${t.border} ${t.text}`}>
               Health · {isFinite(step.health) ? `${step.health.toFixed(0)}%` : "—"}
             </span>
-          </div>
+          </div>}
         </button>
         <div className="flex shrink-0 flex-col items-stretch gap-1.5">
           <button
@@ -3211,22 +3770,20 @@ function NextStepRow({
             className={`flex flex-col items-center gap-1 rounded-md border-2 px-3 py-2 text-[10px] font-bold uppercase tracking-wider transition-all ${
               isDone
                 ? "border-emerald-500 bg-emerald-500/20 text-emerald-200"
-                : "border-slate-600 bg-slate-900 text-slate-400 hover:border-emerald-500/60 hover:text-emerald-300"
+                : "border-slate-300 bg-white text-slate-500 hover:border-[#b7872a] hover:text-[#9d741d] dark:border-slate-600 dark:bg-slate-900 dark:text-slate-400"
             }`}
             aria-label="Mark step done"
           >
-            <span className="text-lg leading-none">{isDone ? "✓" : "○"}</span>
+            <span className="text-lg leading-none">{isDone ? <Check className="h-4 w-4" /> : "—"}</span>
             <span>{isDone ? "Done" : "Mark"}</span>
           </button>
-          {clientId && !isDone && (
-            <AssignButton
+          {clientId && !isDone && isOwner && (
+            <AddToPlanButton
               clientId={clientId}
-              clientName={clientName}
-              source="improvement"
-              sourceRef={step.key}
-              defaultTitle={step.title}
-              defaultDescription={`${step.ratioName} · ${step.impactLine}`}
-              size="xs"
+              moveKey={step.key}
+              title={step.title}
+              outcomeWhy={step.impactLine || `Improves ${step.ratioName}.`}
+              onAssign={(k) => onGoToPlan?.(k)}
             />
           )}
         </div>

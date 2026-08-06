@@ -109,6 +109,10 @@ export function AccountantRatiosPanel({ clientId, clientName }: { clientId: stri
   const [uploadOpen, setUploadOpen] = useState(false);
   const [pendingExtraction, setPendingExtraction] = useState<MergedExtractionResult | null>(null);
   const [reviewOpen, setReviewOpen] = useState(false);
+  // Guards against the autosave effect firing the instant hydration finishes —
+  // otherwise merely opening this panel bumps financials_updated_at and falsely
+  // invalidates an accountant's sign-off with no real data change.
+  const skipNextAutosave = useRef(false);
 
   const onUpload = async (file: File) => {
     const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
@@ -224,6 +228,7 @@ export function AccountantRatiosPanel({ clientId, clientName }: { clientId: stri
       .then(({ data }) => {
         if (data?.financials) setV({ ...DEFAULTS, ...(data.financials as Partial<Inputs>) });
         setContact({ email: data?.contact_email ?? "", phone: data?.contact_phone ?? "" });
+        skipNextAutosave.current = true;
         setLoaded(true);
         const bt = data?.business_type ? BUSINESS_TYPE_TO_BENCHMARK[data.business_type] : null;
         if (bt) {
@@ -259,8 +264,15 @@ export function AccountantRatiosPanel({ clientId, clientName }: { clientId: stri
 
   useEffect(() => {
     if (!loaded) return;
+    if (skipNextAutosave.current) {
+      skipNextAutosave.current = false;
+      return;
+    }
     const t = setTimeout(async () => {
-      const { error } = await supabase.from("clients").update({ financials: v as never }).eq("id", clientId);
+      const { error } = await supabase
+        .from("clients")
+        .update({ financials: v as never, financials_updated_at: new Date().toISOString() })
+        .eq("id", clientId);
       if (error) { toast.error(`Save failed: ${error.message}`); return; }
 
       const now = new Date();

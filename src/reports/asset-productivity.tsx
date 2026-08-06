@@ -10,7 +10,7 @@
 import { Fragment } from "react";
 import { View, Text, StyleSheet } from "@react-pdf/renderer";
 import type { AccountantProfile } from "@/contexts/accountant-profile";
-import { PDFDocument, type SmeData } from "@/components/pdf/pdf-document";
+import { PDFDocument, type SmeData, type ReportSignoffStamp } from "@/components/pdf/pdf-document";
 import { scoreTier } from "@/lib/ratios";
 import { C, fmtPct, resolveTheme } from "@/components/pdf/theme";
 import { MetricBox } from "@/components/pdf/metric-box";
@@ -56,6 +56,7 @@ export type AssetProductivityPDFProps = {
   data: AssetProductivityData;
   accountantProfile: AccountantProfile;
   isDemo?: boolean;
+  reviewSignoff?: ReportSignoffStamp | null;
 };
 
 // ── Styles ─────────────────────────────────────────────────────────────────
@@ -171,6 +172,7 @@ export function AssetProductivityPDF({
   data,
   accountantProfile,
   isDemo,
+  reviewSignoff,
 }: AssetProductivityPDFProps) {
   const theme = resolveTheme(accountantProfile);
   const hs = data.health_scores;
@@ -223,6 +225,7 @@ export function AssetProductivityPDF({
       smeData={smeData}
       accountantProfile={accountantProfile}
       isDemo={isDemo}
+      reviewSignoff={reviewSignoff}
     >
       {/* ── PAGE 1 ── */}
       <ReportTitle

@@ -15,7 +15,11 @@
     "preview": "vite preview",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "deploy": "pnpm run build && wrangler deploy --config dist/server/wrangler.json"
+    "deploy": "pnpm run build && wrangler deploy --config dist/server/wrangler.json",
+    "test:reports": "vite-node --config scripts/vite-test.config.ts scripts/render-reports-test.mts",
+    "test:ask-ai-client-switch": "vite-node --config scripts/vite-test.config.ts scripts/ask-ai-client-switch-test.mts",
+    "test:onboarding": "vite-node --config scripts/vite-test.config.ts scripts/test-onboarding-rls.mts",
+    "test:invited-member": "vite-node --config scripts/vite-test.config.ts scripts/test-invited-member-flow.mts"
   },
   "dependencies": {
     "@cloudflare/vite-plugin": "^1.25.5",
@@ -90,6 +94,7 @@
   "devDependencies": {
     "@eslint/js": "^9.32.0",
     "@lovable.dev/vite-tanstack-config": "^1.5.1",
+    "@playwright/test": "^1.62.1",
     "@types/node": "^22.16.5",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
@@ -103,7 +108,8 @@
     "prettier": "^3.7.3",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.56.1",
-    "vite": "^7.3.1"
+    "vite": "^7.3.1",
+    "vite-node": "^6.0.0"
   },
   "pnpm": {}
 }

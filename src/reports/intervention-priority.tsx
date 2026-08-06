@@ -7,7 +7,7 @@
 
 import { View, Text, StyleSheet } from "@react-pdf/renderer";
 import type { AccountantProfile } from "@/contexts/accountant-profile";
-import { PDFDocument, type SmeData } from "@/components/pdf/pdf-document";
+import { PDFDocument, type SmeData, type ReportSignoffStamp } from "@/components/pdf/pdf-document";
 import { InsightBox } from "@/components/pdf/insight-box";
 import { ReportTitle } from "@/components/pdf/report-title";
 import { SectionHeader } from "@/components/pdf/section-header";
@@ -35,6 +35,7 @@ export type InterventionPriorityPDFProps = {
   interventions: Intervention[];
   accountantProfile: AccountantProfile;
   isDemo?: boolean;
+  reviewSignoff?: ReportSignoffStamp | null;
 };
 
 // ── Styles ─────────────────────────────────────────────────────────────────
@@ -60,6 +61,7 @@ export function InterventionPriorityPDF({
   interventions,
   accountantProfile,
   isDemo,
+  reviewSignoff,
 }: InterventionPriorityPDFProps) {
   const theme = resolveTheme(accountantProfile);
 
@@ -125,6 +127,7 @@ export function InterventionPriorityPDF({
       smeData={smeData}
       accountantProfile={accountantProfile}
       isDemo={isDemo}
+      reviewSignoff={reviewSignoff}
     >
       <ReportTitle
         kicker="Advisory Report 05"

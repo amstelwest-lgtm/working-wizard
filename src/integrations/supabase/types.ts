@@ -14,6 +14,420 @@ export type Database = {
   }
   public: {
     Tables: {
+      action_emails: {
+        Row: {
+          action_item_id: string | null
+          client_id: string
+          created_at: string
+          email_type: string
+          id: string
+          recipient_email: string
+          sent_at: string | null
+          status: string
+        }
+        Insert: {
+          action_item_id?: string | null
+          client_id: string
+          created_at?: string
+          email_type: string
+          id?: string
+          recipient_email: string
+          sent_at?: string | null
+          status?: string
+        }
+        Update: {
+          action_item_id?: string | null
+          client_id?: string
+          created_at?: string
+          email_type?: string
+          id?: string
+          recipient_email?: string
+          sent_at?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "action_emails_action_item_id_fkey"
+            columns: ["action_item_id"]
+            isOneToOne: false
+            referencedRelation: "action_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "action_emails_action_item_id_fkey"
+            columns: ["action_item_id"]
+            isOneToOne: false
+            referencedRelation: "action_items_v"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "action_emails_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      action_items: {
+        Row: {
+          blocker_note: string | null
+          client_id: string
+          completed_at: string | null
+          created_at: string
+          driver_key: string | null
+          due_date: string | null
+          id: string
+          outcome_why: string | null
+          owner_id: string | null
+          plan_id: string
+          progress_pct: number
+          sent_at: string | null
+          seq: number
+          source: Database["public"]["Enums"]["action_source"]
+          source_move_key: string | null
+          status: Database["public"]["Enums"]["action_status"]
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          blocker_note?: string | null
+          client_id: string
+          completed_at?: string | null
+          created_at?: string
+          driver_key?: string | null
+          due_date?: string | null
+          id?: string
+          outcome_why?: string | null
+          owner_id?: string | null
+          plan_id: string
+          progress_pct?: number
+          sent_at?: string | null
+          seq: number
+          source?: Database["public"]["Enums"]["action_source"]
+          source_move_key?: string | null
+          status?: Database["public"]["Enums"]["action_status"]
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          blocker_note?: string | null
+          client_id?: string
+          completed_at?: string | null
+          created_at?: string
+          driver_key?: string | null
+          due_date?: string | null
+          id?: string
+          outcome_why?: string | null
+          owner_id?: string | null
+          plan_id?: string
+          progress_pct?: number
+          sent_at?: string | null
+          seq?: number
+          source?: Database["public"]["Enums"]["action_source"]
+          source_move_key?: string | null
+          status?: Database["public"]["Enums"]["action_status"]
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "action_items_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "action_items_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "client_employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "action_items_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "action_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      action_milestones: {
+        Row: {
+          action_item_id: string
+          done_at: string | null
+          id: string
+          is_done: boolean
+          label: string
+          week_no: number
+        }
+        Insert: {
+          action_item_id: string
+          done_at?: string | null
+          id?: string
+          is_done?: boolean
+          label: string
+          week_no: number
+        }
+        Update: {
+          action_item_id?: string
+          done_at?: string | null
+          id?: string
+          is_done?: boolean
+          label?: string
+          week_no?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "action_milestones_action_item_id_fkey"
+            columns: ["action_item_id"]
+            isOneToOne: false
+            referencedRelation: "action_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "action_milestones_action_item_id_fkey"
+            columns: ["action_item_id"]
+            isOneToOne: false
+            referencedRelation: "action_items_v"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      action_plans: {
+        Row: {
+          client_id: string
+          created_at: string
+          id: string
+          is_active: boolean
+          metric_current: number | null
+          metric_name: string | null
+          metric_start: number | null
+          metric_target: number | null
+          outcome_goal: string
+          period_label: string
+          target_date: string
+          why_statement: string | null
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          metric_current?: number | null
+          metric_name?: string | null
+          metric_start?: number | null
+          metric_target?: number | null
+          outcome_goal: string
+          period_label: string
+          target_date: string
+          why_statement?: string | null
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          metric_current?: number | null
+          metric_name?: string | null
+          metric_start?: number | null
+          metric_target?: number | null
+          outcome_goal?: string
+          period_label?: string
+          target_date?: string
+          why_statement?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "action_plans_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      action_tokens: {
+        Row: {
+          action_item_id: string
+          created_at: string
+          employee_id: string
+          expires_at: string
+          id: string
+          last_used_at: string | null
+          revoked_at: string | null
+          token_hash: string
+          use_count: number
+        }
+        Insert: {
+          action_item_id: string
+          created_at?: string
+          employee_id: string
+          expires_at: string
+          id?: string
+          last_used_at?: string | null
+          revoked_at?: string | null
+          token_hash: string
+          use_count?: number
+        }
+        Update: {
+          action_item_id?: string
+          created_at?: string
+          employee_id?: string
+          expires_at?: string
+          id?: string
+          last_used_at?: string | null
+          revoked_at?: string | null
+          token_hash?: string
+          use_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "action_tokens_action_item_id_fkey"
+            columns: ["action_item_id"]
+            isOneToOne: false
+            referencedRelation: "action_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "action_tokens_action_item_id_fkey"
+            columns: ["action_item_id"]
+            isOneToOne: false
+            referencedRelation: "action_items_v"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "action_tokens_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "client_employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      action_updates: {
+        Row: {
+          action_item_id: string
+          actor_label: string
+          actor_type: string
+          client_id: string
+          created_at: string
+          id: string
+          note: string | null
+          progress_from: number | null
+          progress_to: number | null
+          status_from: Database["public"]["Enums"]["action_status"] | null
+          status_to: Database["public"]["Enums"]["action_status"] | null
+        }
+        Insert: {
+          action_item_id: string
+          actor_label: string
+          actor_type: string
+          client_id: string
+          created_at?: string
+          id?: string
+          note?: string | null
+          progress_from?: number | null
+          progress_to?: number | null
+          status_from?: Database["public"]["Enums"]["action_status"] | null
+          status_to?: Database["public"]["Enums"]["action_status"] | null
+        }
+        Update: {
+          action_item_id?: string
+          actor_label?: string
+          actor_type?: string
+          client_id?: string
+          created_at?: string
+          id?: string
+          note?: string | null
+          progress_from?: number | null
+          progress_to?: number | null
+          status_from?: Database["public"]["Enums"]["action_status"] | null
+          status_to?: Database["public"]["Enums"]["action_status"] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "action_updates_action_item_id_fkey"
+            columns: ["action_item_id"]
+            isOneToOne: false
+            referencedRelation: "action_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "action_updates_action_item_id_fkey"
+            columns: ["action_item_id"]
+            isOneToOne: false
+            referencedRelation: "action_items_v"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "action_updates_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ask_ai_cache: {
+        Row: {
+          answer: string
+          created_at: string
+          hit_count: number
+          id: string
+          question_hash: string
+        }
+        Insert: {
+          answer: string
+          created_at?: string
+          hit_count?: number
+          id?: string
+          question_hash: string
+        }
+        Update: {
+          answer?: string
+          created_at?: string
+          hit_count?: number
+          id?: string
+          question_hash?: string
+        }
+        Relationships: []
+      }
+      ask_ai_log: {
+        Row: {
+          client_id: string
+          created_at: string
+          id: string
+          input_tokens: number
+          latency_ms: number
+          output_tokens: number
+          tier: string
+          user_id: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          id?: string
+          input_tokens?: number
+          latency_ms?: number
+          output_tokens?: number
+          tier: string
+          user_id: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          id?: string
+          input_tokens?: number
+          latency_ms?: number
+          output_tokens?: number
+          tier?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       client_employees: {
         Row: {
           active: boolean
@@ -123,6 +537,41 @@ export type Database = {
           },
         ]
       }
+      client_score_history: {
+        Row: {
+          client_id: string
+          created_at: string
+          id: string
+          is_estimated: boolean
+          period_date: string
+          score: number
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          id?: string
+          is_estimated?: boolean
+          period_date: string
+          score: number
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          id?: string
+          is_estimated?: boolean
+          period_date?: string
+          score?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_score_history_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       clients: {
         Row: {
           business_type: string | null
@@ -181,204 +630,6 @@ export type Database = {
             columns: ["firm_id"]
             isOneToOne: false
             referencedRelation: "firms"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      client_score_history: {
-        Row: {
-          client_id: string
-          created_at: string
-          id: string
-          is_estimated: boolean
-          period_date: string
-          score: number
-        }
-        Insert: {
-          client_id: string
-          created_at?: string
-          id?: string
-          is_estimated?: boolean
-          period_date: string
-          score: number
-        }
-        Update: {
-          client_id?: string
-          created_at?: string
-          id?: string
-          is_estimated?: boolean
-          period_date?: string
-          score?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "client_score_history_client_id_fkey"
-            columns: ["client_id"]
-            isOneToOne: false
-            referencedRelation: "clients"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      email_send_log: {
-        Row: {
-          created_at: string
-          error_message: string | null
-          id: string
-          message_id: string | null
-          metadata: Json | null
-          recipient_email: string
-          status: string
-          template_name: string
-        }
-        Insert: {
-          created_at?: string
-          error_message?: string | null
-          id?: string
-          message_id?: string | null
-          metadata?: Json | null
-          recipient_email: string
-          status: string
-          template_name: string
-        }
-        Update: {
-          created_at?: string
-          error_message?: string | null
-          id?: string
-          message_id?: string | null
-          metadata?: Json | null
-          recipient_email?: string
-          status?: string
-          template_name?: string
-        }
-        Relationships: []
-      }
-      email_send_state: {
-        Row: {
-          auth_email_ttl_minutes: number
-          batch_size: number
-          id: number
-          retry_after_until: string | null
-          send_delay_ms: number
-          transactional_email_ttl_minutes: number
-          updated_at: string
-        }
-        Insert: {
-          auth_email_ttl_minutes?: number
-          batch_size?: number
-          id?: number
-          retry_after_until?: string | null
-          send_delay_ms?: number
-          transactional_email_ttl_minutes?: number
-          updated_at?: string
-        }
-        Update: {
-          auth_email_ttl_minutes?: number
-          batch_size?: number
-          id?: number
-          retry_after_until?: string | null
-          send_delay_ms?: number
-          transactional_email_ttl_minutes?: number
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      email_unsubscribe_tokens: {
-        Row: {
-          created_at: string
-          email: string
-          id: string
-          token: string
-          used_at: string | null
-        }
-        Insert: {
-          created_at?: string
-          email: string
-          id?: string
-          token: string
-          used_at?: string | null
-        }
-        Update: {
-          created_at?: string
-          email?: string
-          id?: string
-          token?: string
-          used_at?: string | null
-        }
-        Relationships: []
-      }
-      employee_sop_items: {
-        Row: {
-          active: boolean
-          client_id: string
-          created_at: string
-          day_of_week: number
-          employee_id: string
-          frequency: Database["public"]["Enums"]["sop_frequency"]
-          id: string
-          title: string
-        }
-        Insert: {
-          active?: boolean
-          client_id: string
-          created_at?: string
-          day_of_week?: number
-          employee_id: string
-          frequency?: Database["public"]["Enums"]["sop_frequency"]
-          id?: string
-          title: string
-        }
-        Update: {
-          active?: boolean
-          client_id?: string
-          created_at?: string
-          day_of_week?: number
-          employee_id?: string
-          frequency?: Database["public"]["Enums"]["sop_frequency"]
-          id?: string
-          title?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "employee_sop_items_employee_id_fkey"
-            columns: ["employee_id"]
-            isOneToOne: false
-            referencedRelation: "client_employees"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      employee_sop_log: {
-        Row: {
-          client_id: string
-          completed_at: string
-          completed_by: string | null
-          id: string
-          sop_item_id: string
-          week_start: string
-        }
-        Insert: {
-          client_id: string
-          completed_at?: string
-          completed_by?: string | null
-          id?: string
-          sop_item_id: string
-          week_start: string
-        }
-        Update: {
-          client_id?: string
-          completed_at?: string
-          completed_by?: string | null
-          id?: string
-          sop_item_id?: string
-          week_start?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "employee_sop_log_sop_item_id_fkey"
-            columns: ["sop_item_id"]
-            isOneToOne: false
-            referencedRelation: "employee_sop_items"
             referencedColumns: ["id"]
           },
         ]
@@ -594,29 +845,116 @@ export type Database = {
         }
         Relationships: []
       }
-      suppressed_emails: {
+      qbo_connections: {
         Row: {
-          created_at: string
-          email: string
+          access_token: string
+          client_id: string
+          company_name: string | null
+          connected_at: string | null
           id: string
-          metadata: Json | null
-          reason: string
+          last_synced_at: string | null
+          realm_id: string
+          refresh_token: string
+          sync_error: string | null
+          sync_status: string | null
+          token_expiry: string
         }
         Insert: {
-          created_at?: string
-          email: string
+          access_token: string
+          client_id: string
+          company_name?: string | null
+          connected_at?: string | null
           id?: string
-          metadata?: Json | null
-          reason: string
+          last_synced_at?: string | null
+          realm_id: string
+          refresh_token: string
+          sync_error?: string | null
+          sync_status?: string | null
+          token_expiry: string
         }
         Update: {
-          created_at?: string
-          email?: string
+          access_token?: string
+          client_id?: string
+          company_name?: string | null
+          connected_at?: string | null
           id?: string
-          metadata?: Json | null
-          reason?: string
+          last_synced_at?: string | null
+          realm_id?: string
+          refresh_token?: string
+          sync_error?: string | null
+          sync_status?: string | null
+          token_expiry?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "qbo_connections_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: true
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      qbo_oauth_states: {
+        Row: {
+          client_id: string
+          created_at: string | null
+          id: string
+          state: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string | null
+          id?: string
+          state: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string | null
+          id?: string
+          state?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "qbo_oauth_states_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      qbo_sync_data: {
+        Row: {
+          client_id: string
+          data_type: string
+          id: string
+          raw_data: Json | null
+          synced_at: string | null
+        }
+        Insert: {
+          client_id: string
+          data_type: string
+          id?: string
+          raw_data?: Json | null
+          synced_at?: string | null
+        }
+        Update: {
+          client_id?: string
+          data_type?: string
+          id?: string
+          raw_data?: Json | null
+          synced_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "qbo_sync_data_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_roles: {
         Row: {
@@ -641,16 +979,86 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      action_items_v: {
+        Row: {
+          blocker_note: string | null
+          client_id: string | null
+          completed_at: string | null
+          created_at: string | null
+          days_remaining: number | null
+          driver_key: string | null
+          due_date: string | null
+          health: Database["public"]["Enums"]["action_health"] | null
+          id: string | null
+          outcome_why: string | null
+          owner_email: string | null
+          owner_id: string | null
+          owner_name: string | null
+          owner_role: string | null
+          plan_id: string | null
+          progress_pct: number | null
+          sent_at: string | null
+          seq: number | null
+          source: Database["public"]["Enums"]["action_source"] | null
+          source_move_key: string | null
+          status: Database["public"]["Enums"]["action_status"] | null
+          title: string | null
+          updated_at: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "action_items_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "action_items_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "client_employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "action_items_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "action_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
-      delete_email: {
-        Args: { message_id: number; queue_name: string }
+      action_item_health: {
+        Args: {
+          p_created: string
+          p_due: string
+          p_progress: number
+          p_status: Database["public"]["Enums"]["action_status"]
+        }
+        Returns: Database["public"]["Enums"]["action_health"]
+      }
+      ask_ai_check_rate_limit: {
+        Args: { p_limit?: number; p_user_id: string }
         Returns: boolean
       }
-      enqueue_email: {
-        Args: { payload: Json; queue_name: string }
-        Returns: number
+      ask_ai_record_request: {
+        Args: {
+          p_client_id: string
+          p_input_tokens?: number
+          p_latency_ms?: number
+          p_limit?: number
+          p_output_tokens?: number
+          p_tier: string
+          p_user_id: string
+        }
+        Returns: boolean
+      }
+      ensure_own_client: {
+        Args: { p_name: string }
+        Returns: string
       }
       has_client_access: {
         Args: { _client_id: string; _user_id: string }
@@ -667,25 +1075,16 @@ export type Database = {
         Args: { _firm_id: string; _user_id: string }
         Returns: boolean
       }
-      move_to_dlq: {
-        Args: {
-          dlq_name: string
-          message_id: number
-          payload: Json
-          source_queue: string
-        }
-        Returns: number
-      }
-      read_email_batch: {
-        Args: { batch_size: number; queue_name: string; vt: number }
-        Returns: {
-          message: Json
-          msg_id: number
-          read_ct: number
-        }[]
-      }
     }
     Enums: {
+      action_health:
+        | "on_track"
+        | "at_risk"
+        | "off_track"
+        | "overdue"
+        | "complete"
+      action_source: "strategic_move" | "manual"
+      action_status: "not_started" | "in_progress" | "done" | "blocked"
       app_role: "accountant" | "firm_admin" | "client_owner" | "client_member"
       employee_task_source:
         | "kpi"
@@ -694,7 +1093,6 @@ export type Database = {
         | "sop_weekly"
         | "manual"
       employee_task_status: "open" | "done" | "skipped"
-      sop_frequency: "weekly"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -822,6 +1220,15 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      action_health: [
+        "on_track",
+        "at_risk",
+        "off_track",
+        "overdue",
+        "complete",
+      ],
+      action_source: ["strategic_move", "manual"],
+      action_status: ["not_started", "in_progress", "done", "blocked"],
       app_role: ["accountant", "firm_admin", "client_owner", "client_member"],
       employee_task_source: [
         "kpi",
@@ -831,7 +1238,6 @@ export const Constants = {
         "manual",
       ],
       employee_task_status: ["open", "done", "skipped"],
-      sop_frequency: ["weekly"],
     },
   },
 } as const

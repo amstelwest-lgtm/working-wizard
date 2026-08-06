@@ -27,7 +27,7 @@
 .ask-ai-icon {
   width: 16px;
   height: 16px;
-  color: #b8860b;
+  color: #8a6508;
   flex-shrink: 0;
 }
 
@@ -46,8 +46,12 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.28em;
-  color: #b8860b;
+  color: #8a6508;
 }
+.dark .ask-ai-icon { color: #d4a550; }
+.dark .ask-ai-header { color: #d4a550; }
+.dark .ask-ai-chip:hover { color: #f7d98a; }
+.dark .ask-ai-send { color: #d4a550; }
 
 .ask-ai-textarea {
   width: 100%;
@@ -89,7 +93,7 @@
 }
 .ask-ai-chip:hover {
   border-color: rgba(212, 165, 80, 0.6);
-  color: #b8860b;
+  color: #8a6508;
 }
 
 .ask-ai-actions {
@@ -106,7 +110,7 @@
   border: 1px solid rgba(212, 165, 80, 0.5);
   border-radius: 6px;
   background: rgba(212, 165, 80, 0.1);
-  color: #b8860b;
+  color: #8a6508;
   font-family: inherit;
   font-size: 11px;
   font-weight: 500;
@@ -138,15 +142,60 @@
 }
 
 .ask-ai-answer {
-  border-radius: 8px;
+  border-radius: 10px;
   border: 1px solid rgba(183, 135, 42, 0.25);
   background: #f8fafc;
-  padding: 12px;
-  font-size: 12px;
-  line-height: 1.6;
+  padding: 16px 18px;
+  font-family: "Inter", "Segoe UI", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+  font-size: 13.5px;
+  line-height: 1.65;
   color: #334155;
-  white-space: pre-wrap;
 }
+.ask-ai-answer p { margin: 0 0 10px; }
+.ask-ai-answer p:last-child { margin-bottom: 0; }
+.ask-ai-answer strong { color: #0f172a; font-weight: 600; }
+.ask-ai-answer em { color: #475569; }
+.ask-ai-answer code {
+  font-family: ui-monospace, SF Mono, Menlo, Consolas, monospace;
+  font-size: 12px;
+  background: rgba(183, 135, 42, 0.08);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+.ask-ai-answer ul, .ask-ai-answer ol { margin: 4px 0 12px; padding-left: 20px; }
+.ask-ai-answer li { margin: 3px 0; }
+.ask-ai-md-h {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: #8a6508;
+  margin: 14px 0 8px;
+}
+.ask-ai-md-h:first-child { margin-top: 0; }
+.ask-ai-md-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0 14px;
+  font-size: 12.5px;
+}
+.ask-ai-md-table th {
+  text-align: left;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #8a6508;
+  padding: 6px 10px;
+  border-bottom: 1.5px solid rgba(183, 135, 42, 0.35);
+}
+.ask-ai-md-table td {
+  padding: 6px 10px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+  color: #334155;
+}
+.ask-ai-md-table tr:last-child td { border-bottom: none; }
+.ask-ai-md-table tbody tr:nth-child(even) { background: rgba(183, 135, 42, 0.04); }
 
 .ask-ai-answer-chips {
   display: flex;
@@ -177,23 +226,8 @@
   50%       { opacity: 0.45; }
 }
 
-/* Dark mode */
-@media (prefers-color-scheme: dark) {
-  .ask-ai-trigger { color: rgba(241, 230, 200, 0.6); }
-  .ask-ai-trigger:hover { background: rgba(255,255,255,0.04); }
-  .ask-ai-textarea {
-    background: #060a18;
-    color: #f1e6c8;
-    border-color: rgba(183, 135, 42, 0.3);
-  }
-  .ask-ai-textarea::placeholder { color: rgba(241, 230, 200, 0.3); }
-  .ask-ai-chip { background: #0a1020; color: rgba(241, 230, 200, 0.6); }
-  .ask-ai-chip:hover { color: #f7d98a; border-color: rgba(212, 165, 80, 0.6); }
-  .ask-ai-answer { background: #060a18; color: rgba(241, 230, 200, 0.8); }
-  .ask-ai-cancel { color: rgba(241, 230, 200, 0.4); }
-  .ask-ai-cancel:hover { color: rgba(241, 230, 200, 0.7); }
-}
-
+/* Dark mode — driven by the app's .dark class only (never OS preference),
+   so light app theme + dark OS never gets pale text on a white background. */
 .dark .ask-ai-trigger { color: rgba(241, 230, 200, 0.6); }
 .dark .ask-ai-trigger:hover { background: rgba(255,255,255,0.04); }
 .dark .ask-ai-textarea {
@@ -204,6 +238,13 @@
 .dark .ask-ai-textarea::placeholder { color: rgba(241, 230, 200, 0.3); }
 .dark .ask-ai-chip { background: #0a1020; color: rgba(241, 230, 200, 0.6); }
 .dark .ask-ai-chip:hover { color: #f7d98a; border-color: rgba(212, 165, 80, 0.6); }
-.dark .ask-ai-answer { background: #060a18; color: rgba(241, 230, 200, 0.8); }
+.dark .ask-ai-answer { background: #060a18; color: rgba(241, 230, 200, 0.85); }
+.dark .ask-ai-answer strong { color: #f7d98a; }
+.dark .ask-ai-answer em { color: rgba(241, 230, 200, 0.7); }
+.dark .ask-ai-answer code { background: rgba(212, 165, 80, 0.12); color: #f1e6c8; }
+.dark .ask-ai-md-h { color: #d4a550; }
+.dark .ask-ai-md-table th { color: #d4a550; border-bottom-color: rgba(212, 165, 80, 0.4); }
+.dark .ask-ai-md-table td { color: rgba(241, 230, 200, 0.8); border-bottom-color: rgba(148, 163, 184, 0.15); }
+.dark .ask-ai-md-table tbody tr:nth-child(even) { background: rgba(212, 165, 80, 0.05); }
 .dark .ask-ai-cancel { color: rgba(241, 230, 200, 0.4); }
 .dark .ask-ai-cancel:hover { color: rgba(241, 230, 200, 0.7); }

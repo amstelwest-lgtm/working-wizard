@@ -221,7 +221,7 @@ export const triggerQboSync = createServerFn({ method: "POST" })
 
       await supabaseAdmin
         .from("clients" as never)
-        .update({ financials: merged })
+        .update({ financials: merged, financials_updated_at: new Date().toISOString() })
         .eq("id", data.clientId);
 
       // Cache raw sync data (upsert per data type)

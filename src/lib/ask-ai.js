@@ -13,6 +13,90 @@ const DEFAULT_CHIPS = [
   "Where am I weakest vs industry?",
 ];
 
+// ── Minimal safe markdown → HTML renderer ───────────────────────────────
+// Escapes all HTML first, then converts the subset Claude actually emits:
+// headings, bold, italics, tables, bullet/numbered lists, paragraphs.
+function escapeHtml(s) {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function inlineMd(s) {
+  return s
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>")
+    .replace(/`([^`]+)`/g, "<code>$1</code>");
+}
+
+export function renderMarkdown(md) {
+  const lines = escapeHtml(md).split("\n");
+  const out = [];
+  let listType = null; // "ul" | "ol"
+  let tableRows = null; // array of arrays
+
+  const closeList = () => {
+    if (listType) { out.push(`</${listType}>`); listType = null; }
+  };
+  const flushTable = () => {
+    if (!tableRows || tableRows.length === 0) { tableRows = null; return; }
+    const [head, ...body] = tableRows;
+    let html = '<table class="ask-ai-md-table"><thead><tr>';
+    html += head.map((c) => `<th>${inlineMd(c)}</th>`).join("");
+    html += "</tr></thead><tbody>";
+    for (const row of body) {
+      html += "<tr>" + row.map((c) => `<td>${inlineMd(c)}</td>`).join("") + "</tr>";
+    }
+    html += "</tbody></table>";
+    out.push(html);
+    tableRows = null;
+  };
+
+  for (const raw of lines) {
+    const line = raw.trimEnd();
+    const trimmed = line.trim();
+
+    // Table row?
+    if (/^\|.*\|$/.test(trimmed)) {
+      const cells = trimmed.slice(1, -1).split("|").map((c) => c.trim());
+      // Separator row (|---|---|) — skip
+      if (cells.every((c) => /^:?-{2,}:?$/.test(c) || c === "")) continue;
+      closeList();
+      if (!tableRows) tableRows = [];
+      tableRows.push(cells);
+      continue;
+    }
+    flushTable();
+
+    if (trimmed === "") { closeList(); continue; }
+
+    const h = trimmed.match(/^(#{1,4})\s+(.*)$/);
+    if (h) {
+      closeList();
+      const lvl = Math.min(h[1].length + 2, 5); // ## → h4-ish visual scale
+      out.push(`<h${lvl} class="ask-ai-md-h">${inlineMd(h[2])}</h${lvl}>`);
+      continue;
+    }
+
+    const ul = trimmed.match(/^[-•]\s+(.*)$/);
+    if (ul) {
+      if (listType !== "ul") { closeList(); out.push("<ul>"); listType = "ul"; }
+      out.push(`<li>${inlineMd(ul[1])}</li>`);
+      continue;
+    }
+    const ol = trimmed.match(/^\d+[.)]\s+(.*)$/);
+    if (ol) {
+      if (listType !== "ol") { closeList(); out.push("<ol>"); listType = "ol"; }
+      out.push(`<li>${inlineMd(ol[1])}</li>`);
+      continue;
+    }
+
+    closeList();
+    out.push(`<p>${inlineMd(trimmed)}</p>`);
+  }
+  closeList();
+  flushTable();
+  return out.join("");
+}
+
 export function mountAskAi(container, options) {
   const { endpoint, getToken } = options;
 
@@ -125,7 +209,7 @@ export function mountAskAi(container, options) {
       if (answer) {
         const answerEl = document.createElement("div");
         answerEl.className = "ask-ai-answer";
-        answerEl.textContent = answer;
+        answerEl.innerHTML = renderMarkdown(answer);
 
         if (answerChips.length > 0) {
           const chipRow = document.createElement("div");

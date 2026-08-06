@@ -6,4 +6,9 @@
 - [react-pdf gotchas](react-pdf-gotchas.md) — absolute chart children need Fragment keys not View wrappers; Helvetica WinAnsi lacks ▲▼→−ō (draw glyphs as Views); theme in components/pdf/theme.ts
 - [ResizeObserver fake crash](resizeobserver-fake-crash.md) — benign loop warning flagged as artifact crash; fixed via rAF-deferring ResizeObserver shim in dev script, not error-event filtering
 - [Ask AI edge function patterns](ask-ai-edge-function.md) — service-role GRANT needed for revoked RPCs; advisory-lock rate limit; display-name→camelCase ratio mapping; benchmark pct units; monetary metrics excluded
+- [Standalone dark pages](standalone-dark-pages.md) — always-dark routes must add `.dark` to html or global `html:not(.dark)` heading overrides make text invisible
+- [Email pipeline](email-pipeline.md) — transactional email now sends via Resend API (RESEND_API_KEY + RESEND_FROM_EMAIL); queue processor swapped off Lovable gateway
 - [E2E tester login](testing-auth-bypass.md) — Supabase signup is gated; mint confirmed users via admin API (service key from management API); test login wf-tester-33@example.com / Test1234!
+- [Hydration re-fires autosave](hydration-autosave-refire.md) — debounced autosave keyed on a hydration `loaded` flag fires on load with no edits; guard with a one-shot ref
+- [RLS access vs UI authorization](rls-access-vs-ui-authorization.md) — a route/RLS policy readable by multiple roles doesn't mean every role should see every control on it
+- [Impersonation scope check](impersonation-audit-scope-check.md) — "active session" existence checks must use limit(1)+length, not .maybeSingle(), or duplicates cause false 403s

@@ -35,7 +35,7 @@ function saveCache(industry: string, data: NewsItem[]) {
   }
 }
 
-export function IndustryPulse({ industry }: { industry: string }) {
+export function IndustryPulse({ industry, vertical }: { industry: string; vertical?: boolean }) {
   const { viewMode } = useViewMode();
   const [news, setNews] = useState<NewsItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -70,10 +70,12 @@ export function IndustryPulse({ industry }: { industry: string }) {
     if (industry) load();
   }, [industry]);
 
-  const displayNews = viewMode === "simplified" ? news.slice(0, 1) : news;
+  const displayNews = vertical
+    ? news.slice(0, 3)
+    : viewMode === "simplified" ? news.slice(0, 1) : news;
 
   return (
-    <div className="w-full max-w-[640px]">
+    <div className={vertical ? "w-full max-w-[340px]" : "w-full max-w-[640px]"}>
       {/* Header */}
       <div className="mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -128,13 +130,21 @@ export function IndustryPulse({ industry }: { industry: string }) {
 
       {/* News cards */}
       {!loading && displayNews.length > 0 && (
-        <div className="flex gap-3 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div
+          className={
+            vertical
+              ? "flex flex-col gap-3"
+              : "flex gap-3 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          }
+        >
           {displayNews.map((item, i) => {
             const tc = TAG_COLORS[item.tagColor] ?? TAG_COLORS.amber;
             return (
               <div
                 key={i}
-                className="flex min-w-[240px] max-w-[260px] shrink-0 flex-col gap-2 rounded-xl border border-white/8 bg-white/4 p-3.5"
+                className={`flex flex-col gap-2 rounded-xl border border-white/8 bg-white/4 p-3.5 ${
+                  vertical ? "w-full" : "min-w-[240px] max-w-[260px] shrink-0"
+                }`}
               >
                 <span
                   className="w-fit rounded px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.1em]"

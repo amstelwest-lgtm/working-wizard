@@ -1,1 +1,9 @@
 project_id = "jxclnsbsqpixxqlbcapl"
+
+# Public no-login task links — GET/POST are authorised by the token itself.
+[functions.task-link]
+verify_jwt = false
+
+# Admin endpoint — requires a logged-in app user (JWT verified).
+[functions.task-admin]
+verify_jwt = true

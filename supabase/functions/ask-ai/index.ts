@@ -3,7 +3,7 @@ import { sanitize } from "./sanitizer.ts";
 import { classify } from "./classifier.ts";
 import { buildContext } from "./context-builder.ts";
 import { buildPrompt } from "./prompt.ts";
-import { callGemini } from "./gemini.ts";
+import { callClaude } from "./anthropic.ts";
 
 const RATE_LIMIT = 30; // questions per user per hour
 
@@ -152,7 +152,7 @@ Deno.serve(async (req: Request) => {
     }
   }
 
-  // ── Atomically check rate limit + record request (before calling Gemini) ──
+  // ── Atomically check rate limit + record request (before calling the model) ──
   const { data: allowed, error: rlErr } = await adminClient.rpc("ask_ai_record_request", {
     p_user_id: user.id,
     p_client_id: clientId,
@@ -173,10 +173,10 @@ Deno.serve(async (req: Request) => {
   const ctx = await buildContext(userClient, clientId, tier, question);
   const { system, user: userPrompt } = buildPrompt(question, ctx, tier);
 
-  // ── Call Gemini ───────────────────────────────────────────────────────────
+  // ── Call Claude ───────────────────────────────────────────────────────────
   let geminiResult;
   try {
-    geminiResult = await callGemini(system, userPrompt);
+    geminiResult = await callClaude(system, userPrompt);
   } catch (e) {
     const msg = (e as Error).message;
     if (msg.startsWith("Rate limit")) return respond({ error: msg }, 429);

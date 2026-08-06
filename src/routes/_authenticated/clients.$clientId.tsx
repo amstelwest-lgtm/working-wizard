@@ -15,6 +15,14 @@ import { scoreFromFlatFinancials, scoreFromRatioInputs } from "@/lib/health-scor
 import { useAccountantProfile } from "@/contexts/accountant-profile";
 import "@/styles/accountant-portal.css";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { SphereHero } from "@/components/sphere-hero";
+import { buildSpherePillars } from "@/components/sphere-hero-adapter";
+import { SimplifiedRatios } from "@/components/simplified-ratios";
+import { ProfitabilityWaterfall } from "@/components/profitability-waterfall";
+import { useServerFn } from "@tanstack/react-start";
+import { listClientReviewSignoffs } from "@/lib/review-signoffs.functions";
+import type { ClientReviewSignoff } from "@/lib/review-signoffs.functions";
+import { ReviewSignoffButton, ReviewSignoffBadge, computeIsStale } from "@/components/review-signoff";
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
@@ -240,9 +248,56 @@ type Client = {
   open_queries_count: number;
   reports_issued_count?: number;
   financials?: Record<string, string | number | null> | null;
+  financials_updated_at?: string | null;
 };
 
-type ActiveTab = "ratios" | "cash" | "reports" | "tasks" | "advisory";
+type ActiveTab = "ratios" | "profit" | "cash" | "reports" | "tasks" | "advisory";
+
+// Friendly labels for SphereHero drivers
+const SPHERE_RATIO_META: Record<string, { friendly: string }> = {
+  grossMargin: { friendly: "Gross Margin" },
+  operatingMargin: { friendly: "Operating Margin" },
+  netMargin: { friendly: "Net Margin" },
+  fixedCostRatio: { friendly: "Fixed Cost Ratio" },
+  assetTurnover: { friendly: "Asset Turnover" },
+  roa: { friendly: "Return on Assets" },
+  inventoryDays: { friendly: "Inventory Days" },
+  salesPerEmployee: { friendly: "Sales per Employee" },
+  equityMultiplier: { friendly: "Equity Multiplier" },
+  interestBurden: { friendly: "Interest Burden" },
+  taxBurden: { friendly: "Tax Burden" },
+  debtorDays: { friendly: "Debtor Days" },
+  creditorDays: { friendly: "Creditor Days" },
+  workingCapitalDays: { friendly: "Working Capital Days" },
+  ocfToEbitda: { friendly: "OCF / EBITDA" },
+  dol: { friendly: "Operating Leverage" },
+  customerConcentration: { friendly: "Customer Concentration" },
+  gpToLabor: { friendly: "Gross Profit / Labor" },
+  roe: { friendly: "Return on Equity" },
+};
+
+// Maps computeRatios() human-readable names → camelCase healthMap keys
+const RATIO_NAME_TO_KEY: Record<string, string> = {
+  "Gross Margin": "grossMargin",
+  "Operating Margin": "operatingMargin",
+  "Net Margin": "netMargin",
+  "Return on Assets": "roa",
+  "Return on Equity": "roe",
+  "Asset Turnover": "assetTurnover",
+  "Equity Multiplier": "equityMultiplier",
+  "Interest Burden": "interestBurden",
+  "Tax Burden": "taxBurden",
+  "Debtor Days": "debtorDays",
+  "Inventory Days": "inventoryDays",
+  "Creditor Days": "creditorDays",
+  "Working Capital Days": "workingCapitalDays",
+  "Fixed Cost Ratio": "fixedCostRatio",
+  "Degree of Operating Leverage": "dol",
+  "Top-5 Customer Share": "customerConcentration",
+  "Gross Profit / Labor": "gpToLabor",
+  "Sales-per-Employee Ratio": "salesPerEmployee",
+  "OCF / EBITDA": "ocfToEbitda",
+};
 
 // ── Report gallery definitions ──────────────────────────────────────────────
 const REPORT_TEMPLATES = [
@@ -325,9 +380,26 @@ function ClientView() {
   const [activeTab, setActiveTab] = useState<ActiveTab>("ratios");
   const [finOpen, setFinOpen] = useState(true); // collapsible open by default
   const [autosaveStatus, setAutosaveStatus] = useState<"idle" | "saving" | "saved">("idle");
+  const [viewMode, setViewMode] = useState<"simplified" | "complex">("simplified");
 
   // Financials state (flat key-value for the fin-grid)
   const [financials, setFinancials] = useState<Record<string, string>>({});
+
+  // Accountant sign-off on this period's financials
+  const fetchReviewSignoffs = useServerFn(listClientReviewSignoffs);
+  const [financialsSignoff, setFinancialsSignoff] = useState<ClientReviewSignoff | null>(null);
+
+  // Only accountants/firm admins may sign off — a client owner/member who lands on this
+  // route (RLS allows them to read their own client) must see a read-only view, since the
+  // server rejects their sign-off attempts anyway. Determine the viewer's own role once.
+  const [viewerCanSign, setViewerCanSign] = useState(false);
+  useEffect(() => {
+    if (!user) return;
+    supabase.from("user_roles").select("role").eq("user_id", user.id).maybeSingle()
+      .then(({ data }) => {
+        setViewerCanSign(data?.role === "accountant" || data?.role === "firm_admin");
+      });
+  }, [user]);
 
   // Playbook drawer
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -364,6 +436,99 @@ function ClientView() {
     scoreFromFlatFinancials(financials, client?.cash_runway_weeks) ?? 0;
   const healthScoreRounded = Math.round(healthScore);
 
+  // ── Health orb & pillar computation ────────────────────────────────────
+  const healthMap: Record<string, number> = {};
+  Object.entries(ratios).forEach(([name, val]) => {
+    const key = RATIO_NAME_TO_KEY[name];
+    if (key) healthMap[key] = Math.round(ratioHealthScore(name, val as number));
+  });
+
+  const avgPillar = (keys: string[]) => {
+    const scores = keys.map((k) => healthMap[k]).filter((h) => h != null && isFinite(h));
+    return scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : NaN;
+  };
+
+  const pillarHealths = {
+    profit: avgPillar(["grossMargin", "operatingMargin", "netMargin", "fixedCostRatio"]),
+    assets: avgPillar(["assetTurnover", "roa", "inventoryDays", "salesPerEmployee"]),
+    financing: avgPillar(["equityMultiplier", "interestBurden", "taxBurden", "roe"]),
+    cash: avgPillar(["debtorDays", "creditorDays", "workingCapitalDays", "ocfToEbitda"]),
+  };
+
+  const avgHealth = (() => {
+    const p = Object.values(pillarHealths).filter((h) => isFinite(h));
+    return p.length ? p.reduce((a, b) => a + b, 0) / p.length : NaN;
+  })();
+
+  const spherePillars = buildSpherePillars({
+    overallHealth: avgHealth,
+    pillarHealths,
+    healthMap,
+    ratioMeta: SPHERE_RATIO_META,
+  });
+
+  const simplifiedSections = [
+    { id: "profit", label: "Profitability", health: pillarHealths.profit, series: [] as number[] },
+    { id: "assets", label: "Asset Efficiency", health: pillarHealths.assets, series: [] as number[] },
+    { id: "financing", label: "Financing", health: pillarHealths.financing, series: [] as number[] },
+    { id: "cash", label: "Cash & Working Capital", health: pillarHealths.cash, series: [] as number[] },
+  ];
+
+  // Waterfall fallback — derived from period financials.
+  // PDF-extracted statements supply EBIT/EBT/netIncome but leave fixedCosts
+  // blank, so derive operating expenses as the residual (gross profit − EBIT)
+  // when no classified figure exists. Interest and tax stay signed so the
+  // waterfall reconciles to the reported net income even in loss periods or
+  // with non-operating income / tax credits.
+  const finNum = (key: string) => parseFloat(financials[key] || "0") || 0;
+  const hasFin = (key: string) => (financials[key] ?? "") !== "";
+  const wfRevenue = finNum("revenue");
+  const wfCogs = finNum("cogs");
+  const wfGrossProfit = wfRevenue - wfCogs;
+  const wfOpex = hasFin("fixedCosts")
+    ? finNum("fixedCosts")
+    : hasFin("ebit")
+    ? wfGrossProfit - finNum("ebit")
+    : 0;
+  const wfInterest = hasFin("ebit") && hasFin("ebt") ? finNum("ebit") - finNum("ebt") : 0;
+  const wfTax = hasFin("ebt") && hasFin("netIncome") ? finNum("ebt") - finNum("netIncome") : 0;
+  const waterfallFallback = {
+    revenue: wfRevenue,
+    cogs: wfCogs,
+    fixedCosts: wfOpex,
+    interest: wfInterest,
+    tax: wfTax,
+  };
+
+  // ── Ask AI widget mount (same widget the owner app uses) ────────────────
+  useEffect(() => {
+    if (!client) return;
+    let cancelled = false;
+    const el = document.getElementById("ask-ai-accountant");
+    if (!el) return;
+    // Always refresh the client context — submit() reads dataset.clientId at
+    // request time, so a stale value would send questions for the wrong client.
+    el.dataset.clientId = clientId;
+    if (el.dataset.askAiMounted) return;
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+    // @ts-ignore — plain JS module without type declarations
+    import("../../lib/ask-ai.js").then((mod: { mountAskAi?: (el: HTMLElement, opts: unknown) => void }) => {
+      if (cancelled || typeof mod.mountAskAi !== "function") return;
+      el.dataset.clientId = clientId;
+      el.dataset.askAiMounted = "1";
+      mod.mountAskAi(el, {
+        endpoint: `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ask-ai`,
+        getToken: async () => {
+          const { data } = await supabase.auth.getSession();
+          return data.session?.access_token ?? null;
+        },
+      });
+    }).catch(() => {
+      // Widget module unavailable — silent fail
+    });
+    return () => { cancelled = true; };
+  }, [client, clientId]);
+
   // Autosave debounce ref
   const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -377,7 +542,7 @@ function ClientView() {
         const { data, error } = await supabase
           .from("clients")
           .select(
-            "id, name, business_type, cash_runway_weeks, last_forecast_at, open_queries_count, financials, reports_issued_count"
+            "id, name, business_type, cash_runway_weeks, last_forecast_at, open_queries_count, financials, financials_updated_at, reports_issued_count"
           )
           .eq("id", clientId)
           .maybeSingle();
@@ -392,7 +557,7 @@ function ClientView() {
             const { data: data2, error: error2 } = await supabase
               .from("clients")
               .select(
-                "id, name, business_type, cash_runway_weeks, last_forecast_at, open_queries_count, financials"
+                "id, name, business_type, cash_runway_weeks, last_forecast_at, open_queries_count, financials, financials_updated_at"
               )
               .eq("id", clientId)
               .maybeSingle();
@@ -423,6 +588,18 @@ function ClientView() {
         setLoading(false);
       }
     })();
+  }, [clientId]);
+
+  useEffect(() => {
+    if (!clientId) return;
+    fetchReviewSignoffs({ data: { clientId } })
+      .then(({ signoffs }) => {
+        setFinancialsSignoff(signoffs.find((s) => s.scope === "financials") ?? null);
+      })
+      .catch(() => {
+        // Sign-off state is a trust-signal enhancement, never block the page.
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId]);
 
   // ── Impersonation exit ────────────────────────────────────────────────────
@@ -457,14 +634,16 @@ function ClientView() {
       if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
       autosaveTimer.current = setTimeout(async () => {
         const updated = { ...financials, [key]: value };
+        const updatedAt = new Date().toISOString();
         const { error } = await supabase
           .from("clients")
-          .update({ financials: updated as never })
+          .update({ financials: updated as never, financials_updated_at: updatedAt })
           .eq("id", clientId);
         if (error) {
           toast.error(`Autosave failed: ${error.message}`);
           setAutosaveStatus("idle");
         } else {
+          setClient((c) => (c ? { ...c, financials_updated_at: updatedAt } : c));
           setAutosaveStatus("saved");
           setTimeout(() => setAutosaveStatus("idle"), 2000);
         }
@@ -510,6 +689,20 @@ function ClientView() {
     if (saveError) {
       toast.error(`Failed to save snapshot: ${saveError.message}`);
     } else {
+      // Reports read financial history from client_financial_snapshots (latest by
+      // period_date), not directly from clients.financials — so this save changes
+      // what a generated report shows and must bump financials_updated_at, or a
+      // prior sign-off stays "current" against data that has since changed.
+      const financialsUpdatedAt = new Date().toISOString();
+      const { error: touchError } = await supabase
+        .from("clients")
+        .update({ financials: financials as never, financials_updated_at: financialsUpdatedAt })
+        .eq("id", clientId);
+      if (touchError) {
+        toast.error(`Snapshot saved, but failed to mark financials updated: ${touchError.message}`);
+      } else {
+        setClient((c) => (c ? { ...c, financials_updated_at: financialsUpdatedAt } : c));
+      }
       toast.success(`Snapshot saved for ${periodLabel}`);
       await recordScoreHistory(
         clientId,
@@ -560,9 +753,10 @@ function ClientView() {
         return;
       }
 
+      const financialsUpdatedAt = new Date().toISOString();
       await supabase
         .from("clients")
-        .update({ financials: inputs as never })
+        .update({ financials: inputs as never, financials_updated_at: financialsUpdatedAt })
         .eq("id", clientId);
 
       await recordScoreHistory(
@@ -576,6 +770,7 @@ function ClientView() {
           Object.entries(inputs).map(([k, v]) => [k, v != null ? String(v) : ""])
         )
       );
+      setClient((c) => (c ? { ...c, financials_updated_at: financialsUpdatedAt } : c));
       toast.success(`Financials saved for ${periodLabel}`);
       setUploadOpen(false);
     },
@@ -878,7 +1073,8 @@ function ClientView() {
         <div className="tabs">
           {(
             [
-              { id: "ratios", label: "Ratios" },
+              { id: "ratios", label: "Health & Ratios" },
+              { id: "profit", label: "Profitability" },
               { id: "cash", label: "13-Week Cash Forecast", star: true },
               { id: "reports", label: "Reports", star: true },
               { id: "tasks", label: "Tasks" },
@@ -899,6 +1095,67 @@ function ClientView() {
 
         {/* ===== RATIOS TAB ===== */}
         <div className={`tabpane${activeTab === "ratios" ? " on" : ""}`} id="pane-ratios">
+          {/* Simplified / Complex toggle */}
+          <div style={{ display: "flex", justifyContent: "center", marginBottom: 24 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 2, borderRadius: 999, background: "rgba(255,255,255,0.05)", padding: 3 }}>
+              {(["simplified", "complex"] as const).map((m) => (
+                <button
+                  key={m}
+                  onClick={() => setViewMode(m)}
+                  style={{
+                    borderRadius: 999,
+                    padding: "5px 18px",
+                    fontSize: 11,
+                    fontWeight: 700,
+                    letterSpacing: "0.08em",
+                    textTransform: "uppercase",
+                    transition: "all 0.18s",
+                    border: "none",
+                    cursor: "pointer",
+                    background: viewMode === m ? "#d4a550" : "transparent",
+                    color: viewMode === m ? "#0a0e1a" : "var(--ink-dim)",
+                    boxShadow: viewMode === m ? "0 2px 8px rgba(212,165,80,0.35)" : "none",
+                  }}
+                >
+                  {m}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Simplified view — health orb + pillar cards */}
+          {viewMode === "simplified" && (
+            <div style={{ marginBottom: 32 }}>
+              {/* Orb — always-dark container so sphere colours read correctly */}
+              <div style={{ background: "#0a0e1a", borderRadius: 20, padding: "16px 8px", marginBottom: 20 }}>
+                <SphereHero
+                  overallHealth={isFinite(avgHealth) ? avgHealth : 0}
+                  pillars={spherePillars}
+                  topPriority={(() => {
+                    const worst = Object.entries(pillarHealths)
+                      .filter(([, h]) => isFinite(h))
+                      .sort(([, a], [, b]) => a - b)[0];
+                    if (!worst) return { title: "Upload financial data", description: "Add figures to see a health score and your highest-impact first move." };
+                    const labels: Record<string, string> = { profit: "Profitability", assets: "Asset Efficiency", financing: "Financing", cash: "Cash & Working Capital" };
+                    return {
+                      title: `Improve ${labels[worst[0]] ?? worst[0]}`,
+                      description: `This pillar scores ${Math.round(worst[1])}% — your highest-impact area right now.`,
+                    };
+                  })()}
+                />
+              </div>
+              {/* Pillar summary cards */}
+              <div style={{ background: "#0a0e1a", borderRadius: 20, padding: 16 }}>
+                <SimplifiedRatios sections={simplifiedSections} />
+              </div>
+            </div>
+          )}
+
+          {/* Ask AI — question widget scoped to this client */}
+          <div className="card" style={{ marginBottom: 20, padding: "6px 8px" }}>
+            <div id="ask-ai-accountant" />
+          </div>
+
           {/* Collapsible Financials */}
           <div className={`card collapse${finOpen ? " open" : ""}`} id="finCollapse">
             <div
@@ -991,7 +1248,29 @@ function ClientView() {
             </div>
           </div>
 
-          {/* Ratio rows */}
+          {/* Accountant sign-off on this period's financials — accountants/firm admins only;
+              a client owner/member who somehow lands on this route sees the read-only badge. */}
+          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 20 }}>
+            {viewerCanSign ? (
+              <ReviewSignoffButton
+                clientId={clientId}
+                clientName={client?.name}
+                scope="financials"
+                signoff={financialsSignoff}
+                isStale={computeIsStale(financialsSignoff, client?.financials_updated_at ?? null)}
+                onChange={setFinancialsSignoff}
+              />
+            ) : (
+              <ReviewSignoffBadge
+                signoff={financialsSignoff}
+                scope="financials"
+                isStale={computeIsStale(financialsSignoff, client?.financials_updated_at ?? null)}
+              />
+            )}
+          </div>
+
+          {/* Ratio rows — complex mode only */}
+          {viewMode === "complex" && (
           <div style={{ marginTop: 26 }}>
             <span className="eyebrow">Ratios — accountant summary</span>
             <p className="sub">
@@ -1004,7 +1283,6 @@ function ClientView() {
                 const band = tierToBand(tier);
                 const color = bandColor(band);
                 const formattedVal = formatRatioValue(name, val as number);
-                // Determine a rough category from the name
                 const cat =
                   name.includes("Margin") || name.includes("Income") || name.includes("Return")
                     ? "Profitability"
@@ -1041,6 +1319,22 @@ function ClientView() {
               })}
             </div>
           </div>
+          )}
+        </div>
+
+        {/* ===== PROFIT TAB ===== */}
+        <div className={`tabpane${activeTab === "profit" ? " on" : ""}`} id="pane-profit">
+          <span className="eyebrow">Profitability Waterfall</span>
+          <p className="sub" style={{ marginBottom: 24 }}>
+            How revenue converts to profit — step by step. Figures sourced from the period financials above.
+          </p>
+          {/* Wrap in a Tailwind dark context so the component's dark: variants fire */}
+          <div className="dark" style={{ colorScheme: "dark" }}>
+            <ProfitabilityWaterfall
+              fallback={waterfallFallback}
+              clientName={client?.name}
+            />
+          </div>
         </div>
 
         {/* ===== CASH TAB ===== */}
@@ -1052,7 +1346,7 @@ function ClientView() {
                 <div className="h-sec">13-week cash forecast</div>
               </div>
             </div>
-            <CashForecastPanel clientId={client.id} clientName={client.name} />
+            <CashForecastPanel clientId={client.id} clientName={client.name} canSign={viewerCanSign} />
           </div>
         </div>
 

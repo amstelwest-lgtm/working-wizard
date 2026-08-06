@@ -130,7 +130,7 @@ function AuthPage() {
           <img src="/milon-wordmark.png" alt="Milōn" className="mb-2 h-8 w-auto" />
           <CardTitle className="text-lg">Accountant Portal</CardTitle>
           <CardDescription>
-            Sign in or create your firm account.{" "}
+            For accounting firms and advisory practices only.{" "}
             <Link to="/" className="underline text-primary">Back home</Link>
           </CardDescription>
         </CardHeader>
@@ -174,6 +174,12 @@ function AuthPage() {
           </Tabs>
         </CardContent>
       </Card>
+      <p className="text-center text-sm text-muted-foreground">
+        Business owner?{" "}
+        <Link to="/" className="font-medium text-primary underline">
+          Sign in at milon.co.za →
+        </Link>
+      </p>
       <PreLoginShareButton />
     </div>
   );

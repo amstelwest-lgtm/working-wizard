@@ -10,7 +10,7 @@
 import { Fragment } from "react";
 import { View, Text, StyleSheet } from "@react-pdf/renderer";
 import type { AccountantProfile } from "@/contexts/accountant-profile";
-import { PDFDocument, type SmeData } from "@/components/pdf/pdf-document";
+import { PDFDocument, type SmeData, type ReportSignoffStamp } from "@/components/pdf/pdf-document";
 import { MetricBox } from "@/components/pdf/metric-box";
 import { ReportTitle } from "@/components/pdf/report-title";
 import { SectionHeader } from "@/components/pdf/section-header";
@@ -39,6 +39,7 @@ export type CashForecastPDFProps = {
   minimumThreshold?: number;
   assumptions?: string[];
   isDemo?: boolean;
+  reviewSignoff?: ReportSignoffStamp | null;
 };
 
 // ── Constants ──────────────────────────────────────────────────────────────
@@ -254,6 +255,7 @@ export function CashForecastPDF({
   minimumThreshold = DEFAULT_THRESHOLD,
   assumptions = DEFAULT_ASSUMPTIONS,
   isDemo,
+  reviewSignoff,
 }: CashForecastPDFProps) {
   const theme = resolveTheme(accountantProfile);
   const weeks = cashForecast;
@@ -312,6 +314,7 @@ export function CashForecastPDF({
       smeData={smeData}
       accountantProfile={accountantProfile}
       isDemo={isDemo}
+      reviewSignoff={reviewSignoff}
     >
       {/* ── PAGE 1 ── */}
       <ReportTitle

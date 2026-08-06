@@ -9,6 +9,14 @@ export type SmeData = {
   period: string;
 };
 
+/** A current (non-stale) accountant sign-off, stamped onto the report footer. */
+export type ReportSignoffStamp = {
+  signedOffByName: string;
+  signedOffByTitle: string | null;
+  firmName: string | null;
+  signedOffAt: string;
+};
+
 type Props = {
   title: string;
   subject?: string;
@@ -16,6 +24,8 @@ type Props = {
   accountantProfile: AccountantProfile;
   /** When true, every page carries an elegant "illustrative data" watermark. */
   isDemo?: boolean;
+  /** Only pass a non-stale sign-off — the footer renders it unconditionally when present. */
+  reviewSignoff?: ReportSignoffStamp | null;
   children: React.ReactNode;
 };
 
@@ -34,6 +44,7 @@ export function PDFDocument({
   smeData,
   accountantProfile,
   isDemo,
+  reviewSignoff,
   children,
 }: Props) {
   return (
@@ -67,7 +78,7 @@ export function PDFDocument({
         </View>
 
         {/* Fixed footer — absolutely positioned at bottom of every page */}
-        <ReportFooter fixed profile={accountantProfile} />
+        <ReportFooter fixed profile={accountantProfile} reviewSignoff={reviewSignoff} />
       </Page>
     </Document>
   );

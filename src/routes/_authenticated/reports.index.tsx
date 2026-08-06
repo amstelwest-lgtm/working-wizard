@@ -29,6 +29,8 @@ import type { AssetProductivityData } from "@/reports/asset-productivity";
 import type { LaborProductivityData } from "@/reports/labor-productivity";
 import type { RatioMovementRow } from "@/reports/ratio-movement";
 import type { BenchmarkRow } from "@/reports/benchmark-report";
+import type { ClientReviewSignoff } from "@/lib/review-signoffs.functions";
+import type { ReportSignoffStamp } from "@/components/pdf/pdf-document";
 
 export const Route = createFileRoute("/_authenticated/reports/")({
   validateSearch: (search: Record<string, unknown>) => ({
@@ -186,6 +188,9 @@ type ClientReportData = {
   };
   benchmark: BenchmarkRow[];
   cashForecast: CashForecastWeek[] | null;
+  financialsUpdatedAt: string | null;
+  lastForecastAt: string | null;
+  reviewSignoffs: { financials: ClientReviewSignoff | null; cash_forecast: ClientReviewSignoff | null };
 };
 
 const DEFAULT_MOVEMENT_LABELS = {
@@ -202,6 +207,8 @@ const EMPTY_CLIENT_DATA: ClientReportData = {
   assets: null, labor: null,
   movement: [], movementPeriodLabels: DEFAULT_MOVEMENT_LABELS,
   benchmark: [], cashForecast: null,
+  financialsUpdatedAt: null, lastForecastAt: null,
+  reviewSignoffs: { financials: null, cash_forecast: null },
 };
 
 // ── Data-builder helpers ────────────────────────────────────────────────────
@@ -743,9 +750,9 @@ async function buildInterventions(ratioResults: RatioResult[]): Promise<Interven
 }
 
 async function loadClientReportData(clientId: string): Promise<ClientReportData> {
-  const [clientRes, snapshotRes] = await Promise.all([
+  const [clientRes, snapshotRes, signoffRes] = await Promise.all([
     supabase.from("clients")
-      .select("id, name, cash_runway_weeks, financials, cashflow")
+      .select("id, name, cash_runway_weeks, financials, cashflow, financials_updated_at, last_forecast_at")
       .eq("id", clientId)
       .maybeSingle(),
     supabase.from("client_financial_snapshots")
@@ -753,13 +760,33 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
       .eq("client_id", clientId)
       .order("period_date", { ascending: false })
       .limit(20),  // fetch enough history to cover 12-month windows
+    (supabase as unknown as { from: (t: string) => { select: (c: string) => { eq: (k: string, v: string) => Promise<{ data: ClientReviewSignoff[] | null; error: { message: string } | null }> } } })
+      .from("client_review_signoffs")
+      .select("*")
+      .eq("client_id", clientId),
   ]);
 
-  const clientRow = clientRes.data;
+  if (signoffRes.error) {
+    // Fail closed (report renders with no sign-off stamp) rather than silently — an
+    // accountant should notice if sign-off status can't be verified before a report ships.
+    console.error("Failed to load review sign-offs for report:", signoffRes.error.message);
+  }
+
+  const clientRow = clientRes.data as unknown as {
+    name: string; cash_runway_weeks: number | null; financials: unknown;
+    cashflow: unknown; financials_updated_at: string | null; last_forecast_at: string | null;
+  } | null;
+  const reviewSignoffs = {
+    financials: (signoffRes.data ?? []).find((s) => s.scope === "financials") ?? null,
+    cash_forecast: (signoffRes.data ?? []).find((s) => s.scope === "cash_forecast") ?? null,
+  };
   const baseEmpty = {
     ...EMPTY_CLIENT_DATA,
     clientName: clientRow?.name ?? "",
     cashRunwayWeeks: clientRow?.cash_runway_weeks ?? null,
+    financialsUpdatedAt: clientRow?.financials_updated_at ?? null,
+    lastForecastAt: clientRow?.last_forecast_at ?? null,
+    reviewSignoffs,
   };
   if (!clientRow?.financials) return baseEmpty;
 
@@ -811,6 +838,33 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
       (clientRow as unknown as { cashflow: SavedCashflow | null }).cashflow ?? {},
       clientRow.cash_runway_weeks,
     ),
+    financialsUpdatedAt: clientRow.financials_updated_at,
+    lastForecastAt: clientRow.last_forecast_at,
+    reviewSignoffs,
+  };
+}
+
+/** Freshness timestamp is null when there is nothing to be stale against yet. */
+function isSignoffStale(signoff: ClientReviewSignoff | null, freshAt: string | null): boolean {
+  if (!signoff) return true;
+  if (!freshAt) return false;
+  return new Date(freshAt).getTime() > new Date(signoff.signed_off_at).getTime();
+}
+
+/** Only current (non-stale) sign-offs are stamped onto a report footer. */
+function signoffStampFor(
+  scope: "financials" | "cash_forecast",
+  cd: ClientReportData | null,
+): ReportSignoffStamp | null {
+  if (!cd) return null;
+  const signoff = cd.reviewSignoffs[scope];
+  const freshAt = scope === "financials" ? cd.financialsUpdatedAt : cd.lastForecastAt;
+  if (!signoff || isSignoffStale(signoff, freshAt)) return null;
+  return {
+    signedOffByName: signoff.signed_off_by_name,
+    signedOffByTitle: signoff.signed_off_by_title,
+    firmName: signoff.firm_name,
+    signedOffAt: signoff.signed_off_at,
   };
 }
 
@@ -857,6 +911,8 @@ function makeSmeWithNote(s: Settings, isDemo: boolean): { name: string; period: 
 
 function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
   const cd = clientData?.hasData ? clientData : null;
+  const financialsStamp = signoffStampFor("financials", clientData);
+  const forecastStamp = signoffStampFor("cash_forecast", clientData);
 
   return {
     scorecard: async (s, p) => {
@@ -867,6 +923,7 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
         ratioResults: isDemo ? MOCK_RATIOS : cd.ratioResults,
         accountantProfile: p,
         isDemo,
+        reviewSignoff: financialsStamp,
       });
     },
     intervention: async (s, p) => {
@@ -880,6 +937,7 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
         interventions,
         accountantProfile: p,
         isDemo,
+        reviewSignoff: financialsStamp,
       });
     },
     forecast: async (s, p) => {
@@ -891,6 +949,7 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
         scenario: "moderate",
         accountantProfile: p,
         isDemo,
+        reviewSignoff: forecastStamp,
       });
     },
     cycle: async (s, p) => {
@@ -901,6 +960,7 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
         workingCapitalData: isDemo ? MOCK_WC : cd!.workingCapital!,
         accountantProfile: p,
         isDemo,
+        reviewSignoff: financialsStamp,
       });
     },
     waterfall: async (s, p) => {
@@ -911,6 +971,7 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
         profitabilityData: isDemo ? MOCK_PROFIT : cd!.profitability!,
         accountantProfile: p,
         isDemo,
+        reviewSignoff: financialsStamp,
       });
     },
     leverage: async (s, p) => {
@@ -921,6 +982,7 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
         data: isDemo ? MOCK_LEVERAGE : cd!.leverage!,
         accountantProfile: p,
         isDemo,
+        reviewSignoff: financialsStamp,
       });
     },
     assets: async (s, p) => {
@@ -931,6 +993,7 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
         data: isDemo ? MOCK_ASSETS : cd!.assets!,
         accountantProfile: p,
         isDemo,
+        reviewSignoff: financialsStamp,
       });
     },
     labor: async (s, p) => {
@@ -941,6 +1004,7 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
         data: isDemo ? MOCK_LABOR : cd!.labor!,
         accountantProfile: p,
         isDemo,
+        reviewSignoff: financialsStamp,
       });
     },
     movement: async (s, p) => {
@@ -952,6 +1016,7 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
         periodLabels: isDemo ? undefined : cd!.movementPeriodLabels,
         accountantProfile: p,
         isDemo,
+        reviewSignoff: financialsStamp,
       });
     },
     benchmark: async (s, p) => {
@@ -965,6 +1030,7 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
         benchmarkRows: isDemo ? MOCK_BENCHMARK : cd!.benchmark,
         accountantProfile: p,
         isDemo,
+        reviewSignoff: financialsStamp,
       });
     },
   };

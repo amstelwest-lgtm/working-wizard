@@ -1,0 +1,216 @@
+/**
+ * bankStatements.server.ts
+ * TanStack Start server function — sends one or more bank statements (PDF/CSV)
+ * to Anthropic Claude (claude-sonnet-4-6) and returns a drafted basic income
+ * statement built from the transaction activity. Server-side only; the API key
+ * never reaches the browser.
+ *
+ * Product decision (annualisation): figures are ALWAYS returned for the actual
+ * period the statements cover, with period_start/period_end/months_covered so
+ * the UI can offer an annualised *view* as an option. Storing annualised
+ * numbers as if they were actuals would silently distort ratios and reports.
+ */
+
+import { createServerFn } from "@tanstack/react-start";
+import { z } from "zod";
+import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+
+const ANTHROPIC_MODEL = "claude-sonnet-4-6";
+
+export interface BankDraftOpexLine {
+  category: string;
+  amount: number;
+}
+
+export interface BankDraftStatement {
+  period_start: string | null;      // ISO date of earliest transaction
+  period_end: string | null;        // ISO date of latest transaction
+  months_covered: number | null;    // e.g. 3 for a quarter of statements
+  currency: string | null;
+  revenue: number;
+  cost_of_sales: number;            // positive magnitude
+  gross_profit: number;
+  other_income: number;
+  opex_breakdown: BankDraftOpexLine[]; // exactly 5 main deductible expense buckets
+  total_opex: number;               // positive magnitude, sum of breakdown
+  interest_paid: number;            // positive magnitude
+  tax_paid: number;                 // positive magnitude
+  net_profit: number;
+  excluded_items: string[];         // transfers, loan drawdowns, owner drawings etc.
+  notes: string | null;             // judgement calls a human should check
+}
+
+const money = z.number().finite();
+const magnitude = z.number().finite().nonnegative();
+const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "expected YYYY-MM-DD");
+
+const draftSchema = z
+  .object({
+    period_start: isoDate.nullable(),
+    period_end: isoDate.nullable(),
+    months_covered: z.number().finite().positive().nullable(),
+    currency: z.string().max(10).nullable(),
+    revenue: magnitude,
+    cost_of_sales: magnitude,
+    gross_profit: money,
+    other_income: magnitude,
+    opex_breakdown: z
+      .array(z.object({ category: z.string().min(1).max(80), amount: magnitude }).strict())
+      .min(1)
+      .max(5),
+    total_opex: magnitude,
+    interest_paid: magnitude,
+    tax_paid: magnitude,
+    net_profit: money,
+    excluded_items: z.array(z.string().max(300)).max(100),
+    notes: z.string().max(5000).nullable(),
+  })
+  .strict();
+
+const DRAFT_PROMPT = `
+You are an accountant's assistant. You are given one or more BANK STATEMENTS
+for a small business (South African context; currency is usually ZAR unless the
+statements clearly show otherwise). Build a draft basic income statement from
+the transaction activity, following these rules exactly:
+
+1. Classify every transaction. Money IN that is clearly trading income =
+   revenue. Money OUT that is clearly direct cost of goods/services sold
+   (suppliers, stock, raw materials, direct subcontractors) = cost_of_sales.
+2. other_income = non-trading inflows that are genuine income (interest
+   received, rebates, insurance payouts) — NOT capital injections, loan
+   drawdowns, inter-account transfers, or owner deposits.
+3. Group ALL remaining operating outflows into EXACTLY 5 opex categories,
+   choosing the 5 most significant deductible expense groupings present in the
+   data (typical examples: Salaries & wages; Rent & utilities; Bank charges &
+   insurance; Marketing & advertising; Professional & admin fees; Motor &
+   travel; Repairs & maintenance). Use an "Other operating costs" bucket as the
+   5th category if needed so nothing is dropped. Each amount is a POSITIVE
+   magnitude.
+4. interest_paid = loan/overdraft/finance interest outflows. tax_paid =
+   payments that are clearly income tax / provisional tax (NOT VAT — treat VAT
+   payments to the revenue service as excluded, noting them).
+5. EXCLUDE and list in excluded_items: inter-account transfers, loan principal
+   drawdowns/repayments (principal portion), owner drawings/injections, asset
+   purchases (capex), VAT payments/refunds. Never count these in revenue or
+   expenses.
+6. Compute: gross_profit = revenue - cost_of_sales.
+   net_profit = gross_profit + other_income - total_opex - interest_paid - tax_paid.
+   total_opex must equal the sum of opex_breakdown amounts.
+7. Report the ACTUAL period covered: period_start (earliest transaction date),
+   period_end (latest), months_covered (rounded to 1 decimal). Do NOT annualise
+   any figure — report actuals for the period only.
+8. Flag every judgement call briefly in notes (e.g. ambiguous counterparties,
+   possible personal expenses, cash deposits assumed to be sales).
+
+Return ONLY a JSON object with exactly these keys and types, no prose, no
+markdown fences:
+{"period_start": "YYYY-MM-DD"|null, "period_end": "YYYY-MM-DD"|null,
+ "months_covered": number|null, "currency": string|null, "revenue": number,
+ "cost_of_sales": number, "gross_profit": number, "other_income": number,
+ "opex_breakdown": [{"category": string, "amount": number} x5],
+ "total_opex": number, "interest_paid": number, "tax_paid": number,
+ "net_profit": number, "excluded_items": string[], "notes": string|null}
+`.trim();
+
+export const draftFinancialsFromBankStatements = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) =>
+    z.object({
+      files: z
+        .array(
+          z.object({
+            fileName: z.string(),
+            // Exactly one of base64 (PDF) or text (CSV/TXT) must be provided.
+            // 14M base64 chars ≈ 10 MB per file; aggregate is checked below too.
+            base64: z.string().max(14_000_000).optional(),
+            text: z.string().max(2_000_000).optional(),
+          }),
+        )
+        .min(1)
+        .max(6),
+    }).parse(input),
+  )
+  .handler(async ({ data }) => {
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) {
+      throw new Error("ANTHROPIC_API_KEY is not configured. Please add it in your project secrets.");
+    }
+
+    let totalBytes = 0;
+    const content: Array<Record<string, unknown>> = [];
+    for (const f of data.files) {
+      if (f.base64) {
+        totalBytes += Math.ceil((f.base64.length * 3) / 4);
+        content.push({
+          type: "document",
+          source: { type: "base64", media_type: "application/pdf", data: f.base64 },
+        });
+      } else if (f.text) {
+        totalBytes += f.text.length;
+        content.push({
+          type: "text",
+          text: `--- Bank statement file: ${f.fileName} ---\n${f.text}`,
+        });
+      } else {
+        throw new Error(`File "${f.fileName}" had no readable content.`);
+      }
+    }
+    if (totalBytes > 25 * 1024 * 1024) {
+      throw new Error(
+        `Statements are too large (${(totalBytes / 1024 / 1024).toFixed(1)} MB total). Max 25 MB — try fewer files.`,
+      );
+    }
+    content.push({ type: "text", text: DRAFT_PROMPT });
+
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: ANTHROPIC_MODEL,
+        max_tokens: 8192,
+        messages: [{ role: "user", content }],
+      }),
+    });
+
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(`AI drafting failed (${res.status}): ${body.slice(0, 300)}`);
+    }
+
+    const json = (await res.json()) as {
+      content?: Array<{ type: string; text?: string }>;
+    };
+    const raw = (json.content ?? []).filter((b) => b.type === "text").map((b) => b.text ?? "").join("");
+    if (!raw) throw new Error("The AI returned an empty response.");
+
+    // Tolerate accidental markdown fences around the JSON.
+    const jsonText = raw.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "").trim();
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(jsonText);
+    } catch (err) {
+      throw new Error("Failed to parse the AI response as JSON: " + (err as Error).message);
+    }
+    const draft = draftSchema.parse(parsed) as BankDraftStatement;
+
+    // Server-side arithmetic sanity checks — surface, don't silently fix.
+    const warnings: string[] = [];
+    const sumOpex = draft.opex_breakdown.reduce((s, l) => s + l.amount, 0);
+    if (Math.abs(sumOpex - draft.total_opex) > 1) {
+      warnings.push(`Opex breakdown (${sumOpex.toFixed(0)}) doesn't sum to total opex (${draft.total_opex.toFixed(0)}).`);
+    }
+    if (Math.abs(draft.revenue - draft.cost_of_sales - draft.gross_profit) > 1) {
+      warnings.push("Gross profit doesn't equal revenue minus cost of sales.");
+    }
+    const expectedNet =
+      draft.gross_profit + draft.other_income - draft.total_opex - draft.interest_paid - draft.tax_paid;
+    if (Math.abs(expectedNet - draft.net_profit) > 1) {
+      warnings.push(`Net profit (${draft.net_profit.toFixed(0)}) doesn't tie back to the components (expected ${expectedNet.toFixed(0)}).`);
+    }
+
+    return { draft, warnings };
+  });

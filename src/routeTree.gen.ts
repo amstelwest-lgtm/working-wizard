@@ -15,6 +15,7 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AppRouteImport } from './routes/app'
 import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as TTokenRouteImport } from './routes/t.$token'
 import { Route as EmailUnsubscribeRouteImport } from './routes/email/unsubscribe'
 import { Route as ApiClientErrorRouteImport } from './routes/api/client-error'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
@@ -55,6 +56,11 @@ const AuthenticatedRoute = AuthenticatedRouteImport.update({
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TTokenRoute = TTokenRouteImport.update({
+  id: '/t/$token',
+  path: '/t/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
 const EmailUnsubscribeRoute = EmailUnsubscribeRouteImport.update({
@@ -134,6 +140,7 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/api/client-error': typeof ApiClientErrorRoute
   '/email/unsubscribe': typeof EmailUnsubscribeRoute
+  '/t/$token': typeof TTokenRoute
   '/clients/$clientId': typeof AuthenticatedClientsClientIdRoute
   '/reports/demo': typeof AuthenticatedReportsDemoRoute
   '/settings/brand': typeof AuthenticatedSettingsBrandRoute
@@ -153,6 +160,7 @@ export interface FileRoutesByTo {
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/api/client-error': typeof ApiClientErrorRoute
   '/email/unsubscribe': typeof EmailUnsubscribeRoute
+  '/t/$token': typeof TTokenRoute
   '/clients/$clientId': typeof AuthenticatedClientsClientIdRoute
   '/reports/demo': typeof AuthenticatedReportsDemoRoute
   '/settings/brand': typeof AuthenticatedSettingsBrandRoute
@@ -174,6 +182,7 @@ export interface FileRoutesById {
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/api/client-error': typeof ApiClientErrorRoute
   '/email/unsubscribe': typeof EmailUnsubscribeRoute
+  '/t/$token': typeof TTokenRoute
   '/_authenticated/clients/$clientId': typeof AuthenticatedClientsClientIdRoute
   '/_authenticated/reports/demo': typeof AuthenticatedReportsDemoRoute
   '/_authenticated/settings/brand': typeof AuthenticatedSettingsBrandRoute
@@ -195,6 +204,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/api/client-error'
     | '/email/unsubscribe'
+    | '/t/$token'
     | '/clients/$clientId'
     | '/reports/demo'
     | '/settings/brand'
@@ -214,6 +224,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/api/client-error'
     | '/email/unsubscribe'
+    | '/t/$token'
     | '/clients/$clientId'
     | '/reports/demo'
     | '/settings/brand'
@@ -234,6 +245,7 @@ export interface FileRouteTypes {
     | '/_authenticated/dashboard'
     | '/api/client-error'
     | '/email/unsubscribe'
+    | '/t/$token'
     | '/_authenticated/clients/$clientId'
     | '/_authenticated/reports/demo'
     | '/_authenticated/settings/brand'
@@ -254,6 +266,7 @@ export interface RootRouteChildren {
   UnsubscribeRoute: typeof UnsubscribeRoute
   ApiClientErrorRoute: typeof ApiClientErrorRoute
   EmailUnsubscribeRoute: typeof EmailUnsubscribeRoute
+  TTokenRoute: typeof TTokenRoute
   ApiQboCallbackRoute: typeof ApiQboCallbackRoute
   LovableEmailSuppressionRoute: typeof LovableEmailSuppressionRoute
   LovableEmailQueueProcessRoute: typeof LovableEmailQueueProcessRoute
@@ -303,6 +316,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/t/$token': {
+      id: '/t/$token'
+      path: '/t/$token'
+      fullPath: '/t/$token'
+      preLoaderRoute: typeof TTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/email/unsubscribe': {
@@ -421,6 +441,7 @@ const rootRouteChildren: RootRouteChildren = {
   UnsubscribeRoute: UnsubscribeRoute,
   ApiClientErrorRoute: ApiClientErrorRoute,
   EmailUnsubscribeRoute: EmailUnsubscribeRoute,
+  TTokenRoute: TTokenRoute,
   ApiQboCallbackRoute: ApiQboCallbackRoute,
   LovableEmailSuppressionRoute: LovableEmailSuppressionRoute,
   LovableEmailQueueProcessRoute: LovableEmailQueueProcessRoute,

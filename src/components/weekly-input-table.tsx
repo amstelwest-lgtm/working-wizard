@@ -30,24 +30,21 @@ function getRecentWeeks(n = 4): string[] {
   return weeks;
 }
 
-const OWNER_FIELDS: Array<{ key: keyof WeeklyRow; label: string; hint: string }> = [
-  { key: "revenue",       label: "Revenue",        hint: "Total sales banked this week" },
-  { key: "costOfSales",   label: "Cost of Sales",  hint: "Direct costs for goods / services sold" },
-  { key: "fixedCosts",    label: "Fixed Costs",    hint: "Rent, salaries, recurring overheads" },
-  { key: "cashMovements", label: "Cash Movements", hint: "Net cash in/out (excluding items above)" },
+const FIELDS: Array<{ key: keyof WeeklyRow; label: string; hint: string }> = [
+  { key: "revenue",       label: "Revenue",            hint: "Total sales banked this week" },
+  { key: "costOfSales",   label: "Cost of Sales",      hint: "Direct costs for goods / services sold" },
+  { key: "fixedCosts",    label: "Fixed Costs",        hint: "Rent, salaries, recurring overheads" },
+  { key: "cashMovements", label: "Cash Movements",     hint: "Net cash in/out (excluding items above)" },
+  { key: "interest",      label: "Interest & Finance", hint: "Loan interest paid this period" },
+  { key: "tax",           label: "Income Tax",         hint: "Tax provision for this period" },
 ];
 
-const ACCOUNTANT_EXTRA: Array<{ key: keyof WeeklyRow; label: string; hint: string }> = [
-  { key: "interest", label: "Interest & Finance", hint: "Loan interest paid this period" },
-  { key: "tax",      label: "Income Tax",         hint: "Tax provision for this period" },
-];
-
-export function WeeklyInputTable({ role = "owner" }: { role?: "owner" | "accountant" }) {
+export function WeeklyInputTable({ role: _role = "owner" }: { role?: "owner" | "accountant" }) {
   const { weeklyInputs, updateWeek } = useFinancialInputs();
   const [open, setOpen] = useState(false);
   const weeks = getRecentWeeks(4);
   const currentWeek = getISOWeekKey();
-  const fields = role === "accountant" ? [...OWNER_FIELDS, ...ACCOUNTANT_EXTRA] : OWNER_FIELDS;
+  const fields = FIELDS;
 
   return (
     <Card className="border border-slate-800 bg-slate-900/60 shadow-sm print:hidden">
@@ -147,12 +144,6 @@ export function WeeklyInputTable({ role = "owner" }: { role?: "owner" | "account
               ))}
             </tbody>
           </table>
-
-          {role === "accountant" && (
-            <p className="mt-3 border-t border-slate-800 pt-2.5 text-[10px] text-[#d4a550]/70">
-              ✦ Interest &amp; Tax fields are visible to accountants only — they flow into the Profitability Waterfall.
-            </p>
-          )}
         </CardContent>
       )}
     </Card>

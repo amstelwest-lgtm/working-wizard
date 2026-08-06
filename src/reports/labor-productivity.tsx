@@ -9,7 +9,7 @@
 import { Fragment } from "react";
 import { View, Text, StyleSheet } from "@react-pdf/renderer";
 import type { AccountantProfile } from "@/contexts/accountant-profile";
-import { PDFDocument, type SmeData } from "@/components/pdf/pdf-document";
+import { PDFDocument, type SmeData, type ReportSignoffStamp } from "@/components/pdf/pdf-document";
 import { scoreTier } from "@/lib/ratios";
 import { MetricBox } from "@/components/pdf/metric-box";
 import { RatioRow } from "@/components/pdf/ratio-row";
@@ -51,6 +51,7 @@ export type LaborProductivityPDFProps = {
   data: LaborProductivityData;
   accountantProfile: AccountantProfile;
   isDemo?: boolean;
+  reviewSignoff?: ReportSignoffStamp | null;
 };
 
 // ── Trend chart (grouped bars: revenue vs labor cost) ─────────────────────
@@ -140,6 +141,7 @@ export function LaborProductivityPDF({
   data: d,
   accountantProfile,
   isDemo,
+  reviewSignoff,
 }: LaborProductivityPDFProps) {
   const theme = resolveTheme(accountantProfile);
   const hs = d.health_scores;
@@ -193,6 +195,7 @@ export function LaborProductivityPDF({
       smeData={smeData}
       accountantProfile={accountantProfile}
       isDemo={isDemo}
+      reviewSignoff={reviewSignoff}
     >
       {/* ── PAGE 1 ── */}
       <ReportTitle

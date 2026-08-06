@@ -1,11 +1,15 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { signUpInvitedMember } from "@/lib/invite-member.server";
 
 /**
  * Admin signup — creates the user with email_confirm: true so no
  * confirmation email is required. Safe to use in development and for
  * invited users where the email address is already trusted.
+ *
+ * For the invited-member path this delegates entirely to signUpInvitedMember()
+ * so there is a single canonical implementation of that flow.
  */
 export const adminSignUp = createServerFn({ method: "POST" })
   .inputValidator((input) =>
@@ -22,6 +26,22 @@ export const adminSignUp = createServerFn({ method: "POST" })
       .parse(input),
   )
   .handler(async ({ data }) => {
+    // ── Invited member: delegate to the shared utility ──────────────────────
+    // signUpInvitedMember() is the single source of truth for this path.
+    // It creates the auth user AND writes client_memberships + user_roles.
+    // The integration test (scripts/test-invited-member-flow.mts) imports and
+    // calls this same function directly, so any regression here is caught.
+    if (data.signupType === "customer" && data.inviteClientId) {
+      const result = await signUpInvitedMember({
+        email: data.email,
+        password: data.password,
+        fullName: data.fullName,
+        inviteClientId: data.inviteClientId,
+      });
+      return result;
+    }
+
+    // ── All other paths: create the user first ──────────────────────────────
     const { data: authData, error } = await supabaseAdmin.auth.admin.createUser({
       email: data.email,
       password: data.password,
@@ -30,7 +50,7 @@ export const adminSignUp = createServerFn({ method: "POST" })
         full_name: data.fullName?.trim() ?? "",
         business_name: data.businessName?.trim() ?? data.fullName?.trim() ?? "",
         signup_type: data.signupType,
-        invite_client_id: data.inviteClientId ?? null,
+        invite_client_id: null,
       },
     });
 
@@ -57,28 +77,26 @@ export const adminSignUp = createServerFn({ method: "POST" })
         .from("user_roles")
         .insert({ user_id: userId, role: "firm_admin" });
     } else {
-      if (data.inviteClientId) {
-        await supabaseAdmin.from("client_memberships").upsert(
-          { client_id: data.inviteClientId, user_id: userId, role: "client" },
-          { onConflict: "client_id,user_id" },
-        );
-      } else {
-        const { data: existing } = await supabaseAdmin
-          .from("clients")
-          .select("id")
-          .eq("owner_user_id", userId)
-          .limit(1)
-          .maybeSingle();
-        if (!existing) {
-          await supabaseAdmin.from("clients").insert({
-            name:
-              data.businessName?.trim() ||
-              data.fullName?.trim() ||
-              data.email,
-            owner_user_id: userId,
-          });
-        }
+      // Primary owner self-signup (no inviteClientId) — create the client record.
+      const { data: existing } = await supabaseAdmin
+        .from("clients")
+        .select("id")
+        .eq("owner_user_id", userId)
+        .limit(1)
+        .maybeSingle();
+      if (!existing) {
+        await supabaseAdmin.from("clients").insert({
+          name:
+            data.businessName?.trim() ||
+            data.fullName?.trim() ||
+            data.email,
+          owner_user_id: userId,
+        });
       }
+      // user_roles has UNIQUE(user_id, role) not UNIQUE(user_id).
+      // Delete any existing row then insert so no stale role can survive.
+      await supabaseAdmin.from("user_roles").delete().eq("user_id", userId);
+      await supabaseAdmin.from("user_roles").insert({ user_id: userId, role: "client_owner" });
     }
 
     return { userId, email: authData.user.email ?? data.email };

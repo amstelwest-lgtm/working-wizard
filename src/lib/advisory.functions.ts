@@ -16,13 +16,12 @@ import { assertClientScope } from "@/lib/assert-client-scope";
  * drafts the deliverable; it is instructed never to invent numbers and to lean
  * on the structured deltas provided.
  *
- * Model note: this routes through the same Lovable AI gateway as the rest of
- * the app. This deliverable is higher-stakes than the ambient copilot (it goes
- * out under the accountant's name), so it is a good candidate to point at a
- * stronger model than Gemini Flash via the gateway — swap `MODEL` below.
+ * Model note: this deliverable is higher-stakes than the ambient copilot (it
+ * goes out under the accountant's name), so it uses Anthropic Claude Sonnet
+ * (see CLAUDE_MODEL in claude-config.ts) via the Anthropic Messages API.
  */
 
-import { GEMINI_MODEL_GATEWAY } from "@/lib/gemini-config";
+import { CLAUDE_MODEL } from "@/lib/claude-config";
 
 type RatioMap = Record<string, number | string | null>;
 
@@ -144,8 +143,12 @@ export const draftAdvisory = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input) => InputSchema.parse(input))
   .handler(async ({ data, context }) => {
-    const apiKey = process.env.LOVABLE_API_KEY;
-    if (!apiKey) throw new Error("AI not configured");
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) {
+      throw new Error(
+        "AI drafting is not configured (ANTHROPIC_API_KEY missing). Add the key to project secrets to enable the drafter.",
+      );
+    }
 
     // Enforce impersonation scope, then rely on RLS for the actual reads.
     assertClientScope(context.actingAsClientId, data.clientId);
@@ -237,32 +240,35 @@ ${movementLines.length ? movementLines.map((l) => `- ${l}`).join("\n") : "- No m
 INTERVENTIONS THE ACCOUNTANT HAS SIGNED OFF THIS PERIOD:
 ${signoffLines.length ? signoffLines.map((l) => `- ${l}`).join("\n") : "- None recorded yet."}`;
 
-    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${apiKey}`,
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: GEMINI_MODEL_GATEWAY,
-        messages: [
-          { role: "system", content: sys },
-          { role: "user", content: brief },
-        ],
+        model: CLAUDE_MODEL,
+        system: sys,
+        messages: [{ role: "user", content: brief }],
+        max_tokens: 2048,
       }),
     });
 
     if (res.status === 429) throw new Error("Rate limit hit. Try again in a moment.");
-    if (res.status === 402) throw new Error("AI credits exhausted — top up Lovable AI to continue.");
     if (!res.ok) {
       const text = await res.text().catch(() => "");
       throw new Error(`AI error (${res.status}): ${text.slice(0, 200)}`);
     }
 
     const json = (await res.json()) as {
-      choices?: Array<{ message?: { content?: string } }>;
+      content?: Array<{ type?: string; text?: string }>;
     };
-    const raw = json.choices?.[0]?.message?.content?.trim() ?? "";
+    const raw = (json.content ?? [])
+      .filter((b) => b.type === "text")
+      .map((b) => b.text ?? "")
+      .join("")
+      .trim();
 
     // For emails, split out the SUBJECT: line if present.
     let subject: string | null = null;

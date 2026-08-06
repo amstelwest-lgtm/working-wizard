@@ -8,7 +8,7 @@
 
 import { View, Text, StyleSheet } from "@react-pdf/renderer";
 import type { AccountantProfile } from "@/contexts/accountant-profile";
-import { PDFDocument, type SmeData } from "@/components/pdf/pdf-document";
+import { PDFDocument, type SmeData, type ReportSignoffStamp } from "@/components/pdf/pdf-document";
 import { ReportTitle } from "@/components/pdf/report-title";
 import { SectionHeader } from "@/components/pdf/section-header";
 import { ExecSummary, type HeadlineFigure } from "@/components/pdf/exec-summary";
@@ -40,6 +40,7 @@ export type BenchmarkReportPDFProps = {
   benchmarkRows: BenchmarkRow[];
   accountantProfile: AccountantProfile;
   isDemo?: boolean;
+  reviewSignoff?: ReportSignoffStamp | null;
 };
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -118,6 +119,7 @@ export function BenchmarkReportPDF({
   benchmarkRows,
   accountantProfile,
   isDemo,
+  reviewSignoff,
 }: BenchmarkReportPDFProps) {
   const theme = resolveTheme(accountantProfile);
 
@@ -157,6 +159,7 @@ export function BenchmarkReportPDF({
       smeData={smeData}
       accountantProfile={accountantProfile}
       isDemo={isDemo}
+      reviewSignoff={reviewSignoff}
     >
       <ReportTitle
         kicker={`Advisory Report 10 · ${industryName}`}

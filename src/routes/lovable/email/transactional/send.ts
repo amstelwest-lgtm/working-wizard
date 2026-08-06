@@ -317,6 +317,19 @@ export const Route = createFileRoute("/lovable/email/transactional/send")({
           recipient_redacted: redactEmail(effectiveRecipient),
         })
 
+        // Kick the queue processor immediately so the email goes out without
+        // waiting for the next cron cycle. Fire-and-forget: the send is already
+        // safely queued, and the processor is idempotent (message_id dedupe),
+        // so a failed kick is harmless — the pg_cron job
+        // (migration 20260805010000_email_queue_cron.sql) retries every 5 min.
+        const origin = new URL(request.url).origin
+        fetch(`${origin}/lovable/email/queue/process`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${supabaseServiceKey}` },
+        }).catch((e) =>
+          console.error('Queue processor kick failed', { error: String(e) }),
+        )
+
         return Response.json({ success: true, queued: true })
       },
     },

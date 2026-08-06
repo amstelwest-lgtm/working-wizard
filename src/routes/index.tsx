@@ -1,9 +1,11 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
 import { SIGNUP_ACCESS_CODE, notifySignup } from "@/lib/signup-notify";
+import { adminSignUp } from "@/lib/auth.functions";
 // @ts-ignore — raw import fine for dynamic CSS injection
 import landingCSS from "../styles/landing.css?raw";
 
@@ -22,6 +24,25 @@ export const Route = createFileRoute("/")({
 function LandingPage() {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
+  const doAdminSignUp = useServerFn(adminSignUp);
+
+  /* ── invite-link state (populated when /?invite=<clientId>&mode=signup) ── */
+  const [inviteClientId, setInviteClientId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const inv = params.get("invite");
+    const mode = params.get("mode");
+    if (inv && mode === "signup") {
+      setInviteClientId(inv);
+      // Scroll the registration form into view so the invited user sees it immediately
+      setTimeout(() => {
+        const el = document.getElementById("register");
+        if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 400);
+    }
+  }, []);
 
   /* ── sign-in modal state ── */
   const [signinOpen, setSigninOpen]     = useState(false);
@@ -311,12 +332,39 @@ function LandingPage() {
   /* ── register handler ── */
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (regRole === "Accountant / Advisory firm") {
-      navigate({ to: "/auth" });
-      return;
-    }
     if (!regPassword || regPassword.length < 6) {
       toast.error("Password must be at least 6 characters.");
+      return;
+    }
+
+    // ── Invite flow: use adminSignUp so the server writes the correct role ──
+    if (inviteClientId) {
+      setRegBusy(true);
+      try {
+        await doAdminSignUp({
+          data: {
+            email: regEmail,
+            password: regPassword,
+            fullName: regName.trim(),
+            inviteClientId,
+            signupType: "customer",
+          },
+        });
+        // adminSignUp creates a confirmed user → sign in immediately
+        const { error: siErr } = await supabase.auth.signInWithPassword({
+          email: regEmail, password: regPassword,
+        });
+        if (siErr) throw siErr;
+        navigate({ to: "/app" });
+      } catch (err: unknown) {
+        toast.error(err instanceof Error ? err.message : "Registration failed.");
+      } finally { setRegBusy(false); }
+      return;
+    }
+
+    // ── Standard owner signup ──────────────────────────────────────────────
+    if (regRole === "Accountant / Advisory firm") {
+      navigate({ to: "/auth" });
       return;
     }
     if (regCode.trim() !== SIGNUP_ACCESS_CODE) {
@@ -340,13 +388,14 @@ function LandingPage() {
       if (error) throw error;
       notifySignup("Business owner", regEmail, regName.trim());
       if (data.session && data.user) {
-        const { data: existing } = await supabase
-          .from("clients").select("id").eq("owner_user_id", data.user.id).limit(1).maybeSingle();
-        if (!existing) {
-          await supabase.from("clients").insert({
-            name: regBusiness.trim() || regName.trim() || regEmail,
-            owner_user_id: data.user.id,
-          });
+        // Use ensure_own_client() RPC — direct INSERT via anon key is blocked by
+        // a PostgREST WITH CHECK quirk in this project, so the SECURITY DEFINER
+        // RPC is the reliable path for both auto-confirm and email-confirm signups.
+        const clientName = regBusiness.trim() || regName.trim() || regEmail;
+        const { error: rpcErr } = await supabase.rpc("ensure_own_client", { p_name: clientName });
+        if (rpcErr) {
+          // Don't block navigation — the /app effectiveClientId flow will retry.
+          console.error("[signup] ensure_own_client failed:", rpcErr.message);
         }
         navigate({ to: "/app" });
         return;
@@ -922,19 +971,13 @@ function LandingPage() {
               from injecting DOM nodes during SSR hydration and crashing React */}
           {mounted && <div className="reg-shell">
             <form onSubmit={handleRegister}>
-              <label htmlFor="regRoleField">I am a</label>
-              <select id="regRoleField" value={regRole} onChange={e => setRegRole(e.target.value)}>
-                <option>Business owner</option>
-                <option>Accountant / Advisory firm</option>
-              </select>
-
-              {regRole === "Accountant / Advisory firm" ? (
-                <p style={{ marginTop:18, color:"var(--ink-dim)", fontSize:14, lineHeight:1.6 }}>
-                  Accountant accounts are set up through our dedicated firm portal.{" "}
-                  <a href="/auth" style={{ color:"var(--gold)" }}>Click here to register your firm →</a>
-                </p>
-              ) : (
+              {/* ── Invite flow: simplified form, no role/code/plan ── */}
+              {inviteClientId ? (
                 <>
+                  <p style={{ fontSize:13, color:"var(--gold)", marginBottom:16, lineHeight:1.5, fontWeight:600 }}>
+                    You've been invited to a MILŌN workspace. Create your account below.
+                  </p>
+
                   <label htmlFor="regNameField">Full name</label>
                   <input id="regNameField" type="text" required placeholder="Thabo Nkosi" value={regName} onChange={e => setRegName(e.target.value)} />
 
@@ -944,25 +987,56 @@ function LandingPage() {
                   <label htmlFor="regPasswordField">Password</label>
                   <input id="regPasswordField" type="password" required placeholder="At least 6 characters" minLength={6} value={regPassword} onChange={e => setRegPassword(e.target.value)} />
 
-                  <label htmlFor="regCodeField">Access code</label>
-                  <input id="regCodeField" type="text" required placeholder="Provided by your MILŌN contact" value={regCode} onChange={e => setRegCode(e.target.value)} />
-
-                  <label htmlFor="regBusinessField">Business name</label>
-                  <input id="regBusinessField" type="text" placeholder="Nkosi Engineering (Pty) Ltd" value={regBusiness} onChange={e => setRegBusiness(e.target.value)} />
-
-                  <label htmlFor="regPlan">Plan</label>
-                  <select id="regPlan" value={regPlan} onChange={e => setRegPlan(e.target.value)}>
-                    <option value="Spark — Free">Spark — Free forever</option>
-                    <option value="Orbit — R699/mo">Orbit — R699/mo</option>
-                    <option value="Constellation — R1 299/mo">Constellation — R1 299/mo</option>
+                  <button type="submit" className="btn btn-gold" disabled={regBusy} style={{ width:"100%", justifyContent:"center", marginTop:28 }}>
+                    {regBusy ? "Joining workspace…" : "Accept invitation ✦"}
+                  </button>
+                </>
+              ) : (
+                /* ── Standard signup form ── */
+                <>
+                  <label htmlFor="regRoleField">I am a</label>
+                  <select id="regRoleField" value={regRole} onChange={e => setRegRole(e.target.value)}>
+                    <option>Business owner</option>
+                    <option>Accountant / Advisory firm</option>
                   </select>
 
-                  <button type="submit" className="btn btn-gold" disabled={regBusy} style={{ width:"100%", justifyContent:"center", marginTop:28 }}>
-                    {regBusy ? "Creating your account…" : "Get my free health score ✦"}
-                  </button>
-                  <p style={{ textAlign:"center", fontSize:11, color:"var(--ink-dim)", marginTop:14, lineHeight:1.5 }}>
-                    No credit card for Spark. Upgrade anytime. Cancel anytime.
-                  </p>
+                  {regRole === "Accountant / Advisory firm" ? (
+                    <p style={{ marginTop:18, color:"var(--ink-dim)", fontSize:14, lineHeight:1.6 }}>
+                      Accountant accounts are set up through our dedicated firm portal.{" "}
+                      <a href="/auth" style={{ color:"var(--gold)" }}>Click here to register your firm →</a>
+                    </p>
+                  ) : (
+                    <>
+                      <label htmlFor="regNameField">Full name</label>
+                      <input id="regNameField" type="text" required placeholder="Thabo Nkosi" value={regName} onChange={e => setRegName(e.target.value)} />
+
+                      <label htmlFor="regEmailField">Work email</label>
+                      <input id="regEmailField" type="email" required placeholder="thabo@mybusiness.co.za" value={regEmail} onChange={e => setRegEmail(e.target.value)} />
+
+                      <label htmlFor="regPasswordField">Password</label>
+                      <input id="regPasswordField" type="password" required placeholder="At least 6 characters" minLength={6} value={regPassword} onChange={e => setRegPassword(e.target.value)} />
+
+                      <label htmlFor="regCodeField">Access code</label>
+                      <input id="regCodeField" type="text" required placeholder="Provided by your MILŌN contact" value={regCode} onChange={e => setRegCode(e.target.value)} />
+
+                      <label htmlFor="regBusinessField">Business name</label>
+                      <input id="regBusinessField" type="text" placeholder="Nkosi Engineering (Pty) Ltd" value={regBusiness} onChange={e => setRegBusiness(e.target.value)} />
+
+                      <label htmlFor="regPlan">Plan</label>
+                      <select id="regPlan" value={regPlan} onChange={e => setRegPlan(e.target.value)}>
+                        <option value="Spark — Free">Spark — Free forever</option>
+                        <option value="Orbit — R699/mo">Orbit — R699/mo</option>
+                        <option value="Constellation — R1 299/mo">Constellation — R1 299/mo</option>
+                      </select>
+
+                      <button type="submit" className="btn btn-gold" disabled={regBusy} style={{ width:"100%", justifyContent:"center", marginTop:28 }}>
+                        {regBusy ? "Creating your account…" : "Get my free health score ✦"}
+                      </button>
+                      <p style={{ textAlign:"center", fontSize:11, color:"var(--ink-dim)", marginTop:14, lineHeight:1.5 }}>
+                        No credit card for Spark. Upgrade anytime. Cancel anytime.
+                      </p>
+                    </>
+                  )}
                 </>
               )}
             </form>

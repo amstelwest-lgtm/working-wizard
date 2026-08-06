@@ -10,7 +10,7 @@
 import { Fragment } from "react";
 import { View, Text, StyleSheet } from "@react-pdf/renderer";
 import type { AccountantProfile } from "@/contexts/accountant-profile";
-import { PDFDocument, type SmeData } from "@/components/pdf/pdf-document";
+import { PDFDocument, type SmeData, type ReportSignoffStamp } from "@/components/pdf/pdf-document";
 import { scoreTier } from "@/lib/ratios";
 import { MetricBox } from "@/components/pdf/metric-box";
 import { RatioRow } from "@/components/pdf/ratio-row";
@@ -54,6 +54,7 @@ export type CashCyclePDFProps = {
   workingCapitalData: WorkingCapitalData;
   accountantProfile: AccountantProfile;
   isDemo?: boolean;
+  reviewSignoff?: ReportSignoffStamp | null;
 };
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -203,6 +204,7 @@ export function CashCyclePDF({
   workingCapitalData: d,
   accountantProfile,
   isDemo,
+  reviewSignoff,
 }: CashCyclePDFProps) {
   const theme = resolveTheme(accountantProfile);
   const hs = d.health_scores ?? {};
@@ -264,6 +266,7 @@ export function CashCyclePDF({
       smeData={smeData}
       accountantProfile={accountantProfile}
       isDemo={isDemo}
+      reviewSignoff={reviewSignoff}
     >
       {/* ── PAGE 1 ── */}
       <ReportTitle

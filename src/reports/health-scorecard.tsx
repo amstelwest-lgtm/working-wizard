@@ -9,7 +9,7 @@
 
 import { View, Text, StyleSheet } from "@react-pdf/renderer";
 import type { AccountantProfile } from "@/contexts/accountant-profile";
-import { PDFDocument, type SmeData } from "@/components/pdf/pdf-document";
+import { PDFDocument, type SmeData, type ReportSignoffStamp } from "@/components/pdf/pdf-document";
 import { C, TIER_META, tierForScore, scoreColor } from "@/components/pdf/theme";
 import { HealthScoreGauge } from "@/components/pdf/health-score-gauge";
 import { SectionHeader } from "@/components/pdf/section-header";
@@ -38,6 +38,7 @@ export type HealthScorecardPDFProps = {
   ratioResults: RatioResult[];
   accountantProfile: AccountantProfile;
   isDemo?: boolean;
+  reviewSignoff?: ReportSignoffStamp | null;
 };
 
 // ── Constants ──────────────────────────────────────────────────────────────
@@ -177,6 +178,7 @@ export function HealthScorecardPDF({
   ratioResults,
   accountantProfile,
   isDemo,
+  reviewSignoff,
 }: HealthScorecardPDFProps) {
   const overallScore = Math.round(avg(ratioResults.map((r) => r.health_score || 0)));
   const overallTier = tierForScore(overallScore);
@@ -279,6 +281,7 @@ export function HealthScorecardPDF({
       smeData={smeData}
       accountantProfile={accountantProfile}
       isDemo={isDemo}
+      reviewSignoff={reviewSignoff}
     >
       {/* ── PAGE 1 ── */}
       <ReportTitle

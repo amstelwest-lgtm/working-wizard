@@ -9,10 +9,12 @@ import { View, Text, StyleSheet } from "@react-pdf/renderer";
 import type { AccountantProfile } from "@/contexts/accountant-profile";
 import { C, resolveTheme } from "./theme";
 import { MilonMark } from "./glyphs";
+import type { ReportSignoffStamp } from "./pdf-document";
 
 type Props = {
   profile: AccountantProfile;
   fixed?: boolean;
+  reviewSignoff?: ReportSignoffStamp | null;
 };
 
 const styles = StyleSheet.create({
@@ -32,6 +34,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   confidential: { fontSize: 6.5, fontFamily: "Helvetica", color: C.faint, flex: 2 },
+  signoff: { fontSize: 6.5, fontFamily: "Helvetica-Bold", color: C.muted, flex: 2, marginTop: 2 },
   pageNumber: {
     fontSize: 7,
     fontFamily: "Helvetica",
@@ -45,16 +48,32 @@ const styles = StyleSheet.create({
   milon: { fontSize: 6.5, fontFamily: "Helvetica", color: C.faint },
 });
 
-export function ReportFooter({ profile, fixed }: Props) {
+export function ReportFooter({ profile, fixed, reviewSignoff }: Props) {
   const theme = resolveTheme(profile);
+  const signoffDate = reviewSignoff
+    ? new Date(reviewSignoff.signedOffAt).toLocaleDateString("en-ZA", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      })
+    : null;
 
   return (
     <View style={styles.wrapper} fixed={fixed}>
       <View style={styles.hairline} />
       <View style={styles.row}>
-        <Text style={styles.confidential}>
-          Confidential — prepared for the addressee only
-        </Text>
+        <View style={{ flex: 2 }}>
+          <Text style={styles.confidential}>
+            Confidential — prepared for the addressee only
+          </Text>
+          {reviewSignoff ? (
+            <Text style={styles.signoff}>
+              Reviewed & signed off by {reviewSignoff.signedOffByName}
+              {reviewSignoff.signedOffByTitle ? `, ${reviewSignoff.signedOffByTitle}` : ""}
+              {reviewSignoff.firmName ? ` · ${reviewSignoff.firmName}` : ""} · {signoffDate}
+            </Text>
+          ) : null}
+        </View>
 
         <Text
           style={styles.pageNumber}

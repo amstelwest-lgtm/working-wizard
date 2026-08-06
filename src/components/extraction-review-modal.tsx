@@ -33,7 +33,7 @@ function fmtZAR(v: number | null | undefined): string {
   return `R ${v.toLocaleString("en-ZA", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 }
 
-function extractionToInputs(r: MergedExtractionResult): MappedInputs {
+export function extractionToInputs(r: MergedExtractionResult): MappedInputs {
   const is = r.current_period?.income_statement;
   const bs = r.current_period?.balance_sheet;
   const cfs = r.current_period?.cash_flow_statement;
@@ -505,14 +505,15 @@ export function ExtractionReviewModal({ result, open, onClose, onConfirm }: Prop
             <Button
               onClick={handleConfirm}
               disabled={unresolvedConflicts.length > 0}
-              className="flex-1 bg-violet-600 hover:bg-violet-700 text-white"
+              className="flex-1 bg-[#b7872a] hover:bg-[#d4a550] text-white font-semibold"
             >
+              <CheckCircle2 className="h-4 w-4 mr-1.5" />
               {unresolvedConflicts.length > 0
                 ? `Resolve ${unresolvedConflicts.length} conflict${unresolvedConflicts.length > 1 ? "s" : ""} first`
-                : "Confirm and populate form"}
+                : "Confirm & import figures"}
             </Button>
             <Button variant="outline" onClick={onClose} className="border-slate-700 text-slate-300 hover:bg-slate-800">
-              Edit &amp; re-extract
+              Upload different file
             </Button>
             <button
               onClick={onClose}

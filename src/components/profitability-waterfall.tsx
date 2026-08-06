@@ -177,6 +177,7 @@ export function ProfitabilityWaterfall({
   const y = (v: number) => ((v - minVal) / range) * 100;
 
   const CHART_H = 280; // px
+  const LABEL_PAD = 36; // headroom above the tallest bar for its value label
 
   return (
     <Card className="relative overflow-hidden border border-amber-900/15 bg-[radial-gradient(circle_at_90%_0%,rgba(212,165,80,0.13),transparent_34%),linear-gradient(135deg,#fffdf8,#f8f5ed)] shadow-[0_20px_60px_rgba(109,79,22,0.10)] print:hidden dark:border-slate-800 dark:bg-[radial-gradient(circle_at_90%_0%,rgba(212,165,80,0.12),transparent_34%),linear-gradient(135deg,#111827,#0b1220)] dark:shadow-[0_20px_60px_rgba(0,0,0,0.25)]">
@@ -246,7 +247,8 @@ export function ProfitabilityWaterfall({
           )}
 
           {/* ── Waterfall chart ── */}
-          <div className="relative w-full" style={{ height: CHART_H + 88 }}>
+          <div className="w-full overflow-x-auto pb-1">
+          <div className="relative min-w-[560px]" style={{ height: CHART_H + 88 + LABEL_PAD }}>
             {/* horizontal grid lines */}
             {[0, 0.25, 0.5, 0.75, 1].map((p) => (
               <div
@@ -364,6 +366,7 @@ export function ProfitabilityWaterfall({
                 );
               })}
             </div>
+          </div>
           </div>
 
           {/* legend */}

@@ -10,7 +10,7 @@
 import { Fragment } from "react";
 import { View, Text, StyleSheet } from "@react-pdf/renderer";
 import type { AccountantProfile } from "@/contexts/accountant-profile";
-import { PDFDocument, type SmeData } from "@/components/pdf/pdf-document";
+import { PDFDocument, type SmeData, type ReportSignoffStamp } from "@/components/pdf/pdf-document";
 import { scoreTier } from "@/lib/ratios";
 import { C, fmtRand, fmtRandCompact, fmtPct, resolveTheme } from "@/components/pdf/theme";
 import { RatioRow } from "@/components/pdf/ratio-row";
@@ -52,6 +52,7 @@ export type ProfitabilityWaterfallPDFProps = {
   profitabilityData: ProfitabilityData;
   accountantProfile: AccountantProfile;
   isDemo?: boolean;
+  reviewSignoff?: ReportSignoffStamp | null;
 };
 
 // ── Bridge chart ───────────────────────────────────────────────────────────
@@ -381,6 +382,7 @@ export function ProfitabilityWaterfallPDF({
   profitabilityData: d,
   accountantProfile,
   isDemo,
+  reviewSignoff,
 }: ProfitabilityWaterfallPDFProps) {
   const theme = resolveTheme(accountantProfile);
   const p = d.prior_period;
@@ -437,6 +439,7 @@ export function ProfitabilityWaterfallPDF({
       smeData={smeData}
       accountantProfile={accountantProfile}
       isDemo={isDemo}
+      reviewSignoff={reviewSignoff}
     >
       {/* ── PAGE 1: Bridge ── */}
       <ReportTitle

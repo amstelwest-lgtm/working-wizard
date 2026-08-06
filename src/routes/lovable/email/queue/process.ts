@@ -1,6 +1,55 @@
-import { sendLovableEmail } from '@lovable.dev/email-js'
 import { createClient } from '@supabase/supabase-js'
 import { createFileRoute } from '@tanstack/react-router'
+
+class EmailAPIError extends Error {
+  status: number
+  retryAfterSeconds: number | null
+  constructor(status: number, message: string, retryAfterSeconds: number | null = null) {
+    super(message)
+    this.status = status
+    this.retryAfterSeconds = retryAfterSeconds
+  }
+}
+
+// Send a single email through the Resend API.
+async function sendViaResend(
+  apiKey: string,
+  fromEmail: string,
+  payload: Record<string, any>
+): Promise<void> {
+  // Preserve the display name from the queued `from` (e.g. "Milōn <noreply@…>")
+  // but always use the verified Resend sender address.
+  const displayName =
+    typeof payload.from === 'string' && payload.from.includes('<')
+      ? payload.from.split('<')[0].trim()
+      : 'Milōn'
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      from: `${displayName} <${fromEmail}>`,
+      to: [payload.to],
+      subject: payload.subject,
+      html: payload.html,
+      text: payload.text,
+      headers: payload.idempotency_key
+        ? { 'X-Entity-Ref-ID': String(payload.idempotency_key) }
+        : undefined,
+    }),
+  })
+  if (!res.ok) {
+    const retryAfter = res.headers.get('retry-after')
+    const body = await res.text().catch(() => '')
+    throw new EmailAPIError(
+      res.status,
+      `Resend send failed (${res.status}): ${body}`,
+      retryAfter ? Number(retryAfter) : null
+    )
+  }
+}
 
 const MAX_RETRIES = 5
 const DEFAULT_BATCH_SIZE = 10
@@ -65,11 +114,12 @@ export const Route = createFileRoute("/lovable/email/queue/process")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        const apiKey = process.env.LOVABLE_API_KEY
+        const apiKey = process.env.RESEND_API_KEY
+        const fromEmail = process.env.RESEND_FROM_EMAIL
         const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
         const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
-        if (!apiKey || !supabaseUrl || !supabaseServiceKey) {
+        if (!apiKey || !fromEmail || !supabaseUrl || !supabaseServiceKey) {
           console.error('Missing required environment variables')
           return Response.json(
             { error: 'Server configuration error' },
@@ -222,23 +272,7 @@ export const Route = createFileRoute("/lovable/email/queue/process")({
             }
 
             try {
-              await sendLovableEmail(
-                {
-                  run_id: payload.run_id,
-                  to: payload.to,
-                  from: payload.from,
-                  sender_domain: payload.sender_domain,
-                  subject: payload.subject,
-                  html: payload.html,
-                  text: payload.text,
-                  purpose: payload.purpose,
-                  label: payload.label,
-                  idempotency_key: payload.idempotency_key,
-                  unsubscribe_token: payload.unsubscribe_token,
-                  message_id: payload.message_id,
-                },
-                { apiKey, sendUrl: process.env.LOVABLE_SEND_URL }
-              )
+              await sendViaResend(apiKey, fromEmail, payload)
 
               // Log success
               await supabase.from('email_send_log').insert({
