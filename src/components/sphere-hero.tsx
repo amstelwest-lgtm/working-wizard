@@ -46,9 +46,18 @@ export type SphereHeroProps = {
   overallHealth: number;
   overallDelta?: number;
   pillars: SpherePillar[];
-  topPriority?: { title: string; description: string };
+  topPriority?: {
+    title: string;
+    description: string;
+    /** Optional action bullets shown under the next-move headline */
+    actions?: string[];
+    /** e.g. "+R42k additional cash in next 90 days" */
+    impactLabel?: string;
+  };
   /** Called when the user taps the Top Priority arrow, if provided. */
   onTopPriority?: () => void;
+  /** Optional one-line caption under the score sphere */
+  caption?: string;
 };
 
 // ── Tier helpers (aligned with scoreTier in @/lib/ratios: 65 / 40) ──────────
@@ -240,6 +249,7 @@ export function SphereHero({
   pillars,
   topPriority,
   onTopPriority,
+  caption,
 }: SphereHeroProps) {
   const [level, setLevel] = useState<Level>(1);
   const [activePillarId, setActivePillarId] = useState<SpherePillar["id"] | null>(null);
@@ -297,12 +307,17 @@ export function SphereHero({
             />
           </div>
 
-          <p className={`mt-4 text-center transition-opacity duration-300 ${level === 1 ? "opacity-100" : "opacity-0"}`}>
+          <p className={`mt-4 max-w-md text-center transition-opacity duration-300 ${level === 1 ? "opacity-100" : "opacity-0"}`}>
             <span className="block text-sm text-slate-200">
-              {overallTier === "healthy" ? "Your business is in good shape." : overallTier === "watch" ? "Your business needs some attention." : overallTier === "critical" ? "Your business needs urgent attention." : "Add your first numbers to see your health score."}
-            </span>
-            <span className="block text-sm text-slate-400">
-              {overallTier === "healthy" ? "Keep building momentum." : "Start with the priority below."}
+              {caption
+                ? caption
+                : overallTier === "healthy"
+                  ? "Your business is in good shape — keep building momentum."
+                  : overallTier === "watch"
+                    ? "Your business is stable, but cash conversion is holding you back."
+                    : overallTier === "critical"
+                      ? "Your business needs urgent attention — start with the priority below."
+                      : "Add your first numbers to see your health score."}
             </span>
           </p>
         </>
@@ -310,22 +325,28 @@ export function SphereHero({
 
       {/* ── LEVEL 1: compact pillar stat row ── */}
       {level === 1 && (
-        <div className="mt-5 grid w-full max-w-md grid-cols-4 gap-2">
+        <div className="mt-5 grid w-full max-w-lg grid-cols-4 gap-2">
           {pillars.map((p) => {
             const Icon = PILLAR_ICON[p.id];
             const t = tierOf(p.health);
+            const delta = typeof p.delta === "number" ? p.delta : null;
             return (
               <button
                 key={p.id}
                 type="button"
                 onClick={() => go(2)}
-                className="flex flex-col items-center gap-1 rounded-xl py-2 transition hover:bg-amber-50 dark:hover:bg-slate-900/60"
+                className="flex flex-col items-center gap-1 rounded-2xl border border-white/8 bg-white/[0.03] px-1 py-3 transition hover:border-[#d4a550]/35 hover:bg-[#d4a550]/5"
               >
-                <span className="flex h-9 w-9 items-center justify-center rounded-full border border-amber-500/30">
+                <span className="flex h-9 w-9 items-center justify-center rounded-full border border-amber-500/30 bg-[#d4a550]/8">
                   <Icon className="h-4 w-4 text-amber-400" />
                 </span>
-                <span className="text-[10px] uppercase tracking-wider text-slate-300">{p.label}</span>
-                <span className={`text-sm font-bold ${TIER_TEXT[t]}`}>{fmtScore(p.health)}</span>
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-300">{p.label}</span>
+                <span className={`text-base font-bold ${TIER_TEXT[t]}`}>{fmtScore(p.health)}</span>
+                {delta != null && (
+                  <span className={`text-[10px] font-semibold ${delta > 0 ? "text-emerald-400" : delta < 0 ? "text-rose-400" : "text-slate-500"}`}>
+                    {delta > 0 ? "↑" : delta < 0 ? "↓" : "→"} {Math.abs(Math.round(delta))} pts
+                  </span>
+                )}
               </button>
             );
           })}
@@ -429,23 +450,46 @@ export function SphereHero({
         </>
       )}
 
-      {/* ── Top priority card (levels 1 & 3) ── */}
+      {/* ── Your Next Move card (levels 1 & 3) ── */}
       {topPriority && level !== 2 && (
-        <div className="mt-6 w-full max-w-md rounded-2xl border border-amber-700/20 bg-gradient-to-br from-amber-50/90 to-white p-4 shadow-[0_14px_34px_rgba(121,91,27,0.09)] dark:from-slate-900/80 dark:to-slate-950/80 dark:shadow-none">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.25em] text-amber-400">Top priority</p>
-          <div className="mt-1 flex items-center justify-between gap-3">
-            <div>
-              <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{topPriority.title}</p>
+        <div className="mt-6 w-full max-w-lg rounded-2xl border border-[#d4a550]/25 bg-gradient-to-br from-[#d4a550]/10 via-slate-950/40 to-transparent p-4 shadow-[0_14px_34px_rgba(121,91,27,0.12)]">
+          <p className="text-[10px] font-bold uppercase tracking-[0.25em] text-[#d4a550]">Your Next Move</p>
+          <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0 flex-1">
+              <p className="text-base font-semibold text-white">{topPriority.title}</p>
               <p className="mt-0.5 text-xs text-slate-400">{topPriority.description}</p>
+              {topPriority.actions && topPriority.actions.length > 0 && (
+                <ul className="mt-3 space-y-1.5">
+                  {topPriority.actions.map((a) => (
+                    <li key={a} className="flex items-start gap-2 text-[12px] text-slate-300">
+                      <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[#d4a550]/20 text-[10px] font-bold text-[#d4a550]">
+                        ✓
+                      </span>
+                      <span>{a}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
-            <button
-              type="button"
-              onClick={() => { playKlink(); onTopPriority?.(); }}
-              aria-label="Open top priority"
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-amber-500/40 text-amber-400 transition hover:bg-amber-500/10"
-            >
-              <ChevronRight className="h-5 w-5" />
-            </button>
+            <div className="flex shrink-0 items-center gap-3 sm:flex-col sm:items-end">
+              {topPriority.impactLabel && (
+                <div className="text-left sm:text-right">
+                  <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-slate-500">Potential impact</p>
+                  <p className="mt-0.5 text-sm font-semibold text-emerald-400">{topPriority.impactLabel}</p>
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  playKlink();
+                  onTopPriority?.();
+                }}
+                aria-label="Open next move"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-amber-500/40 bg-[#d4a550]/10 text-amber-400 transition hover:bg-amber-500/20"
+              >
+                <ChevronRight className="h-5 w-5" />
+              </button>
+            </div>
           </div>
         </div>
       )}

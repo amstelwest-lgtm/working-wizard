@@ -35,6 +35,7 @@ import { WeeklyInputTable } from "@/components/weekly-input-table";
 import { ProfitabilityWaterfall } from "@/components/profitability-waterfall";
 import { useTrack } from "@/hooks/use-track";
 import { IndustryPulse } from "@/components/industry-pulse";
+import { OverviewRail } from "@/components/overview-rail";
 import { NoteLayer } from "@/components/note-layer";
 import { AdminDashboard } from "@/components/admin-dashboard";
 
@@ -2107,10 +2108,105 @@ function Index() {
         impactLine: ns.impactLine,
         health,
         score,
+        actions: meta.steps.slice(0, 3),
       };
     })
     .sort((a, b) => b.score - a.score)
     .slice(0, 10);
+
+  // Overview rail: percentile vs peers ≈ average of ratio health scores.
+  const positionPercentile = (() => {
+    if (!hasRealFinancials || !isFinite(avgHealth)) return null;
+    return Math.max(5, Math.min(95, Math.round(avgHealth)));
+  })();
+
+  const weekChanges = (() => {
+    const changes: Array<{ label: string; value: string; sentiment: "good" | "bad" | "neutral" }> = [];
+    if (isFinite(revenueGrowth)) {
+      const pct = Math.round(revenueGrowth * 100);
+      changes.push({
+        label: "Revenue",
+        value: `${pct >= 0 ? "+ " : ""}${pct}%`,
+        sentiment: pct > 0 ? "good" : pct < 0 ? "bad" : "neutral",
+      });
+    }
+    const cashH = pillarHealths.cash;
+    const profitH = pillarHealths.profit;
+    if (isFinite(cashH) && isFinite(profitH)) {
+      const gap = Math.round(cashH - profitH);
+      changes.push({
+        label: "Cash conversion",
+        value: gap === 0 ? "Unchanged" : `${gap > 0 ? "+ " : "- "}${Math.abs(gap)}%`,
+        sentiment: gap > 0 ? "good" : gap < 0 ? "bad" : "neutral",
+      });
+    }
+    if (isFinite(grossMarginRatio)) {
+      const gm = Math.round(grossMarginRatio * 1000) / 10;
+      changes.push({
+        label: "Gross margin",
+        value: `${gm}%`,
+        sentiment: gm >= 35 ? "good" : gm >= 20 ? "neutral" : "bad",
+      });
+    }
+    return changes.slice(0, 3);
+  })();
+
+  const cashTrajectory = (() => {
+    if (!hasRealFinancials) return null;
+    const revenueN = n.revenue;
+    const ocfN = n.operatingCashflow;
+    const ca = n.currentAssets;
+    const cl = n.currentLiabilities;
+    const seed = ca > 0 || cl > 0 ? Math.max(0, ca - cl) : NaN;
+    const monthly = ocfN !== 0 ? ocfN / 12 : revenueN > 0 ? (revenueN * 0.04) / 12 : NaN;
+    if (!isFinite(seed) && !isFinite(monthly)) return null;
+    const start = isFinite(seed) ? seed : monthly * 2;
+    const add = isFinite(monthly) ? monthly : start * 0.08;
+    const points = [0, 1, 2, 3].map((i) => Math.max(0, start + add * i));
+    const projected = points[points.length - 1];
+    const fmt = (amount: number) =>
+      amount >= 1_000_000
+        ? `R${(amount / 1_000_000).toFixed(1)}m`
+        : amount >= 1_000
+          ? `R${Math.round(amount / 1000)}k`
+          : `R${Math.round(amount)}`;
+    return {
+      points,
+      projectedLabel: "Projected cash in 90 days",
+      projectedValue: fmt(projected),
+    };
+  })();
+
+  const overviewCaption = (() => {
+    if (!hasRealFinancials || !isFinite(avgHealth)) return undefined;
+    const cashH = pillarHealths.cash;
+    if (isFinite(cashH) && cashH < avgHealth - 5) {
+      return "Your business is stable, but cash conversion is holding you back.";
+    }
+    if (avgHealth >= 65) return "Your business is in good shape — keep building momentum.";
+    if (avgHealth >= 40) return "Your business needs some attention — start with the priority below.";
+    return "Your business needs urgent attention — start with the priority below.";
+  })();
+
+  const nextMoveImpactLabel = (() => {
+    const top = nextSteps[0];
+    if (!top) return undefined;
+    const revenueN = n.revenue;
+    const receivablesN = n.receivables;
+    if (top.key === "debtorDays" && receivablesN > 0) {
+      const unlock = Math.round(receivablesN * 0.15);
+      if (unlock >= 1000) {
+        return `+R${Math.round(unlock / 1000)}k additional cash in next 90 days`;
+      }
+    }
+    if (revenueN > 0) {
+      const unlock = Math.round(revenueN * 0.02);
+      if (unlock >= 1000) {
+        return `+R${Math.round(unlock / 1000)}k potential swing this quarter`;
+      }
+    }
+    return top.impactLine;
+  })();
 
   // Auto-clear the globe highlight after 2s and scroll the row into view.
   // Small delay lets the tab re-render before we query the DOM.
@@ -2512,113 +2608,125 @@ function Index() {
 
           <TabsContent value="today">
             {viewMode === "simplified" ? (
-            <div className="flex flex-col items-center gap-4 pb-8">
-              {/* LIVE timestamp badge row */}
-              <div className="flex w-full max-w-[640px] items-center justify-between lg:max-w-none">
-                <span className="flex items-center gap-2 text-[9px] font-semibold uppercase tracking-[0.22em] text-slate-400 dark:text-slate-600">
-                  Business Health
+            <div className="flex flex-col gap-4 pb-8">
+              <div className="flex w-full flex-col gap-1">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-lg font-semibold tracking-tight text-white sm:text-xl">Business Health</h2>
                   <ReviewSignoffBadge
                     signoff={financialsSignoff}
                     scope="financials"
                     isStale={computeIsStale(financialsSignoff, clientMeta?.financials_updated_at ?? null)}
                     compact
                   />
-                </span>
-                {hasRealFinancials ? (
-                  <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/8 px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-400">
-                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
-                    Live &middot; {new Date().toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })}
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-700 bg-slate-800/60 px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                    No data yet
-                  </span>
-                )}
+                </div>
+                <p className="text-sm text-slate-400">Your financial pulse at a glance.</p>
               </div>
 
               {/* No-data empty state — shown until owner uploads or enters real financials */}
               {!hasRealFinancials && !actingClientId ? (
-                <div className="flex w-full flex-col items-center gap-6 py-8">
-                  {/* Placeholder orb ring */}
-                  <div className="relative flex h-48 w-48 items-center justify-center">
-                    <div className="absolute inset-0 rounded-full border-2 border-dashed border-[#d4a550]/20" />
-                    <div className="absolute inset-6 rounded-full border border-[#d4a550]/10" />
-                    <div className="flex flex-col items-center gap-1">
-                      <span className="text-3xl font-bold text-slate-600">—</span>
-                      <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-600">No score yet</span>
+                <div className="grid w-full gap-6 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start">
+                  <div className="flex w-full flex-col items-center gap-6 py-6">
+                    <div className="relative flex h-48 w-48 items-center justify-center">
+                      <div className="absolute inset-0 rounded-full border-2 border-dashed border-[#d4a550]/20" />
+                      <div className="absolute inset-6 rounded-full border border-[#d4a550]/10" />
+                      <div className="flex flex-col items-center gap-1">
+                        <span className="text-3xl font-bold text-slate-600">—</span>
+                        <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-600">No score yet</span>
+                      </div>
                     </div>
+                    <div className="max-w-sm text-center">
+                      <h3 className="text-base font-semibold text-slate-200">Add your financials to see your score</h3>
+                      <p className="mt-1.5 text-sm text-slate-400">
+                        Upload a financial statement or enter your figures manually. MILŌN will calculate your health score and your highest-impact first move instantly.
+                      </p>
+                    </div>
+                    {userRole !== "client_member" ? (
+                      <div className="flex w-full max-w-sm flex-col gap-3 sm:flex-row">
+                        <button
+                          onClick={() => { setShowFinData(true); setTimeout(() => uploadRef.current?.click(), 150); }}
+                          className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-[#b7872a] px-4 py-3 text-sm font-semibold text-white transition-all hover:bg-[#d4a550]"
+                        >
+                          <Upload className="h-4 w-4" />
+                          Upload statement
+                        </button>
+                        <button
+                          onClick={() => { setShowFinData(true); setShowInputs(true); }}
+                          className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-900 px-4 py-3 text-sm font-semibold text-slate-300 transition-all hover:bg-slate-800"
+                        >
+                          <Database className="h-4 w-4" />
+                          Enter manually
+                        </button>
+                      </div>
+                    ) : (
+                      <p className="max-w-sm text-center text-sm text-slate-400">
+                        Financial data hasn't been added yet. The owner will set this up.
+                      </p>
+                    )}
                   </div>
-                  <div className="max-w-sm text-center">
-                    <h3 className="text-base font-semibold text-slate-200">Add your financials to see your score</h3>
-                    <p className="mt-1.5 text-sm text-slate-400">
-                      Upload a financial statement or enter your figures manually. MILŌN will calculate your health score and your highest-impact first move instantly.
-                    </p>
+                  <div className="flex justify-center lg:justify-start">
+                    <OverviewRail
+                      liveLabel="No data yet"
+                      positionPercentile={null}
+                      weekChanges={[]}
+                      cashTrajectory={null}
+                      onOpenCash={() => setActiveTab("cash")}
+                      onOpenMoves={() => setActiveTab("next")}
+                      industryPulse={
+                        <IndustryPulse industry={businessType?.label ?? "General SME"} vertical />
+                      }
+                    />
                   </div>
-                  {userRole !== "client_member" ? (
-                    <div className="flex flex-col sm:flex-row gap-3 w-full max-w-sm">
-                      <button
-                        onClick={() => { setShowFinData(true); setTimeout(() => uploadRef.current?.click(), 150); }}
-                        className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-[#b7872a] hover:bg-[#d4a550] px-4 py-3 text-sm font-semibold text-white transition-all"
-                      >
-                        <Upload className="h-4 w-4" />
-                        Upload statement
-                      </button>
-                      <button
-                        onClick={() => { setShowFinData(true); setShowInputs(true); }}
-                        className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-900 hover:bg-slate-800 px-4 py-3 text-sm font-semibold text-slate-300 transition-all"
-                      >
-                        <Database className="h-4 w-4" />
-                        Enter manually
-                      </button>
-                    </div>
-                  ) : (
-                    <p className="text-sm text-slate-400 text-center max-w-sm">
-                      Financial data hasn't been added yet. The owner will set this up.
-                    </p>
-                  )}
-                  {businessType && (
-                    <div className="flex w-full justify-center mt-2">
-                      <IndustryPulse industry={businessType.label} vertical />
-                    </div>
-                  )}
                 </div>
               ) : (
-              /* Orb + Industry Pulse — side-by-side on wide screens, stacked on mobile */
-              <div className={`grid w-full gap-6 ${businessType ? "lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start" : ""}`}>
+              <div className="grid w-full gap-6 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start">
                 <div className="flex w-full flex-col items-center gap-4">
-                  {/* Sphere hero — financial health visualisation */}
-                  <div className="w-full flex justify-center">
+                  <div className="flex w-full justify-center">
                     <SphereHero
                       overallHealth={avgHealth}
                       pillars={spherePillars}
+                      caption={overviewCaption}
                       topPriority={
                         nextSteps[0]
                           ? {
                               title: nextSteps[0].title,
-                              description: `Your ${nextSteps[0].ratioName} is your highest-impact lever right now — health score ${Math.round(nextSteps[0].health)}%.`,
+                              description:
+                                nextSteps[0].key === "debtorDays"
+                                  ? "Cash conversion is your biggest constraint."
+                                  : `Your ${nextSteps[0].ratioName} is your highest-impact lever right now.`,
+                              actions: nextSteps[0].actions,
+                              impactLabel: nextMoveImpactLabel,
                             }
                           : {
                               title: "Upload your financial data",
                               description: "Add your figures to get a personalised score and first move.",
                             }
                       }
-                      onTopPriority={() => {
-                        setActiveTab("today");
-                      }}
+                      onTopPriority={() => setActiveTab("next")}
                     />
                   </div>
 
-                  {/* Ask your numbers — edge-function chat widget */}
                   <div
                     id="ask-ai-overview"
-                    className="w-full max-w-[640px] rounded-xl border border-[#b7872a]/30 bg-white dark:bg-[#0a1020]/80"
+                    className="w-full max-w-lg rounded-xl border border-[#b7872a]/30 bg-white dark:bg-[#0a1020]/80"
                   />
                 </div>
-                {businessType && (
-                  <div className="flex w-full justify-center lg:justify-start lg:pt-8">
-                    <IndustryPulse industry={businessType.label} vertical />
-                  </div>
-                )}
+                <div className="flex justify-center lg:justify-start lg:pt-1">
+                  <OverviewRail
+                    liveLabel={
+                      hasRealFinancials
+                        ? `Live · ${new Date().toLocaleDateString("en-ZA", { day: "2-digit", month: "short", year: "numeric" }).toUpperCase()}`
+                        : "No data yet"
+                    }
+                    positionPercentile={positionPercentile}
+                    weekChanges={weekChanges}
+                    cashTrajectory={cashTrajectory}
+                    onOpenCash={() => setActiveTab("cash")}
+                    onOpenMoves={() => setActiveTab("next")}
+                    industryPulse={
+                      <IndustryPulse industry={businessType?.label ?? "General SME"} vertical />
+                    }
+                  />
+                </div>
               </div>
               )}
             </div>
