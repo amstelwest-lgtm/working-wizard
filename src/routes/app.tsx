@@ -1715,41 +1715,64 @@ function Index() {
   // Mount the Ask AI widget wherever a mount container is present
   // (overview tab + profitability waterfall tab). Re-runs on tab change
   // because inactive tab content is unmounted by Radix.
+  // Retries briefly: on first simplified load the #ask-ai-overview node can
+  // appear one paint after hasRealFinancials flips true.
   useEffect(() => {
     let cancelled = false;
-    const allContainers = ["ask-ai-overview", "ask-ai-waterfall"]
-      .map((id) => document.getElementById(id))
-      .filter((el): el is HTMLElement => !!el);
-    // Always refresh the client context on already-mounted containers —
-    // submit() reads dataset.clientId at request time, so a stale value would
-    // send questions for the previously selected client.
-    if (effectiveClientId) {
-      (window as unknown as Record<string, unknown>).__askAiClientId = effectiveClientId;
-      for (const el of allContainers) el.dataset.clientId = effectiveClientId;
-    }
-    const containers = allContainers.filter((el) => !el.dataset.askAiMounted);
-    if (containers.length === 0) return;
-    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-    // @ts-ignore — plain JS module without type declarations
-    import("../lib/ask-ai.js").then((mod: { mountAskAi?: (el: HTMLElement, opts: unknown) => void }) => {
-      // A newer effect run (client switch / tab change) supersedes this one —
-      // don't mount with a stale clientId.
-      if (cancelled || typeof mod.mountAskAi !== "function") return;
-      for (const el of containers) {
-        if (effectiveClientId) el.dataset.clientId = effectiveClientId;
-        el.dataset.askAiMounted = "1";
-        mod.mountAskAi(el, {
-          endpoint: `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ask-ai`,
-          getToken: async () => {
-            const { data } = await supabase.auth.getSession();
-            return data.session?.access_token ?? null;
-          },
-        });
+    let attempts = 0;
+    const timers: number[] = [];
+
+    const tryMount = () => {
+      if (cancelled) return;
+      const allContainers = ["ask-ai-overview", "ask-ai-waterfall"]
+        .map((id) => document.getElementById(id))
+        .filter((el): el is HTMLElement => !!el);
+
+      if (effectiveClientId) {
+        (window as unknown as Record<string, unknown>).__askAiClientId = effectiveClientId;
+        for (const el of allContainers) el.dataset.clientId = effectiveClientId;
       }
-    }).catch(() => {
-      // Widget not yet deployed — silent fail
-    });
-    return () => { cancelled = true; };
+
+      const containers = allContainers.filter((el) => !el.dataset.askAiMounted);
+      if (containers.length === 0) {
+        // Container not in DOM yet (or already mounted) — retry a few times on first paint.
+        if (allContainers.length === 0 && attempts < 8) {
+          attempts += 1;
+          timers.push(window.setTimeout(tryMount, 50 * attempts));
+        }
+        return;
+      }
+
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-ignore — plain JS module without type declarations
+      import("../lib/ask-ai.js").then((mod: { mountAskAi?: (el: HTMLElement, opts: unknown) => void }) => {
+        if (cancelled || typeof mod.mountAskAi !== "function") return;
+        for (const el of containers) {
+          if (el.dataset.askAiMounted) continue;
+          if (effectiveClientId) el.dataset.clientId = effectiveClientId;
+          el.dataset.askAiMounted = "1";
+          mod.mountAskAi(el, {
+            endpoint: `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ask-ai`,
+            getToken: async () => {
+              const { data } = await supabase.auth.getSession();
+              return data.session?.access_token ?? null;
+            },
+          });
+        }
+      }).catch(() => {
+        // Widget not yet deployed — silent fail
+      });
+    };
+
+    tryMount();
+    timers.push(window.setTimeout(tryMount, 0));
+    timers.push(window.setTimeout(tryMount, 100));
+    timers.push(window.setTimeout(tryMount, 300));
+
+    return () => {
+      cancelled = true;
+      for (const t of timers) window.clearTimeout(t);
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [effectiveClientId, activeTab, viewMode, hasRealFinancials]);
 
@@ -2157,11 +2180,20 @@ function Index() {
     const ocfN = n.operatingCashflow;
     const ca = n.currentAssets;
     const cl = n.currentLiabilities;
-    const seed = ca > 0 || cl > 0 ? Math.max(0, ca - cl) : NaN;
-    const monthly = ocfN !== 0 ? ocfN / 12 : revenueN > 0 ? (revenueN * 0.04) / 12 : NaN;
+    const wc = ca > 0 || cl > 0 ? Math.max(0, ca - cl) : NaN;
+    const monthlyFromOcf = ocfN !== 0 ? ocfN / 12 : NaN;
+    const monthlyFromRev = revenueN > 0 ? (revenueN * 0.04) / 12 : NaN;
+    const monthly = isFinite(monthlyFromOcf) ? monthlyFromOcf : monthlyFromRev;
+    // Prefer WC seed when it's meaningful; otherwise seed from ~2 months of cash generation.
+    const seed =
+      isFinite(wc) && wc >= 1000
+        ? wc
+        : isFinite(monthly)
+          ? Math.max(monthly * 2, 0)
+          : NaN;
     if (!isFinite(seed) && !isFinite(monthly)) return null;
-    const start = isFinite(seed) ? seed : monthly * 2;
-    const add = isFinite(monthly) ? monthly : start * 0.08;
+    const start = isFinite(seed) ? seed : (monthly as number) * 2;
+    const add = isFinite(monthly) ? (monthly as number) : start * 0.08;
     const points = [0, 1, 2, 3].map((i) => Math.max(0, start + add * i));
     const projected = points[points.length - 1];
     const fmt = (amount: number) =>
@@ -2188,24 +2220,23 @@ function Index() {
     return "Your business needs urgent attention — start with the priority below.";
   })();
 
+  // Short money-style label only — never the long impactLine (that crushed the card layout).
   const nextMoveImpactLabel = (() => {
     const top = nextSteps[0];
     if (!top) return undefined;
+    const fmtK = (amount: number) =>
+      amount >= 1_000_000
+        ? `+R${(amount / 1_000_000).toFixed(1)}m`
+        : `+R${Math.round(amount / 1000)}k`;
     const revenueN = n.revenue;
     const receivablesN = n.receivables;
-    if (top.key === "debtorDays" && receivablesN > 0) {
-      const unlock = Math.round(receivablesN * 0.15);
-      if (unlock >= 1000) {
-        return `+R${Math.round(unlock / 1000)}k additional cash in next 90 days`;
-      }
+    if (top.key === "debtorDays" && receivablesN >= 1000) {
+      return `${fmtK(receivablesN * 0.15)} additional cash in next 90 days`;
     }
-    if (revenueN > 0) {
-      const unlock = Math.round(revenueN * 0.02);
-      if (unlock >= 1000) {
-        return `+R${Math.round(unlock / 1000)}k potential swing this quarter`;
-      }
+    if (revenueN >= 1000) {
+      return `${fmtK(revenueN * 0.02)} potential swing this quarter`;
     }
-    return top.impactLine;
+    return undefined;
   })();
 
   // Auto-clear the globe highlight after 2s and scroll the row into view.
@@ -2611,7 +2642,9 @@ function Index() {
             <div className="flex flex-col gap-4 pb-8">
               <div className="flex w-full flex-col gap-1">
                 <div className="flex items-center gap-2">
-                  <h2 className="text-lg font-semibold tracking-tight text-white sm:text-xl">Business Health</h2>
+                  <h2 className="text-lg font-semibold tracking-tight text-slate-900 dark:text-white sm:text-xl">
+                    Business Health
+                  </h2>
                   <ReviewSignoffBadge
                     signoff={financialsSignoff}
                     scope="financials"
@@ -2619,7 +2652,7 @@ function Index() {
                     compact
                   />
                 </div>
-                <p className="text-sm text-slate-400">Your financial pulse at a glance.</p>
+                <p className="text-sm text-slate-500 dark:text-slate-400">Your financial pulse at a glance.</p>
               </div>
 
               {/* No-data empty state — shown until owner uploads or enters real financials */}
@@ -2671,6 +2704,10 @@ function Index() {
                       cashTrajectory={null}
                       onOpenCash={() => setActiveTab("cash")}
                       onOpenMoves={() => setActiveTab("next")}
+                      onOpenBenchmarks={() => {
+                        setActiveTab("today");
+                        setViewMode("complex");
+                      }}
                       industryPulse={
                         <IndustryPulse industry={businessType?.label ?? "General SME"} vertical />
                       }
@@ -2707,7 +2744,7 @@ function Index() {
 
                   <div
                     id="ask-ai-overview"
-                    className="w-full max-w-lg rounded-xl border border-[#b7872a]/30 bg-white dark:bg-[#0a1020]/80"
+                    className="min-h-[120px] w-full max-w-lg rounded-xl border border-[#b7872a]/40 bg-white p-1 shadow-sm dark:bg-[#0a1020]/80"
                   />
                 </div>
                 <div className="flex justify-center lg:justify-start lg:pt-1">
@@ -2722,6 +2759,10 @@ function Index() {
                     cashTrajectory={cashTrajectory}
                     onOpenCash={() => setActiveTab("cash")}
                     onOpenMoves={() => setActiveTab("next")}
+                    onOpenBenchmarks={() => {
+                      setActiveTab("today");
+                      setViewMode("complex");
+                    }}
                     industryPulse={
                       <IndustryPulse industry={businessType?.label ?? "General SME"} vertical />
                     }

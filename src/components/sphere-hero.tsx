@@ -308,7 +308,7 @@ export function SphereHero({
           </div>
 
           <p className={`mt-4 max-w-md text-center transition-opacity duration-300 ${level === 1 ? "opacity-100" : "opacity-0"}`}>
-            <span className="block text-sm text-slate-200">
+            <span className="block text-sm text-slate-600 dark:text-slate-200">
               {caption
                 ? caption
                 : overallTier === "healthy"
@@ -335,15 +335,25 @@ export function SphereHero({
                 key={p.id}
                 type="button"
                 onClick={() => go(2)}
-                className="flex flex-col items-center gap-1 rounded-2xl border border-white/8 bg-white/[0.03] px-1 py-3 transition hover:border-[#d4a550]/35 hover:bg-[#d4a550]/5"
+                className="flex flex-col items-center gap-1 rounded-2xl border border-slate-200 bg-white px-1 py-3 shadow-sm transition hover:border-[#d4a550]/50 hover:bg-amber-50/50 dark:border-white/8 dark:bg-white/[0.03] dark:shadow-none dark:hover:bg-[#d4a550]/5"
               >
-                <span className="flex h-9 w-9 items-center justify-center rounded-full border border-amber-500/30 bg-[#d4a550]/8">
-                  <Icon className="h-4 w-4 text-amber-400" />
+                <span className="flex h-9 w-9 items-center justify-center rounded-full border border-amber-500/30 bg-[#d4a550]/10">
+                  <Icon className="h-4 w-4 text-amber-600 dark:text-amber-400" />
                 </span>
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-300">{p.label}</span>
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">
+                  {p.label}
+                </span>
                 <span className={`text-base font-bold ${TIER_TEXT[t]}`}>{fmtScore(p.health)}</span>
                 {delta != null && (
-                  <span className={`text-[10px] font-semibold ${delta > 0 ? "text-emerald-400" : delta < 0 ? "text-rose-400" : "text-slate-500"}`}>
+                  <span
+                    className={`text-[10px] font-semibold ${
+                      delta > 0
+                        ? "text-emerald-600 dark:text-emerald-400"
+                        : delta < 0
+                          ? "text-rose-600 dark:text-rose-400"
+                          : "text-slate-500"
+                    }`}
+                  >
                     {delta > 0 ? "↑" : delta < 0 ? "↓" : "→"} {Math.abs(Math.round(delta))} pts
                   </span>
                 )}
@@ -452,44 +462,52 @@ export function SphereHero({
 
       {/* ── Your Next Move card (levels 1 & 3) ── */}
       {topPriority && level !== 2 && (
-        <div className="mt-6 w-full max-w-lg rounded-2xl border border-[#d4a550]/25 bg-gradient-to-br from-[#d4a550]/10 via-slate-950/40 to-transparent p-4 shadow-[0_14px_34px_rgba(121,91,27,0.12)]">
-          <p className="text-[10px] font-bold uppercase tracking-[0.25em] text-[#d4a550]">Your Next Move</p>
-          <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div className="min-w-0 flex-1">
-              <p className="text-base font-semibold text-white">{topPriority.title}</p>
-              <p className="mt-0.5 text-xs text-slate-400">{topPriority.description}</p>
-              {topPriority.actions && topPriority.actions.length > 0 && (
-                <ul className="mt-3 space-y-1.5">
-                  {topPriority.actions.map((a) => (
-                    <li key={a} className="flex items-start gap-2 text-[12px] text-slate-300">
-                      <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[#d4a550]/20 text-[10px] font-bold text-[#d4a550]">
-                        ✓
-                      </span>
-                      <span>{a}</span>
-                    </li>
-                  ))}
-                </ul>
+        <div className="mt-6 w-full max-w-lg rounded-2xl border border-[#d4a550]/30 bg-gradient-to-br from-amber-50 to-white p-4 shadow-[0_14px_34px_rgba(121,91,27,0.10)] dark:from-[#d4a550]/10 dark:via-slate-950/50 dark:to-transparent dark:shadow-[0_14px_34px_rgba(121,91,27,0.12)]">
+          <p className="text-[10px] font-bold uppercase tracking-[0.25em] text-[#b8860b] dark:text-[#d4a550]">
+            Your Next Move
+          </p>
+          <p className="mt-2 text-base font-semibold leading-snug text-slate-900 dark:text-white">
+            {topPriority.title}
+          </p>
+          <p className="mt-1 text-xs leading-relaxed text-slate-500 dark:text-slate-400">
+            {topPriority.description}
+          </p>
+          {topPriority.actions && topPriority.actions.length > 0 && (
+            <ul className="mt-3 space-y-1.5">
+              {topPriority.actions.map((a) => (
+                <li key={a} className="flex items-start gap-2 text-[12px] text-slate-700 dark:text-slate-300">
+                  <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[#d4a550]/20 text-[10px] font-bold text-[#b8860b] dark:text-[#d4a550]">
+                    ✓
+                  </span>
+                  <span className="min-w-0 flex-1">{a}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          <div className="mt-4 flex items-center justify-between gap-3 border-t border-[#d4a550]/20 pt-3">
+            <div className="min-w-0">
+              <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-slate-500">
+                Potential impact
+              </p>
+              {topPriority.impactLabel ? (
+                <p className="mt-0.5 text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+                  {topPriority.impactLabel}
+                </p>
+              ) : (
+                <p className="mt-0.5 text-xs text-slate-500">Open Next Moves for the full playbook</p>
               )}
             </div>
-            <div className="flex shrink-0 items-center gap-3 sm:flex-col sm:items-end">
-              {topPriority.impactLabel && (
-                <div className="text-left sm:text-right">
-                  <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-slate-500">Potential impact</p>
-                  <p className="mt-0.5 text-sm font-semibold text-emerald-400">{topPriority.impactLabel}</p>
-                </div>
-              )}
-              <button
-                type="button"
-                onClick={() => {
-                  playKlink();
-                  onTopPriority?.();
-                }}
-                aria-label="Open next move"
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-amber-500/40 bg-[#d4a550]/10 text-amber-400 transition hover:bg-amber-500/20"
-              >
-                <ChevronRight className="h-5 w-5" />
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => {
+                playKlink();
+                onTopPriority?.();
+              }}
+              aria-label="Open next move"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-amber-500/40 bg-[#d4a550]/10 text-amber-600 transition hover:bg-amber-500/20 dark:text-amber-400"
+            >
+              <ChevronRight className="h-5 w-5" />
+            </button>
           </div>
         </div>
       )}
