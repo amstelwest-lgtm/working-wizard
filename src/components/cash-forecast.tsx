@@ -45,6 +45,8 @@ import { useServerFn } from "@tanstack/react-start";
 import { listClientReviewSignoffs } from "@/lib/review-signoffs.functions";
 import type { ClientReviewSignoff } from "@/lib/review-signoffs.functions";
 import { ReviewSignoffBadge, ReviewSignoffButton, computeIsStale } from "@/components/review-signoff";
+import { CashFromBanksDrafter } from "@/components/cash-from-banks-drafter";
+import type { CashForecastPublishPayload } from "@/lib/cash-from-banks.types";
 // @react-pdf/renderer + the branded report are dynamically imported inside
 // exportPDF to avoid blocking initial hydration.
 
@@ -389,10 +391,75 @@ export function CashForecastPanel({
   const [capexWeek, setCapexWeek] = useState(1);
   const [loaded, setLoaded] = useState(!clientId);
   const [mounted, setMounted] = useState(false);
+  const [showBankUpload, setShowBankUpload] = useState(false);
   // Guards against the autosave effect firing the instant hydration finishes —
   // otherwise merely opening the forecast bumps last_forecast_at and falsely
   // invalidates an accountant's sign-off with no real data change.
   const skipNextAutosave = useRef(false);
+
+  const existingCashflowForBanks = {
+    startDate,
+    openingBalance,
+    revenue,
+    expenses,
+    other,
+    revAdj,
+    expAdj,
+    collectDelay,
+    headcountDelta,
+    avgSalary,
+    fixedCostDelta,
+    revGrowthPct,
+    capexAmount,
+    capexWeek,
+  };
+
+  const applyBankPublish = async (payload: CashForecastPublishPayload) => {
+    // Persist explicitly below when clientId is set; skip the debounce autosave
+    // that would otherwise fire from these state updates.
+    skipNextAutosave.current = true;
+    setStartDate(payload.startDate);
+    setOpeningBalance(payload.openingBalance);
+    setRevenue(payload.revenue as LineItem[]);
+    setExpenses(payload.expenses as LineItem[]);
+    setOther(payload.other as LineItem[]);
+    setRevAdj(payload.revAdj);
+    setExpAdj(payload.expAdj);
+    setCollectDelay(payload.collectDelay);
+    setHeadcountDelta(payload.headcountDelta);
+    setAvgSalary(payload.avgSalary);
+    setFixedCostDelta(payload.fixedCostDelta);
+    setRevGrowthPct(payload.revGrowthPct);
+    setCapexAmount(payload.capexAmount);
+    setCapexWeek(payload.capexWeek);
+    setShowBankUpload(false);
+    toast.success("Cash forecast updated from bank statements.");
+
+    if (!clientId) return;
+    const forecastUpdatedAt = new Date().toISOString();
+    const { error } = await supabase
+      .from("clients")
+      .update({
+        cashflow: payload as never,
+        cashflow_bank_draft: payload as never,
+        last_forecast_at: forecastUpdatedAt,
+      })
+      .eq("id", clientId);
+    if (error) {
+      const retry = await supabase
+        .from("clients")
+        .update({
+          cashflow: payload as never,
+          last_forecast_at: forecastUpdatedAt,
+        })
+        .eq("id", clientId);
+      if (retry.error) {
+        toast.error(`Cash forecast save failed: ${retry.error.message}`);
+        return;
+      }
+    }
+    setLastForecastAt(forecastUpdatedAt);
+  };
 
   useEffect(() => {
     const t = requestAnimationFrame(() => setMounted(true));
@@ -1091,54 +1158,19 @@ export function CashForecastPanel({
         id="wizard-cash-setup"
         icon={Settings2}
         title="Forecast Setup"
-        subtitle="Start date, opening balance and CSV import"
+        subtitle="Start date, opening balance and bank statement upload"
         headerRight={
-          <>
-            <input
-              type="file"
-              accept=".csv,.txt"
-              className="hidden"
-              id="cf-csv-import"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (!file) return;
-                file.text().then((raw) => {
-                  const rows = raw.split(/\r?\n/).map((r) => r.split(",").map((c) => c.trim().replace(/^"|"$/g, "")));
-                  const newRev: typeof DEFAULT_REVENUE = [];
-                  const newExp: typeof DEFAULT_EXPENSES = [];
-                  for (const row of rows) {
-                    if (row.length < 2) continue;
-                    const name = row[0];
-                    const amt = parseFloat(row[1].replace(/[^0-9.\-]/g, ""));
-                    if (!name || !isFinite(amt)) continue;
-                    const typeHint = (row[2] ?? "").toLowerCase();
-                    const isExpense = amt < 0 || typeHint.startsWith("exp") || typeHint.startsWith("cost");
-                    const line: LineItem = { id: newId(), name, amount: String(Math.abs(amt)), frequency: "recurring-monthly", startWeek: 1, splitCount: 3 };
-                    if (isExpense) newExp.push(line); else newRev.push(line);
-                  }
-                  if (newRev.length) setRevenue(newRev);
-                  if (newExp.length) setExpenses(newExp);
-                  if (!newRev.length && !newExp.length) {
-                    toast.warning("No valid rows found. Use format: Name, Amount, [revenue|expense]");
-                  } else {
-                    toast.success(`Imported ${newRev.length} revenue + ${newExp.length} expense lines`);
-                  }
-                  e.target.value = "";
-                });
-              }}
-            />
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-7 gap-1.5 border-[#d4a550]/40 bg-[#d4a550]/10 px-2.5 text-[10px] text-[#b8860b] hover:bg-[#d4a550]/20 dark:text-[#d4a550]"
-              onClick={(e) => {
-                e.stopPropagation();
-                document.getElementById("cf-csv-import")?.click();
-              }}
-            >
-              <Upload className="h-3 w-3" /> Import CSV
-            </Button>
-          </>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 gap-1.5 border-[#d4a550]/40 bg-[#d4a550]/10 px-2.5 text-[10px] text-[#b8860b] hover:bg-[#d4a550]/20 dark:text-[#d4a550]"
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowBankUpload(true);
+            }}
+          >
+            <Upload className="h-3 w-3" /> Upload bank statements
+          </Button>
         }
       >
         <div className="grid gap-3 md:grid-cols-2">
@@ -1225,6 +1257,28 @@ export function CashForecastPanel({
           </div>
         </div>
       </SectionCard>
+
+      <CashFromBanksDrafter
+        open={showBankUpload}
+        onClose={() => setShowBankUpload(false)}
+        existingCashflow={existingCashflowForBanks}
+        onSaveDraft={
+          clientId
+            ? async (draft) => {
+                await supabase
+                  .from("clients")
+                  .update({ cashflow_bank_draft: draft as never })
+                  .eq("id", clientId)
+                  .then(({ error }) => {
+                    if (error && !/cashflow_bank_draft|42703/.test(error.message ?? "")) {
+                      console.warn("cashflow_bank_draft save:", error.message);
+                    }
+                  });
+              }
+            : undefined
+        }
+        onPublish={applyBankPublish}
+      />
     </div>
   );
 }
