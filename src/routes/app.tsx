@@ -4,11 +4,14 @@ import { useServerFn } from "@tanstack/react-start";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { ArrowLeft, Upload, Loader2, Building2, Shield, Plug2, Database, ChevronDown, Check, ArrowUpRight, BookOpen, Target, Layers3, Pencil } from "lucide-react";
+import { ArrowLeft, Upload, Loader2, Building2, Shield, Plug2, Database, ChevronDown, Check, Pencil } from "lucide-react";
+import { NextStepsPanel } from "@/components/next-steps-panel";
+import { formatVal, HealthBar, tierColor } from "@/components/owner-board-ui";
 import { HeaderShareButton } from "@/components/share";
 import { extractFinancials, extractPDFsWithAI } from "@/lib/extract-financials.functions";
 import { extractionToInputs, ExtractionReviewModal } from "@/components/extraction-review-modal";
 import { BankStatementDrafter } from "@/components/bank-statement-drafter";
+import { CashFromBanksDrafter } from "@/components/cash-from-banks-drafter";
 import type { MergedExtractionResult } from "@/lib/extraction-types";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -27,7 +30,6 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { KpiTrendline, pctDelta } from "@/components/kpi-trendline";
 import { BenchmarkBar } from "@/components/benchmark-bar";
 import { AssignButton } from "@/components/assign-button";
-import { AddToPlanButton } from "@/components/add-to-plan-button";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { computeRatios, BUSINESS_TYPE_TO_BENCHMARK } from "@/lib/ratios";
 import { FinancialInputsContext, type WeeklyInputs, type WeeklyRow, DEFAULT_WEEKLY_ROW } from "@/contexts/financial-inputs";
@@ -35,6 +37,7 @@ import { WeeklyInputTable } from "@/components/weekly-input-table";
 import { ProfitabilityWaterfall } from "@/components/profitability-waterfall";
 import { useTrack } from "@/hooks/use-track";
 import { IndustryPulse } from "@/components/industry-pulse";
+import { OverviewRail } from "@/components/overview-rail";
 import { NoteLayer } from "@/components/note-layer";
 import { AdminDashboard } from "@/components/admin-dashboard";
 
@@ -79,18 +82,24 @@ const CashForecastPanel = lazy(() =>
 const ActionPlanPanel = lazy(() =>
   import("@/components/action-plan"),
 );
-import { TodayPanel, type TodayTask } from "@/components/today-panel";
 import { SplashScreen } from "@/components/splash-screen";
 import { WalkthroughWizard } from "@/components/walkthrough-wizard";
 import { QboConnectCard } from "@/components/qbo-connect";
 import { Button } from "@/components/ui/button";
-import { type RatioInfo } from "@/components/holo-globe";
 import { SphereHero } from "@/components/sphere-hero";
 import { buildSpherePillars } from "@/components/sphere-hero-adapter";
 import { useViewMode } from "@/contexts/view-mode";
 import { listClientReviewSignoffs } from "@/lib/review-signoffs.functions";
 import type { ClientReviewSignoff } from "@/lib/review-signoffs.functions";
 import { ReviewSignoffBadge, computeIsStale } from "@/components/review-signoff";
+import { useAskAiMount } from "@/hooks/use-ask-ai-mount";
+import {
+  computeCashTrajectory,
+  computeNextMoveImpactLabel,
+  computeOverviewCaption,
+  computePositionPercentile,
+  computeWeekChanges,
+} from "@/lib/overview-insights";
 
 export const Route = createFileRoute("/app")({
   component: Index,
@@ -1527,7 +1536,6 @@ function Index() {
   }, [effectiveClientId]);
 
   const [clientMeta, setClientMeta] = useState<{ business_type: string | null; cash_runway_weeks: number | null; financials_updated_at?: string | null } | null>(null);
-  const [openTasks, setOpenTasks] = useState<TodayTask[]>([]);
   const [activeTab, setActiveTab] = useState<string>("today");
   const fetchReviewSignoffs = useServerFn(listClientReviewSignoffs);
   const [financialsSignoff, setFinancialsSignoff] = useState<ClientReviewSignoff | null>(null);
@@ -1543,7 +1551,7 @@ function Index() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [effectiveClientId]);
   useEffect(() => {
-    if (!effectiveClientId) { setClientMeta(null); setOpenTasks([]); return; }
+    if (!effectiveClientId) { setClientMeta(null); return; }
     supabase.from("clients").select("business_type, cash_runway_weeks, financials_updated_at").eq("id", effectiveClientId).maybeSingle()
       .then((res) => {
         const data = res.data as { business_type: string | null; cash_runway_weeks: number | null; financials_updated_at: string | null } | null;
@@ -1558,22 +1566,7 @@ function Index() {
           setShowOnboarding(true);
         }
       });
-    supabase
-      .from("employee_tasks")
-      .select("id, title, due_date, employee:client_employees(name)")
-      .eq("client_id", effectiveClientId)
-      .eq("status", "open")
-      .order("created_at", { ascending: false })
-      .limit(5)
-      .then(({ data }) => {
-        if (!data) { setOpenTasks([]); return; }
-        setOpenTasks(
-          (data as Array<{ id: string; title: string; due_date: string | null; employee: { name: string } | null }>).map((r) => ({
-            id: r.id, title: r.title, dueDate: r.due_date, employeeName: r.employee?.name ?? null,
-          })),
-        );
-      });
-  }, [effectiveClientId, userRole]);
+  }, [effectiveClientId, userRole, actingClientId]);
 
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data: { user: u } }) => {
@@ -1711,46 +1704,7 @@ function Index() {
     return () => clearTimeout(t);
   }, [v, weeklyInputs, effectiveClientId, hydratedClientId, hasRealFinancials]);
 
-  // Mount the Ask AI widget wherever a mount container is present
-  // (overview tab + profitability waterfall tab). Re-runs on tab change
-  // because inactive tab content is unmounted by Radix.
-  useEffect(() => {
-    let cancelled = false;
-    const allContainers = ["ask-ai-overview", "ask-ai-waterfall"]
-      .map((id) => document.getElementById(id))
-      .filter((el): el is HTMLElement => !!el);
-    // Always refresh the client context on already-mounted containers —
-    // submit() reads dataset.clientId at request time, so a stale value would
-    // send questions for the previously selected client.
-    if (effectiveClientId) {
-      (window as unknown as Record<string, unknown>).__askAiClientId = effectiveClientId;
-      for (const el of allContainers) el.dataset.clientId = effectiveClientId;
-    }
-    const containers = allContainers.filter((el) => !el.dataset.askAiMounted);
-    if (containers.length === 0) return;
-    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-    // @ts-ignore — plain JS module without type declarations
-    import("../lib/ask-ai.js").then((mod: { mountAskAi?: (el: HTMLElement, opts: unknown) => void }) => {
-      // A newer effect run (client switch / tab change) supersedes this one —
-      // don't mount with a stale clientId.
-      if (cancelled || typeof mod.mountAskAi !== "function") return;
-      for (const el of containers) {
-        if (effectiveClientId) el.dataset.clientId = effectiveClientId;
-        el.dataset.askAiMounted = "1";
-        mod.mountAskAi(el, {
-          endpoint: `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ask-ai`,
-          getToken: async () => {
-            const { data } = await supabase.auth.getSession();
-            return data.session?.access_token ?? null;
-          },
-        });
-      }
-    }).catch(() => {
-      // Widget not yet deployed — silent fail
-    });
-    return () => { cancelled = true; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [effectiveClientId, activeTab, viewMode, hasRealFinancials]);
+  useAskAiMount({ effectiveClientId, activeTab, viewMode, hasRealFinancials });
 
   const exitImpersonation = async () => {
     if (actingClientId) {
@@ -1818,6 +1772,9 @@ function Index() {
   const [showQboDialog, setShowQboDialog] = useState(false);
   const [showFinData, setShowFinData] = useState(false);
   const [showBankDrafter, setShowBankDrafter] = useState(false);
+  const [showCashFromBanks, setShowCashFromBanks] = useState(false);
+  const [cashForecastReloadToken, setCashForecastReloadToken] = useState(0);
+  const [existingCashflowForBanks, setExistingCashflowForBanks] = useState<Record<string, unknown> | null>(null);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const businessType = businessTypeId ? BUSINESS_TYPES.find((b) => b.id === businessTypeId) ?? null : null;
   const model: ModelTuning = businessType ? MODEL_TUNING[businessType.model] : MODEL_TUNING.hybrid;
@@ -2048,25 +2005,7 @@ function Index() {
     debtToAssets: { value: debtToAssets, format: "pct" },
   };
 
-  // Build ratioLookup for HoloGlobe hover cards — keys match driver section ids in holo-globe.tsx
-  const ratioLookup: Record<string, RatioInfo> = {};
-  (Object.keys(valueMap) as RatioKey[]).forEach((k) => {
-    const meta = RATIO_META[k];
-    const bm = benchmarkFor(k);
-    ratioLookup[k] = {
-      friendly: meta.friendly,
-      techName: meta.techName,
-      value: valueMap[k].value,
-      format: valueMap[k].format,
-      health: healthMap[k],
-      series: seriesFor(k),
-      benchmark: bm
-        ? { p25: bm.p25, p50: bm.p50, p75: bm.p75, higher_is_better: bm.higher_is_better }
-        : null,
-    };
-  });
-
-  // Aggregate financial health score — average of the four pillar averages (mirrors HoloGlobe)
+  // Aggregate financial health score — average of the four pillar averages
   const avgHealth = (() => {
     const pillarGroups: RatioKey[][] = [
       ["revenueGrowth", "salesPerEmployee", "grossMargin", "directCostsRatio", "fixedCostRatio", "interestBurden", "taxBurden"],
@@ -2107,10 +2046,36 @@ function Index() {
         impactLine: ns.impactLine,
         health,
         score,
+        actions: meta.steps.slice(0, 3),
       };
     })
     .sort((a, b) => b.score - a.score)
     .slice(0, 10);
+
+  const positionPercentile = computePositionPercentile(hasRealFinancials, avgHealth);
+  const weekChanges = computeWeekChanges({
+    revenueGrowth,
+    cashHealth: pillarHealths.cash,
+    profitHealth: pillarHealths.profit,
+    grossMarginRatio,
+  });
+  const cashTrajectory = computeCashTrajectory({
+    hasRealFinancials,
+    revenue: n.revenue,
+    operatingCashflow: n.operatingCashflow,
+    currentAssets: n.currentAssets,
+    currentLiabilities: n.currentLiabilities,
+  });
+  const overviewCaption = computeOverviewCaption({
+    hasRealFinancials,
+    avgHealth,
+    cashHealth: pillarHealths.cash,
+  });
+  const nextMoveImpactLabel = computeNextMoveImpactLabel({
+    topKey: nextSteps[0]?.key,
+    revenue: n.revenue,
+    receivables: n.receivables,
+  });
 
   // Auto-clear the globe highlight after 2s and scroll the row into view.
   // Small delay lets the tab re-render before we query the DOM.
@@ -2489,8 +2454,8 @@ function Index() {
           </TabsList>
 
           {/* Simplified / Complex toggle — persists across all tabs */}
-          <div className="flex justify-center mt-1 mb-4">
-            <div className="flex items-center gap-0.5 rounded-full bg-white/5 p-[3px]">
+          <div className="mb-3 mt-1 flex justify-center">
+            <div className="flex items-center gap-0.5 rounded-full border border-slate-200/80 bg-slate-100/80 p-[3px] dark:border-white/10 dark:bg-white/5">
               {(["simplified", "complex"] as const).map((m) => (
                 <button
                   key={m}
@@ -2501,7 +2466,7 @@ function Index() {
                   className={`rounded-full px-4 py-[5px] text-[11px] font-semibold uppercase tracking-[0.08em] transition-all ${
                     viewMode === m
                       ? "bg-[#d4a550] text-[#0a0e1a] shadow-[0_2px_8px_rgba(212,165,80,0.35)]"
-                      : "bg-transparent text-slate-400/70 hover:text-slate-300"
+                      : "bg-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400/70 dark:hover:text-slate-300"
                   }`}
                 >
                   {m}
@@ -2510,27 +2475,34 @@ function Index() {
             </div>
           </div>
 
-          <TabsContent value="today">
+          <TabsContent value="today" className="mt-0">
             {viewMode === "simplified" ? (
-            <div className="flex flex-col items-center gap-4 pb-8">
-              {/* LIVE timestamp badge row */}
-              <div className="flex w-full max-w-[640px] items-center justify-between lg:max-w-none">
-                <span className="flex items-center gap-2 text-[9px] font-semibold uppercase tracking-[0.22em] text-slate-400 dark:text-slate-600">
-                  Business Health
-                  <ReviewSignoffBadge
-                    signoff={financialsSignoff}
-                    scope="financials"
-                    isStale={computeIsStale(financialsSignoff, clientMeta?.financials_updated_at ?? null)}
-                    compact
-                  />
-                </span>
+            <div className="pb-6">
+              {/* Page header — aligned with rail top */}
+              <div className="mb-3 flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h2 className="text-lg font-semibold tracking-tight text-slate-900 dark:text-white">
+                      Business Health
+                    </h2>
+                    <ReviewSignoffBadge
+                      signoff={financialsSignoff}
+                      scope="financials"
+                      isStale={computeIsStale(financialsSignoff, clientMeta?.financials_updated_at ?? null)}
+                      compact
+                    />
+                  </div>
+                  <p className="mt-0.5 text-[13px] text-slate-500 dark:text-slate-400">
+                    Your financial pulse at a glance.
+                  </p>
+                </div>
                 {hasRealFinancials ? (
-                  <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/8 px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-400">
+                  <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[0.16em] text-emerald-700 dark:text-emerald-400">
                     <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
-                    Live &middot; {new Date().toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })}
+                    Live · {new Date().toLocaleDateString("en-ZA", { day: "2-digit", month: "short", year: "numeric" }).toUpperCase()}
                   </span>
                 ) : (
-                  <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-700 bg-slate-800/60 px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                  <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:border-slate-700 dark:bg-slate-800/60">
                     No data yet
                   </span>
                 )}
@@ -2538,87 +2510,111 @@ function Index() {
 
               {/* No-data empty state — shown until owner uploads or enters real financials */}
               {!hasRealFinancials && !actingClientId ? (
-                <div className="flex w-full flex-col items-center gap-6 py-8">
-                  {/* Placeholder orb ring */}
-                  <div className="relative flex h-48 w-48 items-center justify-center">
-                    <div className="absolute inset-0 rounded-full border-2 border-dashed border-[#d4a550]/20" />
-                    <div className="absolute inset-6 rounded-full border border-[#d4a550]/10" />
-                    <div className="flex flex-col items-center gap-1">
-                      <span className="text-3xl font-bold text-slate-600">—</span>
-                      <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-600">No score yet</span>
+                <div className="grid w-full items-start gap-4 lg:grid-cols-[minmax(0,1fr)_300px] xl:grid-cols-[minmax(0,1fr)_320px]">
+                  <div className="flex w-full flex-col items-center gap-5 rounded-xl border border-dashed border-slate-200 bg-white/60 px-4 py-10 dark:border-slate-700 dark:bg-slate-900/40">
+                    <div className="relative flex h-36 w-36 items-center justify-center">
+                      <div className="absolute inset-0 rounded-full border-2 border-dashed border-[#d4a550]/25" />
+                      <div className="absolute inset-5 rounded-full border border-[#d4a550]/15" />
+                      <div className="flex flex-col items-center gap-1">
+                        <span className="text-3xl font-bold text-slate-400">—</span>
+                        <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">No score yet</span>
+                      </div>
                     </div>
+                    <div className="max-w-sm text-center">
+                      <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100">Add your financials to see your score</h3>
+                      <p className="mt-1.5 text-sm text-slate-500">
+                        Upload a statement or enter figures manually. MILŌN calculates your health score and highest-impact first move instantly.
+                      </p>
+                    </div>
+                    {userRole !== "client_member" ? (
+                      <div className="flex w-full max-w-sm flex-col gap-2.5 sm:flex-row">
+                        <button
+                          onClick={() => { setShowFinData(true); setTimeout(() => uploadRef.current?.click(), 150); }}
+                          className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-[#b7872a] px-4 py-2.5 text-sm font-semibold text-white transition-all hover:bg-[#d4a550]"
+                        >
+                          <Upload className="h-4 w-4" />
+                          Upload statement
+                        </button>
+                        <button
+                          onClick={() => { setShowFinData(true); setShowInputs(true); }}
+                          className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
+                        >
+                          <Database className="h-4 w-4" />
+                          Enter manually
+                        </button>
+                      </div>
+                    ) : (
+                      <p className="max-w-sm text-center text-sm text-slate-500">
+                        Financial data hasn't been added yet. The owner will set this up.
+                      </p>
+                    )}
                   </div>
-                  <div className="max-w-sm text-center">
-                    <h3 className="text-base font-semibold text-slate-200">Add your financials to see your score</h3>
-                    <p className="mt-1.5 text-sm text-slate-400">
-                      Upload a financial statement or enter your figures manually. MILŌN will calculate your health score and your highest-impact first move instantly.
-                    </p>
-                  </div>
-                  {userRole !== "client_member" ? (
-                    <div className="flex flex-col sm:flex-row gap-3 w-full max-w-sm">
-                      <button
-                        onClick={() => { setShowFinData(true); setTimeout(() => uploadRef.current?.click(), 150); }}
-                        className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-[#b7872a] hover:bg-[#d4a550] px-4 py-3 text-sm font-semibold text-white transition-all"
-                      >
-                        <Upload className="h-4 w-4" />
-                        Upload statement
-                      </button>
-                      <button
-                        onClick={() => { setShowFinData(true); setShowInputs(true); }}
-                        className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-900 hover:bg-slate-800 px-4 py-3 text-sm font-semibold text-slate-300 transition-all"
-                      >
-                        <Database className="h-4 w-4" />
-                        Enter manually
-                      </button>
-                    </div>
-                  ) : (
-                    <p className="text-sm text-slate-400 text-center max-w-sm">
-                      Financial data hasn't been added yet. The owner will set this up.
-                    </p>
-                  )}
-                  {businessType && (
-                    <div className="flex w-full justify-center mt-2">
-                      <IndustryPulse industry={businessType.label} vertical />
-                    </div>
-                  )}
+                  <OverviewRail
+                    positionPercentile={null}
+                    weekChanges={[]}
+                    cashTrajectory={null}
+                    onOpenCash={() => setActiveTab("cash")}
+                    onOpenMoves={() => setActiveTab("next")}
+                    onOpenBenchmarks={() => {
+                      setActiveTab("today");
+                      setViewMode("complex");
+                    }}
+                    industryPulse={
+                      <IndustryPulse industry={businessType?.label ?? "General SME"} vertical />
+                    }
+                  />
                 </div>
               ) : (
-              /* Orb + Industry Pulse — side-by-side on wide screens, stacked on mobile */
-              <div className={`grid w-full gap-6 ${businessType ? "lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start" : ""}`}>
-                <div className="flex w-full flex-col items-center gap-4">
-                  {/* Sphere hero — financial health visualisation */}
-                  <div className="w-full flex justify-center">
+              <div className="grid w-full items-start gap-4 lg:grid-cols-[minmax(0,1fr)_300px] xl:grid-cols-[minmax(0,1fr)_320px]">
+                {/* Main column */}
+                <section className="flex min-w-0 flex-col gap-3">
+                  <div className="rounded-xl border border-slate-200/90 bg-white px-3 py-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)] dark:border-white/10 dark:bg-[#0f172a]/40 dark:shadow-none sm:px-5">
                     <SphereHero
+                      compact
                       overallHealth={avgHealth}
                       pillars={spherePillars}
+                      caption={overviewCaption}
                       topPriority={
                         nextSteps[0]
                           ? {
                               title: nextSteps[0].title,
-                              description: `Your ${nextSteps[0].ratioName} is your highest-impact lever right now — health score ${Math.round(nextSteps[0].health)}%.`,
+                              description:
+                                nextSteps[0].key === "debtorDays"
+                                  ? "Cash conversion is your biggest constraint."
+                                  : `Your ${nextSteps[0].ratioName} is your highest-impact lever right now.`,
+                              actions: nextSteps[0].actions,
+                              impactLabel: nextMoveImpactLabel,
                             }
                           : {
                               title: "Upload your financial data",
                               description: "Add your figures to get a personalised score and first move.",
                             }
                       }
-                      onTopPriority={() => {
-                        setActiveTab("today");
-                      }}
+                      onTopPriority={() => setActiveTab("next")}
                     />
                   </div>
 
-                  {/* Ask your numbers — edge-function chat widget */}
                   <div
                     id="ask-ai-overview"
-                    className="w-full max-w-[640px] rounded-xl border border-[#b7872a]/30 bg-white dark:bg-[#0a1020]/80"
+                    className="min-h-[88px] w-full rounded-xl border border-[#b7872a]/35 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)] dark:bg-[#0a1020]/80"
                   />
-                </div>
-                {businessType && (
-                  <div className="flex w-full justify-center lg:justify-start lg:pt-8">
-                    <IndustryPulse industry={businessType.label} vertical />
-                  </div>
-                )}
+                </section>
+
+                {/* Insight rail */}
+                <OverviewRail
+                  positionPercentile={positionPercentile}
+                  weekChanges={weekChanges}
+                  cashTrajectory={cashTrajectory}
+                  onOpenCash={() => setActiveTab("cash")}
+                  onOpenMoves={() => setActiveTab("next")}
+                  onOpenBenchmarks={() => {
+                    setActiveTab("today");
+                    setViewMode("complex");
+                  }}
+                  industryPulse={
+                    <IndustryPulse industry={businessType?.label ?? "General SME"} vertical />
+                  }
+                />
               </div>
               )}
             </div>
@@ -2944,6 +2940,7 @@ function Index() {
                 clientName={actingClientName ?? undefined}
                 simplified={viewMode === "simplified"}
                 canSign={(userRole === "accountant" || userRole === "firm_admin") && !!actingClientId}
+                reloadToken={cashForecastReloadToken}
               />
             </Suspense>
           </TabsContent>
@@ -3159,15 +3156,39 @@ function Index() {
             </button>
             <button
               onClick={() => { setShowFinData(false); setShowBankDrafter(true); }}
-              className="flex flex-col items-start gap-1.5 rounded-lg border border-amber-700/30 bg-amber-50 p-4 text-left transition-colors hover:border-amber-700/60 hover:bg-amber-100 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-[#b7872a]/60 dark:hover:bg-slate-800 sm:col-span-2"
+              className="flex flex-col items-start gap-1.5 rounded-lg border border-amber-700/30 bg-amber-50 p-4 text-left transition-colors hover:border-amber-700/60 hover:bg-amber-100 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-[#b7872a]/60 dark:hover:bg-slate-800"
             >
               <span className="flex items-center gap-2 text-sm font-semibold text-amber-900 dark:text-slate-100">
                 <Database className="h-4 w-4" />
                 Draft financials from bank statements
               </span>
               <span className="text-xs text-slate-600 dark:text-slate-400">
-                No financial statements yet? Upload bank statements (PDF or CSV) and AI drafts a basic
-                income statement — revenue, cost of sales, expenses and profit — for you to review.
+                Upload statements and AI drafts a basic income statement for P&amp;L / ratios.
+              </span>
+            </button>
+            <button
+              onClick={async () => {
+                setShowFinData(false);
+                if (effectiveClientId) {
+                  const { data } = await supabase
+                    .from("clients")
+                    .select("cashflow")
+                    .eq("id", effectiveClientId)
+                    .maybeSingle();
+                  setExistingCashflowForBanks((data?.cashflow as Record<string, unknown> | null) ?? null);
+                } else {
+                  setExistingCashflowForBanks(null);
+                }
+                setShowCashFromBanks(true);
+              }}
+              className="flex flex-col items-start gap-1.5 rounded-lg border border-amber-700/30 bg-amber-50 p-4 text-left transition-colors hover:border-amber-700/60 hover:bg-amber-100 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-[#b7872a]/60 dark:hover:bg-slate-800"
+            >
+              <span className="flex items-center gap-2 text-sm font-semibold text-amber-900 dark:text-slate-100">
+                <Database className="h-4 w-4" />
+                Build cash forecast from bank statements
+              </span>
+              <span className="text-xs text-slate-600 dark:text-slate-400">
+                Claude groups repeating cash movements; classify cadence, then publish to Cash Forecast.
               </span>
             </button>
           </div>
@@ -3232,6 +3253,56 @@ function Index() {
               ? "Draft figures applied (annualised) — saved automatically. Have your accountant review them."
               : "Draft figures applied for the statement period — saved automatically. Have your accountant review them.",
           );
+        }}
+      />
+
+      {/* Bank statement → preliminary cash forecast (Phases 1–3) */}
+      <CashFromBanksDrafter
+        open={showCashFromBanks}
+        onClose={() => setShowCashFromBanks(false)}
+        existingCashflow={existingCashflowForBanks as never}
+        onSaveDraft={async (draft) => {
+          if (!effectiveClientId) return;
+          await supabase
+            .from("clients")
+            .update({ cashflow_bank_draft: draft as never })
+            .eq("id", effectiveClientId)
+            .then(({ error }) => {
+              // Column may not exist until migration is applied — ignore quietly.
+              if (error && !/cashflow_bank_draft|42703/.test(error.message ?? "")) {
+                console.warn("cashflow_bank_draft save:", error.message);
+              }
+            });
+        }}
+        onPublish={async (payload) => {
+          if (!effectiveClientId) {
+            toast.error("Save / select a client before publishing a cash forecast.");
+            return;
+          }
+          const forecastUpdatedAt = new Date().toISOString();
+          const { error } = await supabase
+            .from("clients")
+            .update({
+              cashflow: payload as never,
+              cashflow_bank_draft: payload as never,
+              last_forecast_at: forecastUpdatedAt,
+            })
+            .eq("id", effectiveClientId);
+          if (error) {
+            // Retry without cashflow_bank_draft if column not migrated yet
+            const retry = await supabase
+              .from("clients")
+              .update({
+                cashflow: payload as never,
+                last_forecast_at: forecastUpdatedAt,
+              })
+              .eq("id", effectiveClientId);
+            if (retry.error) throw new Error(retry.error.message);
+          }
+          setShowCashFromBanks(false);
+          setCashForecastReloadToken((n) => n + 1);
+          setActiveTab("cash");
+          toast.success("Cash forecast published — review classification on the Cash Forecast tab.");
         }}
       />
 
@@ -3343,150 +3414,6 @@ function Index() {
   );
 }
 
-function pct(x: number) {
-  if (!isFinite(x)) return "—";
-  return `${(x * 100).toFixed(2)}%`;
-}
-
-function formatVal(v: number, f: "x" | "pct" | "days" | "money") {
-  if (!isFinite(v)) return "—";
-  if (f === "pct") return pct(v);
-  if (f === "days") return `${v.toFixed(1)} d`;
-  if (f === "money") return v >= 1000 ? `R${(v / 1000).toFixed(1)}k` : `R${v.toFixed(2)}`;
-  return `${v.toFixed(3)}×`;
-}
-
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div className="space-y-3">
-      <p className="text-[10px] font-bold uppercase tracking-[0.25em] text-sky-400/80">{title}</p>
-      <div className="space-y-3">{children}</div>
-    </div>
-  );
-}
-
-function Field({
-  id,
-  label,
-  value,
-  onChange,
-}: {
-  id: string;
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-}) {
-  return (
-    <div className="space-y-1.5">
-      <Label htmlFor={id} className="text-xs text-slate-300">
-        {label}
-      </Label>
-      <Input
-        id={id}
-        type="number"
-        inputMode="decimal"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="border-slate-700/40 bg-slate-950/60 text-slate-50 tabular-nums focus-visible:ring-sky-500"
-      />
-    </div>
-  );
-}
-
-function tierColor(h: number) {
-  if (!isFinite(h)) return { bar: "bg-slate-500", text: "text-slate-300", border: "border-slate-600", glow: "" };
-  if (h >= 80)
-    return {
-      bar: "bg-gradient-to-r from-emerald-500 to-emerald-400",
-      text: "text-emerald-300",
-      border: "border-emerald-500/50",
-      glow: "shadow-[0_0_20px_-5px_rgb(16,185,129,0.6)]",
-    };
-  if (h >= 60)
-    return {
-      bar: "bg-gradient-to-r from-yellow-500 to-yellow-400",
-      text: "text-yellow-300",
-      border: "border-yellow-500/50",
-      glow: "shadow-[0_0_20px_-5px_rgb(234,179,8,0.5)]",
-    };
-  if (h >= 35)
-    return {
-      bar: "bg-gradient-to-r from-orange-500 to-orange-400",
-      text: "text-orange-300",
-      border: "border-orange-500/50",
-      glow: "shadow-[0_0_20px_-5px_rgb(249,115,22,0.5)]",
-    };
-  return {
-    bar: "bg-gradient-to-r from-red-600 to-red-500",
-    text: "text-red-300",
-    border: "border-red-500/50",
-    glow: "shadow-[0_0_20px_-5px_rgb(239,68,68,0.6)]",
-  };
-}
-
-function tierLabel(h: number) {
-  if (!isFinite(h)) return "—";
-  if (h >= 80) return "Healthy";
-  if (h >= 60) return "Average";
-  if (h >= 35) return "High Risk";
-  return "Danger";
-}
-
-function HealthBar({ health }: { health: number }) {
-  const t = tierColor(health);
-  const w = clampN(health, 0, 100);
-  return (
-    <div>
-      <div className="mb-1 flex items-center justify-between text-[10px] font-bold uppercase tracking-wider">
-        <span className={t.text}>{tierLabel(health)}</span>
-        <span className={`tabular-nums ${t.text}`}>{isFinite(health) ? `${health.toFixed(0)}%` : "—"}</span>
-      </div>
-      <div className="h-2 overflow-hidden rounded-full border border-slate-700 bg-slate-950">
-        <div className={`h-full ${t.bar} transition-all duration-500`} style={{ width: `${w}%` }} />
-      </div>
-    </div>
-  );
-}
-
-function clampN(x: number, lo: number, hi: number) {
-  return Math.max(lo, Math.min(hi, x));
-}
-
-function HeroStat({
-  title,
-  subtitle,
-  value,
-  health,
-  icon,
-  footer,
-  onClick,
-}: {
-  title: string;
-  subtitle: string;
-  value: string;
-  health: number;
-  icon: string;
-  footer?: string;
-  onClick: () => void;
-}) {
-  const t = tierColor(health);
-  return (
-    <button
-      onClick={onClick}
-      className={`group relative overflow-hidden rounded-lg border border-slate-800 bg-slate-900/60 p-5 text-left shadow-sm transition-colors hover:border-slate-700 hover:bg-slate-900`}
-    >
-      <div className="absolute right-3 top-3 text-2xl opacity-30">{icon}</div>
-      <p className="text-[10px] font-medium uppercase tracking-widest text-slate-500">{title}</p>
-      <p className="text-xs text-slate-500">{subtitle}</p>
-      <p className="mt-3 font-mono text-3xl font-semibold tabular-nums text-slate-50">{value}</p>
-      <div className="mt-3">
-        <HealthBar health={health} />
-      </div>
-      {footer && <p className="mt-2 text-[10px] text-slate-500">{footer}</p>}
-    </button>
-  );
-}
-
 function Ratio({
   rkey,
   value,
@@ -3582,212 +3509,6 @@ function Ratio({
       <p className="mt-2 text-[10px] font-bold uppercase tracking-wider text-sky-500/0 transition-colors group-hover:text-sky-500/80">
         ▸ Tap for 5 strategic moves
       </p>
-    </div>
-  );
-}
-
-type NextStep = {
-  key: RatioKey;
-  title: string;
-  ratioName: string;
-  icon: string;
-  cynefin: "Clear" | "Complicated" | "Complex" | "Chaotic";
-  eisenhower: "Do" | "Decide" | "Delegate" | "Delete";
-  impact: number;
-  impactLine: string;
-  health: number;
-  score: number;
-};
-
-function NextStepsPanel({
-  steps,
-  simplified,
-  done,
-  onToggleDone,
-  onOpenSop,
-  clientId,
-  clientName,
-  isOwner = true,
-  onGoToPlan,
-}: {
-  steps: NextStep[];
-  simplified: boolean;
-  done: Set<RatioKey>;
-  onToggleDone: (k: RatioKey) => void;
-  onOpenSop: (k: RatioKey) => void;
-  clientId?: string | null;
-  clientName?: string;
-  isOwner?: boolean;
-  onGoToPlan?: (moveKey: string) => void;
-}) {
-  const completed = steps.filter((s) => done.has(s.key)).length;
-  const open = steps.length - completed;
-  const avgHealth = steps.filter((s) => Number.isFinite(s.health)).reduce((a, s, _, arr) => a + s.health / arr.length, 0);
-  const highestImpact = steps.filter((s) => !done.has(s.key)).sort((a, b) => b.impact - a.impact)[0];
-  return (
-    <div className="space-y-5">
-      <Card className="overflow-hidden border-[#b7872a]/25 bg-white shadow-[0_12px_40px_rgba(15,23,42,.06)] dark:bg-[#111827]/80 dark:shadow-none">
-        <CardHeader className="border-b border-[#b7872a]/15 bg-[#fbf8f1] pb-5 dark:bg-[#151b28]">
-          <div className="flex flex-wrap items-end justify-between gap-5">
-            <div>
-              <div className="mb-2 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[.24em] text-[#9d741d] dark:text-[#d5aa58]"><Target className="h-3.5 w-3.5" /> Advisory queue</div>
-              <CardTitle className="font-display text-2xl text-[#172033] dark:text-[#f6f1e7]">{simplified ? "Your next best moves" : "Operating priorities"}</CardTitle>
-              <CardDescription className="mt-1 max-w-2xl text-[#667085] dark:text-slate-400">
-                {simplified ? "A short list for the week ahead. Start at the top and keep the momentum." : "A decision-grade view of the levers most likely to improve financial health."}
-              </CardDescription>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="rounded-full border border-[#b7872a]/30 bg-[#b7872a]/10 px-3 py-1.5 text-xs font-semibold text-[#8a651b] dark:text-[#e5be72]"><Check className="mr-1 inline h-3.5 w-3.5" />{completed} of {steps.length} complete</span>
-            </div>
-          </div>
-          {!simplified && (
-            <div className="mt-5 grid gap-2 sm:grid-cols-3">
-              <Insight label="Open moves" value={`${open}`} detail="still to ship" icon={<Layers3 />} />
-              <Insight label="Average health" value={Number.isFinite(avgHealth) ? `${avgHealth.toFixed(0)}%` : "—"} detail="across available levers" icon={<Target />} />
-              <Insight label="Lead with" value={highestImpact ? `Impact ${highestImpact.impact}/10` : "All clear"} detail={highestImpact?.ratioName ?? "moves completed"} icon={<ArrowUpRight />} />
-            </div>
-          )}
-        </CardHeader>
-        <CardContent className="space-y-2 p-4 sm:p-5">
-          {steps.map((s, i) => (
-            <NextStepRow key={s.key} step={s} rank={i + 1} simplified={simplified} highlighted={!simplified && i < 3}
-              isDone={done.has(s.key)} onToggleDone={() => onToggleDone(s.key)} onOpenSop={() => onOpenSop(s.key)}
-              clientId={clientId} clientName={clientName} isOwner={isOwner} onGoToPlan={onGoToPlan} />
-          ))}
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-
-function Insight({ label, value, detail, icon }: { label: string; value: string; detail: string; icon: React.ReactNode }) {
-  return <div className="rounded-lg border border-[#b7872a]/15 bg-white/70 p-3 dark:bg-[#0c1320]">
-    <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-slate-500"><span className="text-[#b7872a]">{icon}</span>{label}</div>
-    <div className="mt-1 text-lg font-semibold text-[#172033] dark:text-slate-100">{value}</div>
-    <div className="text-[10px] text-slate-500">{detail}</div>
-  </div>;
-}
-
-function NextStepRow({
-  step,
-  rank,
-  highlighted,
-  simplified,
-  isDone,
-  onToggleDone,
-  onOpenSop,
-  clientId,
-  clientName,
-  isOwner = true,
-  onGoToPlan,
-}: {
-  step: NextStep;
-  rank: number;
-  highlighted?: boolean;
-  simplified: boolean;
-  isDone: boolean;
-  onToggleDone: () => void;
-  onOpenSop: () => void;
-  clientId?: string | null;
-  clientName?: string;
-  isOwner?: boolean;
-  onGoToPlan?: (moveKey: string) => void;
-}) {
-  const t = tierColor(step.health);
-  const cynefinColor: Record<NextStep["cynefin"], string> = {
-    Clear: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
-    Complicated: "border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300",
-    Complex: "border-violet-500/30 bg-violet-500/10 text-violet-700 dark:text-violet-300",
-    Chaotic: "border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-300",
-  };
-  const eisenhowerColor: Record<NextStep["eisenhower"], string> = {
-    Do: "border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-300",
-    Decide: "border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300",
-    Delegate: "border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300",
-    Delete: "border-slate-500/30 bg-slate-500/10 text-slate-600 dark:text-slate-300",
-  };
-  return (
-    <div
-      className={`relative rounded-lg border p-4 transition-colors ${
-        isDone ? "border-emerald-500/25 bg-emerald-500/[0.04] opacity-65" :
-          highlighted ? "border-[#b7872a]/35 bg-[#fffdf7] dark:bg-[#171c29]" :
-          "border-slate-200 bg-white hover:border-[#b7872a]/30 dark:border-slate-700/70 dark:bg-[#111827]/60"
-      }`}
-    >
-      <div className="flex items-start gap-3">
-        <div
-          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full border font-mono text-xs font-bold ${
-            highlighted
-              ? "border-[#b7872a] bg-[#b7872a]/10 text-[#8a651b] dark:text-[#e5be72]"
-              : "border-slate-300 bg-slate-50 text-slate-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-400"
-          }`}
-        >
-          {rank}
-        </div>
-        <button
-          onClick={onOpenSop}
-          className="min-w-0 flex-1 cursor-pointer text-left"
-        >
-          <div className="flex flex-wrap items-center gap-2">
-            <span
-              className={`text-sm font-semibold ${
-                isDone ? "text-slate-400 line-through" : "text-[#172033] dark:text-slate-100"
-              }`}
-            >
-              {step.title}
-            </span>
-            {!simplified && <span className="rounded border border-[#b7872a]/30 bg-[#b7872a]/5 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-[#9d741d] dark:text-[#d5aa58]"><BookOpen className="mr-1 inline h-3 w-3" />SOP</span>}
-          </div>
-          <p className="mt-1 text-[11px] uppercase tracking-wider text-slate-500">
-            Lever: {step.ratioName}
-          </p>
-          {!simplified && highlighted && !isDone && (
-            <p className="mt-2 rounded-md border border-[#b7872a]/20 bg-[#b7872a]/5 p-2 text-xs italic text-slate-700 dark:text-slate-200">
-              {step.impactLine}
-            </p>
-          )}
-          {!simplified && <div className="mt-3 flex flex-wrap gap-1.5">
-            <span className={`rounded border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${eisenhowerColor[step.eisenhower]}`}>
-              Eisenhower · {step.eisenhower}
-            </span>
-            <span className={`rounded border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${cynefinColor[step.cynefin]}`}>
-              Cynefin · {step.cynefin}
-            </span>
-            <span className="rounded border border-sky-500/40 bg-sky-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-slate-200">
-              Pareto Impact · {step.impact}/10
-            </span>
-            <span className={`rounded border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${t.border} ${t.text}`}>
-              Health · {isFinite(step.health) ? `${step.health.toFixed(0)}%` : "—"}
-            </span>
-          </div>}
-        </button>
-        <div className="flex shrink-0 flex-col items-stretch gap-1.5">
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onToggleDone();
-            }}
-            className={`flex flex-col items-center gap-1 rounded-md border-2 px-3 py-2 text-[10px] font-bold uppercase tracking-wider transition-all ${
-              isDone
-                ? "border-emerald-500 bg-emerald-500/20 text-emerald-200"
-                : "border-slate-300 bg-white text-slate-500 hover:border-[#b7872a] hover:text-[#9d741d] dark:border-slate-600 dark:bg-slate-900 dark:text-slate-400"
-            }`}
-            aria-label="Mark step done"
-          >
-            <span className="text-lg leading-none">{isDone ? <Check className="h-4 w-4" /> : "—"}</span>
-            <span>{isDone ? "Done" : "Mark"}</span>
-          </button>
-          {clientId && !isDone && isOwner && (
-            <AddToPlanButton
-              clientId={clientId}
-              moveKey={step.key}
-              title={step.title}
-              outcomeWhy={step.impactLine || `Improves ${step.ratioName}.`}
-              onAssign={(k) => onGoToPlan?.(k)}
-            />
-          )}
-        </div>
-      </div>
     </div>
   );
 }

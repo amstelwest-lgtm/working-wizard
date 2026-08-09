@@ -173,10 +173,10 @@ Deno.serve(async (req: Request) => {
   const ctx = await buildContext(userClient, clientId, tier, question);
   const { system, user: userPrompt } = buildPrompt(question, ctx, tier);
 
-  // ── Call Claude ───────────────────────────────────────────────────────────
-  let geminiResult;
+  // ── Call Claude Sonnet 4.6 ────────────────────────────────────────────────
+  let claudeResult;
   try {
-    geminiResult = await callClaude(system, userPrompt);
+    claudeResult = await callClaude(system, userPrompt);
   } catch (e) {
     const msg = (e as Error).message;
     if (msg.startsWith("Rate limit")) return respond({ error: msg }, 429);
@@ -186,9 +186,9 @@ Deno.serve(async (req: Request) => {
   // ── Update token counts in the log row (best-effort, fire-and-forget) ─────
   adminClient.from("ask_ai_log")
     .update({
-      input_tokens: geminiResult.inputTokens,
-      output_tokens: geminiResult.outputTokens,
-      latency_ms: geminiResult.latencyMs,
+      input_tokens: claudeResult.inputTokens,
+      output_tokens: claudeResult.outputTokens,
+      latency_ms: claudeResult.latencyMs,
     })
     .eq("user_id", user.id)
     .eq("tier", tier)
@@ -199,12 +199,12 @@ Deno.serve(async (req: Request) => {
     });
 
   // ── Cache definitional answers (hash key, service-role write) ─────────────
-  if (tier === "none" && geminiResult.text) {
+  if (tier === "none" && claudeResult.text) {
     const canonical = question.toLowerCase().replace(/\s+/g, " ").trim();
     const hash = await sha256(canonical);
     await adminClient.from("ask_ai_cache").upsert({
       question_hash: hash,
-      answer: geminiResult.text,
+      answer: claudeResult.text,
       hit_count: 0,
       created_at: new Date().toISOString(),
     }).then(({ error: e }) => {
@@ -212,7 +212,7 @@ Deno.serve(async (req: Request) => {
     });
   }
 
-  return respond({ answer: geminiResult.text, chips: deriveChips(question, tier) });
+  return respond({ answer: claudeResult.text, chips: deriveChips(question, tier) });
 });
 
 function deriveChips(question: string, tier: string): string[] {

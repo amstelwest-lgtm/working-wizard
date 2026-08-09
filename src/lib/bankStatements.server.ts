@@ -14,8 +14,11 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-
-const ANTHROPIC_MODEL = "claude-sonnet-4-6";
+import {
+  callClaudeMessages,
+  parseClaudeJson,
+  type ClaudeContentPart,
+} from "@/lib/claude-messages";
 
 export interface BankDraftOpexLine {
   category: string;
@@ -131,13 +134,8 @@ export const draftFinancialsFromBankStatements = createServerFn({ method: "POST"
     }).parse(input),
   )
   .handler(async ({ data }) => {
-    const apiKey = process.env.ANTHROPIC_API_KEY;
-    if (!apiKey) {
-      throw new Error("ANTHROPIC_API_KEY is not configured. Please add it in your project secrets.");
-    }
-
     let totalBytes = 0;
-    const content: Array<Record<string, unknown>> = [];
+    const content: ClaudeContentPart[] = [];
     for (const f of data.files) {
       if (f.base64) {
         totalBytes += Math.ceil((f.base64.length * 3) / 4);
@@ -162,36 +160,15 @@ export const draftFinancialsFromBankStatements = createServerFn({ method: "POST"
     }
     content.push({ type: "text", text: DRAFT_PROMPT });
 
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        model: ANTHROPIC_MODEL,
-        max_tokens: 8192,
-        messages: [{ role: "user", content }],
-      }),
+    const raw = await callClaudeMessages({
+      content,
+      maxTokens: 8192,
+      timeoutMs: 120_000,
     });
 
-    if (!res.ok) {
-      const body = await res.text().catch(() => "");
-      throw new Error(`AI drafting failed (${res.status}): ${body.slice(0, 300)}`);
-    }
-
-    const json = (await res.json()) as {
-      content?: Array<{ type: string; text?: string }>;
-    };
-    const raw = (json.content ?? []).filter((b) => b.type === "text").map((b) => b.text ?? "").join("");
-    if (!raw) throw new Error("The AI returned an empty response.");
-
-    // Tolerate accidental markdown fences around the JSON.
-    const jsonText = raw.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "").trim();
     let parsed: unknown;
     try {
-      parsed = JSON.parse(jsonText);
+      parsed = parseClaudeJson(raw);
     } catch (err) {
       throw new Error("Failed to parse the AI response as JSON: " + (err as Error).message);
     }

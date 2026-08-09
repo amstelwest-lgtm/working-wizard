@@ -577,6 +577,7 @@ export type Database = {
           business_type: string | null
           cash_runway_weeks: number | null
           cashflow: Json | null
+          cashflow_bank_draft: Json | null
           contact_email: string | null
           contact_phone: string | null
           created_at: string
@@ -594,6 +595,7 @@ export type Database = {
           business_type?: string | null
           cash_runway_weeks?: number | null
           cashflow?: Json | null
+          cashflow_bank_draft?: Json | null
           contact_email?: string | null
           contact_phone?: string | null
           created_at?: string
@@ -611,6 +613,7 @@ export type Database = {
           business_type?: string | null
           cash_runway_weeks?: number | null
           cashflow?: Json | null
+          cashflow_bank_draft?: Json | null
           contact_email?: string | null
           contact_phone?: string | null
           created_at?: string

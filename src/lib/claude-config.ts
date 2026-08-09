@@ -4,7 +4,7 @@
  * advisory-facing AI features (Ask AI edge function mirrors this default
  * via its own CLAUDE_MODEL env var in Supabase).
  *
- * Set CLAUDE_MODEL in your Replit Secrets to override at runtime.
+ * Override with CLAUDE_MODEL in host env / Vercel / Supabase secrets.
  */
 
 export const CLAUDE_MODEL: string =

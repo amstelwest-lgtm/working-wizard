@@ -1,18 +1,15 @@
 /**
  * extractFinancials.server.ts
- * TanStack Start server function — sends a PDF to Gemini and returns structured
- * financial data using forced schema output. Server-side only; the API key
- * never reaches the browser.
+ * TanStack Start server function — sends a PDF to Claude Sonnet 4.6 and returns
+ * structured financial data. Server-side only; the API key never reaches the browser.
  */
 
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { GoogleGenAI } from "@google/genai";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { financialResponseSchema, type ExtractionResult } from "@/lib/financialSchema";
+import { type ExtractionResult } from "@/lib/financialSchema";
 import { validateFigures, isClean } from "@/lib/validateFinancials";
-
-import { GEMINI_MODEL } from "@/lib/gemini-config";
+import { callClaudeMessages, parseClaudeJson } from "@/lib/claude-messages";
 
 const EXTRACTION_PROMPT = `
 You are extracting figures from a South African financial statement PDF for an
@@ -34,8 +31,85 @@ accounting platform. Follow these rules exactly:
 7. If anything is ambiguous or you had to make a judgement call, say so briefly
    in extraction_notes so a human can check it.
 
-Return your answer as JSON that matches the provided schema. No prose, no
-markdown, JSON only.
+Return ONLY valid JSON matching this shape (no markdown, no prose):
+{
+  "entity_name": string|null,
+  "registration_number": string|null,
+  "currency": string|null,
+  "units": "actual"|"thousands"|"millions"|null,
+  "statement_basis": "audited"|"independently_reviewed"|"compiled"|"management_accounts"|"unknown"|null,
+  "current_period": {
+    "period_end": "YYYY-MM-DD"|null,
+    "figures": {
+      "income_statement": {
+        "revenue": number|null,
+        "cost_of_sales": number|null,
+        "gross_profit": number|null,
+        "other_income": number|null,
+        "operating_expenses": number|null,
+        "depreciation_amortisation": number|null,
+        "operating_profit": number|null,
+        "finance_income": number|null,
+        "finance_costs": number|null,
+        "profit_before_tax": number|null,
+        "income_tax": number|null,
+        "profit_after_tax": number|null
+      },
+      "balance_sheet": {
+        "non_current_assets": {
+          "property_plant_equipment": number|null,
+          "intangible_assets": number|null,
+          "investments": number|null,
+          "deferred_tax_asset": number|null,
+          "other": number|null,
+          "total": number|null
+        },
+        "current_assets": {
+          "inventories": number|null,
+          "trade_and_other_receivables": number|null,
+          "cash_and_cash_equivalents": number|null,
+          "other": number|null,
+          "total": number|null
+        },
+        "total_assets": number|null,
+        "equity": {
+          "share_capital": number|null,
+          "retained_earnings": number|null,
+          "other_reserves": number|null,
+          "total": number|null
+        },
+        "non_current_liabilities": {
+          "borrowings": number|null,
+          "deferred_tax_liability": number|null,
+          "other": number|null,
+          "total": number|null
+        },
+        "current_liabilities": {
+          "trade_and_other_payables": number|null,
+          "borrowings": number|null,
+          "current_tax": number|null,
+          "bank_overdraft": number|null,
+          "other": number|null,
+          "total": number|null
+        },
+        "total_liabilities": number|null,
+        "total_equity_and_liabilities": number|null
+      },
+      "cash_flow": {
+        "cash_from_operating": number|null,
+        "cash_from_investing": number|null,
+        "cash_from_financing": number|null,
+        "net_change_in_cash": number|null,
+        "cash_at_end": number|null
+      } | null
+    }
+  },
+  "comparative_period": null | {
+    "period_end": "YYYY-MM-DD"|null,
+    "figures": { /* same shape as current_period.figures */ }
+  },
+  "extraction_notes": string|null
+}
 `.trim();
 
 export const extractFinancialsFromPDF = createServerFn({ method: "POST" })
@@ -47,11 +121,6 @@ export const extractFinancialsFromPDF = createServerFn({ method: "POST" })
     }).parse(input),
   )
   .handler(async ({ data }) => {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      throw new Error("GEMINI_API_KEY is not configured. Please add it in your project secrets.");
-    }
-
     const { pdfBase64, mimeType = "application/pdf" } = data;
 
     // Size check: base64 inflates ~33%, so actual bytes ≈ base64.length × 0.75
@@ -60,33 +129,23 @@ export const extractFinancialsFromPDF = createServerFn({ method: "POST" })
       throw new Error(`PDF is too large (${(approxBytes / 1024 / 1024).toFixed(1)} MB). Max 32 MB.`);
     }
 
-    const ai = new GoogleGenAI({ apiKey });
-
-    const response = await ai.models.generateContent({
-      model: GEMINI_MODEL,
-      contents: [
+    const raw = await callClaudeMessages({
+      content: [
         {
-          role: "user",
-          parts: [
-            { inlineData: { mimeType, data: pdfBase64 } },
-            { text: EXTRACTION_PROMPT },
-          ],
+          type: "document",
+          source: { type: "base64", media_type: mimeType, data: pdfBase64 },
         },
+        { type: "text", text: EXTRACTION_PROMPT },
       ],
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: financialResponseSchema,
-      },
+      maxTokens: 8192,
+      timeoutMs: 90_000,
     });
-
-    const raw = response.text;
-    if (!raw) throw new Error("Gemini returned an empty response.");
 
     let extracted: ExtractionResult;
     try {
-      extracted = JSON.parse(raw) as ExtractionResult;
+      extracted = parseClaudeJson<ExtractionResult>(raw);
     } catch (err) {
-      throw new Error("Failed to parse Gemini response as JSON: " + (err as Error).message);
+      throw new Error("Failed to parse Claude response as JSON: " + (err as Error).message);
     }
 
     const issues = validateFigures(extracted.current_period.figures);
