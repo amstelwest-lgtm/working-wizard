@@ -24,7 +24,7 @@ import { ProfitabilityWaterfall } from "@/components/profitability-waterfall";
 import { useServerFn } from "@tanstack/react-start";
 import { listClientReviewSignoffs } from "@/lib/review-signoffs.functions";
 import type { ClientReviewSignoff } from "@/lib/review-signoffs.functions";
-import { ReviewSignoffButton, ReviewSignoffBadge, computeIsStale } from "@/components/review-signoff";
+import { ReviewSignoffButton, computeIsStale } from "@/components/review-signoff";
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
@@ -390,21 +390,10 @@ function ClientView() {
   // Financials state (flat key-value for the fin-grid)
   const [financials, setFinancials] = useState<Record<string, string>>({});
 
-  // Accountant sign-off on this period's financials
+  // Accountant sign-off on this period's financials / cash forecast
   const fetchReviewSignoffs = useServerFn(listClientReviewSignoffs);
   const [financialsSignoff, setFinancialsSignoff] = useState<ClientReviewSignoff | null>(null);
-
-  // Only accountants/firm admins may sign off — a client owner/member who lands on this
-  // route (RLS allows them to read their own client) must see a read-only view, since the
-  // server rejects their sign-off attempts anyway. Determine the viewer's own role once.
-  const [viewerCanSign, setViewerCanSign] = useState(false);
-  useEffect(() => {
-    if (!user) return;
-    supabase.from("user_roles").select("role").eq("user_id", user.id).maybeSingle()
-      .then(({ data }) => {
-        setViewerCanSign(data?.role === "accountant" || data?.role === "firm_admin");
-      });
-  }, [user]);
+  const [cashForecastSignoff, setCashForecastSignoff] = useState<ClientReviewSignoff | null>(null);
 
   // Playbook drawer
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -600,12 +589,13 @@ function ClientView() {
     fetchReviewSignoffs({ data: { clientId } })
       .then(({ signoffs }) => {
         setFinancialsSignoff(signoffs.find((s) => s.scope === "financials") ?? null);
+        setCashForecastSignoff(signoffs.find((s) => s.scope === "cash_forecast") ?? null);
       })
       .catch(() => {
         // Sign-off state is a trust-signal enhancement, never block the page.
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clientId]);
+  }, [clientId, activeTab, cashForecastReloadToken]);
 
   // ── Impersonation exit ────────────────────────────────────────────────────
 
@@ -1253,25 +1243,16 @@ function ClientView() {
             </div>
           </div>
 
-          {/* Accountant sign-off on this period's financials — accountants/firm admins only;
-              a client owner/member who somehow lands on this route sees the read-only badge. */}
+          {/* Practice portal: always show interactive sign-off (server still enforces access). */}
           <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 20 }}>
-            {viewerCanSign ? (
-              <ReviewSignoffButton
-                clientId={clientId}
-                clientName={client?.name}
-                scope="financials"
-                signoff={financialsSignoff}
-                isStale={computeIsStale(financialsSignoff, client?.financials_updated_at ?? null)}
-                onChange={setFinancialsSignoff}
-              />
-            ) : (
-              <ReviewSignoffBadge
-                signoff={financialsSignoff}
-                scope="financials"
-                isStale={computeIsStale(financialsSignoff, client?.financials_updated_at ?? null)}
-              />
-            )}
+            <ReviewSignoffButton
+              clientId={clientId}
+              clientName={client?.name}
+              scope="financials"
+              signoff={financialsSignoff}
+              isStale={computeIsStale(financialsSignoff, client?.financials_updated_at ?? null)}
+              onChange={setFinancialsSignoff}
+            />
           </div>
 
           {/* Ratio rows — complex mode only */}
@@ -1331,13 +1312,23 @@ function ClientView() {
         <div className={`tabpane${activeTab === "profit" ? " on" : ""}`} id="pane-profit">
           <span className="eyebrow">Profitability Waterfall</span>
           <p className="sub" style={{ marginBottom: 24 }}>
-            How revenue converts to profit — step by step. Figures sourced from the period financials above.
+            How revenue converts to profit — step by step. Figures sourced from the period financials.
           </p>
           {/* Wrap in a Tailwind dark context so the component's dark: variants fire */}
           <div className="dark" style={{ colorScheme: "dark" }}>
             <ProfitabilityWaterfall
               fallback={waterfallFallback}
               clientName={client?.name}
+            />
+          </div>
+          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 16 }}>
+            <ReviewSignoffButton
+              clientId={clientId}
+              clientName={client?.name}
+              scope="financials"
+              signoff={financialsSignoff}
+              isStale={computeIsStale(financialsSignoff, client?.financials_updated_at ?? null)}
+              onChange={setFinancialsSignoff}
             />
           </div>
         </div>
@@ -1350,20 +1341,18 @@ function ClientView() {
                 <span className="eyebrow">Signature view</span>
                 <div className="h-sec">13-week cash forecast</div>
               </div>
-              {viewerCanSign && (
-                <button
-                  type="button"
-                  className="btn ghost mini"
-                  onClick={() => setShowCashFromBanks(true)}
-                >
-                  Classify from bank statements
-                </button>
-              )}
+              <button
+                type="button"
+                className="btn ghost mini"
+                onClick={() => setShowCashFromBanks(true)}
+              >
+                Classify from bank statements
+              </button>
             </div>
             <CashForecastPanel
               clientId={client.id}
               clientName={client.name}
-              canSign={viewerCanSign}
+              canSign
               reloadToken={cashForecastReloadToken}
             />
           </div>
@@ -1416,7 +1405,47 @@ function ClientView() {
           <div className="h-sec">Choose a deliverable</div>
           <p className="sub">
             Each report is generated from live figures and branded to your practice.
+            Sign off financials and the cash forecast so deliverables carry your endorsement.
           </p>
+          <div
+            className="card"
+            style={{
+              marginBottom: 20,
+              padding: "16px 20px",
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 16,
+              justifyContent: "space-between",
+              alignItems: "flex-start",
+            }}
+          >
+            <div style={{ flex: "1 1 220px" }}>
+              <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--ink-dim)", marginBottom: 4 }}>
+                Report sign-offs
+              </div>
+              <p style={{ margin: 0, fontSize: 13, color: "var(--ink-dim)" }}>
+                Logs your initials, name, date and time from your account. Stamped on generated PDFs until data changes.
+              </p>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
+              <ReviewSignoffButton
+                clientId={clientId}
+                clientName={client?.name}
+                scope="financials"
+                signoff={financialsSignoff}
+                isStale={computeIsStale(financialsSignoff, client?.financials_updated_at ?? null)}
+                onChange={setFinancialsSignoff}
+              />
+              <ReviewSignoffButton
+                clientId={clientId}
+                clientName={client?.name}
+                scope="cash_forecast"
+                signoff={cashForecastSignoff}
+                isStale={computeIsStale(cashForecastSignoff, client?.last_forecast_at ?? null)}
+                onChange={setCashForecastSignoff}
+              />
+            </div>
+          </div>
           <div className="rep-grid">
             {REPORT_TEMPLATES.map((r) => (
               <div key={r.key} className="rep-card">

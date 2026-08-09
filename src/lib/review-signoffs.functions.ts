@@ -13,6 +13,7 @@ export type ClientReviewSignoff = {
   scope: ReviewScope;
   signed_off_by_id: string;
   signed_off_by_name: string;
+  signed_off_by_initials: string | null;
   signed_off_by_title: string | null;
   firm_name: string | null;
   note: string | null;
@@ -36,24 +37,24 @@ function authedSupabase() {
 // file is regenerated post-migration (same pattern as intervention.functions.ts).
 type LooseSb = { from: (t: string) => any };
 
-async function assertAccountant(userId: string, sb: ReturnType<typeof authedSupabase>) {
-  const { data, error } = await (sb as unknown as LooseSb)
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", userId)
-    .in("role", ["accountant", "firm_admin"])
-    .limit(1);
-  if (error) throw new Error(error.message);
-  if (!data || data.length === 0) {
-    throw new Error("Only accountants can perform this action");
+/** Initials from a signup display name, e.g. "Jane Q Public" → "JQP". */
+export function initialsFromName(name: string): string {
+  const parts = name
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (parts.length === 0) return "";
+  if (parts.length === 1) {
+    const only = parts[0];
+    return (only.slice(0, 2) || only.slice(0, 1)).toUpperCase();
   }
+  return parts
+    .map((p) => p[0])
+    .join("")
+    .slice(0, 4)
+    .toUpperCase();
 }
 
-// Sign-off is a formal endorsement, not a routine read — never rely on RLS alone to scope
-// it to clients this accountant actually serves. Explicitly re-check server-side using the
-// same `has_client_access` function the database policies are built on (ownership, direct
-// membership, or firm membership), so an accountant/firm-admin role alone is never enough
-// to sign off (or erase a sign-off for) a client outside their book.
 async function assertClientAccess(
   userId: string,
   clientId: string,
@@ -66,6 +67,30 @@ async function assertClientAccess(
   if (error) throw new Error(error.message);
   if (!data) {
     throw new Error("You do not have access to this client");
+  }
+}
+
+/**
+ * Practice-portal users with client access may sign off. Pure client owners /
+ * members are blocked (unless they also hold accountant / firm_admin).
+ * Users with no role row are allowed — firm signups sometimes lack a role after
+ * RLS hardening blocked client-side inserts into user_roles.
+ */
+async function assertCanSignOff(userId: string, sb: ReturnType<typeof authedSupabase>) {
+  const { data, error } = await (sb as unknown as LooseSb)
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", userId);
+  if (error) throw new Error(error.message);
+  const roles = (data ?? []).map((r: { role: string }) => r.role);
+  const isPracticeRole =
+    roles.includes("accountant") || roles.includes("firm_admin") || roles.length === 0;
+  const isClientOnly =
+    (roles.includes("client_owner") || roles.includes("client_member")) &&
+    !roles.includes("accountant") &&
+    !roles.includes("firm_admin");
+  if (isClientOnly || !isPracticeRole) {
+    throw new Error("Only practice portal users can sign off reviews");
   }
 }
 
@@ -109,16 +134,22 @@ export const signoffReview = createServerFn({ method: "POST" })
     const sb = authedSupabase();
     const { data: userData, error: userErr } = await sb.auth.getUser();
     if (userErr || !userData?.user) throw new Error("Not authenticated");
-    await assertAccountant(userData.user.id, sb);
+    await assertCanSignOff(userData.user.id, sb);
     await assertClientAccess(userData.user.id, data.clientId, sb);
 
-    // Trusted display name from auth user metadata; never accept name from client.
+    // Trusted display name from auth user metadata (signup personal info).
     const meta = (userData.user.user_metadata ?? {}) as Record<string, unknown>;
     const trustedName =
       (typeof meta.full_name === "string" && meta.full_name.trim()) ||
       (typeof meta.name === "string" && meta.name.trim()) ||
       (userData.user.email ? userData.user.email.split("@")[0] : null);
     if (!trustedName) throw new Error("Cannot determine signer name from account");
+
+    const initials = initialsFromName(trustedName);
+    const firmFromMeta =
+      typeof meta.firm_name === "string" && meta.firm_name.trim()
+        ? meta.firm_name.trim()
+        : null;
 
     const { data: row, error } = await (sb as unknown as LooseSb)
       .from("client_review_signoffs")
@@ -128,8 +159,9 @@ export const signoffReview = createServerFn({ method: "POST" })
           scope: data.scope,
           signed_off_by_id: userData.user.id,
           signed_off_by_name: trustedName,
+          signed_off_by_initials: initials || null,
           signed_off_by_title: data.accountantTitle ?? null,
-          firm_name: data.firmName ?? null,
+          firm_name: data.firmName?.trim() || firmFromMeta,
           note: data.note ?? null,
           signed_off_at: new Date().toISOString(),
         },
@@ -155,7 +187,7 @@ export const removeReviewSignoff = createServerFn({ method: "POST" })
     const sb = authedSupabase();
     const { data: userData, error: userErr } = await sb.auth.getUser();
     if (userErr || !userData?.user) throw new Error("Not authenticated");
-    await assertAccountant(userData.user.id, sb);
+    await assertCanSignOff(userData.user.id, sb);
     await assertClientAccess(userData.user.id, data.clientId, sb);
 
     const { error } = await (sb as unknown as LooseSb)

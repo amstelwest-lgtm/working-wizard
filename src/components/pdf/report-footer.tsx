@@ -51,10 +51,12 @@ const styles = StyleSheet.create({
 export function ReportFooter({ profile, fixed, reviewSignoff }: Props) {
   const theme = resolveTheme(profile);
   const signoffDate = reviewSignoff
-    ? new Date(reviewSignoff.signedOffAt).toLocaleDateString("en-ZA", {
+    ? new Date(reviewSignoff.signedOffAt).toLocaleString("en-ZA", {
         day: "numeric",
         month: "short",
         year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
       })
     : null;
 
@@ -68,7 +70,11 @@ export function ReportFooter({ profile, fixed, reviewSignoff }: Props) {
           </Text>
           {reviewSignoff ? (
             <Text style={styles.signoff}>
-              Reviewed & signed off by {reviewSignoff.signedOffByName}
+              Reviewed & signed off by{" "}
+              {reviewSignoff.signedOffByInitials
+                ? `${reviewSignoff.signedOffByInitials} · `
+                : ""}
+              {reviewSignoff.signedOffByName}
               {reviewSignoff.signedOffByTitle ? `, ${reviewSignoff.signedOffByTitle}` : ""}
               {reviewSignoff.firmName ? ` · ${reviewSignoff.firmName}` : ""} · {signoffDate}
             </Text>

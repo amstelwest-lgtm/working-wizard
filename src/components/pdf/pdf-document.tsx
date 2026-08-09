@@ -12,6 +12,7 @@ export type SmeData = {
 /** A current (non-stale) accountant sign-off, stamped onto the report footer. */
 export type ReportSignoffStamp = {
   signedOffByName: string;
+  signedOffByInitials: string | null;
   signedOffByTitle: string | null;
   firmName: string | null;
   signedOffAt: string;

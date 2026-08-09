@@ -862,6 +862,7 @@ function signoffStampFor(
   if (!signoff || isSignoffStale(signoff, freshAt)) return null;
   return {
     signedOffByName: signoff.signed_off_by_name,
+    signedOffByInitials: signoff.signed_off_by_initials ?? null,
     signedOffByTitle: signoff.signed_off_by_title,
     firmName: signoff.firm_name,
     signedOffAt: signoff.signed_off_at,

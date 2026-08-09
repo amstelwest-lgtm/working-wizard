@@ -22,25 +22,39 @@ import {
 } from "@/lib/review-signoffs.functions";
 
 const SCOPE_LABEL: Record<ReviewScope, string> = {
-  financials: "this period's financials",
+  financials: "this period's financials / profitability",
   cash_forecast: "the cash forecast",
 };
 
 const SCOPE_SHORT_LABEL: Record<ReviewScope, string> = {
-  financials: "financials",
+  financials: "financials & profitability",
   cash_forecast: "cash forecast",
 };
 
 const CURRENT_COLOR = "#2e7d32"; // green — reviewed and up to date
 const STALE_COLOR = "#b8860b"; // gold/amber — reviewed previously, data has since changed
 
-function formatDate(iso: string): string {
+function formatDateTime(iso: string): string {
   try {
     const d = new Date(iso);
-    return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+    return d.toLocaleString("en-GB", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
   } catch {
     return iso;
   }
+}
+
+function signerLine(signoff: ClientReviewSignoff): string {
+  const initials = signoff.signed_off_by_initials?.trim();
+  const name = signoff.signed_off_by_name;
+  const title = signoff.signed_off_by_title ? ` ${signoff.signed_off_by_title}` : "";
+  if (initials) return `${initials} · ${name}${title}`;
+  return `${name}${title}`;
 }
 
 /**
@@ -70,8 +84,8 @@ export function ReviewSignoffBadge({
         style={{ backgroundColor: `${accent}1a`, color: accent }}
         title={
           isStale
-            ? `Reviewed by ${signoff.signed_off_by_name} on ${formatDate(signoff.signed_off_at)} — data has changed since`
-            : `Reviewed by ${signoff.signed_off_by_name} on ${formatDate(signoff.signed_off_at)}`
+            ? `Reviewed by ${signerLine(signoff)} on ${formatDateTime(signoff.signed_off_at)} — data has changed since`
+            : `Reviewed by ${signerLine(signoff)} on ${formatDateTime(signoff.signed_off_at)}`
         }
       >
         {isStale ? <AlertTriangle className="h-2.5 w-2.5" /> : <Check className="h-2.5 w-2.5" />}
@@ -97,12 +111,11 @@ export function ReviewSignoffBadge({
           </span>
         </div>
         <span className="text-[10px] text-slate-500 flex-shrink-0">
-          {formatDate(signoff.signed_off_at)}
+          {formatDateTime(signoff.signed_off_at)}
         </span>
       </div>
       <div className="text-xs font-medium text-slate-100 pl-[18px]">
-        {signoff.signed_off_by_name}
-        {signoff.signed_off_by_title ? ` ${signoff.signed_off_by_title}` : ""}
+        {signerLine(signoff)}
         {signoff.firm_name ? ` · ${signoff.firm_name}` : ""}
       </div>
       {isStale && (
@@ -153,10 +166,6 @@ export function ReviewSignoffButton({
   const accentState = isStale ? STALE_COLOR : CURRENT_COLOR;
 
   const handleSignoff = async () => {
-    if (!profile.firmName?.trim()) {
-      toast.error("Please set your firm name in Settings → Brand before signing off.");
-      return;
-    }
     setSaving(true);
     try {
       const row = await doSignoff({
@@ -164,7 +173,7 @@ export function ReviewSignoffButton({
           clientId,
           scope,
           accountantTitle: null,
-          firmName: profile.firmName,
+          firmName: profile.firmName?.trim() || null,
           note: note.trim() || null,
         },
       });
@@ -207,12 +216,11 @@ export function ReviewSignoffButton({
                 Signed off by
               </span>
               <span className="text-xs font-medium text-slate-100 truncate">
-                {signoff.signed_off_by_name}
-                {signoff.signed_off_by_title ? ` ${signoff.signed_off_by_title}` : ""}
+                {signerLine(signoff)}
               </span>
             </div>
             <span className="text-[10px] text-slate-500 flex-shrink-0">
-              {formatDate(signoff.signed_off_at)}
+              {formatDateTime(signoff.signed_off_at)}
             </span>
           </div>
           {signoff.firm_name && (
@@ -263,7 +271,7 @@ export function ReviewSignoffButton({
       {signoff && isStale && (
         <div className="text-[11px] flex items-center gap-1.5" style={{ color: STALE_COLOR }}>
           <AlertTriangle className="h-3 w-3" />
-          Previously signed off by {signoff.signed_off_by_name} on {formatDate(signoff.signed_off_at)} — data has changed
+          Previously signed off by {signerLine(signoff)} on {formatDateTime(signoff.signed_off_at)} — data has changed
         </div>
       )}
       <button
@@ -281,8 +289,9 @@ export function ReviewSignoffButton({
             <DialogTitle>Sign off {SCOPE_LABEL[scope]}</DialogTitle>
             <DialogDescription className="text-slate-400">
               You are formally endorsing {SCOPE_LABEL[scope]}
-              {clientName ? ` for ${clientName}` : ""}. This sign-off will be visible to the
-              client and included in generated reports until the underlying data changes.
+              {clientName ? ` for ${clientName}` : ""}. Your name, initials, date and time from
+              your account will be logged and shown to the client on reports until the
+              underlying data changes.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
