@@ -15,7 +15,7 @@ const TAG_COLORS: Record<string, { bg: string; color: string }> = {
   blue: { bg: "rgba(100,160,220,0.15)", color: "#3b82c4" },
 };
 
-const CACHE_KEY = "milon_industry_pulse_v2";
+const CACHE_KEY = "milon_industry_pulse_v3";
 const CACHE_TTL = 24 * 60 * 60 * 1000;
 
 type CachedPulse = {
@@ -53,10 +53,14 @@ function MetricRow({ metric }: { metric: PulseMetric }) {
       : metric.sentiment === "bad"
         ? "text-rose-600 dark:text-rose-400"
         : "text-amber-600 dark:text-amber-300";
+  const arrow =
+    metric.direction === "up" ? "↑ " : metric.direction === "down" ? "↓ " : "→ ";
+  // Avoid double arrows if the value already includes one
+  const value = /^[↑↓→]/.test(metric.value.trim()) ? metric.value : `${arrow}${metric.value}`;
   return (
     <div className="flex items-center justify-between gap-3 py-1.5 text-[12px]">
       <span className="text-slate-500 dark:text-slate-400">{metric.label}</span>
-      <span className={`font-semibold tabular-nums ${color}`}>{metric.value}</span>
+      <span className={`max-w-[55%] text-right font-semibold ${color}`}>{value}</span>
     </div>
   );
 }
@@ -146,7 +150,8 @@ export function IndustryPulse({
             </h3>
           </div>
           <p className="mt-0.5 pl-4 text-[10px] text-slate-500">
-            AI · {lastRefresh ? lastRefresh.toLocaleDateString("en-ZA") : "Refreshed daily"}
+            {display.source === "ai" ? "Live AI" : "Sector baseline"} ·{" "}
+            {lastRefresh ? lastRefresh.toLocaleDateString("en-ZA") : "Updated today"}
           </p>
         </div>
         <button

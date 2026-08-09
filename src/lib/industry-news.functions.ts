@@ -78,7 +78,7 @@ function normalizeMetrics(raw: unknown): PulseMetric[] {
     .slice(0, 4);
 }
 
-/** Curated SA SME pulse — used when AI keys are missing or the model fails. */
+/** Plain-English SA SME pulse — used when AI keys are missing or the model fails. */
 export function fallbackIndustryPulse(industry: string): IndustryPulsePayload {
   const key = industry.toLowerCase();
   const sector =
@@ -100,57 +100,57 @@ export function fallbackIndustryPulse(industry: string): IndustryPulsePayload {
 
   const packs: Record<string, IndustryPulsePayload> = {
     retail: {
-      headline: "Your industry is tightening.",
+      headline: "Customers are spending, but profit per sale is thinner.",
       metrics: [
-        { label: "Gross margins", value: "↓ 2.4%", direction: "down", sentiment: "bad" },
-        { label: "Customer payment days", value: "↑ 5d", direction: "up", sentiment: "bad" },
-        { label: "Demand", value: "→ Stable", direction: "flat", sentiment: "neutral" },
+        { label: "Profit per sale", value: "Down", direction: "down", sentiment: "bad" },
+        { label: "How fast customers pay", value: "Slower", direction: "up", sentiment: "bad" },
+        { label: "Customer demand", value: "Steady", direction: "flat", sentiment: "neutral" },
       ],
       items: [
         {
-          headline: "SA retailers face margin squeeze on import costs",
-          summary: "Rand volatility and higher logistics fees are compressing SME retail gross margins — lock supplier prices where you can.",
-          tag: "Affects margins",
+          headline: "Import and delivery costs are eating retail profit",
+          summary: "A weaker rand and higher delivery fees mean you keep less from each sale. Lock supplier prices for 30–90 days where you can.",
+          tag: "Affects profit",
           tagColor: "red",
         },
         {
-          headline: "Card-fee and load-shedding costs still biting",
-          summary: "Payment fees and backup-power spend are eating cash that used to sit in working capital.",
+          headline: "Card fees and backup power quietly drain cash",
+          summary: "Payment fees and generators add up every month. Check these costs — they often grow unnoticed.",
           tag: "Watch this",
           tagColor: "amber",
         },
         {
-          headline: "Same-day delivery expectations keep rising",
-          summary: "Customers expect faster fulfilment; slow stock turns are becoming a competitive risk.",
+          headline: "Faster delivery wins more repeat buyers",
+          summary: "Customers expect quicker fulfilment. Faster stock turns free cash and keep you competitive.",
           tag: "Opportunity",
-          tagColor: "blue",
+          tagColor: "green",
         },
       ],
       source: "fallback",
     },
     construction: {
-      headline: "Cash cycles are stretching.",
+      headline: "Jobs are fine — getting paid on time is the hard part.",
       metrics: [
-        { label: "Payment retentions", value: "↑ 8d", direction: "up", sentiment: "bad" },
-        { label: "Material costs", value: "↑ 3.1%", direction: "up", sentiment: "bad" },
-        { label: "Tender activity", value: "→ Soft", direction: "flat", sentiment: "neutral" },
+        { label: "How long clients take to pay", value: "Slower", direction: "up", sentiment: "bad" },
+        { label: "Material costs", value: "Rising", direction: "up", sentiment: "bad" },
+        { label: "New tender activity", value: "Soft", direction: "flat", sentiment: "neutral" },
       ],
       items: [
         {
-          headline: "Milestone billing delays still dominate cash",
-          summary: "Private and public clients are stretching retentions — deposits and staged billing protect runway.",
+          headline: "Clients are holding back payment longer",
+          summary: "Ask for a deposit before work starts, and bill in stages. Waiting until the end traps your cash.",
           tag: "Affects cash",
           tagColor: "red",
         },
         {
-          headline: "Steel and cement prices remain sticky",
-          summary: "Input inflation is uneven; update quotes more often and pass through material clauses.",
-          tag: "Affects margins",
+          headline: "Steel and cement prices keep moving",
+          summary: "Update quotes more often, and add a materials price clause so cost jumps don’t wipe your margin.",
+          tag: "Affects profit",
           tagColor: "amber",
         },
         {
-          headline: "Subcontractor capacity opening in metros",
-          summary: "Some trades have idle capacity — useful if you need to accelerate committed jobs.",
+          headline: "Some trades have spare capacity right now",
+          summary: "If a job is delayed, you may find subcontractors available sooner — useful for catching up.",
           tag: "Opportunity",
           tagColor: "green",
         },
@@ -158,28 +158,28 @@ export function fallbackIndustryPulse(industry: string): IndustryPulsePayload {
       source: "fallback",
     },
     hospitality: {
-      headline: "Demand is uneven across the week.",
+      headline: "Weekends are busy — weekdays need tighter cost control.",
       metrics: [
-        { label: "Covers / traffic", value: "↓ 4%", direction: "down", sentiment: "bad" },
-        { label: "Food cost pressure", value: "↑ 2.8%", direction: "up", sentiment: "bad" },
-        { label: "Weekend demand", value: "→ Firm", direction: "flat", sentiment: "good" },
+        { label: "Customer traffic", value: "Softer midweek", direction: "down", sentiment: "bad" },
+        { label: "Food & drink costs", value: "Rising", direction: "up", sentiment: "bad" },
+        { label: "Weekend demand", value: "Strong", direction: "flat", sentiment: "good" },
       ],
       items: [
         {
-          headline: "Weekday covers soft while weekends hold",
-          summary: "Owners are protecting cash by trimming weekday labour and pushing midweek offers.",
+          headline: "Weekdays are quiet while weekends hold up",
+          summary: "Cut midweek labour where you can, and run simple midweek specials to fill empty seats.",
           tag: "Watch this",
           tagColor: "amber",
         },
         {
-          headline: "Load-shedding backup costs still elevate break-even",
-          summary: "Generator and inverter spend keeps fixed costs high — menu mix and covers matter more.",
-          tag: "Affects margins",
+          headline: "Backup power is raising your break-even",
+          summary: "Generators and inverters cost money even when sales are flat. Push higher-margin menu items.",
+          tag: "Affects profit",
           tagColor: "red",
         },
         {
-          headline: "Prepaid and deposit policies gaining ground",
-          summary: "Events and large tables paid upfront are improving hospitality cash conversion.",
+          headline: "Take deposits for events and large bookings",
+          summary: "Upfront payment for functions improves cash and reduces no-shows.",
           tag: "Opportunity",
           tagColor: "green",
         },
@@ -187,57 +187,57 @@ export function fallbackIndustryPulse(industry: string): IndustryPulsePayload {
       source: "fallback",
     },
     manufacturing: {
-      headline: "Working capital is the pressure point.",
+      headline: "Orders are steady — cash is stuck in stock and receivables.",
       metrics: [
-        { label: "Input costs", value: "↑ 2.1%", direction: "up", sentiment: "bad" },
-        { label: "Order books", value: "→ Stable", direction: "flat", sentiment: "neutral" },
-        { label: "Export demand", value: "↓ Soft", direction: "down", sentiment: "bad" },
+        { label: "Input costs", value: "Rising", direction: "up", sentiment: "bad" },
+        { label: "Order book", value: "Steady", direction: "flat", sentiment: "neutral" },
+        { label: "Export demand", value: "Softer", direction: "down", sentiment: "bad" },
       ],
       items: [
         {
-          headline: "SA manufacturers guarding inventory turns",
-          summary: "Slow-moving SKUs are trapping cash — review minimum order quantities and stock aged past 60 days.",
+          headline: "Slow-moving stock is trapping your cash",
+          summary: "Review items sitting longer than 60 days. Smaller order quantities free money faster.",
           tag: "Affects cash",
           tagColor: "amber",
         },
         {
-          headline: "Electricity reliability still shapes throughput",
-          summary: "Unplanned downtime lifts unit cost; schedule high-margin runs around stable power windows.",
+          headline: "Power cuts raise your cost per unit",
+          summary: "Plan high-margin production for more reliable power windows when you can.",
           tag: "Watch this",
           tagColor: "red",
         },
         {
-          headline: "Nearshore B2B buyers asking for deposits",
-          summary: "More suppliers are requiring deposits — mirror that with your own customers where you can.",
+          headline: "Ask customers for deposits on big orders",
+          summary: "Many suppliers already do this. Matching that with your customers protects cash flow.",
           tag: "Opportunity",
-          tagColor: "blue",
+          tagColor: "green",
         },
       ],
       source: "fallback",
     },
     logistics: {
-      headline: "Fuel and utilisation decide the week.",
+      headline: "Fuel costs are up — empty trips hurt the most.",
       metrics: [
-        { label: "Fuel / diesel pressure", value: "↑ 1.9%", direction: "up", sentiment: "bad" },
-        { label: "Fleet utilisation", value: "→ Flat", direction: "flat", sentiment: "neutral" },
-        { label: "Customer rate pressure", value: "↓ Soft", direction: "down", sentiment: "bad" },
+        { label: "Diesel / fuel cost", value: "Rising", direction: "up", sentiment: "bad" },
+        { label: "Truck / vehicle use", value: "Flat", direction: "flat", sentiment: "neutral" },
+        { label: "Customer pricing pressure", value: "Soft", direction: "down", sentiment: "bad" },
       ],
       items: [
         {
-          headline: "Thin margins leave little room for empty kilometres",
-          summary: "Route density and return loads are the fastest levers when diesel moves against you.",
-          tag: "Affects margins",
+          headline: "Empty return trips wipe out thin margins",
+          summary: "Fill return loads wherever possible. Empty kilometres are often your biggest profit leak.",
+          tag: "Affects profit",
           tagColor: "red",
         },
         {
-          headline: "Clients delaying payment on freight invoices",
-          summary: "Debtor days are creeping — COD or 7-day terms on smaller accounts protect cash.",
+          headline: "Customers are paying freight invoices later",
+          summary: "For smaller accounts, use cash-on-delivery or 7-day payment terms to protect cash.",
           tag: "Affects cash",
           tagColor: "amber",
         },
         {
-          headline: "Shared-load platforms opening spare capacity",
-          summary: "Filling backhauls can recover margin without adding fixed fleet cost.",
+          headline: "Shared loads can fill spare capacity",
+          summary: "Matching spare space with other shippers can lift profit without buying more vehicles.",
           tag: "Opportunity",
           tagColor: "green",
         },
@@ -245,57 +245,57 @@ export function fallbackIndustryPulse(industry: string): IndustryPulsePayload {
       source: "fallback",
     },
     saas: {
-      headline: "Buyers are stretching payment terms.",
+      headline: "Deals take longer — get paid sooner when you can.",
       metrics: [
-        { label: "Sales cycles", value: "↑ 12d", direction: "up", sentiment: "bad" },
-        { label: "Churn pressure", value: "→ Elevated", direction: "flat", sentiment: "bad" },
-        { label: "Expansion revenue", value: "↑ Mild", direction: "up", sentiment: "good" },
+        { label: "Time to close a sale", value: "Longer", direction: "up", sentiment: "bad" },
+        { label: "Customer cancellations", value: "Higher risk", direction: "up", sentiment: "bad" },
+        { label: "Upsell / expansion", value: "Mild growth", direction: "up", sentiment: "good" },
       ],
       items: [
         {
-          headline: "SA SaaS buyers delaying renewals and upgrades",
-          summary: "Annual prepay discounts and tighter dunning are protecting cash conversion.",
+          headline: "Buyers are delaying renewals and upgrades",
+          summary: "Offer a discount for annual prepay, and follow up unpaid invoices quickly.",
           tag: "Affects cash",
           tagColor: "amber",
         },
         {
-          headline: "Usage-based packaging winning late-stage deals",
-          summary: "Lower entry commitments help close when budgets are frozen — watch margin on support load.",
+          headline: "Simple starter packages help close deals",
+          summary: "When budgets are tight, a lower entry price with clear upgrade paths wins more often.",
           tag: "Opportunity",
           tagColor: "green",
         },
         {
-          headline: "Cloud infra costs still rising with FX",
-          summary: "Dollar-linked hosting can quietly erase gross margin — review packaging and FX buffers.",
-          tag: "Affects margins",
+          headline: "Dollar hosting costs can erase your margin",
+          summary: "If your tools are priced in dollars, check that your SA pricing still leaves enough profit.",
+          tag: "Affects profit",
           tagColor: "red",
         },
       ],
       source: "fallback",
     },
     services: {
-      headline: "Collections are the binding constraint.",
+      headline: "Clients are paying slower — cash is the pressure point.",
       metrics: [
-        { label: "Debtor days", value: "↑ 6d", direction: "up", sentiment: "bad" },
-        { label: "Utilisation", value: "→ Stable", direction: "flat", sentiment: "neutral" },
-        { label: "Fee pressure", value: "↓ Soft", direction: "down", sentiment: "bad" },
+        { label: "How fast clients pay", value: "6 days slower", direction: "up", sentiment: "bad" },
+        { label: "Team billable time", value: "Steady", direction: "flat", sentiment: "neutral" },
+        { label: "Client fee pressure", value: "Clients pushing down", direction: "down", sentiment: "bad" },
       ],
       items: [
         {
-          headline: "Professional services seeing slower client pay",
-          summary: "Retainers, deposits and autopay are outperforming pure month-end invoicing on cash.",
+          headline: "Clients are taking longer to pay invoices",
+          summary: "Ask for a deposit or monthly retainer, and turn on autopay. Waiting until month-end hurts cash.",
           tag: "Affects cash",
           tagColor: "red",
         },
         {
-          headline: "Scope creep without change orders is back",
-          summary: "Protect margin with written change control before extra hours land on the timesheet.",
-          tag: "Affects margins",
+          headline: "Extra unpaid work is wiping out profit",
+          summary: "If the brief grows, send a written change request before the extra hours start.",
+          tag: "Affects profit",
           tagColor: "amber",
         },
         {
-          headline: "Niche expertise still commanding premiums",
-          summary: "Specialist packages with clear outcomes are resisting fee pressure better than generalist retainers.",
+          headline: "Specialist packages still win higher fees",
+          summary: "Clear outcome-based offers hold price better than open-ended generalist retainers.",
           tag: "Opportunity",
           tagColor: "green",
         },
@@ -303,28 +303,28 @@ export function fallbackIndustryPulse(industry: string): IndustryPulsePayload {
       source: "fallback",
     },
     general: {
-      headline: "Your industry is tightening.",
+      headline: "Cash is tighter — get paid faster and watch costs.",
       metrics: [
-        { label: "Gross margins", value: "↓ 2.4%", direction: "down", sentiment: "bad" },
-        { label: "Customer payment days", value: "↑ 5d", direction: "up", sentiment: "bad" },
-        { label: "Demand", value: "→ Stable", direction: "flat", sentiment: "neutral" },
+        { label: "Profit per sale", value: "Down a bit", direction: "down", sentiment: "bad" },
+        { label: "How fast customers pay", value: "Slower", direction: "up", sentiment: "bad" },
+        { label: "Customer demand", value: "Steady", direction: "flat", sentiment: "neutral" },
       ],
       items: [
         {
-          headline: "SA SMEs under working-capital pressure",
-          summary: "Slower customer payment and sticky input costs are the common squeeze across sectors.",
+          headline: "Customers are paying SA businesses slower",
+          summary: "Send invoices the same day, follow up early, and ask for deposits on bigger jobs.",
           tag: "Affects cash",
           tagColor: "red",
         },
         {
-          headline: "Interest rates still elevate financing cost",
-          summary: "Debt-funded growth is expensive — free cash from collections beats new facilities.",
+          headline: "Borrowing is still expensive",
+          summary: "Collecting cash from customers is usually cheaper than taking on more debt right now.",
           tag: "Watch this",
           tagColor: "amber",
         },
         {
-          headline: "Owners prioritising deposits and autopay",
-          summary: "Businesses that pull cash forward are building runway while peers stall.",
+          headline: "Deposits and autopay are helping owners",
+          summary: "Businesses that get paid upfront or automatically usually sleep better than those waiting 30–60 days.",
           tag: "Opportunity",
           tagColor: "green",
         },
@@ -333,17 +333,7 @@ export function fallbackIndustryPulse(industry: string): IndustryPulsePayload {
     },
   };
 
-  const pack = packs[sector] ?? packs.general;
-  return {
-    ...pack,
-    headline: pack.headline,
-    items: pack.items.map((item) => ({
-      ...item,
-      summary: item.summary.includes(industry)
-        ? item.summary
-        : item.summary,
-    })),
-  };
+  return packs[sector] ?? packs.general;
 }
 
 function extractJsonObject(raw: string): unknown {
@@ -403,23 +393,26 @@ function parseAiPayload(raw: string, industry: string): IndustryPulsePayload | n
 }
 
 function buildPrompt(industry: string, today: string): string {
-  return `You are a South African business intelligence assistant. Today is ${today}.
+  return `You write Industry Pulse for South African small-business owners. Today is ${today}.
+Sector: "${industry}".
 
-For a South African SME in the "${industry}" sector, produce a concise Industry Pulse.
+Write for a busy owner — Grade 8 English. No jargon. No MBA speak.
+Bad: "Collections are the binding constraint", "utilisation", "fee pressure", "scope creep", "cash conversion".
+Good: "Clients are paying slower", "Team billable time", "Clients pushing fees down", "Extra unpaid work is eating profit".
 
-Respond ONLY with valid JSON (no markdown fencing, no preamble):
+Respond ONLY with valid JSON (no markdown, no preamble):
 {
-  "headline": "One short status line about industry conditions (max 8 words), e.g. Your industry is tightening.",
+  "headline": "One clear sentence about what matters most right now (max 14 words).",
   "metrics": [
-    { "label": "Gross margins", "value": "↓ 2.4%", "direction": "up|down|flat", "sentiment": "good|bad|neutral" },
-    { "label": "Customer payment days", "value": "↑ 5d", "direction": "up|down|flat", "sentiment": "good|bad|neutral" },
-    { "label": "Demand", "value": "→ Stable", "direction": "up|down|flat", "sentiment": "good|bad|neutral" }
+    { "label": "How fast clients pay", "value": "↓ 6 days slower", "direction": "up|down|flat", "sentiment": "good|bad|neutral" },
+    { "label": "Profit per sale", "value": "↓ Down", "direction": "up|down|flat", "sentiment": "good|bad|neutral" },
+    { "label": "Customer demand", "value": "→ Steady", "direction": "up|down|flat", "sentiment": "good|bad|neutral" }
   ],
   "items": [
     {
-      "headline": "Concise punchy headline (max 10 words)",
-      "summary": "One sentence: what happened and why it matters to an SME owner.",
-      "tag": "Affects margins | Regulatory | Watch this | Opportunity | Affects cash",
+      "headline": "Plain headline a business owner gets instantly (max 12 words)",
+      "summary": "One sentence: what is happening + one practical action they can take this week.",
+      "tag": "Affects cash | Affects profit | Watch this | Opportunity",
       "tagColor": "green | amber | red | blue"
     }
   ]
@@ -427,9 +420,13 @@ Respond ONLY with valid JSON (no markdown fencing, no preamble):
 
 Rules:
 - Exactly 3 metrics and 3 news items
-- Focus on SA conditions: rates, rand, fuel, SARS/tax, load-shedding, sector demand, payment behaviour
-- direction/sentiment must be consistent (e.g. longer payment days = direction up + sentiment bad)
-- Be specific to ${industry}; do not invent fake article URLs`;
+- Metric labels must be everyday words (not debtor days, utilisation, fee pressure, working capital)
+- Metric values must be readable words or simple numbers (e.g. "↓ Slower", "↑ Rising", "→ Steady") — not cryptic codes
+- Each news summary must end with a concrete action
+- Focus on SA realities: payment delays, rand, fuel, power cuts, SARS/tax, demand
+- Specific to ${industry}
+- Do not invent fake article titles that sound like press releases
+- Do not use the words: utilisation, debtor days, fee pressure, scope creep, binding constraint, cash conversion, working capital, ROIC`;
 }
 
 async function callLovable(apiKey: string, prompt: string): Promise<string> {
