@@ -361,6 +361,8 @@ export function CashForecastPanel({
   simplified,
   canSign,
   reloadToken,
+  openBankUploadToken,
+  onBankPublish,
 }: {
   clientId?: string;
   clientName?: string;
@@ -369,6 +371,10 @@ export function CashForecastPanel({
   canSign?: boolean;
   /** Bump to re-load cashflow from Supabase (e.g. after bank→cash publish). */
   reloadToken?: number;
+  /** Bump to open the bank-statement upload dialog (e.g. accountant Cash tab header). */
+  openBankUploadToken?: number;
+  /** Optional parent hook after a successful bank→cash publish (e.g. sync client cache). */
+  onBankPublish?: (payload: CashForecastPublishPayload) => void;
 } = {}) {
   const { profile } = useAccountantProfile();
   const fetchReviewSignoffs = useServerFn(listClientReviewSignoffs);
@@ -396,6 +402,11 @@ export function CashForecastPanel({
   // otherwise merely opening the forecast bumps last_forecast_at and falsely
   // invalidates an accountant's sign-off with no real data change.
   const skipNextAutosave = useRef(false);
+
+  useEffect(() => {
+    if (openBankUploadToken == null || openBankUploadToken <= 0) return;
+    setShowBankUpload(true);
+  }, [openBankUploadToken]);
 
   const existingCashflowForBanks = {
     startDate,
@@ -435,7 +446,10 @@ export function CashForecastPanel({
     setShowBankUpload(false);
     toast.success("Cash forecast updated from bank statements.");
 
-    if (!clientId) return;
+    if (!clientId) {
+      onBankPublish?.(payload);
+      return;
+    }
     const forecastUpdatedAt = new Date().toISOString();
     const { error } = await supabase
       .from("clients")
@@ -459,6 +473,7 @@ export function CashForecastPanel({
       }
     }
     setLastForecastAt(forecastUpdatedAt);
+    onBankPublish?.(payload);
   };
 
   useEffect(() => {
