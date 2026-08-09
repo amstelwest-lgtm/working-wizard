@@ -80,18 +80,24 @@ const CashForecastPanel = lazy(() =>
 const ActionPlanPanel = lazy(() =>
   import("@/components/action-plan"),
 );
-import { TodayPanel, type TodayTask } from "@/components/today-panel";
 import { SplashScreen } from "@/components/splash-screen";
 import { WalkthroughWizard } from "@/components/walkthrough-wizard";
 import { QboConnectCard } from "@/components/qbo-connect";
 import { Button } from "@/components/ui/button";
-import { type RatioInfo } from "@/components/holo-globe";
 import { SphereHero } from "@/components/sphere-hero";
 import { buildSpherePillars } from "@/components/sphere-hero-adapter";
 import { useViewMode } from "@/contexts/view-mode";
 import { listClientReviewSignoffs } from "@/lib/review-signoffs.functions";
 import type { ClientReviewSignoff } from "@/lib/review-signoffs.functions";
 import { ReviewSignoffBadge, computeIsStale } from "@/components/review-signoff";
+import { useAskAiMount } from "@/hooks/use-ask-ai-mount";
+import {
+  computeCashTrajectory,
+  computeNextMoveImpactLabel,
+  computeOverviewCaption,
+  computePositionPercentile,
+  computeWeekChanges,
+} from "@/lib/overview-insights";
 
 export const Route = createFileRoute("/app")({
   component: Index,
@@ -1528,7 +1534,6 @@ function Index() {
   }, [effectiveClientId]);
 
   const [clientMeta, setClientMeta] = useState<{ business_type: string | null; cash_runway_weeks: number | null; financials_updated_at?: string | null } | null>(null);
-  const [openTasks, setOpenTasks] = useState<TodayTask[]>([]);
   const [activeTab, setActiveTab] = useState<string>("today");
   const fetchReviewSignoffs = useServerFn(listClientReviewSignoffs);
   const [financialsSignoff, setFinancialsSignoff] = useState<ClientReviewSignoff | null>(null);
@@ -1544,7 +1549,7 @@ function Index() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [effectiveClientId]);
   useEffect(() => {
-    if (!effectiveClientId) { setClientMeta(null); setOpenTasks([]); return; }
+    if (!effectiveClientId) { setClientMeta(null); return; }
     supabase.from("clients").select("business_type, cash_runway_weeks, financials_updated_at").eq("id", effectiveClientId).maybeSingle()
       .then((res) => {
         const data = res.data as { business_type: string | null; cash_runway_weeks: number | null; financials_updated_at: string | null } | null;
@@ -1559,22 +1564,7 @@ function Index() {
           setShowOnboarding(true);
         }
       });
-    supabase
-      .from("employee_tasks")
-      .select("id, title, due_date, employee:client_employees(name)")
-      .eq("client_id", effectiveClientId)
-      .eq("status", "open")
-      .order("created_at", { ascending: false })
-      .limit(5)
-      .then(({ data }) => {
-        if (!data) { setOpenTasks([]); return; }
-        setOpenTasks(
-          (data as Array<{ id: string; title: string; due_date: string | null; employee: { name: string } | null }>).map((r) => ({
-            id: r.id, title: r.title, dueDate: r.due_date, employeeName: r.employee?.name ?? null,
-          })),
-        );
-      });
-  }, [effectiveClientId, userRole]);
+  }, [effectiveClientId, userRole, actingClientId]);
 
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data: { user: u } }) => {
@@ -1712,69 +1702,7 @@ function Index() {
     return () => clearTimeout(t);
   }, [v, weeklyInputs, effectiveClientId, hydratedClientId, hasRealFinancials]);
 
-  // Mount the Ask AI widget wherever a mount container is present
-  // (overview tab + profitability waterfall tab). Re-runs on tab change
-  // because inactive tab content is unmounted by Radix.
-  // Retries briefly: on first simplified load the #ask-ai-overview node can
-  // appear one paint after hasRealFinancials flips true.
-  useEffect(() => {
-    let cancelled = false;
-    let attempts = 0;
-    const timers: number[] = [];
-
-    const tryMount = () => {
-      if (cancelled) return;
-      const allContainers = ["ask-ai-overview", "ask-ai-waterfall"]
-        .map((id) => document.getElementById(id))
-        .filter((el): el is HTMLElement => !!el);
-
-      if (effectiveClientId) {
-        (window as unknown as Record<string, unknown>).__askAiClientId = effectiveClientId;
-        for (const el of allContainers) el.dataset.clientId = effectiveClientId;
-      }
-
-      const containers = allContainers.filter((el) => !el.dataset.askAiMounted);
-      if (containers.length === 0) {
-        // Container not in DOM yet (or already mounted) — retry a few times on first paint.
-        if (allContainers.length === 0 && attempts < 8) {
-          attempts += 1;
-          timers.push(window.setTimeout(tryMount, 50 * attempts));
-        }
-        return;
-      }
-
-      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-      // @ts-ignore — plain JS module without type declarations
-      import("../lib/ask-ai.js").then((mod: { mountAskAi?: (el: HTMLElement, opts: unknown) => void }) => {
-        if (cancelled || typeof mod.mountAskAi !== "function") return;
-        for (const el of containers) {
-          if (el.dataset.askAiMounted) continue;
-          if (effectiveClientId) el.dataset.clientId = effectiveClientId;
-          el.dataset.askAiMounted = "1";
-          mod.mountAskAi(el, {
-            endpoint: `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ask-ai`,
-            getToken: async () => {
-              const { data } = await supabase.auth.getSession();
-              return data.session?.access_token ?? null;
-            },
-          });
-        }
-      }).catch(() => {
-        // Widget not yet deployed — silent fail
-      });
-    };
-
-    tryMount();
-    timers.push(window.setTimeout(tryMount, 0));
-    timers.push(window.setTimeout(tryMount, 100));
-    timers.push(window.setTimeout(tryMount, 300));
-
-    return () => {
-      cancelled = true;
-      for (const t of timers) window.clearTimeout(t);
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [effectiveClientId, activeTab, viewMode, hasRealFinancials]);
+  useAskAiMount({ effectiveClientId, activeTab, viewMode, hasRealFinancials });
 
   const exitImpersonation = async () => {
     if (actingClientId) {
@@ -2072,25 +2000,7 @@ function Index() {
     debtToAssets: { value: debtToAssets, format: "pct" },
   };
 
-  // Build ratioLookup for HoloGlobe hover cards — keys match driver section ids in holo-globe.tsx
-  const ratioLookup: Record<string, RatioInfo> = {};
-  (Object.keys(valueMap) as RatioKey[]).forEach((k) => {
-    const meta = RATIO_META[k];
-    const bm = benchmarkFor(k);
-    ratioLookup[k] = {
-      friendly: meta.friendly,
-      techName: meta.techName,
-      value: valueMap[k].value,
-      format: valueMap[k].format,
-      health: healthMap[k],
-      series: seriesFor(k),
-      benchmark: bm
-        ? { p25: bm.p25, p50: bm.p50, p75: bm.p75, higher_is_better: bm.higher_is_better }
-        : null,
-    };
-  });
-
-  // Aggregate financial health score — average of the four pillar averages (mirrors HoloGlobe)
+  // Aggregate financial health score — average of the four pillar averages
   const avgHealth = (() => {
     const pillarGroups: RatioKey[][] = [
       ["revenueGrowth", "salesPerEmployee", "grossMargin", "directCostsRatio", "fixedCostRatio", "interestBurden", "taxBurden"],
@@ -2137,115 +2047,30 @@ function Index() {
     .sort((a, b) => b.score - a.score)
     .slice(0, 10);
 
-  // Overview rail: percentile vs peers ≈ average of ratio health scores.
-  const positionPercentile = (() => {
-    if (!hasRealFinancials || !isFinite(avgHealth)) return null;
-    return Math.max(5, Math.min(95, Math.round(avgHealth)));
-  })();
-
-  const weekChanges = (() => {
-    const changes: Array<{ label: string; value: string; sentiment: "good" | "bad" | "neutral" }> = [];
-    if (isFinite(revenueGrowth)) {
-      const pct = Math.round(revenueGrowth * 100);
-      changes.push({
-        label: "Revenue",
-        value: `${pct >= 0 ? "+ " : ""}${pct}%`,
-        sentiment: pct > 0 ? "good" : pct < 0 ? "bad" : "neutral",
-      });
-    }
-    const cashH = pillarHealths.cash;
-    const profitH = pillarHealths.profit;
-    if (isFinite(cashH) && isFinite(profitH)) {
-      const gap = Math.round(cashH - profitH);
-      changes.push({
-        label: "Cash conversion",
-        value: gap === 0 ? "Unchanged" : `${gap > 0 ? "+ " : "- "}${Math.abs(gap)}%`,
-        sentiment: gap > 0 ? "good" : gap < 0 ? "bad" : "neutral",
-      });
-    }
-    if (isFinite(grossMarginRatio)) {
-      const gm = Math.round(grossMarginRatio * 1000) / 10;
-      changes.push({
-        label: "Gross margin",
-        value: `${gm}%`,
-        sentiment: gm >= 35 ? "good" : gm >= 20 ? "neutral" : "bad",
-      });
-    }
-    return changes.slice(0, 3);
-  })();
-
-  const cashTrajectory = (() => {
-    if (!hasRealFinancials) return null;
-    const revenueN = n.revenue;
-    const ocfN = n.operatingCashflow;
-    const ca = n.currentAssets;
-    const cl = n.currentLiabilities;
-    const wc = ca > 0 || cl > 0 ? Math.max(0, ca - cl) : NaN;
-    const monthlyFromOcf = ocfN !== 0 ? ocfN / 12 : NaN;
-    const monthlyFromRev = revenueN > 0 ? (revenueN * 0.04) / 12 : NaN;
-    // Prefer OCF when it's a meaningful monthly figure; otherwise revenue proxy.
-    const monthly =
-      isFinite(monthlyFromOcf) && Math.abs(monthlyFromOcf) >= 500
-        ? monthlyFromOcf
-        : monthlyFromRev;
-    const seed =
-      isFinite(wc) && wc >= 5_000
-        ? wc
-        : isFinite(monthly)
-          ? Math.max(monthly * 2, revenueN > 0 ? revenueN * 0.05 : 0)
-          : NaN;
-    if (!isFinite(seed) && !isFinite(monthly)) return null;
-    const start = isFinite(seed) ? seed : (monthly as number) * 2;
-    const add = isFinite(monthly) ? (monthly as number) : start * 0.08;
-    // Guard against nonsense micro-projections (e.g. R75) when inputs are incomplete.
-    if (start < 1_000 && (!isFinite(revenueN) || revenueN < 10_000)) return null;
-    const points = [0, 1, 2, 3].map((i) => Math.max(0, start + add * i));
-    const projected = points[points.length - 1];
-    const fmt = (amount: number) =>
-      amount >= 1_000_000
-        ? `R${(amount / 1_000_000).toFixed(1)}m`
-        : amount >= 1_000
-          ? `R${Math.round(amount / 1000)}k`
-          : `R${Math.round(amount)}`;
-    return {
-      points,
-      projectedLabel: "Projected cash in 90 days",
-      projectedValue: fmt(projected),
-    };
-  })();
-
-  const overviewCaption = (() => {
-    if (!hasRealFinancials || !isFinite(avgHealth)) return undefined;
-    const cashH = pillarHealths.cash;
-    if (isFinite(cashH) && cashH < avgHealth - 5) {
-      return "Your business is stable, but cash conversion is holding you back.";
-    }
-    if (avgHealth >= 65) return "Your business is in good shape — keep building momentum.";
-    if (avgHealth >= 40) return "Your business needs some attention — start with the priority below.";
-    return "Your business needs urgent attention — start with the priority below.";
-  })();
-
-  // Short money-style label only — never the long impactLine (that crushed the card layout).
-  const nextMoveImpactLabel = (() => {
-    const top = nextSteps[0];
-    if (!top) return undefined;
-    const fmtImpact = (amount: number) => {
-      if (amount >= 1_000_000) return `+R${(amount / 1_000_000).toFixed(1)}m`;
-      if (amount >= 1_000) return `+R${Math.round(amount / 1000)}k`;
-      return `+R${Math.round(amount)}`;
-    };
-    const revenueN = n.revenue;
-    const receivablesN = n.receivables;
-    if (top.key === "debtorDays" && receivablesN >= 5_000) {
-      const unlock = receivablesN * 0.15;
-      if (unlock >= 1_000) return `${fmtImpact(unlock)} additional cash in next 90 days`;
-    }
-    if (revenueN >= 50_000) {
-      const unlock = revenueN * 0.02;
-      if (unlock >= 1_000) return `${fmtImpact(unlock)} potential swing this quarter`;
-    }
-    return undefined;
-  })();
+  const positionPercentile = computePositionPercentile(hasRealFinancials, avgHealth);
+  const weekChanges = computeWeekChanges({
+    revenueGrowth,
+    cashHealth: pillarHealths.cash,
+    profitHealth: pillarHealths.profit,
+    grossMarginRatio,
+  });
+  const cashTrajectory = computeCashTrajectory({
+    hasRealFinancials,
+    revenue: n.revenue,
+    operatingCashflow: n.operatingCashflow,
+    currentAssets: n.currentAssets,
+    currentLiabilities: n.currentLiabilities,
+  });
+  const overviewCaption = computeOverviewCaption({
+    hasRealFinancials,
+    avgHealth,
+    cashHealth: pillarHealths.cash,
+  });
+  const nextMoveImpactLabel = computeNextMoveImpactLabel({
+    topKey: nextSteps[0]?.key,
+    revenue: n.revenue,
+    receivables: n.receivables,
+  });
 
   // Auto-clear the globe highlight after 2s and scroll the row into view.
   // Small delay lets the tab re-render before we query the DOM.

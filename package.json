@@ -19,7 +19,8 @@
     "test:reports": "vite-node --config scripts/vite-test.config.ts scripts/render-reports-test.mts",
     "test:ask-ai-client-switch": "vite-node --config scripts/vite-test.config.ts scripts/ask-ai-client-switch-test.mts",
     "test:onboarding": "vite-node --config scripts/vite-test.config.ts scripts/test-onboarding-rls.mts",
-    "test:invited-member": "vite-node --config scripts/vite-test.config.ts scripts/test-invited-member-flow.mts"
+    "test:invited-member": "vite-node --config scripts/vite-test.config.ts scripts/test-invited-member-flow.mts",
+    "test:industry-pulse": "vite-node --config scripts/vite-test.config.ts scripts/industry-pulse-fallback-test.mts"
   },
   "dependencies": {
     "@cloudflare/vite-plugin": "^1.25.5",

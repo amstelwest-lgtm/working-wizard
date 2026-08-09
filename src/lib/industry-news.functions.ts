@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { GEMINI_MODEL, GEMINI_MODEL_GATEWAY } from "@/lib/gemini-config";
+import { CLAUDE_MODEL } from "@/lib/claude-config";
 
 export type NewsItem = {
   headline: string;
@@ -429,75 +429,34 @@ Rules:
 - Do not use the words: utilisation, debtor days, fee pressure, scope creep, binding constraint, cash conversion, working capital, ROIC`;
 }
 
-async function callLovable(apiKey: string, prompt: string): Promise<string> {
-  const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+/** Primary provider: Claude Sonnet 4.6 via Anthropic Messages API. */
+async function callClaude(apiKey: string, prompt: string): Promise<string> {
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+      "content-type": "application/json",
     },
     body: JSON.stringify({
-      model: GEMINI_MODEL_GATEWAY,
+      model: CLAUDE_MODEL,
+      max_tokens: 1200,
       messages: [{ role: "user", content: prompt }],
     }),
   });
   if (res.status === 429) throw new Error("Rate limit hit — try again in a moment.");
-  if (res.status === 402) throw new Error("AI credits exhausted.");
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    throw new Error(`AI error (${res.status}): ${text.slice(0, 200)}`);
+    throw new Error(`Claude error (${res.status}): ${text.slice(0, 200)}`);
   }
   const json = (await res.json()) as {
-    choices?: Array<{ message?: { content?: string } }>;
+    content?: Array<{ type: string; text?: string }>;
   };
-  return json.choices?.[0]?.message?.content?.trim() ?? "";
-}
-
-async function callGeminiDirect(apiKey: string, prompt: string): Promise<string> {
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { responseMimeType: "application/json" },
-      }),
-    },
-  );
-  if (res.status === 429) throw new Error("Rate limit hit — try again in a moment.");
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(`Gemini error (${res.status}): ${text.slice(0, 200)}`);
-  }
-  const json = (await res.json()) as {
-    candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-  };
-  return json.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? "";
-}
-
-async function callOpenAI(apiKey: string, prompt: string): Promise<string> {
-  const res = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "gpt-4o-mini",
-      messages: [{ role: "user", content: prompt }],
-      response_format: { type: "json_object" },
-    }),
-  });
-  if (res.status === 429) throw new Error("Rate limit hit — try again in a moment.");
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(`OpenAI error (${res.status}): ${text.slice(0, 200)}`);
-  }
-  const json = (await res.json()) as {
-    choices?: Array<{ message?: { content?: string } }>;
-  };
-  return json.choices?.[0]?.message?.content?.trim() ?? "";
+  return (json.content ?? [])
+    .filter((b) => b.type === "text")
+    .map((b) => b.text ?? "")
+    .join("")
+    .trim();
 }
 
 export const fetchIndustryNews = createServerFn({ method: "POST" })
@@ -513,42 +472,16 @@ export const fetchIndustryNews = createServerFn({ method: "POST" })
     const prompt = buildPrompt(industry, today);
     const fallback = fallbackIndustryPulse(industry);
 
-    const lovableKey = process.env.LOVABLE_API_KEY;
-    const geminiKey = process.env.GEMINI_API_KEY;
-    const openaiKey = process.env.OPENAI_API_KEY;
+    const anthropicKey = process.env.ANTHROPIC_API_KEY;
+    if (!anthropicKey) return fallback;
 
-    const attempts: Array<() => Promise<string>> = [];
-    if (lovableKey) attempts.push(() => callLovable(lovableKey, prompt));
-    if (geminiKey) attempts.push(() => callGeminiDirect(geminiKey, prompt));
-    if (openaiKey) attempts.push(() => callOpenAI(openaiKey, prompt));
-
-    // No AI keys configured — still return useful curated pulse (never blank UI).
-    if (attempts.length === 0) return fallback;
-
-    let lastError: Error | null = null;
-    for (const attempt of attempts) {
-      try {
-        const raw = await attempt();
-        const parsed = parseAiPayload(raw, industry);
-        if (parsed) return parsed;
-      } catch (e) {
-        lastError = e instanceof Error ? e : new Error(String(e));
-        // Try next provider; only surface hard quota errors if every path fails
-        // and we somehow have no fallback (we always do).
-        if (
-          lastError.message.includes("Rate limit") ||
-          lastError.message.includes("credits exhausted")
-        ) {
-          // keep trying other providers first
-        }
-      }
+    try {
+      const raw = await callClaude(anthropicKey, prompt);
+      const parsed = parseAiPayload(raw, industry);
+      if (parsed) return parsed;
+    } catch {
+      // Prefer curated baseline over a blank/error panel.
     }
 
-    // Prefer showing curated intelligence over a blank/error panel.
-    return {
-      ...fallback,
-      items: lastError
-        ? fallback.items
-        : fallback.items,
-    };
+    return fallback;
   });

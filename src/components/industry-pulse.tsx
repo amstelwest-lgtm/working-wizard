@@ -150,7 +150,7 @@ export function IndustryPulse({
             </h3>
           </div>
           <p className="mt-0.5 pl-4 text-[10px] text-slate-500">
-            {display.source === "ai" ? "Live AI" : "Sector baseline"} ·{" "}
+            {display.source === "ai" ? "Claude · Live" : "Sector baseline"} ·{" "}
             {lastRefresh ? lastRefresh.toLocaleDateString("en-ZA") : "Updated today"}
           </p>
         </div>

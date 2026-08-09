@@ -30,7 +30,7 @@ export const Route = createFileRoute("/api/qbo/callback")({
         // Validate state (CSRF) — must exist and be < 10 minutes old
         const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
         const { data: stateRow } = await supabaseAdmin
-          .from("qbo_oauth_states" as never)
+          .from("qbo_oauth_states")
           .select("client_id, created_at")
           .eq("state", state)
           .gte("created_at", tenMinutesAgo)
@@ -46,7 +46,7 @@ export const Route = createFileRoute("/api/qbo/callback")({
 
         // Consume state immediately to prevent replay
         await supabaseAdmin
-          .from("qbo_oauth_states" as never)
+          .from("qbo_oauth_states")
           .delete()
           .eq("state", state);
 
@@ -80,7 +80,7 @@ export const Route = createFileRoute("/api/qbo/callback")({
           }
 
           // Upsert connection (one QBO company per Milōn client)
-          await supabaseAdmin.from("qbo_connections" as never).upsert(
+          await supabaseAdmin.from("qbo_connections").upsert(
             {
               client_id: clientId,
               realm_id: realmId,

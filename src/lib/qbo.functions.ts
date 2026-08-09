@@ -48,7 +48,7 @@ export const getQboAuthUrl = createServerFn({ method: "POST" })
 
     // Random state token for CSRF protection (10-minute TTL enforced on callback)
     const state = crypto.randomUUID();
-    await supabaseAdmin.from("qbo_oauth_states" as never).insert({
+    await supabaseAdmin.from("qbo_oauth_states").insert({
       state,
       client_id: data.clientId,
     });
@@ -76,7 +76,7 @@ export const getQboStatus = createServerFn({ method: "POST" })
     assertClientScope(context.actingAsClientId, data.clientId);
 
     const { data: conn } = await supabaseAdmin
-      .from("qbo_connections" as never)
+      .from("qbo_connections")
       .select(
         "realm_id, company_name, connected_at, last_synced_at, sync_status, sync_error",
       )
@@ -84,14 +84,13 @@ export const getQboStatus = createServerFn({ method: "POST" })
       .maybeSingle();
 
     if (!conn) return null;
-    const c = conn as Record<string, string | null>;
     return {
-      realmId: c.realm_id ?? "",
-      companyName: c.company_name ?? null,
-      connectedAt: c.connected_at ?? "",
-      lastSyncedAt: c.last_synced_at ?? null,
-      syncStatus: c.sync_status ?? "idle",
-      syncError: c.sync_error ?? null,
+      realmId: conn.realm_id ?? "",
+      companyName: conn.company_name ?? null,
+      connectedAt: conn.connected_at ?? "",
+      lastSyncedAt: conn.last_synced_at ?? null,
+      syncStatus: conn.sync_status ?? "idle",
+      syncError: conn.sync_error ?? null,
     };
   });
 
@@ -107,7 +106,7 @@ export const getQboStatuses = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     if (data.clientIds.length === 0) return {};
     const { data: rows } = await supabaseAdmin
-      .from("qbo_connections" as never)
+      .from("qbo_connections")
       .select("client_id, company_name, last_synced_at, sync_status")
       .in("client_id", data.clientIds);
 
@@ -116,11 +115,10 @@ export const getQboStatuses = createServerFn({ method: "POST" })
       { companyName: string | null; lastSyncedAt: string | null; syncStatus: string }
     > = {};
     for (const r of rows ?? []) {
-      const row = r as Record<string, string | null>;
-      out[row.client_id!] = {
-        companyName: row.company_name ?? null,
-        lastSyncedAt: row.last_synced_at ?? null,
-        syncStatus: row.sync_status ?? "idle",
+      out[r.client_id] = {
+        companyName: r.company_name ?? null,
+        lastSyncedAt: r.last_synced_at ?? null,
+        syncStatus: r.sync_status ?? "idle",
       };
     }
     return out;
@@ -159,16 +157,16 @@ export const triggerQboSync = createServerFn({ method: "POST" })
 
     // Get connection (admin — tokens are sensitive)
     const { data: connRaw } = await supabaseAdmin
-      .from("qbo_connections" as never)
+      .from("qbo_connections")
       .select("*")
       .eq("client_id", data.clientId)
       .maybeSingle();
     if (!connRaw) throw new Error("QuickBooks is not connected for this client");
-    const conn = connRaw as Record<string, string>;
+    const conn = connRaw;
 
     // Mark syncing
     await supabaseAdmin
-      .from("qbo_connections" as never)
+      .from("qbo_connections")
       .update({ sync_status: "syncing", sync_error: null })
       .eq("client_id", data.clientId);
 
@@ -181,7 +179,7 @@ export const triggerQboSync = createServerFn({ method: "POST" })
         const tokens = await refreshQboToken(conn.refresh_token);
         accessToken = tokens.access_token;
         await supabaseAdmin
-          .from("qbo_connections" as never)
+          .from("qbo_connections")
           .update({
             access_token: tokens.access_token,
             refresh_token: tokens.refresh_token,
@@ -205,13 +203,14 @@ export const triggerQboSync = createServerFn({ method: "POST" })
 
       // Merge with existing financials (don't overwrite fields QBO doesn't cover)
       const { data: existing } = await supabaseAdmin
-        .from("clients" as never)
+        .from("clients")
         .select("financials")
         .eq("id", data.clientId)
         .maybeSingle();
       const prev =
-        (existing as Record<string, Record<string, string>> | null)
-          ?.financials ?? {};
+        (existing?.financials && typeof existing.financials === "object" && !Array.isArray(existing.financials)
+          ? (existing.financials as Record<string, string>)
+          : {});
       const merged = {
         ...prev,
         ...Object.fromEntries(
@@ -220,12 +219,12 @@ export const triggerQboSync = createServerFn({ method: "POST" })
       };
 
       await supabaseAdmin
-        .from("clients" as never)
+        .from("clients")
         .update({ financials: merged, financials_updated_at: new Date().toISOString() })
         .eq("id", data.clientId);
 
       // Cache raw sync data (upsert per data type)
-      await supabaseAdmin.from("qbo_sync_data" as never).upsert(
+      await supabaseAdmin.from("qbo_sync_data").upsert(
         [
           { client_id: data.clientId, data_type: "pl", raw_data: pnl, synced_at: new Date().toISOString() },
           { client_id: data.clientId, data_type: "bs", raw_data: bs, synced_at: new Date().toISOString() },
@@ -238,7 +237,7 @@ export const triggerQboSync = createServerFn({ method: "POST" })
 
       // Mark idle + record sync time
       await supabaseAdmin
-        .from("qbo_connections" as never)
+        .from("qbo_connections")
         .update({
           sync_status: "idle",
           sync_error: null,
@@ -261,7 +260,7 @@ export const triggerQboSync = createServerFn({ method: "POST" })
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Unknown sync error";
       await supabaseAdmin
-        .from("qbo_connections" as never)
+        .from("qbo_connections")
         .update({ sync_status: "error", sync_error: msg })
         .eq("client_id", data.clientId);
       throw new Error(`Sync failed: ${msg}`);
@@ -286,7 +285,7 @@ export const disconnectQbo = createServerFn({ method: "POST" })
     if (!client) throw new Error("Client not found");
 
     await supabaseAdmin
-      .from("qbo_connections" as never)
+      .from("qbo_connections")
       .delete()
       .eq("client_id", data.clientId);
 
