@@ -358,12 +358,15 @@ export function CashForecastPanel({
   clientName,
   simplified,
   canSign,
+  reloadToken,
 }: {
   clientId?: string;
   clientName?: string;
   simplified?: boolean;
   /** Accountant view only: show the interactive sign-off control instead of the read-only badge. */
   canSign?: boolean;
+  /** Bump to re-load cashflow from Supabase (e.g. after bank→cash publish). */
+  reloadToken?: number;
 } = {}) {
   const { profile } = useAccountantProfile();
   const fetchReviewSignoffs = useServerFn(listClientReviewSignoffs);
@@ -439,7 +442,7 @@ export function CashForecastPanel({
         skipNextAutosave.current = true;
         setLoaded(true);
       });
-  }, [clientId]);
+  }, [clientId, reloadToken]);
 
   useEffect(() => {
     if (!clientId || !loaded) return;

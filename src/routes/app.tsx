@@ -11,6 +11,7 @@ import { HeaderShareButton } from "@/components/share";
 import { extractFinancials, extractPDFsWithAI } from "@/lib/extract-financials.functions";
 import { extractionToInputs, ExtractionReviewModal } from "@/components/extraction-review-modal";
 import { BankStatementDrafter } from "@/components/bank-statement-drafter";
+import { CashFromBanksDrafter } from "@/components/cash-from-banks-drafter";
 import type { MergedExtractionResult } from "@/lib/extraction-types";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -1771,6 +1772,8 @@ function Index() {
   const [showQboDialog, setShowQboDialog] = useState(false);
   const [showFinData, setShowFinData] = useState(false);
   const [showBankDrafter, setShowBankDrafter] = useState(false);
+  const [showCashFromBanks, setShowCashFromBanks] = useState(false);
+  const [cashForecastReloadToken, setCashForecastReloadToken] = useState(0);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const businessType = businessTypeId ? BUSINESS_TYPES.find((b) => b.id === businessTypeId) ?? null : null;
   const model: ModelTuning = businessType ? MODEL_TUNING[businessType.model] : MODEL_TUNING.hybrid;
@@ -2936,6 +2939,7 @@ function Index() {
                 clientName={actingClientName ?? undefined}
                 simplified={viewMode === "simplified"}
                 canSign={(userRole === "accountant" || userRole === "firm_admin") && !!actingClientId}
+                reloadToken={cashForecastReloadToken}
               />
             </Suspense>
           </TabsContent>
@@ -3151,15 +3155,26 @@ function Index() {
             </button>
             <button
               onClick={() => { setShowFinData(false); setShowBankDrafter(true); }}
-              className="flex flex-col items-start gap-1.5 rounded-lg border border-amber-700/30 bg-amber-50 p-4 text-left transition-colors hover:border-amber-700/60 hover:bg-amber-100 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-[#b7872a]/60 dark:hover:bg-slate-800 sm:col-span-2"
+              className="flex flex-col items-start gap-1.5 rounded-lg border border-amber-700/30 bg-amber-50 p-4 text-left transition-colors hover:border-amber-700/60 hover:bg-amber-100 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-[#b7872a]/60 dark:hover:bg-slate-800"
             >
               <span className="flex items-center gap-2 text-sm font-semibold text-amber-900 dark:text-slate-100">
                 <Database className="h-4 w-4" />
                 Draft financials from bank statements
               </span>
               <span className="text-xs text-slate-600 dark:text-slate-400">
-                No financial statements yet? Upload bank statements (PDF or CSV) and AI drafts a basic
-                income statement — revenue, cost of sales, expenses and profit — for you to review.
+                Upload statements and AI drafts a basic income statement for P&amp;L / ratios.
+              </span>
+            </button>
+            <button
+              onClick={() => { setShowFinData(false); setShowCashFromBanks(true); }}
+              className="flex flex-col items-start gap-1.5 rounded-lg border border-amber-700/30 bg-amber-50 p-4 text-left transition-colors hover:border-amber-700/60 hover:bg-amber-100 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-[#b7872a]/60 dark:hover:bg-slate-800"
+            >
+              <span className="flex items-center gap-2 text-sm font-semibold text-amber-900 dark:text-slate-100">
+                <Database className="h-4 w-4" />
+                Build cash forecast from bank statements
+              </span>
+              <span className="text-xs text-slate-600 dark:text-slate-400">
+                Claude groups repeating cash movements into a preliminary 13-week forecast you can publish.
               </span>
             </button>
           </div>
@@ -3224,6 +3239,42 @@ function Index() {
               ? "Draft figures applied (annualised) — saved automatically. Have your accountant review them."
               : "Draft figures applied for the statement period — saved automatically. Have your accountant review them.",
           );
+        }}
+      />
+
+      {/* Bank statement → preliminary cash forecast (Phases 1–3) */}
+      <CashFromBanksDrafter
+        open={showCashFromBanks}
+        onClose={() => setShowCashFromBanks(false)}
+        onPublish={async (payload) => {
+          if (!effectiveClientId) {
+            toast.error("Save / select a client before publishing a cash forecast.");
+            return;
+          }
+          const forecastUpdatedAt = new Date().toISOString();
+          const { error } = await supabase
+            .from("clients")
+            .update({
+              cashflow: payload as never,
+              cashflow_bank_draft: payload as never,
+              last_forecast_at: forecastUpdatedAt,
+            })
+            .eq("id", effectiveClientId);
+          if (error) {
+            // Retry without cashflow_bank_draft if column not migrated yet
+            const retry = await supabase
+              .from("clients")
+              .update({
+                cashflow: payload as never,
+                last_forecast_at: forecastUpdatedAt,
+              })
+              .eq("id", effectiveClientId);
+            if (retry.error) throw new Error(retry.error.message);
+          }
+          setShowCashFromBanks(false);
+          setCashForecastReloadToken((n) => n + 1);
+          setActiveTab("cash");
+          toast.success("Preliminary cash forecast published — review it on the Cash Forecast tab.");
         }}
       />
 
