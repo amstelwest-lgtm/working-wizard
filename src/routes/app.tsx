@@ -2183,17 +2183,22 @@ function Index() {
     const wc = ca > 0 || cl > 0 ? Math.max(0, ca - cl) : NaN;
     const monthlyFromOcf = ocfN !== 0 ? ocfN / 12 : NaN;
     const monthlyFromRev = revenueN > 0 ? (revenueN * 0.04) / 12 : NaN;
-    const monthly = isFinite(monthlyFromOcf) ? monthlyFromOcf : monthlyFromRev;
-    // Prefer WC seed when it's meaningful; otherwise seed from ~2 months of cash generation.
+    // Prefer OCF when it's a meaningful monthly figure; otherwise revenue proxy.
+    const monthly =
+      isFinite(monthlyFromOcf) && Math.abs(monthlyFromOcf) >= 500
+        ? monthlyFromOcf
+        : monthlyFromRev;
     const seed =
-      isFinite(wc) && wc >= 1000
+      isFinite(wc) && wc >= 5_000
         ? wc
         : isFinite(monthly)
-          ? Math.max(monthly * 2, 0)
+          ? Math.max(monthly * 2, revenueN > 0 ? revenueN * 0.05 : 0)
           : NaN;
     if (!isFinite(seed) && !isFinite(monthly)) return null;
     const start = isFinite(seed) ? seed : (monthly as number) * 2;
     const add = isFinite(monthly) ? (monthly as number) : start * 0.08;
+    // Guard against nonsense micro-projections (e.g. R75) when inputs are incomplete.
+    if (start < 1_000 && (!isFinite(revenueN) || revenueN < 10_000)) return null;
     const points = [0, 1, 2, 3].map((i) => Math.max(0, start + add * i));
     const projected = points[points.length - 1];
     const fmt = (amount: number) =>
@@ -2224,17 +2229,20 @@ function Index() {
   const nextMoveImpactLabel = (() => {
     const top = nextSteps[0];
     if (!top) return undefined;
-    const fmtK = (amount: number) =>
-      amount >= 1_000_000
-        ? `+R${(amount / 1_000_000).toFixed(1)}m`
-        : `+R${Math.round(amount / 1000)}k`;
+    const fmtImpact = (amount: number) => {
+      if (amount >= 1_000_000) return `+R${(amount / 1_000_000).toFixed(1)}m`;
+      if (amount >= 1_000) return `+R${Math.round(amount / 1000)}k`;
+      return `+R${Math.round(amount)}`;
+    };
     const revenueN = n.revenue;
     const receivablesN = n.receivables;
-    if (top.key === "debtorDays" && receivablesN >= 1000) {
-      return `${fmtK(receivablesN * 0.15)} additional cash in next 90 days`;
+    if (top.key === "debtorDays" && receivablesN >= 5_000) {
+      const unlock = receivablesN * 0.15;
+      if (unlock >= 1_000) return `${fmtImpact(unlock)} additional cash in next 90 days`;
     }
-    if (revenueN >= 1000) {
-      return `${fmtK(revenueN * 0.02)} potential swing this quarter`;
+    if (revenueN >= 50_000) {
+      const unlock = revenueN * 0.02;
+      if (unlock >= 1_000) return `${fmtImpact(unlock)} potential swing this quarter`;
     }
     return undefined;
   })();
@@ -2616,8 +2624,8 @@ function Index() {
           </TabsList>
 
           {/* Simplified / Complex toggle — persists across all tabs */}
-          <div className="flex justify-center mt-1 mb-4">
-            <div className="flex items-center gap-0.5 rounded-full bg-white/5 p-[3px]">
+          <div className="mb-3 mt-1 flex justify-center">
+            <div className="flex items-center gap-0.5 rounded-full border border-slate-200/80 bg-slate-100/80 p-[3px] dark:border-white/10 dark:bg-white/5">
               {(["simplified", "complex"] as const).map((m) => (
                 <button
                   key={m}
@@ -2628,7 +2636,7 @@ function Index() {
                   className={`rounded-full px-4 py-[5px] text-[11px] font-semibold uppercase tracking-[0.08em] transition-all ${
                     viewMode === m
                       ? "bg-[#d4a550] text-[#0a0e1a] shadow-[0_2px_8px_rgba(212,165,80,0.35)]"
-                      : "bg-transparent text-slate-400/70 hover:text-slate-300"
+                      : "bg-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400/70 dark:hover:text-slate-300"
                   }`}
                 >
                   {m}
@@ -2637,88 +2645,102 @@ function Index() {
             </div>
           </div>
 
-          <TabsContent value="today">
+          <TabsContent value="today" className="mt-0">
             {viewMode === "simplified" ? (
-            <div className="flex flex-col gap-4 pb-8">
-              <div className="flex w-full flex-col gap-1">
-                <div className="flex items-center gap-2">
-                  <h2 className="text-lg font-semibold tracking-tight text-slate-900 dark:text-white sm:text-xl">
-                    Business Health
-                  </h2>
-                  <ReviewSignoffBadge
-                    signoff={financialsSignoff}
-                    scope="financials"
-                    isStale={computeIsStale(financialsSignoff, clientMeta?.financials_updated_at ?? null)}
-                    compact
-                  />
+            <div className="pb-6">
+              {/* Page header — aligned with rail top */}
+              <div className="mb-3 flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h2 className="text-lg font-semibold tracking-tight text-slate-900 dark:text-white">
+                      Business Health
+                    </h2>
+                    <ReviewSignoffBadge
+                      signoff={financialsSignoff}
+                      scope="financials"
+                      isStale={computeIsStale(financialsSignoff, clientMeta?.financials_updated_at ?? null)}
+                      compact
+                    />
+                  </div>
+                  <p className="mt-0.5 text-[13px] text-slate-500 dark:text-slate-400">
+                    Your financial pulse at a glance.
+                  </p>
                 </div>
-                <p className="text-sm text-slate-500 dark:text-slate-400">Your financial pulse at a glance.</p>
+                {hasRealFinancials ? (
+                  <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[0.16em] text-emerald-700 dark:text-emerald-400">
+                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
+                    Live · {new Date().toLocaleDateString("en-ZA", { day: "2-digit", month: "short", year: "numeric" }).toUpperCase()}
+                  </span>
+                ) : (
+                  <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:border-slate-700 dark:bg-slate-800/60">
+                    No data yet
+                  </span>
+                )}
               </div>
 
               {/* No-data empty state — shown until owner uploads or enters real financials */}
               {!hasRealFinancials && !actingClientId ? (
-                <div className="grid w-full gap-6 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start">
-                  <div className="flex w-full flex-col items-center gap-6 py-6">
-                    <div className="relative flex h-48 w-48 items-center justify-center">
-                      <div className="absolute inset-0 rounded-full border-2 border-dashed border-[#d4a550]/20" />
-                      <div className="absolute inset-6 rounded-full border border-[#d4a550]/10" />
+                <div className="grid w-full items-start gap-4 lg:grid-cols-[minmax(0,1fr)_300px] xl:grid-cols-[minmax(0,1fr)_320px]">
+                  <div className="flex w-full flex-col items-center gap-5 rounded-xl border border-dashed border-slate-200 bg-white/60 px-4 py-10 dark:border-slate-700 dark:bg-slate-900/40">
+                    <div className="relative flex h-36 w-36 items-center justify-center">
+                      <div className="absolute inset-0 rounded-full border-2 border-dashed border-[#d4a550]/25" />
+                      <div className="absolute inset-5 rounded-full border border-[#d4a550]/15" />
                       <div className="flex flex-col items-center gap-1">
-                        <span className="text-3xl font-bold text-slate-600">—</span>
-                        <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-600">No score yet</span>
+                        <span className="text-3xl font-bold text-slate-400">—</span>
+                        <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">No score yet</span>
                       </div>
                     </div>
                     <div className="max-w-sm text-center">
-                      <h3 className="text-base font-semibold text-slate-200">Add your financials to see your score</h3>
-                      <p className="mt-1.5 text-sm text-slate-400">
-                        Upload a financial statement or enter your figures manually. MILŌN will calculate your health score and your highest-impact first move instantly.
+                      <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100">Add your financials to see your score</h3>
+                      <p className="mt-1.5 text-sm text-slate-500">
+                        Upload a statement or enter figures manually. MILŌN calculates your health score and highest-impact first move instantly.
                       </p>
                     </div>
                     {userRole !== "client_member" ? (
-                      <div className="flex w-full max-w-sm flex-col gap-3 sm:flex-row">
+                      <div className="flex w-full max-w-sm flex-col gap-2.5 sm:flex-row">
                         <button
                           onClick={() => { setShowFinData(true); setTimeout(() => uploadRef.current?.click(), 150); }}
-                          className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-[#b7872a] px-4 py-3 text-sm font-semibold text-white transition-all hover:bg-[#d4a550]"
+                          className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-[#b7872a] px-4 py-2.5 text-sm font-semibold text-white transition-all hover:bg-[#d4a550]"
                         >
                           <Upload className="h-4 w-4" />
                           Upload statement
                         </button>
                         <button
                           onClick={() => { setShowFinData(true); setShowInputs(true); }}
-                          className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-900 px-4 py-3 text-sm font-semibold text-slate-300 transition-all hover:bg-slate-800"
+                          className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
                         >
                           <Database className="h-4 w-4" />
                           Enter manually
                         </button>
                       </div>
                     ) : (
-                      <p className="max-w-sm text-center text-sm text-slate-400">
+                      <p className="max-w-sm text-center text-sm text-slate-500">
                         Financial data hasn't been added yet. The owner will set this up.
                       </p>
                     )}
                   </div>
-                  <div className="flex justify-center lg:justify-start">
-                    <OverviewRail
-                      liveLabel="No data yet"
-                      positionPercentile={null}
-                      weekChanges={[]}
-                      cashTrajectory={null}
-                      onOpenCash={() => setActiveTab("cash")}
-                      onOpenMoves={() => setActiveTab("next")}
-                      onOpenBenchmarks={() => {
-                        setActiveTab("today");
-                        setViewMode("complex");
-                      }}
-                      industryPulse={
-                        <IndustryPulse industry={businessType?.label ?? "General SME"} vertical />
-                      }
-                    />
-                  </div>
+                  <OverviewRail
+                    positionPercentile={null}
+                    weekChanges={[]}
+                    cashTrajectory={null}
+                    onOpenCash={() => setActiveTab("cash")}
+                    onOpenMoves={() => setActiveTab("next")}
+                    onOpenBenchmarks={() => {
+                      setActiveTab("today");
+                      setViewMode("complex");
+                    }}
+                    industryPulse={
+                      <IndustryPulse industry={businessType?.label ?? "General SME"} vertical />
+                    }
+                  />
                 </div>
               ) : (
-              <div className="grid w-full gap-6 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start">
-                <div className="flex w-full flex-col items-center gap-4">
-                  <div className="flex w-full justify-center">
+              <div className="grid w-full items-start gap-4 lg:grid-cols-[minmax(0,1fr)_300px] xl:grid-cols-[minmax(0,1fr)_320px]">
+                {/* Main column */}
+                <section className="flex min-w-0 flex-col gap-3">
+                  <div className="rounded-xl border border-slate-200/90 bg-white px-3 py-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)] dark:border-white/10 dark:bg-[#0f172a]/40 dark:shadow-none sm:px-5">
                     <SphereHero
+                      compact
                       overallHealth={avgHealth}
                       pillars={spherePillars}
                       caption={overviewCaption}
@@ -2744,30 +2766,25 @@ function Index() {
 
                   <div
                     id="ask-ai-overview"
-                    className="min-h-[120px] w-full max-w-lg rounded-xl border border-[#b7872a]/40 bg-white p-1 shadow-sm dark:bg-[#0a1020]/80"
+                    className="min-h-[88px] w-full rounded-xl border border-[#b7872a]/35 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)] dark:bg-[#0a1020]/80"
                   />
-                </div>
-                <div className="flex justify-center lg:justify-start lg:pt-1">
-                  <OverviewRail
-                    liveLabel={
-                      hasRealFinancials
-                        ? `Live · ${new Date().toLocaleDateString("en-ZA", { day: "2-digit", month: "short", year: "numeric" }).toUpperCase()}`
-                        : "No data yet"
-                    }
-                    positionPercentile={positionPercentile}
-                    weekChanges={weekChanges}
-                    cashTrajectory={cashTrajectory}
-                    onOpenCash={() => setActiveTab("cash")}
-                    onOpenMoves={() => setActiveTab("next")}
-                    onOpenBenchmarks={() => {
-                      setActiveTab("today");
-                      setViewMode("complex");
-                    }}
-                    industryPulse={
-                      <IndustryPulse industry={businessType?.label ?? "General SME"} vertical />
-                    }
-                  />
-                </div>
+                </section>
+
+                {/* Insight rail */}
+                <OverviewRail
+                  positionPercentile={positionPercentile}
+                  weekChanges={weekChanges}
+                  cashTrajectory={cashTrajectory}
+                  onOpenCash={() => setActiveTab("cash")}
+                  onOpenMoves={() => setActiveTab("next")}
+                  onOpenBenchmarks={() => {
+                    setActiveTab("today");
+                    setViewMode("complex");
+                  }}
+                  industryPulse={
+                    <IndustryPulse industry={businessType?.label ?? "General SME"} vertical />
+                  }
+                />
               </div>
               )}
             </div>

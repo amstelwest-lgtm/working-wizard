@@ -9,10 +9,10 @@ import {
 } from "@/lib/industry-news.functions";
 
 const TAG_COLORS: Record<string, { bg: string; color: string }> = {
-  green: { bg: "rgba(76,175,130,0.15)", color: "#4caf82" },
-  amber: { bg: "rgba(201,168,76,0.15)", color: "#c9a84c" },
-  red: { bg: "rgba(224,92,92,0.15)", color: "#e05c5c" },
-  blue: { bg: "rgba(100,160,220,0.15)", color: "#64a0dc" },
+  green: { bg: "rgba(76,175,130,0.15)", color: "#2f9d6a" },
+  amber: { bg: "rgba(201,168,76,0.18)", color: "#b8860b" },
+  red: { bg: "rgba(224,92,92,0.15)", color: "#d64545" },
+  blue: { bg: "rgba(100,160,220,0.15)", color: "#3b82c4" },
 };
 
 const CACHE_KEY = "milon_industry_pulse_v2";
@@ -64,17 +64,17 @@ function MetricRow({ metric }: { metric: PulseMetric }) {
 function NewsCard({ item }: { item: NewsItem }) {
   const tc = TAG_COLORS[item.tagColor] ?? TAG_COLORS.amber;
   return (
-    <div className="flex flex-col gap-1.5 rounded-xl border border-slate-200 bg-white/70 p-3 dark:border-white/8 dark:bg-white/[0.03]">
+    <div className="rounded-lg border border-slate-200/80 bg-slate-50/70 p-2.5 dark:border-white/8 dark:bg-white/[0.03]">
       <span
-        className="w-fit rounded px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.1em]"
+        className="inline-block rounded px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.1em]"
         style={{ background: tc.bg, color: tc.color }}
       >
         {item.tag}
       </span>
-      <div className="text-[13px] font-bold leading-snug text-slate-900 dark:text-white">
+      <div className="mt-1.5 text-[12px] font-semibold leading-snug text-slate-900 dark:text-white">
         {item.headline}
       </div>
-      <div className="text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">
+      <div className="mt-0.5 text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">
         {item.summary}
       </div>
     </div>
@@ -86,7 +86,6 @@ export function IndustryPulse({
   vertical,
 }: {
   industry: string;
-  /** kept for call-site compatibility; sidebar layout is always vertical */
   vertical?: boolean;
 }) {
   void vertical;
@@ -134,31 +133,32 @@ export function IndustryPulse({
   const display = pulse ?? fallbackIndustryPulse(sector);
 
   return (
-    <div className="w-full max-w-[340px] rounded-2xl border border-slate-200 bg-gradient-to-b from-amber-50/60 to-white p-4 dark:border-white/8 dark:from-white/[0.04] dark:to-transparent">
-      {/* Header — title on its own row so it never gets clipped */}
-      <div className="mb-1 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <span
-            className="h-2 w-2 shrink-0 rounded-full bg-emerald-500"
-            style={{ boxShadow: "0 0 6px #4caf82", animation: "pulse 2s ease-in-out infinite" }}
-          />
-          <h3 className="text-[12px] font-bold uppercase tracking-[0.14em] text-slate-900 dark:text-white">
-            Industry Pulse
-          </h3>
+    <div className="w-full rounded-xl border border-slate-200/90 bg-white p-3.5 shadow-[0_1px_2px_rgba(15,23,42,0.04)] dark:border-white/10 dark:bg-[#0f172a]/55 dark:shadow-none">
+      <div className="mb-2 flex items-start justify-between gap-2">
+        <div>
+          <div className="flex items-center gap-2">
+            <span
+              className="h-2 w-2 shrink-0 rounded-full bg-emerald-500"
+              style={{ boxShadow: "0 0 6px #4caf82" }}
+            />
+            <h3 className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-800 dark:text-slate-100">
+              Industry Pulse
+            </h3>
+          </div>
+          <p className="mt-0.5 pl-4 text-[10px] text-slate-500">
+            AI · {lastRefresh ? lastRefresh.toLocaleDateString("en-ZA") : "Refreshed daily"}
+          </p>
         </div>
         <button
           type="button"
           onClick={() => load(true)}
           disabled={loading}
           aria-label="Refresh industry pulse"
-          className="flex items-center gap-1.5 rounded-md border border-[#d4a550]/40 px-2 py-1 text-[10px] font-semibold text-[#b8860b] transition-colors hover:bg-[#d4a550]/10 disabled:opacity-40 dark:text-[#d4a550]"
+          className="flex h-7 w-7 items-center justify-center rounded-md border border-[#d4a550]/35 text-[#b8860b] transition-colors hover:bg-[#d4a550]/10 disabled:opacity-40 dark:text-[#d4a550]"
         >
-          <RefreshCw className={`h-3 w-3 ${loading ? "animate-spin" : ""}`} />
+          <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
         </button>
       </div>
-      <p className="mb-3 text-[10px] text-slate-500">
-        AI · {lastRefresh ? lastRefresh.toLocaleDateString("en-ZA") : "Refreshed daily"}
-      </p>
 
       {loading && !pulse && (
         <div className="space-y-2 py-2">
@@ -174,11 +174,11 @@ export function IndustryPulse({
 
       {(!loading || pulse) && (
         <>
-          <p className="text-[15px] font-semibold leading-snug text-slate-900 dark:text-white">
+          <p className="text-[14px] font-semibold leading-snug text-slate-900 dark:text-white">
             {display.headline}
           </p>
 
-          <div className="mt-3 divide-y divide-slate-200/80 border-y border-slate-200/80 py-1 dark:divide-white/6 dark:border-white/6">
+          <div className="mt-2.5 divide-y divide-slate-100 border-y border-slate-100 py-0.5 dark:divide-white/6 dark:border-white/6">
             {display.metrics.map((m) => (
               <MetricRow key={m.label} metric={m} />
             ))}
@@ -190,12 +190,11 @@ export function IndustryPulse({
             </p>
           )}
 
-          {/* Industry news always visible */}
-          <div className="mt-4">
-            <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
+          <div className="mt-3">
+            <h4 className="mb-2 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-800 dark:text-slate-100">
               Industry News
-            </p>
-            <div className="flex flex-col gap-2.5">
+            </h4>
+            <div className="flex flex-col gap-2">
               {display.items.map((item, i) => (
                 <NewsCard key={`${item.headline}-${i}`} item={item} />
               ))}
