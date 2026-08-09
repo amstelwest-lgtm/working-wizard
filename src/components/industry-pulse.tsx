@@ -1,12 +1,6 @@
-import { useState, useEffect } from "react";
-import { RefreshCw } from "lucide-react";
-import {
-  fetchIndustryNews,
-  fallbackIndustryPulse,
-  type IndustryPulsePayload,
-  type NewsItem,
-  type PulseMetric,
-} from "@/lib/industry-news.functions";
+import { ExternalLink, RefreshCw } from "lucide-react";
+import { useIndustryPulse } from "@/hooks/use-industry-pulse";
+import { resolveNewsUrl, type NewsItem, type PulseMetric } from "@/lib/industry-news.functions";
 
 const TAG_COLORS: Record<string, { bg: string; color: string }> = {
   green: { bg: "rgba(76,175,130,0.15)", color: "#2f9d6a" },
@@ -14,37 +8,6 @@ const TAG_COLORS: Record<string, { bg: string; color: string }> = {
   red: { bg: "rgba(224,92,92,0.15)", color: "#d64545" },
   blue: { bg: "rgba(100,160,220,0.15)", color: "#3b82c4" },
 };
-
-const CACHE_KEY = "milon_industry_pulse_v4";
-const CACHE_TTL = 24 * 60 * 60 * 1000;
-
-type CachedPulse = {
-  timestamp: number;
-  data: IndustryPulsePayload;
-};
-
-function loadCache(industry: string): IndustryPulsePayload | null {
-  try {
-    const raw = sessionStorage.getItem(`${CACHE_KEY}_${industry}`);
-    if (!raw) return null;
-    const { timestamp, data } = JSON.parse(raw) as CachedPulse;
-    if (Date.now() - timestamp < CACHE_TTL && data?.metrics?.length) return data;
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-function saveCache(industry: string, data: IndustryPulsePayload) {
-  try {
-    sessionStorage.setItem(
-      `${CACHE_KEY}_${industry}`,
-      JSON.stringify({ timestamp: Date.now(), data } satisfies CachedPulse),
-    );
-  } catch {
-    /* ignore quota */
-  }
-}
 
 function MetricRow({ metric }: { metric: PulseMetric }) {
   const color =
@@ -55,36 +18,16 @@ function MetricRow({ metric }: { metric: PulseMetric }) {
         : "text-amber-600 dark:text-amber-300";
   const arrow =
     metric.direction === "up" ? "↑ " : metric.direction === "down" ? "↓ " : "→ ";
-  // Avoid double arrows if the value already includes one
   const value = /^[↑↓→]/.test(metric.value.trim()) ? metric.value : `${arrow}${metric.value}`;
   return (
-    <div className="flex items-center justify-between gap-3 py-1.5 text-[12px]">
+    <div className="flex items-center justify-between gap-3 py-1 text-[12px]">
       <span className="text-slate-500 dark:text-slate-400">{metric.label}</span>
       <span className={`max-w-[55%] text-right font-semibold ${color}`}>{value}</span>
     </div>
   );
 }
 
-function NewsCard({ item }: { item: NewsItem }) {
-  const tc = TAG_COLORS[item.tagColor] ?? TAG_COLORS.amber;
-  return (
-    <div className="rounded-lg border border-slate-200/80 bg-slate-50/70 p-2.5 dark:border-white/8 dark:bg-white/[0.03]">
-      <span
-        className="inline-block rounded px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.1em]"
-        style={{ background: tc.bg, color: tc.color }}
-      >
-        {item.tag}
-      </span>
-      <div className="mt-1.5 text-[12px] font-semibold leading-snug text-slate-900 dark:text-white">
-        {item.headline}
-      </div>
-      <div className="mt-0.5 text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">
-        {item.summary}
-      </div>
-    </div>
-  );
-}
-
+/** Compact rail card: headline + metrics only (news lives in IndustryNewsBand). */
 export function IndustryPulse({
   industry,
   vertical,
@@ -93,52 +36,11 @@ export function IndustryPulse({
   vertical?: boolean;
 }) {
   void vertical;
-  const sector = industry?.trim() || "General SME";
-  const [pulse, setPulse] = useState<IndustryPulsePayload | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  async function load(force = false) {
-    if (!force) {
-      const cached = loadCache(sector);
-      if (cached) {
-        setPulse(cached);
-        setLastRefresh(new Date());
-        return;
-      }
-    }
-    setLoading(true);
-    setError(null);
-    try {
-      const result = await fetchIndustryNews({ data: { industry: sector } });
-      const payload =
-        result?.metrics?.length || result?.items?.length
-          ? result
-          : fallbackIndustryPulse(sector);
-      saveCache(sector, payload);
-      setPulse(payload);
-      setLastRefresh(new Date());
-    } catch (e) {
-      const fb = fallbackIndustryPulse(sector);
-      setPulse(fb);
-      setError(e instanceof Error ? e.message : "Using offline industry pulse");
-      setLastRefresh(new Date());
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sector]);
-
-  const display = pulse ?? fallbackIndustryPulse(sector);
+  const { display, loading, lastRefresh, error, refresh } = useIndustryPulse(industry);
 
   return (
-    <div className="w-full rounded-xl border border-slate-200/90 bg-white p-3.5 shadow-[0_1px_2px_rgba(15,23,42,0.04)] dark:border-white/10 dark:bg-[#0f172a]/55 dark:shadow-none">
-      <div className="mb-2 flex items-start justify-between gap-2">
+    <div className="w-full rounded-xl border border-slate-200/90 bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)] dark:border-white/10 dark:bg-[#0f172a]/55 dark:shadow-none">
+      <div className="mb-1.5 flex items-start justify-between gap-2">
         <div>
           <div className="flex items-center gap-2">
             <span
@@ -156,7 +58,7 @@ export function IndustryPulse({
         </div>
         <button
           type="button"
-          onClick={() => load(true)}
+          onClick={() => refresh()}
           disabled={loading}
           aria-label="Refresh industry pulse"
           className="flex h-7 w-7 items-center justify-center rounded-md border border-[#d4a550]/35 text-[#b8860b] transition-colors hover:bg-[#d4a550]/10 disabled:opacity-40 dark:text-[#d4a550]"
@@ -165,7 +67,7 @@ export function IndustryPulse({
         </button>
       </div>
 
-      {loading && !pulse && (
+      {loading && !display.metrics.length ? (
         <div className="space-y-2 py-2">
           {[1, 2, 3].map((i) => (
             <div
@@ -175,41 +77,89 @@ export function IndustryPulse({
             />
           ))}
         </div>
-      )}
-
-      {(!loading || pulse) && (
+      ) : (
         <>
-          <p className="text-[14px] font-semibold leading-snug text-slate-900 dark:text-white">
+          <p className="text-[13px] font-semibold leading-snug text-slate-900 dark:text-white">
             {display.headline}
           </p>
-
-          <div className="mt-2.5 divide-y divide-slate-100 border-y border-slate-100 py-0.5 dark:divide-white/6 dark:border-white/6">
+          <div className="mt-2 divide-y divide-slate-100 border-y border-slate-100 py-0.5 dark:divide-white/6 dark:border-white/6">
             {display.metrics.map((m) => (
               <MetricRow key={m.label} metric={m} />
             ))}
           </div>
-
           {error && (
-            <p className="mt-2 text-[10px] leading-snug text-slate-500">
+            <p className="mt-1.5 text-[10px] leading-snug text-slate-500">
               Live AI unavailable — showing sector baseline.
             </p>
           )}
-
-          <div className="mt-3">
-            <div className="mb-2">
-              <h4 className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-800 dark:text-slate-100">
-                Industry News
-              </h4>
-              <p className="mt-0.5 text-[10px] text-slate-500">What's moving in your sector</p>
-            </div>
-            <div className="flex flex-col gap-2">
-              {display.items.map((item, i) => (
-                <NewsCard key={`${item.headline}-${i}`} item={item} />
-              ))}
-            </div>
-          </div>
         </>
       )}
     </div>
+  );
+}
+
+function NewsLinkCard({ item }: { item: NewsItem }) {
+  const tc = TAG_COLORS[item.tagColor] ?? TAG_COLORS.amber;
+  const href = resolveNewsUrl(item);
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="group flex flex-col rounded-xl border border-slate-200/90 bg-white p-3.5 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition hover:border-[#d4a550]/50 hover:shadow-md dark:border-white/10 dark:bg-[#0f172a]/55 dark:hover:border-[#d4a550]/35"
+    >
+      <span
+        className="inline-block w-fit rounded px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.1em]"
+        style={{ background: tc.bg, color: tc.color }}
+      >
+        {item.tag}
+      </span>
+      <div className="mt-2 text-[13px] font-semibold leading-snug text-slate-900 group-hover:text-[#8a651b] dark:text-white dark:group-hover:text-[#d4a550]">
+        {item.headline}
+      </div>
+      <div className="mt-1 flex-1 text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">
+        {item.summary}
+      </div>
+      <span className="mt-3 inline-flex items-center gap-1 text-[11px] font-semibold text-[#b8860b] dark:text-[#d4a550]">
+        Read article
+        <ExternalLink className="h-3 w-3 opacity-80 transition group-hover:translate-x-0.5" />
+      </span>
+    </a>
+  );
+}
+
+/** Full-width news strip under the overview grid — keeps the rail from spilling. */
+export function IndustryNewsBand({ industry }: { industry: string }) {
+  const { display, loading } = useIndustryPulse(industry);
+  if (loading && !display.items.length) {
+    return (
+      <section className="mt-4">
+        <div className="mb-2.5 h-4 w-40 animate-pulse rounded bg-slate-200 dark:bg-white/10" />
+        <div className="grid gap-3 sm:grid-cols-3">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="h-28 animate-pulse rounded-xl bg-slate-100 dark:bg-white/5" />
+          ))}
+        </div>
+      </section>
+    );
+  }
+  if (!display.items.length) return null;
+
+  return (
+    <section className="mt-4">
+      <div className="mb-2.5 flex items-end justify-between gap-3">
+        <div>
+          <h3 className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-800 dark:text-slate-100">
+            Industry News
+          </h3>
+          <p className="mt-0.5 text-[11px] text-slate-500">What's moving in your sector</p>
+        </div>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-3">
+        {display.items.map((item, i) => (
+          <NewsLinkCard key={`${item.headline}-${i}`} item={item} />
+        ))}
+      </div>
+    </section>
   );
 }

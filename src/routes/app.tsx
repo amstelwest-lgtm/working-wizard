@@ -36,7 +36,7 @@ import { FinancialInputsContext, type WeeklyInputs, type WeeklyRow, DEFAULT_WEEK
 import { WeeklyInputTable } from "@/components/weekly-input-table";
 import { ProfitabilityWaterfall } from "@/components/profitability-waterfall";
 import { useTrack } from "@/hooks/use-track";
-import { IndustryPulse } from "@/components/industry-pulse";
+import { IndustryPulse, IndustryNewsBand } from "@/components/industry-pulse";
 import { OverviewRail } from "@/components/overview-rail";
 import { NoteLayer } from "@/components/note-layer";
 import { AdminDashboard } from "@/components/admin-dashboard";
@@ -2510,62 +2510,66 @@ function Index() {
 
               {/* No-data empty state — shown until owner uploads or enters real financials */}
               {!hasRealFinancials && !actingClientId ? (
-                <div className="grid w-full items-start gap-4 lg:grid-cols-[minmax(0,1fr)_300px] xl:grid-cols-[minmax(0,1fr)_320px]">
-                  <div className="flex w-full flex-col items-center gap-5 rounded-xl border border-dashed border-slate-200 bg-white/60 px-4 py-10 dark:border-slate-700 dark:bg-slate-900/40">
-                    <div className="relative flex h-36 w-36 items-center justify-center">
-                      <div className="absolute inset-0 rounded-full border-2 border-dashed border-[#d4a550]/25" />
-                      <div className="absolute inset-5 rounded-full border border-[#d4a550]/15" />
-                      <div className="flex flex-col items-center gap-1">
-                        <span className="text-3xl font-bold text-slate-400">—</span>
-                        <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">No score yet</span>
+                <div>
+                  <div className="grid w-full items-start gap-4 lg:grid-cols-[minmax(0,1fr)_280px] xl:grid-cols-[minmax(0,1fr)_300px]">
+                    <div className="flex w-full flex-col items-center gap-5 rounded-xl border border-dashed border-slate-200 bg-white/60 px-4 py-10 dark:border-slate-700 dark:bg-slate-900/40">
+                      <div className="relative flex h-36 w-36 items-center justify-center">
+                        <div className="absolute inset-0 rounded-full border-2 border-dashed border-[#d4a550]/25" />
+                        <div className="absolute inset-5 rounded-full border border-[#d4a550]/15" />
+                        <div className="flex flex-col items-center gap-1">
+                          <span className="text-3xl font-bold text-slate-400">—</span>
+                          <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">No score yet</span>
+                        </div>
                       </div>
-                    </div>
-                    <div className="max-w-sm text-center">
-                      <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100">Add your financials to see your score</h3>
-                      <p className="mt-1.5 text-sm text-slate-500">
-                        Upload a statement or enter figures manually. MILŌN calculates your health score and highest-impact first move instantly.
-                      </p>
-                    </div>
-                    {userRole !== "client_member" ? (
-                      <div className="flex w-full max-w-sm flex-col gap-2.5 sm:flex-row">
-                        <button
-                          onClick={() => { setShowFinData(true); setTimeout(() => uploadRef.current?.click(), 150); }}
-                          className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-[#b7872a] px-4 py-2.5 text-sm font-semibold text-white transition-all hover:bg-[#d4a550]"
-                        >
-                          <Upload className="h-4 w-4" />
-                          Upload statement
-                        </button>
-                        <button
-                          onClick={() => { setShowFinData(true); setShowInputs(true); }}
-                          className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
-                        >
-                          <Database className="h-4 w-4" />
-                          Enter manually
-                        </button>
+                      <div className="max-w-sm text-center">
+                        <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100">Add your financials to see your score</h3>
+                        <p className="mt-1.5 text-sm text-slate-500">
+                          Upload a statement or enter figures manually. MILŌN calculates your health score and highest-impact first move instantly.
+                        </p>
                       </div>
-                    ) : (
-                      <p className="max-w-sm text-center text-sm text-slate-500">
-                        Financial data hasn't been added yet. The owner will set this up.
-                      </p>
-                    )}
+                      {userRole !== "client_member" ? (
+                        <div className="flex w-full max-w-sm flex-col gap-2.5 sm:flex-row">
+                          <button
+                            onClick={() => { setShowFinData(true); setTimeout(() => uploadRef.current?.click(), 150); }}
+                            className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-[#b7872a] px-4 py-2.5 text-sm font-semibold text-white transition-all hover:bg-[#d4a550]"
+                          >
+                            <Upload className="h-4 w-4" />
+                            Upload statement
+                          </button>
+                          <button
+                            onClick={() => { setShowFinData(true); setShowInputs(true); }}
+                            className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
+                          >
+                            <Database className="h-4 w-4" />
+                            Enter manually
+                          </button>
+                        </div>
+                      ) : (
+                        <p className="max-w-sm text-center text-sm text-slate-500">
+                          Financial data hasn't been added yet. The owner will set this up.
+                        </p>
+                      )}
+                    </div>
+                    <OverviewRail
+                      positionPercentile={null}
+                      weekChanges={[]}
+                      cashTrajectory={null}
+                      onOpenCash={() => setActiveTab("cash")}
+                      onOpenMoves={() => setActiveTab("next")}
+                      onOpenBenchmarks={() => {
+                        setActiveTab("today");
+                        setViewMode("complex");
+                      }}
+                      industryPulse={
+                        <IndustryPulse industry={businessType?.label ?? "General SME"} vertical />
+                      }
+                    />
                   </div>
-                  <OverviewRail
-                    positionPercentile={null}
-                    weekChanges={[]}
-                    cashTrajectory={null}
-                    onOpenCash={() => setActiveTab("cash")}
-                    onOpenMoves={() => setActiveTab("next")}
-                    onOpenBenchmarks={() => {
-                      setActiveTab("today");
-                      setViewMode("complex");
-                    }}
-                    industryPulse={
-                      <IndustryPulse industry={businessType?.label ?? "General SME"} vertical />
-                    }
-                  />
+                  <IndustryNewsBand industry={businessType?.label ?? "General SME"} />
                 </div>
               ) : (
-              <div className="grid w-full items-start gap-4 lg:grid-cols-[minmax(0,1fr)_300px] xl:grid-cols-[minmax(0,1fr)_320px]">
+              <div>
+              <div className="grid w-full items-start gap-4 lg:grid-cols-[minmax(0,1fr)_280px] xl:grid-cols-[minmax(0,1fr)_300px]">
                 {/* Main column */}
                 <section className="flex min-w-0 flex-col gap-3">
                   <div className="rounded-xl border border-slate-200/90 bg-white px-3 py-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)] dark:border-white/10 dark:bg-[#0f172a]/40 dark:shadow-none sm:px-5">
@@ -2600,7 +2604,7 @@ function Index() {
                   />
                 </section>
 
-                {/* Insight rail */}
+                {/* Insight rail — pulse metrics + compact cards only */}
                 <OverviewRail
                   positionPercentile={positionPercentile}
                   weekChanges={weekChanges}
@@ -2615,6 +2619,8 @@ function Index() {
                     <IndustryPulse industry={businessType?.label ?? "General SME"} vertical />
                   }
                 />
+              </div>
+              <IndustryNewsBand industry={businessType?.label ?? "General SME"} />
               </div>
               )}
             </div>

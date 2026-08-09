@@ -5,7 +5,6 @@ import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
 import { AdvisoryDrafter } from "@/components/advisory-drafter";
 import { CashForecastPanel } from "@/components/cash-forecast";
-import { CashFromBanksDrafter } from "@/components/cash-from-banks-drafter";
 import type { ExistingCashflow } from "@/lib/cash-from-banks.publish";
 import { TasksPanel } from "@/components/tasks-panel";
 import { UploadFinancials } from "@/components/upload-financials";
@@ -132,6 +131,16 @@ const FIELD_LABELS: { key: string; label: string }[] = [
   { key: "laborCost", label: "Labor cost" },
   { key: "employees", label: "Employees" },
   { key: "founderHours", label: "Founder hours / yr" },
+];
+
+/** Waterfall-critical fields shown on the Profit tab data-input card. */
+const PROFIT_FIELD_LABELS: { key: string; label: string }[] = [
+  { key: "revenue", label: "Revenue" },
+  { key: "cogs", label: "COGS" },
+  { key: "fixedCosts", label: "Operating expenses / fixed costs" },
+  { key: "ebit", label: "EBIT" },
+  { key: "ebt", label: "EBT" },
+  { key: "netIncome", label: "Net income" },
 ];
 
 // tier → band class mapping  
@@ -382,10 +391,11 @@ function ClientView() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<ActiveTab>("ratios");
   const [finOpen, setFinOpen] = useState(true); // collapsible open by default
+  const [profitFinOpen, setProfitFinOpen] = useState(true);
   const [autosaveStatus, setAutosaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [viewMode, setViewMode] = useState<"simplified" | "complex">("simplified");
-  const [showCashFromBanks, setShowCashFromBanks] = useState(false);
   const [cashForecastReloadToken, setCashForecastReloadToken] = useState(0);
+  const [cashBankUploadToken, setCashBankUploadToken] = useState(0);
 
   // Financials state (flat key-value for the fin-grid)
   const [financials, setFinancials] = useState<Record<string, string>>({});
@@ -1312,8 +1322,107 @@ function ClientView() {
         <div className={`tabpane${activeTab === "profit" ? " on" : ""}`} id="pane-profit">
           <span className="eyebrow">Profitability Waterfall</span>
           <p className="sub" style={{ marginBottom: 24 }}>
-            How revenue converts to profit — step by step. Figures sourced from the period financials.
+            How revenue converts to profit — step by step. Enter figures below or upload a statement PDF.
           </p>
+
+          <div className={`card collapse${profitFinOpen ? " open" : ""}`} id="profitFinCollapse" style={{ marginBottom: 20 }}>
+            <div
+              className="c-head"
+              onClick={() => setProfitFinOpen((v) => !v)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => e.key === "Enter" && setProfitFinOpen((v) => !v)}
+            >
+              <h3>
+                Profitability inputs{" "}
+                {autosaveStatus === "saving" && (
+                  <span className="autosave" style={{ marginLeft: 10 }}>
+                    Saving…
+                  </span>
+                )}
+                {(autosaveStatus === "saved" || autosaveStatus === "idle") && (
+                  <span className="autosave" style={{ marginLeft: 10 }}>
+                    Auto-saved
+                  </span>
+                )}
+              </h3>
+              <span className="hint">
+                Edit P&amp;L figures or upload a PDF — the waterfall updates live
+              </span>
+              <span className="chev">
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                >
+                  <path d="M6 9l6 6 6-6" />
+                </svg>
+              </span>
+            </div>
+            <div className="c-body">
+              <div className="c-inner">
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: 10,
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginBottom: 16,
+                  }}
+                >
+                  <p style={{ margin: 0, fontSize: 12, color: "var(--ink-dim)", maxWidth: 420 }}>
+                    Same period figures as Health &amp; Ratios. Upload an income statement PDF to extract and review values.
+                  </p>
+                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                    <button
+                      type="button"
+                      className="btn ghost mini"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setActiveTab("ratios");
+                        setFinOpen(true);
+                      }}
+                    >
+                      Full financials
+                    </button>
+                    <button
+                      type="button"
+                      className="btn gold mini"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setUploadOpen(true);
+                      }}
+                    >
+                      <svg viewBox="0 0 24 24">
+                        <path d="M12 15V3M7 8l5-5 5 5M5 21h14" />
+                      </svg>
+                      Upload PDF statement
+                    </button>
+                  </div>
+                </div>
+                <div className="fin-grid">
+                  {PROFIT_FIELD_LABELS.map(({ key, label }) => (
+                    <div key={key}>
+                      <label>{label}</label>
+                      <input
+                        value={financials[key] ?? ""}
+                        onChange={(e) => handleFinancialChange(key, e.target.value)}
+                        onBlur={(e) => handleFinancialChange(key, e.target.value)}
+                        placeholder="—"
+                        type="number"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* Wrap in a Tailwind dark context so the component's dark: variants fire */}
           <div className="dark" style={{ colorScheme: "dark" }}>
             <ProfitabilityWaterfall
@@ -1344,9 +1453,9 @@ function ClientView() {
               <button
                 type="button"
                 className="btn ghost mini"
-                onClick={() => setShowCashFromBanks(true)}
+                onClick={() => setCashBankUploadToken((n) => n + 1)}
               >
-                Classify from bank statements
+                Upload bank statements
               </button>
             </div>
             <CashForecastPanel
@@ -1354,49 +1463,20 @@ function ClientView() {
               clientName={client.name}
               canSign
               reloadToken={cashForecastReloadToken}
+              openBankUploadToken={cashBankUploadToken}
+              onBankPublish={(payload) => {
+                setClient((c) =>
+                  c
+                    ? {
+                        ...c,
+                        cashflow: payload,
+                        last_forecast_at: new Date().toISOString(),
+                      }
+                    : c,
+                );
+              }}
             />
           </div>
-          <CashFromBanksDrafter
-            open={showCashFromBanks}
-            onClose={() => setShowCashFromBanks(false)}
-            existingCashflow={client.cashflow ?? null}
-            onSaveDraft={async (draft) => {
-              await supabase
-                .from("clients")
-                .update({ cashflow_bank_draft: draft as never })
-                .eq("id", client.id)
-                .then(({ error }) => {
-                  if (error && !/cashflow_bank_draft|42703/.test(error.message ?? "")) {
-                    console.warn("cashflow_bank_draft save:", error.message);
-                  }
-                });
-            }}
-            onPublish={async (payload) => {
-              const forecastUpdatedAt = new Date().toISOString();
-              const { error } = await supabase
-                .from("clients")
-                .update({
-                  cashflow: payload as never,
-                  cashflow_bank_draft: payload as never,
-                  last_forecast_at: forecastUpdatedAt,
-                })
-                .eq("id", client.id);
-              if (error) {
-                const retry = await supabase
-                  .from("clients")
-                  .update({
-                    cashflow: payload as never,
-                    last_forecast_at: forecastUpdatedAt,
-                  })
-                  .eq("id", client.id);
-                if (retry.error) throw new Error(retry.error.message);
-              }
-              setClient((c) => (c ? { ...c, cashflow: payload, last_forecast_at: forecastUpdatedAt } : c));
-              setShowCashFromBanks(false);
-              setCashForecastReloadToken((n) => n + 1);
-              toast.success("Cash forecast published from bank classification.");
-            }}
-          />
         </div>
 
         {/* ===== REPORTS TAB ===== */}

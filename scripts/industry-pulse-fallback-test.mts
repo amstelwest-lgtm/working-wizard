@@ -2,7 +2,7 @@
  * Smoke test: Industry Pulse fallback always returns a renderable payload.
  * Run: pnpm exec vite-node --config scripts/vite-test.config.ts scripts/industry-pulse-fallback-test.mts
  */
-import { fallbackIndustryPulse } from "../src/lib/industry-news.functions";
+import { fallbackIndustryPulse, resolveNewsUrl } from "../src/lib/industry-news.functions";
 
 function assert(cond: unknown, msg: string) {
   if (!cond) throw new Error(msg);
@@ -41,6 +41,8 @@ for (const industry of sectors) {
       !/affects cash|affects profit|opportunity|watch this/i.test(item.tag),
       `${industry}: news tag still advice-flavoured ("${item.tag}")`,
     );
+    const href = resolveNewsUrl(item);
+    assert(href.startsWith("http"), `${industry}: bad news url`);
   }
 }
 
