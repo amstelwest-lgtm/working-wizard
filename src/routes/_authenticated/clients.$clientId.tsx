@@ -5,6 +5,8 @@ import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
 import { AdvisoryDrafter } from "@/components/advisory-drafter";
 import { CashForecastPanel } from "@/components/cash-forecast";
+import { CashFromBanksDrafter } from "@/components/cash-from-banks-drafter";
+import type { ExistingCashflow } from "@/lib/cash-from-banks.publish";
 import { TasksPanel } from "@/components/tasks-panel";
 import { UploadFinancials } from "@/components/upload-financials";
 import { PlaybookDrawer } from "@/components/playbook-drawer";
@@ -249,6 +251,7 @@ type Client = {
   reports_issued_count?: number;
   financials?: Record<string, string | number | null> | null;
   financials_updated_at?: string | null;
+  cashflow?: ExistingCashflow | null;
 };
 
 type ActiveTab = "ratios" | "profit" | "cash" | "reports" | "tasks" | "advisory";
@@ -381,6 +384,8 @@ function ClientView() {
   const [finOpen, setFinOpen] = useState(true); // collapsible open by default
   const [autosaveStatus, setAutosaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [viewMode, setViewMode] = useState<"simplified" | "complex">("simplified");
+  const [showCashFromBanks, setShowCashFromBanks] = useState(false);
+  const [cashForecastReloadToken, setCashForecastReloadToken] = useState(0);
 
   // Financials state (flat key-value for the fin-grid)
   const [financials, setFinancials] = useState<Record<string, string>>({});
@@ -542,7 +547,7 @@ function ClientView() {
         const { data, error } = await supabase
           .from("clients")
           .select(
-            "id, name, business_type, cash_runway_weeks, last_forecast_at, open_queries_count, financials, financials_updated_at, reports_issued_count"
+            "id, name, business_type, cash_runway_weeks, last_forecast_at, open_queries_count, financials, financials_updated_at, reports_issued_count, cashflow"
           )
           .eq("id", clientId)
           .maybeSingle();
@@ -557,7 +562,7 @@ function ClientView() {
             const { data: data2, error: error2 } = await supabase
               .from("clients")
               .select(
-                "id, name, business_type, cash_runway_weeks, last_forecast_at, open_queries_count, financials, financials_updated_at"
+                "id, name, business_type, cash_runway_weeks, last_forecast_at, open_queries_count, financials, financials_updated_at, cashflow"
               )
               .eq("id", clientId)
               .maybeSingle();
@@ -1345,9 +1350,64 @@ function ClientView() {
                 <span className="eyebrow">Signature view</span>
                 <div className="h-sec">13-week cash forecast</div>
               </div>
+              {viewerCanSign && (
+                <button
+                  type="button"
+                  className="btn ghost mini"
+                  onClick={() => setShowCashFromBanks(true)}
+                >
+                  Classify from bank statements
+                </button>
+              )}
             </div>
-            <CashForecastPanel clientId={client.id} clientName={client.name} canSign={viewerCanSign} />
+            <CashForecastPanel
+              clientId={client.id}
+              clientName={client.name}
+              canSign={viewerCanSign}
+              reloadToken={cashForecastReloadToken}
+            />
           </div>
+          <CashFromBanksDrafter
+            open={showCashFromBanks}
+            onClose={() => setShowCashFromBanks(false)}
+            existingCashflow={client.cashflow ?? null}
+            onSaveDraft={async (draft) => {
+              await supabase
+                .from("clients")
+                .update({ cashflow_bank_draft: draft as never })
+                .eq("id", client.id)
+                .then(({ error }) => {
+                  if (error && !/cashflow_bank_draft|42703/.test(error.message ?? "")) {
+                    console.warn("cashflow_bank_draft save:", error.message);
+                  }
+                });
+            }}
+            onPublish={async (payload) => {
+              const forecastUpdatedAt = new Date().toISOString();
+              const { error } = await supabase
+                .from("clients")
+                .update({
+                  cashflow: payload as never,
+                  cashflow_bank_draft: payload as never,
+                  last_forecast_at: forecastUpdatedAt,
+                })
+                .eq("id", client.id);
+              if (error) {
+                const retry = await supabase
+                  .from("clients")
+                  .update({
+                    cashflow: payload as never,
+                    last_forecast_at: forecastUpdatedAt,
+                  })
+                  .eq("id", client.id);
+                if (retry.error) throw new Error(retry.error.message);
+              }
+              setClient((c) => (c ? { ...c, cashflow: payload, last_forecast_at: forecastUpdatedAt } : c));
+              setShowCashFromBanks(false);
+              setCashForecastReloadToken((n) => n + 1);
+              toast.success("Cash forecast published from bank classification.");
+            }}
+          />
         </div>
 
         {/* ===== REPORTS TAB ===== */}

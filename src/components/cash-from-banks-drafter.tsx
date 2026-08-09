@@ -1,19 +1,10 @@
 /**
- * CashFromBanksDrafter — Phases 1–3 vertical slice
- * Upload bank statements → Claude txn extract → pattern draft → preview → publish to cashflow.
+ * CashFromBanksDrafter — upload bank statements → Claude extract → Phase 4 workspace → publish.
  */
 
 import { useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import {
-  Loader2,
-  Upload,
-  FileText,
-  X,
-  Sparkles,
-  AlertTriangle,
-  Wallet,
-} from "lucide-react";
+import { Loader2, Upload, FileText, X, Sparkles, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -23,51 +14,40 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
 import { draftCashForecastFromBankStatements } from "@/lib/cash-from-banks.server";
-import { buildCashflowPublishPayload } from "@/lib/cash-from-banks.publish";
+import { buildCashflowPublishPayload, type ExistingCashflow } from "@/lib/cash-from-banks.publish";
 import type {
-  CashCadence,
-  CashForecastDraftLine,
   CashForecastPublishPayload,
   CashFromBanksDraftResult,
 } from "@/lib/cash-from-banks.types";
+import {
+  CashClassificationWorkspace,
+  type WorkspacePublishRequest,
+} from "@/components/cash-classification-workspace";
 
 interface Props {
   open: boolean;
   onClose: () => void;
-  /** Called with the cashflow JSON ready to persist on clients.cashflow */
+  /** Existing published cashflow — drives replace/merge policy */
+  existingCashflow?: ExistingCashflow | null;
   onPublish: (payload: CashForecastPublishPayload) => void | Promise<void>;
+  /** Optional: persist working draft JSON (extract + lines) for resume */
+  onSaveDraft?: (draft: CashFromBanksDraftResult) => void | Promise<void>;
 }
 
-const CADENCE_LABEL: Record<CashCadence, string> = {
-  once_off: "Once-off",
-  weekly: "Weekly",
-  monthly: "Monthly",
-  annual: "Annual (→ monthly)",
-  split_weeks: "Split weeks",
-  split_months: "Split months",
-};
-
-function fmt(n: number): string {
-  return `R ${n.toLocaleString("en-ZA", { maximumFractionDigits: 0 })}`;
-}
-
-export function CashFromBanksDrafter({ open, onClose, onPublish }: Props) {
+export function CashFromBanksDrafter({
+  open,
+  onClose,
+  existingCashflow = null,
+  onPublish,
+  onSaveDraft,
+}: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [files, setFiles] = useState<File[]>([]);
   const [working, setWorking] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [result, setResult] = useState<CashFromBanksDraftResult | null>(null);
-  const [lines, setLines] = useState<CashForecastDraftLine[]>([]);
+  const [lines, setLines] = useState<CashFromBanksDraftResult["lines"]>([]);
   const [startDate, setStartDate] = useState("");
   const [openingBalance, setOpeningBalance] = useState("0");
   const doDraft = useServerFn(draftCashForecastFromBankStatements);
@@ -129,6 +109,7 @@ export function CashFromBanksDrafter({ open, onClose, onPublish }: Props) {
       setLines(draft.lines);
       setStartDate(draft.startDate);
       setOpeningBalance(String(draft.openingBalance));
+      await onSaveDraft?.(draft);
     } catch (e) {
       toast.error(`Cash draft failed: ${(e as Error).message}`);
     } finally {
@@ -136,17 +117,24 @@ export function CashFromBanksDrafter({ open, onClose, onPublish }: Props) {
     }
   };
 
-  const updateLine = (id: string, patch: Partial<CashForecastDraftLine>) => {
-    setLines((prev) => prev.map((l) => (l.id === id ? { ...l, ...patch } : l)));
+  const handleLinesChange = (next: typeof lines) => {
+    setLines(next);
+    if (result) {
+      const draft = { ...result, lines: next, startDate, openingBalance: parseFloat(openingBalance) || 0 };
+      void onSaveDraft?.(draft);
+    }
   };
 
-  const publish = async () => {
+  const publish = async (req: WorkspacePublishRequest) => {
     setPublishing(true);
     try {
       const payload = buildCashflowPublishPayload({
-        lines,
-        startDate,
-        openingBalance: parseFloat(openingBalance) || 0,
+        lines: req.lines,
+        startDate: req.startDate,
+        openingBalance: req.openingBalance,
+        policy: req.policy,
+        existing: existingCashflow,
+        adoptBankBalances: req.adoptBankBalances,
       });
       await onPublish(payload);
       reset();
@@ -156,9 +144,6 @@ export function CashFromBanksDrafter({ open, onClose, onPublish }: Props) {
       setPublishing(false);
     }
   };
-
-  const activeCount = lines.filter((l) => l.status !== "excluded").length;
-  const excludedCount = lines.length - activeCount;
 
   return (
     <Dialog
@@ -170,15 +155,14 @@ export function CashFromBanksDrafter({ open, onClose, onPublish }: Props) {
         }
       }}
     >
-      <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto border border-amber-900/20 bg-[#fffdf8] text-slate-900 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-50">
+      <DialogContent className="max-h-[92vh] max-w-5xl overflow-y-auto border border-amber-900/20 bg-[#fffdf8] text-slate-900 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-50">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-base font-semibold tracking-tight">
             <Wallet className="h-4 w-4 text-[#b8860b]" />
             Cash forecast from bank statements
           </DialogTitle>
           <DialogDescription className="text-xs text-slate-500">
-            Claude reads your statements, groups repeating cash movements, and builds a
-            preliminary 13-week forecast you can publish to the Cash Forecast tab.
+            Classify cash movements, set cadence, then publish into the 13-week Cash Forecast.
           </DialogDescription>
         </DialogHeader>
 
@@ -252,175 +236,23 @@ export function CashFromBanksDrafter({ open, onClose, onPublish }: Props) {
         )}
 
         {result && (
-          <div className="space-y-4">
-            <div className="grid gap-3 sm:grid-cols-3">
-              <div className="space-y-1">
-                <Label className="text-[10px] uppercase tracking-wider text-slate-500">
-                  Forecast start
-                </Label>
-                <Input
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  className="h-8 text-xs"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-[10px] uppercase tracking-wider text-slate-500">
-                  Opening bank balance
-                </Label>
-                <Input
-                  type="number"
-                  value={openingBalance}
-                  onChange={(e) => setOpeningBalance(e.target.value)}
-                  className="h-8 text-xs"
-                />
-              </div>
-              <div className="rounded-lg border border-amber-900/10 bg-white/70 px-3 py-2 text-[11px] dark:border-slate-800 dark:bg-slate-900/40">
-                <div className="text-slate-500">Detected</div>
-                <div className="mt-0.5 font-semibold">
-                  {result.extract.transactions.length} txns · {activeCount} lines · {excludedCount}{" "}
-                  excluded
-                </div>
-                {result.extract.period_start && result.extract.period_end && (
-                  <div className="mt-0.5 text-slate-500">
-                    {result.extract.period_start} → {result.extract.period_end}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {result.warnings.length > 0 && (
-              <div className="space-y-1 rounded-lg border border-amber-500/30 bg-amber-50/80 p-2.5 text-[11px] text-amber-900 dark:bg-amber-500/10 dark:text-amber-100">
-                {result.warnings.map((w, i) => (
-                  <div key={i} className="flex gap-1.5">
-                    <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
-                    <span>{w}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            <div className="overflow-hidden rounded-xl border border-amber-900/15 dark:border-slate-800">
-              <div className="grid grid-cols-[1fr_90px_120px_88px] gap-2 border-b border-amber-900/10 bg-amber-50/50 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:border-slate-800 dark:bg-slate-900/60">
-                <span>Line</span>
-                <span>Side</span>
-                <span>Cadence</span>
-                <span className="text-right">Amount</span>
-              </div>
-              <div className="max-h-[42vh] divide-y divide-amber-900/10 overflow-y-auto dark:divide-slate-800">
-                {lines.map((line) => (
-                  <div
-                    key={line.id}
-                    className={`grid grid-cols-[1fr_90px_120px_88px] items-center gap-2 px-2.5 py-2 text-xs ${
-                      line.status === "excluded" ? "opacity-45" : ""
-                    }`}
-                  >
-                    <div className="min-w-0">
-                      <Input
-                        value={line.name}
-                        onChange={(e) => updateLine(line.id, { name: e.target.value })}
-                        className="h-7 text-xs"
-                      />
-                      <div className="mt-0.5 truncate text-[10px] text-slate-500">
-                        {line.bucket} · {line.txn_count} txn
-                        {line.txn_count === 1 ? "" : "s"} ·{" "}
-                        {Math.round(line.confidence * 100)}% conf
-                      </div>
-                    </div>
-                    <Select
-                      value={line.side}
-                      onValueChange={(v) =>
-                        updateLine(line.id, { side: v as "inflow" | "outflow" })
-                      }
-                    >
-                      <SelectTrigger className="h-7 text-[11px]">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="inflow">In</SelectItem>
-                        <SelectItem value="outflow">Out</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Select
-                      value={line.cadence}
-                      onValueChange={(v) =>
-                        updateLine(line.id, { cadence: v as CashCadence })
-                      }
-                    >
-                      <SelectTrigger className="h-7 text-[11px]">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {(Object.keys(CADENCE_LABEL) as CashCadence[]).map((c) => (
-                          <SelectItem key={c} value={c}>
-                            {CADENCE_LABEL[c]}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <div className="space-y-1">
-                      <Input
-                        type="number"
-                        value={line.amount}
-                        onChange={(e) =>
-                          updateLine(line.id, { amount: parseFloat(e.target.value) || 0 })
-                        }
-                        className="h-7 text-right text-xs"
-                      />
-                      <button
-                        type="button"
-                        className="w-full text-[10px] text-slate-500 underline-offset-2 hover:underline"
-                        onClick={() =>
-                          updateLine(line.id, {
-                            status: line.status === "excluded" ? "proposed" : "excluded",
-                          })
-                        }
-                      >
-                        {line.status === "excluded" ? "Include" : "Exclude"}
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setResult(null);
-                  setLines([]);
-                }}
-              >
-                Back
-              </Button>
-              <div className="flex items-center gap-2">
-                <span className="text-[11px] text-slate-500">
-                  Active inflows{" "}
-                  {fmt(
-                    lines
-                      .filter((l) => l.status !== "excluded" && l.side === "inflow")
-                      .reduce((s, l) => s + l.amount, 0),
-                  )}
-                </span>
-                <Button
-                  disabled={publishing || activeCount === 0}
-                  onClick={publish}
-                  className="bg-[#b8860b] text-white hover:bg-[#9a7209]"
-                >
-                  {publishing ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Publishing…
-                    </>
-                  ) : (
-                    "Publish to Cash Forecast"
-                  )}
-                </Button>
-              </div>
-            </div>
-          </div>
+          <CashClassificationWorkspace
+            lines={lines}
+            onChange={handleLinesChange}
+            startDate={startDate}
+            openingBalance={openingBalance}
+            onStartDateChange={setStartDate}
+            onOpeningBalanceChange={setOpeningBalance}
+            transactions={result.extract.transactions}
+            warnings={result.warnings}
+            existingCashflow={existingCashflow}
+            publishing={publishing}
+            onPublish={publish}
+            onBack={() => {
+              setResult(null);
+              setLines([]);
+            }}
+          />
         )}
       </DialogContent>
     </Dialog>

@@ -1,6 +1,6 @@
 /**
  * cash-from-banks.publish.ts
- * Map editable draft lines → clients.cashflow payload.
+ * Map editable draft lines → clients.cashflow payload, with replace/merge policies.
  */
 
 import {
@@ -8,9 +8,39 @@ import {
   publishAmountForLine,
   type CashForecastDraftLine,
   type CashForecastPublishPayload,
+  type ForecastFrequency,
 } from "@/lib/cash-from-banks.types";
 
-function toLineItem(line: CashForecastDraftLine) {
+export type PublishPolicy = "replace" | "merge";
+
+type LineItem = {
+  id: string;
+  name: string;
+  amount: string;
+  frequency: ForecastFrequency;
+  startWeek: number;
+  splitCount: number;
+};
+
+export type ExistingCashflow = {
+  startDate?: string;
+  openingBalance?: string;
+  revenue?: LineItem[];
+  expenses?: LineItem[];
+  other?: LineItem[];
+  revAdj?: number;
+  expAdj?: number;
+  collectDelay?: number;
+  headcountDelta?: number;
+  avgSalary?: string;
+  fixedCostDelta?: string;
+  revGrowthPct?: number;
+  capexAmount?: string;
+  capexWeek?: number;
+  seededFromBanksAt?: string;
+};
+
+function toLineItem(line: CashForecastDraftLine): LineItem {
   return {
     id: line.id,
     name: line.name,
@@ -21,68 +51,108 @@ function toLineItem(line: CashForecastDraftLine) {
   };
 }
 
+function ensureSection(items: LineItem[], fallback: LineItem): LineItem[] {
+  return items.length ? items : [fallback];
+}
+
+function hasMeaningfulExisting(existing: ExistingCashflow | null | undefined): boolean {
+  if (!existing) return false;
+  const all = [...(existing.revenue ?? []), ...(existing.expenses ?? []), ...(existing.other ?? [])];
+  return all.some((l) => (parseFloat(l.amount) || 0) !== 0);
+}
+
+export function existingCashflowIsMeaningful(existing: ExistingCashflow | null | undefined): boolean {
+  return hasMeaningfulExisting(existing);
+}
+
+function remapId(id: string): string {
+  return `m_${id}_${Math.random().toString(36).slice(2, 6)}`;
+}
+
 export function buildCashflowPublishPayload(input: {
   lines: CashForecastDraftLine[];
   startDate: string;
   openingBalance: number;
+  policy?: PublishPolicy;
+  existing?: ExistingCashflow | null;
+  /** When merging, whether to overwrite opening balance / start date from the bank draft */
+  adoptBankBalances?: boolean;
 }): CashForecastPublishPayload {
+  const policy = input.policy ?? "replace";
   const active = input.lines.filter((l) => l.status !== "excluded" && l.amount > 0);
-  const revenue = active.filter((l) => l.side === "inflow").map(toLineItem);
   const expenseBuckets = new Set(["cos", "opex", "payroll", "rent", "interest", "tax"]);
-  const expenses = active
+
+  let revenue = active.filter((l) => l.side === "inflow").map(toLineItem);
+  let expenses = active
     .filter((l) => l.side === "outflow" && expenseBuckets.has(l.bucket))
     .map(toLineItem);
-  const other = active
+  let other = active
     .filter((l) => l.side === "outflow" && !expenseBuckets.has(l.bucket))
     .map(toLineItem);
 
-  // Ensure Cash Forecast has at least one row per section
-  if (revenue.length === 0) {
-    revenue.push({
-      id: "seed-rev",
-      name: "Trading receipts (add detail)",
-      amount: "",
-      frequency: "recurring-monthly",
-      startWeek: 1,
-      splitCount: 3,
-    });
-  }
-  if (expenses.length === 0) {
-    expenses.push({
-      id: "seed-exp",
-      name: "Operating payments (add detail)",
-      amount: "",
-      frequency: "recurring-monthly",
-      startWeek: 1,
-      splitCount: 3,
-    });
-  }
-  if (other.length === 0) {
-    other.push({
-      id: "seed-other",
-      name: "Other cash out",
-      amount: "",
-      frequency: "once-off",
-      startWeek: 1,
-      splitCount: 3,
-    });
+  const existing = input.existing;
+  if (policy === "merge" && existing && hasMeaningfulExisting(existing)) {
+    // Fresh ids so merge doesn't collide with existing line ids
+    revenue = [
+      ...(existing.revenue ?? []),
+      ...revenue.map((l) => ({ ...l, id: remapId(l.id) })),
+    ];
+    expenses = [
+      ...(existing.expenses ?? []),
+      ...expenses.map((l) => ({ ...l, id: remapId(l.id) })),
+    ];
+    other = [
+      ...(existing.other ?? []),
+      ...other.map((l) => ({ ...l, id: remapId(l.id) })),
+    ];
   }
 
+  revenue = ensureSection(revenue, {
+    id: "seed-rev",
+    name: "Trading receipts (add detail)",
+    amount: "",
+    frequency: "recurring-monthly",
+    startWeek: 1,
+    splitCount: 3,
+  });
+  expenses = ensureSection(expenses, {
+    id: "seed-exp",
+    name: "Operating payments (add detail)",
+    amount: "",
+    frequency: "recurring-monthly",
+    startWeek: 1,
+    splitCount: 3,
+  });
+  other = ensureSection(other, {
+    id: "seed-other",
+    name: "Other cash out",
+    amount: "",
+    frequency: "once-off",
+    startWeek: 1,
+    splitCount: 3,
+  });
+
+  const adopt = input.adoptBankBalances !== false;
+  const keepScenario = policy === "merge" && existing;
+
   return {
-    startDate: input.startDate,
-    openingBalance: String(Math.round(input.openingBalance * 100) / 100),
+    startDate: adopt || !existing?.startDate ? input.startDate : existing.startDate,
+    openingBalance:
+      adopt || existing?.openingBalance == null
+        ? String(Math.round(input.openingBalance * 100) / 100)
+        : existing.openingBalance,
     revenue,
     expenses,
     other,
-    revAdj: 100,
-    expAdj: 100,
-    collectDelay: 0,
-    headcountDelta: 0,
-    avgSalary: "0",
-    fixedCostDelta: "0",
-    revGrowthPct: 0,
-    capexAmount: "0",
-    capexWeek: 1,
+    revAdj: keepScenario ? (existing?.revAdj ?? 100) : 100,
+    expAdj: keepScenario ? (existing?.expAdj ?? 100) : 100,
+    collectDelay: keepScenario ? (existing?.collectDelay ?? 0) : 0,
+    headcountDelta: keepScenario ? (existing?.headcountDelta ?? 0) : 0,
+    avgSalary: keepScenario ? (existing?.avgSalary ?? "0") : "0",
+    fixedCostDelta: keepScenario ? (existing?.fixedCostDelta ?? "0") : "0",
+    revGrowthPct: keepScenario ? (existing?.revGrowthPct ?? 0) : 0,
+    capexAmount: keepScenario ? (existing?.capexAmount ?? "0") : "0",
+    capexWeek: keepScenario ? (existing?.capexWeek ?? 1) : 1,
     seededFromBanksAt: new Date().toISOString(),
   };
 }

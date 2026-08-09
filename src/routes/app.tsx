@@ -1774,6 +1774,7 @@ function Index() {
   const [showBankDrafter, setShowBankDrafter] = useState(false);
   const [showCashFromBanks, setShowCashFromBanks] = useState(false);
   const [cashForecastReloadToken, setCashForecastReloadToken] = useState(0);
+  const [existingCashflowForBanks, setExistingCashflowForBanks] = useState<Record<string, unknown> | null>(null);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const businessType = businessTypeId ? BUSINESS_TYPES.find((b) => b.id === businessTypeId) ?? null : null;
   const model: ModelTuning = businessType ? MODEL_TUNING[businessType.model] : MODEL_TUNING.hybrid;
@@ -3166,7 +3167,20 @@ function Index() {
               </span>
             </button>
             <button
-              onClick={() => { setShowFinData(false); setShowCashFromBanks(true); }}
+              onClick={async () => {
+                setShowFinData(false);
+                if (effectiveClientId) {
+                  const { data } = await supabase
+                    .from("clients")
+                    .select("cashflow")
+                    .eq("id", effectiveClientId)
+                    .maybeSingle();
+                  setExistingCashflowForBanks((data?.cashflow as Record<string, unknown> | null) ?? null);
+                } else {
+                  setExistingCashflowForBanks(null);
+                }
+                setShowCashFromBanks(true);
+              }}
               className="flex flex-col items-start gap-1.5 rounded-lg border border-amber-700/30 bg-amber-50 p-4 text-left transition-colors hover:border-amber-700/60 hover:bg-amber-100 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-[#b7872a]/60 dark:hover:bg-slate-800"
             >
               <span className="flex items-center gap-2 text-sm font-semibold text-amber-900 dark:text-slate-100">
@@ -3174,7 +3188,7 @@ function Index() {
                 Build cash forecast from bank statements
               </span>
               <span className="text-xs text-slate-600 dark:text-slate-400">
-                Claude groups repeating cash movements into a preliminary 13-week forecast you can publish.
+                Claude groups repeating cash movements; classify cadence, then publish to Cash Forecast.
               </span>
             </button>
           </div>
@@ -3246,6 +3260,20 @@ function Index() {
       <CashFromBanksDrafter
         open={showCashFromBanks}
         onClose={() => setShowCashFromBanks(false)}
+        existingCashflow={existingCashflowForBanks as never}
+        onSaveDraft={async (draft) => {
+          if (!effectiveClientId) return;
+          await supabase
+            .from("clients")
+            .update({ cashflow_bank_draft: draft as never })
+            .eq("id", effectiveClientId)
+            .then(({ error }) => {
+              // Column may not exist until migration is applied — ignore quietly.
+              if (error && !/cashflow_bank_draft|42703/.test(error.message ?? "")) {
+                console.warn("cashflow_bank_draft save:", error.message);
+              }
+            });
+        }}
         onPublish={async (payload) => {
           if (!effectiveClientId) {
             toast.error("Save / select a client before publishing a cash forecast.");
@@ -3274,7 +3302,7 @@ function Index() {
           setShowCashFromBanks(false);
           setCashForecastReloadToken((n) => n + 1);
           setActiveTab("cash");
-          toast.success("Preliminary cash forecast published — review it on the Cash Forecast tab.");
+          toast.success("Cash forecast published — review classification on the Cash Forecast tab.");
         }}
       />
 
