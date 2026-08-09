@@ -15,7 +15,7 @@ const TAG_COLORS: Record<string, { bg: string; color: string }> = {
   blue: { bg: "rgba(100,160,220,0.15)", color: "#3b82c4" },
 };
 
-const CACHE_KEY = "milon_industry_pulse_v3";
+const CACHE_KEY = "milon_industry_pulse_v4";
 const CACHE_TTL = 24 * 60 * 60 * 1000;
 
 type CachedPulse = {
@@ -196,9 +196,12 @@ export function IndustryPulse({
           )}
 
           <div className="mt-3">
-            <h4 className="mb-2 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-800 dark:text-slate-100">
-              Industry News
-            </h4>
+            <div className="mb-2">
+              <h4 className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-800 dark:text-slate-100">
+                Industry News
+              </h4>
+              <p className="mt-0.5 text-[10px] text-slate-500">What's moving in your sector</p>
+            </div>
             <div className="flex flex-col gap-2">
               {display.items.map((item, i) => (
                 <NewsCard key={`${item.headline}-${i}`} item={item} />

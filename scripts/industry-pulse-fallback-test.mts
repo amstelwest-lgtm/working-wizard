@@ -29,8 +29,18 @@ for (const industry of sectors) {
     assert(["up", "down", "flat"].includes(m.direction), `${industry}: bad direction`);
     assert(["good", "bad", "neutral"].includes(m.sentiment), `${industry}: bad sentiment`);
   }
+  const adviceVerbs =
+    /^(ask|send|cut|turn on|review|offer|lock|update|add|fill|use|match|check|push|run|take|follow up)\b/i;
   for (const item of pulse.items) {
     assert(item.headline && item.summary && item.tag, `${industry}: news incomplete`);
+    assert(
+      !adviceVerbs.test(item.summary.trim()),
+      `${industry}: news summary looks like advice ("${item.summary}")`,
+    );
+    assert(
+      !/affects cash|affects profit|opportunity|watch this/i.test(item.tag),
+      `${industry}: news tag still advice-flavoured ("${item.tag}")`,
+    );
   }
 }
 

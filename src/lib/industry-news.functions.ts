@@ -108,21 +108,21 @@ export function fallbackIndustryPulse(industry: string): IndustryPulsePayload {
       ],
       items: [
         {
-          headline: "Import and delivery costs are eating retail profit",
-          summary: "A weaker rand and higher delivery fees mean you keep less from each sale. Lock supplier prices for 30–90 days where you can.",
-          tag: "Affects profit",
+          headline: "Rand weakness lifts import and shipping costs for SA retailers",
+          summary: "Weaker currency and higher courier rates are squeezing shelf margins on imported goods.",
+          tag: "Costs",
           tagColor: "red",
         },
         {
-          headline: "Card fees and backup power quietly drain cash",
-          summary: "Payment fees and generators add up every month. Check these costs — they often grow unnoticed.",
-          tag: "Watch this",
+          headline: "Card fees and backup-power bills keep rising for stores",
+          summary: "Payment charges and generator/inverter spend are showing up as a bigger share of monthly costs.",
+          tag: "Costs",
           tagColor: "amber",
         },
         {
-          headline: "Faster delivery wins more repeat buyers",
-          summary: "Customers expect quicker fulfilment. Faster stock turns free cash and keep you competitive.",
-          tag: "Opportunity",
+          headline: "Shoppers reward same-day and next-day fulfilment",
+          summary: "Retail surveys show faster delivery is winning repeat purchases even when prices are similar.",
+          tag: "Demand",
           tagColor: "green",
         },
       ],
@@ -137,22 +137,22 @@ export function fallbackIndustryPulse(industry: string): IndustryPulsePayload {
       ],
       items: [
         {
-          headline: "Clients are holding back payment longer",
-          summary: "Ask for a deposit before work starts, and bill in stages. Waiting until the end traps your cash.",
-          tag: "Affects cash",
+          headline: "Contractors report longer payment holds on completed work",
+          summary: "Retention and late certificates are stretching cash cycles across residential and commercial jobs.",
+          tag: "Payments",
           tagColor: "red",
         },
         {
-          headline: "Steel and cement prices keep moving",
-          summary: "Update quotes more often, and add a materials price clause so cost jumps don’t wipe your margin.",
-          tag: "Affects profit",
+          headline: "Steel and cement prices remain volatile month to month",
+          summary: "Builders say quote validity windows are shortening as material input costs keep swinging.",
+          tag: "Costs",
           tagColor: "amber",
         },
         {
-          headline: "Some trades have spare capacity right now",
-          summary: "If a job is delayed, you may find subcontractors available sooner — useful for catching up.",
-          tag: "Opportunity",
-          tagColor: "green",
+          headline: "Private tender volumes soften while public works stay patchy",
+          summary: "New private project starts are quieter; public pipelines remain uneven by province and sector.",
+          tag: "Demand",
+          tagColor: "blue",
         },
       ],
       source: "fallback",
@@ -166,21 +166,21 @@ export function fallbackIndustryPulse(industry: string): IndustryPulsePayload {
       ],
       items: [
         {
-          headline: "Weekdays are quiet while weekends hold up",
-          summary: "Cut midweek labour where you can, and run simple midweek specials to fill empty seats.",
-          tag: "Watch this",
+          headline: "Midweek covers soften while weekend bookings hold",
+          summary: "Restaurants and venues report a sharper split between busy weekends and quieter weekdays.",
+          tag: "Demand",
           tagColor: "amber",
         },
         {
-          headline: "Backup power is raising your break-even",
-          summary: "Generators and inverters cost money even when sales are flat. Push higher-margin menu items.",
-          tag: "Affects profit",
+          headline: "Food inflation and backup power lift break-even covers",
+          summary: "Higher ingredient prices plus generator costs mean more seats must sell before a shift turns a profit.",
+          tag: "Costs",
           tagColor: "red",
         },
         {
-          headline: "Take deposits for events and large bookings",
-          summary: "Upfront payment for functions improves cash and reduces no-shows.",
-          tag: "Opportunity",
+          headline: "Events and functions still book earlier with deposits",
+          summary: "Operators say larger bookings are more reliable when deposits are taken at confirmation.",
+          tag: "Payments",
           tagColor: "green",
         },
       ],
@@ -195,22 +195,22 @@ export function fallbackIndustryPulse(industry: string): IndustryPulsePayload {
       ],
       items: [
         {
-          headline: "Slow-moving stock is trapping your cash",
-          summary: "Review items sitting longer than 60 days. Smaller order quantities free money faster.",
-          tag: "Affects cash",
+          headline: "Factories report cash tied up in slow-moving stock",
+          summary: "Inventory days are stretching as buyers order smaller batches and delay restocks.",
+          tag: "Cash",
           tagColor: "amber",
         },
         {
-          headline: "Power cuts raise your cost per unit",
-          summary: "Plan high-margin production for more reliable power windows when you can.",
-          tag: "Watch this",
+          headline: "Load-shedding still raises unit cost on local production runs",
+          summary: "Interrupted shifts and backup-power spend continue to push cost per unit higher for many plants.",
+          tag: "Costs",
           tagColor: "red",
         },
         {
-          headline: "Ask customers for deposits on big orders",
-          summary: "Many suppliers already do this. Matching that with your customers protects cash flow.",
-          tag: "Opportunity",
-          tagColor: "green",
+          headline: "Export orders soften as global buyers delay shipments",
+          summary: "Manufacturers say overseas demand is patchy, with longer gaps between confirmed orders.",
+          tag: "Demand",
+          tagColor: "blue",
         },
       ],
       source: "fallback",
@@ -224,22 +224,22 @@ export function fallbackIndustryPulse(industry: string): IndustryPulsePayload {
       ],
       items: [
         {
-          headline: "Empty return trips wipe out thin margins",
-          summary: "Fill return loads wherever possible. Empty kilometres are often your biggest profit leak.",
-          tag: "Affects profit",
+          headline: "Diesel prices keep freight margins under pressure",
+          summary: "Fuel remains the swing cost on thin haulage contracts, especially on longer corridors.",
+          tag: "Costs",
           tagColor: "red",
         },
         {
-          headline: "Customers are paying freight invoices later",
-          summary: "For smaller accounts, use cash-on-delivery or 7-day payment terms to protect cash.",
-          tag: "Affects cash",
+          headline: "Shippers take longer to settle freight invoices",
+          summary: "Carriers report slower payment from mid-size accounts as clients stretch working capital.",
+          tag: "Payments",
           tagColor: "amber",
         },
         {
-          headline: "Shared loads can fill spare capacity",
-          summary: "Matching spare space with other shippers can lift profit without buying more vehicles.",
-          tag: "Opportunity",
-          tagColor: "green",
+          headline: "Backhaul demand stays uneven across main SA routes",
+          summary: "Empty return trips remain common where inbound and outbound volumes don’t match.",
+          tag: "Demand",
+          tagColor: "blue",
         },
       ],
       source: "fallback",
@@ -253,22 +253,22 @@ export function fallbackIndustryPulse(industry: string): IndustryPulsePayload {
       ],
       items: [
         {
-          headline: "Buyers are delaying renewals and upgrades",
-          summary: "Offer a discount for annual prepay, and follow up unpaid invoices quickly.",
-          tag: "Affects cash",
+          headline: "SA buyers stretch software renewal and upgrade cycles",
+          summary: "Procurement teams are delaying non-critical SaaS renewals and asking for longer proof periods.",
+          tag: "Demand",
           tagColor: "amber",
         },
         {
-          headline: "Simple starter packages help close deals",
-          summary: "When budgets are tight, a lower entry price with clear upgrade paths wins more often.",
-          tag: "Opportunity",
-          tagColor: "green",
+          headline: "Dollar-priced cloud costs squeeze local software margins",
+          summary: "Hosting and tooling billed in USD continue to rise relative to rand subscription revenue.",
+          tag: "Costs",
+          tagColor: "red",
         },
         {
-          headline: "Dollar hosting costs can erase your margin",
-          summary: "If your tools are priced in dollars, check that your SA pricing still leaves enough profit.",
-          tag: "Affects profit",
-          tagColor: "red",
+          headline: "Starter packages and annual prepay still close faster",
+          summary: "Vendors report simpler entry plans and prepaid annual deals converting better than large custom quotes.",
+          tag: "Sales",
+          tagColor: "green",
         },
       ],
       source: "fallback",
@@ -282,21 +282,21 @@ export function fallbackIndustryPulse(industry: string): IndustryPulsePayload {
       ],
       items: [
         {
-          headline: "Clients are taking longer to pay invoices",
-          summary: "Ask for a deposit or monthly retainer, and turn on autopay. Waiting until month-end hurts cash.",
-          tag: "Affects cash",
+          headline: "Professional-services invoices settle more slowly across SA",
+          summary: "Agencies and consultancies report longer average days-to-pay as clients stretch supplier terms.",
+          tag: "Payments",
           tagColor: "red",
         },
         {
-          headline: "Extra unpaid work is wiping out profit",
-          summary: "If the brief grows, send a written change request before the extra hours start.",
-          tag: "Affects profit",
+          headline: "Clients push back on fees while still expanding project scope",
+          summary: "Firms say briefs grow mid-engagement even as rate increases meet tougher resistance.",
+          tag: "Fees",
           tagColor: "amber",
         },
         {
-          headline: "Specialist packages still win higher fees",
-          summary: "Clear outcome-based offers hold price better than open-ended generalist retainers.",
-          tag: "Opportunity",
+          headline: "Specialist and outcome-based offers hold price better",
+          summary: "Niche packages with clear deliverables are outperforming open-ended generalist retainers on fee defence.",
+          tag: "Demand",
           tagColor: "green",
         },
       ],
@@ -311,22 +311,22 @@ export function fallbackIndustryPulse(industry: string): IndustryPulsePayload {
       ],
       items: [
         {
-          headline: "Customers are paying SA businesses slower",
-          summary: "Send invoices the same day, follow up early, and ask for deposits on bigger jobs.",
-          tag: "Affects cash",
+          headline: "SA SMEs report customers taking longer to pay",
+          summary: "Late settlement remains a top cash-flow complaint for smaller firms across most sectors.",
+          tag: "Payments",
           tagColor: "red",
         },
         {
-          headline: "Borrowing is still expensive",
-          summary: "Collecting cash from customers is usually cheaper than taking on more debt right now.",
-          tag: "Watch this",
+          headline: "Borrowing costs stay elevated for small firms",
+          summary: "Bank funding remains expensive, so many owners lean harder on customer collections than new debt.",
+          tag: "Finance",
           tagColor: "amber",
         },
         {
-          headline: "Deposits and autopay are helping owners",
-          summary: "Businesses that get paid upfront or automatically usually sleep better than those waiting 30–60 days.",
-          tag: "Opportunity",
-          tagColor: "green",
+          headline: "Demand holds, but margins stay under cost pressure",
+          summary: "Sales volumes are steadier than profits as fuel, power, and input costs keep eating margin.",
+          tag: "Costs",
+          tagColor: "blue",
         },
       ],
       source: "fallback",
@@ -396,9 +396,12 @@ function buildPrompt(industry: string, today: string): string {
   return `You write Industry Pulse for South African small-business owners. Today is ${today}.
 Sector: "${industry}".
 
+This panel sits next to a separate "Your Next Move" action block. Do NOT give coaching, to-dos, or "do this week" advice.
+Your job is situational awareness: what is happening in the sector.
+
 Write for a busy owner — Grade 8 English. No jargon. No MBA speak.
 Bad: "Collections are the binding constraint", "utilisation", "fee pressure", "scope creep", "cash conversion".
-Good: "Clients are paying slower", "Team billable time", "Clients pushing fees down", "Extra unpaid work is eating profit".
+Good: "Clients are paying slower", "Team billable time", "Clients pushing fees down".
 
 Respond ONLY with valid JSON (no markdown, no preamble):
 {
@@ -410,9 +413,9 @@ Respond ONLY with valid JSON (no markdown, no preamble):
   ],
   "items": [
     {
-      "headline": "Plain headline a business owner gets instantly (max 12 words)",
-      "summary": "One sentence: what is happening + one practical action they can take this week.",
-      "tag": "Affects cash | Affects profit | Watch this | Opportunity",
+      "headline": "News-style sector headline (max 14 words)",
+      "summary": "One sentence on what is happening and why owners in this sector should care. No instructions.",
+      "tag": "Payments | Costs | Demand | Fees | Labour | Rand | Power | Regulation | Finance | Sales",
       "tagColor": "green | amber | red | blue"
     }
   ]
@@ -421,12 +424,13 @@ Respond ONLY with valid JSON (no markdown, no preamble):
 Rules:
 - Exactly 3 metrics and 3 news items
 - Metric labels must be everyday words (not debtor days, utilisation, fee pressure, working capital)
-- Metric values must be readable words or simple numbers (e.g. "↓ Slower", "↑ Rising", "→ Steady") — not cryptic codes
-- Each news summary must end with a concrete action
-- Focus on SA realities: payment delays, rand, fuel, power cuts, SARS/tax, demand
+- Metric values must be readable words or simple numbers (e.g. "↓ Slower", "↑ Rising", "→ Steady")
+- items[] must read like industry news / sector briefings, not tips
+- Forbidden in items: imperative advice ("Ask for…", "Send…", "Cut…", "Turn on…", "Review…", "Offer…")
+- Focus on SA realities: payment delays, rand, fuel, power cuts, SARS/tax, demand, labour, costs
 - Specific to ${industry}
-- Do not invent fake article titles that sound like press releases
-- Do not use the words: utilisation, debtor days, fee pressure, scope creep, binding constraint, cash conversion, working capital, ROIC`;
+- Prefer plausible current sector developments over fake newspaper mastheads or invented company names
+- Do not use: utilisation, debtor days, fee pressure, scope creep, binding constraint, cash conversion, working capital, ROIC`;
 }
 
 /** Primary provider: Claude Sonnet 4.6 via Anthropic Messages API. */
