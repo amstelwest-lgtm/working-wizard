@@ -29,47 +29,71 @@ function sentimentClass(s: "good" | "bad" | "neutral") {
   return "text-amber-600 dark:text-amber-300";
 }
 
-/** Distribution chart: peer cohort bars + "you" marker */
+/** Distribution chart: peer cohort bars + "you" marker — high contrast on light & dark */
 function PositionChart({ percentile }: { percentile: number }) {
   const buckets = 7;
   const active = Math.min(
     buckets - 1,
     Math.max(0, Math.round((percentile / 100) * (buckets - 1))),
   );
-  const heights = [38, 55, 72, 92, 78, 54, 40];
+  // Pixel heights (not %) so bars always paint clearly on light backgrounds
+  const heightsPx = [28, 40, 54, 68, 58, 42, 30];
+  const maxH = 68;
 
   return (
     <div className="mt-2.5">
-      <div className="relative flex h-[88px] items-end gap-1.5 rounded-lg border border-slate-100 bg-slate-50/90 px-2.5 pb-2 pt-5 dark:border-white/5 dark:bg-white/[0.03]">
-        {heights.map((h, i) => {
-          const isActive = i === active;
-          return (
+      <div className="relative overflow-hidden rounded-lg border border-slate-200 bg-[#eef2f7] px-2.5 pb-2 pt-6 dark:border-white/10 dark:bg-slate-950/50">
+        {/* subtle guide lines */}
+        <div className="pointer-events-none absolute inset-x-2.5 bottom-2 top-6" aria-hidden>
+          {[0.25, 0.5, 0.75].map((t) => (
             <div
-              key={i}
-              className="relative flex flex-1 flex-col items-center justify-end"
-              style={{ height: "100%" }}
-            >
-              {isActive && (
-                <span className="absolute -top-1 z-10 rounded-sm bg-emerald-600 px-1.5 py-px text-[8px] font-bold uppercase tracking-wide text-white shadow-sm">
-                  You
-                </span>
-              )}
-              <div
-                className={`w-full max-w-[28px] rounded-t-[3px] transition-all ${
-                  isActive
-                    ? "bg-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.4)]"
-                    : "bg-slate-300/90 dark:bg-white/18"
-                }`}
-                style={{ height: `${h}%` }}
-              />
-            </div>
-          );
-        })}
+              key={t}
+              className="absolute inset-x-0 border-t border-slate-300/70 dark:border-white/10"
+              style={{ bottom: `${t * 100}%` }}
+            />
+          ))}
+        </div>
+
+        <div className="relative flex items-end justify-between gap-1.5" style={{ height: maxH }}>
+          {heightsPx.map((h, i) => {
+            const isActive = i === active;
+            const isAvg = i === 3;
+            return (
+              <div key={i} className="relative flex flex-1 flex-col items-center justify-end" style={{ height: maxH }}>
+                {isActive && (
+                  <span className="absolute -top-5 z-10 rounded bg-emerald-600 px-1.5 py-px text-[8px] font-bold uppercase tracking-wide text-white shadow">
+                    You
+                  </span>
+                )}
+                <div
+                  className={`w-full max-w-[26px] rounded-t-[4px] ${
+                    isActive
+                      ? "bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.45)] ring-2 ring-emerald-200 dark:ring-emerald-500/30"
+                      : isAvg
+                        ? "bg-slate-500 dark:bg-slate-400"
+                        : "bg-slate-400 dark:bg-slate-500"
+                  }`}
+                  style={{ height: h }}
+                  title={isActive ? "You" : isAvg ? "Average" : "Peer group"}
+                />
+              </div>
+            );
+          })}
+        </div>
       </div>
-      <div className="mt-1.5 flex justify-between text-[9px] font-semibold uppercase tracking-[0.12em] text-slate-400">
-        <span>Bottom quartile</span>
-        <span>Avg</span>
-        <span>Top quartile</span>
+
+      <div className="mt-1.5 flex justify-between text-[9px] font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
+        <span>Bottom</span>
+        <span>Average</span>
+        <span>Top</span>
+      </div>
+      <div className="mt-1.5 flex items-center gap-3 text-[10px] text-slate-500 dark:text-slate-400">
+        <span className="inline-flex items-center gap-1">
+          <span className="h-2 w-2 rounded-sm bg-emerald-500" /> You
+        </span>
+        <span className="inline-flex items-center gap-1">
+          <span className="h-2 w-2 rounded-sm bg-slate-400 dark:bg-slate-500" /> Similar businesses
+        </span>
       </div>
     </div>
   );
