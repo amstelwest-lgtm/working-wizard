@@ -2,12 +2,13 @@
  * Financial statement extraction server functions.
  *
  * extractFinancials        — legacy CSV/Excel/text path (pattern + AI text)
- * extractPDFsWithAI        — new AI-powered PDF path via Gemini native PDF support
+ * extractPDFsWithAI        — AI-powered PDF path via Claude Sonnet 4.6 (document)
  *                            Accepts up to 3 PDFs, merges, normalises, returns full schema
  */
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { callClaudeMessages, parseClaudeJson } from "@/lib/claude-messages";
 import type {
   RawExtraction,
   MergedExtractionResult,
@@ -17,9 +18,9 @@ import type {
   CashFlowStatement,
 } from "@/lib/extraction-types";
 
-// ─── Gemini extraction prompt ──────────────────────────────────────────────────
+// ─── Claude extraction prompt ──────────────────────────────────────────────────
 
-const GEMINI_PROMPT = `You are a financial data extraction specialist for South African SME financial statements.
+const EXTRACTION_PROMPT = `You are a financial data extraction specialist for South African SME financial statements.
 
 Extract ALL financial figures from this document.
 
@@ -133,60 +134,21 @@ Return this EXACT JSON structure with no deviations:
   }
 }`;
 
-// ─── Call Gemini with native PDF support ───────────────────────────────────────
+// ─── Call Claude with native PDF document support ──────────────────────────────
 
-async function callGeminiPDF(base64: string, fileName: string): Promise<RawExtraction> {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) throw new Error("GEMINI_API_KEY is not configured. Please add it in your project secrets.");
-
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 60_000);
-
-  try {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`,
+async function callClaudePDF(base64: string, fileName: string): Promise<RawExtraction> {
+  const raw = await callClaudeMessages({
+    content: [
       {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        signal: controller.signal,
-        body: JSON.stringify({
-          contents: [{
-            parts: [
-              {
-                inline_data: {
-                  mime_type: "application/pdf",
-                  data: base64,
-                },
-              },
-              { text: GEMINI_PROMPT },
-            ],
-          }],
-          generationConfig: {
-            responseMimeType: "application/json",
-          },
-        }),
+        type: "document",
+        source: { type: "base64", media_type: "application/pdf", data: base64 },
       },
-    );
-
-    if (!res.ok) {
-      const body = await res.text().catch(() => "");
-      throw new Error(`Gemini API error (${res.status}): ${body.slice(0, 300)}`);
-    }
-
-    const json = await res.json();
-    const rawText: string | undefined = json.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!rawText) throw new Error("No response content from Gemini");
-
-    try {
-      return JSON.parse(rawText) as RawExtraction;
-    } catch {
-      const match = rawText.match(/\{[\s\S]*\}/);
-      if (match) return JSON.parse(match[0]) as RawExtraction;
-      throw new Error("Could not parse JSON from Gemini response");
-    }
-  } finally {
-    clearTimeout(timeout);
-  }
+      { type: "text", text: `File name: ${fileName}\n\n${EXTRACTION_PROMPT}` },
+    ],
+    maxTokens: 8192,
+    timeoutMs: 90_000,
+  });
+  return parseClaudeJson<RawExtraction>(raw);
 }
 
 // ─── Merge multiple extractions ────────────────────────────────────────────────
@@ -330,10 +292,10 @@ export const extractPDFsWithAI = createServerFn({ method: "POST" })
       }
     }
 
-    // Call Gemini for each PDF in parallel
+    // Call Claude for each PDF in parallel
     const extractions = await Promise.all(
       data.files.map(async (f) => ({
-        raw: await callGeminiPDF(f.base64, f.fileName),
+        raw: await callClaudePDF(f.base64, f.fileName),
         fileName: f.fileName,
       })),
     );
@@ -437,34 +399,20 @@ function patternExtract(text: string): Record<string, string> {
 }
 
 async function aiExtractText(text: string, fileName: string): Promise<Record<string, string>> {
-  const lovableKey = process.env.LOVABLE_API_KEY;
-  const openaiKey = process.env.OPENAI_API_KEY;
-  const apiKey = openaiKey || lovableKey;
-  if (!apiKey) return {};
-
-  const endpoint = openaiKey
-    ? "https://api.openai.com/v1/chat/completions"
-    : "https://ai.gateway.lovable.dev/v1/chat/completions";
-  const model = openaiKey ? "gpt-4o-mini" : "google/gemini-3.6-flash";
+  if (!process.env.ANTHROPIC_API_KEY) return {};
 
   try {
-    const res = await fetch(endpoint, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: "system", content: SYSTEM },
-          { role: "user", content: `File: ${fileName}\n\nContents:\n${text.slice(0, 80_000)}` },
-        ],
-        response_format: { type: "json_object" },
-      }),
+    const raw = await callClaudeMessages({
+      content: [
+        {
+          type: "text",
+          text: `${SYSTEM}\n\nFile: ${fileName}\n\nContents:\n${text.slice(0, 80_000)}`,
+        },
+      ],
+      maxTokens: 4096,
+      timeoutMs: 60_000,
     });
-    if (!res.ok) return {};
-    const json = await res.json();
-    const raw = json?.choices?.[0]?.message?.content ?? "{}";
-    let parsed: Record<string, unknown> = {};
-    try { parsed = JSON.parse(raw); } catch { const m = raw.match(/\{[\s\S]*\}/); if (m) parsed = JSON.parse(m[0]); }
+    const parsed = parseClaudeJson<Record<string, unknown>>(raw);
     const out: Record<string, string> = {};
     for (const k of FIELDS) {
       const val = parsed[k];

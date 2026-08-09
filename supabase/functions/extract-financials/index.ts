@@ -1,5 +1,5 @@
 // Extracts a structured financials JSON from an uploaded financial statement
-// (CSV text, Excel-as-CSV text, or PDF as base64) using the Lovable AI Gateway.
+// (CSV text, Excel-as-CSV text, or PDF as base64) using Claude Sonnet 4.6.
 import { extractText, getDocumentProxy } from "https://esm.sh/unpdf@0.12.1";
 
 const corsHeaders = {
@@ -14,6 +14,8 @@ const FIELDS = [
   "inventory", "payables", "fixedCosts", "variableCosts",
   "top5Revenue", "laborCost", "employees", "founderHours",
 ];
+
+const MODEL = Deno.env.get("CLAUDE_MODEL") || "claude-sonnet-4-6";
 
 const SYSTEM = `You are a financial-statement parser. Extract the following figures from the supplied document and return ONLY valid JSON, no prose, no markdown.
 
@@ -64,43 +66,72 @@ Deno.serve(async (req: Request) => {
 
   try {
     const { mimeType, base64, text, fileName } = await req.json();
-    const apiKey = Deno.env.get("LOVABLE_API_KEY");
+    const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
     if (!apiKey) {
-      return new Response(JSON.stringify({ error: "AI gateway not configured" }), {
+      return new Response(JSON.stringify({ error: "AI is not configured (ANTHROPIC_API_KEY missing)" }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Resolve to plain text — extract from PDF server-side via unpdf.
-    let docText = "";
-    if (text && text.trim().length > 0) {
-      docText = text.slice(0, 120_000);
-    } else if (base64 && (mimeType === "application/pdf" || (fileName ?? "").toLowerCase().endsWith(".pdf"))) {
-      try {
-        docText = await pdfToText(base64);
-      } catch (e) {
-        return new Response(JSON.stringify({ error: `PDF parse failed: ${(e as Error).message}` }),
+    // Prefer native PDF document to Claude when we have base64 PDF.
+    // Fall back to text extraction for CSV/Excel or when PDF text path is used.
+    const isPdf =
+      mimeType === "application/pdf" ||
+      (fileName ?? "").toLowerCase().endsWith(".pdf");
+
+    let content: Array<Record<string, unknown>>;
+    let debugTextChars = 0;
+
+    if (base64 && isPdf) {
+      content = [
+        {
+          type: "document",
+          source: { type: "base64", media_type: "application/pdf", data: base64 },
+        },
+        {
+          type: "text",
+          text: `${SYSTEM}\n\nFile: ${fileName ?? "statement.pdf"}`,
+        },
+      ];
+    } else {
+      let docText = "";
+      if (text && text.trim().length > 0) {
+        docText = text.slice(0, 120_000);
+      } else if (base64 && isPdf) {
+        try {
+          docText = await pdfToText(base64);
+        } catch (e) {
+          return new Response(JSON.stringify({ error: `PDF parse failed: ${(e as Error).message}` }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
+        if (!docText.trim()) {
+          return new Response(JSON.stringify({ error: "PDF appears to be scanned/image-only — no text could be extracted. Re-export as a text PDF or upload a CSV/Excel." }),
+            { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
+      } else {
+        return new Response(JSON.stringify({ error: "No usable text or PDF provided" }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
-      if (!docText.trim()) {
-        return new Response(JSON.stringify({ error: "PDF appears to be scanned/image-only — no text could be extracted. Re-export as a text PDF or upload a CSV/Excel." }),
-          { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      }
-    } else {
-      return new Response(JSON.stringify({ error: "No usable text or PDF provided" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      debugTextChars = docText.length;
+      content = [
+        {
+          type: "text",
+          text: `${SYSTEM}\n\nFile: ${fileName ?? "statement"}\n\nContents:\n${docText}`,
+        },
+      ];
     }
 
-    const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const aiRes = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      headers: {
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+      },
       body: JSON.stringify({
-        model: "google/gemini-3.6-flash",
-        messages: [
-          { role: "system", content: SYSTEM },
-          { role: "user", content: `File: ${fileName ?? "statement"}\n\nContents:\n${docText}` },
-        ],
-        response_format: { type: "json_object" },
+        model: MODEL,
+        max_tokens: 4096,
+        messages: [{ role: "user", content }],
       }),
     });
 
@@ -108,23 +139,24 @@ Deno.serve(async (req: Request) => {
       return new Response(JSON.stringify({ error: "Rate limit reached. Try again in a moment." }),
         { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
-    if (aiRes.status === 402) {
-      return new Response(JSON.stringify({ error: "AI credits exhausted. Add credits in Lovable Cloud." }),
-        { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
     if (!aiRes.ok) {
       const t = await aiRes.text();
-      return new Response(JSON.stringify({ error: `AI gateway: ${aiRes.status} ${t.slice(0, 300)}` }),
+      return new Response(JSON.stringify({ error: `Claude: ${aiRes.status} ${t.slice(0, 300)}` }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     const aiJson = await aiRes.json();
-    const raw = aiJson?.choices?.[0]?.message?.content ?? "{}";
+    const raw = ((aiJson?.content ?? []) as Array<{ type: string; text?: string }>)
+      .filter((b) => b.type === "text")
+      .map((b) => b.text ?? "")
+      .join("")
+      .trim() || "{}";
+    const cleaned = raw.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "").trim();
     let parsed: Record<string, unknown> = {};
     try {
-      parsed = JSON.parse(raw);
+      parsed = JSON.parse(cleaned);
     } catch {
-      const m = raw.match(/\{[\s\S]*\}/);
+      const m = cleaned.match(/\{[\s\S]*\}/);
       if (m) parsed = JSON.parse(m[0]);
     }
 
@@ -138,7 +170,7 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    return new Response(JSON.stringify({ financials: out, debug: { textChars: docText.length } }), {
+    return new Response(JSON.stringify({ financials: out, debug: { textChars: debugTextChars, model: MODEL } }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
