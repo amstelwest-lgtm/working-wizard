@@ -405,6 +405,8 @@ function ClientView() {
   const fetchReviewSignoffs = useServerFn(listClientReviewSignoffs);
   const [financialsSignoff, setFinancialsSignoff] = useState<ClientReviewSignoff | null>(null);
   const [cashForecastSignoff, setCashForecastSignoff] = useState<ClientReviewSignoff | null>(null);
+  const [budgetSignoff, setBudgetSignoff] = useState<ClientReviewSignoff | null>(null);
+  const [budgetUpdatedAt, setBudgetUpdatedAt] = useState<string | null>(null);
 
   // Playbook drawer
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -601,12 +603,27 @@ function ClientView() {
       .then(({ signoffs }) => {
         setFinancialsSignoff(signoffs.find((s) => s.scope === "financials") ?? null);
         setCashForecastSignoff(signoffs.find((s) => s.scope === "cash_forecast") ?? null);
+        setBudgetSignoff(signoffs.find((s) => s.scope === "budget") ?? null);
       })
       .catch(() => {
         // Sign-off state is a trust-signal enhancement, never block the page.
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId, activeTab, cashForecastReloadToken]);
+
+  useEffect(() => {
+    if (!clientId) return;
+    supabase
+      .from("clients")
+      .select("budget_updated_at")
+      .eq("id", clientId)
+      .maybeSingle()
+      .then(({ data }) => {
+        setBudgetUpdatedAt(
+          (data as { budget_updated_at?: string | null } | null)?.budget_updated_at ?? null,
+        );
+      });
+  }, [clientId, activeTab]);
 
   // ── Impersonation exit ────────────────────────────────────────────────────
 
@@ -1491,10 +1508,17 @@ function ClientView() {
           <div className="dark" style={{ colorScheme: "dark" }}>
             <BudgetPanel
               clientId={client.id}
+              clientName={client.name}
               simplified={viewMode === "simplified"}
               role="accountant"
+              canSign
+              businessTypeId={client.business_type}
               financials={financials}
               fyStartMonthDefault={3}
+              onPushedToCash={() => {
+                setCashForecastReloadToken((n) => n + 1);
+                setActiveTab("cash");
+              }}
             />
           </div>
         </div>
@@ -1505,7 +1529,7 @@ function ClientView() {
           <div className="h-sec">Choose a deliverable</div>
           <p className="sub">
             Each report is generated from live figures and branded to your practice.
-            Sign off financials and the cash forecast so deliverables carry your endorsement.
+            Sign off financials, cash forecast, and budget so deliverables carry your endorsement.
           </p>
           <div
             className="card"
@@ -1543,6 +1567,14 @@ function ClientView() {
                 signoff={cashForecastSignoff}
                 isStale={computeIsStale(cashForecastSignoff, client?.last_forecast_at ?? null)}
                 onChange={setCashForecastSignoff}
+              />
+              <ReviewSignoffButton
+                clientId={clientId}
+                clientName={client?.name}
+                scope="budget"
+                signoff={budgetSignoff}
+                isStale={computeIsStale(budgetSignoff, budgetUpdatedAt)}
+                onChange={setBudgetSignoff}
               />
             </div>
           </div>

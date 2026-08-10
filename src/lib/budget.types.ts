@@ -117,6 +117,14 @@ export type BudgetDocument = {
   wc: BudgetWc;
   capex: BudgetCapexLine[];
   showInventoryDays: boolean;
+  /** Participative challenge / note log (Phase 4). */
+  notes?: Array<{
+    id: string;
+    at: string;
+    by: string;
+    text: string;
+    kind: "note" | "challenge";
+  }>;
   updatedAt: string;
 };
 

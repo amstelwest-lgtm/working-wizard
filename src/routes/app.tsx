@@ -2963,17 +2963,26 @@ function Index() {
             <Suspense fallback={<div className="p-6 text-sm text-slate-400">Loading budget…</div>}>
               <BudgetPanel
                 clientId={effectiveClientId ?? undefined}
+                clientName={actingClientName ?? undefined}
                 simplified={viewMode === "simplified"}
                 role={
                   userRole === "accountant" || userRole === "firm_admin"
                     ? "accountant"
                     : "owner"
                 }
+                canSign={(userRole === "accountant" || userRole === "firm_admin") && !!actingClientId}
+                businessTypeId={businessTypeId}
                 financials={{
                   revenue: v.revenue,
                   cogs: v.cogs,
                   fixedCosts: v.fixedCosts,
+                  laborCost: v.laborCost,
+                  receivables: v.receivables,
+                  payables: v.payables,
+                  inventory: v.inventory,
+                  operatingCashflow: v.operatingCashflow,
                 }}
+                onPushedToCash={() => setCashForecastReloadToken((n) => n + 1)}
               />
             </Suspense>
           </TabsContent>

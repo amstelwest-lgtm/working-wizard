@@ -102,6 +102,7 @@ export function createBudgetDocument(input: {
     wc: { ...tpl.defaultWc, debtorDays: input.qualification.debtorDaysDefault || tpl.defaultWc.debtorDays },
     capex: [],
     showInventoryDays: tpl.showInventoryDays,
+    notes: [],
     updatedAt: new Date().toISOString(),
   };
 }

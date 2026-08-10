@@ -224,5 +224,6 @@ export function normalizeBudgetDocument(raw: BudgetDocument): BudgetDocument {
       usefulLifeMonths: c.usefulLifeMonths ?? 36,
       residual: c.residual ?? 0,
     })),
+    notes: raw.notes ?? [],
   };
 }

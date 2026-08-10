@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { BudgetFunnel } from "@/components/budget/budget-funnel";
 import { BudgetWorkspace } from "@/components/budget/budget-workspace";
+import { BudgetAdvancedPanel } from "@/components/budget/budget-advanced";
 import type { BudgetActuals, BudgetDocument, UnmappedDriver } from "@/lib/budget.types";
 import { createBudgetDocument, currentFyStart } from "@/lib/budget.months";
 import { normalizeBudgetDocument } from "@/lib/budget.compute";
@@ -22,19 +23,32 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { useServerFn } from "@tanstack/react-start";
+import { listClientReviewSignoffs } from "@/lib/review-signoffs.functions";
+import type { ClientReviewSignoff } from "@/lib/review-signoffs.functions";
+import { ReviewSignoffButton, ReviewSignoffBadge, computeIsStale } from "@/components/review-signoff";
 
 export function BudgetPanel({
   clientId,
+  clientName,
   simplified,
   role = "owner",
   financials,
+  businessTypeId,
   fyStartMonthDefault = 3,
+  onPushedToCash,
+  canSign,
 }: {
   clientId?: string;
+  clientName?: string;
   simplified?: boolean;
   role?: "owner" | "accountant";
   financials?: Record<string, string> | null;
+  businessTypeId?: string | null;
   fyStartMonthDefault?: number;
+  onPushedToCash?: () => void;
+  /** Show interactive sign-off (accountant portal / acting accountant). */
+  canSign?: boolean;
 }) {
   const [loaded, setLoaded] = useState(!clientId);
   const [doc, setDoc] = useState<BudgetDocument | null>(null);
@@ -46,6 +60,9 @@ export function BudgetPanel({
   } | null>(null);
   const [lowOverlapOpen, setLowOverlapOpen] = useState(false);
   const [snapshotActuals, setSnapshotActuals] = useState<BudgetActuals | null>(null);
+  const [budgetUpdatedAt, setBudgetUpdatedAt] = useState<string | null>(null);
+  const [budgetSignoff, setBudgetSignoff] = useState<ClientReviewSignoff | null>(null);
+  const fetchReviewSignoffs = useServerFn(listClientReviewSignoffs);
   const skipAutosave = useRef(false);
 
   useEffect(() => {
@@ -55,7 +72,7 @@ export function BudgetPanel({
     }
     supabase
       .from("clients")
-      .select("budget, financial_year_start_month")
+      .select("budget, budget_updated_at, financial_year_start_month")
       .eq("id", clientId)
       .maybeSingle()
       .then(({ data, error }) => {
@@ -63,7 +80,12 @@ export function BudgetPanel({
           // Column may not exist until migration — still allow local draft
           console.warn("budget load:", error.message);
         }
-        const budget = (data as { budget?: BudgetDocument | null } | null)?.budget ?? null;
+        const row = data as {
+          budget?: BudgetDocument | null;
+          budget_updated_at?: string | null;
+        } | null;
+        const budget = row?.budget ?? null;
+        setBudgetUpdatedAt(row?.budget_updated_at ?? null);
         if (budget && budget.version === 1) {
           skipAutosave.current = true;
           setDoc(normalizeBudgetDocument(budget));
@@ -74,6 +96,18 @@ export function BudgetPanel({
         }
         setLoaded(true);
       });
+  }, [clientId]);
+
+  useEffect(() => {
+    if (!clientId) return;
+    fetchReviewSignoffs({ data: { clientId } })
+      .then(({ signoffs }) => {
+        setBudgetSignoff(signoffs.find((s) => s.scope === "budget") ?? null);
+      })
+      .catch(() => {
+        /* sign-off is non-blocking */
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId]);
 
   // Prefer latest financial snapshot for budget-vs-actuals; fall back to live financials.
@@ -135,9 +169,11 @@ export function BudgetPanel({
           }
         } else {
           setDoc(payload);
+          setBudgetUpdatedAt(updatedAt);
         }
       } else {
         setDoc(payload);
+        setBudgetUpdatedAt(updatedAt);
       }
     }, 900);
     return () => clearTimeout(t);
@@ -241,6 +277,39 @@ export function BudgetPanel({
         onChangeModel={beginModelChange}
         role={role}
       />
+
+      <div className="mt-6 space-y-4">
+        <BudgetAdvancedPanel
+          doc={doc}
+          onChange={setDoc}
+          financials={financials}
+          businessTypeId={businessTypeId}
+          role={role}
+          clientId={clientId}
+          onPushedToCash={onPushedToCash}
+        />
+
+        {clientId && (
+          <div className="flex justify-end">
+            {canSign || role === "accountant" ? (
+              <ReviewSignoffButton
+                clientId={clientId}
+                clientName={clientName}
+                scope="budget"
+                signoff={budgetSignoff}
+                isStale={computeIsStale(budgetSignoff, budgetUpdatedAt ?? doc.updatedAt)}
+                onChange={setBudgetSignoff}
+              />
+            ) : (
+              <ReviewSignoffBadge
+                signoff={budgetSignoff}
+                scope="budget"
+                isStale={computeIsStale(budgetSignoff, budgetUpdatedAt ?? doc.updatedAt)}
+              />
+            )}
+          </div>
+        )}
+      </div>
 
       <Dialog open={lowOverlapOpen} onOpenChange={setLowOverlapOpen}>
         <DialogContent className="bg-[#0d1117] border-slate-800 text-slate-100">
