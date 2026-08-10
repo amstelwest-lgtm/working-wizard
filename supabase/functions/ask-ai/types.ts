@@ -17,9 +17,9 @@ export interface OperatingProfileSummary {
   costShape: string;
   seasonality: string;
   inventoryIntensity: string;
-  teamSize: string;
-  revenueBand: string;
-  primaryPressure: string;
+  customerConcentration: string;
+  debtPosition: string;
+  ownerGoal: string;
 }
 
 export interface ProfileRow {

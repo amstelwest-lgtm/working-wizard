@@ -151,9 +151,9 @@ export async function buildContext(
                 costShape: String(op.costShape ?? ""),
                 seasonality: String(op.seasonality ?? ""),
                 inventoryIntensity: String(op.inventoryIntensity ?? ""),
-                teamSize: String(op.teamSize ?? ""),
-                revenueBand: String(op.revenueBand ?? ""),
-                primaryPressure: String(op.primaryPressure ?? ""),
+                customerConcentration: String(op.customerConcentration ?? ""),
+                debtPosition: String(op.debtPosition ?? ""),
+                ownerGoal: String(op.ownerGoal ?? ""),
               }
             : null,
       };

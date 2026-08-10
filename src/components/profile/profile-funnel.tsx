@@ -22,10 +22,10 @@ import {
 import {
   buildOperatingProfile,
   type ClientOperatingProfile,
+  type CustomerConcentration,
+  type DebtPosition,
   type InventoryIntensity,
-  type PrimaryPressure,
-  type RevenueBand,
-  type TeamSizeBand,
+  type OwnerGoal,
 } from "@/lib/client-profile";
 
 const TOTAL = 10;
@@ -56,62 +56,123 @@ const COST_SHAPE: Array<{ id: BudgetCostShape; label: string; examples: string }
 const PAY_TIMING: Array<{ days: number; label: string; examples: string }> = [
   { days: 0, label: "Cash / card on sale", examples: "Retail, restaurants, salons, fuel" },
   { days: 30, label: "Around 30 days", examples: "Typical B2B invoices" },
-  { days: 45, label: "Milestone / progress billing (~45 days)", examples: "Construction, project retainers" },
+  {
+    days: 45,
+    label: "Milestone / progress billing (~45 days)",
+    examples: "Construction, project retainers",
+  },
   { days: 60, label: "60+ days", examples: "Medical aid, government, large corporates, export" },
 ];
 
 const SEASONALITY: Array<{ id: BudgetSeasonality; label: string; examples: string }> = [
   { id: "flat", label: "Fairly even through the year", examples: "Many B2B services" },
   { id: "mild", label: "Mild peaks", examples: "Retail holidays, restaurant weekends" },
-  { id: "strong", label: "Strong peaks and troughs", examples: "Hotels, agri harvest, education terms, events" },
+  {
+    id: "strong",
+    label: "Strong peaks and troughs",
+    examples: "Hotels, agri harvest, education terms, events",
+  },
 ];
 
 const INVENTORY: Array<{ id: InventoryIntensity; label: string; examples: string }> = [
-  { id: "none", label: "Little or no stock", examples: "Consultancies, SaaS, agencies, most services" },
-  { id: "light", label: "Some stock / short shelf-life", examples: "Cafés, salons (retail), light spare parts" },
-  { id: "heavy", label: "Material inventory or WIP", examples: "Retail, wholesale, manufacturing, agri, pharmacies" },
+  {
+    id: "none",
+    label: "Little or no stock",
+    examples: "Consultancies, SaaS, agencies, most services",
+  },
+  {
+    id: "light",
+    label: "Some stock / short shelf-life",
+    examples: "Cafés, salons (retail), light spare parts",
+  },
+  {
+    id: "heavy",
+    label: "Material inventory or WIP",
+    examples: "Retail, wholesale, manufacturing, agri, pharmacies",
+  },
 ];
 
-const TEAM: Array<{ id: TeamSizeBand; label: string; examples: string }> = [
-  { id: "solo", label: "Just me (or me + contractors)", examples: "Solo founder, freelancer" },
-  { id: "small", label: "2–10 people", examples: "Small team / early SME" },
-  { id: "medium", label: "11–50 people", examples: "Growing regional business" },
-  { id: "large", label: "50+ people", examples: "Multi-site or labour-heavy ops" },
+const CONCENTRATION: Array<{ id: CustomerConcentration; label: string; examples: string }> = [
+  {
+    id: "diverse",
+    label: "Spread wide — no customer is critical",
+    examples: "Retail, restaurants, consumer apps — losing one changes nothing",
+  },
+  {
+    id: "moderate",
+    label: "Top few are meaningful (roughly a quarter of sales)",
+    examples: "Small B2B book, a few anchor clients",
+  },
+  {
+    id: "concentrated",
+    label: "Top 3 are about half of sales",
+    examples: "Agencies, contractors, wholesalers with anchor accounts",
+  },
+  {
+    id: "single_dominant",
+    label: "One customer dominates (or one payer/funder)",
+    examples: "Single corporate contract, one mine/retail group, one grant funder",
+  },
 ];
 
-const REVENUE: Array<{ id: RevenueBand; label: string; examples: string }> = [
-  { id: "pre_revenue", label: "Pre-revenue / just starting", examples: "Building toward first sales" },
-  { id: "under_100k", label: "Under ~R100k / month", examples: "Early traction" },
-  { id: "100k_500k", label: "About R100k–R500k / month", examples: "Established SME band" },
-  { id: "500k_2m", label: "About R500k–R2m / month", examples: "Scaling operation" },
-  { id: "over_2m", label: "Over ~R2m / month", examples: "Larger or multi-site" },
+const DEBT: Array<{ id: DebtPosition; label: string; examples: string }> = [
+  {
+    id: "none",
+    label: "No debt — self-funded",
+    examples: "No loans, no overdraft in use",
+  },
+  {
+    id: "light",
+    label: "Small facilities only",
+    examples: "Overdraft, credit card, one vehicle finance",
+  },
+  {
+    id: "moderate",
+    label: "Real repayments each month",
+    examples: "Term loan, asset finance, equipment leases",
+  },
+  {
+    id: "heavy",
+    label: "Debt is a strain",
+    examples: "Repayments squeeze cash, personal surety, arrears risk",
+  },
+  {
+    id: "seeking",
+    label: "Looking to raise funding this year",
+    examples: "Bank application, investor raise, expansion facility",
+  },
 ];
 
-const PRESSURE: Array<{ id: PrimaryPressure; label: string; examples: string }> = [
+const GOAL: Array<{ id: OwnerGoal; label: string; examples: string }> = [
   {
-    id: "cash",
-    label: "Cash / runway",
-    examples: "Will we make payroll? How many weeks of cash left?",
+    id: "survive_cash",
+    label: "Get through a cash squeeze",
+    examples: "Payroll pressure, short runway, month-end stress",
   },
   {
-    id: "profit",
-    label: "Profitability / margins",
-    examples: "Busy but not enough left after costs",
+    id: "lift_margins",
+    label: "Make more from the same revenue",
+    examples: "Busy but thin — pricing, cost of sales, overhead drag",
   },
   {
-    id: "growth",
-    label: "Growth / winning work",
-    examples: "Need more sales, occupancy, or pipeline",
+    id: "grow_revenue",
+    label: "Grow sales / win more work",
+    examples: "Pipeline, occupancy, new outlets or products",
   },
   {
-    id: "working_capital",
-    label: "Working capital (debtors, stock, creditors)",
-    examples: "Money stuck in invoices or inventory",
+    id: "free_working_capital",
+    label: "Free up cash stuck in the business",
+    examples: "Debtors slow, stock heavy, supplier terms tight",
   },
   {
-    id: "people",
-    label: "People / capacity",
-    examples: "Hiring, utilisation, founder bottleneck",
+    id: "reduce_founder_dependence",
+    label: "Get the business to run without me",
+    examples: "Founder bottleneck, delegation, systems and hiring",
+  },
+  {
+    id: "build_to_exit",
+    label: "Build value for a sale or handover",
+    examples: "Grooming for exit, succession, investor-ready numbers",
   },
 ];
 
@@ -134,7 +195,9 @@ export function ProfileFunnel({
   const [primary, setPrimary] = useState<VolumeUnitOption | null>(() => {
     if (!initial) return null;
     const opts = volumeOptionsForMotion(initial.payMotion);
-    return opts.find((o) => o.templateId === initial.templateId || o.id === initial.volumeUnit) ?? null;
+    return (
+      opts.find((o) => o.templateId === initial.templateId || o.id === initial.volumeUnit) ?? null
+    );
   });
   const [secondary, setSecondary] = useState<BudgetVolumeUnit[]>(
     initial?.secondaryVolumeUnits ?? [],
@@ -147,14 +210,14 @@ export function ProfileFunnel({
   const [inventoryIntensity, setInventoryIntensity] = useState<InventoryIntensity | null>(
     initial?.inventoryIntensity ?? null,
   );
-  const [teamSize, setTeamSize] = useState<TeamSizeBand | null>(initial?.teamSize ?? null);
-  const [revenueBand, setRevenueBand] = useState<RevenueBand | null>(initial?.revenueBand ?? null);
-  const [primaryPressure, setPrimaryPressure] = useState<PrimaryPressure | null>(
-    initial?.primaryPressure ?? null,
+  const [customerConcentration, setCustomerConcentration] = useState<CustomerConcentration | null>(
+    initial?.customerConcentration ?? null,
   );
-  const [fyStartMonth, setFyStartMonth] = useState(
-    initial?.fyStartMonth ?? initialFyStartMonth,
+  const [debtPosition, setDebtPosition] = useState<DebtPosition | null>(
+    initial?.debtPosition ?? null,
   );
+  const [ownerGoal, setOwnerGoal] = useState<OwnerGoal | null>(initial?.ownerGoal ?? null);
+  const [fyStartMonth, setFyStartMonth] = useState(initial?.fyStartMonth ?? initialFyStartMonth);
 
   const volumeChoices = useMemo(
     () => (payMotion ? volumeOptionsForMotion(payMotion) : []),
@@ -191,9 +254,9 @@ export function ProfileFunnel({
     "What does your cost base look like?",
     "How seasonal is demand?",
     "How important is stock / inventory?",
-    "How big is the team?",
-    "Roughly, what’s monthly revenue?",
-    "What’s the #1 pressure right now?",
+    "How concentrated is your revenue?",
+    "Where do you stand on debt and funding?",
+    "What are you actually trying to achieve?",
   ];
 
   const finish = async () => {
@@ -204,9 +267,9 @@ export function ProfileFunnel({
       !costShape ||
       !seasonality ||
       !inventoryIntensity ||
-      !teamSize ||
-      !revenueBand ||
-      !primaryPressure
+      !customerConcentration ||
+      !debtPosition ||
+      !ownerGoal
     ) {
       return;
     }
@@ -219,9 +282,9 @@ export function ProfileFunnel({
       costShape,
       seasonality,
       inventoryIntensity,
-      teamSize,
-      revenueBand,
-      primaryPressure,
+      customerConcentration,
+      debtPosition,
+      ownerGoal,
       fyStartMonth,
     });
     setSaving(true);
@@ -254,8 +317,8 @@ export function ProfileFunnel({
         </p>
         <h2 className="mt-1 text-xl font-semibold text-slate-100 sm:text-2xl">{titles[step]}</h2>
         <p className="mt-1 text-sm text-slate-400">
-          Examples under each answer help you pick the closest fit — this tunes health scores,
-          cash, budget, benchmarks, and advice.
+          Examples under each answer help you pick the closest fit — this tunes health scores, cash,
+          budget, benchmarks, and advice.
         </p>
       </div>
 
@@ -309,7 +372,9 @@ export function ProfileFunnel({
               }}
             >
               <div className="text-sm font-semibold text-slate-100">No second stream</div>
-              <div className="text-xs text-slate-400">Just the primary for now — you can refine later</div>
+              <div className="text-xs text-slate-400">
+                Just the primary for now — you can refine later
+              </div>
             </button>
             {secondaryChoices.slice(0, 10).map((o) => {
               const on = secondary.includes(o.id);
@@ -403,13 +468,13 @@ export function ProfileFunnel({
           ))}
 
         {step === 7 &&
-          TEAM.map((o) => (
+          CONCENTRATION.map((o) => (
             <button
               key={o.id}
               type="button"
-              className={`${card} ${teamSize === o.id ? cardOn : ""}`}
+              className={`${card} ${customerConcentration === o.id ? cardOn : ""}`}
               onClick={() => {
-                setTeamSize(o.id);
+                setCustomerConcentration(o.id);
                 goNext();
               }}
             >
@@ -419,13 +484,13 @@ export function ProfileFunnel({
           ))}
 
         {step === 8 &&
-          REVENUE.map((o) => (
+          DEBT.map((o) => (
             <button
               key={o.id}
               type="button"
-              className={`${card} ${revenueBand === o.id ? cardOn : ""}`}
+              className={`${card} ${debtPosition === o.id ? cardOn : ""}`}
               onClick={() => {
-                setRevenueBand(o.id);
+                setDebtPosition(o.id);
                 goNext();
               }}
             >
@@ -436,12 +501,12 @@ export function ProfileFunnel({
 
         {step === 9 && (
           <>
-            {PRESSURE.map((o) => (
+            {GOAL.map((o) => (
               <button
                 key={o.id}
                 type="button"
-                className={`${card} ${primaryPressure === o.id ? cardOn : ""}`}
-                onClick={() => setPrimaryPressure(o.id)}
+                className={`${card} ${ownerGoal === o.id ? cardOn : ""}`}
+                onClick={() => setOwnerGoal(o.id)}
               >
                 <div className="text-sm font-semibold text-slate-100">{o.label}</div>
                 <div className="mt-1 text-[11px] text-slate-500">e.g. {o.examples}</div>
@@ -480,11 +545,15 @@ export function ProfileFunnel({
               </p>
             </div>
             <Button
-              disabled={!primaryPressure || saving}
+              disabled={!ownerGoal || saving}
               className="mt-2 w-full bg-[#d4a550] text-[#0a0e1a] hover:bg-[#c49a45]"
               onClick={finish}
             >
-              {saving ? "Saving…" : mode === "first-run" ? "Save profile & continue" : "Update profile"}
+              {saving
+                ? "Saving…"
+                : mode === "first-run"
+                  ? "Save profile & continue"
+                  : "Update profile"}
             </Button>
           </>
         )}

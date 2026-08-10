@@ -62,9 +62,9 @@ export function buildPrompt(
       lines.push(`Cost base: ${op.costShape.replace(/_/g, " ")}`);
       lines.push(`Seasonality: ${op.seasonality}`);
       lines.push(`Inventory intensity: ${op.inventoryIntensity}`);
-      lines.push(`Team size: ${op.teamSize}`);
-      lines.push(`Revenue band: ${op.revenueBand.replace(/_/g, " ")}`);
-      lines.push(`Owner's stated top pressure: ${op.primaryPressure.replace(/_/g, " ")}`);
+      lines.push(`Customer concentration: ${op.customerConcentration.replace(/_/g, " ")}`);
+      lines.push(`Debt position: ${op.debtPosition.replace(/_/g, " ")}`);
+      lines.push(`Owner's stated goal: ${op.ownerGoal.replace(/_/g, " ")}`);
     }
     if (ctx.profile.annual_revenue) {
       // Bucket revenue to avoid exact amounts

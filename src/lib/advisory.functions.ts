@@ -229,7 +229,7 @@ export const draftAdvisory = createServerFn({ method: "POST" })
 HARD RULES:
 - Never invent or estimate a number. Use only the figures in the brief below. If a needed figure is missing, work with what's there rather than guessing.
 - Interpret movement with care: a ratio going "up" is not automatically good or bad — reason about what it means for THIS business (a ${client.business_type ?? "general"} SME).
-- Respect the business profile below: revenue driver, cash timing, seasonality, stock intensity, team size, and the owner's stated top pressure. Lead with what matters to that pressure.
+- Respect the business profile below: revenue driver, cash timing, seasonality, stock intensity, customer concentration, debt position, and the owner's stated goal. Lead with what moves that goal, and flag concentration or debt risk when the numbers support it.
 - Ground every claim in a specific figure from the brief. No generic filler advice.
 - Plain language an owner understands. No accounting jargon without a plain-language gloss.
 - Match the accountant's voice and firm positioning if provided.

@@ -3,6 +3,7 @@
  * not just ratio scores.
  */
 
+import { GOAL_TO_PRESSURE } from "@/lib/client-profile";
 import type { ClientOperatingProfile, PrimaryPressure } from "@/lib/client-profile";
 
 /** Ratio families each pressure should surface first. */
@@ -41,7 +42,6 @@ const PRESSURE_BOOSTS: Record<PrimaryPressure, string[]> = {
 function isMuted(profile: ClientOperatingProfile, ratioName: string): boolean {
   if (profile.inventoryIntensity === "none" && ratioName === "Inventory Days") return true;
   if (profile.debtorDaysDefault === 0 && ratioName === "Debtor Days") return true;
-  if (profile.teamSize === "solo" && ratioName === "Sales-per-Employee Ratio") return true;
   return false;
 }
 
@@ -57,7 +57,8 @@ export function profilePriorityWeight(
   if (isMuted(profile, ratioName)) return 0.4;
 
   let weight = 1;
-  if (PRESSURE_BOOSTS[profile.primaryPressure]?.includes(ratioName)) {
+  const pressure = profile.primaryPressure ?? GOAL_TO_PRESSURE[profile.ownerGoal];
+  if (PRESSURE_BOOSTS[pressure]?.includes(ratioName)) {
     weight *= 1.45;
   }
   if (profile.costShape === "payroll_heavy" && PRESSURE_BOOSTS.people.includes(ratioName)) {
@@ -75,8 +76,42 @@ export function profilePriorityWeight(
   if (profile.seasonality === "strong" && ratioName === "Working Capital Days") {
     weight *= 1.15;
   }
+  if (
+    (profile.customerConcentration === "concentrated" ||
+      profile.customerConcentration === "single_dominant") &&
+    ratioName === "Top-5 Customer Share"
+  ) {
+    weight *= profile.customerConcentration === "single_dominant" ? 1.6 : 1.35;
+  }
+  if (
+    (profile.debtPosition === "heavy" || profile.debtPosition === "seeking") &&
+    DEBT_RATIOS.includes(ratioName)
+  ) {
+    weight *= profile.debtPosition === "heavy" ? 1.4 : 1.25;
+  }
+  if (profile.debtPosition === "none" && DEBT_RATIOS.includes(ratioName)) {
+    weight *= 0.7;
+  }
+  if (profile.ownerGoal === "build_to_exit" && EXIT_RATIOS.includes(ratioName)) {
+    weight *= 1.3;
+  }
   return weight;
 }
+
+const DEBT_RATIOS = [
+  "Debt-to-Equity",
+  "Equity Multiplier",
+  "Interest Burden",
+  "Interest Cover",
+  "Return on Equity",
+];
+
+const EXIT_RATIOS = [
+  "Net Margin",
+  "Return on Assets",
+  "Top-5 Customer Share",
+  "Gross Profit / Labor",
+];
 
 const TEMPLATE_INDUSTRY_LABEL: Record<string, string> = {
   hospitality_rooms: "Hotels & accommodation",
@@ -121,19 +156,28 @@ export function profileIndustryLabel(
   return TEMPLATE_INDUSTRY_LABEL[profile.templateId] ?? fallback;
 }
 
-const TEAM_LABEL: Record<ClientOperatingProfile["teamSize"], string> = {
-  solo: "solo owner",
-  small: "2–10 staff",
-  medium: "11–50 staff",
-  large: "50+ staff",
+const CONCENTRATION_LABEL: Record<ClientOperatingProfile["customerConcentration"], string> = {
+  diverse: "revenue spread wide, no critical customer",
+  moderate: "top few customers are meaningful (~25% of sales)",
+  concentrated: "top 3 customers are about half of sales",
+  single_dominant: "one customer or payer dominates revenue",
 };
 
-const REVENUE_LABEL: Record<ClientOperatingProfile["revenueBand"], string> = {
-  pre_revenue: "pre-revenue",
-  under_100k: "under R100k/month",
-  "100k_500k": "R100k–R500k/month",
-  "500k_2m": "R500k–R2m/month",
-  over_2m: "over R2m/month",
+const DEBT_LABEL: Record<ClientOperatingProfile["debtPosition"], string> = {
+  none: "no debt, self-funded",
+  light: "small facilities only (overdraft / card)",
+  moderate: "real monthly loan or asset-finance repayments",
+  heavy: "debt is straining cash",
+  seeking: "actively raising funding this year",
+};
+
+const GOAL_LABEL: Record<ClientOperatingProfile["ownerGoal"], string> = {
+  survive_cash: "get through a cash squeeze",
+  lift_margins: "make more from the same revenue",
+  grow_revenue: "grow sales and win more work",
+  free_working_capital: "free cash trapped in debtors and stock",
+  reduce_founder_dependence: "make the business run without the founder",
+  build_to_exit: "build value for a sale or handover",
 };
 
 const STOCK_LABEL: Record<ClientOperatingProfile["inventoryIntensity"], string> = {
@@ -158,8 +202,8 @@ export function profileAiContext(
     `Cost base: ${profile.costShape.replace(/_/g, " ")}`,
     `Seasonality: ${profile.seasonality}`,
     `Inventory: ${STOCK_LABEL[profile.inventoryIntensity]}`,
-    `Team: ${TEAM_LABEL[profile.teamSize]}`,
-    `Revenue band: ${REVENUE_LABEL[profile.revenueBand]}`,
-    `Owner's top pressure: ${profile.primaryPressure.replace(/_/g, " ")}`,
+    `Customer concentration: ${CONCENTRATION_LABEL[profile.customerConcentration]}`,
+    `Debt position: ${DEBT_LABEL[profile.debtPosition]}`,
+    `Owner's goal: ${GOAL_LABEL[profile.ownerGoal]}`,
   ].join(" · ");
 }

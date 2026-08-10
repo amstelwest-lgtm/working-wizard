@@ -16,16 +16,34 @@ import type {
 import { resolveTemplateId } from "@/lib/budget.templates";
 import { findVolumeOption } from "@/lib/budget.taxonomy";
 
-export type TeamSizeBand = "solo" | "small" | "medium" | "large";
-export type RevenueBand = "pre_revenue" | "under_100k" | "100k_500k" | "500k_2m" | "over_2m";
-/** Monthly ZAR revenue bands — labels in the funnel. */
 export type InventoryIntensity = "none" | "light" | "heavy";
-export type PrimaryPressure =
-  | "cash"
-  | "profit"
-  | "growth"
-  | "working_capital"
-  | "people";
+
+/** Revenue risk — how much of the book sits with a few customers. */
+export type CustomerConcentration = "diverse" | "moderate" | "concentrated" | "single_dominant";
+
+/** Balance-sheet pressure and financing intent. */
+export type DebtPosition = "none" | "light" | "moderate" | "heavy" | "seeking";
+
+/** What the owner is actually trying to achieve — sets advice intent. */
+export type OwnerGoal =
+  | "survive_cash"
+  | "lift_margins"
+  | "grow_revenue"
+  | "free_working_capital"
+  | "reduce_founder_dependence"
+  | "build_to_exit";
+
+/** Derived emphasis used to rank interventions. */
+export type PrimaryPressure = "cash" | "profit" | "growth" | "working_capital" | "people";
+
+export const GOAL_TO_PRESSURE: Record<OwnerGoal, PrimaryPressure> = {
+  survive_cash: "cash",
+  lift_margins: "profit",
+  grow_revenue: "growth",
+  free_working_capital: "working_capital",
+  reduce_founder_dependence: "people",
+  build_to_exit: "profit",
+};
 
 export type ClientOperatingProfile = {
   version: 1;
@@ -38,8 +56,10 @@ export type ClientOperatingProfile = {
   costShape: BudgetCostShape;
   seasonality: BudgetSeasonality;
   inventoryIntensity: InventoryIntensity;
-  teamSize: TeamSizeBand;
-  revenueBand: RevenueBand;
+  customerConcentration: CustomerConcentration;
+  debtPosition: DebtPosition;
+  ownerGoal: OwnerGoal;
+  /** Derived from ownerGoal — kept for ranking logic. */
   primaryPressure: PrimaryPressure;
   fyStartMonth: number;
   /** Derived legacy id for MODEL_TUNING / benchmarks */
@@ -47,9 +67,7 @@ export type ClientOperatingProfile = {
   confirmedAt: string;
 };
 
-export function inventoryToProfile(
-  intensity: InventoryIntensity,
-): BudgetInventoryProfile {
+export function inventoryToProfile(intensity: InventoryIntensity): BudgetInventoryProfile {
   if (intensity === "none") return "none";
   if (intensity === "light") return "short_life";
   return "standard";
@@ -136,15 +154,16 @@ export function buildOperatingProfile(input: {
   costShape: BudgetCostShape;
   seasonality: BudgetSeasonality;
   inventoryIntensity: InventoryIntensity;
-  teamSize: TeamSizeBand;
-  revenueBand: RevenueBand;
-  primaryPressure: PrimaryPressure;
+  customerConcentration: CustomerConcentration;
+  debtPosition: DebtPosition;
+  ownerGoal: OwnerGoal;
   fyStartMonth: number;
 }): ClientOperatingProfile {
   const businessTypeId = deriveBusinessTypeId(input);
   return {
     version: 1,
     ...input,
+    primaryPressure: GOAL_TO_PRESSURE[input.ownerGoal],
     businessTypeId,
     confirmedAt: new Date().toISOString(),
   };
