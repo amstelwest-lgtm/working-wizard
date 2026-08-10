@@ -18,6 +18,8 @@ import { ReportTitle } from "@/components/pdf/report-title";
 import { SectionHeader } from "@/components/pdf/section-header";
 import { ExecSummary, type HeadlineFigure } from "@/components/pdf/exec-summary";
 import { profitabilityNarrative } from "./narrative";
+import type { ClientOperatingProfile } from "@/lib/client-profile";
+
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -48,6 +50,8 @@ export type ProfitabilityData = PeriodData & {
 };
 
 export type ProfitabilityWaterfallPDFProps = {
+  /** Owner operating profile — shapes narrative wording only. */
+  operatingProfile?: ClientOperatingProfile | null;
   smeData: SmeData;
   profitabilityData: ProfitabilityData;
   accountantProfile: AccountantProfile;
@@ -383,6 +387,7 @@ export function ProfitabilityWaterfallPDF({
   accountantProfile,
   isDemo,
   reviewSignoff,
+  operatingProfile,
 }: ProfitabilityWaterfallPDFProps) {
   const theme = resolveTheme(accountantProfile);
   const p = d.prior_period;
@@ -430,7 +435,7 @@ export function ProfitabilityWaterfallPDF({
     gross_margin_pct: d.gross_margin_pct,
     net_margin_pct: d.net_margin_pct,
     priorNetMargin: p?.net_margin_pct,
-  });
+  }, operatingProfile);
 
   return (
     <PDFDocument

@@ -20,6 +20,8 @@ import { SectionHeader } from "@/components/pdf/section-header";
 import { ExecSummary, type HeadlineFigure } from "@/components/pdf/exec-summary";
 import { DuPontDiagram } from "@/components/pdf/dupont";
 import { assetNarrative, diagnoseDuPont } from "./narrative";
+import type { ClientOperatingProfile } from "@/lib/client-profile";
+
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -52,6 +54,8 @@ export type AssetProductivityData = {
 };
 
 export type AssetProductivityPDFProps = {
+  /** Owner operating profile — shapes narrative wording only. */
+  operatingProfile?: ClientOperatingProfile | null;
   smeData: SmeData;
   data: AssetProductivityData;
   accountantProfile: AccountantProfile;
@@ -173,6 +177,7 @@ export function AssetProductivityPDF({
   accountantProfile,
   isDemo,
   reviewSignoff,
+  operatingProfile,
 }: AssetProductivityPDFProps) {
   const theme = resolveTheme(accountantProfile);
   const hs = data.health_scores;
@@ -235,7 +240,7 @@ export function AssetProductivityPDF({
         isDemo={isDemo}
       />
 
-      <ExecSummary figures={figures} narrative={assetNarrative(levers, dupont)} />
+      <ExecSummary figures={figures} narrative={assetNarrative(levers, dupont, operatingProfile)} />
 
       <SectionHeader title="DuPont Decomposition — ROE Driver Analysis" color={theme.accent} />
       <DuPontDiagram levers={levers} diagnosis={dupont} />

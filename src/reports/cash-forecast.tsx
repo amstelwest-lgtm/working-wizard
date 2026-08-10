@@ -17,6 +17,9 @@ import { SectionHeader } from "@/components/pdf/section-header";
 import { ExecSummary, type HeadlineFigure } from "@/components/pdf/exec-summary";
 import { C, fmtRand, fmtRandCompact, resolveTheme } from "@/components/pdf/theme";
 import { cashForecastNarrative } from "./narrative";
+import type { ClientOperatingProfile } from "@/lib/client-profile";
+import { profileCashAssumptions } from "@/lib/profile-signals";
+
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -32,6 +35,8 @@ export type CashForecastWeek = {
 };
 
 export type CashForecastPDFProps = {
+  /** Owner operating profile — shapes narrative wording only. */
+  operatingProfile?: ClientOperatingProfile | null;
   smeData: SmeData;
   cashForecast: CashForecastWeek[];
   scenario: "critical" | "moderate" | "growth";
@@ -256,10 +261,15 @@ export function CashForecastPDF({
   assumptions = DEFAULT_ASSUMPTIONS,
   isDemo,
   reviewSignoff,
+  operatingProfile,
 }: CashForecastPDFProps) {
   const theme = resolveTheme(accountantProfile);
   const weeks = cashForecast;
   const scenarioMeta = SCENARIO_META[scenario] ?? SCENARIO_META.moderate;
+  const resolvedAssumptions = [
+    ...assumptions,
+    ...profileCashAssumptions(operatingProfile),
+  ];
 
   const closings = weeks.map((w) => w.closing_balance);
   const minBalance = Math.min(...closings);
@@ -305,7 +315,7 @@ export function CashForecastPDF({
     minBalance,
     threshold: minimumThreshold,
     weeksBelow,
-  });
+  }, operatingProfile);
 
   return (
     <PDFDocument
@@ -355,8 +365,8 @@ export function CashForecastPDF({
             padding: 12,
           }}
         >
-          {assumptions.map((a, i) => (
-            <View key={i} style={{ flexDirection: "row", marginBottom: i < assumptions.length - 1 ? 6 : 0 }}>
+          {resolvedAssumptions.map((a, i) => (
+            <View key={i} style={{ flexDirection: "row", marginBottom: i < resolvedAssumptions.length - 1 ? 6 : 0 }}>
               <Text style={{ fontSize: 8, color: C.faint, width: 12 }}>•</Text>
               <Text style={{ fontSize: 8, color: C.body, fontFamily: "Helvetica", lineHeight: 1.5, flex: 1 }}>{a}</Text>
             </View>

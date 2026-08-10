@@ -31,6 +31,14 @@ import type { RatioMovementRow } from "@/reports/ratio-movement";
 import type { BenchmarkRow } from "@/reports/benchmark-report";
 import type { ClientReviewSignoff } from "@/lib/review-signoffs.functions";
 import type { ReportSignoffStamp } from "@/components/pdf/pdf-document";
+import {
+  parseOperatingProfile,
+  type ClientOperatingProfile,
+} from "@/lib/client-profile";
+import {
+  profileIndustryLabel,
+  profilePriorityWeight,
+} from "@/lib/profile-signals";
 
 export const Route = createFileRoute("/_authenticated/reports/")({
   validateSearch: (search: Record<string, unknown>) => ({
@@ -191,6 +199,8 @@ type ClientReportData = {
   financialsUpdatedAt: string | null;
   lastForecastAt: string | null;
   reviewSignoffs: { financials: ClientReviewSignoff | null; cash_forecast: ClientReviewSignoff | null };
+  /** Owner 10Q profile — shapes report narratives / ordering, not layout. */
+  operatingProfile: ClientOperatingProfile | null;
 };
 
 const DEFAULT_MOVEMENT_LABELS = {
@@ -209,6 +219,7 @@ const EMPTY_CLIENT_DATA: ClientReportData = {
   benchmark: [], cashForecast: null,
   financialsUpdatedAt: null, lastForecastAt: null,
   reviewSignoffs: { financials: null, cash_forecast: null },
+  operatingProfile: null,
 };
 
 // ── Data-builder helpers ────────────────────────────────────────────────────
@@ -707,7 +718,10 @@ function buildCashForecastFromSavedCashflow(
 
 // Build real interventions from the playbook-data.json filtered by the
 // client's actual at-risk/critical ratios (camelCase ratio_key format).
-async function buildInterventions(ratioResults: RatioResult[]): Promise<Intervention[]> {
+async function buildInterventions(
+  ratioResults: RatioResult[],
+  profile?: ClientOperatingProfile | null,
+): Promise<Intervention[]> {
   // Map the snake_case ratio_key from ratioResults back to camelCase playbook keys
   const KEY_MAP: Record<string, string> = {
     gross_margin:         "grossMargin",
@@ -746,13 +760,26 @@ async function buildInterventions(ratioResults: RatioResult[]): Promise<Interven
       result.push({ ...steps[0], ratio_name: rr.ratio_name, health_tier: rr.health_tier });
     }
   }
-  return result.length > 0 ? result : MOCK_INTERVENTIONS;
+  if (result.length === 0) return MOCK_INTERVENTIONS;
+
+  const tierRank = (t: string) => (t === "critical" ? 2 : t === "at_risk" ? 1 : 0);
+  const impactOf = (s: string) => {
+    const m = /^(\d+)/.exec(s);
+    return m ? Number(m[1]) : 5;
+  };
+  result.sort((a, b) => {
+    const score = (iv: Intervention) =>
+      (tierRank(iv.health_tier) * 10 + impactOf(iv.impact)) *
+      profilePriorityWeight(profile, iv.ratio_name);
+    return score(b) - score(a);
+  });
+  return result;
 }
 
 async function loadClientReportData(clientId: string): Promise<ClientReportData> {
   const [clientRes, snapshotRes, signoffRes] = await Promise.all([
     supabase.from("clients")
-      .select("id, name, cash_runway_weeks, financials, cashflow, financials_updated_at, last_forecast_at")
+      .select("id, name, cash_runway_weeks, financials, cashflow, financials_updated_at, last_forecast_at, operating_profile")
       .eq("id", clientId)
       .maybeSingle(),
     supabase.from("client_financial_snapshots")
@@ -775,7 +802,9 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
   const clientRow = clientRes.data as unknown as {
     name: string; cash_runway_weeks: number | null; financials: unknown;
     cashflow: unknown; financials_updated_at: string | null; last_forecast_at: string | null;
+    operating_profile?: unknown;
   } | null;
+  const operatingProfile = parseOperatingProfile(clientRow?.operating_profile);
   const reviewSignoffs = {
     financials: (signoffRes.data ?? []).find((s) => s.scope === "financials") ?? null,
     cash_forecast: (signoffRes.data ?? []).find((s) => s.scope === "cash_forecast") ?? null,
@@ -787,6 +816,7 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
     financialsUpdatedAt: clientRow?.financials_updated_at ?? null,
     lastForecastAt: clientRow?.last_forecast_at ?? null,
     reviewSignoffs,
+    operatingProfile,
   };
   if (!clientRow?.financials) return baseEmpty;
 
@@ -841,6 +871,7 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
     financialsUpdatedAt: clientRow.financials_updated_at,
     lastForecastAt: clientRow.last_forecast_at,
     reviewSignoffs,
+    operatingProfile,
   };
 }
 
@@ -912,6 +943,7 @@ function makeSmeWithNote(s: Settings, isDemo: boolean): { name: string; period: 
 
 function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
   const cd = clientData?.hasData ? clientData : null;
+  const operatingProfile = clientData?.operatingProfile ?? null;
   const financialsStamp = signoffStampFor("financials", clientData);
   const forecastStamp = signoffStampFor("cash_forecast", clientData);
 
@@ -925,6 +957,7 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
         accountantProfile: p,
         isDemo,
         reviewSignoff: financialsStamp,
+        operatingProfile,
       });
     },
     intervention: async (s, p) => {
@@ -932,13 +965,14 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
       const isDemo = !cd || cd.ratioResults.length === 0;
       const interventions = isDemo
         ? MOCK_INTERVENTIONS
-        : await buildInterventions(cd.ratioResults);
+        : await buildInterventions(cd.ratioResults, operatingProfile);
       return renderToBlob(InterventionPriorityPDF, {
         smeData: makeSmeWithNote(s, isDemo),
         interventions,
         accountantProfile: p,
         isDemo,
         reviewSignoff: financialsStamp,
+        operatingProfile,
       });
     },
     forecast: async (s, p) => {
@@ -951,6 +985,7 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
         accountantProfile: p,
         isDemo,
         reviewSignoff: forecastStamp,
+        operatingProfile,
       });
     },
     cycle: async (s, p) => {
@@ -962,6 +997,7 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
         accountantProfile: p,
         isDemo,
         reviewSignoff: financialsStamp,
+        operatingProfile,
       });
     },
     waterfall: async (s, p) => {
@@ -973,6 +1009,7 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
         accountantProfile: p,
         isDemo,
         reviewSignoff: financialsStamp,
+        operatingProfile,
       });
     },
     leverage: async (s, p) => {
@@ -984,6 +1021,7 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
         accountantProfile: p,
         isDemo,
         reviewSignoff: financialsStamp,
+        operatingProfile,
       });
     },
     assets: async (s, p) => {
@@ -995,6 +1033,7 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
         accountantProfile: p,
         isDemo,
         reviewSignoff: financialsStamp,
+        operatingProfile,
       });
     },
     labor: async (s, p) => {
@@ -1006,6 +1045,7 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
         accountantProfile: p,
         isDemo,
         reviewSignoff: financialsStamp,
+        operatingProfile,
       });
     },
     movement: async (s, p) => {
@@ -1018,6 +1058,7 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
         accountantProfile: p,
         isDemo,
         reviewSignoff: financialsStamp,
+        operatingProfile,
       });
     },
     benchmark: async (s, p) => {
@@ -1027,11 +1068,12 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
       return renderToBlob(BenchmarkReportPDF, {
         smeData: makeSmeWithNote(s, isDemo),
         industryCode: industry.code,
-        industryName: industry.name,
+        industryName: profileIndustryLabel(operatingProfile, industry.name),
         benchmarkRows: isDemo ? MOCK_BENCHMARK : cd!.benchmark,
         accountantProfile: p,
         isDemo,
         reviewSignoff: financialsStamp,
+        operatingProfile,
       });
     },
   };

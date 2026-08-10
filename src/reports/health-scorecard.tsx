@@ -18,6 +18,8 @@ import { ReportTitle } from "@/components/pdf/report-title";
 import { ExecSummary, type HeadlineFigure } from "@/components/pdf/exec-summary";
 import { DuPontStrip } from "@/components/pdf/dupont";
 import { diagnoseDuPont, healthNarrative } from "./narrative";
+import type { ClientOperatingProfile } from "@/lib/client-profile";
+
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -34,6 +36,8 @@ export type RatioResult = {
 };
 
 export type HealthScorecardPDFProps = {
+  /** Owner operating profile — shapes narrative wording only. */
+  operatingProfile?: ClientOperatingProfile | null;
   smeData: SmeData;
   ratioResults: RatioResult[];
   accountantProfile: AccountantProfile;
@@ -179,6 +183,7 @@ export function HealthScorecardPDF({
   accountantProfile,
   isDemo,
   reviewSignoff,
+  operatingProfile,
 }: HealthScorecardPDFProps) {
   const overallScore = Math.round(avg(ratioResults.map((r) => r.health_score || 0)));
   const overallTier = tierForScore(overallScore);
@@ -272,6 +277,7 @@ export function HealthScorecardPDF({
     overallScore,
     pillarData.map((p) => ({ label: PILLAR_LABEL[p.pillar], score: p.score })),
     dupont,
+    operatingProfile,
   );
 
   return (

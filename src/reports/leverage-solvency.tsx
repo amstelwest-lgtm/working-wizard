@@ -17,6 +17,8 @@ import { SectionHeader } from "@/components/pdf/section-header";
 import { ExecSummary, type HeadlineFigure } from "@/components/pdf/exec-summary";
 import { C, fmtRand, fmtRandCompact, fmtPct, resolveTheme } from "@/components/pdf/theme";
 import { leverageNarrative } from "./narrative";
+import type { ClientOperatingProfile } from "@/lib/client-profile";
+
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -44,6 +46,8 @@ export type LeverageSolvencyData = {
 };
 
 export type LeverageSolvencyPDFProps = {
+  /** Owner operating profile — shapes narrative wording only. */
+  operatingProfile?: ClientOperatingProfile | null;
   smeData: SmeData;
   data: LeverageSolvencyData;
   accountantProfile: AccountantProfile;
@@ -146,6 +150,7 @@ export function LeverageSolvencyPDF({
   accountantProfile,
   isDemo,
   reviewSignoff,
+  operatingProfile,
 }: LeverageSolvencyPDFProps) {
   const theme = resolveTheme(accountantProfile);
   const hs = d.health_scores;
@@ -191,7 +196,7 @@ export function LeverageSolvencyPDF({
     debtToEquity: Number.isFinite(debtToEquity) ? debtToEquity : 0,
     totalDebt: d.total_debt,
     totalEquity: d.total_equity,
-  });
+  }, operatingProfile);
 
   const ratioRows = [
     { name: "Funding Structure (Debt %)", value: fmtPct(debtToAssets), score: hs.fundingStructure },
