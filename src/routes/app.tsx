@@ -40,6 +40,12 @@ import { IndustryPulse, IndustryNewsBand } from "@/components/industry-pulse";
 import { OverviewRail } from "@/components/overview-rail";
 import { NoteLayer } from "@/components/note-layer";
 import { AdminDashboard } from "@/components/admin-dashboard";
+import { ProfileFunnel } from "@/components/profile/profile-funnel";
+import {
+  parseOperatingProfile,
+  profileShortLabel,
+  type ClientOperatingProfile,
+} from "@/lib/client-profile";
 
 type Benchmark = { p25: number; p50: number; p75: number; unit: string; higher_is_better: boolean };
 
@@ -1538,7 +1544,12 @@ function Index() {
       .then(({ data }) => { if (data) setHistory(data as never); });
   }, [effectiveClientId]);
 
-  const [clientMeta, setClientMeta] = useState<{ business_type: string | null; cash_runway_weeks: number | null; financials_updated_at?: string | null } | null>(null);
+  const [clientMeta, setClientMeta] = useState<{
+    business_type: string | null;
+    cash_runway_weeks: number | null;
+    financials_updated_at?: string | null;
+    operating_profile?: ClientOperatingProfile | null;
+  } | null>(null);
   const [activeTab, setActiveTab] = useState<string>("today");
   const fetchReviewSignoffs = useServerFn(listClientReviewSignoffs);
   const [financialsSignoff, setFinancialsSignoff] = useState<ClientReviewSignoff | null>(null);
@@ -1555,16 +1566,37 @@ function Index() {
   }, [effectiveClientId]);
   useEffect(() => {
     if (!effectiveClientId) { setClientMeta(null); return; }
-    supabase.from("clients").select("business_type, cash_runway_weeks, financials_updated_at").eq("id", effectiveClientId).maybeSingle()
+    supabase
+      .from("clients")
+      .select("business_type, cash_runway_weeks, financials_updated_at, operating_profile, financial_year_start_month")
+      .eq("id", effectiveClientId)
+      .maybeSingle()
       .then((res) => {
-        const data = res.data as { business_type: string | null; cash_runway_weeks: number | null; financials_updated_at: string | null } | null;
-        setClientMeta(data ?? null);
-        if (data?.business_type) {
+        const data = res.data as {
+          business_type: string | null;
+          cash_runway_weeks: number | null;
+          financials_updated_at: string | null;
+          operating_profile?: unknown;
+          financial_year_start_month?: number | null;
+        } | null;
+        const profile = parseOperatingProfile(data?.operating_profile);
+        setClientMeta(
+          data
+            ? {
+                business_type: data.business_type,
+                cash_runway_weeks: data.cash_runway_weeks,
+                financials_updated_at: data.financials_updated_at,
+                operating_profile: profile,
+              }
+            : null,
+        );
+        if (profile) {
+          setOperatingProfile(profile);
+          setBusinessTypeId(profile.businessTypeId);
+        } else if (data?.business_type) {
           setBusinessTypeId(data.business_type as string);
         } else if (!actingClientId && userRole !== null && userRole !== "client_member") {
-          // First-run: owner has no business type yet — open the selector as required.
-          // Skip for invited members (client_member) — they should see the client's data
-          // as-is without being asked to set up a business type they don't own.
+          // First-run: owner has no profile yet — open the 10-question funnel.
           setFirstRunStep("pick-type");
           setShowOnboarding(true);
         }
@@ -1768,10 +1800,11 @@ function Index() {
 
   const benchmarkFor = (k: RatioKey): Benchmark | null => benchmarks[k] ?? null;
   const [showOnboarding, setShowOnboarding] = useState(false);
-  // firstRunStep: null = not first run (or done); 'pick-type' = must choose business type; 'first-data' = nudge to upload data
+  // firstRunStep: null = not first run (or done); 'pick-type' = must complete profile funnel; 'first-data' = nudge to upload data
   const [firstRunStep, setFirstRunStep] = useState<null | "pick-type" | "first-data">(null);
   const [btSaving, setBtSaving] = useState(false);
   const [btSaveError, setBtSaveError] = useState<string | null>(null);
+  const [operatingProfile, setOperatingProfile] = useState<ClientOperatingProfile | null>(null);
   const [showQboDialog, setShowQboDialog] = useState(false);
   const [showFinData, setShowFinData] = useState(false);
   const [showBankDrafter, setShowBankDrafter] = useState(false);
@@ -2180,28 +2213,40 @@ function Index() {
             />
           </div>
           <div className="flex flex-wrap items-center gap-1.5 print:hidden lg:justify-end">
-            {/* Business Profile pill — owners can change type; members see it read-only */}
+            {/* Business Profile pill — owners retake the 10-question funnel */}
             {userRole !== "client_member" ? (
               <button
                 onClick={() => setShowOnboarding(true)}
                 className="inline-flex h-9 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50/80 px-3 text-[9px] font-semibold uppercase tracking-[0.16em] text-slate-600 transition-all hover:-translate-y-0.5 hover:border-[#b7872a]/50 hover:bg-[#d4a550]/10 dark:border-slate-700/80 dark:bg-slate-900/70 dark:text-slate-300"
-                title={businessType ? `Business type: ${businessType.label} — click to change` : "Set your business type"}
+                title={
+                  operatingProfile
+                    ? `Profile: ${profileShortLabel(operatingProfile)} — click to retake`
+                    : "Set up your business profile"
+                }
               >
                 <Building2 className="h-3 w-3 shrink-0" />
-                {businessType ? (
+                {operatingProfile || businessType ? (
                   <>
-                    <span className="hidden sm:inline">{businessType.label}</span>
+                    <span className="hidden max-w-[10rem] truncate sm:inline">
+                      {profileShortLabel(operatingProfile) !== "Set up profile"
+                        ? profileShortLabel(operatingProfile)
+                        : businessType?.label}
+                    </span>
                     <Pencil className="hidden h-2.5 w-2.5 opacity-40 sm:block" />
                   </>
                 ) : (
-                  <span className="hidden sm:inline text-[#8a6508] dark:text-[#d4a550]">Set business type</span>
+                  <span className="hidden sm:inline text-[#8a6508] dark:text-[#d4a550]">Set up profile</span>
                 )}
               </button>
-            ) : businessType ? (
+            ) : operatingProfile || businessType ? (
               <div className="inline-flex h-9 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50/80 px-3 text-[9px] font-semibold uppercase tracking-[0.16em] text-slate-600 dark:border-slate-700/80 dark:bg-slate-900/70 dark:text-slate-300"
-                title={`Business type: ${businessType.label}`}>
+                title={`Profile: ${profileShortLabel(operatingProfile) || businessType?.label}`}>
                 <Building2 className="h-3 w-3 shrink-0" />
-                <span className="hidden sm:inline">{businessType.label}</span>
+                <span className="hidden max-w-[10rem] truncate sm:inline">
+                  {profileShortLabel(operatingProfile) !== "Set up profile"
+                    ? profileShortLabel(operatingProfile)
+                    : businessType?.label}
+                </span>
               </div>
             ) : null}
             {/* Risk Profile popover */}
@@ -2272,11 +2317,10 @@ function Index() {
         </header>
 
 
-        {/* Business type selector — required on first run, optional thereafter */}
+        {/* Business profile funnel — required on first run, retakeable thereafter */}
         <Dialog
           open={showOnboarding}
           onOpenChange={(open) => {
-            // Block dismiss during first-run until they pick a type
             if (!open && firstRunStep === "pick-type") return;
             setShowOnboarding(open);
           }}
@@ -2286,80 +2330,57 @@ function Index() {
             onEscapeKeyDown={firstRunStep === "pick-type" ? (e) => e.preventDefault() : undefined}
             className={`[display:flex] h-[calc(100dvh-1rem)] max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] max-w-3xl flex-col overflow-hidden border border-slate-800 bg-slate-950 p-4 text-slate-50 sm:h-auto sm:max-h-[90vh] sm:p-6 ${firstRunStep === "pick-type" ? "[&>button:first-of-type]:hidden" : ""}`}
           >
-            <DialogHeader className="shrink-0 pr-8">
-              {firstRunStep === "pick-type" && (
-                <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#d4a550]">
-                  Step 1 of 2 · Set up your profile
-                </p>
-              )}
-              <DialogTitle className="text-2xl text-slate-100">
-                {firstRunStep === "pick-type" ? "What type of business do you run?" : "Change your business type"}
-              </DialogTitle>
-              <DialogDescription className="text-slate-400">
-                {firstRunStep === "pick-type"
-                  ? "Every benchmark, KPI target, cash-flow expectation and health score adapts to your business model. Pick the closest match."
-                  : "Benchmarks and health scores recalculate immediately when you pick a new type. No data is lost."}
-              </DialogDescription>
+            <DialogHeader className="sr-only">
+              <DialogTitle>Business profile</DialogTitle>
+              <DialogDescription>Ten questions that tune Milōn to your business</DialogDescription>
             </DialogHeader>
-            <div className="-mx-1 min-h-0 flex-1 touch-pan-y overflow-y-scroll overscroll-contain px-1 [-webkit-overflow-scrolling:touch]">
-            <div className="grid gap-2 pb-2 sm:grid-cols-2">
-              {BUSINESS_TYPES.map((bt) => {
-                const selected = bt.id === businessTypeId;
-                return (
-                  <button
-                    key={bt.id}
-                    disabled={btSaving}
-                    onClick={async () => {
-                      setBtSaveError(null);
-                      // Optimistically update UI immediately
-                      setBusinessTypeId(bt.id);
-                      if (effectiveClientId) {
-                        setBtSaving(true);
-                        const { error } = await supabase
-                          .from("clients")
-                          .update({ business_type: bt.id })
-                          .eq("id", effectiveClientId);
-                        setBtSaving(false);
-                        if (error) {
-                          // Revert optimistic update and stay on dialog so user can retry
-                          setBusinessTypeId(null);
-                          setBtSaveError("Could not save your selection — please try again.");
-                          return;
-                        }
-                      }
-                      // Persistence confirmed (or no client yet) — advance
-                      setShowOnboarding(false);
-                      if (firstRunStep === "pick-type") {
-                        setFirstRunStep("first-data");
-                      }
-                    }}
-                    className={`group rounded-lg border p-3 text-left transition-all disabled:opacity-60 disabled:cursor-wait ${
-                      selected
-                        ? "border-[#d4a550]/60 bg-[#d4a550]/10"
-                        : "border-slate-800 bg-slate-900 hover:border-slate-600 hover:bg-slate-800"
-                    }`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="text-xl">{bt.icon}</span>
-                      <span className="font-semibold text-slate-100">{bt.label}</span>
-                      {btSaving && selected && (
-                        <Loader2 className="ml-auto h-3.5 w-3.5 animate-spin text-[#d4a550]" />
-                      )}
-                    </div>
-                    <p className="mt-1 text-[11px] text-slate-400">{bt.blurb}</p>
-                    <p className="mt-2 text-[10px] uppercase tracking-wider text-slate-500">
-                      Model: {bt.model.replace("_", " ")}
-                    </p>
-                  </button>
-                );
-              })}
-            </div>
+            <ProfileFunnel
+              mode={firstRunStep === "pick-type" ? "first-run" : "retake"}
+              initial={operatingProfile}
+              initialFyStartMonth={operatingProfile?.fyStartMonth ?? 3}
+              onCancel={
+                firstRunStep === "pick-type"
+                  ? undefined
+                  : () => setShowOnboarding(false)
+              }
+              onComplete={async (profile) => {
+                setBtSaveError(null);
+                setOperatingProfile(profile);
+                setBusinessTypeId(profile.businessTypeId);
+                if (effectiveClientId) {
+                  setBtSaving(true);
+                  const { error } = await supabase
+                    .from("clients")
+                    .update({
+                      business_type: profile.businessTypeId,
+                      operating_profile: profile as unknown as Record<string, unknown>,
+                      financial_year_start_month: profile.fyStartMonth,
+                    } as never)
+                    .eq("id", effectiveClientId);
+                  setBtSaving(false);
+                  if (error) {
+                    setBtSaveError("Could not save your profile — please try again.");
+                    return;
+                  }
+                }
+                setShowOnboarding(false);
+                if (firstRunStep === "pick-type") {
+                  setFirstRunStep("first-data");
+                } else {
+                  toast.success("Business profile updated");
+                }
+              }}
+            />
             {btSaveError && (
               <p className="mt-2 rounded-md border border-red-800/50 bg-red-950/30 px-3 py-2 text-xs text-red-400">
                 {btSaveError}
               </p>
             )}
-            </div>
+            {btSaving && (
+              <p className="flex items-center gap-2 text-xs text-slate-400">
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-[#d4a550]" /> Saving profile…
+              </p>
+            )}
           </DialogContent>
         </Dialog>
 
@@ -2374,7 +2395,8 @@ function Index() {
                 Now let's get your data in
               </DialogTitle>
               <DialogDescription className="text-slate-400">
-                Upload a financial statement and MILŌN will calculate your health score instantly. You can also skip this and enter figures manually later.
+                Your profile is set. Upload a financial statement and MILŌN will calculate your health score
+                instantly — or skip and enter figures manually later.
               </DialogDescription>
             </DialogHeader>
             <div className="flex flex-col gap-3 pt-2">
@@ -2972,6 +2994,8 @@ function Index() {
                 }
                 canSign={(userRole === "accountant" || userRole === "firm_admin") && !!actingClientId}
                 businessTypeId={businessTypeId}
+                operatingProfile={operatingProfile}
+                onRetakeProfile={() => setShowOnboarding(true)}
                 financials={{
                   revenue: v.revenue,
                   cogs: v.cogs,

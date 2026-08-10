@@ -608,18 +608,29 @@ function BudgetComplexWorkspace({
         </div>
       </section>
 
-      {/* Capex (simple + depreciation) */}
-      {(doc.qualification.capexMode !== "none" || doc.capex.length > 0) && (
-        <section className="space-y-2">
-          <div className="flex items-center justify-between">
+      {/* Capex — available for every model; collapsed by default */}
+      <details className="group rounded-xl border border-slate-200/80 open:bg-white/70 dark:border-slate-800 dark:open:bg-slate-950/40">
+        <summary className="cursor-pointer list-none px-4 py-3 marker:content-none">
+          <div className="flex items-center justify-between gap-2">
             <div>
-              <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Capex</h3>
+              <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                Capex{" "}
+                <span className="font-normal text-slate-400">
+                  {doc.capex.length ? `(${doc.capex.length})` : "(optional)"}
+                </span>
+              </h3>
               <p className="text-[11px] text-slate-500">
-                Cash-funded hits the cash flow in the purchase month; finance-funded does not.
-                Straight-line depreciation flows into EBIT.
+                Expand if you plan asset purchases — cash-funded hits cash in the purchase month;
+                finance-funded does not. Straight-line depreciation flows into EBIT.
               </p>
             </div>
+            <span className="text-xs text-slate-400 group-open:hidden">Show</span>
+            <span className="hidden text-xs text-slate-400 group-open:inline">Hide</span>
+          </div>
+        </summary>
+        <div className="space-y-2 border-t border-slate-100 px-4 pb-4 pt-3 dark:border-slate-800">
             {doc.capex.length < 3 && (
+              <div className="flex justify-end">
               <Button
                 type="button"
                 size="sm"
@@ -628,6 +639,7 @@ function BudgetComplexWorkspace({
                 onClick={() =>
                   onChange({
                     ...doc,
+                    qualification: { ...doc.qualification, capexMode: "light" },
                     capex: [
                       ...doc.capex,
                       {
@@ -636,7 +648,7 @@ function BudgetComplexWorkspace({
                         month: months[0],
                         amount: 0,
                         funding: "cash",
-                        usefulLifeMonths: doc.qualification.capexMode === "significant" ? 60 : 36,
+                        usefulLifeMonths: 36,
                         residual: 0,
                       },
                     ],
@@ -646,8 +658,8 @@ function BudgetComplexWorkspace({
               >
                 <Plus className="mr-1 h-3 w-3" /> Add
               </Button>
+              </div>
             )}
-          </div>
           {doc.capex.length === 0 ? (
             <p className="text-xs text-slate-500">No capex lines yet — add up to three planned purchases.</p>
           ) : (
@@ -761,14 +773,14 @@ function BudgetComplexWorkspace({
                       })
                     }
                   >
-                    Remove
+                    <Trash2 className="h-3.5 w-3.5" />
                   </Button>
                 </div>
               ))}
             </div>
           )}
-        </section>
-      )}
+        </div>
+      </details>
 
       {/* Sensitivity */}
       <section className="rounded-xl border border-slate-200/80 bg-white/70 p-4 dark:border-slate-800 dark:bg-slate-950/40">

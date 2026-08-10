@@ -5,7 +5,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { BudgetFunnel } from "@/components/budget/budget-funnel";
 import { BudgetWorkspace } from "@/components/budget/budget-workspace";
 import { BudgetAdvancedPanel } from "@/components/budget/budget-advanced";
 import type { BudgetActuals, BudgetDocument, UnmappedDriver } from "@/lib/budget.types";
@@ -27,6 +26,11 @@ import { useServerFn } from "@tanstack/react-start";
 import { listClientReviewSignoffs } from "@/lib/review-signoffs.functions";
 import type { ClientReviewSignoff } from "@/lib/review-signoffs.functions";
 import { ReviewSignoffButton, ReviewSignoffBadge, computeIsStale } from "@/components/review-signoff";
+import {
+  parseOperatingProfile,
+  profileToBudgetQualification,
+  type ClientOperatingProfile,
+} from "@/lib/client-profile";
 
 export function BudgetPanel({
   clientId,
@@ -35,8 +39,10 @@ export function BudgetPanel({
   role = "owner",
   financials,
   businessTypeId,
+  operatingProfile: operatingProfileProp,
   fyStartMonthDefault = 3,
   onPushedToCash,
+  onRetakeProfile,
   canSign,
 }: {
   clientId?: string;
@@ -45,14 +51,19 @@ export function BudgetPanel({
   role?: "owner" | "accountant";
   financials?: Record<string, string> | null;
   businessTypeId?: string | null;
+  operatingProfile?: ClientOperatingProfile | null;
   fyStartMonthDefault?: number;
   onPushedToCash?: () => void;
+  /** Opens the profile-wide 10-question funnel (change model). */
+  onRetakeProfile?: () => void;
   /** Show interactive sign-off (accountant portal / acting accountant). */
   canSign?: boolean;
 }) {
   const [loaded, setLoaded] = useState(!clientId);
   const [doc, setDoc] = useState<BudgetDocument | null>(null);
-  const [showFunnel, setShowFunnel] = useState(false);
+  const [profile, setProfile] = useState<ClientOperatingProfile | null>(
+    operatingProfileProp ?? null,
+  );
   const [unmapped, setUnmapped] = useState<UnmappedDriver[] | null>(null);
   const [pendingChange, setPendingChange] = useState<{
     result: ReturnType<typeof applyTemplateChange>;
@@ -64,6 +75,11 @@ export function BudgetPanel({
   const [budgetSignoff, setBudgetSignoff] = useState<ClientReviewSignoff | null>(null);
   const fetchReviewSignoffs = useServerFn(listClientReviewSignoffs);
   const skipAutosave = useRef(false);
+  const seededFromProfile = useRef(false);
+
+  useEffect(() => {
+    setProfile(operatingProfileProp ?? null);
+  }, [operatingProfileProp]);
 
   useEffect(() => {
     if (!clientId) {
@@ -72,27 +88,27 @@ export function BudgetPanel({
     }
     supabase
       .from("clients")
-      .select("budget, budget_updated_at, financial_year_start_month")
+      .select("budget, budget_updated_at, financial_year_start_month, operating_profile")
       .eq("id", clientId)
       .maybeSingle()
       .then(({ data, error }) => {
         if (error) {
-          // Column may not exist until migration — still allow local draft
           console.warn("budget load:", error.message);
         }
         const row = data as {
           budget?: BudgetDocument | null;
           budget_updated_at?: string | null;
+          operating_profile?: unknown;
         } | null;
         const budget = row?.budget ?? null;
         setBudgetUpdatedAt(row?.budget_updated_at ?? null);
+        const fromDb = parseOperatingProfile(row?.operating_profile);
+        if (fromDb) setProfile(fromDb);
         if (budget && budget.version === 1) {
           skipAutosave.current = true;
           setDoc(normalizeBudgetDocument(budget));
-          setShowFunnel(false);
         } else {
           setDoc(null);
-          setShowFunnel(true);
         }
         setLoaded(true);
       });
@@ -201,66 +217,107 @@ export function BudgetPanel({
       fyStartMonth: number;
     }) => {
       const next = createBudgetDocument(args);
+      if (args.qualification.inventoryProfile === "none") {
+        next.showInventoryDays = false;
+      } else if (args.qualification.inventoryProfile) {
+        next.showInventoryDays = true;
+      }
       skipAutosave.current = false;
       setDoc(next);
       setUnmapped(null);
-      setShowFunnel(false);
       toast.success(`Budget ready · ${BUDGET_TEMPLATES[args.templateId].label}`);
     },
     [],
   );
 
+  // Seed budget from operating profile when none exists yet
+  useEffect(() => {
+    if (!loaded || doc || !profile || seededFromProfile.current) return;
+    seededFromProfile.current = true;
+    startFresh({
+      templateId: profile.templateId,
+      qualification: profileToBudgetQualification(profile, "none"),
+      fyStartMonth: profile.fyStartMonth || fyStartMonthDefault,
+    });
+  }, [loaded, doc, profile, fyStartMonthDefault, startFresh]);
+
   const beginModelChange = () => {
-    setShowFunnel(true);
+    if (onRetakeProfile) {
+      onRetakeProfile();
+      return;
+    }
+    toast.message("Update your business profile to change the budget model");
   };
 
-  const onFunnelComplete = (args: {
-    templateId: BudgetTemplateId;
-    qualification: BudgetQualification;
-    fyStartMonth: number;
-  }) => {
-    if (!doc) {
-      startFresh(args);
+  const applyProfileToExisting = useCallback(
+    (nextProfile: ClientOperatingProfile) => {
+      if (!doc) {
+        startFresh({
+          templateId: nextProfile.templateId,
+          qualification: profileToBudgetQualification(nextProfile, "none"),
+          fyStartMonth: nextProfile.fyStartMonth || fyStartMonthDefault,
+        });
+        return;
+      }
+      const qualification = profileToBudgetQualification(
+        nextProfile,
+        doc.qualification.capexMode ?? "none",
+      );
+      const result = applyTemplateChange(doc, nextProfile.templateId, qualification);
+      result.next.fyStartMonth = nextProfile.fyStartMonth;
+      if (nextProfile.fyStartMonth !== doc.fyStartMonth) {
+        result.next.fyStart = currentFyStart(nextProfile.fyStartMonth);
+      }
+      result.next.showInventoryDays = nextProfile.inventoryIntensity !== "none";
+      if (result.lowOverlap) {
+        setPendingChange({ result, mode: "apply" });
+        setLowOverlapOpen(true);
+        return;
+      }
+      setDoc(result.next);
+      setUnmapped(result.unmapped.length ? result.unmapped : null);
+      toast.success(
+        `Budget model updated · ${result.mappedCount} drivers carried across (${result.overlapPct.toFixed(0)}% overlap)`,
+      );
+    },
+    [doc, fyStartMonthDefault, startFresh],
+  );
+
+  // When parent profile changes after a retake, remap budget
+  const lastProfileAt = useRef<string | null>(null);
+  useEffect(() => {
+    if (!profile || !loaded) return;
+    if (!lastProfileAt.current) {
+      lastProfileAt.current = profile.confirmedAt;
       return;
     }
-    const result = applyTemplateChange(doc, args.templateId, {
-      ...args.qualification,
-    });
-    result.next.fyStartMonth = args.fyStartMonth;
-    if (args.fyStartMonth !== doc.fyStartMonth) {
-      result.next.fyStart = currentFyStart(args.fyStartMonth);
+    if (profile.confirmedAt !== lastProfileAt.current) {
+      lastProfileAt.current = profile.confirmedAt;
+      if (doc) applyProfileToExisting(profile);
     }
-    if (result.lowOverlap) {
-      setPendingChange({ result, mode: "apply" });
-      setLowOverlapOpen(true);
-      return;
-    }
-    setDoc(result.next);
-    setUnmapped(result.unmapped.length ? result.unmapped : null);
-    setShowFunnel(false);
-    toast.success(
-      `Model updated · ${result.mappedCount} drivers carried across (${result.overlapPct.toFixed(0)}% overlap)`,
-    );
-  };
+  }, [profile, loaded, doc, applyProfileToExisting]);
 
   if (!loaded) {
     return <div className="p-6 text-sm text-slate-400">Loading budget…</div>;
   }
 
-  if (showFunnel || !doc) {
+  if (!doc) {
     return (
-      <div className="pb-8">
-        {doc && (
-          <div className="mb-4 flex justify-end">
-            <Button type="button" variant="ghost" size="sm" onClick={() => setShowFunnel(false)}>
-              Cancel — keep current budget
-            </Button>
-          </div>
+      <div className="space-y-3 rounded-xl border border-dashed border-slate-300 p-6 text-sm dark:border-slate-700">
+        <p className="font-semibold text-slate-800 dark:text-slate-100">Budget needs your business profile</p>
+        <p className="text-slate-500">
+          Answer the intro questions once — we use them to pick the right volume × price drivers
+          (and to tune health, cash, and advice across Milōn).
+        </p>
+        {onRetakeProfile && (
+          <Button
+            type="button"
+            className="bg-[#d4a550] text-[#0a0e1a] hover:bg-[#c49a45]"
+            onClick={onRetakeProfile}
+          >
+            Set up business profile
+          </Button>
         )}
-        <BudgetFunnel
-          initialFyStartMonth={doc?.fyStartMonth ?? fyStartMonthDefault}
-          onComplete={onFunnelComplete}
-        />
       </div>
     );
   }
@@ -331,7 +388,6 @@ export function BudgetPanel({
               variant="ghost"
               onClick={() => {
                 if (!pendingChange || !doc) return;
-                // Start fresh with the pending qualification/template
                 const q = pendingChange.result.next.qualification;
                 const tid = pendingChange.result.next.templateId;
                 startFresh({
@@ -355,7 +411,6 @@ export function BudgetPanel({
                     ? pendingChange.result.unmapped
                     : null,
                 );
-                setShowFunnel(false);
                 setPendingChange(null);
                 setLowOverlapOpen(false);
                 toast.message("Review unmapped drivers before discarding");

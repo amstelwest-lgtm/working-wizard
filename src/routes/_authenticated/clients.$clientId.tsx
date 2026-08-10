@@ -25,6 +25,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { listClientReviewSignoffs } from "@/lib/review-signoffs.functions";
 import type { ClientReviewSignoff } from "@/lib/review-signoffs.functions";
 import { ReviewSignoffButton, computeIsStale } from "@/components/review-signoff";
+import { parseOperatingProfile } from "@/lib/client-profile";
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
@@ -255,6 +256,7 @@ type Client = {
   id: string;
   name: string;
   business_type: string | null;
+  operating_profile?: unknown;
   cash_runway_weeks: number | null;
   last_forecast_at: string | null;
   open_queries_count: number;
@@ -549,7 +551,7 @@ function ClientView() {
         const { data, error } = await supabase
           .from("clients")
           .select(
-            "id, name, business_type, cash_runway_weeks, last_forecast_at, open_queries_count, financials, financials_updated_at, reports_issued_count, cashflow"
+            "id, name, business_type, operating_profile, cash_runway_weeks, last_forecast_at, open_queries_count, financials, financials_updated_at, reports_issued_count, cashflow"
           )
           .eq("id", clientId)
           .maybeSingle();
@@ -564,7 +566,7 @@ function ClientView() {
             const { data: data2, error: error2 } = await supabase
               .from("clients")
               .select(
-                "id, name, business_type, cash_runway_weeks, last_forecast_at, open_queries_count, financials, financials_updated_at, cashflow"
+                "id, name, business_type, operating_profile, cash_runway_weeks, last_forecast_at, open_queries_count, financials, financials_updated_at, cashflow"
               )
               .eq("id", clientId)
               .maybeSingle();
@@ -1513,6 +1515,7 @@ function ClientView() {
               role="accountant"
               canSign
               businessTypeId={client.business_type}
+              operatingProfile={parseOperatingProfile(client.operating_profile)}
               financials={financials}
               fyStartMonthDefault={3}
               onPushedToCash={() => {
