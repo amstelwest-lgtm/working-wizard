@@ -8,13 +8,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type {
+  BudgetActuals,
   BudgetDocument,
   BudgetScenarioId,
   UnmappedDriver,
 } from "@/lib/budget.types";
 import { BUDGET_TEMPLATES, newId } from "@/lib/budget.templates";
 import { fyMonths, formatMonthLabel } from "@/lib/budget.months";
-import { computeBudgetMonths, fmtZar } from "@/lib/budget.compute";
+import { computeBudgetMonths, fmtZar, lowestCashTrough } from "@/lib/budget.compute";
 import {
   keepUnmappedAsExtraLine,
   reassignUnmappedDriver,
@@ -35,7 +36,7 @@ export function BudgetWorkspace({
   doc: BudgetDocument;
   onChange: (next: BudgetDocument) => void;
   simplified?: boolean;
-  actuals?: { revenue?: number; cogs?: number; fixedCosts?: number } | null;
+  actuals?: BudgetActuals | null;
   unmappedReview?: UnmappedDriver[] | null;
   onClearUnmapped?: () => void;
   onChangeModel?: () => void;
@@ -48,7 +49,10 @@ export function BudgetWorkspace({
     () => computeBudgetMonths(doc, doc.activeScenario),
     [doc],
   );
+  const baseResults = useMemo(() => computeBudgetMonths(doc, "base"), [doc]);
   const focus = results.find((r) => r.month === focusMonth) ?? results[0];
+  const baseFocus = baseResults.find((r) => r.month === focusMonth) ?? baseResults[0];
+  const trough = useMemo(() => lowestCashTrough(results), [results]);
   const tpl = BUDGET_TEMPLATES[doc.templateId];
 
   const patchLine = (lineId: string, month: string, patch: Partial<{ volume: number; price: number }>) => {
@@ -168,7 +172,22 @@ export function BudgetWorkspace({
       )}
 
       {/* Assumptions */}
-      <section className="grid gap-3 rounded-xl border border-slate-200/80 bg-white/70 p-4 dark:border-slate-800 dark:bg-slate-950/50 sm:grid-cols-4">
+      <section className="grid gap-3 rounded-xl border border-slate-200/80 bg-white/70 p-4 dark:border-slate-800 dark:bg-slate-950/50 sm:grid-cols-3 lg:grid-cols-6">
+        <div>
+          <Label className="text-[10px] uppercase tracking-wider text-slate-500">Opening cash</Label>
+          <Input
+            type="number"
+            value={doc.openingCash ?? 0}
+            onChange={(e) =>
+              onChange({
+                ...doc,
+                openingCash: parseFloat(e.target.value) || 0,
+                updatedAt: new Date().toISOString(),
+              })
+            }
+            className="mt-1 h-8"
+          />
+        </div>
         <div>
           <Label className="text-[10px] uppercase tracking-wider text-slate-500">Gross profit %</Label>
           <Input
@@ -233,21 +252,53 @@ export function BudgetWorkspace({
           </div>
         ) : (
           <div>
-            <Label className="text-[10px] uppercase tracking-wider text-slate-500">VAT</Label>
-            <select
-              className="mt-1 h-8 w-full rounded-md border border-slate-200 bg-white px-2 text-sm dark:border-slate-700 dark:bg-slate-950"
-              value={doc.vatMode}
+            <Label className="text-[10px] uppercase tracking-wider text-slate-500">VAT rate %</Label>
+            <Input
+              type="number"
+              value={Math.round((doc.vatRate || 0.15) * 1000) / 10}
               onChange={(e) =>
                 onChange({
                   ...doc,
-                  vatMode: e.target.value as BudgetDocument["vatMode"],
+                  vatRate: (parseFloat(e.target.value) || 0) / 100,
                   updatedAt: new Date().toISOString(),
                 })
               }
-            >
-              <option value="exclusive">Exclusive</option>
-              <option value="inclusive">Inclusive</option>
-            </select>
+              className="mt-1 h-8"
+            />
+          </div>
+        )}
+        <div>
+          <Label className="text-[10px] uppercase tracking-wider text-slate-500">VAT mode</Label>
+          <select
+            className="mt-1 h-8 w-full rounded-md border border-slate-200 bg-white px-2 text-sm dark:border-slate-700 dark:bg-slate-950"
+            value={doc.vatMode}
+            onChange={(e) =>
+              onChange({
+                ...doc,
+                vatMode: e.target.value as BudgetDocument["vatMode"],
+                updatedAt: new Date().toISOString(),
+              })
+            }
+          >
+            <option value="exclusive">Exclusive (P&L ex-VAT)</option>
+            <option value="inclusive">Inclusive (strip VAT for P&L)</option>
+          </select>
+        </div>
+        {doc.showInventoryDays && (
+          <div className="sm:col-span-3 lg:col-span-6">
+            <Label className="text-[10px] uppercase tracking-wider text-slate-500">VAT rate %</Label>
+            <Input
+              type="number"
+              value={Math.round((doc.vatRate || 0.15) * 1000) / 10}
+              onChange={(e) =>
+                onChange({
+                  ...doc,
+                  vatRate: (parseFloat(e.target.value) || 0) / 100,
+                  updatedAt: new Date().toISOString(),
+                })
+              }
+              className="mt-1 h-8 max-w-[140px]"
+            />
           </div>
         )}
       </section>
@@ -411,11 +462,17 @@ export function BudgetWorkspace({
         </div>
       </section>
 
-      {/* Capex (simple) */}
-      {doc.qualification.capexMode !== "none" && (
+      {/* Capex (simple + depreciation) */}
+      {(doc.qualification.capexMode !== "none" || doc.capex.length > 0) && (
         <section className="space-y-2">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Capex</h3>
+            <div>
+              <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Capex</h3>
+              <p className="text-[11px] text-slate-500">
+                Cash-funded hits the cash flow in the purchase month; finance-funded does not.
+                Straight-line depreciation flows into EBIT.
+              </p>
+            </div>
             {doc.capex.length < 3 && (
               <Button
                 type="button"
@@ -433,6 +490,8 @@ export function BudgetWorkspace({
                         month: months[0],
                         amount: 0,
                         funding: "cash",
+                        usefulLifeMonths: doc.qualification.capexMode === "significant" ? 60 : 36,
+                        residual: 0,
                       },
                     ],
                     updatedAt: new Date().toISOString(),
@@ -448,7 +507,10 @@ export function BudgetWorkspace({
           ) : (
             <div className="space-y-2">
               {doc.capex.map((c) => (
-                <div key={c.id} className="grid gap-2 rounded-lg border border-slate-200 p-3 dark:border-slate-800 sm:grid-cols-5">
+                <div
+                  key={c.id}
+                  className="grid gap-2 rounded-lg border border-slate-200 p-3 dark:border-slate-800 sm:grid-cols-3 lg:grid-cols-7"
+                >
                   <Input
                     value={c.name}
                     onChange={(e) =>
@@ -458,6 +520,7 @@ export function BudgetWorkspace({
                         updatedAt: new Date().toISOString(),
                       })
                     }
+                    placeholder="Description"
                   />
                   <select
                     className="h-9 rounded-md border border-slate-200 bg-white px-2 text-sm dark:border-slate-700 dark:bg-slate-950"
@@ -488,6 +551,7 @@ export function BudgetWorkspace({
                         updatedAt: new Date().toISOString(),
                       })
                     }
+                    placeholder="Amount"
                   />
                   <select
                     className="h-9 rounded-md border border-slate-200 bg-white px-2 text-sm dark:border-slate-700 dark:bg-slate-950"
@@ -507,6 +571,38 @@ export function BudgetWorkspace({
                     <option value="cash">Cash</option>
                     <option value="finance">Finance</option>
                   </select>
+                  <Input
+                    type="number"
+                    value={c.usefulLifeMonths ?? 36}
+                    onChange={(e) =>
+                      onChange({
+                        ...doc,
+                        capex: doc.capex.map((x) =>
+                          x.id === c.id
+                            ? { ...x, usefulLifeMonths: Math.max(1, parseInt(e.target.value, 10) || 36) }
+                            : x,
+                        ),
+                        updatedAt: new Date().toISOString(),
+                      })
+                    }
+                    placeholder="Life (mo)"
+                    title="Useful life in months"
+                  />
+                  <Input
+                    type="number"
+                    value={c.residual ?? 0}
+                    onChange={(e) =>
+                      onChange({
+                        ...doc,
+                        capex: doc.capex.map((x) =>
+                          x.id === c.id ? { ...x, residual: parseFloat(e.target.value) || 0 } : x,
+                        ),
+                        updatedAt: new Date().toISOString(),
+                      })
+                    }
+                    placeholder="Residual"
+                    title="Residual value"
+                  />
                   <Button
                     type="button"
                     variant="ghost"
@@ -532,9 +628,9 @@ export function BudgetWorkspace({
       <section className="rounded-xl border border-slate-200/80 bg-white/70 p-4 dark:border-slate-800 dark:bg-slate-950/40">
         <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Sensitivity (active scenario)</h3>
         <p className="mb-3 text-xs text-slate-500">
-          Tweaks volume / price factors on {doc.scenarios[doc.activeScenario].label}. Base stays at 1.0× unless you edit it.
+          Tweaks factors on {doc.scenarios[doc.activeScenario].label}. Base stays at 1.0× unless you edit it.
         </p>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-3 sm:grid-cols-3">
           <div>
             <Label className="text-[10px] uppercase tracking-wider text-slate-500">
               Volume factor ({doc.scenarios[doc.activeScenario].volumeFactor.toFixed(2)}×)
@@ -587,6 +683,33 @@ export function BudgetWorkspace({
               className="mt-2 w-full accent-[#d4a550]"
             />
           </div>
+          <div>
+            <Label className="text-[10px] uppercase tracking-wider text-slate-500">
+              Debtor days Δ ({(doc.scenarios[doc.activeScenario].debtorDaysDelta ?? 0) >= 0 ? "+" : ""}
+              {doc.scenarios[doc.activeScenario].debtorDaysDelta ?? 0} days)
+            </Label>
+            <input
+              type="range"
+              min={-30}
+              max={60}
+              step={1}
+              value={doc.scenarios[doc.activeScenario].debtorDaysDelta ?? 0}
+              onChange={(e) =>
+                onChange({
+                  ...doc,
+                  scenarios: {
+                    ...doc.scenarios,
+                    [doc.activeScenario]: {
+                      ...doc.scenarios[doc.activeScenario],
+                      debtorDaysDelta: parseInt(e.target.value, 10) || 0,
+                    },
+                  },
+                  updatedAt: new Date().toISOString(),
+                })
+              }
+              className="mt-2 w-full accent-[#d4a550]"
+            />
+          </div>
         </div>
       </section>
 
@@ -610,11 +733,12 @@ export function BudgetWorkspace({
         </div>
 
         {focus && (
-          <div className="grid gap-3 sm:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
             {[
               { l: "Revenue", v: focus.revenue },
               { l: "Gross profit", v: focus.grossProfit },
-              { l: "EBITDA proxy", v: focus.ebitda },
+              { l: "EBITDA", v: focus.ebitda },
+              { l: "EBIT", v: focus.ebit },
               { l: "Closing cash", v: focus.closingCash },
             ].map((s) => (
               <div
@@ -632,10 +756,29 @@ export function BudgetWorkspace({
           </div>
         )}
 
+        {trough && (
+          <div
+            className={`rounded-lg border px-3 py-2 text-xs ${
+              trough.closingCash < 0
+                ? "border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-300"
+                : "border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300"
+            }`}
+          >
+            Cash trough: <strong>{formatMonthLabel(trough.month)}</strong> at{" "}
+            <strong className="tabular-nums">{fmtZar(trough.closingCash)}</strong>
+            {doc.activeScenario !== "base" && baseFocus && focus && (
+              <span className="ml-2 text-slate-500">
+                · vs base focus month cash {fmtZar(baseFocus.closingCash)} (Δ{" "}
+                {fmtZar(focus.closingCash - baseFocus.closingCash)})
+              </span>
+            )}
+          </div>
+        )}
+
         {actuals && (actuals.revenue || actuals.cogs || actuals.fixedCosts) && focus && (
           <div className="rounded-xl border border-slate-200 p-3 text-xs dark:border-slate-800">
             <div className="mb-2 font-semibold text-slate-700 dark:text-slate-200">
-              vs latest period actuals
+              vs {actuals.label}
             </div>
             <div className="grid gap-2 sm:grid-cols-3">
               <CompareRow label="Revenue" budget={focus.revenue} actual={actuals.revenue ?? 0} />
@@ -646,7 +789,7 @@ export function BudgetWorkspace({
         )}
 
         <div className="overflow-x-auto rounded-xl border border-slate-200/80 dark:border-slate-800">
-          <table className="w-full min-w-[720px] text-xs">
+          <table className="w-full min-w-[880px] text-xs">
             <thead>
               <tr className="border-b border-slate-100 text-left text-[10px] uppercase tracking-wider text-slate-400 dark:border-slate-800">
                 <th className="px-3 py-2">Month</th>
@@ -654,7 +797,9 @@ export function BudgetWorkspace({
                 <th className="px-2 py-2 text-right">COGS</th>
                 <th className="px-2 py-2 text-right">GP%</th>
                 <th className="px-2 py-2 text-right">Overheads</th>
-                <th className="px-2 py-2 text-right">EBITDA</th>
+                <th className="px-2 py-2 text-right">Deprec.</th>
+                <th className="px-2 py-2 text-right">EBIT</th>
+                <th className="px-2 py-2 text-right">VAT net</th>
                 <th className="px-2 py-2 text-right">Net cash</th>
                 <th className="px-2 py-2 text-right">Closing cash</th>
               </tr>
@@ -672,7 +817,9 @@ export function BudgetWorkspace({
                   <td className="px-2 py-1.5 text-right tabular-nums">{fmtZar(r.cogs)}</td>
                   <td className="px-2 py-1.5 text-right tabular-nums">{r.gpPct.toFixed(1)}%</td>
                   <td className="px-2 py-1.5 text-right tabular-nums">{fmtZar(r.overheads)}</td>
-                  <td className="px-2 py-1.5 text-right tabular-nums">{fmtZar(r.ebitda)}</td>
+                  <td className="px-2 py-1.5 text-right tabular-nums">{fmtZar(r.depreciation)}</td>
+                  <td className="px-2 py-1.5 text-right tabular-nums">{fmtZar(r.ebit)}</td>
+                  <td className="px-2 py-1.5 text-right tabular-nums">{fmtZar(r.vatNet)}</td>
                   <td className={`px-2 py-1.5 text-right tabular-nums ${r.netCash < 0 ? "text-red-600" : ""}`}>
                     {fmtZar(r.netCash)}
                   </td>

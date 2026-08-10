@@ -61,6 +61,10 @@ export type BudgetCapexLine = {
   month: string; // YYYY-MM
   amount: number;
   funding: "cash" | "finance";
+  /** Straight-line life in months (Phase 3). Default 36. */
+  usefulLifeMonths?: number;
+  /** Residual value for depreciation (default 0). */
+  residual?: number;
 };
 
 export type BudgetWc = {
@@ -74,6 +78,8 @@ export type BudgetScenarioPayload = {
   volumeFactor: number;
   priceFactor: number;
   overheadFactor: number;
+  /** Added to WC debtor days for this scenario (Phase 2/3 sensitivity). */
+  debtorDaysDelta?: number;
   label: string;
 };
 
@@ -96,6 +102,10 @@ export type BudgetDocument = {
   /** First month of the FY this budget covers, YYYY-MM */
   fyStart: string;
   vatMode: BudgetVatMode;
+  /** SA standard rate — editable (Phase 2). */
+  vatRate: number;
+  /** Opening bank balance at FY start (Phase 2). */
+  openingCash: number;
   activeScenario: BudgetScenarioId;
   scenarios: Record<BudgetScenarioId, BudgetScenarioPayload>;
   revenueLines: BudgetRevenueLine[];
@@ -112,18 +122,29 @@ export type BudgetDocument = {
 
 export type BudgetMonthResult = {
   month: string;
+  /** P&L revenue (ex-VAT when exclusive; stripped when inclusive) */
   revenue: number;
   cogs: number;
   grossProfit: number;
   gpPct: number;
   overheads: number;
+  depreciation: number;
   ebitda: number;
+  ebit: number;
   capexCash: number;
-  /** Simplified cash movement proxy */
+  inventoryBuild: number;
+  vatNet: number;
   cashIn: number;
   cashOut: number;
   netCash: number;
   closingCash: number;
+};
+
+export type BudgetActuals = {
+  label: string;
+  revenue: number;
+  cogs: number;
+  fixedCosts: number;
 };
 
 export type UnmappedDriver = {
@@ -133,3 +154,5 @@ export type UnmappedDriver = {
   kind: BudgetDriverKind;
   months: Record<string, BudgetMonthCell>;
 };
+
+export const DEFAULT_VAT_RATE = 0.15;

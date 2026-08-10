@@ -7,8 +7,9 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { BudgetFunnel } from "@/components/budget/budget-funnel";
 import { BudgetWorkspace } from "@/components/budget/budget-workspace";
-import type { BudgetDocument, UnmappedDriver } from "@/lib/budget.types";
+import type { BudgetActuals, BudgetDocument, UnmappedDriver } from "@/lib/budget.types";
 import { createBudgetDocument, currentFyStart } from "@/lib/budget.months";
+import { normalizeBudgetDocument } from "@/lib/budget.compute";
 import { applyTemplateChange } from "@/lib/budget.model-change";
 import { BUDGET_TEMPLATES } from "@/lib/budget.templates";
 import type { BudgetQualification, BudgetTemplateId } from "@/lib/budget.types";
@@ -44,6 +45,7 @@ export function BudgetPanel({
     mode: "apply" | "fresh";
   } | null>(null);
   const [lowOverlapOpen, setLowOverlapOpen] = useState(false);
+  const [snapshotActuals, setSnapshotActuals] = useState<BudgetActuals | null>(null);
   const skipAutosave = useRef(false);
 
   useEffect(() => {
@@ -64,13 +66,43 @@ export function BudgetPanel({
         const budget = (data as { budget?: BudgetDocument | null } | null)?.budget ?? null;
         if (budget && budget.version === 1) {
           skipAutosave.current = true;
-          setDoc(budget);
+          setDoc(normalizeBudgetDocument(budget));
           setShowFunnel(false);
         } else {
           setDoc(null);
           setShowFunnel(true);
         }
         setLoaded(true);
+      });
+  }, [clientId]);
+
+  // Prefer latest financial snapshot for budget-vs-actuals; fall back to live financials.
+  useEffect(() => {
+    if (!clientId) {
+      setSnapshotActuals(null);
+      return;
+    }
+    supabase
+      .from("client_financial_snapshots")
+      .select("period_label, financials")
+      .eq("client_id", clientId)
+      .order("period_date", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+      .then(({ data }) => {
+        const fin = (data as { period_label?: string; financials?: Record<string, string | number> } | null)
+          ?.financials;
+        if (!fin) {
+          setSnapshotActuals(null);
+          return;
+        }
+        const num = (k: string) => parseFloat(String(fin[k] ?? "0")) || 0;
+        setSnapshotActuals({
+          label: (data as { period_label?: string }).period_label || "Latest snapshot",
+          revenue: num("revenue"),
+          cogs: num("cogs"),
+          fixedCosts: num("fixedCosts"),
+        });
       });
   }, [clientId]);
 
@@ -111,13 +143,20 @@ export function BudgetPanel({
     return () => clearTimeout(t);
   }, [clientId, loaded, doc]);
 
-  const actuals = financials
+  const liveActuals: BudgetActuals | null = financials
     ? {
+        label: "Current financials",
         revenue: parseFloat(financials.revenue || "0") || 0,
         cogs: parseFloat(financials.cogs || "0") || 0,
         fixedCosts: parseFloat(financials.fixedCosts || "0") || 0,
       }
     : null;
+  const actuals =
+    snapshotActuals && (snapshotActuals.revenue || snapshotActuals.cogs || snapshotActuals.fixedCosts)
+      ? snapshotActuals
+      : liveActuals && (liveActuals.revenue || liveActuals.cogs || liveActuals.fixedCosts)
+        ? liveActuals
+        : null;
 
   const startFresh = useCallback(
     (args: {
@@ -151,14 +190,9 @@ export function BudgetPanel({
     const result = applyTemplateChange(doc, args.templateId, {
       ...args.qualification,
     });
-    // Preserve / refresh FY start from funnel choice
     result.next.fyStartMonth = args.fyStartMonth;
-    if (result.next.fyStartMonth !== doc.fyStartMonth) {
-      const { currentFyStart, createBudgetDocument: recreate } = await import("@/lib/budget.months");
-      // rebuild month keys via fresh doc skeleton then re-apply mapping is heavy;
-      // simply set fyStart — workspace reads fyMonths(fyStart)
+    if (args.fyStartMonth !== doc.fyStartMonth) {
       result.next.fyStart = currentFyStart(args.fyStartMonth);
-      void recreate;
     }
     if (result.lowOverlap) {
       setPendingChange({ result, mode: "apply" });

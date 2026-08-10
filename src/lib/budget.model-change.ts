@@ -93,6 +93,8 @@ export function applyTemplateChange(
     gpPct: prev.gpPct || fresh.gpPct,
     cogsMode: prev.cogsMode,
     vatMode: prev.vatMode,
+    vatRate: prev.vatRate ?? fresh.vatRate,
+    openingCash: prev.openingCash ?? 0,
     activeScenario: prev.activeScenario,
     scenarios: prev.scenarios,
     overheads: prev.overheads.map((oh) => ({
@@ -110,7 +112,11 @@ export function applyTemplateChange(
         ? prev.wc.inventoryDays || fresh.wc.inventoryDays
         : 0,
     },
-    capex: prev.capex,
+    capex: prev.capex.map((c) => ({
+      ...c,
+      usefulLifeMonths: c.usefulLifeMonths ?? 36,
+      residual: c.residual ?? 0,
+    })),
     cogsPerUnit: Object.fromEntries(
       mappedLines.map((l) => [l.id, prev.cogsPerUnit[l.id] ?? 0]),
     ),
