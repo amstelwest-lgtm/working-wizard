@@ -24,11 +24,13 @@ import {
 const SCOPE_LABEL: Record<ReviewScope, string> = {
   financials: "this period's financials / profitability",
   cash_forecast: "the cash forecast",
+  budget: "the FY budget",
 };
 
 const SCOPE_SHORT_LABEL: Record<ReviewScope, string> = {
   financials: "financials & profitability",
   cash_forecast: "cash forecast",
+  budget: "budget",
 };
 
 const CURRENT_COLOR = "#2e7d32"; // green — reviewed and up to date

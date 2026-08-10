@@ -5,6 +5,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
 import { AdvisoryDrafter } from "@/components/advisory-drafter";
 import { CashForecastPanel } from "@/components/cash-forecast";
+import { BudgetPanel } from "@/components/budget/budget-panel";
 import type { ExistingCashflow } from "@/lib/cash-from-banks.publish";
 import { TasksPanel } from "@/components/tasks-panel";
 import { UploadFinancials } from "@/components/upload-financials";
@@ -263,7 +264,7 @@ type Client = {
   cashflow?: ExistingCashflow | null;
 };
 
-type ActiveTab = "ratios" | "profit" | "cash" | "reports" | "tasks" | "advisory";
+type ActiveTab = "ratios" | "profit" | "cash" | "budget" | "reports" | "tasks" | "advisory";
 
 // Friendly labels for SphereHero drivers
 const SPHERE_RATIO_META: Record<string, { friendly: string }> = {
@@ -404,6 +405,8 @@ function ClientView() {
   const fetchReviewSignoffs = useServerFn(listClientReviewSignoffs);
   const [financialsSignoff, setFinancialsSignoff] = useState<ClientReviewSignoff | null>(null);
   const [cashForecastSignoff, setCashForecastSignoff] = useState<ClientReviewSignoff | null>(null);
+  const [budgetSignoff, setBudgetSignoff] = useState<ClientReviewSignoff | null>(null);
+  const [budgetUpdatedAt, setBudgetUpdatedAt] = useState<string | null>(null);
 
   // Playbook drawer
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -600,12 +603,27 @@ function ClientView() {
       .then(({ signoffs }) => {
         setFinancialsSignoff(signoffs.find((s) => s.scope === "financials") ?? null);
         setCashForecastSignoff(signoffs.find((s) => s.scope === "cash_forecast") ?? null);
+        setBudgetSignoff(signoffs.find((s) => s.scope === "budget") ?? null);
       })
       .catch(() => {
         // Sign-off state is a trust-signal enhancement, never block the page.
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId, activeTab, cashForecastReloadToken]);
+
+  useEffect(() => {
+    if (!clientId) return;
+    supabase
+      .from("clients")
+      .select("budget_updated_at")
+      .eq("id", clientId)
+      .maybeSingle()
+      .then(({ data }) => {
+        setBudgetUpdatedAt(
+          (data as { budget_updated_at?: string | null } | null)?.budget_updated_at ?? null,
+        );
+      });
+  }, [clientId, activeTab]);
 
   // ── Impersonation exit ────────────────────────────────────────────────────
 
@@ -1081,6 +1099,7 @@ function ClientView() {
               { id: "ratios", label: "Health & Ratios" },
               { id: "profit", label: "Profitability" },
               { id: "cash", label: "13-Week Cash Forecast", star: true },
+              { id: "budget", label: "Budget" },
               { id: "reports", label: "Reports", star: true },
               { id: "tasks", label: "Tasks" },
               { id: "advisory", label: "Advisory Drafter" },
@@ -1479,13 +1498,38 @@ function ClientView() {
           </div>
         </div>
 
+        {/* ===== BUDGET TAB ===== */}
+        <div className={`tabpane${activeTab === "budget" ? " on" : ""}`} id="pane-budget">
+          <span className="eyebrow">Living FY budget</span>
+          <div className="h-sec">Driver-based monthly budget</div>
+          <p className="sub" style={{ marginBottom: 24 }}>
+            Volume × price first, then cash timing. Advanced pressure-testing is available after setup.
+          </p>
+          <div className="dark" style={{ colorScheme: "dark" }}>
+            <BudgetPanel
+              clientId={client.id}
+              clientName={client.name}
+              simplified={viewMode === "simplified"}
+              role="accountant"
+              canSign
+              businessTypeId={client.business_type}
+              financials={financials}
+              fyStartMonthDefault={3}
+              onPushedToCash={() => {
+                setCashForecastReloadToken((n) => n + 1);
+                setActiveTab("cash");
+              }}
+            />
+          </div>
+        </div>
+
         {/* ===== REPORTS TAB ===== */}
         <div className={`tabpane${activeTab === "reports" ? " on" : ""}`} id="pane-reports">
           <span className="eyebrow">White-label reports — this client</span>
           <div className="h-sec">Choose a deliverable</div>
           <p className="sub">
             Each report is generated from live figures and branded to your practice.
-            Sign off financials and the cash forecast so deliverables carry your endorsement.
+            Sign off financials, cash forecast, and budget so deliverables carry your endorsement.
           </p>
           <div
             className="card"
@@ -1523,6 +1567,14 @@ function ClientView() {
                 signoff={cashForecastSignoff}
                 isStale={computeIsStale(cashForecastSignoff, client?.last_forecast_at ?? null)}
                 onChange={setCashForecastSignoff}
+              />
+              <ReviewSignoffButton
+                clientId={clientId}
+                clientName={client?.name}
+                scope="budget"
+                signoff={budgetSignoff}
+                isStale={computeIsStale(budgetSignoff, budgetUpdatedAt)}
+                onChange={setBudgetSignoff}
               />
             </div>
           </div>

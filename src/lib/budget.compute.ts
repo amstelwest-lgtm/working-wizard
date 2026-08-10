@@ -1,0 +1,229 @@
+/**
+ * Budget P&L + monthly cash (WC, VAT, inventory, capex depreciation).
+ */
+
+import type {
+  BudgetDocument,
+  BudgetMonthResult,
+  BudgetScenarioId,
+  BudgetCapexLine,
+} from "@/lib/budget.types";
+import { DEFAULT_VAT_RATE } from "@/lib/budget.types";
+import { fyMonths } from "@/lib/budget.months";
+
+function scenarioFactors(doc: BudgetDocument, scenario: BudgetScenarioId) {
+  return doc.scenarios[scenario] ?? doc.scenarios.base;
+}
+
+function monthIndex(months: string[], ym: string): number {
+  return months.indexOf(ym);
+}
+
+/** Monthly straight-line depreciation for one asset in a given FY month index. */
+export function depreciationForMonth(
+  asset: BudgetCapexLine,
+  months: string[],
+  monthIdx: number,
+): number {
+  const life = Math.max(1, asset.usefulLifeMonths ?? 36);
+  const residual = Math.max(0, asset.residual ?? 0);
+  const depreciable = Math.max(0, (asset.amount || 0) - residual);
+  if (depreciable <= 0) return 0;
+  const startIdx = monthIndex(months, asset.month);
+  if (startIdx < 0 || monthIdx < startIdx) return 0;
+  if (monthIdx >= startIdx + life) return 0;
+  return depreciable / life;
+}
+
+/**
+ * Convert entered revenue/COGS to P&L ex-VAT amounts.
+ * exclusive: figures already ex-VAT.
+ * inclusive: strip VAT from tax-inclusive inputs.
+ */
+function toExVat(amount: number, vatMode: BudgetDocument["vatMode"], rate: number): number {
+  if (vatMode === "inclusive") {
+    return amount / (1 + rate);
+  }
+  return amount;
+}
+
+/** Cash movement includes VAT on taxable supplies when exclusive; inclusive uses gross. */
+function withOutputVat(exVat: number, vatMode: BudgetDocument["vatMode"], rate: number): number {
+  if (vatMode === "exclusive") return exVat * (1 + rate);
+  return exVat * (1 + rate); // inclusive path: exVat already stripped, restore gross for cash
+}
+
+function withInputVat(exVat: number, vatMode: BudgetDocument["vatMode"], rate: number): number {
+  return withOutputVat(exVat, vatMode, rate);
+}
+
+export function computeBudgetMonths(
+  doc: BudgetDocument,
+  scenario: BudgetScenarioId = doc.activeScenario,
+): BudgetMonthResult[] {
+  const months = fyMonths(doc.fyStart);
+  const f = scenarioFactors(doc, scenario);
+  const rate = doc.vatRate > 0 ? doc.vatRate : DEFAULT_VAT_RATE;
+  const opening = doc.openingCash || 0;
+  const results: BudgetMonthResult[] = [];
+  let cash = opening;
+
+  const debtorDays = Math.max(0, (doc.wc.debtorDays || 0) + (f.debtorDaysDelta || 0));
+  const creditorDays = Math.max(0, doc.wc.creditorDays || 0);
+  const inventoryDays = doc.showInventoryDays ? Math.max(0, doc.wc.inventoryDays || 0) : 0;
+
+  const receiptLag = Math.max(0, Math.round(debtorDays / 30));
+  const payLag = Math.max(0, Math.round(creditorDays / 30));
+
+  const revenueByMonth: number[] = [];
+  const cogsByMonth: number[] = [];
+  const overheadByMonth: number[] = [];
+  const depByMonth: number[] = [];
+
+  for (let i = 0; i < months.length; i++) {
+    const mo = months[i];
+    let revenueEntered = 0;
+    let cogsEntered = 0;
+    for (const line of doc.revenueLines) {
+      const cell = line.months[mo] ?? { volume: 0, price: 0 };
+      const vol = (cell.volume || 0) * f.volumeFactor;
+      const price = (cell.price || 0) * f.priceFactor;
+      const lineRev = vol * price;
+      revenueEntered += lineRev;
+      if (doc.cogsMode === "per_unit") {
+        cogsEntered += vol * (doc.cogsPerUnit[line.id] || 0);
+      }
+    }
+    if (doc.cogsMode === "gp_pct") {
+      const gp = Math.min(100, Math.max(0, doc.gpPct)) / 100;
+      cogsEntered = revenueEntered * (1 - gp);
+    }
+
+    const revenue = toExVat(revenueEntered, doc.vatMode, rate);
+    const cogs =
+      doc.cogsMode === "gp_pct"
+        ? revenue * (1 - Math.min(100, Math.max(0, doc.gpPct)) / 100)
+        : toExVat(cogsEntered, doc.vatMode, rate);
+
+    let overheads = 0;
+    for (const oh of doc.overheads) {
+      overheads += (oh.months[mo] || 0) * f.overheadFactor;
+    }
+
+    let depreciation = 0;
+    for (const asset of doc.capex) {
+      depreciation += depreciationForMonth(asset, months, i);
+    }
+
+    revenueByMonth.push(revenue);
+    cogsByMonth.push(cogs);
+    overheadByMonth.push(overheads);
+    depByMonth.push(depreciation);
+  }
+
+  let prevInventoryStock = 0;
+
+  for (let i = 0; i < months.length; i++) {
+    const mo = months[i];
+    const revenue = revenueByMonth[i];
+    const cogs = cogsByMonth[i];
+    const overheads = overheadByMonth[i];
+    const depreciation = depByMonth[i];
+    const grossProfit = revenue - cogs;
+    const gpPct = revenue > 0 ? (grossProfit / revenue) * 100 : 0;
+    const ebitda = grossProfit - overheads;
+    const ebit = ebitda - depreciation;
+
+    const capexCash = doc.capex
+      .filter((c) => c.month === mo && c.funding === "cash")
+      .reduce((s, c) => s + (c.amount || 0), 0);
+
+    // Inventory stock ≈ COGS cover for inventoryDays; Δstock is cash tied up / released
+    const inventoryStock = inventoryDays > 0 ? cogs * (inventoryDays / 30) : 0;
+    const inventoryBuild = inventoryStock - prevInventoryStock;
+    prevInventoryStock = inventoryStock;
+
+    const laggedRev = revenueByMonth[Math.max(0, i - receiptLag)] ?? 0;
+    const laggedCogs = cogsByMonth[Math.max(0, i - payLag)] ?? 0;
+
+    // Cash receipts / payments at gross (incl. VAT) based on ex-VAT P&L
+    const cashIn = withOutputVat(laggedRev, doc.vatMode, rate);
+    // Purchases ≈ lagged COGS + inventory build (stock increase uses cash now)
+    const purchaseExVat = laggedCogs + Math.max(0, inventoryBuild);
+    const cashOutPurchases =
+      withInputVat(purchaseExVat, doc.vatMode, rate) + Math.min(0, inventoryBuild);
+
+    const overheadCash = overheads; // overheads treated as VAT-exempt for simplicity
+    const vatOnReceipts = cashIn - laggedRev;
+    const vatOnPurchases = withInputVat(purchaseExVat, doc.vatMode, rate) - purchaseExVat;
+    const vatNet = vatOnReceipts - vatOnPurchases;
+
+    const cashOut = cashOutPurchases + overheadCash + capexCash;
+    const netCash = cashIn - cashOut;
+    cash += netCash;
+
+    results.push({
+      month: mo,
+      revenue,
+      cogs,
+      grossProfit,
+      gpPct,
+      overheads,
+      depreciation,
+      ebitda,
+      ebit,
+      capexCash,
+      inventoryBuild,
+      vatNet,
+      cashIn,
+      cashOut,
+      netCash,
+      closingCash: cash,
+    });
+  }
+
+  return results;
+}
+
+export function lowestCashTrough(results: BudgetMonthResult[]): {
+  month: string;
+  closingCash: number;
+} | null {
+  if (!results.length) return null;
+  return results.reduce((min, r) =>
+    r.closingCash < min.closingCash ? { month: r.month, closingCash: r.closingCash } : min,
+  { month: results[0].month, closingCash: results[0].closingCash });
+}
+
+export function fmtZar(n: number): string {
+  const sign = n < 0 ? "-" : "";
+  const abs = Math.abs(Math.round(n));
+  return `${sign}R${abs.toLocaleString("en-ZA")}`;
+}
+
+/** Ensure older saved budgets get Phase 2/3 defaults. */
+export function normalizeBudgetDocument(raw: BudgetDocument): BudgetDocument {
+  const scenarios = { ...raw.scenarios };
+  for (const id of ["base", "upside", "downside"] as const) {
+    const prev = scenarios[id];
+    scenarios[id] = {
+      label: prev?.label ?? id[0].toUpperCase() + id.slice(1),
+      volumeFactor: prev?.volumeFactor ?? 1,
+      priceFactor: prev?.priceFactor ?? 1,
+      overheadFactor: prev?.overheadFactor ?? 1,
+      debtorDaysDelta: prev?.debtorDaysDelta ?? 0,
+    };
+  }
+  return {
+    ...raw,
+    vatRate: raw.vatRate > 0 ? raw.vatRate : DEFAULT_VAT_RATE,
+    openingCash: raw.openingCash ?? 0,
+    scenarios,
+    capex: (raw.capex ?? []).map((c) => ({
+      ...c,
+      usefulLifeMonths: c.usefulLifeMonths ?? 36,
+      residual: c.residual ?? 0,
+    })),
+    notes: raw.notes ?? [],
+  };
+}

@@ -5,7 +5,7 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { Database } from "@/integrations/supabase/types";
 
-export type ReviewScope = "financials" | "cash_forecast";
+export type ReviewScope = "financials" | "cash_forecast" | "budget";
 
 export type ClientReviewSignoff = {
   id: string;
@@ -124,7 +124,7 @@ export const signoffReview = createServerFn({ method: "POST" })
   .inputValidator((input) =>
     z.object({
       clientId: z.string().uuid(),
-      scope: z.enum(["financials", "cash_forecast"]),
+      scope: z.enum(["financials", "cash_forecast", "budget"]),
       accountantTitle: z.string().max(60).optional().nullable(),
       firmName: z.string().max(120).optional().nullable(),
       note: z.string().max(1000).optional().nullable(),
@@ -180,7 +180,7 @@ export const removeReviewSignoff = createServerFn({ method: "POST" })
   .inputValidator((input) =>
     z.object({
       clientId: z.string().uuid(),
-      scope: z.enum(["financials", "cash_forecast"]),
+      scope: z.enum(["financials", "cash_forecast", "budget"]),
     }).parse(input),
   )
   .handler(async ({ data }) => {
