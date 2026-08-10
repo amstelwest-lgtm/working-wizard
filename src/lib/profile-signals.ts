@@ -157,34 +157,96 @@ export function profileIndustryLabel(
 }
 
 const CONCENTRATION_LABEL: Record<ClientOperatingProfile["customerConcentration"], string> = {
-  diverse: "revenue spread wide, no critical customer",
-  moderate: "top few customers are meaningful (~25% of sales)",
-  concentrated: "top 3 customers are about half of sales",
-  single_dominant: "one customer or payer dominates revenue",
+  diverse: "Spread wide — no customer is critical",
+  moderate: "Top few are meaningful (~25% of sales)",
+  concentrated: "Top 3 are about half of sales",
+  single_dominant: "One customer / payer dominates",
 };
 
 const DEBT_LABEL: Record<ClientOperatingProfile["debtPosition"], string> = {
-  none: "no debt, self-funded",
-  light: "small facilities only (overdraft / card)",
-  moderate: "real monthly loan or asset-finance repayments",
-  heavy: "debt is straining cash",
-  seeking: "actively raising funding this year",
+  none: "No debt — self-funded",
+  light: "Small facilities only",
+  moderate: "Real repayments each month",
+  heavy: "Debt is a strain",
+  seeking: "Looking to raise funding this year",
 };
 
 const GOAL_LABEL: Record<ClientOperatingProfile["ownerGoal"], string> = {
-  survive_cash: "get through a cash squeeze",
-  lift_margins: "make more from the same revenue",
-  grow_revenue: "grow sales and win more work",
-  free_working_capital: "free cash trapped in debtors and stock",
-  reduce_founder_dependence: "make the business run without the founder",
-  build_to_exit: "build value for a sale or handover",
+  survive_cash: "Get through a cash squeeze",
+  lift_margins: "Make more from the same revenue",
+  grow_revenue: "Grow sales / win more work",
+  free_working_capital: "Free up cash stuck in the business",
+  reduce_founder_dependence: "Get the business to run without me",
+  build_to_exit: "Build value for a sale or handover",
 };
 
 const STOCK_LABEL: Record<ClientOperatingProfile["inventoryIntensity"], string> = {
-  none: "little or no stock",
-  light: "some short-life stock",
-  heavy: "material inventory or WIP",
+  none: "Little or no stock",
+  light: "Some short-life stock",
+  heavy: "Material inventory or WIP",
 };
+
+const COST_LABEL: Record<ClientOperatingProfile["costShape"], string> = {
+  variable: "Mostly variable with sales",
+  fixed: "Mostly fixed",
+  payroll_heavy: "Payroll-heavy",
+  balanced: "Balanced mix",
+};
+
+const SEASON_LABEL: Record<ClientOperatingProfile["seasonality"], string> = {
+  flat: "Fairly even through the year",
+  mild: "Mild peaks",
+  strong: "Strong peaks and troughs",
+};
+
+const PAY_MOTION_LABEL: Record<ClientOperatingProfile["payMotion"], string> = {
+  goods: "Sells physical goods",
+  time_delivery: "Sells time, jobs, or delivered work",
+  access_capacity: "Sells access to space / seats / capacity",
+  recurring_rights: "Recurring fee for ongoing access",
+  take_rate: "Earns a cut / commission on flow",
+  mix: "Material mix of models",
+  funding: "Grant / donation / programme funded",
+};
+
+/** Display rows for accountant / owner profile summary. */
+export function profileDisplayRows(
+  profile: ClientOperatingProfile,
+): Array<{ label: string; value: string }> {
+  const payTiming =
+    profile.debtorDaysDefault === 0
+      ? "Cash / card on sale"
+      : profile.debtorDaysDefault <= 30
+        ? `Around ${profile.debtorDaysDefault} days`
+        : profile.debtorDaysDefault <= 45
+          ? "Milestone / ~45 days"
+          : `${profile.debtorDaysDefault}+ days`;
+
+  const secondary =
+    profile.secondaryVolumeUnits?.length > 0
+      ? profile.secondaryVolumeUnits.map((u) => u.replace(/_/g, " ")).join(", ")
+      : "None";
+
+  return [
+    { label: "Model", value: profileIndustryLabel(profile, profile.businessTypeId) },
+    { label: "How they earn", value: PAY_MOTION_LABEL[profile.payMotion] },
+    { label: "Sales unit", value: profile.volumeUnit.replace(/_/g, " ") },
+    { label: "Second stream", value: secondary },
+    { label: "Customer pay", value: payTiming },
+    { label: "Cost base", value: COST_LABEL[profile.costShape] },
+    { label: "Seasonality", value: SEASON_LABEL[profile.seasonality] },
+    { label: "Stock", value: STOCK_LABEL[profile.inventoryIntensity] },
+    { label: "Concentration", value: CONCENTRATION_LABEL[profile.customerConcentration] },
+    { label: "Debt / funding", value: DEBT_LABEL[profile.debtPosition] },
+    { label: "Owner goal", value: GOAL_LABEL[profile.ownerGoal] },
+    {
+      label: "FY starts",
+      value: new Date(2000, profile.fyStartMonth - 1, 1).toLocaleString("en-ZA", {
+        month: "long",
+      }),
+    },
+  ];
+}
 
 /** Compact context string for AI prompts / advisory drafting. */
 export function profileAiContext(
@@ -201,9 +263,9 @@ export function profileAiContext(
     `Cash timing: ${payTiming}`,
     `Cost base: ${profile.costShape.replace(/_/g, " ")}`,
     `Seasonality: ${profile.seasonality}`,
-    `Inventory: ${STOCK_LABEL[profile.inventoryIntensity]}`,
-    `Customer concentration: ${CONCENTRATION_LABEL[profile.customerConcentration]}`,
-    `Debt position: ${DEBT_LABEL[profile.debtPosition]}`,
-    `Owner's goal: ${GOAL_LABEL[profile.ownerGoal]}`,
+    `Inventory: ${STOCK_LABEL[profile.inventoryIntensity].toLowerCase()}`,
+    `Customer concentration: ${CONCENTRATION_LABEL[profile.customerConcentration].toLowerCase()}`,
+    `Debt position: ${DEBT_LABEL[profile.debtPosition].toLowerCase()}`,
+    `Owner's goal: ${GOAL_LABEL[profile.ownerGoal].toLowerCase()}`,
   ].join(" · ");
 }

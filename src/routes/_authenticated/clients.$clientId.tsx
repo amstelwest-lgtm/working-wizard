@@ -26,6 +26,8 @@ import { listClientReviewSignoffs } from "@/lib/review-signoffs.functions";
 import type { ClientReviewSignoff } from "@/lib/review-signoffs.functions";
 import { ReviewSignoffButton, computeIsStale } from "@/components/review-signoff";
 import { parseOperatingProfile } from "@/lib/client-profile";
+import { profileIndustryLabel } from "@/lib/profile-signals";
+import { AccountantOperatingProfile } from "@/components/accountant-operating-profile";
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
@@ -47,7 +49,7 @@ async function recordScoreHistory(clientId: string, score: number | null) {
       score,
       is_estimated: false,
     },
-    { onConflict: "client_id,period_date" }
+    { onConflict: "client_id,period_date" },
   );
   if (error) {
     const msg = error.message ?? "";
@@ -145,7 +147,7 @@ const PROFIT_FIELD_LABELS: { key: string; label: string }[] = [
   { key: "netIncome", label: "Net income" },
 ];
 
-// tier → band class mapping  
+// tier → band class mapping
 function tierToBand(tier: HealthTier): "ok" | "warn" | "risk" {
   if (tier === "healthy") return "ok";
   if (tier === "at_risk") return "warn";
@@ -189,10 +191,10 @@ function ratioHealthScore(name: string, val: number): number {
   if (!Number.isFinite(val)) return 50;
   // For margin-type ratios: scale 0-100 where 20% = 100
   if (name === "Net Margin") return Math.min(100, Math.max(0, (val / 0.15) * 100));
-  if (name === "Operating Margin") return Math.min(100, Math.max(0, (val / 0.20) * 100));
-  if (name === "Gross Margin") return Math.min(100, Math.max(0, (val / 0.40) * 100));
+  if (name === "Operating Margin") return Math.min(100, Math.max(0, (val / 0.2) * 100));
+  if (name === "Gross Margin") return Math.min(100, Math.max(0, (val / 0.4) * 100));
   if (name === "Return on Assets") return Math.min(100, Math.max(0, (val / 0.12) * 100));
-  if (name === "Return on Equity") return Math.min(100, Math.max(0, (val / 0.20) * 100));
+  if (name === "Return on Equity") return Math.min(100, Math.max(0, (val / 0.2) * 100));
   if (name === "Asset Turnover") return Math.min(100, Math.max(0, (val / 1.5) * 100));
   // Days — lower is better, 90 days = 0 score
   if (name === "Debtor Days") return Math.min(100, Math.max(0, ((90 - val) / 90) * 100));
@@ -338,8 +340,7 @@ const REPORT_TEMPLATES = [
     key: "intervention",
     name: "Action Plan Report",
     desc: "Ranked 10-step playbooks for at-risk ratios.",
-    iconPath:
-      "M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11",
+    iconPath: "M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11",
   },
   {
     key: "waterfall",
@@ -370,15 +371,13 @@ const REPORT_TEMPLATES = [
     key: "assets",
     name: "Scenario Report",
     desc: "What-if models: hires, price moves, capex.",
-    iconPath:
-      "M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2zM22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z",
+    iconPath: "M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2zM22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z",
   },
   {
     key: "labor",
     name: "Board Pack",
     desc: "Everything above, condensed for a board or bank.",
-    iconPath:
-      "M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9zM14 3v6h6",
+    iconPath: "M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9zM14 3v6h6",
   },
 ];
 
@@ -441,8 +440,7 @@ function ClientView() {
     founderHours: financials["founderHours"] ?? "",
   };
   const ratios = computeRatios(ratioInputs);
-  const healthScore =
-    scoreFromFlatFinancials(financials, client?.cash_runway_weeks) ?? 0;
+  const healthScore = scoreFromFlatFinancials(financials, client?.cash_runway_weeks) ?? 0;
   const healthScoreRounded = Math.round(healthScore);
 
   // ── Health orb & pillar computation ────────────────────────────────────
@@ -478,9 +476,24 @@ function ClientView() {
 
   const simplifiedSections = [
     { id: "profit", label: "Profitability", health: pillarHealths.profit, series: [] as number[] },
-    { id: "assets", label: "Asset Efficiency", health: pillarHealths.assets, series: [] as number[] },
-    { id: "financing", label: "Financing", health: pillarHealths.financing, series: [] as number[] },
-    { id: "cash", label: "Cash & Working Capital", health: pillarHealths.cash, series: [] as number[] },
+    {
+      id: "assets",
+      label: "Asset Efficiency",
+      health: pillarHealths.assets,
+      series: [] as number[],
+    },
+    {
+      id: "financing",
+      label: "Financing",
+      health: pillarHealths.financing,
+      series: [] as number[],
+    },
+    {
+      id: "cash",
+      label: "Cash & Working Capital",
+      health: pillarHealths.cash,
+      series: [] as number[],
+    },
   ];
 
   // Waterfall fallback — derived from period financials.
@@ -497,8 +510,8 @@ function ClientView() {
   const wfOpex = hasFin("fixedCosts")
     ? finNum("fixedCosts")
     : hasFin("ebit")
-    ? wfGrossProfit - finNum("ebit")
-    : 0;
+      ? wfGrossProfit - finNum("ebit")
+      : 0;
   const wfInterest = hasFin("ebit") && hasFin("ebt") ? finNum("ebit") - finNum("ebt") : 0;
   const wfTax = hasFin("ebt") && hasFin("netIncome") ? finNum("ebt") - finNum("netIncome") : 0;
   const waterfallFallback = {
@@ -521,21 +534,25 @@ function ClientView() {
     if (el.dataset.askAiMounted) return;
     // eslint-disable-next-line @typescript-eslint/ban-ts-comment
     // @ts-ignore — plain JS module without type declarations
-    import("../../lib/ask-ai.js").then((mod: { mountAskAi?: (el: HTMLElement, opts: unknown) => void }) => {
-      if (cancelled || typeof mod.mountAskAi !== "function") return;
-      el.dataset.clientId = clientId;
-      el.dataset.askAiMounted = "1";
-      mod.mountAskAi(el, {
-        endpoint: `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ask-ai`,
-        getToken: async () => {
-          const { data } = await supabase.auth.getSession();
-          return data.session?.access_token ?? null;
-        },
+    import("../../lib/ask-ai.js")
+      .then((mod: { mountAskAi?: (el: HTMLElement, opts: unknown) => void }) => {
+        if (cancelled || typeof mod.mountAskAi !== "function") return;
+        el.dataset.clientId = clientId;
+        el.dataset.askAiMounted = "1";
+        mod.mountAskAi(el, {
+          endpoint: `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ask-ai`,
+          getToken: async () => {
+            const { data } = await supabase.auth.getSession();
+            return data.session?.access_token ?? null;
+          },
+        });
+      })
+      .catch(() => {
+        // Widget module unavailable — silent fail
       });
-    }).catch(() => {
-      // Widget module unavailable — silent fail
-    });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [client, clientId]);
 
   // Autosave debounce ref
@@ -551,22 +568,19 @@ function ClientView() {
         const { data, error } = await supabase
           .from("clients")
           .select(
-            "id, name, business_type, operating_profile, cash_runway_weeks, last_forecast_at, open_queries_count, financials, financials_updated_at, reports_issued_count, cashflow"
+            "id, name, business_type, operating_profile, cash_runway_weeks, last_forecast_at, open_queries_count, financials, financials_updated_at, reports_issued_count, cashflow",
           )
           .eq("id", clientId)
           .maybeSingle();
 
         if (error) {
           // Check if error is due to missing column
-          if (
-            error.message?.includes("reports_issued_count") ||
-            error.code === "42703"
-          ) {
+          if (error.message?.includes("reports_issued_count") || error.code === "42703") {
             // Retry without the missing column
             const { data: data2, error: error2 } = await supabase
               .from("clients")
               .select(
-                "id, name, business_type, operating_profile, cash_runway_weeks, last_forecast_at, open_queries_count, financials, financials_updated_at, cashflow"
+                "id, name, business_type, operating_profile, cash_runway_weeks, last_forecast_at, open_queries_count, financials, financials_updated_at, cashflow",
               )
               .eq("id", clientId)
               .maybeSingle();
@@ -577,8 +591,8 @@ function ClientView() {
               const fin = (data2 as Client | null)?.financials ?? {};
               setFinancials(
                 Object.fromEntries(
-                  Object.entries(fin).map(([k, v]) => [k, v != null ? String(v) : ""])
-                )
+                  Object.entries(fin).map(([k, v]) => [k, v != null ? String(v) : ""]),
+                ),
               );
             }
           } else {
@@ -589,8 +603,8 @@ function ClientView() {
           const fin = (data as Client | null)?.financials ?? {};
           setFinancials(
             Object.fromEntries(
-              Object.entries(fin).map(([k, v]) => [k, v != null ? String(v) : ""])
-            )
+              Object.entries(fin).map(([k, v]) => [k, v != null ? String(v) : ""]),
+            ),
           );
         }
       } finally {
@@ -674,7 +688,7 @@ function ClientView() {
         }
       }, 600);
     },
-    [financials, clientId]
+    [financials, clientId],
   );
 
   // ── Save snapshot ────────────────────────────────────────────────────────
@@ -731,7 +745,7 @@ function ClientView() {
       toast.success(`Snapshot saved for ${periodLabel}`);
       await recordScoreHistory(
         clientId,
-        scoreFromRatioInputs(ratioInputs, client?.cash_runway_weeks)
+        scoreFromRatioInputs(ratioInputs, client?.cash_runway_weeks),
       );
     }
   }, [clientId, financials, ratioInputs, client?.cash_runway_weeks]);
@@ -784,22 +798,17 @@ function ClientView() {
         .update({ financials: inputs as never, financials_updated_at: financialsUpdatedAt })
         .eq("id", clientId);
 
-      await recordScoreHistory(
-        clientId,
-        scoreFromRatioInputs(inputs, client?.cash_runway_weeks)
-      );
+      await recordScoreHistory(clientId, scoreFromRatioInputs(inputs, client?.cash_runway_weeks));
 
       // Update local state with new financials
       setFinancials(
-        Object.fromEntries(
-          Object.entries(inputs).map(([k, v]) => [k, v != null ? String(v) : ""])
-        )
+        Object.fromEntries(Object.entries(inputs).map(([k, v]) => [k, v != null ? String(v) : ""])),
       );
       setClient((c) => (c ? { ...c, financials_updated_at: financialsUpdatedAt } : c));
       toast.success(`Financials saved for ${periodLabel}`);
       setUploadOpen(false);
     },
-    [clientId, client?.cash_runway_weeks]
+    [clientId, client?.cash_runway_weeks],
   );
 
   // ── Deliverables bar actions ──────────────────────────────────────────────
@@ -830,10 +839,10 @@ function ClientView() {
           name.includes("Margin") || name.includes("Income") || name.includes("Leverage")
             ? "profit"
             : name.includes("Days") || name.includes("Capital") || name.includes("OCF")
-            ? "cash"
-            : name.includes("Equity") || name.includes("Multiplier") || name.includes("Burden")
-            ? "financing"
-            : "assets";
+              ? "cash"
+              : name.includes("Equity") || name.includes("Multiplier") || name.includes("Burden")
+                ? "financing"
+                : "assets";
         return {
           ratio_key: name.toLowerCase().replace(/[^a-z0-9]/g, "_"),
           ratio_name: name,
@@ -854,7 +863,7 @@ function ClientView() {
           smeData,
           ratioResults: ratioEntries,
           accountantProfile: profile,
-        }) as Parameters<typeof pdf>[0]
+        }) as Parameters<typeof pdf>[0],
       ).toBlob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -885,7 +894,7 @@ function ClientView() {
         `Cash Runway: ${runway}\n` +
         `Open Queries: ${client.open_queries_count}\n\n` +
         `Please review the attached report for detailed ratio analysis and recommended actions.\n\n` +
-        `Best regards,\n${profile.accountantName || "Your Accountant"}\n${profile.firmName || ""}`
+        `Best regards,\n${profile.accountantName || "Your Accountant"}\n${profile.firmName || ""}`,
     );
     window.open(`mailto:?subject=${subject}&body=${body}`);
   }, [client, healthScoreRounded, profile]);
@@ -899,24 +908,21 @@ function ClientView() {
       `${client.name} Financial Health Update\n` +
         `Health Score: ${score}/100 (${tierLabel})\n` +
         `Cash Runway: ${client.cash_runway_weeks != null ? `${client.cash_runway_weeks} wk` : "—"}\n` +
-        `Prepared by ${profile.firmName || "your accountant"} via MILŌN Portal.`
+        `Prepared by ${profile.firmName || "your accountant"} via MILŌN Portal.`,
     );
     window.open(`https://wa.me/?text=${text}`, "_blank");
   }, [client, healthScoreRounded, profile]);
 
   // ── Playbook drawer ───────────────────────────────────────────────────────
 
-  const openDrawer = useCallback(
-    (ratioName: string, score: number) => {
-      const tier = scoreTier(score);
-      const key = ratioName.toLowerCase().replace(/[^a-z0-9]/g, "_");
-      setDrawerRatioKey(key);
-      setDrawerRatioName(ratioName);
-      setDrawerTier(tier);
-      setDrawerOpen(true);
-    },
-    []
-  );
+  const openDrawer = useCallback((ratioName: string, score: number) => {
+    const tier = scoreTier(score);
+    const key = ratioName.toLowerCase().replace(/[^a-z0-9]/g, "_");
+    setDrawerRatioKey(key);
+    setDrawerRatioName(ratioName);
+    setDrawerTier(tier);
+    setDrawerOpen(true);
+  }, []);
 
   // ── Report navigation ─────────────────────────────────────────────────────
 
@@ -932,7 +938,10 @@ function ClientView() {
 
   if (loading) {
     return (
-      <div className="accountant-portal" style={{ display: "grid", placeItems: "center", minHeight: "100vh" }}>
+      <div
+        className="accountant-portal"
+        style={{ display: "grid", placeItems: "center", minHeight: "100vh" }}
+      >
         <span style={{ color: "var(--ink-dim)" }}>Loading…</span>
       </div>
     );
@@ -940,7 +949,10 @@ function ClientView() {
 
   if (!client) {
     return (
-      <div className="accountant-portal" style={{ display: "grid", placeItems: "center", minHeight: "100vh" }}>
+      <div
+        className="accountant-portal"
+        style={{ display: "grid", placeItems: "center", minHeight: "100vh" }}
+      >
         <div style={{ textAlign: "center" }}>
           <p style={{ color: "var(--ink-dim)", marginBottom: 16 }}>
             Client not found or you don't have access.
@@ -1012,8 +1024,7 @@ function ClientView() {
           </a>
           <span>/</span>
           <span>
-            Acting as client:{" "}
-            <b style={{ color: "var(--ink)" }}>{client.name}</b>
+            Acting as client: <b style={{ color: "var(--ink)" }}>{client.name}</b>
           </span>
           <span className="aud">Audited</span>
         </div>
@@ -1026,16 +1037,17 @@ function ClientView() {
             </div>
             <div>
               <h1>{client.name}</h1>
-              <span className="ctype">{client.business_type ?? "—"}</span>
+              <span className="ctype">
+                {profileIndustryLabel(
+                  parseOperatingProfile(client.operating_profile),
+                  client.business_type ?? "—",
+                )}
+              </span>
             </div>
           </div>
           <div className="meta">
             <div>
-              <b>
-                {client.cash_runway_weeks != null
-                  ? `${client.cash_runway_weeks} wk`
-                  : "—"}
-              </b>
+              <b>{client.cash_runway_weeks != null ? `${client.cash_runway_weeks} wk` : "—"}</b>
               <span>Cash runway</span>
             </div>
             <div>
@@ -1060,6 +1072,11 @@ function ClientView() {
             </div>
           </div>
         </div>
+
+        <AccountantOperatingProfile
+          profile={parseOperatingProfile(client.operating_profile)}
+          fallbackType={client.business_type}
+        />
 
         {/* ===== DELIVERABLES ACTION BAR ===== */}
         <div className="card hero-card action-bar">
@@ -1123,7 +1140,16 @@ function ClientView() {
         <div className={`tabpane${activeTab === "ratios" ? " on" : ""}`} id="pane-ratios">
           {/* Simplified / Complex toggle */}
           <div style={{ display: "flex", justifyContent: "center", marginBottom: 24 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 2, borderRadius: 999, background: "rgba(255,255,255,0.05)", padding: 3 }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 2,
+                borderRadius: 999,
+                background: "rgba(255,255,255,0.05)",
+                padding: 3,
+              }}
+            >
               {(["simplified", "complex"] as const).map((m) => (
                 <button
                   key={m}
@@ -1153,7 +1179,14 @@ function ClientView() {
           {viewMode === "simplified" && (
             <div style={{ marginBottom: 32 }}>
               {/* Orb — always-dark container so sphere colours read correctly */}
-              <div style={{ background: "#0a0e1a", borderRadius: 20, padding: "16px 8px", marginBottom: 20 }}>
+              <div
+                style={{
+                  background: "#0a0e1a",
+                  borderRadius: 20,
+                  padding: "16px 8px",
+                  marginBottom: 20,
+                }}
+              >
                 <SphereHero
                   overallHealth={isFinite(avgHealth) ? avgHealth : 0}
                   pillars={spherePillars}
@@ -1161,8 +1194,18 @@ function ClientView() {
                     const worst = Object.entries(pillarHealths)
                       .filter(([, h]) => isFinite(h))
                       .sort(([, a], [, b]) => a - b)[0];
-                    if (!worst) return { title: "Upload financial data", description: "Add figures to see a health score and your highest-impact first move." };
-                    const labels: Record<string, string> = { profit: "Profitability", assets: "Asset Efficiency", financing: "Financing", cash: "Cash & Working Capital" };
+                    if (!worst)
+                      return {
+                        title: "Upload financial data",
+                        description:
+                          "Add figures to see a health score and your highest-impact first move.",
+                      };
+                    const labels: Record<string, string> = {
+                      profit: "Profitability",
+                      assets: "Asset Efficiency",
+                      financing: "Financing",
+                      cash: "Cash & Working Capital",
+                    };
                     return {
                       title: `Improve ${labels[worst[0]] ?? worst[0]}`,
                       description: `This pillar scores ${Math.round(worst[1])}% — your highest-impact area right now.`,
@@ -1236,16 +1279,10 @@ function ClientView() {
                     marginBottom: 16,
                   }}
                 >
-                  <button
-                    className="btn ghost mini"
-                    onClick={handleSaveSnapshot}
-                  >
+                  <button className="btn ghost mini" onClick={handleSaveSnapshot}>
                     Save snapshot
                   </button>
-                  <button
-                    className="btn ghost mini"
-                    onClick={() => setUploadOpen(true)}
-                  >
+                  <button className="btn ghost mini" onClick={() => setUploadOpen(true)}>
                     <svg viewBox="0 0 24 24">
                       <path d="M12 15V3M7 8l5-5 5 5M5 21h14" />
                     </svg>
@@ -1258,12 +1295,8 @@ function ClientView() {
                       <label>{label}</label>
                       <input
                         value={financials[key] ?? ""}
-                        onChange={(e) =>
-                          handleFinancialChange(key, e.target.value)
-                        }
-                        onBlur={(e) =>
-                          handleFinancialChange(key, e.target.value)
-                        }
+                        onChange={(e) => handleFinancialChange(key, e.target.value)}
+                        onBlur={(e) => handleFinancialChange(key, e.target.value)}
                         placeholder="—"
                         type="number"
                       />
@@ -1288,54 +1321,57 @@ function ClientView() {
 
           {/* Ratio rows — complex mode only */}
           {viewMode === "complex" && (
-          <div style={{ marginTop: 26 }}>
-            <span className="eyebrow">Ratios — accountant summary</span>
-            <p className="sub">
-              Tap any ratio for its definition and the ten-step repair playbook.
-            </p>
-            <div className="ratio-rows">
-              {Object.entries(ratios).map(([name, val]) => {
-                const score = Math.round(ratioHealthScore(name, val as number));
-                const tier = scoreTier(score);
-                const band = tierToBand(tier);
-                const color = bandColor(band);
-                const formattedVal = formatRatioValue(name, val as number);
-                const cat =
-                  name.includes("Margin") || name.includes("Income") || name.includes("Return")
-                    ? "Profitability"
-                    : name.includes("Days") || name.includes("Capital") || name.includes("OCF")
-                    ? "Cash & Working Capital"
-                    : name.includes("Equity") || name.includes("Debt") || name.includes("Asset") || name.includes("Burden")
-                    ? "Leverage & Assets"
-                    : "Other";
+            <div style={{ marginTop: 26 }}>
+              <span className="eyebrow">Ratios — accountant summary</span>
+              <p className="sub">
+                Tap any ratio for its definition and the ten-step repair playbook.
+              </p>
+              <div className="ratio-rows">
+                {Object.entries(ratios).map(([name, val]) => {
+                  const score = Math.round(ratioHealthScore(name, val as number));
+                  const tier = scoreTier(score);
+                  const band = tierToBand(tier);
+                  const color = bandColor(band);
+                  const formattedVal = formatRatioValue(name, val as number);
+                  const cat =
+                    name.includes("Margin") || name.includes("Income") || name.includes("Return")
+                      ? "Profitability"
+                      : name.includes("Days") || name.includes("Capital") || name.includes("OCF")
+                        ? "Cash & Working Capital"
+                        : name.includes("Equity") ||
+                            name.includes("Debt") ||
+                            name.includes("Asset") ||
+                            name.includes("Burden")
+                          ? "Leverage & Assets"
+                          : "Other";
 
-                return (
-                  <button
-                    key={name}
-                    className="ratio-row"
-                    onClick={() => openDrawer(name, score)}
-                  >
-                    <span>
-                      <span className="rn">{name}</span>
-                      <br />
-                      <span className="rc">{cat}</span>
-                    </span>
-                    <span className="rv" style={{ color }}>
-                      {formattedVal}
-                    </span>
-                    <span className="bar">
-                      <i style={{ width: `${score}%`, background: color }} />
-                    </span>
-                    <span className={`chip ${band}`}>
-                      <i />
-                      {bandLabel(band)}
-                    </span>
-                    <span className="arr">→</span>
-                  </button>
-                );
-              })}
+                  return (
+                    <button
+                      key={name}
+                      className="ratio-row"
+                      onClick={() => openDrawer(name, score)}
+                    >
+                      <span>
+                        <span className="rn">{name}</span>
+                        <br />
+                        <span className="rc">{cat}</span>
+                      </span>
+                      <span className="rv" style={{ color }}>
+                        {formattedVal}
+                      </span>
+                      <span className="bar">
+                        <i style={{ width: `${score}%`, background: color }} />
+                      </span>
+                      <span className={`chip ${band}`}>
+                        <i />
+                        {bandLabel(band)}
+                      </span>
+                      <span className="arr">→</span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </div>
           )}
         </div>
 
@@ -1343,10 +1379,15 @@ function ClientView() {
         <div className={`tabpane${activeTab === "profit" ? " on" : ""}`} id="pane-profit">
           <span className="eyebrow">Profitability Waterfall</span>
           <p className="sub" style={{ marginBottom: 24 }}>
-            How revenue converts to profit — step by step. Enter figures below or upload a statement PDF.
+            How revenue converts to profit — step by step. Enter figures below or upload a statement
+            PDF.
           </p>
 
-          <div className={`card collapse${profitFinOpen ? " open" : ""}`} id="profitFinCollapse" style={{ marginBottom: 20 }}>
+          <div
+            className={`card collapse${profitFinOpen ? " open" : ""}`}
+            id="profitFinCollapse"
+            style={{ marginBottom: 20 }}
+          >
             <div
               className="c-head"
               onClick={() => setProfitFinOpen((v) => !v)}
@@ -1397,7 +1438,8 @@ function ClientView() {
                   }}
                 >
                   <p style={{ margin: 0, fontSize: 12, color: "var(--ink-dim)", maxWidth: 420 }}>
-                    Same period figures as Health &amp; Ratios. Upload an income statement PDF to extract and review values.
+                    Same period figures as Health &amp; Ratios. Upload an income statement PDF to
+                    extract and review values.
                   </p>
                   <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                     <button
@@ -1446,10 +1488,7 @@ function ClientView() {
 
           {/* Wrap in a Tailwind dark context so the component's dark: variants fire */}
           <div className="dark" style={{ colorScheme: "dark" }}>
-            <ProfitabilityWaterfall
-              fallback={waterfallFallback}
-              clientName={client?.name}
-            />
+            <ProfitabilityWaterfall fallback={waterfallFallback} clientName={client?.name} />
           </div>
           <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 16 }}>
             <ReviewSignoffButton
@@ -1505,7 +1544,8 @@ function ClientView() {
           <span className="eyebrow">Living FY budget</span>
           <div className="h-sec">Driver-based monthly budget</div>
           <p className="sub" style={{ marginBottom: 24 }}>
-            Volume × price first, then cash timing. Advanced pressure-testing is available after setup.
+            Volume × price first, then cash timing. Advanced pressure-testing is available after
+            setup.
           </p>
           <div className="dark" style={{ colorScheme: "dark" }}>
             <BudgetPanel
@@ -1531,8 +1571,8 @@ function ClientView() {
           <span className="eyebrow">White-label reports — this client</span>
           <div className="h-sec">Choose a deliverable</div>
           <p className="sub">
-            Each report is generated from live figures and branded to your practice.
-            Sign off financials, cash forecast, and budget so deliverables carry your endorsement.
+            Each report is generated from live figures and branded to your practice. Sign off
+            financials, cash forecast, and budget so deliverables carry your endorsement.
           </p>
           <div
             className="card"
@@ -1547,14 +1587,26 @@ function ClientView() {
             }}
           >
             <div style={{ flex: "1 1 220px" }}>
-              <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--ink-dim)", marginBottom: 4 }}>
+              <div
+                style={{
+                  fontSize: 12,
+                  fontWeight: 700,
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                  color: "var(--ink-dim)",
+                  marginBottom: 4,
+                }}
+              >
                 Report sign-offs
               </div>
               <p style={{ margin: 0, fontSize: 13, color: "var(--ink-dim)" }}>
-                Logs your initials, name, date and time from your account. Stamped on generated PDFs until data changes.
+                Logs your initials, name, date and time from your account. Stamped on generated PDFs
+                until data changes.
               </p>
             </div>
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
+            <div
+              style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}
+            >
               <ReviewSignoffButton
                 clientId={clientId}
                 clientName={client?.name}
@@ -1592,16 +1644,10 @@ function ClientView() {
                 <b>{r.name}</b>
                 <p>{r.desc}</p>
                 <div className="acts">
-                  <button
-                    className="btn ghost mini"
-                    onClick={navigateToReport}
-                  >
+                  <button className="btn ghost mini" onClick={navigateToReport}>
                     Preview
                   </button>
-                  <button
-                    className="btn gold mini"
-                    onClick={navigateToReport}
-                  >
+                  <button className="btn gold mini" onClick={navigateToReport}>
                     Generate
                   </button>
                 </div>
@@ -1612,10 +1658,7 @@ function ClientView() {
 
         {/* ===== TASKS TAB ===== */}
         <div className={`tabpane${activeTab === "tasks" ? " on" : ""}`} id="pane-tasks">
-          <TasksPanel
-            clientId={client.id}
-            clientName={client.name}
-          />
+          <TasksPanel clientId={client.id} clientName={client.name} />
         </div>
 
         {/* ===== ADVISORY TAB ===== */}
@@ -1624,8 +1667,7 @@ function ClientView() {
         </div>
 
         <div className="footer-note">
-          MILŌN Practice Portal ·{" "}
-          <span className="serif gold-text">The passion to perform.</span>
+          MILŌN Practice Portal · <span className="serif gold-text">The passion to perform.</span>
         </div>
       </div>
 
@@ -1643,11 +1685,7 @@ function ClientView() {
 
       {/* ===== UPLOAD FINANCIALS MODAL ===== */}
       {uploadOpen && (
-        <div
-          className="veil open"
-          onClick={() => setUploadOpen(false)}
-          role="presentation"
-        >
+        <div className="veil open" onClick={() => setUploadOpen(false)} role="presentation">
           <div
             className="drawer open"
             onClick={(e) => e.stopPropagation()}
@@ -1663,9 +1701,7 @@ function ClientView() {
                 marginBottom: 20,
               }}
             >
-              <h3 style={{ fontSize: 20, fontWeight: 700 }}>
-                Upload financial statement
-              </h3>
+              <h3 style={{ fontSize: 20, fontWeight: 700 }}>Upload financial statement</h3>
               <button
                 className="close"
                 onClick={() => setUploadOpen(false)}
@@ -1693,8 +1729,8 @@ function ClientView() {
                 marginBottom: 20,
               }}
             >
-              Gemini reads the PDF and extracts the income statement and balance
-              sheet. Review every figure before confirming.
+              Gemini reads the PDF and extracts the income statement and balance sheet. Review every
+              figure before confirming.
             </p>
             <UploadFinancials onConfirm={handleConfirmFinancials} />
           </div>
