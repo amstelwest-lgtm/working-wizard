@@ -580,6 +580,7 @@ export type Database = {
           cashflow_bank_draft: Json | null
           budget: Json | null
           budget_updated_at: string | null
+          operating_profile: Json | null
           financial_year_start_month: number | null
           contact_email: string | null
           contact_phone: string | null
@@ -601,6 +602,7 @@ export type Database = {
           cashflow_bank_draft?: Json | null
           budget?: Json | null
           budget_updated_at?: string | null
+          operating_profile?: Json | null
           financial_year_start_month?: number | null
           contact_email?: string | null
           contact_phone?: string | null
@@ -622,6 +624,7 @@ export type Database = {
           cashflow_bank_draft?: Json | null
           budget?: Json | null
           budget_updated_at?: string | null
+          operating_profile?: Json | null
           financial_year_start_month?: number | null
           contact_email?: string | null
           contact_phone?: string | null

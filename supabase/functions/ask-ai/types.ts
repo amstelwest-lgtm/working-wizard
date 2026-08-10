@@ -10,11 +10,24 @@ export interface RatioRow {
   higher_is_better: boolean | null;
 }
 
+export interface OperatingProfileSummary {
+  industry: string;
+  volumeUnit: string;
+  debtorDaysDefault: number;
+  costShape: string;
+  seasonality: string;
+  inventoryIntensity: string;
+  teamSize: string;
+  revenueBand: string;
+  primaryPressure: string;
+}
+
 export interface ProfileRow {
   client_id: string;
   entity_type: string | null;
   business_type: string | null;
   annual_revenue: number | null;
+  operating: OperatingProfileSummary | null;
 }
 
 export interface ScoreRow {

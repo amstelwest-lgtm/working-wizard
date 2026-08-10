@@ -46,6 +46,7 @@ import {
   profileShortLabel,
   type ClientOperatingProfile,
 } from "@/lib/client-profile";
+import { profileIndustryLabel, profilePriorityWeight } from "@/lib/profile-signals";
 
 type Benchmark = { p25: number; p50: number; p75: number; unit: string; higher_is_better: boolean };
 
@@ -1814,6 +1815,7 @@ function Index() {
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const businessType = businessTypeId ? BUSINESS_TYPES.find((b) => b.id === businessTypeId) ?? null : null;
   const model: ModelTuning = businessType ? MODEL_TUNING[businessType.model] : MODEL_TUNING.hybrid;
+  const industryLabel = profileIndustryLabel(operatingProfile, businessType?.label ?? "General SME");
   // Marks real financials so autosave and the scored view activate after first user edit
   const markRealFinancials = () => setHasRealFinancials(true);
   const set = (k: keyof Inputs) => (val: string) => {
@@ -2070,7 +2072,9 @@ function Index() {
       const ns = NEXT_STEP_META[k];
       const health = healthMap[k];
       const urgency = isFinite(health) ? 100 - health : 50;
-      const score = urgency * ns.impact;
+      // Profile answers (top pressure, stock, pay timing, team) reorder moves
+      // so structurally irrelevant ratios sink and the owner's pain surfaces.
+      const score = urgency * ns.impact * profilePriorityWeight(operatingProfile, meta.friendly);
       return {
         key: k,
         title: meta.steps[0],
@@ -2587,11 +2591,11 @@ function Index() {
                         setViewMode("complex");
                       }}
                       industryPulse={
-                        <IndustryPulse industry={businessType?.label ?? "General SME"} vertical />
+                        <IndustryPulse industry={industryLabel} vertical />
                       }
                     />
                   </div>
-                  <IndustryNewsBand industry={businessType?.label ?? "General SME"} />
+                  <IndustryNewsBand industry={industryLabel} />
                 </div>
               ) : (
               <div>
@@ -2642,11 +2646,11 @@ function Index() {
                     setViewMode("complex");
                   }}
                   industryPulse={
-                    <IndustryPulse industry={businessType?.label ?? "General SME"} vertical />
+                    <IndustryPulse industry={industryLabel} vertical />
                   }
                 />
               </div>
-              <IndustryNewsBand industry={businessType?.label ?? "General SME"} />
+              <IndustryNewsBand industry={industryLabel} />
               </div>
               )}
             </div>

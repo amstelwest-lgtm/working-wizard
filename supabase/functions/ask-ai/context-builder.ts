@@ -129,18 +129,33 @@ export async function buildContext(
   if (tier !== "none") {
     const { data } = await supabase
       .from("clients")
-      .select("id, business_type, financials")
+      .select("id, business_type, financials, operating_profile")
       .eq("id", clientId)
       .maybeSingle();
 
     if (data) {
       const fin = (data.financials ?? {}) as Record<string, unknown>;
       const rawRevenue = fin["annual_revenue"] ?? fin["revenue"];
+      const op = (data.operating_profile ?? null) as Record<string, unknown> | null;
       profile = {
         client_id: data.id,
         entity_type: null,
         business_type: data.business_type ?? null,
         annual_revenue: rawRevenue !== undefined ? Number(rawRevenue) : null,
+        operating:
+          op && typeof op === "object" && op.version === 1
+            ? {
+                industry: String(op.templateId ?? ""),
+                volumeUnit: String(op.volumeUnit ?? ""),
+                debtorDaysDefault: Number(op.debtorDaysDefault ?? 0),
+                costShape: String(op.costShape ?? ""),
+                seasonality: String(op.seasonality ?? ""),
+                inventoryIntensity: String(op.inventoryIntensity ?? ""),
+                teamSize: String(op.teamSize ?? ""),
+                revenueBand: String(op.revenueBand ?? ""),
+                primaryPressure: String(op.primaryPressure ?? ""),
+              }
+            : null,
       };
     }
   }
