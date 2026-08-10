@@ -50,6 +50,22 @@ export function buildPrompt(
 
   if (ctx.profile) {
     if (ctx.profile.business_type) lines.push(`Business type: ${ctx.profile.business_type}`);
+    const op = ctx.profile.operating;
+    if (op) {
+      lines.push(`Business model: ${op.industry.replace(/_/g, " ")}`);
+      lines.push(`Revenue driver: ${op.volumeUnit.replace(/_/g, " ")}`);
+      lines.push(
+        op.debtorDaysDefault === 0
+          ? "Cash timing: paid cash on sale"
+          : `Cash timing: customers pay around ${op.debtorDaysDefault} days`,
+      );
+      lines.push(`Cost base: ${op.costShape.replace(/_/g, " ")}`);
+      lines.push(`Seasonality: ${op.seasonality}`);
+      lines.push(`Inventory intensity: ${op.inventoryIntensity}`);
+      lines.push(`Customer concentration: ${op.customerConcentration.replace(/_/g, " ")}`);
+      lines.push(`Debt position: ${op.debtPosition.replace(/_/g, " ")}`);
+      lines.push(`Owner's stated goal: ${op.ownerGoal.replace(/_/g, " ")}`);
+    }
     if (ctx.profile.annual_revenue) {
       // Bucket revenue to avoid exact amounts
       const r = ctx.profile.annual_revenue;

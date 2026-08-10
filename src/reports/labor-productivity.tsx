@@ -18,6 +18,8 @@ import { SectionHeader } from "@/components/pdf/section-header";
 import { ExecSummary, type HeadlineFigure } from "@/components/pdf/exec-summary";
 import { C, fmtRand, fmtRandCompact, fmtPct, resolveTheme } from "@/components/pdf/theme";
 import { laborNarrative } from "./narrative";
+import type { ClientOperatingProfile } from "@/lib/client-profile";
+
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -47,6 +49,8 @@ export type LaborProductivityData = {
 };
 
 export type LaborProductivityPDFProps = {
+  /** Owner operating profile — shapes narrative wording only. */
+  operatingProfile?: ClientOperatingProfile | null;
   smeData: SmeData;
   data: LaborProductivityData;
   accountantProfile: AccountantProfile;
@@ -142,6 +146,7 @@ export function LaborProductivityPDF({
   accountantProfile,
   isDemo,
   reviewSignoff,
+  operatingProfile,
 }: LaborProductivityPDFProps) {
   const theme = resolveTheme(accountantProfile);
   const hs = d.health_scores;
@@ -180,7 +185,7 @@ export function LaborProductivityPDF({
     revenuePerEmployee: d.revenue_per_employee,
     gpPerLaborRand: d.gp_per_labor_rand,
     realGrowth,
-  });
+  }, operatingProfile);
 
   const ratioRows = [
     { name: "GP-to-Labor Ratio", value: `R${d.gp_per_labor_rand.toFixed(2)} / R1`, score: hs.gpToLabor },

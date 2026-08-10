@@ -15,6 +15,8 @@ import { ExecSummary, type HeadlineFigure } from "@/components/pdf/exec-summary"
 import { BenchmarkBar } from "@/components/pdf/benchmark-bar";
 import { C, resolveTheme } from "@/components/pdf/theme";
 import { benchmarkNarrative } from "./narrative";
+import type { ClientOperatingProfile } from "@/lib/client-profile";
+
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -34,6 +36,8 @@ export type BenchmarkRow = {
 };
 
 export type BenchmarkReportPDFProps = {
+  /** Owner operating profile — shapes narrative wording only. */
+  operatingProfile?: ClientOperatingProfile | null;
   smeData: SmeData;
   industryCode: string;
   industryName: string;
@@ -120,6 +124,7 @@ export function BenchmarkReportPDF({
   accountantProfile,
   isDemo,
   reviewSignoff,
+  operatingProfile,
 }: BenchmarkReportPDFProps) {
   const theme = resolveTheme(accountantProfile);
 
@@ -146,7 +151,7 @@ export function BenchmarkReportPDF({
     below,
     total: benchmarkRows.length,
     industryName,
-  });
+  }, operatingProfile);
 
   const pillars = (["profit", "assets", "financing", "cash"] as const).filter((p) =>
     benchmarkRows.some((r) => r.pillar === p),

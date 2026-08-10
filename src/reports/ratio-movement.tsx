@@ -15,6 +15,8 @@ import { ExecSummary, type HeadlineFigure } from "@/components/pdf/exec-summary"
 import { Sparkline } from "@/components/pdf/sparkline";
 import { C, resolveTheme } from "@/components/pdf/theme";
 import { movementNarrative } from "./narrative";
+import type { ClientOperatingProfile } from "@/lib/client-profile";
+
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -31,6 +33,8 @@ export type RatioMovementRow = {
 };
 
 export type RatioMovementPDFProps = {
+  /** Owner operating profile — shapes narrative wording only. */
+  operatingProfile?: ClientOperatingProfile | null;
   smeData: SmeData;
   ratios: RatioMovementRow[];
   periodLabels?: {
@@ -130,6 +134,7 @@ export function RatioMovementPDF({
   accountantProfile,
   isDemo,
   reviewSignoff,
+  operatingProfile,
 }: RatioMovementPDFProps) {
   const theme = resolveTheme(accountantProfile);
   const labels = periodLabels ?? {
@@ -185,7 +190,7 @@ export function RatioMovementPDF({
         isDemo={isDemo}
       />
 
-      <ExecSummary figures={figures} narrative={movementNarrative(counts)} />
+      <ExecSummary figures={figures} narrative={movementNarrative(counts, operatingProfile)} />
 
       {pillars.map((pillar) => {
         const rows = withVerdicts.filter((x) => x.row.pillar === pillar);

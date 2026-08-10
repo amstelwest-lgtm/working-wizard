@@ -17,7 +17,56 @@ export type BudgetVatMode = "exclusive" | "inclusive";
 
 export type BudgetCapexMode = "none" | "light" | "significant";
 
-export type BudgetCostShape = "variable" | "fixed" | "balanced";
+export type BudgetCostShape = "variable" | "fixed" | "balanced" | "payroll_heavy";
+
+export type BudgetSeasonality = "flat" | "mild" | "strong";
+
+export type BudgetInventoryProfile = "none" | "short_life" | "standard" | "wip_heavy";
+
+/** How money mostly arrives — root of the qualifying funnel. */
+export type BudgetPayMotion =
+  | "goods"
+  | "time_delivery"
+  | "access_capacity"
+  | "recurring_rights"
+  | "take_rate"
+  | "mix"
+  | "funding";
+
+/** The volume unit founders think in — maps to a driver kit. */
+export type BudgetVolumeUnit =
+  | "units_sku"
+  | "wholesale_volume"
+  | "production_output"
+  | "fuel_litres"
+  | "harvest_batch"
+  | "shipment_lot"
+  | "billable_hours"
+  | "day_shift"
+  | "jobs_ticket"
+  | "patients_visits"
+  | "projects_fee"
+  | "loads_trips"
+  | "sites_fee"
+  | "rooms_adr"
+  | "covers_spend"
+  | "appointments_ticket"
+  | "seats_course"
+  | "events_booking"
+  | "units_rent"
+  | "posts_hours"
+  | "subscribers_arpu"
+  | "members_fee"
+  | "contracts_mrr"
+  | "policies_trail"
+  | "gmv_take"
+  | "deals_commission"
+  | "media_spend_fee"
+  | "grants_donations"
+  | "hybrid_primary"
+  | "construction_certified"
+  | "telecom_subscribers"
+  | "professional_hours";
 
 export type BudgetTemplateId =
   | "retail_units"
@@ -29,7 +78,29 @@ export type BudgetTemplateId =
   | "saas_arpu"
   | "hospitality_covers"
   | "construction_contracts"
-  | "hybrid_primary";
+  | "hybrid_primary"
+  | "fuel_forecourt"
+  | "agri_seasonal"
+  | "trade_shipment"
+  | "field_jobs"
+  | "healthcare_visits"
+  | "logistics_trips"
+  | "facilities_sites"
+  | "security_posts"
+  | "hospitality_rooms"
+  | "membership_club"
+  | "appointments_ticket"
+  | "education_seats"
+  | "events_bookings"
+  | "property_rent"
+  | "telecom_arpu"
+  | "commission_trail"
+  | "marketplace_take"
+  | "agency_deals"
+  | "media_agency"
+  | "professional_wip"
+  | "nonprofit_funding"
+  | "day_labour";
 
 /** Per-month volume × price (or fee) cell. */
 export type BudgetMonthCell = {
@@ -84,12 +155,22 @@ export type BudgetScenarioPayload = {
 };
 
 export type BudgetQualification = {
-  payModel: "products" | "services" | "subscription" | "mix";
-  subtype: string;
+  /** New funnel root */
+  payMotion: BudgetPayMotion;
+  /** Primary volume unit */
+  volumeUnit: BudgetVolumeUnit;
+  /** Optional ancillary streams (hotel F&B, forecourt shop, etc.) */
+  secondaryVolumeUnits?: BudgetVolumeUnit[];
+  /** @deprecated legacy funnel — kept for saved docs */
+  payModel?: "products" | "services" | "subscription" | "mix";
+  /** @deprecated legacy funnel */
+  subtype?: string;
   driverKind: BudgetDriverKind;
   costShape: BudgetCostShape;
   debtorDaysDefault: number;
   capexMode: BudgetCapexMode;
+  seasonality?: BudgetSeasonality;
+  inventoryProfile?: BudgetInventoryProfile;
   confirmedAt: string;
 };
 

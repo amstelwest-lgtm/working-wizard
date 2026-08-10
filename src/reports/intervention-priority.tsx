@@ -14,6 +14,8 @@ import { SectionHeader } from "@/components/pdf/section-header";
 import { ExecSummary, type HeadlineFigure } from "@/components/pdf/exec-summary";
 import { C, resolveTheme } from "@/components/pdf/theme";
 import { interventionNarrative } from "./narrative";
+import type { ClientOperatingProfile } from "@/lib/client-profile";
+
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -31,6 +33,8 @@ export type Intervention = {
 };
 
 export type InterventionPriorityPDFProps = {
+  /** Owner operating profile — shapes narrative wording only. */
+  operatingProfile?: ClientOperatingProfile | null;
   smeData: SmeData;
   interventions: Intervention[];
   accountantProfile: AccountantProfile;
@@ -62,6 +66,7 @@ export function InterventionPriorityPDF({
   accountantProfile,
   isDemo,
   reviewSignoff,
+  operatingProfile,
 }: InterventionPriorityPDFProps) {
   const theme = resolveTheme(accountantProfile);
 
@@ -98,7 +103,7 @@ export function InterventionPriorityPDF({
     critical: critical.length,
     atRisk: atRisk.length,
     total: interventions.length,
-  });
+  }, operatingProfile);
 
   let counter = 0;
   const renderCards = (items: Intervention[]) =>

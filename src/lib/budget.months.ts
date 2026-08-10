@@ -13,6 +13,8 @@ import {
   BUDGET_TEMPLATES,
   OVERHEAD_BUCKETS,
   newId,
+  resolveTemplateId,
+  seedsForSecondary,
 } from "@/lib/budget.templates";
 
 /** Build 12 YYYY-MM keys starting at fyStart (inclusive). */
@@ -64,7 +66,16 @@ export function createBudgetDocument(input: {
   const months = fyMonths(fyStart);
   const tpl = BUDGET_TEMPLATES[input.templateId];
 
-  const revenueLines: BudgetRevenueLine[] = tpl.revenueSeeds.map((seed) => ({
+  const seedRows = [...tpl.revenueSeeds];
+  const secondary = input.qualification.secondaryVolumeUnits ?? [];
+  for (const vu of secondary) {
+    for (const s of seedsForSecondary(vu)) {
+      if (seedRows.some((r) => r.driverKey === s.driverKey)) continue;
+      seedRows.push(s);
+    }
+  }
+
+  const revenueLines: BudgetRevenueLine[] = seedRows.map((seed) => ({
     id: newId("rev"),
     driverKey: seed.driverKey,
     name: seed.name,
@@ -73,6 +84,25 @@ export function createBudgetDocument(input: {
     priceLabel: seed.priceLabel,
     months: emptyMonthMap(months),
   }));
+
+  // Secondary lines should use their own kit's driver kind / labels already;
+  // re-stamp kind from secondary template when possible.
+  for (let i = 0; i < revenueLines.length; i++) {
+    const seed = seedRows[i];
+    if (!seed.driverKey.startsWith("sec_")) continue;
+    const vu = secondary.find((v) =>
+      seedsForSecondary(v).some((s) => s.driverKey === seed.driverKey),
+    );
+    if (!vu) continue;
+    const secTpl = BUDGET_TEMPLATES[resolveTemplateId({ payMotion: "mix", volumeUnit: vu })];
+    revenueLines[i] = { ...revenueLines[i], kind: secTpl.driverKind };
+  }
+
+  const showInventory =
+    tpl.showInventoryDays ||
+    secondary.some(
+      (vu) => BUDGET_TEMPLATES[resolveTemplateId({ payMotion: "mix", volumeUnit: vu })].showInventoryDays,
+    );
 
   return {
     version: 1,
@@ -101,7 +131,7 @@ export function createBudgetDocument(input: {
     })),
     wc: { ...tpl.defaultWc, debtorDays: input.qualification.debtorDaysDefault || tpl.defaultWc.debtorDays },
     capex: [],
-    showInventoryDays: tpl.showInventoryDays,
+    showInventoryDays: showInventory,
     notes: [],
     updatedAt: new Date().toISOString(),
   };

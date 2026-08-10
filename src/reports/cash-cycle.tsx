@@ -19,6 +19,8 @@ import { SectionHeader } from "@/components/pdf/section-header";
 import { ExecSummary, type HeadlineFigure } from "@/components/pdf/exec-summary";
 import { C, fmtRand, fmtRandCompact, fmtPct, resolveTheme } from "@/components/pdf/theme";
 import { cashCycleNarrative } from "./narrative";
+import type { ClientOperatingProfile } from "@/lib/client-profile";
+
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -50,6 +52,8 @@ export type WorkingCapitalData = {
 };
 
 export type CashCyclePDFProps = {
+  /** Owner operating profile — shapes narrative wording only. */
+  operatingProfile?: ClientOperatingProfile | null;
   smeData: SmeData;
   workingCapitalData: WorkingCapitalData;
   accountantProfile: AccountantProfile;
@@ -205,6 +209,7 @@ export function CashCyclePDF({
   accountantProfile,
   isDemo,
   reviewSignoff,
+  operatingProfile,
 }: CashCyclePDFProps) {
   const theme = resolveTheme(accountantProfile);
   const hs = d.health_scores ?? {};
@@ -245,7 +250,7 @@ export function CashCyclePDF({
     cccPrior: d.ccc_prior !== undefined ? Math.round(d.ccc_prior) : undefined,
     cashTrapped: d.cash_trapped_rands,
     dailyRevenue,
-  });
+  }, operatingProfile);
 
   const ratioRows = [
     { name: "Debtor Days", value: `${Math.round(d.debtor_days)} d`, score: hs.debtor_days ?? daysScore(d.debtor_days, 40) },

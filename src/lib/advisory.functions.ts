@@ -22,6 +22,8 @@ import { assertClientScope } from "@/lib/assert-client-scope";
  */
 
 import { CLAUDE_MODEL } from "@/lib/claude-config";
+import { parseOperatingProfile } from "@/lib/client-profile";
+import { profileAiContext } from "@/lib/profile-signals";
 
 type RatioMap = Record<string, number | string | null>;
 
@@ -155,10 +157,15 @@ export const draftAdvisory = createServerFn({ method: "POST" })
 
     const { data: client } = await context.supabase
       .from("clients")
-      .select("id, name, business_type, cash_runway_weeks")
+      .select("id, name, business_type, cash_runway_weeks, operating_profile")
       .eq("id", data.clientId)
       .maybeSingle();
     if (!client) throw new Error("Client not accessible");
+
+    const operatingProfile = parseOperatingProfile(
+      (client as { operating_profile?: unknown }).operating_profile,
+    );
+    const operatingContext = profileAiContext(operatingProfile);
 
     // Last two snapshots (RLS-scoped) for the movement brief.
     const { data: snaps } = await context.supabase
@@ -222,6 +229,7 @@ export const draftAdvisory = createServerFn({ method: "POST" })
 HARD RULES:
 - Never invent or estimate a number. Use only the figures in the brief below. If a needed figure is missing, work with what's there rather than guessing.
 - Interpret movement with care: a ratio going "up" is not automatically good or bad — reason about what it means for THIS business (a ${client.business_type ?? "general"} SME).
+- Respect the business profile below: revenue driver, cash timing, seasonality, stock intensity, customer concentration, debt position, and the owner's stated goal. Lead with what moves that goal, and flag concentration or debt risk when the numbers support it.
 - Ground every claim in a specific figure from the brief. No generic filler advice.
 - Plain language an owner understands. No accounting jargon without a plain-language gloss.
 - Match the accountant's voice and firm positioning if provided.
@@ -230,6 +238,7 @@ ${voice ? `\nACCOUNTANT VOICE:\n${voice}` : ""}
 ${KIND_INSTRUCTION[data.kind]}${data.steer ? `\n\nADDITIONAL STEER FROM THE ACCOUNTANT: ${data.steer}` : ""}`;
 
     const brief = `CLIENT: ${client.name} (${client.business_type ?? "type not set"})
+${operatingContext ? `BUSINESS PROFILE: ${operatingContext}` : ""}
 CURRENT PERIOD: ${current.period_label}
 ${hasPrior ? `PRIOR PERIOD: ${prior!.period_label}` : "PRIOR PERIOD: none — this is the first snapshot, so frame as a baseline, not a comparison."}
 ${client.cash_runway_weeks != null ? `CASH RUNWAY: ${client.cash_runway_weeks} weeks` : ""}

@@ -10,6 +10,8 @@ import type {
 } from "@/lib/budget.types";
 import { DEFAULT_VAT_RATE } from "@/lib/budget.types";
 import { fyMonths } from "@/lib/budget.months";
+import { BUDGET_TEMPLATES, resolveTemplateId } from "@/lib/budget.templates";
+import { migrateLegacyQualification } from "@/lib/budget.taxonomy";
 
 function scenarioFactors(doc: BudgetDocument, scenario: BudgetScenarioId) {
   return doc.scenarios[scenario] ?? doc.scenarios.base;
@@ -201,7 +203,7 @@ export function fmtZar(n: number): string {
   return `${sign}R${abs.toLocaleString("en-ZA")}`;
 }
 
-/** Ensure older saved budgets get Phase 2/3 defaults. */
+/** Ensure older saved budgets get Phase 2/3 defaults + new qualification fields. */
 export function normalizeBudgetDocument(raw: BudgetDocument): BudgetDocument {
   const scenarios = { ...raw.scenarios };
   for (const id of ["base", "upside", "downside"] as const) {
@@ -214,8 +216,39 @@ export function normalizeBudgetDocument(raw: BudgetDocument): BudgetDocument {
       debtorDaysDelta: prev?.debtorDaysDelta ?? 0,
     };
   }
+
+  const q = raw.qualification ?? ({} as BudgetDocument["qualification"]);
+  let qualification = q;
+  if (!q.payMotion || !q.volumeUnit) {
+    const migrated = migrateLegacyQualification({
+      payModel: q.payModel,
+      subtype: q.subtype,
+    });
+    qualification = {
+      ...q,
+      payMotion: migrated.payMotion,
+      volumeUnit: migrated.volumeUnit,
+      secondaryVolumeUnits: q.secondaryVolumeUnits ?? [],
+      driverKind: q.driverKind ?? BUDGET_TEMPLATES[migrated.templateId]?.driverKind ?? "units_price",
+      costShape: q.costShape ?? "balanced",
+      debtorDaysDefault: q.debtorDaysDefault ?? 30,
+      capexMode: q.capexMode ?? "none",
+      confirmedAt: q.confirmedAt ?? new Date().toISOString(),
+    };
+  }
+
+  const templateId =
+    raw.templateId && raw.templateId in BUDGET_TEMPLATES
+      ? raw.templateId
+      : resolveTemplateId({
+          payMotion: qualification.payMotion,
+          volumeUnit: qualification.volumeUnit,
+        });
+
   return {
     ...raw,
+    templateId,
+    qualification,
     vatRate: raw.vatRate > 0 ? raw.vatRate : DEFAULT_VAT_RATE,
     openingCash: raw.openingCash ?? 0,
     scenarios,

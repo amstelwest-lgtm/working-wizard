@@ -4,6 +4,18 @@
  */
 
 import { fmtPct, fmtRandCompact, tierForScore } from "@/components/pdf/theme";
+import type { ClientOperatingProfile } from "@/lib/client-profile";
+import {
+  reportProfileCoda,
+  type ReportNarrativeKind,
+} from "@/lib/profile-signals";
+
+export type NarrativeProfile = ClientOperatingProfile | null | undefined;
+
+function withCoda(base: string, profile: NarrativeProfile, kind: ReportNarrativeKind): string {
+  const coda = reportProfileCoda(profile, kind);
+  return coda ? `${base} ${coda}` : base;
+}
 
 export type DuPontLevers = {
   roe: number;
@@ -69,6 +81,7 @@ export function healthNarrative(
   overallScore: number,
   pillars: { label: string; score: number }[],
   dupont: DuPontDiagnosis,
+  profile?: NarrativeProfile,
 ): string {
   const sorted = [...pillars].sort((a, b) => a.score - b.score);
   const weakest = sorted[0];
@@ -80,20 +93,23 @@ export function healthNarrative(
       : tier === "at_risk"
         ? `At ${Math.round(overallScore)}/100, the business is stable but showing strain.`
         : `At ${Math.round(overallScore)}/100, key indicators point to significant financial stress.`;
-  return (
+  const base =
     `${opening} ${strongest.label} is the strongest pillar (${Math.round(strongest.score)}), ` +
     `while ${weakest.label} is ${TIER_PHRASE[tierForScore(weakest.score)]} at ${Math.round(weakest.score)}. ` +
-    dupont.sentence
-  );
+    dupont.sentence;
+  return withCoda(base, profile, "health");
 }
 
-export function profitabilityNarrative(d: {
-  revenue: number;
-  net_profit: number;
-  gross_margin_pct: number;
-  net_margin_pct: number;
-  priorNetMargin?: number;
-}): string {
+export function profitabilityNarrative(
+  d: {
+    revenue: number;
+    net_profit: number;
+    gross_margin_pct: number;
+    net_margin_pct: number;
+    priorNetMargin?: number;
+  },
+  profile?: NarrativeProfile,
+): string {
   const kept = d.net_margin_pct * 100;
   const trendBit =
     d.priorNetMargin !== undefined
@@ -107,19 +123,22 @@ export function profitabilityNarrative(d: {
       : kept >= 5
         ? "an adequate but improvable conversion of sales into profit"
         : "a thin conversion that leaves little buffer for shocks";
-  return (
+  const base =
     `Of every R100 earned, R${kept.toFixed(2)} reaches the bottom line — ${verdict}. ` +
     `Gross margin stands at ${fmtPct(d.gross_margin_pct)} on revenue of ${fmtRandCompact(d.revenue)}.` +
-    trendBit
-  );
+    trendBit;
+  return withCoda(base, profile, "profit");
 }
 
-export function cashForecastNarrative(d: {
-  runwayWeeks: number;
-  minBalance: number;
-  threshold: number;
-  weeksBelow: number;
-}): string {
+export function cashForecastNarrative(
+  d: {
+    runwayWeeks: number;
+    minBalance: number;
+    threshold: number;
+    weeksBelow: number;
+  },
+  profile?: NarrativeProfile,
+): string {
   const runwayBit =
     d.runwayWeeks >= 13
       ? `Cash remains above the danger threshold across the full 13-week horizon`
@@ -128,50 +147,64 @@ export function cashForecastNarrative(d: {
     d.weeksBelow > 0
       ? ` The balance dips below the ${fmtRandCompact(d.threshold)} minimum in ${d.weeksBelow} week${d.weeksBelow > 1 ? "s" : ""}, bottoming out at ${fmtRandCompact(d.minBalance)} — the shaded danger zone on the chart marks where action is needed.`
       : ` The lowest projected balance is ${fmtRandCompact(d.minBalance)}, comfortably above the ${fmtRandCompact(d.threshold)} minimum.`;
-  return `${runwayBit}.${lowBit}`;
+  return withCoda(`${runwayBit}.${lowBit}`, profile, "forecast");
 }
 
-export function cashCycleNarrative(d: {
-  ccc: number;
-  cccPrior?: number;
-  cashTrapped: number;
-  dailyRevenue: number;
-}): string {
+export function cashCycleNarrative(
+  d: {
+    ccc: number;
+    cccPrior?: number;
+    cashTrapped: number;
+    dailyRevenue: number;
+  },
+  profile?: NarrativeProfile,
+): string {
   const trend =
     d.cccPrior !== undefined
       ? d.ccc <= d.cccPrior
         ? ` — ${d.cccPrior - d.ccc} days faster than last period`
         : ` — ${d.ccc - d.cccPrior} days slower than last period`
       : "";
-  const verdict = d.ccc <= 45 ? "an efficient cycle" : d.ccc <= 75 ? "a moderate cycle with room to tighten" : "a slow cycle that is starving the business of cash";
-  return (
+  const verdict =
+    d.ccc <= 45
+      ? "an efficient cycle"
+      : d.ccc <= 75
+        ? "a moderate cycle with room to tighten"
+        : "a slow cycle that is starving the business of cash";
+  const base =
     `It takes ${d.ccc} days for R1 spent to return as cash${trend} — ${verdict}. ` +
-    `${fmtRandCompact(d.cashTrapped)} is currently trapped in working capital; every 1-day improvement releases roughly ${fmtRandCompact(d.dailyRevenue)}.`
-  );
+    `${fmtRandCompact(d.cashTrapped)} is currently trapped in working capital; every 1-day improvement releases roughly ${fmtRandCompact(d.dailyRevenue)}.`;
+  return withCoda(base, profile, "cycle");
 }
 
-export function leverageNarrative(d: {
-  debtToEquity: number;
-  totalDebt: number;
-  totalEquity: number;
-}): string {
+export function leverageNarrative(
+  d: {
+    debtToEquity: number;
+    totalDebt: number;
+    totalEquity: number;
+  },
+  profile?: NarrativeProfile,
+): string {
   const verdict =
     d.debtToEquity <= 1
       ? "a conservative structure with headroom to borrow if growth requires it"
       : d.debtToEquity <= 2
         ? "a balanced structure, though further borrowing should be weighed carefully"
         : "a leveraged structure where debt reduction should take priority";
-  return (
+  const base =
     `The business carries ${fmtRandCompact(d.totalDebt)} of debt against ${fmtRandCompact(d.totalEquity)} of equity ` +
-    `(${d.debtToEquity.toFixed(2)}× debt-to-equity) — ${verdict}.`
-  );
+    `(${d.debtToEquity.toFixed(2)}× debt-to-equity) — ${verdict}.`;
+  return withCoda(base, profile, "leverage");
 }
 
-export function laborNarrative(d: {
-  revenuePerEmployee: number;
-  gpPerLaborRand: number;
-  realGrowth: number;
-}): string {
+export function laborNarrative(
+  d: {
+    revenuePerEmployee: number;
+    gpPerLaborRand: number;
+    realGrowth: number;
+  },
+  profile?: NarrativeProfile,
+): string {
   const gpBit =
     d.gpPerLaborRand >= 0.5
       ? `Each R1 of wages generates R${d.gpPerLaborRand.toFixed(2)} of gross profit — a productive team.`
@@ -180,32 +213,48 @@ export function laborNarrative(d: {
     d.realGrowth > 0
       ? ` Revenue is outpacing inflation by ${fmtPct(d.realGrowth)} in real terms.`
       : ` Revenue growth is trailing inflation by ${fmtPct(Math.abs(d.realGrowth))} — pricing needs attention.`;
-  return `Revenue per employee stands at ${fmtRandCompact(d.revenuePerEmployee)}. ${gpBit}${growthBit}`;
+  return withCoda(
+    `Revenue per employee stands at ${fmtRandCompact(d.revenuePerEmployee)}. ${gpBit}${growthBit}`,
+    profile,
+    "labor",
+  );
 }
 
-export function movementNarrative(counts: {
-  improving: number;
-  decliningAll: number;
-  decliningMost: number;
-  total: number;
-}): string {
+export function movementNarrative(
+  counts: {
+    improving: number;
+    decliningAll: number;
+    decliningMost: number;
+    total: number;
+  },
+  profile?: NarrativeProfile,
+): string {
   const declining = counts.decliningAll + counts.decliningMost;
-  if (counts.total === 0) return "No ratio history is available yet — upload further periods to unlock trend analysis.";
+  if (counts.total === 0) {
+    return withCoda(
+      "No ratio history is available yet — upload further periods to unlock trend analysis.",
+      profile,
+      "movement",
+    );
+  }
   const opening = `${counts.improving} of ${counts.total} tracked ratios are improving`;
   const declineBit =
     declining > 0
       ? `, while ${declining} show${declining === 1 ? "s" : ""} a sustained decline${counts.decliningAll > 0 ? ` (${counts.decliningAll} deteriorating across every period on record)` : ""}. The highlighted rows below deserve first attention.`
       : `, with no ratio in sustained decline — momentum is on the business's side.`;
-  return opening + declineBit;
+  return withCoda(opening + declineBit, profile, "movement");
 }
 
-export function benchmarkNarrative(d: {
-  topQ: number;
-  above: number;
-  below: number;
-  total: number;
-  industryName: string;
-}): string {
+export function benchmarkNarrative(
+  d: {
+    topQ: number;
+    above: number;
+    below: number;
+    total: number;
+    industryName: string;
+  },
+  profile?: NarrativeProfile,
+): string {
   const aboveOrTop = d.topQ + d.above;
   const standing =
     aboveOrTop >= d.total * 0.7
@@ -213,31 +262,48 @@ export function benchmarkNarrative(d: {
       : aboveOrTop >= d.total * 0.4
         ? "a mid-pack performer with clear areas to close on the leaders"
         : "trailing its sector on most measures — the gaps below map the catch-up agenda";
-  return (
+  const base =
     `Against ${d.industryName} peers, ${aboveOrTop} of ${d.total} ratios sit at or above the sector median` +
-    `${d.topQ > 0 ? ` and ${d.topQ} reach${d.topQ === 1 ? "es" : ""} the top quartile` : ""}, making the business ${standing}.`
-  );
+    `${d.topQ > 0 ? ` and ${d.topQ} reach${d.topQ === 1 ? "es" : ""} the top quartile` : ""}, making the business ${standing}.`;
+  return withCoda(base, profile, "benchmark");
 }
 
-export function interventionNarrative(d: {
-  critical: number;
-  atRisk: number;
-  total: number;
-}): string {
-  if (d.total === 0) return "No intervention steps are required at present — all tracked ratios are healthy.";
+export function interventionNarrative(
+  d: {
+    critical: number;
+    atRisk: number;
+    total: number;
+  },
+  profile?: NarrativeProfile,
+): string {
+  if (d.total === 0) {
+    return withCoda(
+      "No intervention steps are required at present — all tracked ratios are healthy.",
+      profile,
+      "intervention",
+    );
+  }
   const urgency =
     d.critical > 0
       ? `${d.critical} step${d.critical > 1 ? "s" : ""} address${d.critical === 1 ? "es" : ""} critical ratios and should start immediately`
       : "no ratio is in critical territory, so this plan is about prevention rather than rescue";
-  return (
+  const base =
     `This roadmap prioritises ${d.total} action step${d.total > 1 ? "s" : ""} by severity and impact: ${urgency}` +
-    `${d.atRisk > 0 ? `, with ${d.atRisk} further step${d.atRisk > 1 ? "s" : ""} targeting at-risk measures` : ""}.`
-  );
+    `${d.atRisk > 0 ? `, with ${d.atRisk} further step${d.atRisk > 1 ? "s" : ""} targeting at-risk measures` : ""}.`;
+  return withCoda(base, profile, "intervention");
 }
 
-export function assetNarrative(l: DuPontLevers, dupont: DuPontDiagnosis): string {
+export function assetNarrative(
+  l: DuPontLevers,
+  dupont: DuPontDiagnosis,
+  profile?: NarrativeProfile,
+): string {
   const roeBit = Number.isFinite(l.roe)
     ? `Return on equity stands at ${fmtPct(l.roe)}${l.roe >= 0.15 ? " — a strong return on the owners' capital" : l.roe >= 0.08 ? " — a moderate return with room to build" : " — below what the owners' capital should earn"}.`
     : "Return on equity is not meaningful this period (negative or nil equity base).";
-  return `${roeBit} ${dupont.sentence} The decomposition below shows exactly which lever to work.`;
+  return withCoda(
+    `${roeBit} ${dupont.sentence} The decomposition below shows exactly which lever to work.`,
+    profile,
+    "assets",
+  );
 }
