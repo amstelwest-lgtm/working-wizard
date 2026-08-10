@@ -79,6 +79,9 @@ const RATIO_KEY_TO_SNAPSHOT: Record<string, string> = {
 const CashForecastPanel = lazy(() =>
   import("@/components/cash-forecast").then((m) => ({ default: m.CashForecastPanel })),
 );
+const BudgetPanel = lazy(() =>
+  import("@/components/budget/budget-panel").then((m) => ({ default: m.BudgetPanel })),
+);
 const ActionPlanPanel = lazy(() =>
   import("@/components/action-plan"),
 );
@@ -2435,11 +2438,12 @@ function Index() {
 
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="mb-5 grid h-auto w-full grid-cols-5 gap-0 rounded-none border-0 border-b border-[#b7872a]/20 bg-transparent p-0">
+          <TabsList className="mb-5 grid h-auto w-full grid-cols-3 gap-0 rounded-none border-0 border-b border-[#b7872a]/20 bg-transparent p-0 sm:grid-cols-6">
             {[
               { value: "today", label: "Business Health" },
               { value: "waterfall", label: "Profit" },
               { value: "cash", label: "Cash Forecast" },
+              { value: "budget", label: "Budget" },
               { value: "next", label: "Next moves" },
               { value: "tasks", label: "Action Plan" },
             ].map((t) => (
@@ -2947,6 +2951,29 @@ function Index() {
                 simplified={viewMode === "simplified"}
                 canSign={(userRole === "accountant" || userRole === "firm_admin") && !!actingClientId}
                 reloadToken={cashForecastReloadToken}
+              />
+            </Suspense>
+          </TabsContent>
+
+          <TabsContent value="budget">
+            <div className="mb-4 flex items-center gap-3 pb-3">
+              <span className="text-[9px] font-semibold uppercase tracking-[0.25em] text-[#b8860b] dark:text-[#d4a550]/80">Budget</span>
+              <span className="h-px flex-1 bg-gradient-to-r from-[#b7872a]/30 to-transparent" />
+            </div>
+            <Suspense fallback={<div className="p-6 text-sm text-slate-400">Loading budget…</div>}>
+              <BudgetPanel
+                clientId={effectiveClientId ?? undefined}
+                simplified={viewMode === "simplified"}
+                role={
+                  userRole === "accountant" || userRole === "firm_admin"
+                    ? "accountant"
+                    : "owner"
+                }
+                financials={{
+                  revenue: v.revenue,
+                  cogs: v.cogs,
+                  fixedCosts: v.fixedCosts,
+                }}
               />
             </Suspense>
           </TabsContent>

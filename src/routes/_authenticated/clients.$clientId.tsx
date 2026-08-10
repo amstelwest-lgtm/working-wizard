@@ -5,6 +5,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
 import { AdvisoryDrafter } from "@/components/advisory-drafter";
 import { CashForecastPanel } from "@/components/cash-forecast";
+import { BudgetPanel } from "@/components/budget/budget-panel";
 import type { ExistingCashflow } from "@/lib/cash-from-banks.publish";
 import { TasksPanel } from "@/components/tasks-panel";
 import { UploadFinancials } from "@/components/upload-financials";
@@ -263,7 +264,7 @@ type Client = {
   cashflow?: ExistingCashflow | null;
 };
 
-type ActiveTab = "ratios" | "profit" | "cash" | "reports" | "tasks" | "advisory";
+type ActiveTab = "ratios" | "profit" | "cash" | "budget" | "reports" | "tasks" | "advisory";
 
 // Friendly labels for SphereHero drivers
 const SPHERE_RATIO_META: Record<string, { friendly: string }> = {
@@ -1081,6 +1082,7 @@ function ClientView() {
               { id: "ratios", label: "Health & Ratios" },
               { id: "profit", label: "Profitability" },
               { id: "cash", label: "13-Week Cash Forecast", star: true },
+              { id: "budget", label: "Budget" },
               { id: "reports", label: "Reports", star: true },
               { id: "tasks", label: "Tasks" },
               { id: "advisory", label: "Advisory Drafter" },
@@ -1475,6 +1477,24 @@ function ClientView() {
                     : c,
                 );
               }}
+            />
+          </div>
+        </div>
+
+        {/* ===== BUDGET TAB ===== */}
+        <div className={`tabpane${activeTab === "budget" ? " on" : ""}`} id="pane-budget">
+          <span className="eyebrow">Living FY budget</span>
+          <div className="h-sec">Driver-based monthly budget</div>
+          <p className="sub" style={{ marginBottom: 24 }}>
+            Volume × price first, then cash timing. Advanced pressure-testing is available after setup.
+          </p>
+          <div className="dark" style={{ colorScheme: "dark" }}>
+            <BudgetPanel
+              clientId={client.id}
+              simplified={viewMode === "simplified"}
+              role="accountant"
+              financials={financials}
+              fyStartMonthDefault={3}
             />
           </div>
         </div>

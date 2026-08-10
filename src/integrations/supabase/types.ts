@@ -578,6 +578,9 @@ export type Database = {
           cash_runway_weeks: number | null
           cashflow: Json | null
           cashflow_bank_draft: Json | null
+          budget: Json | null
+          budget_updated_at: string | null
+          financial_year_start_month: number | null
           contact_email: string | null
           contact_phone: string | null
           created_at: string
@@ -596,6 +599,9 @@ export type Database = {
           cash_runway_weeks?: number | null
           cashflow?: Json | null
           cashflow_bank_draft?: Json | null
+          budget?: Json | null
+          budget_updated_at?: string | null
+          financial_year_start_month?: number | null
           contact_email?: string | null
           contact_phone?: string | null
           created_at?: string
@@ -614,6 +620,9 @@ export type Database = {
           cash_runway_weeks?: number | null
           cashflow?: Json | null
           cashflow_bank_draft?: Json | null
+          budget?: Json | null
+          budget_updated_at?: string | null
+          financial_year_start_month?: number | null
           contact_email?: string | null
           contact_phone?: string | null
           created_at?: string
