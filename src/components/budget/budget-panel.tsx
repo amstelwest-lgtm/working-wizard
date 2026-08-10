@@ -279,15 +279,18 @@ export function BudgetPanel({
       />
 
       <div className="mt-6 space-y-4">
-        <BudgetAdvancedPanel
-          doc={doc}
-          onChange={setDoc}
-          financials={financials}
-          businessTypeId={businessTypeId}
-          role={role}
-          clientId={clientId}
-          onPushedToCash={onPushedToCash}
-        />
+        {/* Owner Simple: keep Advanced collapsed away — Complex / accountant still get the full panel */}
+        {!(simplified && role === "owner") && (
+          <BudgetAdvancedPanel
+            doc={doc}
+            onChange={setDoc}
+            financials={financials}
+            businessTypeId={businessTypeId}
+            role={role}
+            clientId={clientId}
+            onPushedToCash={onPushedToCash}
+          />
+        )}
 
         {clientId && (
           <div className="flex justify-end">

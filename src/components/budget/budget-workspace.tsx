@@ -20,6 +20,7 @@ import {
   keepUnmappedAsExtraLine,
   reassignUnmappedDriver,
 } from "@/lib/budget.model-change";
+import { BudgetSimpleView } from "@/components/budget/budget-simple-view";
 
 const SCENARIOS: BudgetScenarioId[] = ["base", "upside", "downside"];
 
@@ -42,8 +43,122 @@ export function BudgetWorkspace({
   onChangeModel?: () => void;
   role?: "owner" | "accountant";
 }) {
+  if (simplified) {
+    return (
+      <div className="space-y-4">
+        {unmappedReview && unmappedReview.length > 0 && (
+          <UnmappedReviewBlock
+            items={unmappedReview}
+            doc={doc}
+            onChange={onChange}
+            onClear={onClearUnmapped}
+          />
+        )}
+        <BudgetSimpleView
+          doc={doc}
+          onChange={onChange}
+          actuals={actuals}
+          onChangeModel={onChangeModel}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <BudgetComplexWorkspace
+      doc={doc}
+      onChange={onChange}
+      actuals={actuals}
+      unmappedReview={unmappedReview}
+      onClearUnmapped={onClearUnmapped}
+      onChangeModel={onChangeModel}
+      role={role}
+    />
+  );
+}
+
+function UnmappedReviewBlock({
+  items,
+  doc,
+  onChange,
+  onClear,
+}: {
+  items: UnmappedDriver[];
+  doc: BudgetDocument;
+  onChange: (next: BudgetDocument) => void;
+  onClear?: () => void;
+}) {
+  return (
+    <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4">
+      <div className="text-sm font-semibold text-amber-900 dark:text-amber-200">
+        Review unmapped drivers
+      </div>
+      <p className="mt-1 text-xs text-amber-800/80 dark:text-amber-200/70">
+        These came from your previous model and have no matching key. Reassign or keep as an
+        extra line — we never silently discard.
+      </p>
+      <ul className="mt-3 space-y-2">
+        {items.map((u) => (
+          <li
+            key={u.id}
+            className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-500/20 bg-white/60 px-3 py-2 dark:bg-slate-950/40"
+          >
+            <span className="text-sm font-medium text-slate-800 dark:text-slate-100">
+              {u.name} <span className="text-xs text-slate-500">({u.driverKey})</span>
+            </span>
+            <select
+              className="rounded border border-slate-200 bg-white px-2 py-1 text-xs dark:border-slate-700 dark:bg-slate-900"
+              defaultValue=""
+              onChange={(e) => {
+                const key = e.target.value;
+                if (!key) return;
+                if (key === "__keep__") {
+                  onChange(keepUnmappedAsExtraLine(doc, u));
+                } else {
+                  onChange(reassignUnmappedDriver(doc, u, key));
+                }
+                onClear?.();
+              }}
+            >
+              <option value="" disabled>
+                Reassign to…
+              </option>
+              {doc.revenueLines.map((l) => (
+                <option key={l.id} value={l.driverKey}>
+                  {l.name}
+                </option>
+              ))}
+              <option value="__keep__">Keep as extra line</option>
+            </select>
+          </li>
+        ))}
+      </ul>
+      <Button type="button" variant="ghost" size="sm" className="mt-2 text-xs" onClick={onClear}>
+        Discard remaining unmapped
+      </Button>
+    </div>
+  );
+}
+
+function BudgetComplexWorkspace({
+  doc,
+  onChange,
+  actuals,
+  unmappedReview,
+  onClearUnmapped,
+  onChangeModel,
+  role = "owner",
+}: {
+  doc: BudgetDocument;
+  onChange: (next: BudgetDocument) => void;
+  actuals?: BudgetActuals | null;
+  unmappedReview?: UnmappedDriver[] | null;
+  onClearUnmapped?: () => void;
+  onChangeModel?: () => void;
+  role?: "owner" | "accountant";
+}) {
   const months = useMemo(() => fyMonths(doc.fyStart), [doc.fyStart]);
-  const focusMonths = simplified ? months.slice(0, 3) : months;
+  const focusMonths = months;
   const [focusMonth, setFocusMonth] = useState(months[0] ?? doc.fyStart);
   const results = useMemo(
     () => computeBudgetMonths(doc, doc.activeScenario),
@@ -54,6 +169,20 @@ export function BudgetWorkspace({
   const baseFocus = baseResults.find((r) => r.month === focusMonth) ?? baseResults[0];
   const trough = useMemo(() => lowestCashTrough(results), [results]);
   const tpl = BUDGET_TEMPLATES[doc.templateId];
+  const fyTotals = useMemo(() => {
+    const sum = (fn: (r: (typeof results)[0]) => number) =>
+      results.reduce((a, r) => a + fn(r), 0);
+    return {
+      revenue: sum((r) => r.revenue),
+      cogs: sum((r) => r.cogs),
+      overheads: sum((r) => r.overheads),
+      depreciation: sum((r) => r.depreciation),
+      ebit: sum((r) => r.ebit),
+      vatNet: sum((r) => r.vatNet),
+      netCash: sum((r) => r.netCash),
+      closingEnd: results.length ? results[results.length - 1].closingCash : 0,
+    };
+  }, [results]);
 
   const patchLine = (lineId: string, month: string, patch: Partial<{ volume: number; price: number }>) => {
     onChange({
@@ -120,55 +249,13 @@ export function BudgetWorkspace({
         </div>
       </div>
 
-      {/* Unmapped review */}
       {unmappedReview && unmappedReview.length > 0 && (
-        <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4">
-          <div className="text-sm font-semibold text-amber-900 dark:text-amber-200">
-            Review unmapped drivers
-          </div>
-          <p className="mt-1 text-xs text-amber-800/80 dark:text-amber-200/70">
-            These came from your previous model and have no matching key. Reassign or keep as an extra line — we never silently discard.
-          </p>
-          <ul className="mt-3 space-y-2">
-            {unmappedReview.map((u) => (
-              <li
-                key={u.id}
-                className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-500/20 bg-white/60 px-3 py-2 dark:bg-slate-950/40"
-              >
-                <span className="text-sm font-medium text-slate-800 dark:text-slate-100">
-                  {u.name} <span className="text-xs text-slate-500">({u.driverKey})</span>
-                </span>
-                <select
-                  className="rounded border border-slate-200 bg-white px-2 py-1 text-xs dark:border-slate-700 dark:bg-slate-900"
-                  defaultValue=""
-                  onChange={(e) => {
-                    const key = e.target.value;
-                    if (!key) return;
-                    if (key === "__keep__") {
-                      onChange(keepUnmappedAsExtraLine(doc, u));
-                    } else {
-                      onChange(reassignUnmappedDriver(doc, u, key));
-                    }
-                    onClearUnmapped?.();
-                  }}
-                >
-                  <option value="" disabled>
-                    Reassign to…
-                  </option>
-                  {doc.revenueLines.map((l) => (
-                    <option key={l.id} value={l.driverKey}>
-                      {l.name}
-                    </option>
-                  ))}
-                  <option value="__keep__">Keep as extra line</option>
-                </select>
-              </li>
-            ))}
-          </ul>
-          <Button type="button" variant="ghost" size="sm" className="mt-2 text-xs" onClick={onClearUnmapped}>
-            Discard remaining unmapped
-          </Button>
-        </div>
+        <UnmappedReviewBlock
+          items={unmappedReview}
+          doc={doc}
+          onChange={onChange}
+          onClear={onClearUnmapped}
+        />
       )}
 
       {/* Assumptions */}
@@ -415,15 +502,42 @@ export function BudgetWorkspace({
                     </td>
                   ))}
                 </tr>
+                <tr className="border-t border-slate-100 bg-slate-50/60 dark:border-slate-800 dark:bg-slate-900/40">
+                  <td className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                    Revenue
+                  </td>
+                  {focusMonths.map((m) => {
+                    const cell = line.months[m] ?? { volume: 0, price: 0 };
+                    return (
+                      <td
+                        key={m}
+                        className="px-2 py-1.5 text-right text-[11px] font-semibold tabular-nums text-slate-800 dark:text-slate-100"
+                      >
+                        {fmtZar(cell.volume * cell.price)}
+                      </td>
+                    );
+                  })}
+                </tr>
+                <tr className="border-t border-slate-200 dark:border-slate-700">
+                  <td className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                    FY total
+                  </td>
+                  <td
+                    colSpan={focusMonths.length}
+                    className="px-2 py-1.5 text-right text-xs font-semibold tabular-nums text-slate-900 dark:text-slate-100"
+                  >
+                    {fmtZar(
+                      focusMonths.reduce((s, m) => {
+                        const cell = line.months[m] ?? { volume: 0, price: 0 };
+                        return s + cell.volume * cell.price;
+                      }, 0),
+                    )}
+                  </td>
+                </tr>
               </tbody>
             </table>
           </div>
         ))}
-        {simplified && (
-          <p className="text-[11px] text-slate-500">
-            Showing first 3 months — switch to complex for the full FY grid.
-          </p>
-        )}
       </section>
 
       {/* Overheads */}
@@ -458,6 +572,38 @@ export function BudgetWorkspace({
                 </tr>
               ))}
             </tbody>
+            <tfoot>
+              <tr className="border-t-2 border-slate-200 bg-slate-50/80 dark:border-slate-700 dark:bg-slate-900/40">
+                <td className="px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                  Total
+                </td>
+                {focusMonths.map((m) => (
+                  <td
+                    key={m}
+                    className="px-2 py-2 text-right text-[11px] font-semibold tabular-nums text-slate-800 dark:text-slate-100"
+                  >
+                    {fmtZar(doc.overheads.reduce((s, oh) => s + (oh.months[m] ?? 0), 0))}
+                  </td>
+                ))}
+              </tr>
+              <tr className="border-t border-slate-200 dark:border-slate-700">
+                <td className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                  FY total
+                </td>
+                <td
+                  colSpan={focusMonths.length}
+                  className="px-2 py-1.5 text-right text-xs font-semibold tabular-nums"
+                >
+                  {fmtZar(
+                    focusMonths.reduce(
+                      (s, m) =>
+                        s + doc.overheads.reduce((a, oh) => a + (oh.months[m] ?? 0), 0),
+                      0,
+                    ),
+                  )}
+                </td>
+              </tr>
+            </tfoot>
           </table>
         </div>
       </section>
@@ -805,7 +951,7 @@ export function BudgetWorkspace({
               </tr>
             </thead>
             <tbody>
-              {(simplified ? results.slice(0, 3) : results).map((r) => (
+              {results.map((r) => (
                 <tr
                   key={r.month}
                   className={`border-b border-slate-50 dark:border-slate-900 ${
@@ -829,6 +975,32 @@ export function BudgetWorkspace({
                 </tr>
               ))}
             </tbody>
+            <tfoot>
+              <tr className="border-t-2 border-slate-300 bg-slate-50 font-semibold dark:border-slate-600 dark:bg-slate-900/50">
+                <td className="px-3 py-2 text-[10px] uppercase tracking-wider text-slate-500">
+                  FY total
+                </td>
+                <td className="px-2 py-2 text-right tabular-nums">{fmtZar(fyTotals.revenue)}</td>
+                <td className="px-2 py-2 text-right tabular-nums">{fmtZar(fyTotals.cogs)}</td>
+                <td className="px-2 py-2 text-right tabular-nums text-slate-400">—</td>
+                <td className="px-2 py-2 text-right tabular-nums">{fmtZar(fyTotals.overheads)}</td>
+                <td className="px-2 py-2 text-right tabular-nums">{fmtZar(fyTotals.depreciation)}</td>
+                <td className="px-2 py-2 text-right tabular-nums">{fmtZar(fyTotals.ebit)}</td>
+                <td className="px-2 py-2 text-right tabular-nums">{fmtZar(fyTotals.vatNet)}</td>
+                <td
+                  className={`px-2 py-2 text-right tabular-nums ${fyTotals.netCash < 0 ? "text-red-600" : ""}`}
+                >
+                  {fmtZar(fyTotals.netCash)}
+                </td>
+                <td
+                  className={`px-2 py-2 text-right tabular-nums ${fyTotals.closingEnd < 0 ? "text-red-600" : ""}`}
+                  title="FY-end closing cash (not a sum of monthly closings)"
+                >
+                  {fmtZar(fyTotals.closingEnd)}
+                  <span className="ml-1 text-[9px] font-normal text-slate-400">end</span>
+                </td>
+              </tr>
+            </tfoot>
           </table>
         </div>
         {role === "accountant" && (
