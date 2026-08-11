@@ -720,11 +720,7 @@ export function CashForecastPanel({
           cashForecast: forecastWeeks,
           scenario: "moderate",
           accountantProfile: profile,
-<<<<<<< HEAD
-          // Same R50k floor as on-screen runway — never 0 (that invents breaches).
-=======
-          // Same R50k floor as on-screen runway — never 0.
->>>>>>> origin/cursor/reports-honesty-ledger-5d34
+// Same R50k floor as on-screen runway — never 0 (that invents breaches).
           minimumThreshold: CASH_RUNWAY_THRESHOLD_RAND,
           assumptions,
         }) as Parameters<typeof pdf>[0],
