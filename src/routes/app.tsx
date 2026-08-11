@@ -3350,12 +3350,14 @@ function Index() {
             return;
           }
           const forecastUpdatedAt = new Date().toISOString();
+          const runway = (await import("@/lib/cash-runway")).runwayWeeksFromCashflow(payload);
           const { error } = await supabase
             .from("clients")
             .update({
               cashflow: payload as never,
               cashflow_bank_draft: payload as never,
               last_forecast_at: forecastUpdatedAt,
+              ...(runway != null ? { cash_runway_weeks: runway } : {}),
             })
             .eq("id", effectiveClientId);
           if (error) {
@@ -3365,6 +3367,7 @@ function Index() {
               .update({
                 cashflow: payload as never,
                 last_forecast_at: forecastUpdatedAt,
+                ...(runway != null ? { cash_runway_weeks: runway } : {}),
               })
               .eq("id", effectiveClientId);
             if (retry.error) throw new Error(retry.error.message);

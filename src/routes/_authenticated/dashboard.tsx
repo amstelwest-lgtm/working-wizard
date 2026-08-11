@@ -7,6 +7,8 @@ import { PlaybookDrawer } from "@/components/playbook-drawer";
 import { scoreFromFlatFinancials, buildTrend, scoreTier, type TrendPoint } from "@/lib/health-score";
 import { useServerFn } from "@tanstack/react-start";
 import { getQboStatuses } from "@/lib/qbo.functions";
+import { effectiveCashRunwayWeeks } from "@/lib/cash-runway";
+import { countOpenQueriesByClient } from "@/lib/open-queries";
 import "@/styles/accountant-portal.css";
 import { ThemeToggle } from "@/components/theme-toggle";
 
@@ -29,6 +31,7 @@ type Client = {
   last_login_at: string | null;
   firm_id: string | null;
   financials: Record<string, string | number | null> | null;
+  cashflow?: unknown;
   // reports_issued_count may not exist until migration runs
   reports_issued_count?: number | null;
 };
@@ -36,6 +39,10 @@ type Client = {
 type ClientRow = Client & {
   score: number | null;
   trend: TrendPoint[];
+  /** Resolved runway (persisted or derived from cashflow). */
+  runwayWeeks: number | null;
+  /** Unresolved notes count. */
+  openQueries: number;
 };
 
 // Playbook metadata shape for the library grid
@@ -350,8 +357,13 @@ function Dashboard() {
     }
 
     // Compute per-client enriched rows
+    const openQueriesMap = await countOpenQueriesByClient(rawClients.map((c) => c.id));
     const rows: ClientRow[] = rawClients.map((c) => {
-      const score = scoreFromFlatFinancials(c.financials, c.cash_runway_weeks);
+      const runwayWeeks = effectiveCashRunwayWeeks(
+        c.cash_runway_weeks,
+        c.cashflow as Parameters<typeof effectiveCashRunwayWeeks>[1],
+      );
+      const score = scoreFromFlatFinancials(c.financials, runwayWeeks);
       const realHistory = historyMap[c.id] ?? [];
       const trendHistory =
         realHistory.length > 0
@@ -360,7 +372,13 @@ function Dashboard() {
           ? [{ score, is_estimated: true }]
           : [];
       const trend = buildTrend(trendHistory);
-      return { ...c, score, trend };
+      return {
+        ...c,
+        score,
+        trend,
+        runwayWeeks,
+        openQueries: openQueriesMap[c.id] ?? 0,
+      };
     });
 
     setClientRows(rows);
@@ -460,8 +478,8 @@ function Dashboard() {
   }
 
   function runwayStr(c: ClientRow): string {
-    if (c.cash_runway_weeks == null) return "—";
-    return `${c.cash_runway_weeks} wk`;
+    if (c.runwayWeeks == null) return "—";
+    return `${c.runwayWeeks} wk`;
   }
 
   // ── current month label ───────────────────────────────────────────────────
@@ -709,6 +727,7 @@ function Dashboard() {
                 <th>Health</th>
                 <th className="hide-sm">Trend</th>
                 <th>Runway</th>
+                <th className="hide-sm">Queries</th>
                 <th className="hide-sm">Op. profit</th>
                 <th>Status</th>
                 <th style={{ textAlign: "right" }}>Actions</th>
@@ -741,6 +760,13 @@ function Dashboard() {
                       <SparkSvg trend={c.trend} />
                     </td>
                     <td className="num">{runwayStr(c)}</td>
+                    <td className="num hide-sm">
+                      {c.openQueries > 0 ? (
+                        <span title="Unresolved notes on this client">{c.openQueries}</span>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
                     <td className="num hide-sm">{opMarginStr(c)}</td>
                     <td>
                       <span className={`chip ${chip.cls}`}>

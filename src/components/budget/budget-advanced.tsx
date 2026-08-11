@@ -17,6 +17,7 @@ import {
   seedBudgetFromFinancials,
   budgetToCashForecastPayload,
 } from "@/lib/budget.bridges";
+import { runwayWeeksFromCashflow } from "@/lib/cash-runway";
 import type { CashForecastPublishPayload } from "@/lib/cash-from-banks.types";
 
 type BenchmarkHint = {
@@ -116,11 +117,13 @@ export function BudgetAdvancedPanel({
     try {
       const payload: CashForecastPublishPayload = budgetToCashForecastPayload(doc);
       const forecastUpdatedAt = new Date().toISOString();
+      const runway = runwayWeeksFromCashflow(payload);
       const { error } = await supabase
         .from("clients")
         .update({
           cashflow: payload as never,
           last_forecast_at: forecastUpdatedAt,
+          ...(runway != null ? { cash_runway_weeks: runway } : {}),
         })
         .eq("id", clientId);
       if (error) throw new Error(error.message);
