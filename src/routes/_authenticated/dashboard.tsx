@@ -4,7 +4,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
 import { PlaybookDrawer } from "@/components/playbook-drawer";
-import { scoreFromFlatFinancials, buildTrend, scoreTier, type TrendPoint } from "@/lib/health-score";
+import {
+  healthFromFlatFinancials,
+  buildTrend,
+  scoreTier,
+  type TrendPoint,
+  type OverallHealth,
+} from "@/lib/health-score";
 import { useServerFn } from "@tanstack/react-start";
 import { getQboStatuses } from "@/lib/qbo.functions";
 import { effectiveCashRunwayWeeks } from "@/lib/cash-runway";
@@ -38,6 +44,7 @@ type Client = {
 
 type ClientRow = Client & {
   score: number | null;
+  health: OverallHealth;
   trend: TrendPoint[];
   /** Resolved runway (persisted or derived from cashflow). */
   runwayWeeks: number | null;
@@ -94,21 +101,33 @@ async function getPlaybookCatalogue(): Promise<PlaybookMeta[]> {
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-/** chip class and label from a 0-100 score */
-function chipFromScore(score: number | null): { cls: "ok" | "warn" | "risk"; label: string } {
-  const tier = scoreTier(score);
-  if (tier === "healthy") return { cls: "ok", label: "Healthy" };
-  if (tier === "at_risk") return { cls: "warn", label: "Watch" };
-  return { cls: "risk", label: "At risk" };
+/** Chip from overall health — respects the critical-pillar tell. */
+function chipFromHealth(health: OverallHealth): { cls: "ok" | "warn" | "risk"; label: string } {
+  if (health.overall == null) return { cls: "warn", label: "—" };
+  const tier = health.displayStatus;
+  if (tier === "healthy") return { cls: "ok", label: health.displayLabel };
+  if (tier === "at_risk") return { cls: "warn", label: health.displayLabel };
+  return { cls: "risk", label: health.displayLabel };
 }
 
 /** SVG ring for a 0-100 score */
-function RingSvg({ score, size = 46, sw = 4 }: { score: number | null; size?: number; sw?: number }) {
+function RingSvg({
+  score,
+  status,
+  size = 46,
+  sw = 4,
+}: {
+  score: number | null;
+  /** When set, drives ring colour (critical-pillar tell) instead of raw scoreTier. */
+  status?: ReturnType<typeof scoreTier>;
+  size?: number;
+  sw?: number;
+}) {
   const s = score ?? 50;
   const r = (size - sw) / 2;
   const c = 2 * Math.PI * r;
   const off = c * (1 - s / 100);
-  const tier = scoreTier(s);
+  const tier = status ?? scoreTier(s);
   const col = tier === "healthy" ? "var(--ok)" : tier === "at_risk" ? "var(--warn)" : "var(--risk)";
   return (
     <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
@@ -363,7 +382,8 @@ function Dashboard() {
         c.cash_runway_weeks,
         c.cashflow as Parameters<typeof effectiveCashRunwayWeeks>[1],
       );
-      const score = scoreFromFlatFinancials(c.financials, runwayWeeks);
+      const health = healthFromFlatFinancials(c.financials, runwayWeeks);
+      const score = health.overall;
       const realHistory = historyMap[c.id] ?? [];
       const trendHistory =
         realHistory.length > 0
@@ -375,6 +395,7 @@ function Dashboard() {
       return {
         ...c,
         score,
+        health,
         trend,
         runwayWeeks,
         openQueries: openQueriesMap[c.id] ?? 0,
@@ -735,7 +756,7 @@ function Dashboard() {
             </thead>
             <tbody>
               {filteredRows.map((c) => {
-                const chip = chipFromScore(c.score);
+                const chip = chipFromHealth(c.health);
                 const score = c.score != null ? Math.round(c.score) : null;
                 const qbo = qboStatuses[c.id];
                 return (
@@ -751,7 +772,7 @@ function Dashboard() {
                     <td>
                       <div className="cell-health">
                         <span className="ring">
-                          <RingSvg score={score} />
+                          <RingSvg score={score} status={c.health.displayStatus} />
                           <b>{score ?? "—"}</b>
                         </span>
                       </div>

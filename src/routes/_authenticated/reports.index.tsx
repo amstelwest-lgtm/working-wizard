@@ -15,6 +15,7 @@ import { useAccountantProfile } from "@/contexts/accountant-profile";
 import type { AccountantProfile } from "@/contexts/accountant-profile";
 import { computeRatios, scoreTier } from "@/lib/ratios";
 import type { RatioInputs } from "@/lib/ratios";
+import { scoreRatio, pillarForRatioName } from "@/lib/health-score";
 import { PlaybookDrawer } from "@/components/playbook-drawer";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { supabase } from "@/integrations/supabase/client";
@@ -230,23 +231,7 @@ function getNum(fin: Record<string, string>, key: string): number {
 }
 
 function scoreForRatio(name: string, val: number): number {
-  if (!Number.isFinite(val)) return 50;
-  if (name === "Net Margin")               return Math.min(100, Math.max(0, (val / 0.15) * 100));
-  if (name === "Operating Margin")         return Math.min(100, Math.max(0, (val / 0.20) * 100));
-  if (name === "Gross Margin")             return Math.min(100, Math.max(0, (val / 0.40) * 100));
-  if (name === "Return on Assets")         return Math.min(100, Math.max(0, (val / 0.12) * 100));
-  if (name === "Return on Equity")         return Math.min(100, Math.max(0, (val / 0.20) * 100));
-  if (name === "Asset Turnover")           return Math.min(100, Math.max(0, (val / 1.5)  * 100));
-  if (name === "Debtor Days")              return Math.min(100, Math.max(0, ((90 - val) / 90) * 100));
-  if (name === "Inventory Days")           return Math.min(100, Math.max(0, ((90 - val) / 90) * 100));
-  if (name === "Creditor Days")            return Math.min(100, Math.max(0, (val / 60) * 100));
-  if (name === "Working Capital Days")     return Math.min(100, Math.max(0, ((90 - val) / 90) * 100));
-  if (name === "OCF / EBITDA")             return Math.min(100, Math.max(0, val * 100));
-  if (name === "Interest Burden")          return Math.min(100, Math.max(0, val * 100));
-  if (name === "Equity Multiplier")        return Math.min(100, Math.max(0, ((4 - val) / 3) * 100));
-  if (name === "Gross Profit / Labor")     return Math.min(100, Math.max(0, (val / 0.6) * 100));
-  if (name === "Sales-per-Employee Ratio") return Math.min(100, Math.max(0, (val / 300_000) * 100));
-  return 50;
+  return scoreRatio(name, val);
 }
 
 function fmtRatioVal(name: string, val: number): string {
@@ -259,15 +244,7 @@ function fmtRatioVal(name: string, val: number): string {
 }
 
 function pillarForRatio(name: string): "profit" | "assets" | "financing" | "cash" {
-  if (name.includes("Margin") || name.includes("Growth") ||
-      name.includes("Leverage") || name.includes("Labor") || name.includes("Customer"))
-    return "profit";
-  if (name.includes("Days") || name.includes("Capital") || name.includes("OCF"))
-    return "cash";
-  if ((name.includes("Equity") && !name.includes("Return")) ||
-      name.includes("Multiplier") || name.includes("Burden") || name.includes("Debt"))
-    return "financing";
-  return "assets";
+  return pillarForRatioName(name);
 }
 
 function buildRatioResults(rawRatios: Record<string, number>): RatioResult[] {
@@ -958,6 +935,7 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
         isDemo,
         reviewSignoff: financialsStamp,
         operatingProfile,
+        cashRunwayWeeks: isDemo ? null : (cd.cashRunwayWeeks ?? null),
       });
     },
     intervention: async (s, p) => {

@@ -1,20 +1,302 @@
-import { computeRatios, scoreTier, type RatioInputs } from "@/lib/ratios";
+import { computeRatios, scoreTier, type HealthTier, type RatioInputs } from "@/lib/ratios";
 
 /**
- * Single source of truth for turning a client's raw financials into one
- * overall 0-100 health score, and for building the 8-point trend used by
- * sparklines across the accountant portal.
+ * Single source of truth for overall health scoring.
  *
- * Mirrors the same three signals the dashboard's client-list RAG badge has
- * always used (operating margin, net margin, debtor days, cash runway) so
- * the score shown here always agrees with the Red/Amber/Green badge.
+ * Surfaces that must agree:
+ * - Accountant portfolio dashboard (ring + status chip)
+ * - Client header ring + sphere pillars
+ * - `client_score_history` writes
+ * - Health Scorecard PDF overall + pillar band
+ *
+ * Overall = equal average of available pillar scores.
+ * Cash runway (when known) is one leg of the cash pillar — never a 55% override.
+ * A client never shows a clean "Healthy" chip when any pillar is critical.
  */
 
 export type FlatFinancials = Record<string, string | number | undefined | null> | null | undefined;
 
-function num(v: string | number | undefined | null): number {
-  if (v == null || v === "") return 0;
-  return typeof v === "number" ? v : parseFloat(v) || 0;
+export type HealthPillarId = "profit" | "assets" | "financing" | "cash";
+
+export type PillarScore = {
+  id: HealthPillarId;
+  label: string;
+  score: number | null;
+  status: HealthTier;
+};
+
+export type OverallHealth = {
+  /** Rounded 0–100 overall, or null when nothing scorable exists. */
+  overall: number | null;
+  /** Tier from the overall number alone. */
+  status: HealthTier;
+  /**
+   * Display tier — same as `status`, except "healthy" is demoted to "at_risk"
+   * when any pillar is critical (the critical-pillar tell).
+   */
+  displayStatus: HealthTier;
+  /** Short UI label for chips ("Healthy" / "Watch" / "At risk"). */
+  displayLabel: string;
+  pillars: PillarScore[];
+  weakestPillar: PillarScore | null;
+  hasCriticalPillar: boolean;
+};
+
+export const PILLAR_LABELS: Record<HealthPillarId, string> = {
+  profit: "Profitability",
+  assets: "Asset Efficiency",
+  financing: "Financing",
+  cash: "Cash & Working Capital",
+};
+
+/** Which ratios feed each pillar (human names from `computeRatios`). */
+export const PILLAR_RATIO_NAMES: Record<HealthPillarId, readonly string[]> = {
+  profit: [
+    "Gross Margin",
+    "Operating Margin",
+    "Net Margin",
+    "Fixed Cost Ratio",
+    "Degree of Operating Leverage",
+    "Gross Profit / Labor",
+    "Top-5 Customer Share",
+  ],
+  assets: [
+    "Asset Turnover",
+    "Return on Assets",
+    "Inventory Days",
+    "Sales-per-Employee Ratio",
+  ],
+  financing: ["Equity Multiplier", "Interest Burden", "Tax Burden", "Return on Equity"],
+  cash: ["Debtor Days", "Creditor Days", "Working Capital Days", "OCF / EBITDA"],
+};
+
+const ALL_PILLARS: HealthPillarId[] = ["profit", "assets", "financing", "cash"];
+
+function clamp(n: number): number {
+  return Math.min(100, Math.max(0, n));
+}
+
+function avg(nums: number[]): number | null {
+  if (!nums.length) return null;
+  return nums.reduce((s, n) => s + n, 0) / nums.length;
+}
+
+function emptyRatioInputs(): RatioInputs {
+  return {
+    revenue: "",
+    cogs: "",
+    ebit: "",
+    ebt: "",
+    netIncome: "",
+    ebitda: "",
+    operatingCashflow: "",
+    totalAssets: "",
+    equity: "",
+    receivables: "",
+    inventory: "",
+    payables: "",
+    fixedCosts: "",
+    variableCosts: "",
+    top5Revenue: "",
+    laborCost: "",
+    employees: "",
+    founderHours: "",
+  };
+}
+
+/** Map a flat `clients.financials` blob into RatioInputs. */
+export function flatToRatioInputs(financials: FlatFinancials): RatioInputs {
+  const base = emptyRatioInputs();
+  if (!financials) return base;
+  const keys = Object.keys(base) as (keyof RatioInputs)[];
+  for (const k of keys) {
+    const v = financials[k];
+    if (v == null || v === "") continue;
+    base[k] = String(v);
+  }
+  return base;
+}
+
+/**
+ * Per-ratio health score (0–100). Shared by client page, reports studio,
+ * and overall aggregation.
+ */
+export function scoreRatio(name: string, val: number): number {
+  if (!Number.isFinite(val)) return 50;
+
+  // Margins / returns — higher is better
+  if (name === "Net Margin") return clamp((val / 0.15) * 100);
+  if (name === "Operating Margin") return clamp((val / 0.2) * 100);
+  if (name === "Gross Margin") return clamp((val / 0.4) * 100);
+  if (name === "Return on Assets") return clamp((val / 0.12) * 100);
+  if (name === "Return on Equity") return clamp((val / 0.2) * 100);
+  if (name === "Asset Turnover") return clamp((val / 1.5) * 100);
+  if (name === "Gross Profit / Labor") return clamp((val / 0.6) * 100);
+  if (name === "Sales-per-Employee Ratio") return clamp((val / 300_000) * 100);
+  if (name === "OCF / EBITDA") return clamp(val * 100);
+  if (name === "Interest Burden") return clamp(val * 100);
+  if (name === "Tax Burden") return clamp(val * 100);
+
+  // Lower-is-better cost / concentration burdens
+  if (name === "Fixed Cost Ratio") return clamp(((0.5 - val) / 0.5) * 100);
+  if (name === "Top-5 Customer Share") return clamp(((0.8 - val) / 0.8) * 100);
+
+  // Days — lower usually better (except creditors, where longer payment terms help cash)
+  if (name === "Debtor Days") return clamp(((90 - val) / 90) * 100);
+  if (name === "Inventory Days") return clamp(((90 - val) / 90) * 100);
+  if (name === "Working Capital Days") return clamp(((90 - val) / 90) * 100);
+  if (name === "Creditor Days") return clamp((val / 60) * 100);
+
+  // Structure / leverage
+  if (name === "Equity Multiplier") return clamp(((4 - val) / 3) * 100);
+  if (name === "Degree of Operating Leverage") {
+    // Moderate operating leverage is healthier than extreme sensitivity
+    if (val <= 0) return 30;
+    if (val <= 2) return clamp(50 + (val / 2) * 40);
+    if (val <= 4) return clamp(90 - ((val - 2) / 2) * 40);
+    return clamp(50 - (val - 4) * 10);
+  }
+
+  // Extra names used by report builders / camelCase aliases
+  if (name === "Debt-to-Equity" || name === "Debt to Equity") return clamp(((2 - val) / 2) * 100);
+  if (name === "Debt-to-Assets" || name === "Debt to Assets") return clamp(((0.7 - val) / 0.7) * 100);
+  if (name === "Current Ratio") return clamp((val / 2) * 100);
+  if (name === "Revenue Growth") return clamp((val / 0.2) * 100);
+
+  return 50;
+}
+
+/**
+ * Cash runway → 0–100.
+ * Aligns with scoreTier bands: ≥12 wk healthy, 4–12 watch, <4 critical.
+ */
+export function scoreCashRunway(weeks: number): number {
+  if (!Number.isFinite(weeks)) return 50;
+  if (weeks >= 16) return 100;
+  if (weeks >= 12) return 85;
+  if (weeks >= 8) return 65;
+  if (weeks >= 4) return 45;
+  if (weeks >= 2) return 25;
+  return 10;
+}
+
+/** Assign a ratio's human name to a pillar. */
+export function pillarForRatioName(name: string): HealthPillarId {
+  for (const id of ALL_PILLARS) {
+    if ((PILLAR_RATIO_NAMES[id] as readonly string[]).includes(name)) return id;
+  }
+  // Heuristic fallback for report-only names
+  if (
+    name.includes("Margin") ||
+    name.includes("Growth") ||
+    name.includes("Leverage") ||
+    name.includes("Labor") ||
+    name.includes("Customer") ||
+    name.includes("Cost")
+  ) {
+    return "profit";
+  }
+  if (name.includes("Days") || name.includes("Capital") || name.includes("OCF") || name.includes("Cash")) {
+    return "cash";
+  }
+  if (
+    (name.includes("Equity") && !name.includes("Return")) ||
+    name.includes("Multiplier") ||
+    name.includes("Burden") ||
+    name.includes("Debt") ||
+    name.includes("Interest")
+  ) {
+    return "financing";
+  }
+  return "assets";
+}
+
+function chipLabel(status: HealthTier): string {
+  if (status === "healthy") return "Healthy";
+  if (status === "at_risk") return "Watch";
+  return "At risk";
+}
+
+export type ComputeOverallHealthInput = {
+  /** Human-named ratio values from `computeRatios` (or equivalent). */
+  ratios?: Record<string, number | null | undefined>;
+  /**
+   * Pre-scored ratios (e.g. scorecard `RatioResult[]`). When provided these
+   * are used instead of re-scoring `ratios`.
+   */
+  scoredRatios?: Array<{
+    name: string;
+    score: number;
+    pillar?: HealthPillarId;
+  }>;
+  cashRunwayWeeks?: number | null;
+};
+
+/**
+ * Canonical overall health. Equal-weight average of pillars that have data.
+ * Cash runway (when present) is blended into the cash pillar.
+ */
+export function computeOverallHealth(input: ComputeOverallHealthInput): OverallHealth {
+  const bucket: Record<HealthPillarId, number[]> = {
+    profit: [],
+    assets: [],
+    financing: [],
+    cash: [],
+  };
+
+  if (input.scoredRatios?.length) {
+    for (const r of input.scoredRatios) {
+      if (!Number.isFinite(r.score)) continue;
+      const pillar = r.pillar ?? pillarForRatioName(r.name);
+      bucket[pillar].push(r.score);
+    }
+  } else if (input.ratios) {
+    for (const [name, val] of Object.entries(input.ratios)) {
+      if (val == null || !Number.isFinite(val)) continue;
+      const pillar = pillarForRatioName(name);
+      bucket[pillar].push(scoreRatio(name, val));
+    }
+  }
+
+  if (input.cashRunwayWeeks != null && Number.isFinite(input.cashRunwayWeeks)) {
+    bucket.cash.push(scoreCashRunway(input.cashRunwayWeeks));
+  }
+
+  const pillars: PillarScore[] = ALL_PILLARS.map((id) => {
+    const score = avg(bucket[id]);
+    const rounded = score == null ? null : Math.round(score);
+    return {
+      id,
+      label: PILLAR_LABELS[id],
+      score: rounded,
+      status: scoreTier(rounded),
+    };
+  });
+
+  const scoredPillars = pillars.filter((p) => p.score != null) as Array<
+    PillarScore & { score: number }
+  >;
+  const overallRaw = avg(scoredPillars.map((p) => p.score));
+  const overall = overallRaw == null ? null : Math.round(overallRaw);
+  const status = scoreTier(overall);
+  const hasCriticalPillar = scoredPillars.some((p) => p.status === "critical");
+  const displayStatus: HealthTier =
+    hasCriticalPillar && status === "healthy" ? "at_risk" : status;
+
+  const weakestPillar =
+    scoredPillars.length === 0
+      ? null
+      : [...scoredPillars].sort((a, b) => a.score - b.score)[0] ?? null;
+
+  return {
+    overall,
+    status,
+    displayStatus,
+    displayLabel: chipLabel(displayStatus),
+    pillars,
+    weakestPillar,
+    hasCriticalPillar,
+  };
 }
 
 /** Score (0-100) from a flat financials object shaped like `clients.financials`. */
@@ -23,61 +305,42 @@ export function scoreFromFlatFinancials(
   cashRunwayWeeks?: number | null,
 ): number | null {
   if (!financials && cashRunwayWeeks == null) return null;
-
-  let ratioScore: number | null = null;
-  if (financials) {
-    const revenue = num(financials.revenue);
-    const ebit = num(financials.ebit);
-    const receivables = num(financials.receivables);
-    const netIncome = num(financials.netIncome);
-    if (revenue > 0) {
-      const safe = (a: number, b: number) => (b === 0 ? 0 : a / b);
-      const operatingMargin = safe(ebit, revenue);
-      const netMargin = safe(netIncome, revenue);
-      const debtorDays = safe(receivables, revenue) * 365;
-      const omHealth = clamp((operatingMargin / 0.2) * 100);
-      const nmHealth = clamp((netMargin / 0.15) * 100);
-      const ddHealth = clamp(((90 - debtorDays) / 90) * 100);
-      ratioScore = (omHealth + nmHealth + ddHealth) / 3;
-    }
-  }
-
-  let cashScore: number | null = null;
-  if (cashRunwayWeeks != null) {
-    if (cashRunwayWeeks < 8) cashScore = 0;
-    else if (cashRunwayWeeks < 16) cashScore = 40;
-    else cashScore = 100;
-  }
-
-  if (ratioScore == null && cashScore == null) return null;
-  if (ratioScore == null) return cashScore;
-  if (cashScore == null) return ratioScore;
-  return cashScore * 0.55 + ratioScore * 0.45;
+  return computeOverallHealth({
+    ratios: financials ? computeRatios(flatToRatioInputs(financials)) : undefined,
+    cashRunwayWeeks,
+  }).overall;
 }
 
-/** Score (0-100) computed from a full `RatioInputs` snapshot (used for uploaded statements). */
-export function scoreFromRatioInputs(inputs: RatioInputs, cashRunwayWeeks?: number | null): number | null {
-  const ratios = computeRatios(inputs);
-  const revenue = parseFloat(inputs.revenue) || 0;
-  if (revenue <= 0) return scoreFromFlatFinancials(null, cashRunwayWeeks);
-  const omHealth = clamp((ratios["Operating Margin"] / 0.2) * 100);
-  const nmHealth = clamp((ratios["Net Margin"] / 0.15) * 100);
-  const ddHealth = Number.isFinite(ratios["Debtor Days"])
-    ? clamp(((90 - ratios["Debtor Days"]) / 90) * 100)
-    : 50;
-  const ratioScore = (omHealth + nmHealth + ddHealth) / 3;
-
-  let cashScore: number | null = null;
-  if (cashRunwayWeeks != null) {
-    if (cashRunwayWeeks < 8) cashScore = 0;
-    else if (cashRunwayWeeks < 16) cashScore = 40;
-    else cashScore = 100;
-  }
-  return cashScore == null ? ratioScore : cashScore * 0.55 + ratioScore * 0.45;
+/** Full OverallHealth from flat financials — for chips that need the critical-pillar tell. */
+export function healthFromFlatFinancials(
+  financials: FlatFinancials,
+  cashRunwayWeeks?: number | null,
+): OverallHealth {
+  return computeOverallHealth({
+    ratios: financials ? computeRatios(flatToRatioInputs(financials)) : undefined,
+    cashRunwayWeeks,
+  });
 }
 
-function clamp(n: number): number {
-  return Math.min(100, Math.max(0, n));
+/** Score (0-100) from a full `RatioInputs` snapshot. */
+export function scoreFromRatioInputs(
+  inputs: RatioInputs,
+  cashRunwayWeeks?: number | null,
+): number | null {
+  return computeOverallHealth({
+    ratios: computeRatios(inputs),
+    cashRunwayWeeks,
+  }).overall;
+}
+
+export function healthFromRatioInputs(
+  inputs: RatioInputs,
+  cashRunwayWeeks?: number | null,
+): OverallHealth {
+  return computeOverallHealth({
+    ratios: computeRatios(inputs),
+    cashRunwayWeeks,
+  });
 }
 
 export { scoreTier };
