@@ -32,16 +32,20 @@ export type DebtLine = {
 export type LeverageSolvencyData = {
   total_debt: number;
   total_equity: number;
+  /** Balance-sheet total assets — used when debt facilities are not captured. */
+  total_assets: number;
+  /** False when no debt schedule lines — total_debt is 0 and must not be read as “debt-free”. */
+  debt_facilities_captured: boolean;
   net_profit: number;
   drawings: number;
   prior_equity: number;
   debt_lines: DebtLine[];
   health_scores: {
-    fundingStructure: number;
-    equityMultiplier: number;
-    debtToEquity: number;
-    debtToAssets: number;
-    interestBurden: number;
+    fundingStructure: number | null;
+    equityMultiplier: number | null;
+    debtToEquity: number | null;
+    debtToAssets: number | null;
+    interestBurden: number | null;
   };
 };
 
@@ -154,28 +158,33 @@ export function LeverageSolvencyPDF({
 }: LeverageSolvencyPDFProps) {
   const theme = resolveTheme(accountantProfile);
   const hs = d.health_scores;
-
-  const totalAssets = d.total_debt + d.total_equity;
-  const debtToEquity = d.total_equity !== 0 ? d.total_debt / d.total_equity : NaN;
-  const debtToAssets = totalAssets !== 0 ? d.total_debt / totalAssets : NaN;
+  const hasDebt = d.debt_facilities_captured;
+  const totalAssets = d.total_assets > 0 ? d.total_assets : d.total_debt + d.total_equity;
+  const debtToEquity = hasDebt && d.total_equity !== 0 ? d.total_debt / d.total_equity : NaN;
+  const debtToAssets = hasDebt && totalAssets !== 0 ? d.total_debt / totalAssets : NaN;
   const equityMultiplier = d.total_equity !== 0 ? totalAssets / d.total_equity : NaN;
   const weightedRate =
-    d.debt_lines.length > 0 && d.total_debt > 0
+    hasDebt && d.debt_lines.length > 0 && d.total_debt > 0
       ? d.debt_lines.reduce((s, l) => s + l.amount * l.annual_rate_pct, 0) / d.total_debt
-      : 0;
+      : NaN;
   const equityMovement = d.total_equity - d.prior_equity;
   const retained = d.net_profit - d.drawings;
 
   const figures: HeadlineFigure[] = [
     {
       label: "Debt-to-Equity",
-      value: Number.isFinite(debtToEquity) ? `${debtToEquity.toFixed(2)}×` : "n/m",
+      value: Number.isFinite(debtToEquity) ? `${debtToEquity.toFixed(2)}×` : "—",
       good: Number.isFinite(debtToEquity) ? debtToEquity <= 1.5 : undefined,
+      note: hasDebt ? undefined : "Capture facilities first",
     },
     {
       label: "Total Debt",
-      value: fmtRandCompact(d.total_debt),
-      note: `avg. rate ${weightedRate.toFixed(1)}%`,
+      value: hasDebt ? fmtRandCompact(d.total_debt) : "—",
+      note: hasDebt
+        ? Number.isFinite(weightedRate)
+          ? `avg. rate ${weightedRate.toFixed(1)}%`
+          : undefined
+        : "No facilities captured",
     },
     {
       label: "Total Equity",
@@ -194,17 +203,37 @@ export function LeverageSolvencyPDF({
 
   const narrative = leverageNarrative({
     debtToEquity: Number.isFinite(debtToEquity) ? debtToEquity : 0,
-    totalDebt: d.total_debt,
+    totalDebt: hasDebt ? d.total_debt : 0,
     totalEquity: d.total_equity,
   }, operatingProfile);
 
   const ratioRows = [
-    { name: "Funding Structure (Debt %)", value: fmtPct(debtToAssets), score: hs.fundingStructure },
-    { name: "Equity Multiplier", value: Number.isFinite(equityMultiplier) ? `${equityMultiplier.toFixed(2)}×` : "n/m", score: hs.equityMultiplier },
-    { name: "Debt-to-Equity", value: Number.isFinite(debtToEquity) ? `${debtToEquity.toFixed(2)}×` : "n/m", score: hs.debtToEquity },
-    { name: "Debt-to-Assets", value: fmtPct(debtToAssets), score: hs.debtToAssets },
-    { name: "Interest Burden", value: `${weightedRate.toFixed(1)}%`, score: hs.interestBurden },
-  ];
+    {
+      name: "Funding Structure (Debt %)",
+      value: Number.isFinite(debtToAssets) ? fmtPct(debtToAssets) : "—",
+      score: hs.fundingStructure,
+    },
+    {
+      name: "Equity Multiplier",
+      value: Number.isFinite(equityMultiplier) ? `${equityMultiplier.toFixed(2)}×` : "n/m",
+      score: hs.equityMultiplier,
+    },
+    {
+      name: "Debt-to-Equity",
+      value: Number.isFinite(debtToEquity) ? `${debtToEquity.toFixed(2)}×` : "—",
+      score: hs.debtToEquity,
+    },
+    {
+      name: "Debt-to-Assets",
+      value: Number.isFinite(debtToAssets) ? fmtPct(debtToAssets) : "—",
+      score: hs.debtToAssets,
+    },
+    {
+      name: "Interest Burden",
+      value: Number.isFinite(weightedRate) ? `${weightedRate.toFixed(1)}%` : "—",
+      score: hs.interestBurden,
+    },
+  ].filter((r) => r.score != null) as Array<{ name: string; value: string; score: number }>;
 
   return (
     <PDFDocument
@@ -226,7 +255,13 @@ export function LeverageSolvencyPDF({
       <ExecSummary figures={figures} narrative={narrative} />
 
       <SectionHeader title="Funding Structure" color={theme.accent} />
-      <FundingBar debt={d.total_debt} equity={d.total_equity} accent={theme.accent} />
+      {hasDebt ? (
+        <FundingBar debt={d.total_debt} equity={d.total_equity} accent={theme.accent} />
+      ) : (
+        <Text style={{ fontSize: 8, color: C.muted, marginBottom: 8, fontFamily: "Helvetica" }}>
+          No debt facilities captured on the client page — enter the schedule before quoting leverage totals.
+        </Text>
+      )}
 
       <SectionHeader title="Leverage Ratio Analysis" color={theme.accent} />
       {ratioRows.map((r, i) => (
@@ -257,8 +292,8 @@ export function LeverageSolvencyPDF({
             }}
           >
             <Text style={{ fontSize: 8, fontFamily: "Helvetica", color: C.muted, lineHeight: 1.5 }}>
-              Individual debt facilities will appear here once loan details are captured. The
-              totals above are derived from the balance sheet.
+              No debt facilities captured yet. Enter the schedule on the client page — this report
+              will not invent a debt total from assets minus equity.
             </Text>
           </View>
         )}
