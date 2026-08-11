@@ -44,6 +44,7 @@ import { ProfileFunnel } from "@/components/profile/profile-funnel";
 import {
   parseOperatingProfile,
   profileShortLabel,
+  stampProfileProvenance,
   type ClientOperatingProfile,
 } from "@/lib/client-profile";
 import { profileIndustryLabel, profilePriorityWeight } from "@/lib/profile-signals";
@@ -2349,16 +2350,17 @@ function Index() {
               }
               onComplete={async (profile) => {
                 setBtSaveError(null);
-                setOperatingProfile(profile);
-                setBusinessTypeId(profile.businessTypeId);
+                const stamped = stampProfileProvenance(profile, "owner", undefined);
+                setOperatingProfile(stamped);
+                setBusinessTypeId(stamped.businessTypeId);
                 if (effectiveClientId) {
                   setBtSaving(true);
                   const { error } = await supabase
                     .from("clients")
                     .update({
-                      business_type: profile.businessTypeId,
-                      operating_profile: profile as unknown as Record<string, unknown>,
-                      financial_year_start_month: profile.fyStartMonth,
+                      business_type: stamped.businessTypeId,
+                      operating_profile: stamped as unknown as Record<string, unknown>,
+                      financial_year_start_month: stamped.fyStartMonth,
                     } as never)
                     .eq("id", effectiveClientId);
                   setBtSaving(false);

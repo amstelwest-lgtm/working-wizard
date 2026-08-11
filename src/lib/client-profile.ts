@@ -65,7 +65,23 @@ export type ClientOperatingProfile = {
   /** Derived legacy id for MODEL_TUNING / benchmarks */
   businessTypeId: string;
   confirmedAt: string;
+  /** Who last confirmed the profile — owner app or firm/accountant. */
+  confirmedBy?: "owner" | "firm";
+  confirmedByUserId?: string;
 };
+
+export function stampProfileProvenance(
+  profile: ClientOperatingProfile,
+  by: "owner" | "firm",
+  userId?: string | null,
+): ClientOperatingProfile {
+  return {
+    ...profile,
+    confirmedAt: new Date().toISOString(),
+    confirmedBy: by,
+    confirmedByUserId: userId ?? undefined,
+  };
+}
 
 export function inventoryToProfile(intensity: InventoryIntensity): BudgetInventoryProfile {
   if (intensity === "none") return "none";

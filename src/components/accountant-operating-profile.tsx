@@ -1,6 +1,6 @@
 /**
  * Accountant-facing view of the client's operating profile answers.
- * Collapsed by default with goal / risk chips; expands to the full 10 answers.
+ * Empty state CTA lets the practice fill the funnel (Gap 10).
  */
 
 import type { ClientOperatingProfile } from "@/lib/client-profile";
@@ -52,9 +52,12 @@ function debtTone(d: ClientOperatingProfile["debtPosition"]): "ok" | "warn" | "r
 export function AccountantOperatingProfile({
   profile,
   fallbackType,
+  onEdit,
 }: {
   profile: ClientOperatingProfile | null;
   fallbackType?: string | null;
+  /** Opens ProfileFunnel for the accountant to fill / retake. */
+  onEdit?: () => void;
 }) {
   if (!profile) {
     return (
@@ -69,11 +72,18 @@ export function AccountantOperatingProfile({
         >
           Business profile
         </div>
-        <p style={{ margin: "6px 0 0", fontSize: 13, color: "var(--ink-dim)" }}>
+        <p style={{ margin: "6px 0 10px", fontSize: 13, color: "var(--ink-dim)" }}>
           {fallbackType
-            ? `Legacy type only · ${fallbackType.replace(/_/g, " ")}. Ask the owner to retake the Milōn profile questions for concentration, debt, and goal context.`
-            : "Owner has not completed the business profile yet — health, budget, and advice will be thinner until they do."}
+            ? `Legacy type only · ${fallbackType.replace(/_/g, " ")}. Fill the Milōn profile in discovery so concentration, debt, and goal shape advice.`
+            : "No operating profile yet — health, budget, and advice stay thinner until someone completes the 10 questions."}
         </p>
+        {onEdit && (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            <button type="button" className="btn gold mini" onClick={onEdit}>
+              Fill profile now
+            </button>
+          </div>
+        )}
       </div>
     );
   }
@@ -81,6 +91,19 @@ export function AccountantOperatingProfile({
   const rows = profileDisplayRows(profile);
   const industry = profileIndustryLabel(profile, fallbackType ?? "SME");
   const goalRow = rows.find((r) => r.label === "Owner goal")?.value;
+  const by =
+    profile.confirmedBy === "firm"
+      ? "Firm"
+      : profile.confirmedBy === "owner"
+        ? "Owner"
+        : null;
+  const when = profile.confirmedAt
+    ? new Date(profile.confirmedAt).toLocaleDateString("en-ZA", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      })
+    : null;
 
   return (
     <details className="card op-profile" style={{ marginTop: 12, padding: 0 }}>
@@ -114,10 +137,29 @@ export function AccountantOperatingProfile({
               {goalRow}
             </span>
           </div>
+          {(by || when) && (
+            <div style={{ marginTop: 2, fontSize: 11, color: "var(--ink-dim)" }}>
+              Last updated{by ? ` by ${by}` : ""}
+              {when ? ` · ${when}` : ""}
+            </div>
+          )}
         </div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
           <RiskChip tone={concentrationTone(profile.customerConcentration)}>Concentration</RiskChip>
           <RiskChip tone={debtTone(profile.debtPosition)}>Debt</RiskChip>
+          {onEdit && (
+            <button
+              type="button"
+              className="btn ghost mini"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onEdit();
+              }}
+            >
+              Edit profile
+            </button>
+          )}
           <span style={{ fontSize: 11, color: "var(--ink-dim)" }}>Show answers</span>
         </div>
       </summary>

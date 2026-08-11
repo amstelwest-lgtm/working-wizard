@@ -1,9 +1,25 @@
 import { useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { Loader2, Sparkles, Copy, Check, Mail, ListChecks, FileText } from "lucide-react";
+import {
+  Loader2,
+  Sparkles,
+  Copy,
+  Check,
+  Mail,
+  ListChecks,
+  FileText,
+  MessageCircle,
+} from "lucide-react";
 import { draftAdvisory } from "@/lib/advisory.functions";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
+import { useAuth } from "@/hooks/use-auth";
+import {
+  hashFigures,
+  latestSnapshotId,
+  recordDelivery,
+  type DeliveryKind,
+} from "@/lib/advisory-deliveries";
 
 type Kind = "client_email" | "meeting_agenda" | "exec_summary";
 
@@ -21,18 +37,35 @@ type DraftResult = {
 
 const KIND_META: Record<Kind, { label: string; icon: typeof Mail; hint: string }> = {
   client_email: { label: "Client email", icon: Mail, hint: "Ready-to-send email to the owner" },
-  meeting_agenda: { label: "Meeting agenda", icon: ListChecks, hint: "Agenda for this month's advisory session" },
-  exec_summary: { label: "Exec summary", icon: FileText, hint: "30-second state-of-the-business paragraph" },
+  meeting_agenda: {
+    label: "Meeting agenda",
+    icon: ListChecks,
+    hint: "Agenda for this month's advisory session",
+  },
+  exec_summary: {
+    label: "Exec summary",
+    icon: FileText,
+    hint: "30-second state-of-the-business paragraph",
+  },
 };
+
+function kindToDelivery(kind: Kind): DeliveryKind {
+  if (kind === "meeting_agenda") return "meeting_agenda";
+  if (kind === "exec_summary") return "exec_summary";
+  return "advisory_draft";
+}
 
 export function AdvisoryDrafter({
   clientId,
   clientName,
+  onLogged,
 }: {
   clientId: string;
   clientName?: string;
+  onLogged?: () => void;
 }) {
   const { profile } = useAccountantProfile();
+  const { user } = useAuth();
   const run = useServerFn(draftAdvisory);
 
   const [kind, setKind] = useState<Kind>("client_email");
@@ -63,17 +96,57 @@ export function AdvisoryDrafter({
     }
   };
 
+  const logShare = async (
+    channel: "copy" | "mailto" | "whatsapp",
+    draft: DraftResult,
+  ) => {
+    if (!user) return;
+    const snapId = await latestSnapshotId(clientId);
+    await recordDelivery({
+      clientId,
+      channel,
+      kind: kindToDelivery(draft.kind),
+      subject: draft.subject,
+      body: draft.body,
+      snapshotId: snapId,
+      figuresHash: hashFigures({
+        period: draft.grounding.currentPeriod,
+        prior: draft.grounding.priorPeriod,
+        movements: draft.grounding.movementCount,
+      }),
+      periodLabel: draft.grounding.currentPeriod,
+      createdBy: user.id,
+    });
+    onLogged?.();
+  };
+
   const copy = async () => {
     if (!result) return;
-    const text =
-      result.subject ? `Subject: ${result.subject}\n\n${result.body}` : result.body;
+    const text = result.subject ? `Subject: ${result.subject}\n\n${result.body}` : result.body;
     try {
       await navigator.clipboard.writeText(text);
+      await logShare("copy", result);
       setCopied(true);
       setTimeout(() => setCopied(false), 1600);
+      toast.success("Copied · logged to sent history");
     } catch {
       toast.error("Copy failed");
     }
+  };
+
+  const openMailto = async () => {
+    if (!result) return;
+    await logShare("mailto", result);
+    const subject = encodeURIComponent(result.subject ?? `${clientName ?? "Client"} — advisory`);
+    const body = encodeURIComponent(result.body);
+    window.open(`mailto:?subject=${subject}&body=${body}`);
+  };
+
+  const openWhatsApp = async () => {
+    if (!result) return;
+    await logShare("whatsapp", result);
+    const text = result.subject ? `*${result.subject}*\n\n${result.body}` : result.body;
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
   };
 
   return (
@@ -85,11 +158,11 @@ export function AdvisoryDrafter({
         </h3>
       </div>
       <p className="mt-1 text-xs text-slate-400">
-        Drafts a deliverable from this client&apos;s real movement and your signed-off
-        moves, in your voice. Review before sending.
+        Drafts a deliverable from this client&apos;s real movement and your signed-off moves, in
+        your voice. Copy / mailto / WhatsApp are logged to Sent history (share opened — not postal
+        proof).
       </p>
 
-      {/* Deliverable type */}
       <div className="mt-4 grid grid-cols-3 gap-2">
         {(Object.keys(KIND_META) as Kind[]).map((k) => {
           const M = KIND_META[k];
@@ -113,7 +186,6 @@ export function AdvisoryDrafter({
         })}
       </div>
 
-      {/* Optional steer */}
       <textarea
         value={steer}
         onChange={(e) => setSteer(e.target.value)}
@@ -139,34 +211,52 @@ export function AdvisoryDrafter({
         )}
       </button>
 
-      {/* Result */}
       {result && (
         <div className="mt-4 rounded-lg border border-slate-800 bg-slate-950/60 p-4">
-          <div className="mb-2 flex items-center justify-between">
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
             <span className="text-[11px] uppercase tracking-wide text-slate-500">
               {KIND_META[result.kind].label}
             </span>
-            <button
-              type="button"
-              onClick={copy}
-              className="flex items-center gap-1 rounded-md border border-slate-700 px-2 py-1 text-[11px] text-slate-300 hover:border-amber-500/50"
-            >
-              {copied ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
-              {copied ? "Copied" : "Copy"}
-            </button>
+            <div className="flex flex-wrap gap-1.5">
+              <button
+                type="button"
+                onClick={copy}
+                className="flex items-center gap-1 rounded-md border border-slate-700 px-2 py-1 text-[11px] text-slate-300 hover:border-amber-500/50"
+              >
+                {copied ? (
+                  <Check className="h-3 w-3 text-emerald-400" />
+                ) : (
+                  <Copy className="h-3 w-3" />
+                )}
+                {copied ? "Copied" : "Copy"}
+              </button>
+              <button
+                type="button"
+                onClick={openMailto}
+                className="flex items-center gap-1 rounded-md border border-slate-700 px-2 py-1 text-[11px] text-slate-300 hover:border-amber-500/50"
+              >
+                <Mail className="h-3 w-3" />
+                Mailto
+              </button>
+              <button
+                type="button"
+                onClick={openWhatsApp}
+                className="flex items-center gap-1 rounded-md border border-slate-700 px-2 py-1 text-[11px] text-slate-300 hover:border-amber-500/50"
+              >
+                <MessageCircle className="h-3 w-3" />
+                WhatsApp
+              </button>
+            </div>
           </div>
           {result.subject && (
-            <p className="mb-2 text-sm font-semibold text-amber-100">
-              {result.subject}
-            </p>
+            <p className="mb-2 text-sm font-semibold text-amber-100">{result.subject}</p>
           )}
-          <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-200">
-            {result.body}
-          </p>
+          <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-200">{result.body}</p>
           <p className="mt-3 border-t border-slate-800 pt-2 text-[11px] text-slate-500">
             Grounded in {result.grounding.currentPeriod}
             {result.grounding.priorPeriod ? ` vs ${result.grounding.priorPeriod}` : " (baseline)"} ·{" "}
-            {result.grounding.movementCount} movements · {result.grounding.signoffCount} signed-off moves
+            {result.grounding.movementCount} movements · {result.grounding.signoffCount} signed-off
+            moves
           </p>
         </div>
       )}
