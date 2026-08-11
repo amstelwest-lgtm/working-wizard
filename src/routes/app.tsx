@@ -3051,9 +3051,11 @@ function Index() {
         </Tabs>
       </div>
 
-      {/* Contextual Notes overlay — fixed to viewport, tab-scoped */}
+      {/* Contextual Notes overlay — fixed to viewport, tab-scoped, persisted per client */}
       <NoteLayer
+        clientId={effectiveClientId}
         tab={activeTab}
+        clientName={actingClientName ?? undefined}
         authorName={
           (user?.user_metadata as { full_name?: string; name?: string } | null)?.full_name
           ?? (user?.user_metadata as { full_name?: string; name?: string } | null)?.name
