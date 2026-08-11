@@ -39,6 +39,8 @@ import {
   profileIndustryLabel,
   profilePriorityWeight,
 } from "@/lib/profile-signals";
+import { parseDebtSchedule, totalDebtFromSchedule } from "@/lib/debt-schedule";
+import { resolvePriorSnapshot, withPriorRatioScores } from "@/lib/prior-period";
 
 export const Route = createFileRoute("/_authenticated/reports/")({
   validateSearch: (search: Record<string, unknown>) => ({
@@ -451,7 +453,10 @@ function buildWorkingCapitalData(
   };
 }
 
-function buildProfitabilityData(fin: Record<string, string>): ProfitabilityData | null {
+function buildProfitabilityData(
+  fin: Record<string, string>,
+  priorFin?: Record<string, string> | null,
+): ProfitabilityData | null {
   const revenue = getNum(fin, "revenue");
   const cogs    = getNum(fin, "cogs");
   const ebit    = getNum(fin, "ebit");
@@ -466,7 +471,7 @@ function buildProfitabilityData(fin: Record<string, string>): ProfitabilityData 
   const tax    = Math.max(0, ebtVal - net);
   const tbPct  = ebtVal > 0 ? tax / ebtVal : 0;
   const nmPct  = net / revenue;
-  return {
+  const current = {
     revenue, gross_profit: gp, gross_margin_pct: gmPct,
     gross_margin_score: Math.round(scoreForRatio("Gross Margin", gmPct)),
     gross_margin_tier:  scoreTier(Math.round(scoreForRatio("Gross Margin", gmPct))),
@@ -482,38 +487,117 @@ function buildProfitabilityData(fin: Record<string, string>): ProfitabilityData 
     net_margin_score: Math.round(scoreForRatio("Net Margin", nmPct)),
     net_margin_tier:  scoreTier(Math.round(scoreForRatio("Net Margin", nmPct))),
   };
+
+  let prior_period: ProfitabilityData["prior_period"] | undefined;
+  if (priorFin) {
+    const pRev = getNum(priorFin, "revenue");
+    const pCogs = getNum(priorFin, "cogs");
+    const pEbit = getNum(priorFin, "ebit");
+    const pEbt = getNum(priorFin, "ebt");
+    const pNet = getNum(priorFin, "netIncome");
+    if (Number.isFinite(pRev) && Number.isFinite(pEbit) && Number.isFinite(pNet)) {
+      const pGp = Number.isFinite(pCogs) ? pRev - pCogs : pRev * 0.5;
+      const pEbtVal = Number.isFinite(pEbt) ? pEbt : pEbit;
+      const pIb = pEbit > 0 ? Math.max(0, (pEbit - pEbtVal) / pEbit) : 0;
+      const pTax = Math.max(0, pEbtVal - pNet);
+      const pTb = pEbtVal > 0 ? pTax / pEbtVal : 0;
+      prior_period = {
+        revenue: pRev,
+        gross_profit: pGp,
+        gross_margin_pct: pGp / pRev,
+        gross_margin_score: Math.round(scoreForRatio("Gross Margin", pGp / pRev)),
+        gross_margin_tier: scoreTier(Math.round(scoreForRatio("Gross Margin", pGp / pRev))),
+        operating_profit: pEbit,
+        operating_margin_pct: pEbit / pRev,
+        operating_margin_score: Math.round(scoreForRatio("Operating Margin", pEbit / pRev)),
+        operating_margin_tier: scoreTier(Math.round(scoreForRatio("Operating Margin", pEbit / pRev))),
+        ebt: pEbtVal,
+        interest_burden_pct: pIb,
+        interest_burden_score: Math.round(scoreForRatio("Interest Burden", 1 - pIb)),
+        tax: pTax,
+        tax_burden_pct: pTb,
+        tax_burden_score: Math.round(Math.max(0, 100 - pTb * 100)),
+        net_profit: pNet,
+        net_margin_pct: pNet / pRev,
+        net_margin_score: Math.round(scoreForRatio("Net Margin", pNet / pRev)),
+        net_margin_tier: scoreTier(Math.round(scoreForRatio("Net Margin", pNet / pRev))),
+      };
+    }
+  }
+
+  return { ...current, prior_period };
 }
 
 function buildLeverageData(
   fin: Record<string, string>,
   rawRatios: Record<string, number>,
+  priorEquityFromSnapshot?: number | null,
 ): LeverageSolvencyData | null {
-  const equity      = getNum(fin, "equity");
+  const equity = getNum(fin, "equity");
   const totalAssets = getNum(fin, "totalAssets");
-  const net         = getNum(fin, "netIncome");
+  const net = getNum(fin, "netIncome");
   if (!Number.isFinite(equity) || !Number.isFinite(totalAssets)) return null;
-  const totalDebt = Math.max(0, totalAssets - equity);
-  const d2a = totalDebt / totalAssets;
+
+  const schedule = parseDebtSchedule(
+    (() => {
+      try {
+        const raw = (fin as Record<string, unknown>).debt_schedule;
+        if (raw) return raw;
+        // When financials were stringified, debt_schedule may be a JSON string key
+        const s = fin["debt_schedule"];
+        return s ? s : null;
+      } catch {
+        return null;
+      }
+    })(),
+  );
+
+  // Prefer captured facilities; never invent a fake bank line.
+  const fromSchedule = totalDebtFromSchedule(schedule);
+  const residualDebt = Math.max(0, totalAssets - equity);
+  const totalDebt = schedule.lines.length > 0 ? fromSchedule : residualDebt;
+  const debt_lines =
+    schedule.lines.length > 0
+      ? schedule.lines
+          .filter((l) => l.label.trim() || l.amount > 0)
+          .map((l) => ({
+            label: l.label.trim() || "Facility",
+            amount: l.amount,
+            annual_rate_pct: l.annual_rate_pct ?? 0,
+            maturity_year: l.maturity_year ?? new Date().getFullYear() + 3,
+          }))
+      : [];
+
+  const d2a = totalAssets > 0 ? totalDebt / totalAssets : 0;
   const d2e = equity > 0 ? totalDebt / equity : NaN;
-  const em  = rawRatios["Equity Multiplier"];
-  const ib  = rawRatios["Interest Burden"];
+  const em = rawRatios["Equity Multiplier"];
+  const ib = rawRatios["Interest Burden"];
+  const priorEquity =
+    schedule.prior_equity != null && Number.isFinite(schedule.prior_equity)
+      ? schedule.prior_equity
+      : priorEquityFromSnapshot != null && Number.isFinite(priorEquityFromSnapshot)
+        ? priorEquityFromSnapshot
+        : equity;
+  const drawings =
+    schedule.drawings_ytd != null && Number.isFinite(schedule.drawings_ytd)
+      ? schedule.drawings_ytd
+      : 0;
+
   return {
-    total_debt: totalDebt, total_equity: equity,
+    total_debt: totalDebt,
+    total_equity: equity,
     net_profit: Number.isFinite(net) ? net : 0,
-    drawings: 0,
-    prior_equity: equity * 0.92,
-    debt_lines: totalDebt > 0 ? [{
-      label: "Total Borrowings",
-      amount: totalDebt,
-      annual_rate_pct: 12.5,
-      maturity_year: new Date().getFullYear() + 3,
-    }] : [],
+    drawings,
+    prior_equity: priorEquity,
+    debt_lines,
     health_scores: {
       fundingStructure: Math.round(Math.min(100, Math.max(0, (1 - d2a) * 100))),
       equityMultiplier: Number.isFinite(em) ? Math.round(scoreForRatio("Equity Multiplier", em)) : 50,
-      debtToEquity:     Number.isFinite(d2e) ? Math.round(Math.min(100, Math.max(0, ((2 - d2e) / 2) * 100))) : 50,
-      debtToAssets:     Math.round(Math.min(100, Math.max(0, (1 - d2a) * 100))),
-      interestBurden:   Number.isFinite(ib) ? Math.round(ib * 100) : 50,
+      debtToEquity: Number.isFinite(d2e)
+        ? Math.round(Math.min(100, Math.max(0, ((2 - d2e) / 2) * 100)))
+        : 50,
+      debtToAssets: Math.round(Math.min(100, Math.max(0, (1 - d2a) * 100))),
+      interestBurden: Number.isFinite(ib) ? Math.round(ib * 100) : 50,
     },
   };
 }
@@ -783,7 +867,7 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
       .eq("id", clientId)
       .maybeSingle(),
     supabase.from("client_financial_snapshots")
-      .select("period_label, period_date, ratios")
+      .select("id, period_label, period_date, ratios, financials")
       .eq("client_id", clientId)
       .order("period_date", { ascending: false })
       .limit(20),  // fetch enough history to cover 12-month windows
@@ -820,10 +904,18 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
   };
   if (!clientRow?.financials) return baseEmpty;
 
-  const rawFin = clientRow.financials as Record<string, string | number | null>;
+  const rawFin = clientRow.financials as Record<string, string | number | null | object>;
+  const debtRaw = (rawFin as Record<string, unknown>).debt_schedule;
   const fin = Object.fromEntries(
-    Object.entries(rawFin).map(([k, v]) => [k, v != null ? String(v) : ""])
-  );
+    Object.entries(rawFin)
+      .filter(([k]) => k !== "debt_schedule")
+      .map(([k, v]) => [k, v != null && typeof v !== "object" ? String(v) : ""]),
+  ) as Record<string, string>;
+  // Keep debt_schedule as a JSON string key so buildLeverageData can parse it
+  if (debtRaw != null) {
+    fin["debt_schedule"] =
+      typeof debtRaw === "string" ? debtRaw : JSON.stringify(debtRaw);
+  }
   if (!fin["revenue"] || fin["revenue"].trim() === "") return { ...baseEmpty, financials: fin };
 
   const ratioInputs: RatioInputs = {
@@ -839,12 +931,37 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
     founderHours: fin["founderHours"] ?? "",
   };
   const rawRatios = computeRatios(ratioInputs);
-  const ratioResults = buildRatioResults(rawRatios);
   const snapshots: DatedSnapshot[] = (snapshotRes.data ?? []).map((s) => ({
     period_label: s.period_label,
     period_date:  s.period_date as string,
     ratios: (s.ratios as Record<string, number>) ?? {},
   }));
+  const priorSnap = resolvePriorSnapshot(
+    (snapshotRes.data ?? []).map((s) => ({
+      id: s.id as string | undefined,
+      period_label: s.period_label as string,
+      period_date: s.period_date as string,
+      financials: (s.financials as Record<string, unknown>) ?? null,
+      ratios: (s.ratios as Record<string, number>) ?? null,
+    })),
+  );
+  let ratioResults = buildRatioResults(rawRatios);
+  ratioResults = withPriorRatioScores(ratioResults, priorSnap?.ratios ?? null);
+
+  const priorEquityNum = (() => {
+    const pe = priorSnap?.financials?.equity;
+    if (pe == null || pe === "") return null;
+    const n = typeof pe === "number" ? pe : parseFloat(String(pe));
+    return Number.isFinite(n) ? n : null;
+  })();
+
+  const priorFinForProfit = priorSnap?.financials
+    ? (Object.fromEntries(
+        Object.entries(priorSnap.financials)
+          .filter(([, v]) => v == null || typeof v !== "object")
+          .map(([k, v]) => [k, v != null ? String(v) : ""]),
+      ) as Record<string, string>)
+    : null;
 
   const { rows: movementRows, labels: movementLabels } =
     buildMovementRows(rawRatios, snapshots, new Date());
@@ -857,8 +974,8 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
     rawRatios,
     ratioResults,
     workingCapital: buildWorkingCapitalData(fin, rawRatios),
-    profitability:  buildProfitabilityData(fin),
-    leverage:       buildLeverageData(fin, rawRatios),
+    profitability:  buildProfitabilityData(fin, priorFinForProfit),
+    leverage:       buildLeverageData(fin, rawRatios, priorEquityNum),
     assets:         buildAssetData(rawRatios),
     labor:          buildLaborData(fin, rawRatios),
     movement:       movementRows,

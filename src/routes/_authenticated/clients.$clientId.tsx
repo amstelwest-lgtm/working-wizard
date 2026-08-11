@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, lazy, Suspense } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
@@ -25,9 +25,42 @@ import { useServerFn } from "@tanstack/react-start";
 import { listClientReviewSignoffs } from "@/lib/review-signoffs.functions";
 import type { ClientReviewSignoff } from "@/lib/review-signoffs.functions";
 import { ReviewSignoffButton, computeIsStale } from "@/components/review-signoff";
-import { parseOperatingProfile } from "@/lib/client-profile";
+import {
+  parseOperatingProfile,
+  stampProfileProvenance,
+  type ClientOperatingProfile,
+} from "@/lib/client-profile";
 import { profileIndustryLabel } from "@/lib/profile-signals";
 import { AccountantOperatingProfile } from "@/components/accountant-operating-profile";
+import { ProfileFunnel } from "@/components/profile/profile-funnel";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { DebtScheduleEditor } from "@/components/debt-schedule-editor";
+import {
+  splitFinancialsBlob,
+  mergeFinancialsBlob,
+  emptyDebtSchedule,
+  type DebtSchedule,
+} from "@/lib/debt-schedule";
+import { PeriodVarianceStrip } from "@/components/period-variance-strip";
+import {
+  buildVarianceChips,
+  resolvePriorSnapshot,
+  type SnapshotRow,
+} from "@/lib/prior-period";
+import { AdvisorySentHistory } from "@/components/advisory-sent-history";
+import {
+  hashFigures,
+  latestSnapshotId,
+  recordDelivery,
+} from "@/lib/advisory-deliveries";
+
+const ActionPlanPanel = lazy(() => import("@/components/action-plan"));
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
@@ -268,7 +301,15 @@ type Client = {
   cashflow?: ExistingCashflow | null;
 };
 
-type ActiveTab = "ratios" | "profit" | "cash" | "budget" | "reports" | "tasks" | "advisory";
+type ActiveTab =
+  | "ratios"
+  | "profit"
+  | "cash"
+  | "budget"
+  | "reports"
+  | "plan"
+  | "tasks"
+  | "advisory";
 
 // Friendly labels for SphereHero drivers
 const SPHERE_RATIO_META: Record<string, { friendly: string }> = {
@@ -401,6 +442,11 @@ function ClientView() {
 
   // Financials state (flat key-value for the fin-grid)
   const [financials, setFinancials] = useState<Record<string, string>>({});
+  const [debtSchedule, setDebtSchedule] = useState<DebtSchedule>(emptyDebtSchedule());
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [snapshots, setSnapshots] = useState<SnapshotRow[]>([]);
+  const [deliveryRefresh, setDeliveryRefresh] = useState(0);
 
   // Accountant sign-off on this period's financials / cash forecast
   const fetchReviewSignoffs = useServerFn(listClientReviewSignoffs);
@@ -414,9 +460,6 @@ function ClientView() {
   const [drawerRatioKey, setDrawerRatioKey] = useState<string | null>(null);
   const [drawerRatioName, setDrawerRatioName] = useState<string>("");
   const [drawerTier, setDrawerTier] = useState<HealthTier>("at_risk");
-
-  // Upload financials modal
-  const [uploadOpen, setUploadOpen] = useState(false);
 
   // Computed ratios
   const ratioInputs: RatioInputs = {
@@ -495,6 +538,15 @@ function ClientView() {
       series: [] as number[],
     },
   ];
+
+  const priorSnapshot = resolvePriorSnapshot(snapshots);
+  const varianceChips = buildVarianceChips({
+    currentFinancials: financials,
+    currentRatios: ratios,
+    prior: priorSnapshot,
+    healthScore: healthScoreRounded,
+    cashRunwayWeeks: client?.cash_runway_weeks ?? null,
+  });
 
   // Waterfall fallback — derived from period financials.
   // PDF-extracted statements supply EBIT/EBT/netIncome but leave fixedCosts
@@ -589,11 +641,11 @@ function ClientView() {
             } else {
               setClient((data2 as Client | null) ?? null);
               const fin = (data2 as Client | null)?.financials ?? {};
-              setFinancials(
-                Object.fromEntries(
-                  Object.entries(fin).map(([k, v]) => [k, v != null ? String(v) : ""]),
-                ),
+              const { scalars, debtSchedule: ds } = splitFinancialsBlob(
+                fin as Record<string, unknown>,
               );
+              setFinancials(scalars);
+              setDebtSchedule(ds);
             }
           } else {
             toast.error(error.message);
@@ -601,17 +653,39 @@ function ClientView() {
         } else {
           setClient((data as Client | null) ?? null);
           const fin = (data as Client | null)?.financials ?? {};
-          setFinancials(
-            Object.fromEntries(
-              Object.entries(fin).map(([k, v]) => [k, v != null ? String(v) : ""]),
-            ),
+          const { scalars, debtSchedule: ds } = splitFinancialsBlob(
+            fin as Record<string, unknown>,
           );
+          setFinancials(scalars);
+          setDebtSchedule(ds);
         }
       } finally {
         setLoading(false);
       }
     })();
   }, [clientId]);
+
+  // Load financial snapshots for variance / prior period
+  useEffect(() => {
+    if (!clientId) return;
+    supabase
+      .from("client_financial_snapshots")
+      .select("id, period_label, period_date, financials, ratios")
+      .eq("client_id", clientId)
+      .order("period_date", { ascending: false })
+      .limit(24)
+      .then(({ data }) => {
+        setSnapshots(
+          (data ?? []).map((s) => ({
+            id: s.id as string,
+            period_label: s.period_label as string,
+            period_date: s.period_date as string,
+            financials: (s.financials as Record<string, unknown>) ?? null,
+            ratios: (s.ratios as Record<string, number>) ?? null,
+          })),
+        );
+      });
+  }, [clientId, client?.financials_updated_at]);
 
   useEffect(() => {
     if (!clientId) return;
@@ -672,7 +746,8 @@ function ClientView() {
       setAutosaveStatus("saving");
       if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
       autosaveTimer.current = setTimeout(async () => {
-        const updated = { ...financials, [key]: value };
+        const updatedScalars = { ...financials, [key]: value };
+        const updated = mergeFinancialsBlob(updatedScalars, debtSchedule);
         const updatedAt = new Date().toISOString();
         const { error } = await supabase
           .from("clients")
@@ -680,6 +755,31 @@ function ClientView() {
           .eq("id", clientId);
         if (error) {
           toast.error(`Autosave failed: ${error.message}`);
+          setAutosaveStatus("idle");
+        } else {
+          setClient((c) => (c ? { ...c, financials_updated_at: updatedAt } : c));
+          setAutosaveStatus("saved");
+          setTimeout(() => setAutosaveStatus("idle"), 2000);
+        }
+      }, 600);
+    },
+    [financials, debtSchedule, clientId],
+  );
+
+  const handleDebtScheduleChange = useCallback(
+    (next: DebtSchedule) => {
+      setDebtSchedule(next);
+      setAutosaveStatus("saving");
+      if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
+      autosaveTimer.current = setTimeout(async () => {
+        const updated = mergeFinancialsBlob(financials, next);
+        const updatedAt = new Date().toISOString();
+        const { error } = await supabase
+          .from("clients")
+          .update({ financials: updated as never, financials_updated_at: updatedAt })
+          .eq("id", clientId);
+        if (error) {
+          toast.error(`Debt schedule save failed: ${error.message}`);
           setAutosaveStatus("idle");
         } else {
           setClient((c) => (c ? { ...c, financials_updated_at: updatedAt } : c));
@@ -710,7 +810,10 @@ function ClientView() {
     if (existing?.id) {
       const { error } = await supabase
         .from("client_financial_snapshots")
-        .update({ financials: financials as never, ratios: ratiosOut as never })
+        .update({
+          financials: mergeFinancialsBlob(financials, debtSchedule) as never,
+          ratios: ratiosOut as never,
+        })
         .eq("id", existing.id);
       saveError = error;
     } else {
@@ -718,7 +821,7 @@ function ClientView() {
         client_id: clientId,
         period_label: periodLabel,
         period_date: periodDate,
-        financials: financials as never,
+        financials: mergeFinancialsBlob(financials, debtSchedule) as never,
         ratios: ratiosOut as never,
         source: "manual",
       });
@@ -733,9 +836,10 @@ function ClientView() {
       // what a generated report shows and must bump financials_updated_at, or a
       // prior sign-off stays "current" against data that has since changed.
       const financialsUpdatedAt = new Date().toISOString();
+      const blob = mergeFinancialsBlob(financials, debtSchedule);
       const { error: touchError } = await supabase
         .from("clients")
-        .update({ financials: financials as never, financials_updated_at: financialsUpdatedAt })
+        .update({ financials: blob as never, financials_updated_at: financialsUpdatedAt })
         .eq("id", clientId);
       if (touchError) {
         toast.error(`Snapshot saved, but failed to mark financials updated: ${touchError.message}`);
@@ -748,7 +852,7 @@ function ClientView() {
         scoreFromRatioInputs(ratioInputs, client?.cash_runway_weeks),
       );
     }
-  }, [clientId, financials, ratioInputs, client?.cash_runway_weeks]);
+  }, [clientId, financials, debtSchedule, ratioInputs, client?.cash_runway_weeks]);
 
   // ── Upload confirm ────────────────────────────────────────────────────────
 
@@ -876,42 +980,85 @@ function ClientView() {
       toast.success("Scorecard PDF downloaded");
       await recordReportIssued(client.id);
       setClient((c) => (c ? { ...c, reports_issued_count: (c.reports_issued_count ?? 0) + 1 } : c));
+      if (user) {
+        const snapId = await latestSnapshotId(client.id);
+        await recordDelivery({
+          clientId: client.id,
+          channel: "pdf_download",
+          kind: "report_pdf",
+          reportKey: "scorecard",
+          snapshotId: snapId,
+          figuresHash: hashFigures({ financials, ratios, debtSchedule }),
+          periodLabel: periodLabel,
+          createdBy: user.id,
+        });
+        setDeliveryRefresh((n) => n + 1);
+      }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "PDF export failed");
     }
-  }, [client, ratios, profile]);
+  }, [client, ratios, profile, user, financials, debtSchedule]);
 
-  const handleEmailDraft = useCallback(() => {
+  const handleEmailDraft = useCallback(async () => {
     if (!client) return;
     const score = healthScoreRounded;
     const tier = scoreTier(score);
     const tierLabel = tier === "healthy" ? "Healthy" : tier === "at_risk" ? "At Risk" : "Critical";
     const runway = client.cash_runway_weeks != null ? `${client.cash_runway_weeks} weeks` : "—";
-    const subject = encodeURIComponent(`${client.name} — Financial Health Update`);
-    const body = encodeURIComponent(
+    const subjectText = `${client.name} — Financial Health Update`;
+    const bodyText =
       `Hi,\n\nHere is a brief financial health summary for ${client.name}.\n\n` +
-        `Overall Health Score: ${score}/100 (${tierLabel})\n` +
-        `Cash Runway: ${runway}\n` +
-        `Open Queries: ${client.open_queries_count}\n\n` +
-        `Please review the attached report for detailed ratio analysis and recommended actions.\n\n` +
-        `Best regards,\n${profile.accountantName || "Your Accountant"}\n${profile.firmName || ""}`,
+      `Overall Health Score: ${score}/100 (${tierLabel})\n` +
+      `Cash Runway: ${runway}\n` +
+      `Open Queries: ${client.open_queries_count}\n\n` +
+      `Please review the attached report for detailed ratio analysis and recommended actions.\n\n` +
+      `Best regards,\n${profile.accountantName || "Your Accountant"}\n${profile.firmName || ""}`;
+    if (user) {
+      const snapId = await latestSnapshotId(client.id);
+      await recordDelivery({
+        clientId: client.id,
+        channel: "mailto",
+        kind: "health_summary",
+        subject: subjectText,
+        body: bodyText,
+        snapshotId: snapId,
+        figuresHash: hashFigures({ financials, ratios, score }),
+        periodLabel: new Date().toLocaleString("en-US", { month: "short", year: "numeric" }),
+        createdBy: user.id,
+      });
+      setDeliveryRefresh((n) => n + 1);
+    }
+    window.open(
+      `mailto:?subject=${encodeURIComponent(subjectText)}&body=${encodeURIComponent(bodyText)}`,
     );
-    window.open(`mailto:?subject=${subject}&body=${body}`);
-  }, [client, healthScoreRounded, profile]);
+  }, [client, healthScoreRounded, profile, user, financials, ratios]);
 
-  const handleWhatsApp = useCallback(() => {
+  const handleWhatsApp = useCallback(async () => {
     if (!client) return;
     const score = healthScoreRounded;
     const tier = scoreTier(score);
     const tierLabel = tier === "healthy" ? "Healthy" : tier === "at_risk" ? "At Risk" : "Critical";
-    const text = encodeURIComponent(
+    const text =
       `${client.name} Financial Health Update\n` +
-        `Health Score: ${score}/100 (${tierLabel})\n` +
-        `Cash Runway: ${client.cash_runway_weeks != null ? `${client.cash_runway_weeks} wk` : "—"}\n` +
-        `Prepared by ${profile.firmName || "your accountant"} via MILŌN Portal.`,
-    );
-    window.open(`https://wa.me/?text=${text}`, "_blank");
-  }, [client, healthScoreRounded, profile]);
+      `Health Score: ${score}/100 (${tierLabel})\n` +
+      `Cash Runway: ${client.cash_runway_weeks != null ? `${client.cash_runway_weeks} wk` : "—"}\n` +
+      `Prepared by ${profile.firmName || "your accountant"} via MILŌN Portal.`;
+    if (user) {
+      const snapId = await latestSnapshotId(client.id);
+      await recordDelivery({
+        clientId: client.id,
+        channel: "whatsapp",
+        kind: "health_summary",
+        body: text,
+        snapshotId: snapId,
+        figuresHash: hashFigures({ financials, ratios, score }),
+        periodLabel: new Date().toLocaleString("en-US", { month: "short", year: "numeric" }),
+        createdBy: user.id,
+      });
+      setDeliveryRefresh((n) => n + 1);
+    }
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
+  }, [client, healthScoreRounded, profile, user, financials, ratios]);
 
   // ── Playbook drawer ───────────────────────────────────────────────────────
 
@@ -1076,6 +1223,18 @@ function ClientView() {
         <AccountantOperatingProfile
           profile={parseOperatingProfile(client.operating_profile)}
           fallbackType={client.business_type}
+          onEdit={() => setProfileOpen(true)}
+        />
+
+        <PeriodVarianceStrip
+          chips={varianceChips}
+          priorLabel={priorSnapshot?.period_label ?? null}
+          onOpenMovement={() =>
+            navigate({
+              to: "/reports",
+              search: { client: client.name, clientId: client.id, report: "movement" } as never,
+            })
+          }
         />
 
         {/* ===== DELIVERABLES ACTION BAR ===== */}
@@ -1120,7 +1279,8 @@ function ClientView() {
               { id: "cash", label: "13-Week Cash Forecast", star: true },
               { id: "budget", label: "Budget" },
               { id: "reports", label: "Reports", star: true },
-              { id: "tasks", label: "Tasks" },
+              { id: "plan", label: "Action Plan", star: true },
+              { id: "tasks", label: "Staff tasks" },
               { id: "advisory", label: "Advisory Drafter" },
             ] as { id: ActiveTab; label: string; star?: boolean }[]
           ).map((t) => (
@@ -1303,6 +1463,7 @@ function ClientView() {
                     </div>
                   ))}
                 </div>
+                <DebtScheduleEditor value={debtSchedule} onChange={handleDebtScheduleChange} />
               </div>
             </div>
           </div>
@@ -1557,7 +1718,10 @@ function ClientView() {
               businessTypeId={client.business_type}
               operatingProfile={parseOperatingProfile(client.operating_profile)}
               financials={financials}
-              fyStartMonthDefault={3}
+              fyStartMonthDefault={
+                parseOperatingProfile(client.operating_profile)?.fyStartMonth ?? 3
+              }
+              onRetakeProfile={() => setProfileOpen(true)}
               onPushedToCash={() => {
                 setCashForecastReloadToken((n) => n + 1);
                 setActiveTab("cash");
@@ -1656,14 +1820,39 @@ function ClientView() {
           </div>
         </div>
 
-        {/* ===== TASKS TAB ===== */}
+        {/* ===== ACTION PLAN TAB ===== */}
+        <div className={`tabpane${activeTab === "plan" ? " on" : ""}`} id="pane-plan">
+          <span className="eyebrow">Live action plan</span>
+          <div className="h-sec">What we agreed they&apos;d do</div>
+          <p className="sub" style={{ marginBottom: 24 }}>
+            Same plan the owner sees under Next Moves / Action Plan — edit here without
+            impersonating.
+          </p>
+          <div className="dark" style={{ colorScheme: "dark" }}>
+            <Suspense fallback={<div style={{ padding: 24, color: "var(--ink-dim)" }}>Loading plan…</div>}>
+              <ActionPlanPanel
+                clientId={client.id}
+                clientName={client.name}
+                simplified={viewMode === "simplified"}
+                isOwner
+              />
+            </Suspense>
+          </div>
+        </div>
+
+        {/* ===== STAFF TASKS TAB ===== */}
         <div className={`tabpane${activeTab === "tasks" ? " on" : ""}`} id="pane-tasks">
           <TasksPanel clientId={client.id} clientName={client.name} />
         </div>
 
         {/* ===== ADVISORY TAB ===== */}
         <div className={`tabpane${activeTab === "advisory" ? " on" : ""}`} id="pane-advisory">
-          <AdvisoryDrafter clientId={client.id} clientName={client.name} />
+          <AdvisoryDrafter
+            clientId={client.id}
+            clientName={client.name}
+            onLogged={() => setDeliveryRefresh((n) => n + 1)}
+          />
+          <AdvisorySentHistory clientId={client.id} refreshToken={deliveryRefresh} />
         </div>
 
         <div className="footer-note">
@@ -1736,6 +1925,49 @@ function ClientView() {
           </div>
         </div>
       )}
+
+      <Dialog open={profileOpen} onOpenChange={setProfileOpen}>
+        <DialogContent className="[display:flex] h-[calc(100dvh-1rem)] max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] max-w-3xl flex-col overflow-hidden border border-slate-800 bg-slate-950 p-4 text-slate-50 sm:h-auto sm:max-h-[90vh] sm:p-6">
+          <DialogHeader className="sr-only">
+            <DialogTitle>Business profile</DialogTitle>
+            <DialogDescription>Ten questions that tune Milōn to this client</DialogDescription>
+          </DialogHeader>
+          <ProfileFunnel
+            mode="retake"
+            initial={parseOperatingProfile(client.operating_profile)}
+            initialFyStartMonth={
+              parseOperatingProfile(client.operating_profile)?.fyStartMonth ?? 3
+            }
+            onCancel={() => setProfileOpen(false)}
+            onComplete={async (profile) => {
+              const stamped = stampProfileProvenance(profile, "firm", user?.id);
+              const { error } = await supabase
+                .from("clients")
+                .update({
+                  business_type: stamped.businessTypeId,
+                  operating_profile: stamped as unknown as Record<string, unknown>,
+                  financial_year_start_month: stamped.fyStartMonth,
+                } as never)
+                .eq("id", clientId);
+              if (error) {
+                toast.error(`Could not save profile: ${error.message}`);
+                return;
+              }
+              setClient((c) =>
+                c
+                  ? {
+                      ...c,
+                      business_type: stamped.businessTypeId,
+                      operating_profile: stamped as unknown as Record<string, unknown>,
+                    }
+                  : c,
+              );
+              setProfileOpen(false);
+              toast.success("Business profile saved for this client");
+            }}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
