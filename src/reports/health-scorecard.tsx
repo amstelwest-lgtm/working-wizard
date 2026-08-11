@@ -17,8 +17,9 @@ import { RatioRow } from "@/components/pdf/ratio-row";
 import { ReportTitle } from "@/components/pdf/report-title";
 import { ExecSummary, type HeadlineFigure } from "@/components/pdf/exec-summary";
 import { DuPontStrip } from "@/components/pdf/dupont";
-import { diagnoseDuPont, healthNarrative } from "./narrative";
+import { computeOverallHealth, type HealthPillarId } from "@/lib/health-score";
 import type { ClientOperatingProfile } from "@/lib/client-profile";
+import { diagnoseDuPont, healthNarrative } from "./narrative";
 
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -43,6 +44,8 @@ export type HealthScorecardPDFProps = {
   accountantProfile: AccountantProfile;
   isDemo?: boolean;
   reviewSignoff?: ReportSignoffStamp | null;
+  /** When known, blended into the cash pillar (same rule as dashboard / client header). */
+  cashRunwayWeeks?: number | null;
 };
 
 // ── Constants ──────────────────────────────────────────────────────────────
@@ -184,19 +187,33 @@ export function HealthScorecardPDF({
   isDemo,
   reviewSignoff,
   operatingProfile,
+  cashRunwayWeeks,
 }: HealthScorecardPDFProps) {
-  const overallScore = Math.round(avg(ratioResults.map((r) => r.health_score || 0)));
-  const overallTier = tierForScore(overallScore);
+  const overall = computeOverallHealth({
+    scoredRatios: ratioResults.map((r) => ({
+      name: r.ratio_name,
+      score: r.health_score,
+      pillar: r.pillar as HealthPillarId,
+    })),
+    cashRunwayWeeks,
+  });
+  const overallScore = overall.overall ?? 0;
+  const overallTier = overall.displayStatus;
   const overallColor = TIER_META[overallTier].color;
 
   const pillarData = PILLARS.map((pillar) => {
+    const fromOverall = overall.pillars.find((p) => p.id === pillar);
     const ratios = ratioResults.filter((r) => r.pillar === pillar);
-    const score = avg(ratios.map((r) => r.health_score || 0));
+    const score = fromOverall?.score ?? avg(ratios.map((r) => r.health_score || 0));
     const counts = {
       critical: ratios.filter((r) => r.health_tier === "critical").length,
       at_risk: ratios.filter((r) => r.health_tier === "at_risk").length,
       healthy: ratios.filter((r) => r.health_tier === "healthy").length,
     };
+    // Cash runway can push cash pillar critical without a ratio row
+    if (pillar === "cash" && fromOverall?.status === "critical" && counts.critical === 0) {
+      counts.critical = 1;
+    }
     return { pillar, score, counts, ratios };
   });
 

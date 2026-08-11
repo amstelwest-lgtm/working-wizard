@@ -13,7 +13,13 @@ import { PlaybookDrawer } from "@/components/playbook-drawer";
 import type { ExtractionResult } from "@/lib/financialSchema";
 import { computeRatios, scoreTier } from "@/lib/ratios";
 import type { RatioInputs, HealthTier } from "@/lib/ratios";
-import { scoreFromFlatFinancials, scoreFromRatioInputs } from "@/lib/health-score";
+import {
+  scoreRatio,
+  scoreFromRatioInputs,
+  healthFromRatioInputs,
+  pillarForRatioName,
+  type OverallHealth,
+} from "@/lib/health-score";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
 import "@/styles/accountant-portal.css";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -186,38 +192,27 @@ function formatRatioValue(name: string, val: number): string {
   return `${(val * 100).toFixed(1)}%`;
 }
 
-// Score from ratio value (simple heuristic per-ratio)
+// Score from ratio value — delegated to the shared health-score module
 function ratioHealthScore(name: string, val: number): number {
-  if (!Number.isFinite(val)) return 50;
-  // For margin-type ratios: scale 0-100 where 20% = 100
-  if (name === "Net Margin") return Math.min(100, Math.max(0, (val / 0.15) * 100));
-  if (name === "Operating Margin") return Math.min(100, Math.max(0, (val / 0.2) * 100));
-  if (name === "Gross Margin") return Math.min(100, Math.max(0, (val / 0.4) * 100));
-  if (name === "Return on Assets") return Math.min(100, Math.max(0, (val / 0.12) * 100));
-  if (name === "Return on Equity") return Math.min(100, Math.max(0, (val / 0.2) * 100));
-  if (name === "Asset Turnover") return Math.min(100, Math.max(0, (val / 1.5) * 100));
-  // Days — lower is better, 90 days = 0 score
-  if (name === "Debtor Days") return Math.min(100, Math.max(0, ((90 - val) / 90) * 100));
-  if (name === "Inventory Days") return Math.min(100, Math.max(0, ((90 - val) / 90) * 100));
-  if (name === "Creditor Days") return Math.min(100, Math.max(0, (val / 60) * 100));
-  if (name === "Working Capital Days") return Math.min(100, Math.max(0, ((90 - val) / 90) * 100));
-  if (name === "OCF / EBITDA") return Math.min(100, Math.max(0, val * 100));
-  return 50;
+  return scoreRatio(name, val);
 }
 
 /** Health ring SVG */
 function HealthRing({
   score,
+  status,
   size = 46,
   strokeWidth = 4,
 }: {
   score: number;
+  /** When set, drives ring colour (critical-pillar tell). */
+  status?: HealthTier;
   size?: number;
   strokeWidth?: number;
 }) {
   const r = (size - strokeWidth) / 2;
   const c = 2 * Math.PI * r;
-  const band = tierToBand(scoreTier(score));
+  const band = tierToBand(status ?? scoreTier(score));
   const color = bandColor(band);
   const off = c * (1 - score / 100);
   return (
@@ -440,32 +435,31 @@ function ClientView() {
     founderHours: financials["founderHours"] ?? "",
   };
   const ratios = computeRatios(ratioInputs);
-  const healthScore = scoreFromFlatFinancials(financials, client?.cash_runway_weeks) ?? 0;
-  const healthScoreRounded = Math.round(healthScore);
+  const overallHealth: OverallHealth = healthFromRatioInputs(
+    ratioInputs,
+    client?.cash_runway_weeks,
+  );
+  const healthScoreRounded = overallHealth.overall ?? 0;
 
-  // ── Health orb & pillar computation ────────────────────────────────────
+  // ── Health orb & pillar computation (same source as header / score history) ──
   const healthMap: Record<string, number> = {};
   Object.entries(ratios).forEach(([name, val]) => {
     const key = RATIO_NAME_TO_KEY[name];
-    if (key) healthMap[key] = Math.round(ratioHealthScore(name, val as number));
+    if (key) healthMap[key] = Math.round(scoreRatio(name, val as number));
   });
 
-  const avgPillar = (keys: string[]) => {
-    const scores = keys.map((k) => healthMap[k]).filter((h) => h != null && isFinite(h));
-    return scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : NaN;
-  };
+  const pillarById = Object.fromEntries(
+    overallHealth.pillars.map((p) => [p.id, p.score ?? NaN]),
+  ) as Record<"profit" | "assets" | "financing" | "cash", number>;
 
   const pillarHealths = {
-    profit: avgPillar(["grossMargin", "operatingMargin", "netMargin", "fixedCostRatio"]),
-    assets: avgPillar(["assetTurnover", "roa", "inventoryDays", "salesPerEmployee"]),
-    financing: avgPillar(["equityMultiplier", "interestBurden", "taxBurden", "roe"]),
-    cash: avgPillar(["debtorDays", "creditorDays", "workingCapitalDays", "ocfToEbitda"]),
+    profit: pillarById.profit,
+    assets: pillarById.assets,
+    financing: pillarById.financing,
+    cash: pillarById.cash,
   };
 
-  const avgHealth = (() => {
-    const p = Object.values(pillarHealths).filter((h) => isFinite(h));
-    return p.length ? p.reduce((a, b) => a + b, 0) / p.length : NaN;
-  })();
+  const avgHealth = overallHealth.overall ?? NaN;
 
   const spherePillars = buildSpherePillars({
     overallHealth: avgHealth,
@@ -830,29 +824,22 @@ function ClientView() {
         month: "long",
         year: "numeric",
       });
-      // Build ratio results from computed ratios
-      const ratioEntries = Object.entries(ratios).map(([name, val]) => {
-        const score = Math.round(ratioHealthScore(name, val as number));
-        const tier = scoreTier(score);
-        // Map ratio names to pillars (RatioResult only allows these 4)
-        const pillar: "profit" | "assets" | "financing" | "cash" =
-          name.includes("Margin") || name.includes("Income") || name.includes("Leverage")
-            ? "profit"
-            : name.includes("Days") || name.includes("Capital") || name.includes("OCF")
-              ? "cash"
-              : name.includes("Equity") || name.includes("Multiplier") || name.includes("Burden")
-                ? "financing"
-                : "assets";
-        return {
-          ratio_key: name.toLowerCase().replace(/[^a-z0-9]/g, "_"),
-          ratio_name: name,
-          pillar,
-          current_value: Number.isFinite(val as number) ? (val as number) : 0,
-          health_score: score,
-          health_tier: tier,
-          formatted_value: formatRatioValue(name, val as number),
-        };
-      });
+      // Build ratio results from computed ratios (shared scoring + pillars)
+      const ratioEntries = Object.entries(ratios)
+        .filter(([, val]) => Number.isFinite(val as number))
+        .map(([name, val]) => {
+          const score = Math.round(scoreRatio(name, val as number));
+          const tier = scoreTier(score);
+          return {
+            ratio_key: name.toLowerCase().replace(/[^a-z0-9]/g, "_"),
+            ratio_name: name,
+            pillar: pillarForRatioName(name),
+            current_value: val as number,
+            health_score: score,
+            health_tier: tier,
+            formatted_value: formatRatioValue(name, val as number),
+          };
+        });
 
       const smeData = {
         name: client.name,
@@ -863,6 +850,7 @@ function ClientView() {
           smeData,
           ratioResults: ratioEntries,
           accountantProfile: profile,
+          cashRunwayWeeks: client.cash_runway_weeks,
         }) as Parameters<typeof pdf>[0],
       ).toBlob();
       const url = URL.createObjectURL(blob);
@@ -884,26 +872,29 @@ function ClientView() {
   const handleEmailDraft = useCallback(() => {
     if (!client) return;
     const score = healthScoreRounded;
-    const tier = scoreTier(score);
-    const tierLabel = tier === "healthy" ? "Healthy" : tier === "at_risk" ? "At Risk" : "Critical";
+    const tierLabel = overallHealth.displayLabel;
     const runway = client.cash_runway_weeks != null ? `${client.cash_runway_weeks} weeks` : "—";
+    const weak =
+      overallHealth.weakestPillar != null
+        ? `\nWeakest pillar: ${overallHealth.weakestPillar.label} (${overallHealth.weakestPillar.score})\n`
+        : "\n";
     const subject = encodeURIComponent(`${client.name} — Financial Health Update`);
     const body = encodeURIComponent(
       `Hi,\n\nHere is a brief financial health summary for ${client.name}.\n\n` +
         `Overall Health Score: ${score}/100 (${tierLabel})\n` +
-        `Cash Runway: ${runway}\n` +
+        `Cash Runway: ${runway}` +
+        weak +
         `Open Queries: ${client.open_queries_count}\n\n` +
         `Please review the attached report for detailed ratio analysis and recommended actions.\n\n` +
         `Best regards,\n${profile.accountantName || "Your Accountant"}\n${profile.firmName || ""}`,
     );
     window.open(`mailto:?subject=${subject}&body=${body}`);
-  }, [client, healthScoreRounded, profile]);
+  }, [client, healthScoreRounded, overallHealth, profile]);
 
   const handleWhatsApp = useCallback(() => {
     if (!client) return;
     const score = healthScoreRounded;
-    const tier = scoreTier(score);
-    const tierLabel = tier === "healthy" ? "Healthy" : tier === "at_risk" ? "At Risk" : "Critical";
+    const tierLabel = overallHealth.displayLabel;
     const text = encodeURIComponent(
       `${client.name} Financial Health Update\n` +
         `Health Score: ${score}/100 (${tierLabel})\n` +
@@ -911,7 +902,7 @@ function ClientView() {
         `Prepared by ${profile.firmName || "your accountant"} via MILŌN Portal.`,
     );
     window.open(`https://wa.me/?text=${text}`, "_blank");
-  }, [client, healthScoreRounded, profile]);
+  }, [client, healthScoreRounded, overallHealth, profile]);
 
   // ── Playbook drawer ───────────────────────────────────────────────────────
 
@@ -1033,7 +1024,12 @@ function ClientView() {
         <div className="card client-head">
           <div className="idb">
             <div className="ring big-ring">
-              <HealthRing score={healthScoreRounded} size={74} strokeWidth={5} />
+              <HealthRing
+                score={healthScoreRounded}
+                status={overallHealth.displayStatus}
+                size={74}
+                strokeWidth={5}
+              />
             </div>
             <div>
               <h1>{client.name}</h1>
@@ -1043,6 +1039,58 @@ function ClientView() {
                   client.business_type ?? "—",
                 )}
               </span>
+              <div
+                style={{
+                  marginTop: 8,
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: 6,
+                  alignItems: "center",
+                }}
+              >
+                <span
+                  className={`chip ${
+                    overallHealth.displayStatus === "healthy"
+                      ? "ok"
+                      : overallHealth.displayStatus === "at_risk"
+                        ? "warn"
+                        : "risk"
+                  }`}
+                  style={{ fontSize: 11 }}
+                >
+                  <i />
+                  {overallHealth.displayLabel}
+                </span>
+                {overallHealth.pillars
+                  .filter((p) => p.score != null)
+                  .map((p) => (
+                    <span
+                      key={p.id}
+                      title={`${p.label}: ${p.score}`}
+                      style={{
+                        fontSize: 11,
+                        color: "var(--muted)",
+                        padding: "2px 8px",
+                        borderRadius: 4,
+                        background: "var(--soft, #f1f5f9)",
+                      }}
+                    >
+                      {p.label.split(" ")[0]}{" "}
+                      <b
+                        style={{
+                          color:
+                            p.status === "critical"
+                              ? "var(--risk)"
+                              : p.status === "at_risk"
+                                ? "var(--warn)"
+                                : "var(--ink)",
+                        }}
+                      >
+                        {p.score}
+                      </b>
+                    </span>
+                  ))}
+              </div>
             </div>
           </div>
           <div className="meta">
