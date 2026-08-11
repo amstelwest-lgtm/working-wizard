@@ -19,11 +19,13 @@ function ColorSwatch({
   value,
   onChange,
   hint,
+  disabled,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   hint?: string;
+  disabled?: boolean;
 }) {
   return (
     <div className="space-y-1.5">
@@ -34,7 +36,8 @@ function ColorSwatch({
             type="color"
             value={value}
             onChange={(e) => onChange(e.target.value)}
-            className="absolute -inset-1 h-[calc(100%+8px)] w-[calc(100%+8px)] cursor-pointer border-0 bg-transparent p-0 opacity-0"
+            disabled={disabled}
+            className="absolute -inset-1 h-[calc(100%+8px)] w-[calc(100%+8px)] cursor-pointer border-0 bg-transparent p-0 opacity-0 disabled:cursor-not-allowed"
             aria-label={label}
           />
           <div
@@ -45,6 +48,7 @@ function ColorSwatch({
         <Input
           value={value}
           onChange={(e) => onChange(e.target.value)}
+          disabled={disabled}
           className="h-9 font-mono text-xs bg-slate-950/60 border-slate-700 text-slate-200 uppercase w-32"
           maxLength={7}
           spellCheck={false}
@@ -133,18 +137,36 @@ function HeaderPreview() {
 }
 
 function BrandSettingsPage() {
-  const { profile, updateProfile } = useAccountantProfile();
+  const { profile, updateProfile, saveProfile, canEditBrand, brandLoading, firmId } =
+    useAccountantProfile();
+  const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!profile.firmName.trim()) {
       toast.error("Firm name is required.");
       return;
     }
-    setSaved(true);
-    toast.success("Brand settings saved.");
-    setTimeout(() => setSaved(false), 2000);
+    if (!canEditBrand) {
+      toast.error("Only the firm owner can save brand settings.");
+      return;
+    }
+    setSaving(true);
+    try {
+      const result = await saveProfile();
+      if (!result.ok) {
+        toast.error(result.error ?? "Could not save brand settings.");
+        return;
+      }
+      setSaved(true);
+      toast.success("Brand settings saved for your practice.");
+      setTimeout(() => setSaved(false), 2000);
+    } finally {
+      setSaving(false);
+    }
   };
+
+  const readOnly = !canEditBrand;
 
   return (
     <main className="min-h-screen bg-[#07090f] text-slate-50 px-4 py-8">
@@ -167,8 +189,21 @@ function BrandSettingsPage() {
           </h1>
           <p className="mt-1 text-sm text-slate-400">
             Personalise every report with your firm's identity. Changes are
-            saved to this browser and applied to all generated PDFs.
+            saved to your practice and shared with your team on every device.
           </p>
+          {brandLoading && (
+            <p className="mt-2 text-xs text-slate-500">Loading firm brand…</p>
+          )}
+          {!brandLoading && !firmId && (
+            <p className="mt-2 text-xs text-amber-400/90">
+              No firm found yet — finish accountant signup so brand can sync.
+            </p>
+          )}
+          {!brandLoading && firmId && readOnly && (
+            <p className="mt-2 text-xs text-amber-400/90">
+              Viewing as a firm member — only the firm owner can edit brand.
+            </p>
+          )}
         </div>
 
         <div className="grid gap-8 lg:grid-cols-[1fr_1.1fr]">
@@ -205,6 +240,7 @@ function BrandSettingsPage() {
                     value={profile.firmName}
                     onChange={(e) => updateProfile({ firmName: e.target.value })}
                     placeholder="e.g. Clarity Accounting"
+                    disabled={readOnly}
                     className="bg-slate-950/60 border-slate-700 text-slate-100 placeholder:text-slate-600 text-sm"
                   />
                 </div>
@@ -219,6 +255,7 @@ function BrandSettingsPage() {
                       })
                     }
                     placeholder="e.g. Clear numbers. Confident decisions."
+                    disabled={readOnly}
                     className="bg-slate-950/60 border-slate-700 text-slate-100 placeholder:text-slate-600 text-sm"
                   />
                   <p className="text-[11px] text-slate-500">
@@ -237,6 +274,7 @@ function BrandSettingsPage() {
                         updateProfile({ accountantName: e.target.value })
                       }
                       placeholder="Jane Smith"
+                      disabled={readOnly}
                       className="bg-slate-950/60 border-slate-700 text-slate-100 placeholder:text-slate-600 text-sm"
                     />
                   </div>
@@ -251,6 +289,7 @@ function BrandSettingsPage() {
                         updateProfile({ accountantEmail: e.target.value })
                       }
                       placeholder="jane@clarity.co.za"
+                      disabled={readOnly}
                       className="bg-slate-950/60 border-slate-700 text-slate-100 placeholder:text-slate-600 text-sm"
                     />
                   </div>
@@ -274,18 +313,21 @@ function BrandSettingsPage() {
                   value={profile.primaryColor}
                   onChange={(v) => updateProfile({ primaryColor: v })}
                   hint="Text & headings"
+                  disabled={readOnly}
                 />
                 <ColorSwatch
                   label="Secondary Colour"
                   value={profile.secondaryColor}
                   onChange={(v) => updateProfile({ secondaryColor: v })}
                   hint="Backgrounds & fills"
+                  disabled={readOnly}
                 />
                 <ColorSwatch
                   label="Accent Colour"
                   value={profile.accentColor}
                   onChange={(v) => updateProfile({ accentColor: v })}
                   hint="Border lines & highlights"
+                  disabled={readOnly}
                 />
               </CardContent>
             </Card>
@@ -295,10 +337,10 @@ function BrandSettingsPage() {
               <Button
                 onClick={handleSave}
                 className="gap-2 bg-[#c9962b] hover:bg-[#b8861f] text-white font-semibold"
-                disabled={saved}
+                disabled={saved || saving || readOnly || brandLoading}
               >
                 <Save className="h-4 w-4" />
-                {saved ? "Saved ✓" : "Save Settings"}
+                {saving ? "Saving…" : saved ? "Saved ✓" : "Save Settings"}
               </Button>
             </div>
           </div>
