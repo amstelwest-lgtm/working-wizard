@@ -850,7 +850,7 @@ function Dashboard() {
                         {/* Invite */}
                         <button
                           className="icon-btn"
-                          title="Invite client"
+                          title="Invite client owner to claim this workspace"
                           onClick={() => {
                             const origin =
                               typeof window !== "undefined"
@@ -858,7 +858,7 @@ function Dashboard() {
                                 : "https://milon.co.za";
                             const url = `${origin}/?invite=${c.id}&mode=signup`;
                             navigator.clipboard?.writeText(url);
-                            toast.success("Invite link copied for " + c.name);
+                            toast.success("Owner invite link copied for " + c.name);
                           }}
                         >
                           <svg viewBox="0 0 24 24">

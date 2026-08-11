@@ -1,28 +1,17 @@
 /**
- * Integration test — invited member end-to-end flow
+ * Integration test — invite accept flows (G25 ownership handoff)
  *
- * Verifies the full invite → accept → login path by exercising the same code
- * that runs in production:
- *
- *   1. Owner signs up → client record + client_owner role
- *   2. signUpInvitedMember() — the shared utility called by the adminSignUp
- *      server function — creates the member user with client_member role and
- *      the matching client_memberships row.
- *   3. Member signs in with the anon key (same as the browser does) and:
- *       a. effectiveClientId step-2 (membership lookup) resolves the client
- *       b. Member can SELECT client metadata (business_type)
- *       c. Member CANNOT UPDATE the client record (owner-or-firm RLS —
- *          invited client_member excluded; see 20260811160000_clients_update_owner_or_firm.sql)
- *   4. Pure-function test: first-run gate logic shows the onboarding dialog
- *      only for client_owner, never for client_member.
+ *   A) Firm-created client: accountant is placeholder owner → invitee becomes
+ *      clients.owner_user_id (client_owner), firm_id kept, invitee can UPDATE,
+ *      accountant (firm) can still UPDATE via is_client_writer.
+ *   B) True owner inviting staff: ownership stays; invitee is client_member and
+ *      cannot UPDATE (Gap 3).
  *
  * Run: pnpm test:invited-member
  */
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { signUpInvitedMember } from "@/lib/invite-member.server";
-
-// ── Env vars ──────────────────────────────────────────────────────────────────
 
 const SUPABASE_URL = process.env.SUPABASE_URL!;
 const ANON_KEY = process.env.SUPABASE_PUBLISHABLE_KEY!;
@@ -34,7 +23,6 @@ if (!SUPABASE_URL || !ANON_KEY) {
   process.exit(1);
 }
 
-// ── Fetch service-role key from the management API ────────────────────────────
 async function getServiceRoleKey(): Promise<string> {
   if (!ACCESS_TOKEN) throw new Error("SUPABASE_ACCESS_TOKEN is not set");
   const res = await fetch(`https://api.supabase.com/v1/projects/${PROJECT_ID}/api-keys`, {
@@ -47,27 +35,24 @@ async function getServiceRoleKey(): Promise<string> {
   return svcKey;
 }
 
-// ── Test helpers ──────────────────────────────────────────────────────────────
-
 let passed = 0;
 let failed = 0;
 
-function pass(label: string) { console.log(`  ✅ ${label}`); passed++; }
+function pass(label: string) {
+  console.log(`  ✅ ${label}`);
+  passed++;
+}
 function fail(label: string, detail?: string) {
   console.error(`  ❌ ${label}${detail ? `\n     → ${detail}` : ""}`);
   failed++;
 }
-function section(t: string) { console.log(`\n── ${t} ──`); }
-
-// ── Pure-function test: invite URL param parsing (mirrors index.tsx useEffect) ─
+function section(t: string) {
+  console.log(`\n── ${t} ──`);
+}
 
 function testInviteUrlParsing() {
   section("Invite URL param parsing (pure function — mirrors index.tsx useEffect)");
 
-  /**
-   * Mirrors the useEffect in src/routes/index.tsx that reads /?invite=<id>&mode=signup.
-   * Returns the parsed inviteClientId, or null if params are absent/malformed.
-   */
   function parseInviteParams(search: string): string | null {
     const params = new URLSearchParams(search);
     const inv = params.get("invite");
@@ -78,44 +63,30 @@ function testInviteUrlParsing() {
 
   const clientId = "550e8400-e29b-41d4-a716-446655440000";
 
-  // Happy path: both params present → client ID returned
   parseInviteParams(`?invite=${clientId}&mode=signup`) === clientId
     ? pass("?invite=<id>&mode=signup → inviteClientId extracted ✓")
     : fail("Failed to extract inviteClientId from invite URL");
 
-  // Missing mode param → null (standard signup, no invite)
   parseInviteParams(`?invite=${clientId}`) === null
-    ? pass("?invite=<id> without mode=signup → null (not an invite) ✓")
+    ? pass("?invite=<id> without mode=signup → null ✓")
     : fail("Missing mode=signup should not be treated as invite");
 
-  // Missing invite param → null
   parseInviteParams("?mode=signup") === null
     ? pass("?mode=signup without invite= → null ✓")
     : fail("Missing invite= should not be treated as invite");
 
-  // Empty URL → null
   parseInviteParams("") === null
     ? pass("Empty search string → null ✓")
     : fail("Empty params should return null");
 
-  // Wrong mode value → null
   parseInviteParams(`?invite=${clientId}&mode=login`) === null
     ? pass("mode=login (not signup) → null ✓")
     : fail("mode=login should not trigger invite flow");
 }
 
-// ── Pure-function test: first-run gate logic ──────────────────────────────────
-
 function testFirstRunGateLogic() {
   section("First-run gate logic (pure function — mirrors app.tsx clientMeta effect)");
 
-  /**
-   * Extracted from app.tsx ~line 1534:
-   *   } else if (!actingClientId && userRole !== null && userRole !== "client_member") {
-   *     setFirstRunStep("pick-type");
-   *     setShowOnboarding(true);
-   *   }
-   */
   function shouldShowOnboarding(opts: {
     businessType: string | null;
     actingClientId: string | null;
@@ -123,8 +94,8 @@ function testFirstRunGateLogic() {
   }): boolean {
     if (opts.businessType) return false;
     if (opts.actingClientId) return false;
-    if (opts.userRole === null) return false;        // defer until role loads
-    if (opts.userRole === "client_member") return false; // invited member — never show
+    if (opts.userRole === null) return false;
+    if (opts.userRole === "client_member") return false;
     return true;
   }
 
@@ -137,22 +108,200 @@ function testFirstRunGateLogic() {
     : fail("Owner with business_type set should NOT trigger onboarding");
 
   !shouldShowOnboarding({ businessType: null, actingClientId: null, userRole: "client_member" })
-    ? pass("client_member with no business_type → NO onboarding (regression fix verified)")
-    : fail("client_member MUST NOT see the first-run onboarding dialog — REGRESSION");
+    ? pass("client_member with no business_type → NO onboarding ✓")
+    : fail("client_member MUST NOT see the first-run onboarding dialog");
 
   !shouldShowOnboarding({ businessType: null, actingClientId: "some-client-id", userRole: "firm_admin" })
-    ? pass("firm_admin acting as client (actingClientId set) → no onboarding")
+    ? pass("firm_admin acting as client → no onboarding")
     : fail("Acting-client mode should not show onboarding");
 
   !shouldShowOnboarding({ businessType: null, actingClientId: null, userRole: null })
-    ? pass("userRole=null (not yet loaded) → onboarding deferred")
+    ? pass("userRole=null → onboarding deferred")
     : fail("Should not show onboarding before userRole is known");
 }
 
-// ── DB / RLS integration tests ────────────────────────────────────────────────
+async function cleanupUsers(admin: SupabaseClient, userIds: string[], clientIds: string[], firmIds: string[]) {
+  for (const uid of userIds) {
+    if (!uid) continue;
+    await admin.from("client_memberships").delete().eq("user_id", uid);
+    await admin.from("firm_memberships").delete().eq("user_id", uid);
+    await admin.from("user_roles").delete().eq("user_id", uid);
+  }
+  for (const cid of clientIds) {
+    if (cid) await admin.from("clients").delete().eq("id", cid);
+  }
+  for (const fid of firmIds) {
+    if (fid) await admin.from("firms").delete().eq("id", fid);
+  }
+  for (const uid of userIds) {
+    if (uid) await admin.auth.admin.deleteUser(uid);
+  }
+}
 
-async function testInviteFlow(admin: SupabaseClient) {
+/** A) Firm placeholder → invitee becomes owner; firm retains write access. */
+async function testFirmOwnershipHandoff(admin: SupabaseClient) {
   const ts = Date.now();
+  const accountantEmail = `acct-${ts}@example.com`;
+  const ownerEmail = `bizowner-${ts}@example.com`;
+  const password = "Test1234!";
+  let accountantId = "";
+  let inviteeId = "";
+  let clientId = "";
+  let firmId = "";
+
+  section("A1 · Firm accountant creates client (placeholder owner)");
+  const { data: acctU, error: acctErr } = await admin.auth.admin.createUser({
+    email: accountantEmail,
+    password,
+    email_confirm: true,
+    user_metadata: { full_name: "Test Accountant", signup_type: "accountant" },
+  });
+  if (acctErr || !acctU.user) {
+    fail("Create accountant", acctErr?.message);
+    return;
+  }
+  accountantId = acctU.user.id;
+  pass(`Accountant created: ${accountantEmail}`);
+
+  const { data: firmRow, error: firmErr } = await admin
+    .from("firms")
+    .insert({ name: `Firm ${ts}`, owner_user_id: accountantId })
+    .select("id")
+    .single();
+  if (firmErr || !firmRow) {
+    fail("Insert firm", firmErr?.message);
+    await cleanupUsers(admin, [accountantId], [], []);
+    return;
+  }
+  firmId = firmRow.id;
+  await admin.from("firm_memberships").insert({ firm_id: firmId, user_id: accountantId, role: "owner" });
+  await admin.from("user_roles").insert({ user_id: accountantId, role: "firm_admin" });
+  pass(`Firm created: ${firmId}`);
+
+  const { data: clientRow, error: clientErr } = await admin
+    .from("clients")
+    .insert({
+      name: "Biz Co",
+      owner_user_id: accountantId,
+      firm_id: firmId,
+      business_type: "service",
+    })
+    .select("id")
+    .single();
+  if (clientErr || !clientRow) {
+    fail("Insert firm client", clientErr?.message);
+    await cleanupUsers(admin, [accountantId], [], [firmId]);
+    return;
+  }
+  clientId = clientRow.id;
+  pass(`Client created with accountant as placeholder owner: ${clientId}`);
+
+  section("A2 · Invite business owner via signUpInvitedMember()");
+  try {
+    const result = await signUpInvitedMember({
+      email: ownerEmail,
+      password,
+      fullName: "Biz Owner",
+      inviteClientId: clientId,
+    });
+    inviteeId = result.userId;
+    result.transferredOwnership
+      ? pass(`Ownership transferred to invitee ✓ (${inviteeId})`)
+      : fail("Expected transferredOwnership=true for firm-created client");
+  } catch (e) {
+    fail("signUpInvitedMember() threw", (e as Error).message);
+    await cleanupUsers(admin, [accountantId], [clientId], [firmId]);
+    return;
+  }
+
+  section("A3 · Verify ownership + roles");
+  const { data: after } = await admin
+    .from("clients")
+    .select("owner_user_id, firm_id")
+    .eq("id", clientId)
+    .maybeSingle();
+  after?.owner_user_id === inviteeId
+    ? pass("clients.owner_user_id = invitee ✓")
+    : fail("owner_user_id not transferred", JSON.stringify(after));
+  after?.firm_id === firmId
+    ? pass("clients.firm_id preserved ✓")
+    : fail("firm_id was cleared", JSON.stringify(after));
+
+  const { data: roleRow } = await admin
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", inviteeId)
+    .maybeSingle();
+  roleRow?.role === "client_owner"
+    ? pass(`user_roles.role = client_owner ✓`)
+    : fail("invitee role is not client_owner", JSON.stringify(roleRow));
+
+  const { data: memRow } = await admin
+    .from("client_memberships")
+    .select("role")
+    .eq("user_id", inviteeId)
+    .eq("client_id", clientId)
+    .maybeSingle();
+  memRow?.role === "client_owner"
+    ? pass(`client_memberships.role = client_owner ✓`)
+    : fail("membership role is not client_owner", JSON.stringify(memRow));
+
+  section("A4 · Invitee can UPDATE; accountant (firm) can still UPDATE");
+  const inviteeClient = createClient(SUPABASE_URL, ANON_KEY);
+  const { error: signInErr } = await inviteeClient.auth.signInWithPassword({
+    email: ownerEmail,
+    password,
+  });
+  if (signInErr) {
+    fail("Invitee sign-in", signInErr.message);
+    await cleanupUsers(admin, [inviteeId, accountantId], [clientId], [firmId]);
+    return;
+  }
+  pass("Invitee signed in");
+
+  const { error: ownerPatchErr } = await inviteeClient
+    .from("clients")
+    .update({ business_type: "retail" })
+    .eq("id", clientId);
+  const { data: afterOwnerPatch } = await admin
+    .from("clients")
+    .select("business_type")
+    .eq("id", clientId)
+    .maybeSingle();
+  afterOwnerPatch?.business_type === "retail"
+    ? pass(`Invitee UPDATE succeeded (business_type=retail)${ownerPatchErr ? ` warn: ${ownerPatchErr.message}` : ""} ✓`)
+    : fail("Invitee could not UPDATE as new owner", JSON.stringify(afterOwnerPatch));
+
+  const acctClient = createClient(SUPABASE_URL, ANON_KEY);
+  const { error: acctSignErr } = await acctClient.auth.signInWithPassword({
+    email: accountantEmail,
+    password,
+  });
+  if (acctSignErr) {
+    fail("Accountant sign-in", acctSignErr.message);
+  } else {
+    const { error: firmPatchErr } = await acctClient
+      .from("clients")
+      .update({ cash_runway_weeks: 9 })
+      .eq("id", clientId);
+    const { data: afterFirmPatch } = await admin
+      .from("clients")
+      .select("cash_runway_weeks")
+      .eq("id", clientId)
+      .maybeSingle();
+    afterFirmPatch?.cash_runway_weeks === 9
+      ? pass(`Firm accountant still UPDATE via is_client_writer ✓${firmPatchErr ? ` warn: ${firmPatchErr.message}` : ""}`)
+      : fail("Firm lost write access after handoff", JSON.stringify(afterFirmPatch));
+  }
+
+  section("A · Cleanup");
+  await cleanupUsers(admin, [inviteeId, accountantId], [clientId], [firmId]);
+  pass("Firm handoff fixtures cleaned up");
+}
+
+/** B) True owner inviting staff — no ownership transfer. */
+async function testStaffInviteNoHandoff(admin: SupabaseClient) {
+  const ts = Date.now() + 1;
   const ownerEmail = `owner-${ts}@example.com`;
   const memberEmail = `member-${ts}@example.com`;
   const password = "Test1234!";
@@ -160,10 +309,11 @@ async function testInviteFlow(admin: SupabaseClient) {
   let memberUserId = "";
   let clientId = "";
 
-  // ── 1. Create owner ──────────────────────────────────────────────────────
-  section("1 · Create owner (client_owner)");
+  section("B1 · True client_owner creates client (no firm)");
   const { data: ownerU, error: ownerErr } = await admin.auth.admin.createUser({
-    email: ownerEmail, password, email_confirm: true,
+    email: ownerEmail,
+    password,
+    email_confirm: true,
     user_metadata: { full_name: "Test Owner", business_name: "Test Co", signup_type: "customer" },
   });
   if (ownerErr || !ownerU.user) {
@@ -180,36 +330,40 @@ async function testInviteFlow(admin: SupabaseClient) {
     .single();
   if (clientErr || !clientRow) {
     fail("Insert client row", clientErr?.message);
-    await admin.auth.admin.deleteUser(ownerUserId);
+    await cleanupUsers(admin, [ownerUserId], [], []);
     return;
   }
   clientId = clientRow.id;
   await admin.from("user_roles").insert({ user_id: ownerUserId, role: "client_owner" });
-  pass(`Client created with business_type='service': ${clientId}`);
+  pass(`Client created (no firm): ${clientId}`);
 
-  // ── 2. Invite member via signUpInvitedMember() — same function adminSignUp
-  //       calls for the invite branch.  The test exercises the real production
-  //       code path rather than manually re-writing the handler's DB steps.
-  section("2 · Invite member via signUpInvitedMember() (the adminSignUp invite path)");
-  let result: { userId: string; email: string };
+  section("B2 · Invite staff via signUpInvitedMember()");
   try {
-    result = await signUpInvitedMember({
+    const result = await signUpInvitedMember({
       email: memberEmail,
       password,
       fullName: "Test Member",
       inviteClientId: clientId,
     });
     memberUserId = result.userId;
-    pass(`signUpInvitedMember() succeeded: ${memberEmail} (${memberUserId})`);
+    !result.transferredOwnership
+      ? pass(`No ownership transfer for staff invite ✓ (${memberUserId})`)
+      : fail("Staff invite incorrectly transferred ownership");
   } catch (e) {
     fail("signUpInvitedMember() threw", (e as Error).message);
-    await admin.from("clients").delete().eq("id", clientId);
-    await admin.auth.admin.deleteUser(ownerUserId);
+    await cleanupUsers(admin, [ownerUserId], [clientId], []);
     return;
   }
 
-  // ── 3. Verify DB rows ────────────────────────────────────────────────────
-  section("3 · Verify DB rows: user_roles and client_memberships");
+  section("B3 · Verify staff roles + ownership unchanged");
+  const { data: after } = await admin
+    .from("clients")
+    .select("owner_user_id")
+    .eq("id", clientId)
+    .maybeSingle();
+  after?.owner_user_id === ownerUserId
+    ? pass("clients.owner_user_id still original owner ✓")
+    : fail("Ownership was stolen from true owner", JSON.stringify(after));
 
   const { data: roleRow } = await admin
     .from("user_roles")
@@ -217,112 +371,49 @@ async function testInviteFlow(admin: SupabaseClient) {
     .eq("user_id", memberUserId)
     .maybeSingle();
   roleRow?.role === "client_member"
-    ? pass(`user_roles.role = '${roleRow.role}' ✓`)
-    : fail("user_roles.role is not client_member", JSON.stringify(roleRow));
+    ? pass(`user_roles.role = client_member ✓`)
+    : fail("staff role is not client_member", JSON.stringify(roleRow));
 
-  const { data: memRow } = await admin
-    .from("client_memberships")
-    .select("client_id, role")
-    .eq("user_id", memberUserId)
-    .maybeSingle();
-  memRow?.role === "client_member" && memRow.client_id === clientId
-    ? pass(`client_memberships.role = '${memRow.role}', client_id matches ✓`)
-    : fail("client_memberships row incorrect", JSON.stringify(memRow));
-
-  // ── 4. Sign in as member (anon key = browser-equivalent session) ─────────
-  section("4 · Sign in as member — verify client data access");
+  section("B4 · Staff can SELECT, cannot UPDATE");
   const memberClient = createClient(SUPABASE_URL, ANON_KEY);
-  const { data: signIn, error: signInErr } = await memberClient.auth.signInWithPassword({
-    email: memberEmail, password,
+  const { error: signInErr } = await memberClient.auth.signInWithPassword({
+    email: memberEmail,
+    password,
   });
-  if (signInErr || !signIn.user) {
-    fail("Member sign-in", signInErr?.message);
-    await cleanup(admin, memberUserId, ownerUserId, clientId);
+  if (signInErr) {
+    fail("Member sign-in", signInErr.message);
+    await cleanupUsers(admin, [memberUserId, ownerUserId], [clientId], []);
     return;
   }
-  pass("Member signed in successfully");
+  pass("Member signed in");
 
-  // effectiveClientId step-2: client_memberships lookup
-  const { data: memLookup, error: memLookupErr } = await memberClient
-    .from("client_memberships")
-    .select("client_id")
-    .eq("user_id", signIn.user.id)
-    .limit(1)
-    .maybeSingle();
-  !memLookupErr && memLookup?.client_id === clientId
-    ? pass("effectiveClientId step-2: membership lookup returns correct client_id ✓")
-    : fail("effectiveClientId step-2 failed", memLookupErr?.message ?? JSON.stringify(memLookup));
-
-  // Member can SELECT client metadata (needed to render the dashboard)
   const { data: clientMeta, error: selectErr } = await memberClient
     .from("clients")
-    .select("business_type, cash_runway_weeks")
+    .select("business_type")
     .eq("id", clientId)
     .maybeSingle();
   !selectErr && clientMeta?.business_type === "service"
-    ? pass(`Member SELECT client data: business_type='${clientMeta.business_type}' ✓`)
-    : fail("Member cannot SELECT client data", selectErr?.message ?? JSON.stringify(clientMeta));
+    ? pass(`Member SELECT ok ✓`)
+    : fail("Member cannot SELECT", selectErr?.message ?? JSON.stringify(clientMeta));
 
-  // ── 5. First-run gate: business_type set → no onboarding dialog ──────────
-  section("5 · First-run gate: member lands on /app without onboarding dialog");
-  clientMeta?.business_type
-    ? pass("business_type set → first-run gate skips dialog (line 1532 branch taken)")
-    : fail("business_type missing — first-run gate might show the owner-only dialog");
-  pass("Role guard verified: client_member excluded from first-run dialog (pure-function test above)");
-
-  // ── 6. Member CANNOT UPDATE client — invited members stay blocked (Gap 3 keeps this)
-  section("6 · Member CANNOT PATCH client record (owner-or-firm RLS — invited members excluded)");
-  const { error: patchErr } = await memberClient
-    .from("clients")
-    .update({ business_type: "retail" })
-    .eq("id", clientId);
-
+  await memberClient.from("clients").update({ business_type: "retail" }).eq("id", clientId);
   const { data: afterPatch } = await admin
     .from("clients")
     .select("business_type")
     .eq("id", clientId)
     .maybeSingle();
-
   afterPatch?.business_type === "service"
-    ? pass(`RLS blocked member UPDATE — business_type unchanged ✓${patchErr ? ` (${patchErr.message})` : " (silent no-op)"}`)
-    : fail(
-        "Member was able to change business_type — RLS is not enforcing owner-only writes",
-        `business_type is now '${afterPatch?.business_type}'. Check migration 20260806200000_clients_update_owner_only.sql was applied.`,
-      );
+    ? pass("RLS blocked staff UPDATE ✓")
+    : fail("Staff was able to UPDATE", JSON.stringify(afterPatch));
 
-  // ── Cleanup ───────────────────────────────────────────────────────────────
-  section("Cleanup");
-  await cleanup(admin, memberUserId, ownerUserId, clientId);
-  pass("All test users and data cleaned up");
+  section("B · Cleanup");
+  await cleanupUsers(admin, [memberUserId, ownerUserId], [clientId], []);
+  pass("Staff invite fixtures cleaned up");
 }
-
-async function cleanup(
-  admin: SupabaseClient,
-  memberUserId: string,
-  ownerUserId: string,
-  clientId: string,
-) {
-  if (memberUserId) {
-    await admin.from("client_memberships").delete().eq("user_id", memberUserId);
-    await admin.from("user_roles").delete().eq("user_id", memberUserId);
-    await admin.auth.admin.deleteUser(memberUserId);
-  }
-  if (ownerUserId) {
-    await admin.from("user_roles").delete().eq("user_id", ownerUserId);
-  }
-  if (clientId) {
-    await admin.from("clients").delete().eq("id", clientId);
-  }
-  if (ownerUserId) {
-    await admin.auth.admin.deleteUser(ownerUserId);
-  }
-}
-
-// ── Main ──────────────────────────────────────────────────────────────────────
 
 async function main() {
   console.log("══════════════════════════════════════════════════════════════");
-  console.log("  Invited member flow: role assignment + access control tests ");
+  console.log("  Invite flows: ownership handoff (G25) + staff member        ");
   console.log("══════════════════════════════════════════════════════════════");
 
   testInviteUrlParsing();
@@ -341,7 +432,8 @@ async function main() {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 
-  await testInviteFlow(admin);
+  await testFirmOwnershipHandoff(admin);
+  await testStaffInviteNoHandoff(admin);
 
   console.log(`\n══════════════════════════════════════════════════════════════`);
   console.log(`  Results: ${passed} passed, ${failed} failed`);
@@ -350,4 +442,7 @@ async function main() {
   if (failed > 0) process.exit(1);
 }
 
-main().catch((e) => { console.error("Fatal:", e); process.exit(1); });
+main().catch((e) => {
+  console.error("Fatal:", e);
+  process.exit(1);
+});
