@@ -28,12 +28,9 @@ import { ReviewSignoffButton, computeIsStale } from "@/components/review-signoff
 import { parseOperatingProfile } from "@/lib/client-profile";
 import { profileIndustryLabel } from "@/lib/profile-signals";
 import { AccountantOperatingProfile } from "@/components/accountant-operating-profile";
-<<<<<<< HEAD
 import { NoteLayer } from "@/components/note-layer";
-=======
 import { effectiveCashRunwayWeeks, runwayWeeksFromCashflow } from "@/lib/cash-runway";
 import { countOpenQueriesForClient } from "@/lib/open-queries";
->>>>>>> origin/cursor/portfolio-runway-queries-5d34
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
