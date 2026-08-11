@@ -549,7 +549,7 @@ function ClientView() {
     currentRatios: ratios,
     prior: priorSnapshot,
     healthScore: healthScoreRounded,
-    cashRunwayWeeks: client?.cash_runway_weeks ?? null,
+    cashRunwayWeeks: effectiveRunway,
   });
 
   // Waterfall fallback — derived from period financials.
@@ -978,7 +978,7 @@ function ClientView() {
           smeData,
           ratioResults: ratioEntries,
           accountantProfile: profile,
-          cashRunwayWeeks: client.cash_runway_weeks,
+          cashRunwayWeeks: effectiveRunway,
         }) as Parameters<typeof pdf>[0],
       ).toBlob();
       const url = URL.createObjectURL(blob);

@@ -16,6 +16,13 @@ import type { AccountantProfile } from "@/contexts/accountant-profile";
 import { computeRatios, scoreTier } from "@/lib/ratios";
 import type { RatioInputs } from "@/lib/ratios";
 import { scoreRatio, pillarForRatioName } from "@/lib/health-score";
+import {
+  CASH_RUNWAY_THRESHOLD_RAND,
+  effectiveCashRunwayWeeks,
+  runwayWeeksFromClosings,
+} from "@/lib/cash-runway";
+import { hashFigures, latestSnapshotId, recordDelivery } from "@/lib/advisory-deliveries";
+import { useAuth } from "@/hooks/use-auth";
 import { PlaybookDrawer } from "@/components/playbook-drawer";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { supabase } from "@/integrations/supabase/client";
@@ -144,11 +151,11 @@ const MOCK_WC: WorkingCapitalData = { debtor_days: 54, debtor_days_prior: 49, in
 
 const MOCK_PROFIT: ProfitabilityData = { revenue: 12_500_000, gross_profit: 4_750_000, gross_margin_pct: 0.38, gross_margin_score: 62, gross_margin_tier: "at_risk", operating_profit: 2_375_000, operating_margin_pct: 0.19, operating_margin_score: 76, operating_margin_tier: "healthy", ebt: 2_218_750, interest_burden_pct: 0.177, interest_burden_score: 72, tax: 554_688, tax_burden_pct: 0.044, tax_burden_score: 74, net_profit: 1_664_063, net_margin_pct: 0.133, net_margin_score: 68, net_margin_tier: "at_risk", prior_period: { revenue: 11_000_000, gross_profit: 3_850_000, gross_margin_pct: 0.35, gross_margin_score: 54, operating_profit: 1_980_000, operating_margin_pct: 0.18, operating_margin_score: 68, ebt: 1_848_000, interest_burden_pct: 0.168, interest_burden_score: 65, tax: 462_000, tax_burden_pct: 0.042, tax_burden_score: 68, net_profit: 1_386_000, net_margin_pct: 0.126, net_margin_score: 62 } };
 
-const MOCK_LEVERAGE: LeverageSolvencyData = { total_debt: 3_800_000, total_equity: 3_530_000, net_profit: 450_000, drawings: 120_000, prior_equity: 3_200_000, debt_lines: [{ label: "ABSA Business Term Loan", amount: 1_500_000, annual_rate_pct: 11.5, maturity_year: 2026 }, { label: "Working Capital Facility", amount: 850_000, annual_rate_pct: 13.0, maturity_year: 2025 }, { label: "Equipment Finance (John Deere)", amount: 950_000, annual_rate_pct: 9.8, maturity_year: 2028 }, { label: "Director Loan Account", amount: 500_000, annual_rate_pct: 0, maturity_year: 2027 }], health_scores: { fundingStructure: 52, equityMultiplier: 70, debtToEquity: 67, debtToAssets: 61, interestBurden: 72 } };
+const MOCK_LEVERAGE: LeverageSolvencyData = { total_debt: 3_800_000, total_equity: 3_530_000, total_assets: 7_330_000, debt_facilities_captured: true, net_profit: 450_000, drawings: 120_000, prior_equity: 3_200_000, debt_lines: [{ label: "ABSA Business Term Loan", amount: 1_500_000, annual_rate_pct: 11.5, maturity_year: 2026 }, { label: "Working Capital Facility", amount: 850_000, annual_rate_pct: 13.0, maturity_year: 2025 }, { label: "Equipment Finance (John Deere)", amount: 950_000, annual_rate_pct: 9.8, maturity_year: 2028 }, { label: "Director Loan Account", amount: 500_000, annual_rate_pct: 0, maturity_year: 2027 }], health_scores: { fundingStructure: 52, equityMultiplier: 70, debtToEquity: 67, debtToAssets: 61, interestBurden: 72 } };
 
 const MOCK_ASSETS: AssetProductivityData = { roe: 0.127, net_margin: 0.133, asset_turnover: 1.30, equity_multiplier: 2.1, capex_periods: [{ label: "Jun 2024", capex: 320_000, depreciation: 280_000 }, { label: "Sep 2024", capex: 180_000, depreciation: 285_000 }, { label: "Dec 2024", capex: 240_000, depreciation: 290_000 }, { label: "Jun 2025", capex: 410_000, depreciation: 295_000 }], health_scores: { assetTurnover: 74, roa: 83, fixedCapitalUtilization: 65, assetReinvestmentRatio: 68, capexIntensity: 71 }, ratios: { assetTurnover: { value: "1.30×" }, roa: { value: "14.0%" }, fixedCapitalUtilization: { value: "68.0%" }, assetReinvestmentRatio: { value: "1.39×" }, capexIntensity: { value: "3.3%" } } };
 
-const MOCK_LABOR: LaborProductivityData = { employee_count: 47, total_labor_cost: 8_750_000, total_revenue: 12_500_000, total_gp: 4_750_000, revenue_per_employee: 265_957, rpe_prior: 244_444, gp_per_labor_rand: 0.543, revenue_growth: 0.136, inflation_rate: 0.057, periods: [{ label: "Jun 2024", revenue: 10_250_000, employees: 42, labor_cost: 7_350_000 }, { label: "Sep 2024", revenue: 10_800_000, employees: 44, labor_cost: 7_750_000 }, { label: "Dec 2024", revenue: 11_500_000, employees: 45, labor_cost: 8_200_000 }, { label: "Jun 2025", revenue: 12_500_000, employees: 47, labor_cost: 8_750_000 }], health_scores: { gpToLabor: 64, salesPerEmployee: 72, revenueGrowth: 41 } };
+const MOCK_LABOR: LaborProductivityData = { employee_count: 47, total_labor_cost: 8_750_000, total_revenue: 12_500_000, total_gp: 4_750_000, gp_known: true, revenue_per_employee: 265_957, rpe_prior: 244_444, gp_per_labor_rand: 0.543, revenue_growth: 0.136, inflation_rate: 0.057, periods: [{ label: "Jun 2024", revenue: 10_250_000, employees: 42, labor_cost: 7_350_000 }, { label: "Sep 2024", revenue: 10_800_000, employees: 44, labor_cost: 7_750_000 }, { label: "Dec 2024", revenue: 11_500_000, employees: 45, labor_cost: 8_200_000 }, { label: "Jun 2025", revenue: 12_500_000, employees: 47, labor_cost: 8_750_000 }], health_scores: { gpToLabor: 64, salesPerEmployee: 72, revenueGrowth: 41 } };
 
 const MOCK_MOVEMENT: RatioMovementRow[] = [
   { ratio_key: "grossMargin", ratio_name: "Gross Margin", pillar: "profit", unit: "%", current: 0.38, three_months: 0.37, six_months: 0.36, twelve_months: 0.35 },
@@ -436,7 +443,8 @@ function buildWorkingCapitalData(
       debtor_days:              Math.round(scoreForRatio("Debtor Days", dd)),
       inventory_days:           Math.round(scoreForRatio("Inventory Days", id)),
       creditor_days:            Math.round(scoreForRatio("Creditor Days", cd)),
-      wip_days:                 68,
+      // WIP not in financials — score 0 days honestly (not a soft-demo 68).
+      wip_days:                 Math.round(scoreForRatio("Inventory Days", 0)),
       working_capital_days:     Math.round(scoreForRatio("Working Capital Days", ccc)),
       working_capital_funding:  Math.round(Math.min(100, Math.max(0, (1 - wcFunding) * 100))),
       working_capital_utilization: Math.round(Math.min(100, Math.max(0, (1 - wcFunding) * 90))),
@@ -454,7 +462,9 @@ function buildProfitabilityData(
   const ebt     = getNum(fin, "ebt");
   const net     = getNum(fin, "netIncome");
   if (!Number.isFinite(revenue) || !Number.isFinite(ebit) || !Number.isFinite(net)) return null;
-  const gp    = Number.isFinite(cogs) ? revenue - cogs : revenue * 0.5;
+  // Never invent GP from 50% of revenue — COGS required for gross margin.
+  if (!Number.isFinite(cogs)) return null;
+  const gp    = revenue - cogs;
   const gmPct = gp / revenue;
   const omPct = ebit / revenue;
   const ebtVal = Number.isFinite(ebt) ? ebt : ebit;
@@ -486,8 +496,8 @@ function buildProfitabilityData(
     const pEbit = getNum(priorFin, "ebit");
     const pEbt = getNum(priorFin, "ebt");
     const pNet = getNum(priorFin, "netIncome");
-    if (Number.isFinite(pRev) && Number.isFinite(pEbit) && Number.isFinite(pNet)) {
-      const pGp = Number.isFinite(pCogs) ? pRev - pCogs : pRev * 0.5;
+    if (Number.isFinite(pRev) && Number.isFinite(pEbit) && Number.isFinite(pNet) && Number.isFinite(pCogs)) {
+      const pGp = pRev - pCogs;
       const pEbtVal = Number.isFinite(pEbt) ? pEbt : pEbit;
       const pIb = pEbit > 0 ? Math.max(0, (pEbit - pEbtVal) / pEbit) : 0;
       const pTax = Math.max(0, pEbtVal - pNet);
@@ -543,12 +553,12 @@ function buildLeverageData(
     })(),
   );
 
-  // Prefer captured facilities; never invent a fake bank line.
+  // Prefer captured facilities; never invent residual debt from assets − equity.
   const fromSchedule = totalDebtFromSchedule(schedule);
-  const residualDebt = Math.max(0, totalAssets - equity);
-  const totalDebt = schedule.lines.length > 0 ? fromSchedule : residualDebt;
+  const debt_facilities_captured = schedule.lines.some((l) => l.amount > 0 || l.label.trim());
+  const totalDebt = debt_facilities_captured ? fromSchedule : 0;
   const debt_lines =
-    schedule.lines.length > 0
+    debt_facilities_captured
       ? schedule.lines
           .filter((l) => l.label.trim() || l.amount > 0)
           .map((l) => ({
@@ -559,8 +569,8 @@ function buildLeverageData(
           }))
       : [];
 
-  const d2a = totalAssets > 0 ? totalDebt / totalAssets : 0;
-  const d2e = equity > 0 ? totalDebt / equity : NaN;
+  const d2a = debt_facilities_captured && totalAssets > 0 ? totalDebt / totalAssets : NaN;
+  const d2e = debt_facilities_captured && equity > 0 ? totalDebt / equity : NaN;
   const em = rawRatios["Equity Multiplier"];
   const ib = rawRatios["Interest Burden"];
   const priorEquity =
@@ -577,18 +587,24 @@ function buildLeverageData(
   return {
     total_debt: totalDebt,
     total_equity: equity,
+    total_assets: totalAssets,
+    debt_facilities_captured,
     net_profit: Number.isFinite(net) ? net : 0,
     drawings,
     prior_equity: priorEquity,
     debt_lines,
     health_scores: {
-      fundingStructure: Math.round(Math.min(100, Math.max(0, (1 - d2a) * 100))),
-      equityMultiplier: Number.isFinite(em) ? Math.round(scoreForRatio("Equity Multiplier", em)) : 50,
+      fundingStructure: Number.isFinite(d2a)
+        ? Math.round(Math.min(100, Math.max(0, (1 - d2a) * 100)))
+        : null,
+      equityMultiplier: Number.isFinite(em) ? Math.round(scoreForRatio("Equity Multiplier", em)) : null,
       debtToEquity: Number.isFinite(d2e)
         ? Math.round(Math.min(100, Math.max(0, ((2 - d2e) / 2) * 100)))
-        : 50,
-      debtToAssets: Math.round(Math.min(100, Math.max(0, (1 - d2a) * 100))),
-      interestBurden: Number.isFinite(ib) ? Math.round(ib * 100) : 50,
+        : null,
+      debtToAssets: Number.isFinite(d2a)
+        ? Math.round(Math.min(100, Math.max(0, (1 - d2a) * 100)))
+        : null,
+      interestBurden: Number.isFinite(ib) ? Math.round(ib * 100) : null,
     },
   };
 }
@@ -606,9 +622,10 @@ function buildAssetData(rawRatios: Record<string, number>): AssetProductivityDat
     health_scores: {
       assetTurnover:           Math.round(scoreForRatio("Asset Turnover", at)),
       roa:                     Math.round(scoreForRatio("Return on Assets", roa)),
-      fixedCapitalUtilization: 60,
-      assetReinvestmentRatio:  60,
-      capexIntensity:          65,
+      // Capex / fixed-asset ratios need inputs we do not yet capture — never invent.
+      fixedCapitalUtilization: null,
+      assetReinvestmentRatio:  null,
+      capexIntensity:          null,
     },
     ratios: {
       assetTurnover:           { value: `${at.toFixed(2)}×` },
@@ -622,7 +639,8 @@ function buildAssetData(rawRatios: Record<string, number>): AssetProductivityDat
 
 function buildLaborData(
   fin: Record<string, string>,
-  rawRatios: Record<string, number>,
+  _rawRatios: Record<string, number>,
+  priorFin?: Record<string, string> | null,
 ): LaborProductivityData | null {
   const revenue   = getNum(fin, "revenue");
   const laborCost = getNum(fin, "laborCost");
@@ -630,24 +648,42 @@ function buildLaborData(
   const cogs      = getNum(fin, "cogs");
   if (!Number.isFinite(revenue) || !Number.isFinite(employees) ||
       !Number.isFinite(laborCost) || employees <= 0 || laborCost <= 0) return null;
-  const gp        = Number.isFinite(cogs) ? revenue - cogs : revenue * 0.5;
-  const rpe       = revenue / employees;
-  const gpPerLabor = gp / laborCost;
+  const gpKnown = Number.isFinite(cogs);
+  const gp = gpKnown ? revenue - cogs : 0;
+  const rpe = revenue / employees;
+  const gpPerLabor = gpKnown ? gp / laborCost : null;
+
+  const priorRev = priorFin ? getNum(priorFin, "revenue") : NaN;
+  const priorEmp = priorFin ? getNum(priorFin, "employees") : NaN;
+  const rpePrior =
+    Number.isFinite(priorRev) && Number.isFinite(priorEmp) && priorEmp > 0
+      ? priorRev / priorEmp
+      : null;
+  const revenueGrowth =
+    Number.isFinite(priorRev) && priorRev > 0 ? (revenue - priorRev) / priorRev : null;
+
   return {
     employee_count: Math.round(employees),
     total_labor_cost: laborCost,
     total_revenue: revenue,
     total_gp: gp,
+    gp_known: gpKnown,
     revenue_per_employee: rpe,
-    rpe_prior: rpe * 0.95,
+    rpe_prior: rpePrior,
     gp_per_labor_rand: gpPerLabor,
-    revenue_growth: Number.isFinite(rawRatios["Net Margin"]) ? 0.08 : 0,
-    inflation_rate: 0.057,
+    revenue_growth: revenueGrowth,
+    inflation_rate: null, // never invent CPI
     periods: [{ label: "Current Period", revenue, employees: Math.round(employees), labor_cost: laborCost }],
     health_scores: {
-      gpToLabor:        Math.round(Math.min(100, Math.max(0, (gpPerLabor / 0.6) * 100))),
+      gpToLabor:
+        gpPerLabor != null
+          ? Math.round(Math.min(100, Math.max(0, (gpPerLabor / 0.6) * 100)))
+          : null,
       salesPerEmployee: Math.round(Math.min(100, Math.max(0, (rpe / 300_000) * 100))),
-      revenueGrowth:    Number.isFinite(rawRatios["Net Margin"]) ? Math.round(scoreForRatio("Net Margin", rawRatios["Net Margin"])) : 50,
+      revenueGrowth:
+        revenueGrowth != null
+          ? Math.round(Math.min(100, Math.max(0, ((revenueGrowth + 0.05) / 0.25) * 100)))
+          : null,
     },
   };
 }
@@ -768,14 +804,15 @@ function buildCashForecastFromSavedCashflow(
   }
 
   const opening = parseFloat(cf.openingBalance ?? "0") || 0;
-  const runway  = cashRunwayWeeks ?? CF_WEEKS;
   const weeks: CashForecastWeek[] = [];
+  const closings: number[] = [];
   let balance = opening;
   for (let i = 0; i < CF_WEEKS; i++) {
     const receipts = Math.round(inflow[i]);
     const payments = Math.round(outflow[i]);
     const net_movement = receipts - payments;
     const closing = balance + net_movement;
+    closings.push(closing);
     weeks.push({
       period_label: `Week ${i + 1}`,
       opening_balance: Math.round(balance),
@@ -784,9 +821,15 @@ function buildCashForecastFromSavedCashflow(
       net_movement,
       closing_balance: Math.round(closing),
       scenario: "moderate",
-      runway_weeks: Math.max(0, runway - i),
+      runway_weeks: 0, // filled below after derived runway
     });
     balance = closing;
+  }
+  // Prefer persisted runway; else derive from closings. Never pad with a fake 13.
+  const derived = runwayWeeksFromClosings(closings, CASH_RUNWAY_THRESHOLD_RAND);
+  const runway = cashRunwayWeeks ?? derived;
+  for (let i = 0; i < weeks.length; i++) {
+    weeks[i].runway_weeks = Math.max(0, runway - i);
   }
   return weeks;
 }
@@ -880,6 +923,10 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
     operating_profile?: unknown;
   } | null;
   const operatingProfile = parseOperatingProfile(clientRow?.operating_profile);
+  const effectiveRunway = effectiveCashRunwayWeeks(
+    clientRow?.cash_runway_weeks,
+    clientRow?.cashflow as Parameters<typeof effectiveCashRunwayWeeks>[1],
+  );
   const reviewSignoffs = {
     financials: (signoffRes.data ?? []).find((s) => s.scope === "financials") ?? null,
     cash_forecast: (signoffRes.data ?? []).find((s) => s.scope === "cash_forecast") ?? null,
@@ -887,7 +934,7 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
   const baseEmpty = {
     ...EMPTY_CLIENT_DATA,
     clientName: clientRow?.name ?? "",
-    cashRunwayWeeks: clientRow?.cash_runway_weeks ?? null,
+    cashRunwayWeeks: effectiveRunway,
     financialsUpdatedAt: clientRow?.financials_updated_at ?? null,
     lastForecastAt: clientRow?.last_forecast_at ?? null,
     reviewSignoffs,
@@ -960,7 +1007,7 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
   return {
     hasData: true,
     clientName: clientRow.name,
-    cashRunwayWeeks: clientRow.cash_runway_weeks,
+    cashRunwayWeeks: effectiveRunway,
     financials: fin,
     rawRatios,
     ratioResults,
@@ -968,13 +1015,13 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
     profitability:  buildProfitabilityData(fin, priorFinForProfit),
     leverage:       buildLeverageData(fin, rawRatios, priorEquityNum),
     assets:         buildAssetData(rawRatios),
-    labor:          buildLaborData(fin, rawRatios),
+    labor:          buildLaborData(fin, rawRatios, priorFinForProfit),
     movement:       movementRows,
     movementPeriodLabels: movementLabels,
     benchmark:      buildBenchmarkRows(rawRatios, ratioResults),
     cashForecast:   buildCashForecastFromSavedCashflow(
       (clientRow as unknown as { cashflow: SavedCashflow | null }).cashflow ?? {},
-      clientRow.cash_runway_weeks,
+      effectiveRunway,
     ),
     financialsUpdatedAt: clientRow.financials_updated_at,
     lastForecastAt: clientRow.last_forecast_at,
@@ -1055,26 +1102,39 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
   const financialsStamp = signoffStampFor("financials", clientData);
   const forecastStamp = signoffStampFor("cash_forecast", clientData);
 
+  /** Live client with hasData must never fall through to MOCK_* for a missing slice. */
+  function liveOrDemo<T>(slice: T | null | undefined, missingMsg: string): { isDemo: boolean; data: T | null } {
+    if (!cd) return { isDemo: true, data: null };
+    if (slice == null) throw new Error(missingMsg);
+    return { isDemo: false, data: slice };
+  }
+
   return {
     scorecard: async (s, p) => {
       const { HealthScorecardPDF } = await import("@/reports/health-scorecard");
-      const isDemo = !cd || cd.ratioResults.length === 0;
+      if (cd && cd.ratioResults.length === 0) {
+        throw new Error("No scorable ratios yet — complete financials before generating the scorecard.");
+      }
+      const isDemo = !cd;
       return renderToBlob(HealthScorecardPDF, {
         smeData: makeSmeWithNote(s, isDemo),
-        ratioResults: isDemo ? MOCK_RATIOS : cd.ratioResults,
+        ratioResults: isDemo ? MOCK_RATIOS : cd!.ratioResults,
         accountantProfile: p,
         isDemo,
         reviewSignoff: financialsStamp,
         operatingProfile,
-        cashRunwayWeeks: isDemo ? null : (cd.cashRunwayWeeks ?? null),
+        cashRunwayWeeks: isDemo ? null : (cd!.cashRunwayWeeks ?? null),
       });
     },
     intervention: async (s, p) => {
       const { InterventionPriorityPDF } = await import("@/reports/intervention-priority");
-      const isDemo = !cd || cd.ratioResults.length === 0;
+      if (cd && cd.ratioResults.length === 0) {
+        throw new Error("No scorable ratios yet — complete financials before generating interventions.");
+      }
+      const isDemo = !cd;
       const interventions = isDemo
         ? MOCK_INTERVENTIONS
-        : await buildInterventions(cd.ratioResults, operatingProfile);
+        : await buildInterventions(cd!.ratioResults, operatingProfile);
       return renderToBlob(InterventionPriorityPDF, {
         smeData: makeSmeWithNote(s, isDemo),
         interventions,
@@ -1086,10 +1146,13 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
     },
     forecast: async (s, p) => {
       const { CashForecastPDF } = await import("@/reports/cash-forecast");
-      const isDemo = !cd || !cd.cashForecast;
+      const { isDemo, data } = liveOrDemo(
+        cd?.cashForecast,
+        "No cash forecast saved for this client — configure the Cash tab before generating.",
+      );
       return renderToBlob(CashForecastPDF, {
         smeData: makeSmeWithNote(s, isDemo),
-        cashForecast: isDemo ? MOCK_FORECAST : cd!.cashForecast!,
+        cashForecast: isDemo ? MOCK_FORECAST : data!,
         scenario: "moderate",
         accountantProfile: p,
         isDemo,
@@ -1099,10 +1162,13 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
     },
     cycle: async (s, p) => {
       const { CashCyclePDF } = await import("@/reports/cash-cycle");
-      const isDemo = !cd || !cd.workingCapital;
+      const { isDemo, data } = liveOrDemo(
+        cd?.workingCapital,
+        "Working-capital report needs debtor/inventory days — add receivables and inventory.",
+      );
       return renderToBlob(CashCyclePDF, {
         smeData: makeSmeWithNote(s, isDemo),
-        workingCapitalData: isDemo ? MOCK_WC : cd!.workingCapital!,
+        workingCapitalData: isDemo ? MOCK_WC : data!,
         accountantProfile: p,
         isDemo,
         reviewSignoff: financialsStamp,
@@ -1111,10 +1177,13 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
     },
     waterfall: async (s, p) => {
       const { ProfitabilityWaterfallPDF } = await import("@/reports/profitability-waterfall");
-      const isDemo = !cd || !cd.profitability;
+      const { isDemo, data } = liveOrDemo(
+        cd?.profitability,
+        "Profitability waterfall needs revenue, COGS, EBIT, and net income — never invents gross profit.",
+      );
       return renderToBlob(ProfitabilityWaterfallPDF, {
         smeData: makeSmeWithNote(s, isDemo),
-        profitabilityData: isDemo ? MOCK_PROFIT : cd!.profitability!,
+        profitabilityData: isDemo ? MOCK_PROFIT : data!,
         accountantProfile: p,
         isDemo,
         reviewSignoff: financialsStamp,
@@ -1123,10 +1192,13 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
     },
     leverage: async (s, p) => {
       const { LeverageSolvencyPDF } = await import("@/reports/leverage-solvency");
-      const isDemo = !cd || !cd.leverage;
+      const { isDemo, data } = liveOrDemo(
+        cd?.leverage,
+        "Leverage report needs equity and total assets.",
+      );
       return renderToBlob(LeverageSolvencyPDF, {
         smeData: makeSmeWithNote(s, isDemo),
-        data: isDemo ? MOCK_LEVERAGE : cd!.leverage!,
+        data: isDemo ? MOCK_LEVERAGE : data!,
         accountantProfile: p,
         isDemo,
         reviewSignoff: financialsStamp,
@@ -1135,10 +1207,13 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
     },
     assets: async (s, p) => {
       const { AssetProductivityPDF } = await import("@/reports/asset-productivity");
-      const isDemo = !cd || !cd.assets;
+      const { isDemo, data } = liveOrDemo(
+        cd?.assets,
+        "Asset productivity needs asset turnover, equity multiplier, and net margin.",
+      );
       return renderToBlob(AssetProductivityPDF, {
         smeData: makeSmeWithNote(s, isDemo),
-        data: isDemo ? MOCK_ASSETS : cd!.assets!,
+        data: isDemo ? MOCK_ASSETS : data!,
         accountantProfile: p,
         isDemo,
         reviewSignoff: financialsStamp,
@@ -1147,10 +1222,13 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
     },
     labor: async (s, p) => {
       const { LaborProductivityPDF } = await import("@/reports/labor-productivity");
-      const isDemo = !cd || !cd.labor;
+      const { isDemo, data } = liveOrDemo(
+        cd?.labor,
+        "Labor productivity needs revenue, headcount, and labor cost.",
+      );
       return renderToBlob(LaborProductivityPDF, {
         smeData: makeSmeWithNote(s, isDemo),
-        data: isDemo ? MOCK_LABOR : cd!.labor!,
+        data: isDemo ? MOCK_LABOR : data!,
         accountantProfile: p,
         isDemo,
         reviewSignoff: financialsStamp,
@@ -1159,7 +1237,10 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
     },
     movement: async (s, p) => {
       const { RatioMovementPDF } = await import("@/reports/ratio-movement");
-      const isDemo = !cd || cd.movement.length === 0;
+      if (cd && cd.movement.length === 0) {
+        throw new Error("No period history yet — save at least one snapshot before the movement report.");
+      }
+      const isDemo = !cd;
       return renderToBlob(RatioMovementPDF, {
         smeData: makeSmeWithNote(s, isDemo),
         ratios: isDemo ? MOCK_MOVEMENT : cd!.movement,
@@ -1173,7 +1254,10 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
     benchmark: async (s, p) => {
       const { BenchmarkReportPDF } = await import("@/reports/benchmark-report");
       const industry = INDUSTRIES.find((i) => i.code === s.industryCode) ?? INDUSTRIES[0];
-      const isDemo = !cd || cd.benchmark.length === 0;
+      if (cd && cd.benchmark.length === 0) {
+        throw new Error("No benchmarkable ratios yet — complete financials before generating.");
+      }
+      const isDemo = !cd;
       return renderToBlob(BenchmarkReportPDF, {
         smeData: makeSmeWithNote(s, isDemo),
         industryCode: industry.code,
@@ -1548,6 +1632,7 @@ async function recordReportIssued(clientId: string | undefined) {
 function ReportsPage() {
   const { client: clientParam, clientId, report: reportParam } = Route.useSearch();
   const { profile } = useAccountantProfile();
+  const { user } = useAuth();
   const [isClient, setIsClient] = useState(false);
   const [settings, setSettings] = useState<Settings>({
     smeName: clientParam ?? "Acme Trading (Pty) Ltd",
@@ -1620,6 +1705,25 @@ function ReportsPage() {
     return true;
   }
 
+  async function logReportDelivery(reportKey: string) {
+    if (!user || !clientId) return;
+    const snapId = await latestSnapshotId(clientId);
+    await recordDelivery({
+      clientId,
+      channel: "pdf_download",
+      kind: "report_pdf",
+      reportKey,
+      snapshotId: snapId,
+      figuresHash: hashFigures({
+        ratios: clientData?.rawRatios ?? null,
+        runway: clientData?.cashRunwayWeeks ?? null,
+        reportKey,
+      }),
+      periodLabel: `${settings.periodMonth} ${settings.periodYear}`,
+      createdBy: user.id,
+    });
+  }
+
   // ── Generate single PDF ──────────────────────────────────────────────────
 
   async function handleGenerate(report: ReportMeta) {
@@ -1630,6 +1734,7 @@ function ReportsPage() {
       triggerDownload(blob, makeSafeFilename(settings, report.filename));
       toast.success(`${report.name} downloaded.`);
       await recordReportIssued(clientId);
+      await logReportDelivery(report.key);
     } catch (err) {
       toast.error(`Generation failed: ${(err as Error).message}`);
       console.error(err);
@@ -1698,6 +1803,7 @@ function ReportsPage() {
       triggerDownload(zipBlob, `${sme}_${settings.periodMonth}_${settings.periodYear}_Reports.zip`);
       toast.success("All reports downloaded as ZIP.");
       await recordReportIssued(clientId);
+      await logReportDelivery("zip_all");
     } catch (err) {
       toast.error(`ZIP generation failed: ${(err as Error).message}`);
       console.error(err);

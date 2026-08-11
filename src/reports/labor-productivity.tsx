@@ -35,16 +35,21 @@ export type LaborProductivityData = {
   total_labor_cost: number;
   total_revenue: number;
   total_gp: number;
+  /** False when COGS missing — total_gp must not be treated as a real gross profit. */
+  gp_known: boolean;
   revenue_per_employee: number;
-  rpe_prior: number;
-  gp_per_labor_rand: number;
-  revenue_growth: number;
-  inflation_rate: number;
+  /** Prior-period RPE when a prior snapshot exists; otherwise null (never invent). */
+  rpe_prior: number | null;
+  gp_per_labor_rand: number | null;
+  /** YoY revenue growth when prior revenue known; otherwise null. */
+  revenue_growth: number | null;
+  /** External inflation assumption — null unless explicitly provided (never invent CPI). */
+  inflation_rate: number | null;
   periods: LaborPeriod[];
   health_scores: {
-    gpToLabor: number;
+    gpToLabor: number | null;
     salesPerEmployee: number;
-    revenueGrowth: number;
+    revenueGrowth: number | null;
   };
 };
 
@@ -150,9 +155,16 @@ export function LaborProductivityPDF({
 }: LaborProductivityPDFProps) {
   const theme = resolveTheme(accountantProfile);
   const hs = d.health_scores;
-  const realGrowth = d.revenue_growth - d.inflation_rate;
-  const rpeChange = d.rpe_prior !== 0 ? ((d.revenue_per_employee - d.rpe_prior) / d.rpe_prior) * 100 : undefined;
+  const realGrowth =
+    d.revenue_growth != null && d.inflation_rate != null
+      ? d.revenue_growth - d.inflation_rate
+      : null;
+  const rpeChange =
+    d.rpe_prior != null && d.rpe_prior !== 0
+      ? ((d.revenue_per_employee - d.rpe_prior) / d.rpe_prior) * 100
+      : undefined;
   const laborShare = d.total_revenue !== 0 ? d.total_labor_cost / d.total_revenue : NaN;
+  const gpPerLabor = d.gp_per_labor_rand;
 
   const figures: HeadlineFigure[] = [
     {
@@ -160,12 +172,13 @@ export function LaborProductivityPDF({
       value: fmtRandCompact(d.revenue_per_employee),
       direction: rpeChange === undefined ? undefined : rpeChange >= 0 ? "up" : "down",
       good: rpeChange === undefined ? undefined : rpeChange >= 0,
-      note: rpeChange !== undefined ? `${rpeChange >= 0 ? "+" : ""}${rpeChange.toFixed(1)}% vs prior` : undefined,
+      note: rpeChange !== undefined ? `${rpeChange >= 0 ? "+" : ""}${rpeChange.toFixed(1)}% vs prior` : "No prior period",
     },
     {
       label: "GP per R1 of Wages",
-      value: `R${d.gp_per_labor_rand.toFixed(2)}`,
-      good: d.gp_per_labor_rand >= 0.5,
+      value: gpPerLabor != null ? `R${gpPerLabor.toFixed(2)}` : "—",
+      good: gpPerLabor != null ? gpPerLabor >= 0.5 : undefined,
+      note: d.gp_known ? undefined : "COGS required",
     },
     {
       label: "Headcount",
@@ -174,24 +187,36 @@ export function LaborProductivityPDF({
     },
     {
       label: "Real Growth",
-      value: fmtPct(realGrowth),
-      direction: realGrowth >= 0 ? "up" : "down",
-      good: realGrowth >= 0,
-      note: "revenue growth less inflation",
+      value: realGrowth != null ? fmtPct(realGrowth) : "—",
+      direction: realGrowth == null ? undefined : realGrowth >= 0 ? "up" : "down",
+      good: realGrowth == null ? undefined : realGrowth >= 0,
+      note: realGrowth != null ? "revenue growth less inflation" : "Needs prior revenue + inflation",
     },
   ];
 
   const narrative = laborNarrative({
     revenuePerEmployee: d.revenue_per_employee,
-    gpPerLaborRand: d.gp_per_labor_rand,
-    realGrowth,
+    gpPerLaborRand: gpPerLabor ?? 0,
+    realGrowth: realGrowth ?? 0,
   }, operatingProfile);
 
   const ratioRows = [
-    { name: "GP-to-Labor Ratio", value: `R${d.gp_per_labor_rand.toFixed(2)} / R1`, score: hs.gpToLabor },
-    { name: "Sales per Employee", value: fmtRandCompact(d.revenue_per_employee), score: hs.salesPerEmployee },
-    { name: "Real Revenue Growth", value: fmtPct(realGrowth), score: hs.revenueGrowth },
-  ];
+    {
+      name: "GP-to-Labor Ratio",
+      value: gpPerLabor != null ? `R${gpPerLabor.toFixed(2)} / R1` : "—",
+      score: hs.gpToLabor,
+    },
+    {
+      name: "Sales per Employee",
+      value: fmtRandCompact(d.revenue_per_employee),
+      score: hs.salesPerEmployee,
+    },
+    {
+      name: "Real Revenue Growth",
+      value: realGrowth != null ? fmtPct(realGrowth) : "—",
+      score: hs.revenueGrowth,
+    },
+  ].filter((r) => r.score != null) as Array<{ name: string; value: string; score: number }>;
 
   return (
     <PDFDocument
@@ -215,7 +240,12 @@ export function LaborProductivityPDF({
       <View style={{ flexDirection: "row", gap: 10, marginBottom: 6 }}>
         <MetricBox label="Total Revenue" value={fmtRand(d.total_revenue)} accentColor={theme.accent} />
         <MetricBox label="Total Labor Cost" value={fmtRand(d.total_labor_cost)} accentColor={C.blue} note={fmtPct(laborShare) + " of revenue"} />
-        <MetricBox label="Gross Profit" value={fmtRand(d.total_gp)} accentColor={C.green} />
+        <MetricBox
+          label="Gross Profit"
+          value={d.gp_known ? fmtRand(d.total_gp) : "—"}
+          accentColor={C.green}
+          note={d.gp_known ? undefined : "COGS required"}
+        />
       </View>
 
       <SectionHeader title="Revenue vs Labor Cost Trend" color={theme.accent} />

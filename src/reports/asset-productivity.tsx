@@ -40,9 +40,10 @@ export type AssetProductivityData = {
   health_scores: {
     assetTurnover: number;
     roa: number;
-    fixedCapitalUtilization: number;
-    assetReinvestmentRatio: number;
-    capexIntensity: number;
+    /** Null when fixed assets / capex inputs are missing — never invent. */
+    fixedCapitalUtilization: number | null;
+    assetReinvestmentRatio: number | null;
+    capexIntensity: number | null;
   };
   ratios: {
     assetTurnover: { value: string };
@@ -193,10 +194,22 @@ export function AssetProductivityPDF({
   const ratioRows = [
     { name: "Asset Turnover", value: data.ratios.assetTurnover.value, score: hs.assetTurnover },
     { name: "Return on Assets (ROA)", value: data.ratios.roa.value, score: hs.roa },
-    { name: "Fixed Capital Utilization", value: data.ratios.fixedCapitalUtilization.value, score: hs.fixedCapitalUtilization },
-    { name: "Asset Reinvestment Ratio", value: data.ratios.assetReinvestmentRatio.value, score: hs.assetReinvestmentRatio },
-    { name: "Capex Intensity", value: data.ratios.capexIntensity.value, score: hs.capexIntensity },
-  ];
+    {
+      name: "Fixed Capital Utilization",
+      value: data.ratios.fixedCapitalUtilization.value,
+      score: hs.fixedCapitalUtilization,
+    },
+    {
+      name: "Asset Reinvestment Ratio",
+      value: data.ratios.assetReinvestmentRatio.value,
+      score: hs.assetReinvestmentRatio,
+    },
+    {
+      name: "Capex Intensity",
+      value: data.ratios.capexIntensity.value,
+      score: hs.capexIntensity,
+    },
+  ].filter((r) => r.score != null) as Array<{ name: string; value: string; score: number }>;
 
   const figures: HeadlineFigure[] = [
     {

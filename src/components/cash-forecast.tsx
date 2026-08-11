@@ -41,6 +41,7 @@ import {
   ReferenceLine,
 } from "recharts";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
+import { useAuth } from "@/hooks/use-auth";
 import { useServerFn } from "@tanstack/react-start";
 import { listClientReviewSignoffs } from "@/lib/review-signoffs.functions";
 import type { ClientReviewSignoff } from "@/lib/review-signoffs.functions";
@@ -52,6 +53,7 @@ import {
   runwayWeeksFromCashflow,
   runwayWeeksFromClosings,
 } from "@/lib/cash-runway";
+import { hashFigures, latestSnapshotId, recordDelivery } from "@/lib/advisory-deliveries";
 // @react-pdf/renderer + the branded report are dynamically imported inside
 // exportPDF to avoid blocking initial hydration.
 
@@ -382,6 +384,7 @@ export function CashForecastPanel({
   onBankPublish?: (payload: CashForecastPublishPayload) => void;
 } = {}) {
   const { profile } = useAccountantProfile();
+  const { user } = useAuth();
   const fetchReviewSignoffs = useServerFn(listClientReviewSignoffs);
   const [exporting, setExporting] = useState(false);
   const [forecastSignoff, setForecastSignoff] = useState<ClientReviewSignoff | null>(null);
@@ -680,6 +683,7 @@ export function CashForecastPanel({
         import("@/reports/cash-forecast"),
       ]);
 
+      const derivedRunway = runwayWeeksFromClosings(calc.closing, CASH_RUNWAY_THRESHOLD_RAND);
       const forecastWeeks = weeks.map((_, i) => ({
         period_label: `Week ${i + 1}`,
         opening_balance: Math.round(i === 0 ? calc.opening : calc.closing[i - 1]),
@@ -688,7 +692,7 @@ export function CashForecastPanel({
         net_movement: Math.round(calc.net[i]),
         closing_balance: Math.round(calc.closing[i]),
         scenario: "moderate" as const,
-        runway_weeks: Math.max(0, WEEKS - i),
+        runway_weeks: Math.max(0, derivedRunway - i),
       }));
 
       const assumptions = [
@@ -716,7 +720,11 @@ export function CashForecastPanel({
           cashForecast: forecastWeeks,
           scenario: "moderate",
           accountantProfile: profile,
+<<<<<<< HEAD
           // Same R50k floor as on-screen runway — never 0 (that invents breaches).
+=======
+          // Same R50k floor as on-screen runway — never 0.
+>>>>>>> origin/cursor/reports-honesty-ledger-5d34
           minimumThreshold: CASH_RUNWAY_THRESHOLD_RAND,
           assumptions,
         }) as Parameters<typeof pdf>[0],
@@ -730,6 +738,25 @@ export function CashForecastPanel({
       a.click();
       a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 2000);
+
+      if (user && clientId) {
+        const snapId = await latestSnapshotId(clientId);
+        await recordDelivery({
+          clientId,
+          channel: "pdf_download",
+          kind: "report_pdf",
+          reportKey: "forecast",
+          snapshotId: snapId,
+          figuresHash: hashFigures({
+            opening: calc.opening,
+            closings: calc.closing,
+            runway: derivedRunway,
+            threshold: CASH_RUNWAY_THRESHOLD_RAND,
+          }),
+          periodLabel: period,
+          createdBy: user.id,
+        });
+      }
     } catch (err) {
       toast.error(`PDF export failed: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
