@@ -741,6 +741,14 @@ export type Database = {
           name: string
           owner_user_id: string
           referral_code: string | null
+          logo_url: string | null
+          accent_color: string | null
+          primary_color: string | null
+          secondary_color: string | null
+          tagline: string | null
+          brand_contact_name: string | null
+          brand_contact_email: string | null
+          brand_updated_at: string | null
         }
         Insert: {
           created_at?: string
@@ -748,6 +756,14 @@ export type Database = {
           name: string
           owner_user_id: string
           referral_code?: string | null
+          logo_url?: string | null
+          accent_color?: string | null
+          primary_color?: string | null
+          secondary_color?: string | null
+          tagline?: string | null
+          brand_contact_name?: string | null
+          brand_contact_email?: string | null
+          brand_updated_at?: string | null
         }
         Update: {
           created_at?: string
@@ -755,6 +771,14 @@ export type Database = {
           name?: string
           owner_user_id?: string
           referral_code?: string | null
+          logo_url?: string | null
+          accent_color?: string | null
+          primary_color?: string | null
+          secondary_color?: string | null
+          tagline?: string | null
+          brand_contact_name?: string | null
+          brand_contact_email?: string | null
+          brand_updated_at?: string | null
         }
         Relationships: []
       }
