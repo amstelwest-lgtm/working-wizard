@@ -11,8 +11,8 @@
  *   3. Member signs in with the anon key (same as the browser does) and:
  *       a. effectiveClientId step-2 (membership lookup) resolves the client
  *       b. Member can SELECT client metadata (business_type)
- *       c. Member CANNOT UPDATE the client record (owner-only RLS — Migration
- *          20260806200000_clients_update_owner_only.sql)
+ *       c. Member CANNOT UPDATE the client record (owner-or-firm RLS —
+ *          invited client_member excluded; see 20260811160000_clients_update_owner_or_firm.sql)
  *   4. Pure-function test: first-run gate logic shows the onboarding dialog
  *      only for client_owner, never for client_member.
  *
@@ -270,8 +270,8 @@ async function testInviteFlow(admin: SupabaseClient) {
     : fail("business_type missing — first-run gate might show the owner-only dialog");
   pass("Role guard verified: client_member excluded from first-run dialog (pure-function test above)");
 
-  // ── 6. Member CANNOT UPDATE client — owner-only RLS enforced at DB level ──
-  section("6 · Member CANNOT PATCH client record (owner-only RLS — migration 20260806200000)");
+  // ── 6. Member CANNOT UPDATE client — invited members stay blocked (Gap 3 keeps this)
+  section("6 · Member CANNOT PATCH client record (owner-or-firm RLS — invited members excluded)");
   const { error: patchErr } = await memberClient
     .from("clients")
     .update({ business_type: "retail" })
