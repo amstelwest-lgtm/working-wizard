@@ -47,6 +47,11 @@ import type { ClientReviewSignoff } from "@/lib/review-signoffs.functions";
 import { ReviewSignoffBadge, ReviewSignoffButton, computeIsStale } from "@/components/review-signoff";
 import { CashFromBanksDrafter } from "@/components/cash-from-banks-drafter";
 import type { CashForecastPublishPayload } from "@/lib/cash-from-banks.types";
+import {
+  CASH_RUNWAY_THRESHOLD_RAND,
+  runwayWeeksFromCashflow,
+  runwayWeeksFromClosings,
+} from "@/lib/cash-runway";
 // @react-pdf/renderer + the branded report are dynamically imported inside
 // exportPDF to avoid blocking initial hydration.
 
@@ -451,12 +456,14 @@ export function CashForecastPanel({
       return;
     }
     const forecastUpdatedAt = new Date().toISOString();
+    const runway = runwayWeeksFromCashflow(payload);
     const { error } = await supabase
       .from("clients")
       .update({
         cashflow: payload as never,
         cashflow_bank_draft: payload as never,
         last_forecast_at: forecastUpdatedAt,
+        ...(runway != null ? { cash_runway_weeks: runway } : {}),
       })
       .eq("id", clientId);
     if (error) {
@@ -465,6 +472,7 @@ export function CashForecastPanel({
         .update({
           cashflow: payload as never,
           last_forecast_at: forecastUpdatedAt,
+          ...(runway != null ? { cash_runway_weeks: runway } : {}),
         })
         .eq("id", clientId);
       if (retry.error) {
@@ -535,9 +543,14 @@ export function CashForecastPanel({
     const t = setTimeout(async () => {
       const payload = { startDate, openingBalance, revenue, expenses, other, revAdj, expAdj, collectDelay, headcountDelta, avgSalary, fixedCostDelta, revGrowthPct, capexAmount, capexWeek };
       const forecastUpdatedAt = new Date().toISOString();
+      const runway = runwayWeeksFromCashflow(payload);
       const { error } = await supabase
         .from("clients")
-        .update({ cashflow: payload as never, last_forecast_at: forecastUpdatedAt })
+        .update({
+          cashflow: payload as never,
+          last_forecast_at: forecastUpdatedAt,
+          ...(runway != null ? { cash_runway_weeks: runway } : {}),
+        })
         .eq("id", clientId);
       if (error) toast.error(`Cash forecast save failed: ${error.message}`);
       else setLastForecastAt(forecastUpdatedAt);
@@ -642,6 +655,7 @@ export function CashForecastPanel({
   const lowestWeek = calc.closing.indexOf(lowestBal) + 1;
   const closingW13 = calc.closing[WEEKS - 1];
   const trajectory = closingW13 - calc.opening;
+  const runwayWeeks = runwayWeeksFromClosings(calc.closing, CASH_RUNWAY_THRESHOLD_RAND);
   const scenarioActive =
     revAdj !== 100 || expAdj !== 100 || collectDelay !== 0 || headcountDelta !== 0 ||
     (parseFloat(fixedCostDelta) || 0) !== 0 || revGrowthPct !== 0 || (parseFloat(capexAmount) || 0) !== 0;
@@ -861,6 +875,12 @@ export function CashForecastPanel({
               value={fmtCompact(lowestBal)}
               tone={shortfall ? "bad" : "good"}
               sub={`Week ${lowestWeek} · ${weeks[lowestWeek - 1]}`}
+            />
+            <Stat
+              label="Cash runway"
+              value={runwayWeeks >= WEEKS ? `${WEEKS}+ wk` : `${runwayWeeks} wk`}
+              tone={runwayWeeks < 8 ? "bad" : runwayWeeks < 13 ? "neutral" : "good"}
+              sub={`Above R${(CASH_RUNWAY_THRESHOLD_RAND / 1000).toFixed(0)}k floor`}
             />
             <Stat
               label="Net cash · next 4 weeks"

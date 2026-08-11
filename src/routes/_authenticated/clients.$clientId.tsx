@@ -28,7 +28,12 @@ import { ReviewSignoffButton, computeIsStale } from "@/components/review-signoff
 import { parseOperatingProfile } from "@/lib/client-profile";
 import { profileIndustryLabel } from "@/lib/profile-signals";
 import { AccountantOperatingProfile } from "@/components/accountant-operating-profile";
+<<<<<<< HEAD
 import { NoteLayer } from "@/components/note-layer";
+=======
+import { effectiveCashRunwayWeeks, runwayWeeksFromCashflow } from "@/lib/cash-runway";
+import { countOpenQueriesForClient } from "@/lib/open-queries";
+>>>>>>> origin/cursor/portfolio-runway-queries-5d34
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
@@ -418,6 +423,8 @@ function ClientView() {
 
   // Upload financials modal
   const [uploadOpen, setUploadOpen] = useState(false);
+  /** Unresolved client notes — live open-query count for triage. */
+  const [openQueriesCount, setOpenQueriesCount] = useState(0);
 
   // Computed ratios
   const ratioInputs: RatioInputs = {
@@ -441,7 +448,11 @@ function ClientView() {
     founderHours: financials["founderHours"] ?? "",
   };
   const ratios = computeRatios(ratioInputs);
-  const healthScore = scoreFromFlatFinancials(financials, client?.cash_runway_weeks) ?? 0;
+  const effectiveRunway = effectiveCashRunwayWeeks(
+    client?.cash_runway_weeks,
+    client?.cashflow as Parameters<typeof effectiveCashRunwayWeeks>[1],
+  );
+  const healthScore = scoreFromFlatFinancials(financials, effectiveRunway) ?? 0;
   const healthScoreRounded = Math.round(healthScore);
 
   // ── Health orb & pillar computation ────────────────────────────────────
@@ -615,6 +626,20 @@ function ClientView() {
   }, [clientId]);
 
   useEffect(() => {
+    if (!clientId) {
+      setOpenQueriesCount(0);
+      return;
+    }
+    let cancelled = false;
+    countOpenQueriesForClient(clientId).then((n) => {
+      if (!cancelled) setOpenQueriesCount(n);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [clientId, activeTab]);
+
+  useEffect(() => {
     if (!clientId) return;
     fetchReviewSignoffs({ data: { clientId } })
       .then(({ signoffs }) => {
@@ -746,10 +771,10 @@ function ClientView() {
       toast.success(`Snapshot saved for ${periodLabel}`);
       await recordScoreHistory(
         clientId,
-        scoreFromRatioInputs(ratioInputs, client?.cash_runway_weeks),
+        scoreFromRatioInputs(ratioInputs, effectiveRunway),
       );
     }
-  }, [clientId, financials, ratioInputs, client?.cash_runway_weeks]);
+  }, [clientId, financials, ratioInputs, effectiveRunway]);
 
   // ── Upload confirm ────────────────────────────────────────────────────────
 
@@ -799,7 +824,7 @@ function ClientView() {
         .update({ financials: inputs as never, financials_updated_at: financialsUpdatedAt })
         .eq("id", clientId);
 
-      await recordScoreHistory(clientId, scoreFromRatioInputs(inputs, client?.cash_runway_weeks));
+      await recordScoreHistory(clientId, scoreFromRatioInputs(inputs, effectiveRunway));
 
       // Update local state with new financials
       setFinancials(
@@ -809,7 +834,7 @@ function ClientView() {
       toast.success(`Financials saved for ${periodLabel}`);
       setUploadOpen(false);
     },
-    [clientId, client?.cash_runway_weeks],
+    [clientId, effectiveRunway],
   );
 
   // ── Deliverables bar actions ──────────────────────────────────────────────
@@ -887,18 +912,18 @@ function ClientView() {
     const score = healthScoreRounded;
     const tier = scoreTier(score);
     const tierLabel = tier === "healthy" ? "Healthy" : tier === "at_risk" ? "At Risk" : "Critical";
-    const runway = client.cash_runway_weeks != null ? `${client.cash_runway_weeks} weeks` : "—";
+    const runway = effectiveRunway != null ? `${effectiveRunway} weeks` : "—";
     const subject = encodeURIComponent(`${client.name} — Financial Health Update`);
     const body = encodeURIComponent(
       `Hi,\n\nHere is a brief financial health summary for ${client.name}.\n\n` +
         `Overall Health Score: ${score}/100 (${tierLabel})\n` +
         `Cash Runway: ${runway}\n` +
-        `Open Queries: ${client.open_queries_count}\n\n` +
+        `Open Queries: ${openQueriesCount}\n\n` +
         `Please review the attached report for detailed ratio analysis and recommended actions.\n\n` +
         `Best regards,\n${profile.accountantName || "Your Accountant"}\n${profile.firmName || ""}`,
     );
     window.open(`mailto:?subject=${subject}&body=${body}`);
-  }, [client, healthScoreRounded, profile]);
+  }, [client, healthScoreRounded, profile, effectiveRunway, openQueriesCount]);
 
   const handleWhatsApp = useCallback(() => {
     if (!client) return;
@@ -908,11 +933,12 @@ function ClientView() {
     const text = encodeURIComponent(
       `${client.name} Financial Health Update\n` +
         `Health Score: ${score}/100 (${tierLabel})\n` +
-        `Cash Runway: ${client.cash_runway_weeks != null ? `${client.cash_runway_weeks} wk` : "—"}\n` +
+        `Cash Runway: ${effectiveRunway != null ? `${effectiveRunway} wk` : "—"}\n` +
+        `Open Queries: ${openQueriesCount}\n` +
         `Prepared by ${profile.firmName || "your accountant"} via MILŌN Portal.`,
     );
     window.open(`https://wa.me/?text=${text}`, "_blank");
-  }, [client, healthScoreRounded, profile]);
+  }, [client, healthScoreRounded, profile, effectiveRunway, openQueriesCount]);
 
   // ── Playbook drawer ───────────────────────────────────────────────────────
 
@@ -1048,7 +1074,7 @@ function ClientView() {
           </div>
           <div className="meta">
             <div>
-              <b>{client.cash_runway_weeks != null ? `${client.cash_runway_weeks} wk` : "—"}</b>
+              <b>{effectiveRunway != null ? `${effectiveRunway} wk` : "—"}</b>
               <span>Cash runway</span>
             </div>
             <div>
@@ -1064,7 +1090,7 @@ function ClientView() {
               <span>Last forecast</span>
             </div>
             <div>
-              <b>{client.open_queries_count}</b>
+              <b>{openQueriesCount}</b>
               <span>Open queries</span>
             </div>
             <div>
@@ -1526,12 +1552,14 @@ function ClientView() {
               reloadToken={cashForecastReloadToken}
               openBankUploadToken={cashBankUploadToken}
               onBankPublish={(payload) => {
+                const runway = runwayWeeksFromCashflow(payload);
                 setClient((c) =>
                   c
                     ? {
                         ...c,
                         cashflow: payload,
                         last_forecast_at: new Date().toISOString(),
+                        ...(runway != null ? { cash_runway_weeks: runway } : {}),
                       }
                     : c,
                 );
