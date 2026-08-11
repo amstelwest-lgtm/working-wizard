@@ -4,6 +4,7 @@ import { computeRatios, scoreTier, type HealthTier, type RatioInputs } from "@/l
  * Single source of truth for overall health scoring.
  *
  * Surfaces that must agree:
+ * - Owner app overview sphere + captions
  * - Accountant portfolio dashboard (ring + status chip)
  * - Client header ring + sphere pillars
  * - `client_score_history` writes

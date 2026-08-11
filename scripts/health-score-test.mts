@@ -9,6 +9,7 @@ import {
   healthFromRatioInputs,
   scoreFromFlatFinancials,
 } from "../src/lib/health-score";
+import { CASH_RUNWAY_THRESHOLD_RAND } from "../src/lib/cash-runway";
 import type { RatioInputs } from "../src/lib/ratios";
 
 function assert(cond: boolean, msg: string) {
@@ -86,6 +87,9 @@ const fromFlat = scoreFromFlatFinancials(
 );
 assert(fromInputs.overall === fromFlat, `flat vs inputs: ${fromInputs.overall} vs ${fromFlat}`);
 assert(fromInputs.pillars.every((p) => p.score != null), "all pillars scored");
+
+// R50k cash-runway floor is shared — PDF exports must not invent a R0 floor.
+assert(CASH_RUNWAY_THRESHOLD_RAND === 50_000, "R50k runway floor");
 
 console.log("health-score-test: ok");
 console.log("sample overall", fromInputs.overall, fromInputs.displayLabel, fromInputs.pillars.map((p) => `${p.id}:${p.score}`).join(" "));

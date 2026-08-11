@@ -19,6 +19,7 @@ import { C, fmtRand, fmtRandCompact, resolveTheme } from "@/components/pdf/theme
 import { cashForecastNarrative } from "./narrative";
 import type { ClientOperatingProfile } from "@/lib/client-profile";
 import { profileCashAssumptions } from "@/lib/profile-signals";
+import { CASH_RUNWAY_THRESHOLD_RAND } from "@/lib/cash-runway";
 
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -49,7 +50,7 @@ export type CashForecastPDFProps = {
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
-const DEFAULT_THRESHOLD = 50_000;
+const DEFAULT_THRESHOLD = CASH_RUNWAY_THRESHOLD_RAND;
 const CHART_W = 515;
 const CHART_H = 130;
 const LABEL_H = 20;

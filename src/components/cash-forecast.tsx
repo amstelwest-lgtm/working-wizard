@@ -716,7 +716,8 @@ export function CashForecastPanel({
           cashForecast: forecastWeeks,
           scenario: "moderate",
           accountantProfile: profile,
-          minimumThreshold: 0,
+          // Same R50k floor as on-screen runway — never 0 (that invents breaches).
+          minimumThreshold: CASH_RUNWAY_THRESHOLD_RAND,
           assumptions,
         }) as Parameters<typeof pdf>[0],
       ).toBlob();

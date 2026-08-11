@@ -32,6 +32,8 @@ import { BenchmarkBar } from "@/components/benchmark-bar";
 import { AssignButton } from "@/components/assign-button";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { computeRatios, BUSINESS_TYPE_TO_BENCHMARK } from "@/lib/ratios";
+import { healthFromRatioInputs } from "@/lib/health-score";
+import { effectiveCashRunwayWeeks, type SavedCashflowLike } from "@/lib/cash-runway";
 import { FinancialInputsContext, type WeeklyInputs, type WeeklyRow, DEFAULT_WEEKLY_ROW } from "@/contexts/financial-inputs";
 import { WeeklyInputTable } from "@/components/weekly-input-table";
 import { ProfitabilityWaterfall } from "@/components/profitability-waterfall";
@@ -1549,6 +1551,7 @@ function Index() {
   const [clientMeta, setClientMeta] = useState<{
     business_type: string | null;
     cash_runway_weeks: number | null;
+    cashflow?: SavedCashflowLike | null;
     financials_updated_at?: string | null;
     operating_profile?: ClientOperatingProfile | null;
   } | null>(null);
@@ -1570,13 +1573,14 @@ function Index() {
     if (!effectiveClientId) { setClientMeta(null); return; }
     supabase
       .from("clients")
-      .select("business_type, cash_runway_weeks, financials_updated_at, operating_profile, financial_year_start_month")
+      .select("business_type, cash_runway_weeks, cashflow, financials_updated_at, operating_profile, financial_year_start_month")
       .eq("id", effectiveClientId)
       .maybeSingle()
       .then((res) => {
         const data = res.data as {
           business_type: string | null;
           cash_runway_weeks: number | null;
+          cashflow?: SavedCashflowLike | null;
           financials_updated_at: string | null;
           operating_profile?: unknown;
           financial_year_start_month?: number | null;
@@ -1587,6 +1591,7 @@ function Index() {
             ? {
                 business_type: data.business_type,
                 cash_runway_weeks: data.cash_runway_weeks,
+                cashflow: data.cashflow ?? null,
                 financials_updated_at: data.financials_updated_at,
                 operating_profile: profile,
               }
@@ -1997,18 +2002,23 @@ function Index() {
     })(),
   };
 
-  const pillarHealths = (() => {
-    const avgKeys = (keys: RatioKey[]) => {
-      const hs = keys.map((k) => healthMap[k]).filter((h) => isFinite(h));
-      return hs.length ? hs.reduce((a, b) => a + b, 0) / hs.length : NaN;
-    };
-    return {
-      profit: avgKeys(["revenueGrowth", "salesPerEmployee", "grossMargin", "directCostsRatio", "fixedCostRatio", "interestBurden", "taxBurden"]),
-      assets: avgKeys(["assetTurnover", "roa", "inventoryDays", "fixedCapitalUtilization", "workingCapitalUtilization"]),
-      financing: avgKeys(["fundingStructure", "debtToEquity", "debtToAssets", "equityMultiplier"]),
-      cash: avgKeys(["debtorDays", "creditorDays", "currentRatio", "workingCapitalFunding", "ocfToEbitda"]),
-    };
-  })();
+  // Overall + pillars — same computeOverallHealth as accountant dashboard / scorecard.
+  // Local healthMap above stays for next-steps / sphere drivers; it must not drive the overall.
+  const effectiveRunway = effectiveCashRunwayWeeks(
+    clientMeta?.cash_runway_weeks,
+    clientMeta?.cashflow ?? null,
+  );
+  const overallHealth = healthFromRatioInputs(v, effectiveRunway);
+  const pillarById = Object.fromEntries(
+    overallHealth.pillars.map((p) => [p.id, p.score ?? NaN]),
+  ) as Record<"profit" | "assets" | "financing" | "cash", number>;
+  const pillarHealths = {
+    profit: pillarById.profit,
+    assets: pillarById.assets,
+    financing: pillarById.financing,
+    cash: pillarById.cash,
+  };
+  const avgHealth = overallHealth.overall ?? NaN;
 
   const valueMap: Record<RatioKey, { value: number; format: "x" | "pct" | "days" | "money" }> = {
     taxBurden: { value: taxBurden, format: "x" },
@@ -2043,21 +2053,6 @@ function Index() {
     debtToEquity: { value: debtToEquity, format: "x" },
     debtToAssets: { value: debtToAssets, format: "pct" },
   };
-
-  // Aggregate financial health score — average of the four pillar averages
-  const avgHealth = (() => {
-    const pillarGroups: RatioKey[][] = [
-      ["revenueGrowth", "salesPerEmployee", "grossMargin", "directCostsRatio", "fixedCostRatio", "interestBurden", "taxBurden"],
-      ["assetTurnover", "roa", "inventoryDays", "fixedCapitalUtilization", "workingCapitalUtilization"],
-      ["fundingStructure", "debtToEquity", "debtToAssets", "equityMultiplier", "interestBurden", "workingCapitalDays"],
-      ["debtorDays", "creditorDays", "inventoryDays", "currentRatio", "workingCapitalFunding", "capexIntensity", "assetReinvestmentRatio", "ocfToEbitda"],
-    ];
-    const pillarAvgs = pillarGroups.map((keys) => {
-      const hs = keys.map((k) => healthMap[k]).filter((h) => isFinite(h));
-      return hs.length ? hs.reduce((a, b) => a + b, 0) / hs.length : NaN;
-    }).filter((h) => isFinite(h));
-    return pillarAvgs.length ? pillarAvgs.reduce((a, b) => a + b, 0) / pillarAvgs.length : NaN;
-  })();
 
   const spherePillars = buildSpherePillars({
     overallHealth: avgHealth,

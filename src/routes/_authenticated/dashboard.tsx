@@ -123,26 +123,36 @@ function RingSvg({
   size?: number;
   sw?: number;
 }) {
-  const s = score ?? 50;
+  // Null score = empty ring. Never invent 50 — that makes unscored clients look average.
+  const hasScore = score != null && Number.isFinite(score);
+  const s = hasScore ? Math.min(100, Math.max(0, score)) : 0;
   const r = (size - sw) / 2;
   const c = 2 * Math.PI * r;
   const off = c * (1 - s / 100);
-  const tier = status ?? scoreTier(s);
-  const col = tier === "healthy" ? "var(--ok)" : tier === "at_risk" ? "var(--warn)" : "var(--risk)";
+  const tier = status ?? (hasScore ? scoreTier(s) : "at_risk");
+  const col = !hasScore
+    ? "var(--muted, #94a3b8)"
+    : tier === "healthy"
+      ? "var(--ok)"
+      : tier === "at_risk"
+        ? "var(--warn)"
+        : "var(--risk)";
   return (
     <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
       <circle className="tr" cx={size / 2} cy={size / 2} r={r} fill="none" strokeWidth={sw} />
-      <circle
-        className="fl"
-        cx={size / 2}
-        cy={size / 2}
-        r={r}
-        fill="none"
-        strokeWidth={sw}
-        stroke={col}
-        strokeDasharray={c.toFixed(1)}
-        strokeDashoffset={off.toFixed(1)}
-      />
+      {hasScore && (
+        <circle
+          className="fl"
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          fill="none"
+          strokeWidth={sw}
+          stroke={col}
+          strokeDasharray={c.toFixed(1)}
+          strokeDashoffset={off.toFixed(1)}
+        />
+      )}
     </svg>
   );
 }
@@ -466,13 +476,15 @@ function Dashboard() {
   };
 
   // ── Derived stats ─────────────────────────────────────────────────────────
-  const avgHealth = clientRows.length
-    ? Math.round(clientRows.reduce((s, c) => s + (c.score ?? 50), 0) / clientRows.length)
-    : 0;
-  const atRiskCount = clientRows.filter((c) => {
-    const tier = scoreTier(c.score);
-    return tier === "critical";
-  }).length;
+  // Average only scored clients — never invent 50 for empty financials.
+  const scoredRows = clientRows.filter((c) => c.score != null && Number.isFinite(c.score));
+  const avgHealth = scoredRows.length
+    ? Math.round(scoredRows.reduce((s, c) => s + (c.score as number), 0) / scoredRows.length)
+    : null;
+  // "Needs attention" = display status (includes critical-pillar demotion to Watch).
+  const atRiskCount = clientRows.filter(
+    (c) => c.health.overall != null && c.health.displayStatus !== "healthy",
+  ).length;
   const tier = partnerTier(clientRows.length);
 
   // ── Filtered clients ──────────────────────────────────────────────────────
@@ -567,10 +579,14 @@ function Dashboard() {
               Avg health
             </div>
             <div className="v">
-              {loading ? "—" : avgHealth}
-              <small>/100</small>
+              {loading || avgHealth == null ? "—" : avgHealth}
+              {avgHealth != null && <small>/100</small>}
             </div>
-            <div className="d">Across all clients</div>
+            <div className="d">
+              {scoredRows.length
+                ? `Across ${scoredRows.length} scored client${scoredRows.length === 1 ? "" : "s"}`
+                : "No scored clients yet"}
+            </div>
           </div>
 
           <div className="stat">
@@ -675,7 +691,11 @@ function Dashboard() {
                     stroke="#d4af37"
                     strokeWidth="4"
                     strokeDasharray="100.5"
-                    strokeDashoffset={loading ? 37 : (100.5 * (1 - avgHealth / 100)).toFixed(1)}
+                    strokeDashoffset={
+                      loading || avgHealth == null
+                        ? 100.5
+                        : (100.5 * (1 - avgHealth / 100)).toFixed(1)
+                    }
                     strokeLinecap="round"
                     transform="rotate(-90 20 20)"
                   />
@@ -683,7 +703,7 @@ function Dashboard() {
               </div>
               <div className="ln" style={{ width: "84%" }} />
               <div className="ln" style={{ width: "66%" }} />
-              <div className="bar"><i style={{ width: `${avgHealth}%` }} /></div>
+              <div className="bar"><i style={{ width: `${avgHealth ?? 0}%` }} /></div>
               <div className="ln" style={{ width: "74%" }} />
             </div>
             <div className="doc doc-3">
