@@ -314,68 +314,68 @@ const RATIO_NAME_TO_KEY: Record<string, string> = {
   "OCF / EBITDA": "ocfToEbitda",
 };
 
-// ── Report gallery definitions ──────────────────────────────────────────────
+// ── Report gallery definitions (names match Reports Studio / PDF titles) ──
 const REPORT_TEMPLATES = [
   {
     key: "scorecard",
-    name: "Business Health Report",
-    desc: "Full health score, four pillars, and the story of the numbers.",
+    name: "Financial Health Scorecard",
+    desc: "Overall score, four pillars, and every tracked ratio with tier badges.",
     iconPath: "M9 17V9M13 17v-5M17 17v-8",
   },
   {
-    key: "forecast",
-    name: "Cash Runway Report",
-    desc: "13-week forecast, dip analysis and reserve floor.",
-    iconPath: "M3 17l6-6 4 4 8-8",
-  },
-  {
-    key: "benchmark",
-    name: "Ratio Benchmark Report",
-    desc: "Every ratio vs sector median and top quartile.",
-    iconPath: "M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01",
-  },
-  {
     key: "intervention",
-    name: "Action Plan Report",
-    desc: "Ranked 10-step playbooks for at-risk ratios.",
+    name: "Priority Intervention Plan",
+    desc: "Ranked action steps for at-risk and critical ratios.",
     iconPath: "M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11",
   },
   {
+    key: "forecast",
+    name: "13-Week Cash Flow Forecast",
+    desc: "Weekly cash position, runway to the R50k floor, and assumptions.",
+    iconPath: "M3 17l6-6 4 4 8-8",
+  },
+  {
+    key: "cycle",
+    name: "Cash Flow Cycle Report",
+    desc: "Debtors, stock, creditors, and cash trapped in the cycle.",
+    iconPath: "M21 12a9 9 0 1 1-6.2-8.6M21 3v6h-6",
+  },
+  {
     key: "waterfall",
-    name: "Profitability Deep-dive",
-    desc: "Margins, mix and pricing power in detail.",
+    name: "Profitability Waterfall",
+    desc: "Revenue through to net profit with margin bridges.",
     iconPath:
       "M12 8c-2 0-3 .9-3 2s1 1.6 3 2 3 1 3 2-1 2-3 2M12 6v2M12 16v2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0",
   },
   {
-    key: "cycle",
-    name: "Working Capital Report",
-    desc: "Debtors, creditors, stock and the cash cycle.",
-    iconPath: "M21 12a9 9 0 1 1-6.2-8.6M21 3v6h-6",
-  },
-  {
     key: "leverage",
-    name: "Debt & Financing Review",
-    desc: "Facilities, cost of capital and leverage path.",
+    name: "Leverage & Solvency",
+    desc: "Debt structure, equity bridge, and financing ratios.",
     iconPath: "M4 10h16M4 14h16M7 10V7a5 5 0 0 1 10 0v3",
   },
   {
-    key: "movement",
-    name: "Growth & Trends Report",
-    desc: "Revenue trajectory and momentum indicators.",
-    iconPath: "M23 6l-9.5 9.5-5-5L1 18M17 6h6v6",
-  },
-  {
     key: "assets",
-    name: "Scenario Report",
-    desc: "What-if models: hires, price moves, capex.",
+    name: "Asset Productivity",
+    desc: "DuPont ROE tree, capex vs depreciation, and asset turns.",
     iconPath: "M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2zM22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z",
   },
   {
     key: "labor",
-    name: "Board Pack",
-    desc: "Everything above, condensed for a board or bank.",
-    iconPath: "M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9zM14 3v6h6",
+    name: "Labour Productivity",
+    desc: "Revenue per employee, GP per labour rand, growth vs inflation.",
+    iconPath: "M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75",
+  },
+  {
+    key: "movement",
+    name: "Ratio Movement",
+    desc: "Tracked ratios across four periods — declines highlighted.",
+    iconPath: "M23 6l-9.5 9.5-5-5L1 18M17 6h6v6",
+  },
+  {
+    key: "benchmark",
+    name: "Industry Benchmark Report",
+    desc: "Each ratio vs sector median and top quartile.",
+    iconPath: "M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01",
   },
 ];
 
@@ -834,7 +834,7 @@ function ClientView() {
     if (!client) return;
     navigate({
       to: "/reports",
-      search: { client: client.name, clientId: client.id } as never,
+      search: { client: client.name, clientId: client.id, report: undefined },
     });
   }, [client, navigate]);
 
@@ -941,13 +941,20 @@ function ClientView() {
 
   // ── Report navigation ─────────────────────────────────────────────────────
 
-  const navigateToReport = useCallback(() => {
-    if (!client) return;
-    navigate({
-      to: "/reports",
-      search: { client: client.name, clientId: client.id } as never,
-    });
-  }, [client, navigate]);
+  const navigateToReport = useCallback(
+    (reportKey?: string) => {
+      if (!client) return;
+      navigate({
+        to: "/reports",
+        search: {
+          client: client.name,
+          clientId: client.id,
+          report: reportKey,
+        },
+      });
+    },
+    [client, navigate],
+  );
 
   // ── Loading / error states ────────────────────────────────────────────────
 
@@ -1718,10 +1725,10 @@ function ClientView() {
                 <b>{r.name}</b>
                 <p>{r.desc}</p>
                 <div className="acts">
-                  <button className="btn ghost mini" onClick={navigateToReport}>
+                  <button className="btn ghost mini" onClick={() => navigateToReport(r.key)}>
                     Preview
                   </button>
-                  <button className="btn gold mini" onClick={navigateToReport}>
+                  <button className="btn gold mini" onClick={() => navigateToReport(r.key)}>
                     Generate
                   </button>
                 </div>

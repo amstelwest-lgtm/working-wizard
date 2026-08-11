@@ -529,7 +529,7 @@ function Dashboard() {
           <span className="spacer" />
           <button
             className="tb-btn gold"
-            onClick={() => navigate({ to: "/reports", search: { client: undefined, clientId: undefined } })}
+            onClick={() => navigate({ to: "/reports", search: { client: undefined, clientId: undefined, report: undefined } })}
           >
             <svg viewBox="0 0 24 24">
               <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
@@ -617,7 +617,7 @@ function Dashboard() {
             <div className="spot-actions">
               <button
                 className="btn gold"
-                onClick={() => navigate({ to: "/reports", search: { client: undefined, clientId: undefined } })}
+                onClick={() => navigate({ to: "/reports", search: { client: undefined, clientId: undefined, report: undefined } })}
               >
                 <svg viewBox="0 0 24 24">
                   <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
@@ -819,7 +819,7 @@ function Dashboard() {
                           className="icon-btn"
                           title="Generate report"
                           onClick={() =>
-                            navigate({ to: "/reports", search: { client: c.name, clientId: c.id } })
+                            navigate({ to: "/reports", search: { client: c.name, clientId: c.id, report: undefined } })
                           }
                         >
                           <svg viewBox="0 0 24 24">

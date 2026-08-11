@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { toast } from "sonner";
 import {
   Download, Eye, Loader2, FileText, Lightbulb, BarChart2,
@@ -45,10 +45,24 @@ export const Route = createFileRoute("/_authenticated/reports/")({
   validateSearch: (search: Record<string, unknown>) => ({
     client: typeof search.client === "string" ? search.client : undefined,
     clientId: typeof search.clientId === "string" ? search.clientId : undefined,
+    report: typeof search.report === "string" ? search.report : undefined,
   }),
   component: ReportsPage,
   head: () => ({ meta: [{ title: "Reports — Milōn" }] }),
 });
+
+const REPORT_KEYS = [
+  "scorecard",
+  "intervention",
+  "forecast",
+  "cycle",
+  "waterfall",
+  "leverage",
+  "assets",
+  "labor",
+  "movement",
+  "benchmark",
+] as const;
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
@@ -737,7 +751,7 @@ async function buildInterventions(
       result.push({ ...steps[0], ratio_name: rr.ratio_name, health_tier: rr.health_tier });
     }
   }
-  if (result.length === 0) return MOCK_INTERVENTIONS;
+  if (result.length === 0) return [];
 
   const tierRank = (t: string) => (t === "critical" ? 2 : t === "at_risk" ? 1 : 0);
   const impactOf = (s: string) => {
@@ -1097,7 +1111,7 @@ type PreviewState = {
 // ── Report card ────────────────────────────────────────────────────────────
 
 function ReportCard({
-  report, isGenerating, isPreviewing, isClient, dataLoading,
+  report, isGenerating, isPreviewing, isClient, dataLoading, blocked, highlight,
   onGenerate, onPreview,
 }: {
   report: ReportMeta;
@@ -1105,11 +1119,19 @@ function ReportCard({
   isPreviewing: boolean;
   isClient: boolean;
   dataLoading: boolean;
+  blocked: boolean;
+  highlight?: boolean;
   onGenerate: () => void;
   onPreview: () => void;
 }) {
+  const disabled = !isClient || dataLoading || blocked;
   return (
-    <div className="report-card group flex flex-col rounded-xl border border-border bg-card shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:border-[#c9962b]/60 hover:shadow-md">
+    <div
+      id={`report-card-${report.key}`}
+      className={`report-card group flex flex-col rounded-xl border bg-card shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:border-[#c9962b]/60 hover:shadow-md ${
+        highlight ? "border-[#c9962b] ring-2 ring-[#c9962b]/30" : "border-border"
+      }`}
+    >
       <div className="p-4 pb-3 flex-1">
         <div className="flex items-start gap-3">
           <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${report.iconBg}`}>
@@ -1135,7 +1157,8 @@ function ReportCard({
           size="sm"
           className="flex-1 border-border bg-transparent text-foreground hover:bg-muted hover:text-foreground text-xs gap-1.5"
           onClick={onPreview}
-          disabled={!isClient || isPreviewing || dataLoading}
+          disabled={disabled || isPreviewing}
+          title={blocked ? "Upload financials before generating client reports" : undefined}
         >
           {isPreviewing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Eye className="h-3.5 w-3.5" />}
           {dataLoading ? "Loading…" : "Preview"}
@@ -1144,7 +1167,8 @@ function ReportCard({
           size="sm"
           className="flex-1 text-xs gap-1.5 bg-[#c9962b] text-white hover:bg-[#b8851f]"
           onClick={onGenerate}
-          disabled={!isClient || isGenerating || dataLoading}
+          disabled={disabled || isGenerating}
+          title={blocked ? "Upload financials before generating client reports" : undefined}
         >
           {isGenerating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
           Download
@@ -1405,7 +1429,7 @@ async function recordReportIssued(clientId: string | undefined) {
 }
 
 function ReportsPage() {
-  const { client: clientParam, clientId } = Route.useSearch();
+  const { client: clientParam, clientId, report: reportParam } = Route.useSearch();
   const { profile } = useAccountantProfile();
   const [isClient, setIsClient] = useState(false);
   const [settings, setSettings] = useState<Settings>({
@@ -1423,6 +1447,11 @@ function ReportsPage() {
   const [selectedPlaybook, setSelectedPlaybook] = useState<PlaybookRatio | null>(null);
   const [clientData, setClientData] = useState<ClientReportData | null>(null);
   const [dataLoading, setDataLoading] = useState(false);
+  const deepLinkHandled = useRef<string | null>(null);
+
+  /** Client-linked studio never ships mock figures — upload first. */
+  const blockedForClient =
+    Boolean(clientId) && !dataLoading && !(clientData?.hasData);
 
   function openPlaybook(ratio: PlaybookRatio) {
     setSelectedPlaybook(ratio);
@@ -1439,6 +1468,7 @@ function ReportsPage() {
     let cancelled = false;
     setClientData(null);   // clear before async starts
     setDataLoading(true);
+    deepLinkHandled.current = null;
     loadClientReportData(clientId).then((data) => {
       if (cancelled) return;
       setClientData(data);
@@ -1464,10 +1494,19 @@ function ReportsPage() {
     setPreviewKey(null);
   }, [previewState]);
 
+  function assertCanGenerate(): boolean {
+    if (!isClient || dataLoading) return false;
+    if (blockedForClient) {
+      toast.error("Upload financials for this client before generating reports. Demo figures are never shipped under a client name.");
+      return false;
+    }
+    return true;
+  }
+
   // ── Generate single PDF ──────────────────────────────────────────────────
 
   async function handleGenerate(report: ReportMeta) {
-    if (!isClient || dataLoading) return;
+    if (!assertCanGenerate()) return;
     setLoadingKey(report.key);
     try {
       const blob = await GEN[report.key](settings, profile);
@@ -1485,7 +1524,7 @@ function ReportsPage() {
   // ── Preview single PDF ───────────────────────────────────────────────────
 
   async function handlePreview(report: ReportMeta) {
-    if (!isClient || dataLoading) return;
+    if (!assertCanGenerate()) return;
     if (previewState?.blobUrl) URL.revokeObjectURL(previewState.blobUrl);
     setPreviewKey(report.key);
     setPreviewState({ key: report.key, name: report.name, blobUrl: null, loading: true });
@@ -1501,10 +1540,26 @@ function ReportsPage() {
     }
   }
 
+  // Deep-link from client gallery: /reports?clientId=&report=labor
+  useEffect(() => {
+    if (!isClient || dataLoading) return;
+    if (!reportParam || !REPORT_KEYS.includes(reportParam as (typeof REPORT_KEYS)[number])) return;
+    if (blockedForClient) return;
+    const token = `${clientId ?? "demo"}:${reportParam}`;
+    if (deepLinkHandled.current === token) return;
+    const report = REPORTS.find((r) => r.key === reportParam);
+    if (!report) return;
+    deepLinkHandled.current = token;
+    const el = document.getElementById(`report-card-${report.key}`);
+    el?.scrollIntoView({ behavior: "smooth", block: "center" });
+    void handlePreview(report);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fire once per deep-link token
+  }, [isClient, dataLoading, reportParam, clientId, blockedForClient, clientData?.hasData]);
+
   // ── Generate all as ZIP ──────────────────────────────────────────────────
 
   async function handleGenerateAll() {
-    if (!isClient || dataLoading) return;
+    if (!assertCanGenerate()) return;
     setZipProgress({ done: 0, total: REPORTS.length });
     try {
       const { default: JSZip } = await import("jszip");
@@ -1581,12 +1636,20 @@ function ReportsPage() {
                   </>
                 ) : (
                   <>
-                    <span className="inline-block h-1.5 w-1.5 rounded-full bg-amber-500" />
-                    <span className="text-[11px] text-amber-700 dark:text-amber-400">
-                      No financials uploaded — reports show demo data
+                    <span className="inline-block h-1.5 w-1.5 rounded-full bg-red-500" />
+                    <span className="text-[11px] text-red-700 dark:text-red-400">
+                      No financials — generate blocked. Upload figures on the client file first.
                     </span>
                   </>
                 )}
+              </div>
+            )}
+            {!clientId && (
+              <div className="mt-2 flex items-center gap-1.5">
+                <span className="inline-block h-1.5 w-1.5 rounded-full bg-amber-500" />
+                <span className="text-[11px] text-amber-700 dark:text-amber-400">
+                  No client linked — PDFs use illustrative demo data (watermarked). Open a client for live reports.
+                </span>
               </div>
             )}
           </div>
@@ -1601,7 +1664,8 @@ function ReportsPage() {
               <Button
                 className="gap-2 bg-[#c9962b] hover:bg-[#b8851f] font-semibold text-white"
                 onClick={handleGenerateAll}
-                disabled={!isClient || dataLoading}
+                disabled={!isClient || dataLoading || blockedForClient}
+                title={blockedForClient ? "Upload financials before generating client reports" : undefined}
               >
                 {dataLoading
                   ? <><Loader2 className="h-4 w-4 animate-spin" />Loading client data…</>
@@ -1635,6 +1699,8 @@ function ReportsPage() {
                     isPreviewing={previewKey === r.key}
                     isClient={isClient}
                     dataLoading={dataLoading}
+                    blocked={blockedForClient}
+                    highlight={reportParam === r.key}
                     onGenerate={() => handleGenerate(r)}
                     onPreview={() => handlePreview(r)}
                   />
@@ -1657,6 +1723,8 @@ function ReportsPage() {
                     isPreviewing={previewKey === r.key}
                     isClient={isClient}
                     dataLoading={dataLoading}
+                    blocked={blockedForClient}
+                    highlight={reportParam === r.key}
                     onGenerate={() => handleGenerate(r)}
                     onPreview={() => handlePreview(r)}
                   />
