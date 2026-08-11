@@ -1,6 +1,7 @@
 import type { ComponentType } from 'react'
 import { template as taskAssigned } from './task-assigned'
 import { template as actionTask } from './action-task'
+import { template as noteMention } from './note-mention'
 
 export interface TemplateEntry {
   component: ComponentType<any>
@@ -14,4 +15,5 @@ export interface TemplateEntry {
 export const TEMPLATES: Record<string, TemplateEntry> = {
   'task-assigned': taskAssigned,
   'action-task': actionTask,
+  'note-mention': noteMention,
 }

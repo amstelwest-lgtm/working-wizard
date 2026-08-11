@@ -1,11 +1,14 @@
-import { useRef, useState, useEffect } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Trash2, CheckCheck, CornerDownRight } from "lucide-react";
-import { useNotes } from "@/contexts/notes";
+import { useNotes, type NoteCollaborator } from "@/contexts/notes";
+import { useAuth } from "@/hooks/use-auth";
 
 type NoteLayerProps = {
+  clientId: string | null | undefined;
   tab: string;
   authorName: string;
+  clientName?: string;
 };
 
 function getInitials(name: string) {
@@ -17,17 +20,174 @@ function getInitials(name: string) {
     .join("");
 }
 
-export function NoteLayer({ tab, authorName }: NoteLayerProps) {
-  const { pinMode, setPinMode, addNote, deleteNote, resolveNote, replyToNote, getNotesForTab } =
-    useNotes();
+function MentionComposer({
+  value,
+  onChange,
+  onSubmit,
+  onCancel,
+  collaborators,
+  placeholder,
+  autoFocus,
+  inputRef,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  onSubmit: () => void;
+  onCancel: () => void;
+  collaborators: NoteCollaborator[];
+  placeholder: string;
+  autoFocus?: boolean;
+  inputRef?: React.RefObject<HTMLInputElement | null>;
+}) {
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
+  const [mentionIndex, setMentionIndex] = useState(0);
 
-  const [composing, setComposing] = useState<{ vpX: number; vpY: number; pageX: number; pageY: number } | null>(null);
+  const suggestions = useMemo(() => {
+    if (mentionQuery == null) return [];
+    const q = mentionQuery.toLowerCase();
+    return collaborators
+      .filter(
+        (c) =>
+          c.handle.toLowerCase().includes(q) ||
+          c.name.toLowerCase().includes(q) ||
+          c.email.toLowerCase().includes(q),
+      )
+      .slice(0, 6);
+  }, [collaborators, mentionQuery]);
+
+  function detectMention(next: string, caret: number) {
+    const before = next.slice(0, caret);
+    const m = before.match(/@([a-zA-Z0-9._-]*)$/);
+    if (m) {
+      setMentionQuery(m[1]);
+      setMentionIndex(0);
+    } else {
+      setMentionQuery(null);
+    }
+  }
+
+  function applyMention(c: NoteCollaborator) {
+    const caret = inputRef?.current?.selectionStart ?? value.length;
+    const before = value.slice(0, caret);
+    const after = value.slice(caret);
+    const replaced = before.replace(/@([a-zA-Z0-9._-]*)$/, `@${c.handle} `);
+    onChange(replaced + after);
+    setMentionQuery(null);
+    setTimeout(() => {
+      const el = inputRef?.current;
+      if (!el) return;
+      const pos = replaced.length;
+      el.focus();
+      el.setSelectionRange(pos, pos);
+    }, 0);
+  }
+
+  return (
+    <div className="relative">
+      <input
+        ref={inputRef}
+        type="text"
+        value={value}
+        autoFocus={autoFocus}
+        onChange={(e) => {
+          const next = e.target.value;
+          onChange(next);
+          detectMention(next, e.target.selectionStart ?? next.length);
+        }}
+        onKeyDown={(e) => {
+          if (mentionQuery != null && suggestions.length > 0) {
+            if (e.key === "ArrowDown") {
+              e.preventDefault();
+              setMentionIndex((i) => (i + 1) % suggestions.length);
+              return;
+            }
+            if (e.key === "ArrowUp") {
+              e.preventDefault();
+              setMentionIndex((i) => (i - 1 + suggestions.length) % suggestions.length);
+              return;
+            }
+            if (e.key === "Enter" || e.key === "Tab") {
+              e.preventDefault();
+              applyMention(suggestions[mentionIndex] ?? suggestions[0]);
+              return;
+            }
+            if (e.key === "Escape") {
+              e.preventDefault();
+              setMentionQuery(null);
+              return;
+            }
+          }
+          if (e.key === "Enter") onSubmit();
+          if (e.key === "Escape") onCancel();
+        }}
+        placeholder={placeholder}
+        className="w-full rounded-full border border-[#d4a550]/50 bg-transparent px-4 py-2 text-[13px] text-slate-800 outline-none placeholder:text-slate-400 focus:border-[#d4a550] dark:text-white"
+      />
+      {mentionQuery != null && suggestions.length > 0 && (
+        <div className="absolute left-0 right-0 top-full z-10 mt-1 overflow-hidden rounded-xl border border-black/10 bg-white shadow-lg dark:border-white/10 dark:bg-[#16233d]">
+          {suggestions.map((c, i) => (
+            <button
+              key={c.userId}
+              type="button"
+              className={`flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] ${
+                i === mentionIndex
+                  ? "bg-[#d4a550]/15 text-slate-900 dark:text-white"
+                  : "text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-white/5"
+              }`}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                applyMention(c);
+              }}
+            >
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#d4a550] text-[10px] font-bold text-[#0a1628]">
+                {getInitials(c.name)}
+              </span>
+              <span className="min-w-0 flex-1 truncate">
+                <span className="font-semibold">{c.name}</span>
+                <span className="text-slate-400"> @{c.handle}</span>
+              </span>
+              <span className="shrink-0 text-[10px] text-slate-400">{c.roleLabel}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      {mentionQuery != null && suggestions.length === 0 && (
+        <div className="absolute left-0 right-0 top-full z-10 mt-1 rounded-xl border border-black/10 bg-white px-3 py-2 text-[11px] text-slate-500 shadow-lg dark:border-white/10 dark:bg-[#16233d]">
+          No matching person with an email on this client
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function NoteLayer({ clientId, tab, authorName, clientName }: NoteLayerProps) {
+  const { user } = useAuth();
+  const {
+    pinMode,
+    setPinMode,
+    addNote,
+    deleteNote,
+    resolveNote,
+    replyToNote,
+    getNotesForTab,
+    collaborators,
+    registerSurface,
+    clearSurface,
+  } = useNotes();
+
+  const [composing, setComposing] = useState<{
+    vpX: number;
+    vpY: number;
+    pageX: number;
+    pageY: number;
+  } | null>(null);
   const [noteText, setNoteText] = useState("");
   const [openNoteId, setOpenNoteId] = useState<string | null>(null);
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const [replyText, setReplyText] = useState("");
   const [scrollY, setScrollY] = useState(0);
   const [mounted, setMounted] = useState(false);
+  const [saving, setSaving] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const replyRef = useRef<HTMLInputElement>(null);
 
@@ -37,12 +197,33 @@ export function NoteLayer({ tab, authorName }: NoteLayerProps) {
   }, []);
 
   useEffect(() => {
-    function onScroll() { setScrollY(window.scrollY); }
+    if (!clientId) {
+      clearSurface();
+      return;
+    }
+    registerSurface({
+      clientId,
+      tab,
+      authorName,
+      clientName,
+    });
+  }, [clientId, tab, authorName, clientName, registerSurface, clearSurface]);
+
+  useEffect(() => {
+    return () => {
+      if (clientId) clearSurface(clientId);
+    };
+  }, [clientId, clearSurface]);
+
+  useEffect(() => {
+    function onScroll() {
+      setScrollY(window.scrollY);
+    }
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  const tabNotes = getNotesForTab(tab);
+  const tabNotes = clientId ? getNotesForTab(tab) : [];
   const initials = getInitials(authorName);
 
   function handleCrosshairClick(e: React.MouseEvent<HTMLDivElement>) {
@@ -56,33 +237,40 @@ export function NoteLayer({ tab, authorName }: NoteLayerProps) {
     setTimeout(() => inputRef.current?.focus(), 50);
   }
 
-  function submitNote() {
-    if (!composing || !noteText.trim()) return;
-    const saved = addNote({
-      tab,
-      x: composing.pageX,
-      y: composing.pageY,
-      text: noteText.trim(),
-      author: authorName,
-    });
-    setNoteText("");
-    setComposing(null);
-    setOpenNoteId(saved.id);
+  async function submitNote() {
+    if (!composing || !noteText.trim() || saving) return;
+    setSaving(true);
+    try {
+      const saved = await addNote({
+        x: composing.pageX,
+        y: composing.pageY,
+        text: noteText.trim(),
+      });
+      setNoteText("");
+      setComposing(null);
+      if (saved) setOpenNoteId(saved.id);
+    } finally {
+      setSaving(false);
+    }
   }
 
-  function submitReply(noteId: string) {
-    if (!replyText.trim()) return;
-    replyToNote(noteId, { text: replyText.trim(), author: authorName });
-    setReplyText("");
-    setReplyingTo(null);
+  async function submitReply(noteId: string) {
+    if (!replyText.trim() || saving) return;
+    setSaving(true);
+    try {
+      await replyToNote(noteId, replyText.trim());
+      setReplyText("");
+      setReplyingTo(null);
+    } finally {
+      setSaving(false);
+    }
   }
 
-  if (!mounted) return null;
+  if (!mounted || !clientId) return null;
   if (!pinMode && tabNotes.length === 0 && !composing) return null;
 
   const overlay = (
     <>
-      {/* Crosshair capture layer — only when in pin mode */}
       {pinMode && (
         <div
           style={{ position: "fixed", inset: 0, zIndex: 99990, cursor: "crosshair" }}
@@ -90,11 +278,14 @@ export function NoteLayer({ tab, authorName }: NoteLayerProps) {
         />
       )}
 
-      {/* Saved pins — position tracks the page via scroll offset */}
       {tabNotes.map((note) => {
         const vpX = note.x - window.scrollX;
         const vpY = note.y - scrollY;
-        const inView = vpX > -60 && vpX < window.innerWidth + 60 && vpY > -60 && vpY < window.innerHeight + 60;
+        const inView =
+          vpX > -60 &&
+          vpX < window.innerWidth + 60 &&
+          vpY > -60 &&
+          vpY < window.innerHeight + 60;
         if (!inView) return null;
 
         return (
@@ -119,7 +310,10 @@ export function NoteLayer({ tab, authorName }: NoteLayerProps) {
                 e.stopPropagation();
                 const next = openNoteId === note.id ? null : note.id;
                 setOpenNoteId(next);
-                if (!next) { setReplyingTo(null); setReplyText(""); }
+                if (!next) {
+                  setReplyingTo(null);
+                  setReplyText("");
+                }
               }}
             >
               {note.resolved ? "✓" : getInitials(note.author)}
@@ -132,12 +326,11 @@ export function NoteLayer({ tab, authorName }: NoteLayerProps) {
                 style={{ bottom: "calc(100% + 10px)" }}
                 onClick={(e) => e.stopPropagation()}
               >
-                {/* Original note */}
                 <div className="px-4 pt-3 pb-2">
                   <div className="mb-2 flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#d4a550] text-[10px] font-extrabold text-[#0a1628]">
-                        {initials}
+                        {getInitials(note.author)}
                       </div>
                       <div>
                         <div className="text-[12px] font-semibold text-slate-800 dark:text-white">
@@ -145,38 +338,59 @@ export function NoteLayer({ tab, authorName }: NoteLayerProps) {
                         </div>
                         <div className="text-[10px] text-slate-400">
                           {new Date(note.timestamp).toLocaleString("en-ZA", {
-                            day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
+                            day: "numeric",
+                            month: "short",
+                            hour: "2-digit",
+                            minute: "2-digit",
                           })}
                         </div>
                       </div>
                     </div>
-                    {/* Delete */}
-                    <button
-                      title="Delete note"
-                      onClick={() => { deleteNote(note.id); setOpenNoteId(null); }}
-                      className="rounded p-1 text-slate-300 hover:bg-red-50 hover:text-red-500 dark:text-slate-600 dark:hover:bg-red-900/30 dark:hover:text-red-400"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
+                    {note.authorId === user?.id && (
+                      <button
+                        title="Delete note"
+                        onClick={() => {
+                          void deleteNote(note.id);
+                          setOpenNoteId(null);
+                        }}
+                        className="rounded p-1 text-slate-300 hover:bg-red-50 hover:text-red-500 dark:text-slate-600 dark:hover:bg-red-900/30 dark:hover:text-red-400"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    )}
                   </div>
-                  <div className={`text-[13px] leading-relaxed ${note.resolved ? "text-slate-400 line-through dark:text-slate-500" : "text-slate-700 dark:text-slate-200"}`}>
+                  <div
+                    className={`text-[13px] leading-relaxed ${
+                      note.resolved
+                        ? "text-slate-400 line-through dark:text-slate-500"
+                        : "text-slate-700 dark:text-slate-200"
+                    }`}
+                  >
                     {note.text}
                   </div>
                 </div>
 
-                {/* Replies */}
                 {note.replies.length > 0 && (
-                  <div className="border-t border-black/5 dark:border-white/6 px-4 py-2 space-y-2">
+                  <div className="space-y-2 border-t border-black/5 px-4 py-2 dark:border-white/6">
                     {note.replies.map((r) => (
                       <div key={r.id} className="flex gap-2">
                         <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-200 text-[9px] font-bold text-slate-600 dark:bg-slate-700 dark:text-slate-300">
                           {getInitials(r.author)}
                         </div>
                         <div>
-                          <span className="text-[11px] font-semibold text-slate-700 dark:text-slate-200">{r.author} </span>
-                          <span className="text-[12px] text-slate-600 dark:text-slate-300">{r.text}</span>
+                          <span className="text-[11px] font-semibold text-slate-700 dark:text-slate-200">
+                            {r.author}{" "}
+                          </span>
+                          <span className="text-[12px] text-slate-600 dark:text-slate-300">
+                            {r.text}
+                          </span>
                           <div className="text-[10px] text-slate-400">
-                            {new Date(r.timestamp).toLocaleString("en-ZA", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                            {new Date(r.timestamp).toLocaleString("en-ZA", {
+                              day: "numeric",
+                              month: "short",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
                           </div>
                         </div>
                       </div>
@@ -184,27 +398,34 @@ export function NoteLayer({ tab, authorName }: NoteLayerProps) {
                   </div>
                 )}
 
-                {/* Reply input */}
                 {replyingTo === note.id && (
-                  <div className="border-t border-black/5 dark:border-white/6 px-3 pb-3 pt-2">
-                    <input
-                      ref={replyRef}
-                      type="text"
+                  <div className="border-t border-black/5 px-3 pb-3 pt-2 dark:border-white/6">
+                    <MentionComposer
                       value={replyText}
-                      onChange={(e) => setReplyText(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") submitReply(note.id);
-                        if (e.key === "Escape") { setReplyingTo(null); setReplyText(""); }
+                      onChange={setReplyText}
+                      onSubmit={() => void submitReply(note.id)}
+                      onCancel={() => {
+                        setReplyingTo(null);
+                        setReplyText("");
                       }}
-                      placeholder="Reply…"
-                      className="mb-2 w-full rounded-full border border-[#d4a550]/40 bg-transparent px-3 py-1.5 text-[12px] text-slate-800 outline-none placeholder:text-slate-400 focus:border-[#d4a550] dark:text-white"
+                      collaborators={collaborators}
+                      placeholder="Reply… use @ to notify"
                       autoFocus
+                      inputRef={replyRef}
                     />
-                    <div className="flex justify-end gap-2">
-                      <button onClick={() => { setReplyingTo(null); setReplyText(""); }} className="text-[11px] text-slate-400 hover:text-slate-600">Cancel</button>
+                    <div className="mt-2 flex justify-end gap-2">
                       <button
-                        onClick={() => submitReply(note.id)}
-                        disabled={!replyText.trim()}
+                        onClick={() => {
+                          setReplyingTo(null);
+                          setReplyText("");
+                        }}
+                        className="text-[11px] text-slate-400 hover:text-slate-600"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={() => void submitReply(note.id)}
+                        disabled={!replyText.trim() || saving}
                         className="rounded-full px-3 py-1 text-[11px] font-semibold text-white disabled:opacity-40"
                         style={{ background: "#1a73e8" }}
                       >
@@ -214,9 +435,8 @@ export function NoteLayer({ tab, authorName }: NoteLayerProps) {
                   </div>
                 )}
 
-                {/* Actions */}
                 {replyingTo !== note.id && (
-                  <div className="flex items-center gap-1 border-t border-black/5 dark:border-white/6 px-3 py-2">
+                  <div className="flex items-center gap-1 border-t border-black/5 px-3 py-2 dark:border-white/6">
                     <button
                       onClick={() => {
                         setReplyingTo(note.id);
@@ -228,7 +448,7 @@ export function NoteLayer({ tab, authorName }: NoteLayerProps) {
                       Reply
                     </button>
                     <button
-                      onClick={() => resolveNote(note.id)}
+                      onClick={() => void resolveNote(note.id)}
                       className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${
                         note.resolved
                           ? "bg-emerald-50 text-emerald-600 hover:bg-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-400"
@@ -246,7 +466,6 @@ export function NoteLayer({ tab, authorName }: NoteLayerProps) {
         );
       })}
 
-      {/* Compose dialog — appears at click viewport position */}
       {composing && (
         <div
           data-note="true"
@@ -260,7 +479,7 @@ export function NoteLayer({ tab, authorName }: NoteLayerProps) {
           className="w-[300px] rounded-2xl border border-black/8 bg-white shadow-[0_8px_32px_rgba(0,0,0,0.22)] dark:border-white/10 dark:bg-[#1e2d4a]"
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="flex items-center gap-2.5 px-4 pt-4 pb-3">
+          <div className="flex items-center gap-2.5 px-4 pb-3 pt-4">
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#d4a550] text-[11px] font-extrabold text-[#0a1628]">
               {initials}
             </div>
@@ -270,17 +489,15 @@ export function NoteLayer({ tab, authorName }: NoteLayerProps) {
           </div>
 
           <div className="px-4 pb-3">
-            <input
-              ref={inputRef}
-              type="text"
+            <MentionComposer
               value={noteText}
-              onChange={(e) => setNoteText(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") submitNote();
-                if (e.key === "Escape") setComposing(null);
-              }}
-              placeholder="Comment or add others with @"
-              className="w-full rounded-full border border-[#d4a550]/50 bg-transparent px-4 py-2 text-[13px] text-slate-800 outline-none placeholder:text-slate-400 focus:border-[#d4a550] dark:text-white"
+              onChange={setNoteText}
+              onSubmit={() => void submitNote()}
+              onCancel={() => setComposing(null)}
+              collaborators={collaborators}
+              placeholder="Comment — @name emails only that person"
+              autoFocus
+              inputRef={inputRef}
             />
           </div>
 
@@ -292,12 +509,16 @@ export function NoteLayer({ tab, authorName }: NoteLayerProps) {
               Cancel
             </button>
             <button
-              disabled={!noteText.trim()}
-              onClick={submitNote}
+              disabled={!noteText.trim() || saving}
+              onClick={() => void submitNote()}
               className="rounded-full px-4 py-1.5 text-[13px] font-semibold transition-colors disabled:opacity-40"
-              style={noteText.trim() ? { background: "#1a73e8", color: "#fff" } : { background: "#e2e8f0", color: "#64748b" }}
+              style={
+                noteText.trim()
+                  ? { background: "#1a73e8", color: "#fff" }
+                  : { background: "#e2e8f0", color: "#64748b" }
+              }
             >
-              Comment
+              {saving ? "Saving…" : "Comment"}
             </button>
           </div>
         </div>

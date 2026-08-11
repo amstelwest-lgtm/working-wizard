@@ -28,6 +28,7 @@ import { ReviewSignoffButton, computeIsStale } from "@/components/review-signoff
 import { parseOperatingProfile } from "@/lib/client-profile";
 import { profileIndustryLabel } from "@/lib/profile-signals";
 import { AccountantOperatingProfile } from "@/components/accountant-operating-profile";
+import { NoteLayer } from "@/components/note-layer";
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
@@ -1682,6 +1683,21 @@ function ClientView() {
         clientName={client.name}
         isAccountant={true}
       />
+
+      {/* Contextual notes — shared with owner app, persisted per client */}
+      {client && (
+        <NoteLayer
+          clientId={client.id}
+          tab={activeTab}
+          clientName={client.name}
+          authorName={
+            (user?.user_metadata as { full_name?: string; name?: string } | null)?.full_name
+            ?? (user?.user_metadata as { full_name?: string; name?: string } | null)?.name
+            ?? user?.email
+            ?? "Accountant"
+          }
+        />
+      )}
 
       {/* ===== UPLOAD FINANCIALS MODAL ===== */}
       {uploadOpen && (
