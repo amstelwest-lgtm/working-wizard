@@ -8,8 +8,8 @@ import { signUpInvitedMember } from "@/lib/invite-member.server";
  * confirmation email is required. Safe to use in development and for
  * invited users where the email address is already trusted.
  *
- * For the invited-member path this delegates entirely to signUpInvitedMember()
- * so there is a single canonical implementation of that flow.
+ * For the invite path this delegates entirely to signUpInvitedMember()
+ * so there is a single canonical implementation (including G25 ownership handoff).
  */
 export const adminSignUp = createServerFn({ method: "POST" })
   .inputValidator((input) =>

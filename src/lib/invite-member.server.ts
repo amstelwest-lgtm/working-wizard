@@ -3,10 +3,12 @@
  * the adminSignUp server function and from integration tests without needing to
  * go through the TanStack Start HTTP framing layer.
  *
- * This function creates a confirmed user, writes a client_memberships row with
- * role='client_member', and sets the user_roles entry to 'client_member'.
- * It is the source of truth for the invite → accept path; adminSignUp delegates
- * to it for invited users.
+ * Two invite outcomes (G25):
+ *   A) Firm-created client (current owner is a practice placeholder) →
+ *      transfer clients.owner_user_id to the invitee, keep firm_id, promote
+ *      invitee to client_owner so Action Plan / owner UI gates work.
+ *   B) True client owner inviting staff → membership only as client_member;
+ *      ownership stays put.
  */
 
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
@@ -21,21 +23,60 @@ export type InviteMemberInput = {
 export type InviteMemberResult = {
   userId: string;
   email: string;
+  /** True when invitee became clients.owner_user_id (firm handoff). */
+  transferredOwnership: boolean;
 };
 
+/** Current owner is a firm placeholder for this client (not the real business owner). */
+async function isPracticePlaceholderOwner(
+  ownerUserId: string,
+  firmId: string | null,
+): Promise<boolean> {
+  if (!firmId) return false;
+
+  const { data: firm } = await supabaseAdmin
+    .from("firms")
+    .select("owner_user_id")
+    .eq("id", firmId)
+    .maybeSingle();
+  if (firm?.owner_user_id === ownerUserId) return true;
+
+  const { data: membership } = await supabaseAdmin
+    .from("firm_memberships")
+    .select("user_id")
+    .eq("firm_id", firmId)
+    .eq("user_id", ownerUserId)
+    .maybeSingle();
+  return Boolean(membership?.user_id);
+}
+
 /**
- * Sign up an invited member.
+ * Sign up via invite link.
  *
- * Steps (mirrors what adminSignUp does for the inviteClientId branch):
+ * Steps:
  *   1. Create the auth user with email_confirm:true so no email link is needed.
- *   2. Upsert a client_memberships row: client_member role.
- *   3. Delete any stale user_roles row, then insert client_member.
- *      (user_roles has UNIQUE(user_id,role) not UNIQUE(user_id), so we must
- *       delete-then-insert to avoid duplicate-role rows accumulating.)
+ *   2. Decide ownership handoff vs staff membership (see module doc).
+ *   3. Upsert client_memberships + user_roles accordingly.
+ *   4. When handing off, UPDATE clients.owner_user_id via service role
+ *      (trigger allows auth.uid() IS NULL); leave firm_id unchanged.
  */
 export async function signUpInvitedMember(
   input: InviteMemberInput,
 ): Promise<InviteMemberResult> {
+  const { data: client, error: clientErr } = await supabaseAdmin
+    .from("clients")
+    .select("id, owner_user_id, firm_id")
+    .eq("id", input.inviteClientId)
+    .maybeSingle();
+  if (clientErr) throw new Error(`Failed to load invite client: ${clientErr.message}`);
+  if (!client) throw new Error("Invite link is invalid — client not found.");
+
+  const shouldTransfer = await isPracticePlaceholderOwner(
+    client.owner_user_id,
+    client.firm_id,
+  );
+  const role = shouldTransfer ? "client_owner" : "client_member";
+
   const { data: authData, error } = await supabaseAdmin.auth.admin.createUser({
     email: input.email,
     password: input.password,
@@ -44,6 +85,7 @@ export async function signUpInvitedMember(
       full_name: input.fullName?.trim() ?? "",
       signup_type: "customer",
       invite_client_id: input.inviteClientId,
+      invite_outcome: shouldTransfer ? "owner_handoff" : "staff_member",
     },
   });
 
@@ -52,24 +94,50 @@ export async function signUpInvitedMember(
 
   const userId = authData.user.id;
 
+  if (shouldTransfer) {
+    const { error: ownErr } = await supabaseAdmin
+      .from("clients")
+      .update({ owner_user_id: userId })
+      .eq("id", input.inviteClientId);
+    if (ownErr) {
+      // Roll back auth user so a retry can succeed cleanly.
+      await supabaseAdmin.auth.admin.deleteUser(userId);
+      throw new Error(`Ownership handoff failed: ${ownErr.message}`);
+    }
+  }
+
   const { error: memErr } = await supabaseAdmin
     .from("client_memberships")
     .upsert(
-      { client_id: input.inviteClientId, user_id: userId, role: "client_member" },
+      { client_id: input.inviteClientId, user_id: userId, role },
       { onConflict: "client_id,user_id" },
     );
-  if (memErr)
+  if (memErr) {
+    if (shouldTransfer) {
+      // Best-effort revert ownership so the accountant remains writer.
+      await supabaseAdmin
+        .from("clients")
+        .update({ owner_user_id: client.owner_user_id })
+        .eq("id", input.inviteClientId);
+    }
+    await supabaseAdmin.auth.admin.deleteUser(userId);
     throw new Error(`client_memberships upsert failed: ${memErr.message}`);
+  }
 
   // user_roles has UNIQUE(user_id, role) not UNIQUE(user_id).
-  // Delete any existing row so the invited member always ends up with exactly
-  // one 'client_member' entry — no stale 'client_owner' row can survive.
+  // Delete any existing row so the invitee ends with exactly one role entry.
   await supabaseAdmin.from("user_roles").delete().eq("user_id", userId);
   const { error: roleErr } = await supabaseAdmin
     .from("user_roles")
-    .insert({ user_id: userId, role: "client_member" });
-  if (roleErr)
+    .insert({ user_id: userId, role });
+  if (roleErr) {
+    await supabaseAdmin.auth.admin.deleteUser(userId);
     throw new Error(`user_roles insert failed: ${roleErr.message}`);
+  }
 
-  return { userId, email: authData.user.email ?? input.email };
+  return {
+    userId,
+    email: authData.user.email ?? input.email,
+    transferredOwnership: shouldTransfer,
+  };
 }

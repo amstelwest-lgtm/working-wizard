@@ -975,7 +975,7 @@ function LandingPage() {
               {inviteClientId ? (
                 <>
                   <p style={{ fontSize:13, color:"var(--gold)", marginBottom:16, lineHeight:1.5, fontWeight:600 }}>
-                    You've been invited to a MILŌN workspace. Create your account below.
+                    You've been invited to your business workspace on MILŌN. Create your account to take ownership and see your numbers.
                   </p>
 
                   <label htmlFor="regNameField">Full name</label>

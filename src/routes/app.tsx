@@ -1490,18 +1490,32 @@ function Index() {
       const metaInvite = (u.user.user_metadata?.invite_client_id as string | null) ?? null;
       const inviteClientId = pendingInvite ?? metaInvite;
       if (inviteClientId) {
-        // Attempt to write the membership row.  For users invited via adminSignUp
-        // this row already exists (written server-side) so the upsert is a no-op.
-        // For legacy magic-link invites it may or may not succeed depending on RLS.
-        // NOTE: user_roles is NOT written here — the RLS hardening migration
-        // (20260707000000_rls_hardening.sql) removed authenticated INSERT/DELETE
-        // on user_roles.  Roles are always written server-side by adminSignUp /
-        // signUpInvitedMember.  An in-session setUserRole() call happens in the
-        // separate userRole useEffect so the UI still gates correctly.
-        await supabase.from("client_memberships").upsert(
-          { client_id: inviteClientId, user_id: u.user.id, role: "client_member" },
-          { onConflict: "client_id,user_id" },
-        );
+        // Prefer ownership (G25 handoff already set owner_user_id server-side).
+        const { data: claimed } = await supabase
+          .from("clients")
+          .select("id")
+          .eq("id", inviteClientId)
+          .eq("owner_user_id", u.user.id)
+          .maybeSingle();
+        if (claimed?.id) {
+          localStorage.removeItem("pending_invite_client_id");
+          if (!cancelled) setEffectiveClientId(claimed.id);
+          return;
+        }
+        // Staff invite / legacy path — membership only. Never upsert client_member
+        // over an existing client_owner membership row.
+        const { data: existingMem } = await supabase
+          .from("client_memberships")
+          .select("client_id, role")
+          .eq("client_id", inviteClientId)
+          .eq("user_id", u.user.id)
+          .maybeSingle();
+        if (!existingMem) {
+          await supabase.from("client_memberships").upsert(
+            { client_id: inviteClientId, user_id: u.user.id, role: "client_member" },
+            { onConflict: "client_id,user_id" },
+          );
+        }
         localStorage.removeItem("pending_invite_client_id");
         if (!cancelled) setEffectiveClientId(inviteClientId);
         return;
