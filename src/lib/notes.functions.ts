@@ -3,7 +3,7 @@ import { getRequest } from "@tanstack/react-start/server";
 import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { getSupabaseAdminOrNull } from "@/integrations/supabase/client.server";
 import type { Database } from "@/integrations/supabase/types";
 
 export type NoteMention = {
@@ -172,8 +172,10 @@ export const listNoteCollaborators = createServerFn({ method: "GET" })
     if (userErr || !userData?.user) throw new Error("Not authenticated");
     await assertClientAccess(userData.user.id, data.clientId, sb);
 
-    const admin = supabaseAdmin as unknown as LooseSb;
-    const { data: client, error: clientErr } = await admin
+    // Prefer service-role when present; otherwise use the caller's RLS session.
+    // Lovable Cloud often has no SUPABASE_SERVICE_ROLE_KEY — never throw for that.
+    const db = (getSupabaseAdminOrNull() ?? sb) as unknown as LooseSb;
+    const { data: client, error: clientErr } = await db
       .from("clients")
       .select("id, name, owner_user_id, firm_id, contact_email")
       .eq("id", data.clientId)
@@ -188,7 +190,7 @@ export const listNoteCollaborators = createServerFn({ method: "GET" })
       roleByUser.set(client.owner_user_id, "Owner");
     }
 
-    const { data: members } = await admin
+    const { data: members } = await db
       .from("client_memberships")
       .select("user_id, role")
       .eq("client_id", data.clientId);
@@ -203,7 +205,7 @@ export const listNoteCollaborators = createServerFn({ method: "GET" })
     }
 
     if (client.firm_id) {
-      const { data: firmMembers } = await admin
+      const { data: firmMembers } = await db
         .from("firm_memberships")
         .select("user_id")
         .eq("firm_id", client.firm_id);
@@ -215,7 +217,7 @@ export const listNoteCollaborators = createServerFn({ method: "GET" })
 
     const ids = [...userIds];
     const { data: profiles } = ids.length
-      ? await admin.from("profiles").select("id, email, full_name").in("id", ids)
+      ? await db.from("profiles").select("id, email, full_name").in("id", ids)
       : { data: [] as { id: string; email: string | null; full_name: string | null }[] };
 
     const byId = new Map(

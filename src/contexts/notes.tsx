@@ -141,7 +141,11 @@ export function NotesProvider({ children }: { children: ReactNode }) {
       setClientName(collabRes.clientName ?? surface.clientName ?? "Client");
     } catch (e) {
       console.error("Failed to load notes", e);
-      toast.error(e instanceof Error ? e.message : "Failed to load notes");
+      const msg = e instanceof Error ? e.message : "Failed to load notes";
+      // Lovable Cloud often lacks a service-role key — don't toast that as a user error.
+      if (!/SUPABASE_SERVICE_ROLE_KEY|Connect Supabase in Lovable/i.test(msg)) {
+        toast.error(msg);
+      }
     } finally {
       setLoading(false);
     }

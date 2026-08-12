@@ -2498,7 +2498,7 @@ function Index() {
 
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="mb-5 grid h-auto w-full grid-cols-3 gap-0 rounded-none border-0 border-b border-[#b7872a]/20 bg-transparent p-0 sm:grid-cols-6">
+          <TabsList className="mb-2 grid h-auto w-full grid-cols-3 gap-0 rounded-none border-0 border-b border-[#b7872a]/20 bg-transparent p-0 sm:grid-cols-6">
             {[
               { value: "today", label: "Business Health" },
               { value: "waterfall", label: "Profit" },
@@ -2517,12 +2517,13 @@ function Index() {
             ))}
           </TabsList>
 
-          {/* Simplified / Complex toggle — persists across all tabs */}
-          <div className="mb-3 mt-1 flex justify-center">
+          {/* Simplified / Complex toggle — below tabs, never overlaid on the tab strip */}
+          <div className="relative z-10 mb-4 mt-1 flex justify-center">
             <div className="flex items-center gap-0.5 rounded-full border border-slate-200/80 bg-slate-100/80 p-[3px] dark:border-white/10 dark:bg-white/5">
               {(["simplified", "complex"] as const).map((m) => (
                 <button
                   key={m}
+                  type="button"
                   onClick={() => {
                     setViewMode(m);
                     track("view_mode_toggled", { mode: m, userId: user?.email ?? user?.id ?? "anon" });
