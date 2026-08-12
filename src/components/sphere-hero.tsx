@@ -44,6 +44,11 @@ export type SpherePillar = {
 
 export type SphereHeroProps = {
   overallHealth: number;
+  /**
+   * When set, drives overall orb colour/label (critical-pillar demotion)
+   * instead of raw score bands. Values match `OverallHealth.displayStatus`.
+   */
+  displayStatus?: "healthy" | "at_risk" | "critical" | null;
   overallDelta?: number;
   pillars: SpherePillar[];
   topPriority?: {
@@ -70,6 +75,16 @@ function tierOf(h: number): Tier {
   if (!isFinite(h)) return "nodata";
   if (h >= 65) return "healthy";
   if (h >= 40) return "watch";
+  return "critical";
+}
+
+function tierFromDisplayStatus(
+  status: "healthy" | "at_risk" | "critical" | null | undefined,
+  score: number,
+): Tier {
+  if (status == null) return tierOf(score);
+  if (status === "healthy") return "healthy";
+  if (status === "at_risk") return "watch";
   return "critical";
 }
 
@@ -247,6 +262,7 @@ type Level = 1 | 2 | 3;
 
 export function SphereHero({
   overallHealth,
+  displayStatus,
   overallDelta,
   pillars,
   topPriority,
@@ -267,7 +283,7 @@ export function SphereHero({
     setLevel(next);
   }, []);
 
-  const overallTier = tierOf(overallHealth);
+  const overallTier = tierFromDisplayStatus(displayStatus, overallHealth);
   const overallGlow = overallTier === "healthy" || overallTier === "watch" ? GOLD : TIER_GLOW[overallTier];
 
   return (

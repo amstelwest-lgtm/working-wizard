@@ -20,6 +20,7 @@ import type { Intervention } from "@/reports/intervention-priority";
 import type { CashForecastWeek } from "@/reports/cash-forecast";
 import type { WorkingCapitalData } from "@/reports/cash-cycle";
 import type { ProfitabilityData } from "@/reports/profitability-waterfall";
+import { scoreTier } from "@/lib/ratios";
 
 export const Route = createFileRoute("/_authenticated/reports/demo")({
   component: ReportsDemoPage,
@@ -141,7 +142,8 @@ function triggerDownload(blob: Blob, filename: string) {
 // ── Mini preview components (HTML, not PDF) ────────────────────────────────
 
 function ScoreBar({ score }: { score: number }) {
-  const cls = score >= 70 ? "bg-emerald-500" : score >= 40 ? "bg-amber-500" : "bg-red-500";
+  const tier = scoreTier(score);
+  const cls = tier === "healthy" ? "bg-emerald-500" : tier === "at_risk" ? "bg-amber-500" : "bg-red-500";
   return (
     <div className="h-1.5 w-full rounded-full bg-slate-700">
       <div className={`h-1.5 rounded-full ${cls}`} style={{ width: `${Math.max(0, Math.min(100, score))}%` }} />
@@ -335,8 +337,9 @@ function ReportsDemoPage() {
   const ccc           = MOCK_WC_DATA.cash_conversion_cycle;
   const cccClass      = ccc <= 45 ? "text-emerald-400" : ccc <= 75 ? "text-amber-400" : "text-red-400";
 
-  const overallTierClass = overallScore >= 70 ? "text-emerald-400 border-emerald-500/50"
-    : overallScore >= 40 ? "text-amber-400 border-amber-500/50"
+  const overallTier = scoreTier(overallScore);
+  const overallTierClass = overallTier === "healthy" ? "text-emerald-400 border-emerald-500/50"
+    : overallTier === "at_risk" ? "text-amber-400 border-amber-500/50"
     : "text-red-400 border-red-500/50";
 
   return (
@@ -378,7 +381,7 @@ function ReportsDemoPage() {
             { label: "At Risk", value: String(atRiskCount), cls: "text-amber-400" },
             { label: "Cash Bal", value: "R245k", cls: "text-slate-200" },
             { label: "CCC", value: `${ccc}d`, cls: cccClass },
-            { label: "Net Margin", value: "13.3%", cls: overallScore >= 70 ? "text-emerald-400" : "text-amber-400" },
+            { label: "Net Margin", value: "13.3%", cls: overallTier === "healthy" ? "text-emerald-400" : "text-amber-400" },
           ].map(({ label, value, cls }) => (
             <div key={label} className="rounded-lg border border-slate-800 bg-slate-900/40 p-3 text-center">
               <p className="text-[10px] uppercase tracking-widest text-slate-500 mb-1">{label}</p>
@@ -448,7 +451,7 @@ function ReportsDemoPage() {
                       return (
                         <div key={pillar} className="rounded-lg border border-slate-800 bg-slate-900/60 p-3">
                           <p className="text-[9px] uppercase tracking-widest text-slate-500">{LABELS[pillar]}</p>
-                          <p className={`text-xl font-bold mt-0.5 ${ps >= 70 ? "text-emerald-400" : ps >= 40 ? "text-amber-400" : "text-red-400"}`}>{ps}</p>
+                          <p className={`text-xl font-bold mt-0.5 ${scoreTier(ps) === "healthy" ? "text-emerald-400" : scoreTier(ps) === "at_risk" ? "text-amber-400" : "text-red-400"}`}>{ps}</p>
                           <ScoreBar score={ps} />
                           {crit > 0 && <p className="text-[9px] text-red-400 mt-1">{crit} critical</p>}
                         </div>
@@ -609,10 +612,10 @@ function ReportsDemoPage() {
                     { name: "WC Funding", score: 32, val: `${(MOCK_WC_DATA.working_capital_funding * 100).toFixed(0)}%` },
                   ].map(({ name, score, val }) => (
                     <div key={name} className="flex items-center gap-3 mb-2">
-                      <TierPip tier={score >= 70 ? "healthy" : score >= 40 ? "at_risk" : "critical"} />
+                      <TierPip tier={scoreTier(score)} />
                       <span className="flex-1 text-xs text-slate-300">{name}</span>
                       <span className="text-xs font-mono font-semibold text-slate-200 w-12 text-right">{val}</span>
-                      <span className={`text-xs font-bold w-8 text-right ${score >= 70 ? "text-emerald-400" : score >= 40 ? "text-amber-400" : "text-red-400"}`}>{score}</span>
+                      <span className={`text-xs font-bold w-8 text-right ${scoreTier(score) === "healthy" ? "text-emerald-400" : scoreTier(score) === "at_risk" ? "text-amber-400" : "text-red-400"}`}>{score}</span>
                     </div>
                   ))}
                 </div>

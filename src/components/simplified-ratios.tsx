@@ -1,4 +1,5 @@
 import { Sparkline } from "@/components/sparkline";
+import { scoreTier } from "@/lib/ratios";
 
 interface SectionCard {
   id: string;
@@ -13,15 +14,17 @@ interface SimplifiedRatiosProps {
 
 function statusLabel(health: number): string {
   if (!isFinite(health)) return "NO DATA";
-  if (health >= 70) return "HEALTHY";
-  if (health >= 40) return "NEEDS WATCH";
+  const tier = scoreTier(health);
+  if (tier === "healthy") return "HEALTHY";
+  if (tier === "at_risk") return "NEEDS WATCH";
   return "HIGH RISK";
 }
 
 function statusColor(health: number): string {
   if (!isFinite(health)) return "rgb(100 116 139)";
-  if (health >= 70) return "#4CAF82";
-  if (health >= 40) return "#f59e0b";
+  const tier = scoreTier(health);
+  if (tier === "healthy") return "#4CAF82";
+  if (tier === "at_risk") return "#f59e0b";
   return "#e05c5c";
 }
 

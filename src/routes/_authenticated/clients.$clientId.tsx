@@ -17,6 +17,7 @@ import {
   scoreRatio,
   scoreFromRatioInputs,
   healthFromRatioInputs,
+  healthMapFromRatios,
   pillarForRatioName,
   type OverallHealth,
 } from "@/lib/health-score";
@@ -333,27 +334,7 @@ const SPHERE_RATIO_META: Record<string, { friendly: string }> = {
 };
 
 // Maps computeRatios() human-readable names → camelCase healthMap keys
-const RATIO_NAME_TO_KEY: Record<string, string> = {
-  "Gross Margin": "grossMargin",
-  "Operating Margin": "operatingMargin",
-  "Net Margin": "netMargin",
-  "Return on Assets": "roa",
-  "Return on Equity": "roe",
-  "Asset Turnover": "assetTurnover",
-  "Equity Multiplier": "equityMultiplier",
-  "Interest Burden": "interestBurden",
-  "Tax Burden": "taxBurden",
-  "Debtor Days": "debtorDays",
-  "Inventory Days": "inventoryDays",
-  "Creditor Days": "creditorDays",
-  "Working Capital Days": "workingCapitalDays",
-  "Fixed Cost Ratio": "fixedCostRatio",
-  "Degree of Operating Leverage": "dol",
-  "Top-5 Customer Share": "customerConcentration",
-  "Gross Profit / Labor": "gpToLabor",
-  "Sales-per-Employee Ratio": "salesPerEmployee",
-  "OCF / EBITDA": "ocfToEbitda",
-};
+// (shared RATIO_NAME_TO_KEY from @/lib/health-score)
 
 // ── Report gallery definitions (names match Reports Studio / PDF titles) ──
 const REPORT_TEMPLATES = [
@@ -495,11 +476,7 @@ function ClientView() {
   const healthScoreRounded = overallHealth.overall ?? 0;
 
   // ── Health orb & pillar computation (same source as header / score history) ──
-  const healthMap: Record<string, number> = {};
-  Object.entries(ratios).forEach(([name, val]) => {
-    const key = RATIO_NAME_TO_KEY[name];
-    if (key) healthMap[key] = Math.round(scoreRatio(name, val as number));
-  });
+  const healthMap = healthMapFromRatios(ratios as Record<string, number>);
 
   const pillarById = Object.fromEntries(
     overallHealth.pillars.map((p) => [p.id, p.score ?? NaN]),
@@ -1448,7 +1425,8 @@ function ClientView() {
                 }}
               >
                 <SphereHero
-                  overallHealth={isFinite(avgHealth) ? avgHealth : 0}
+                  overallHealth={isFinite(avgHealth) ? avgHealth : NaN}
+                  displayStatus={overallHealth.displayStatus}
                   pillars={spherePillars}
                   topPriority={(() => {
                     const worst = Object.entries(pillarHealths)

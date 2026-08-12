@@ -822,7 +822,8 @@ function DriversStrip({ moves, onView }: { moves: StrategicMoveLite[]; onView?: 
   return (
     <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-5">
       {moves.map((m) => {
-        const tone = m.health >= 70 ? "#22c55e" : m.health >= 45 ? "#f5a524" : "#ef4444";
+        const tone =
+          m.health >= 65 ? "#22c55e" : m.health >= 40 ? "#f5a524" : "#ef4444";
         return (
           <button
             key={m.key}

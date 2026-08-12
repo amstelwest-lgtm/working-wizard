@@ -32,7 +32,7 @@ import { BenchmarkBar } from "@/components/benchmark-bar";
 import { AssignButton } from "@/components/assign-button";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { computeRatios, BUSINESS_TYPE_TO_BENCHMARK } from "@/lib/ratios";
-import { healthFromRatioInputs } from "@/lib/health-score";
+import { healthFromRatioInputs, healthMapFromRatios, scoreRatio } from "@/lib/health-score";
 import { effectiveCashRunwayWeeks, type SavedCashflowLike } from "@/lib/cash-runway";
 import { FinancialInputsContext, type WeeklyInputs, type WeeklyRow, DEFAULT_WEEKLY_ROW } from "@/contexts/financial-inputs";
 import { WeeklyInputTable } from "@/components/weekly-input-table";
@@ -1975,45 +1975,41 @@ function Index() {
     wcDaysMax:           RBase.wcDaysMax           * model.wcDaysMax,
   };
 
+  // Per-ratio scores — shared scoreRatio SSOT (same as accountant client / scorecard).
+  // Owner-only extras use scoreRatio aliases; missing inputs stay NaN (never invent 50).
+  const ssotHealth = healthMapFromRatios(computedRatios as Record<string, number>);
   const healthMap: Record<RatioKey, number> = {
-    taxBurden: clamp(((taxBurden - R.taxBurdenFloor) / R.taxBurdenRange) * 100),
-    interestBurden: clamp(((interestBurden - R.interestBurdenFloor) / R.interestBurdenRange) * 100),
-    operatingMargin: hHigher(operatingMargin, R.opMarginTarget),
-    assetTurnover: hHigher(assetTurnover, R.assetTurnoverTarget),
-    equityMultiplier: clamp(((R.leverageMax - equityMultiplier) / (R.leverageMax - 1)) * 100),
-    netMargin: hHigher(netMargin, R.netMarginTarget),
-    roa: hHigher(roa, R.roaTarget),
-    roe: hHigher(roe, R.roeTarget),
-    debtorDays: hLower(debtorDays, R.debtorDaysMax),
-    inventoryDays: hLower(inventoryDays, R.inventoryDaysMax),
-    creditorDays: hRange(creditorDays, R.creditorRange[0], R.creditorRange[1]),
-    workingCapitalDays: hLower(workingCapitalDays, R.wcDaysMax),
-    fixedCostRatio: hLower(fixedCostRatio, newTargets.fcrMax),
-    dol: hLower(dol, newTargets.dolMax),
-    customerConcentration: hLower(customerConcentration, newTargets.ccMax),
-    gpToLabor: hHigher(gpToLabor, newTargets.gplMin),
-    salesPerEmployee: hHigher(salesPerEmployee, newTargets.speMin),
-    ocfToEbitda: hRange(ocfToEbitda, newTargets.ocfRange[0], newTargets.ocfRange[1]),
-    revenuePerFounderHour: hHigher(revenuePerFounderHour, newTargets.rphMin),
-    grossMargin: hHigher(grossMarginRatio, 0.35),
-    directCostsRatio: hLower(directCostsRatio, 0.65),
-    fundingStructure: hHigher(fundingStructureRatio, 0.30),
-    workingCapitalUtilization: hHigher(workingCapitalUtilization, 2.0),
-    fixedCapitalUtilization: hHigher(fixedCapitalUtilization, 1.5),
-    workingCapitalFunding: hLower(workingCapitalFunding, 0.25),
-    revenueGrowth: isFinite(revenueGrowth) ? hHigher(revenueGrowth, 0.10) : 50,
-    capexIntensity: hRange(capexIntensity, 0.02, 0.10),
-    assetReinvestmentRatio: isFinite(assetReinvestmentRatio) ? hRange(assetReinvestmentRatio, 0.8, 1.5) : 50,
-    currentRatio: isFinite(currentRatio) ? hRange(currentRatio, 1.5, 3.0) : 50,
-    debtToEquity: hLower(debtToEquity, 2.0),
-    debtToAssets: (() => {
-      const dta = debtToAssets;
-      if (!isFinite(dta) || dta <= 0) return 100;
-      if (dta <= 0.4) return clamp(80 + (1 - dta / 0.4) * 20);
-      if (dta <= 0.6) return clamp(50 + ((0.6 - dta) / 0.2) * 30);
-      if (dta <= 0.8) return clamp(20 + ((0.8 - dta) / 0.2) * 30);
-      return clamp((1.0 - dta) / 0.2 * 20);
-    })(),
+    taxBurden: ssotHealth.taxBurden ?? (isFinite(taxBurden) ? Math.round(scoreRatio("Tax Burden", taxBurden)) : NaN),
+    interestBurden: ssotHealth.interestBurden ?? (isFinite(interestBurden) ? Math.round(scoreRatio("Interest Burden", interestBurden)) : NaN),
+    operatingMargin: ssotHealth.operatingMargin ?? NaN,
+    assetTurnover: ssotHealth.assetTurnover ?? NaN,
+    equityMultiplier: ssotHealth.equityMultiplier ?? NaN,
+    netMargin: ssotHealth.netMargin ?? NaN,
+    roa: ssotHealth.roa ?? NaN,
+    roe: ssotHealth.roe ?? NaN,
+    debtorDays: ssotHealth.debtorDays ?? NaN,
+    inventoryDays: ssotHealth.inventoryDays ?? NaN,
+    creditorDays: ssotHealth.creditorDays ?? NaN,
+    workingCapitalDays: ssotHealth.workingCapitalDays ?? NaN,
+    fixedCostRatio: ssotHealth.fixedCostRatio ?? NaN,
+    dol: ssotHealth.dol ?? NaN,
+    customerConcentration: ssotHealth.customerConcentration ?? NaN,
+    gpToLabor: ssotHealth.gpToLabor ?? NaN,
+    salesPerEmployee: ssotHealth.salesPerEmployee ?? NaN,
+    ocfToEbitda: ssotHealth.ocfToEbitda ?? NaN,
+    revenuePerFounderHour: isFinite(revenuePerFounderHour) ? Math.round(clamp((revenuePerFounderHour / 2500) * 100)) : NaN,
+    grossMargin: ssotHealth.grossMargin ?? NaN,
+    directCostsRatio: isFinite(directCostsRatio) ? Math.round(clamp(((0.65 - directCostsRatio) / 0.65) * 100)) : NaN,
+    fundingStructure: isFinite(fundingStructureRatio) ? Math.round(clamp((fundingStructureRatio / 0.30) * 100)) : NaN,
+    workingCapitalUtilization: isFinite(workingCapitalUtilization) ? Math.round(clamp((workingCapitalUtilization / 2.0) * 100)) : NaN,
+    fixedCapitalUtilization: isFinite(fixedCapitalUtilization) ? Math.round(clamp((fixedCapitalUtilization / 1.5) * 100)) : NaN,
+    workingCapitalFunding: isFinite(workingCapitalFunding) ? Math.round(clamp(((0.25 - workingCapitalFunding) / 0.25) * 100)) : NaN,
+    revenueGrowth: isFinite(revenueGrowth) ? Math.round(scoreRatio("Revenue Growth", revenueGrowth)) : NaN,
+    capexIntensity: isFinite(capexIntensity) ? Math.round(hRange(capexIntensity, 0.02, 0.10)) : NaN,
+    assetReinvestmentRatio: isFinite(assetReinvestmentRatio) ? Math.round(hRange(assetReinvestmentRatio, 0.8, 1.5)) : NaN,
+    currentRatio: isFinite(currentRatio) ? Math.round(scoreRatio("Current Ratio", currentRatio)) : NaN,
+    debtToEquity: isFinite(debtToEquity) ? Math.round(scoreRatio("Debt-to-Equity", debtToEquity)) : NaN,
+    debtToAssets: isFinite(debtToAssets) ? Math.round(scoreRatio("Debt-to-Assets", debtToAssets)) : NaN,
   };
 
   // Overall + pillars — same computeOverallHealth as accountant dashboard / scorecard.
@@ -2617,6 +2613,7 @@ function Index() {
                     <SphereHero
                       compact
                       overallHealth={avgHealth}
+                      displayStatus={overallHealth.displayStatus}
                       pillars={spherePillars}
                       caption={overviewCaption}
                       topPriority={
@@ -2854,8 +2851,8 @@ function Index() {
                       : fmt === "x" ? `${rawVal.toFixed(2)}×`
                       : fmt === "days" ? `${Math.round(rawVal)} d`
                       : rawVal.toLocaleString("en-ZA", { maximumFractionDigits: 0 });
-                    const hCls = !isFinite(health) ? "text-slate-400" : health >= 70 ? "text-emerald-400" : health >= 40 ? "text-amber-400" : "text-rose-400";
-                    const hLabelCls = !isFinite(health) ? "text-slate-500/70" : health >= 70 ? "text-emerald-500/70" : health >= 40 ? "text-amber-500/70" : "text-rose-500/70";
+                    const hCls = !isFinite(health) ? "text-slate-400" : health >= 65 ? "text-emerald-400" : health >= 40 ? "text-amber-400" : "text-rose-400";
+                    const hLabelCls = !isFinite(health) ? "text-slate-500/70" : health >= 65 ? "text-emerald-500/70" : health >= 40 ? "text-amber-500/70" : "text-rose-500/70";
                     return (
                       <tr
                         key={k}
@@ -2895,7 +2892,7 @@ function Index() {
                             {isFinite(health) ? `${Math.round(health)}%` : "—"}
                           </div>
                           <div className={`text-[10px] ${hLabelCls}`}>
-                            {isFinite(health) ? (health >= 70 ? "Healthy" : health >= 40 ? "Watch" : "Action") : "—"}
+                            {isFinite(health) ? (health >= 65 ? "Healthy" : health >= 40 ? "Watch" : "Action") : "—"}
                           </div>
                         </td>
                       </tr>
@@ -3044,7 +3041,7 @@ function Index() {
                       title: s.title,
                       ratioName: s.ratioName,
                       impactLine: s.impactLine,
-                      health: isFinite(s.health) ? s.health : 50,
+                      health: isFinite(s.health) ? s.health : NaN,
                     }))}
                     onViewAnalysis={() => {
                       setViewMode("complex");

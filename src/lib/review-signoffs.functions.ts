@@ -20,6 +20,11 @@ export type ClientReviewSignoff = {
   signed_off_at: string;
 };
 
+export type ClientReviewSignoffHistory = ClientReviewSignoff & {
+  action: "sign" | "retract";
+  created_at: string;
+};
+
 function authedSupabase() {
   const url = process.env.SUPABASE_URL;
   const anon = process.env.SUPABASE_PUBLISHABLE_KEY;
@@ -115,6 +120,36 @@ export const listClientReviewSignoffs = createServerFn({ method: "GET" })
       .eq("client_id", data.clientId);
     if (error) throw new Error(error.message);
     return { signoffs: (rows ?? []) as ClientReviewSignoff[] };
+  });
+
+// ── Append-only sign-off history (G16) ───────────────────────────────────────
+
+export const listClientReviewSignoffHistory = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) =>
+    z.object({
+      clientId: z.string().uuid(),
+      scope: z.enum(["financials", "cash_forecast", "budget"]).optional(),
+      limit: z.number().int().min(1).max(200).optional(),
+    }).parse(input),
+  )
+  .handler(async ({ data }) => {
+    const sb = authedSupabase();
+    const { data: userData, error: userErr } = await sb.auth.getUser();
+    if (userErr || !userData?.user) throw new Error("Not authenticated");
+    await assertClientAccess(userData.user.id, data.clientId, sb);
+
+    let q = (sb as unknown as LooseSb)
+      .from("client_review_signoff_history")
+      .select("*")
+      .eq("client_id", data.clientId)
+      .order("signed_off_at", { ascending: false })
+      .limit(data.limit ?? 50);
+    if (data.scope) q = q.eq("scope", data.scope);
+
+    const { data: rows, error } = await q;
+    if (error) throw new Error(error.message);
+    return { history: (rows ?? []) as ClientReviewSignoffHistory[] };
   });
 
 // ── Sign off a scope (financials or cash_forecast) ───────────────────────────

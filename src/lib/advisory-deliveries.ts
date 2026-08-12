@@ -122,6 +122,36 @@ export async function latestSnapshotId(clientId: string): Promise<string | null>
   return data?.id ?? null;
 }
 
+export async function acknowledgeDelivery(
+  ackToken: string,
+): Promise<{ ok: boolean; delivery: AdvisoryDelivery | null; error: string | null }> {
+  const token = ackToken.trim();
+  if (!token) return { ok: false, delivery: null, error: "Missing acknowledgement token" };
+
+  const { data, error } = await (supabase as unknown as {
+    rpc: (
+      fn: string,
+      args: { _token: string },
+    ) => Promise<{ data: unknown; error: { message: string; code?: string } | null }>;
+  }).rpc("acknowledge_advisory_delivery", { _token: token });
+
+  if (error) {
+    const msg = error.message ?? "";
+    if (msg.includes("does not exist") || error.code === "42883") {
+      return {
+        ok: false,
+        delivery: null,
+        error: "Acknowledgement is not available yet — run the latest DB migration.",
+      };
+    }
+    return { ok: false, delivery: null, error: msg };
+  }
+  if (!data) {
+    return { ok: false, delivery: null, error: "Token not found" };
+  }
+  return { ok: true, delivery: data as AdvisoryDelivery, error: null };
+}
+
 export function channelHonestyLabel(channel: DeliveryChannel, acknowledged: boolean): string {
   if (acknowledged) return "Acknowledged by client";
   if (channel === "email") return "Sent via email";

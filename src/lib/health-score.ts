@@ -50,6 +50,43 @@ export const PILLAR_LABELS: Record<HealthPillarId, string> = {
   cash: "Cash & Working Capital",
 };
 
+/** Maps `computeRatios()` human-readable names → camelCase keys used in UI health maps. */
+export const RATIO_NAME_TO_KEY: Record<string, string> = {
+  "Gross Margin": "grossMargin",
+  "Gross Profit Margin": "grossMargin",
+  "Operating Margin": "operatingMargin",
+  "Net Margin": "netMargin",
+  "Return on Assets": "roa",
+  "Return on Equity": "roe",
+  "Asset Turnover": "assetTurnover",
+  "Equity Multiplier": "equityMultiplier",
+  "Interest Burden": "interestBurden",
+  "Tax Burden": "taxBurden",
+  "Debtor Days": "debtorDays",
+  "Inventory Days": "inventoryDays",
+  "Creditor Days": "creditorDays",
+  "Working Capital Days": "workingCapitalDays",
+  "Fixed Cost Ratio": "fixedCostRatio",
+  "Degree of Operating Leverage": "dol",
+  "Top-5 Customer Share": "customerConcentration",
+  "Gross Profit / Labor": "gpToLabor",
+  "Sales-per-Employee Ratio": "salesPerEmployee",
+  "OCF / EBITDA": "ocfToEbitda",
+};
+
+/** Build a camelCase healthMap from `computeRatios` output via shared `scoreRatio`. */
+export function healthMapFromRatios(
+  ratios: Record<string, number>,
+): Record<string, number> {
+  const map: Record<string, number> = {};
+  for (const [name, val] of Object.entries(ratios)) {
+    if (!Number.isFinite(val)) continue;
+    const key = RATIO_NAME_TO_KEY[name];
+    if (key) map[key] = Math.round(scoreRatio(name, val));
+  }
+  return map;
+}
+
 /** Which ratios feed each pillar (human names from `computeRatios`). */
 export const PILLAR_RATIO_NAMES: Record<HealthPillarId, readonly string[]> = {
   profit: [

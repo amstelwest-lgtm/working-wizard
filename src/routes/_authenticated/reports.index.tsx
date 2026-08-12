@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Progress } from "@/components/ui/progress";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
 import type { AccountantProfile } from "@/contexts/accountant-profile";
-import { computeRatios, scoreTier } from "@/lib/ratios";
+import { computeRatios, scoreTier, BUSINESS_TYPE_TO_BENCHMARK } from "@/lib/ratios";
 import type { RatioInputs } from "@/lib/ratios";
 import { scoreRatio, pillarForRatioName } from "@/lib/health-score";
 import {
@@ -287,22 +287,81 @@ function buildRatioResults(rawRatios: Record<string, number>): RatioResult[] {
     });
 }
 
-// Static ZA-SME baseline benchmarks (industry-neutral)
-const BENCH_META: Record<string, {
-  median: number; top: number; lower?: boolean;
-  unit: string; pillar: "profit" | "assets" | "financing" | "cash";
-}> = {
-  "Gross Margin":         { median: 0.32, top: 0.45, unit: "%", pillar: "profit" },
-  "Operating Margin":     { median: 0.12, top: 0.22, unit: "%", pillar: "profit" },
-  "Net Margin":           { median: 0.07, top: 0.15, unit: "%", pillar: "profit" },
-  "Asset Turnover":       { median: 1.10, top: 1.45, unit: "×", pillar: "assets" },
-  "Return on Assets":     { median: 0.09, top: 0.16, unit: "%", pillar: "assets" },
-  "Inventory Days":       { median: 45,   top: 30,   lower: true, unit: "d",  pillar: "assets" },
-  "Equity Multiplier":    { median: 2.3,  top: 1.8,  lower: true, unit: "×",  pillar: "financing" },
-  "Debtor Days":          { median: 45,   top: 30,   lower: true, unit: "d",  pillar: "cash" },
-  "Working Capital Days": { median: 55,   top: 38,   lower: true, unit: "d",  pillar: "cash" },
-  "OCF / EBITDA":         { median: 0.70, top: 0.90, unit: "×",  pillar: "cash" },
+/**
+ * Live benchmark PDF rows come only from `industry_benchmarks` for the client's
+ * sector. Invented ZA-SME medians (old BENCH_META) must never appear under a
+ * real client name — demo path still uses MOCK_BENCHMARK.
+ */
+const METRIC_KEY_TO_RATIO: Record<
+  string,
+  {
+    name: string;
+    unit: "%" | "×" | "d";
+    pillar: "profit" | "assets" | "financing" | "cash";
+  }
+> = {
+  grossMargin: { name: "Gross Margin", unit: "%", pillar: "profit" },
+  operatingMargin: { name: "Operating Margin", unit: "%", pillar: "profit" },
+  netMargin: { name: "Net Margin", unit: "%", pillar: "profit" },
+  assetTurnover: { name: "Asset Turnover", unit: "×", pillar: "assets" },
+  roa: { name: "Return on Assets", unit: "%", pillar: "assets" },
+  inventoryDays: { name: "Inventory Days", unit: "d", pillar: "assets" },
+  debtorDays: { name: "Debtor Days", unit: "d", pillar: "cash" },
+  creditorDays: { name: "Creditor Days", unit: "d", pillar: "cash" },
+  fixedCostRatio: { name: "Fixed Cost Ratio", unit: "%", pillar: "profit" },
+  roe: { name: "Return on Equity", unit: "%", pillar: "financing" },
 };
+
+type SectorBenchProps = {
+  median: number;
+  top: number;
+  lower: boolean;
+  unit: "%" | "×" | "d";
+  pillar: "profit" | "assets" | "financing" | "cash";
+};
+
+/** DB stores pct as 0–100; ratio space (and PDF fmt) uses 0–1. */
+function normalizeBenchProps(
+  unit: string,
+  p50: number,
+  p75: number,
+  higherIsBetter: boolean,
+  meta: { unit: "%" | "×" | "d"; pillar: "profit" | "assets" | "financing" | "cash" },
+): SectorBenchProps {
+  const scale = unit === "pct" ? 0.01 : 1;
+  return {
+    median: p50 * scale,
+    top: p75 * scale,
+    lower: !higherIsBetter,
+    unit: meta.unit,
+    pillar: meta.pillar,
+  };
+}
+
+async function loadSectorBenchmarks(
+  businessTypeId: string | null | undefined,
+): Promise<Record<string, SectorBenchProps>> {
+  const sector = businessTypeId ? BUSINESS_TYPE_TO_BENCHMARK[businessTypeId] : null;
+  if (!sector) return {};
+  const { data, error } = await supabase
+    .from("industry_benchmarks")
+    .select("metric_key, p50, p75, unit, higher_is_better")
+    .eq("business_type", sector);
+  if (error || !data) return {};
+  const out: Record<string, SectorBenchProps> = {};
+  for (const row of data) {
+    const meta = METRIC_KEY_TO_RATIO[row.metric_key];
+    if (!meta) continue;
+    out[meta.name] = normalizeBenchProps(
+      row.unit,
+      Number(row.p50),
+      Number(row.p75),
+      Boolean(row.higher_is_better),
+      meta,
+    );
+  }
+  return out;
+}
 
 function fmtBenchVal(val: number, unit: string): string {
   if (unit === "%") return `${(val * 100).toFixed(1)}%`;
@@ -310,12 +369,16 @@ function fmtBenchVal(val: number, unit: string): string {
   return `${Math.round(val)}d`;
 }
 
-function buildBenchmarkRows(rawRatios: Record<string, number>, ratioResults: RatioResult[]): BenchmarkRow[] {
-  return Object.entries(BENCH_META)
+function buildBenchmarkRows(
+  rawRatios: Record<string, number>,
+  ratioResults: RatioResult[],
+  sector: Record<string, SectorBenchProps>,
+): BenchmarkRow[] {
+  return Object.entries(sector)
     .filter(([name]) => Number.isFinite(rawRatios[name]))
     .map(([name, b]) => {
       const val = rawRatios[name];
-      const rr  = ratioResults.find((r) => r.ratio_name === name);
+      const rr = ratioResults.find((r) => r.ratio_name === name);
       const score = rr?.health_score ?? Math.round(scoreForRatio(name, val));
       return {
         ratio_key: name.toLowerCase().replace(/[^a-z0-9]/g, "_"),
@@ -897,7 +960,7 @@ async function buildInterventions(
 async function loadClientReportData(clientId: string): Promise<ClientReportData> {
   const [clientRes, snapshotRes, signoffRes] = await Promise.all([
     supabase.from("clients")
-      .select("id, name, cash_runway_weeks, financials, cashflow, financials_updated_at, last_forecast_at, operating_profile")
+      .select("id, name, cash_runway_weeks, financials, cashflow, financials_updated_at, last_forecast_at, operating_profile, business_type")
       .eq("id", clientId)
       .maybeSingle(),
     supabase.from("client_financial_snapshots")
@@ -921,8 +984,12 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
     name: string; cash_runway_weeks: number | null; financials: unknown;
     cashflow: unknown; financials_updated_at: string | null; last_forecast_at: string | null;
     operating_profile?: unknown;
+    business_type?: string | null;
   } | null;
   const operatingProfile = parseOperatingProfile(clientRow?.operating_profile);
+  const businessTypeId =
+    clientRow?.business_type ?? operatingProfile?.businessTypeId ?? null;
+  const sectorBench = await loadSectorBenchmarks(businessTypeId);
   const effectiveRunway = effectiveCashRunwayWeeks(
     clientRow?.cash_runway_weeks,
     clientRow?.cashflow as Parameters<typeof effectiveCashRunwayWeeks>[1],
@@ -1018,7 +1085,7 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
     labor:          buildLaborData(fin, rawRatios, priorFinForProfit),
     movement:       movementRows,
     movementPeriodLabels: movementLabels,
-    benchmark:      buildBenchmarkRows(rawRatios, ratioResults),
+    benchmark:      buildBenchmarkRows(rawRatios, ratioResults, sectorBench),
     cashForecast:   buildCashForecastFromSavedCashflow(
       (clientRow as unknown as { cashflow: SavedCashflow | null }).cashflow ?? {},
       effectiveRunway,
@@ -1255,7 +1322,9 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
       const { BenchmarkReportPDF } = await import("@/reports/benchmark-report");
       const industry = INDUSTRIES.find((i) => i.code === s.industryCode) ?? INDUSTRIES[0];
       if (cd && cd.benchmark.length === 0) {
-        throw new Error("No benchmarkable ratios yet — complete financials before generating.");
+        throw new Error(
+          "No sector benchmarks available — set the client business type / profile, then regenerate.",
+        );
       }
       const isDemo = !cd;
       return renderToBlob(BenchmarkReportPDF, {

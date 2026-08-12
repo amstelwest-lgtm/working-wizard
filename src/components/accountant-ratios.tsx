@@ -14,7 +14,7 @@ import { FileDown, Mail, MessageCircle, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { KpiTrendline, pctDelta } from "@/components/kpi-trendline";
 import { BenchmarkBar } from "@/components/benchmark-bar";
-import { computeRatios, BUSINESS_TYPE_TO_BENCHMARK } from "@/lib/ratios";
+import { computeRatios, BUSINESS_TYPE_TO_BENCHMARK, scoreTier } from "@/lib/ratios";
 import { PDFUploadZone } from "@/components/pdf-upload-zone";
 import { ExtractionReviewModal } from "@/components/extraction-review-modal";
 import type { MergedExtractionResult } from "@/lib/extraction-types";
@@ -82,14 +82,16 @@ function fmt(v: number, f: RatioRow["format"]) {
 
 function healthCls(h: number) {
   if (!isFinite(h)) return "bg-slate-500 text-white";
-  if (h >= 70) return "bg-emerald-600 text-white";
-  if (h >= 40) return "bg-amber-500 text-white";
+  const tier = scoreTier(h);
+  if (tier === "healthy") return "bg-emerald-600 text-white";
+  if (tier === "at_risk") return "bg-amber-500 text-white";
   return "bg-rose-600 text-white";
 }
 function healthLabel(h: number) {
   if (!isFinite(h)) return "No data";
-  if (h >= 70) return "Healthy";
-  if (h >= 40) return "Watch";
+  const tier = scoreTier(h);
+  if (tier === "healthy") return "Healthy";
+  if (tier === "at_risk") return "Watch";
   return "Action";
 }
 
@@ -462,7 +464,13 @@ Your Milōn accountant`;
       pdf.text(`Generated: ${date}`, 14, 25);
 
       const tableRows = rows.map((r) => {
-        const health = !isFinite(r.health) ? "—" : r.health >= 70 ? "Healthy" : r.health >= 40 ? "Watch" : "Action";
+        const health = !isFinite(r.health)
+          ? "—"
+          : scoreTier(r.health) === "healthy"
+            ? "Healthy"
+            : scoreTier(r.health) === "at_risk"
+              ? "Watch"
+              : "Action";
         return [r.friendly, r.technical, fmt(r.value, r.format), r.benchmark, isFinite(r.health) ? `${Math.round(r.health)}%` : "—", health];
       });
 
