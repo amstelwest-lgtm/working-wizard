@@ -4,6 +4,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useFinancialInputs } from "@/contexts/financial-inputs";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
+import { useAuth } from "@/hooks/use-auth";
+import { hashFigures, latestSnapshotId, recordDelivery } from "@/lib/advisory-deliveries";
+import type { ReportSignoffStamp } from "@/components/pdf/pdf-document";
 
 export type WaterfallFallback = {
   revenue: number;
@@ -64,6 +67,7 @@ const COLORS = {
  * and downloads it as a file.
  */
 async function exportPDF(opts: {
+  clientId?: string;
   clientName?: string;
   revenue: number;
   costOfSales: number;
@@ -71,6 +75,8 @@ async function exportPDF(opts: {
   interest: number;
   tax: number;
   accountantProfile: import("@/contexts/accountant-profile").AccountantProfile;
+  reviewSignoff?: ReportSignoffStamp | null;
+  createdBy?: string | null;
 }) {
   const { revenue, costOfSales, fixedCosts, interest, tax } = opts;
   const grossProfit = revenue - costOfSales;
@@ -87,21 +93,24 @@ async function exportPDF(opts: {
   const period = now.toLocaleDateString("en-ZA", { month: "long", year: "numeric" });
   const name = opts.clientName?.trim() || "Your Business";
 
+  const profitabilityData = {
+    revenue,
+    gross_profit: grossProfit,
+    gross_margin_pct: revenue ? grossProfit / revenue : 0,
+    operating_profit: operatingProfit,
+    operating_margin_pct: revenue ? operatingProfit / revenue : 0,
+    ebt,
+    tax,
+    net_profit: netProfit,
+    net_margin_pct: revenue ? netProfit / revenue : 0,
+  };
+
   const blob = await pdf(
     ProfitabilityWaterfallPDF({
       smeData: { name, period },
-      profitabilityData: {
-        revenue,
-        gross_profit: grossProfit,
-        gross_margin_pct: revenue ? grossProfit / revenue : 0,
-        operating_profit: operatingProfit,
-        operating_margin_pct: revenue ? operatingProfit / revenue : 0,
-        ebt,
-        tax,
-        net_profit: netProfit,
-        net_margin_pct: revenue ? netProfit / revenue : 0,
-      },
+      profitabilityData,
       accountantProfile: opts.accountantProfile,
+      reviewSignoff: opts.reviewSignoff ?? null,
     }) as Parameters<typeof pdf>[0],
   ).toBlob();
 
@@ -113,17 +122,36 @@ async function exportPDF(opts: {
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 2000);
+
+  if (opts.clientId && opts.createdBy) {
+    const snapId = await latestSnapshotId(opts.clientId);
+    await recordDelivery({
+      clientId: opts.clientId,
+      channel: "pdf_download",
+      kind: "report_pdf",
+      reportKey: "waterfall",
+      snapshotId: snapId,
+      figuresHash: hashFigures(profitabilityData),
+      periodLabel: period,
+      createdBy: opts.createdBy,
+    });
+  }
 }
 
 export function ProfitabilityWaterfall({
   fallback,
   clientName,
+  clientId,
+  reviewSignoff = null,
 }: {
   fallback?: WaterfallFallback;
   clientName?: string;
+  clientId?: string;
+  reviewSignoff?: ReportSignoffStamp | null;
 }) {
   const { weeklyInputs } = useFinancialInputs();
   const { profile } = useAccountantProfile();
+  const { user } = useAuth();
   const [open, setOpen] = useState(true);
   const [mounted, setMounted] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -207,6 +235,7 @@ export function ProfitabilityWaterfall({
                 setExporting(true);
                 try {
                   await exportPDF({
+                    clientId,
                     clientName,
                     revenue,
                     costOfSales,
@@ -214,6 +243,8 @@ export function ProfitabilityWaterfall({
                     interest,
                     tax,
                     accountantProfile: profile,
+                    reviewSignoff,
+                    createdBy: user?.id ?? null,
                   });
                 } finally {
                   setExporting(false);

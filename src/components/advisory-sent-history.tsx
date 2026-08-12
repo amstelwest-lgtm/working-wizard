@@ -3,9 +3,11 @@
  */
 
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import {
   listDeliveries,
   channelHonestyLabel,
+  ackUrlForToken,
   type AdvisoryDelivery,
 } from "@/lib/advisory-deliveries";
 
@@ -42,6 +44,15 @@ export function AdvisorySentHistory({
       cancelled = true;
     };
   }, [clientId, refreshToken]);
+
+  const copyAckLink = async (token: string) => {
+    try {
+      await navigator.clipboard.writeText(ackUrlForToken(token));
+      toast.success("Acknowledgement link copied");
+    } catch {
+      toast.error("Could not copy link");
+    }
+  };
 
   return (
     <div className="card" style={{ marginTop: 16, padding: "14px 18px" }}>
@@ -99,12 +110,24 @@ export function AdvisorySentHistory({
                   {r.recipient_email ? ` · ${r.recipient_email}` : ""}
                 </div>
               </div>
-              <span
-                className={`chip ${r.acknowledged_at ? "ok" : "warn"}`}
-                style={{ fontSize: 11, alignSelf: "center" }}
-              >
-                {channelHonestyLabel(r.channel, !!r.acknowledged_at)}
-              </span>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                {!r.acknowledged_at && r.ack_token ? (
+                  <button
+                    type="button"
+                    className="btn ghost mini"
+                    style={{ fontSize: 11 }}
+                    onClick={() => copyAckLink(r.ack_token!)}
+                  >
+                    Copy ack link
+                  </button>
+                ) : null}
+                <span
+                  className={`chip ${r.acknowledged_at ? "ok" : "warn"}`}
+                  style={{ fontSize: 11, alignSelf: "center" }}
+                >
+                  {channelHonestyLabel(r.channel, !!r.acknowledged_at)}
+                </span>
+              </div>
             </div>
           ))}
         </div>

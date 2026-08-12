@@ -105,6 +105,8 @@ import { useViewMode } from "@/contexts/view-mode";
 import { listClientReviewSignoffs } from "@/lib/review-signoffs.functions";
 import type { ClientReviewSignoff } from "@/lib/review-signoffs.functions";
 import { ReviewSignoffBadge, computeIsStale } from "@/components/review-signoff";
+import { upsertCurrentPeriodSnapshot } from "@/lib/financial-snapshots";
+import { stampFromSignoff } from "@/lib/review-signoff-stamp";
 import { useAskAiMount } from "@/hooks/use-ask-ai-mount";
 import {
   computeCashTrajectory,
@@ -1753,6 +1755,31 @@ function Index() {
         setSaveStatus("idle");
       } else {
         setClientMeta((m) => (m ? { ...m, financials_updated_at: financialsUpdatedAt } : m));
+        // G20: upsert this month's snapshot so deliveries / movement aren't snapshot-less.
+        void upsertCurrentPeriodSnapshot({
+          clientId: effectiveClientId,
+          financials: { ...v, weeklyInputs } as Record<string, unknown>,
+          source: "autosave",
+        }).then(({ id }) => {
+          if (id) {
+            setHistory((h) => {
+              // Soft-refresh history list if this period was missing.
+              const periodLabel = new Date().toLocaleString("en-US", {
+                month: "short",
+                year: "numeric",
+              });
+              if (h.some((s) => s.period_label === periodLabel)) return h;
+              return [
+                ...h,
+                {
+                  period_label: periodLabel,
+                  period_date: new Date().toISOString().slice(0, 10),
+                  ratios: {},
+                },
+              ].slice(-6);
+            });
+          }
+        });
         setSaveStatus("saved");
         setTimeout(() => setSaveStatus("idle"), 2500);
       }
@@ -2919,6 +2946,11 @@ function Index() {
             </div>
             <ProfitabilityWaterfall
               clientName={actingClientName ?? undefined}
+              clientId={effectiveClientId ?? undefined}
+              reviewSignoff={stampFromSignoff(
+                financialsSignoff,
+                computeIsStale(financialsSignoff, clientMeta?.financials_updated_at ?? null),
+              )}
               fallback={(() => {
                 // Mirror the accountant-side residual derivation so that
                 // PDF-extracted statements (which leave fixedCosts blank)

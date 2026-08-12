@@ -54,6 +54,7 @@ import {
   runwayWeeksFromClosings,
 } from "@/lib/cash-runway";
 import { hashFigures, latestSnapshotId, recordDelivery } from "@/lib/advisory-deliveries";
+import { stampFromSignoff } from "@/lib/review-signoff-stamp";
 // @react-pdf/renderer + the branded report are dynamically imported inside
 // exportPDF to avoid blocking initial hydration.
 
@@ -723,6 +724,7 @@ export function CashForecastPanel({
 // Same R50k floor as on-screen runway — never 0 (that invents breaches).
           minimumThreshold: CASH_RUNWAY_THRESHOLD_RAND,
           assumptions,
+          reviewSignoff: stampFromSignoff(forecastSignoff, forecastStale),
         }) as Parameters<typeof pdf>[0],
       ).toBlob();
 

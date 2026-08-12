@@ -30,6 +30,7 @@ export type AdvisoryDelivery = {
   created_at: string;
   acknowledged_at: string | null;
   acknowledged_by: string | null;
+  ack_token: string | null;
 };
 
 export type RecordDeliveryInput = {
@@ -46,6 +47,8 @@ export type RecordDeliveryInput = {
   figuresHash?: string | null;
   periodLabel?: string | null;
   createdBy: string;
+  /** When false, skip appending the ack URL to body (default: append for share channels). */
+  appendAckLink?: boolean;
 };
 
 /** Simple stable hash of figures for stamping (not cryptographic). */
@@ -59,6 +62,25 @@ export function hashFigures(payload: unknown): string {
   return (h >>> 0).toString(16).padStart(8, "0");
 }
 
+/** Cryptographically random ack token (≥16 chars for the RPC guard). */
+export function newAckToken(): string {
+  const bytes = new Uint8Array(24);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+export function ackUrlForToken(token: string): string {
+  if (typeof window !== "undefined" && window.location?.origin) {
+    return `${window.location.origin}/ack/${token}`;
+  }
+  return `/ack/${token}`;
+}
+
+export function appendAckFooter(body: string, ackToken: string): string {
+  const url = ackUrlForToken(ackToken);
+  return `${body.trim()}\n\n---\nPlease confirm you received this: ${url}`;
+}
+
 /** Untyped access until advisory_deliveries lands in generated Database types. */
 function deliveriesTable() {
   return (supabase as unknown as { from: (t: string) => ReturnType<typeof supabase.from> }).from(
@@ -66,9 +88,25 @@ function deliveriesTable() {
   );
 }
 
+const SHARE_CHANNELS: DeliveryChannel[] = ["mailto", "whatsapp", "copy", "email"];
+
 export async function recordDelivery(
   input: RecordDeliveryInput,
-): Promise<{ id: string | null; error: string | null }> {
+): Promise<{
+  id: string | null;
+  ackToken: string | null;
+  body: string | null;
+  error: string | null;
+}> {
+  const ackToken = newAckToken();
+  const shouldAppend =
+    input.appendAckLink !== false &&
+    SHARE_CHANNELS.includes(input.channel) &&
+    Boolean(input.body?.trim());
+  const body = shouldAppend && input.body
+    ? appendAckFooter(input.body, ackToken)
+    : (input.body ?? null);
+
   const { data, error } = await deliveriesTable()
     .insert({
       client_id: input.clientId,
@@ -76,7 +114,7 @@ export async function recordDelivery(
       channel: input.channel,
       kind: input.kind,
       subject: input.subject ?? null,
-      body: input.body ?? null,
+      body,
       recipient_email: input.recipientEmail ?? null,
       recipient_name: input.recipientName ?? null,
       report_key: input.reportKey ?? null,
@@ -84,18 +122,25 @@ export async function recordDelivery(
       figures_hash: input.figuresHash ?? null,
       period_label: input.periodLabel ?? null,
       created_by: input.createdBy,
+      ack_token: ackToken,
     } as never)
-    .select("id")
+    .select("id, ack_token")
     .maybeSingle();
 
   if (error) {
     const msg = error.message ?? "";
     if (msg.includes("does not exist") || msg.includes("relation") || (error as { code?: string }).code === "42P01") {
-      return { id: null, error: null };
+      return { id: null, ackToken: null, body, error: null };
     }
-    return { id: null, error: msg };
+    return { id: null, ackToken: null, body, error: msg };
   }
-  return { id: (data as { id: string } | null)?.id ?? null, error: null };
+  const row = data as { id: string; ack_token: string } | null;
+  return {
+    id: row?.id ?? null,
+    ackToken: row?.ack_token ?? ackToken,
+    body,
+    error: null,
+  };
 }
 
 export async function listDeliveries(

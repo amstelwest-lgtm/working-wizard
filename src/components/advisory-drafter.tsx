@@ -100,9 +100,9 @@ export function AdvisoryDrafter({
     channel: "copy" | "mailto" | "whatsapp",
     draft: DraftResult,
   ) => {
-    if (!user) return;
+    if (!user) return { body: draft.body, ackToken: null as string | null };
     const snapId = await latestSnapshotId(clientId);
-    await recordDelivery({
+    const logged = await recordDelivery({
       clientId,
       channel,
       kind: kindToDelivery(draft.kind),
@@ -118,14 +118,17 @@ export function AdvisoryDrafter({
       createdBy: user.id,
     });
     onLogged?.();
+    return { body: logged.body ?? draft.body, ackToken: logged.ackToken };
   };
 
   const copy = async () => {
     if (!result) return;
-    const text = result.subject ? `Subject: ${result.subject}\n\n${result.body}` : result.body;
     try {
+      const logged = await logShare("copy", result);
+      const text = result.subject
+        ? `Subject: ${result.subject}\n\n${logged.body}`
+        : logged.body;
       await navigator.clipboard.writeText(text);
-      await logShare("copy", result);
       setCopied(true);
       setTimeout(() => setCopied(false), 1600);
       toast.success("Copied · logged to sent history");
@@ -136,16 +139,16 @@ export function AdvisoryDrafter({
 
   const openMailto = async () => {
     if (!result) return;
-    await logShare("mailto", result);
+    const logged = await logShare("mailto", result);
     const subject = encodeURIComponent(result.subject ?? `${clientName ?? "Client"} — advisory`);
-    const body = encodeURIComponent(result.body);
+    const body = encodeURIComponent(logged.body);
     window.open(`mailto:?subject=${subject}&body=${body}`);
   };
 
   const openWhatsApp = async () => {
     if (!result) return;
-    await logShare("whatsapp", result);
-    const text = result.subject ? `*${result.subject}*\n\n${result.body}` : result.body;
+    const logged = await logShare("whatsapp", result);
+    const text = result.subject ? `*${result.subject}*\n\n${logged.body}` : logged.body;
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
   };
 

@@ -27,27 +27,53 @@ export type InviteMemberResult = {
   transferredOwnership: boolean;
 };
 
-/** Current owner is a firm placeholder for this client (not the real business owner). */
+/** Current owner is a firm / practice placeholder for this client (not the real business owner). */
 async function isPracticePlaceholderOwner(
   ownerUserId: string,
   firmId: string | null,
 ): Promise<boolean> {
-  if (!firmId) return false;
+  if (firmId) {
+    const { data: firm } = await supabaseAdmin
+      .from("firms")
+      .select("owner_user_id")
+      .eq("id", firmId)
+      .maybeSingle();
+    if (firm?.owner_user_id === ownerUserId) return true;
 
-  const { data: firm } = await supabaseAdmin
+    const { data: membership } = await supabaseAdmin
+      .from("firm_memberships")
+      .select("user_id")
+      .eq("firm_id", firmId)
+      .eq("user_id", ownerUserId)
+      .maybeSingle();
+    if (membership?.user_id) return true;
+  }
+
+  // N20: firm_id may be null on older firm-created clients. Still treat as a
+  // practice placeholder when the current owner holds a practice role or owns /
+  // belongs to any firm — so invite still hands ownership to the real owner.
+  const { data: roles } = await supabaseAdmin
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", ownerUserId);
+  const roleList = (roles ?? []).map((r: { role: string }) => r.role);
+  if (roleList.includes("accountant") || roleList.includes("firm_admin")) return true;
+
+  const { data: ownedFirm } = await supabaseAdmin
     .from("firms")
-    .select("owner_user_id")
-    .eq("id", firmId)
+    .select("id")
+    .eq("owner_user_id", ownerUserId)
+    .limit(1)
     .maybeSingle();
-  if (firm?.owner_user_id === ownerUserId) return true;
+  if (ownedFirm?.id) return true;
 
-  const { data: membership } = await supabaseAdmin
+  const { data: anyMembership } = await supabaseAdmin
     .from("firm_memberships")
     .select("user_id")
-    .eq("firm_id", firmId)
     .eq("user_id", ownerUserId)
+    .limit(1)
     .maybeSingle();
-  return Boolean(membership?.user_id);
+  return Boolean(anyMembership?.user_id);
 }
 
 /**

@@ -69,6 +69,8 @@ import {
   latestSnapshotId,
   recordDelivery,
 } from "@/lib/advisory-deliveries";
+import { upsertCurrentPeriodSnapshot } from "@/lib/financial-snapshots";
+import { stampFromSignoff } from "@/lib/review-signoff-stamp";
 
 const ActionPlanPanel = lazy(() => import("@/components/action-plan"));
 
@@ -753,6 +755,13 @@ function ClientView() {
           setAutosaveStatus("idle");
         } else {
           setClient((c) => (c ? { ...c, financials_updated_at: updatedAt } : c));
+          // G20: keep current-period snapshot in sync so deliveries / movement
+          // reports are not stuck on null or stale snapshot ids.
+          void upsertCurrentPeriodSnapshot({
+            clientId,
+            financials: updated as Record<string, unknown>,
+            source: "autosave",
+          });
           setAutosaveStatus("saved");
           setTimeout(() => setAutosaveStatus("idle"), 2000);
         }
@@ -778,6 +787,11 @@ function ClientView() {
           setAutosaveStatus("idle");
         } else {
           setClient((c) => (c ? { ...c, financials_updated_at: updatedAt } : c));
+          void upsertCurrentPeriodSnapshot({
+            clientId,
+            financials: updated as Record<string, unknown>,
+            source: "autosave",
+          });
           setAutosaveStatus("saved");
           setTimeout(() => setAutosaveStatus("idle"), 2000);
         }
@@ -950,12 +964,17 @@ function ClientView() {
         name: client.name,
         period: periodLabel,
       };
+      const financialsStamp = stampFromSignoff(
+        financialsSignoff,
+        computeIsStale(financialsSignoff, client.financials_updated_at ?? null),
+      );
       const blob = await pdf(
         HealthScorecardPDF({
           smeData,
           ratioResults: ratioEntries,
           accountantProfile: profile,
           cashRunwayWeeks: effectiveRunway,
+          reviewSignoff: financialsStamp,
         }) as Parameters<typeof pdf>[0],
       ).toBlob();
       const url = URL.createObjectURL(blob);
@@ -986,7 +1005,7 @@ function ClientView() {
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "PDF export failed");
     }
-  }, [client, ratios, profile, user, financials, debtSchedule]);
+  }, [client, ratios, profile, user, financials, debtSchedule, financialsSignoff, effectiveRunway]);
 
   const handleEmailDraft = useCallback(async () => {
     if (!client) return;
@@ -1006,9 +1025,10 @@ function ClientView() {
       `Open Queries: ${openQueriesCount}\n\n` +
       `Please review the attached report for detailed ratio analysis and recommended actions.\n\n` +
       `Best regards,\n${profile.accountantName || "Your Accountant"}\n${profile.firmName || ""}`;
+    let shareBody = bodyText;
     if (user) {
       const snapId = await latestSnapshotId(client.id);
-      await recordDelivery({
+      const logged = await recordDelivery({
         clientId: client.id,
         channel: "mailto",
         kind: "health_summary",
@@ -1019,10 +1039,11 @@ function ClientView() {
         periodLabel: new Date().toLocaleString("en-US", { month: "short", year: "numeric" }),
         createdBy: user.id,
       });
+      shareBody = logged.body ?? bodyText;
       setDeliveryRefresh((n) => n + 1);
     }
     window.open(
-      `mailto:?subject=${encodeURIComponent(subjectText)}&body=${encodeURIComponent(bodyText)}`,
+      `mailto:?subject=${encodeURIComponent(subjectText)}&body=${encodeURIComponent(shareBody)}`,
     );
   }, [
     client,
@@ -1046,9 +1067,10 @@ function ClientView() {
       `Cash Runway: ${effectiveRunway != null ? `${effectiveRunway} wk` : "—"}\n` +
       `Open Queries: ${openQueriesCount}\n` +
       `Prepared by ${profile.firmName || "your accountant"} via MILŌN Portal.`;
+    let shareText = text;
     if (user) {
       const snapId = await latestSnapshotId(client.id);
-      await recordDelivery({
+      const logged = await recordDelivery({
         clientId: client.id,
         channel: "whatsapp",
         kind: "health_summary",
@@ -1058,9 +1080,10 @@ function ClientView() {
         periodLabel: new Date().toLocaleString("en-US", { month: "short", year: "numeric" }),
         createdBy: user.id,
       });
+      shareText = logged.body ?? text;
       setDeliveryRefresh((n) => n + 1);
     }
-    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
+    window.open(`https://wa.me/?text=${encodeURIComponent(shareText)}`, "_blank");
   }, [
     client,
     healthScoreRounded,
@@ -1727,7 +1750,15 @@ function ClientView() {
 
           {/* Wrap in a Tailwind dark context so the component's dark: variants fire */}
           <div className="dark" style={{ colorScheme: "dark" }}>
-            <ProfitabilityWaterfall fallback={waterfallFallback} clientName={client?.name} />
+            <ProfitabilityWaterfall
+              fallback={waterfallFallback}
+              clientName={client?.name}
+              clientId={client?.id}
+              reviewSignoff={stampFromSignoff(
+                financialsSignoff,
+                computeIsStale(financialsSignoff, client?.financials_updated_at ?? null),
+              )}
+            />
           </div>
           <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 16 }}>
             <ReviewSignoffButton
