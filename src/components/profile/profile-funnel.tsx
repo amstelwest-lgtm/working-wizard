@@ -3,7 +3,8 @@
  * Replaces the old single business-type picker. Retakeable anytime.
  */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import type {
   BudgetCapexMode,
@@ -271,6 +272,7 @@ export function ProfileFunnel({
       !debtPosition ||
       !ownerGoal
     ) {
+      toast.error("Pick an answer for each question before saving.");
       return;
     }
     const profile = buildOperatingProfile({
@@ -308,8 +310,13 @@ export function ProfileFunnel({
   const goNext = () => setStep((s) => Math.min(TOTAL - 1, s + 1));
   const goBack = () => setStep((s) => Math.max(0, s - 1));
 
+  const optionsRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    optionsRef.current?.scrollTo({ top: 0 });
+  }, [step]);
+
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4">
+    <div className="flex h-full min-h-0 flex-1 flex-col gap-3 overflow-hidden">
       <div className="shrink-0">
         <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#d4a550]">
           {mode === "first-run" ? "Welcome to Milōn" : "Update business profile"} · question{" "}
@@ -322,7 +329,10 @@ export function ProfileFunnel({
         </p>
       </div>
 
-      <div className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain pr-1">
+      <div
+        ref={optionsRef}
+        className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain pr-1 [-webkit-overflow-scrolling:touch]"
+      >
         {step === 0 &&
           PAY_MOTION_OPTIONS.map((o) => (
             <button
@@ -512,7 +522,7 @@ export function ProfileFunnel({
                 <div className="mt-1 text-[11px] text-slate-500">e.g. {o.examples}</div>
               </button>
             ))}
-            <div className="mt-4 rounded-xl border border-slate-700 bg-slate-900/60 p-3">
+            <div className="mt-2 rounded-xl border border-slate-700 bg-slate-900/60 p-3">
               <label className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
                 Financial year starts in
               </label>
@@ -544,22 +554,12 @@ export function ProfileFunnel({
                 Default March (common SA). Used by Budget and reporting periods.
               </p>
             </div>
-            <Button
-              disabled={!ownerGoal || saving}
-              className="mt-2 w-full bg-[#d4a550] text-[#0a0e1a] hover:bg-[#c49a45]"
-              onClick={finish}
-            >
-              {saving
-                ? "Saving…"
-                : mode === "first-run"
-                  ? "Save profile & continue"
-                  : "Update profile"}
-            </Button>
           </>
         )}
       </div>
 
-      <div className="flex shrink-0 gap-2 border-t border-slate-800 pt-3">
+      {/* Sticky footer — Save always visible on last question (was clipped below fold). */}
+      <div className="flex shrink-0 items-center gap-2 border-t border-slate-800 pt-3">
         {step > 0 ? (
           <Button variant="ghost" size="sm" className="text-slate-300" onClick={goBack}>
             Back
@@ -571,13 +571,28 @@ export function ProfileFunnel({
         ) : (
           <span />
         )}
-        <div className="ml-auto flex gap-1">
-          {Array.from({ length: TOTAL }).map((_, i) => (
-            <span
-              key={i}
-              className={`h-1.5 w-1.5 rounded-full ${i <= step ? "bg-[#d4a550]" : "bg-slate-700"}`}
-            />
-          ))}
+        <div className="ml-auto flex items-center gap-3">
+          <div className="flex gap-1">
+            {Array.from({ length: TOTAL }).map((_, i) => (
+              <span
+                key={i}
+                className={`h-1.5 w-1.5 rounded-full ${i <= step ? "bg-[#d4a550]" : "bg-slate-700"}`}
+              />
+            ))}
+          </div>
+          {step === 9 && (
+            <Button
+              disabled={!ownerGoal || saving}
+              className="bg-[#d4a550] text-[#0a0e1a] hover:bg-[#c49a45]"
+              onClick={finish}
+            >
+              {saving
+                ? "Saving…"
+                : mode === "first-run"
+                  ? "Save profile & continue"
+                  : "Update profile"}
+            </Button>
+          )}
         </div>
       </div>
     </div>
