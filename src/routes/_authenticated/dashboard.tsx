@@ -13,6 +13,7 @@ import {
 } from "@/lib/health-score";
 import { useServerFn } from "@tanstack/react-start";
 import { getQboStatuses } from "@/lib/qbo.functions";
+import { createFirmClient } from "@/lib/firm-clients.functions";
 import { effectiveCashRunwayWeeks } from "@/lib/cash-runway";
 import { countOpenQueriesByClient } from "@/lib/open-queries";
 import "@/styles/accountant-portal.css";
@@ -193,18 +194,17 @@ function AddClientDialog({
   onClose,
   onAdded,
   firmId,
-  userId,
 }: {
   open: boolean;
   onClose: () => void;
   onAdded: () => void;
   firmId: string | null;
-  userId: string;
 }) {
   const [newName, setNewName] = useState("");
   const [newType, setNewType] = useState("");
   const [saving, setSaving] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const createClient = useServerFn(createFirmClient);
 
   useEffect(() => {
     if (open) {
@@ -217,19 +217,31 @@ function AddClientDialog({
   if (!open) return null;
 
   const add = async () => {
-    if (!newName.trim()) return;
+    if (!newName.trim()) {
+      toast.error("Enter a business name");
+      return;
+    }
+    if (!firmId) {
+      toast.error("No practice firm found yet — refresh and try again.");
+      return;
+    }
     setSaving(true);
-    const { error } = await supabase.from("clients").insert({
-      name: newName.trim(),
-      owner_user_id: userId,
-      firm_id: firmId ?? null,
-      business_type: newType || null,
-    });
-    setSaving(false);
-    if (error) { toast.error(error.message); return; }
-    toast.success("Client added");
-    onAdded();
-    onClose();
+    try {
+      await createClient({
+        data: {
+          name: newName.trim(),
+          firmId,
+          businessType: newType.trim() || null,
+        },
+      });
+      toast.success("Client added");
+      onAdded();
+      onClose();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not add client");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -242,6 +254,11 @@ function AddClientDialog({
           <button className="close" onClick={onClose}>✕</button>
         </div>
         <div className="drawer-body" style={{ padding: "24px 30px" }}>
+          {!firmId && (
+            <p style={{ marginBottom: 16, fontSize: 13, color: "var(--warn, #e8b34b)" }}>
+              Your practice firm is still loading. Wait a moment, then try again.
+            </p>
+          )}
           <div style={{ marginBottom: 16 }}>
             <label style={{ fontSize: 10.5, letterSpacing: ".14em", textTransform: "uppercase", color: "var(--ink-dim)", display: "block", marginBottom: 6 }}>
               Business name *
@@ -250,7 +267,7 @@ function AddClientDialog({
               ref={inputRef}
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") add(); }}
+              onKeyDown={(e) => { if (e.key === "Enter") void add(); }}
               style={{ width: "100%", padding: "11px 14px", borderRadius: 11, border: "1px solid var(--line)", background: "var(--bg-2)", color: "var(--ink)", fontFamily: "inherit", fontSize: 14 }}
               placeholder="e.g. Karoo Traders"
             />
@@ -268,7 +285,12 @@ function AddClientDialog({
           </div>
           <div style={{ display: "flex", gap: 12 }}>
             <button className="btn ghost" onClick={onClose} style={{ flex: 1 }}>Cancel</button>
-            <button className="btn gold" onClick={add} disabled={saving || !newName.trim()} style={{ flex: 1 }}>
+            <button
+              className="btn gold"
+              onClick={() => void add()}
+              disabled={saving || !newName.trim() || !firmId}
+              style={{ flex: 1 }}
+            >
               {saving ? "Saving…" : "Add client"}
             </button>
           </div>
@@ -339,10 +361,10 @@ function Dashboard() {
   const getStatuses = useServerFn(getQboStatuses);
 
   // ── Load ──────────────────────────────────────────────────────────────────
-  const load = async (activeFirmId: string | null) => {
+  const load = async (activeFirmId: string | null, userId: string | undefined) => {
     setLoading(true);
 
-    if (!activeFirmId) {
+    if (!userId) {
       setClientRows([]);
       setQboStatuses({});
       setReportsThisMonth(0);
@@ -350,14 +372,36 @@ function Dashboard() {
       return;
     }
 
-    // Clients for the active firm only (G27) — never mix portfolios across practices.
-    const { data: cs, error } = await supabase
-      .from("clients")
-      .select("*")
-      .eq("firm_id", activeFirmId)
-      .order("created_at", { ascending: false });
+    // Firm-scoped list + legacy orphans (firm_id null) owned by this accountant.
+    // Strict firm_id-only filtering hid pre-G27 clients and made the dashboard look empty.
+    let query = supabase.from("clients").select("*").order("created_at", { ascending: false });
+    if (activeFirmId) {
+      query = query.or(
+        `firm_id.eq.${activeFirmId},and(firm_id.is.null,owner_user_id.eq.${userId})`,
+      );
+    } else {
+      // No firm context yet — still show clients this user owns.
+      query = query.eq("owner_user_id", userId);
+    }
+    const { data: cs, error } = await query;
     if (error) toast.error(error.message);
-    const rawClients = (cs ?? []) as Client[];
+    let rawClients = (cs ?? []) as Client[];
+
+    // Attach legacy null-firm practice clients to the active firm so they stay visible.
+    if (activeFirmId && rawClients.some((c) => !c.firm_id)) {
+      const orphanIds = rawClients.filter((c) => !c.firm_id).map((c) => c.id);
+      const { error: attachErr } = await supabase
+        .from("clients")
+        .update({ firm_id: activeFirmId })
+        .in("id", orphanIds)
+        .eq("owner_user_id", userId)
+        .is("firm_id", null);
+      if (!attachErr) {
+        rawClients = rawClients.map((c) =>
+          orphanIds.includes(c.id) ? { ...c, firm_id: activeFirmId } : c,
+        );
+      }
+    }
 
     // QBO statuses (non-fatal)
     let qbo: typeof qboStatuses = {};
@@ -440,9 +484,9 @@ function Dashboard() {
 
   useEffect(() => {
     if (brandLoading) return;
-    void load(firmId);
+    void load(firmId, user?.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [firmId, brandLoading]);
+  }, [firmId, brandLoading, user?.id]);
 
   // Load playbook catalogue
   useEffect(() => {
@@ -956,9 +1000,8 @@ function Dashboard() {
         <AddClientDialog
           open={addOpen}
           onClose={() => setAddOpen(false)}
-          onAdded={() => void load(firmId)}
-          firmId={firm?.id ?? null}
-          userId={user.id}
+          onAdded={() => void load(firmId, user.id)}
+          firmId={firm?.id ?? firmId}
         />
       )}
 
