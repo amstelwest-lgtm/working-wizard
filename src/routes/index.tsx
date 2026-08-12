@@ -15,8 +15,16 @@ export const Route = createFileRoute("/")({
       { title: "MILŌN — Know your numbers. Sleep at night." },
       { name: "description", content: "MILŌN is the financial health platform for South African SMEs and their accountants. One score. 31 ratios. 13-week cashflow. 930+ fixes ranked for you." },
     ],
-    // Ship landing CSS in document head (not post-hydration injection) to avoid FOUC.
-    links: [{ rel: "stylesheet", href: landingCssUrl }],
+    // Ship landing CSS early; also preload so it races ahead of the large app bundle CSS.
+    links: [
+      { rel: "preload", href: landingCssUrl, as: "style" },
+      { rel: "stylesheet", href: landingCssUrl },
+    ],
+    scripts: [
+      {
+        children: `(function(){try{var d=document.documentElement;d.classList.add("dark");d.dataset.theme="dark";d.dataset.landing="1";d.style.backgroundColor="#050507";}catch(e){}})();`,
+      },
+    ],
   }),
 });
 
@@ -84,12 +92,22 @@ function LandingPage() {
     const root = document.documentElement;
     const hadDark = root.classList.contains("dark");
     const prevTheme = root.dataset.theme;
+    const hadLanding = root.dataset.landing;
     root.classList.add("dark");
     root.dataset.theme = "dark";
+    root.dataset.landing = "1";
+    root.style.backgroundColor = "#050507";
+    root.style.color = "";
+    document.body.style.backgroundColor = "#050507";
     return () => {
       if (!hadDark) root.classList.remove("dark");
       if (prevTheme) root.dataset.theme = prevTheme;
       else delete root.dataset.theme;
+      if (hadLanding) root.dataset.landing = hadLanding;
+      else delete root.dataset.landing;
+      root.style.backgroundColor = "";
+      root.style.color = "";
+      document.body.style.backgroundColor = "";
     };
   }, []);
 
@@ -410,7 +428,18 @@ function LandingPage() {
   /* ── email confirmation screen ── */
   if (regDone) {
     return (
-      <div style={{ minHeight:"100vh", background:"#050507", display:"flex", alignItems:"center", justifyContent:"center", padding:"0 16px" }}>
+      <div
+        data-milon-landing=""
+        style={{
+          minHeight: "100vh",
+          background: "#050507",
+          color: "#f2ecdc",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "0 16px",
+        }}
+      >
         <div style={{ width:"100%", maxWidth:420, borderRadius:28, padding:"44px 36px", background:"rgba(13,13,20,.96)", border:"1px solid rgba(212,175,55,.2)", boxShadow:"0 30px 80px rgba(0,0,0,.6)", textAlign:"center" }}>
           <div style={{ width:52, height:52, borderRadius:"50%", background:"rgba(212,175,55,.1)", display:"grid", placeItems:"center", margin:"0 auto 22px" }}>
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#d4af37" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -431,7 +460,7 @@ function LandingPage() {
 
   /* ═══════════════════════════ MAIN RENDER ═══════════════════════════ */
   return (
-    <>
+    <div data-milon-landing="" style={{ minHeight: "100vh", background: "#050507", color: "#f2ecdc" }}>
       {/* ── sign-in modal ── */}
       {signinOpen && (
         <div className="milon-signin-modal" onClick={() => { setSigninOpen(false); setFpMode(false); setFpDone(false); setSiError(""); }}>
@@ -1066,6 +1095,6 @@ function LandingPage() {
           </div>
         </div>
       </footer>
-    </>
+    </div>
   );
 }

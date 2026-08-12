@@ -1,4 +1,4 @@
-/* MILŌN landing page CSS — injected dynamically via index.tsx, removed on unmount */
+/* MILŌN landing page CSS — linked from index route head */
 :root{
   --bg:#050507;
   --bg-2:#0a0a10;
@@ -18,6 +18,17 @@
   --ok:#5ccf8a;
   --shadow-gold:0 0 60px rgba(212,175,55,.12);
   --ease:cubic-bezier(.22,.9,.24,1);
+}
+
+/* Reveal real ink once this stylesheet has loaded (critical CSS hid text as #050507). */
+html[data-landing="1"],
+html[data-landing="1"] body{
+  background:#050507 !important;
+  background-color:#050507 !important;
+  color:#f2ecdc !important;
+}
+html[data-landing="1"] body{
+  color:var(--ink) !important;
 }
 html[data-theme="light"]{
   --bg:#f7f4ec;
