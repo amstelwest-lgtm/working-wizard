@@ -1939,8 +1939,8 @@ function ReportsPage() {
 
   // ── Preview single PDF ───────────────────────────────────────────────────
 
-  async function handlePreview(report: ReportMeta) {
-    if (!assertCanGenerate()) return;
+  async function handlePreview(report: ReportMeta): Promise<boolean> {
+    if (!assertCanGenerate()) return false;
     if (previewState?.blobUrl) URL.revokeObjectURL(previewState.blobUrl);
     setPreviewKey(report.key);
     setPreviewState({ key: report.key, name: report.name, blobUrl: null, loading: true });
@@ -1948,11 +1948,13 @@ function ReportsPage() {
       const blob = await GEN[report.key](settings, profile);
       const url = URL.createObjectURL(blob);
       setPreviewState({ key: report.key, name: report.name, blobUrl: url, loading: false });
+      return true;
     } catch (err) {
       toast.error(`Preview failed: ${(err as Error).message}`);
       console.error(err);
       setPreviewState(null);
       setPreviewKey(null);
+      return false;
     }
   }
 
@@ -2002,24 +2004,24 @@ function ReportsPage() {
       })();
     } else {
       void (async () => {
-        try {
-          await handlePreview(deepLinkReport);
-          // Keep the focus shell until the user closes the preview modal — avoids
-          // remounting PreviewModal when flipping to the full catalogue.
-          void navigate({
-            to: "/reports",
-            search: {
-              client: clientParam,
-              clientId,
-              report: deepLinkReport.key,
-              action: undefined,
-            },
-            replace: true,
-          });
-        } catch {
+        const ok = await handlePreview(deepLinkReport);
+        if (!ok) {
           setDeepLinkBusy(false);
           clearDeepLinkSearch();
+          return;
         }
+        // Keep the focus shell until the user closes the preview modal — avoids
+        // remounting PreviewModal when flipping to the full catalogue.
+        void navigate({
+          to: "/reports",
+          search: {
+            client: clientParam,
+            clientId,
+            report: deepLinkReport.key,
+            action: undefined,
+          },
+          replace: true,
+        });
       })();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- fire once per deep-link token
