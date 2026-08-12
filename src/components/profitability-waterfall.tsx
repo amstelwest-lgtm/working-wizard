@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { useFinancialInputs } from "@/contexts/financial-inputs";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
 import { useAuth } from "@/hooks/use-auth";
-import { hashFigures, latestSnapshotId, recordDelivery } from "@/lib/advisory-deliveries";
+import { hashFigures, latestSnapshotId, recordDelivery, warnIfDeliveryFailed } from "@/lib/advisory-deliveries";
 import type { ReportSignoffStamp } from "@/components/pdf/pdf-document";
 
 export type WaterfallFallback = {
@@ -125,7 +125,7 @@ async function exportPDF(opts: {
 
   if (opts.clientId && opts.createdBy) {
     const snapId = await latestSnapshotId(opts.clientId);
-    await recordDelivery({
+    const logged = await recordDelivery({
       clientId: opts.clientId,
       channel: "pdf_download",
       kind: "report_pdf",
@@ -135,6 +135,7 @@ async function exportPDF(opts: {
       periodLabel: period,
       createdBy: opts.createdBy,
     });
+    warnIfDeliveryFailed(logged.error);
   }
 }
 

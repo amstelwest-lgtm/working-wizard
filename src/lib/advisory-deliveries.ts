@@ -2,6 +2,7 @@
  * Advisory / report delivery ledger — defend "we advised them in March."
  */
 
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 
 export type DeliveryChannel = "mailto" | "whatsapp" | "copy" | "pdf_download" | "email";
@@ -130,7 +131,12 @@ export async function recordDelivery(
   if (error) {
     const msg = error.message ?? "";
     if (msg.includes("does not exist") || msg.includes("relation") || (error as { code?: string }).code === "42P01") {
-      return { id: null, ackToken: null, body, error: null };
+      return {
+        id: null,
+        ackToken: null,
+        body,
+        error: "Advisory ledger unavailable — run the latest DB migration.",
+      };
     }
     return { id: null, ackToken: null, body, error: msg };
   }
@@ -204,4 +210,10 @@ export function channelHonestyLabel(channel: DeliveryChannel, acknowledged: bool
   if (channel === "copy") return "Copied · not confirmed delivered";
   if (channel === "mailto" || channel === "whatsapp") return "Opened share · not confirmed delivered";
   return "Logged";
+}
+
+/** Soft warning when the ledger insert failed — never blocks the user action. */
+export function warnIfDeliveryFailed(error: string | null | undefined): void {
+  if (!error) return;
+  toast.warning(`Sent history not logged: ${error}`);
 }

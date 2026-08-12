@@ -428,6 +428,77 @@ export type Database = {
         }
         Relationships: []
       }
+      advisory_deliveries: {
+        Row: {
+          id: string
+          client_id: string
+          firm_id: string | null
+          channel: string
+          kind: string
+          subject: string | null
+          body: string | null
+          recipient_email: string | null
+          recipient_name: string | null
+          report_key: string | null
+          snapshot_id: string | null
+          figures_hash: string | null
+          period_label: string | null
+          created_by: string
+          created_at: string
+          acknowledged_at: string | null
+          acknowledged_by: string | null
+          ack_token: string | null
+        }
+        Insert: {
+          id?: string
+          client_id: string
+          firm_id?: string | null
+          channel: string
+          kind: string
+          subject?: string | null
+          body?: string | null
+          recipient_email?: string | null
+          recipient_name?: string | null
+          report_key?: string | null
+          snapshot_id?: string | null
+          figures_hash?: string | null
+          period_label?: string | null
+          created_by: string
+          created_at?: string
+          acknowledged_at?: string | null
+          acknowledged_by?: string | null
+          ack_token?: string | null
+        }
+        Update: {
+          id?: string
+          client_id?: string
+          firm_id?: string | null
+          channel?: string
+          kind?: string
+          subject?: string | null
+          body?: string | null
+          recipient_email?: string | null
+          recipient_name?: string | null
+          report_key?: string | null
+          snapshot_id?: string | null
+          figures_hash?: string | null
+          period_label?: string | null
+          created_by?: string
+          created_at?: string
+          acknowledged_at?: string | null
+          acknowledged_by?: string | null
+          ack_token?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "advisory_deliveries_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_employees: {
         Row: {
           active: boolean
@@ -530,6 +601,209 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "client_memberships_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_notes: {
+        Row: {
+          id: string
+          client_id: string
+          tab: string
+          x: number
+          y: number
+          body: string
+          author_id: string
+          author_name: string
+          author_email: string | null
+          resolved: boolean
+          mentions: Json
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          client_id: string
+          tab?: string
+          x?: number
+          y?: number
+          body: string
+          author_id: string
+          author_name: string
+          author_email?: string | null
+          resolved?: boolean
+          mentions?: Json
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          client_id?: string
+          tab?: string
+          x?: number
+          y?: number
+          body?: string
+          author_id?: string
+          author_name?: string
+          author_email?: string | null
+          resolved?: boolean
+          mentions?: Json
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_notes_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_note_replies: {
+        Row: {
+          id: string
+          note_id: string
+          client_id: string
+          body: string
+          author_id: string
+          author_name: string
+          author_email: string | null
+          mentions: Json
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          note_id: string
+          client_id: string
+          body: string
+          author_id: string
+          author_name: string
+          author_email?: string | null
+          mentions?: Json
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          note_id?: string
+          client_id?: string
+          body?: string
+          author_id?: string
+          author_name?: string
+          author_email?: string | null
+          mentions?: Json
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_note_replies_note_id_fkey"
+            columns: ["note_id"]
+            isOneToOne: false
+            referencedRelation: "client_notes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_review_signoffs: {
+        Row: {
+          id: string
+          client_id: string
+          scope: string
+          signed_off_by_id: string
+          signed_off_by_name: string
+          signed_off_by_initials: string | null
+          signed_off_by_title: string | null
+          firm_name: string | null
+          note: string | null
+          signed_off_at: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          client_id: string
+          scope: string
+          signed_off_by_id?: string
+          signed_off_by_name: string
+          signed_off_by_initials?: string | null
+          signed_off_by_title?: string | null
+          firm_name?: string | null
+          note?: string | null
+          signed_off_at?: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          client_id?: string
+          scope?: string
+          signed_off_by_id?: string
+          signed_off_by_name?: string
+          signed_off_by_initials?: string | null
+          signed_off_by_title?: string | null
+          firm_name?: string | null
+          note?: string | null
+          signed_off_at?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_review_signoffs_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_review_signoff_history: {
+        Row: {
+          id: string
+          client_id: string
+          scope: string
+          signed_off_by_id: string
+          signed_off_by_name: string
+          signed_off_by_initials: string | null
+          signed_off_by_title: string | null
+          firm_name: string | null
+          note: string | null
+          signed_off_at: string
+          action: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          client_id: string
+          scope: string
+          signed_off_by_id: string
+          signed_off_by_name: string
+          signed_off_by_initials?: string | null
+          signed_off_by_title?: string | null
+          firm_name?: string | null
+          note?: string | null
+          signed_off_at?: string
+          action?: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          client_id?: string
+          scope?: string
+          signed_off_by_id?: string
+          signed_off_by_name?: string
+          signed_off_by_initials?: string | null
+          signed_off_by_title?: string | null
+          firm_name?: string | null
+          note?: string | null
+          signed_off_at?: string
+          action?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_review_signoff_history_client_id_fkey"
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients"
@@ -1110,9 +1384,17 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_client_writer: {
+        Args: { _user_id: string; _client_id: string }
+        Returns: boolean
+      }
       is_firm_member: {
         Args: { _firm_id: string; _user_id: string }
         Returns: boolean
+      }
+      acknowledge_advisory_delivery: {
+        Args: { _token: string }
+        Returns: Database["public"]["Tables"]["advisory_deliveries"]["Row"]
       }
     }
     Enums: {

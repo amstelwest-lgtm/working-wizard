@@ -53,7 +53,7 @@ import {
   runwayWeeksFromCashflow,
   runwayWeeksFromClosings,
 } from "@/lib/cash-runway";
-import { hashFigures, latestSnapshotId, recordDelivery } from "@/lib/advisory-deliveries";
+import { hashFigures, latestSnapshotId, recordDelivery, warnIfDeliveryFailed } from "@/lib/advisory-deliveries";
 import { stampFromSignoff } from "@/lib/review-signoff-stamp";
 // @react-pdf/renderer + the branded report are dynamically imported inside
 // exportPDF to avoid blocking initial hydration.
@@ -739,7 +739,7 @@ export function CashForecastPanel({
 
       if (user && clientId) {
         const snapId = await latestSnapshotId(clientId);
-        await recordDelivery({
+        const logged = await recordDelivery({
           clientId,
           channel: "pdf_download",
           kind: "report_pdf",
@@ -754,6 +754,7 @@ export function CashForecastPanel({
           periodLabel: period,
           createdBy: user.id,
         });
+        warnIfDeliveryFailed(logged.error);
       }
     } catch (err) {
       toast.error(`PDF export failed: ${err instanceof Error ? err.message : String(err)}`);

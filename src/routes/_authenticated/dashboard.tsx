@@ -33,7 +33,6 @@ type Client = {
   business_type: string | null;
   cash_runway_weeks: number | null;
   last_forecast_at: string | null;
-  open_queries_count: number;
   last_login_at: string | null;
   firm_id: string | null;
   financials: Record<string, string | number | null> | null;
@@ -783,7 +782,13 @@ function Dashboard() {
                   <tr
                     key={c.id}
                     className="row"
-                    onClick={() => navigate({ to: "/clients/$clientId", params: { clientId: c.id } })}
+                    onClick={() =>
+                      navigate({
+                        to: "/clients/$clientId",
+                        params: { clientId: c.id },
+                        search: {},
+                      })
+                    }
                   >
                     <td>
                       <div className="cname">{c.name}</div>

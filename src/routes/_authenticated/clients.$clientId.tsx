@@ -40,6 +40,7 @@ import {
 import { profileIndustryLabel } from "@/lib/profile-signals";
 import { AccountantOperatingProfile } from "@/components/accountant-operating-profile";
 import { NoteLayer } from "@/components/note-layer";
+import { QboConnectCard } from "@/components/qbo-connect";
 import { effectiveCashRunwayWeeks, runwayWeeksFromCashflow } from "@/lib/cash-runway";
 import { countOpenQueriesForClient } from "@/lib/open-queries";
 import { ProfileFunnel } from "@/components/profile/profile-funnel";
@@ -68,6 +69,7 @@ import {
   hashFigures,
   latestSnapshotId,
   recordDelivery,
+  warnIfDeliveryFailed,
 } from "@/lib/advisory-deliveries";
 import { upsertCurrentPeriodSnapshot } from "@/lib/financial-snapshots";
 import { stampFromSignoff } from "@/lib/review-signoff-stamp";
@@ -285,6 +287,12 @@ function HealthRing({
 // ── route ──────────────────────────────────────────────────────────────────
 
 export const Route = createFileRoute("/_authenticated/clients/$clientId")({
+  validateSearch: (search: Record<string, unknown>): { qbo?: string; reason?: string } => {
+    const out: { qbo?: string; reason?: string } = {};
+    if (typeof search.qbo === "string") out.qbo = search.qbo;
+    if (typeof search.reason === "string") out.reason = search.reason;
+    return out;
+  },
   component: ClientView,
 });
 
@@ -295,7 +303,6 @@ type Client = {
   operating_profile?: unknown;
   cash_runway_weeks: number | null;
   last_forecast_at: string | null;
-  open_queries_count: number;
   reports_issued_count?: number;
   financials?: Record<string, string | number | null> | null;
   financials_updated_at?: string | null;
@@ -407,9 +414,31 @@ const REPORT_TEMPLATES = [
 
 function ClientView() {
   const { clientId } = Route.useParams();
+  const search = Route.useSearch();
   const { user } = useAuth();
   const navigate = useNavigate();
   const { profile } = useAccountantProfile();
+
+  // QBO OAuth return (?qbo=connected|error) — callback lands here for accountants.
+  useEffect(() => {
+    if (!search.qbo) return;
+    if (search.qbo === "connected") {
+      toast.success("QuickBooks Online connected — tap Sync to import data");
+    } else if (search.qbo === "error") {
+      toast.error(`QuickBooks connection failed: ${search.reason ?? "unknown error"}`);
+    }
+    navigate({
+      to: "/clients/$clientId",
+      params: { clientId },
+      search: (prev) => {
+        const next = { ...prev };
+        delete next.qbo;
+        delete next.reason;
+        return next;
+      },
+      replace: true,
+    });
+  }, [search.qbo, search.reason, clientId, navigate]);
 
   const [client, setClient] = useState<Client | null>(null);
   const [loading, setLoading] = useState(true);
@@ -428,6 +457,7 @@ function ClientView() {
   const [uploadOpen, setUploadOpen] = useState(false);
   const [snapshots, setSnapshots] = useState<SnapshotRow[]>([]);
   const [deliveryRefresh, setDeliveryRefresh] = useState(0);
+  const [queriesRefresh, setQueriesRefresh] = useState(0);
 
   // Accountant sign-off on this period's financials / cash forecast
   const fetchReviewSignoffs = useServerFn(listClientReviewSignoffs);
@@ -603,7 +633,7 @@ function ClientView() {
         const { data, error } = await supabase
           .from("clients")
           .select(
-            "id, name, business_type, operating_profile, cash_runway_weeks, last_forecast_at, open_queries_count, financials, financials_updated_at, reports_issued_count, cashflow",
+            "id, name, business_type, operating_profile, cash_runway_weeks, last_forecast_at, financials, financials_updated_at, reports_issued_count, cashflow",
           )
           .eq("id", clientId)
           .maybeSingle();
@@ -615,7 +645,7 @@ function ClientView() {
             const { data: data2, error: error2 } = await supabase
               .from("clients")
               .select(
-                "id, name, business_type, operating_profile, cash_runway_weeks, last_forecast_at, open_queries_count, financials, financials_updated_at, cashflow",
+                "id, name, business_type, operating_profile, cash_runway_weeks, last_forecast_at, financials, financials_updated_at, cashflow",
               )
               .eq("id", clientId)
               .maybeSingle();
@@ -682,7 +712,7 @@ function ClientView() {
     return () => {
       cancelled = true;
     };
-  }, [clientId, activeTab]);
+  }, [clientId, activeTab, queriesRefresh]);
 
   useEffect(() => {
     if (!clientId) return;
@@ -990,7 +1020,7 @@ function ClientView() {
       setClient((c) => (c ? { ...c, reports_issued_count: (c.reports_issued_count ?? 0) + 1 } : c));
       if (user) {
         const snapId = await latestSnapshotId(client.id);
-        await recordDelivery({
+        const logged = await recordDelivery({
           clientId: client.id,
           channel: "pdf_download",
           kind: "report_pdf",
@@ -1000,6 +1030,7 @@ function ClientView() {
           periodLabel: periodLabel,
           createdBy: user.id,
         });
+        warnIfDeliveryFailed(logged.error);
         setDeliveryRefresh((n) => n + 1);
       }
     } catch (e) {
@@ -1039,6 +1070,7 @@ function ClientView() {
         periodLabel: new Date().toLocaleString("en-US", { month: "short", year: "numeric" }),
         createdBy: user.id,
       });
+      warnIfDeliveryFailed(logged.error);
       shareBody = logged.body ?? bodyText;
       setDeliveryRefresh((n) => n + 1);
     }
@@ -1080,6 +1112,7 @@ function ClientView() {
         periodLabel: new Date().toLocaleString("en-US", { month: "short", year: "numeric" }),
         createdBy: user.id,
       });
+      warnIfDeliveryFailed(logged.error);
       shareText = logged.body ?? text;
       setDeliveryRefresh((n) => n + 1);
     }
@@ -1550,6 +1583,44 @@ function ClientView() {
                     Upload statement
                   </button>
                 </div>
+                <div style={{ marginBottom: 16 }}>
+                  <QboConnectCard
+                    clientId={clientId}
+                    onSyncComplete={(inputs) => {
+                      const next = Object.fromEntries(
+                        Object.entries(inputs).map(([k, val]) => [k, String(val)]),
+                      );
+                      setFinancials((prev) => ({ ...prev, ...next }));
+                      const updated = mergeFinancialsBlob(
+                        { ...financials, ...next },
+                        debtSchedule,
+                      );
+                      const updatedAt = new Date().toISOString();
+                      void supabase
+                        .from("clients")
+                        .update({
+                          financials: updated as never,
+                          financials_updated_at: updatedAt,
+                        })
+                        .eq("id", clientId)
+                        .then(({ error }) => {
+                          if (error) {
+                            toast.error(`QBO sync save failed: ${error.message}`);
+                            return;
+                          }
+                          setClient((c) =>
+                            c ? { ...c, financials_updated_at: updatedAt } : c,
+                          );
+                          void upsertCurrentPeriodSnapshot({
+                            clientId,
+                            financials: updated as Record<string, unknown>,
+                            source: "qbo",
+                          });
+                          toast.success("Financials updated from QuickBooks");
+                        });
+                    }}
+                  />
+                </div>
                 <div className="fin-grid">
                   {FIELD_LABELS.map(({ key, label }) => (
                     <div key={key}>
@@ -1995,6 +2066,7 @@ function ClientView() {
             ?? user?.email
             ?? "Accountant"
           }
+          onNotesChanged={() => setQueriesRefresh((n) => n + 1)}
         />
       )}
 

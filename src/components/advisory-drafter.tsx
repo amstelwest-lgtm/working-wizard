@@ -18,6 +18,7 @@ import {
   hashFigures,
   latestSnapshotId,
   recordDelivery,
+  warnIfDeliveryFailed,
   type DeliveryKind,
 } from "@/lib/advisory-deliveries";
 
@@ -117,6 +118,7 @@ export function AdvisoryDrafter({
       periodLabel: draft.grounding.currentPeriod,
       createdBy: user.id,
     });
+    warnIfDeliveryFailed(logged.error);
     onLogged?.();
     return { body: logged.body ?? draft.body, ackToken: logged.ackToken };
   };

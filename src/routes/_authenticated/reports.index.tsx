@@ -21,7 +21,7 @@ import {
   effectiveCashRunwayWeeks,
   runwayWeeksFromClosings,
 } from "@/lib/cash-runway";
-import { hashFigures, latestSnapshotId, recordDelivery } from "@/lib/advisory-deliveries";
+import { hashFigures, latestSnapshotId, recordDelivery, warnIfDeliveryFailed } from "@/lib/advisory-deliveries";
 import { useAuth } from "@/hooks/use-auth";
 import { PlaybookDrawer } from "@/components/playbook-drawer";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -1852,7 +1852,7 @@ function ReportsPage() {
   async function logReportDelivery(reportKey: string) {
     if (!user || !clientId) return;
     const snapId = await latestSnapshotId(clientId);
-    await recordDelivery({
+    const logged = await recordDelivery({
       clientId,
       channel: "pdf_download",
       kind: "report_pdf",
@@ -1866,6 +1866,7 @@ function ReportsPage() {
       periodLabel: `${settings.periodMonth} ${settings.periodYear}`,
       createdBy: user.id,
     });
+    warnIfDeliveryFailed(logged.error);
   }
 
   // ── Generate single PDF ──────────────────────────────────────────────────

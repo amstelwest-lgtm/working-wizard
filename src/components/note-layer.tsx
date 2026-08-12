@@ -9,6 +9,8 @@ type NoteLayerProps = {
   tab: string;
   authorName: string;
   clientName?: string;
+  /** Fired after a note create / resolve / delete / reply so parents can refresh live counts. */
+  onNotesChanged?: () => void;
 };
 
 function getInitials(name: string) {
@@ -160,7 +162,7 @@ function MentionComposer({
   );
 }
 
-export function NoteLayer({ clientId, tab, authorName, clientName }: NoteLayerProps) {
+export function NoteLayer({ clientId, tab, authorName, clientName, onNotesChanged }: NoteLayerProps) {
   const { user } = useAuth();
   const {
     pinMode,
@@ -249,6 +251,7 @@ export function NoteLayer({ clientId, tab, authorName, clientName }: NoteLayerPr
       setNoteText("");
       setComposing(null);
       if (saved) setOpenNoteId(saved.id);
+      onNotesChanged?.();
     } finally {
       setSaving(false);
     }
@@ -261,6 +264,7 @@ export function NoteLayer({ clientId, tab, authorName, clientName }: NoteLayerPr
       await replyToNote(noteId, replyText.trim());
       setReplyText("");
       setReplyingTo(null);
+      onNotesChanged?.();
     } finally {
       setSaving(false);
     }
@@ -350,7 +354,7 @@ export function NoteLayer({ clientId, tab, authorName, clientName }: NoteLayerPr
                       <button
                         title="Delete note"
                         onClick={() => {
-                          void deleteNote(note.id);
+                          void deleteNote(note.id).then(() => onNotesChanged?.());
                           setOpenNoteId(null);
                         }}
                         className="rounded p-1 text-slate-300 hover:bg-red-50 hover:text-red-500 dark:text-slate-600 dark:hover:bg-red-900/30 dark:hover:text-red-400"
@@ -448,7 +452,7 @@ export function NoteLayer({ clientId, tab, authorName, clientName }: NoteLayerPr
                       Reply
                     </button>
                     <button
-                      onClick={() => void resolveNote(note.id)}
+                      onClick={() => void resolveNote(note.id).then(() => onNotesChanged?.())}
                       className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${
                         note.resolved
                           ? "bg-emerald-50 text-emerald-600 hover:bg-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-400"

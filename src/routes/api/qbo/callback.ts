@@ -97,11 +97,11 @@ export const Route = createFileRoute("/api/qbo/callback")({
             { onConflict: "client_id" },
           );
 
-          return Response.redirect(`${appOrigin}/app?qbo=connected`);
+          return Response.redirect(`${appOrigin}/clients/${clientId}?qbo=connected`);
         } catch (err) {
           console.error("[QBO callback] token exchange error:", err);
           return Response.redirect(
-            `${appOrigin}/app?qbo=error&reason=token_exchange_failed`,
+            `${appOrigin}/clients/${clientId}?qbo=error&reason=token_exchange_failed`,
           );
         }
       },
