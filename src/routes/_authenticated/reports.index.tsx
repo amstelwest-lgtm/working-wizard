@@ -95,6 +95,18 @@ const INDUSTRIES = [
   { code: "ZA-101", name: "Processing of Meat & Food Products" },
 ];
 
+/** Friendly labels for industry_benchmarks.business_type keys. */
+const BENCHMARK_SECTOR_LABEL: Record<string, string> = {
+  retail: "Retail",
+  services: "Professional & business services",
+  saas: "SaaS / software",
+  hospitality: "Hospitality",
+  construction: "Construction",
+  manufacturing: "Manufacturing",
+  professional: "Professional services",
+  other: "General SME",
+};
+
 // ── Settings type ──────────────────────────────────────────────────────────
 
 type Settings = {
@@ -225,6 +237,11 @@ type ClientReportData = {
   reviewSignoffs: { financials: ClientReviewSignoff | null; cash_forecast: ClientReviewSignoff | null };
   /** Owner 10Q profile — shapes report narratives / ordering, not layout. */
   operatingProfile: ClientOperatingProfile | null;
+  /**
+   * Live sector used for Benchmark PDF title + rows (from client business_type /
+   * profile). Null in demo / when type unset — never invent a sector label.
+   */
+  benchmarkSector: { code: string; name: string } | null;
 };
 
 const DEFAULT_MOVEMENT_LABELS = {
@@ -244,6 +261,7 @@ const EMPTY_CLIENT_DATA: ClientReportData = {
   financialsUpdatedAt: null, lastForecastAt: null,
   reviewSignoffs: { financials: null, cash_forecast: null },
   operatingProfile: null,
+  benchmarkSector: null,
 };
 
 // ── Data-builder helpers ────────────────────────────────────────────────────
@@ -990,6 +1008,7 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
   const businessTypeId =
     clientRow?.business_type ?? operatingProfile?.businessTypeId ?? null;
   const sectorBench = await loadSectorBenchmarks(businessTypeId);
+  const benchmarkSector = resolveBenchmarkSector(businessTypeId, operatingProfile);
   const effectiveRunway = effectiveCashRunwayWeeks(
     clientRow?.cash_runway_weeks,
     clientRow?.cashflow as Parameters<typeof effectiveCashRunwayWeeks>[1],
@@ -1006,6 +1025,7 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
     lastForecastAt: clientRow?.last_forecast_at ?? null,
     reviewSignoffs,
     operatingProfile,
+    benchmarkSector,
   };
   if (!clientRow?.financials) return baseEmpty;
 
@@ -1094,6 +1114,7 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
     lastForecastAt: clientRow.last_forecast_at,
     reviewSignoffs,
     operatingProfile,
+    benchmarkSector,
   };
 }
 
@@ -1119,6 +1140,38 @@ function signoffStampFor(
     signedOffByTitle: signoff.signed_off_by_title,
     firmName: signoff.firm_name,
     signedOffAt: signoff.signed_off_at,
+  };
+}
+
+/** G19 — drop prior columns when the Studio toggle is off. */
+function stripPriorFromRatios(rows: RatioResult[]): RatioResult[] {
+  return rows.map((r) => {
+    const { prior_period_value: _pv, prior_period_score: _ps, ...rest } = r;
+    return rest;
+  });
+}
+
+function withoutPriorProfit(d: ProfitabilityData): ProfitabilityData {
+  const { prior_period: _p, ...rest } = d;
+  return rest;
+}
+
+function withoutPriorLabor(d: LaborProductivityData): LaborProductivityData {
+  return { ...d, rpe_prior: null, revenue_growth: null };
+}
+
+function resolveBenchmarkSector(
+  businessTypeId: string | null | undefined,
+  operatingProfile: ClientOperatingProfile | null,
+): { code: string; name: string } | null {
+  const bt = businessTypeId ?? operatingProfile?.businessTypeId ?? null;
+  if (!bt) return null;
+  const sector = BUSINESS_TYPE_TO_BENCHMARK[bt];
+  if (!sector) return null;
+  const fallback = BENCHMARK_SECTOR_LABEL[sector] ?? sector;
+  return {
+    code: `sector:${sector}`,
+    name: profileIndustryLabel(operatingProfile, fallback),
   };
 }
 
@@ -1183,9 +1236,10 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
         throw new Error("No scorable ratios yet — complete financials before generating the scorecard.");
       }
       const isDemo = !cd;
+      const ratioRows = isDemo ? MOCK_RATIOS : cd!.ratioResults;
       return renderToBlob(HealthScorecardPDF, {
         smeData: makeSmeWithNote(s, isDemo),
-        ratioResults: isDemo ? MOCK_RATIOS : cd!.ratioResults,
+        ratioResults: s.includePrior ? ratioRows : stripPriorFromRatios(ratioRows),
         accountantProfile: p,
         isDemo,
         reviewSignoff: financialsStamp,
@@ -1250,7 +1304,10 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
       );
       return renderToBlob(ProfitabilityWaterfallPDF, {
         smeData: makeSmeWithNote(s, isDemo),
-        profitabilityData: isDemo ? MOCK_PROFIT : data!,
+        profitabilityData: (() => {
+          const d = isDemo ? MOCK_PROFIT : data!;
+          return s.includePrior ? d : withoutPriorProfit(d);
+        })(),
         accountantProfile: p,
         isDemo,
         reviewSignoff: financialsStamp,
@@ -1293,9 +1350,10 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
         cd?.labor,
         "Labor productivity needs revenue, headcount, and labor cost.",
       );
+      const laborData = isDemo ? MOCK_LABOR : data!;
       return renderToBlob(LaborProductivityPDF, {
         smeData: makeSmeWithNote(s, isDemo),
-        data: isDemo ? MOCK_LABOR : data!,
+        data: s.includePrior ? laborData : withoutPriorLabor(laborData),
         accountantProfile: p,
         isDemo,
         reviewSignoff: financialsStamp,
@@ -1320,7 +1378,11 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
     },
     benchmark: async (s, p) => {
       const { BenchmarkReportPDF } = await import("@/reports/benchmark-report");
-      const industry = INDUSTRIES.find((i) => i.code === s.industryCode) ?? INDUSTRIES[0];
+      // Live clients: title must match the sector used for rows — never the
+      // Studio picker alone (which can disagree with industry_benchmarks).
+      const industry = cd?.benchmarkSector
+        ? cd.benchmarkSector
+        : (INDUSTRIES.find((i) => i.code === s.industryCode) ?? INDUSTRIES[0]);
       if (cd && cd.benchmark.length === 0) {
         throw new Error(
           "No sector benchmarks available — set the client business type / profile, then regenerate.",
@@ -1330,7 +1392,9 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
       return renderToBlob(BenchmarkReportPDF, {
         smeData: makeSmeWithNote(s, isDemo),
         industryCode: industry.code,
-        industryName: profileIndustryLabel(operatingProfile, industry.name),
+        industryName: cd?.benchmarkSector
+          ? industry.name
+          : profileIndustryLabel(operatingProfile, industry.name),
         benchmarkRows: isDemo ? MOCK_BENCHMARK : cd!.benchmark,
         accountantProfile: p,
         isDemo,
@@ -1451,11 +1515,13 @@ function ReportCard({
 // ── Settings panel ─────────────────────────────────────────────────────────
 
 function SettingsPanel({
-  settings, onChange, profile,
+  settings, onChange, profile, clientSector = null,
 }: {
   settings: Settings;
   onChange: (patch: Partial<Settings>) => void;
   profile: AccountantProfile;
+  /** When set (live client with business type), Benchmark PDF uses this — picker is display-only. */
+  clientSector?: { code: string; name: string } | null;
 }) {
   const inputCls = "w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-[#c9962b] focus:outline-none focus:ring-1 focus:ring-[#c9962b]/40";
 
@@ -1503,14 +1569,23 @@ function SettingsPanel({
       {/* Industry */}
       <div>
         <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Industry (Benchmark Report)</label>
-        <Select value={settings.industryCode} onValueChange={(v) => onChange({ industryCode: v })}>
-          <SelectTrigger className="border-input bg-background text-foreground text-sm h-9 w-full">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent className="bg-popover border-border">
-            {INDUSTRIES.map((i) => <SelectItem key={i.code} value={i.code} className="text-popover-foreground focus:bg-muted text-xs">{i.name}</SelectItem>)}
-          </SelectContent>
-        </Select>
+        {clientSector ? (
+          <div className="rounded-lg border border-border bg-muted/40 px-3 py-2.5">
+            <p className="text-sm font-medium text-foreground">{clientSector.name}</p>
+            <p className="mt-0.5 text-[10px] text-muted-foreground">
+              From this client&apos;s business type / profile — matches the sector benchmarks in the PDF.
+            </p>
+          </div>
+        ) : (
+          <Select value={settings.industryCode} onValueChange={(v) => onChange({ industryCode: v })}>
+            <SelectTrigger className="border-input bg-background text-foreground text-sm h-9 w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="bg-popover border-border">
+              {INDUSTRIES.map((i) => <SelectItem key={i.code} value={i.code} className="text-popover-foreground focus:bg-muted text-xs">{i.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        )}
       </div>
 
       {/* Prior period toggle */}
@@ -2061,6 +2136,7 @@ function ReportsPage() {
             settings={settings}
             onChange={(patch) => setSettings((prev) => ({ ...prev, ...patch }))}
             profile={profile}
+            clientSector={clientData?.hasData ? clientData.benchmarkSector : null}
           />
         </div>
       </div>

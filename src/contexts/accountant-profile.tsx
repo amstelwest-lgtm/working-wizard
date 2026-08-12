@@ -27,7 +27,12 @@ export type AccountantProfile = {
   tagline: string | null;
 };
 
-const STORAGE_KEY = "milon_accountant_profile";
+/** Legacy unscoped key — only migrated into a user-scoped key, never applied cross-user. */
+const LEGACY_STORAGE_KEY = "milon_accountant_profile";
+
+function storageKeyFor(userId: string): string {
+  return `milon_accountant_profile:${userId}`;
+}
 
 export const DEFAULT_PROFILE: AccountantProfile = {
   firmName: "",
@@ -58,20 +63,31 @@ type AccountantProfileContextValue = {
 const AccountantProfileContext =
   createContext<AccountantProfileContextValue | null>(null);
 
-function loadFromStorage(): AccountantProfile {
-  if (typeof window === "undefined") return DEFAULT_PROFILE;
+function loadFromStorage(userId: string | null): AccountantProfile {
+  if (typeof window === "undefined" || !userId) return DEFAULT_PROFILE;
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return DEFAULT_PROFILE;
-    return { ...DEFAULT_PROFILE, ...JSON.parse(raw) };
+    const scoped = localStorage.getItem(storageKeyFor(userId));
+    if (scoped) return { ...DEFAULT_PROFILE, ...JSON.parse(scoped) };
+
+    // One-shot migrate legacy unscoped cache into this user's key, then remove it
+    // so another account on the same browser cannot flash the wrong firm brand (N8).
+    const legacy = localStorage.getItem(LEGACY_STORAGE_KEY);
+    if (legacy) {
+      const parsed = { ...DEFAULT_PROFILE, ...JSON.parse(legacy) };
+      localStorage.setItem(storageKeyFor(userId), JSON.stringify(parsed));
+      localStorage.removeItem(LEGACY_STORAGE_KEY);
+      return parsed;
+    }
+    return DEFAULT_PROFILE;
   } catch {
     return DEFAULT_PROFILE;
   }
 }
 
-function saveToStorage(profile: AccountantProfile) {
+function saveToStorage(userId: string | null, profile: AccountantProfile) {
+  if (!userId) return;
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(profile));
+    localStorage.setItem(storageKeyFor(userId), JSON.stringify(profile));
   } catch {
     // storage quota exceeded or private browsing — silently ignore
   }
@@ -83,15 +99,14 @@ export function AccountantProfileProvider({
   children: ReactNode;
 }) {
   const { user, loading: authLoading } = useAuth();
+  // Stay on DEFAULT until the signed-in user is known — never paint another
+  // browser tab's / previous user's brand (N8).
   const [profile, setProfile] = useState<AccountantProfile>(DEFAULT_PROFILE);
   const [firm, setFirm] = useState<FirmBrandRow | null>(null);
   const [brandLoading, setBrandLoading] = useState(true);
   const hydratedRef = useRef(false);
-
-  // Initial local cache so PDF preview doesn't flash empty before firm fetch.
-  useEffect(() => {
-    setProfile(loadFromStorage());
-  }, []);
+  const userIdRef = useRef<string | null>(null);
+  userIdRef.current = user?.id ?? null;
 
   useEffect(() => {
     let cancelled = false;
@@ -101,6 +116,7 @@ export function AccountantProfileProvider({
       if (!user) {
         if (!cancelled) {
           setFirm(null);
+          setProfile(DEFAULT_PROFILE);
           setBrandLoading(false);
           hydratedRef.current = false;
         }
@@ -108,6 +124,14 @@ export function AccountantProfileProvider({
       }
 
       setBrandLoading(true);
+      // Soft cache for this user only — never cross-account.
+      const cached = loadFromStorage(user.id);
+      if (!cancelled && (cached.firmName || cached.logoUrl || cached.tagline)) {
+        setProfile(cached);
+      } else if (!cancelled) {
+        setProfile(DEFAULT_PROFILE);
+      }
+
       try {
         const row = await fetchUserFirm(user.id);
         if (cancelled) return;
@@ -115,9 +139,8 @@ export function AccountantProfileProvider({
 
         if (row) {
           const fromDb = profileFromFirm(row);
-          const cached = loadFromStorage();
 
-          // One-shot import: if firm brand is empty but this browser has local
+          // One-shot import: if firm brand is empty but this user has local
           // settings, prefer the cache (and later Save writes it to the firm).
           if (firmBrandIsEmpty(row) && (cached.firmName || cached.logoUrl || cached.tagline)) {
             const merged: AccountantProfile = {
@@ -132,17 +155,17 @@ export function AccountantProfileProvider({
               tagline: cached.tagline ?? fromDb.tagline,
             };
             setProfile(merged);
-            saveToStorage(merged);
+            saveToStorage(user.id, merged);
           } else {
+            // DB wins when firm brand is populated — avoids stale local flash.
             const merged: AccountantProfile = {
               ...fromDb,
-              // Prefer DB name; fall back to cache only when firm name empty
               firmName: fromDb.firmName || cached.firmName,
               accountantName: fromDb.accountantName || cached.accountantName,
               accountantEmail: fromDb.accountantEmail || cached.accountantEmail,
             };
             setProfile(merged);
-            saveToStorage(merged);
+            saveToStorage(user.id, merged);
           }
         }
       } finally {
@@ -162,13 +185,13 @@ export function AccountantProfileProvider({
   const updateProfile = useCallback((partial: Partial<AccountantProfile>) => {
     setProfile((prev) => {
       const next = { ...prev, ...partial };
-      saveToStorage(next);
+      saveToStorage(userIdRef.current, next);
       return next;
     });
   }, []);
 
   const resetProfile = useCallback(() => {
-    saveToStorage(DEFAULT_PROFILE);
+    saveToStorage(userIdRef.current, DEFAULT_PROFILE);
     setProfile(DEFAULT_PROFILE);
   }, []);
 
@@ -179,18 +202,15 @@ export function AccountantProfileProvider({
     if (user && firm.owner_user_id !== user.id) {
       return { ok: false, error: "Only the firm owner can update brand settings." };
     }
-    // Read latest profile from a ref-less path: use functional state snapshot
-    // by saving whatever is currently in storage (kept in sync by updateProfile).
-    const current = loadFromStorage();
+    const current = loadFromStorage(user?.id ?? null);
     const toSave: AccountantProfile = {
       ...DEFAULT_PROFILE,
       ...current,
-      // Prefer live React state when available — merge via closure profile
       ...profile,
     };
     const { error } = await saveFirmBrand(firm.id, toSave);
     if (error) return { ok: false, error };
-    saveToStorage(toSave);
+    saveToStorage(user?.id ?? null, toSave);
     setProfile(toSave);
     setFirm((f) =>
       f
