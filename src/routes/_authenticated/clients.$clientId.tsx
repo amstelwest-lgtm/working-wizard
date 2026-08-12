@@ -962,7 +962,7 @@ function ClientView() {
     if (!client) return;
     navigate({
       to: "/reports",
-      search: { client: client.name, clientId: client.id, report: undefined },
+      search: { client: client.name, clientId: client.id, report: undefined, action: undefined },
     });
   }, [client, navigate]);
 
@@ -1152,7 +1152,7 @@ function ClientView() {
   // ── Report navigation ─────────────────────────────────────────────────────
 
   const navigateToReport = useCallback(
-    (reportKey?: string) => {
+    (reportKey?: string, action: "preview" | "download" = "preview") => {
       if (!client) return;
       navigate({
         to: "/reports",
@@ -1160,6 +1160,7 @@ function ClientView() {
           client: client.name,
           clientId: client.id,
           report: reportKey,
+          action: reportKey ? action : undefined,
         },
       });
     },
@@ -1370,7 +1371,12 @@ function ClientView() {
           onOpenMovement={() =>
             navigate({
               to: "/reports",
-              search: { client: client.name, clientId: client.id, report: "movement" } as never,
+              search: {
+                client: client.name,
+                clientId: client.id,
+                report: "movement",
+                action: "preview",
+              },
             })
           }
         />
@@ -1434,45 +1440,47 @@ function ClientView() {
           ))}
         </div>
 
+        {/* Simplified / Complex — global for ratios, budget, and action plan (mirrors owner app) */}
+        <div style={{ display: "flex", justifyContent: "center", margin: "8px 0 20px" }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 2,
+              borderRadius: 999,
+              background: "rgba(255,255,255,0.05)",
+              padding: 3,
+              border: "1px solid var(--line)",
+            }}
+          >
+            {(["simplified", "complex"] as const).map((m) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => setViewMode(m)}
+                style={{
+                  borderRadius: 999,
+                  padding: "5px 18px",
+                  fontSize: 11,
+                  fontWeight: 700,
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                  transition: "all 0.18s",
+                  border: "none",
+                  cursor: "pointer",
+                  background: viewMode === m ? "#d4a550" : "transparent",
+                  color: viewMode === m ? "#0a0e1a" : "var(--ink-dim)",
+                  boxShadow: viewMode === m ? "0 2px 8px rgba(212,165,80,0.35)" : "none",
+                }}
+              >
+                {m}
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* ===== RATIOS TAB ===== */}
         <div className={`tabpane${activeTab === "ratios" ? " on" : ""}`} id="pane-ratios">
-          {/* Simplified / Complex toggle */}
-          <div style={{ display: "flex", justifyContent: "center", marginBottom: 24 }}>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 2,
-                borderRadius: 999,
-                background: "rgba(255,255,255,0.05)",
-                padding: 3,
-              }}
-            >
-              {(["simplified", "complex"] as const).map((m) => (
-                <button
-                  key={m}
-                  onClick={() => setViewMode(m)}
-                  style={{
-                    borderRadius: 999,
-                    padding: "5px 18px",
-                    fontSize: 11,
-                    fontWeight: 700,
-                    letterSpacing: "0.08em",
-                    textTransform: "uppercase",
-                    transition: "all 0.18s",
-                    border: "none",
-                    cursor: "pointer",
-                    background: viewMode === m ? "#d4a550" : "transparent",
-                    color: viewMode === m ? "#0a0e1a" : "var(--ink-dim)",
-                    boxShadow: viewMode === m ? "0 2px 8px rgba(212,165,80,0.35)" : "none",
-                  }}
-                >
-                  {m}
-                </button>
-              ))}
-            </div>
-          </div>
-
           {/* Simplified view — health orb + pillar cards */}
           {viewMode === "simplified" && (
             <div style={{ marginBottom: 32 }}>
@@ -1892,8 +1900,8 @@ function ClientView() {
           <span className="eyebrow">Living FY budget</span>
           <div className="h-sec">Driver-based monthly budget</div>
           <p className="sub" style={{ marginBottom: 24 }}>
-            Volume × price first, then cash timing. Advanced pressure-testing is available after
-            setup.
+            Use <b>Complex</b> for full driver grids, capex, and sensitivity.{" "}
+            <b>Simplified</b> keeps volume × price and cash timing front-and-centre.
           </p>
           <div className="dark" style={{ colorScheme: "dark" }}>
             <BudgetPanel
@@ -1995,10 +2003,10 @@ function ClientView() {
                 <b>{r.name}</b>
                 <p>{r.desc}</p>
                 <div className="acts">
-                  <button className="btn ghost mini" onClick={() => navigateToReport(r.key)}>
+                  <button className="btn ghost mini" onClick={() => navigateToReport(r.key, "preview")}>
                     Preview
                   </button>
-                  <button className="btn gold mini" onClick={() => navigateToReport(r.key)}>
+                  <button className="btn gold mini" onClick={() => navigateToReport(r.key, "download")}>
                     Generate
                   </button>
                 </div>

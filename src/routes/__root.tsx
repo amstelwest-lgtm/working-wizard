@@ -173,6 +173,18 @@ function RootShell({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
       <head>
+        {/* Path-aware theme before first paint — stops landing FOUC without forcing dark on /app. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var p=location.pathname;if(p==="/"||p===""){var d=document.documentElement;d.classList.add("dark");d.dataset.theme="dark";}}catch(e){}})();`,
+          }}
+        />
+        <style
+          dangerouslySetInnerHTML={{
+            __html:
+              "html.dark,html.dark body,html[data-theme=dark],html[data-theme=dark] body{background:#050507;color:#f2ecdc}",
+          }}
+        />
         <HeadContent />
       </head>
       <body>

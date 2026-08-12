@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { toast } from "sonner";
 import {
@@ -55,6 +55,10 @@ export const Route = createFileRoute("/_authenticated/reports/")({
     client: typeof search.client === "string" ? search.client : undefined,
     clientId: typeof search.clientId === "string" ? search.clientId : undefined,
     report: typeof search.report === "string" ? search.report : undefined,
+    action:
+      search.action === "download" || search.action === "preview"
+        ? (search.action as "download" | "preview")
+        : undefined,
   }),
   component: ReportsPage,
   head: () => ({ meta: [{ title: "Reports — Milōn" }] }),
@@ -1774,7 +1778,9 @@ async function recordReportIssued(clientId: string | undefined) {
 }
 
 function ReportsPage() {
-  const { client: clientParam, clientId, report: reportParam } = Route.useSearch();
+  const { client: clientParam, clientId, report: reportParam, action: actionParam } =
+    Route.useSearch();
+  const navigate = useNavigate();
   const { profile, firmId } = useAccountantProfile();
   const { user } = useAuth();
   const [isClient, setIsClient] = useState(false);
@@ -1787,13 +1793,30 @@ function ReportsPage() {
   });
   const [loadingKey, setLoadingKey] = useState<string | null>(null);
   const [previewKey, setPreviewKey] = useState<string | null>(null);
-  const [previewState, setPreviewState] = useState<PreviewState | null>(null);
+  const [previewState, setPreviewState] = useState<PreviewState | null>(() => {
+    // Deep-link: open the preview shell immediately so the catalogue does not flash first.
+    if (
+      typeof window !== "undefined" &&
+      reportParam &&
+      REPORT_KEYS.includes(reportParam as (typeof REPORT_KEYS)[number]) &&
+      actionParam !== "download"
+    ) {
+      const r = REPORTS.find((x) => x.key === reportParam);
+      if (r) return { key: r.key, name: r.name, blobUrl: null, loading: true };
+    }
+    return null;
+  });
   const [zipProgress, setZipProgress] = useState<{ done: number; total: number } | null>(null);
   const [playbookOpen, setPlaybookOpen] = useState(false);
   const [selectedPlaybook, setSelectedPlaybook] = useState<PlaybookRatio | null>(null);
   const [clientData, setClientData] = useState<ClientReportData | null>(null);
-  const [dataLoading, setDataLoading] = useState(false);
+  const [dataLoading, setDataLoading] = useState(Boolean(clientId));
   const deepLinkHandled = useRef<string | null>(null);
+  const deepLinkReport =
+    reportParam && REPORT_KEYS.includes(reportParam as (typeof REPORT_KEYS)[number])
+      ? REPORTS.find((r) => r.key === reportParam) ?? null
+      : null;
+  const [deepLinkBusy, setDeepLinkBusy] = useState(() => Boolean(deepLinkReport));
 
   /** Client-linked studio never ships mock figures — upload first. */
   const blockedForClient =
@@ -1806,11 +1829,32 @@ function ReportsPage() {
 
   useEffect(() => { setIsClient(true); }, []);
 
+  // Open preview shell immediately for deep-links (avoids catalogue flash).
+  useEffect(() => {
+    if (!deepLinkReport) return;
+    if (actionParam === "download") {
+      setLoadingKey(deepLinkReport.key);
+      setDeepLinkBusy(true);
+      return;
+    }
+    setPreviewKey(deepLinkReport.key);
+    setPreviewState((prev) =>
+      prev?.key === deepLinkReport.key
+        ? prev
+        : { key: deepLinkReport.key, name: deepLinkReport.name, blobUrl: null, loading: true },
+    );
+    setDeepLinkBusy(true);
+  }, [deepLinkReport, actionParam]);
+
   // Load real client financials whenever clientId changes.
   // Clear stale data *immediately* so exports cannot use the previous client's
   // figures while the new request is in flight.
   useEffect(() => {
-    if (!clientId) { setClientData(null); return; }
+    if (!clientId) {
+      setClientData(null);
+      setDataLoading(false);
+      return;
+    }
     let cancelled = false;
     setClientData(null);   // clear before async starts
     setDataLoading(true);
@@ -1838,6 +1882,7 @@ function ReportsPage() {
     if (previewState?.blobUrl) URL.revokeObjectURL(previewState.blobUrl);
     setPreviewState(null);
     setPreviewKey(null);
+    setDeepLinkBusy(false);
   }, [previewState]);
 
   function assertCanGenerate(): boolean {
@@ -1911,21 +1956,74 @@ function ReportsPage() {
     }
   }
 
-  // Deep-link from client gallery: /reports?clientId=&report=labor
+  function clearDeepLinkSearch() {
+    void navigate({
+      to: "/reports",
+      search: {
+        client: clientParam,
+        clientId,
+        report: undefined,
+        action: undefined,
+      },
+      replace: true,
+    });
+  }
+
+  // Deep-link from client gallery: /reports?clientId=&report=labor&action=preview|download
   useEffect(() => {
     if (!isClient || dataLoading) return;
-    if (!reportParam || !REPORT_KEYS.includes(reportParam as (typeof REPORT_KEYS)[number])) return;
-    if (blockedForClient) return;
-    const token = `${clientId ?? "demo"}:${reportParam}`;
+    if (!deepLinkReport) {
+      setDeepLinkBusy(false);
+      return;
+    }
+    const token = `${clientId ?? "demo"}:${deepLinkReport.key}:${actionParam ?? "preview"}`;
     if (deepLinkHandled.current === token) return;
-    const report = REPORTS.find((r) => r.key === reportParam);
-    if (!report) return;
+
+    if (blockedForClient) {
+      deepLinkHandled.current = token;
+      setDeepLinkBusy(false);
+      setPreviewState(null);
+      setPreviewKey(null);
+      setLoadingKey(null);
+      toast.error("Upload financials for this client before generating reports.");
+      clearDeepLinkSearch();
+      return;
+    }
+
     deepLinkHandled.current = token;
-    const el = document.getElementById(`report-card-${report.key}`);
-    el?.scrollIntoView({ behavior: "smooth", block: "center" });
-    void handlePreview(report);
+    if (actionParam === "download") {
+      void (async () => {
+        try {
+          await handleGenerate(deepLinkReport);
+        } finally {
+          setDeepLinkBusy(false);
+          clearDeepLinkSearch();
+        }
+      })();
+    } else {
+      void (async () => {
+        try {
+          await handlePreview(deepLinkReport);
+          // Keep the focus shell until the user closes the preview modal — avoids
+          // remounting PreviewModal when flipping to the full catalogue.
+          void navigate({
+            to: "/reports",
+            search: {
+              client: clientParam,
+              clientId,
+              report: deepLinkReport.key,
+              action: undefined,
+            },
+            replace: true,
+          });
+        } catch {
+          setDeepLinkBusy(false);
+          clearDeepLinkSearch();
+        }
+      })();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- fire once per deep-link token
-  }, [isClient, dataLoading, reportParam, clientId, blockedForClient, clientData?.hasData]);
+  }, [isClient, dataLoading, reportParam, actionParam, clientId, blockedForClient, clientData?.hasData]);
 
   // ── Generate all as ZIP ──────────────────────────────────────────────────
 
@@ -1964,6 +2062,44 @@ function ReportsPage() {
   const zipPct = zipProgress ? Math.round((zipProgress.done / zipProgress.total) * 100) : 0;
   const essential = REPORTS.filter((r) => r.category === "essential");
   const optional = REPORTS.filter((r) => r.category === "optional");
+
+  // Deep-link focus: skip painting the full catalogue until preview/download finishes.
+  if (deepLinkBusy && deepLinkReport) {
+    return (
+      <main className="reports-studio flex min-h-[100dvh] flex-col items-center justify-center bg-background px-4 text-foreground">
+        <div className="w-full max-w-md rounded-xl border border-border bg-card p-8 text-center shadow-sm">
+          <Loader2 className="mx-auto mb-4 h-8 w-8 animate-spin text-[#c9962b]" />
+          <p className="text-sm font-semibold text-foreground">
+            {actionParam === "download" ? "Preparing download" : "Preparing preview"}
+          </p>
+          <p className="mt-1 text-sm text-muted-foreground">{deepLinkReport.name}</p>
+          {clientParam || clientData?.clientName ? (
+            <p className="mt-3 text-[11px] text-muted-foreground">
+              {clientData?.clientName ?? clientParam}
+              {dataLoading ? " · loading figures…" : ""}
+            </p>
+          ) : null}
+        </div>
+        <PreviewModal
+          state={previewState}
+          onClose={() => {
+            closePreview();
+            clearDeepLinkSearch();
+          }}
+          onDownload={() => {
+            if (previewState?.blobUrl) {
+              const a = document.createElement("a");
+              a.href = previewState.blobUrl;
+              a.download = makeSafeFilename(settings, deepLinkReport.filename);
+              a.click();
+              return;
+            }
+            void handleGenerate(deepLinkReport);
+          }}
+        />
+      </main>
+    );
+  }
 
   return (
     <main className="reports-studio min-h-[100dvh] bg-background text-foreground px-4 py-8 sm:px-6">

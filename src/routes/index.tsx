@@ -6,8 +6,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
 import { SIGNUP_ACCESS_CODE, notifySignup } from "@/lib/signup-notify";
 import { adminSignUp } from "@/lib/auth.functions";
-// @ts-ignore — raw import fine for dynamic CSS injection
-import landingCSS from "../styles/landing.css?raw";
+import landingCssUrl from "../styles/landing.css?url";
 
 export const Route = createFileRoute("/")({
   component: LandingPage,
@@ -16,6 +15,8 @@ export const Route = createFileRoute("/")({
       { title: "MILŌN — Know your numbers. Sleep at night." },
       { name: "description", content: "MILŌN is the financial health platform for South African SMEs and their accountants. One score. 31 ratios. 13-week cashflow. 930+ fixes ranked for you." },
     ],
+    // Ship landing CSS in document head (not post-hydration injection) to avoid FOUC.
+    links: [{ rel: "stylesheet", href: landingCssUrl }],
   }),
 });
 
@@ -78,17 +79,17 @@ function LandingPage() {
     if (!loading && user) navigate({ to: "/app" });
   }, [user, loading, navigate]);
 
-  /* ── inject landing CSS + data-theme, clean up on unmount ── */
+  /* ── Force dark theme for landing; restore on leave ── */
   useEffect(() => {
-    const el = document.createElement("style");
-    el.id = "milon-landing-css";
-    el.textContent = landingCSS;
-    document.head.appendChild(el);
-    document.documentElement.dataset.theme = "dark";
-    document.documentElement.classList.add("dark");
+    const root = document.documentElement;
+    const hadDark = root.classList.contains("dark");
+    const prevTheme = root.dataset.theme;
+    root.classList.add("dark");
+    root.dataset.theme = "dark";
     return () => {
-      document.head.removeChild(el);
-      delete document.documentElement.dataset.theme;
+      if (!hadDark) root.classList.remove("dark");
+      if (prevTheme) root.dataset.theme = prevTheme;
+      else delete root.dataset.theme;
     };
   }, []);
 
