@@ -22,7 +22,7 @@ export const createFirmClient = createServerFn({ method: "POST" })
       .parse(input),
   )
   .handler(async ({ data, context }) => {
-    const sb = context.supabase as {
+    const sb = context.supabase as unknown as {
       rpc: (
         fn: string,
         args: Record<string, unknown>,
