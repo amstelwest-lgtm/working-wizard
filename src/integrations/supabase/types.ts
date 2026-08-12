@@ -1379,6 +1379,14 @@ export type Database = {
         Args: { p_name: string }
         Returns: string
       }
+      create_firm_client: {
+        Args: {
+          p_name: string
+          p_firm_id: string
+          p_business_type?: string | null
+        }
+        Returns: string
+      }
       has_client_access: {
         Args: { _client_id: string; _user_id: string }
         Returns: boolean

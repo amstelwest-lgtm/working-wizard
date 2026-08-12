@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { assertClientScope } from "@/lib/assert-client-scope";
-import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { getSupabaseAdminOrNull, supabaseAdmin } from "@/integrations/supabase/client.server";
 import {
   buildQboAuthUrl,
   exchangeCodeForTokens,
@@ -75,7 +75,10 @@ export const getQboStatus = createServerFn({ method: "POST" })
   .handler(async ({ data, context }): Promise<QboStatus> => {
     assertClientScope(context.actingAsClientId, data.clientId);
 
-    const { data: conn } = await supabaseAdmin
+    const admin = getSupabaseAdminOrNull();
+    if (!admin) return null;
+
+    const { data: conn } = await admin
       .from("qbo_connections")
       .select(
         "realm_id, company_name, connected_at, last_synced_at, sync_status, sync_error",
@@ -105,7 +108,10 @@ export const getQboStatuses = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     if (data.clientIds.length === 0) return {};
-    const { data: rows } = await supabaseAdmin
+    // Optional — never toast-fail login/dashboard when service role isn't set in Lovable.
+    const admin = getSupabaseAdminOrNull();
+    if (!admin) return {};
+    const { data: rows } = await admin
       .from("qbo_connections")
       .select("client_id, company_name, last_synced_at, sync_status")
       .in("client_id", data.clientIds);

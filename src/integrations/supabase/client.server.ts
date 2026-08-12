@@ -5,6 +5,10 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
 
+export function isSupabaseAdminConfigured(): boolean {
+  return Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
+}
+
 function createSupabaseAdminClient() {
   const SUPABASE_URL = process.env.SUPABASE_URL;
   const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -29,6 +33,13 @@ function createSupabaseAdminClient() {
 }
 
 let _supabaseAdmin: ReturnType<typeof createSupabaseAdminClient> | undefined;
+
+/** Returns null when the service-role key is not configured (optional features). */
+export function getSupabaseAdminOrNull(): ReturnType<typeof createSupabaseAdminClient> | null {
+  if (!isSupabaseAdminConfigured()) return null;
+  if (!_supabaseAdmin) _supabaseAdmin = createSupabaseAdminClient();
+  return _supabaseAdmin;
+}
 
 // Server-side Supabase client with service role - bypasses RLS
 // SECURITY: Only use this for trusted server-side operations, never expose to client code
