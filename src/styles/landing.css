@@ -20,15 +20,13 @@
   --ease:cubic-bezier(.22,.9,.24,1);
 }
 
-/* Reveal real ink once this stylesheet has loaded (critical CSS hid text as #050507). */
+/* Landing surface — must win over styles.css light-theme body rules. */
 html[data-landing="1"],
 html[data-landing="1"] body{
   background:#050507 !important;
   background-color:#050507 !important;
-  color:#f2ecdc !important;
-}
-html[data-landing="1"] body{
   color:var(--ink) !important;
+  color-scheme:dark;
 }
 html[data-theme="light"]{
   --bg:#f7f4ec;

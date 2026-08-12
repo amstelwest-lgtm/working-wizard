@@ -4,6 +4,7 @@ import {
   Link,
   createRootRouteWithContext,
   useRouter,
+  useRouterState,
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
@@ -170,20 +171,37 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 });
 
 function RootShell({ children }: { children: React.ReactNode }) {
+  // SSR + hydrate must agree on landing attrs. A head script alone is not enough:
+  // React would strip script-added `dark` / `data-landing` on hydrate and the
+  // light-theme rules in styles.css flash readable text on a white body.
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const isLanding = pathname === "/" || pathname === "";
+
   return (
-    <html lang="en">
+    <html
+      lang="en"
+      className={isLanding ? "dark" : undefined}
+      data-theme={isLanding ? "dark" : undefined}
+      data-landing={isLanding ? "1" : undefined}
+      style={
+        isLanding
+          ? { backgroundColor: "#050507", color: "#f2ecdc", colorScheme: "dark" }
+          : undefined
+      }
+      suppressHydrationWarning
+    >
       <head>
         {/*
           FOUC guard for `/`:
-          1) Blocking script runs before <body> is parsed — sets dark + landing flags
-             and paints html background inline (beats async stylesheets).
-          2) Critical CSS uses !important so global styles.css white defaults cannot win.
-          3) Text is temporarily the same color as the background until landing.css
-             loads and sets the real ink color — no readable “white page text” flash.
+          1) SSR already paints dark attrs on <html> (see above) so first HTML
+             bytes are black — no white body before JS.
+          2) Blocking script keeps the same attrs if anything races ahead.
+          3) Critical CSS !important beats styles.css light defaults until
+             inlined landing.css applies.
         */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var p=location.pathname;if(p==="/"||p===""){var d=document.documentElement;d.classList.add("dark");d.dataset.theme="dark";d.dataset.landing="1";d.style.backgroundColor="#050507";d.style.color="#050507";}}catch(e){}})();`,
+            __html: `(function(){try{var p=location.pathname;if(p==="/"||p===""){var d=document.documentElement;d.classList.add("dark");d.dataset.theme="dark";d.dataset.landing="1";d.style.backgroundColor="#050507";d.style.color="#f2ecdc";d.style.colorScheme="dark";}}catch(e){}})();`,
           }}
         />
         <style
@@ -191,18 +209,24 @@ function RootShell({ children }: { children: React.ReactNode }) {
             __html: [
               'html[data-landing="1"],html[data-landing="1"] body{',
               'background:#050507!important;background-color:#050507!important;',
-              'color:#050507!important;',
+              'color:#f2ecdc!important;color-scheme:dark;',
               '}',
               'html.dark,html.dark body,html[data-theme="dark"],html[data-theme="dark"] body{',
               'background:#050507!important;background-color:#050507!important;',
               '}',
-              'html[data-landing="1"] body{color:#050507!important;}',
             ].join(""),
           }}
         />
         <HeadContent />
       </head>
-      <body>
+      <body
+        style={
+          isLanding
+            ? { backgroundColor: "#050507", color: "#f2ecdc" }
+            : undefined
+        }
+        suppressHydrationWarning
+      >
         {children}
         <Scripts />
       </body>

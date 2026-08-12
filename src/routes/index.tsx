@@ -6,7 +6,9 @@ import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
 import { SIGNUP_ACCESS_CODE, notifySignup } from "@/lib/signup-notify";
 import { adminSignUp } from "@/lib/auth.functions";
-import landingCssUrl from "../styles/landing.css?url";
+// Inline so landing paint doesn't wait on a second stylesheet round-trip
+// (external app CSS can still load; these rules win for landing selectors).
+import landingCss from "../styles/landing.css?inline";
 
 export const Route = createFileRoute("/")({
   component: LandingPage,
@@ -15,14 +17,10 @@ export const Route = createFileRoute("/")({
       { title: "MILŌN — Know your numbers. Sleep at night." },
       { name: "description", content: "MILŌN is the financial health platform for South African SMEs and their accountants. One score. 31 ratios. 13-week cashflow. 930+ fixes ranked for you." },
     ],
-    // Ship landing CSS early; also preload so it races ahead of the large app bundle CSS.
-    links: [
-      { rel: "preload", href: landingCssUrl, as: "style" },
-      { rel: "stylesheet", href: landingCssUrl },
-    ],
+    styles: [{ children: landingCss }],
     scripts: [
       {
-        children: `(function(){try{var d=document.documentElement;d.classList.add("dark");d.dataset.theme="dark";d.dataset.landing="1";d.style.backgroundColor="#050507";}catch(e){}})();`,
+        children: `(function(){try{var d=document.documentElement;d.classList.add("dark");d.dataset.theme="dark";d.dataset.landing="1";d.style.backgroundColor="#050507";d.style.color="#f2ecdc";d.style.colorScheme="dark";}catch(e){}})();`,
       },
     ],
   }),
@@ -87,27 +85,38 @@ function LandingPage() {
     if (!loading && user) navigate({ to: "/app" });
   }, [user, loading, navigate]);
 
-  /* ── Force dark theme for landing; restore on leave ── */
+  /* ── Force dark theme for landing; restore on leave ──
+     Keep ink/bg inline styles in sync with RootShell — clearing them on mount
+     was letting styles.css light defaults flash between hydrate and paint. */
   useEffect(() => {
     const root = document.documentElement;
+    const body = document.body;
     const hadDark = root.classList.contains("dark");
     const prevTheme = root.dataset.theme;
     const hadLanding = root.dataset.landing;
+    const prevRootBg = root.style.backgroundColor;
+    const prevRootColor = root.style.color;
+    const prevBodyBg = body.style.backgroundColor;
+    const prevBodyColor = body.style.color;
     root.classList.add("dark");
     root.dataset.theme = "dark";
     root.dataset.landing = "1";
     root.style.backgroundColor = "#050507";
-    root.style.color = "";
-    document.body.style.backgroundColor = "#050507";
+    root.style.color = "#f2ecdc";
+    root.style.colorScheme = "dark";
+    body.style.backgroundColor = "#050507";
+    body.style.color = "#f2ecdc";
     return () => {
       if (!hadDark) root.classList.remove("dark");
       if (prevTheme) root.dataset.theme = prevTheme;
       else delete root.dataset.theme;
       if (hadLanding) root.dataset.landing = hadLanding;
       else delete root.dataset.landing;
-      root.style.backgroundColor = "";
-      root.style.color = "";
-      document.body.style.backgroundColor = "";
+      root.style.backgroundColor = prevRootBg;
+      root.style.color = prevRootColor;
+      root.style.colorScheme = "";
+      body.style.backgroundColor = prevBodyBg;
+      body.style.color = prevBodyColor;
     };
   }, []);
 
