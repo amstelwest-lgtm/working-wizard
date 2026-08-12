@@ -53,7 +53,7 @@ import {
   runwayWeeksFromCashflow,
   runwayWeeksFromClosings,
 } from "@/lib/cash-runway";
-import { hashFigures, latestSnapshotId, recordDelivery, warnIfDeliveryFailed } from "@/lib/advisory-deliveries";
+import { hashFigures, latestSnapshotId, recordDelivery, warnIfDeliveryFailed, warnIfPdfArchiveFailed } from "@/lib/advisory-deliveries";
 import { stampFromSignoff } from "@/lib/review-signoff-stamp";
 // @react-pdf/renderer + the branded report are dynamically imported inside
 // exportPDF to avoid blocking initial hydration.
@@ -384,7 +384,7 @@ export function CashForecastPanel({
   /** Optional parent hook after a successful bank→cash publish (e.g. sync client cache). */
   onBankPublish?: (payload: CashForecastPublishPayload) => void;
 } = {}) {
-  const { profile } = useAccountantProfile();
+  const { profile, firmId } = useAccountantProfile();
   const { user } = useAuth();
   const fetchReviewSignoffs = useServerFn(listClientReviewSignoffs);
   const [exporting, setExporting] = useState(false);
@@ -741,6 +741,7 @@ export function CashForecastPanel({
         const snapId = await latestSnapshotId(clientId);
         const logged = await recordDelivery({
           clientId,
+          firmId,
           channel: "pdf_download",
           kind: "report_pdf",
           reportKey: "forecast",
@@ -753,8 +754,10 @@ export function CashForecastPanel({
           }),
           periodLabel: period,
           createdBy: user.id,
+          pdfBlob: blob,
         });
         warnIfDeliveryFailed(logged.error);
+        warnIfPdfArchiveFailed(logged.pdfError);
       }
     } catch (err) {
       toast.error(`PDF export failed: ${err instanceof Error ? err.message : String(err)}`);

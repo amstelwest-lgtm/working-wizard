@@ -448,6 +448,8 @@ export type Database = {
           acknowledged_at: string | null
           acknowledged_by: string | null
           ack_token: string | null
+          pdf_storage_path: string | null
+          pdf_byte_size: number | null
         }
         Insert: {
           id?: string
@@ -468,6 +470,8 @@ export type Database = {
           acknowledged_at?: string | null
           acknowledged_by?: string | null
           ack_token?: string | null
+          pdf_storage_path?: string | null
+          pdf_byte_size?: number | null
         }
         Update: {
           id?: string
@@ -488,6 +492,8 @@ export type Database = {
           acknowledged_at?: string | null
           acknowledged_by?: string | null
           ack_token?: string | null
+          pdf_storage_path?: string | null
+          pdf_byte_size?: number | null
         }
         Relationships: [
           {

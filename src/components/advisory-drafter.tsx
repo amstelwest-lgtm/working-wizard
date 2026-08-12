@@ -65,7 +65,7 @@ export function AdvisoryDrafter({
   clientName?: string;
   onLogged?: () => void;
 }) {
-  const { profile } = useAccountantProfile();
+  const { profile, firmId } = useAccountantProfile();
   const { user } = useAuth();
   const run = useServerFn(draftAdvisory);
 
@@ -105,6 +105,7 @@ export function AdvisoryDrafter({
     const snapId = await latestSnapshotId(clientId);
     const logged = await recordDelivery({
       clientId,
+      firmId,
       channel,
       kind: kindToDelivery(draft.kind),
       subject: draft.subject,

@@ -23,10 +23,14 @@ const DEFAULT_BRAND: FirmBrandProfile = {
   tagline: null,
 };
 
+const FIRM_SELECT =
+  "id, name, owner_user_id, referral_code, logo_url, accent_color, primary_color, secondary_color, tagline, brand_contact_name, brand_contact_email, brand_updated_at";
+
 export type FirmBrandRow = {
   id: string;
   name: string;
   owner_user_id: string;
+  referral_code: string | null;
   logo_url: string | null;
   accent_color: string | null;
   primary_color: string | null;
@@ -37,35 +41,78 @@ export type FirmBrandRow = {
   brand_updated_at: string | null;
 };
 
-/** Resolve the current user's firm (owned first, else first membership). */
-export async function fetchUserFirm(userId: string): Promise<FirmBrandRow | null> {
+function activeFirmStorageKey(userId: string): string {
+  return `milon_active_firm_id:${userId}`;
+}
+
+export function readActiveFirmId(userId: string): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return localStorage.getItem(activeFirmStorageKey(userId));
+  } catch {
+    return null;
+  }
+}
+
+export function writeActiveFirmId(userId: string, firmId: string): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(activeFirmStorageKey(userId), firmId);
+  } catch {
+    // storage quota / private browsing
+  }
+}
+
+/** All firms the user owns or is a member of (deduped, owned first by created_at). */
+export async function listUserFirms(userId: string): Promise<FirmBrandRow[]> {
+  const byId = new Map<string, FirmBrandRow>();
+
   const { data: owned } = await supabase
     .from("firms")
-    .select(
-      "id, name, owner_user_id, logo_url, accent_color, primary_color, secondary_color, tagline, brand_contact_name, brand_contact_email, brand_updated_at",
-    )
+    .select(FIRM_SELECT)
     .eq("owner_user_id", userId)
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
-  if (owned) return owned as FirmBrandRow;
+    .order("created_at", { ascending: true });
+  for (const row of owned ?? []) {
+    byId.set(row.id, row as FirmBrandRow);
+  }
 
-  const { data: mem } = await supabase
+  const { data: mems } = await supabase
     .from("firm_memberships")
     .select("firm_id")
-    .eq("user_id", userId)
-    .limit(1)
-    .maybeSingle();
-  if (!mem?.firm_id) return null;
+    .eq("user_id", userId);
+  const memberIds = (mems ?? [])
+    .map((m) => m.firm_id)
+    .filter((id): id is string => Boolean(id) && !byId.has(id));
 
-  const { data: firm } = await supabase
-    .from("firms")
-    .select(
-      "id, name, owner_user_id, logo_url, accent_color, primary_color, secondary_color, tagline, brand_contact_name, brand_contact_email, brand_updated_at",
-    )
-    .eq("id", mem.firm_id)
-    .maybeSingle();
-  return (firm as FirmBrandRow | null) ?? null;
+  if (memberIds.length > 0) {
+    const { data: memberFirms } = await supabase
+      .from("firms")
+      .select(FIRM_SELECT)
+      .in("id", memberIds)
+      .order("created_at", { ascending: true });
+    for (const row of memberFirms ?? []) {
+      byId.set(row.id, row as FirmBrandRow);
+    }
+  }
+
+  return Array.from(byId.values());
+}
+
+/**
+ * Resolve the active firm: preferred id if still accessible, else first owned,
+ * else first membership (G27).
+ */
+export async function fetchUserFirm(
+  userId: string,
+  preferredFirmId?: string | null,
+): Promise<FirmBrandRow | null> {
+  const firms = await listUserFirms(userId);
+  if (firms.length === 0) return null;
+  if (preferredFirmId) {
+    const preferred = firms.find((f) => f.id === preferredFirmId);
+    if (preferred) return preferred;
+  }
+  return firms[0] ?? null;
 }
 
 export function profileFromFirm(firm: FirmBrandRow): FirmBrandProfile {

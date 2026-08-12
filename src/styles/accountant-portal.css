@@ -50,6 +50,10 @@ html[data-theme="light"] #atmos .glow{opacity:.3}
 .accountant-portal .topbar .brand img{height:30px;filter:drop-shadow(0 0 8px rgba(212,175,55,.35))}
 .accountant-portal .topbar .firm-chip{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:99px;padding:5px 14px;font-size:12px;letter-spacing:.1em;color:var(--ink-dim)}
 .accountant-portal .topbar .firm-chip b{color:var(--gold);letter-spacing:.18em}
+.accountant-portal .topbar .firm-switcher{cursor:pointer;padding-right:10px}
+.accountant-portal .topbar .firm-switcher-label{letter-spacing:.1em}
+.accountant-portal .topbar .firm-switcher select{appearance:none;-webkit-appearance:none;background:transparent;border:0;color:var(--gold);font:inherit;font-weight:700;letter-spacing:.14em;cursor:pointer;padding:0 14px 0 0;max-width:220px;outline:none;background-image:linear-gradient(45deg,transparent 50%,var(--gold) 50%),linear-gradient(135deg,var(--gold) 50%,transparent 50%);background-position:calc(100% - 6px) 55%,calc(100% - 1px) 55%;background-size:5px 5px,5px 5px;background-repeat:no-repeat}
+.accountant-portal .topbar .firm-switcher select option{color:var(--ink);background:var(--bg)}
 .accountant-portal .topbar .spacer{flex:1}
 .accountant-portal .tb-btn{display:inline-flex;align-items:center;gap:8px;padding:9px 18px;border-radius:99px;border:1px solid var(--line);background:transparent;color:var(--ink);font-size:13px;font-weight:600;letter-spacing:.03em;transition:all .25s var(--ease)}
 .accountant-portal .tb-btn:hover{border-color:var(--gold);color:var(--gold);transform:translateY(-1px)}

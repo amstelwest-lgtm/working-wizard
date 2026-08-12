@@ -21,7 +21,7 @@ import {
   effectiveCashRunwayWeeks,
   runwayWeeksFromClosings,
 } from "@/lib/cash-runway";
-import { hashFigures, latestSnapshotId, recordDelivery, warnIfDeliveryFailed } from "@/lib/advisory-deliveries";
+import { hashFigures, latestSnapshotId, recordDelivery, warnIfDeliveryFailed, warnIfPdfArchiveFailed } from "@/lib/advisory-deliveries";
 import { useAuth } from "@/hooks/use-auth";
 import { PlaybookDrawer } from "@/components/playbook-drawer";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -1775,7 +1775,7 @@ async function recordReportIssued(clientId: string | undefined) {
 
 function ReportsPage() {
   const { client: clientParam, clientId, report: reportParam } = Route.useSearch();
-  const { profile } = useAccountantProfile();
+  const { profile, firmId } = useAccountantProfile();
   const { user } = useAuth();
   const [isClient, setIsClient] = useState(false);
   const [settings, setSettings] = useState<Settings>({
@@ -1849,11 +1849,12 @@ function ReportsPage() {
     return true;
   }
 
-  async function logReportDelivery(reportKey: string) {
+  async function logReportDelivery(reportKey: string, pdfBlob?: Blob | null) {
     if (!user || !clientId) return;
     const snapId = await latestSnapshotId(clientId);
     const logged = await recordDelivery({
       clientId,
+      firmId,
       channel: "pdf_download",
       kind: "report_pdf",
       reportKey,
@@ -1865,8 +1866,11 @@ function ReportsPage() {
       }),
       periodLabel: `${settings.periodMonth} ${settings.periodYear}`,
       createdBy: user.id,
+      // ZIP is not a single PDF artifact — skip blob archive for zip_all.
+      pdfBlob: reportKey === "zip_all" ? null : (pdfBlob ?? null),
     });
     warnIfDeliveryFailed(logged.error);
+    warnIfPdfArchiveFailed(logged.pdfError);
   }
 
   // ── Generate single PDF ──────────────────────────────────────────────────
@@ -1879,7 +1883,7 @@ function ReportsPage() {
       triggerDownload(blob, makeSafeFilename(settings, report.filename));
       toast.success(`${report.name} downloaded.`);
       await recordReportIssued(clientId);
-      await logReportDelivery(report.key);
+      await logReportDelivery(report.key, blob);
     } catch (err) {
       toast.error(`Generation failed: ${(err as Error).message}`);
       console.error(err);

@@ -22,6 +22,7 @@ import {
   type OverallHealth,
 } from "@/lib/health-score";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
+import { FirmSwitcher } from "@/components/firm-switcher";
 import "@/styles/accountant-portal.css";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { SphereHero } from "@/components/sphere-hero";
@@ -70,6 +71,7 @@ import {
   latestSnapshotId,
   recordDelivery,
   warnIfDeliveryFailed,
+  warnIfPdfArchiveFailed,
 } from "@/lib/advisory-deliveries";
 import { upsertCurrentPeriodSnapshot } from "@/lib/financial-snapshots";
 import { stampFromSignoff } from "@/lib/review-signoff-stamp";
@@ -417,7 +419,7 @@ function ClientView() {
   const search = Route.useSearch();
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { profile } = useAccountantProfile();
+  const { profile, firmId } = useAccountantProfile();
 
   // QBO OAuth return (?qbo=connected|error) — callback lands here for accountants.
   useEffect(() => {
@@ -1022,6 +1024,7 @@ function ClientView() {
         const snapId = await latestSnapshotId(client.id);
         const logged = await recordDelivery({
           clientId: client.id,
+          firmId,
           channel: "pdf_download",
           kind: "report_pdf",
           reportKey: "scorecard",
@@ -1029,14 +1032,16 @@ function ClientView() {
           figuresHash: hashFigures({ financials, ratios, debtSchedule }),
           periodLabel: periodLabel,
           createdBy: user.id,
+          pdfBlob: blob,
         });
         warnIfDeliveryFailed(logged.error);
+        warnIfPdfArchiveFailed(logged.pdfError);
         setDeliveryRefresh((n) => n + 1);
       }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "PDF export failed");
     }
-  }, [client, ratios, profile, user, financials, debtSchedule, financialsSignoff, effectiveRunway]);
+  }, [client, ratios, profile, user, financials, debtSchedule, financialsSignoff, effectiveRunway, firmId]);
 
   const handleEmailDraft = useCallback(async () => {
     if (!client) return;
@@ -1061,6 +1066,7 @@ function ClientView() {
       const snapId = await latestSnapshotId(client.id);
       const logged = await recordDelivery({
         clientId: client.id,
+        firmId,
         channel: "mailto",
         kind: "health_summary",
         subject: subjectText,
@@ -1087,6 +1093,7 @@ function ClientView() {
     user,
     financials,
     ratios,
+    firmId,
   ]);
 
   const handleWhatsApp = useCallback(async () => {
@@ -1104,6 +1111,7 @@ function ClientView() {
       const snapId = await latestSnapshotId(client.id);
       const logged = await recordDelivery({
         clientId: client.id,
+        firmId,
         channel: "whatsapp",
         kind: "health_summary",
         body: text,
@@ -1127,6 +1135,7 @@ function ClientView() {
     user,
     financials,
     ratios,
+    firmId,
   ]);
 
   // ── Playbook drawer ───────────────────────────────────────────────────────
@@ -1207,11 +1216,7 @@ function ClientView() {
           <span className="brand">
             <span className="gold-text">MILŌN</span>
           </span>
-          {profile.firmName && (
-            <span className="firm-chip">
-              Practice · <b>{profile.firmName}</b>
-            </span>
-          )}
+          <FirmSwitcher />
           <span className="spacer" />
           <ThemeToggle />
           <button className="tb-btn gold" onClick={handleGenerateReport}>

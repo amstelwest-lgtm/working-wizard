@@ -8,6 +8,7 @@ import {
   listDeliveries,
   channelHonestyLabel,
   ackUrlForToken,
+  signedDeliveryPdfUrl,
   type AdvisoryDelivery,
 } from "@/lib/advisory-deliveries";
 
@@ -29,6 +30,7 @@ export function AdvisorySentHistory({
 }) {
   const [rows, setRows] = useState<AdvisoryDelivery[]>([]);
   const [loading, setLoading] = useState(true);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -54,6 +56,28 @@ export function AdvisorySentHistory({
     }
   };
 
+  const redownloadPdf = async (row: AdvisoryDelivery) => {
+    if (!row.pdf_storage_path) return;
+    setDownloadingId(row.id);
+    try {
+      const { url, error } = await signedDeliveryPdfUrl(row.pdf_storage_path);
+      if (error || !url) {
+        toast.error(error ?? "Could not open archived PDF");
+        return;
+      }
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${row.report_key || row.kind || "report"}.pdf`;
+      a.rel = "noopener";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      toast.success("Archived PDF opened");
+    } finally {
+      setDownloadingId(null);
+    }
+  };
+
   return (
     <div className="card" style={{ marginTop: 16, padding: "14px 18px" }}>
       <div
@@ -68,7 +92,8 @@ export function AdvisorySentHistory({
       </div>
       <p style={{ margin: "6px 0 12px", fontSize: 13, color: "var(--ink-dim)" }}>
         Logged shares and PDF downloads with stamped figures. Mailto / WhatsApp rows mean the
-        share sheet was opened — not postal proof — until the client acknowledges.
+        share sheet was opened — not postal proof — until the client acknowledges. Archived PDFs
+        can be re-downloaded when a file was stored with the row.
       </p>
       {loading ? (
         <p style={{ fontSize: 13, color: "var(--ink-dim)" }}>Loading…</p>
@@ -108,9 +133,21 @@ export function AdvisorySentHistory({
                   {r.period_label ? ` · figures ${r.period_label}` : ""}
                   {r.figures_hash ? ` · hash ${r.figures_hash}` : ""}
                   {r.recipient_email ? ` · ${r.recipient_email}` : ""}
+                  {r.pdf_storage_path ? " · PDF archived" : ""}
                 </div>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                {r.pdf_storage_path ? (
+                  <button
+                    type="button"
+                    className="btn ghost mini"
+                    style={{ fontSize: 11 }}
+                    disabled={downloadingId === r.id}
+                    onClick={() => void redownloadPdf(r)}
+                  >
+                    {downloadingId === r.id ? "Opening…" : "Re-download PDF"}
+                  </button>
+                ) : null}
                 {!r.acknowledged_at && r.ack_token ? (
                   <button
                     type="button"

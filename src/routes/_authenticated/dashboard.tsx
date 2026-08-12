@@ -17,6 +17,8 @@ import { effectiveCashRunwayWeeks } from "@/lib/cash-runway";
 import { countOpenQueriesByClient } from "@/lib/open-queries";
 import "@/styles/accountant-portal.css";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { FirmSwitcher } from "@/components/firm-switcher";
+import { useAccountantProfile } from "@/contexts/accountant-profile";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   component: Dashboard,
@@ -298,8 +300,19 @@ function Dashboard() {
       });
   }, [user, navigate]);
 
+  const { firmId, firms, brandLoading } = useAccountantProfile();
+  const firm: Firm | null =
+    firms.find((f) => f.id === firmId) ??
+    (firms[0]
+      ? {
+          id: firms[0].id,
+          name: firms[0].name,
+          referral_code: firms[0].referral_code,
+          owner_user_id: firms[0].owner_user_id,
+        }
+      : null);
+
   // ── State ─────────────────────────────────────────────────────────────────
-  const [firm, setFirm] = useState<Firm | null>(null);
   const [clientRows, setClientRows] = useState<ClientRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -326,22 +339,22 @@ function Dashboard() {
   const getStatuses = useServerFn(getQboStatuses);
 
   // ── Load ──────────────────────────────────────────────────────────────────
-  const load = async () => {
+  const load = async (activeFirmId: string | null) => {
     setLoading(true);
 
-    // Firm
-    const { data: firms } = await supabase
-      .from("firms")
-      .select("*")
-      .order("created_at", { ascending: true })
-      .limit(1);
-    const f = (firms?.[0] ?? null) as Firm | null;
-    setFirm(f);
+    if (!activeFirmId) {
+      setClientRows([]);
+      setQboStatuses({});
+      setReportsThisMonth(0);
+      setLoading(false);
+      return;
+    }
 
-    // Clients — select all columns; reports_issued_count may not exist yet
+    // Clients for the active firm only (G27) — never mix portfolios across practices.
     const { data: cs, error } = await supabase
       .from("clients")
       .select("*")
+      .eq("firm_id", activeFirmId)
       .order("created_at", { ascending: false });
     if (error) toast.error(error.message);
     const rawClients = (cs ?? []) as Client[];
@@ -426,9 +439,10 @@ function Dashboard() {
   };
 
   useEffect(() => {
-    load();
+    if (brandLoading) return;
+    void load(firmId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [firmId, brandLoading]);
 
   // Load playbook catalogue
   useEffect(() => {
@@ -534,9 +548,7 @@ function Dashboard() {
             <img src="/milon-wordmark.png" alt="Milōn" />
             <span className="gold-text">MILŌN</span>
           </span>
-          <span className="firm-chip">
-            Practice · <b>{firm?.name ?? "—"}</b>
-          </span>
+          <FirmSwitcher />
           <span className="spacer" />
           <button
             className="tb-btn gold"
@@ -944,7 +956,7 @@ function Dashboard() {
         <AddClientDialog
           open={addOpen}
           onClose={() => setAddOpen(false)}
-          onAdded={load}
+          onAdded={() => void load(firmId)}
           firmId={firm?.id ?? null}
           userId={user.id}
         />

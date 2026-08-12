@@ -11,8 +11,11 @@ import { useAuth } from "@/hooks/use-auth";
 import {
   fetchUserFirm,
   firmBrandIsEmpty,
+  listUserFirms,
   profileFromFirm,
+  readActiveFirmId,
   saveFirmBrand,
+  writeActiveFirmId,
   type FirmBrandRow,
 } from "@/lib/firm-brand";
 
@@ -52,6 +55,10 @@ type AccountantProfileContextValue = {
   resetProfile: () => void;
   /** Firm row id when loaded; null if user has no firm yet. */
   firmId: string | null;
+  /** All firms this user can access (owned + memberships). */
+  firms: FirmBrandRow[];
+  /** Switch active firm (G27). Re-hydrates brand from the chosen firm. */
+  setActiveFirm: (firmId: string) => Promise<void>;
   /** True when the signed-in user owns the firm (can UPDATE brand). */
   canEditBrand: boolean;
   /** Loading firm brand from Supabase. */
@@ -93,6 +100,39 @@ function saveToStorage(userId: string | null, profile: AccountantProfile) {
   }
 }
 
+function applyFirmToProfile(
+  row: FirmBrandRow,
+  userId: string,
+  cached: AccountantProfile,
+): AccountantProfile {
+  const fromDb = profileFromFirm(row);
+
+  if (firmBrandIsEmpty(row) && (cached.firmName || cached.logoUrl || cached.tagline)) {
+    const merged: AccountantProfile = {
+      ...fromDb,
+      firmName: cached.firmName || fromDb.firmName || row.name,
+      logoUrl: cached.logoUrl ?? fromDb.logoUrl,
+      primaryColor: cached.primaryColor || fromDb.primaryColor,
+      secondaryColor: cached.secondaryColor || fromDb.secondaryColor,
+      accentColor: cached.accentColor || fromDb.accentColor,
+      accountantName: cached.accountantName || fromDb.accountantName,
+      accountantEmail: cached.accountantEmail || fromDb.accountantEmail,
+      tagline: cached.tagline ?? fromDb.tagline,
+    };
+    saveToStorage(userId, merged);
+    return merged;
+  }
+
+  const merged: AccountantProfile = {
+    ...fromDb,
+    firmName: fromDb.firmName || cached.firmName,
+    accountantName: fromDb.accountantName || cached.accountantName,
+    accountantEmail: fromDb.accountantEmail || cached.accountantEmail,
+  };
+  saveToStorage(userId, merged);
+  return merged;
+}
+
 export function AccountantProfileProvider({
   children,
 }: {
@@ -103,6 +143,7 @@ export function AccountantProfileProvider({
   // browser tab's / previous user's brand (N8).
   const [profile, setProfile] = useState<AccountantProfile>(DEFAULT_PROFILE);
   const [firm, setFirm] = useState<FirmBrandRow | null>(null);
+  const [firms, setFirms] = useState<FirmBrandRow[]>([]);
   const [brandLoading, setBrandLoading] = useState(true);
   const hydratedRef = useRef(false);
   const userIdRef = useRef<string | null>(null);
@@ -116,6 +157,7 @@ export function AccountantProfileProvider({
       if (!user) {
         if (!cancelled) {
           setFirm(null);
+          setFirms([]);
           setProfile(DEFAULT_PROFILE);
           setBrandLoading(false);
           hydratedRef.current = false;
@@ -133,40 +175,18 @@ export function AccountantProfileProvider({
       }
 
       try {
-        const row = await fetchUserFirm(user.id);
+        const preferred = readActiveFirmId(user.id);
+        const [all, row] = await Promise.all([
+          listUserFirms(user.id),
+          fetchUserFirm(user.id, preferred),
+        ]);
         if (cancelled) return;
+        setFirms(all);
         setFirm(row);
 
         if (row) {
-          const fromDb = profileFromFirm(row);
-
-          // One-shot import: if firm brand is empty but this user has local
-          // settings, prefer the cache (and later Save writes it to the firm).
-          if (firmBrandIsEmpty(row) && (cached.firmName || cached.logoUrl || cached.tagline)) {
-            const merged: AccountantProfile = {
-              ...fromDb,
-              firmName: cached.firmName || fromDb.firmName || row.name,
-              logoUrl: cached.logoUrl ?? fromDb.logoUrl,
-              primaryColor: cached.primaryColor || fromDb.primaryColor,
-              secondaryColor: cached.secondaryColor || fromDb.secondaryColor,
-              accentColor: cached.accentColor || fromDb.accentColor,
-              accountantName: cached.accountantName || fromDb.accountantName,
-              accountantEmail: cached.accountantEmail || fromDb.accountantEmail,
-              tagline: cached.tagline ?? fromDb.tagline,
-            };
-            setProfile(merged);
-            saveToStorage(user.id, merged);
-          } else {
-            // DB wins when firm brand is populated — avoids stale local flash.
-            const merged: AccountantProfile = {
-              ...fromDb,
-              firmName: fromDb.firmName || cached.firmName,
-              accountantName: fromDb.accountantName || cached.accountantName,
-              accountantEmail: fromDb.accountantEmail || cached.accountantEmail,
-            };
-            setProfile(merged);
-            saveToStorage(user.id, merged);
-          }
+          writeActiveFirmId(user.id, row.id);
+          setProfile(applyFirmToProfile(row, user.id, cached));
         }
       } finally {
         if (!cancelled) {
@@ -194,6 +214,23 @@ export function AccountantProfileProvider({
     saveToStorage(userIdRef.current, DEFAULT_PROFILE);
     setProfile(DEFAULT_PROFILE);
   }, []);
+
+  const setActiveFirm = useCallback(
+    async (nextFirmId: string) => {
+      if (!user) return;
+      const match = firms.find((f) => f.id === nextFirmId);
+      if (!match) return;
+      if (firm?.id === nextFirmId) return;
+
+      writeActiveFirmId(user.id, nextFirmId);
+      setFirm(match);
+      // Brand for the newly selected firm — don't bleed the previous firm's cache
+      // colours into an already-branded firm.
+      const cached = loadFromStorage(user.id);
+      setProfile(applyFirmToProfile(match, user.id, cached));
+    },
+    [user, firms, firm?.id],
+  );
 
   const saveProfile = useCallback(async () => {
     if (!firm) {
@@ -228,6 +265,24 @@ export function AccountantProfileProvider({
           }
         : f,
     );
+    setFirms((list) =>
+      list.map((f) =>
+        f.id === firm.id
+          ? {
+              ...f,
+              name: toSave.firmName.trim() || f.name,
+              logo_url: toSave.logoUrl,
+              accent_color: toSave.accentColor,
+              primary_color: toSave.primaryColor,
+              secondary_color: toSave.secondaryColor,
+              tagline: toSave.tagline,
+              brand_contact_name: toSave.accountantName || null,
+              brand_contact_email: toSave.accountantEmail || null,
+              brand_updated_at: new Date().toISOString(),
+            }
+          : f,
+      ),
+    );
     return { ok: true };
   }, [firm, user, profile]);
 
@@ -240,6 +295,8 @@ export function AccountantProfileProvider({
         updateProfile,
         resetProfile,
         firmId: firm?.id ?? null,
+        firms,
+        setActiveFirm,
         canEditBrand,
         brandLoading,
         saveProfile,

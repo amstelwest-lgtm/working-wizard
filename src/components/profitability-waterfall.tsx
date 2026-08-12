@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { useFinancialInputs } from "@/contexts/financial-inputs";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
 import { useAuth } from "@/hooks/use-auth";
-import { hashFigures, latestSnapshotId, recordDelivery, warnIfDeliveryFailed } from "@/lib/advisory-deliveries";
+import { hashFigures, latestSnapshotId, recordDelivery, warnIfDeliveryFailed, warnIfPdfArchiveFailed } from "@/lib/advisory-deliveries";
 import type { ReportSignoffStamp } from "@/components/pdf/pdf-document";
 
 export type WaterfallFallback = {
@@ -77,6 +77,7 @@ async function exportPDF(opts: {
   accountantProfile: import("@/contexts/accountant-profile").AccountantProfile;
   reviewSignoff?: ReportSignoffStamp | null;
   createdBy?: string | null;
+  firmId?: string | null;
 }) {
   const { revenue, costOfSales, fixedCosts, interest, tax } = opts;
   const grossProfit = revenue - costOfSales;
@@ -127,6 +128,7 @@ async function exportPDF(opts: {
     const snapId = await latestSnapshotId(opts.clientId);
     const logged = await recordDelivery({
       clientId: opts.clientId,
+      firmId: opts.firmId,
       channel: "pdf_download",
       kind: "report_pdf",
       reportKey: "waterfall",
@@ -134,8 +136,10 @@ async function exportPDF(opts: {
       figuresHash: hashFigures(profitabilityData),
       periodLabel: period,
       createdBy: opts.createdBy,
+      pdfBlob: blob,
     });
     warnIfDeliveryFailed(logged.error);
+    warnIfPdfArchiveFailed(logged.pdfError);
   }
 }
 
@@ -151,7 +155,7 @@ export function ProfitabilityWaterfall({
   reviewSignoff?: ReportSignoffStamp | null;
 }) {
   const { weeklyInputs } = useFinancialInputs();
-  const { profile } = useAccountantProfile();
+  const { profile, firmId } = useAccountantProfile();
   const { user } = useAuth();
   const [open, setOpen] = useState(true);
   const [mounted, setMounted] = useState(false);
@@ -246,6 +250,7 @@ export function ProfitabilityWaterfall({
                     accountantProfile: profile,
                     reviewSignoff,
                     createdBy: user?.id ?? null,
+                    firmId,
                   });
                 } finally {
                   setExporting(false);

@@ -32,6 +32,8 @@ export type AdvisoryDelivery = {
   acknowledged_at: string | null;
   acknowledged_by: string | null;
   ack_token: string | null;
+  pdf_storage_path: string | null;
+  pdf_byte_size: number | null;
 };
 
 export type RecordDeliveryInput = {
@@ -50,7 +52,11 @@ export type RecordDeliveryInput = {
   createdBy: string;
   /** When false, skip appending the ack URL to body (default: append for share channels). */
   appendAckLink?: boolean;
+  /** Optional PDF blob to archive in private storage (G28). */
+  pdfBlob?: Blob | null;
 };
+
+const PDF_BUCKET = "advisory-pdfs";
 
 /** Simple stable hash of figures for stamping (not cryptographic). */
 export function hashFigures(payload: unknown): string {
@@ -91,6 +97,51 @@ function deliveriesTable() {
 
 const SHARE_CHANNELS: DeliveryChannel[] = ["mailto", "whatsapp", "copy", "email"];
 
+/**
+ * Upload a PDF before the ledger insert so the path can be written immutably (G28).
+ * Path: {firmId}/{clientId}/{uuid}.pdf
+ */
+export async function uploadDeliveryPdf(opts: {
+  firmId: string;
+  clientId: string;
+  blob: Blob;
+}): Promise<{ path: string | null; byteSize: number | null; error: string | null }> {
+  const objectId =
+    typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const path = `${opts.firmId}/${opts.clientId}/${objectId}.pdf`;
+  const { error } = await supabase.storage.from(PDF_BUCKET).upload(path, opts.blob, {
+    contentType: "application/pdf",
+    upsert: false,
+    cacheControl: "31536000",
+  });
+  if (error) {
+    const msg = error.message ?? "PDF upload failed";
+    if (msg.includes("Bucket not found") || msg.includes("not found")) {
+      return {
+        path: null,
+        byteSize: null,
+        error: "PDF archive unavailable — run the advisory-pdfs migration.",
+      };
+    }
+    return { path: null, byteSize: null, error: msg };
+  }
+  return { path, byteSize: opts.blob.size, error: null };
+}
+
+/** Signed URL for re-downloading an archived delivery PDF. */
+export async function signedDeliveryPdfUrl(
+  path: string,
+  expiresInSeconds = 120,
+): Promise<{ url: string | null; error: string | null }> {
+  const { data, error } = await supabase.storage
+    .from(PDF_BUCKET)
+    .createSignedUrl(path, expiresInSeconds);
+  if (error) return { url: null, error: error.message };
+  return { url: data?.signedUrl ?? null, error: null };
+}
+
 export async function recordDelivery(
   input: RecordDeliveryInput,
 ): Promise<{
@@ -98,6 +149,7 @@ export async function recordDelivery(
   ackToken: string | null;
   body: string | null;
   error: string | null;
+  pdfError: string | null;
 }> {
   const ackToken = newAckToken();
   const shouldAppend =
@@ -107,6 +159,25 @@ export async function recordDelivery(
   const body = shouldAppend && input.body
     ? appendAckFooter(input.body, ackToken)
     : (input.body ?? null);
+
+  let pdfStoragePath: string | null = null;
+  let pdfByteSize: number | null = null;
+  let pdfError: string | null = null;
+
+  if (input.pdfBlob && input.pdfBlob.size > 0) {
+    if (!input.firmId) {
+      pdfError = "PDF not archived — no active firm on this account.";
+    } else {
+      const uploaded = await uploadDeliveryPdf({
+        firmId: input.firmId,
+        clientId: input.clientId,
+        blob: input.pdfBlob,
+      });
+      pdfStoragePath = uploaded.path;
+      pdfByteSize = uploaded.byteSize;
+      pdfError = uploaded.error;
+    }
+  }
 
   const { data, error } = await deliveriesTable()
     .insert({
@@ -124,6 +195,8 @@ export async function recordDelivery(
       period_label: input.periodLabel ?? null,
       created_by: input.createdBy,
       ack_token: ackToken,
+      pdf_storage_path: pdfStoragePath,
+      pdf_byte_size: pdfByteSize,
     } as never)
     .select("id, ack_token")
     .maybeSingle();
@@ -136,9 +209,42 @@ export async function recordDelivery(
         ackToken: null,
         body,
         error: "Advisory ledger unavailable — run the latest DB migration.",
+        pdfError,
       };
     }
-    return { id: null, ackToken: null, body, error: msg };
+    // Column missing (migration not applied) — retry without PDF columns.
+    if (msg.includes("pdf_storage_path") || msg.includes("pdf_byte_size")) {
+      const retry = await deliveriesTable()
+        .insert({
+          client_id: input.clientId,
+          firm_id: input.firmId ?? null,
+          channel: input.channel,
+          kind: input.kind,
+          subject: input.subject ?? null,
+          body,
+          recipient_email: input.recipientEmail ?? null,
+          recipient_name: input.recipientName ?? null,
+          report_key: input.reportKey ?? null,
+          snapshot_id: input.snapshotId ?? null,
+          figures_hash: input.figuresHash ?? null,
+          period_label: input.periodLabel ?? null,
+          created_by: input.createdBy,
+          ack_token: ackToken,
+        } as never)
+        .select("id, ack_token")
+        .maybeSingle();
+      if (!retry.error) {
+        const row = retry.data as { id: string; ack_token: string } | null;
+        return {
+          id: row?.id ?? null,
+          ackToken: row?.ack_token ?? ackToken,
+          body,
+          error: null,
+          pdfError: pdfError ?? "PDF archive columns missing — run the advisory-pdfs migration.",
+        };
+      }
+    }
+    return { id: null, ackToken: null, body, error: msg, pdfError };
   }
   const row = data as { id: string; ack_token: string } | null;
   return {
@@ -146,6 +252,7 @@ export async function recordDelivery(
     ackToken: row?.ack_token ?? ackToken,
     body,
     error: null,
+    pdfError,
   };
 }
 
@@ -216,4 +323,10 @@ export function channelHonestyLabel(channel: DeliveryChannel, acknowledged: bool
 export function warnIfDeliveryFailed(error: string | null | undefined): void {
   if (!error) return;
   toast.warning(`Sent history not logged: ${error}`);
+}
+
+/** Soft warning when PDF archive failed but the ledger row still landed. */
+export function warnIfPdfArchiveFailed(error: string | null | undefined): void {
+  if (!error) return;
+  toast.warning(`PDF not archived for re-download: ${error}`);
 }
