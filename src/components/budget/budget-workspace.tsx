@@ -21,6 +21,7 @@ import {
   reassignUnmappedDriver,
 } from "@/lib/budget.model-change";
 import { BudgetSimpleView } from "@/components/budget/budget-simple-view";
+import { BudgetVariancePanel } from "@/components/budget/budget-variance-panel";
 
 const SCENARIOS: BudgetScenarioId[] = ["base", "upside", "downside"];
 
@@ -33,6 +34,7 @@ export function BudgetWorkspace({
   onClearUnmapped,
   onChangeModel,
   role = "owner",
+  clientId,
 }: {
   doc: BudgetDocument;
   onChange: (next: BudgetDocument) => void;
@@ -42,6 +44,7 @@ export function BudgetWorkspace({
   onClearUnmapped?: () => void;
   onChangeModel?: () => void;
   role?: "owner" | "accountant";
+  clientId?: string;
 }) {
   if (simplified) {
     return (
@@ -54,6 +57,7 @@ export function BudgetWorkspace({
             onClear={onClearUnmapped}
           />
         )}
+        <BudgetVariancePanel clientId={clientId} doc={doc} />
         <BudgetSimpleView
           doc={doc}
           onChange={onChange}
@@ -73,6 +77,7 @@ export function BudgetWorkspace({
       onClearUnmapped={onClearUnmapped}
       onChangeModel={onChangeModel}
       role={role}
+      clientId={clientId}
     />
   );
 }
@@ -148,6 +153,7 @@ function BudgetComplexWorkspace({
   onClearUnmapped,
   onChangeModel,
   role = "owner",
+  clientId,
 }: {
   doc: BudgetDocument;
   onChange: (next: BudgetDocument) => void;
@@ -156,6 +162,7 @@ function BudgetComplexWorkspace({
   onClearUnmapped?: () => void;
   onChangeModel?: () => void;
   role?: "owner" | "accountant";
+  clientId?: string;
 }) {
   const months = useMemo(() => fyMonths(doc.fyStart), [doc.fyStart]);
   const focusMonths = months;
@@ -257,6 +264,8 @@ function BudgetComplexWorkspace({
           onClear={onClearUnmapped}
         />
       )}
+
+      <BudgetVariancePanel clientId={clientId} doc={doc} />
 
       {/* Assumptions */}
       <section className="grid gap-3 rounded-xl border border-slate-200/80 bg-white/70 p-4 dark:border-slate-800 dark:bg-slate-950/50 sm:grid-cols-3 lg:grid-cols-6">

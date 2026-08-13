@@ -333,6 +333,7 @@ export function BudgetPanel({
         onClearUnmapped={() => setUnmapped(null)}
         onChangeModel={beginModelChange}
         role={role}
+        clientId={clientId}
       />
 
       <div className="mt-6 space-y-4">
