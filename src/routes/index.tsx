@@ -20,11 +20,47 @@ export const Route = createFileRoute("/")({
     styles: [{ children: landingCss }],
     scripts: [
       {
-        children: `(function(){try{var d=document.documentElement;d.classList.add("dark");d.dataset.theme="dark";d.dataset.landing="1";d.style.backgroundColor="#050507";d.style.color="#f2ecdc";d.style.colorScheme="dark";}catch(e){}})();`,
+        children: `(function(){try{var d=document.documentElement;d.dataset.landing="1";var t="dark";try{var s=localStorage.getItem("milon.landing.theme");if(s==="light"||s==="dark")t=s;}catch(e){}d.dataset.theme=t;if(t==="light"){d.classList.remove("dark");d.style.backgroundColor="#f7f4ec";d.style.color="#1b1608";d.style.colorScheme="light";}else{d.classList.add("dark");d.style.backgroundColor="#050507";d.style.color="#f2ecdc";d.style.colorScheme="dark";}}catch(e){}})();`,
       },
     ],
   }),
 });
+
+const LANDING_THEME_KEY = "milon.landing.theme";
+
+function applyLandingTheme(theme: "light" | "dark") {
+  const root = document.documentElement;
+  const body = document.body;
+  root.dataset.landing = "1";
+  root.dataset.theme = theme;
+  if (theme === "light") {
+    root.classList.remove("dark");
+    root.style.backgroundColor = "#f7f4ec";
+    root.style.color = "#1b1608";
+    root.style.colorScheme = "light";
+    body.style.backgroundColor = "#f7f4ec";
+    body.style.color = "#1b1608";
+  } else {
+    root.classList.add("dark");
+    root.style.backgroundColor = "#050507";
+    root.style.color = "#f2ecdc";
+    root.style.colorScheme = "dark";
+    body.style.backgroundColor = "#050507";
+    body.style.color = "#f2ecdc";
+  }
+  const wrap = document.querySelector<HTMLElement>("[data-milon-landing]");
+  if (wrap) {
+    wrap.style.background = "var(--bg)";
+    wrap.style.color = "var(--ink)";
+  }
+  const tbtn = document.getElementById("themeToggle");
+  if (tbtn) tbtn.textContent = theme === "light" ? "☾" : "☀";
+  try {
+    localStorage.setItem(LANDING_THEME_KEY, theme);
+  } catch {
+    /* ignore */
+  }
+}
 
 /* ─────────────────────────────────────────────────────────────── */
 
@@ -85,9 +121,7 @@ function LandingPage() {
     if (!loading && user) navigate({ to: "/app" });
   }, [user, loading, navigate]);
 
-  /* ── Force dark theme for landing; restore on leave ──
-     Keep ink/bg inline styles in sync with RootShell — clearing them on mount
-     was letting styles.css light defaults flash between hydrate and paint. */
+  /* ── Landing theme: keep data-landing; restore prior theme on leave ── */
   useEffect(() => {
     const root = document.documentElement;
     const body = document.body;
@@ -98,16 +132,17 @@ function LandingPage() {
     const prevRootColor = root.style.color;
     const prevBodyBg = body.style.backgroundColor;
     const prevBodyColor = body.style.color;
-    root.classList.add("dark");
-    root.dataset.theme = "dark";
-    root.dataset.landing = "1";
-    root.style.backgroundColor = "#050507";
-    root.style.color = "#f2ecdc";
-    root.style.colorScheme = "dark";
-    body.style.backgroundColor = "#050507";
-    body.style.color = "#f2ecdc";
+    let initial: "light" | "dark" = "dark";
+    try {
+      const saved = localStorage.getItem(LANDING_THEME_KEY);
+      if (saved === "light" || saved === "dark") initial = saved;
+    } catch {
+      /* ignore */
+    }
+    applyLandingTheme(initial);
     return () => {
       if (!hadDark) root.classList.remove("dark");
+      else root.classList.add("dark");
       if (prevTheme) root.dataset.theme = prevTheme;
       else delete root.dataset.theme;
       if (hadLanding) root.dataset.landing = hadLanding;
@@ -210,11 +245,13 @@ function LandingPage() {
 
     /* theme toggle */
     const tbtn = document.getElementById("themeToggle");
-    if (tbtn) tbtn.onclick = () => {
-      const isDark = document.documentElement.dataset.theme === "dark";
-      document.documentElement.dataset.theme = isDark ? "light" : "dark";
-      tbtn.textContent = isDark ? "☾" : "☀";
-    };
+    if (tbtn) {
+      tbtn.onclick = () => {
+        const next =
+          document.documentElement.dataset.theme === "light" ? "dark" : "light";
+        applyLandingTheme(next);
+      };
+    }
 
     /* ── quiz engine ── */
     const QUIZ: Record<string, Array<{ q: string; hint: string; opts: string[][]; key: string; reward: string }>> = {
@@ -441,8 +478,8 @@ function LandingPage() {
         data-milon-landing=""
         style={{
           minHeight: "100vh",
-          background: "#050507",
-          color: "#f2ecdc",
+          background: "var(--bg)",
+          color: "var(--ink)",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -469,7 +506,7 @@ function LandingPage() {
 
   /* ═══════════════════════════ MAIN RENDER ═══════════════════════════ */
   return (
-    <div data-milon-landing="" style={{ minHeight: "100vh", background: "#050507", color: "#f2ecdc" }}>
+    <div data-milon-landing="" style={{ minHeight: "100vh", background: "var(--bg)", color: "var(--ink)" }}>
       {/* ── sign-in modal ── */}
       {signinOpen && (
         <div className="milon-signin-modal" onClick={() => { setSigninOpen(false); setFpMode(false); setFpDone(false); setSiError(""); }}>

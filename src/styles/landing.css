@@ -20,10 +20,10 @@ html[data-landing="1"]{
   --ease:cubic-bezier(.22,.9,.24,1);
 }
 
-/* Landing surface — must win over styles.css light-theme body rules. */
+/* Landing surface — must win over styles.css; colours follow --bg/--ink (theme). */
 html[data-landing="1"],html[data-landing="1"] body{
-  background:#050507 !important;
-  background-color:#050507 !important;
+  background:var(--bg) !important;
+  background-color:var(--bg) !important;
   color:var(--ink) !important;
   color-scheme:dark;
 }
@@ -42,6 +42,13 @@ html[data-landing="1"][data-theme="light"]{
   --gold-bright:#8a6000;
   /* Gradient: drop the pale #fdee79 midpoint, keep rich amber tones */
   --gold-grad:linear-gradient(120deg,#7a5400 0%,#b8860b 30%,#d4af37 55%,#b8860b 75%,#7a5400 100%);
+  color-scheme:light;
+}
+html[data-landing="1"][data-theme="light"],html[data-landing="1"][data-theme="light"] body{
+  background:var(--bg) !important;
+  background-color:var(--bg) !important;
+  color:var(--ink) !important;
+  color-scheme:light;
 }
 html[data-landing="1"] *{margin:0;padding:0;box-sizing:border-box}
 html[data-landing="1"]{scroll-behavior:smooth}
@@ -368,12 +375,15 @@ html[data-landing="1"] .milon-signin-box{width:100%;max-width:420px;border-radiu
   background:linear-gradient(rgba(13,13,20,.96),rgba(13,13,20,.96)) padding-box,
              linear-gradient(150deg,rgba(253,238,121,.8),rgba(212,175,55,.12)) border-box;
   border:1px solid transparent;box-shadow:0 30px 80px rgba(0,0,0,.6)}
-/* Light mode: replace the hardcoded near-black box with a bright surface */
+html[data-landing="1"][data-theme="light"] .milon-signin-modal{
+  background:rgba(247,244,236,.82);
+}
 html[data-landing="1"][data-theme="light"] .milon-signin-box{
   background:linear-gradient(#fff,#fff) padding-box,
              linear-gradient(150deg,rgba(172,132,0,.45),rgba(140,110,0,.12)) border-box;
   box-shadow:0 30px 80px rgba(0,0,0,.14);
-  color:var(--ink)}
+  color:var(--ink);
+}
 html[data-landing="1"] .milon-signin-box h2{font-size:22px;font-weight:700;color:var(--ink);margin:0 0 24px}
 html[data-landing="1"] .milon-signin-box .field{margin-bottom:14px}
 html[data-landing="1"] .milon-signin-box .field label{display:block;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-dim);margin-bottom:7px}

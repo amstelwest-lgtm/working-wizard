@@ -171,47 +171,44 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 });
 
 function RootShell({ children }: { children: React.ReactNode }) {
-  // SSR + hydrate must agree on landing attrs. A head script alone is not enough:
-  // React would strip script-added `dark` / `data-landing` on hydrate and the
-  // light-theme rules in styles.css flash readable text on a white body.
+  // SSR + hydrate must agree on `data-landing` so FOUC CSS can paint black
+  // before body. Theme (`dark` class / data-theme / inline colors) is owned by
+  // the blocking script + landing toggle — React must NOT bind those or it
+  // resets light mode on every shell render.
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const isLanding = pathname === "/" || pathname === "";
 
   return (
     <html
       lang="en"
-      className={isLanding ? "dark" : undefined}
-      data-theme={isLanding ? "dark" : undefined}
       data-landing={isLanding ? "1" : undefined}
-      style={
-        isLanding
-          ? { backgroundColor: "#050507", color: "#f2ecdc", colorScheme: "dark" }
-          : undefined
-      }
       suppressHydrationWarning
     >
       <head>
         {/*
           FOUC guard for `/`:
-          1) SSR already paints dark attrs on <html> (see above) so first HTML
-             bytes are black — no white body before JS.
-          2) Blocking script keeps the same attrs if anything races ahead.
-          3) Critical CSS !important beats styles.css light defaults until
-             inlined landing.css applies.
+          1) data-landing is SSR'd on <html>.
+          2) Blocking script applies saved/default theme before body paints.
+          3) Critical CSS covers dark default + light override (!important so
+             styles.css cannot flash a white unstyled body).
         */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var p=location.pathname;if(p==="/"||p===""){var d=document.documentElement;d.classList.add("dark");d.dataset.theme="dark";d.dataset.landing="1";d.style.backgroundColor="#050507";d.style.color="#f2ecdc";d.style.colorScheme="dark";}}catch(e){}})();`,
+            __html: `(function(){try{var p=location.pathname;if(p!="/"&&p!="")return;var d=document.documentElement;d.dataset.landing="1";var t="dark";try{var s=localStorage.getItem("milon.landing.theme");if(s==="light"||s==="dark")t=s;}catch(e){}d.dataset.theme=t;if(t==="light"){d.classList.remove("dark");d.style.backgroundColor="#f7f4ec";d.style.color="#1b1608";d.style.colorScheme="light";}else{d.classList.add("dark");d.style.backgroundColor="#050507";d.style.color="#f2ecdc";d.style.colorScheme="dark";}}catch(e){}})();`,
           }}
         />
         <style
           dangerouslySetInnerHTML={{
             __html: [
-              'html[data-landing="1"],html[data-landing="1"] body{',
+              'html[data-landing="1"]:not([data-theme="light"]),html[data-landing="1"]:not([data-theme="light"]) body{',
               'background:#050507!important;background-color:#050507!important;',
               'color:#f2ecdc!important;color-scheme:dark;',
               '}',
-              'html.dark,html.dark body,html[data-theme="dark"],html[data-theme="dark"] body{',
+              'html[data-landing="1"][data-theme="light"],html[data-landing="1"][data-theme="light"] body{',
+              'background:#f7f4ec!important;background-color:#f7f4ec!important;',
+              'color:#1b1608!important;color-scheme:light;',
+              '}',
+              'html.dark:not([data-theme="light"]),html.dark:not([data-theme="light"]) body{',
               'background:#050507!important;background-color:#050507!important;',
               '}',
             ].join(""),
@@ -219,14 +216,7 @@ function RootShell({ children }: { children: React.ReactNode }) {
         />
         <HeadContent />
       </head>
-      <body
-        style={
-          isLanding
-            ? { backgroundColor: "#050507", color: "#f2ecdc" }
-            : undefined
-        }
-        suppressHydrationWarning
-      >
+      <body suppressHydrationWarning>
         {children}
         <Scripts />
       </body>
