@@ -9,6 +9,12 @@ import { BudgetPanel } from "@/components/budget/budget-panel";
 import type { ExistingCashflow } from "@/lib/cash-from-banks.publish";
 import { TasksPanel } from "@/components/tasks-panel";
 import { UploadFinancials } from "@/components/upload-financials";
+import { BankStatementDrafter } from "@/components/bank-statement-drafter";
+import { WalkthroughWizard } from "@/components/walkthrough-wizard";
+import { seedBudgetFromFinancials } from "@/lib/budget.bridges";
+import { normalizeBudgetDocument } from "@/lib/budget.compute";
+import type { BudgetDocument } from "@/lib/budget.types";
+import { createBudgetDocument, currentFyStart } from "@/lib/budget.months";
 import { PlaybookDrawer } from "@/components/playbook-drawer";
 import type { ExtractionResult } from "@/lib/financialSchema";
 import { computeRatios, scoreTier } from "@/lib/ratios";
@@ -36,6 +42,7 @@ import { ReviewSignoffButton, computeIsStale } from "@/components/review-signoff
 import {
   parseOperatingProfile,
   stampProfileProvenance,
+  profileToBudgetQualification,
   type ClientOperatingProfile,
 } from "@/lib/client-profile";
 import { profileIndustryLabel } from "@/lib/profile-signals";
@@ -289,10 +296,15 @@ function HealthRing({
 // ── route ──────────────────────────────────────────────────────────────────
 
 export const Route = createFileRoute("/_authenticated/clients/$clientId")({
-  validateSearch: (search: Record<string, unknown>): { qbo?: string; reason?: string } => {
-    const out: { qbo?: string; reason?: string } = {};
+  validateSearch: (search: Record<string, unknown>): {
+    qbo?: string;
+    reason?: string;
+    onboard?: string;
+  } => {
+    const out: { qbo?: string; reason?: string; onboard?: string } = {};
     if (typeof search.qbo === "string") out.qbo = search.qbo;
     if (typeof search.reason === "string") out.reason = search.reason;
+    if (typeof search.onboard === "string") out.onboard = search.onboard;
     return out;
   },
   component: ClientView,
@@ -442,6 +454,22 @@ function ClientView() {
     });
   }, [search.qbo, search.reason, clientId, navigate]);
 
+  // First-client onboarding: land from dashboard with ?onboard=1 → bank upload nudge
+  useEffect(() => {
+    if (search.onboard !== "1") return;
+    setFirstDataOpen(true);
+    navigate({
+      to: "/clients/$clientId",
+      params: { clientId },
+      search: (prev) => {
+        const next = { ...prev };
+        delete next.onboard;
+        return next;
+      },
+      replace: true,
+    });
+  }, [search.onboard, clientId, navigate]);
+
   const [client, setClient] = useState<Client | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<ActiveTab>("ratios");
@@ -457,6 +485,8 @@ function ClientView() {
   const [debtSchedule, setDebtSchedule] = useState<DebtSchedule>(emptyDebtSchedule());
   const [profileOpen, setProfileOpen] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [showBankDrafter, setShowBankDrafter] = useState(false);
+  const [firstDataOpen, setFirstDataOpen] = useState(false);
   const [snapshots, setSnapshots] = useState<SnapshotRow[]>([]);
   const [deliveryRefresh, setDeliveryRefresh] = useState(0);
   const [queriesRefresh, setQueriesRefresh] = useState(0);
@@ -1204,6 +1234,24 @@ function ClientView() {
 
   return (
     <div className="accountant-portal">
+      <WalkthroughWizard
+        variant="accountant-client"
+        ready={!loading && !!client && !firstDataOpen && !showBankDrafter && !uploadOpen}
+        onTabChange={(tab) => {
+          if (
+            tab === "ratios" ||
+            tab === "profit" ||
+            tab === "cash" ||
+            tab === "budget" ||
+            tab === "reports" ||
+            tab === "plan" ||
+            tab === "tasks" ||
+            tab === "advisory"
+          ) {
+            setActiveTab(tab);
+          }
+        }}
+      />
       {/* Ambient background */}
       <div id="atmos">
         <div className="glow g1" />
@@ -1589,6 +1637,12 @@ function ClientView() {
                   <button className="btn ghost mini" onClick={handleSaveSnapshot}>
                     Save snapshot
                   </button>
+                  <button className="btn gold mini" onClick={() => setShowBankDrafter(true)}>
+                    <svg viewBox="0 0 24 24">
+                      <path d="M12 15V3M7 8l5-5 5 5M5 21h14" />
+                    </svg>
+                    Draft from banks
+                  </button>
                   <button className="btn ghost mini" onClick={() => setUploadOpen(true)}>
                     <svg viewBox="0 0 24 24">
                       <path d="M12 15V3M7 8l5-5 5 5M5 21h14" />
@@ -1897,6 +1951,7 @@ function ClientView() {
 
         {/* ===== BUDGET TAB ===== */}
         <div className={`tabpane${activeTab === "budget" ? " on" : ""}`} id="pane-budget">
+          <div id="wizard-budget-panel">
           <span className="eyebrow">Living FY budget</span>
           <div className="h-sec">Driver-based monthly budget</div>
           <p className="sub" style={{ marginBottom: 24 }}>
@@ -1922,6 +1977,7 @@ function ClientView() {
                 setActiveTab("cash");
               }}
             />
+          </div>
           </div>
         </div>
 
@@ -2136,6 +2192,148 @@ function ClientView() {
           </div>
         </div>
       )}
+
+      {/* First-client: bank statements nudge */}
+      <Dialog open={firstDataOpen} onOpenChange={setFirstDataOpen}>
+        <DialogContent className="border border-slate-800 bg-slate-950 text-slate-50 max-w-md">
+          <DialogHeader>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#d4a550]">
+              Practice client · Step 1
+            </p>
+            <DialogTitle className="text-xl text-slate-100 mt-1">
+              Upload 3 months of bank statements
+            </DialogTitle>
+            <DialogDescription className="text-slate-400">
+              Fastest path for this client: drop ~3 months of statements. We draft P&amp;L figures,
+              seed budget, and can build a cash forecast — then tour the workspace.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-3 pt-2">
+            <button
+              type="button"
+              onClick={() => {
+                setFirstDataOpen(false);
+                setShowBankDrafter(true);
+              }}
+              className="btn gold"
+              style={{ width: "100%", justifyContent: "center" }}
+            >
+              Upload bank statements
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setFirstDataOpen(false);
+                setUploadOpen(true);
+              }}
+              className="btn ghost"
+              style={{ width: "100%", justifyContent: "center" }}
+            >
+              Upload a financial statement instead
+            </button>
+            <button
+              type="button"
+              onClick={() => setFirstDataOpen(false)}
+              className="text-xs text-slate-500 hover:text-slate-400 pt-1 text-center"
+              style={{ background: "none", border: "none", cursor: "pointer" }}
+            >
+              Skip for now — tour the empty board
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <BankStatementDrafter
+        open={showBankDrafter}
+        onClose={() => setShowBankDrafter(false)}
+        onApply={async ({ fields, annualised }) => {
+          const asStrings = Object.fromEntries(
+            Object.entries(fields).map(([k, v]) => [k, v != null ? String(v) : ""]),
+          );
+          setFinancials((prev) => ({ ...prev, ...asStrings }));
+          setShowBankDrafter(false);
+
+          const financialsUpdatedAt = new Date().toISOString();
+          const merged = mergeFinancialsBlob(
+            { ...financials, ...asStrings },
+            debtSchedule,
+          );
+          const { error } = await supabase
+            .from("clients")
+            .update({
+              financials: merged as never,
+              financials_updated_at: financialsUpdatedAt,
+            })
+            .eq("id", clientId);
+          if (error) {
+            toast.error(`Could not save bank draft: ${error.message}`);
+            return;
+          }
+          setClient((c) => (c ? { ...c, financials_updated_at: financialsUpdatedAt } : c));
+          await recordScoreHistory(
+            clientId,
+            scoreFromRatioInputs(
+              { ...ratioInputs, ...fields } as RatioInputs,
+              effectiveRunway,
+            ),
+          );
+          toast.success(
+            annualised
+              ? "Draft figures applied (annualised) — saved."
+              : "Draft figures applied for the statement period — saved.",
+          );
+
+          try {
+            const { data: row } = await supabase
+              .from("clients")
+              .select("budget, financial_year_start_month, operating_profile")
+              .eq("id", clientId)
+              .maybeSingle();
+            const fyMonth =
+              (row as { financial_year_start_month?: number | null } | null)
+                ?.financial_year_start_month ?? 3;
+            const profile = parseOperatingProfile(
+              (row as { operating_profile?: unknown } | null)?.operating_profile,
+            );
+            const budgetRaw = (row as { budget?: BudgetDocument | null } | null)?.budget;
+            let doc =
+              budgetRaw?.version === 1
+                ? normalizeBudgetDocument(budgetRaw as BudgetDocument)
+                : null;
+            if (!doc && profile) {
+              doc = createBudgetDocument({
+                templateId: profile.templateId,
+                qualification: profileToBudgetQualification(profile),
+                fyStartMonth: fyMonth,
+                fyStart: currentFyStart(fyMonth),
+              });
+            }
+            if (doc) {
+              const seeded = seedBudgetFromFinancials(doc, fields);
+              const updatedAt = new Date().toISOString();
+              await supabase
+                .from("clients")
+                .update({
+                  budget: { ...seeded.doc, updatedAt } as never,
+                  budget_updated_at: updatedAt,
+                } as never)
+                .eq("id", clientId);
+              if (seeded.changes.length) {
+                toast.message("Budget pre-filled from bank draft", {
+                  description: seeded.changes[0],
+                });
+              }
+            }
+          } catch (e) {
+            console.warn("budget seed after bank draft:", e);
+          }
+
+          setTimeout(() => {
+            setActiveTab("cash");
+            setCashBankUploadToken((n) => n + 1);
+          }, 400);
+        }}
+      />
 
       <Dialog open={profileOpen} onOpenChange={setProfileOpen}>
         <DialogContent className="flex h-[min(90vh,calc(100dvh-1rem))] max-h-[min(90vh,calc(100dvh-1rem))] w-[calc(100vw-1rem)] max-w-3xl flex-col gap-0 overflow-hidden border border-slate-800 bg-slate-950 p-4 text-slate-50 sm:p-6">

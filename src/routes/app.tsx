@@ -47,6 +47,7 @@ import {
   parseOperatingProfile,
   profileShortLabel,
   stampProfileProvenance,
+  profileToBudgetQualification,
   type ClientOperatingProfile,
 } from "@/lib/client-profile";
 import { profileIndustryLabel, profilePriorityWeight } from "@/lib/profile-signals";
@@ -97,6 +98,10 @@ const ActionPlanPanel = lazy(() =>
 );
 import { SplashScreen } from "@/components/splash-screen";
 import { WalkthroughWizard } from "@/components/walkthrough-wizard";
+import { seedBudgetFromFinancials } from "@/lib/budget.bridges";
+import { normalizeBudgetDocument } from "@/lib/budget.compute";
+import type { BudgetDocument } from "@/lib/budget.types";
+import { createBudgetDocument, currentFyStart } from "@/lib/budget.months";
 import { QboConnectCard } from "@/components/qbo-connect";
 import { Button } from "@/components/ui/button";
 import { SphereHero } from "@/components/sphere-hero";
@@ -2196,6 +2201,13 @@ function Index() {
       <SplashScreen />
       {!actingClientId && (
         <WalkthroughWizard
+          variant="owner"
+          ready={
+            firstRunStep === null &&
+            !showOnboarding &&
+            !showBankDrafter &&
+            !showCashFromBanks
+          }
           onTabChange={(tab) => {
             if (tab === "today-complex") {
               setViewMode("complex");
@@ -2422,7 +2434,7 @@ function Index() {
           </DialogContent>
         </Dialog>
 
-        {/* First-data nudge — shown after business type is set on first run */}
+        {/* First-data nudge — after profile: 3 months of bank statements first */}
         <Dialog open={firstRunStep === "first-data"} onOpenChange={() => setFirstRunStep(null)}>
           <DialogContent className="border border-slate-800 bg-slate-950 text-slate-50 max-w-md">
             <DialogHeader>
@@ -2430,29 +2442,43 @@ function Index() {
                 Step 2 of 2 · Bring in your numbers
               </p>
               <DialogTitle className="text-xl text-slate-100 mt-1">
-                Now let's get your data in
+                Upload 3 months of bank statements
               </DialogTitle>
               <DialogDescription className="text-slate-400">
-                Your profile is set. Upload a financial statement and MILŌN will calculate your health score
-                instantly — or skip and enter figures manually later.
+                Fastest path: drop the last ~3 months of statements. We draft your P&amp;L,
+                pre-fill budget, and can build a cash forecast — then we walk you through Business Health.
               </DialogDescription>
             </DialogHeader>
             <div className="flex flex-col gap-3 pt-2">
               <button
                 onClick={() => {
                   setFirstRunStep(null);
+                  setShowBankDrafter(true);
+                }}
+                className="flex items-center gap-3 rounded-lg border border-[#d4a550]/40 bg-[#d4a550]/10 p-4 text-left hover:border-[#d4a550]/70 hover:bg-[#d4a550]/15 transition-all"
+              >
+                <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#d4a550]/20 text-[#d4a550]">
+                  <Upload className="h-4 w-4" />
+                </span>
+                <div>
+                  <p className="font-semibold text-slate-100 text-sm">Upload bank statements (recommended)</p>
+                  <p className="text-[11px] text-slate-400 mt-0.5">PDF or CSV · ~3 months · AI drafts your figures</p>
+                </div>
+              </button>
+              <button
+                onClick={() => {
+                  setFirstRunStep(null);
                   setShowFinData(true);
-                  // Give the fin-data dialog a tick to mount, then trigger the file picker
                   setTimeout(() => uploadRef.current?.click(), 150);
                 }}
                 className="flex items-center gap-3 rounded-lg border border-slate-700 bg-slate-900 p-4 text-left hover:border-[#d4a550]/50 hover:bg-slate-800 transition-all"
               >
-                <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#d4a550]/10 text-[#d4a550]">
-                  <Upload className="h-4 w-4" />
+                <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-700 text-slate-300">
+                  <Database className="h-4 w-4" />
                 </span>
                 <div>
-                  <p className="font-semibold text-slate-100 text-sm">Upload a financial statement</p>
-                  <p className="text-[11px] text-slate-400 mt-0.5">PDF, Excel or CSV · AI extracts figures automatically</p>
+                  <p className="font-semibold text-slate-100 text-sm">Upload a financial statement instead</p>
+                  <p className="text-[11px] text-slate-400 mt-0.5">PDF, Excel or CSV management accounts</p>
                 </div>
               </button>
               <button
@@ -2467,30 +2493,24 @@ function Index() {
                 </span>
                 <div>
                   <p className="font-semibold text-slate-100 text-sm">Connect QuickBooks</p>
-                  <p className="text-[11px] text-slate-400 mt-0.5">Sync live accounting data automatically</p>
+                  <p className="text-[11px] text-slate-400 mt-0.5">Sync live accounting data</p>
                 </div>
               </button>
               <button
                 onClick={() => {
                   setFirstRunStep(null);
                   setShowFinData(true);
-                  setShowInputs(true); // open the manual fields immediately
+                  setShowInputs(true);
                 }}
-                className="flex items-center gap-3 rounded-lg border border-slate-700 bg-slate-900 p-4 text-left hover:border-[#d4a550]/50 hover:bg-slate-800 transition-all"
+                className="text-xs text-slate-500 hover:text-slate-400 underline pt-1 text-center"
               >
-                <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-700 text-slate-400">
-                  <Database className="h-4 w-4" />
-                </span>
-                <div>
-                  <p className="font-semibold text-slate-100 text-sm">Enter figures manually</p>
-                  <p className="text-[11px] text-slate-400 mt-0.5">Type in your numbers directly</p>
-                </div>
+                Enter figures manually
               </button>
               <button
                 onClick={() => setFirstRunStep(null)}
-                className="text-xs text-slate-500 hover:text-slate-400 underline pt-1 text-center"
+                className="text-xs text-slate-600 hover:text-slate-400 pt-0.5 text-center"
               >
-                Skip for now — I'll add data later
+                Skip for now — tour the empty board
               </button>
             </div>
           </DialogContent>
@@ -3023,6 +3043,7 @@ function Index() {
           </TabsContent>
 
           <TabsContent value="budget">
+            <div id="wizard-budget-panel">
             <div className="mb-4 flex items-center gap-3 pb-3">
               <span className="text-[9px] font-semibold uppercase tracking-[0.25em] text-[#b8860b] dark:text-[#d4a550]/80">Budget</span>
               <span className="h-px flex-1 bg-gradient-to-r from-[#b7872a]/30 to-transparent" />
@@ -3054,6 +3075,7 @@ function Index() {
                 onPushedToCash={() => setCashForecastReloadToken((n) => n + 1)}
               />
             </Suspense>
+            </div>
           </TabsContent>
 
           <TabsContent value="tasks">
@@ -3357,15 +3379,64 @@ function Index() {
       <BankStatementDrafter
         open={showBankDrafter}
         onClose={() => setShowBankDrafter(false)}
-        onApply={({ fields, annualised }) => {
+        onApply={async ({ fields, annualised }) => {
           setV((prev) => ({ ...prev, ...fields } as Inputs));
           setHasRealFinancials(true);
           setShowBankDrafter(false);
           toast.success(
             annualised
-              ? "Draft figures applied (annualised) — saved automatically. Have your accountant review them."
-              : "Draft figures applied for the statement period — saved automatically. Have your accountant review them.",
+              ? "Draft figures applied (annualised) — saved automatically."
+              : "Draft figures applied for the statement period — saved automatically.",
           );
+
+          // Prefill budget from drafted figures when a client row exists.
+          if (effectiveClientId) {
+            try {
+              const { data: row } = await supabase
+                .from("clients")
+                .select("budget, financial_year_start_month, operating_profile")
+                .eq("id", effectiveClientId)
+                .maybeSingle();
+              const fyMonth =
+                (row as { financial_year_start_month?: number | null } | null)
+                  ?.financial_year_start_month ?? 3;
+              const budgetRaw = (row as { budget?: BudgetDocument | null } | null)?.budget;
+              let doc =
+                budgetRaw?.version === 1
+                  ? normalizeBudgetDocument(budgetRaw as BudgetDocument)
+                  : null;
+              if (!doc && operatingProfile) {
+                const q = profileToBudgetQualification(operatingProfile);
+                doc = createBudgetDocument({
+                  templateId: operatingProfile.templateId,
+                  qualification: q,
+                  fyStartMonth: fyMonth,
+                  fyStart: currentFyStart(fyMonth),
+                });
+              }
+              if (doc) {
+                const seeded = seedBudgetFromFinancials(doc, fields);
+                const updatedAt = new Date().toISOString();
+                await supabase
+                  .from("clients")
+                  .update({
+                    budget: { ...seeded.doc, updatedAt } as never,
+                    budget_updated_at: updatedAt,
+                  } as never)
+                  .eq("id", effectiveClientId);
+                if (seeded.changes.length) {
+                  toast.message("Budget pre-filled from your bank draft", {
+                    description: seeded.changes[0],
+                  });
+                }
+              }
+            } catch (e) {
+              console.warn("budget seed after bank draft:", e);
+            }
+          }
+
+          // Next natural step in onboarding: cash forecast from the same statements.
+          setTimeout(() => setShowCashFromBanks(true), 400);
         }}
       />
 

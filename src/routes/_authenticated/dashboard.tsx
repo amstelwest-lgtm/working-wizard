@@ -20,6 +20,13 @@ import "@/styles/accountant-portal.css";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { FirmSwitcher } from "@/components/firm-switcher";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
+import { WalkthroughWizard } from "@/components/walkthrough-wizard";
+import {
+  ACCOUNTANT_FIRST_CLIENT_KEY,
+  PRACTICE_TEST_CLIENT_NAME,
+  markOnboardingDone,
+  onboardingDone,
+} from "@/lib/onboarding";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   component: Dashboard,
@@ -194,11 +201,17 @@ function AddClientDialog({
   onClose,
   onAdded,
   firmId,
+  defaultName = "",
+  heading = "Add a client",
+  blurb,
 }: {
   open: boolean;
   onClose: () => void;
-  onAdded: () => void;
+  onAdded: (created: { id: string; name: string }) => void;
   firmId: string | null;
+  defaultName?: string;
+  heading?: string;
+  blurb?: string;
 }) {
   const [newName, setNewName] = useState("");
   const [newType, setNewType] = useState("");
@@ -208,11 +221,11 @@ function AddClientDialog({
 
   useEffect(() => {
     if (open) {
-      setNewName("");
+      setNewName(defaultName);
       setNewType("");
       setTimeout(() => inputRef.current?.focus(), 50);
     }
-  }, [open]);
+  }, [open, defaultName]);
 
   if (!open) return null;
 
@@ -227,7 +240,7 @@ function AddClientDialog({
     }
     setSaving(true);
     try {
-      await createClient({
+      const created = await createClient({
         data: {
           name: newName.trim(),
           firmId,
@@ -235,7 +248,7 @@ function AddClientDialog({
         },
       });
       toast.success("Client added");
-      onAdded();
+      onAdded({ id: created.id, name: created.name });
       onClose();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not add client");
@@ -250,10 +263,15 @@ function AddClientDialog({
       <div className="drawer open" style={{ maxWidth: 420 }}>
         <div className="drawer-head">
           <div className="cat">New client</div>
-          <h3>Add a client</h3>
+          <h3>{heading}</h3>
           <button className="close" onClick={onClose}>✕</button>
         </div>
         <div className="drawer-body" style={{ padding: "24px 30px" }}>
+          {blurb && (
+            <p style={{ marginBottom: 16, fontSize: 13, color: "var(--ink-dim)", lineHeight: 1.55 }}>
+              {blurb}
+            </p>
+          )}
           {!firmId && (
             <p style={{ marginBottom: 16, fontSize: 13, color: "var(--warn, #e8b34b)" }}>
               Your practice firm is still loading. Wait a moment, then try again.
@@ -339,6 +357,7 @@ function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [addOpen, setAddOpen] = useState(false);
+  const [firstClientOpen, setFirstClientOpen] = useState(false);
   const [qboStatuses, setQboStatuses] = useState<
     Record<string, { companyName: string | null; lastSyncedAt: string | null; syncStatus: string }>
   >({});
@@ -532,6 +551,18 @@ function Dashboard() {
     setDrawerOpen(true);
   };
 
+  // ── First practice client nudge ─────────────────────────────────────────
+  useEffect(() => {
+    if (loading || brandLoading) return;
+    if (clientRows.length > 0) {
+      markOnboardingDone(ACCOUNTANT_FIRST_CLIENT_KEY);
+      return;
+    }
+    if (!onboardingDone(ACCOUNTANT_FIRST_CLIENT_KEY) && (firm?.id || firmId)) {
+      setFirstClientOpen(true);
+    }
+  }, [loading, brandLoading, clientRows.length, firm?.id, firmId]);
+
   // ── Derived stats ─────────────────────────────────────────────────────────
   // Average only scored clients — never invent 50 for empty financials.
   const scoredRows = clientRows.filter((c) => c.score != null && Number.isFinite(c.score));
@@ -578,6 +609,10 @@ function Dashboard() {
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="accountant-portal">
+      <WalkthroughWizard
+        variant="accountant-dashboard"
+        ready={!loading && !brandLoading && !firstClientOpen && clientRows.length > 0}
+      />
       {/* Ambient background */}
       <div id="atmos">
         <div className="glow g1" />
@@ -810,11 +845,28 @@ function Dashboard() {
             Loading clients…
           </p>
         ) : filteredRows.length === 0 ? (
-          <p className="sub" style={{ textAlign: "center", padding: "40px 0" }}>
-            {clientRows.length === 0
-              ? "No clients yet. Add your first client to start tracking."
-              : "No clients match your search."}
-          </p>
+          <div style={{ textAlign: "center", padding: "48px 16px" }}>
+            {clientRows.length === 0 ? (
+              <>
+                <p className="sub" style={{ marginBottom: 8, fontSize: 15 }}>
+                  Start with one practice client
+                </p>
+                <p className="sub" style={{ marginBottom: 20, maxWidth: 420, marginInline: "auto" }}>
+                  Add a sandbox client, upload ~3 months of bank statements, and walk the full
+                  advisory board once — then onboard your paying clients the same way.
+                </p>
+                <button
+                  className="btn gold"
+                  type="button"
+                  onClick={() => setFirstClientOpen(true)}
+                >
+                  Create practice demo client
+                </button>
+              </>
+            ) : (
+              <p className="sub">No clients match your search.</p>
+            )}
+          </div>
         ) : (
           <table className="ctable">
             <thead>
@@ -998,10 +1050,37 @@ function Dashboard() {
       {/* ===== ADD CLIENT DIALOG ===== */}
       {user && (
         <AddClientDialog
-          open={addOpen}
-          onClose={() => setAddOpen(false)}
-          onAdded={() => void load(firmId, user.id)}
+          open={addOpen || firstClientOpen}
+          onClose={() => {
+            setAddOpen(false);
+            if (firstClientOpen) {
+              // Allow skip — don't block forever
+              markOnboardingDone(ACCOUNTANT_FIRST_CLIENT_KEY);
+              setFirstClientOpen(false);
+            }
+          }}
+          onAdded={(created) => {
+            markOnboardingDone(ACCOUNTANT_FIRST_CLIENT_KEY);
+            const wasFirst = firstClientOpen;
+            setFirstClientOpen(false);
+            setAddOpen(false);
+            void load(firmId, user.id);
+            if (wasFirst && created.id) {
+              navigate({
+                to: "/clients/$clientId",
+                params: { clientId: created.id },
+                search: { onboard: "1" },
+              });
+            }
+          }}
           firmId={firm?.id ?? firmId}
+          defaultName={firstClientOpen ? PRACTICE_TEST_CLIENT_NAME : ""}
+          heading={firstClientOpen ? "Your first practice client" : "Add a client"}
+          blurb={
+            firstClientOpen
+              ? "Use a sandbox client to learn the workflow — upload statements, check Business Health, then add real clients."
+              : undefined
+          }
         />
       )}
 
