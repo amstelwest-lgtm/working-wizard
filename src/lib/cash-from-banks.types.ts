@@ -43,6 +43,15 @@ export type CashStatementTransaction = {
   counterparty: string | null;
   ai_bucket: CashBucket;
   excluded: boolean;
+  /** Which bank account this line belongs to (multi-account uploads). */
+  account_label?: string | null;
+};
+
+export type CashBankAccountSummary = {
+  account_label: string;
+  opening_balance: number | null;
+  closing_balance: number | null;
+  file_names: string[];
 };
 
 export type CashForecastDraftLine = {
@@ -69,6 +78,8 @@ export type CashBankExtract = {
   currency: string | null;
   transactions: CashStatementTransaction[];
   notes: string | null;
+  /** Per-account balances when multiple bank accounts were uploaded. */
+  accounts?: CashBankAccountSummary[];
 };
 
 export type CashForecastPublishPayload = {
@@ -117,6 +128,8 @@ export type CashFromBanksDraftResult = {
   startDate: string;
   openingBalance: number;
   warnings: string[];
+  /** Movements trial balance + bank tie-out checks (client-facing). */
+  movements?: import("@/lib/bank-movements").MovementsTrialBalance;
 };
 
 export function cadenceToFrequency(cadence: CashCadence): ForecastFrequency {

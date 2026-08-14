@@ -1862,6 +1862,7 @@ function Index() {
   const [showFinData, setShowFinData] = useState(false);
   const [showBankDrafter, setShowBankDrafter] = useState(false);
   const [showCashFromBanks, setShowCashFromBanks] = useState(false);
+  const [bankCashDraft, setBankCashDraft] = useState<import("@/lib/cash-from-banks.types").CashFromBanksDraftResult | null>(null);
   const [cashForecastReloadToken, setCashForecastReloadToken] = useState(0);
   const [existingCashflowForBanks, setExistingCashflowForBanks] = useState<Record<string, unknown> | null>(null);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
@@ -2445,8 +2446,8 @@ function Index() {
                 Upload 3 months of bank statements
               </DialogTitle>
               <DialogDescription className="text-slate-400">
-                Fastest path: drop the last ~3 months of statements. We draft your P&amp;L,
-                pre-fill budget, and can build a cash forecast — then we walk you through Business Health.
+                Fastest path: drop the last ~3 months of statements (add every bank account). We draft your P&amp;L,
+                pre-fill budget, build a cash forecast, and show movements in balances — from one upload.
               </DialogDescription>
             </DialogHeader>
             <div className="flex flex-col gap-3 pt-2">
@@ -3379,10 +3380,11 @@ function Index() {
       <BankStatementDrafter
         open={showBankDrafter}
         onClose={() => setShowBankDrafter(false)}
-        onApply={async ({ fields, annualised }) => {
+        onApply={async ({ fields, annualised, cashDraft }) => {
           setV((prev) => ({ ...prev, ...fields } as Inputs));
           setHasRealFinancials(true);
           setShowBankDrafter(false);
+          setBankCashDraft(cashDraft ?? null);
           toast.success(
             annualised
               ? "Draft figures applied (annualised) — saved automatically."
@@ -3435,7 +3437,7 @@ function Index() {
             }
           }
 
-          // Next natural step in onboarding: cash forecast from the same statements.
+          // Same statement pack → cash forecast (no re-upload).
           setTimeout(() => setShowCashFromBanks(true), 400);
         }}
       />
@@ -3443,7 +3445,11 @@ function Index() {
       {/* Bank statement → preliminary cash forecast (Phases 1–3) */}
       <CashFromBanksDrafter
         open={showCashFromBanks}
-        onClose={() => setShowCashFromBanks(false)}
+        onClose={() => {
+          setShowCashFromBanks(false);
+          setBankCashDraft(null);
+        }}
+        initialDraft={bankCashDraft}
         existingCashflow={existingCashflowForBanks as never}
         onSaveDraft={async (draft) => {
           if (!effectiveClientId) return;
@@ -3487,6 +3493,7 @@ function Index() {
             if (retry.error) throw new Error(retry.error.message);
           }
           setShowCashFromBanks(false);
+          setBankCashDraft(null);
           setCashForecastReloadToken((n) => n + 1);
           setActiveTab("cash");
           toast.success("Cash forecast published — review classification on the Cash Forecast tab.");

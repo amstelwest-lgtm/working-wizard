@@ -2,7 +2,7 @@
  * CashFromBanksDrafter — upload bank statements → Claude extract → Phase 4 workspace → publish.
  */
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { Loader2, Upload, FileText, X, Sparkles, Wallet } from "lucide-react";
 import { toast } from "sonner";
@@ -24,6 +24,8 @@ import {
   CashClassificationWorkspace,
   type WorkspacePublishRequest,
 } from "@/components/cash-classification-workspace";
+import { MovementsTrialBalancePanel } from "@/components/movements-trial-balance-panel";
+import { MAX_BANK_FILES } from "@/lib/bank-files";
 
 interface Props {
   open: boolean;
@@ -33,6 +35,11 @@ interface Props {
   onPublish: (payload: CashForecastPublishPayload) => void | Promise<void>;
   /** Optional: persist working draft JSON (extract + lines) for resume */
   onSaveDraft?: (draft: CashFromBanksDraftResult) => void | Promise<void>;
+  /**
+   * Pre-built cash draft from the shared bank onboarding pack.
+   * When set, skip the upload step and open the classification workspace.
+   */
+  initialDraft?: CashFromBanksDraftResult | null;
 }
 
 export function CashFromBanksDrafter({
@@ -41,6 +48,7 @@ export function CashFromBanksDrafter({
   existingCashflow = null,
   onPublish,
   onSaveDraft,
+  initialDraft = null,
 }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [files, setFiles] = useState<File[]>([]);
@@ -51,6 +59,22 @@ export function CashFromBanksDrafter({
   const [startDate, setStartDate] = useState("");
   const [openingBalance, setOpeningBalance] = useState("0");
   const doDraft = useServerFn(draftCashForecastFromBankStatements);
+
+  const hydrate = (draft: CashFromBanksDraftResult) => {
+    setResult(draft);
+    setLines(draft.lines);
+    setStartDate(draft.startDate);
+    setOpeningBalance(String(draft.openingBalance));
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    if (initialDraft) {
+      hydrate(initialDraft);
+      void onSaveDraft?.(initialDraft);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, initialDraft]);
 
   const reset = () => {
     setFiles([]);
@@ -73,12 +97,12 @@ export function CashFromBanksDrafter({
         toast.error(`"${f.name}" is larger than 10 MB.`);
         continue;
       }
-      if (next.length >= 6) {
-        toast.error("Maximum 6 statement files.");
+      if (next.length >= MAX_BANK_FILES) {
+        toast.error(`Maximum ${MAX_BANK_FILES} statement files.`);
         break;
       }
-      if (next.reduce((s, x) => s + x.size, 0) + f.size > 25 * 1024 * 1024) {
-        toast.error("Combined files exceed 25 MB.");
+      if (next.reduce((s, x) => s + x.size, 0) + f.size > 40 * 1024 * 1024) {
+        toast.error("Combined files exceed 40 MB.");
         continue;
       }
       next.push(f);
@@ -179,7 +203,9 @@ export function CashFromBanksDrafter({
             >
               <Upload className="h-6 w-6 text-[#b8860b]" />
               <p className="text-sm font-medium">Drop PDF / CSV bank statements</p>
-              <p className="text-[11px] text-slate-500">Up to 6 files · 25 MB total</p>
+              <p className="text-[11px] text-slate-500">
+                Up to {MAX_BANK_FILES} files · multiple accounts · 40 MB total
+              </p>
               <input
                 ref={inputRef}
                 type="file"
@@ -236,23 +262,31 @@ export function CashFromBanksDrafter({
         )}
 
         {result && (
-          <CashClassificationWorkspace
-            lines={lines}
-            onChange={handleLinesChange}
-            startDate={startDate}
-            openingBalance={openingBalance}
-            onStartDateChange={setStartDate}
-            onOpeningBalanceChange={setOpeningBalance}
-            transactions={result.extract.transactions}
-            warnings={result.warnings}
-            existingCashflow={existingCashflow}
-            publishing={publishing}
-            onPublish={publish}
-            onBack={() => {
-              setResult(null);
-              setLines([]);
-            }}
-          />
+          <div className="space-y-4">
+            {result.movements && <MovementsTrialBalancePanel movements={result.movements} />}
+            <CashClassificationWorkspace
+              lines={lines}
+              onChange={handleLinesChange}
+              startDate={startDate}
+              openingBalance={openingBalance}
+              onStartDateChange={setStartDate}
+              onOpeningBalanceChange={setOpeningBalance}
+              transactions={result.extract.transactions}
+              warnings={result.warnings}
+              existingCashflow={existingCashflow}
+              publishing={publishing}
+              onPublish={publish}
+              onBack={() => {
+                if (initialDraft) {
+                  reset();
+                  onClose();
+                  return;
+                }
+                setResult(null);
+                setLines([]);
+              }}
+            />
+          </div>
         )}
       </DialogContent>
     </Dialog>

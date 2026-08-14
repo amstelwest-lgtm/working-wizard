@@ -73,8 +73,10 @@ const draftSchema = z
 const DRAFT_PROMPT = `
 You are an accountant's assistant. You are given one or more BANK STATEMENTS
 for a small business (South African context; currency is usually ZAR unless the
-statements clearly show otherwise). Build a draft basic income statement from
-the transaction activity, following these rules exactly:
+statements clearly show otherwise). Files may cover MULTIPLE bank accounts
+(cheque, credit card, savings) — treat them as one consolidated business cash
+picture. Build a draft basic income statement from the transaction activity,
+following these rules exactly:
 
 1. Classify every transaction. Money IN that is clearly trading income =
    revenue. Money OUT that is clearly direct cost of goods/services sold
@@ -103,7 +105,9 @@ the transaction activity, following these rules exactly:
    period_end (latest), months_covered (rounded to 1 decimal). Do NOT annualise
    any figure — report actuals for the period only.
 8. Flag every judgement call briefly in notes (e.g. ambiguous counterparties,
-   possible personal expenses, cash deposits assumed to be sales).
+   possible personal expenses, cash deposits assumed to be sales, multi-account
+   consolidation). Silently cross-check that major bank outflows classified as
+   expenses are consistent with statement activity — call out material gaps.
 
 Return ONLY a JSON object with exactly these keys and types, no prose, no
 markdown fences:
@@ -123,6 +127,7 @@ export const draftFinancialsFromBankStatements = createServerFn({ method: "POST"
         .array(
           z.object({
             fileName: z.string(),
+            accountLabel: z.string().max(80).optional(),
             // Exactly one of base64 (PDF) or text (CSV/TXT) must be provided.
             // 14M base64 chars ≈ 10 MB per file; aggregate is checked below too.
             base64: z.string().max(14_000_000).optional(),
@@ -130,32 +135,37 @@ export const draftFinancialsFromBankStatements = createServerFn({ method: "POST"
           }),
         )
         .min(1)
-        .max(6),
+        .max(12),
     }).parse(input),
   )
   .handler(async ({ data }) => {
     let totalBytes = 0;
     const content: ClaudeContentPart[] = [];
     for (const f of data.files) {
+      const label = f.accountLabel?.trim() || "Bank account";
       if (f.base64) {
         totalBytes += Math.ceil((f.base64.length * 3) / 4);
         content.push({
           type: "document",
           source: { type: "base64", media_type: "application/pdf", data: f.base64 },
         });
+        content.push({
+          type: "text",
+          text: `The previous PDF is bank statement file "${f.fileName}" for account "${label}".`,
+        });
       } else if (f.text) {
         totalBytes += f.text.length;
         content.push({
           type: "text",
-          text: `--- Bank statement file: ${f.fileName} ---\n${f.text}`,
+          text: `--- Bank statement file: ${f.fileName} | account: ${label} ---\n${f.text}`,
         });
       } else {
         throw new Error(`File "${f.fileName}" had no readable content.`);
       }
     }
-    if (totalBytes > 25 * 1024 * 1024) {
+    if (totalBytes > 40 * 1024 * 1024) {
       throw new Error(
-        `Statements are too large (${(totalBytes / 1024 / 1024).toFixed(1)} MB total). Max 25 MB — try fewer files.`,
+        `Statements are too large (${(totalBytes / 1024 / 1024).toFixed(1)} MB total). Max 40 MB — try fewer files.`,
       );
     }
     content.push({ type: "text", text: DRAFT_PROMPT });
@@ -163,7 +173,7 @@ export const draftFinancialsFromBankStatements = createServerFn({ method: "POST"
     const raw = await callClaudeMessages({
       content,
       maxTokens: 8192,
-      timeoutMs: 120_000,
+      timeoutMs: 150_000,
     });
 
     let parsed: unknown;

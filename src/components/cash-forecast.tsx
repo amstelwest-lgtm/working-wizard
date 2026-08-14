@@ -47,7 +47,7 @@ import { listClientReviewSignoffs } from "@/lib/review-signoffs.functions";
 import type { ClientReviewSignoff } from "@/lib/review-signoffs.functions";
 import { ReviewSignoffBadge, ReviewSignoffButton, computeIsStale } from "@/components/review-signoff";
 import { CashFromBanksDrafter } from "@/components/cash-from-banks-drafter";
-import type { CashForecastPublishPayload } from "@/lib/cash-from-banks.types";
+import type { CashForecastPublishPayload, CashFromBanksDraftResult } from "@/lib/cash-from-banks.types";
 import {
   CASH_RUNWAY_THRESHOLD_RAND,
   runwayWeeksFromCashflow,
@@ -371,6 +371,7 @@ export function CashForecastPanel({
   reloadToken,
   openBankUploadToken,
   onBankPublish,
+  initialBankDraft = null,
 }: {
   clientId?: string;
   clientName?: string;
@@ -383,6 +384,8 @@ export function CashForecastPanel({
   openBankUploadToken?: number;
   /** Optional parent hook after a successful bank→cash publish (e.g. sync client cache). */
   onBankPublish?: (payload: CashForecastPublishPayload) => void;
+  /** Pre-built cash draft from shared bank onboarding — skip re-upload. */
+  initialBankDraft?: CashFromBanksDraftResult | null;
 } = {}) {
   const { profile, firmId } = useAccountantProfile();
   const { user } = useAuth();
@@ -1327,6 +1330,7 @@ export function CashForecastPanel({
         open={showBankUpload}
         onClose={() => setShowBankUpload(false)}
         existingCashflow={existingCashflowForBanks}
+        initialDraft={initialBankDraft}
         onSaveDraft={
           clientId
             ? async (draft) => {

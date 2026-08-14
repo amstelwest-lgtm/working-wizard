@@ -479,6 +479,9 @@ function ClientView() {
   const [viewMode, setViewMode] = useState<"simplified" | "complex">("simplified");
   const [cashForecastReloadToken, setCashForecastReloadToken] = useState(0);
   const [cashBankUploadToken, setCashBankUploadToken] = useState(0);
+  const [bankCashDraft, setBankCashDraft] = useState<
+    import("@/lib/cash-from-banks.types").CashFromBanksDraftResult | null
+  >(null);
 
   // Financials state (flat key-value for the fin-grid)
   const [financials, setFinancials] = useState<Record<string, string>>({});
@@ -1932,7 +1935,9 @@ function ClientView() {
               canSign
               reloadToken={cashForecastReloadToken}
               openBankUploadToken={cashBankUploadToken}
+              initialBankDraft={bankCashDraft}
               onBankPublish={(payload) => {
+                setBankCashDraft(null);
                 const runway = runwayWeeksFromCashflow(payload);
                 setClient((c) =>
                   c
@@ -2204,8 +2209,9 @@ function ClientView() {
               Upload 3 months of bank statements
             </DialogTitle>
             <DialogDescription className="text-slate-400">
-              Fastest path for this client: drop ~3 months of statements. We draft P&amp;L figures,
-              seed budget, and can build a cash forecast — then tour the workspace.
+              Fastest path for this client: drop ~3 months of statements (every bank account).
+              One pack drafts P&amp;L, seeds budget, builds cash forecast, and shows movements in
+              balances — then tour the workspace.
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-3 pt-2">
@@ -2246,12 +2252,13 @@ function ClientView() {
       <BankStatementDrafter
         open={showBankDrafter}
         onClose={() => setShowBankDrafter(false)}
-        onApply={async ({ fields, annualised }) => {
+        onApply={async ({ fields, annualised, cashDraft }) => {
           const asStrings = Object.fromEntries(
             Object.entries(fields).map(([k, v]) => [k, v != null ? String(v) : ""]),
           );
           setFinancials((prev) => ({ ...prev, ...asStrings }));
           setShowBankDrafter(false);
+          setBankCashDraft(cashDraft ?? null);
 
           const financialsUpdatedAt = new Date().toISOString();
           const merged = mergeFinancialsBlob(
@@ -2328,6 +2335,7 @@ function ClientView() {
             console.warn("budget seed after bank draft:", e);
           }
 
+          // Same statement pack → cash forecast (no re-upload).
           setTimeout(() => {
             setActiveTab("cash");
             setCashBankUploadToken((n) => n + 1);
