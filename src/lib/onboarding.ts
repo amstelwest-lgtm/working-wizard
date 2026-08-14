@@ -1,12 +1,15 @@
 /**
  * Onboarding storage keys + helpers.
  * Keep keys versioned so we can re-show improved tours once.
+ *
+ * v4 / v2 — one-time reset (Aug 2026) so existing accounts re-see the
+ * guided owner + accountant onboarding after the banks → board tour shipped.
  */
 
-export const OWNER_TOUR_KEY = "milon_walkthrough_v3";
-export const ACCOUNTANT_DASH_TOUR_KEY = "milon_accountant_dash_tour_v1";
-export const ACCOUNTANT_CLIENT_TOUR_KEY = "milon_accountant_client_tour_v1";
-export const ACCOUNTANT_FIRST_CLIENT_KEY = "milon_accountant_first_client_done_v1";
+export const OWNER_TOUR_KEY = "milon_walkthrough_v4";
+export const ACCOUNTANT_DASH_TOUR_KEY = "milon_accountant_dash_tour_v2";
+export const ACCOUNTANT_CLIENT_TOUR_KEY = "milon_accountant_client_tour_v2";
+export const ACCOUNTANT_FIRST_CLIENT_KEY = "milon_accountant_first_client_done_v2";
 
 export function onboardingDone(key: string): boolean {
   if (typeof localStorage === "undefined") return true;
@@ -16,6 +19,19 @@ export function onboardingDone(key: string): boolean {
 export function markOnboardingDone(key: string): void {
   if (typeof localStorage === "undefined") return;
   localStorage.setItem(key, "1");
+}
+
+/** Clear tour flags so guided onboarding can run again on this browser. */
+export function resetOnboardingTours(role: "owner" | "accountant" | "all" = "all"): void {
+  if (typeof localStorage === "undefined") return;
+  if (role === "owner" || role === "all") {
+    localStorage.removeItem(OWNER_TOUR_KEY);
+  }
+  if (role === "accountant" || role === "all") {
+    localStorage.removeItem(ACCOUNTANT_DASH_TOUR_KEY);
+    localStorage.removeItem(ACCOUNTANT_CLIENT_TOUR_KEY);
+    localStorage.removeItem(ACCOUNTANT_FIRST_CLIENT_KEY);
+  }
 }
 
 /** Suggested name for an accountant's first sandbox client. */

@@ -20,6 +20,7 @@ import { Route as EmailUnsubscribeRouteImport } from './routes/email/unsubscribe
 import { Route as ApiClientErrorRouteImport } from './routes/api/client-error'
 import { Route as AckTokenRouteImport } from './routes/ack.$token'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
+import { Route as AuthenticatedSettingsIndexRouteImport } from './routes/_authenticated/settings.index'
 import { Route as AuthenticatedReportsIndexRouteImport } from './routes/_authenticated/reports.index'
 import { Route as LovableEmailSuppressionRouteImport } from './routes/lovable/email/suppression'
 import { Route as ApiQboCallbackRouteImport } from './routes/api/qbo/callback'
@@ -84,6 +85,12 @@ const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedSettingsIndexRoute =
+  AuthenticatedSettingsIndexRouteImport.update({
+    id: '/settings/',
+    path: '/settings/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedReportsIndexRoute =
   AuthenticatedReportsIndexRouteImport.update({
     id: '/reports/',
@@ -154,6 +161,7 @@ export interface FileRoutesByFullPath {
   '/api/qbo/callback': typeof ApiQboCallbackRoute
   '/lovable/email/suppression': typeof LovableEmailSuppressionRoute
   '/reports/': typeof AuthenticatedReportsIndexRoute
+  '/settings/': typeof AuthenticatedSettingsIndexRoute
   '/lovable/email/queue/process': typeof LovableEmailQueueProcessRoute
   '/lovable/email/transactional/preview': typeof LovableEmailTransactionalPreviewRoute
   '/lovable/email/transactional/send': typeof LovableEmailTransactionalSendRoute
@@ -175,6 +183,7 @@ export interface FileRoutesByTo {
   '/api/qbo/callback': typeof ApiQboCallbackRoute
   '/lovable/email/suppression': typeof LovableEmailSuppressionRoute
   '/reports': typeof AuthenticatedReportsIndexRoute
+  '/settings': typeof AuthenticatedSettingsIndexRoute
   '/lovable/email/queue/process': typeof LovableEmailQueueProcessRoute
   '/lovable/email/transactional/preview': typeof LovableEmailTransactionalPreviewRoute
   '/lovable/email/transactional/send': typeof LovableEmailTransactionalSendRoute
@@ -198,6 +207,7 @@ export interface FileRoutesById {
   '/api/qbo/callback': typeof ApiQboCallbackRoute
   '/lovable/email/suppression': typeof LovableEmailSuppressionRoute
   '/_authenticated/reports/': typeof AuthenticatedReportsIndexRoute
+  '/_authenticated/settings/': typeof AuthenticatedSettingsIndexRoute
   '/lovable/email/queue/process': typeof LovableEmailQueueProcessRoute
   '/lovable/email/transactional/preview': typeof LovableEmailTransactionalPreviewRoute
   '/lovable/email/transactional/send': typeof LovableEmailTransactionalSendRoute
@@ -221,6 +231,7 @@ export interface FileRouteTypes {
     | '/api/qbo/callback'
     | '/lovable/email/suppression'
     | '/reports/'
+    | '/settings/'
     | '/lovable/email/queue/process'
     | '/lovable/email/transactional/preview'
     | '/lovable/email/transactional/send'
@@ -242,6 +253,7 @@ export interface FileRouteTypes {
     | '/api/qbo/callback'
     | '/lovable/email/suppression'
     | '/reports'
+    | '/settings'
     | '/lovable/email/queue/process'
     | '/lovable/email/transactional/preview'
     | '/lovable/email/transactional/send'
@@ -264,6 +276,7 @@ export interface FileRouteTypes {
     | '/api/qbo/callback'
     | '/lovable/email/suppression'
     | '/_authenticated/reports/'
+    | '/_authenticated/settings/'
     | '/lovable/email/queue/process'
     | '/lovable/email/transactional/preview'
     | '/lovable/email/transactional/send'
@@ -366,6 +379,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedDashboardRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/settings/': {
+      id: '/_authenticated/settings/'
+      path: '/settings'
+      fullPath: '/settings/'
+      preLoaderRoute: typeof AuthenticatedSettingsIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/reports/': {
       id: '/_authenticated/reports/'
       path: '/reports'
@@ -438,6 +458,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedReportsDemoRoute: typeof AuthenticatedReportsDemoRoute
   AuthenticatedSettingsBrandRoute: typeof AuthenticatedSettingsBrandRoute
   AuthenticatedReportsIndexRoute: typeof AuthenticatedReportsIndexRoute
+  AuthenticatedSettingsIndexRoute: typeof AuthenticatedSettingsIndexRoute
 }
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
@@ -446,6 +467,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedReportsDemoRoute: AuthenticatedReportsDemoRoute,
   AuthenticatedSettingsBrandRoute: AuthenticatedSettingsBrandRoute,
   AuthenticatedReportsIndexRoute: AuthenticatedReportsIndexRoute,
+  AuthenticatedSettingsIndexRoute: AuthenticatedSettingsIndexRoute,
 }
 
 const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(
