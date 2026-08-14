@@ -9,7 +9,6 @@ import {
 } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { sendTransactionalEmail } from "@/lib/email/send";
 import {
   createClientNote,
   deleteClientNote,
@@ -56,34 +55,40 @@ type NotesCtx = {
 
 const NotesContext = createContext<NotesCtx | null>(null);
 
-async function notifyMentions(opts: {
-  mentions: NoteMention[];
-  authorName: string;
-  clientName: string;
-  noteText: string;
-  tab: string;
-  noteId: string;
-}) {
-  const unique = new Map(opts.mentions.map((m) => [m.email.toLowerCase(), m]));
-  for (const m of unique.values()) {
-    try {
-      await sendTransactionalEmail({
-        templateName: "note-mention",
-        recipientEmail: m.email,
-        idempotencyKey: `note-mention-${opts.noteId}-${m.userId}`,
-        templateData: {
-          recipientName: m.name,
-          authorName: opts.authorName,
-          clientName: opts.clientName,
-          noteText: opts.noteText,
-          tabLabel: opts.tab,
-        },
-      });
-    } catch (e) {
-      console.warn("note mention email failed", e);
-      toast.warning(`Note saved — email to ${m.name} failed`);
-    }
+function toastEmailResult(
+  emailResult:
+    | { sent: string[]; failed: Array<{ email: string; error: string }> }
+    | undefined,
+  mentionCount: number,
+) {
+  if (mentionCount <= 0) {
+    toast.success("Note saved");
+    return;
   }
+  const sent = emailResult?.sent?.length ?? 0;
+  const failed = emailResult?.failed ?? [];
+  if (sent > 0 && failed.length === 0) {
+    toast.success(`Note saved · emailed ${sent} tagged ${sent === 1 ? "person" : "people"}`);
+    return;
+  }
+  if (sent > 0 && failed.length > 0) {
+    toast.warning(
+      `Note saved · emailed ${sent}, failed ${failed.length} (${failed[0]?.error ?? "email error"})`,
+    );
+    return;
+  }
+  if (failed.length > 0) {
+    const err = failed[0]?.error ?? "email failed";
+    if (/RESEND_API_KEY not configured/i.test(err)) {
+      toast.warning(
+        "Note saved · mention email not sent (Resend API key not configured in this environment)",
+      );
+    } else {
+      toast.warning(`Note saved · email not sent: ${err}`);
+    }
+    return;
+  }
+  toast.success("Note saved");
 }
 
 export function NotesProvider({ children }: { children: ReactNode }) {
@@ -174,23 +179,12 @@ export function NotesProvider({ children }: { children: ReactNode }) {
           },
         });
         setNotes((prev) => [...prev, res.note]);
-        if (res.notifyMentions.length > 0) {
-          void notifyMentions({
-            mentions: res.notifyMentions,
-            authorName: res.authorName,
-            clientName,
-            noteText: input.text,
-            tab: surface.tab,
-            noteId: res.note.id,
-          });
-          toast.success(
-            `Note saved · emailed ${res.notifyMentions.length} tagged ${
-              res.notifyMentions.length === 1 ? "person" : "people"
-            }`,
-          );
-        } else {
-          toast.success("Note saved");
-        }
+        toastEmailResult(
+          res.emailResult as
+            | { sent: string[]; failed: Array<{ email: string; error: string }> }
+            | undefined,
+          res.notifyMentions.length,
+        );
         return res.note;
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "Failed to save note");
@@ -254,16 +248,11 @@ export function NotesProvider({ children }: { children: ReactNode }) {
           ),
         );
         if (res.notifyMentions.length > 0) {
-          void notifyMentions({
-            mentions: res.notifyMentions,
-            authorName: res.authorName,
-            clientName,
-            noteText: text,
-            tab: surface.tab,
-            noteId: `${noteId}-reply-${res.reply.id}`,
-          });
-          toast.success(
-            `Reply saved · emailed ${res.notifyMentions.length} tagged`,
+          toastEmailResult(
+            res.emailResult as
+              | { sent: string[]; failed: Array<{ email: string; error: string }> }
+              | undefined,
+            res.notifyMentions.length,
           );
         }
       } catch (e) {

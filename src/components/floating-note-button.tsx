@@ -3,7 +3,8 @@ import { toast } from "sonner";
 import { useNotes } from "@/contexts/notes";
 
 export function FloatingNoteButton() {
-  const { pinMode, setPinMode, surface } = useNotes();
+  const { pinMode, setPinMode, surface, getNotesForTab } = useNotes();
+  const count = surface?.clientId ? getNotesForTab(surface.tab).length : 0;
 
   return (
     <button
@@ -19,7 +20,9 @@ export function FloatingNoteButton() {
           ? "Open a client to pin notes"
           : pinMode
             ? "Cancel pin mode"
-            : "Pin a note on this page"
+            : count > 0
+              ? `Pin a note (${count} on this tab)`
+              : "Pin a note on this page"
       }
       className={`fixed bottom-20 right-4 z-50 flex h-10 w-10 items-center justify-center rounded-full border backdrop-blur-md transition-all duration-200 ${
         !surface?.clientId
@@ -30,6 +33,11 @@ export function FloatingNoteButton() {
       }`}
     >
       {pinMode ? <X className="h-4 w-4" /> : <PenLine className="h-4 w-4" />}
+      {count > 0 && !pinMode && (
+        <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#d4a550] px-1 text-[9px] font-bold text-[#0a1628]">
+          {count > 9 ? "9+" : count}
+        </span>
+      )}
     </button>
   );
 }

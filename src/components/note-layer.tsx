@@ -59,7 +59,7 @@ function MentionComposer({
 
   function detectMention(next: string, caret: number) {
     const before = next.slice(0, caret);
-    const m = before.match(/@([a-zA-Z0-9._-]*)$/);
+    const m = before.match(/@([a-zA-Z0-9._%+-@]*)$/);
     if (m) {
       setMentionQuery(m[1]);
       setMentionIndex(0);
@@ -155,7 +155,29 @@ function MentionComposer({
       )}
       {mentionQuery != null && suggestions.length === 0 && (
         <div className="absolute left-0 right-0 top-full z-10 mt-1 rounded-xl border border-black/10 bg-white px-3 py-2 text-[11px] text-slate-500 shadow-lg dark:border-white/10 dark:bg-[#16233d]">
-          No matching person with an email on this client
+          {/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mentionQuery) ? (
+            <button
+              type="button"
+              className="w-full text-left text-[#b8860b] hover:underline"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                const email = mentionQuery.toLowerCase();
+                const caret = inputRef?.current?.selectionStart ?? value.length;
+                const before = value.slice(0, caret);
+                const after = value.slice(caret);
+                const replaced = before.replace(
+                  /@([a-zA-Z0-9._%+-@]*)$/,
+                  `@${email} `,
+                );
+                onChange(replaced + after);
+                setMentionQuery(null);
+              }}
+            >
+              Notify {mentionQuery} by email
+            </button>
+          ) : (
+            <>Type @name or a full email (name@company.com) to notify</>
+          )}
         </div>
       )}
     </div>
@@ -271,6 +293,17 @@ export function NoteLayer({ clientId, tab, authorName, clientName, onNotesChange
   }
 
   if (!mounted || !clientId) return null;
+
+  const openNote = (noteId: string) => {
+    const note = tabNotes.find((n) => n.id === noteId);
+    if (!note) return;
+    // Scroll so the pin is near the middle of the viewport, then open it.
+    const targetY = Math.max(0, note.y - window.innerHeight * 0.4);
+    window.scrollTo({ top: targetY, behavior: "smooth" });
+    setOpenNoteId(noteId);
+    setScrollY(window.scrollY);
+  };
+
   if (!pinMode && tabNotes.length === 0 && !composing) return null;
 
   const overlay = (
@@ -282,6 +315,53 @@ export function NoteLayer({ clientId, tab, authorName, clientName, onNotesChange
         />
       )}
 
+      {/* Always-visible tray so notes remain findable after hard refresh / scroll */}
+      {tabNotes.length > 0 && (
+        <div
+          data-note="true"
+          className="fixed bottom-32 right-4 z-[99993] w-[260px] max-h-[40vh] overflow-y-auto rounded-2xl border border-[#d4a550]/30 bg-white/95 p-2 shadow-xl backdrop-blur dark:border-[#d4a550]/25 dark:bg-[#0d1525]/95"
+        >
+          <div className="mb-1.5 px-2 pt-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b8860b]">
+            Notes on this tab · {tabNotes.length}
+          </div>
+          <ul className="space-y-1">
+            {tabNotes.map((n) => (
+              <li key={n.id}>
+                <button
+                  type="button"
+                  onClick={() => openNote(n.id)}
+                  className={`flex w-full items-start gap-2 rounded-xl px-2 py-1.5 text-left text-[11px] transition hover:bg-[#d4a550]/10 ${
+                    openNoteId === n.id ? "bg-[#d4a550]/15" : ""
+                  }`}
+                >
+                  <span
+                    className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[9px] font-bold ${
+                      n.resolved
+                        ? "bg-emerald-600/20 text-emerald-500"
+                        : "bg-[#d4a550]/25 text-[#b8860b]"
+                    }`}
+                  >
+                    {n.resolved ? "✓" : getInitials(n.author)}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-semibold text-slate-800 dark:text-slate-100">
+                      {n.author}
+                    </span>
+                    <span
+                      className={`block truncate text-slate-500 dark:text-slate-400 ${
+                        n.resolved ? "line-through" : ""
+                      }`}
+                    >
+                      {n.text}
+                    </span>
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {tabNotes.map((note) => {
         const vpX = note.x - window.scrollX;
         const vpY = note.y - scrollY;
@@ -290,7 +370,9 @@ export function NoteLayer({ clientId, tab, authorName, clientName, onNotesChange
           vpX < window.innerWidth + 60 &&
           vpY > -60 &&
           vpY < window.innerHeight + 60;
-        if (!inView) return null;
+        // Keep open notes visible even if slightly off-screen; otherwise only
+        // render pins in view (tray still lists everything).
+        if (!inView && openNoteId !== note.id) return null;
 
         return (
           <div
