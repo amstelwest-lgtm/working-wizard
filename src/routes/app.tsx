@@ -1631,6 +1631,14 @@ function Index() {
       });
   }, [effectiveClientId, userRole, actingClientId]);
 
+  // Settings → Business profile deep-link
+  useEffect(() => {
+    if (typeof sessionStorage === "undefined") return;
+    if (sessionStorage.getItem("milon_open_profile") !== "1") return;
+    sessionStorage.removeItem("milon_open_profile");
+    setShowOnboarding(true);
+  }, []);
+
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data: { user: u } }) => {
       if (!u) return;
@@ -2355,6 +2363,13 @@ function Index() {
             )}
             <ThemeToggle />
             <HeaderShareButton />
+            <button
+              onClick={() => navigate({ to: "/settings" })}
+              className="inline-flex h-9 items-center rounded-xl border border-slate-200 bg-slate-50/80 px-3 text-[9px] font-semibold uppercase tracking-[0.16em] text-slate-600 transition-all hover:-translate-y-0.5 hover:border-[#b7872a]/50 hover:bg-[#d4a550]/10 dark:border-slate-700/80 dark:bg-slate-900/70 dark:text-slate-300"
+              title="Settings"
+            >
+              Settings
+            </button>
             <button
               onClick={() => signOut().then(() => { window.location.href = "/"; })}
               className="inline-flex h-9 items-center rounded-xl border border-slate-200 bg-slate-50/80 px-3 text-[9px] font-semibold uppercase tracking-[0.16em] text-slate-600 transition-all hover:-translate-y-0.5 hover:border-[#b7872a]/50 hover:bg-[#d4a550]/10 dark:border-slate-700/80 dark:bg-slate-900/70 dark:text-slate-300"

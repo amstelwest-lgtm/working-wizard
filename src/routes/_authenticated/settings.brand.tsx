@@ -174,11 +174,11 @@ function BrandSettingsPage() {
         {/* Back nav */}
         <div className="flex items-center gap-3">
           <Link
-            to="/dashboard"
+            to="/settings"
             className="flex items-center gap-1.5 text-sm text-slate-400 hover:text-slate-200 transition-colors"
           >
             <ArrowLeft className="h-4 w-4" />
-            Back to Dashboard
+            Back to Settings
           </Link>
         </div>
 
