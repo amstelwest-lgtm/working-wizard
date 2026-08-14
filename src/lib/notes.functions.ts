@@ -5,6 +5,7 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { getSupabaseAdminOrNull } from "@/integrations/supabase/client.server";
 import type { Database } from "@/integrations/supabase/types";
+import { dispatchNoteMentionEmails } from "@/lib/note-mention-email";
 
 export type NoteMention = {
   userId: string;
@@ -138,7 +139,8 @@ function mapReply(row: Record<string, unknown>): NoteReply {
 }
 
 const mentionSchema = z.object({
-  userId: z.string().uuid(),
+  /** Auth user id, or `ext:<email>` for external notify-only tags. */
+  userId: z.string().min(1).max(200),
   email: z.string().email().max(200),
   name: z.string().min(1).max(120),
   handle: z.string().min(1).max(64),
@@ -162,6 +164,10 @@ function authorFromUser(user: {
   };
 }
 
+function externalMentionId(email: string): string {
+  return `ext:${email.trim().toLowerCase()}`;
+}
+
 /** Everyone with access to this client who can be @mentioned. */
 export const listNoteCollaborators = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
@@ -172,16 +178,61 @@ export const listNoteCollaborators = createServerFn({ method: "GET" })
     if (userErr || !userData?.user) throw new Error("Not authenticated");
     await assertClientAccess(userData.user.id, data.clientId, sb);
 
-    // Prefer service-role when present; otherwise use the caller's RLS session.
-    // Lovable Cloud often has no SUPABASE_SERVICE_ROLE_KEY — never throw for that.
+    const loose = sb as unknown as LooseSb;
+
+    // Prefer SECURITY DEFINER RPC (works without service-role).
+    const { data: rpcRows, error: rpcErr } = await loose.rpc("list_note_collaborators", {
+      p_client_id: data.clientId,
+    });
+
+    let clientName = "Client";
+    {
+      const { data: client } = await loose
+        .from("clients")
+        .select("name")
+        .eq("id", data.clientId)
+        .maybeSingle();
+      if (client?.name) clientName = String(client.name);
+    }
+
+    if (!rpcErr && Array.isArray(rpcRows)) {
+      const collaborators: NoteCollaborator[] = [];
+      const seen = new Set<string>();
+      for (const row of rpcRows as Array<{
+        user_id: string;
+        email: string | null;
+        full_name: string | null;
+        role_label: string | null;
+      }>) {
+        const email = (row.email ?? "").trim();
+        if (!email) continue;
+        const name = (row.full_name ?? "").trim() || email.split("@")[0];
+        const handle = handleFrom(email, name);
+        const key = handle.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        collaborators.push({
+          userId: row.user_id,
+          email,
+          name,
+          handle,
+          roleLabel: row.role_label ?? "Access",
+        });
+      }
+      collaborators.sort((a, b) => a.name.localeCompare(b.name));
+      return { clientName, collaborators };
+    }
+
+    // Fallback when RPC not migrated yet — may only see own profile under RLS.
     const db = (getSupabaseAdminOrNull() ?? sb) as unknown as LooseSb;
     const { data: client, error: clientErr } = await db
       .from("clients")
-      .select("id, name, owner_user_id, firm_id, contact_email")
+      .select("id, name, owner_user_id, firm_id")
       .eq("id", data.clientId)
       .maybeSingle();
     if (clientErr) throw new Error(clientErr.message);
     if (!client) throw new Error("Client not found");
+    clientName = (client.name as string) ?? "Client";
 
     const userIds = new Set<string>();
     const roleByUser = new Map<string, string>();
@@ -244,7 +295,6 @@ export const listNoteCollaborators = createServerFn({ method: "GET" })
       });
     }
 
-    // Deduplicate by handle (prefer owner label)
     const seen = new Set<string>();
     const unique = collaborators.filter((c) => {
       const key = c.handle.toLowerCase();
@@ -254,10 +304,7 @@ export const listNoteCollaborators = createServerFn({ method: "GET" })
     });
 
     unique.sort((a, b) => a.name.localeCompare(b.name));
-    return {
-      clientName: (client.name as string) ?? "Client",
-      collaborators: unique,
-    };
+    return { clientName, collaborators: unique };
   });
 
 export const listClientNotes = createServerFn({ method: "GET" })
@@ -346,10 +393,32 @@ export const createClientNote = createServerFn({ method: "POST" })
       .single();
     if (error) throw new Error(error.message);
 
+    const mail = await (async () => {
+      let clientName = "Client";
+      try {
+        const { data: c } = await loose
+          .from("clients")
+          .select("name")
+          .eq("id", data.clientId)
+          .maybeSingle();
+        if (c?.name) clientName = String(c.name);
+      } catch {
+        /* ignore */
+      }
+      return dispatchNoteMentionEmails(mentions, {
+        authorName: author.authorName,
+        clientName,
+        noteText: data.text,
+        tabLabel: data.tab,
+        noteId: String((row as { id: string }).id),
+      });
+    })();
+
     return {
       note: mapNote(row as Record<string, unknown>, []),
       notifyMentions: mentions,
       authorName: author.authorName,
+      emailResult: mail,
     };
   });
 
@@ -377,7 +446,7 @@ export const replyToClientNote = createServerFn({ method: "POST" })
     const loose = sb as unknown as LooseSb;
     const { data: parent, error: parentErr } = await loose
       .from("client_notes")
-      .select("id, client_id")
+      .select("id, client_id, tab")
       .eq("id", data.noteId)
       .eq("client_id", data.clientId)
       .maybeSingle();
@@ -399,10 +468,31 @@ export const replyToClientNote = createServerFn({ method: "POST" })
       .single();
     if (error) throw new Error(error.message);
 
+    let clientName = "Client";
+    try {
+      const { data: c } = await loose
+        .from("clients")
+        .select("name")
+        .eq("id", data.clientId)
+        .maybeSingle();
+      if (c?.name) clientName = String(c.name);
+    } catch {
+      /* ignore */
+    }
+
+    const emailResult = await dispatchNoteMentionEmails(mentions, {
+      authorName: author.authorName,
+      clientName,
+      noteText: data.text,
+      tabLabel: String(parent.tab ?? ""),
+      noteId: `${data.noteId}-reply-${(row as { id: string }).id}`,
+    });
+
     return {
       reply: mapReply(row as Record<string, unknown>),
       notifyMentions: mentions,
       authorName: author.authorName,
+      emailResult,
     };
   });
 
@@ -474,14 +564,17 @@ export const deleteClientNote = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-/** Match @handles in free text against the collaborator directory. */
+/** Match @handles and @emails in free text against the collaborator directory. */
 export function extractMentionsFromText(
   text: string,
   collaborators: NoteCollaborator[],
 ): NoteMention[] {
-  if (!text || collaborators.length === 0) return [];
+  if (!text) return [];
   const byHandle = new Map(
     collaborators.map((c) => [c.handle.toLowerCase(), c]),
+  );
+  const byEmail = new Map(
+    collaborators.map((c) => [c.email.toLowerCase(), c]),
   );
   // Also allow @FirstName when unique
   for (const c of collaborators) {
@@ -490,9 +583,36 @@ export function extractMentionsFromText(
   }
 
   const found = new Map<string, NoteMention>();
+
+  // Full emails: @name@domain.com or bare name@domain.com after @
+  const emailRe = /@([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/g;
+  let em: RegExpExecArray | null;
+  while ((em = emailRe.exec(text)) !== null) {
+    const email = em[1].toLowerCase();
+    const hit = byEmail.get(email);
+    if (hit) {
+      found.set(hit.userId, {
+        userId: hit.userId,
+        email: hit.email,
+        name: hit.name,
+        handle: hit.handle,
+      });
+    } else {
+      const id = externalMentionId(email);
+      found.set(id, {
+        userId: id,
+        email,
+        name: email.split("@")[0],
+        handle: email,
+      });
+    }
+  }
+
+  // Handles (skip tokens that are already full emails)
   const re = /@([a-zA-Z0-9._-]+)/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(text)) !== null) {
+    if (m[1].includes("@")) continue;
     const hit = byHandle.get(m[1].toLowerCase());
     if (hit) {
       found.set(hit.userId, {
