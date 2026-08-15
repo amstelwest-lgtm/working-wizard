@@ -509,7 +509,7 @@ export default function ActionPlanPanel({ clientId, clientName, simplified, isOw
   const drawerItem = drawerId ? enriched.find((i) => i.id === drawerId) ?? null : null;
 
   return (
-    <div className="space-y-5">
+    <div id="wizard-action-plan" className="space-y-5">
       <GoalHeader plan={plan} confidence={confidence} isOwner={isOwner} onChange={async (patch) => {
         setPlan({ ...plan, ...patch });
         const { error } = await supabase.from("action_plans").update(patch).eq("id", plan.id);
@@ -521,7 +521,7 @@ export default function ActionPlanPanel({ clientId, clientName, simplified, isOw
       )}
 
       {/* ── The table ── */}
-      <Card className={CARD_SHELL}>
+      <Card id="wizard-action-list" className={CARD_SHELL}>
         <div className={GOLD_RULE} />
         <CardHeader className="border-b border-amber-900/10 pb-4 dark:border-slate-800">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -709,7 +709,7 @@ function GoalHeader({ plan, confidence, isOwner = true, onChange }: {
   })();
 
   return (
-    <Card className={CARD_SHELL}>
+    <Card id="wizard-action-goal" className={CARD_SHELL}>
       <div className={GOLD_RULE} />
       <CardContent className="pt-6">
         <div className="flex flex-wrap items-start justify-between gap-4">

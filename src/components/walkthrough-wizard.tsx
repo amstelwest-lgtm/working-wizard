@@ -30,56 +30,56 @@ const SPOT_PAD = 10;
 const ORB_PAD = 4;
 const CARD_GAP = 20;
 
-/** Owner: profile+banks happen before this tour; here we walk the product once. */
+/** Owner: profile+banks happen before this tour; walk the operating board once. */
 const OWNER_STEPS: Step[] = [
   {
     tab: "today",
     targetId: ".health-orb",
     section: "Business Health",
-    title: "Your health score in one glance",
-    body: "This single number summarises profit, assets, financing and cash. Higher is healthier. Everything below explains what is driving it.",
+    title: "Start here — one health score",
+    body: "This orb is your weekly pulse: profit, assets, financing and cash rolled into one number. Tap it anytime to drill into the four pillars.",
   },
   {
     tab: "today",
     targetId: "ask-ai-overview",
     section: "Ask AI",
-    title: "Ask anything about these numbers",
-    body: "Type a plain-English question — cash squeeze, margin drop, what to fix first. Answers stay grounded in this client's figures.",
+    title: "Ask in plain English",
+    body: "Sitting under the score is Ask AI. Try “why is cash tight?” or “what should I fix first?” — answers stay grounded in your uploaded figures.",
   },
   {
     tab: "waterfall",
     targetId: "wizard-profit-walk",
     section: "Profit",
-    title: "See where profit is made or lost",
-    body: "This waterfall is the profit walk — revenue down to net profit, step by step. Use it when you need to explain a margin miss to yourself or your accountant.",
+    title: "Follow the money down the waterfall",
+    body: "Profit shows how revenue becomes net profit, step by step. Use it when a margin looks wrong or you need to explain the story to someone else.",
   },
   {
     tab: "cash",
     targetId: "wizard-cash-outlook, wizard-cash-table, wizard-cash-panel",
     section: "Cash Forecast",
-    title: "See cash 13 weeks ahead",
-    body: "Cash Outlook shows your closing balance trajectory and flags tight weeks early. Bank statements can draft this — update it whenever timing changes.",
+    title: "Look 13 weeks ahead on cash",
+    body: "Cash Outlook shows closing balances and flags shortfall weeks early. Keep this current — bank statements can draft it for you.",
   },
   {
     tab: "budget",
     targetId: "wizard-budget-plan, wizard-budget-panel",
     section: "Budget",
-    title: "Your living annual budget",
-    body: "This plan is seeded from your profile and figures — revenue, costs, and cash by month. Scroll down later to upload a monthly P&L for Budget vs Actuals.",
+    title: "Your year plan, already seeded",
+    body: "This is the living budget — months of revenue, costs and cash from your profile and figures. Further down you can upload a monthly P&L for Budget vs Actuals.",
   },
   {
     tab: "next",
-    targetId: "wizard-moves-list",
+    targetId: "wizard-moves-hero, wizard-moves-list",
     section: "Next moves",
-    title: "Ranked moves, not a to-do dump",
-    body: "We surface the highest-impact actions from your live ratios. Start at the top — that is usually the fastest way to lift the score.",
+    title: "What to do next — ranked",
+    body: "Milōn turns the live ratios into a short priority list. Start at the top. When you’re ready to own a move, send it into the Action Plan.",
   },
   {
     tab: "tasks",
-    targetId: "wizard-tasks-panel",
+    targetId: "wizard-action-goal, wizard-action-list, wizard-action-plan, wizard-tasks-panel",
     section: "Action Plan",
-    title: "Turn advice into an action plan",
-    body: "Assign owners, track progress, and keep one shared plan with your accountant. You are ready — explore freely, or re-open any tab anytime.",
+    title: "Turn moves into owned work",
+    body: "Set the quarter outcome up top, then add actions underneath — assign people, track progress, and keep one shared plan with your accountant. You’re set — explore any tab anytime.",
   },
 ];
 
@@ -87,26 +87,26 @@ const ACCOUNTANT_DASH_STEPS: Step[] = [
   {
     targetId: "wizard-practice-board",
     section: "Practice",
-    title: "Your whole book, one screen",
-    body: "Every client's health score in one place. Sort by who needs attention first — before they call in a panic.",
+    title: "Your whole book at a glance",
+    body: "Health, runway and status for every client — so you know who needs attention before they call.",
   },
   {
     targetId: ".ctable tbody tr, .client-card, [data-client-row]",
     section: "Clients",
     title: "Open a client workspace",
-    body: "Click a client to enter their operating board: health, cash, budget, reports and action plan — the same truth the owner sees.",
+    body: "Click any row to enter their board — same health, cash, budget and plan the owner sees, ready for an advisory conversation.",
   },
   {
     targetId: "wizard-dash-reports",
     section: "Reports",
-    title: "Deliverables you can charge for",
-    body: "From a client workspace, generate branded advisory PDFs in a few clicks. That is your recurring advisory layer.",
+    title: "Reports you can charge for",
+    body: "Reports studio is where branded PDFs live. Generate them from inside a client workspace after the numbers are solid.",
   },
   {
     targetId: "wizard-add-client",
-    section: "First client",
+    section: "Grow the book",
     title: "Add the next client the same way",
-    body: "Use Add client for each new SME, upload their bank statements, then walk Health → Cash → Budget → Reports → Action Plan once.",
+    body: "Use Add client, upload ~3 months of banks, then walk Health → Cash → Budget → Reports → Action Plan once. That loop is the practice.",
   },
 ];
 
@@ -114,58 +114,58 @@ const ACCOUNTANT_CLIENT_STEPS: Step[] = [
   {
     tab: "ratios",
     targetId: "finCollapse",
-    section: "Upload",
-    title: "Bank statements first",
-    body: "Upload ~3 months of bank statements (or a P&L PDF) so health, budget and cash have real figures. Use “Draft from banks” on Health & Ratios.",
+    section: "Figures",
+    title: "Get real numbers on the board",
+    body: "Open this panel to draft from bank statements or enter figures — health, cash and budget stay empty until something lands here.",
   },
   {
     tab: "ratios",
     targetId: ".health-orb",
     section: "Business Health",
-    title: "Read the health score with the owner",
-    body: "Same orb the SME sees. Drill pillars to explain what is driving the score before you prescribe fixes.",
+    title: "Read the score with the owner",
+    body: "Same orb the SME sees. Drill the pillars so you can explain what’s driving the number before you prescribe fixes.",
   },
   {
     tab: "ratios",
     targetId: "ask-ai-accountant",
     section: "Ask AI",
-    title: "Ask against live client numbers",
-    body: "Plain-English questions stay grounded in this client's figures — useful in prep calls and review meetings.",
+    title: "Prep with Ask AI",
+    body: "Ask against this client’s live figures before a call — useful for “what changed?” and “what’s the first move?”",
   },
   {
     tab: "profit",
     targetId: "wizard-profit-walk",
     section: "Profit",
-    title: "Show the profit walk",
-    body: "This waterfall is the profit walk — how revenue becomes net profit. Use it when margins slip or the owner asks where money went.",
+    title: "Walk profit together",
+    body: "The waterfall is the profit story — revenue to net. Use it when margins slip or the owner asks where the money went.",
   },
   {
     tab: "cash",
     targetId: "wizard-cash-outlook, wizard-cash-table, wizard-cash-panel",
     section: "Cash Forecast",
-    title: "13-week cash is your signature view",
-    body: "Cash Outlook shows closing balances and crunch weeks early. Bank statements can draft this forecast — align the owner on collections or spend timing.",
+    title: "Cash is your signature view",
+    body: "Thirteen weeks of closing balances and crunch weeks. Align the owner on collections or spend timing before a shortfall hits.",
   },
   {
     tab: "budget",
     targetId: "wizard-budget-plan, wizard-budget-panel",
     section: "Budget",
-    title: "Budget pre-filled from figures",
-    body: "After a bank draft we seed the annual plan here. Budget vs Actuals sits underneath — upload each month’s P&L when management accounts land.",
+    title: "Annual plan, then monthly truth",
+    body: "The seeded budget is the plan. Budget vs Actuals underneath is where monthly management accounts land.",
   },
   {
     tab: "reports",
     targetId: "pane-reports",
     section: "Reports",
-    title: "Board-ready deliverables",
-    body: "Generate branded advisory PDFs from this workspace — the product your practice can charge for repeatedly.",
+    title: "Deliver branded advice",
+    body: "Pick a deliverable, sign off the numbers, and generate a board-ready PDF — the recurring product for the practice.",
   },
   {
     tab: "plan",
-    targetId: "pane-plan",
+    targetId: "wizard-action-goal, wizard-action-list, wizard-action-plan, pane-plan",
     section: "Action Plan",
-    title: "Lock an action plan together",
-    body: "Turn ranked moves into an owned plan the SME can follow. Then add your next real client the same way.",
+    title: "Leave with an owned plan",
+    body: "Lock the outcome goal and the actions the SME will run. Same plan they see in their app — then move to the next client.",
   },
 ];
 
@@ -229,15 +229,17 @@ function measureSpot(el: Element): Spot {
   let spotTop = top - pad;
   let spotLeft = left - pad;
 
-  const maxH = Math.min(vh * 0.48, 420);
+  // Keep the hole compact so the tour card has room beside/below the feature
+  const maxH = Math.min(vh * 0.40, 360);
   if (height > maxH) {
     height = maxH;
-    spotTop = Math.max(10, Math.min(spotTop, vh - maxH - 10));
+    // Anchor to the visible top of the target — don't float the hole mid-page
+    spotTop = Math.max(10, Math.min(top - pad, vh - maxH - 12));
   }
-  const maxW = Math.min(vw * 0.94, vw - 20);
+  const maxW = Math.min(vw * 0.92, vw - 24);
   if (width > maxW) {
     width = maxW;
-    spotLeft = Math.max(10, (vw - maxW) / 2);
+    spotLeft = Math.max(12, Math.min(left - pad, vw - maxW - 12));
   }
 
   return {
@@ -245,7 +247,7 @@ function measureSpot(el: Element): Spot {
     left: spotLeft,
     width,
     height,
-    radius: readRadius(el, r.width, r.height, pad),
+    radius: readRadius(el, Math.min(r.width, width - pad * 2), Math.min(r.height, height - pad * 2), pad),
   };
 }
 
@@ -255,7 +257,7 @@ function cardLayoutForSpot(
   cardH: number,
 ): { top: number; maxHeight: number } {
   const vh = window.innerHeight;
-  const ideal = Math.min(Math.max(cardH, 180), Math.min(vh * 0.52, 420));
+  const ideal = Math.min(Math.max(cardH, 160), Math.min(vh * 0.44, 360));
   if (!spot) {
     return { top: Math.max(12, vh - ideal - 28), maxHeight: ideal };
   }
@@ -263,11 +265,14 @@ function cardLayoutForSpot(
   const belowTop = spot.top + spot.height + CARD_GAP;
   const spaceBelow = Math.max(0, vh - belowTop - 12);
   const spaceAbove = Math.max(0, spot.top - CARD_GAP - 12);
+  const targetInUpperHalf = spot.top + spot.height / 2 < vh * 0.5;
 
-  // Prefer below when the card fits (or when below has more room)
-  if (spaceBelow >= Math.min(ideal, 200) || spaceBelow >= spaceAbove) {
-    const maxHeight = Math.min(ideal, Math.max(140, spaceBelow));
-    return { top: belowTop, maxHeight };
+  // Prefer below when the feature sits in the upper half (normal flow)
+  if (targetInUpperHalf && spaceBelow >= 120) {
+    return { top: belowTop, maxHeight: Math.min(ideal, Math.max(140, spaceBelow)) };
+  }
+  if (spaceBelow >= Math.min(ideal, 180) || spaceBelow >= spaceAbove) {
+    return { top: belowTop, maxHeight: Math.min(ideal, Math.max(140, spaceBelow)) };
   }
 
   const maxHeight = Math.min(ideal, Math.max(140, spaceAbove));
@@ -278,12 +283,11 @@ function cardLayoutForSpot(
 function scrollTargetAwayFromCard(el: Element, cardH: number) {
   const r = el.getBoundingClientRect();
   const vh = window.innerHeight;
-  const room = Math.min(cardH + CARD_GAP + 24, vh * 0.42);
-  // Leave room below the target for the card
-  const desiredCenter = Math.min(vh * 0.36, vh - room - r.height / 2);
-  const currentCenter = r.top + r.height / 2;
-  const delta = currentCenter - desiredCenter;
-  if (Math.abs(delta) > 24) {
+  const room = Math.min(Math.max(cardH, 200) + CARD_GAP + 16, vh * 0.46);
+  // Park the feature in the upper band so the card can sit cleanly underneath
+  const desiredTop = Math.max(56, Math.min(vh * 0.14, vh - room - Math.min(r.height, vh * 0.4)));
+  const delta = r.top - desiredTop;
+  if (Math.abs(delta) > 20) {
     window.scrollBy({ top: delta, behavior: "smooth" });
   }
 }
@@ -462,11 +466,13 @@ export function WalkthroughWizard({
     "Next moves": "#10b981",
     "Action Plan": "#8b5cf6",
     Practice: "#c9962b",
+    "Grow the book": "#c9962b",
     "First client": "#c9962b",
     Clients: "#c9962b",
     Reports: "#10b981",
     Workspace: "#c9962b",
     Upload: "#0ea5e9",
+    Figures: "#0ea5e9",
     Overview: "#c9962b",
   };
   const sectionColor = SECTION_COLORS[s.section ?? "Overview"] ?? "#c9962b";
