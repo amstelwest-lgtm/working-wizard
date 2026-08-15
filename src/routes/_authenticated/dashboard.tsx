@@ -630,6 +630,7 @@ function Dashboard() {
           <FirmSwitcher />
           <span className="spacer" />
           <button
+            id="wizard-dash-reports"
             className="tb-btn gold"
             onClick={() => navigate({ to: "/reports", search: { client: undefined, clientId: undefined, report: undefined, action: undefined } })}
           >
@@ -656,7 +657,7 @@ function Dashboard() {
         </div>
 
         {/* ===== STATS STRIP ===== */}
-        <div className="stats-strip">
+        <div className="stats-strip" id="wizard-practice-board">
           <div className="stat">
             <div className="k">
               <svg viewBox="0 0 24 24">
@@ -839,7 +840,11 @@ function Dashboard() {
             </svg>
             Referral link
           </button>
-          <button className="btn gold mini" onClick={() => setAddOpen(true)}>
+          <button
+            id="wizard-add-client"
+            className="btn gold mini"
+            onClick={() => setAddOpen(true)}
+          >
             <svg viewBox="0 0 24 24">
               <path d="M12 5v14M5 12h14" />
             </svg>

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   ACCOUNTANT_CLIENT_TOUR_KEY,
   ACCOUNTANT_DASH_TOUR_KEY,
@@ -16,6 +16,17 @@ type Step = {
   title: string;
   body: string;
 };
+
+type Spot = {
+  top: number;
+  left: number;
+  width: number;
+  height: number;
+  radius: number;
+};
+
+const CARD_APPROX_H = 280;
+const SPOT_PAD = 10;
 
 /** Owner: profile+banks happen before this tour; here we walk the product once. */
 const OWNER_STEPS: Step[] = [
@@ -72,7 +83,7 @@ const OWNER_STEPS: Step[] = [
 
 const ACCOUNTANT_DASH_STEPS: Step[] = [
   {
-    targetId: null,
+    targetId: "wizard-practice-board",
     section: "Practice",
     title: "Your whole book, one screen",
     body: "Every client's health score in one place. Sort by who needs attention first — before they call in a panic.",
@@ -84,13 +95,13 @@ const ACCOUNTANT_DASH_STEPS: Step[] = [
     body: "Click a client to enter their operating board: health, cash, budget, reports and action plan — the same truth the owner sees.",
   },
   {
-    targetId: null,
+    targetId: "wizard-dash-reports",
     section: "Reports",
     title: "Deliverables you can charge for",
     body: "From a client workspace, generate branded advisory PDFs in a few clicks. That is your recurring advisory layer.",
   },
   {
-    targetId: null,
+    targetId: "wizard-add-client",
     section: "First client",
     title: "Add the next client the same way",
     body: "Use Add client for each new SME, upload their bank statements, then walk Health → Cash → Budget → Reports → Action Plan once.",
@@ -100,7 +111,7 @@ const ACCOUNTANT_DASH_STEPS: Step[] = [
 const ACCOUNTANT_CLIENT_STEPS: Step[] = [
   {
     tab: "ratios",
-    targetId: null,
+    targetId: "finCollapse",
     section: "Upload",
     title: "Bank statements first",
     body: "Upload ~3 months of bank statements (or a P&L PDF) so health, budget and cash have real figures. Use “Draft from banks” on Health & Ratios.",
@@ -121,7 +132,7 @@ const ACCOUNTANT_CLIENT_STEPS: Step[] = [
   },
   {
     tab: "profit",
-    targetId: null,
+    targetId: "pane-profit",
     section: "Profit",
     title: "Show the profit walk",
     body: "Profitability explains how revenue becomes cash profit. Use it when margins slip or the owner asks where money went.",
@@ -135,21 +146,21 @@ const ACCOUNTANT_CLIENT_STEPS: Step[] = [
   },
   {
     tab: "budget",
-    targetId: null,
+    targetId: "wizard-budget-panel",
     section: "Budget",
     title: "Budget pre-filled from figures",
     body: "After a bank draft we seed the annual budget. Compare Budget vs Actual each month when management accounts land.",
   },
   {
     tab: "reports",
-    targetId: null,
+    targetId: "pane-reports",
     section: "Reports",
     title: "Board-ready deliverables",
     body: "Generate branded advisory PDFs from this workspace — the product your practice can charge for repeatedly.",
   },
   {
     tab: "plan",
-    targetId: null,
+    targetId: "pane-plan",
     section: "Action Plan",
     title: "Lock an action plan together",
     body: "Turn ranked moves into an owned plan the SME can follow. Then add your next real client the same way.",
@@ -174,6 +185,58 @@ function resolveTarget(targetId: string): Element | null {
     return document.querySelector(first);
   }
   return document.getElementById(targetId);
+}
+
+function readRadius(el: Element, width: number, height: number): number {
+  if (el instanceof HTMLElement && el.classList.contains("health-orb")) {
+    return Math.max(width, height) / 2 + SPOT_PAD;
+  }
+  const style = window.getComputedStyle(el);
+  const raw = style.borderTopLeftRadius || style.borderRadius || "0";
+  if (raw.includes("%")) {
+    const pct = parseFloat(raw) || 0;
+    return (Math.min(width, height) * pct) / 100 + SPOT_PAD;
+  }
+  const px = parseFloat(raw) || 0;
+  // Near-circular buttons (orb): keep a full circle spotlight
+  if (Math.abs(width - height) < 8 && (px >= Math.min(width, height) / 2 - 1 || el.classList.contains("rounded-full"))) {
+    return Math.max(width, height) / 2 + SPOT_PAD;
+  }
+  return Math.min(24, px + 4) + SPOT_PAD * 0.35;
+}
+
+function measureSpot(el: Element): Spot {
+  const r = el.getBoundingClientRect();
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  // Intersect with the viewport so tall panes still get a clear lit region
+  const top = Math.max(r.top, 10);
+  const left = Math.max(r.left, 10);
+  const bottom = Math.min(r.bottom, vh - 10);
+  const right = Math.min(r.right, vw - 10);
+  let width = Math.max(48, right - left) + SPOT_PAD * 2;
+  let height = Math.max(48, bottom - top) + SPOT_PAD * 2;
+  let spotTop = top - SPOT_PAD;
+  let spotLeft = left - SPOT_PAD;
+
+  const maxH = Math.min(vh * 0.48, 420);
+  if (height > maxH) {
+    height = maxH;
+    spotTop = Math.max(10, Math.min(spotTop, vh - maxH - 10));
+  }
+  const maxW = Math.min(vw * 0.94, vw - 20);
+  if (width > maxW) {
+    width = maxW;
+    spotLeft = Math.max(10, (vw - maxW) / 2);
+  }
+
+  return {
+    top: spotTop,
+    left: spotLeft,
+    width,
+    height,
+    radius: readRadius(el, r.width, r.height),
+  };
 }
 
 export function WalkthroughWizard({
@@ -202,7 +265,10 @@ export function WalkthroughWizard({
 
   const [visible, setVisible] = useState(false);
   const [step, setStep] = useState(0);
+  const [spot, setSpot] = useState<Spot | null>(null);
+  const [cardPlace, setCardPlace] = useState<"bottom" | "top">("bottom");
   const prevTargetRef = useRef<string | null>(null);
+  const activeElRef = useRef<Element | null>(null);
 
   useEffect(() => {
     if (!ready) {
@@ -222,23 +288,99 @@ export function WalkthroughWizard({
 
     if (s.tab && onTabChange) onTabChange(s.tab);
 
-    const timer = setTimeout(() => {
-      if (!s.targetId) return;
-      const el = resolveTarget(s.targetId);
-      if (!el) return;
-      el.classList.add("wizard-highlight");
-      el.scrollIntoView({ behavior: "smooth", block: "center" });
-      prevTargetRef.current = s.targetId;
-    }, 280);
+    let cancelled = false;
+    let tries = 0;
 
-    return () => clearTimeout(timer);
+    const apply = () => {
+      if (cancelled) return;
+      if (!s.targetId) {
+        activeElRef.current = null;
+        setSpot(null);
+        setCardPlace("bottom");
+        prevTargetRef.current = null;
+        return;
+      }
+      const el = resolveTarget(s.targetId);
+      if (!el) {
+        // Tab content may still be mounting — retry briefly
+        if (tries++ < 12) {
+          window.setTimeout(apply, 80);
+        } else {
+          activeElRef.current = null;
+          setSpot(null);
+          setCardPlace("bottom");
+        }
+        return;
+      }
+
+      el.classList.add("wizard-highlight");
+      activeElRef.current = el;
+      prevTargetRef.current = s.targetId;
+
+      const tall = el.getBoundingClientRect().height > window.innerHeight * 0.55;
+      el.scrollIntoView({
+        behavior: "smooth",
+        block: tall ? "start" : "center",
+        inline: "nearest",
+      });
+
+      // Remeasure after scroll settles so the hole lines up
+      const paint = () => {
+        if (cancelled || activeElRef.current !== el) return;
+        const next = measureSpot(el);
+        setSpot(next);
+        const spaceBelow = window.innerHeight - (next.top + next.height);
+        const spaceAbove = next.top;
+        setCardPlace(spaceBelow < CARD_APPROX_H + 24 && spaceAbove > spaceBelow ? "top" : "bottom");
+      };
+
+      requestAnimationFrame(() => {
+        paint();
+        window.setTimeout(paint, 320);
+        window.setTimeout(paint, 560);
+      });
+    };
+
+    const timer = window.setTimeout(apply, 120);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
   }, [step, visible, onTabChange, STEPS]);
+
+  // Keep spotlight glued to the target on scroll/resize
+  useLayoutEffect(() => {
+    if (!visible) return;
+
+    const refresh = () => {
+      const el = activeElRef.current;
+      if (!el || !document.contains(el)) {
+        setSpot(null);
+        return;
+      }
+      const next = measureSpot(el);
+      setSpot(next);
+      const spaceBelow = window.innerHeight - (next.top + next.height);
+      const spaceAbove = next.top;
+      setCardPlace(spaceBelow < CARD_APPROX_H + 24 && spaceAbove > spaceBelow ? "top" : "bottom");
+    };
+
+    window.addEventListener("resize", refresh);
+    window.addEventListener("scroll", refresh, true);
+    return () => {
+      window.removeEventListener("resize", refresh);
+      window.removeEventListener("scroll", refresh, true);
+    };
+  }, [visible, step]);
 
   const dismiss = () => {
     markOnboardingDone(storageKey);
     document.querySelectorAll(".wizard-highlight").forEach((el) =>
       el.classList.remove("wizard-highlight"),
     );
+    activeElRef.current = null;
+    setSpot(null);
     setVisible(false);
     onComplete?.();
   };
@@ -269,25 +411,54 @@ export function WalkthroughWizard({
 
   return (
     <>
+      {/* Click catcher — does not dim; spotlight box-shadow dims around the hole */}
       <div
+        aria-hidden
         style={{
           position: "fixed",
           inset: 0,
           zIndex: 8000,
-          background: "rgba(7, 9, 15, 0.68)",
           pointerEvents: "all",
+          background: spot ? "transparent" : "rgba(7, 9, 15, 0.68)",
         }}
       />
+
+      {/* Spotlight hole: transparent pad + giant shadow darkens everything else */}
+      {spot && (
+        <div
+          aria-hidden
+          className="wizard-spotlight"
+          style={{
+            position: "fixed",
+            top: spot.top,
+            left: spot.left,
+            width: spot.width,
+            height: spot.height,
+            borderRadius: spot.radius,
+            boxShadow: "0 0 0 9999px rgba(7, 9, 15, 0.72)",
+            outline: `2px solid rgba(${hexToRgb(sectionColor)}, 0.85)`,
+            outlineOffset: 2,
+            zIndex: 8001,
+            pointerEvents: "none",
+            transition:
+              "top 220ms ease, left 220ms ease, width 220ms ease, height 220ms ease, border-radius 220ms ease",
+          }}
+        />
+      )}
 
       <div
         style={{
           position: "fixed",
-          bottom: 28,
           left: "50%",
           transform: "translateX(-50%)",
+          ...(cardPlace === "top"
+            ? { top: 24, bottom: "auto" }
+            : { bottom: 28, top: "auto" }),
           zIndex: 8002,
           width: "min(460px, calc(100vw - 32px))",
           pointerEvents: "all",
+          maxHeight: "min(52vh, 420px)",
+          overflowY: "auto",
         }}
       >
         <div
