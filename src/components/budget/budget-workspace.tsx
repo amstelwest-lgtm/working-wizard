@@ -218,7 +218,7 @@ function BudgetComplexWorkspace({
   };
 
   return (
-    <div className="space-y-6">
+    <div id="wizard-budget-plan" className="space-y-6">
       {/* Header strip */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
