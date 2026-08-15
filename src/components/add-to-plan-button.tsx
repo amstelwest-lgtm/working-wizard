@@ -24,9 +24,9 @@ interface Props {
 }
 
 /**
- * "Add to Action Plan" — creates an Action Plan item from a Next Move
- * (deduped by source_move_key), then surfaces an "Assign" affordance that
- * hands over to the Action Plan tab's existing assignment workflow.
+ * "Add to Action Plan" — creates an Action Plan item from a Next Move / SOP step
+ * (deduped by source_move_key), then offers "Open plan" to hand off into the
+ * Action Plan tab for owner/date assignment (not the legacy employee_tasks flow).
  */
 export function AddToPlanButton({ clientId, moveKey, title, outcomeWhy, onAssign }: Props) {
   const [state, setState] = useState<"idle" | "adding" | "added">("idle");
@@ -97,10 +97,10 @@ export function AddToPlanButton({ clientId, moveKey, title, outcomeWhy, onAssign
     return (
       <button
         onClick={(e) => { e.preventDefault(); e.stopPropagation(); onAssign(moveKey); }}
-        title="Assign in the Action Plan"
+        title="Open in Action Plan to assign an owner"
         className="inline-flex items-center gap-1 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-1.5 py-1 text-[10px] text-emerald-700 transition hover:bg-emerald-500/25 dark:text-emerald-300"
       >
-        <span className="font-bold uppercase tracking-wider">Assign</span>
+        <span className="font-bold uppercase tracking-wider">Open plan</span>
         <ArrowRight className="h-3 w-3" />
       </button>
     );
