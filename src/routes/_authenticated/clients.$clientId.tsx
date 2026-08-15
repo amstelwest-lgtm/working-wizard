@@ -1235,25 +1235,27 @@ function ClientView() {
 
   // ── Render ────────────────────────────────────────────────────────────────
 
+  const handleTourTabChange = useCallback((tab: string) => {
+    if (
+      tab === "ratios" ||
+      tab === "profit" ||
+      tab === "cash" ||
+      tab === "budget" ||
+      tab === "reports" ||
+      tab === "plan" ||
+      tab === "tasks" ||
+      tab === "advisory"
+    ) {
+      setActiveTab(tab);
+    }
+  }, []);
+
   return (
     <div className="accountant-portal">
       <WalkthroughWizard
         variant="accountant-client"
         ready={!loading && !!client && !firstDataOpen && !showBankDrafter && !uploadOpen}
-        onTabChange={(tab) => {
-          if (
-            tab === "ratios" ||
-            tab === "profit" ||
-            tab === "cash" ||
-            tab === "budget" ||
-            tab === "reports" ||
-            tab === "plan" ||
-            tab === "tasks" ||
-            tab === "advisory"
-          ) {
-            setActiveTab(tab);
-          }
-        }}
+        onTabChange={handleTourTabChange}
       />
       {/* Ambient background */}
       <div id="atmos">

@@ -2195,6 +2195,23 @@ function Index() {
     [weeklyInputs, updateWeek],
   );
 
+  const handleTourTabChange = useCallback((tab: string) => {
+    if (tab === "today-complex") {
+      setViewMode("complex");
+      setActiveTab("today");
+    } else {
+      setActiveTab(tab);
+    }
+  }, []);
+
+  // Warm the Cash chunk before the tour reaches step 4 (avoids a hard fail if
+  // the lazy import races a fresh deploy / slow network).
+  useEffect(() => {
+    if (firstRunStep !== null || showOnboarding || showBankDrafter || showCashFromBanks) return;
+    void import("@/components/cash-forecast");
+    void import("@/components/budget/budget-panel");
+  }, [firstRunStep, showOnboarding, showBankDrafter, showCashFromBanks]);
+
   // Don't flash the dashboard while auth resolves or if unauthenticated
   if (authLoading || !user) {
     return (
@@ -2217,14 +2234,7 @@ function Index() {
             !showBankDrafter &&
             !showCashFromBanks
           }
-          onTabChange={(tab) => {
-            if (tab === "today-complex") {
-              setViewMode("complex");
-              setActiveTab("today");
-            } else {
-              setActiveTab(tab);
-            }
-          }}
+          onTabChange={handleTourTabChange}
           userRole={userRole ?? undefined}
         />
       )}
@@ -3051,7 +3061,9 @@ function Index() {
               <span className="text-[9px] font-semibold uppercase tracking-[0.25em] text-[#b8860b] dark:text-[#d4a550]/80">Cash Forecast</span>
               <span className="h-px flex-1 bg-gradient-to-r from-[#b7872a]/30 to-transparent" />
             </div>
-            <Suspense fallback={<div className="p-6 text-sm text-slate-400">Loading cash forecast…</div>}>
+            <Suspense
+              fallback={<div className="p-6 text-sm text-slate-400">Loading cash forecast…</div>}
+            >
               <CashForecastPanel
                 clientId={effectiveClientId ?? undefined}
                 clientName={actingClientName ?? undefined}
