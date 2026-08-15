@@ -202,7 +202,10 @@ export function NextStepsPanel<K extends string>({
   const highestImpact = steps.filter((s) => !done.has(s.key)).sort((a, b) => b.impact - a.impact)[0];
   return (
     <div className="space-y-5">
-      <Card className="overflow-hidden border-[#b7872a]/25 bg-white shadow-[0_12px_40px_rgba(15,23,42,.06)] dark:bg-[#111827]/80 dark:shadow-none">
+      <Card
+        id="wizard-moves-hero"
+        className="overflow-hidden border-[#b7872a]/25 bg-white shadow-[0_12px_40px_rgba(15,23,42,.06)] dark:bg-[#111827]/80 dark:shadow-none"
+      >
         <CardHeader className="border-b border-[#b7872a]/15 bg-[#fbf8f1] pb-5 dark:bg-[#151b28]">
           <div className="flex flex-wrap items-end justify-between gap-5">
             <div>
