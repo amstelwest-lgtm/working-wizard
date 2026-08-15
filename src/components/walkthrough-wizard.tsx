@@ -324,6 +324,12 @@ export function WalkthroughWizard({
   const prevTargetRef = useRef<string | null>(null);
   const activeElRef = useRef<Element | null>(null);
   const cardRef = useRef<HTMLDivElement>(null);
+  const onTabChangeRef = useRef(onTabChange);
+  const lastTabRef = useRef<string | null>(null);
+  const spotRef = useRef<Spot | null>(null);
+  const paintTimersRef = useRef<number[]>([]);
+
+  onTabChangeRef.current = onTabChange;
 
   useEffect(() => {
     if (!ready) {
@@ -341,26 +347,52 @@ export function WalkthroughWizard({
       resolveTarget(prevTargetRef.current)?.classList.remove("wizard-highlight");
     }
 
-    if (s.tab && onTabChange) onTabChange(s.tab);
+    // Only switch tabs when the step's tab actually changes — never re-fire on
+    // parent re-renders (inline onTabChange identities used to restart this
+    // effect and thrash scroll/state until the page crashed on Cash).
+    if (s.tab && s.tab !== lastTabRef.current) {
+      lastTabRef.current = s.tab;
+      onTabChangeRef.current?.(s.tab);
+    }
 
     let cancelled = false;
     let tries = 0;
+    paintTimersRef.current.forEach((id) => clearTimeout(id));
+    paintTimersRef.current = [];
+
+    const spotsEqual = (a: Spot | null, b: Spot | null) => {
+      if (a === b) return true;
+      if (!a || !b) return false;
+      return (
+        Math.abs(a.top - b.top) < 1 &&
+        Math.abs(a.left - b.left) < 1 &&
+        Math.abs(a.width - b.width) < 1 &&
+        Math.abs(a.height - b.height) < 1 &&
+        Math.abs(a.radius - b.radius) < 1
+      );
+    };
 
     const layout = (el: Element | null) => {
       if (cancelled) return;
       const cardH = cardRef.current?.offsetHeight || CARD_APPROX_H;
       if (!el) {
-        setSpot(null);
+        if (spotRef.current !== null) {
+          spotRef.current = null;
+          setSpot(null);
+        }
         const pos = cardLayoutForSpot(null, cardH);
-        setCardTop(pos.top);
-        setCardMaxH(pos.maxHeight);
+        setCardTop((t) => (Math.abs(t - pos.top) < 1 ? t : pos.top));
+        setCardMaxH((h) => (Math.abs(h - pos.maxHeight) < 1 ? h : pos.maxHeight));
         return;
       }
       const next = measureSpot(el);
-      setSpot(next);
+      if (!spotsEqual(spotRef.current, next)) {
+        spotRef.current = next;
+        setSpot(next);
+      }
       const pos = cardLayoutForSpot(next, cardH);
-      setCardTop(pos.top);
-      setCardMaxH(pos.maxHeight);
+      setCardTop((t) => (Math.abs(t - pos.top) < 1 ? t : pos.top));
+      setCardMaxH((h) => (Math.abs(h - pos.maxHeight) < 1 ? h : pos.maxHeight));
     };
 
     const apply = () => {
@@ -373,9 +405,10 @@ export function WalkthroughWizard({
       }
       const el = resolveTarget(s.targetId);
       if (!el) {
-        // Tab content may still be mounting — retry briefly
-        if (tries++ < 25) {
-          window.setTimeout(apply, 100);
+        // Tab content may still be mounting (lazy Cash/Budget) — retry briefly
+        if (tries++ < 30) {
+          const id = window.setTimeout(apply, 120);
+          paintTimersRef.current.push(id);
         } else {
           activeElRef.current = null;
           layout(null);
@@ -390,7 +423,6 @@ export function WalkthroughWizard({
       const cardH = cardRef.current?.offsetHeight || CARD_APPROX_H;
       scrollTargetAwayFromCard(el, cardH);
 
-      // Remeasure after scroll settles so the hole + card clear each other
       const paint = () => {
         if (cancelled || activeElRef.current !== el) return;
         layout(el);
@@ -398,43 +430,67 @@ export function WalkthroughWizard({
 
       requestAnimationFrame(() => {
         paint();
-        window.setTimeout(paint, 320);
-        window.setTimeout(paint, 560);
+        paintTimersRef.current.push(window.setTimeout(paint, 320));
+        paintTimersRef.current.push(window.setTimeout(paint, 700));
       });
     };
 
-    const timer = window.setTimeout(apply, 120);
+    const timer = window.setTimeout(apply, 160);
+    paintTimersRef.current.push(timer);
 
     return () => {
       cancelled = true;
-      clearTimeout(timer);
+      paintTimersRef.current.forEach((id) => clearTimeout(id));
+      paintTimersRef.current = [];
     };
-  }, [step, visible, onTabChange, STEPS]);
+    // Intentionally omit onTabChange — held in a ref to avoid re-entry loops.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, visible, variant]);
 
-  // Keep spotlight glued to the target on scroll/resize; re-clear the card
+  // Keep spotlight glued to the target on scroll/resize; throttle to avoid
+  // update storms while smooth-scrolling the cash/budget panels into place.
   useLayoutEffect(() => {
     if (!visible) return;
 
+    let raf = 0;
     const refresh = () => {
-      const el = activeElRef.current;
-      const cardH = cardRef.current?.offsetHeight || CARD_APPROX_H;
-      if (!el || !document.contains(el)) {
-        setSpot(null);
-        const pos = cardLayoutForSpot(null, cardH);
-        setCardTop(pos.top);
-        setCardMaxH(pos.maxHeight);
-        return;
-      }
-      const next = measureSpot(el);
-      setSpot(next);
-      const pos = cardLayoutForSpot(next, cardH);
-      setCardTop(pos.top);
-      setCardMaxH(pos.maxHeight);
+      if (raf) return;
+      raf = window.requestAnimationFrame(() => {
+        raf = 0;
+        const el = activeElRef.current;
+        const cardH = cardRef.current?.offsetHeight || CARD_APPROX_H;
+        if (!el || !document.contains(el)) {
+          if (spotRef.current !== null) {
+            spotRef.current = null;
+            setSpot(null);
+          }
+          const pos = cardLayoutForSpot(null, cardH);
+          setCardTop((t) => (Math.abs(t - pos.top) < 1 ? t : pos.top));
+          setCardMaxH((h) => (Math.abs(h - pos.maxHeight) < 1 ? h : pos.maxHeight));
+          return;
+        }
+        const next = measureSpot(el);
+        const prev = spotRef.current;
+        if (
+          !prev ||
+          Math.abs(prev.top - next.top) >= 1 ||
+          Math.abs(prev.left - next.left) >= 1 ||
+          Math.abs(prev.width - next.width) >= 1 ||
+          Math.abs(prev.height - next.height) >= 1
+        ) {
+          spotRef.current = next;
+          setSpot(next);
+        }
+        const pos = cardLayoutForSpot(next, cardH);
+        setCardTop((t) => (Math.abs(t - pos.top) < 1 ? t : pos.top));
+        setCardMaxH((h) => (Math.abs(h - pos.maxHeight) < 1 ? h : pos.maxHeight));
+      });
     };
 
     window.addEventListener("resize", refresh);
     window.addEventListener("scroll", refresh, true);
     return () => {
+      if (raf) cancelAnimationFrame(raf);
       window.removeEventListener("resize", refresh);
       window.removeEventListener("scroll", refresh, true);
     };
