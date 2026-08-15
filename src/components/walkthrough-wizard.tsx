@@ -55,10 +55,10 @@ const OWNER_STEPS: Step[] = [
   },
   {
     tab: "cash",
-    targetId: "wizard-cash-table",
+    targetId: "wizard-cash-outlook, wizard-cash-table, wizard-cash-panel",
     section: "Cash Forecast",
-    title: "Spot cash crunches 13 weeks out",
-    body: "Your forecast highlights tight weeks early. Bank statements can draft this for you — update it whenever cash timing changes.",
+    title: "See cash 13 weeks ahead",
+    body: "Cash Outlook shows your closing balance trajectory and flags tight weeks early. Bank statements can draft this — update it whenever timing changes.",
   },
   {
     tab: "budget",
@@ -141,10 +141,10 @@ const ACCOUNTANT_CLIENT_STEPS: Step[] = [
   },
   {
     tab: "cash",
-    targetId: "wizard-cash-table",
+    targetId: "wizard-cash-outlook, wizard-cash-table, wizard-cash-panel",
     section: "Cash Forecast",
     title: "13-week cash is your signature view",
-    body: "Bank statements can draft this forecast. Spot crunch weeks early and align the owner on collections or spend timing.",
+    body: "Cash Outlook shows closing balances and crunch weeks early. Bank statements can draft this forecast — align the owner on collections or spend timing.",
   },
   {
     tab: "budget",
@@ -182,11 +182,14 @@ function storageKeyFor(variant: WalkthroughVariant): string {
 }
 
 function resolveTarget(targetId: string): Element | null {
-  if (/^[.#\[]/.test(targetId)) {
-    const first = targetId.split(",")[0].trim();
-    return document.querySelector(first);
+  const parts = targetId.split(",").map((s) => s.trim()).filter(Boolean);
+  for (const part of parts) {
+    const el = /^[.#\[]/.test(part)
+      ? document.querySelector(part)
+      : document.getElementById(part);
+    if (el) return el;
   }
-  return document.getElementById(targetId);
+  return null;
 }
 
 function readRadius(el: Element, width: number, height: number, pad: number): number {
@@ -367,8 +370,8 @@ export function WalkthroughWizard({
       const el = resolveTarget(s.targetId);
       if (!el) {
         // Tab content may still be mounting — retry briefly
-        if (tries++ < 12) {
-          window.setTimeout(apply, 80);
+        if (tries++ < 25) {
+          window.setTimeout(apply, 100);
         } else {
           activeElRef.current = null;
           layout(null);

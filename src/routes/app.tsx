@@ -3045,6 +3045,7 @@ function Index() {
           </TabsContent>
 
           <TabsContent value="cash">
+            <div id="wizard-cash-panel">
             <div className="mb-4 flex items-center gap-3 pb-3">
               <span className="text-[9px] font-semibold uppercase tracking-[0.25em] text-[#b8860b] dark:text-[#d4a550]/80">Cash Forecast</span>
               <span className="h-px flex-1 bg-gradient-to-r from-[#b7872a]/30 to-transparent" />
@@ -3058,6 +3059,7 @@ function Index() {
                 reloadToken={cashForecastReloadToken}
               />
             </Suspense>
+            </div>
           </TabsContent>
 
           <TabsContent value="budget">

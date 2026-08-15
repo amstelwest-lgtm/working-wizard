@@ -2,12 +2,12 @@
  * Onboarding storage keys + helpers.
  * Keep keys versioned so we can re-show improved tours once.
  *
- * v6 — card clears spotlight; Profit step targets waterfall (#36 follow-up).
+ * v7 — Cash step targets Cash Outlook (simplified + complex).
  */
 
-export const OWNER_TOUR_KEY = "milon_walkthrough_v6";
-export const ACCOUNTANT_DASH_TOUR_KEY = "milon_accountant_dash_tour_v4";
-export const ACCOUNTANT_CLIENT_TOUR_KEY = "milon_accountant_client_tour_v4";
+export const OWNER_TOUR_KEY = "milon_walkthrough_v7";
+export const ACCOUNTANT_DASH_TOUR_KEY = "milon_accountant_dash_tour_v5";
+export const ACCOUNTANT_CLIENT_TOUR_KEY = "milon_accountant_client_tour_v5";
 export const ACCOUNTANT_FIRST_CLIENT_KEY = "milon_accountant_first_client_done_v2";
 
 export function onboardingDone(key: string): boolean {
