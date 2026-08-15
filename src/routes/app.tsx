@@ -29,7 +29,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { KpiTrendline, pctDelta } from "@/components/kpi-trendline";
 import { BenchmarkBar } from "@/components/benchmark-bar";
-import { AssignButton } from "@/components/assign-button";
+import { AddToPlanButton } from "@/components/add-to-plan-button";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { computeRatios, BUSINESS_TYPE_TO_BENCHMARK } from "@/lib/ratios";
 import { healthFromRatioInputs, healthMapFromRatios, scoreRatio } from "@/lib/health-score";
@@ -3578,7 +3578,7 @@ function Index() {
         </DialogContent>
       </Dialog>
 
-      {/* SOP best-practice dialog (opened from a Next Step) */}
+      {/* SOP playbook — add steps to Action Plan (not legacy employee_tasks assign) */}
       <Dialog open={openSop !== null} onOpenChange={(o) => !o && setOpenSop(null)}>
         <DialogContent className="max-w-lg border-2 border-emerald-500/50 bg-slate-900 text-slate-50">
           {openSop && (
@@ -3586,10 +3586,10 @@ function Index() {
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-3 text-xl">
                   <span className="text-2xl">{RATIO_META[openSop].icon}</span>
-                  <span>SOP · {RATIO_META[openSop].friendly}</span>
+                  <span>Playbook · {RATIO_META[openSop].friendly}</span>
                 </DialogTitle>
                 <DialogDescription className="text-slate-400">
-                  Practical, simple best-practice playbook to implement this step.
+                  Practical steps for this move. Add any step to your Action Plan — assign owners and due dates there.
                 </DialogDescription>
               </DialogHeader>
               <ol className="space-y-2">
@@ -3603,21 +3603,43 @@ function Index() {
                     </span>
                     <span className="min-w-0 flex-1 text-sm text-slate-200">{s}</span>
                     {effectiveClientId && userRole !== "client_member" && (
-                      <AssignButton
-                        clientId={effectiveClientId}
-                        clientName={actingClientName ?? undefined}
-                        source="improvement"
-                        sourceRef={`${openSop}:sop:${i}`}
-                        defaultTitle={s}
-                        defaultDescription={`${RATIO_META[openSop].friendly} · SOP step ${i + 1}`}
-                        size="xs"
-                      />
+                      <div onClick={(e) => e.stopPropagation()}>
+                        <AddToPlanButton
+                          clientId={effectiveClientId}
+                          moveKey={`${openSop}:sop:${i}`}
+                          title={s}
+                          outcomeWhy={`${RATIO_META[openSop].friendly} · playbook step ${i + 1}`}
+                          onAssign={(k) => {
+                            setOpenSop(null);
+                            setPlanFocusKey(k);
+                            setActiveTab("tasks");
+                          }}
+                        />
+                      </div>
                     )}
                   </li>
                 ))}
               </ol>
+              {effectiveClientId && userRole !== "client_member" && (
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#d4a550]/30 bg-[#d4a550]/10 px-3 py-2.5">
+                  <p className="text-[11px] text-slate-300">
+                    Prefer the whole move as one action?
+                  </p>
+                  <AddToPlanButton
+                    clientId={effectiveClientId}
+                    moveKey={openSop}
+                    title={RATIO_META[openSop].friendly}
+                    outcomeWhy={RATIO_META[openSop].hint}
+                    onAssign={(k) => {
+                      setOpenSop(null);
+                      setPlanFocusKey(k);
+                      setActiveTab("tasks");
+                    }}
+                  />
+                </div>
+              )}
               <p className="text-[11px] uppercase tracking-wider text-slate-500">
-                Tip: keep this open as a checklist — implement one point per week.
+                Tip: add one step this week — owners and dates live on the Action Plan tab.
               </p>
             </>
           )}
@@ -3638,7 +3660,7 @@ function Ratio({
   series,
   benchmark,
   clientId,
-  clientName,
+  onGoToPlan,
 }: {
   rkey: RatioKey;
   value: number;
@@ -3649,7 +3671,7 @@ function Ratio({
   series?: number[];
   benchmark?: Benchmark | null;
   clientId?: string | null;
-  clientName?: string;
+  onGoToPlan?: (moveKey: string) => void;
 }) {
   const meta = RATIO_META[rkey];
   const t = tierColor(health);
@@ -3663,15 +3685,14 @@ function Ratio({
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); } }}
       className={`group relative overflow-hidden rounded-lg border border-slate-800 bg-slate-900/40 p-4 text-left transition-colors hover:border-slate-700 hover:bg-slate-900 cursor-pointer ${className ?? ""}`}
     >
-      {clientId && (
-        <div className="absolute right-2 top-2 z-10">
-          <AssignButton
+      {clientId && onGoToPlan && (
+        <div className="absolute right-2 top-2 z-10" onClick={(e) => e.stopPropagation()}>
+          <AddToPlanButton
             clientId={clientId}
-            clientName={clientName}
-            source="kpi"
-            sourceRef={rkey}
-            defaultTitle={`Improve: ${meta.friendly}`}
-            defaultDescription={`${meta.techName} — ${meta.hint}\n\nFirst move: ${meta.steps[0]}`}
+            moveKey={rkey}
+            title={`Improve: ${meta.friendly}`}
+            outcomeWhy={`${meta.techName} — ${meta.hint}`}
+            onAssign={onGoToPlan}
           />
         </div>
       )}
