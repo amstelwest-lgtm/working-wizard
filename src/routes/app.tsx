@@ -4,7 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { ArrowLeft, Upload, Loader2, Building2, Shield, Plug2, Database, ChevronDown, Check, Pencil } from "lucide-react";
+import { ArrowLeft, Upload, Loader2, Building2, Shield, Plug2, Database, ChevronDown, Check, Pencil, Settings, LogOut } from "lucide-react";
 import { NextStepsPanel } from "@/components/next-steps-panel";
 import { formatVal, HealthBar, tierColor } from "@/components/owner-board-ui";
 import { HeaderShareButton } from "@/components/share";
@@ -2364,19 +2364,19 @@ function Index() {
             <HeaderShareButton />
             <button
               onClick={() => navigate({ to: "/settings" })}
-              className="inline-flex h-7 items-center rounded-lg border border-slate-200 bg-slate-50/80 px-2 text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-600 transition-colors hover:border-[#b7872a]/50 hover:bg-[#d4a550]/10 dark:border-slate-700/80 dark:bg-slate-900/70 dark:text-slate-300"
+              className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50/80 px-2 text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-600 transition-colors hover:border-[#b7872a]/50 hover:bg-[#d4a550]/10 dark:border-slate-700/80 dark:bg-slate-900/70 dark:text-slate-300"
               title="Settings"
             >
+              <Settings className="h-3 w-3 shrink-0 sm:hidden" />
               <span className="hidden sm:inline">Settings</span>
-              <span className="sm:hidden">⚙</span>
             </button>
             <button
               onClick={() => signOut().then(() => { window.location.href = "/"; })}
-              className="inline-flex h-7 items-center rounded-lg border border-slate-200 bg-slate-50/80 px-2 text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-600 transition-colors hover:border-[#b7872a]/50 hover:bg-[#d4a550]/10 dark:border-slate-700/80 dark:bg-slate-900/70 dark:text-slate-300"
+              className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50/80 px-2 text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-600 transition-colors hover:border-[#b7872a]/50 hover:bg-[#d4a550]/10 dark:border-slate-700/80 dark:bg-slate-900/70 dark:text-slate-300"
               title="Sign out"
             >
+              <LogOut className="h-3 w-3 shrink-0 sm:hidden" />
               <span className="hidden sm:inline">Sign out</span>
-              <span className="sm:hidden">⎋</span>
             </button>
           </div>
           </div>
