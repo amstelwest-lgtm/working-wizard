@@ -2981,37 +2981,39 @@ function Index() {
             <div className="mb-4">
               <WeeklyInputTable />
             </div>
-            <ProfitabilityWaterfall
-              clientName={actingClientName ?? undefined}
-              clientId={effectiveClientId ?? undefined}
-              reviewSignoff={stampFromSignoff(
-                financialsSignoff,
-                computeIsStale(financialsSignoff, clientMeta?.financials_updated_at ?? null),
-              )}
-              fallback={(() => {
-                // Mirror the accountant-side residual derivation so that
-                // PDF-extracted statements (which leave fixedCosts blank)
-                // still render meaningful operating-expense and net-profit bars.
-                const hasFin = (key: keyof typeof v) => (v[key] ?? "") !== "";
-                const wfGrossProfit = n.revenue - n.cogs;
-                const wfOpex = hasFin("fixedCosts")
-                  ? n.fixedCosts
-                  : hasFin("ebit")
-                  ? wfGrossProfit - n.ebit
-                  : 0;
-                const wfInterest =
-                  hasFin("ebit") && hasFin("ebt") ? n.ebit - n.ebt : 0;
-                const wfTax =
-                  hasFin("ebt") && hasFin("netIncome") ? n.ebt - n.netIncome : 0;
-                return {
-                  revenue:    n.revenue,
-                  cogs:       n.cogs,
-                  fixedCosts: wfOpex,
-                  interest:   wfInterest,
-                  tax:        wfTax,
-                };
-              })()}
-            />
+            <div id="wizard-profit-walk">
+              <ProfitabilityWaterfall
+                clientName={actingClientName ?? undefined}
+                clientId={effectiveClientId ?? undefined}
+                reviewSignoff={stampFromSignoff(
+                  financialsSignoff,
+                  computeIsStale(financialsSignoff, clientMeta?.financials_updated_at ?? null),
+                )}
+                fallback={(() => {
+                  // Mirror the accountant-side residual derivation so that
+                  // PDF-extracted statements (which leave fixedCosts blank)
+                  // still render meaningful operating-expense and net-profit bars.
+                  const hasFin = (key: keyof typeof v) => (v[key] ?? "") !== "";
+                  const wfGrossProfit = n.revenue - n.cogs;
+                  const wfOpex = hasFin("fixedCosts")
+                    ? n.fixedCosts
+                    : hasFin("ebit")
+                    ? wfGrossProfit - n.ebit
+                    : 0;
+                  const wfInterest =
+                    hasFin("ebit") && hasFin("ebt") ? n.ebit - n.ebt : 0;
+                  const wfTax =
+                    hasFin("ebt") && hasFin("netIncome") ? n.ebt - n.netIncome : 0;
+                  return {
+                    revenue:    n.revenue,
+                    cogs:       n.cogs,
+                    fixedCosts: wfOpex,
+                    interest:   wfInterest,
+                    tax:        wfTax,
+                  };
+                })()}
+              />
+            </div>
             {/* Ask your numbers — edge-function chat widget */}
             <div
               id="ask-ai-waterfall"

@@ -27,6 +27,8 @@ type Spot = {
 
 const CARD_APPROX_H = 280;
 const SPOT_PAD = 10;
+const ORB_PAD = 4;
+const CARD_GAP = 20;
 
 /** Owner: profile+banks happen before this tour; here we walk the product once. */
 const OWNER_STEPS: Step[] = [
@@ -46,10 +48,10 @@ const OWNER_STEPS: Step[] = [
   },
   {
     tab: "waterfall",
-    targetId: "ask-ai-waterfall",
+    targetId: "wizard-profit-walk",
     section: "Profit",
     title: "See where profit is made or lost",
-    body: "The profit walk shows how revenue becomes cash profit. Use it when you need to explain a margin miss to yourself or your accountant.",
+    body: "This waterfall is the profit walk — revenue down to net profit, step by step. Use it when you need to explain a margin miss to yourself or your accountant.",
   },
   {
     tab: "cash",
@@ -132,10 +134,10 @@ const ACCOUNTANT_CLIENT_STEPS: Step[] = [
   },
   {
     tab: "profit",
-    targetId: "pane-profit",
+    targetId: "wizard-profit-walk",
     section: "Profit",
     title: "Show the profit walk",
-    body: "Profitability explains how revenue becomes cash profit. Use it when margins slip or the owner asks where money went.",
+    body: "This waterfall is the profit walk — how revenue becomes net profit. Use it when margins slip or the owner asks where money went.",
   },
   {
     tab: "cash",
@@ -187,37 +189,42 @@ function resolveTarget(targetId: string): Element | null {
   return document.getElementById(targetId);
 }
 
-function readRadius(el: Element, width: number, height: number): number {
+function readRadius(el: Element, width: number, height: number, pad: number): number {
   if (el instanceof HTMLElement && el.classList.contains("health-orb")) {
-    return Math.max(width, height) / 2 + SPOT_PAD;
+    return Math.max(width, height) / 2 + pad;
   }
   const style = window.getComputedStyle(el);
   const raw = style.borderTopLeftRadius || style.borderRadius || "0";
   if (raw.includes("%")) {
     const pct = parseFloat(raw) || 0;
-    return (Math.min(width, height) * pct) / 100 + SPOT_PAD;
+    return (Math.min(width, height) * pct) / 100 + pad;
   }
   const px = parseFloat(raw) || 0;
   // Near-circular buttons (orb): keep a full circle spotlight
   if (Math.abs(width - height) < 8 && (px >= Math.min(width, height) / 2 - 1 || el.classList.contains("rounded-full"))) {
-    return Math.max(width, height) / 2 + SPOT_PAD;
+    return Math.max(width, height) / 2 + pad;
   }
-  return Math.min(24, px + 4) + SPOT_PAD * 0.35;
+  return Math.min(24, px + 4) + pad * 0.35;
+}
+
+function padFor(el: Element): number {
+  return el instanceof HTMLElement && el.classList.contains("health-orb") ? ORB_PAD : SPOT_PAD;
 }
 
 function measureSpot(el: Element): Spot {
   const r = el.getBoundingClientRect();
   const vw = window.innerWidth;
   const vh = window.innerHeight;
+  const pad = padFor(el);
   // Intersect with the viewport so tall panes still get a clear lit region
   const top = Math.max(r.top, 10);
   const left = Math.max(r.left, 10);
   const bottom = Math.min(r.bottom, vh - 10);
   const right = Math.min(r.right, vw - 10);
-  let width = Math.max(48, right - left) + SPOT_PAD * 2;
-  let height = Math.max(48, bottom - top) + SPOT_PAD * 2;
-  let spotTop = top - SPOT_PAD;
-  let spotLeft = left - SPOT_PAD;
+  let width = Math.max(48, right - left) + pad * 2;
+  let height = Math.max(48, bottom - top) + pad * 2;
+  let spotTop = top - pad;
+  let spotLeft = left - pad;
 
   const maxH = Math.min(vh * 0.48, 420);
   if (height > maxH) {
@@ -235,8 +242,47 @@ function measureSpot(el: Element): Spot {
     left: spotLeft,
     width,
     height,
-    radius: readRadius(el, r.width, r.height),
+    radius: readRadius(el, r.width, r.height, pad),
   };
+}
+
+/** Place the tour card fully outside the spotlight (never overlapping it). */
+function cardLayoutForSpot(
+  spot: Spot | null,
+  cardH: number,
+): { top: number; maxHeight: number } {
+  const vh = window.innerHeight;
+  const ideal = Math.min(Math.max(cardH, 180), Math.min(vh * 0.52, 420));
+  if (!spot) {
+    return { top: Math.max(12, vh - ideal - 28), maxHeight: ideal };
+  }
+
+  const belowTop = spot.top + spot.height + CARD_GAP;
+  const spaceBelow = Math.max(0, vh - belowTop - 12);
+  const spaceAbove = Math.max(0, spot.top - CARD_GAP - 12);
+
+  // Prefer below when the card fits (or when below has more room)
+  if (spaceBelow >= Math.min(ideal, 200) || spaceBelow >= spaceAbove) {
+    const maxHeight = Math.min(ideal, Math.max(140, spaceBelow));
+    return { top: belowTop, maxHeight };
+  }
+
+  const maxHeight = Math.min(ideal, Math.max(140, spaceAbove));
+  const top = Math.max(12, spot.top - CARD_GAP - maxHeight);
+  return { top, maxHeight };
+}
+
+function scrollTargetAwayFromCard(el: Element, cardH: number) {
+  const r = el.getBoundingClientRect();
+  const vh = window.innerHeight;
+  const room = Math.min(cardH + CARD_GAP + 24, vh * 0.42);
+  // Leave room below the target for the card
+  const desiredCenter = Math.min(vh * 0.36, vh - room - r.height / 2);
+  const currentCenter = r.top + r.height / 2;
+  const delta = currentCenter - desiredCenter;
+  if (Math.abs(delta) > 24) {
+    window.scrollBy({ top: delta, behavior: "smooth" });
+  }
 }
 
 export function WalkthroughWizard({
@@ -266,9 +312,11 @@ export function WalkthroughWizard({
   const [visible, setVisible] = useState(false);
   const [step, setStep] = useState(0);
   const [spot, setSpot] = useState<Spot | null>(null);
-  const [cardPlace, setCardPlace] = useState<"bottom" | "top">("bottom");
+  const [cardTop, setCardTop] = useState(28);
+  const [cardMaxH, setCardMaxH] = useState(420);
   const prevTargetRef = useRef<string | null>(null);
   const activeElRef = useRef<Element | null>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!ready) {
@@ -291,13 +339,29 @@ export function WalkthroughWizard({
     let cancelled = false;
     let tries = 0;
 
+    const layout = (el: Element | null) => {
+      if (cancelled) return;
+      const cardH = cardRef.current?.offsetHeight || CARD_APPROX_H;
+      if (!el) {
+        setSpot(null);
+        const pos = cardLayoutForSpot(null, cardH);
+        setCardTop(pos.top);
+        setCardMaxH(pos.maxHeight);
+        return;
+      }
+      const next = measureSpot(el);
+      setSpot(next);
+      const pos = cardLayoutForSpot(next, cardH);
+      setCardTop(pos.top);
+      setCardMaxH(pos.maxHeight);
+    };
+
     const apply = () => {
       if (cancelled) return;
       if (!s.targetId) {
         activeElRef.current = null;
-        setSpot(null);
-        setCardPlace("bottom");
         prevTargetRef.current = null;
+        layout(null);
         return;
       }
       const el = resolveTarget(s.targetId);
@@ -307,8 +371,7 @@ export function WalkthroughWizard({
           window.setTimeout(apply, 80);
         } else {
           activeElRef.current = null;
-          setSpot(null);
-          setCardPlace("bottom");
+          layout(null);
         }
         return;
       }
@@ -317,21 +380,13 @@ export function WalkthroughWizard({
       activeElRef.current = el;
       prevTargetRef.current = s.targetId;
 
-      const tall = el.getBoundingClientRect().height > window.innerHeight * 0.55;
-      el.scrollIntoView({
-        behavior: "smooth",
-        block: tall ? "start" : "center",
-        inline: "nearest",
-      });
+      const cardH = cardRef.current?.offsetHeight || CARD_APPROX_H;
+      scrollTargetAwayFromCard(el, cardH);
 
-      // Remeasure after scroll settles so the hole lines up
+      // Remeasure after scroll settles so the hole + card clear each other
       const paint = () => {
         if (cancelled || activeElRef.current !== el) return;
-        const next = measureSpot(el);
-        setSpot(next);
-        const spaceBelow = window.innerHeight - (next.top + next.height);
-        const spaceAbove = next.top;
-        setCardPlace(spaceBelow < CARD_APPROX_H + 24 && spaceAbove > spaceBelow ? "top" : "bottom");
+        layout(el);
       };
 
       requestAnimationFrame(() => {
@@ -349,21 +404,25 @@ export function WalkthroughWizard({
     };
   }, [step, visible, onTabChange, STEPS]);
 
-  // Keep spotlight glued to the target on scroll/resize
+  // Keep spotlight glued to the target on scroll/resize; re-clear the card
   useLayoutEffect(() => {
     if (!visible) return;
 
     const refresh = () => {
       const el = activeElRef.current;
+      const cardH = cardRef.current?.offsetHeight || CARD_APPROX_H;
       if (!el || !document.contains(el)) {
         setSpot(null);
+        const pos = cardLayoutForSpot(null, cardH);
+        setCardTop(pos.top);
+        setCardMaxH(pos.maxHeight);
         return;
       }
       const next = measureSpot(el);
       setSpot(next);
-      const spaceBelow = window.innerHeight - (next.top + next.height);
-      const spaceAbove = next.top;
-      setCardPlace(spaceBelow < CARD_APPROX_H + 24 && spaceAbove > spaceBelow ? "top" : "bottom");
+      const pos = cardLayoutForSpot(next, cardH);
+      setCardTop(pos.top);
+      setCardMaxH(pos.maxHeight);
     };
 
     window.addEventListener("resize", refresh);
@@ -447,18 +506,19 @@ export function WalkthroughWizard({
       )}
 
       <div
+        ref={cardRef}
         style={{
           position: "fixed",
           left: "50%",
           transform: "translateX(-50%)",
-          ...(cardPlace === "top"
-            ? { top: 24, bottom: "auto" }
-            : { bottom: 28, top: "auto" }),
+          top: cardTop,
+          bottom: "auto",
           zIndex: 8002,
           width: "min(460px, calc(100vw - 32px))",
           pointerEvents: "all",
-          maxHeight: "min(52vh, 420px)",
+          maxHeight: cardMaxH,
           overflowY: "auto",
+          transition: "top 220ms ease, max-height 220ms ease",
         }}
       >
         <div

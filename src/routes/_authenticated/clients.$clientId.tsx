@@ -1897,7 +1897,7 @@ function ClientView() {
           </div>
 
           {/* Wrap in a Tailwind dark context so the component's dark: variants fire */}
-          <div className="dark" style={{ colorScheme: "dark" }}>
+          <div className="dark" id="wizard-profit-walk" style={{ colorScheme: "dark" }}>
             <ProfitabilityWaterfall
               fallback={waterfallFallback}
               clientName={client?.name}
