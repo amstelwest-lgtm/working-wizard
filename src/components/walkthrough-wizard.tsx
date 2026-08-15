@@ -62,10 +62,10 @@ const OWNER_STEPS: Step[] = [
   },
   {
     tab: "budget",
-    targetId: "wizard-budget-panel",
+    targetId: "wizard-budget-plan, wizard-budget-panel",
     section: "Budget",
-    title: "Plan the year, then compare actuals",
-    body: "Your budget is pre-filled from your profile and figures. Each month you can upload a P&L and see Budget vs Actual variance automatically.",
+    title: "Your living annual budget",
+    body: "This plan is seeded from your profile and figures — revenue, costs, and cash by month. Scroll down later to upload a monthly P&L for Budget vs Actuals.",
   },
   {
     tab: "next",
@@ -148,10 +148,10 @@ const ACCOUNTANT_CLIENT_STEPS: Step[] = [
   },
   {
     tab: "budget",
-    targetId: "wizard-budget-panel",
+    targetId: "wizard-budget-plan, wizard-budget-panel",
     section: "Budget",
     title: "Budget pre-filled from figures",
-    body: "After a bank draft we seed the annual budget. Compare Budget vs Actual each month when management accounts land.",
+    body: "After a bank draft we seed the annual plan here. Budget vs Actuals sits underneath — upload each month’s P&L when management accounts land.",
   },
   {
     tab: "reports",

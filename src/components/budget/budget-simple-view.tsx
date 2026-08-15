@@ -143,7 +143,7 @@ export function BudgetSimpleView({
   const maxRev = Math.max(1, ...results.map((r) => r.revenue));
 
   return (
-    <div className="space-y-5">
+    <div id="wizard-budget-plan" className="space-y-5">
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
