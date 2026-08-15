@@ -109,7 +109,7 @@ function NextStepRow<K extends string>({
             {!simplified && (
               <span className="rounded border border-[#b7872a]/30 bg-[#b7872a]/5 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-[#9d741d] dark:text-[#d5aa58]">
                 <BookOpen className="mr-1 inline h-3 w-3" />
-                SOP
+                Playbook
               </span>
             )}
           </div>
