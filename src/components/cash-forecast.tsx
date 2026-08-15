@@ -855,7 +855,7 @@ export function CashForecastPanel({
   // ── Simplified mode: glanceable hero ─────────────────────────────────────
   if (simplified) {
     return (
-      <Card className={CARD_SHELL}>
+      <Card id="wizard-cash-outlook" className={CARD_SHELL}>
         <div className={GOLD_RULE} />
         <CardHeader className="border-b border-amber-900/10 pb-4 dark:border-slate-800">
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -930,7 +930,7 @@ export function CashForecastPanel({
 
   // ── Complex mode ──────────────────────────────────────────────────────────
   return (
-    <div className="space-y-5">
+    <div id="wizard-cash-outlook" className="space-y-5">
       {/* Hero: summary + chart */}
       <Card className={CARD_SHELL}>
         <div className={GOLD_RULE} />

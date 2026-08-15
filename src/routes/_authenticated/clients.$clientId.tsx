@@ -1922,7 +1922,7 @@ function ClientView() {
 
         {/* ===== CASH TAB ===== */}
         <div className={`tabpane${activeTab === "cash" ? " on" : ""}`} id="pane-cash">
-          <div className="card cf-wrap">
+          <div className="card cf-wrap" id="wizard-cash-panel">
             <div className="cf-head">
               <div>
                 <span className="eyebrow">Signature view</span>
