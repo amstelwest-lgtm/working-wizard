@@ -10,7 +10,7 @@
  * Health is derived, never typed. The pace marker — where a task *should* be
  * today — is the signature element and appears on every progress bar.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -1103,7 +1103,7 @@ function QuickAdd({
   inputRef,
 }: {
   onAdd: (title: string) => void;
-  inputRef?: React.RefObject<HTMLInputElement | null>;
+  inputRef?: RefObject<HTMLInputElement | null>;
 }) {
   const [v, setV] = useState("");
   const submit = () => {
