@@ -57,13 +57,14 @@ export function BudgetWorkspace({
             onClear={onClearUnmapped}
           />
         )}
-        <BudgetVariancePanel clientId={clientId} doc={doc} />
+        {/* Plan first — variance is a monthly check, not the hero */}
         <BudgetSimpleView
           doc={doc}
           onChange={onChange}
           actuals={actuals}
           onChangeModel={onChangeModel}
         />
+        <BudgetVariancePanel clientId={clientId} doc={doc} />
       </div>
     );
   }

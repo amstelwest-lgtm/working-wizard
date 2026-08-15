@@ -234,7 +234,10 @@ export function BudgetVariancePanel({
   }
 
   return (
-    <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-[#0b1220]/60">
+    <div
+      id="wizard-budget-variance"
+      className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-[#0b1220]/60"
+    >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
