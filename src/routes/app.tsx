@@ -2246,21 +2246,21 @@ function Index() {
         </div>
       )}
       <div id="board-pack" className="mx-auto max-w-6xl px-4 py-5 sm:px-6 lg:py-7">
-        {/* App bar */}
-        <header className="relative mb-5 overflow-hidden rounded-2xl border border-slate-200/80 bg-white/90 px-3 py-3 shadow-[0_12px_35px_rgba(15,23,42,0.06)] backdrop-blur-xl dark:border-slate-800/90 dark:bg-[#0d1420]/90 dark:shadow-[0_18px_45px_rgba(0,0,0,0.22)] sm:px-4 sm:py-3.5">
+        {/* App bar — compact single row */}
+        <header className="relative mb-3 overflow-hidden rounded-xl border border-slate-200/80 bg-white/90 px-2.5 py-1.5 shadow-[0_8px_24px_rgba(15,23,42,0.05)] backdrop-blur-xl dark:border-slate-800/90 dark:bg-[#0d1420]/90 dark:shadow-[0_10px_28px_rgba(0,0,0,0.2)] sm:px-3">
           <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#d4a550]/80 to-transparent" />
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex min-w-0 items-center gap-3">
-            <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-[#d4a550]/30 bg-[#d4a550]/10">
-              <Database className="h-4 w-4 text-[#a8791a] dark:text-[#d4a550]" />
+          <div className="flex items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-2">
+            <div className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-[#d4a550]/30 bg-[#d4a550]/10">
+              <Database className="h-3.5 w-3.5 text-[#a8791a] dark:text-[#d4a550]" />
             </div>
             <img
               src="/milon-wordmark.png"
               alt="Milōn"
-              className="h-5 w-auto shrink-0 dark:brightness-110 sm:h-6"
+              className="h-4 w-auto shrink-0 dark:brightness-110 sm:h-[18px]"
               style={{ filter: "brightness(0.85) saturate(1.2)" }}
             />
-            <div className="mt-0.5 truncate text-[10px] font-medium uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">
+            <div className="hidden min-w-0 truncate text-[9px] font-medium uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500 md:block">
               {actingClientName ?? "Operating finance"}
             </div>
             <ReviewSignoffBadge
@@ -2270,12 +2270,12 @@ function Index() {
               compact
             />
           </div>
-          <div className="flex flex-wrap items-center gap-1.5 print:hidden lg:justify-end">
+          <div className="flex shrink-0 items-center gap-1 print:hidden">
             {/* Business Profile pill — owners retake the 10-question funnel */}
             {userRole !== "client_member" ? (
               <button
                 onClick={() => setShowOnboarding(true)}
-                className="inline-flex h-9 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50/80 px-3 text-[9px] font-semibold uppercase tracking-[0.16em] text-slate-600 transition-all hover:-translate-y-0.5 hover:border-[#b7872a]/50 hover:bg-[#d4a550]/10 dark:border-slate-700/80 dark:bg-slate-900/70 dark:text-slate-300"
+                className="inline-flex h-7 max-w-[11rem] items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50/80 px-2 text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-600 transition-colors hover:border-[#b7872a]/50 hover:bg-[#d4a550]/10 dark:border-slate-700/80 dark:bg-slate-900/70 dark:text-slate-300"
                 title={
                   operatingProfile
                     ? `Profile: ${profileShortLabel(operatingProfile)} — click to retake`
@@ -2285,22 +2285,24 @@ function Index() {
                 <Building2 className="h-3 w-3 shrink-0" />
                 {operatingProfile || businessType ? (
                   <>
-                    <span className="hidden max-w-[10rem] truncate sm:inline">
+                    <span className="hidden truncate sm:inline">
                       {profileShortLabel(operatingProfile) !== "Set up profile"
                         ? profileShortLabel(operatingProfile)
                         : businessType?.label}
                     </span>
-                    <Pencil className="hidden h-2.5 w-2.5 opacity-40 sm:block" />
+                    <Pencil className="hidden h-2.5 w-2.5 shrink-0 opacity-40 sm:block" />
                   </>
                 ) : (
-                  <span className="hidden sm:inline text-[#8a6508] dark:text-[#d4a550]">Set up profile</span>
+                  <span className="hidden text-[#8a6508] sm:inline dark:text-[#d4a550]">Profile</span>
                 )}
               </button>
             ) : operatingProfile || businessType ? (
-              <div className="inline-flex h-9 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50/80 px-3 text-[9px] font-semibold uppercase tracking-[0.16em] text-slate-600 dark:border-slate-700/80 dark:bg-slate-900/70 dark:text-slate-300"
-                title={`Profile: ${profileShortLabel(operatingProfile) || businessType?.label}`}>
+              <div
+                className="inline-flex h-7 max-w-[11rem] items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50/80 px-2 text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-600 dark:border-slate-700/80 dark:bg-slate-900/70 dark:text-slate-300"
+                title={`Profile: ${profileShortLabel(operatingProfile) || businessType?.label}`}
+              >
                 <Building2 className="h-3 w-3 shrink-0" />
-                <span className="hidden max-w-[10rem] truncate sm:inline">
+                <span className="hidden truncate sm:inline">
                   {profileShortLabel(operatingProfile) !== "Set up profile"
                     ? profileShortLabel(operatingProfile)
                     : businessType?.label}
@@ -2311,12 +2313,12 @@ function Index() {
             <Popover>
               <PopoverTrigger asChild>
                 <button
-                  className="inline-flex h-9 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50/80 px-3 text-[9px] font-semibold uppercase tracking-[0.16em] text-slate-600 transition-all hover:-translate-y-0.5 hover:border-[#b7872a]/50 hover:bg-[#d4a550]/10 dark:border-slate-700/80 dark:bg-slate-900/70 dark:text-slate-300"
+                  className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50/80 px-2 text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-600 transition-colors hover:border-[#b7872a]/50 hover:bg-[#d4a550]/10 dark:border-slate-700/80 dark:bg-slate-900/70 dark:text-slate-300"
                   title="Risk Profile"
                 >
                   <Shield className="h-3 w-3 shrink-0" />
-              <span className="hidden sm:inline">Risk · <span className="capitalize">{risk}</span></span>
-              <ChevronDown className="hidden h-3 w-3 opacity-50 sm:block" />
+                  <span className="hidden capitalize sm:inline">{risk}</span>
+                  <ChevronDown className="hidden h-3 w-3 opacity-50 sm:block" />
                 </button>
               </PopoverTrigger>
               <PopoverContent className="w-44 border border-slate-700 bg-slate-900 p-2 shadow-xl" align="end">
@@ -2342,40 +2344,39 @@ function Index() {
             {userRole !== "client_member" && (
               <button
                 onClick={() => setShowFinData(true)}
-                className="inline-flex h-9 items-center gap-2 rounded-xl border border-[#b7872a]/50 bg-gradient-to-b from-[#d4a550]/20 to-[#b7872a]/10 px-3 text-[9px] font-semibold uppercase tracking-[0.16em] text-[#8a6508] shadow-[0_2px_10px_rgba(212,165,80,0.18)] transition-all hover:-translate-y-0.5 hover:border-[#b7872a]/80 hover:from-[#d4a550]/30 hover:to-[#b7872a]/20 dark:text-[#e1b85e]"
+                className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-[#b7872a]/50 bg-gradient-to-b from-[#d4a550]/20 to-[#b7872a]/10 px-2.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-[#8a6508] shadow-[0_1px_6px_rgba(212,165,80,0.16)] transition-colors hover:border-[#b7872a]/80 hover:from-[#d4a550]/30 hover:to-[#b7872a]/20 dark:text-[#e1b85e]"
                 title="Upload financial statements or connect QuickBooks / Xero"
               >
-                <Upload className="h-3.5 w-3.5 shrink-0" />
-                <span className="text-left leading-none">
-                  <span className="block">Upload financials</span>
-                  <span className="mt-1 hidden text-[8px] font-medium normal-case tracking-normal opacity-70 md:block">PDF upload or QuickBooks / Xero</span>
-                </span>
+                <Upload className="h-3 w-3 shrink-0" />
+                <span className="hidden sm:inline">Upload</span>
               </button>
             )}
             {userRole === "firm_admin" && (
               <button
                 onClick={() => setAdminOpen(true)}
-                className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-[#d4a550]/30 bg-[#d4a550]/10 px-3 text-[9px] font-semibold uppercase tracking-[0.16em] text-[#8a6508] transition-all hover:-translate-y-0.5 hover:border-[#d4a550]/60 hover:bg-[#d4a550]/20 dark:text-[#d4a550]"
+                className="inline-flex h-7 items-center gap-1 rounded-lg border border-[#d4a550]/30 bg-[#d4a550]/10 px-2 text-[9px] font-semibold uppercase tracking-[0.14em] text-[#8a6508] transition-colors hover:border-[#d4a550]/60 hover:bg-[#d4a550]/20 dark:text-[#d4a550]"
                 title="Admin Dashboard"
               >
                 ⬡ <span className="hidden sm:inline">Admin</span>
               </button>
             )}
-            <ThemeToggle />
+            <ThemeToggle className="h-7 rounded-lg border-slate-200 px-2 py-0 text-[9px] font-semibold uppercase tracking-[0.14em] dark:border-slate-700/80" />
             <HeaderShareButton />
             <button
               onClick={() => navigate({ to: "/settings" })}
-              className="inline-flex h-9 items-center rounded-xl border border-slate-200 bg-slate-50/80 px-3 text-[9px] font-semibold uppercase tracking-[0.16em] text-slate-600 transition-all hover:-translate-y-0.5 hover:border-[#b7872a]/50 hover:bg-[#d4a550]/10 dark:border-slate-700/80 dark:bg-slate-900/70 dark:text-slate-300"
+              className="inline-flex h-7 items-center rounded-lg border border-slate-200 bg-slate-50/80 px-2 text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-600 transition-colors hover:border-[#b7872a]/50 hover:bg-[#d4a550]/10 dark:border-slate-700/80 dark:bg-slate-900/70 dark:text-slate-300"
               title="Settings"
             >
-              Settings
+              <span className="hidden sm:inline">Settings</span>
+              <span className="sm:hidden">⚙</span>
             </button>
             <button
               onClick={() => signOut().then(() => { window.location.href = "/"; })}
-              className="inline-flex h-9 items-center rounded-xl border border-slate-200 bg-slate-50/80 px-3 text-[9px] font-semibold uppercase tracking-[0.16em] text-slate-600 transition-all hover:-translate-y-0.5 hover:border-[#b7872a]/50 hover:bg-[#d4a550]/10 dark:border-slate-700/80 dark:bg-slate-900/70 dark:text-slate-300"
+              className="inline-flex h-7 items-center rounded-lg border border-slate-200 bg-slate-50/80 px-2 text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-600 transition-colors hover:border-[#b7872a]/50 hover:bg-[#d4a550]/10 dark:border-slate-700/80 dark:bg-slate-900/70 dark:text-slate-300"
               title="Sign out"
             >
-              Sign out
+              <span className="hidden sm:inline">Sign out</span>
+              <span className="sm:hidden">⎋</span>
             </button>
           </div>
           </div>
