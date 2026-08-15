@@ -10,7 +10,7 @@
  * Health is derived, never typed. The pace marker — where a task *should* be
  * today — is the signature element and appears on every progress bar.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -194,6 +194,7 @@ export default function ActionPlanPanel({ clientId, clientName, simplified, isOw
   const dragSeq = useRef<string | null>(null);
   // Item briefly highlighted after arriving from Next Moves → Assign
   const [focusedItemId, setFocusedItemId] = useState<string | null>(null);
+  const quickAddRef = useRef<HTMLInputElement>(null);
 
   // ── Load ───────────────────────────────────────────────────────────────────
   const refresh = useCallback(async () => {
@@ -535,6 +536,17 @@ export default function ActionPlanPanel({ clientId, clientName, simplified, isOw
             </div>
             {isOwner && (
               <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  size="sm"
+                  className="bg-[#b8860b] text-white hover:bg-[#9a7009] dark:bg-[#d4a550] dark:text-slate-950 dark:hover:bg-[#c69440]"
+                  onClick={() => {
+                    quickAddRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+                    quickAddRef.current?.focus();
+                  }}
+                >
+                  <Plus className="mr-1 h-3.5 w-3.5" />
+                  Add action
+                </Button>
                 {moves.length > 0 && (
                   <Button size="sm" variant="outline" className={INPUT_CLS} onClick={() => setImportOpen(true)}>
                     <Sparkles className="mr-1 h-3.5 w-3.5 text-[#b8860b] dark:text-[#d4a550]" />
@@ -597,11 +609,23 @@ export default function ActionPlanPanel({ clientId, clientName, simplified, isOw
         </CardHeader>
         <CardContent className="px-0 pb-2 pt-0">
           {filtered.length === 0 && (
-            <p className="px-6 py-8 text-center text-sm text-slate-500 dark:text-slate-400">
-              {items.length === 0
-                ? "No actions yet. Import from Strategic Moves or type one below."
-                : "Nothing matches this filter."}
-            </p>
+            <div className="px-6 py-8 text-center">
+              <p className="text-sm text-slate-500 dark:text-slate-400">
+                {items.length === 0
+                  ? "No actions yet. Add one manually or import from Strategic Moves."
+                  : "Nothing matches this filter."}
+              </p>
+              {isOwner && items.length === 0 && (
+                <Button
+                  size="sm"
+                  className="mt-3 bg-[#b8860b] text-white hover:bg-[#9a7009] dark:bg-[#d4a550] dark:text-slate-950 dark:hover:bg-[#c69440]"
+                  onClick={() => quickAddRef.current?.focus()}
+                >
+                  <Plus className="mr-1 h-3.5 w-3.5" />
+                  Add action
+                </Button>
+              )}
+            </div>
           )}
           <div>
             {filtered.map((it) => (
@@ -623,7 +647,7 @@ export default function ActionPlanPanel({ clientId, clientName, simplified, isOw
               />
             ))}
           </div>
-          {isOwner && <QuickAdd onAdd={(title) => addItem(title)} />}
+          {isOwner && <QuickAdd inputRef={quickAddRef} onAdd={(title) => addItem(title)} />}
         </CardContent>
       </Card>
 
@@ -1074,20 +1098,46 @@ function OwnerPicker({ employees, onPick, onAdd, onClose }: {
 }
 
 // ═══ Quick add ═══════════════════════════════════════════════════════════════
-function QuickAdd({ onAdd }: { onAdd: (title: string) => void }) {
+function QuickAdd({
+  onAdd,
+  inputRef,
+}: {
+  onAdd: (title: string) => void;
+  inputRef?: RefObject<HTMLInputElement | null>;
+}) {
   const [v, setV] = useState("");
+  const submit = () => {
+    const title = v.trim();
+    if (!title) return;
+    onAdd(title);
+    setV("");
+  };
   return (
-    <div className="flex items-center gap-3 px-4 py-3">
-      <Plus className="h-4 w-4 shrink-0 text-slate-300 dark:text-slate-600" />
+    <div className="mx-3 mb-3 flex items-center gap-2 rounded-xl border border-dashed border-[#d4a550]/45 bg-[#d4a550]/5 px-3 py-2 dark:border-[#d4a550]/35 dark:bg-[#d4a550]/8">
+      <Plus className="h-4 w-4 shrink-0 text-[#b8860b] dark:text-[#d4a550]" />
       <input
+        ref={inputRef}
         value={v}
         onChange={(e) => setV(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === "Enter" && v.trim()) { onAdd(v.trim()); setV(""); }
+          if (e.key === "Enter") {
+            e.preventDefault();
+            submit();
+          }
         }}
-        placeholder="Type an action and press Enter — owner and date can follow"
-        className="w-full bg-transparent text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none dark:text-slate-200 dark:placeholder:text-slate-500"
+        placeholder="Describe the action…"
+        className="min-w-0 flex-1 bg-transparent text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none dark:text-slate-200 dark:placeholder:text-slate-500"
+        aria-label="New action title"
       />
+      <Button
+        type="button"
+        size="sm"
+        disabled={!v.trim()}
+        onClick={submit}
+        className="h-8 shrink-0 bg-[#b8860b] px-3 text-xs text-white hover:bg-[#9a7009] disabled:opacity-40 dark:bg-[#d4a550] dark:text-slate-950 dark:hover:bg-[#c69440]"
+      >
+        Add
+      </Button>
     </div>
   );
 }
