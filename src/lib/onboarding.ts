@@ -2,13 +2,12 @@
  * Onboarding storage keys + helpers.
  * Keep keys versioned so we can re-show improved tours once.
  *
- * v4 / v2 — one-time reset (Aug 2026) so existing accounts re-see the
- * guided owner + accountant onboarding after the banks → board tour shipped.
+ * v5 / v3 — spotlight cutout + orb shape fix (Aug 2026).
  */
 
-export const OWNER_TOUR_KEY = "milon_walkthrough_v4";
-export const ACCOUNTANT_DASH_TOUR_KEY = "milon_accountant_dash_tour_v2";
-export const ACCOUNTANT_CLIENT_TOUR_KEY = "milon_accountant_client_tour_v2";
+export const OWNER_TOUR_KEY = "milon_walkthrough_v5";
+export const ACCOUNTANT_DASH_TOUR_KEY = "milon_accountant_dash_tour_v3";
+export const ACCOUNTANT_CLIENT_TOUR_KEY = "milon_accountant_client_tour_v3";
 export const ACCOUNTANT_FIRST_CLIENT_KEY = "milon_accountant_first_client_done_v2";
 
 export function onboardingDone(key: string): boolean {

@@ -443,13 +443,12 @@ html:not(.dark) main.bg-slate-950 { background-color: #f8fafc !important; color:
 /* Headings use the editorial serif sparingly */
 .font-display { font-family: var(--font-display); letter-spacing: -0.01em; }
 
-/* Walkthrough wizard — target element highlight */
-.wizard-highlight {
-  outline: 2px solid rgba(201, 150, 43, 0.75) !important;
-  outline-offset: 5px;
-  border-radius: 10px;
-  position: relative;
-  z-index: 8001;
+/* Walkthrough wizard — do not set border-radius or z-index on the target.
+   border-radius: 10px was squashing .health-orb into a square; z-index failed
+   under transformed parents. The spotlight hole is drawn by WalkthroughWizard. */
+.wizard-highlight:not(.health-orb) {
+  outline: 2px solid rgba(201, 150, 43, 0.55);
+  outline-offset: 4px;
   animation: wizard-pulse 1.8s ease-in-out infinite;
 }
 @keyframes wizard-pulse {
