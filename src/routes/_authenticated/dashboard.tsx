@@ -1,9 +1,10 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState, useRef, Fragment } from "react";
+import { useEffect, useMemo, useState, useRef, Fragment } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
 import { PlaybookDrawer } from "@/components/playbook-drawer";
+import { PortfolioHealthScatter } from "@/components/portfolio-health-scatter";
 import {
   healthFromFlatFinancials,
   buildTrend,
@@ -11,6 +12,22 @@ import {
   type TrendPoint,
   type OverallHealth,
 } from "@/lib/health-score";
+import {
+  avgHealthDelta,
+  buildAttentionItems,
+  buildPortfolioInsights,
+  clientsAddedThisMonth,
+  dataAsOfLabel,
+  derivePriority,
+  firstNameOf,
+  portfolioSparkPoints,
+  portfolioSummaryLine,
+  revenueOf,
+  timeGreeting,
+  trendDelta30d,
+  type PriorityLevel,
+  type ScoreHistoryPoint,
+} from "@/lib/portfolio-dashboard";
 import { useServerFn } from "@tanstack/react-start";
 import { getQboStatuses } from "@/lib/qbo.functions";
 import { createFirmClient } from "@/lib/firm-clients.functions";
@@ -47,6 +64,7 @@ type Client = {
   firm_id: string | null;
   financials: Record<string, string | number | null> | null;
   cashflow?: unknown;
+  created_at?: string | null;
   // reports_issued_count may not exist until migration runs
   reports_issued_count?: number | null;
 };
@@ -55,10 +73,20 @@ type ClientRow = Client & {
   score: number | null;
   health: OverallHealth;
   trend: TrendPoint[];
+  /** ~30-day health delta from score history. */
+  trendDelta: number | null;
   /** Resolved runway (persisted or derived from cashflow). */
   runwayWeeks: number | null;
   /** Unresolved notes count. */
   openQueries: number;
+  /** Open (not done) action-plan items. */
+  openActions: number;
+  /** Open actions past due_date. */
+  overdueActions: number;
+  /** Revenue for scatter bubble sizing. */
+  revenue: number | null;
+  priority: PriorityLevel;
+  priorityLabel: string;
 };
 
 // Playbook metadata shape for the library grid
@@ -166,32 +194,40 @@ function RingSvg({
   );
 }
 
-/** Sparkline SVG from an 8-point trend */
-function SparkSvg({ trend }: { trend: TrendPoint[] }) {
-  const pts = trend.map((t) => t.score);
-  if (pts.length === 0) return <svg className="spark" viewBox="0 0 84 26" />;
-  const w = 84, h = 26;
+/** Sparkline SVG from numeric points (or an 8-point trend). */
+function SparkSvg({
+  trend,
+  points,
+  className = "spark",
+  width = 84,
+  height = 26,
+}: {
+  trend?: TrendPoint[];
+  points?: number[];
+  className?: string;
+  width?: number;
+  height?: number;
+}) {
+  const pts = points ?? trend?.map((t) => t.score) ?? [];
+  if (pts.length === 0) return <svg className={className} viewBox={`0 0 ${width} ${height}`} />;
+  const w = width;
+  const h = height;
   const min = Math.min(...pts);
   const max = Math.max(...pts);
   const rg = max - min || 1;
   const step = w / Math.max(pts.length - 1, 1);
   const d = pts
-    .map((p, i) => `${i ? "L" : "M"}${(i * step).toFixed(1)} ${(h - 3 - ((p - min) / rg) * (h - 6)).toFixed(1)}`)
+    .map(
+      (p, i) =>
+        `${i ? "L" : "M"}${(i * step).toFixed(1)} ${(h - 3 - ((p - min) / rg) * (h - 6)).toFixed(1)}`,
+    )
     .join(" ");
   const up = pts[pts.length - 1] >= pts[0];
   return (
-    <svg className="spark" viewBox={`0 0 ${w} ${h}`}>
+    <svg className={className} viewBox={`0 0 ${w} ${h}`}>
       <path d={d} stroke={up ? "var(--ok)" : "var(--risk)"} />
     </svg>
   );
-}
-
-/** Partner tier from client count */
-function partnerTier(count: number): string {
-  if (count >= 40) return "Platinum";
-  if (count >= 15) return "Gold";
-  if (count >= 5) return "Silver";
-  return "Starter";
 }
 
 // ── Add Client Dialog ─────────────────────────────────────────────────────────
@@ -264,11 +300,15 @@ function AddClientDialog({
         <div className="drawer-head">
           <div className="cat">New client</div>
           <h3>{heading}</h3>
-          <button className="close" onClick={onClose}>✕</button>
+          <button className="close" onClick={onClose}>
+            ✕
+          </button>
         </div>
         <div className="drawer-body" style={{ padding: "24px 30px" }}>
           {blurb && (
-            <p style={{ marginBottom: 16, fontSize: 13, color: "var(--ink-dim)", lineHeight: 1.55 }}>
+            <p
+              style={{ marginBottom: 16, fontSize: 13, color: "var(--ink-dim)", lineHeight: 1.55 }}
+            >
               {blurb}
             </p>
           )}
@@ -278,31 +318,71 @@ function AddClientDialog({
             </p>
           )}
           <div style={{ marginBottom: 16 }}>
-            <label style={{ fontSize: 10.5, letterSpacing: ".14em", textTransform: "uppercase", color: "var(--ink-dim)", display: "block", marginBottom: 6 }}>
+            <label
+              style={{
+                fontSize: 10.5,
+                letterSpacing: ".14em",
+                textTransform: "uppercase",
+                color: "var(--ink-dim)",
+                display: "block",
+                marginBottom: 6,
+              }}
+            >
               Business name *
             </label>
             <input
               ref={inputRef}
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") void add(); }}
-              style={{ width: "100%", padding: "11px 14px", borderRadius: 11, border: "1px solid var(--line)", background: "var(--bg-2)", color: "var(--ink)", fontFamily: "inherit", fontSize: 14 }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void add();
+              }}
+              style={{
+                width: "100%",
+                padding: "11px 14px",
+                borderRadius: 11,
+                border: "1px solid var(--line)",
+                background: "var(--bg-2)",
+                color: "var(--ink)",
+                fontFamily: "inherit",
+                fontSize: 14,
+              }}
               placeholder="e.g. Karoo Traders"
             />
           </div>
           <div style={{ marginBottom: 24 }}>
-            <label style={{ fontSize: 10.5, letterSpacing: ".14em", textTransform: "uppercase", color: "var(--ink-dim)", display: "block", marginBottom: 6 }}>
+            <label
+              style={{
+                fontSize: 10.5,
+                letterSpacing: ".14em",
+                textTransform: "uppercase",
+                color: "var(--ink-dim)",
+                display: "block",
+                marginBottom: 6,
+              }}
+            >
               Business type (optional)
             </label>
             <input
               value={newType}
               onChange={(e) => setNewType(e.target.value)}
-              style={{ width: "100%", padding: "11px 14px", borderRadius: 11, border: "1px solid var(--line)", background: "var(--bg-2)", color: "var(--ink)", fontFamily: "inherit", fontSize: 14 }}
+              style={{
+                width: "100%",
+                padding: "11px 14px",
+                borderRadius: 11,
+                border: "1px solid var(--line)",
+                background: "var(--bg-2)",
+                color: "var(--ink)",
+                fontFamily: "inherit",
+                fontSize: 14,
+              }}
               placeholder="Services / Retail / SaaS…"
             />
           </div>
           <div style={{ display: "flex", gap: 12 }}>
-            <button className="btn ghost" onClick={onClose} style={{ flex: 1 }}>Cancel</button>
+            <button className="btn ghost" onClick={onClose} style={{ flex: 1 }}>
+              Cancel
+            </button>
             <button
               className="btn gold"
               onClick={() => void add()}
@@ -340,7 +420,7 @@ function Dashboard() {
       });
   }, [user, navigate]);
 
-  const { firmId, firms, brandLoading } = useAccountantProfile();
+  const { firmId, firms, brandLoading, profile } = useAccountantProfile();
   const firm: Firm | null =
     firms.find((f) => f.id === firmId) ??
     (firms[0]
@@ -367,8 +447,6 @@ function Dashboard() {
   const [drawerRatioKey, setDrawerRatioKey] = useState<string | null>(null);
   const [drawerRatioName, setDrawerRatioName] = useState("");
 
-  // stats derived from client list
-  const [reportsThisMonth, setReportsThisMonth] = useState(0);
   // Only known after mount — reading window.location.origin during render would
   // make the server-rendered HTML differ from the client's first render and
   // trigger a hydration mismatch.
@@ -386,7 +464,6 @@ function Dashboard() {
     if (!userId) {
       setClientRows([]);
       setQboStatuses({});
-      setReportsThisMonth(0);
       setLoading(false);
       return;
     }
@@ -434,14 +511,17 @@ function Dashboard() {
     }
 
     // Score history — query defensively; the table may not exist yet
-    let historyMap: Record<string, { score: number; is_estimated: boolean }[]> = {};
+    const historyMap: Record<string, ScoreHistoryPoint[]> = {};
     try {
       // NOTE: client_score_history is added by migration 20260802000000_score_history_and_reports_count.sql
       // which may not have run yet against the live database — query defensively.
       const { data: hist, error: histErr } = await supabase
         .from("client_score_history")
-        .select("client_id, score, is_estimated")
-        .in("client_id", rawClients.map((c) => c.id))
+        .select("client_id, score, is_estimated, period_date")
+        .in(
+          "client_id",
+          rawClients.map((c) => c.id),
+        )
         .order("period_date", { ascending: true });
 
       if (histErr) {
@@ -453,11 +533,42 @@ function Dashboard() {
       } else if (hist) {
         for (const row of hist) {
           historyMap[row.client_id] = historyMap[row.client_id] ?? [];
-          historyMap[row.client_id].push({ score: row.score, is_estimated: row.is_estimated });
+          historyMap[row.client_id].push({
+            score: row.score,
+            is_estimated: row.is_estimated,
+            period_date: row.period_date,
+          });
         }
       }
     } catch {
       // table doesn't exist — silently ignore
+    }
+
+    // Open action-plan items (non-fatal if RLS/table missing)
+    const openActionsMap: Record<string, number> = {};
+    const overdueActionsMap: Record<string, number> = {};
+    if (rawClients.length > 0) {
+      try {
+        const today = new Date().toISOString().slice(0, 10);
+        const { data: actions, error: actErr } = await supabase
+          .from("action_items")
+          .select("client_id, status, due_date")
+          .in(
+            "client_id",
+            rawClients.map((c) => c.id),
+          )
+          .neq("status", "done");
+        if (!actErr && actions) {
+          for (const a of actions) {
+            openActionsMap[a.client_id] = (openActionsMap[a.client_id] ?? 0) + 1;
+            if (a.due_date && a.due_date < today) {
+              overdueActionsMap[a.client_id] = (overdueActionsMap[a.client_id] ?? 0) + 1;
+            }
+          }
+        }
+      } catch {
+        // non-fatal
+      }
     }
 
     // Compute per-client enriched rows
@@ -471,33 +582,40 @@ function Dashboard() {
       const score = health.overall;
       const realHistory = historyMap[c.id] ?? [];
       const trendHistory =
-        realHistory.length > 0
-          ? realHistory
-          : score != null
-          ? [{ score, is_estimated: true }]
-          : [];
+        realHistory.length > 0 ? realHistory : score != null ? [{ score, is_estimated: true }] : [];
       const trend = buildTrend(trendHistory);
+      const trendDelta = trendDelta30d(realHistory, score);
+      const openActions = openActionsMap[c.id] ?? 0;
+      const overdueActions = overdueActionsMap[c.id] ?? 0;
+      const openQueries = openQueriesMap[c.id] ?? 0;
+      const revenue = revenueOf(c.financials);
+      const priority = derivePriority({
+        score,
+        health,
+        trendDelta,
+        runwayWeeks,
+        openQueries,
+        openActions,
+        overdueActions,
+        revenue,
+      });
       return {
         ...c,
         score,
         health,
         trend,
+        trendDelta,
         runwayWeeks,
-        openQueries: openQueriesMap[c.id] ?? 0,
+        openQueries,
+        openActions,
+        overdueActions,
+        revenue,
+        priority: priority.level,
+        priorityLabel: priority.label,
       };
     });
 
     setClientRows(rows);
-
-    // Reports count — sum reports_issued_count if column exists (defensive)
-    let totalReports = 0;
-    try {
-      totalReports = rawClients.reduce((s, c) => s + (c.reports_issued_count ?? 0), 0);
-    } catch {
-      totalReports = 0;
-    }
-    setReportsThisMonth(totalReports);
-
     setLoading(false);
   };
 
@@ -520,7 +638,10 @@ function Dashboard() {
       client_id: c.id,
       firm_id: firm?.id ?? null,
     });
-    if (error) { toast.error(error.message); return; }
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
     sessionStorage.setItem("acting_as_client_id", c.id);
     sessionStorage.setItem("acting_as_client_name", c.name);
     navigate({ to: "/app" });
@@ -533,7 +654,10 @@ function Dashboard() {
   const referralUrl = firm?.referral_code ? `${origin}/auth?ref=${firm.referral_code}` : "";
 
   const copyReferral = () => {
-    if (!referralUrl) { toast.error("No referral link yet"); return; }
+    if (!referralUrl) {
+      toast.error("No referral link yet");
+      return;
+    }
     navigator.clipboard?.writeText(referralUrl);
     toast.success("Referral link copied");
   };
@@ -573,11 +697,89 @@ function Dashboard() {
   const atRiskCount = clientRows.filter(
     (c) => c.health.overall != null && c.health.displayStatus !== "healthy",
   ).length;
-  const tier = partnerTier(clientRows.length);
+  const criticalCount = clientRows.filter((c) => c.health.displayStatus === "critical").length;
+  const openActionsTotal = clientRows.reduce((s, c) => s + c.openActions, 0);
+  const actionsDueThisWeek = clientRows.reduce((s, c) => {
+    // Approximate: overdue counts toward "due this week" pressure; open actions
+    // without dates still contribute to the headline open-actions metric only.
+    return s + c.overdueActions;
+  }, 0);
+  const addedThisMonth = clientsAddedThisMonth(clientRows);
+  const healthDelta = avgHealthDelta(clientRows);
+  const sparkPts = portfolioSparkPoints(scoredRows);
+  const greetName = firstNameOf(profile.accountantName || user?.email?.split("@")[0]);
+  const greeting = `${timeGreeting()}, ${greetName}.`;
+  const summaryLine = portfolioSummaryLine({
+    clientCount: clientRows.length,
+    needAttention: atRiskCount,
+    avgHealth,
+  });
+  const asOf = dataAsOfLabel();
+
+  const attentionItems = useMemo(
+    () =>
+      buildAttentionItems(
+        clientRows.map((c) => ({
+          id: c.id,
+          name: c.name,
+          score: c.score,
+          health: c.health,
+          trendDelta: c.trendDelta,
+          runwayWeeks: c.runwayWeeks,
+          openQueries: c.openQueries,
+          openActions: c.openActions,
+          overdueActions: c.overdueActions,
+          revenue: c.revenue,
+        })),
+        3,
+      ),
+    [clientRows],
+  );
+
+  const insights = useMemo(
+    () =>
+      buildPortfolioInsights(
+        clientRows.map((c) => ({
+          id: c.id,
+          name: c.name,
+          score: c.score,
+          health: c.health,
+          trendDelta: c.trendDelta,
+          runwayWeeks: c.runwayWeeks,
+          openQueries: c.openQueries,
+          openActions: c.openActions,
+          overdueActions: c.overdueActions,
+          revenue: c.revenue,
+        })),
+      ),
+    [clientRows],
+  );
+
+  const scatterClients = useMemo(
+    () =>
+      scoredRows
+        .filter((c) => c.score != null)
+        .map((c) => ({
+          id: c.id,
+          name: c.name,
+          score: c.score as number,
+          trendDelta: c.trendDelta ?? 0,
+          revenue: c.revenue,
+          status: c.health.displayStatus,
+        })),
+    [scoredRows],
+  );
+
+  const profileInitials = greetName
+    .split(/\s+/)
+    .map((p) => p[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
 
   // ── Filtered clients ──────────────────────────────────────────────────────
   const filteredRows = clientRows.filter((c) =>
-    c.name.toLowerCase().includes(searchQuery.toLowerCase())
+    c.name.toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
   // ── Playbook grid grouped by category ────────────────────────────────────
@@ -594,17 +796,30 @@ function Dashboard() {
     const ebit = parseFloat(String(f.ebit ?? ""));
     const revenue = parseFloat(String(f.revenue ?? ""));
     if (!isFinite(ebit)) return "—";
-    if (isFinite(revenue) && revenue > 0) return `${((ebit / revenue) * 100).toFixed(1)}%`;
+    if (isFinite(revenue) && revenue > 0) {
+      const pct = ((ebit / revenue) * 100).toFixed(1);
+      const money = ebit.toLocaleString("en-ZA", { maximumFractionDigits: 0 });
+      return `${pct}% R${money}`;
+    }
     return ebit.toLocaleString("en-ZA", { maximumFractionDigits: 0 });
   }
 
   function runwayStr(c: ClientRow): string {
     if (c.runwayWeeks == null) return "—";
+    const months = c.runwayWeeks / 4.345;
+    if (months >= 1) return `${months.toFixed(1)} months`;
     return `${c.runwayWeeks} wk`;
   }
 
-  // ── current month label ───────────────────────────────────────────────────
-  const monthLabel = new Date().toLocaleString("en-ZA", { month: "short" });
+  function trendLabel(c: ClientRow): string {
+    if (c.trendDelta == null) return "—";
+    if (c.trendDelta === 0) return "Flat";
+    return c.trendDelta > 0 ? `↑ ${c.trendDelta}` : `↓ ${Math.abs(c.trendDelta)}`;
+  }
+
+  const scrollToClients = () => {
+    document.getElementById("clients-table")?.scrollIntoView({ behavior: "smooth" });
+  };
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
@@ -632,7 +847,17 @@ function Dashboard() {
           <button
             id="wizard-dash-reports"
             className="tb-btn gold"
-            onClick={() => navigate({ to: "/reports", search: { client: undefined, clientId: undefined, report: undefined, action: undefined } })}
+            onClick={() =>
+              navigate({
+                to: "/reports",
+                search: {
+                  client: undefined,
+                  clientId: undefined,
+                  report: undefined,
+                  action: undefined,
+                },
+              })
+            }
           >
             <svg viewBox="0 0 24 24">
               <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
@@ -641,19 +866,37 @@ function Dashboard() {
             Reports studio
           </button>
           <ThemeToggle />
-          <button
-            className="tb-btn"
-            type="button"
-            onClick={() => navigate({ to: "/settings" })}
-          >
+          <button className="tb-btn" type="button" onClick={() => navigate({ to: "/settings" })}>
+            <svg viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="3" />
+              <path d="M12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4" />
+            </svg>
             Settings
           </button>
-          <button className="tb-btn" onClick={handleSignOut}>
+          <span className="profile-chip" title={profile.accountantName || user?.email || ""}>
+            <span className="av">{profileInitials || "·"}</span>
+            {greetName}
+          </span>
+          <button className="tb-btn" onClick={handleSignOut} title="Sign out">
             <svg viewBox="0 0 24 24">
               <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />
             </svg>
-            Sign out
           </button>
+        </div>
+
+        {/* ===== GREETING ===== */}
+        <div className="dash-hero">
+          <div>
+            <h1>{greeting}</h1>
+            <p className="dash-summary">{summaryLine}</p>
+          </div>
+          <div className="dash-asof">
+            <svg viewBox="0 0 24 24">
+              <rect x="3" y="4" width="18" height="18" rx="2" />
+              <path d="M16 2v4M8 2v4M3 10h18" />
+            </svg>
+            Data as of {asOf}
+          </div>
         </div>
 
         {/* ===== STATS STRIP ===== */}
@@ -665,8 +908,15 @@ function Dashboard() {
               </svg>
               Clients
             </div>
-            <div className="v">{clientRows.length}</div>
-            <div className="d up">Active on platform</div>
+            <div className="v">{loading ? "—" : clientRows.length}</div>
+            <div className="stat-foot">
+              <div className={`d ${addedThisMonth > 0 ? "up" : ""}`}>
+                {addedThisMonth > 0 ? `+${addedThisMonth} this month` : "Active on platform"}
+              </div>
+              {sparkPts.length > 1 && (
+                <SparkSvg points={sparkPts} className="stat-spark" width={72} height={22} />
+              )}
+            </div>
           </div>
 
           <div className="stat">
@@ -680,10 +930,19 @@ function Dashboard() {
               {loading || avgHealth == null ? "—" : avgHealth}
               {avgHealth != null && <small>/100</small>}
             </div>
-            <div className="d">
-              {scoredRows.length
-                ? `Across ${scoredRows.length} scored client${scoredRows.length === 1 ? "" : "s"}`
-                : "No scored clients yet"}
+            <div className="stat-foot">
+              <div
+                className={`d ${healthDelta != null && healthDelta > 0 ? "up" : healthDelta != null && healthDelta < 0 ? "warn" : ""}`}
+              >
+                {healthDelta == null
+                  ? scoredRows.length
+                    ? `Across ${scoredRows.length} scored`
+                    : "No scored clients yet"
+                  : `${healthDelta > 0 ? "↑" : healthDelta < 0 ? "↓" : "→"} ${Math.abs(healthDelta)} pts vs last month`}
+              </div>
+              {sparkPts.length > 1 && (
+                <SparkSvg points={sparkPts} className="stat-spark" width={72} height={22} />
+              )}
             </div>
           </div>
 
@@ -692,134 +951,127 @@ function Dashboard() {
               <svg viewBox="0 0 24 24">
                 <path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0zM12 9v4M12 17h.01" />
               </svg>
-              At risk
+              Need attention
             </div>
             <div className="v" style={{ color: atRiskCount ? "var(--risk)" : "var(--ok)" }}>
               {loading ? "—" : atRiskCount}
             </div>
-            <div className="d warn">Needs attention first</div>
+            <div className="d warn">
+              {atRiskCount === 0
+                ? "All clear"
+                : `${criticalCount} critical · ${Math.max(0, atRiskCount - criticalCount)} declining`}
+            </div>
           </div>
 
           <div className="stat">
             <div className="k">
               <svg viewBox="0 0 24 24">
-                <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9zM14 3v6h6" />
+                <path d="M9 11l3 3L22 4" />
+                <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
               </svg>
-              Reports · {monthLabel}
+              Open actions
             </div>
-            <div className="v">{loading ? "—" : reportsThisMonth}</div>
+            <div className="v">{loading ? "—" : openActionsTotal}</div>
             <div className="d">
-              Partner tier: <b style={{ color: "var(--gold)" }}>{tier}</b> · 25% rev-share
+              {actionsDueThisWeek > 0
+                ? `${actionsDueThisWeek} overdue`
+                : openActionsTotal > 0
+                  ? "Across action plans"
+                  : "No open actions"}
             </div>
           </div>
         </div>
 
-        {/* ===== REPORTS SPOTLIGHT ===== */}
-        <div className="spotlight">
-          <div className="card hero-card spot-copy">
-            <span className="eyebrow">Your deliverable, spotlighted</span>
-            <h2>
-              Board-ready reports.
-              <br />
-              <span className="serif gold-text">Your brand on every page.</span>
-            </h2>
-            <p>
-              Ten white-label reports per client — benchmarked ratios, cash forecasts and ranked
-              action plans — generated in one click and branded to your practice. This is the
-              advisory product your clients pay for.
-            </p>
-            <div className="spot-actions">
-              <button
-                className="btn gold"
-                onClick={() => navigate({ to: "/reports", search: { client: undefined, clientId: undefined, report: undefined, action: undefined } })}
-              >
-                <svg viewBox="0 0 24 24">
-                  <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
-                  <path d="M14 3v6h6" />
-                </svg>
-                Generate a report
-              </button>
-              <button
-                className="btn ghost"
-                onClick={() => {
-                  document.getElementById("playbooks")?.scrollIntoView({ behavior: "smooth" });
-                }}
-              >
-                Browse playbooks
-              </button>
-            </div>
-            <div className="spot-metrics">
-              <div>
-                <b>{loading ? "—" : reportsThisMonth}</b>
-                <span>Reports this month</span>
-              </div>
-              <div>
-                <b>10</b>
-                <span>Templates per client</span>
-              </div>
-              <div>
-                <b>{loading ? "—" : reportsThisMonth}</b>
-                <span>Client downloads</span>
-              </div>
-            </div>
-          </div>
+        {/* ===== PORTFOLIO HEALTH + ATTENTION ===== */}
+        <div className="portfolio-grid">
+          <PortfolioHealthScatter
+            clients={scatterClients}
+            onSelect={(clientId) =>
+              navigate({
+                to: "/clients/$clientId",
+                params: { clientId },
+                search: {},
+              })
+            }
+          />
 
-          <div className="card report-fan">
-            <div className="doc doc-1">
-              <div className="dt">{firm?.name ?? "Practice"} · Milōn</div>
-              <div className="dh">Cash Runway Report</div>
-              <div className="ln" style={{ width: "88%" }} />
-              <div className="ln" style={{ width: "70%" }} />
-              <div className="bar"><i style={{ width: "64%" }} /></div>
-              <div className="bar"><i style={{ width: "42%" }} /></div>
-              <div className="ln" style={{ width: "80%" }} />
-              <div className="ln" style={{ width: "56%" }} />
+          <div className="attn-panel">
+            <div className="attn-head">
+              <h2>Needs your attention</h2>
+              <button type="button" className="linkish" onClick={scrollToClients}>
+                View all →
+              </button>
             </div>
-            <div className="doc doc-2">
-              <div className="dt">{firm?.name ?? "Practice"} · Milōn</div>
-              <div className="dh">Business Health Report</div>
-              <div className="ring" style={{ width: 40, height: 40, margin: "8px auto 4px" }}>
-                <svg width="40" height="40" viewBox="0 0 40 40">
-                  <circle cx="20" cy="20" r="16" fill="none" stroke="rgba(212,175,55,.15)" strokeWidth="4" />
-                  <circle
-                    cx="20"
-                    cy="20"
-                    r="16"
-                    fill="none"
-                    stroke="#d4af37"
-                    strokeWidth="4"
-                    strokeDasharray="100.5"
-                    strokeDashoffset={
-                      loading || avgHealth == null
-                        ? 100.5
-                        : (100.5 * (1 - avgHealth / 100)).toFixed(1)
+            {attentionItems.length === 0 ? (
+              <div className="attn-empty">
+                {loading ? "Loading…" : "No clients need urgent attention — nice work."}
+              </div>
+            ) : (
+              <div className="attn-list">
+                {attentionItems.map((item) => (
+                  <button
+                    key={item.clientId}
+                    type="button"
+                    className={`attn-card ${item.severity}`}
+                    onClick={() =>
+                      navigate({
+                        to: "/clients/$clientId",
+                        params: { clientId: item.clientId },
+                        search: {},
+                      })
                     }
-                    strokeLinecap="round"
-                    transform="rotate(-90 20 20)"
-                  />
-                </svg>
+                  >
+                    <span className="rail" />
+                    <div>
+                      <span className="attn-name">{item.name}</span>
+                      <span className="attn-sev">{item.severityLabel}</span>
+                    </div>
+                    <div className="attn-reason">{item.reason}</div>
+                    <div className="attn-detail">{item.detail}</div>
+                  </button>
+                ))}
               </div>
-              <div className="ln" style={{ width: "84%" }} />
-              <div className="ln" style={{ width: "66%" }} />
-              <div className="bar"><i style={{ width: `${avgHealth ?? 0}%` }} /></div>
-              <div className="ln" style={{ width: "74%" }} />
-            </div>
-            <div className="doc doc-3">
-              <div className="dt">{firm?.name ?? "Practice"} · Milōn</div>
-              <div className="dh">Ratio Benchmarks</div>
-              <div className="bar"><i style={{ width: "62%" }} /></div>
-              <div className="bar"><i style={{ width: "83%" }} /></div>
-              <div className="bar"><i style={{ width: "38%" }} /></div>
-              <div className="bar"><i style={{ width: "57%" }} /></div>
-              <div className="ln" style={{ width: "76%" }} />
-              <div className="ln" style={{ width: "52%" }} />
-            </div>
-            <span className="wl-chip">White-labelled · Your logo, your colours</span>
+            )}
+            <button type="button" className="btn gold attn-cta" onClick={scrollToClients}>
+              View all priorities
+            </button>
           </div>
         </div>
+
+        {/* ===== PORTFOLIO INSIGHTS ===== */}
+        {insights.length > 0 && (
+          <div className="insights-strip">
+            <div className="insights-items">
+              {insights.map((ins) => (
+                <div key={ins.id} className={`insight ${ins.kind}`}>
+                  <span className="ic">
+                    {ins.kind === "trend" ? (
+                      <svg viewBox="0 0 24 24">
+                        <path d="M3 17l6-6 4 4 8-8" />
+                        <path d="M14 7h7v7" />
+                      </svg>
+                    ) : ins.kind === "risk" ? (
+                      <svg viewBox="0 0 24 24">
+                        <path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0zM12 9v4M12 17h.01" />
+                      </svg>
+                    ) : (
+                      <svg viewBox="0 0 24 24">
+                        <path d="M12 2l2.4 7.2H22l-6 4.8 2.3 7L12 16.8 5.7 21l2.3-7-6-4.8h7.6z" />
+                      </svg>
+                    )}
+                  </span>
+                  <p>{ins.text}</p>
+                </div>
+              ))}
+            </div>
+            <button type="button" className="insights-cta" onClick={scrollToClients}>
+              View full insights →
+            </button>
+          </div>
+        )}
 
         {/* ===== CLIENTS TABLE ===== */}
-        <div className="clients-head">
+        <div className="clients-head" id="clients-table">
           <h2>Clients</h2>
           <div className="search">
             <svg viewBox="0 0 24 24">
@@ -840,11 +1092,7 @@ function Dashboard() {
             </svg>
             Referral link
           </button>
-          <button
-            id="wizard-add-client"
-            className="btn gold mini"
-            onClick={() => setAddOpen(true)}
-          >
+          <button id="wizard-add-client" className="btn gold mini" onClick={() => setAddOpen(true)}>
             <svg viewBox="0 0 24 24">
               <path d="M12 5v14M5 12h14" />
             </svg>
@@ -863,15 +1111,14 @@ function Dashboard() {
                 <p className="sub" style={{ marginBottom: 8, fontSize: 15 }}>
                   Start with one practice client
                 </p>
-                <p className="sub" style={{ marginBottom: 20, maxWidth: 420, marginInline: "auto" }}>
+                <p
+                  className="sub"
+                  style={{ marginBottom: 20, maxWidth: 420, marginInline: "auto" }}
+                >
                   Add a sandbox client, upload ~3 months of bank statements, and walk the full
                   advisory board once — then onboard your paying clients the same way.
                 </p>
-                <button
-                  className="btn gold"
-                  type="button"
-                  onClick={() => setFirstClientOpen(true)}
-                >
+                <button className="btn gold" type="button" onClick={() => setFirstClientOpen(true)}>
                   Create practice demo client
                 </button>
               </>
@@ -885,10 +1132,11 @@ function Dashboard() {
               <tr>
                 <th>Client</th>
                 <th>Health</th>
-                <th className="hide-sm">Trend</th>
+                <th className="hide-sm">Trend (30d)</th>
+                <th className="hide-sm">Priority</th>
                 <th>Runway</th>
                 <th className="hide-sm">Queries</th>
-                <th className="hide-sm">Op. profit</th>
+                <th className="hide-sm">Op. profit (MTD)</th>
                 <th>Status</th>
                 <th style={{ textAlign: "right" }}>Actions</th>
               </tr>
@@ -902,6 +1150,7 @@ function Dashboard() {
                   <tr
                     key={c.id}
                     className="row"
+                    data-client-row
                     onClick={() =>
                       navigate({
                         to: "/clients/$clientId",
@@ -923,7 +1172,29 @@ function Dashboard() {
                       </div>
                     </td>
                     <td className="hide-sm">
-                      <SparkSvg trend={c.trend} />
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <SparkSvg trend={c.trend} />
+                        <span
+                          className="num"
+                          style={{
+                            fontSize: 12,
+                            color:
+                              (c.trendDelta ?? 0) > 0
+                                ? "var(--ok)"
+                                : (c.trendDelta ?? 0) < 0
+                                  ? "var(--risk)"
+                                  : "var(--ink-dim)",
+                          }}
+                        >
+                          {trendLabel(c)}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="hide-sm">
+                      <span className={`prio ${c.priority}`}>
+                        <i />
+                        {c.priorityLabel}
+                      </span>
                     </td>
                     <td className="num">{runwayStr(c)}</td>
                     <td className="num hide-sm">
@@ -964,7 +1235,15 @@ function Dashboard() {
                           className="icon-btn"
                           title="Generate report"
                           onClick={() =>
-                            navigate({ to: "/reports", search: { client: c.name, clientId: c.id, report: undefined, action: undefined } })
+                            navigate({
+                              to: "/reports",
+                              search: {
+                                client: c.name,
+                                clientId: c.id,
+                                report: undefined,
+                                action: undefined,
+                              },
+                            })
                           }
                         >
                           <svg viewBox="0 0 24 24">
@@ -1024,9 +1303,7 @@ function Dashboard() {
           <div className="pb-grid">
             {Object.entries(playbookByCategory).map(([cat, items]) => (
               <Fragment key={cat}>
-                <div className="pb-cat">
-                  {cat}
-                </div>
+                <div className="pb-cat">{cat}</div>
                 {items.map((p) => (
                   <button
                     key={p.ratioKey}
