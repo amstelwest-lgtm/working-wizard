@@ -1200,6 +1200,21 @@ function ClientView() {
     [client, navigate],
   );
 
+  const handleTourTabChange = useCallback((tab: string) => {
+    if (
+      tab === "ratios" ||
+      tab === "profit" ||
+      tab === "cash" ||
+      tab === "budget" ||
+      tab === "reports" ||
+      tab === "plan" ||
+      tab === "tasks" ||
+      tab === "advisory"
+    ) {
+      setActiveTab(tab);
+    }
+  }, []);
+
   // ── Loading / error states ────────────────────────────────────────────────
 
   if (loading) {
@@ -1234,21 +1249,6 @@ function ClientView() {
   const reportsIssued = client.reports_issued_count ?? 0;
 
   // ── Render ────────────────────────────────────────────────────────────────
-
-  const handleTourTabChange = useCallback((tab: string) => {
-    if (
-      tab === "ratios" ||
-      tab === "profit" ||
-      tab === "cash" ||
-      tab === "budget" ||
-      tab === "reports" ||
-      tab === "plan" ||
-      tab === "tasks" ||
-      tab === "advisory"
-    ) {
-      setActiveTab(tab);
-    }
-  }, []);
 
   return (
     <div className="accountant-portal">
