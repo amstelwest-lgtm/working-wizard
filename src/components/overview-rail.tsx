@@ -5,7 +5,10 @@ export type OverviewRailProps = {
   liveLabel?: string;
   showLiveBadge?: boolean;
   industry?: string | null;
-  positionPercentile: number | null;
+  /** @deprecated Peer percentile removed — kept optional for call-site compat. */
+  positionPercentile?: number | null;
+  /** Honest health score band when peers are unavailable. */
+  healthBand?: { score: number; label: string } | null;
   weekChanges: Array<{
     label: string;
     value: string;
@@ -29,49 +32,20 @@ function sentimentClass(s: "good" | "bad" | "neutral") {
   return "text-amber-600 dark:text-amber-300";
 }
 
-/** Compact peer chart for the rail */
-function PositionChart({ percentile }: { percentile: number }) {
-  const buckets = 7;
-  const active = Math.min(
-    buckets - 1,
-    Math.max(0, Math.round((percentile / 100) * (buckets - 1))),
-  );
-  const heightsPx = [18, 26, 34, 42, 36, 28, 20];
-  const maxH = 42;
-
+function HealthMeter({ score }: { score: number }) {
+  const pct = Math.max(0, Math.min(100, score));
   return (
     <div className="mt-2">
-      <div className="relative overflow-hidden rounded-md border border-slate-200 bg-[#eef2f7] px-2 pb-1.5 pt-4 dark:border-white/10 dark:bg-slate-950/50">
-        <div className="relative flex items-end justify-between gap-1" style={{ height: maxH }}>
-          {heightsPx.map((h, i) => {
-            const isActive = i === active;
-            const isAvg = i === 3;
-            return (
-              <div key={i} className="relative flex flex-1 flex-col items-center justify-end" style={{ height: maxH }}>
-                {isActive && (
-                  <span className="absolute -top-3.5 z-10 rounded bg-emerald-600 px-1 py-px text-[7px] font-bold uppercase tracking-wide text-white">
-                    You
-                  </span>
-                )}
-                <div
-                  className={`w-full max-w-[22px] rounded-t-[3px] ${
-                    isActive
-                      ? "bg-emerald-500 ring-1 ring-emerald-200 dark:ring-emerald-500/30"
-                      : isAvg
-                        ? "bg-slate-500 dark:bg-slate-400"
-                        : "bg-slate-400 dark:bg-slate-500"
-                  }`}
-                  style={{ height: h }}
-                />
-              </div>
-            );
-          })}
-        </div>
+      <div className="h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
+        <div
+          className="h-full rounded-full bg-emerald-500 transition-[width]"
+          style={{ width: `${pct}%` }}
+        />
       </div>
       <div className="mt-1 flex justify-between text-[8px] font-semibold uppercase tracking-[0.12em] text-slate-500">
-        <span>Bottom</span>
-        <span>Avg</span>
-        <span>Top</span>
+        <span>0</span>
+        <span>Health score</span>
+        <span>100</span>
       </div>
     </div>
   );
@@ -131,7 +105,7 @@ function RailCard({
 export function OverviewRail({
   liveLabel,
   showLiveBadge = false,
-  positionPercentile,
+  healthBand = null,
   weekChanges,
   cashTrajectory,
   onOpenCash,
@@ -156,19 +130,24 @@ export function OverviewRail({
 
       <RailCard title="Your Position">
         <p className="text-[12px] font-semibold leading-snug text-slate-800 dark:text-slate-100">
-          {positionPercentile != null ? (
+          {healthBand ? (
             <>
-              Better than{" "}
-              <span className="text-emerald-600 dark:text-emerald-400">
-                {Math.round(positionPercentile)}%
-              </span>{" "}
-              of peers.
+              Health score{" "}
+              <span className="text-emerald-600 dark:text-emerald-400">{healthBand.score}/100</span>
+              <span className="font-medium text-slate-500 dark:text-slate-400">
+                {" "}
+                — {healthBand.label}.
+              </span>
             </>
           ) : (
-            <>Add financials to see how you compare.</>
+            <>Add financials to see your health score.</>
           )}
         </p>
-        {positionPercentile != null && <PositionChart percentile={positionPercentile} />}
+        <p className="mt-1 text-[10px] leading-relaxed text-slate-500">
+          Peer ranking is not available yet — this is your score, not a comparison to other
+          businesses.
+        </p>
+        {healthBand && <HealthMeter score={healthBand.score} />}
         <button
           type="button"
           onClick={onOpenBenchmarks ?? onOpenMoves}
@@ -179,15 +158,19 @@ export function OverviewRail({
       </RailCard>
 
       <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-1">
-        <RailCard title="This Week">
+        <RailCard title="From your figures">
           <p className="text-[12px] font-semibold text-slate-800 dark:text-slate-100">
-            {topChanges.length ? `${weekChanges.length} things changed.` : "No changes yet."}
+            {topChanges.length
+              ? "Highlights from your latest numbers."
+              : "No figures to summarise yet."}
           </p>
           <div className="mt-1.5 space-y-1">
             {topChanges.map((c) => (
               <div key={c.label} className="flex items-center justify-between text-[11px]">
                 <span className="truncate text-slate-500 dark:text-slate-400">{c.label}</span>
-                <span className={`ml-2 shrink-0 font-semibold tabular-nums ${sentimentClass(c.sentiment)}`}>
+                <span
+                  className={`ml-2 shrink-0 font-semibold tabular-nums ${sentimentClass(c.sentiment)}`}
+                >
                   {c.value}
                 </span>
               </div>
@@ -203,7 +186,7 @@ export function OverviewRail({
         </RailCard>
 
         <RailCard
-          title="Cash Trajectory"
+          title="Cash outlook"
           action={
             <button
               type="button"
@@ -215,7 +198,7 @@ export function OverviewRail({
             </button>
           }
         >
-          <p className="-mt-0.5 text-[10px] text-slate-500">90-day outlook</p>
+          <p className="-mt-0.5 text-[10px] text-slate-500">From Cash Forecast</p>
           {cashTrajectory ? (
             <>
               <CashSpark points={cashTrajectory.points} />
@@ -225,7 +208,8 @@ export function OverviewRail({
             </>
           ) : (
             <p className="mt-1.5 text-[11px] leading-relaxed text-slate-500">
-              Open Cash Forecast to project ahead.
+              Open Cash Forecast to project the next 13 weeks from bank drafts or weekly inputs — we
+              do not invent a trajectory from your P&amp;L.
             </p>
           )}
         </RailCard>

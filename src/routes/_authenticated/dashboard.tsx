@@ -31,6 +31,7 @@ import {
 import { useServerFn } from "@tanstack/react-start";
 import { getQboStatuses } from "@/lib/qbo.functions";
 import { createFirmClient } from "@/lib/firm-clients.functions";
+import { mintOwnerInvite } from "@/lib/invite-tokens.functions";
 import { effectiveCashRunwayWeeks } from "@/lib/cash-runway";
 import { countOpenQueriesByClient } from "@/lib/open-queries";
 import "@/styles/accountant-portal.css";
@@ -456,6 +457,7 @@ function Dashboard() {
   }, []);
 
   const getStatuses = useServerFn(getQboStatuses);
+  const mintInvite = useServerFn(mintOwnerInvite);
 
   // ── Load ──────────────────────────────────────────────────────────────────
   const load = async (activeFirmId: string | null, userId: string | undefined) => {
@@ -1256,13 +1258,24 @@ function Dashboard() {
                           className="icon-btn"
                           title="Invite client owner to claim this workspace"
                           onClick={() => {
-                            const origin =
-                              typeof window !== "undefined"
-                                ? window.location.origin
-                                : "https://milon.co.za";
-                            const url = `${origin}/?invite=${c.id}&mode=signup`;
-                            navigator.clipboard?.writeText(url);
-                            toast.success("Owner invite link copied for " + c.name);
+                            void (async () => {
+                              const origin =
+                                typeof window !== "undefined"
+                                  ? window.location.origin
+                                  : "https://milon.co.za";
+                              try {
+                                const { token } = await mintInvite({
+                                  data: { clientId: c.id },
+                                });
+                                const url = `${origin}/?invite=${token}&mode=signup`;
+                                await navigator.clipboard?.writeText(url);
+                                toast.success("Owner invite link copied for " + c.name);
+                              } catch (err) {
+                                toast.error(
+                                  err instanceof Error ? err.message : "Could not mint invite link",
+                                );
+                              }
+                            })();
                           }}
                         >
                           <svg viewBox="0 0 24 24">
