@@ -19,6 +19,17 @@ export function useAskAiMount(deps: {
     let attempts = 0;
     const timers: number[] = [];
 
+    const markError = (containers: HTMLElement[], message: string) => {
+      for (const el of containers) {
+        el.dataset.askAiMounted = "error";
+        el.replaceChildren();
+        const p = document.createElement("p");
+        p.className = "px-3 py-3 text-xs text-slate-500";
+        p.textContent = message;
+        el.appendChild(p);
+      }
+    };
+
     const tryMount = () => {
       if (cancelled) return;
       const allContainers = ["ask-ai-overview", "ask-ai-waterfall"]
@@ -39,15 +50,25 @@ export function useAskAiMount(deps: {
         return;
       }
 
+      if (!hasRealFinancials) {
+        markError(containers, "Ask AI unlocks after you add real figures.");
+        return;
+      }
+
       // eslint-disable-next-line @typescript-eslint/ban-ts-comment
       // @ts-ignore — plain JS module without type declarations
       import("../lib/ask-ai.js")
         .then((mod: { mountAskAi?: (el: HTMLElement, opts: unknown) => void }) => {
-          if (cancelled || typeof mod.mountAskAi !== "function") return;
+          if (cancelled) return;
+          if (typeof mod.mountAskAi !== "function") {
+            markError(containers, "Ask AI is unavailable right now. Refresh and try again.");
+            return;
+          }
           for (const el of containers) {
             if (el.dataset.askAiMounted) continue;
             if (effectiveClientId) el.dataset.clientId = effectiveClientId;
             el.dataset.askAiMounted = "1";
+            el.replaceChildren();
             mod.mountAskAi(el, {
               endpoint: `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ask-ai`,
               getToken: async () => {
@@ -57,8 +78,12 @@ export function useAskAiMount(deps: {
             });
           }
         })
-        .catch(() => {
-          /* Widget not yet deployed — silent fail */
+        .catch((err: unknown) => {
+          console.error("[ask-ai] mount failed", err);
+          markError(
+            containers,
+            "Ask AI could not load. If this keeps happening, Ask AI may not be deployed yet.",
+          );
         });
     };
 

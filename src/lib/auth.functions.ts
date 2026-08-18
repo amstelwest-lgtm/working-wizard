@@ -19,7 +19,7 @@ export const adminSignUp = createServerFn({ method: "POST" })
         password: z.string().min(6),
         fullName: z.string().optional(),
         businessName: z.string().optional(),
-        inviteClientId: z.string().uuid().optional(),
+        inviteClientId: z.string().min(8).max(80).optional(),
         signupType: z.enum(["customer", "accountant"]).default("customer"),
         firmName: z.string().optional(),
       })
@@ -73,9 +73,7 @@ export const adminSignUp = createServerFn({ method: "POST" })
             .insert({ firm_id: firm.id, user_id: userId, role: "owner" });
         }
       }
-      await supabaseAdmin
-        .from("user_roles")
-        .insert({ user_id: userId, role: "firm_admin" });
+      await supabaseAdmin.from("user_roles").insert({ user_id: userId, role: "firm_admin" });
     } else {
       // Primary owner self-signup (no inviteClientId) — create the client record.
       const { data: existing } = await supabaseAdmin
@@ -86,10 +84,7 @@ export const adminSignUp = createServerFn({ method: "POST" })
         .maybeSingle();
       if (!existing) {
         await supabaseAdmin.from("clients").insert({
-          name:
-            data.businessName?.trim() ||
-            data.fullName?.trim() ||
-            data.email,
+          name: data.businessName?.trim() || data.fullName?.trim() || data.email,
           owner_user_id: userId,
         });
       }

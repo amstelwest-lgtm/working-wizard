@@ -12,11 +12,13 @@
  */
 
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { markInviteRedeemed, resolveInviteToClientId } from "@/lib/invite-tokens.resolve";
 
 export type InviteMemberInput = {
   email: string;
   password: string;
   fullName?: string;
+  /** Opaque invite token or legacy client UUID. */
   inviteClientId: string;
 };
 
@@ -86,21 +88,19 @@ async function isPracticePlaceholderOwner(
  *   4. When handing off, UPDATE clients.owner_user_id via service role
  *      (trigger allows auth.uid() IS NULL); leave firm_id unchanged.
  */
-export async function signUpInvitedMember(
-  input: InviteMemberInput,
-): Promise<InviteMemberResult> {
+export async function signUpInvitedMember(input: InviteMemberInput): Promise<InviteMemberResult> {
+  const resolved = await resolveInviteToClientId(input.inviteClientId);
+  const clientId = resolved.clientId;
+
   const { data: client, error: clientErr } = await supabaseAdmin
     .from("clients")
     .select("id, owner_user_id, firm_id")
-    .eq("id", input.inviteClientId)
+    .eq("id", clientId)
     .maybeSingle();
   if (clientErr) throw new Error(`Failed to load invite client: ${clientErr.message}`);
   if (!client) throw new Error("Invite link is invalid — client not found.");
 
-  const shouldTransfer = await isPracticePlaceholderOwner(
-    client.owner_user_id,
-    client.firm_id,
-  );
+  const shouldTransfer = await isPracticePlaceholderOwner(client.owner_user_id, client.firm_id);
   const role = shouldTransfer ? "client_owner" : "client_member";
 
   const { data: authData, error } = await supabaseAdmin.auth.admin.createUser({
@@ -110,7 +110,7 @@ export async function signUpInvitedMember(
     user_metadata: {
       full_name: input.fullName?.trim() ?? "",
       signup_type: "customer",
-      invite_client_id: input.inviteClientId,
+      invite_client_id: clientId,
       invite_outcome: shouldTransfer ? "owner_handoff" : "staff_member",
     },
   });
@@ -124,7 +124,7 @@ export async function signUpInvitedMember(
     const { error: ownErr } = await supabaseAdmin
       .from("clients")
       .update({ owner_user_id: userId })
-      .eq("id", input.inviteClientId);
+      .eq("id", clientId);
     if (ownErr) {
       // Roll back auth user so a retry can succeed cleanly.
       await supabaseAdmin.auth.admin.deleteUser(userId);
@@ -134,17 +134,14 @@ export async function signUpInvitedMember(
 
   const { error: memErr } = await supabaseAdmin
     .from("client_memberships")
-    .upsert(
-      { client_id: input.inviteClientId, user_id: userId, role },
-      { onConflict: "client_id,user_id" },
-    );
+    .upsert({ client_id: clientId, user_id: userId, role }, { onConflict: "client_id,user_id" });
   if (memErr) {
     if (shouldTransfer) {
       // Best-effort revert ownership so the accountant remains writer.
       await supabaseAdmin
         .from("clients")
         .update({ owner_user_id: client.owner_user_id })
-        .eq("id", input.inviteClientId);
+        .eq("id", clientId);
     }
     await supabaseAdmin.auth.admin.deleteUser(userId);
     throw new Error(`client_memberships upsert failed: ${memErr.message}`);
@@ -160,6 +157,8 @@ export async function signUpInvitedMember(
     await supabaseAdmin.auth.admin.deleteUser(userId);
     throw new Error(`user_roles insert failed: ${roleErr.message}`);
   }
+
+  await markInviteRedeemed(resolved.tokenId, userId);
 
   return {
     userId,
