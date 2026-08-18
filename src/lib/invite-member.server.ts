@@ -12,7 +12,12 @@
  */
 
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import { markInviteRedeemed, resolveInviteToClientId } from "@/lib/invite-tokens.resolve";
+import {
+  attachInviteRedeemer,
+  claimInviteToken,
+  releaseInviteToken,
+  resolveInviteToClientId,
+} from "@/lib/invite-tokens.resolve";
 
 export type InviteMemberInput = {
   email: string;
@@ -103,6 +108,9 @@ export async function signUpInvitedMember(input: InviteMemberInput): Promise<Inv
   const shouldTransfer = await isPracticePlaceholderOwner(client.owner_user_id, client.firm_id);
   const role = shouldTransfer ? "client_owner" : "client_member";
 
+  // Claim before createUser so concurrent signups can't both succeed.
+  await claimInviteToken(resolved.tokenId);
+
   const { data: authData, error } = await supabaseAdmin.auth.admin.createUser({
     email: input.email,
     password: input.password,
@@ -115,8 +123,14 @@ export async function signUpInvitedMember(input: InviteMemberInput): Promise<Inv
     },
   });
 
-  if (error) throw new Error(error.message);
-  if (!authData.user) throw new Error("User creation failed");
+  if (error) {
+    await releaseInviteToken(resolved.tokenId);
+    throw new Error(error.message);
+  }
+  if (!authData.user) {
+    await releaseInviteToken(resolved.tokenId);
+    throw new Error("User creation failed");
+  }
 
   const userId = authData.user.id;
 
@@ -126,7 +140,7 @@ export async function signUpInvitedMember(input: InviteMemberInput): Promise<Inv
       .update({ owner_user_id: userId })
       .eq("id", clientId);
     if (ownErr) {
-      // Roll back auth user so a retry can succeed cleanly.
+      await releaseInviteToken(resolved.tokenId);
       await supabaseAdmin.auth.admin.deleteUser(userId);
       throw new Error(`Ownership handoff failed: ${ownErr.message}`);
     }
@@ -137,28 +151,33 @@ export async function signUpInvitedMember(input: InviteMemberInput): Promise<Inv
     .upsert({ client_id: clientId, user_id: userId, role }, { onConflict: "client_id,user_id" });
   if (memErr) {
     if (shouldTransfer) {
-      // Best-effort revert ownership so the accountant remains writer.
       await supabaseAdmin
         .from("clients")
         .update({ owner_user_id: client.owner_user_id })
         .eq("id", clientId);
     }
+    await releaseInviteToken(resolved.tokenId);
     await supabaseAdmin.auth.admin.deleteUser(userId);
     throw new Error(`client_memberships upsert failed: ${memErr.message}`);
   }
 
-  // user_roles has UNIQUE(user_id, role) not UNIQUE(user_id).
-  // Delete any existing row so the invitee ends with exactly one role entry.
   await supabaseAdmin.from("user_roles").delete().eq("user_id", userId);
   const { error: roleErr } = await supabaseAdmin
     .from("user_roles")
     .insert({ user_id: userId, role });
   if (roleErr) {
+    if (shouldTransfer) {
+      await supabaseAdmin
+        .from("clients")
+        .update({ owner_user_id: client.owner_user_id })
+        .eq("id", clientId);
+    }
+    await releaseInviteToken(resolved.tokenId);
     await supabaseAdmin.auth.admin.deleteUser(userId);
     throw new Error(`user_roles insert failed: ${roleErr.message}`);
   }
 
-  await markInviteRedeemed(resolved.tokenId, userId);
+  await attachInviteRedeemer(resolved.tokenId, userId);
 
   return {
     userId,

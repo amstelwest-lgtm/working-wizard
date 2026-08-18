@@ -1699,10 +1699,12 @@ function LandingPage() {
             </p>
             <ul style={{ listStyle: "none", display: "flex", flexDirection: "column", gap: 10 }}>
               <li style={{ display: "flex", gap: 10, fontSize: 14, color: "var(--ink-dim)" }}>
-                <span style={{ color: "var(--gold)" }}>✦</span>Up to 150 clients — R4 500/mo flat
+                <span style={{ color: "var(--gold)" }}>✦</span>Up to 150 clients — planned R4 500/mo
+                (not billed yet)
               </li>
               <li style={{ display: "flex", gap: 10, fontSize: 14, color: "var(--ink-dim)" }}>
-                <span style={{ color: "var(--gold)" }}>✦</span>Unlimited clients — R7 200/mo
+                <span style={{ color: "var(--gold)" }}>✦</span>Unlimited clients — planned R7 200/mo
+                (not billed yet)
               </li>
               <li style={{ display: "flex", gap: 10, fontSize: 14, color: "var(--ink-dim)" }}>
                 <span style={{ color: "var(--gold)" }}>✦</span>White-label onboarding support
@@ -1803,10 +1805,11 @@ function LandingPage() {
             <h2>
               Your first health score
               <br />
-              is <span className="gold-text">free and instant.</span>
+              is <span className="gold-text">free for early access.</span>
             </h2>
             <p className="sub">
-              Upload your financials and MILŌN scores your business in under 60 seconds.
+              Upload your figures and MILŌN scores your business — usually within a minute after
+              processing.
             </p>
           </div>
 
@@ -1978,7 +1981,7 @@ function LandingPage() {
                             lineHeight: 1.5,
                           }}
                         >
-                          No credit card for Spark. Upgrade anytime. Cancel anytime.
+                          No credit card for Spark. Paid plans are not billed yet.
                         </p>
                       </>
                     )}

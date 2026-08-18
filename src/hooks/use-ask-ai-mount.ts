@@ -19,9 +19,13 @@ export function useAskAiMount(deps: {
     let attempts = 0;
     const timers: number[] = [];
 
-    const markError = (containers: HTMLElement[], message: string) => {
+    const markStatus = (
+      containers: HTMLElement[],
+      status: "pending" | "error",
+      message: string,
+    ) => {
       for (const el of containers) {
-        el.dataset.askAiMounted = "error";
+        el.dataset.askAiMounted = status;
         el.replaceChildren();
         const p = document.createElement("p");
         p.className = "px-3 py-3 text-xs text-slate-500";
@@ -41,7 +45,18 @@ export function useAskAiMount(deps: {
         for (const el of allContainers) el.dataset.clientId = effectiveClientId;
       }
 
-      const containers = allContainers.filter((el) => !el.dataset.askAiMounted);
+      // Remount when figures arrive after a "pending" unlock message, or retry
+      // hard errors when financials / tab context changes.
+      for (const el of allContainers) {
+        const state = el.dataset.askAiMounted;
+        if (state === "pending" && hasRealFinancials) {
+          delete el.dataset.askAiMounted;
+        } else if (state === "error" && hasRealFinancials) {
+          delete el.dataset.askAiMounted;
+        }
+      }
+
+      const containers = allContainers.filter((el) => el.dataset.askAiMounted !== "1");
       if (containers.length === 0) {
         if (allContainers.length === 0 && attempts < 8) {
           attempts += 1;
@@ -51,7 +66,7 @@ export function useAskAiMount(deps: {
       }
 
       if (!hasRealFinancials) {
-        markError(containers, "Ask AI unlocks after you add real figures.");
+        markStatus(containers, "pending", "Ask AI unlocks after you add real figures.");
         return;
       }
 
@@ -61,11 +76,15 @@ export function useAskAiMount(deps: {
         .then((mod: { mountAskAi?: (el: HTMLElement, opts: unknown) => void }) => {
           if (cancelled) return;
           if (typeof mod.mountAskAi !== "function") {
-            markError(containers, "Ask AI is unavailable right now. Refresh and try again.");
+            markStatus(
+              containers,
+              "error",
+              "Ask AI is unavailable right now. Refresh and try again.",
+            );
             return;
           }
           for (const el of containers) {
-            if (el.dataset.askAiMounted) continue;
+            if (el.dataset.askAiMounted === "1") continue;
             if (effectiveClientId) el.dataset.clientId = effectiveClientId;
             el.dataset.askAiMounted = "1";
             el.replaceChildren();
@@ -80,8 +99,9 @@ export function useAskAiMount(deps: {
         })
         .catch((err: unknown) => {
           console.error("[ask-ai] mount failed", err);
-          markError(
+          markStatus(
             containers,
+            "error",
             "Ask AI could not load. If this keeps happening, Ask AI may not be deployed yet.",
           );
         });
