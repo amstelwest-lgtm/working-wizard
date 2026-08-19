@@ -2199,7 +2199,7 @@ function ClientView() {
                 marginBottom: 20,
               }}
             >
-              Gemini reads the PDF and extracts the income statement and balance sheet. Review every
+              Claude reads the PDF and extracts the income statement and balance sheet. Review every
               figure before confirming.
             </p>
             <UploadFinancials onConfirm={handleConfirmFinancials} />

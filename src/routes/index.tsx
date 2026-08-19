@@ -73,8 +73,9 @@ function LandingPage() {
   const navigate = useNavigate();
   const doAdminSignUp = useServerFn(adminSignUp);
 
-  /* ── invite-link state (populated when /?invite=<clientId>&mode=signup) ── */
+  /* ── invite-link state (opaque token preferred; legacy client UUID still works) ── */
   const [inviteClientId, setInviteClientId] = useState<string | null>(null);
+  const [inviteIsLegacyUuid, setInviteIsLegacyUuid] = useState(false);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -83,6 +84,13 @@ function LandingPage() {
     const mode = params.get("mode");
     if (inv && mode === "signup") {
       setInviteClientId(inv);
+      const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+      if (uuidRe.test(inv.trim())) {
+        setInviteIsLegacyUuid(true);
+        toast.message(
+          "This invite link is an older format. Ask your accountant for a fresh link when you can.",
+        );
+      }
       // Scroll the registration form into view so the invited user sees it immediately
       setTimeout(() => {
         const el = document.getElementById("register");
@@ -1357,7 +1365,7 @@ function LandingPage() {
             >
               <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
             </svg>
-            <span>Powered by Gemini AI</span>
+            <span>Powered by Claude AI</span>
           </div>
         </div>
       </div>
@@ -1645,7 +1653,7 @@ function LandingPage() {
                   <b>Multi-client dashboard</b> — live health across your entire portfolio
                 </li>
                 <li>
-                  <b>AI advisory drafter</b> — Gemini writes the report; you refine and send
+                  <b>AI advisory drafter</b> — Claude drafts the report; you refine and send
                 </li>
                 <li>
                   <b>10 white-label report formats</b> — your brand, your margin
@@ -1833,6 +1841,19 @@ function LandingPage() {
                       You've been invited to your business workspace on MILŌN. Create your account
                       to take ownership and see your numbers.
                     </p>
+                    {inviteIsLegacyUuid && (
+                      <p
+                        style={{
+                          fontSize: 12,
+                          color: "var(--ink-dim)",
+                          marginBottom: 16,
+                          lineHeight: 1.5,
+                        }}
+                      >
+                        Note: this is an older invite link format. It still works — for the most
+                        secure link, ask your accountant to copy a fresh invite from the dashboard.
+                      </p>
+                    )}
 
                     <label htmlFor="regNameField">Full name</label>
                     <input
@@ -2030,7 +2051,7 @@ function LandingPage() {
               © {new Date().getFullYear()} MILŌN Financial Technologies (Pty) Ltd. All rights
               reserved.
             </span>
-            <span>Built for South Africa · Powered by Gemini AI</span>
+            <span>Built for South Africa · Powered by Claude AI</span>
           </div>
         </div>
       </footer>

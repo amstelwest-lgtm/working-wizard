@@ -1,5 +1,5 @@
 /**
- * UploadFinancials — Drop a financial-statement PDF → Gemini extracts →
+ * UploadFinancials — Drop a financial-statement PDF → Claude extracts →
  * human reviews and corrects → confirm import.
  *
  * Styled with MILŌN's dark/gold design system (Tailwind).
@@ -151,7 +151,7 @@ export function UploadFinancials({ onConfirm }: UploadFinancialsProps) {
           {status === "loading" ? (
             <>
               <Loader2 className="h-8 w-8 text-amber-500 animate-spin" />
-              <p className="text-sm text-muted-foreground">Sending to Gemini…</p>
+              <p className="text-sm text-muted-foreground">Sending to Claude…</p>
               <p className="text-xs text-muted-foreground/60">This takes 10–30 seconds</p>
             </>
           ) : (
@@ -237,7 +237,7 @@ export function UploadFinancials({ onConfirm }: UploadFinancialsProps) {
       {/* Extraction note */}
       {result.extraction_notes && (
         <div className="rounded-md bg-amber-950/30 border border-amber-700/30 px-3 py-2 text-xs text-amber-300">
-          <span className="font-semibold">Note from Gemini:</span> {result.extraction_notes}
+          <span className="font-semibold">Note from Claude:</span> {result.extraction_notes}
         </div>
       )}
 

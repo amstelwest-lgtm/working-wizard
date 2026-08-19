@@ -34,11 +34,12 @@ function sentimentClass(s: "good" | "bad" | "neutral") {
 
 function HealthMeter({ score }: { score: number }) {
   const pct = Math.max(0, Math.min(100, score));
+  const fill = pct >= 65 ? "bg-emerald-500" : pct >= 40 ? "bg-amber-500" : "bg-rose-500";
   return (
     <div className="mt-2">
       <div className="h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
         <div
-          className="h-full rounded-full bg-emerald-500 transition-[width]"
+          className={`h-full rounded-full transition-[width] ${fill}`}
           style={{ width: `${pct}%` }}
         />
       </div>

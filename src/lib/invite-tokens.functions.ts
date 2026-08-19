@@ -49,8 +49,7 @@ export const mintOwnerInvite = createServerFn({ method: "POST" })
     const raw = crypto.getRandomValues(new Uint8Array(24));
     const tokenHex = Array.from(raw, (b) => b.toString(16).padStart(2, "0")).join("");
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: insErr } = await (supabaseAdmin as any).from("invite_tokens").insert({
+    const { error: insErr } = await supabaseAdmin.from("invite_tokens").insert({
       token: tokenHex,
       client_id: data.clientId,
       created_by: user.id,
