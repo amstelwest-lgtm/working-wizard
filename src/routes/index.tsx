@@ -1213,18 +1213,14 @@ function LandingPage() {
       {/* ── nav ── */}
       <nav id="topnav" className={mobileNavOpen ? "nav-open" : undefined}>
         <div className="wrap">
-<<<<<<< HEAD
-          <a className="logo" href="#hero" onClick={() => setMobileNavOpen(false)}>
-=======
           <a
             className="logo"
             href="#hero"
             onClick={(e) => {
               onLogoSecretTap(e);
+              if (!e.altKey) setMobileNavOpen(false);
             }}
-          >
->>>>>>> origin/cursor/owner-ops-dashboard-5d34
-            <svg viewBox="0 0 40 40" fill="none" height="34" width="34">
+          >            <svg viewBox="0 0 40 40" fill="none" height="34" width="34">
               <circle cx="20" cy="20" r="18" stroke="url(#ng1)" strokeWidth="1.4" />
               <path
                 d="M11 27 L17 13 L23 22 L27 11"
