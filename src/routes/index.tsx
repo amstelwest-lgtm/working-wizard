@@ -585,8 +585,9 @@ function LandingPage() {
     setSiError("");
     setSiBusy(true);
     try {
-      // Secret username: "forge" + ops passphrase unlocks the owner console door
-      if (siEmail.trim().toLowerCase() === "forge") {
+      // Secret username: "forge" (+ optional forge@…) unlocks the owner console door
+      const id = siEmail.trim().toLowerCase();
+      if (id === "forge" || id === "forge@milon.ops" || id === "forge@milon.co.za") {
         await doUnlockOps({
           data: { username: "forge", passphrase: siPassword },
         });
@@ -658,9 +659,9 @@ function LandingPage() {
   };
 
   const onLogoSecretTap = (e: React.MouseEvent) => {
-    // Hold Alt while clicking the wordmark once → open ops gate (also 7 taps)
+    e.preventDefault();
+    // Hold Alt while clicking the wordmark once → open ops gate
     if (e.altKey) {
-      e.preventDefault();
       setOpsGateOpen(true);
       setOpsError("");
       return;
@@ -668,14 +669,21 @@ function LandingPage() {
     const ref = logoTapRef.current;
     ref.count += 1;
     if (ref.timer) clearTimeout(ref.timer);
-    ref.timer = setTimeout(() => {
-      ref.count = 0;
-    }, 2200);
-    if (ref.count >= 7) {
+    // Open after 5 taps within ~3s (was 7 — too easy to mistime)
+    if (ref.count >= 5) {
       ref.count = 0;
       setOpsGateOpen(true);
       setOpsError("");
+      return;
     }
+    ref.timer = setTimeout(() => {
+      // Single intentional click → scroll to hero like a normal logo
+      if (ref.count === 1) {
+        const el = document.getElementById("hero");
+        if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+      ref.count = 0;
+    }, 2800);
   };
 
   /* ── register handler ── */
@@ -1099,11 +1107,13 @@ function LandingPage() {
             ) : (
               /* ── normal sign-in ── */
               <>
-                <form onSubmit={handleSignIn}>
+                <form onSubmit={handleSignIn} noValidate>
                   <div className="field">
                     <label>Email</label>
                     <input
-                      type="email"
+                      type="text"
+                      inputMode="email"
+                      autoComplete="username"
                       required
                       placeholder="you@business.co.za"
                       value={siEmail}
@@ -1216,11 +1226,13 @@ function LandingPage() {
           <a
             className="logo"
             href="#hero"
+            title="MILŌN"
             onClick={(e) => {
               onLogoSecretTap(e);
-              if (!e.altKey) setMobileNavOpen(false);
+              setMobileNavOpen(false);
             }}
-          >            <svg viewBox="0 0 40 40" fill="none" height="34" width="34">
+          >
+            <svg viewBox="0 0 40 40" fill="none" height="34" width="34">
               <circle cx="20" cy="20" r="18" stroke="url(#ng1)" strokeWidth="1.4" />
               <path
                 d="M11 27 L17 13 L23 22 L27 11"
