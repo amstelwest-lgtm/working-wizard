@@ -1062,6 +1062,50 @@ export type Database = {
         }
         Relationships: []
       }
+      invite_tokens: {
+        Row: {
+          id: string
+          token: string
+          client_id: string
+          created_by: string
+          purpose: string
+          expires_at: string
+          redeemed_at: string | null
+          redeemed_by: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          token: string
+          client_id: string
+          created_by: string
+          purpose?: string
+          expires_at?: string
+          redeemed_at?: string | null
+          redeemed_by?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          token?: string
+          client_id?: string
+          created_by?: string
+          purpose?: string
+          expires_at?: string
+          redeemed_at?: string | null
+          redeemed_by?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invite_tokens_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       impersonation_audit: {
         Row: {
           client_id: string
@@ -1377,6 +1421,10 @@ export type Database = {
       }
       ensure_own_client: {
         Args: { p_name: string }
+        Returns: string
+      }
+      mint_owner_invite: {
+        Args: { p_client_id: string }
         Returns: string
       }
       create_firm_client: {

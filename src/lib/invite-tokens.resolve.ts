@@ -13,9 +13,7 @@ type InviteTokenRow = {
   redeemed_at: string | null;
 };
 
-// Table added by migration 20260818120000 — may precede generated Database types.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const inviteTokens = () => (supabaseAdmin as any).from("invite_tokens");
+const inviteTokens = () => supabaseAdmin.from("invite_tokens");
 
 function isMissingRelation(err: unknown): boolean {
   const msg =
@@ -30,6 +28,7 @@ function isMissingRelation(err: unknown): boolean {
 async function resolveLegacyUuid(trimmed: string): Promise<{
   clientId: string;
   tokenId: null;
+  legacy: true;
 }> {
   const { data: client } = await supabaseAdmin
     .from("clients")
@@ -37,7 +36,12 @@ async function resolveLegacyUuid(trimmed: string): Promise<{
     .eq("id", trimmed)
     .maybeSingle();
   if (!client) throw new Error("Invite link is invalid — client not found.");
-  return { clientId: client.id, tokenId: null };
+  // Soft-deprecation: still works so old clipboard links don't brick, but
+  // firm dashboards should mint opaque tokens going forward.
+  console.warn(
+    "[invite] legacy client-UUID invite accepted — remint an opaque token from the firm dashboard",
+  );
+  return { clientId: client.id, tokenId: null, legacy: true };
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -46,6 +50,8 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-
 export async function resolveInviteToClientId(invite: string): Promise<{
   clientId: string;
   tokenId: string | null;
+  /** True when the invite was a raw client UUID (deprecated path). */
+  legacy?: boolean;
 }> {
   const trimmed = invite.trim();
   if (!trimmed) throw new Error("Invite link is invalid.");
