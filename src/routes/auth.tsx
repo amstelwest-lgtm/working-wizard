@@ -13,6 +13,9 @@ import { SIGNUP_ACCESS_CODE, notifySignup } from "@/lib/signup-notify";
 
 export const Route = createFileRoute("/auth")({
   component: AuthPage,
+  validateSearch: (search: Record<string, unknown>): { next?: string } => ({
+    next: typeof search.next === "string" && search.next.startsWith("/") ? search.next : undefined,
+  }),
   head: () => ({
     meta: [{ title: "Sign in — Milōn" }],
   }),
@@ -21,6 +24,7 @@ export const Route = createFileRoute("/auth")({
 function AuthPage() {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
+  const { next } = Route.useSearch();
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -34,9 +38,11 @@ function AuthPage() {
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
 
+  const afterAuthPath = next === "/ops" ? "/ops" : "/dashboard";
+
   useEffect(() => {
-    if (!loading && user) navigate({ to: "/dashboard" });
-  }, [user, loading, navigate]);
+    if (!loading && user) navigate({ to: afterAuthPath as "/dashboard" });
+  }, [user, loading, navigate, afterAuthPath]);
 
   const handle = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -77,7 +83,7 @@ function AuthPage() {
             .insert({ user_id: data.user.id, role: "firm_admin" });
         }
         toast.success("Account created");
-        navigate({ to: "/dashboard" });
+        navigate({ to: afterAuthPath as "/dashboard" });
       } else {
         const { error, data: signInData } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
@@ -113,7 +119,7 @@ function AuthPage() {
           // provisioning failure is non-fatal — user proceeds to dashboard regardless
         }
         toast.success("Welcome back");
-        navigate({ to: "/dashboard" });
+        navigate({ to: afterAuthPath as "/dashboard" });
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Something went wrong";
