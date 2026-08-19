@@ -1,11 +1,12 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
 import { SIGNUP_ACCESS_CODE, notifySignup } from "@/lib/signup-notify";
 import { adminSignUp } from "@/lib/auth.functions";
+import { OPS_UNLOCK_KEY, unlockOwnerOps } from "@/lib/owner-ops.functions";
 // Inline so landing paint doesn't wait on a second stylesheet round-trip
 // (external app CSS can still load; these rules win for landing selectors).
 import landingCss from "../styles/landing.css?inline";
@@ -72,6 +73,7 @@ function LandingPage() {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const doAdminSignUp = useServerFn(adminSignUp);
+  const doUnlockOps = useServerFn(unlockOwnerOps);
 
   /* ── invite-link state (opaque token preferred; legacy client UUID still works) ── */
   const [inviteClientId, setInviteClientId] = useState<string | null>(null);
@@ -106,6 +108,14 @@ function LandingPage() {
   const [siPassword, setSiPassword] = useState("");
   const [siBusy, setSiBusy] = useState(false);
   const [siError, setSiError] = useState("");
+
+  /* Secret owner-ops unlock (obscurity layer — real gate is email allowlist on /ops) */
+  const [opsGateOpen, setOpsGateOpen] = useState(false);
+  const [opsUser, setOpsUser] = useState("forge");
+  const [opsPass, setOpsPass] = useState("");
+  const [opsBusy, setOpsBusy] = useState(false);
+  const [opsError, setOpsError] = useState("");
+  const logoTapRef = useRef({ count: 0, timer: 0 as ReturnType<typeof setTimeout> | 0 });
 
   /* ── forgot-password state ── */
   const [fpMode, setFpMode] = useState(false);
@@ -575,17 +585,96 @@ function LandingPage() {
     setSiError("");
     setSiBusy(true);
     try {
+      // Secret username: "forge" + ops passphrase unlocks the owner console door
+      if (siEmail.trim().toLowerCase() === "forge") {
+        await doUnlockOps({
+          data: { username: "forge", passphrase: siPassword },
+        });
+        try {
+          sessionStorage.setItem(OPS_UNLOCK_KEY, "1");
+        } catch {
+          /* ignore */
+        }
+        setSigninOpen(false);
+        setSiEmail("");
+        setSiPassword("");
+        toast.success("Operator door unlocked");
+        if (user) {
+          navigate({ to: "/ops" });
+        } else {
+          setOpsGateOpen(false);
+          toast.message("Now sign in with your real Milōn owner email.");
+          setTimeout(() => setSigninOpen(true), 400);
+        }
+        return;
+      }
+
       const { error } = await supabase.auth.signInWithPassword({
         email: siEmail,
         password: siPassword,
       });
       if (error) throw error;
       setSigninOpen(false);
-      navigate({ to: "/app" });
+      let goOps = false;
+      try {
+        goOps = sessionStorage.getItem(OPS_UNLOCK_KEY) === "1";
+      } catch {
+        /* ignore */
+      }
+      navigate({ to: goOps ? "/ops" : "/app" });
     } catch (err: unknown) {
       setSiError(err instanceof Error ? err.message : "Sign in failed");
     } finally {
       setSiBusy(false);
+    }
+  };
+
+  const handleOpsUnlock = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setOpsError("");
+    setOpsBusy(true);
+    try {
+      await doUnlockOps({
+        data: { username: opsUser, passphrase: opsPass },
+      });
+      try {
+        sessionStorage.setItem(OPS_UNLOCK_KEY, "1");
+      } catch {
+        /* ignore */
+      }
+      setOpsGateOpen(false);
+      setOpsPass("");
+      toast.success("Operator door unlocked");
+      if (user) navigate({ to: "/ops" });
+      else {
+        setSigninOpen(true);
+        toast.message("Sign in with your Milōn owner account to enter Forge.");
+      }
+    } catch (err: unknown) {
+      setOpsError(err instanceof Error ? err.message : "Unlock failed");
+    } finally {
+      setOpsBusy(false);
+    }
+  };
+
+  const onLogoSecretTap = (e: React.MouseEvent) => {
+    // Hold Alt while clicking the wordmark once → open ops gate (also 7 taps)
+    if (e.altKey) {
+      e.preventDefault();
+      setOpsGateOpen(true);
+      setOpsError("");
+      return;
+    }
+    const ref = logoTapRef.current;
+    ref.count += 1;
+    if (ref.timer) clearTimeout(ref.timer);
+    ref.timer = setTimeout(() => {
+      ref.count = 0;
+    }, 2200);
+    if (ref.count >= 7) {
+      ref.count = 0;
+      setOpsGateOpen(true);
+      setOpsError("");
     }
   };
 
@@ -627,7 +716,7 @@ function LandingPage() {
 
     // ── Standard owner signup ──────────────────────────────────────────────
     if (regRole === "Accountant / Advisory firm") {
-      navigate({ to: "/auth" });
+      navigate({ to: "/auth", search: {} });
       return;
     }
     if (regCode.trim() !== SIGNUP_ACCESS_CODE) {
@@ -756,6 +845,97 @@ function LandingPage() {
       data-milon-landing=""
       style={{ minHeight: "100vh", background: "var(--bg)", color: "var(--ink)" }}
     >
+      {/* ── secret operator unlock (not linked in nav) ── */}
+      {opsGateOpen && (
+        <div
+          className="milon-signin-modal"
+          onClick={() => {
+            setOpsGateOpen(false);
+            setOpsError("");
+          }}
+        >
+          <div className="milon-signin-box" onClick={(e) => e.stopPropagation()}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginBottom: 20,
+              }}
+            >
+              <h2 style={{ fontSize: 22 }}>Operator</h2>
+              <button
+                type="button"
+                onClick={() => {
+                  setOpsGateOpen(false);
+                  setOpsError("");
+                }}
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: "50%",
+                  border: "1px solid var(--line)",
+                  background: "transparent",
+                  color: "var(--ink-dim)",
+                  cursor: "pointer",
+                  fontSize: 20,
+                  display: "grid",
+                  placeItems: "center",
+                }}
+              >
+                ×
+              </button>
+            </div>
+            <p style={{ fontSize: 13, color: "var(--ink-dim)", marginBottom: 18, lineHeight: 1.5 }}>
+              Platform console. Username is <b style={{ color: "var(--gold)" }}>forge</b>.
+            </p>
+            <form onSubmit={handleOpsUnlock}>
+              <label style={{ display: "block", fontSize: 11, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--ink-dim)", marginBottom: 6 }}>
+                Username
+              </label>
+              <input
+                value={opsUser}
+                onChange={(e) => setOpsUser(e.target.value)}
+                autoComplete="off"
+                style={{
+                  width: "100%",
+                  padding: "12px 14px",
+                  borderRadius: 12,
+                  border: "1px solid var(--line)",
+                  background: "var(--bg-2)",
+                  color: "var(--ink)",
+                  marginBottom: 14,
+                }}
+              />
+              <label style={{ display: "block", fontSize: 11, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--ink-dim)", marginBottom: 6 }}>
+                Passphrase
+              </label>
+              <input
+                type="password"
+                value={opsPass}
+                onChange={(e) => setOpsPass(e.target.value)}
+                autoComplete="off"
+                style={{
+                  width: "100%",
+                  padding: "12px 14px",
+                  borderRadius: 12,
+                  border: "1px solid var(--line)",
+                  background: "var(--bg-2)",
+                  color: "var(--ink)",
+                  marginBottom: 14,
+                }}
+              />
+              {opsError && (
+                <p style={{ color: "#e25c5c", fontSize: 13, marginBottom: 12 }}>{opsError}</p>
+              )}
+              <button type="submit" className="btn btn-gold" disabled={opsBusy} style={{ width: "100%" }}>
+                {opsBusy ? "Checking…" : "Unlock"}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* ── sign-in modal ── */}
       {signinOpen && (
         <div
@@ -1033,7 +1213,17 @@ function LandingPage() {
       {/* ── nav ── */}
       <nav id="topnav" className={mobileNavOpen ? "nav-open" : undefined}>
         <div className="wrap">
+<<<<<<< HEAD
           <a className="logo" href="#hero" onClick={() => setMobileNavOpen(false)}>
+=======
+          <a
+            className="logo"
+            href="#hero"
+            onClick={(e) => {
+              onLogoSecretTap(e);
+            }}
+          >
+>>>>>>> origin/cursor/owner-ops-dashboard-5d34
             <svg viewBox="0 0 40 40" fill="none" height="34" width="34">
               <circle cx="20" cy="20" r="18" stroke="url(#ng1)" strokeWidth="1.4" />
               <path

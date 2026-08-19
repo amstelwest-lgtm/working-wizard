@@ -1,0 +1,479 @@
+/**
+ * Platform-owner (founder) ops console — server gate + metrics.
+ *
+ * Security model:
+ * 1. Obscurity: landing passphrase / username "forge" unlock (sessionStorage)
+ * 2. Auth: must be signed in
+ * 3. Allowlist: email must be in MILON_OWNER_EMAILS (default: amstel.west@gmail.com)
+ * 4. Data: ops tables are deny-all RLS; reads/writes via service role only
+ */
+
+import { createServerFn } from "@tanstack/react-start";
+import { z } from "zod";
+import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { getSupabaseAdminOrNull } from "@/integrations/supabase/client.server";
+
+const DEFAULT_OWNER_EMAILS = "amstel.west@gmail.com";
+const DEFAULT_PASSPHRASE = "MilonOpsForge";
+
+export const OPS_UNLOCK_KEY = "milon_ops_unlock_v1";
+
+function ownerEmailAllowlist(): string[] {
+  const raw = process.env.MILON_OWNER_EMAILS || DEFAULT_OWNER_EMAILS;
+  return raw
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+function opsPassphrase(): string {
+  return process.env.MILON_OPS_PASSPHRASE || DEFAULT_PASSPHRASE;
+}
+
+type AuthCtx = {
+  userId: string;
+  claims?: { email?: string; sub?: string };
+};
+
+type LooseAdmin = {
+  from: (table: string) => any;
+  auth: {
+    admin: {
+      getUserById: (id: string) => Promise<{ data: { user: { email?: string } | null } }>;
+      listUsers: (opts: {
+        page: number;
+        perPage: number;
+      }) => Promise<{ data: { users: Array<{ created_at?: string }> } }>;
+    };
+  };
+};
+
+function adminLoose(): LooseAdmin {
+  const admin = getSupabaseAdminOrNull();
+  if (!admin) throw new Error("Service role not configured — cannot load ops metrics.");
+  return admin as unknown as LooseAdmin;
+}
+
+async function resolveOwnerEmail(ctx: AuthCtx): Promise<string> {
+  const fromClaims = (ctx.claims?.email ?? "").trim().toLowerCase();
+  if (fromClaims) return fromClaims;
+
+  const admin = getSupabaseAdminOrNull();
+  if (!admin) return "";
+  const { data } = await (admin as unknown as LooseAdmin).auth.admin.getUserById(ctx.userId);
+  return (data.user?.email ?? "").trim().toLowerCase();
+}
+
+async function assertPlatformOwner(ctx: AuthCtx): Promise<{ userId: string; email: string }> {
+  const email = await resolveOwnerEmail(ctx);
+  if (!email || !ownerEmailAllowlist().includes(email)) {
+    throw new Error("Forbidden — this console is locked to the platform owner.");
+  }
+  return { userId: ctx.userId, email };
+}
+
+function moneyZar(cents: number): string {
+  return `R ${(cents / 100).toLocaleString("en-ZA", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
+function missingRelation(msg: string): boolean {
+  return /does not exist|relation/i.test(msg);
+}
+
+/** Public: validate the secret passphrase (obscurity layer only). */
+export const unlockOwnerOps = createServerFn({ method: "POST" })
+  .inputValidator((input) =>
+    z
+      .object({
+        passphrase: z.string().min(1).max(200),
+        /** Secret username gate — must be exactly "forge" (case-insensitive). */
+        username: z.string().min(1).max(64).optional(),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data }) => {
+    const userOk = !data.username || data.username.trim().toLowerCase() === "forge";
+    if (!userOk) throw new Error("Unknown operator.");
+    if (data.passphrase !== opsPassphrase()) throw new Error("Incorrect passphrase.");
+    return { ok: true as const };
+  });
+
+export type OpsPaymentRow = {
+  id: string;
+  paidAt: string;
+  amountCents: number;
+  amountLabel: string;
+  currency: string;
+  payerLabel: string | null;
+  planCode: string | null;
+  status: string;
+  note: string | null;
+};
+
+export type OpsLeadRow = {
+  id: string;
+  name: string | null;
+  email: string | null;
+  company: string | null;
+  status: string;
+  source: string | null;
+  notes: string | null;
+  createdAt: string;
+};
+
+export type OpsDashboard = {
+  me: { email: string };
+  signups: {
+    totalUsers: number;
+    accountants: number;
+    businessOwners: number;
+    clientMembers: number;
+    firms: number;
+    clients: number;
+    clientsWithOwner: number;
+    last7dUsersApprox: number | null;
+  };
+  revenue: {
+    monthKey: string;
+    receivedThisMonthCents: number;
+    pendingThisMonthCents: number;
+    receivedThisMonthLabel: string;
+    pendingThisMonthLabel: string;
+    receivedYtdCents: number;
+    receivedYtdLabel: string;
+    allTimeReceivedCents: number;
+    allTimeReceivedLabel: string;
+  };
+  payments: OpsPaymentRow[];
+  settings: {
+    featureFlags: Record<string, boolean>;
+    pilotNotes: string;
+  };
+  leads: OpsLeadRow[];
+  salesPlaceholder: {
+    title: string;
+    blurb: string;
+    phases: { id: string; label: string; status: "planned" | "next" | "live" }[];
+  };
+  migrationHint: string | null;
+};
+
+export const getOwnerOpsDashboard = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { email } = await assertPlatformOwner(context as AuthCtx);
+    const admin = adminLoose();
+
+    const { data: roles, error: rolesErr } = await admin.from("user_roles").select("role");
+    if (rolesErr) throw new Error(rolesErr.message);
+
+    let accountants = 0;
+    let businessOwners = 0;
+    let clientMembers = 0;
+    for (const r of (roles ?? []) as Array<{ role: string }>) {
+      if (r.role === "firm_admin" || r.role === "accountant") accountants += 1;
+      else if (r.role === "client_owner") businessOwners += 1;
+      else if (r.role === "client_member") clientMembers += 1;
+    }
+
+    const [{ count: firms }, { count: clients }, { count: clientsWithOwner }] =
+      await Promise.all([
+        admin.from("firms").select("id", { count: "exact", head: true }),
+        admin.from("clients").select("id", { count: "exact", head: true }),
+        admin
+          .from("clients")
+          .select("id", { count: "exact", head: true })
+          .not("owner_user_id", "is", null),
+      ]);
+
+    let totalUsers = ((roles ?? []) as unknown[]).length;
+    let last7dUsersApprox: number | null = null;
+    try {
+      const listed = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+      if (listed.data?.users) {
+        totalUsers = Math.max(totalUsers, listed.data.users.length);
+        const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+        last7dUsersApprox = listed.data.users.filter((u) => {
+          const t = u.created_at ? Date.parse(u.created_at) : 0;
+          return t >= weekAgo;
+        }).length;
+      }
+    } catch {
+      /* ignore */
+    }
+
+    let payments: OpsPaymentRow[] = [];
+    let receivedThisMonthCents = 0;
+    let pendingThisMonthCents = 0;
+    let receivedYtdCents = 0;
+    let allTimeReceivedCents = 0;
+    let migrationHint: string | null = null;
+    const now = new Date();
+    const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    const y = now.getFullYear();
+    const m = now.getMonth();
+
+    const { data: payRows, error: payErr } = await admin
+      .from("milon_ops_payments")
+      .select("*")
+      .order("paid_at", { ascending: false })
+      .limit(100);
+
+    if (payErr) {
+      if (missingRelation(payErr.message ?? "")) {
+        migrationHint =
+          "Run migration 20260819190000_milon_owner_ops.sql in the Supabase SQL editor to enable payments, settings, and leads.";
+      } else {
+        throw new Error(payErr.message);
+      }
+    } else {
+      for (const row of (payRows ?? []) as Array<Record<string, unknown>>) {
+        const amountCents = Number(row.amount_cents ?? 0);
+        const status = String(row.status ?? "received");
+        const paidAt = String(row.paid_at ?? "");
+        const d = paidAt
+          ? new Date(paidAt.length <= 10 ? `${paidAt}T12:00:00` : paidAt)
+          : null;
+        if (status === "received") {
+          allTimeReceivedCents += amountCents;
+          if (d && d.getFullYear() === y) receivedYtdCents += amountCents;
+          if (d && d.getFullYear() === y && d.getMonth() === m) {
+            receivedThisMonthCents += amountCents;
+          }
+        }
+        if (
+          status === "pending" &&
+          d &&
+          d.getFullYear() === y &&
+          d.getMonth() === m
+        ) {
+          pendingThisMonthCents += amountCents;
+        }
+        payments.push({
+          id: String(row.id),
+          paidAt,
+          amountCents,
+          amountLabel: moneyZar(amountCents),
+          currency: String(row.currency ?? "ZAR"),
+          payerLabel: (row.payer_label as string | null) ?? null,
+          planCode: (row.plan_code as string | null) ?? null,
+          status,
+          note: (row.note as string | null) ?? null,
+        });
+      }
+    }
+
+    let featureFlags: Record<string, boolean> = {
+      maintenance_mode: false,
+      signup_open: true,
+      ask_ai_enabled: true,
+      qbo_enabled: true,
+      landing_waitlist_orbit: true,
+      show_pricing: true,
+    };
+    let pilotNotes = "First-pilot watchlist — edit me from Ops.";
+
+    const { data: settingsRows } = await admin.from("milon_ops_settings").select("key, value");
+    if (settingsRows) {
+      for (const s of settingsRows as Array<{ key: string; value: unknown }>) {
+        if (s.key === "feature_flags" && s.value && typeof s.value === "object") {
+          featureFlags = { ...featureFlags, ...(s.value as Record<string, boolean>) };
+        }
+        if (s.key === "pilot_notes" && s.value && typeof s.value === "object") {
+          const t = (s.value as { text?: string }).text;
+          if (typeof t === "string") pilotNotes = t;
+        }
+      }
+    }
+
+    let leads: OpsLeadRow[] = [];
+    const { data: leadRows } = await admin
+      .from("milon_ops_leads")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(50);
+    if (leadRows) {
+      leads = (leadRows as Array<Record<string, unknown>>).map((row) => ({
+        id: String(row.id),
+        name: (row.name as string | null) ?? null,
+        email: (row.email as string | null) ?? null,
+        company: (row.company as string | null) ?? null,
+        status: String(row.status ?? "new"),
+        source: (row.source as string | null) ?? null,
+        notes: (row.notes as string | null) ?? null,
+        createdAt: String(row.created_at ?? ""),
+      }));
+    }
+
+    const dash: OpsDashboard = {
+      me: { email },
+      signups: {
+        totalUsers,
+        accountants,
+        businessOwners,
+        clientMembers,
+        firms: firms ?? 0,
+        clients: clients ?? 0,
+        clientsWithOwner: clientsWithOwner ?? 0,
+        last7dUsersApprox,
+      },
+      revenue: {
+        monthKey,
+        receivedThisMonthCents,
+        pendingThisMonthCents,
+        receivedThisMonthLabel: moneyZar(receivedThisMonthCents),
+        pendingThisMonthLabel: moneyZar(pendingThisMonthCents),
+        receivedYtdCents,
+        receivedYtdLabel: moneyZar(receivedYtdCents),
+        allTimeReceivedCents,
+        allTimeReceivedLabel: moneyZar(allTimeReceivedCents),
+      },
+      payments,
+      settings: { featureFlags, pilotNotes },
+      leads,
+      salesPlaceholder: {
+        title: "AI Sales & Email Engine",
+        blurb:
+          "Placeholder for your founder outbound system — Claude-drafted sequences, lead scoring, and an inbox that helps land first paying clients.",
+        phases: [
+          { id: "crm", label: "Lead CRM + import", status: "next" },
+          { id: "sequences", label: "AI email sequences (Resend)", status: "planned" },
+          { id: "scoring", label: "Fit scoring (accountant vs owner)", status: "planned" },
+          { id: "inbox", label: "Reply assist + booking links", status: "planned" },
+        ],
+      },
+      migrationHint,
+    };
+    return dash;
+  });
+
+export const upsertOpsFeatureFlags = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) =>
+    z.object({ flags: z.record(z.string(), z.boolean()) }).parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const { userId } = await assertPlatformOwner(context as AuthCtx);
+    const admin = adminLoose();
+
+    const { data: existing } = await admin
+      .from("milon_ops_settings")
+      .select("value")
+      .eq("key", "feature_flags")
+      .maybeSingle();
+
+    const prev =
+      existing && typeof (existing as { value?: unknown }).value === "object"
+        ? ((existing as { value: Record<string, boolean> }).value ?? {})
+        : {};
+    const next = { ...prev, ...data.flags };
+
+    const { error } = await admin.from("milon_ops_settings").upsert({
+      key: "feature_flags",
+      value: next,
+      updated_at: new Date().toISOString(),
+      updated_by: userId,
+    });
+    if (error) {
+      if (missingRelation(error.message)) {
+        throw new Error(
+          "Ops settings table missing — run migration 20260819190000_milon_owner_ops.sql.",
+        );
+      }
+      throw new Error(error.message);
+    }
+    return { flags: next };
+  });
+
+export const upsertOpsPilotNotes = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) => z.object({ text: z.string().max(8000) }).parse(input))
+  .handler(async ({ data, context }) => {
+    const { userId } = await assertPlatformOwner(context as AuthCtx);
+    const admin = adminLoose();
+    const { error } = await admin.from("milon_ops_settings").upsert({
+      key: "pilot_notes",
+      value: { text: data.text },
+      updated_at: new Date().toISOString(),
+      updated_by: userId,
+    });
+    if (error) throw new Error(error.message);
+    return { ok: true as const };
+  });
+
+export const addOpsPayment = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) =>
+    z
+      .object({
+        amountZar: z.number().positive().max(10_000_000),
+        paidAt: z.string().min(4).max(32),
+        payerLabel: z.string().max(200).optional(),
+        planCode: z.string().max(64).optional(),
+        status: z.enum(["received", "pending", "refunded"]).default("received"),
+        note: z.string().max(1000).optional(),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const { userId } = await assertPlatformOwner(context as AuthCtx);
+    const admin = adminLoose();
+    const amountCents = Math.round(data.amountZar * 100);
+    const { error } = await admin.from("milon_ops_payments").insert({
+      amount_cents: amountCents,
+      paid_at: data.paidAt.slice(0, 10),
+      payer_label: data.payerLabel?.trim() || null,
+      plan_code: data.planCode?.trim() || null,
+      status: data.status,
+      note: data.note?.trim() || null,
+      created_by: userId,
+      currency: "ZAR",
+    });
+    if (error) {
+      if (missingRelation(error.message)) {
+        throw new Error(
+          "Ops payments table missing — run migration 20260819190000_milon_owner_ops.sql in Supabase.",
+        );
+      }
+      throw new Error(error.message);
+    }
+    return { ok: true as const };
+  });
+
+export const addOpsLead = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) =>
+    z
+      .object({
+        name: z.string().max(200).optional(),
+        email: z.string().email().max(200).optional(),
+        company: z.string().max(200).optional(),
+        source: z.string().max(100).optional(),
+        notes: z.string().max(2000).optional(),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    await assertPlatformOwner(context as AuthCtx);
+    const admin = adminLoose();
+    const { error } = await admin.from("milon_ops_leads").insert({
+      name: data.name?.trim() || null,
+      email: data.email?.trim().toLowerCase() || null,
+      company: data.company?.trim() || null,
+      source: data.source?.trim() || "manual",
+      notes: data.notes?.trim() || null,
+      status: "new",
+    });
+    if (error) {
+      if (missingRelation(error.message)) {
+        throw new Error(
+          "Ops leads table missing — run migration 20260819190000_milon_owner_ops.sql in Supabase.",
+        );
+      }
+      throw new Error(error.message);
+    }
+    return { ok: true as const };
+  });
