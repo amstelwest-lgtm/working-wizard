@@ -179,7 +179,7 @@ export function CashFromBanksDrafter({
         }
       }}
     >
-      <DialogContent className="max-h-[92vh] max-w-5xl overflow-y-auto border border-amber-900/20 bg-[#fffdf8] text-slate-900 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-50">
+      <DialogContent className="max-h-[min(92vh,100dvh-1rem)] w-[calc(100vw-1rem)] max-w-5xl overflow-y-auto border border-amber-900/20 bg-[#fffdf8] p-4 text-slate-900 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-50 sm:p-6">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-base font-semibold tracking-tight">
             <Wallet className="h-4 w-4 text-[#b8860b]" />

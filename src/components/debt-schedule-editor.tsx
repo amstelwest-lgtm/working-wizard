@@ -88,12 +88,7 @@ export function DebtScheduleEditor({
             {value.lines.map((line) => (
               <div
                 key={line.id}
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1.4fr 1fr 0.7fr 0.7fr auto",
-                  gap: 8,
-                  alignItems: "end",
-                }}
+                className="debt-line"
               >
                 <label style={{ fontSize: 11, color: "var(--ink-dim)" }}>
                   Facility

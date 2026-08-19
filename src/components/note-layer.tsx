@@ -319,7 +319,7 @@ export function NoteLayer({ clientId, tab, authorName, clientName, onNotesChange
       {tabNotes.length > 0 && (
         <div
           data-note="true"
-          className="fixed bottom-32 right-4 z-[99993] w-[260px] max-h-[40vh] overflow-y-auto rounded-2xl border border-[#d4a550]/30 bg-white/95 p-2 shadow-xl backdrop-blur dark:border-[#d4a550]/25 dark:bg-[#0d1525]/95"
+          className="fixed bottom-32 right-4 z-[99993] w-[min(260px,calc(100vw-2rem))] max-h-[40vh] overflow-y-auto rounded-2xl border border-[#d4a550]/30 bg-white/95 p-2 shadow-xl backdrop-blur dark:border-[#d4a550]/25 dark:bg-[#0d1525]/95"
         >
           <div className="mb-1.5 px-2 pt-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b8860b]">
             Notes on this tab · {tabNotes.length}
@@ -408,7 +408,7 @@ export function NoteLayer({ clientId, tab, authorName, clientName, onNotesChange
             {openNoteId === note.id && (
               <div
                 data-note="true"
-                className="absolute left-1/2 w-[300px] -translate-x-1/2 rounded-2xl border border-black/8 bg-white shadow-[0_8px_32px_rgba(0,0,0,0.22)] dark:border-white/10 dark:bg-[#1e2d4a]"
+                className="absolute left-1/2 w-[min(300px,calc(100vw-1.5rem))] -translate-x-1/2 rounded-2xl border border-black/8 bg-white shadow-[0_8px_32px_rgba(0,0,0,0.22)] dark:border-white/10 dark:bg-[#1e2d4a]"
                 style={{ bottom: "calc(100% + 10px)" }}
                 onClick={(e) => e.stopPropagation()}
               >
@@ -562,7 +562,7 @@ export function NoteLayer({ clientId, tab, authorName, clientName, onNotesChange
             transform: "translate(-50%, -50%)",
             zIndex: 99992,
           }}
-          className="w-[300px] rounded-2xl border border-black/8 bg-white shadow-[0_8px_32px_rgba(0,0,0,0.22)] dark:border-white/10 dark:bg-[#1e2d4a]"
+          className="w-[min(300px,calc(100vw-1.5rem))] rounded-2xl border border-black/8 bg-white shadow-[0_8px_32px_rgba(0,0,0,0.22)] dark:border-white/10 dark:bg-[#1e2d4a]"
           onClick={(e) => e.stopPropagation()}
         >
           <div className="flex items-center gap-2.5 px-4 pb-3 pt-4">

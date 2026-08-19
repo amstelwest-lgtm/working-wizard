@@ -897,7 +897,7 @@ function ItemRow({ item, employees, milestones, lastNudge, lastFailed, draggable
 
   return (
     <div
-      className={`group flex cursor-pointer items-center gap-3 border-b border-amber-900/10 px-4 py-3 transition-colors hover:bg-amber-900/[0.03] dark:border-slate-800/70 dark:hover:bg-slate-800/30 ${
+      className={`group flex cursor-pointer flex-wrap items-center gap-x-3 gap-y-2 border-b border-amber-900/10 px-3 py-3 transition-colors hover:bg-amber-900/[0.03] dark:border-slate-800/70 dark:hover:bg-slate-800/30 sm:flex-nowrap sm:gap-3 sm:px-4 ${
         overdue ? "border-l-2 border-l-[#ef4444]" : "border-l-2 border-l-transparent"
       } ${focused ? "bg-[#f7d98a]/20 ring-2 ring-inset ring-[#b7872a] dark:bg-[rgba(247,217,138,0.10)]" : ""}`}
       draggable={draggable}
@@ -908,7 +908,7 @@ function ItemRow({ item, employees, milestones, lastNudge, lastFailed, draggable
       data-row-id={item.id}
     >
       {draggable && (
-        <GripVertical className="h-4 w-4 shrink-0 cursor-grab text-slate-300 opacity-0 transition-opacity group-hover:opacity-100 dark:text-slate-600"
+        <GripVertical className="hidden h-4 w-4 shrink-0 cursor-grab text-slate-300 opacity-0 transition-opacity group-hover:opacity-100 dark:text-slate-600 sm:block"
           onClick={(e) => e.stopPropagation()} />
       )}
       <span className="w-5 shrink-0 text-right text-[11px] font-bold tabular-nums text-slate-400 dark:text-slate-500">
@@ -916,7 +916,7 @@ function ItemRow({ item, employees, milestones, lastNudge, lastFailed, draggable
       </span>
 
       {/* Title + why (inline edit — owners only) */}
-      <div className="min-w-0 flex-1">
+      <div className="min-w-0 flex-[1_1_12rem] basis-full sm:basis-auto sm:flex-1">
         {isOwner && editTitle ? (
           <Input
             autoFocus
@@ -947,7 +947,7 @@ function ItemRow({ item, employees, milestones, lastNudge, lastFailed, draggable
       </div>
 
       {/* Owner */}
-      <div className="w-32 shrink-0">
+      <div className="w-[calc(50%-0.4rem)] shrink-0 sm:w-32">
         {isOwner && pickOwner ? (
           <OwnerPicker
             employees={employees}
@@ -966,7 +966,7 @@ function ItemRow({ item, employees, milestones, lastNudge, lastFailed, draggable
       </div>
 
       {/* Due */}
-      <div className="w-24 shrink-0">
+      <div className="w-[calc(50%-0.4rem)] shrink-0 sm:w-24">
         <input
           type="date"
           value={item.due_date ?? ""}
@@ -1026,7 +1026,7 @@ function ItemRow({ item, employees, milestones, lastNudge, lastFailed, draggable
       </div>
 
       {/* Health chip + open indicator */}
-      <div className="flex shrink-0 items-center gap-1.5">
+      <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:ml-0">
         <span
           className="rounded-md px-2.5 py-1 text-[11px] font-bold"
           style={{ color: h.color, background: h.bg }}

@@ -178,7 +178,7 @@ export function BankStatementDrafter({ open, onClose, onApply }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) { reset(); onClose(); } }}>
-      <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto border border-amber-900/15 bg-white text-slate-950 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-50">
+      <DialogContent className="max-h-[min(90vh,100dvh-1rem)] w-[calc(100vw-1rem)] max-w-3xl overflow-y-auto border border-amber-900/15 bg-white p-4 text-slate-950 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-50 sm:p-6">
         <DialogHeader>
           <DialogTitle className="text-[15px] font-semibold uppercase tracking-[0.15em]">
             Draft board from bank statements

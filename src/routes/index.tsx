@@ -101,6 +101,7 @@ function LandingPage() {
 
   /* ── sign-in modal state ── */
   const [signinOpen, setSigninOpen] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [siEmail, setSiEmail] = useState("");
   const [siPassword, setSiPassword] = useState("");
   const [siBusy, setSiBusy] = useState(false);
@@ -1030,9 +1031,9 @@ function LandingPage() {
       <div id="progress" aria-hidden="true" />
 
       {/* ── nav ── */}
-      <nav id="topnav">
+      <nav id="topnav" className={mobileNavOpen ? "nav-open" : undefined}>
         <div className="wrap">
-          <a className="logo" href="#hero">
+          <a className="logo" href="#hero" onClick={() => setMobileNavOpen(false)}>
             <svg viewBox="0 0 40 40" fill="none" height="34" width="34">
               <circle cx="20" cy="20" r="18" stroke="url(#ng1)" strokeWidth="1.4" />
               <path
@@ -1051,12 +1052,33 @@ function LandingPage() {
             </svg>
             <span className="logo-word gold-text">MILŌN</span>
           </a>
+          <button
+            type="button"
+            className="nav-burger"
+            aria-label={mobileNavOpen ? "Close menu" : "Open menu"}
+            aria-expanded={mobileNavOpen}
+            onClick={() => setMobileNavOpen((o) => !o)}
+          >
+            <span />
+            <span />
+            <span />
+          </button>
           <div className="links">
-            <a href="#persona">Start</a>
-            <a href="#register">Sign up</a>
-            <a href="#method">The MILŌN Method</a>
-            <a href="#features">Platform</a>
-            <a href="#pricing">Pricing</a>
+            <a href="#persona" onClick={() => setMobileNavOpen(false)}>
+              Start
+            </a>
+            <a href="#register" onClick={() => setMobileNavOpen(false)}>
+              Sign up
+            </a>
+            <a href="#method" onClick={() => setMobileNavOpen(false)}>
+              The MILŌN Method
+            </a>
+            <a href="#features" onClick={() => setMobileNavOpen(false)}>
+              Platform
+            </a>
+            <a href="#pricing" onClick={() => setMobileNavOpen(false)}>
+              Pricing
+            </a>
             <button id="themeToggle" title="Toggle light / dark">
               ☀
             </button>
@@ -1064,6 +1086,7 @@ function LandingPage() {
               className="btn btn-gold"
               style={{ padding: "10px 22px", fontSize: 13 }}
               onClick={() => {
+                setMobileNavOpen(false);
                 setSiError("");
                 setSigninOpen(true);
               }}

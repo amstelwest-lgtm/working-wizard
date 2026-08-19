@@ -373,4 +373,73 @@ html[data-theme="light"] .accountant-portal .doc{background:linear-gradient(170d
 .accountant-portal .topbar .profile-chip{display:inline-flex;align-items:center;gap:8px;padding:5px 12px 5px 5px;border:1px solid var(--line);border-radius:99px;font-size:12.5px;font-weight:600;color:var(--ink);background:var(--card)}
 .accountant-portal .topbar .profile-chip .av{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;background:linear-gradient(135deg,rgba(212,175,55,.35),rgba(212,175,55,.1));color:var(--gold);font-size:11px;font-weight:800}
 
+/* Mobile menu toggle — hidden on desktop */
+.accountant-portal .topbar-menu-btn{
+  display:none;width:38px;height:38px;border-radius:11px;border:1px solid var(--line);
+  background:transparent;color:var(--ink);place-items:center;flex-shrink:0;padding:0;
+}
+.accountant-portal .topbar-menu-btn svg{width:18px;height:18px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round}
+.accountant-portal .topbar-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.accountant-portal .ctable-scroll{width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
+.accountant-portal .debt-line{
+  display:grid;grid-template-columns:1.4fr 1fr .7fr .7fr auto;gap:8px;align-items:end;
+}
+
+/* ===== mobile / phone layout ===== */
+@media(max-width:760px){
+  .accountant-portal .shell{padding:0 14px 72px}
+  .accountant-portal .topbar{
+    height:auto;min-height:56px;margin:0 -14px 20px;padding:10px 14px;
+    gap:10px;flex-wrap:wrap;align-items:center;
+  }
+  .accountant-portal .topbar .brand{gap:8px;font-size:13px;letter-spacing:.22em}
+  .accountant-portal .topbar .brand img{height:24px}
+  .accountant-portal .topbar .brand .gold-text{letter-spacing:.22em}
+  .accountant-portal .topbar .firm-chip{padding:4px 10px;font-size:11px;max-width:42vw}
+  .accountant-portal .topbar .firm-switcher select{max-width:38vw;font-size:11px}
+  .accountant-portal .topbar .spacer{display:none}
+  .accountant-portal .topbar-menu-btn{display:grid;margin-left:auto}
+  .accountant-portal .topbar-actions{
+    display:none;width:100%;flex-direction:column;align-items:stretch;
+    gap:8px;padding:8px 0 4px;border-top:1px solid var(--line-soft);
+  }
+  .accountant-portal .topbar-actions.open{display:flex}
+  .accountant-portal .topbar-actions .tb-btn,
+  .accountant-portal .topbar-actions .profile-chip{
+    width:100%;justify-content:flex-start;border-radius:12px;
+  }
+  .accountant-portal .topbar-actions .theme-toggle,
+  .accountant-portal .topbar-actions [data-theme-toggle]{width:100%}
+  .accountant-portal .card.pad{padding:18px 16px}
+  .accountant-portal .stats-strip{grid-template-columns:1fr;gap:10px}
+  .accountant-portal .stat{padding:16px}
+  .accountant-portal .stat .v{font-size:24px}
+  .accountant-portal .fin-grid{grid-template-columns:1fr}
+  .accountant-portal .clients-head{flex-wrap:wrap;gap:10px}
+  .accountant-portal .clients-head .search{max-width:none;width:100%;order:3}
+  .accountant-portal .clients-head h2{font-size:18px}
+  .accountant-portal .ctable{min-width:520px}
+  .accountant-portal .ctable th,.accountant-portal .ctable td{padding:12px 12px;font-size:13px}
+  .accountant-portal .ph-scatter,.accountant-portal .attn-panel{min-height:0;padding:16px}
+  .accountant-portal .ph-scatter-chart{min-height:220px}
+  .accountant-portal .c-inner{padding:4px 16px 18px}
+  .accountant-portal .collapse .c-head{padding:16px}
+  .accountant-portal .cf-wrap{padding:18px 16px}
+  .accountant-portal .drawer-head{padding:20px 18px 16px}
+  .accountant-portal .drawer-body{padding:18px 16px 32px}
+  .accountant-portal .debt-line{grid-template-columns:1fr 1fr;gap:10px}
+  .accountant-portal .debt-line > :last-child{grid-column:1 / -1;justify-self:start}
+  .accountant-portal .client-head{padding:18px 16px;gap:16px}
+  .accountant-portal .client-head h1{font-size:22px}
+  .accountant-portal .client-head .idb{min-width:0}
+  .accountant-portal .client-head .meta{gap:16px}
+  .accountant-portal .tab{padding:10px 12px;font-size:12.5px}
+  .accountant-portal .action-bar{padding:14px 16px}
+  .accountant-portal .crumb{flex-wrap:wrap;gap:8px;margin-bottom:14px}
+
+@media(max-width:480px){
+  .accountant-portal .debt-line{grid-template-columns:1fr}
+  .accountant-portal .hide-xs{display:none}
+}
+
 @media (prefers-reduced-motion:reduce){.accountant-portal *{transition-duration:.01ms!important;animation-duration:.01ms!important}}

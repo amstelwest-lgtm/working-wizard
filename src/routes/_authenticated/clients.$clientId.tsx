@@ -503,6 +503,7 @@ function ClientView() {
 
   // Playbook drawer
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [drawerRatioKey, setDrawerRatioKey] = useState<string | null>(null);
   const [drawerRatioName, setDrawerRatioName] = useState<string>("");
   const [drawerTier, setDrawerTier] = useState<HealthTier>("at_risk");
@@ -1272,21 +1273,47 @@ function ClientView() {
           </span>
           <FirmSwitcher />
           <span className="spacer" />
-          <ThemeToggle />
           <button
-            className="tb-btn"
             type="button"
-            onClick={() => navigate({ to: "/settings" })}
+            className="topbar-menu-btn"
+            aria-label={mobileNavOpen ? "Close menu" : "Open menu"}
+            aria-expanded={mobileNavOpen}
+            onClick={() => setMobileNavOpen((o) => !o)}
           >
-            Settings
-          </button>
-          <button className="tb-btn gold" onClick={handleGenerateReport}>
-            <svg viewBox="0 0 24 24">
-              <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
-              <path d="M14 3v6h6" />
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              {mobileNavOpen ? (
+                <path d="M18 6L6 18M6 6l12 12" />
+              ) : (
+                <path d="M4 7h16M4 12h16M4 17h16" />
+              )}
             </svg>
-            Reports studio
           </button>
+          <div className={`topbar-actions${mobileNavOpen ? " open" : ""}`}>
+            <ThemeToggle />
+            <button
+              className="tb-btn"
+              type="button"
+              onClick={() => {
+                setMobileNavOpen(false);
+                navigate({ to: "/settings" });
+              }}
+            >
+              Settings
+            </button>
+            <button
+              className="tb-btn gold"
+              onClick={() => {
+                setMobileNavOpen(false);
+                handleGenerateReport();
+              }}
+            >
+              <svg viewBox="0 0 24 24">
+                <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
+                <path d="M14 3v6h6" />
+              </svg>
+              Reports studio
+            </button>
+          </div>
         </div>
 
         {/* ===== BREADCRUMB ===== */}

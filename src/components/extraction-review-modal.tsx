@@ -256,7 +256,7 @@ export function ExtractionReviewModal({ result, open, onClose, onConfirm }: Prop
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto bg-slate-950 border-slate-800 text-slate-200">
+      <DialogContent className="max-h-[min(90vh,100dvh-1rem)] w-[calc(100vw-1rem)] max-w-2xl overflow-y-auto border-slate-800 bg-slate-950 p-4 text-slate-200 sm:p-6">
         <DialogHeader>
           <DialogTitle className="text-slate-100">
             Review Extracted Data

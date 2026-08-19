@@ -358,7 +358,7 @@ export function SphereHero({
 
       {/* ── LEVEL 1: compact pillar stat row ── */}
       {level === 1 && (
-        <div className={`${compact ? "mt-3" : "mt-5"} grid w-full max-w-xl grid-cols-4 gap-2`}>
+        <div className={`${compact ? "mt-3" : "mt-5"} grid w-full max-w-xl grid-cols-2 gap-2 sm:grid-cols-4`}>
           {pillars.map((p) => {
             const Icon = PILLAR_ICON[p.id];
             const t = tierOf(p.health);

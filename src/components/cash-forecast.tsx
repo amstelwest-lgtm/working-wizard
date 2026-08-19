@@ -1145,6 +1145,9 @@ export function CashForecastPanel({
         subtitle="Full line-by-line forecast · red = shortfall, act early"
       >
         <div className="overflow-x-auto">
+          <p className="mb-2 text-[10px] font-medium uppercase tracking-wider text-slate-400 sm:hidden">
+            Swipe sideways to see weeks →
+          </p>
           <table className="w-full min-w-[900px] text-xs">
             <thead>
               <tr className="border-b border-amber-900/15 text-slate-500 dark:border-slate-700 dark:text-slate-400">

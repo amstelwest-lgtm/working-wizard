@@ -447,6 +447,7 @@ function Dashboard() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerRatioKey, setDrawerRatioKey] = useState<string | null>(null);
   const [drawerRatioName, setDrawerRatioName] = useState("");
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   // Only known after mount — reading window.location.origin during render would
   // make the server-rendered HTML differ from the client's first render and
@@ -847,43 +848,71 @@ function Dashboard() {
           <FirmSwitcher />
           <span className="spacer" />
           <button
-            id="wizard-dash-reports"
-            className="tb-btn gold"
-            onClick={() =>
-              navigate({
-                to: "/reports",
-                search: {
-                  client: undefined,
-                  clientId: undefined,
-                  report: undefined,
-                  action: undefined,
-                },
-              })
-            }
+            type="button"
+            className="topbar-menu-btn"
+            aria-label={mobileNavOpen ? "Close menu" : "Open menu"}
+            aria-expanded={mobileNavOpen}
+            onClick={() => setMobileNavOpen((o) => !o)}
           >
-            <svg viewBox="0 0 24 24">
-              <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
-              <path d="M14 3v6h6" />
-            </svg>
-            Reports studio
-          </button>
-          <ThemeToggle />
-          <button className="tb-btn" type="button" onClick={() => navigate({ to: "/settings" })}>
-            <svg viewBox="0 0 24 24">
-              <circle cx="12" cy="12" r="3" />
-              <path d="M12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4" />
-            </svg>
-            Settings
-          </button>
-          <span className="profile-chip" title={profile.accountantName || user?.email || ""}>
-            <span className="av">{profileInitials || "·"}</span>
-            {greetName}
-          </span>
-          <button className="tb-btn" onClick={handleSignOut} title="Sign out">
-            <svg viewBox="0 0 24 24">
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              {mobileNavOpen ? (
+                <path d="M18 6L6 18M6 6l12 12" />
+              ) : (
+                <>
+                  <path d="M4 7h16M4 12h16M4 17h16" />
+                </>
+              )}
             </svg>
           </button>
+          <div className={`topbar-actions${mobileNavOpen ? " open" : ""}`}>
+            <button
+              id="wizard-dash-reports"
+              className="tb-btn gold"
+              onClick={() => {
+                setMobileNavOpen(false);
+                navigate({
+                  to: "/reports",
+                  search: {
+                    client: undefined,
+                    clientId: undefined,
+                    report: undefined,
+                    action: undefined,
+                  },
+                });
+              }}
+            >
+              <svg viewBox="0 0 24 24">
+                <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
+                <path d="M14 3v6h6" />
+              </svg>
+              Reports studio
+            </button>
+            <ThemeToggle />
+            <button
+              className="tb-btn"
+              type="button"
+              onClick={() => {
+                setMobileNavOpen(false);
+                navigate({ to: "/settings" });
+              }}
+            >
+              <svg viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="3" />
+                <path d="M12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4" />
+              </svg>
+              Settings
+            </button>
+            <span className="profile-chip" title={profile.accountantName || user?.email || ""}>
+              <span className="av">{profileInitials || "·"}</span>
+              {greetName}
+            </span>
+            <button className="tb-btn" onClick={handleSignOut} title="Sign out">
+              <svg viewBox="0 0 24 24">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />
+              </svg>
+              Sign out
+            </button>
+          </div>
         </div>
 
         {/* ===== GREETING ===== */}
@@ -1129,6 +1158,7 @@ function Dashboard() {
             )}
           </div>
         ) : (
+          <div className="ctable-scroll">
           <table className="ctable">
             <thead>
               <tr>
@@ -1300,6 +1330,7 @@ function Dashboard() {
               })}
             </tbody>
           </table>
+          </div>
         )}
 
         {/* ===== PLAYBOOK LIBRARY ===== */}
