@@ -610,6 +610,10 @@ function LandingPage() {
         return;
       }
 
+      if (!id.includes("@")) {
+        throw new Error("Enter a valid email address.");
+      }
+
       const { error } = await supabase.auth.signInWithPassword({
         email: siEmail,
         password: siPassword,
