@@ -17,9 +17,11 @@ import {
   FileVideo,
   Loader2,
   Mail,
+  MessageSquare,
   Plus,
   RefreshCw,
   Send,
+  ShieldOff,
   Sparkles,
   Target,
   Upload,
@@ -27,9 +29,11 @@ import {
 } from "lucide-react";
 import {
   STAGE_LABELS,
+  draftLighthouseReply,
   draftLighthouseTouch,
   getLighthouse,
   importLighthouseLeads,
+  optOutLighthouseLead,
   sendLighthouseTouch,
   upsertLighthouseAsset,
   upsertLighthouseLead,
@@ -66,7 +70,9 @@ export function LighthousePanel() {
   const saveLead = useServerFn(upsertLighthouseLead);
   const importLeads = useServerFn(importLighthouseLeads);
   const draftTouch = useServerFn(draftLighthouseTouch);
+  const draftReply = useServerFn(draftLighthouseReply);
   const sendTouch = useServerFn(sendLighthouseTouch);
+  const optOut = useServerFn(optOutLighthouseLead);
   const saveAsset = useServerFn(upsertLighthouseAsset);
   const saveSettings = useServerFn(upsertLighthouseSettings);
 
@@ -223,12 +229,15 @@ export function LighthousePanel() {
       {importOpen && (
         <div className="mb-4 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
           <p className="mb-2 text-xs text-slate-400">
-            One lead per line: <code className="text-amber-200/80">name, email, company, signal</code>.
-            The signal is the specific true reason you are reaching out — it drives the whole sequence.
+            One lead per line:{" "}
+            <code className="text-amber-200/80">name, email, company, signal</code>. The signal is
+            the specific true reason you are reaching out — it drives the whole sequence.
           </p>
           <textarea
             className={`${inputCls} min-h-[110px] resize-y py-2`}
-            placeholder={"Sipho Dlamini, sipho@acme.co.za, Acme Plumbing, hiring 3 vans on Indeed\nAnna Botha, anna@bothaco.co.za, Botha & Co, posts monthly about SARS deadlines"}
+            placeholder={
+              "Sipho Dlamini, sipho@acme.co.za, Acme Plumbing, hiring 3 vans on Indeed\nAnna Botha, anna@bothaco.co.za, Botha & Co, posts monthly about SARS deadlines"
+            }
             value={importText}
             onChange={(e) => setImportText(e.target.value)}
           />
@@ -261,7 +270,11 @@ export function LighthousePanel() {
               }}
               className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-amber-500/40 px-4 text-xs font-bold uppercase tracking-wider text-amber-200 hover:bg-amber-500/10 disabled:opacity-60"
             >
-              {importBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+              {importBusy ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Upload className="h-3.5 w-3.5" />
+              )}
               Import
             </button>
           </div>
@@ -314,12 +327,19 @@ export function LighthousePanel() {
           dash={dash}
           onClose={() => setOpenLeadId(null)}
           onDraft={async (stepNo) => draftTouch({ data: { leadId: openLead.id, stepNo } })}
+          onDraftReply={async (theirMessage, intent) =>
+            draftReply({ data: { leadId: openLead.id, theirMessage, intent } })
+          }
           onSend={async (touchId, subject, body) => {
             await sendTouch({ data: { touchId, subject, body } });
             await refresh();
           }}
           onStage={async (stage) => {
             await saveLead({ data: { id: openLead.id, stage } });
+            await refresh();
+          }}
+          onOptOut={async () => {
+            await optOut({ data: { leadId: openLead.id } });
             await refresh();
           }}
           onRefresh={refresh}
@@ -342,8 +362,12 @@ function FunnelStat({
 }) {
   return (
     <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-3">
-      <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">{label}</div>
-      <div className={`mt-1 text-xl font-bold tabular-nums ${gold ? "text-amber-300" : "text-slate-50"}`}>
+      <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
+        {label}
+      </div>
+      <div
+        className={`mt-1 text-xl font-bold tabular-nums ${gold ? "text-amber-300" : "text-slate-50"}`}
+      >
         {value}
         {sub && <span className="ml-1.5 text-[11px] font-semibold text-slate-500">{sub}</span>}
       </div>
@@ -361,7 +385,8 @@ function PipelineBoard({
   if (leads.length === 0) {
     return (
       <div className="rounded-2xl border border-dashed border-white/15 p-10 text-center text-sm text-slate-500">
-        No leads yet. Import a list or add one — start with 20 well-researched names, not 500 scraped ones.
+        No leads yet. Import a list or add one — start with 20 well-researched names, not 500
+        scraped ones.
       </div>
     );
   }
@@ -451,11 +476,36 @@ function AddLeadForm({
         }
       }}
     >
-      <input className={inputCls} placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />
-      <input className={inputCls} placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
-      <input className={inputCls} placeholder="Company" value={company} onChange={(e) => setCompany(e.target.value)} />
-      <input className={inputCls} placeholder="Role" value={roleTitle} onChange={(e) => setRoleTitle(e.target.value)} />
-      <input className={inputCls} placeholder="City" value={city} onChange={(e) => setCity(e.target.value)} />
+      <input
+        className={inputCls}
+        placeholder="Name"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+      />
+      <input
+        className={inputCls}
+        placeholder="Email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+      />
+      <input
+        className={inputCls}
+        placeholder="Company"
+        value={company}
+        onChange={(e) => setCompany(e.target.value)}
+      />
+      <input
+        className={inputCls}
+        placeholder="Role"
+        value={roleTitle}
+        onChange={(e) => setRoleTitle(e.target.value)}
+      />
+      <input
+        className={inputCls}
+        placeholder="City"
+        value={city}
+        onChange={(e) => setCity(e.target.value)}
+      />
       <select
         className={inputCls}
         value={persona}
@@ -476,7 +526,11 @@ function AddLeadForm({
           disabled={busy}
           className="inline-flex h-10 items-center gap-1.5 rounded-xl bg-gradient-to-r from-[#ac8400] via-[#d4af37] to-[#fdee79] px-4 text-xs font-bold uppercase tracking-wider text-[#1b1300] disabled:opacity-60"
         >
-          {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+          {busy ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Check className="h-3.5 w-3.5" />
+          )}
           Save lead
         </button>
         <button
@@ -585,12 +639,42 @@ function AssetGrid({
     status: "placeholder" | "in_progress" | "ready",
   ) => Promise<void>;
 }) {
+  const awaitingReview = dash.assets.filter(
+    (a) => a.status === "in_progress" && (a.url ?? "").trim(),
+  );
+
   return (
     <div>
       <p className="mb-3 text-sm text-slate-400">
         Collateral slots referenced by the sequences. Anything still marked placeholder is simply
-        left out of the email copy — the drafter is told not to link to something that does not exist.
+        left out of the email copy — the drafter is told not to link to something that does not
+        exist.
       </p>
+      {awaitingReview.length > 0 && (
+        <div className="mb-4 rounded-2xl border border-sky-500/30 bg-sky-500/5 px-4 py-3 text-sm text-sky-100">
+          <p className="font-semibold">
+            {awaitingReview.length} {awaitingReview.length === 1 ? "page is" : "pages are"} live and
+            waiting on you.
+          </p>
+          <p className="mt-1 text-[13px] text-sky-200/80">
+            Read each one, then flip it to ready. Until you do, no email links to it — the copy just
+            makes the point in a sentence instead.
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {awaitingReview.map((a) => (
+              <a
+                key={a.key}
+                href={a.url ?? "#"}
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-full border border-sky-400/30 px-3 py-1 text-[11px] font-semibold text-sky-100 hover:bg-sky-500/10"
+              >
+                Read {a.title} →
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
       <div className="grid gap-3 md:grid-cols-2">
         {dash.assets.map((a) => (
           <AssetCard key={a.key} asset={a} onSave={onSave} />
@@ -675,8 +759,16 @@ function AssetCard({
           {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Save"}
         </button>
       </div>
-      {asset.usedInStep && (
-        <p className="mt-2 text-[11px] text-slate-600">Used in touch {asset.usedInStep}</p>
+      <p className="mt-2 text-[11px] text-slate-600">
+        {asset.usedIn ??
+          (asset.usedInStep
+            ? `Used in touch ${asset.usedInStep}`
+            : "Not referenced by any sequence yet")}
+      </p>
+      {asset.status !== "ready" && (asset.url ?? "").trim() && (
+        <p className="mt-1 text-[11px] text-sky-300/80">
+          URL is set but the slot is not ready — nothing links here yet.
+        </p>
       )}
     </div>
   );
@@ -696,6 +788,8 @@ function SettingsForm({
   const [dailySendCap, setDailySendCap] = useState(String(s.dailySendCap));
   const [bookingUrl, setBookingUrl] = useState(s.bookingUrl);
   const [sendWindow, setSendWindow] = useState(s.sendWindow);
+  const [senderAddress, setSenderAddress] = useState(s.senderAddress);
+  const [replyTo, setReplyTo] = useState(s.replyTo);
   const [busy, setBusy] = useState(false);
 
   return (
@@ -705,15 +799,47 @@ function SettingsForm({
           Sender & offer
         </h3>
         <div className="grid gap-2 sm:grid-cols-2">
-          <input className={inputCls} placeholder="Sender name" value={senderName} onChange={(e) => setSenderName(e.target.value)} />
-          <input className={inputCls} placeholder="Sender title" value={senderTitle} onChange={(e) => setSenderTitle(e.target.value)} />
-          <input className={inputCls} placeholder="Trial days" value={trialDays} onChange={(e) => setTrialDays(e.target.value)} />
-          <input className={inputCls} placeholder="Daily send cap" value={dailySendCap} onChange={(e) => setDailySendCap(e.target.value)} />
+          <input
+            className={inputCls}
+            placeholder="Sender name"
+            value={senderName}
+            onChange={(e) => setSenderName(e.target.value)}
+          />
+          <input
+            className={inputCls}
+            placeholder="Sender title"
+            value={senderTitle}
+            onChange={(e) => setSenderTitle(e.target.value)}
+          />
+          <input
+            className={inputCls}
+            placeholder="Trial days"
+            value={trialDays}
+            onChange={(e) => setTrialDays(e.target.value)}
+          />
+          <input
+            className={inputCls}
+            placeholder="Daily send cap"
+            value={dailySendCap}
+            onChange={(e) => setDailySendCap(e.target.value)}
+          />
           <input
             className={`${inputCls} sm:col-span-2`}
-            placeholder="Booking link (Cal.com / Google) — placeholder until you have one"
+            placeholder="Booking link (Cal.com / Google) — kept in step with the booking_link asset"
             value={bookingUrl}
             onChange={(e) => setBookingUrl(e.target.value)}
+          />
+          <input
+            className={`${inputCls} sm:col-span-2`}
+            placeholder="Reply-to mailbox — where replies actually land"
+            value={replyTo}
+            onChange={(e) => setReplyTo(e.target.value)}
+          />
+          <input
+            className={`${inputCls} sm:col-span-2`}
+            placeholder="Postal address for the email footer — required on cold mail"
+            value={senderAddress}
+            onChange={(e) => setSenderAddress(e.target.value)}
           />
           <input
             className={`${inputCls} sm:col-span-2`}
@@ -722,6 +848,12 @@ function SettingsForm({
             onChange={(e) => setSendWindow(e.target.value)}
           />
         </div>
+        {!senderAddress.trim() && (
+          <p className="mt-2 text-[11px] text-amber-300/80">
+            Without an address the footer still identifies you and carries the unsubscribe link, but
+            a postal line is what most spam filters expect on cold mail.
+          </p>
+        )}
         <button
           disabled={busy}
           onClick={async () => {
@@ -734,6 +866,8 @@ function SettingsForm({
                 dailySendCap: Number(dailySendCap) || 25,
                 bookingUrl,
                 sendWindow,
+                senderAddress,
+                replyTo,
               });
             } catch (e) {
               toast.error(e instanceof Error ? e.message : "Save failed");
@@ -752,11 +886,17 @@ function SettingsForm({
           Deliverability guardrails
         </h3>
         <ul className="space-y-1.5">
-          <li>Keep sends under the daily cap per inbox — volume is what burns domains, not copy.</li>
+          <li>
+            Keep sends under the daily cap per inbox — volume is what burns domains, not copy.
+          </li>
           <li>Verify SPF, DKIM and DMARC on the sending domain before the first campaign.</li>
           <li>Plain text only. No tracking pixels, no image-heavy templates, one link at most.</li>
           <li>Bounce rate above two percent means the list needs cleaning, not more sending.</li>
           <li>Reply-to must be a mailbox you actually watch — replies are the whole point.</li>
+          <li>
+            Every send carries a sender line and a one-click unsubscribe header. Opting out stops
+            the sequence and suppresses the address platform-wide.
+          </li>
         </ul>
         <p className="mt-3 text-[11px] text-slate-600">
           Site used for trial links: {dash.capability.siteUrl}
@@ -771,16 +911,23 @@ function LeadDrawer({
   dash,
   onClose,
   onDraft,
+  onDraftReply,
   onSend,
   onStage,
+  onOptOut,
   onRefresh,
 }: {
   lead: LighthouseLead;
   dash: LighthouseDashboard;
   onClose: () => void;
   onDraft: (stepNo: number) => Promise<{ subject: string; body: string; touchId: string }>;
+  onDraftReply: (
+    theirMessage: string,
+    intent: "answer" | "book" | "trial",
+  ) => Promise<{ subject: string; body: string; touchId: string; stepNo: number }>;
   onSend: (touchId: string, subject: string, body: string) => Promise<void>;
   onStage: (stage: LighthouseStage) => Promise<void>;
+  onOptOut: () => Promise<void>;
   onRefresh: () => Promise<void>;
 }) {
   const seq = dash.sequences.find((s) => s.key === lead.sequenceKey);
@@ -793,6 +940,10 @@ function LeadDrawer({
   const [touchId, setTouchId] = useState(existing?.id ?? "");
   const [drafting, setDrafting] = useState(false);
   const [sending, setSending] = useState(false);
+  const [replyOpen, setReplyOpen] = useState(false);
+  const [theirMessage, setTheirMessage] = useState("");
+  const [replyIntent, setReplyIntent] = useState<"answer" | "book" | "trial">("answer");
+  const [replying, setReplying] = useState(false);
 
   useEffect(() => {
     const t = lead.touches.find((x) => x.stepNo === activeStep) ?? null;
@@ -802,7 +953,10 @@ function LeadDrawer({
   }, [activeStep, lead]);
 
   return (
-    <div className="fixed inset-0 z-[80] flex justify-end bg-black/70 backdrop-blur-sm" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-[80] flex justify-end bg-black/70 backdrop-blur-sm"
+      onClick={onClose}
+    >
       <div
         className="flex h-full w-full max-w-2xl flex-col overflow-y-auto border-l border-white/10 bg-[#0b0b12] p-5"
         onClick={(e) => e.stopPropagation()}
@@ -829,6 +983,14 @@ function LeadDrawer({
             <X className="h-4 w-4" />
           </button>
         </div>
+
+        {lead.doNotContact && (
+          <div className="mb-4 rounded-xl border border-red-500/30 bg-red-500/5 px-3 py-2.5 text-[12.5px] text-red-200">
+            <span className="font-semibold">Unsubscribed</span>
+            {lead.optedOutAt ? ` on ${lead.optedOutAt.slice(0, 10)}` : ""} — drafting and sending
+            are both disabled for this lead, and any unsent drafts were skipped.
+          </div>
+        )}
 
         {/* Stage control */}
         <div className="mb-4 flex flex-wrap gap-1.5">
@@ -869,33 +1031,110 @@ function LeadDrawer({
               </button>
             </div>
             <p className="mt-1 text-[11px] text-slate-500">
-              {lead.trialClickedAt ? `Clicked ${lead.trialClickedAt.slice(0, 10)}` : "Not clicked yet"}
+              {lead.trialClickedAt
+                ? `Clicked ${lead.trialClickedAt.slice(0, 10)}`
+                : "Not clicked yet"}
               {lead.trialSignedUpAt ? ` · signed up ${lead.trialSignedUpAt.slice(0, 10)}` : ""}
             </p>
           </div>
         )}
 
+        {/* Reply helper — the one place the FAQ and booking link belong */}
+        <div className="mb-4">
+          <button
+            onClick={() => setReplyOpen((o) => !o)}
+            className="inline-flex h-9 items-center gap-1.5 rounded-full border border-white/15 px-3 text-xs font-semibold uppercase tracking-wider text-slate-300 hover:border-amber-400/40"
+          >
+            <MessageSquare className="h-3.5 w-3.5" />
+            {replyOpen ? "Close reply helper" : "They replied — draft an answer"}
+          </button>
+          {replyOpen && (
+            <div className="mt-2 rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+              <textarea
+                className={`${inputCls} min-h-[100px] resize-y py-2`}
+                placeholder="Paste what they wrote back. The draft answers their actual question, and may link the objection FAQ or your booking link when those are ready."
+                value={theirMessage}
+                onChange={(e) => setTheirMessage(e.target.value)}
+              />
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <select
+                  className={`${inputCls} max-w-[220px]`}
+                  value={replyIntent}
+                  onChange={(e) => setReplyIntent(e.target.value as typeof replyIntent)}
+                >
+                  <option value="answer">Just answer them</option>
+                  <option value="book">Propose a call</option>
+                  <option value="trial">Point at the free trial</option>
+                </select>
+                <button
+                  disabled={
+                    replying ||
+                    !theirMessage.trim() ||
+                    !dash.capability.aiConfigured ||
+                    lead.doNotContact
+                  }
+                  onClick={async () => {
+                    setReplying(true);
+                    try {
+                      const r = await onDraftReply(theirMessage, replyIntent);
+                      setSubject(r.subject);
+                      setBody(r.body);
+                      setTouchId(r.touchId);
+                      setActiveStep(r.stepNo);
+                      toast.success("Reply drafted — read it before sending");
+                      await onRefresh();
+                    } catch (e) {
+                      toast.error(e instanceof Error ? e.message : "Draft failed");
+                    } finally {
+                      setReplying(false);
+                    }
+                  }}
+                  className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-amber-500/40 px-4 text-xs font-bold uppercase tracking-wider text-amber-200 hover:bg-amber-500/10 disabled:opacity-50"
+                >
+                  {replying ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Sparkles className="h-3.5 w-3.5" />
+                  )}
+                  Draft reply
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* Step tabs */}
         <div className="mb-3 flex flex-wrap gap-1.5">
-          {Array.from({ length: stepCount }, (_, i) => i + 1).map((n) => {
-            const t = lead.touches.find((x) => x.stepNo === n);
-            return (
-              <button
-                key={n}
-                onClick={() => setActiveStep(n)}
-                className={`rounded-lg px-3 py-1.5 text-[11px] font-semibold transition-colors ${
-                  activeStep === n
-                    ? "bg-white/10 text-slate-100"
-                    : "text-slate-500 hover:text-slate-300"
-                }`}
-              >
-                {n}
-                {t?.status === "sent" && <Check className="ml-1 inline h-3 w-3 text-emerald-400" />}
-              </button>
-            );
-          })}
+          {Array.from(
+            new Set([
+              ...Array.from({ length: stepCount }, (_, i) => i + 1),
+              ...lead.touches.map((t) => t.stepNo),
+            ]),
+          )
+            .sort((a, b) => a - b)
+            .map((n) => {
+              const t = lead.touches.find((x) => x.stepNo === n);
+              return (
+                <button
+                  key={n}
+                  onClick={() => setActiveStep(n)}
+                  className={`rounded-lg px-3 py-1.5 text-[11px] font-semibold transition-colors ${
+                    activeStep === n
+                      ? "bg-white/10 text-slate-100"
+                      : "text-slate-500 hover:text-slate-300"
+                  }`}
+                >
+                  {n > stepCount ? "reply" : n}
+                  {t?.status === "sent" && (
+                    <Check className="ml-1 inline h-3 w-3 text-emerald-400" />
+                  )}
+                </button>
+              );
+            })}
         </div>
-        <p className="mb-3 text-[11px] text-slate-500">{STEP_HINT[activeStep]}</p>
+        <p className="mb-3 text-[11px] text-slate-500">
+          {STEP_HINT[activeStep] ?? "Reply — answer what they asked, one ask at most"}
+        </p>
 
         <div className="space-y-2">
           <input
@@ -914,7 +1153,7 @@ function LeadDrawer({
 
         <div className="mt-3 flex flex-wrap gap-2">
           <button
-            disabled={drafting || !dash.capability.aiConfigured}
+            disabled={drafting || !dash.capability.aiConfigured || lead.doNotContact}
             onClick={async () => {
               setDrafting(true);
               try {
@@ -932,11 +1171,15 @@ function LeadDrawer({
             }}
             className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-amber-500/40 px-4 text-xs font-bold uppercase tracking-wider text-amber-200 hover:bg-amber-500/10 disabled:opacity-50"
           >
-            {drafting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+            {drafting ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Sparkles className="h-3.5 w-3.5" />
+            )}
             Draft with Claude
           </button>
           <button
-            disabled={sending || !touchId || !subject || !body}
+            disabled={sending || !touchId || !subject || !body || lead.doNotContact}
             onClick={async () => {
               setSending(true);
               try {
@@ -950,7 +1193,11 @@ function LeadDrawer({
             }}
             className="inline-flex h-10 items-center gap-1.5 rounded-xl bg-gradient-to-r from-[#ac8400] via-[#d4af37] to-[#fdee79] px-4 text-xs font-bold uppercase tracking-wider text-[#1b1300] disabled:opacity-50"
           >
-            {sending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+            {sending ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Send className="h-3.5 w-3.5" />
+            )}
             Send now
           </button>
           {lead.email && (
@@ -963,8 +1210,47 @@ function LeadDrawer({
           )}
         </div>
 
-        {existing?.error && (
-          <p className="mt-2 text-[12px] text-red-300">{existing.error}</p>
+        {existing?.error && <p className="mt-2 text-[12px] text-red-300">{existing.error}</p>}
+
+        <p className="mt-2 text-[11px] text-slate-600">
+          A sender line and an unsubscribe link are appended automatically at send time, so they do
+          not eat into the word budget and cannot be edited away by accident.
+        </p>
+
+        {/* Opt-out */}
+        {lead.optOutLink && !lead.doNotContact && (
+          <div className="mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-white/10 bg-white/[0.02] px-3 py-2.5">
+            <code className="flex-1 truncate text-[11px] text-slate-500">{lead.optOutLink}</code>
+            <button
+              onClick={() => {
+                void navigator.clipboard?.writeText(lead.optOutLink ?? "");
+                toast.success("Opt-out link copied");
+              }}
+              className="inline-flex h-8 items-center gap-1 rounded-lg border border-white/15 px-2.5 text-[11px] text-slate-400 hover:border-amber-400/40"
+            >
+              <Copy className="h-3 w-3" /> Copy
+            </button>
+            <button
+              onClick={async () => {
+                if (
+                  !window.confirm(
+                    "Mark this lead as unsubscribed? This cannot be undone from here.",
+                  )
+                ) {
+                  return;
+                }
+                try {
+                  await onOptOut();
+                  toast.success("Marked unsubscribed");
+                } catch (e) {
+                  toast.error(e instanceof Error ? e.message : "Could not record the opt-out");
+                }
+              }}
+              className="inline-flex h-8 items-center gap-1 rounded-lg border border-red-500/30 px-2.5 text-[11px] font-semibold text-red-300 hover:bg-red-500/10"
+            >
+              <ShieldOff className="h-3 w-3" /> They asked to stop
+            </button>
+          </div>
         )}
 
         <div className="mt-6 border-t border-white/10 pt-4">
@@ -979,7 +1265,10 @@ function LeadDrawer({
                 .slice()
                 .sort((a, b) => a.stepNo - b.stepNo)
                 .map((t) => (
-                  <li key={t.id} className="flex items-baseline justify-between gap-3 text-[12.5px]">
+                  <li
+                    key={t.id}
+                    className="flex items-baseline justify-between gap-3 text-[12.5px]"
+                  >
                     <span className="truncate text-slate-300">
                       {t.stepNo}. {t.subject || "(no subject)"}
                     </span>

@@ -18,6 +18,7 @@ import {
   type AuthCtx,
 } from "@/lib/owner-ops.guard";
 import { callClaudeMessages } from "@/lib/claude-messages";
+import { applyLighthouseOptOut } from "@/lib/lighthouse-optout.server";
 
 const MIGRATION = "20260820100000_milon_lighthouse.sql";
 
@@ -71,6 +72,8 @@ export type LighthouseLead = {
   trialClickedAt: string | null;
   trialSignedUpAt: string | null;
   doNotContact: boolean;
+  optOutLink: string | null;
+  optedOutAt: string | null;
   createdAt: string;
   touches: LighthouseTouch[];
 };
@@ -95,6 +98,8 @@ export type LighthouseStep = {
   max_words: number;
   cta: string;
   asset: string | null;
+  /** Linked only when the primary asset is still a placeholder. */
+  asset_fallback?: string | null;
 };
 
 export type LighthouseSequence = {
@@ -111,6 +116,7 @@ export type LighthouseAsset = {
   title: string;
   purpose: string | null;
   usedInStep: number | null;
+  usedIn: string | null;
   persona: string;
   url: string | null;
   status: "placeholder" | "in_progress" | "ready";
@@ -124,6 +130,10 @@ export type LighthouseSettings = {
   bookingUrl: string;
   sendWindow: string;
   autoSend: boolean;
+  /** Postal or physical address shown in the cold-email footer. */
+  senderAddress: string;
+  /** Mailbox replies actually land in; falls back to the from address. */
+  replyTo: string;
 };
 
 export type LighthouseDashboard = {
@@ -159,19 +169,137 @@ const DEFAULT_SETTINGS: LighthouseSettings = {
   bookingUrl: "",
   sendWindow: "Tue-Thu 07:00-09:00 SAST",
   autoSend: false,
+  senderAddress: "",
+  replyTo: "",
 };
 
 function siteUrl(): string {
-  return (
-    process.env.SITE_URL ||
-    process.env.VITE_APP_URL ||
-    "https://milon.co.za"
-  ).replace(/\/$/, "");
+  return (process.env.SITE_URL || process.env.VITE_APP_URL || "https://milon.co.za").replace(
+    /\/$/,
+    "",
+  );
 }
 
 export function trialLinkFor(token: string | null): string | null {
   if (!token) return null;
   return `${siteUrl()}/?lh=${token}#register`;
+}
+
+export function optOutLinkFor(token: string | null): string | null {
+  if (!token) return null;
+  return `${siteUrl()}/unsubscribe?lh=${token}`;
+}
+
+/** One-click target for the List-Unsubscribe header (RFC 8058). */
+function oneClickOptOutFor(token: string): string {
+  return `${siteUrl()}/lh/unsubscribe?t=${token}`;
+}
+
+const FOOTER_MARK = "—\nYou are receiving this because";
+
+/**
+ * Cold mail needs an identifiable sender and a working way out. The footer is
+ * appended at send time rather than being drafted, so it cannot be edited away
+ * by accident and never eats into the model's word budget.
+ */
+function complianceFooter(opts: {
+  company: string | null;
+  optOutLink: string;
+  senderName: string;
+  senderAddress: string;
+}): string {
+  const who = opts.company ? ` while researching South African businesses` : "";
+  const address = opts.senderAddress.trim();
+  return [
+    "—",
+    `You are receiving this because I came across ${opts.company || "your business"}${who} for Milōn, and I sent it myself.`,
+    `If it is not for you, unsubscribe here and I will not contact you again: ${opts.optOutLink}`,
+    address ? `Milōn · ${opts.senderName} · ${address}` : `Milōn · ${opts.senderName}`,
+  ].join("\n");
+}
+
+function withComplianceFooter(body: string, footer: string): string {
+  if (body.includes(FOOTER_MARK) || body.includes("/unsubscribe?lh=")) return body;
+  return `${body.trimEnd()}\n\n${footer}`;
+}
+
+function parseDraftJson(raw: string): { subject: string; body: string } | null {
+  const attempt = (text: string) => {
+    const parsed = JSON.parse(text) as { subject?: string; body?: string };
+    const subject = String(parsed.subject ?? "").trim();
+    const body = String(parsed.body ?? "").trim();
+    return subject && body ? { subject, body } : null;
+  };
+
+  try {
+    return attempt(
+      raw
+        .replace(/^```(?:json)?\s*/i, "")
+        .replace(/```\s*$/i, "")
+        .trim(),
+    );
+  } catch {
+    const match = raw.match(/\{[\s\S]*\}/);
+    if (!match) return null;
+    try {
+      return attempt(match[0]);
+    } catch {
+      return null;
+    }
+  }
+}
+
+/** Assets may be stored as in-app paths ("/faq") or full external URLs. */
+function absoluteUrl(url: string): string {
+  const trimmed = url.trim();
+  if (!trimmed) return "";
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  return `${siteUrl()}${trimmed.startsWith("/") ? "" : "/"}${trimmed}`;
+}
+
+type AssetLike = { key: string; title: string; url: string };
+
+/**
+ * Walk a preference list of asset keys and return the first that is genuinely
+ * ready — status flipped and a URL filled in. Anything still a placeholder is
+ * skipped, which is what keeps drafts from linking to work that does not exist.
+ */
+async function firstReadyAsset(
+  admin: ReturnType<typeof adminLoose>,
+  keys: Array<string | null>,
+): Promise<AssetLike | null> {
+  const wanted = keys.filter((k): k is string => Boolean(k));
+  if (!wanted.length) return null;
+
+  const { data } = await admin
+    .from("lighthouse_assets")
+    .select("key, title, url, status")
+    .in("key", wanted);
+  const rows = (data ?? []) as Array<Record<string, unknown>>;
+
+  for (const key of wanted) {
+    const row = rows.find((r) => String(r.key) === key);
+    const url = String(row?.url ?? "").trim();
+    if (row && row.status === "ready" && url) {
+      return { key, title: String(row.title ?? key), url: absoluteUrl(url) };
+    }
+  }
+  return null;
+}
+
+/**
+ * The console offers a booking link in two places — Settings and the
+ * `booking_link` asset. Settings wins, but a ready asset is honoured so that
+ * filling in the slot is never a silent no-op.
+ */
+async function resolveBookingUrl(
+  admin: ReturnType<typeof adminLoose>,
+  settingsRaw: Record<string, unknown>,
+): Promise<string> {
+  const fromSettings = String(settingsRaw.booking_url ?? "").trim();
+  if (fromSettings) return absoluteUrl(fromSettings);
+  const asset = await firstReadyAsset(admin, ["booking_link"]);
+  return asset?.url ?? "";
 }
 
 function randomToken(bytes = 12): string {
@@ -194,10 +322,10 @@ function mapLead(row: Record<string, unknown>, touches: LighthouseTouch[]): Ligh
     company: (row.company as string | null) ?? null,
     roleTitle: (row.role_title as string | null) ?? null,
     city: (row.city as string | null) ?? null,
-    persona: ((row.persona as string) === "accountant" ? "accountant" : "owner"),
-    stage: (LIGHTHOUSE_STAGES.includes(row.stage as LighthouseStage)
+    persona: (row.persona as string) === "accountant" ? "accountant" : "owner",
+    stage: LIGHTHOUSE_STAGES.includes(row.stage as LighthouseStage)
       ? (row.stage as LighthouseStage)
-      : "sourced"),
+      : "sourced",
     signal: (row.signal as string | null) ?? null,
     notes: (row.notes as string | null) ?? null,
     sequenceKey: String(row.sequence_key ?? "owner_v1"),
@@ -211,6 +339,8 @@ function mapLead(row: Record<string, unknown>, touches: LighthouseTouch[]): Ligh
     trialClickedAt: (row.trial_clicked_at as string | null) ?? null,
     trialSignedUpAt: (row.trial_signed_up_at as string | null) ?? null,
     doNotContact: Boolean(row.do_not_contact),
+    optOutLink: optOutLinkFor((row.optout_token as string | null) ?? null),
+    optedOutAt: (row.optout_at as string | null) ?? null,
     createdAt: String(row.created_at ?? ""),
     touches,
   };
@@ -262,7 +392,7 @@ export const getLighthouse = createServerFn({ method: "GET" })
     const rows = (leadRows ?? []) as Array<Record<string, unknown>>;
     const ids = rows.map((r) => String(r.id));
 
-    let touchesByLead = new Map<string, LighthouseTouch[]>();
+    const touchesByLead = new Map<string, LighthouseTouch[]>();
     let migrationHint: string | null = null;
     if (ids.length) {
       const { data: touchRows, error: touchErr } = await admin
@@ -304,9 +434,7 @@ export const getLighthouse = createServerFn({ method: "GET" })
     const repliedPlus = leads.filter((l) =>
       ["replied", "meeting", "trial", "activated", "won"].includes(l.stage),
     ).length;
-    const trialPlus = leads.filter((l) =>
-      ["trial", "activated", "won"].includes(l.stage),
-    ).length;
+    const trialPlus = leads.filter((l) => ["trial", "activated", "won"].includes(l.stage)).length;
 
     let sequences: LighthouseSequence[] = [];
     const { data: seqRows } = await admin.from("lighthouse_sequences").select("*");
@@ -334,9 +462,10 @@ export const getLighthouse = createServerFn({ method: "GET" })
         title: String(a.title ?? a.key),
         purpose: (a.purpose as string | null) ?? null,
         usedInStep: a.used_in_step == null ? null : Number(a.used_in_step),
+        usedIn: (a.used_in as string | null) ?? null,
         persona: String(a.persona ?? "both"),
         url: (a.url as string | null) ?? null,
-        status: (String(a.status ?? "placeholder") as LighthouseAsset["status"]),
+        status: String(a.status ?? "placeholder") as LighthouseAsset["status"],
       }));
     }
 
@@ -356,6 +485,8 @@ export const getLighthouse = createServerFn({ method: "GET" })
         bookingUrl: String(raw.booking_url ?? ""),
         sendWindow: String(raw.send_window ?? settings.sendWindow),
         autoSend: Boolean(raw.auto_send ?? false),
+        senderAddress: String(raw.sender_address ?? ""),
+        replyTo: String(raw.reply_to ?? ""),
       };
     }
 
@@ -385,9 +516,8 @@ export const getLighthouse = createServerFn({ method: "GET" })
         sourced: leads.length,
         contacted: contactedPlus,
         replied: repliedPlus,
-        meeting: leads.filter((l) =>
-          ["meeting", "trial", "activated", "won"].includes(l.stage),
-        ).length,
+        meeting: leads.filter((l) => ["meeting", "trial", "activated", "won"].includes(l.stage))
+          .length,
         trial: trialPlus,
         won: stageCounts.won ?? 0,
         replyRatePct: contactedPlus ? Math.round((repliedPlus / contactedPlus) * 1000) / 10 : null,
@@ -446,10 +576,7 @@ export const upsertLighthouseLead = createServerFn({ method: "POST" })
     }
 
     if (data.id) {
-      const { error } = await admin
-        .from("milon_ops_leads")
-        .update(patch)
-        .eq("id", data.id);
+      const { error } = await admin.from("milon_ops_leads").update(patch).eq("id", data.id);
       if (error) throw new Error(error.message);
       return { id: data.id };
     }
@@ -549,6 +676,9 @@ export const draftLighthouseTouch = createServerFn({ method: "POST" })
     if (leadErr) throw new Error(leadErr.message);
     if (!leadRow) throw new Error("Lead not found");
     const lead = leadRow as Record<string, unknown>;
+    if (lead.do_not_contact) {
+      throw new Error("This lead has unsubscribed — drafting is disabled for them.");
+    }
 
     const seqKey = String(lead.sequence_key ?? "owner_v1");
     const { data: seqRow } = await admin
@@ -557,16 +687,15 @@ export const draftLighthouseTouch = createServerFn({ method: "POST" })
       .eq("key", seqKey)
       .maybeSingle();
     const steps = Array.isArray((seqRow as { steps?: unknown } | null)?.steps)
-      ? ((seqRow as { steps: LighthouseStep[] }).steps)
+      ? (seqRow as { steps: LighthouseStep[] }).steps
       : [];
     const step = steps.find((s) => s.step === data.stepNo);
     if (!step) throw new Error(`Step ${data.stepNo} is not defined for ${seqKey}`);
 
-    const { data: assetRow } = step.asset
-      ? await admin.from("lighthouse_assets").select("*").eq("key", step.asset).maybeSingle()
-      : { data: null };
-    const asset = assetRow as Record<string, unknown> | null;
-    const assetReady = asset && asset.status === "ready" && asset.url;
+    // Primary asset first, then the fallback slot. Only when neither is ready
+    // does the copy degrade to describing the point without a link.
+    const readyAsset = await firstReadyAsset(admin, [step.asset, step.asset_fallback ?? null]);
+    const assetUrl = readyAsset?.url ?? null;
 
     const { data: setRow } = await admin
       .from("milon_ops_settings")
@@ -577,7 +706,7 @@ export const draftLighthouseTouch = createServerFn({ method: "POST" })
     const senderName = String(settingsRaw.sender_name ?? DEFAULT_SETTINGS.senderName);
     const senderTitle = String(settingsRaw.sender_title ?? DEFAULT_SETTINGS.senderTitle);
     const trialDays = Number(settingsRaw.trial_days ?? DEFAULT_SETTINGS.trialDays);
-    const bookingUrl = String(settingsRaw.booking_url ?? "");
+    const bookingUrl = await resolveBookingUrl(admin, settingsRaw);
 
     const trialLink = trialLinkFor((lead.trial_token as string | null) ?? null);
 
@@ -603,12 +732,12 @@ export const draftLighthouseTouch = createServerFn({ method: "POST" })
         : step.cta === "reply_interest"
           ? "Ask for a one-word reply only. Do not include any link."
           : step.cta === "watch_60s" || step.cta === "watch_walkthrough"
-            ? assetReady
-              ? `Point to this short video: ${String(asset?.url)}`
+            ? assetUrl
+              ? `Point to exactly this link and nothing else: ${assetUrl}`
               : "The video is not produced yet, so describe the insight in one sentence instead of linking to anything."
             : step.cta === "read_case"
-              ? assetReady
-                ? `Point to: ${String(asset?.url)}`
+              ? assetUrl
+                ? `Point to exactly this link and nothing else: ${assetUrl}`
                 : "There is no published case study yet, so use an honest first-pilot framing without linking."
               : "Close with a simple, low-pressure question.";
 
@@ -645,23 +774,9 @@ The body must be plain text with line breaks, already signed off, ready to send.
       maxTokens: 1200,
     });
 
-    let subject = "";
-    let body = "";
-    try {
-      const parsed = JSON.parse(
-        raw.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "").trim(),
-      ) as { subject?: string; body?: string };
-      subject = String(parsed.subject ?? "").trim();
-      body = String(parsed.body ?? "").trim();
-    } catch {
-      const match = raw.match(/\{[\s\S]*\}/);
-      if (match) {
-        const parsed = JSON.parse(match[0]) as { subject?: string; body?: string };
-        subject = String(parsed.subject ?? "").trim();
-        body = String(parsed.body ?? "").trim();
-      }
-    }
-    if (!subject || !body) throw new Error("Claude returned an unusable draft — try again.");
+    const draft = parseDraftJson(raw);
+    if (!draft) throw new Error("Claude returned an unusable draft — try again.");
+    const { subject, body } = draft;
 
     const scheduledFor = addDays(new Date(), 0);
 
@@ -736,6 +851,59 @@ export const sendLighthouseTouch = createServerFn({ method: "POST" })
     if (!to || !to.includes("@")) throw new Error("Lead has no email address.");
     if (lead?.do_not_contact) throw new Error("Lead is marked do-not-contact.");
 
+    // Fail closed against the platform-wide suppression list: someone who
+    // unsubscribed from any Milōn email must not receive cold outreach either.
+    const { data: suppressed, error: suppErr } = await admin
+      .from("suppressed_emails")
+      .select("email")
+      .eq("email", to.toLowerCase())
+      .maybeSingle();
+    if (suppErr && !missingRelation(suppErr.message ?? "")) {
+      throw new Error("Could not verify the suppression list, so nothing was sent.");
+    }
+    if (suppressed) {
+      await admin
+        .from("lighthouse_touches")
+        .update({ status: "skipped", error: "Recipient is on the suppression list." })
+        .eq("id", data.touchId);
+      await admin
+        .from("milon_ops_leads")
+        .update({ do_not_contact: true, next_touch_on: null })
+        .eq("id", String(touch.lead_id));
+      throw new Error("This address is on the suppression list — nothing was sent.");
+    }
+
+    // Every cold send carries a sender identity and a working way out.
+    let optOutToken = String(lead?.optout_token ?? "").trim();
+    if (!optOutToken) {
+      optOutToken = randomToken();
+      await admin
+        .from("milon_ops_leads")
+        .update({ optout_token: optOutToken })
+        .eq("id", String(touch.lead_id));
+    }
+    const optOutLink = optOutLinkFor(optOutToken) ?? "";
+
+    const { data: sendSetRow } = await admin
+      .from("milon_ops_settings")
+      .select("value")
+      .eq("key", "lighthouse")
+      .maybeSingle();
+    const sendSettings = (sendSetRow as { value?: Record<string, unknown> } | null)?.value ?? {};
+    const senderName = String(sendSettings.sender_name ?? DEFAULT_SETTINGS.senderName);
+    const senderAddress = String(sendSettings.sender_address ?? "");
+    const replyTo = String(sendSettings.reply_to ?? "").trim();
+
+    const bodyWithFooter = withComplianceFooter(
+      data.body,
+      complianceFooter({
+        company: (lead?.company as string | null) ?? null,
+        optOutLink,
+        senderName,
+        senderAddress,
+      }),
+    );
+
     const apiKey = process.env.RESEND_API_KEY;
     const fromRaw = process.env.RESEND_FROM_EMAIL || "noreply@milon.co.za";
     const fromAddr = fromRaw.includes("<")
@@ -747,7 +915,7 @@ export const sendLighthouseTouch = createServerFn({ method: "POST" })
         .from("lighthouse_touches")
         .update({
           subject: data.subject,
-          body: data.body,
+          body: bodyWithFooter,
           status: "approved",
           error: "RESEND_API_KEY not configured — approved but not sent.",
         })
@@ -765,10 +933,18 @@ export const sendLighthouseTouch = createServerFn({ method: "POST" })
         "Idempotency-Key": `lighthouse-${data.touchId}`,
       },
       body: JSON.stringify({
-        from: `${DEFAULT_SETTINGS.senderName} <${fromAddr}>`,
+        from: `${senderName} <${fromAddr}>`,
         to: [to],
+        ...(replyTo ? { reply_to: replyTo } : {}),
         subject: data.subject,
-        text: data.body,
+        text: bodyWithFooter,
+        headers: {
+          // RFC 8058 one-click: mail clients show a native Unsubscribe control
+          // and POST to the https target. Gmail and Yahoo bulk-sender rules
+          // both expect this on anything that is not strictly transactional.
+          "List-Unsubscribe": `<${oneClickOptOutFor(optOutToken)}>, <mailto:${fromAddr}?subject=unsubscribe>`,
+          "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+        },
       }),
     });
 
@@ -788,7 +964,7 @@ export const sendLighthouseTouch = createServerFn({ method: "POST" })
       .from("lighthouse_touches")
       .update({
         subject: data.subject,
-        body: data.body,
+        body: bodyWithFooter,
         status: "sent",
         sent_at: now.toISOString(),
         error: null,
@@ -803,15 +979,14 @@ export const sendLighthouseTouch = createServerFn({ method: "POST" })
       .eq("key", seqKey)
       .maybeSingle();
     const steps = Array.isArray((seqRow as { steps?: unknown } | null)?.steps)
-      ? ((seqRow as { steps: LighthouseStep[] }).steps)
+      ? (seqRow as { steps: LighthouseStep[] }).steps
       : [];
     const thisStep = steps.find((s) => s.step === stepNo);
     const nextStep = steps.find((s) => s.step === stepNo + 1);
     const gap = nextStep && thisStep ? Math.max(1, nextStep.day - thisStep.day) : null;
 
     const stage = String(lead?.stage ?? "sourced");
-    const advanced =
-      stage === "sourced" || stage === "researched" ? "contacted" : stage;
+    const advanced = stage === "sourced" || stage === "researched" ? "contacted" : stage;
 
     await admin
       .from("milon_ops_leads")
@@ -840,11 +1015,50 @@ export const upsertLighthouseAsset = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertPlatformOwner(context as AuthCtx);
     const admin = adminLoose();
+
+    const url = data.url?.trim() ?? undefined;
+
+    // "Ready" is what makes the drafter start linking, so it must never be
+    // reachable without something to link to.
+    if (data.status === "ready") {
+      const existingUrl =
+        url ??
+        String(
+          (
+            (await admin.from("lighthouse_assets").select("url").eq("key", data.key).maybeSingle())
+              .data as { url?: string | null } | null
+          )?.url ?? "",
+        );
+      if (!existingUrl.trim()) {
+        throw new Error(
+          "Add a URL before marking this asset ready — emails must have somewhere to point.",
+        );
+      }
+    }
+
     const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
-    if (data.url !== undefined) patch.url = data.url.trim() || null;
+    if (url !== undefined) patch.url = url || null;
     if (data.status) patch.status = data.status;
     const { error } = await admin.from("lighthouse_assets").update(patch).eq("key", data.key);
     if (error) throw new Error(error.message);
+
+    // The booking link exists in two places by design (an asset slot and a
+    // Settings field). Mirror it so filling either one takes effect.
+    if (data.key === "booking_link" && url) {
+      const { data: existing } = await admin
+        .from("milon_ops_settings")
+        .select("value")
+        .eq("key", "lighthouse")
+        .maybeSingle();
+      const prev = ((existing as { value?: Record<string, unknown> } | null)?.value ??
+        {}) as Record<string, unknown>;
+      await admin.from("milon_ops_settings").upsert({
+        key: "lighthouse",
+        value: { ...prev, booking_url: url },
+        updated_at: new Date().toISOString(),
+      });
+    }
+
     return { ok: true as const };
   });
 
@@ -860,6 +1074,8 @@ export const upsertLighthouseSettings = createServerFn({ method: "POST" })
         bookingUrl: z.string().max(600).optional(),
         sendWindow: z.string().max(120).optional(),
         autoSend: z.boolean().optional(),
+        senderAddress: z.string().max(300).optional(),
+        replyTo: z.string().max(200).optional(),
       })
       .parse(input),
   )
@@ -885,6 +1101,8 @@ export const upsertLighthouseSettings = createServerFn({ method: "POST" })
     if (data.bookingUrl !== undefined) next.booking_url = data.bookingUrl;
     if (data.sendWindow !== undefined) next.send_window = data.sendWindow;
     if (data.autoSend !== undefined) next.auto_send = data.autoSend;
+    if (data.senderAddress !== undefined) next.sender_address = data.senderAddress;
+    if (data.replyTo !== undefined) next.reply_to = data.replyTo.trim().toLowerCase();
 
     const { error } = await admin.from("milon_ops_settings").upsert({
       key: "lighthouse",
@@ -893,6 +1111,214 @@ export const upsertLighthouseSettings = createServerFn({ method: "POST" })
       updated_by: userId,
     });
     if (error) throw new Error(error.message);
+
+    // Keep the booking_link asset slot in step with Settings so the console
+    // never shows a booking link in one tab and a placeholder in the other.
+    if (data.bookingUrl !== undefined) {
+      const trimmed = data.bookingUrl.trim();
+      await admin
+        .from("lighthouse_assets")
+        .update({
+          url: trimmed || null,
+          status: trimmed ? "ready" : "placeholder",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("key", "booking_link");
+    }
+
+    return { ok: true as const };
+  });
+
+/**
+ * Draft a reply to something a prospect actually wrote.
+ *
+ * This is where the objection FAQ and the booking link earn their keep: a
+ * reply is the one message where pointing at an answers page or proposing a
+ * time is the natural move rather than a stacked CTA.
+ */
+export const draftLighthouseReply = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) =>
+    z
+      .object({
+        leadId: z.string().uuid(),
+        theirMessage: z.string().min(1).max(6000),
+        intent: z.enum(["answer", "book", "trial"]).default("answer"),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const { userId } = await assertPlatformOwner(context as AuthCtx);
+    const admin = adminLoose();
+
+    const { data: leadRow, error: leadErr } = await admin
+      .from("milon_ops_leads")
+      .select("*")
+      .eq("id", data.leadId)
+      .maybeSingle();
+    if (leadErr) throw new Error(leadErr.message);
+    if (!leadRow) throw new Error("Lead not found");
+    const lead = leadRow as Record<string, unknown>;
+    if (lead.do_not_contact) {
+      throw new Error("This lead has unsubscribed — drafting is disabled for them.");
+    }
+
+    const { data: setRow } = await admin
+      .from("milon_ops_settings")
+      .select("value")
+      .eq("key", "lighthouse")
+      .maybeSingle();
+    const settingsRaw = (setRow as { value?: Record<string, unknown> } | null)?.value ?? {};
+    const senderName = String(settingsRaw.sender_name ?? DEFAULT_SETTINGS.senderName);
+    const senderTitle = String(settingsRaw.sender_title ?? DEFAULT_SETTINGS.senderTitle);
+    const trialDays = Number(settingsRaw.trial_days ?? DEFAULT_SETTINGS.trialDays);
+    const bookingUrl = await resolveBookingUrl(admin, settingsRaw);
+
+    const faq = await firstReadyAsset(admin, ["faq_objections"]);
+    const sandbox = await firstReadyAsset(admin, ["demo_sandbox"]);
+    const trialLink = trialLinkFor((lead.trial_token as string | null) ?? null);
+
+    const { data: priorRows } = await admin
+      .from("lighthouse_touches")
+      .select("step_no, angle, subject, body")
+      .eq("lead_id", data.leadId);
+    const priorTouches = ((priorRows ?? []) as Array<Record<string, unknown>>).sort(
+      (a, b) => Number(a.step_no) - Number(b.step_no),
+    );
+    const prior = priorTouches
+      .map((p) => `Step ${p.step_no} (${p.angle}): ${p.subject}\n${p.body}`)
+      .join("\n\n---\n\n");
+
+    const intentBrief =
+      data.intent === "book"
+        ? bookingUrl
+          ? `Propose a short call and give exactly this booking link: ${bookingUrl}`
+          : "Propose a short call and ask them to name two times that suit them. Do not invent a booking link."
+        : data.intent === "trial"
+          ? `Point them at the free ${trialDays}-day trial using exactly this link: ${trialLink ?? "(link pending)"}`
+          : "Answer what they actually asked, plainly and completely. Do not pivot to a pitch.";
+
+    const supporting = [
+      faq
+        ? `If a question is already answered in detail there, you may link the answers page once: ${faq.url}`
+        : "",
+      sandbox && data.intent !== "book"
+        ? `If they want to look before committing, you may offer the read-only demo once: ${sandbox.url}`
+        : "",
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+    const prompt = `${SYSTEM_RULES}
+
+You are writing a REPLY to a real message from a prospect. This is not cold outreach — they wrote to you first, so drop the introductions and answer like a person.
+
+PROSPECT
+Name: ${lead.name ?? "unknown"}
+Company: ${lead.company ?? "unknown"}
+Role: ${lead.role_title ?? "unknown"}
+Persona: ${String(lead.persona ?? "owner")}
+Observed signal: ${lead.signal ?? "none recorded"}
+Notes: ${lead.notes ?? "none"}
+
+WHAT THEY WROTE
+${data.theirMessage}
+
+${prior ? `WHAT WE SENT THEM BEFORE:\n\n${prior}` : "No prior emails on record."}
+
+YOUR REPLY
+Goal: ${intentBrief}
+${supporting}
+Answer every direct question they asked. If you do not know something, say so plainly rather than guessing.
+Keep it under 140 words. One ask at the end, at most.
+
+SIGN OFF as ${senderName}, ${senderTitle}.
+
+Return ONLY JSON: {"subject": "...", "body": "..."}
+The body must be plain text with line breaks, already signed off, ready to send.`;
+
+    const raw = await callClaudeMessages({
+      content: [{ type: "text", text: prompt }],
+      maxTokens: 1200,
+    });
+
+    const parsed = parseDraftJson(raw);
+    if (!parsed) throw new Error("Claude returned an unusable draft — try again.");
+
+    // Replies live above the five sequence steps so they never collide with a
+    // scheduled touch. The touch table caps step_no at 8.
+    const usedSteps = priorTouches.map((p) => Number(p.step_no));
+    const stepNo = [6, 7, 8].find((n) => !usedSteps.includes(n)) ?? 8;
+
+    const { data: existing } = await admin
+      .from("lighthouse_touches")
+      .select("id")
+      .eq("lead_id", data.leadId)
+      .eq("step_no", stepNo)
+      .maybeSingle();
+
+    if (existing && (existing as { id?: string }).id) {
+      await admin
+        .from("lighthouse_touches")
+        .update({
+          subject: parsed.subject,
+          body: parsed.body,
+          angle: "reply",
+          status: "draft",
+          error: null,
+        })
+        .eq("id", (existing as { id: string }).id);
+      return { ...parsed, touchId: (existing as { id: string }).id, stepNo };
+    }
+
+    const { data: inserted, error } = await admin
+      .from("lighthouse_touches")
+      .insert({
+        lead_id: data.leadId,
+        step_no: stepNo,
+        angle: "reply",
+        subject: parsed.subject,
+        body: parsed.body,
+        status: "draft",
+        scheduled_for: addDays(new Date(), 0),
+        created_by: userId,
+      })
+      .select("id")
+      .maybeSingle();
+    if (error) {
+      if (missingRelation(error.message)) throw new Error(migrationHintFor(MIGRATION));
+      throw new Error(error.message);
+    }
+
+    // A prospect who wrote back is, by definition, at least at "replied".
+    if (["sourced", "researched", "contacted"].includes(String(lead.stage ?? ""))) {
+      await admin
+        .from("milon_ops_leads")
+        .update({ stage: "replied", replied_at: new Date().toISOString(), next_touch_on: null })
+        .eq("id", data.leadId);
+    }
+
+    return { ...parsed, touchId: String((inserted as { id?: string } | null)?.id ?? ""), stepNo };
+  });
+
+/** Owner-side opt-out — for when someone asks to be removed by phone or reply. */
+export const optOutLighthouseLead = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) => z.object({ leadId: z.string().uuid() }).parse(input))
+  .handler(async ({ data, context }) => {
+    await assertPlatformOwner(context as AuthCtx);
+    const admin = adminLoose();
+
+    const { data: leadRow } = await admin
+      .from("milon_ops_leads")
+      .select("optout_token")
+      .eq("id", data.leadId)
+      .maybeSingle();
+    const token = String((leadRow as { optout_token?: string } | null)?.optout_token ?? "");
+    if (!token) throw new Error("This lead has no opt-out token — run the latest migration.");
+
+    const result = await applyLighthouseOptOut(token, "manual");
+    if (!result.ok) throw new Error("Could not record the opt-out.");
     return { ok: true as const };
   });
 
