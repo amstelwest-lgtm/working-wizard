@@ -157,9 +157,19 @@ function LandingPage() {
   const [regBusy, setRegBusy] = useState(false);
   const [regDone, setRegDone] = useState(false);
 
-  /* ── redirect if already signed in ── */
+  /* ── redirect if already signed in ──
+     Honour a pending Lighthouse unlock so the /app bounce cannot steal the
+     navigation after the passphrase step (or if the owner returns already
+     signed in with the unlock flag still set). */
   useEffect(() => {
-    if (!loading && user) navigate({ to: "/app" });
+    if (loading || !user) return;
+    let goOps = false;
+    try {
+      goOps = sessionStorage.getItem(OPS_UNLOCK_KEY) === "1";
+    } catch {
+      /* ignore */
+    }
+    navigate({ to: goOps ? "/ops" : "/app" });
   }, [user, loading, navigate]);
 
   /* ── Landing theme: keep data-landing; restore prior theme on leave ── */
@@ -643,7 +653,9 @@ function LandingPage() {
       } catch {
         /* ignore */
       }
-      navigate({ to: goOps ? "/ops" : "/app" });
+      // replace: true so the signed-in redirect effect cannot bounce us to /app
+      // after a successful Lighthouse unlock.
+      void navigate({ to: goOps ? "/ops" : "/app", replace: true });
     } catch (err: unknown) {
       setSiError(err instanceof Error ? err.message : "Sign in failed");
     } finally {
@@ -924,7 +936,16 @@ function LandingPage() {
               Platform console. Username is <b style={{ color: "var(--gold)" }}>lighthouse</b>.
             </p>
             <form onSubmit={handleOpsUnlock}>
-              <label style={{ display: "block", fontSize: 11, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--ink-dim)", marginBottom: 6 }}>
+              <label
+                style={{
+                  display: "block",
+                  fontSize: 11,
+                  letterSpacing: "0.14em",
+                  textTransform: "uppercase",
+                  color: "var(--ink-dim)",
+                  marginBottom: 6,
+                }}
+              >
                 Username
               </label>
               <input
@@ -941,7 +962,16 @@ function LandingPage() {
                   marginBottom: 14,
                 }}
               />
-              <label style={{ display: "block", fontSize: 11, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--ink-dim)", marginBottom: 6 }}>
+              <label
+                style={{
+                  display: "block",
+                  fontSize: 11,
+                  letterSpacing: "0.14em",
+                  textTransform: "uppercase",
+                  color: "var(--ink-dim)",
+                  marginBottom: 6,
+                }}
+              >
                 Passphrase
               </label>
               <input
@@ -962,7 +992,12 @@ function LandingPage() {
               {opsError && (
                 <p style={{ color: "#e25c5c", fontSize: 13, marginBottom: 12 }}>{opsError}</p>
               )}
-              <button type="submit" className="btn btn-gold" disabled={opsBusy} style={{ width: "100%" }}>
+              <button
+                type="submit"
+                className="btn btn-gold"
+                disabled={opsBusy}
+                style={{ width: "100%" }}
+              >
                 {opsBusy ? "Checking…" : "Unlock"}
               </button>
             </form>

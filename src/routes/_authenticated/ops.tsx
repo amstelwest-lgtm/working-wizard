@@ -4,7 +4,7 @@
  */
 
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import {
@@ -24,6 +24,7 @@ import {
   OPS_UNLOCK_KEY,
   addOpsPayment,
   getOwnerOpsDashboard,
+  unlockOwnerOps,
   upsertOpsFeatureFlags,
   upsertOpsPilotNotes,
   type OpsDashboard,
@@ -60,6 +61,11 @@ function OwnerOpsPage() {
   const [notes, setNotes] = useState("");
   const [flags, setFlags] = useState<Record<string, boolean>>({});
 
+  const doUnlock = useServerFn(unlockOwnerOps);
+  const [unlockPass, setUnlockPass] = useState("");
+  const [unlockBusy, setUnlockBusy] = useState(false);
+  const [unlockErr, setUnlockErr] = useState("");
+
   const [payAmount, setPayAmount] = useState("");
   const [payDate, setPayDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [payPayer, setPayPayer] = useState("");
@@ -75,6 +81,34 @@ function OwnerOpsPage() {
       setUnlocked(false);
     }
   }, []);
+
+  const markUnlocked = useCallback(() => {
+    try {
+      sessionStorage.setItem(OPS_UNLOCK_KEY, "1");
+    } catch {
+      /* ignore */
+    }
+    setUnlocked(true);
+  }, []);
+
+  const submitUnlock = useCallback(
+    async (e: FormEvent) => {
+      e.preventDefault();
+      setUnlockErr("");
+      setUnlockBusy(true);
+      try {
+        await doUnlock({ data: { username: "lighthouse", passphrase: unlockPass } });
+        markUnlocked();
+        setUnlockPass("");
+        toast.success("Lighthouse unlocked");
+      } catch (ex) {
+        setUnlockErr(ex instanceof Error ? ex.message : "Unlock failed");
+      } finally {
+        setUnlockBusy(false);
+      }
+    },
+    [doUnlock, unlockPass, markUnlocked],
+  );
 
   const refresh = useCallback(async () => {
     setBusy(true);
@@ -123,18 +157,46 @@ function OwnerOpsPage() {
             <Lock className="h-5 w-5" />
             <span className="text-xs font-bold uppercase tracking-[0.22em]">Locked</span>
           </div>
-          <h1 className="font-serif text-2xl text-slate-50">Operator console</h1>
+          <h1 className="font-serif text-2xl text-slate-50">Lighthouse</h1>
           <p className="mt-2 text-sm text-slate-400">
-            Unlock from the landing page first (secret username{" "}
-            <span className="text-amber-300">lighthouse</span> in Sign in, or 5× logo tap +
-            passphrase), then return here signed in as the platform owner.
+            You are signed in as the platform owner. Enter the operator passphrase to open the
+            console — no trip back to the landing page needed.
           </p>
+          <form className="mt-5 space-y-3" onSubmit={(e) => void submitUnlock(e)}>
+            <div>
+              <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">
+                Passphrase
+              </label>
+              <input
+                type="password"
+                autoFocus
+                autoComplete="off"
+                value={unlockPass}
+                onChange={(e) => setUnlockPass(e.target.value)}
+                placeholder="Operator passphrase"
+                className="h-11 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-sm text-slate-100 outline-none placeholder:text-slate-600 focus:border-amber-500/50"
+              />
+            </div>
+            {unlockErr && <p className="text-sm text-red-300">{unlockErr}</p>}
+            <button
+              type="submit"
+              disabled={unlockBusy || !unlockPass.trim()}
+              className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#ac8400] via-[#d4af37] to-[#fdee79] text-xs font-bold uppercase tracking-wider text-[#1b1300] disabled:opacity-50"
+            >
+              {unlockBusy ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Shield className="h-3.5 w-3.5" />
+              )}
+              Unlock
+            </button>
+          </form>
           <div className="mt-5 flex flex-wrap gap-2">
             <Link
-              to="/"
-              className="inline-flex items-center gap-2 rounded-full border border-amber-500/30 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-amber-300 hover:bg-amber-500/10"
+              to="/app"
+              className="inline-flex items-center gap-2 rounded-full border border-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-slate-400 hover:text-slate-200"
             >
-              <ArrowLeft className="h-3.5 w-3.5" /> Landing
+              <ArrowLeft className="h-3.5 w-3.5" /> Back to app
             </Link>
           </div>
         </div>
@@ -205,10 +267,12 @@ function OwnerOpsPage() {
         </header>
 
         <div className="mb-6 flex gap-2 border-b border-white/10">
-          {([
-            ["lighthouse", "Lighthouse — sales"],
-            ["platform", "Platform — metrics"],
-          ] as const).map(([key, label]) => (
+          {(
+            [
+              ["lighthouse", "Lighthouse — sales"],
+              ["platform", "Platform — metrics"],
+            ] as const
+          ).map(([key, label]) => (
             <button
               key={key}
               type="button"
@@ -228,264 +292,282 @@ function OwnerOpsPage() {
 
         {view === "platform" && (
           <>
-        {dash.migrationHint && (
-          <div className="mb-5 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
-            {dash.migrationHint}
-          </div>
-        )}
-
-        {/* Signups */}
-        <section className="mb-8">
-          <h2 className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-slate-400">
-            <Users className="h-3.5 w-3.5 text-amber-400" /> Signups
-          </h2>
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-            <Stat label="Total users" value={String(dash.signups.totalUsers)} />
-            <Stat label="Accountants" value={String(dash.signups.accountants)} hint="firm_admin + accountant" />
-            <Stat label="Business owners" value={String(dash.signups.businessOwners)} hint="client_owner" />
-            <Stat label="Staff members" value={String(dash.signups.clientMembers)} />
-            <Stat label="Firms" value={String(dash.signups.firms)} />
-            <Stat label="Clients" value={String(dash.signups.clients)} />
-            <Stat label="Owned clients" value={String(dash.signups.clientsWithOwner)} />
-            <Stat
-              label="New (7d)"
-              value={dash.signups.last7dUsersApprox == null ? "—" : String(dash.signups.last7dUsersApprox)}
-            />
-          </div>
-        </section>
-
-        {/* Revenue */}
-        <section className="mb-8">
-          <h2 className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-slate-400">
-            <Wallet className="h-3.5 w-3.5 text-amber-400" /> Revenue & payments
-          </h2>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <Stat
-              label={`Received · ${dash.revenue.monthKey}`}
-              value={dash.revenue.receivedThisMonthLabel}
-              gold
-            />
-            <Stat label="Pending this month" value={dash.revenue.pendingThisMonthLabel} />
-            <Stat label="YTD received" value={dash.revenue.receivedYtdLabel} />
-          </div>
-          <p className="mt-2 text-[11px] text-slate-500">
-            All-time received: {dash.revenue.allTimeReceivedLabel}. Billing isn’t live yet — log
-            cash here manually until Stripe/PayFast lands.
-          </p>
-
-          <form
-            className="mt-4 grid gap-2 rounded-2xl border border-white/10 bg-white/[0.03] p-4 sm:grid-cols-6"
-            onSubmit={async (e) => {
-              e.preventDefault();
-              const amountZar = Number(payAmount);
-              if (!Number.isFinite(amountZar) || amountZar <= 0) {
-                toast.error("Enter a valid amount in ZAR");
-                return;
-              }
-              setPayBusy(true);
-              try {
-                await createPayment({
-                  data: {
-                    amountZar,
-                    paidAt: payDate,
-                    payerLabel: payPayer || undefined,
-                    planCode: payPlan || undefined,
-                    status: payStatus,
-                    note: payNote || undefined,
-                  },
-                });
-                toast.success("Payment logged");
-                setPayAmount("");
-                setPayPayer("");
-                setPayNote("");
-                await refresh();
-              } catch (ex) {
-                toast.error(ex instanceof Error ? ex.message : "Could not save payment");
-              } finally {
-                setPayBusy(false);
-              }
-            }}
-          >
-            <input
-              className={inputCls}
-              placeholder="Amount ZAR"
-              value={payAmount}
-              onChange={(e) => setPayAmount(e.target.value)}
-              inputMode="decimal"
-            />
-            <input
-              className={inputCls}
-              type="date"
-              value={payDate}
-              onChange={(e) => setPayDate(e.target.value)}
-            />
-            <input
-              className={inputCls}
-              placeholder="Payer"
-              value={payPayer}
-              onChange={(e) => setPayPayer(e.target.value)}
-            />
-            <select
-              className={inputCls}
-              value={payPlan}
-              onChange={(e) => setPayPlan(e.target.value)}
-            >
-              <option value="manual">manual</option>
-              <option value="spark">spark</option>
-              <option value="orbit">orbit</option>
-              <option value="constellation">constellation</option>
-            </select>
-            <select
-              className={inputCls}
-              value={payStatus}
-              onChange={(e) => setPayStatus(e.target.value as typeof payStatus)}
-            >
-              <option value="received">received</option>
-              <option value="pending">pending</option>
-              <option value="refunded">refunded</option>
-            </select>
-            <button
-              type="submit"
-              disabled={payBusy}
-              className="inline-flex h-10 items-center justify-center gap-1 rounded-xl bg-gradient-to-r from-[#ac8400] via-[#d4af37] to-[#fdee79] text-xs font-bold uppercase tracking-wider text-[#1b1300] disabled:opacity-60"
-            >
-              {payBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
-              Log
-            </button>
-            <input
-              className={`${inputCls} sm:col-span-6`}
-              placeholder="Note (optional)"
-              value={payNote}
-              onChange={(e) => setPayNote(e.target.value)}
-            />
-          </form>
-
-          <div className="mt-4 overflow-x-auto rounded-2xl border border-white/10">
-            <table className="w-full min-w-[560px] text-left text-sm">
-              <thead className="bg-white/[0.04] text-[10px] uppercase tracking-[0.16em] text-slate-500">
-                <tr>
-                  <th className="px-3 py-2">Date</th>
-                  <th className="px-3 py-2">Amount</th>
-                  <th className="px-3 py-2">Payer</th>
-                  <th className="px-3 py-2">Plan</th>
-                  <th className="px-3 py-2">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {dash.payments.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="px-3 py-6 text-center text-slate-500">
-                      No payments logged yet.
-                    </td>
-                  </tr>
-                ) : (
-                  dash.payments.map((p) => (
-                    <tr key={p.id} className="border-t border-white/5">
-                      <td className="px-3 py-2 tabular-nums text-slate-300">{p.paidAt}</td>
-                      <td className="px-3 py-2 font-semibold text-amber-200">{p.amountLabel}</td>
-                      <td className="px-3 py-2 text-slate-300">{p.payerLabel ?? "—"}</td>
-                      <td className="px-3 py-2 text-slate-400">{p.planCode ?? "—"}</td>
-                      <td className="px-3 py-2 text-slate-400">{p.status}</td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </section>
-
-        {/* Dev settings */}
-        <section className="mb-8">
-          <h2 className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-slate-400">
-            <FlaskConical className="h-3.5 w-3.5 text-amber-400" /> Dev / pilot knobs
-          </h2>
-          <div className="grid gap-4 lg:grid-cols-2">
-            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-              <p className="mb-3 text-xs text-slate-500">
-                Stored in <code className="text-amber-200/80">milon_ops_settings</code>. Wire these
-                into product gates next — toggles save immediately.
-              </p>
-              <div className="space-y-2">
-                {flagEntries.map(([key, on]) => (
-                  <label
-                    key={key}
-                    className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-white/5 px-3 py-2.5 hover:border-amber-500/20"
-                  >
-                    <span className="text-sm text-slate-200">
-                      {FLAG_LABELS[key] ?? key.replaceAll("_", " ")}
-                    </span>
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-checked={on}
-                      className={`relative h-6 w-11 rounded-full transition-colors ${
-                        on ? "bg-amber-500" : "bg-slate-700"
-                      }`}
-                      onClick={async () => {
-                        const next = { ...flags, [key]: !on };
-                        setFlags(next);
-                        try {
-                          await saveFlags({ data: { flags: { [key]: !on } } });
-                          toast.success("Saved");
-                        } catch (ex) {
-                          setFlags(flags);
-                          toast.error(ex instanceof Error ? ex.message : "Save failed");
-                        }
-                      }}
-                    >
-                      <span
-                        className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform ${
-                          on ? "left-5" : "left-0.5"
-                        }`}
-                      />
-                    </button>
-                  </label>
-                ))}
+            {dash.migrationHint && (
+              <div className="mb-5 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+                {dash.migrationHint}
               </div>
-            </div>
-            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-              <label className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
-                Pilot notes
-              </label>
-              <textarea
-                className={`${inputCls} mt-2 min-h-[160px] resize-y`}
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-              />
-              <button
-                type="button"
-                className="mt-2 inline-flex h-9 items-center rounded-full border border-amber-500/40 px-4 text-xs font-semibold uppercase tracking-wider text-amber-200 hover:bg-amber-500/10"
-                onClick={async () => {
+            )}
+
+            {/* Signups */}
+            <section className="mb-8">
+              <h2 className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-slate-400">
+                <Users className="h-3.5 w-3.5 text-amber-400" /> Signups
+              </h2>
+              <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                <Stat label="Total users" value={String(dash.signups.totalUsers)} />
+                <Stat
+                  label="Accountants"
+                  value={String(dash.signups.accountants)}
+                  hint="firm_admin + accountant"
+                />
+                <Stat
+                  label="Business owners"
+                  value={String(dash.signups.businessOwners)}
+                  hint="client_owner"
+                />
+                <Stat label="Staff members" value={String(dash.signups.clientMembers)} />
+                <Stat label="Firms" value={String(dash.signups.firms)} />
+                <Stat label="Clients" value={String(dash.signups.clients)} />
+                <Stat label="Owned clients" value={String(dash.signups.clientsWithOwner)} />
+                <Stat
+                  label="New (7d)"
+                  value={
+                    dash.signups.last7dUsersApprox == null
+                      ? "—"
+                      : String(dash.signups.last7dUsersApprox)
+                  }
+                />
+              </div>
+            </section>
+
+            {/* Revenue */}
+            <section className="mb-8">
+              <h2 className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-slate-400">
+                <Wallet className="h-3.5 w-3.5 text-amber-400" /> Revenue & payments
+              </h2>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <Stat
+                  label={`Received · ${dash.revenue.monthKey}`}
+                  value={dash.revenue.receivedThisMonthLabel}
+                  gold
+                />
+                <Stat label="Pending this month" value={dash.revenue.pendingThisMonthLabel} />
+                <Stat label="YTD received" value={dash.revenue.receivedYtdLabel} />
+              </div>
+              <p className="mt-2 text-[11px] text-slate-500">
+                All-time received: {dash.revenue.allTimeReceivedLabel}. Billing isn’t live yet — log
+                cash here manually until Stripe/PayFast lands.
+              </p>
+
+              <form
+                className="mt-4 grid gap-2 rounded-2xl border border-white/10 bg-white/[0.03] p-4 sm:grid-cols-6"
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  const amountZar = Number(payAmount);
+                  if (!Number.isFinite(amountZar) || amountZar <= 0) {
+                    toast.error("Enter a valid amount in ZAR");
+                    return;
+                  }
+                  setPayBusy(true);
                   try {
-                    await saveNotes({ data: { text: notes } });
-                    toast.success("Notes saved");
+                    await createPayment({
+                      data: {
+                        amountZar,
+                        paidAt: payDate,
+                        payerLabel: payPayer || undefined,
+                        planCode: payPlan || undefined,
+                        status: payStatus,
+                        note: payNote || undefined,
+                      },
+                    });
+                    toast.success("Payment logged");
+                    setPayAmount("");
+                    setPayPayer("");
+                    setPayNote("");
+                    await refresh();
                   } catch (ex) {
-                    toast.error(ex instanceof Error ? ex.message : "Save failed");
+                    toast.error(ex instanceof Error ? ex.message : "Could not save payment");
+                  } finally {
+                    setPayBusy(false);
                   }
                 }}
               >
-                Save notes
-              </button>
-            </div>
-          </div>
-        </section>
+                <input
+                  className={inputCls}
+                  placeholder="Amount ZAR"
+                  value={payAmount}
+                  onChange={(e) => setPayAmount(e.target.value)}
+                  inputMode="decimal"
+                />
+                <input
+                  className={inputCls}
+                  type="date"
+                  value={payDate}
+                  onChange={(e) => setPayDate(e.target.value)}
+                />
+                <input
+                  className={inputCls}
+                  placeholder="Payer"
+                  value={payPayer}
+                  onChange={(e) => setPayPayer(e.target.value)}
+                />
+                <select
+                  className={inputCls}
+                  value={payPlan}
+                  onChange={(e) => setPayPlan(e.target.value)}
+                >
+                  <option value="manual">manual</option>
+                  <option value="spark">spark</option>
+                  <option value="orbit">orbit</option>
+                  <option value="constellation">constellation</option>
+                </select>
+                <select
+                  className={inputCls}
+                  value={payStatus}
+                  onChange={(e) => setPayStatus(e.target.value as typeof payStatus)}
+                >
+                  <option value="received">received</option>
+                  <option value="pending">pending</option>
+                  <option value="refunded">refunded</option>
+                </select>
+                <button
+                  type="submit"
+                  disabled={payBusy}
+                  className="inline-flex h-10 items-center justify-center gap-1 rounded-xl bg-gradient-to-r from-[#ac8400] via-[#d4af37] to-[#fdee79] text-xs font-bold uppercase tracking-wider text-[#1b1300] disabled:opacity-60"
+                >
+                  {payBusy ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Plus className="h-3.5 w-3.5" />
+                  )}
+                  Log
+                </button>
+                <input
+                  className={`${inputCls} sm:col-span-6`}
+                  placeholder="Note (optional)"
+                  value={payNote}
+                  onChange={(e) => setPayNote(e.target.value)}
+                />
+              </form>
 
-        <section className="mb-10 rounded-2xl border border-white/10 bg-white/[0.03] p-5">
-          <h2 className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-slate-400">
-            <Sparkles className="h-3.5 w-3.5 text-amber-400" /> Sales engine
-          </h2>
-          <p className="max-w-2xl text-sm text-slate-400">
-            Lead generation, AI-drafted sequences, and the tracked free-trial funnel now live in the
-            Lighthouse tab above.
-          </p>
-          <button
-            type="button"
-            onClick={() => setView("lighthouse")}
-            className="mt-3 inline-flex h-9 items-center rounded-full border border-amber-500/40 px-4 text-xs font-semibold uppercase tracking-wider text-amber-200 hover:bg-amber-500/10"
-          >
-            Open Lighthouse
-          </button>
-        </section>
+              <div className="mt-4 overflow-x-auto rounded-2xl border border-white/10">
+                <table className="w-full min-w-[560px] text-left text-sm">
+                  <thead className="bg-white/[0.04] text-[10px] uppercase tracking-[0.16em] text-slate-500">
+                    <tr>
+                      <th className="px-3 py-2">Date</th>
+                      <th className="px-3 py-2">Amount</th>
+                      <th className="px-3 py-2">Payer</th>
+                      <th className="px-3 py-2">Plan</th>
+                      <th className="px-3 py-2">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {dash.payments.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="px-3 py-6 text-center text-slate-500">
+                          No payments logged yet.
+                        </td>
+                      </tr>
+                    ) : (
+                      dash.payments.map((p) => (
+                        <tr key={p.id} className="border-t border-white/5">
+                          <td className="px-3 py-2 tabular-nums text-slate-300">{p.paidAt}</td>
+                          <td className="px-3 py-2 font-semibold text-amber-200">
+                            {p.amountLabel}
+                          </td>
+                          <td className="px-3 py-2 text-slate-300">{p.payerLabel ?? "—"}</td>
+                          <td className="px-3 py-2 text-slate-400">{p.planCode ?? "—"}</td>
+                          <td className="px-3 py-2 text-slate-400">{p.status}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            {/* Dev settings */}
+            <section className="mb-8">
+              <h2 className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-slate-400">
+                <FlaskConical className="h-3.5 w-3.5 text-amber-400" /> Dev / pilot knobs
+              </h2>
+              <div className="grid gap-4 lg:grid-cols-2">
+                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                  <p className="mb-3 text-xs text-slate-500">
+                    Stored in <code className="text-amber-200/80">milon_ops_settings</code>. Wire
+                    these into product gates next — toggles save immediately.
+                  </p>
+                  <div className="space-y-2">
+                    {flagEntries.map(([key, on]) => (
+                      <label
+                        key={key}
+                        className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-white/5 px-3 py-2.5 hover:border-amber-500/20"
+                      >
+                        <span className="text-sm text-slate-200">
+                          {FLAG_LABELS[key] ?? key.replaceAll("_", " ")}
+                        </span>
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-checked={on}
+                          className={`relative h-6 w-11 rounded-full transition-colors ${
+                            on ? "bg-amber-500" : "bg-slate-700"
+                          }`}
+                          onClick={async () => {
+                            const next = { ...flags, [key]: !on };
+                            setFlags(next);
+                            try {
+                              await saveFlags({ data: { flags: { [key]: !on } } });
+                              toast.success("Saved");
+                            } catch (ex) {
+                              setFlags(flags);
+                              toast.error(ex instanceof Error ? ex.message : "Save failed");
+                            }
+                          }}
+                        >
+                          <span
+                            className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform ${
+                              on ? "left-5" : "left-0.5"
+                            }`}
+                          />
+                        </button>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                  <label className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
+                    Pilot notes
+                  </label>
+                  <textarea
+                    className={`${inputCls} mt-2 min-h-[160px] resize-y`}
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    className="mt-2 inline-flex h-9 items-center rounded-full border border-amber-500/40 px-4 text-xs font-semibold uppercase tracking-wider text-amber-200 hover:bg-amber-500/10"
+                    onClick={async () => {
+                      try {
+                        await saveNotes({ data: { text: notes } });
+                        toast.success("Notes saved");
+                      } catch (ex) {
+                        toast.error(ex instanceof Error ? ex.message : "Save failed");
+                      }
+                    }}
+                  >
+                    Save notes
+                  </button>
+                </div>
+              </div>
+            </section>
+
+            <section className="mb-10 rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+              <h2 className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-slate-400">
+                <Sparkles className="h-3.5 w-3.5 text-amber-400" /> Sales engine
+              </h2>
+              <p className="max-w-2xl text-sm text-slate-400">
+                Lead generation, AI-drafted sequences, and the tracked free-trial funnel now live in
+                the Lighthouse tab above.
+              </p>
+              <button
+                type="button"
+                onClick={() => setView("lighthouse")}
+                className="mt-3 inline-flex h-9 items-center rounded-full border border-amber-500/40 px-4 text-xs font-semibold uppercase tracking-wider text-amber-200 hover:bg-amber-500/10"
+              >
+                Open Lighthouse
+              </button>
+            </section>
           </>
         )}
 
@@ -510,8 +592,12 @@ function Stat({
 }) {
   return (
     <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
-      <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">{label}</div>
-      <div className={`mt-1 text-2xl font-bold tabular-nums ${gold ? "text-amber-300" : "text-slate-50"}`}>
+      <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">
+        {label}
+      </div>
+      <div
+        className={`mt-1 text-2xl font-bold tabular-nums ${gold ? "text-amber-300" : "text-slate-50"}`}
+      >
         {value}
       </div>
       {hint && <div className="mt-0.5 text-[10px] text-slate-600">{hint}</div>}
