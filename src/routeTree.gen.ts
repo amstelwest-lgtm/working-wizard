@@ -11,11 +11,15 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as UnsubscribeRouteImport } from './routes/unsubscribe'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
+import { Route as ForOwnersRouteImport } from './routes/for-owners'
+import { Route as ForAccountantsRouteImport } from './routes/for-accountants'
+import { Route as FaqRouteImport } from './routes/faq'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AppRouteImport } from './routes/app'
 import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as TTokenRouteImport } from './routes/t.$token'
+import { Route as LhUnsubscribeRouteImport } from './routes/lh/unsubscribe'
 import { Route as EmailUnsubscribeRouteImport } from './routes/email/unsubscribe'
 import { Route as ApiClientErrorRouteImport } from './routes/api/client-error'
 import { Route as AckTokenRouteImport } from './routes/ack.$token'
@@ -42,6 +46,21 @@ const ResetPasswordRoute = ResetPasswordRouteImport.update({
   path: '/reset-password',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ForOwnersRoute = ForOwnersRouteImport.update({
+  id: '/for-owners',
+  path: '/for-owners',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ForAccountantsRoute = ForAccountantsRouteImport.update({
+  id: '/for-accountants',
+  path: '/for-accountants',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FaqRoute = FaqRouteImport.update({
+  id: '/faq',
+  path: '/faq',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
   path: '/auth',
@@ -64,6 +83,11 @@ const IndexRoute = IndexRouteImport.update({
 const TTokenRoute = TTokenRouteImport.update({
   id: '/t/$token',
   path: '/t/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LhUnsubscribeRoute = LhUnsubscribeRouteImport.update({
+  id: '/lh/unsubscribe',
+  path: '/lh/unsubscribe',
   getParentRoute: () => rootRouteImport,
 } as any)
 const EmailUnsubscribeRoute = EmailUnsubscribeRouteImport.update({
@@ -154,6 +178,9 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/app': typeof AppRoute
   '/auth': typeof AuthRoute
+  '/faq': typeof FaqRoute
+  '/for-accountants': typeof ForAccountantsRoute
+  '/for-owners': typeof ForOwnersRoute
   '/reset-password': typeof ResetPasswordRoute
   '/unsubscribe': typeof UnsubscribeRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
@@ -161,6 +188,7 @@ export interface FileRoutesByFullPath {
   '/ack/$token': typeof AckTokenRoute
   '/api/client-error': typeof ApiClientErrorRoute
   '/email/unsubscribe': typeof EmailUnsubscribeRoute
+  '/lh/unsubscribe': typeof LhUnsubscribeRoute
   '/t/$token': typeof TTokenRoute
   '/clients/$clientId': typeof AuthenticatedClientsClientIdRoute
   '/reports/demo': typeof AuthenticatedReportsDemoRoute
@@ -177,6 +205,9 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/app': typeof AppRoute
   '/auth': typeof AuthRoute
+  '/faq': typeof FaqRoute
+  '/for-accountants': typeof ForAccountantsRoute
+  '/for-owners': typeof ForOwnersRoute
   '/reset-password': typeof ResetPasswordRoute
   '/unsubscribe': typeof UnsubscribeRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
@@ -184,6 +215,7 @@ export interface FileRoutesByTo {
   '/ack/$token': typeof AckTokenRoute
   '/api/client-error': typeof ApiClientErrorRoute
   '/email/unsubscribe': typeof EmailUnsubscribeRoute
+  '/lh/unsubscribe': typeof LhUnsubscribeRoute
   '/t/$token': typeof TTokenRoute
   '/clients/$clientId': typeof AuthenticatedClientsClientIdRoute
   '/reports/demo': typeof AuthenticatedReportsDemoRoute
@@ -202,6 +234,9 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteWithChildren
   '/app': typeof AppRoute
   '/auth': typeof AuthRoute
+  '/faq': typeof FaqRoute
+  '/for-accountants': typeof ForAccountantsRoute
+  '/for-owners': typeof ForOwnersRoute
   '/reset-password': typeof ResetPasswordRoute
   '/unsubscribe': typeof UnsubscribeRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
@@ -209,6 +244,7 @@ export interface FileRoutesById {
   '/ack/$token': typeof AckTokenRoute
   '/api/client-error': typeof ApiClientErrorRoute
   '/email/unsubscribe': typeof EmailUnsubscribeRoute
+  '/lh/unsubscribe': typeof LhUnsubscribeRoute
   '/t/$token': typeof TTokenRoute
   '/_authenticated/clients/$clientId': typeof AuthenticatedClientsClientIdRoute
   '/_authenticated/reports/demo': typeof AuthenticatedReportsDemoRoute
@@ -227,6 +263,9 @@ export interface FileRouteTypes {
     | '/'
     | '/app'
     | '/auth'
+    | '/faq'
+    | '/for-accountants'
+    | '/for-owners'
     | '/reset-password'
     | '/unsubscribe'
     | '/dashboard'
@@ -234,6 +273,7 @@ export interface FileRouteTypes {
     | '/ack/$token'
     | '/api/client-error'
     | '/email/unsubscribe'
+    | '/lh/unsubscribe'
     | '/t/$token'
     | '/clients/$clientId'
     | '/reports/demo'
@@ -250,6 +290,9 @@ export interface FileRouteTypes {
     | '/'
     | '/app'
     | '/auth'
+    | '/faq'
+    | '/for-accountants'
+    | '/for-owners'
     | '/reset-password'
     | '/unsubscribe'
     | '/dashboard'
@@ -257,6 +300,7 @@ export interface FileRouteTypes {
     | '/ack/$token'
     | '/api/client-error'
     | '/email/unsubscribe'
+    | '/lh/unsubscribe'
     | '/t/$token'
     | '/clients/$clientId'
     | '/reports/demo'
@@ -274,6 +318,9 @@ export interface FileRouteTypes {
     | '/_authenticated'
     | '/app'
     | '/auth'
+    | '/faq'
+    | '/for-accountants'
+    | '/for-owners'
     | '/reset-password'
     | '/unsubscribe'
     | '/_authenticated/dashboard'
@@ -281,6 +328,7 @@ export interface FileRouteTypes {
     | '/ack/$token'
     | '/api/client-error'
     | '/email/unsubscribe'
+    | '/lh/unsubscribe'
     | '/t/$token'
     | '/_authenticated/clients/$clientId'
     | '/_authenticated/reports/demo'
@@ -299,11 +347,15 @@ export interface RootRouteChildren {
   AuthenticatedRoute: typeof AuthenticatedRouteWithChildren
   AppRoute: typeof AppRoute
   AuthRoute: typeof AuthRoute
+  FaqRoute: typeof FaqRoute
+  ForAccountantsRoute: typeof ForAccountantsRoute
+  ForOwnersRoute: typeof ForOwnersRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   UnsubscribeRoute: typeof UnsubscribeRoute
   AckTokenRoute: typeof AckTokenRoute
   ApiClientErrorRoute: typeof ApiClientErrorRoute
   EmailUnsubscribeRoute: typeof EmailUnsubscribeRoute
+  LhUnsubscribeRoute: typeof LhUnsubscribeRoute
   TTokenRoute: typeof TTokenRoute
   ApiQboCallbackRoute: typeof ApiQboCallbackRoute
   LovableEmailSuppressionRoute: typeof LovableEmailSuppressionRoute
@@ -326,6 +378,27 @@ declare module '@tanstack/react-router' {
       path: '/reset-password'
       fullPath: '/reset-password'
       preLoaderRoute: typeof ResetPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/for-owners': {
+      id: '/for-owners'
+      path: '/for-owners'
+      fullPath: '/for-owners'
+      preLoaderRoute: typeof ForOwnersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/for-accountants': {
+      id: '/for-accountants'
+      path: '/for-accountants'
+      fullPath: '/for-accountants'
+      preLoaderRoute: typeof ForAccountantsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/faq': {
+      id: '/faq'
+      path: '/faq'
+      fullPath: '/faq'
+      preLoaderRoute: typeof FaqRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth': {
@@ -361,6 +434,13 @@ declare module '@tanstack/react-router' {
       path: '/t/$token'
       fullPath: '/t/$token'
       preLoaderRoute: typeof TTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/lh/unsubscribe': {
+      id: '/lh/unsubscribe'
+      path: '/lh/unsubscribe'
+      fullPath: '/lh/unsubscribe'
+      preLoaderRoute: typeof LhUnsubscribeRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/email/unsubscribe': {
@@ -500,11 +580,15 @@ const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRoute: AuthenticatedRouteWithChildren,
   AppRoute: AppRoute,
   AuthRoute: AuthRoute,
+  FaqRoute: FaqRoute,
+  ForAccountantsRoute: ForAccountantsRoute,
+  ForOwnersRoute: ForOwnersRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   UnsubscribeRoute: UnsubscribeRoute,
   AckTokenRoute: AckTokenRoute,
   ApiClientErrorRoute: ApiClientErrorRoute,
   EmailUnsubscribeRoute: EmailUnsubscribeRoute,
+  LhUnsubscribeRoute: LhUnsubscribeRoute,
   TTokenRoute: TTokenRoute,
   ApiQboCallbackRoute: ApiQboCallbackRoute,
   LovableEmailSuppressionRoute: LovableEmailSuppressionRoute,

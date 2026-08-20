@@ -1,0 +1,395 @@
+/* ==========================================================================
+   Milōn public collateral pages (/for-owners, /for-accountants, /faq).
+   Self-contained so these pages never wait on the app stylesheet, and so
+   Cmd-P produces a clean one-pager instead of a screenshot of a dark site.
+   ========================================================================== */
+
+.mk {
+  --bg: #050507;
+  --bg-2: #0a0a10;
+  --ink: #f2ecdc;
+  --ink-dim: #9b958a;
+  --gold-deep: #ac8400;
+  --gold: #d4af37;
+  --gold-bright: #fdee79;
+  --line: rgba(212, 175, 55, 0.16);
+  --card: rgba(255, 255, 255, 0.028);
+  --ok: #5ccf8a;
+  --risk: #e25c5c;
+
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial,
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  line-height: 1.6;
+}
+
+.mk *,
+.mk *::before,
+.mk *::after {
+  box-sizing: border-box;
+}
+
+.mk-wrap {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 0 22px;
+}
+
+/* ── Header ─────────────────────────────────────────────────────────────── */
+.mk-top {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 22px;
+  background: rgba(5, 5, 7, 0.82);
+  backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--line);
+}
+
+.mk-logo {
+  font-weight: 800;
+  letter-spacing: 0.28em;
+  font-size: 14px;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.mk-logo span {
+  background: linear-gradient(120deg, #ac8400, #d4af37 40%, #fdee79 60%, #ac8400);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.mk-top-spacer {
+  flex: 1;
+}
+
+.mk-top-link {
+  font-size: 13px;
+  color: var(--ink-dim);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+}
+
+.mk-top-link:hover {
+  color: var(--ink);
+  border-bottom-color: var(--line);
+}
+
+/* ── Type ───────────────────────────────────────────────────────────────── */
+.mk-hero {
+  padding: 58px 0 34px;
+}
+
+.mk-eyebrow {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin-bottom: 14px;
+}
+
+.mk h1 {
+  font-size: clamp(30px, 5.2vw, 46px);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  font-weight: 800;
+  margin: 0 0 16px;
+}
+
+.mk h2 {
+  font-size: clamp(20px, 3vw, 26px);
+  line-height: 1.25;
+  font-weight: 700;
+  margin: 44px 0 14px;
+  letter-spacing: -0.01em;
+}
+
+.mk h3 {
+  font-size: 16px;
+  font-weight: 700;
+  margin: 0 0 6px;
+}
+
+.mk p {
+  margin: 0 0 14px;
+  color: var(--ink-dim);
+  font-size: 16px;
+}
+
+.mk .mk-lead {
+  font-size: 18px;
+  color: var(--ink);
+  max-width: 62ch;
+}
+
+.mk strong {
+  color: var(--ink);
+  font-weight: 650;
+}
+
+.mk-gold {
+  background: linear-gradient(120deg, #ac8400, #d4af37 40%, #fdee79 60%, #d4af37 80%, #ac8400);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* ── Blocks ─────────────────────────────────────────────────────────────── */
+.mk-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  margin: 20px 0;
+}
+
+.mk-card {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--card);
+  padding: 18px;
+}
+
+.mk-card p {
+  margin: 0;
+  font-size: 14px;
+}
+
+.mk-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mk-list li {
+  display: flex;
+  gap: 11px;
+  font-size: 15px;
+  color: var(--ink-dim);
+}
+
+.mk-list li::before {
+  content: "✦";
+  color: var(--gold);
+  flex-shrink: 0;
+}
+
+.mk-list li strong {
+  color: var(--ink);
+}
+
+.mk-steps {
+  counter-reset: mk;
+  list-style: none;
+  padding: 0;
+  margin: 20px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.mk-steps li {
+  counter-increment: mk;
+  display: grid;
+  grid-template-columns: 34px 1fr;
+  gap: 14px;
+  align-items: start;
+}
+
+.mk-steps li::before {
+  content: counter(mk);
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  background: rgba(212, 175, 55, 0.14);
+  color: var(--gold);
+  font-weight: 800;
+  font-size: 13px;
+}
+
+.mk-qa {
+  border-top: 1px solid var(--line);
+  padding: 20px 0 4px;
+}
+
+.mk-qa h3 {
+  font-size: 17px;
+  margin-bottom: 8px;
+}
+
+.mk-note {
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--gold);
+  border-radius: 12px;
+  background: rgba(212, 175, 55, 0.05);
+  padding: 14px 16px;
+  margin: 22px 0;
+  font-size: 14.5px;
+  color: var(--ink-dim);
+}
+
+/* ── CTA ────────────────────────────────────────────────────────────────── */
+.mk-cta {
+  margin: 44px 0 20px;
+  padding: 26px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: linear-gradient(180deg, rgba(212, 175, 55, 0.07), rgba(255, 255, 255, 0.01));
+  text-align: center;
+}
+
+.mk-cta h2 {
+  margin-top: 0;
+}
+
+.mk-btn {
+  display: inline-block;
+  padding: 13px 26px;
+  border-radius: 999px;
+  font-weight: 800;
+  font-size: 14px;
+  text-decoration: none;
+  background: linear-gradient(120deg, #ac8400, #d4af37 40%, #fdee79 60%, #d4af37 80%, #ac8400);
+  color: #1b1300;
+  border: none;
+  cursor: pointer;
+}
+
+.mk-btn-ghost {
+  display: inline-block;
+  padding: 12px 22px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 14px;
+  text-decoration: none;
+  color: var(--ink);
+  border: 1px solid var(--line);
+  background: transparent;
+  cursor: pointer;
+  margin-left: 8px;
+}
+
+/* ── Footer ─────────────────────────────────────────────────────────────── */
+.mk-foot {
+  margin-top: 50px;
+  padding: 26px 0 50px;
+  border-top: 1px solid var(--line);
+  font-size: 12.5px;
+  color: var(--ink-dim);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  align-items: center;
+}
+
+.mk-foot a {
+  color: var(--ink-dim);
+  text-decoration: none;
+  border-bottom: 1px solid var(--line);
+}
+
+.mk-foot a:hover {
+  color: var(--ink);
+}
+
+/* ── Print: the one-pager falls out of the browser, no design tool needed ── */
+@media print {
+  @page {
+    margin: 14mm;
+  }
+
+  .mk {
+    background: #fff;
+    color: #14120c;
+    --ink: #14120c;
+    --ink-dim: #46433a;
+    --line: rgba(0, 0, 0, 0.16);
+    --card: transparent;
+  }
+
+  .mk-top,
+  .mk-cta .mk-btn-ghost,
+  .mk-print-hide {
+    display: none !important;
+  }
+
+  .mk-wrap {
+    max-width: none;
+    padding: 0;
+  }
+
+  .mk-hero {
+    padding: 0 0 18px;
+  }
+
+  .mk h1 {
+    font-size: 26pt;
+  }
+
+  .mk h2 {
+    font-size: 14pt;
+    margin: 18pt 0 8pt;
+    break-after: avoid;
+  }
+
+  .mk h3 {
+    break-after: avoid;
+  }
+
+  .mk p,
+  .mk-list li {
+    font-size: 10.5pt;
+  }
+
+  .mk-gold {
+    background: none;
+    -webkit-text-fill-color: currentColor;
+    color: #8a6000;
+  }
+
+  .mk-card,
+  .mk-note,
+  .mk-cta {
+    break-inside: avoid;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .mk-cta {
+    text-align: left;
+    padding: 12pt 0 0;
+    border: none;
+    border-top: 1px solid var(--line);
+    border-radius: 0;
+  }
+
+  .mk-btn {
+    background: none;
+    color: #8a6000;
+    padding: 0;
+    font-size: 11pt;
+  }
+
+  .mk-qa {
+    break-inside: avoid;
+  }
+
+  .mk-foot {
+    border-top: 1px solid var(--line);
+    font-size: 8.5pt;
+  }
+}
