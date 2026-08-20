@@ -436,6 +436,7 @@ html[data-theme="light"] .accountant-portal .doc{background:linear-gradient(170d
   .accountant-portal .tab{padding:10px 12px;font-size:12.5px}
   .accountant-portal .action-bar{padding:14px 16px}
   .accountant-portal .crumb{flex-wrap:wrap;gap:8px;margin-bottom:14px}
+}
 
 @media(max-width:480px){
   .accountant-portal .debt-line{grid-template-columns:1fr}
