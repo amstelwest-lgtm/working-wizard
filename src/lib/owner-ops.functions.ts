@@ -1,87 +1,22 @@
 /**
- * Platform-owner (founder) ops console — server gate + metrics.
- *
- * Security model:
- * 1. Obscurity: landing passphrase / username "forge" unlock (sessionStorage)
- * 2. Auth: must be signed in
- * 3. Allowlist: email must be in MILON_OWNER_EMAILS (default: amstel.west@gmail.com)
- * 4. Data: ops tables are deny-all RLS; reads/writes via service role only
+ * Milōn Lighthouse — platform-owner console metrics and settings.
+ * Access rules live in owner-ops.guard.ts.
  */
 
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { getSupabaseAdminOrNull } from "@/integrations/supabase/client.server";
+import {
+  OPS_USERNAMES,
+  adminLoose,
+  assertPlatformOwner,
+  missingRelation,
+  moneyZar,
+  opsPassphrase,
+  type AuthCtx,
+} from "@/lib/owner-ops.guard";
 
-const DEFAULT_OWNER_EMAILS = "amstel.west@gmail.com";
-const DEFAULT_PASSPHRASE = "MilonOpsForge";
-
-export const OPS_UNLOCK_KEY = "milon_ops_unlock_v1";
-
-function ownerEmailAllowlist(): string[] {
-  const raw = process.env.MILON_OWNER_EMAILS || DEFAULT_OWNER_EMAILS;
-  return raw
-    .split(",")
-    .map((s) => s.trim().toLowerCase())
-    .filter(Boolean);
-}
-
-function opsPassphrase(): string {
-  return process.env.MILON_OPS_PASSPHRASE || DEFAULT_PASSPHRASE;
-}
-
-type AuthCtx = {
-  userId: string;
-  claims?: { email?: string; sub?: string };
-};
-
-type LooseAdmin = {
-  from: (table: string) => any;
-  auth: {
-    admin: {
-      getUserById: (id: string) => Promise<{ data: { user: { email?: string } | null } }>;
-      listUsers: (opts: {
-        page: number;
-        perPage: number;
-      }) => Promise<{ data: { users: Array<{ created_at?: string }> } }>;
-    };
-  };
-};
-
-function adminLoose(): LooseAdmin {
-  const admin = getSupabaseAdminOrNull();
-  if (!admin) throw new Error("Service role not configured — cannot load ops metrics.");
-  return admin as unknown as LooseAdmin;
-}
-
-async function resolveOwnerEmail(ctx: AuthCtx): Promise<string> {
-  const fromClaims = (ctx.claims?.email ?? "").trim().toLowerCase();
-  if (fromClaims) return fromClaims;
-
-  const admin = getSupabaseAdminOrNull();
-  if (!admin) return "";
-  const { data } = await (admin as unknown as LooseAdmin).auth.admin.getUserById(ctx.userId);
-  return (data.user?.email ?? "").trim().toLowerCase();
-}
-
-async function assertPlatformOwner(ctx: AuthCtx): Promise<{ userId: string; email: string }> {
-  const email = await resolveOwnerEmail(ctx);
-  if (!email || !ownerEmailAllowlist().includes(email)) {
-    throw new Error("Forbidden — this console is locked to the platform owner.");
-  }
-  return { userId: ctx.userId, email };
-}
-
-function moneyZar(cents: number): string {
-  return `R ${(cents / 100).toLocaleString("en-ZA", {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  })}`;
-}
-
-function missingRelation(msg: string): boolean {
-  return /does not exist|relation/i.test(msg);
-}
+export { OPS_UNLOCK_KEY } from "@/lib/owner-ops.guard";
 
 /** Public: validate the secret passphrase (obscurity layer only). */
 export const unlockOwnerOps = createServerFn({ method: "POST" })
@@ -89,13 +24,14 @@ export const unlockOwnerOps = createServerFn({ method: "POST" })
     z
       .object({
         passphrase: z.string().min(1).max(200),
-        /** Secret username gate — must be exactly "forge" (case-insensitive). */
+        /** Secret operator handle — "forge", "lighthouse", or "keeper". */
         username: z.string().min(1).max(64).optional(),
       })
       .parse(input),
   )
   .handler(async ({ data }) => {
-    const userOk = !data.username || data.username.trim().toLowerCase() === "forge";
+    const handle = (data.username ?? "").trim().toLowerCase();
+    const userOk = !handle || OPS_USERNAMES.includes(handle);
     if (!userOk) throw new Error("Unknown operator.");
     if (data.passphrase !== opsPassphrase()) throw new Error("Incorrect passphrase.");
     return { ok: true as const };

@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { SIGNUP_ACCESS_CODE, notifySignup } from "@/lib/signup-notify";
 import { adminSignUp } from "@/lib/auth.functions";
 import { OPS_UNLOCK_KEY, unlockOwnerOps } from "@/lib/owner-ops.functions";
+import { registerLighthouseTrialVisit } from "@/lib/lighthouse.functions";
 // Inline so landing paint doesn't wait on a second stylesheet round-trip
 // (external app CSS can still load; these rules win for landing selectors).
 import landingCss from "../styles/landing.css?inline";
@@ -74,10 +75,25 @@ function LandingPage() {
   const navigate = useNavigate();
   const doAdminSignUp = useServerFn(adminSignUp);
   const doUnlockOps = useServerFn(unlockOwnerOps);
+  const doTrialVisit = useServerFn(registerLighthouseTrialVisit);
 
   /* ── invite-link state (opaque token preferred; legacy client UUID still works) ── */
   const [inviteClientId, setInviteClientId] = useState<string | null>(null);
   const [inviteIsLegacyUuid, setInviteIsLegacyUuid] = useState(false);
+
+  /* ── Lighthouse trial link (?lh=<token>) — attribute the signup back to the lead ── */
+  const [lhToken, setLhToken] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const lh = new URLSearchParams(window.location.search).get("lh");
+    if (!lh) return;
+    setLhToken(lh);
+    void doTrialVisit({ data: { token: lh } }).catch(() => {});
+    setTimeout(() => {
+      document.getElementById("register")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 400);
+  }, [doTrialVisit]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -111,7 +127,7 @@ function LandingPage() {
 
   /* Secret owner-ops unlock (obscurity layer — real gate is email allowlist on /ops) */
   const [opsGateOpen, setOpsGateOpen] = useState(false);
-  const [opsUser, setOpsUser] = useState("forge");
+  const [opsUser, setOpsUser] = useState("lighthouse");
   const [opsPass, setOpsPass] = useState("");
   const [opsBusy, setOpsBusy] = useState(false);
   const [opsError, setOpsError] = useState("");
@@ -585,11 +601,12 @@ function LandingPage() {
     setSiError("");
     setSiBusy(true);
     try {
-      // Secret username: "forge" (+ optional forge@…) unlocks the owner console door
+      // Secret operator handles unlock the Lighthouse console door
       const id = siEmail.trim().toLowerCase();
-      if (id === "forge" || id === "forge@milon.ops" || id === "forge@milon.co.za") {
+      const handle = id.split("@")[0];
+      if (["forge", "lighthouse", "keeper"].includes(handle) && !id.includes("@milon.co.za")) {
         await doUnlockOps({
-          data: { username: "forge", passphrase: siPassword },
+          data: { username: handle, passphrase: siPassword },
         });
         try {
           sessionStorage.setItem(OPS_UNLOCK_KEY, "1");
@@ -653,7 +670,7 @@ function LandingPage() {
       if (user) navigate({ to: "/ops" });
       else {
         setSigninOpen(true);
-        toast.message("Sign in with your Milōn owner account to enter Forge.");
+        toast.message("Sign in with your Milōn owner account to enter Lighthouse.");
       }
     } catch (err: unknown) {
       setOpsError(err instanceof Error ? err.message : "Unlock failed");
@@ -731,7 +748,9 @@ function LandingPage() {
       navigate({ to: "/auth", search: {} });
       return;
     }
-    if (regCode.trim() !== SIGNUP_ACCESS_CODE) {
+    // Lighthouse trial links carry their own invitation, so the access code
+    // gate does not apply to prospects arriving from an outreach sequence.
+    if (!lhToken && regCode.trim() !== SIGNUP_ACCESS_CODE) {
       toast.error("Invalid access code. Contact us to get access.");
       return;
     }
@@ -752,6 +771,9 @@ function LandingPage() {
       });
       if (error) throw error;
       notifySignup("Business owner", regEmail, regName.trim());
+      if (lhToken) {
+        void doTrialVisit({ data: { token: lhToken, signedUp: true } }).catch(() => {});
+      }
       if (data.session && data.user) {
         // Use ensure_own_client() RPC — direct INSERT via anon key is blocked by
         // a PostgREST WITH CHECK quirk in this project, so the SECURITY DEFINER
@@ -899,7 +921,7 @@ function LandingPage() {
               </button>
             </div>
             <p style={{ fontSize: 13, color: "var(--ink-dim)", marginBottom: 18, lineHeight: 1.5 }}>
-              Platform console. Username is <b style={{ color: "var(--gold)" }}>forge</b>.
+              Platform console. Username is <b style={{ color: "var(--gold)" }}>lighthouse</b>.
             </p>
             <form onSubmit={handleOpsUnlock}>
               <label style={{ display: "block", fontSize: 11, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--ink-dim)", marginBottom: 6 }}>
@@ -2180,15 +2202,19 @@ function LandingPage() {
                           onChange={(e) => setRegPassword(e.target.value)}
                         />
 
-                        <label htmlFor="regCodeField">Access code</label>
-                        <input
-                          id="regCodeField"
-                          type="text"
-                          required
-                          placeholder="Provided by your MILŌN contact"
-                          value={regCode}
-                          onChange={(e) => setRegCode(e.target.value)}
-                        />
+                        {!lhToken && (
+                          <>
+                            <label htmlFor="regCodeField">Access code</label>
+                            <input
+                              id="regCodeField"
+                              type="text"
+                              required
+                              placeholder="Provided by your MILŌN contact"
+                              value={regCode}
+                              onChange={(e) => setRegCode(e.target.value)}
+                            />
+                          </>
+                        )}
 
                         <label htmlFor="regBusinessField">Business name</label>
                         <input

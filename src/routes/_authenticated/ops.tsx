@@ -1,5 +1,5 @@
 /**
- * Secret Milōn platform-owner console.
+ * Milōn Lighthouse — secret platform-owner console.
  * Route: /ops — gated by allowlisted email + prior passphrase unlock.
  */
 
@@ -12,7 +12,6 @@ import {
   FlaskConical,
   Loader2,
   Lock,
-  Mail,
   Plus,
   RefreshCw,
   Shield,
@@ -23,7 +22,6 @@ import {
 import { useAuth } from "@/hooks/use-auth";
 import {
   OPS_UNLOCK_KEY,
-  addOpsLead,
   addOpsPayment,
   getOwnerOpsDashboard,
   upsertOpsFeatureFlags,
@@ -31,10 +29,11 @@ import {
   type OpsDashboard,
 } from "@/lib/owner-ops.functions";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { LighthousePanel } from "@/components/lighthouse-panel";
 
 export const Route = createFileRoute("/_authenticated/ops")({
   component: OwnerOpsPage,
-  head: () => ({ meta: [{ title: "Ops — Milōn" }] }),
+  head: () => ({ meta: [{ title: "Lighthouse — Milōn" }] }),
 });
 
 const FLAG_LABELS: Record<string, string> = {
@@ -53,9 +52,8 @@ function OwnerOpsPage() {
   const saveFlags = useServerFn(upsertOpsFeatureFlags);
   const saveNotes = useServerFn(upsertOpsPilotNotes);
   const createPayment = useServerFn(addOpsPayment);
-  const createLead = useServerFn(addOpsLead);
-
   const [unlocked, setUnlocked] = useState(false);
+  const [view, setView] = useState<"lighthouse" | "platform">("lighthouse");
   const [dash, setDash] = useState<OpsDashboard | null>(null);
   const [busy, setBusy] = useState(true);
   const [err, setErr] = useState("");
@@ -69,12 +67,6 @@ function OwnerOpsPage() {
   const [payStatus, setPayStatus] = useState<"received" | "pending" | "refunded">("received");
   const [payNote, setPayNote] = useState("");
   const [payBusy, setPayBusy] = useState(false);
-
-  const [leadName, setLeadName] = useState("");
-  const [leadEmail, setLeadEmail] = useState("");
-  const [leadCompany, setLeadCompany] = useState("");
-  const [leadNotes, setLeadNotes] = useState("");
-  const [leadBusy, setLeadBusy] = useState(false);
 
   useEffect(() => {
     try {
@@ -133,8 +125,9 @@ function OwnerOpsPage() {
           </div>
           <h1 className="font-serif text-2xl text-slate-50">Operator console</h1>
           <p className="mt-2 text-sm text-slate-400">
-            Unlock from the landing page first (secret username <span className="text-amber-300">forge</span>{" "}
-            in Sign in, or 7× logo tap + passphrase), then return here signed in as the platform owner.
+            Unlock from the landing page first (secret username{" "}
+            <span className="text-amber-300">lighthouse</span> in Sign in, or 5× logo tap +
+            passphrase), then return here signed in as the platform owner.
           </p>
           <div className="mt-5 flex flex-wrap gap-2">
             <Link
@@ -178,7 +171,9 @@ function OwnerOpsPage() {
             <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.28em] text-amber-400">
               <Shield className="h-3.5 w-3.5" /> Platform owner
             </div>
-            <h1 className="mt-1 font-serif text-3xl tracking-tight text-slate-50">Milōn Forge</h1>
+            <h1 className="mt-1 font-serif text-3xl tracking-tight text-slate-50">
+              Milōn Lighthouse
+            </h1>
             <p className="mt-1 text-xs text-slate-500">{dash.me.email}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -209,6 +204,30 @@ function OwnerOpsPage() {
           </div>
         </header>
 
+        <div className="mb-6 flex gap-2 border-b border-white/10">
+          {([
+            ["lighthouse", "Lighthouse — sales"],
+            ["platform", "Platform — metrics"],
+          ] as const).map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setView(key)}
+              className={`-mb-px border-b-2 px-1 pb-2.5 text-xs font-bold uppercase tracking-[0.16em] transition-colors ${
+                view === key
+                  ? "border-amber-400 text-amber-200"
+                  : "border-transparent text-slate-500 hover:text-slate-300"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {view === "lighthouse" && <LighthousePanel />}
+
+        {view === "platform" && (
+          <>
         {dash.migrationHint && (
           <div className="mb-5 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
             {dash.migrationHint}
@@ -451,124 +470,24 @@ function OwnerOpsPage() {
           </div>
         </section>
 
-        {/* Sales / email AI placeholder */}
-        <section className="mb-10">
-          <h2 className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-slate-400">
-            <Sparkles className="h-3.5 w-3.5 text-amber-400" /> {dash.salesPlaceholder.title}
+        <section className="mb-10 rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+          <h2 className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-slate-400">
+            <Sparkles className="h-3.5 w-3.5 text-amber-400" /> Sales engine
           </h2>
-          <div className="rounded-2xl border border-dashed border-amber-500/35 bg-gradient-to-br from-amber-500/10 via-transparent to-transparent p-5">
-            <p className="max-w-2xl text-sm text-slate-300">{dash.salesPlaceholder.blurb}</p>
-            <ol className="mt-4 grid gap-2 sm:grid-cols-2">
-              {dash.salesPlaceholder.phases.map((p, i) => (
-                <li
-                  key={p.id}
-                  className="flex items-start gap-3 rounded-xl border border-white/10 bg-black/20 px-3 py-3"
-                >
-                  <span className="grid h-6 w-6 place-items-center rounded-full bg-amber-500/20 text-[11px] font-bold text-amber-300">
-                    {i + 1}
-                  </span>
-                  <div>
-                    <div className="text-sm font-semibold text-slate-100">{p.label}</div>
-                    <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
-                      {p.status}
-                    </div>
-                  </div>
-                </li>
-              ))}
-            </ol>
-
-            <div className="mt-5 border-t border-white/10 pt-4">
-              <div className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
-                <Mail className="h-3.5 w-3.5" /> Seed leads (CRM stub)
-              </div>
-              <form
-                className="grid gap-2 sm:grid-cols-4"
-                onSubmit={async (e) => {
-                  e.preventDefault();
-                  setLeadBusy(true);
-                  try {
-                    await createLead({
-                      data: {
-                        name: leadName || undefined,
-                        email: leadEmail || undefined,
-                        company: leadCompany || undefined,
-                        notes: leadNotes || undefined,
-                        source: "ops_manual",
-                      },
-                    });
-                    toast.success("Lead added");
-                    setLeadName("");
-                    setLeadEmail("");
-                    setLeadCompany("");
-                    setLeadNotes("");
-                    await refresh();
-                  } catch (ex) {
-                    toast.error(ex instanceof Error ? ex.message : "Could not add lead");
-                  } finally {
-                    setLeadBusy(false);
-                  }
-                }}
-              >
-                <input
-                  className={inputCls}
-                  placeholder="Name"
-                  value={leadName}
-                  onChange={(e) => setLeadName(e.target.value)}
-                />
-                <input
-                  className={inputCls}
-                  placeholder="Email"
-                  value={leadEmail}
-                  onChange={(e) => setLeadEmail(e.target.value)}
-                />
-                <input
-                  className={inputCls}
-                  placeholder="Company"
-                  value={leadCompany}
-                  onChange={(e) => setLeadCompany(e.target.value)}
-                />
-                <button
-                  type="submit"
-                  disabled={leadBusy}
-                  className="inline-flex h-10 items-center justify-center gap-1 rounded-xl border border-amber-500/40 text-xs font-bold uppercase tracking-wider text-amber-200 hover:bg-amber-500/10 disabled:opacity-60"
-                >
-                  {leadBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
-                  Add lead
-                </button>
-                <input
-                  className={`${inputCls} sm:col-span-4`}
-                  placeholder="Notes"
-                  value={leadNotes}
-                  onChange={(e) => setLeadNotes(e.target.value)}
-                />
-              </form>
-
-              <ul className="mt-3 space-y-2">
-                {dash.leads.length === 0 ? (
-                  <li className="text-sm text-slate-500">No leads yet — park prospects here.</li>
-                ) : (
-                  dash.leads.map((l) => (
-                    <li
-                      key={l.id}
-                      className="flex flex-wrap items-baseline justify-between gap-2 rounded-lg border border-white/5 px-3 py-2 text-sm"
-                    >
-                      <span className="font-medium text-slate-200">
-                        {l.name || l.email || "Untitled"}{" "}
-                        <span className="text-slate-500">
-                          {l.company ? `· ${l.company}` : ""}
-                          {l.email ? ` · ${l.email}` : ""}
-                        </span>
-                      </span>
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400/80">
-                        {l.status}
-                      </span>
-                    </li>
-                  ))
-                )}
-              </ul>
-            </div>
-          </div>
+          <p className="max-w-2xl text-sm text-slate-400">
+            Lead generation, AI-drafted sequences, and the tracked free-trial funnel now live in the
+            Lighthouse tab above.
+          </p>
+          <button
+            type="button"
+            onClick={() => setView("lighthouse")}
+            className="mt-3 inline-flex h-9 items-center rounded-full border border-amber-500/40 px-4 text-xs font-semibold uppercase tracking-wider text-amber-200 hover:bg-amber-500/10"
+          >
+            Open Lighthouse
+          </button>
         </section>
+          </>
+        )}
 
         <p className="pb-8 text-center text-[10px] uppercase tracking-[0.2em] text-slate-600">
           Hidden console · not linked in product nav
