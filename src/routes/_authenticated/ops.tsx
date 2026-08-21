@@ -24,6 +24,7 @@ import {
   OPS_UNLOCK_KEY,
   addOpsPayment,
   getOwnerOpsDashboard,
+  getOwnerOpsEnvStatus,
   unlockOwnerOps,
   upsertOpsFeatureFlags,
   upsertOpsPilotNotes,
@@ -62,9 +63,20 @@ function OwnerOpsPage() {
   const [flags, setFlags] = useState<Record<string, boolean>>({});
 
   const doUnlock = useServerFn(unlockOwnerOps);
+  const loadEnvStatus = useServerFn(getOwnerOpsEnvStatus);
   const [unlockPass, setUnlockPass] = useState("");
   const [unlockBusy, setUnlockBusy] = useState(false);
   const [unlockErr, setUnlockErr] = useState("");
+  const [envDiag, setEnvDiag] = useState<{
+    urlPresent: boolean;
+    serviceRolePresent: boolean;
+    urlFrom: string | null;
+    serviceRoleFrom: string | null;
+    hint: string;
+    anthropic: boolean;
+    resend: boolean;
+    siteUrl: boolean;
+  } | null>(null);
 
   const [payAmount, setPayAmount] = useState("");
   const [payDate, setPayDate] = useState(() => new Date().toISOString().slice(0, 10));
@@ -137,6 +149,13 @@ function OwnerOpsPage() {
     void refresh();
   }, [authLoading, user, unlocked, navigate, refresh]);
 
+  useEffect(() => {
+    if (authLoading || !user || !unlocked || !err) return;
+    void loadEnvStatus()
+      .then(setEnvDiag)
+      .catch(() => setEnvDiag(null));
+  }, [authLoading, user, unlocked, err, loadEnvStatus]);
+
   const flagEntries = useMemo(() => Object.entries(flags), [flags]);
 
   if (authLoading || (unlocked && busy && !dash && !err)) {
@@ -208,15 +227,66 @@ function OwnerOpsPage() {
     return (
       <div className="grid min-h-screen place-items-center bg-[#07070c] px-4 text-slate-200">
         <div className="w-full max-w-lg rounded-2xl border border-red-500/30 bg-[#140c0c] p-6">
-          <h1 className="text-lg font-semibold text-red-300">Access denied</h1>
-          <p className="mt-2 text-sm text-slate-400">{err}</p>
-          <button
-            type="button"
-            className="mt-4 text-xs font-semibold uppercase tracking-wider text-amber-300"
-            onClick={() => navigate({ to: "/dashboard" })}
-          >
-            Leave
-          </button>
+          <h1 className="text-lg font-semibold text-red-300">Console cannot load</h1>
+          <p className="mt-2 text-sm text-slate-300 whitespace-pre-wrap">{err}</p>
+          {envDiag && (
+            <div className="mt-4 rounded-xl border border-white/10 bg-black/30 p-3 text-[12px] text-slate-400">
+              <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">
+                What the server can see
+              </div>
+              <ul className="space-y-1 font-mono">
+                <li>
+                  SUPABASE_URL:{" "}
+                  <span className={envDiag.urlPresent ? "text-emerald-300" : "text-red-300"}>
+                    {envDiag.urlPresent ? `yes (${envDiag.urlFrom})` : "MISSING"}
+                  </span>
+                </li>
+                <li>
+                  SERVICE_ROLE:{" "}
+                  <span
+                    className={envDiag.serviceRolePresent ? "text-emerald-300" : "text-red-300"}
+                  >
+                    {envDiag.serviceRolePresent ? `yes (${envDiag.serviceRoleFrom})` : "MISSING"}
+                  </span>
+                </li>
+                <li>
+                  ANTHROPIC:{" "}
+                  <span className={envDiag.anthropic ? "text-emerald-300" : "text-amber-300"}>
+                    {envDiag.anthropic ? "yes" : "no"}
+                  </span>
+                </li>
+                <li>
+                  RESEND:{" "}
+                  <span className={envDiag.resend ? "text-emerald-300" : "text-amber-300"}>
+                    {envDiag.resend ? "yes" : "no"}
+                  </span>
+                </li>
+                <li>
+                  SITE_URL:{" "}
+                  <span className={envDiag.siteUrl ? "text-emerald-300" : "text-amber-300"}>
+                    {envDiag.siteUrl ? "yes" : "no"}
+                  </span>
+                </li>
+              </ul>
+              <p className="mt-2 text-[11px] text-slate-500">{envDiag.hint}</p>
+            </div>
+          )}
+          <div className="mt-4 flex flex-wrap gap-3">
+            <button
+              type="button"
+              className="text-xs font-semibold uppercase tracking-wider text-amber-300"
+              onClick={() => void refresh()}
+            >
+              Retry
+            </button>
+            <button
+              type="button"
+              className="text-xs font-semibold uppercase tracking-wider text-slate-500"
+              onClick={() => navigate({ to: "/app" })}
+            >
+              Leave
+            </button>
+          </div>
         </div>
       </div>
     );

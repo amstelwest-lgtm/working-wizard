@@ -8,7 +8,10 @@
  * 4. Data — ops tables are deny-all RLS, reached only via service role here
  */
 
-import { getSupabaseAdminOrNull } from "@/integrations/supabase/client.server";
+import {
+  getSupabaseAdminEnvStatus,
+  getSupabaseAdminOrNull,
+} from "@/integrations/supabase/client.server";
 
 export const DEFAULT_OWNER_EMAILS = "amstel.west@gmail.com";
 export const DEFAULT_PASSPHRASE = "MilonOpsForge";
@@ -53,7 +56,8 @@ export function opsPassphrase(): string {
 export function adminLoose(): LooseAdmin {
   const admin = getSupabaseAdminOrNull();
   if (!admin) {
-    throw new Error("Service role not configured — the owner console cannot read data.");
+    const status = getSupabaseAdminEnvStatus();
+    throw new Error(status.hint);
   }
   return admin as unknown as LooseAdmin;
 }

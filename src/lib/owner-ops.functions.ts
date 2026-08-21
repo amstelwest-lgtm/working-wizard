@@ -6,6 +6,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { getSupabaseAdminEnvStatus } from "@/integrations/supabase/client.server";
 import {
   OPS_USERNAMES,
   adminLoose,
@@ -35,6 +36,23 @@ export const unlockOwnerOps = createServerFn({ method: "POST" })
     if (!userOk) throw new Error("Unknown operator.");
     if (data.passphrase !== opsPassphrase()) throw new Error("Incorrect passphrase.");
     return { ok: true as const };
+  });
+
+/**
+ * Owner-only: which Supabase admin env vars the server can see.
+ * Never returns secret values — only presence and which name resolved.
+ */
+export const getOwnerOpsEnvStatus = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await assertPlatformOwner(context as AuthCtx);
+    const status = getSupabaseAdminEnvStatus();
+    return {
+      ...status,
+      anthropic: Boolean(process.env.ANTHROPIC_API_KEY),
+      resend: Boolean(process.env.RESEND_API_KEY),
+      siteUrl: Boolean(process.env.SITE_URL || process.env.VITE_APP_URL),
+    };
   });
 
 export type OpsPaymentRow = {
@@ -115,15 +133,14 @@ export const getOwnerOpsDashboard = createServerFn({ method: "GET" })
       else if (r.role === "client_member") clientMembers += 1;
     }
 
-    const [{ count: firms }, { count: clients }, { count: clientsWithOwner }] =
-      await Promise.all([
-        admin.from("firms").select("id", { count: "exact", head: true }),
-        admin.from("clients").select("id", { count: "exact", head: true }),
-        admin
-          .from("clients")
-          .select("id", { count: "exact", head: true })
-          .not("owner_user_id", "is", null),
-      ]);
+    const [{ count: firms }, { count: clients }, { count: clientsWithOwner }] = await Promise.all([
+      admin.from("firms").select("id", { count: "exact", head: true }),
+      admin.from("clients").select("id", { count: "exact", head: true }),
+      admin
+        .from("clients")
+        .select("id", { count: "exact", head: true })
+        .not("owner_user_id", "is", null),
+    ]);
 
     let totalUsers = ((roles ?? []) as unknown[]).length;
     let last7dUsersApprox: number | null = null;
@@ -141,7 +158,7 @@ export const getOwnerOpsDashboard = createServerFn({ method: "GET" })
       /* ignore */
     }
 
-    let payments: OpsPaymentRow[] = [];
+    const payments: OpsPaymentRow[] = [];
     let receivedThisMonthCents = 0;
     let pendingThisMonthCents = 0;
     let receivedYtdCents = 0;
@@ -170,9 +187,7 @@ export const getOwnerOpsDashboard = createServerFn({ method: "GET" })
         const amountCents = Number(row.amount_cents ?? 0);
         const status = String(row.status ?? "received");
         const paidAt = String(row.paid_at ?? "");
-        const d = paidAt
-          ? new Date(paidAt.length <= 10 ? `${paidAt}T12:00:00` : paidAt)
-          : null;
+        const d = paidAt ? new Date(paidAt.length <= 10 ? `${paidAt}T12:00:00` : paidAt) : null;
         if (status === "received") {
           allTimeReceivedCents += amountCents;
           if (d && d.getFullYear() === y) receivedYtdCents += amountCents;
@@ -180,12 +195,7 @@ export const getOwnerOpsDashboard = createServerFn({ method: "GET" })
             receivedThisMonthCents += amountCents;
           }
         }
-        if (
-          status === "pending" &&
-          d &&
-          d.getFullYear() === y &&
-          d.getMonth() === m
-        ) {
+        if (status === "pending" && d && d.getFullYear() === y && d.getMonth() === m) {
           pendingThisMonthCents += amountCents;
         }
         payments.push({
@@ -288,9 +298,7 @@ export const getOwnerOpsDashboard = createServerFn({ method: "GET" })
 
 export const upsertOpsFeatureFlags = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input) =>
-    z.object({ flags: z.record(z.string(), z.boolean()) }).parse(input),
-  )
+  .inputValidator((input) => z.object({ flags: z.record(z.string(), z.boolean()) }).parse(input))
   .handler(async ({ data, context }) => {
     const { userId } = await assertPlatformOwner(context as AuthCtx);
     const admin = adminLoose();
