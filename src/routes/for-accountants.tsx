@@ -68,6 +68,19 @@ function ForAccountantsPage() {
         </li>
       </ul>
 
+      <h2>The gap this actually closes</h2>
+      <p>
+        Your clients do not think they need advisory. They think they need to understand their own
+        numbers more than once a year — and right now the only way to give them that is to spend an
+        afternoon per client producing it by hand.
+      </p>
+      <p>
+        Milōn is the channel between the two of you. You work where you already work; the client
+        gets a monthly score they can read in a minute, with your notes attached to the figures they
+        refer to. It is the difference between being the person who files their returns and the
+        person who tells them what to do next.
+      </p>
+
       <h2>The practice economics</h2>
       <p>
         The honest version: we are not going to quote you a time saving we have not measured across

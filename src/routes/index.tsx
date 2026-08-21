@@ -1372,8 +1372,8 @@ function LandingPage() {
             <p className="sub h-anim d3">
               Most owners find out about a cash crisis when it's already here. MILŌN shows you your
               business's health as one simple score — where the problem lives, what it's costing
-              you, and exactly what to do next. A CFO in your pocket. And your accountant's AI
-              sidekick.
+              you, and exactly what to do next. It is also the bridge to your accountant: the same
+              screen, both sides, updated every month instead of once a year.
             </p>
             <div className="hero-cta h-anim d4">
               <a className="btn btn-gold" href="#persona">
@@ -1659,8 +1659,8 @@ function LandingPage() {
             <span className="eyebrow">Start here</span>
             <h2>Who are you in this story?</h2>
             <p className="sub">
-              MILŌN serves two constellations. Choose yours and we'll show you exactly what you're
-              about to gain.
+              MILŌN serves two constellations, and connects them. Choose yours and we'll show you
+              exactly what you're about to gain.
             </p>
           </div>
           <div className="persona-grid stagger">
@@ -1676,7 +1676,7 @@ function LandingPage() {
               <h3>Business Owner</h3>
               <p>
                 You built something real. Now you want to know if the numbers are lying to you — and
-                what to do about it.
+                what to do about it, without waiting for your accountant's next call.
               </p>
               <div className="go">
                 Take the 90-second diagnostic <i>→</i>
@@ -1693,8 +1693,8 @@ function LandingPage() {
               </div>
               <h3>Accountant / Advisory Firm</h3>
               <p>
-                Your compliance work is flawless. Now clients want strategic insight — and they'll
-                pay monthly for it.
+                Your compliance work is flawless. Now clients want to actually understand their
+                numbers between year-ends — and they'll pay monthly for it.
               </p>
               <div className="go">
                 See the advisory revenue model <i>→</i>
@@ -1889,6 +1889,111 @@ function LandingPage() {
         </div>
       </div>
 
+      {/* ══════════════════════════ THE BRIDGE ══════════════════════════ */}
+      <section id="bridge" style={{ paddingTop: 80, paddingBottom: 80 }}>
+        <div className="wrap">
+          <div className="section-head center reveal">
+            <span className="eyebrow">The bridge</span>
+            <h2>
+              Your accountant has the numbers.
+              <br />
+              You have the <span className="gold-text serif">decisions.</span>
+            </h2>
+            <p className="sub">
+              That gap is where good businesses drift. MILŌN closes it — one shared workspace where
+              the figures your accountant prepares reach you every month, in language you can act
+              on, without either of you chasing the other.
+            </p>
+          </div>
+
+          <div className="bridge-grid stagger">
+            <div className="bridge-side">
+              <div className="who">For the owner</div>
+              <h3>Your numbers, without the wait</h3>
+              <p>
+                No more finding out in March how last year went. You see where the business stands
+                whenever you want to look.
+              </p>
+              <ul>
+                <li>
+                  <b>Regular</b> — a fresh score every month, not once a year
+                </li>
+                <li>
+                  <b>Plain</b> — one number and the reason behind it, not a 40-page pack
+                </li>
+                <li>
+                  <b>Yours</b> — open it on your phone without booking a meeting
+                </li>
+                <li>
+                  <b>Answered</b> — your accountant's notes sit on the exact figure they refer to
+                </li>
+              </ul>
+            </div>
+
+            <div className="bridge-link" aria-hidden="true">
+              <span className="rail" />
+              <span className="node">
+                <span>MILŌN</span>
+              </span>
+              <span className="rail" />
+              <span className="cap">One shared view</span>
+            </div>
+
+            <div className="bridge-side">
+              <div className="who">For the accountant</div>
+              <h3>Keep every client in the loop</h3>
+              <p>
+                The update your clients keep asking for, without the hours it used to cost you to
+                produce it one at a time.
+              </p>
+              <ul>
+                <li>
+                  <b>Scalable</b> — the whole client book updated on one screen
+                </li>
+                <li>
+                  <b>Drafted</b> — Claude writes the first version, you sign it off
+                </li>
+                <li>
+                  <b>Branded</b> — it goes out as your firm's work, not ours
+                </li>
+                <li>
+                  <b>Proactive</b> — reach the client before they reach you in a panic
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          <div className="bridge-facts stagger">
+            <div className="bridge-fact">
+              <div className="was">Before</div>
+              <div className="now">
+                Numbers explained once a year, in a meeting nobody remembers.{" "}
+                <b>Now: every month, on your own time.</b>
+              </div>
+            </div>
+            <div className="bridge-fact">
+              <div className="was">Before</div>
+              <div className="now">
+                Advice buried in an email thread. <b>Now: attached to the number it is about.</b>
+              </div>
+            </div>
+            <div className="bridge-fact">
+              <div className="was">Before</div>
+              <div className="now">
+                Owner and accountant guessing what the other can see.{" "}
+                <b>Now: the same screen, both sides.</b>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div className="divider">
+        <div className="wrap">
+          <i />
+        </div>
+      </div>
+
       {/* ══════════════════════════ FEATURES ══════════════════════════ */}
       <section id="features">
         <div className="wrap">
@@ -1896,8 +2001,9 @@ function LandingPage() {
             <span className="eyebrow">The Platform</span>
             <h2>Two portals. One constellation.</h2>
             <p className="sub">
-              Business owners get clarity. Accountants get leverage. Together, the relationship
-              becomes a recurring-revenue advisory practice.
+              Two sides of the same workspace: owners get clarity they can act on, accountants get
+              the leverage to deliver it across every client. The relationship stops being annual
+              and starts being a monthly advisory practice.
             </p>
           </div>
           <div className="feat-cols stagger">

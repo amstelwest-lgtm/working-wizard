@@ -98,6 +98,19 @@ function ForOwnersPage() {
         </li>
       </ol>
 
+      <h2>The gap this actually closes</h2>
+      <p>
+        Your accountant already has your numbers. You are the one who has to make decisions with
+        them. In most businesses those two facts never meet in the same month — the figures get
+        prepared, filed, and explained once a year in a meeting you half remember.
+      </p>
+      <p>
+        Milōn puts both of you on one screen. Your accountant works where they already work, and
+        what they produce reaches you as a score you can read in a minute, whenever you want to
+        look. Their notes land on the exact number they refer to, so advice stops living in an email
+        thread.
+      </p>
+
       <h2>What Milōn is not</h2>
       <div className="mk-grid">
         <div className="mk-card">
