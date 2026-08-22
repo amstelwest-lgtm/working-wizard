@@ -175,8 +175,10 @@ function LandingPage() {
         if (!cancelled) navigate({ to: "/ops" });
         return;
       }
-      const { resolvePostLoginPath, setPortalIntent } = await import("@/lib/user-roles");
-      setPortalIntent("owner");
+      const { resolvePostLoginPath } = await import("@/lib/user-roles");
+      // Do not stamp owner intent here — visiting / while already signed in
+      // must not overwrite an accountant-door login and dump dual-role users
+      // onto the founder board.
       const path = await resolvePostLoginPath(user.id);
       if (!cancelled) navigate({ to: path });
     })();
@@ -674,8 +676,8 @@ function LandingPage() {
         const { data: auth } = await supabase.auth.getUser();
         const uid = auth.user?.id;
         if (uid) {
-          const { resolvePostLoginPath, setPortalIntent } = await import("@/lib/user-roles");
-          setPortalIntent("owner");
+          const { resolvePostLoginPath, forcePortal } = await import("@/lib/user-roles");
+          forcePortal("owner");
           const path = await resolvePostLoginPath(uid);
           void navigate({ to: path, replace: true });
         } else {

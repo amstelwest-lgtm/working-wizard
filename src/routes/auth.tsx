@@ -12,7 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { SIGNUP_ACCESS_CODE, notifySignup } from "@/lib/signup-notify";
 import { ensurePracticePortalAccess } from "@/lib/auth.functions";
-import { setPortalIntent } from "@/lib/user-roles";
+import { forcePortal, setPortalIntent } from "@/lib/user-roles";
 
 export const Route = createFileRoute("/auth")({
   component: AuthPage,
@@ -44,13 +44,25 @@ function AuthPage() {
 
   const afterAuthPath = next === "/ops" ? "/ops" : "/dashboard";
 
+  // Stamp the accountant door as soon as this page is shown — before submit —
+  // so a dual-role session cannot be claimed by the founder landing redirect.
+  useEffect(() => {
+    setPortalIntent("accountant");
+  }, []);
+
   useEffect(() => {
     if (loading || !user) return;
-    setPortalIntent("accountant");
-    void ensurePractice().catch(() => {
-      /* non-fatal — role guard still uses firm ownership */
-    });
-    navigate({ to: afterAuthPath as "/dashboard" });
+    let cancelled = false;
+    forcePortal("accountant");
+    void (async () => {
+      await ensurePractice().catch(() => {
+        /* non-fatal — role guard still uses firm ownership */
+      });
+      if (!cancelled) navigate({ to: afterAuthPath as "/dashboard" });
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [user, loading, navigate, afterAuthPath, ensurePractice]);
 
   const handle = async (e: React.FormEvent) => {
@@ -91,7 +103,7 @@ function AuthPage() {
             .from("user_roles")
             .insert({ user_id: data.user.id, role: "firm_admin" });
         }
-        setPortalIntent("accountant");
+        forcePortal("accountant");
         await ensurePractice().catch(() => undefined);
         toast.success("Account created");
         navigate({ to: afterAuthPath as "/dashboard" });
@@ -129,7 +141,7 @@ function AuthPage() {
         } catch {
           // provisioning failure is non-fatal — user proceeds to dashboard regardless
         }
-        setPortalIntent("accountant");
+        forcePortal("accountant");
         await ensurePractice().catch(() => undefined);
         toast.success("Welcome back");
         navigate({ to: afterAuthPath as "/dashboard" });

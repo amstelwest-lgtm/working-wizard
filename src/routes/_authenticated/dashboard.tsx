@@ -5,7 +5,11 @@ import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
 import { PlaybookDrawer } from "@/components/playbook-drawer";
 import { PortfolioHealthScatter } from "@/components/portfolio-health-scatter";
-import { shouldStayOnAccountantPortal, setPortalIntent } from "@/lib/user-roles";
+import {
+  shouldStayOnAccountantPortal,
+  setPortalIntent,
+  clearForcePortal,
+} from "@/lib/user-roles";
 import {
   healthFromFlatFinancials,
   buildTrend,
@@ -414,7 +418,12 @@ function Dashboard() {
     let cancelled = false;
     setPortalIntent("accountant");
     void shouldStayOnAccountantPortal(user.id).then((stay) => {
-      if (!cancelled && !stay) navigate({ to: "/app" });
+      if (cancelled) return;
+      if (stay) {
+        clearForcePortal();
+        return;
+      }
+      navigate({ to: "/app" });
     });
     return () => {
       cancelled = true;

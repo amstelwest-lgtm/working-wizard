@@ -22,7 +22,8 @@
     "test:invited-member": "vite-node --config scripts/vite-test.config.ts scripts/test-invited-member-flow.mts",
     "test:industry-pulse": "vite-node --config scripts/vite-test.config.ts scripts/industry-pulse-fallback-test.mts",
     "test:cash-from-banks": "vite-node --config scripts/vite-test.config.ts scripts/cash-from-banks-pattern-test.mts",
-    "test:cash-from-banks-workspace": "vite-node --config scripts/vite-test.config.ts scripts/cash-from-banks-workspace-test.mts"
+    "test:cash-from-banks-workspace": "vite-node --config scripts/vite-test.config.ts scripts/cash-from-banks-workspace-test.mts",
+    "test:portal-routing": "vite-node --config scripts/vite-test.config.ts scripts/portal-routing-test.mts"
   },
   "dependencies": {
     "@cloudflare/vite-plugin": "^1.25.5",
