@@ -5,6 +5,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
 import { PlaybookDrawer } from "@/components/playbook-drawer";
 import { PortfolioHealthScatter } from "@/components/portfolio-health-scatter";
+import { shouldStayOnAccountantPortal, setPortalIntent } from "@/lib/user-roles";
 import {
   healthFromFlatFinancials,
   buildTrend,
@@ -406,19 +407,18 @@ function Dashboard() {
   const navigate = useNavigate();
 
   // ── Role guard ────────────────────────────────────────────────────────────
+  // Dual-role founders (firm_admin + client_owner) and firm owners must stay
+  // here when they entered via /auth — never bounce them to the SME board.
   useEffect(() => {
     if (!user) return;
-    supabase
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", user.id)
-      .maybeSingle()
-      .then(({ data }) => {
-        const role = data?.role;
-        if (role === "client_owner" || role === "client_member") {
-          navigate({ to: "/app" });
-        }
-      });
+    let cancelled = false;
+    setPortalIntent("accountant");
+    void shouldStayOnAccountantPortal(user.id).then((stay) => {
+      if (!cancelled && !stay) navigate({ to: "/app" });
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [user, navigate]);
 
   const { firmId, firms, brandLoading, profile } = useAccountantProfile();

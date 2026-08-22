@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { signUpInvitedMember } from "@/lib/invite-member.server";
 
 /**
@@ -88,11 +89,56 @@ export const adminSignUp = createServerFn({ method: "POST" })
           owner_user_id: userId,
         });
       }
-      // user_roles has UNIQUE(user_id, role) not UNIQUE(user_id).
-      // Delete any existing row then insert so no stale role can survive.
-      await supabaseAdmin.from("user_roles").delete().eq("user_id", userId);
-      await supabaseAdmin.from("user_roles").insert({ user_id: userId, role: "client_owner" });
+      // Keep any existing practice role (dual-role founders). Only ensure client_owner.
+      const { data: existingRoles } = await supabaseAdmin
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", userId);
+      const roles = (existingRoles ?? []).map((r) => r.role);
+      if (!roles.includes("client_owner")) {
+        await supabaseAdmin.from("user_roles").insert({ user_id: userId, role: "client_owner" });
+      }
     }
 
     return { userId, email: authData.user.email ?? data.email };
+  });
+
+/**
+ * Accountant-portal entry: if this user owns or belongs to a firm, ensure
+ * firm_admin is present WITHOUT wiping client_owner (dual-role founders).
+ */
+export const ensurePracticePortalAccess = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const userId = context.userId;
+    const { data: owned } = await supabaseAdmin
+      .from("firms")
+      .select("id")
+      .eq("owner_user_id", userId)
+      .limit(1)
+      .maybeSingle();
+    const { data: mem } = await supabaseAdmin
+      .from("firm_memberships")
+      .select("firm_id")
+      .eq("user_id", userId)
+      .limit(1)
+      .maybeSingle();
+    if (!owned && !mem) {
+      return { ensured: false as const, reason: "no_firm" as const };
+    }
+    const { data: existingRoles } = await supabaseAdmin
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", userId);
+    const roles = (existingRoles ?? []).map((r) => r.role as string);
+    if (roles.includes("firm_admin") || roles.includes("accountant")) {
+      return { ensured: true as const, reason: "already" as const };
+    }
+    const { error } = await supabaseAdmin
+      .from("user_roles")
+      .insert({ user_id: userId, role: "firm_admin" });
+    if (error && !/duplicate|unique/i.test(error.message)) {
+      throw new Error(error.message);
+    }
+    return { ensured: true as const, reason: "inserted" as const };
   });

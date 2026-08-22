@@ -2031,13 +2031,26 @@ function Index() {
   const [actingClientId, setActingClientId] = useState<string | null>(null);
   const [actingClientName, setActingClientName] = useState<string | null>(null);
 
-  // Role guard — accountants belong in the portal, not the owner app
-  // Exception: when actingClientId is set an accountant is viewing a client's board intentionally
+  // Role guard — pure practice users belong in the portal, not the owner app.
+  // Dual-role founders (practice + client) keep /app; accountants impersonating
+  // a client (actingClientId) also stay.
   useEffect(() => {
     if (!userRole) return;
-    if ((userRole === "accountant" || userRole === "firm_admin") && !actingClientId) {
-      navigate({ to: "/dashboard" });
-    }
+    if (actingClientId) return;
+    if (userRole !== "accountant" && userRole !== "firm_admin") return;
+    let cancelled = false;
+    void (async () => {
+      const { resolvePortalRoles } = await import("@/lib/user-roles");
+      const { data: u } = await supabase.auth.getUser();
+      if (!u.user || cancelled) return;
+      const portal = await resolvePortalRoles(u.user.id);
+      if (!cancelled && portal.hasPracticeRole && !portal.hasClientRole) {
+        navigate({ to: "/dashboard" });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [userRole, actingClientId, navigate]);
   const [v, setV] = useState<Inputs>(defaults);
   const [weeklyInputs, setWeeklyInputs] = useState<WeeklyInputs>({ weeks: {} });
@@ -2261,19 +2274,15 @@ function Index() {
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data: { user: u } }) => {
       if (!u) return;
-      const { data: roleRow } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", u.id)
-        .maybeSingle();
-
-      if (roleRow?.role) {
-        setUserRole(roleRow.role);
+      const { resolvePortalRoles } = await import("@/lib/user-roles");
+      const portal = await resolvePortalRoles(u.id);
+      if (portal.primaryRole) {
+        setUserRole(portal.primaryRole);
         return;
       }
 
       // Fallback for existing users who predate the role-normalisation migration:
-      // infer the app role from ownership / membership tables and back-fill user_roles.
+      // infer the app role from ownership / membership tables.
       const { data: ownedClient } = await supabase
         .from("clients")
         .select("id")
