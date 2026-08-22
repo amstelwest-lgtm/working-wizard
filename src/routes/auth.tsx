@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { PreLoginShareButton } from "@/components/share";
 import { useState, useEffect } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,6 +11,8 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { SIGNUP_ACCESS_CODE, notifySignup } from "@/lib/signup-notify";
+import { ensurePracticePortalAccess } from "@/lib/auth.functions";
+import { setPortalIntent } from "@/lib/user-roles";
 
 export const Route = createFileRoute("/auth")({
   component: AuthPage,
@@ -25,6 +28,7 @@ function AuthPage() {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const { next } = Route.useSearch();
+  const ensurePractice = useServerFn(ensurePracticePortalAccess);
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -41,8 +45,13 @@ function AuthPage() {
   const afterAuthPath = next === "/ops" ? "/ops" : "/dashboard";
 
   useEffect(() => {
-    if (!loading && user) navigate({ to: afterAuthPath as "/dashboard" });
-  }, [user, loading, navigate, afterAuthPath]);
+    if (loading || !user) return;
+    setPortalIntent("accountant");
+    void ensurePractice().catch(() => {
+      /* non-fatal — role guard still uses firm ownership */
+    });
+    navigate({ to: afterAuthPath as "/dashboard" });
+  }, [user, loading, navigate, afterAuthPath, ensurePractice]);
 
   const handle = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -82,6 +91,8 @@ function AuthPage() {
             .from("user_roles")
             .insert({ user_id: data.user.id, role: "firm_admin" });
         }
+        setPortalIntent("accountant");
+        await ensurePractice().catch(() => undefined);
         toast.success("Account created");
         navigate({ to: afterAuthPath as "/dashboard" });
       } else {
@@ -118,6 +129,8 @@ function AuthPage() {
         } catch {
           // provisioning failure is non-fatal — user proceeds to dashboard regardless
         }
+        setPortalIntent("accountant");
+        await ensurePractice().catch(() => undefined);
         toast.success("Welcome back");
         navigate({ to: afterAuthPath as "/dashboard" });
       }

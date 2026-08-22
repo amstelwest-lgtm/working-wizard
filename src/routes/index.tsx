@@ -163,13 +163,26 @@ function LandingPage() {
      signed in with the unlock flag still set). */
   useEffect(() => {
     if (loading || !user) return;
-    let goOps = false;
-    try {
-      goOps = sessionStorage.getItem(OPS_UNLOCK_KEY) === "1";
-    } catch {
-      /* ignore */
-    }
-    navigate({ to: goOps ? "/ops" : "/app" });
+    let cancelled = false;
+    void (async () => {
+      let goOps = false;
+      try {
+        goOps = sessionStorage.getItem(OPS_UNLOCK_KEY) === "1";
+      } catch {
+        /* ignore */
+      }
+      if (goOps) {
+        if (!cancelled) navigate({ to: "/ops" });
+        return;
+      }
+      const { resolvePostLoginPath, setPortalIntent } = await import("@/lib/user-roles");
+      setPortalIntent("owner");
+      const path = await resolvePostLoginPath(user.id);
+      if (!cancelled) navigate({ to: path });
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [user, loading, navigate]);
 
   /* ── Landing theme: keep data-landing; restore prior theme on leave ── */
@@ -655,7 +668,20 @@ function LandingPage() {
       }
       // replace: true so the signed-in redirect effect cannot bounce us to /app
       // after a successful Lighthouse unlock.
-      void navigate({ to: goOps ? "/ops" : "/app", replace: true });
+      if (goOps) {
+        void navigate({ to: "/ops", replace: true });
+      } else {
+        const { data: auth } = await supabase.auth.getUser();
+        const uid = auth.user?.id;
+        if (uid) {
+          const { resolvePostLoginPath, setPortalIntent } = await import("@/lib/user-roles");
+          setPortalIntent("owner");
+          const path = await resolvePostLoginPath(uid);
+          void navigate({ to: path, replace: true });
+        } else {
+          void navigate({ to: "/app", replace: true });
+        }
+      }
     } catch (err: unknown) {
       setSiError(err instanceof Error ? err.message : "Sign in failed");
     } finally {

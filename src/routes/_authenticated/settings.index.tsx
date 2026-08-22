@@ -50,12 +50,10 @@ function SettingsPage() {
 
   useEffect(() => {
     if (!user) return;
-    void supabase
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", user.id)
-      .maybeSingle()
-      .then(({ data }) => setRole(data?.role ?? null));
+    void import("@/lib/user-roles").then(async ({ resolvePortalRoles }) => {
+      const portal = await resolvePortalRoles(user.id);
+      setRole(portal.primaryRole);
+    });
   }, [user]);
 
   const backTo = isAccountant ? "/dashboard" : "/app";
