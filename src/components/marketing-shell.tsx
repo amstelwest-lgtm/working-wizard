@@ -32,10 +32,16 @@ export function MarketingShell({
           MIL<span>Ō</span>N
         </a>
         <span className="mk-top-spacer" />
+        <a className="mk-top-link mk-top-hide-sm" href="/for-owners">
+          For owners
+        </a>
+        <a className="mk-top-link mk-top-hide-sm" href="/for-accountants">
+          For accountants
+        </a>
         <a className="mk-top-link" href="/faq">
           Questions
         </a>
-        <a className="mk-top-link" href="/#register">
+        <a className="mk-top-cta" href="/#register">
           Start free
         </a>
       </header>
