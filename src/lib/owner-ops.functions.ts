@@ -289,7 +289,7 @@ export const getOwnerOpsDashboard = createServerFn({ method: "GET" })
           { id: "crm", label: "Lead CRM + import", status: "next" },
           { id: "sequences", label: "AI email sequences (Resend)", status: "planned" },
           { id: "scoring", label: "Fit scoring (accountant vs owner)", status: "planned" },
-          { id: "inbox", label: "Reply assist + booking links", status: "planned" },
+          { id: "inbox", label: "Reply assist (email correspondence)", status: "planned" },
         ],
       },
       migrationHint,

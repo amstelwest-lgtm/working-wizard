@@ -1,10 +1,13 @@
 /**
  * Milōn Lighthouse — founder lead-generation and outreach engine.
  *
- * Funnel: sourced → researched → contacted → replied → meeting → trial →
- * activated → won. Every touch is AI-drafted, owner-approved, then sent via
+ * Funnel: sourced → researched → contacted → replied → conversation (email) →
+ * trial → activated → won. The `meeting` stage is an email thread, not a
+ * booked call. Every touch is AI-drafted, owner-approved, then sent via
  * Resend. The last CTA in every sequence is the tracked free-trial link, so
- * the funnel always terminates at a Milōn signup.
+ * the funnel always terminates at a Milōn signup. Calendar booking is
+ * optional and off by default — the sales motion is email correspondence so
+ * it can run around a day job.
  */
 
 import { createServerFn } from "@tanstack/react-start";
@@ -42,7 +45,7 @@ export const STAGE_LABELS: Record<LighthouseStage, string> = {
   researched: "Researched",
   contacted: "In sequence",
   replied: "Replied",
-  meeting: "Meeting set",
+  meeting: "In conversation",
   trial: "Free trial",
   activated: "Activated",
   won: "Paying",
@@ -322,9 +325,8 @@ async function firstReadyAsset(
 }
 
 /**
- * The console offers a booking link in two places — Settings and the
- * `booking_link` asset. Settings wins, but a ready asset is honoured so that
- * filling in the slot is never a silent no-op.
+ * Optional calendar URL. Used only when a reply is drafted with the "book"
+ * intent. Cold outreach never mentions it — the default sales motion is email.
  */
 async function resolveBookingUrl(
   admin: ReturnType<typeof adminLoose>,
@@ -695,7 +697,8 @@ Non-negotiable rules:
 - One clear ask per email. No stacked CTAs.
 - Never say "just following up" or "circling back" with nothing new.
 - Sound like one founder writing to one person, not a marketing department.
-- Subject lines: lowercase or sentence case, under 6 words, no clickbait, no "Re:" fakery.`;
+- Subject lines: lowercase or sentence case, under 6 words, no clickbait, no "Re:" fakery.
+- The sales motion is email correspondence, not calendar booking. Do not propose a call, a meeting, a Zoom, or a booking link unless a booking URL is explicitly provided in this prompt. Prefer they reply in writing or start the free trial.`;
 
 export const draftLighthouseTouch = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -749,7 +752,6 @@ export const draftLighthouseTouch = createServerFn({ method: "POST" })
     const senderName = String(settingsRaw.sender_name ?? DEFAULT_SETTINGS.senderName);
     const senderTitle = String(settingsRaw.sender_title ?? DEFAULT_SETTINGS.senderTitle);
     const trialDays = Number(settingsRaw.trial_days ?? DEFAULT_SETTINGS.trialDays);
-    const bookingUrl = await resolveBookingUrl(admin, settingsRaw);
 
     const trialLink = trialLinkFor((lead.trial_token as string | null) ?? null);
 
@@ -807,7 +809,7 @@ Call to action: ${ctaBrief}
 ${prior ? `ALREADY SENT TO THIS PERSON (do not repeat these angles or openings):\n\n${prior}` : "This is the first message to this person."}
 
 SIGN OFF as ${senderName}, ${senderTitle}.
-${bookingUrl ? `If they ask to talk, the booking link is ${bookingUrl}.` : ""}
+Do not offer a call, a meeting, or a calendar link in this email.
 
 Return ONLY JSON: {"subject": "...", "body": "..."}
 The body must be plain text with line breaks, already signed off, ready to send.`;
@@ -1197,9 +1199,10 @@ export const upsertLighthouseSettings = createServerFn({ method: "POST" })
 /**
  * Draft a reply to something a prospect actually wrote.
  *
- * This is where the objection FAQ and the booking link earn their keep: a
- * reply is the one message where pointing at an answers page or proposing a
- * time is the natural move rather than a stacked CTA.
+ * Default path is email correspondence: answer in writing, keep the thread
+ * going, or point at the trial. A booking link is only used when the owner
+ * has one configured *and* they pick the call intent — live meetings are
+ * optional, not the funnel.
  */
 export const draftLighthouseReply = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -1208,7 +1211,7 @@ export const draftLighthouseReply = createServerFn({ method: "POST" })
       .object({
         leadId: z.string().uuid(),
         theirMessage: z.string().min(1).max(6000),
-        intent: z.enum(["answer", "book", "trial"]).default("answer"),
+        intent: z.enum(["answer", "email", "book", "trial"]).default("answer"),
       })
       .parse(input),
   )
@@ -1254,14 +1257,17 @@ export const draftLighthouseReply = createServerFn({ method: "POST" })
       .map((p) => `Step ${p.step_no} (${p.angle}): ${p.subject}\n${p.body}`)
       .join("\n\n---\n\n");
 
+    const keepOnEmail =
+      "Stay on email. Answer fully in writing. Invite them to reply with the next question. Do not propose a call, a meeting, a Zoom, or a calendar slot. Do not invent times. The founder has a day job — live calls are not the sales motion.";
+
     const intentBrief =
-      data.intent === "book"
-        ? bookingUrl
-          ? `Propose a short call and give exactly this booking link: ${bookingUrl}`
-          : "Propose a short call and ask them to name two times that suit them. Do not invent a booking link."
+      data.intent === "book" && bookingUrl
+        ? `They asked to talk. Propose a short call and give exactly this booking link: ${bookingUrl}. If they would rather stay on email, that is also fine.`
         : data.intent === "trial"
           ? `Point them at the free ${trialDays}-day trial using exactly this link: ${trialLink ?? "(link pending)"}`
-          : "Answer what they actually asked, plainly and completely. Do not pivot to a pitch.";
+          : data.intent === "email" || data.intent === "book"
+            ? keepOnEmail
+            : "Answer what they actually asked, plainly and completely. Do not pivot to a pitch. Do not propose a call.";
 
     const supporting = [
       faq
