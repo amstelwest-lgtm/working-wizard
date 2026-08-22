@@ -23,6 +23,7 @@ import {
 } from "@/lib/cash-runway";
 import { hashFigures, latestSnapshotId, recordDelivery, warnIfDeliveryFailed, warnIfPdfArchiveFailed } from "@/lib/advisory-deliveries";
 import { useAuth } from "@/hooks/use-auth";
+import { useTrack } from "@/hooks/use-track";
 import { PlaybookDrawer } from "@/components/playbook-drawer";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { supabase } from "@/integrations/supabase/client";
@@ -1783,6 +1784,7 @@ function ReportsPage() {
   const navigate = useNavigate();
   const { profile, firmId } = useAccountantProfile();
   const { user } = useAuth();
+  const track = useTrack();
   const [isClient, setIsClient] = useState(false);
   const [settings, setSettings] = useState<Settings>({
     smeName: clientParam ?? "Acme Trading (Pty) Ltd",
@@ -1927,6 +1929,12 @@ function ReportsPage() {
       const blob = await GEN[report.key](settings, profile);
       triggerDownload(blob, makeSafeFilename(settings, report.filename));
       toast.success(`${report.name} downloaded.`);
+      track("report_downloaded", {
+        surface: "reports",
+        clientId,
+        firmId,
+        reportKey: report.key,
+      });
       await recordReportIssued(clientId);
       await logReportDelivery(report.key, blob);
     } catch (err) {
@@ -1948,6 +1956,12 @@ function ReportsPage() {
       const blob = await GEN[report.key](settings, profile);
       const url = URL.createObjectURL(blob);
       setPreviewState({ key: report.key, name: report.name, blobUrl: url, loading: false });
+      track("report_previewed", {
+        surface: "reports",
+        clientId,
+        firmId,
+        reportKey: report.key,
+      });
       return true;
     } catch (err) {
       toast.error(`Preview failed: ${(err as Error).message}`);

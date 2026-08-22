@@ -48,6 +48,7 @@ import {
 import { profileIndustryLabel } from "@/lib/profile-signals";
 import { AccountantOperatingProfile } from "@/components/accountant-operating-profile";
 import { NoteLayer } from "@/components/note-layer";
+import { useTrack } from "@/hooks/use-track";
 import { QboConnectCard } from "@/components/qbo-connect";
 import { effectiveCashRunwayWeeks, runwayWeeksFromCashflow } from "@/lib/cash-runway";
 import { countOpenQueriesForClient } from "@/lib/open-queries";
@@ -432,6 +433,7 @@ function ClientView() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { profile, firmId } = useAccountantProfile();
+  const track = useTrack();
 
   // QBO OAuth return (?qbo=connected|error) — callback lands here for accountants.
   useEffect(() => {
@@ -473,6 +475,15 @@ function ClientView() {
   const [client, setClient] = useState<Client | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<ActiveTab>("ratios");
+  useEffect(() => {
+    track("tab_viewed", {
+      tab: activeTab,
+      surface: "accountant_portal",
+      clientId,
+      firmId,
+      path: `/clients/${clientId}`,
+    });
+  }, [activeTab, clientId, firmId, track]);
   const [finOpen, setFinOpen] = useState(true); // collapsible open by default
   const [profitFinOpen, setProfitFinOpen] = useState(true);
   const [autosaveStatus, setAutosaveStatus] = useState<"idle" | "saving" | "saved">("idle");
@@ -985,9 +996,14 @@ function ClientView() {
       );
       setClient((c) => (c ? { ...c, financials_updated_at: financialsUpdatedAt } : c));
       toast.success(`Financials saved for ${periodLabel}`);
+      track("financials_uploaded", {
+        surface: "accountant_portal",
+        clientId,
+        firmId,
+      });
       setUploadOpen(false);
     },
-    [clientId, effectiveRunway],
+    [clientId, effectiveRunway, firmId, track],
   );
 
   // ── Deliverables bar actions ──────────────────────────────────────────────
@@ -1181,7 +1197,13 @@ function ClientView() {
     setDrawerRatioName(ratioName);
     setDrawerTier(tier);
     setDrawerOpen(true);
-  }, []);
+    track("playbook_opened", {
+      surface: "accountant_portal",
+      clientId,
+      firmId,
+      ratioName,
+    });
+  }, [clientId, firmId, track]);
 
   // ── Report navigation ─────────────────────────────────────────────────────
 
@@ -1544,7 +1566,15 @@ function ClientView() {
               <button
                 key={m}
                 type="button"
-                onClick={() => setViewMode(m)}
+                onClick={() => {
+                  setViewMode(m);
+                  track("view_mode_toggled", {
+                    mode: m,
+                    surface: "accountant_portal",
+                    clientId,
+                    firmId,
+                  });
+                }}
                 style={{
                   borderRadius: 999,
                   padding: "5px 18px",
