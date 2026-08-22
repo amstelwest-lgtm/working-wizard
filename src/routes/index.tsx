@@ -401,10 +401,10 @@ function LandingPage() {
           q: "Roughly, your annual turnover?",
           hint: "This sets your peer group.",
           opts: [
-            ["🌱", "Under R1m"],
-            ["🌿", "R1m – R5m"],
-            ["🌳", "R5m – R20m"],
-            ["🌲", "R20m+"],
+            ["🌑", "Under R1m"],
+            ["🌓", "R1m – R5m"],
+            ["🌔", "R5m – R20m"],
+            ["🌕", "R20m+"],
           ],
           key: "size",
           reward: "✦ Constellation complete.",
@@ -469,7 +469,7 @@ function LandingPage() {
         ],
         "❓": [
           "profit clarity",
-          "You're working hard but flying blind on whether it's actually profitable. <b>MILŌN turns your numbers into one health score and 31 plain-language ratios — so you know, every week, if the harvest is real.</b>",
+          "You're working hard but flying blind on whether it's actually profitable. <b>MILŌN turns your numbers into one health score and 31 plain-language ratios — so you know, every week, whether the profit is real.</b>",
         ],
         "⛓": [
           "debt pressure",
