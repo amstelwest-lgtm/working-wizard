@@ -1735,7 +1735,7 @@ function LandingPage() {
             <span className="eyebrow">The MILŌN Method</span>
             <h2>Four pillars. One score. No excuses.</h2>
             <p className="sub">
-              Every business has four financial organs. MILŌN scores each one every time you upload
+              Every business runs on four forces. MILŌN scores each one every time you upload
               financials, and tells you exactly which is dragging your orbit.
             </p>
           </div>
@@ -1758,11 +1758,11 @@ function LandingPage() {
             </div>
             <div className="pillar-card">
               <div className="node" />
-              <div className="metaphor">The River</div>
+              <div className="metaphor">The Orbit</div>
               <h3>Cash Flow</h3>
               <p>
                 Operating cash, 13-week forecast, debtor days, creditor days, and cash conversion
-                cycle.
+                cycle — the motion that keeps you from falling in.
               </p>
               <div className="score">
                 <span>Demo</span>
@@ -1774,11 +1774,11 @@ function LandingPage() {
             </div>
             <div className="pillar-card warn">
               <div className="node" />
-              <div className="metaphor">The Skeleton</div>
+              <div className="metaphor">The Mass</div>
               <h3>Asset Productivity</h3>
               <p>
-                Working capital, inventory turns, fixed-asset efficiency — how well the structure
-                bears weight.
+                Working capital, inventory turns, fixed-asset efficiency — everything you own, and
+                how hard it works.
               </p>
               <div className="score">
                 <span>Demo</span>
@@ -1790,11 +1790,11 @@ function LandingPage() {
             </div>
             <div className="pillar-card">
               <div className="node" />
-              <div className="metaphor">The Backbone</div>
+              <div className="metaphor">The Gravity</div>
               <h3>Financing & Solvency</h3>
               <p>
-                Debt-to-equity, interest cover, gearing, leverage — the load-bearing structure of
-                your business.
+                Debt-to-equity, interest cover, gearing, leverage — the force holding it all
+                together, or pulling it in.
               </p>
               <div className="score">
                 <span>Demo</span>
