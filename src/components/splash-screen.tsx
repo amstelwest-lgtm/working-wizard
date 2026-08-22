@@ -30,7 +30,7 @@ export function SplashScreen() {
       }}
     >
       <img
-        src="/milon-centaur.png"
+        src="/milon-centaur.svg"
         alt=""
         style={{
           height: "clamp(140px, 22vw, 220px)",

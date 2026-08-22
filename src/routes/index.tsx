@@ -401,10 +401,10 @@ function LandingPage() {
           q: "Roughly, your annual turnover?",
           hint: "This sets your peer group.",
           opts: [
-            ["🌱", "Under R1m"],
-            ["🌿", "R1m – R5m"],
-            ["🌳", "R5m – R20m"],
-            ["🌲", "R20m+"],
+            ["🌑", "Under R1m"],
+            ["🌓", "R1m – R5m"],
+            ["🌔", "R5m – R20m"],
+            ["🌕", "R20m+"],
           ],
           key: "size",
           reward: "✦ Constellation complete.",
@@ -469,7 +469,7 @@ function LandingPage() {
         ],
         "❓": [
           "profit clarity",
-          "You're working hard but flying blind on whether it's actually profitable. <b>MILŌN turns your numbers into one health score and 31 plain-language ratios — so you know, every week, if the harvest is real.</b>",
+          "You're working hard but flying blind on whether it's actually profitable. <b>MILŌN turns your numbers into one health score and 31 plain-language ratios — so you know, every week, whether the profit is real.</b>",
         ],
         "⛓": [
           "debt pressure",
@@ -1319,22 +1319,7 @@ function LandingPage() {
               setMobileNavOpen(false);
             }}
           >
-            <svg viewBox="0 0 40 40" fill="none" height="34" width="34">
-              <circle cx="20" cy="20" r="18" stroke="url(#ng1)" strokeWidth="1.4" />
-              <path
-                d="M11 27 L17 13 L23 22 L27 11"
-                stroke="url(#ng1)"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              <defs>
-                <linearGradient id="ng1" x1="0" y1="0" x2="40" y2="40">
-                  <stop stopColor="#fdee79" />
-                  <stop offset="1" stopColor="#ac8400" />
-                </linearGradient>
-              </defs>
-            </svg>
+            <img src="/milon-centaur.svg" alt="" width={24} height={34} />
             <span className="logo-word gold-text">MILŌN</span>
           </a>
           <button
@@ -1750,7 +1735,7 @@ function LandingPage() {
             <span className="eyebrow">The MILŌN Method</span>
             <h2>Four pillars. One score. No excuses.</h2>
             <p className="sub">
-              Every business has four financial organs. MILŌN scores each one every time you upload
+              Every business runs on four forces. MILŌN scores each one every time you upload
               financials, and tells you exactly which is dragging your orbit.
             </p>
           </div>
@@ -1773,11 +1758,11 @@ function LandingPage() {
             </div>
             <div className="pillar-card">
               <div className="node" />
-              <div className="metaphor">The River</div>
+              <div className="metaphor">The Orbit</div>
               <h3>Cash Flow</h3>
               <p>
                 Operating cash, 13-week forecast, debtor days, creditor days, and cash conversion
-                cycle.
+                cycle — the motion that keeps you from falling in.
               </p>
               <div className="score">
                 <span>Demo</span>
@@ -1789,11 +1774,11 @@ function LandingPage() {
             </div>
             <div className="pillar-card warn">
               <div className="node" />
-              <div className="metaphor">The Skeleton</div>
+              <div className="metaphor">The Mass</div>
               <h3>Asset Productivity</h3>
               <p>
-                Working capital, inventory turns, fixed-asset efficiency — how well the structure
-                bears weight.
+                Working capital, inventory turns, fixed-asset efficiency — everything you own, and
+                how hard it works.
               </p>
               <div className="score">
                 <span>Demo</span>
@@ -1805,11 +1790,11 @@ function LandingPage() {
             </div>
             <div className="pillar-card">
               <div className="node" />
-              <div className="metaphor">The Backbone</div>
+              <div className="metaphor">The Gravity</div>
               <h3>Financing & Solvency</h3>
               <p>
-                Debt-to-equity, interest cover, gearing, leverage — the load-bearing structure of
-                your business.
+                Debt-to-equity, interest cover, gearing, leverage — the force holding it all
+                together, or pulling it in.
               </p>
               <div className="score">
                 <span>Demo</span>

@@ -137,7 +137,7 @@ html[data-landing="1"] nav.scrolled{border-bottom-color:var(--line);background:c
 html[data-landing="1"] nav .wrap{display:flex;align-items:center;justify-content:space-between;height:72px;transition:height .4s var(--ease)}
 html[data-landing="1"] nav.scrolled .wrap{height:62px}
 html[data-landing="1"] .logo{display:flex;align-items:center;gap:12px;text-decoration:none;color:var(--ink)}
-html[data-landing="1"] .logo svg{height:34px;width:auto}
+html[data-landing="1"] .logo svg,html[data-landing="1"] .logo img{height:34px;width:auto}
 html[data-landing="1"] .logo-word{font-weight:800;letter-spacing:.32em;font-size:18px}
 html[data-landing="1"] nav .links{display:flex;gap:28px;align-items:center;font-size:13.5px;letter-spacing:.06em}
 html[data-landing="1"] nav .links a{color:var(--ink-dim);text-decoration:none;transition:color .2s;position:relative}
