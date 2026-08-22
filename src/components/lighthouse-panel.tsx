@@ -43,8 +43,7 @@ import {
   type LighthouseStage,
 } from "@/lib/lighthouse.functions";
 
-const inputCls =
-  "h-10 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-sm text-slate-100 outline-none placeholder:text-slate-600 focus:border-amber-500/50";
+const inputCls = "ops-input";
 
 const BOARD_STAGES: LighthouseStage[] = [
   "sourced",
@@ -111,15 +110,15 @@ export function LighthousePanel() {
 
   if (busy && !dash) {
     return (
-      <div className="flex items-center gap-2 py-16 text-sm text-slate-400">
-        <Loader2 className="h-4 w-4 animate-spin text-amber-400" /> Loading Lighthouse…
+      <div className="flex items-center gap-2 py-16 text-sm text-[var(--ops-ink-dim)]">
+        <Loader2 className="h-4 w-4 animate-spin text-[var(--ops-amber)]" /> Loading Lighthouse…
       </div>
     );
   }
 
   if (err && !dash) {
     return (
-      <div className="rounded-2xl border border-red-500/30 bg-red-500/5 p-5 text-sm text-red-200">
+      <div className="rounded-2xl border border-[var(--ops-danger-border)] bg-[var(--ops-danger-bg)] p-5 text-sm text-[var(--ops-danger-ink)]">
         {err}
       </div>
     );
@@ -129,7 +128,7 @@ export function LighthousePanel() {
   return (
     <div>
       {dash.migrationHint && (
-        <div className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+        <div className="mb-4 rounded-xl border border-[var(--ops-amber-border)] bg-[var(--ops-amber-soft)] px-4 py-3 text-sm text-[var(--ops-amber)]">
           {dash.migrationHint}
         </div>
       )}
@@ -157,25 +156,25 @@ export function LighthousePanel() {
       {(!dash.capability.aiConfigured || !dash.capability.emailConfigured) && (
         <div className="mb-4 flex flex-wrap gap-2 text-[11px]">
           {!dash.capability.aiConfigured && (
-            <span className="rounded-full border border-amber-500/30 px-3 py-1 text-amber-200">
+            <span className="rounded-full border border-[var(--ops-amber-border)] px-3 py-1 text-[var(--ops-amber)]">
               ANTHROPIC_API_KEY missing — AI drafting is off
             </span>
           )}
           {!dash.capability.emailConfigured && (
-            <span className="rounded-full border border-amber-500/30 px-3 py-1 text-amber-200">
+            <span className="rounded-full border border-[var(--ops-amber-border)] px-3 py-1 text-[var(--ops-amber)]">
               RESEND_API_KEY missing — sending is off, drafts still save
             </span>
           )}
         </div>
       )}
 
-      <div className="mb-4 text-[11px] text-slate-500">
+      <div className="mb-4 text-[11px] text-[var(--ops-ink-dim)]">
         Sends today:{" "}
         <span
           className={
             dash.sentToday >= dash.settings.dailySendCap
-              ? "font-semibold text-amber-300"
-              : "text-slate-300"
+              ? "font-semibold text-[var(--ops-amber)]"
+              : "text-[var(--ops-ink-soft)]"
           }
         >
           {dash.sentToday}/{dash.settings.dailySendCap}
@@ -185,8 +184,8 @@ export function LighthousePanel() {
 
       {/* Today */}
       {dash.dueToday.length > 0 && (
-        <div className="mb-5 rounded-2xl border border-amber-500/25 bg-amber-500/5 px-4 py-3">
-          <div className="mb-2 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.18em] text-amber-300">
+        <div className="mb-5 rounded-2xl border border-[var(--ops-amber-border)] bg-[var(--ops-amber-soft)] px-4 py-3">
+          <div className="mb-2 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--ops-amber)]">
             <CalendarClock className="h-3.5 w-3.5" /> Due today · {dash.dueToday.length}
           </div>
           <div className="flex flex-wrap gap-2">
@@ -194,7 +193,7 @@ export function LighthousePanel() {
               <button
                 key={d.leadId}
                 onClick={() => setOpenLeadId(d.leadId)}
-                className="rounded-full border border-white/10 bg-black/30 px-3 py-1 text-xs text-slate-200 hover:border-amber-400/40"
+                className="rounded-full border border-[var(--ops-line)] bg-[var(--ops-input)] px-3 py-1 text-xs text-[var(--ops-ink-soft)] hover:border-[var(--ops-amber-border)]"
               >
                 {d.leadName} · step {d.stepNo}
               </button>
@@ -211,8 +210,8 @@ export function LighthousePanel() {
             onClick={() => setTab(t)}
             className={`rounded-full px-4 py-1.5 text-xs font-semibold uppercase tracking-wider transition-colors ${
               tab === t
-                ? "bg-amber-500/20 text-amber-200"
-                : "border border-white/10 text-slate-400 hover:text-slate-200"
+                ? "bg-[var(--ops-amber-soft)] text-[var(--ops-amber)]"
+                : "border border-[var(--ops-line)] text-[var(--ops-ink-dim)] hover:text-[var(--ops-ink-soft)]"
             }`}
           >
             {t}
@@ -221,7 +220,7 @@ export function LighthousePanel() {
         <span className="flex-1" />
         <button
           onClick={() => setImportOpen((o) => !o)}
-          className="inline-flex h-9 items-center gap-1.5 rounded-full border border-white/15 px-3 text-xs font-semibold uppercase tracking-wider text-slate-300 hover:border-amber-400/40"
+          className="inline-flex h-9 items-center gap-1.5 rounded-full border border-[var(--ops-line-strong)] px-3 text-xs font-semibold uppercase tracking-wider text-[var(--ops-ink-soft)] hover:border-[var(--ops-amber-border)]"
         >
           <Upload className="h-3.5 w-3.5" /> Import
         </button>
@@ -233,7 +232,7 @@ export function LighthousePanel() {
         </button>
         <button
           onClick={() => void refresh()}
-          className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/15 text-slate-400 hover:text-amber-200"
+          className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[var(--ops-line-strong)] text-[var(--ops-ink-dim)] hover:text-[var(--ops-amber)]"
           title="Refresh"
         >
           <RefreshCw className={`h-3.5 w-3.5 ${busy ? "animate-spin" : ""}`} />
@@ -241,10 +240,10 @@ export function LighthousePanel() {
       </div>
 
       {importOpen && (
-        <div className="mb-4 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-          <p className="mb-2 text-xs text-slate-400">
+        <div className="mb-4 rounded-2xl border border-[var(--ops-line)] bg-[var(--ops-card)] p-4">
+          <p className="mb-2 text-xs text-[var(--ops-ink-dim)]">
             One lead per line:{" "}
-            <code className="text-amber-200/80">name, email, company, signal</code>. The signal is
+            <code className="text-[var(--ops-amber)]/80">name, email, company, signal</code>. The signal is
             the specific true reason you are reaching out — it drives the whole sequence.
           </p>
           <textarea
@@ -282,7 +281,7 @@ export function LighthousePanel() {
                   setImportBusy(false);
                 }
               }}
-              className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-amber-500/40 px-4 text-xs font-bold uppercase tracking-wider text-amber-200 hover:bg-amber-500/10 disabled:opacity-60"
+              className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-[var(--ops-amber-border)] px-4 text-xs font-bold uppercase tracking-wider text-[var(--ops-amber)] hover:bg-[var(--ops-amber-soft)] disabled:opacity-60"
             >
               {importBusy ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -375,15 +374,15 @@ function FunnelStat({
   gold?: boolean;
 }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-3">
-      <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
+    <div className="rounded-2xl border border-[var(--ops-line)] bg-[var(--ops-card)] px-3 py-3">
+      <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--ops-ink-dim)]">
         {label}
       </div>
       <div
-        className={`mt-1 text-xl font-bold tabular-nums ${gold ? "text-amber-300" : "text-slate-50"}`}
+        className={`mt-1 text-xl font-bold tabular-nums ${gold ? "text-[var(--ops-amber)]" : "text-[var(--ops-ink)]"}`}
       >
         {value}
-        {sub && <span className="ml-1.5 text-[11px] font-semibold text-slate-500">{sub}</span>}
+        {sub && <span className="ml-1.5 text-[11px] font-semibold text-[var(--ops-ink-dim)]">{sub}</span>}
       </div>
     </div>
   );
@@ -398,7 +397,7 @@ function PipelineBoard({
 }) {
   if (leads.length === 0) {
     return (
-      <div className="rounded-2xl border border-dashed border-white/15 p-10 text-center text-sm text-slate-500">
+      <div className="rounded-2xl border border-dashed border-[var(--ops-line-strong)] p-10 text-center text-sm text-[var(--ops-ink-dim)]">
         No leads yet. Import a list or add one — start with 20 well-researched names, not 500
         scraped ones.
       </div>
@@ -411,35 +410,35 @@ function PipelineBoard({
         return (
           <div key={stage} className="w-[240px] shrink-0">
             <div className="mb-2 flex items-baseline justify-between px-1">
-              <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">
+              <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--ops-ink-dim)]">
                 {STAGE_LABELS[stage]}
               </span>
-              <span className="text-[11px] tabular-nums text-slate-600">{inStage.length}</span>
+              <span className="text-[11px] tabular-nums text-[var(--ops-ink-faint)]">{inStage.length}</span>
             </div>
             <div className="space-y-2">
               {inStage.map((l) => (
                 <button
                   key={l.id}
                   onClick={() => onOpen(l.id)}
-                  className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5 text-left transition-colors hover:border-amber-400/40"
+                  className="w-full rounded-xl border border-[var(--ops-line)] bg-[var(--ops-card)] px-3 py-2.5 text-left transition-colors hover:border-[var(--ops-amber-border)]"
                 >
-                  <div className="truncate text-sm font-semibold text-slate-100">
+                  <div className="truncate text-sm font-semibold text-[var(--ops-ink)]">
                     {l.name || l.email || "Unnamed"}
                   </div>
-                  <div className="truncate text-[11px] text-slate-500">
+                  <div className="truncate text-[11px] text-[var(--ops-ink-dim)]">
                     {l.company || "—"} · {l.persona === "accountant" ? "practice" : "owner"}
                   </div>
                   {l.signal && (
-                    <div className="mt-1 line-clamp-2 text-[11px] text-slate-400">{l.signal}</div>
+                    <div className="mt-1 line-clamp-2 text-[11px] text-[var(--ops-ink-dim)]">{l.signal}</div>
                   )}
-                  <div className="mt-1.5 flex items-center gap-2 text-[10px] text-slate-600">
+                  <div className="mt-1.5 flex items-center gap-2 text-[10px] text-[var(--ops-ink-faint)]">
                     <span>step {l.sequenceStep}/5</span>
                     {l.nextTouchOn && <span>· next {l.nextTouchOn}</span>}
                   </div>
                 </button>
               ))}
               {inStage.length === 0 && (
-                <div className="rounded-xl border border-dashed border-white/8 px-3 py-4 text-center text-[11px] text-slate-700">
+                <div className="rounded-xl border border-dashed border-[var(--ops-line)] px-3 py-4 text-center text-[11px] text-[var(--ops-ink-faint)]">
                   empty
                 </div>
               )}
@@ -477,7 +476,7 @@ function AddLeadForm({
 
   return (
     <form
-      className="mb-4 grid gap-2 rounded-2xl border border-white/10 bg-white/[0.03] p-4 sm:grid-cols-3"
+      className="mb-4 grid gap-2 rounded-2xl border border-[var(--ops-line)] bg-[var(--ops-card)] p-4 sm:grid-cols-3"
       onSubmit={async (e) => {
         e.preventDefault();
         setBusy(true);
@@ -550,7 +549,7 @@ function AddLeadForm({
         <button
           type="button"
           onClick={onCancel}
-          className="inline-flex h-10 items-center rounded-xl border border-white/15 px-4 text-xs font-semibold uppercase tracking-wider text-slate-400"
+          className="inline-flex h-10 items-center rounded-xl border border-[var(--ops-line-strong)] px-4 text-xs font-semibold uppercase tracking-wider text-[var(--ops-ink-dim)]"
         >
           Cancel
         </button>
@@ -562,32 +561,32 @@ function AddLeadForm({
 function Playbook({ dash }: { dash: LighthouseDashboard }) {
   return (
     <div className="space-y-5">
-      <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-slate-300">
-        <p className="font-semibold text-slate-100">How the funnel is built</p>
-        <p className="mt-1.5 text-slate-400">
+      <div className="rounded-2xl border border-[var(--ops-line)] bg-[var(--ops-card)] p-4 text-sm text-[var(--ops-ink-soft)]">
+        <p className="font-semibold text-[var(--ops-ink)]">How the funnel is built</p>
+        <p className="mt-1.5 text-[var(--ops-ink-dim)]">
           Five touches over roughly eighteen days with widening gaps. Each touch carries one
           distinct angle, stays short and plain-text, and never repeats a previous opening. Only
           touches four and five ask for the signup; the earlier ones earn the right to ask. The
           breakup email is deliberately the shortest — it consistently draws the highest reply rate.
         </p>
-        <p className="mt-1.5 text-slate-400">
+        <p className="mt-1.5 text-[var(--ops-ink-dim)]">
           Every sequence ends at the same destination: the tracked free-trial link, which lands the
           prospect on the Milōn signup form with attribution back to their lead record.
         </p>
       </div>
 
       {dash.sequences.length === 0 && (
-        <div className="rounded-2xl border border-dashed border-white/15 p-8 text-center text-sm text-slate-500">
+        <div className="rounded-2xl border border-dashed border-[var(--ops-line-strong)] p-8 text-center text-sm text-[var(--ops-ink-dim)]">
           Sequences load once the Lighthouse migration has been run.
         </div>
       )}
 
       {dash.sequences.map((seq) => (
-        <div key={seq.key} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+        <div key={seq.key} className="rounded-2xl border border-[var(--ops-line)] bg-[var(--ops-card)] p-4">
           <div className="mb-3 flex items-center gap-2">
-            <Target className="h-4 w-4 text-amber-400" />
-            <h3 className="text-sm font-bold text-slate-100">{seq.name}</h3>
-            <span className="rounded-full border border-white/10 px-2 py-0.5 text-[10px] uppercase tracking-wider text-slate-500">
+            <Target className="h-4 w-4 text-[var(--ops-amber)]" />
+            <h3 className="text-sm font-bold text-[var(--ops-ink)]">{seq.name}</h3>
+            <span className="rounded-full border border-[var(--ops-line)] px-2 py-0.5 text-[10px] uppercase tracking-wider text-[var(--ops-ink-dim)]">
               {seq.key}
             </span>
           </div>
@@ -597,34 +596,34 @@ function Playbook({ dash }: { dash: LighthouseDashboard }) {
               return (
                 <li
                   key={s.step}
-                  className="grid gap-2 rounded-xl border border-white/8 bg-black/20 px-3 py-3 sm:grid-cols-[auto_1fr]"
+                  className="grid gap-2 rounded-xl border border-[var(--ops-line)] bg-[var(--ops-card)] px-3 py-3 sm:grid-cols-[auto_1fr]"
                 >
                   <div className="flex items-start gap-2">
-                    <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-amber-500/15 text-[11px] font-bold text-amber-300">
+                    <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[var(--ops-amber-soft)] text-[11px] font-bold text-[var(--ops-amber)]">
                       {s.step}
                     </span>
-                    <span className="whitespace-nowrap text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                    <span className="whitespace-nowrap text-[11px] font-semibold uppercase tracking-wider text-[var(--ops-ink-dim)]">
                       day {s.day}
                     </span>
                   </div>
                   <div>
-                    <div className="text-sm font-semibold capitalize text-slate-100">
+                    <div className="text-sm font-semibold capitalize text-[var(--ops-ink)]">
                       {s.angle.replaceAll("_", " ")}
                     </div>
-                    <p className="mt-0.5 text-[12.5px] text-slate-400">{s.goal}</p>
+                    <p className="mt-0.5 text-[12.5px] text-[var(--ops-ink-dim)]">{s.goal}</p>
                     <div className="mt-1.5 flex flex-wrap gap-1.5 text-[10px]">
-                      <span className="rounded-full border border-white/10 px-2 py-0.5 text-slate-500">
+                      <span className="rounded-full border border-[var(--ops-line)] px-2 py-0.5 text-[var(--ops-ink-dim)]">
                         ≤ {s.max_words} words
                       </span>
-                      <span className="rounded-full border border-white/10 px-2 py-0.5 text-slate-500">
+                      <span className="rounded-full border border-[var(--ops-line)] px-2 py-0.5 text-[var(--ops-ink-dim)]">
                         cta: {s.cta.replaceAll("_", " ")}
                       </span>
                       {asset && (
                         <span
                           className={`rounded-full px-2 py-0.5 ${
                             asset.status === "ready"
-                              ? "bg-emerald-500/15 text-emerald-300"
-                              : "bg-amber-500/10 text-amber-300/80"
+                              ? "bg-[var(--ops-ok-bg)] text-[var(--ops-ok-ink)]"
+                              : "bg-[var(--ops-amber-soft)] text-[var(--ops-amber)]/80"
                           }`}
                         >
                           {asset.title} · {asset.status === "ready" ? "ready" : "placeholder"}
@@ -659,18 +658,18 @@ function AssetGrid({
 
   return (
     <div>
-      <p className="mb-3 text-sm text-slate-400">
+      <p className="mb-3 text-sm text-[var(--ops-ink-dim)]">
         Collateral slots referenced by the sequences. Anything still marked placeholder is simply
         left out of the email copy — the drafter is told not to link to something that does not
         exist.
       </p>
       {awaitingReview.length > 0 && (
-        <div className="mb-4 rounded-2xl border border-sky-500/30 bg-sky-500/5 px-4 py-3 text-sm text-sky-100">
+        <div className="mb-4 rounded-2xl border border-[var(--ops-sky-border)] bg-[var(--ops-sky-bg)] px-4 py-3 text-sm text-[var(--ops-sky-ink)]">
           <p className="font-semibold">
             {awaitingReview.length} {awaitingReview.length === 1 ? "page is" : "pages are"} live and
             waiting on you.
           </p>
-          <p className="mt-1 text-[13px] text-sky-200/80">
+          <p className="mt-1 text-[13px] text-[var(--ops-sky-ink)]">
             Read each one, then flip it to ready. Until you do, no email links to it — the copy just
             makes the point in a sentence instead.
           </p>
@@ -681,7 +680,7 @@ function AssetGrid({
                 href={a.url ?? "#"}
                 target="_blank"
                 rel="noreferrer"
-                className="rounded-full border border-sky-400/30 px-3 py-1 text-[11px] font-semibold text-sky-100 hover:bg-sky-500/10"
+                className="rounded-full border border-[var(--ops-sky-border)] px-3 py-1 text-[11px] font-semibold text-[var(--ops-sky-ink)] hover:bg-[var(--ops-sky-bg)]"
               >
                 Read {a.title} →
               </a>
@@ -694,7 +693,7 @@ function AssetGrid({
           <AssetCard key={a.key} asset={a} onSave={onSave} />
         ))}
         {dash.assets.length === 0 && (
-          <div className="rounded-2xl border border-dashed border-white/15 p-8 text-center text-sm text-slate-500 md:col-span-2">
+          <div className="rounded-2xl border border-dashed border-[var(--ops-line-strong)] p-8 text-center text-sm text-[var(--ops-ink-dim)] md:col-span-2">
             Assets appear once the Lighthouse migration has been run.
           </div>
         )}
@@ -719,22 +718,22 @@ function AssetCard({
   const [busy, setBusy] = useState(false);
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+    <div className="rounded-2xl border border-[var(--ops-line)] bg-[var(--ops-card)] p-4">
       <div className="flex items-start justify-between gap-2">
         <div>
           <div className="flex items-center gap-2">
-            <FileVideo className="h-3.5 w-3.5 text-amber-400" />
-            <span className="text-sm font-semibold text-slate-100">{asset.title}</span>
+            <FileVideo className="h-3.5 w-3.5 text-[var(--ops-amber)]" />
+            <span className="text-sm font-semibold text-[var(--ops-ink)]">{asset.title}</span>
           </div>
-          <p className="mt-1 text-[12px] text-slate-500">{asset.purpose}</p>
+          <p className="mt-1 text-[12px] text-[var(--ops-ink-dim)]">{asset.purpose}</p>
         </div>
         <span
           className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
             status === "ready"
-              ? "bg-emerald-500/15 text-emerald-300"
+              ? "bg-[var(--ops-ok-bg)] text-[var(--ops-ok-ink)]"
               : status === "in_progress"
-                ? "bg-sky-500/15 text-sky-300"
-                : "bg-white/5 text-slate-500"
+                ? "bg-[var(--ops-sky-bg)] text-[var(--ops-sky-ink)]"
+                : "bg-[var(--ops-card)] text-[var(--ops-ink-dim)]"
           }`}
         >
           {status.replaceAll("_", " ")}
@@ -768,19 +767,19 @@ function AssetCard({
               setBusy(false);
             }
           }}
-          className="inline-flex h-10 items-center rounded-xl border border-amber-500/40 px-4 text-xs font-bold uppercase tracking-wider text-amber-200 hover:bg-amber-500/10 disabled:opacity-60"
+          className="inline-flex h-10 items-center rounded-xl border border-[var(--ops-amber-border)] px-4 text-xs font-bold uppercase tracking-wider text-[var(--ops-amber)] hover:bg-[var(--ops-amber-soft)] disabled:opacity-60"
         >
           {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Save"}
         </button>
       </div>
-      <p className="mt-2 text-[11px] text-slate-600">
+      <p className="mt-2 text-[11px] text-[var(--ops-ink-faint)]">
         {asset.usedIn ??
           (asset.usedInStep
             ? `Used in touch ${asset.usedInStep}`
             : "Not referenced by any sequence yet")}
       </p>
       {asset.status !== "ready" && (asset.url ?? "").trim() && (
-        <p className="mt-1 text-[11px] text-sky-300/80">
+        <p className="mt-1 text-[11px] text-[var(--ops-sky-ink)]/80">
           URL is set but the slot is not ready — nothing links here yet.
         </p>
       )}
@@ -808,8 +807,8 @@ function SettingsForm({
 
   return (
     <div className="grid gap-4 lg:grid-cols-2">
-      <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-        <h3 className="mb-3 text-xs font-bold uppercase tracking-[0.16em] text-slate-400">
+      <div className="rounded-2xl border border-[var(--ops-line)] bg-[var(--ops-card)] p-4">
+        <h3 className="mb-3 text-xs font-bold uppercase tracking-[0.16em] text-[var(--ops-ink-dim)]">
           Sender & offer
         </h3>
         <div className="grid gap-2 sm:grid-cols-2">
@@ -863,19 +862,19 @@ function SettingsForm({
           />
         </div>
         {!senderAddress.trim() && (
-          <p className="mt-2 text-[11px] text-amber-300/80">
+          <p className="mt-2 text-[11px] text-[var(--ops-amber)]/80">
             Without an address the footer still identifies you and carries the unsubscribe link, but
             a postal line is what most spam filters expect on cold mail.
           </p>
         )}
         {!replyTo.trim() && (
-          <p className="mt-1 text-[11px] text-amber-300/80">
+          <p className="mt-1 text-[11px] text-[var(--ops-amber)]/80">
             Without a reply-to, replies go to the From address. Set this to the inbox you actually
             watch.
           </p>
         )}
         {!bookingUrl.trim() && (
-          <p className="mt-1 text-[11px] text-slate-500">
+          <p className="mt-1 text-[11px] text-[var(--ops-ink-dim)]">
             Booking link is optional until someone replies and wants a call — then the reply drafter
             can offer it.
           </p>
@@ -901,14 +900,14 @@ function SettingsForm({
               setBusy(false);
             }
           }}
-          className="mt-3 inline-flex h-10 items-center rounded-xl border border-amber-500/40 px-4 text-xs font-bold uppercase tracking-wider text-amber-200 hover:bg-amber-500/10 disabled:opacity-60"
+          className="mt-3 inline-flex h-10 items-center rounded-xl border border-[var(--ops-amber-border)] px-4 text-xs font-bold uppercase tracking-wider text-[var(--ops-amber)] hover:bg-[var(--ops-amber-soft)] disabled:opacity-60"
         >
           {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Save settings"}
         </button>
       </div>
 
-      <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-slate-400">
-        <h3 className="mb-3 text-xs font-bold uppercase tracking-[0.16em] text-slate-400">
+      <div className="rounded-2xl border border-[var(--ops-line)] bg-[var(--ops-card)] p-4 text-sm text-[var(--ops-ink-dim)]">
+        <h3 className="mb-3 text-xs font-bold uppercase tracking-[0.16em] text-[var(--ops-ink-dim)]">
           Deliverability guardrails
         </h3>
         <ul className="space-y-1.5">
@@ -924,11 +923,11 @@ function SettingsForm({
             the sequence and suppresses the address platform-wide.
           </li>
           <li>
-            Wire Resend webhooks to <code className="text-amber-200/80">/api/resend/webhook</code>{" "}
+            Wire Resend webhooks to <code className="text-[var(--ops-amber)]/80">/api/resend/webhook</code>{" "}
             for bounces and complaints — without that, a hard bounce never stops the sequence.
           </li>
         </ul>
-        <p className="mt-3 text-[11px] text-slate-600">
+        <p className="mt-3 text-[11px] text-[var(--ops-ink-faint)]">
           Site used for trial links: {dash.capability.siteUrl}
         </p>
       </div>
@@ -984,38 +983,38 @@ function LeadDrawer({
 
   return (
     <div
-      className="fixed inset-0 z-[80] flex justify-end bg-black/70 backdrop-blur-sm"
+      className="fixed inset-0 z-[80] flex justify-end bg-black/50 backdrop-blur-sm"
       onClick={onClose}
     >
       <div
-        className="flex h-full w-full max-w-2xl flex-col overflow-y-auto border-l border-white/10 bg-[#0b0b12] p-5"
+        className="flex h-full w-full max-w-2xl flex-col overflow-y-auto border-l border-[var(--ops-line)] bg-[var(--ops-bg-elevated)] p-5"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-4 flex items-start justify-between gap-3">
           <div>
-            <h2 className="text-xl font-bold text-slate-50">
+            <h2 className="text-xl font-bold text-[var(--ops-ink)]">
               {lead.name || lead.email || "Unnamed lead"}
             </h2>
-            <p className="text-sm text-slate-500">
+            <p className="text-sm text-[var(--ops-ink-dim)]">
               {lead.company || "—"} · {lead.persona === "accountant" ? "practice" : "owner"}
               {lead.city ? ` · ${lead.city}` : ""}
             </p>
             {lead.signal && (
-              <p className="mt-1.5 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-[12.5px] text-slate-300">
+              <p className="mt-1.5 rounded-lg border border-[var(--ops-line)] bg-[var(--ops-card)] px-3 py-2 text-[12.5px] text-[var(--ops-ink-soft)]">
                 Signal: {lead.signal}
               </p>
             )}
           </div>
           <button
             onClick={onClose}
-            className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-white/15 text-slate-400 hover:text-slate-100"
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-[var(--ops-line-strong)] text-[var(--ops-ink-dim)] hover:text-[var(--ops-ink)]"
           >
             <X className="h-4 w-4" />
           </button>
         </div>
 
         {lead.doNotContact && (
-          <div className="mb-4 rounded-xl border border-red-500/30 bg-red-500/5 px-3 py-2.5 text-[12.5px] text-red-200">
+          <div className="mb-4 rounded-xl border border-[var(--ops-danger-border)] bg-[var(--ops-danger-bg)] px-3 py-2.5 text-[12.5px] text-[var(--ops-danger-ink)]">
             <span className="font-semibold">Unsubscribed</span>
             {lead.optedOutAt ? ` on ${lead.optedOutAt.slice(0, 10)}` : ""} — drafting and sending
             are both disabled for this lead, and any unsent drafts were skipped.
@@ -1033,8 +1032,8 @@ function LeadDrawer({
               }}
               className={`rounded-full px-3 py-1 text-[11px] font-semibold transition-colors ${
                 lead.stage === s
-                  ? "bg-amber-500/20 text-amber-200"
-                  : "border border-white/10 text-slate-500 hover:text-slate-200"
+                  ? "bg-[var(--ops-amber-soft)] text-[var(--ops-amber)]"
+                  : "border border-[var(--ops-line)] text-[var(--ops-ink-dim)] hover:text-[var(--ops-ink-soft)]"
               }`}
             >
               {STAGE_LABELS[s]}
@@ -1044,23 +1043,23 @@ function LeadDrawer({
 
         {/* Trial link */}
         {lead.trialLink && (
-          <div className="mb-4 rounded-xl border border-amber-500/25 bg-amber-500/5 px-3 py-2.5">
-            <div className="mb-1 text-[10px] font-bold uppercase tracking-[0.16em] text-amber-300">
+          <div className="mb-4 rounded-xl border border-[var(--ops-amber-border)] bg-[var(--ops-amber-soft)] px-3 py-2.5">
+            <div className="mb-1 text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--ops-amber)]">
               Tracked trial link — the end of the funnel
             </div>
             <div className="flex items-center gap-2">
-              <code className="flex-1 truncate text-[11px] text-slate-300">{lead.trialLink}</code>
+              <code className="flex-1 truncate text-[11px] text-[var(--ops-ink-soft)]">{lead.trialLink}</code>
               <button
                 onClick={() => {
                   void navigator.clipboard?.writeText(lead.trialLink ?? "");
                   toast.success("Trial link copied");
                 }}
-                className="inline-flex h-8 items-center gap-1 rounded-lg border border-white/15 px-2.5 text-[11px] text-slate-300 hover:border-amber-400/40"
+                className="inline-flex h-8 items-center gap-1 rounded-lg border border-[var(--ops-line-strong)] px-2.5 text-[11px] text-[var(--ops-ink-soft)] hover:border-[var(--ops-amber-border)]"
               >
                 <Copy className="h-3 w-3" /> Copy
               </button>
             </div>
-            <p className="mt-1 text-[11px] text-slate-500">
+            <p className="mt-1 text-[11px] text-[var(--ops-ink-dim)]">
               {lead.trialClickedAt
                 ? `Clicked ${lead.trialClickedAt.slice(0, 10)}`
                 : "Not clicked yet"}
@@ -1073,13 +1072,13 @@ function LeadDrawer({
         <div className="mb-4">
           <button
             onClick={() => setReplyOpen((o) => !o)}
-            className="inline-flex h-9 items-center gap-1.5 rounded-full border border-white/15 px-3 text-xs font-semibold uppercase tracking-wider text-slate-300 hover:border-amber-400/40"
+            className="inline-flex h-9 items-center gap-1.5 rounded-full border border-[var(--ops-line-strong)] px-3 text-xs font-semibold uppercase tracking-wider text-[var(--ops-ink-soft)] hover:border-[var(--ops-amber-border)]"
           >
             <MessageSquare className="h-3.5 w-3.5" />
             {replyOpen ? "Close reply helper" : "They replied — draft an answer"}
           </button>
           {replyOpen && (
-            <div className="mt-2 rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+            <div className="mt-2 rounded-2xl border border-[var(--ops-line)] bg-[var(--ops-card)] p-3">
               <textarea
                 className={`${inputCls} min-h-[100px] resize-y py-2`}
                 placeholder="Paste what they wrote back. The draft answers their actual question, and may link the objection FAQ or your booking link when those are ready."
@@ -1119,7 +1118,7 @@ function LeadDrawer({
                       setReplying(false);
                     }
                   }}
-                  className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-amber-500/40 px-4 text-xs font-bold uppercase tracking-wider text-amber-200 hover:bg-amber-500/10 disabled:opacity-50"
+                  className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-[var(--ops-amber-border)] px-4 text-xs font-bold uppercase tracking-wider text-[var(--ops-amber)] hover:bg-[var(--ops-amber-soft)] disabled:opacity-50"
                 >
                   {replying ? (
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -1150,19 +1149,19 @@ function LeadDrawer({
                   onClick={() => setActiveStep(n)}
                   className={`rounded-lg px-3 py-1.5 text-[11px] font-semibold transition-colors ${
                     activeStep === n
-                      ? "bg-white/10 text-slate-100"
-                      : "text-slate-500 hover:text-slate-300"
+                      ? "bg-[var(--ops-amber-soft)] text-[var(--ops-ink)]"
+                      : "text-[var(--ops-ink-dim)] hover:text-[var(--ops-ink-soft)]"
                   }`}
                 >
                   {n > stepCount ? "reply" : n}
                   {t?.status === "sent" && (
-                    <Check className="ml-1 inline h-3 w-3 text-emerald-400" />
+                    <Check className="ml-1 inline h-3 w-3 text-[var(--ops-ok-ink)]" />
                   )}
                 </button>
               );
             })}
         </div>
-        <p className="mb-3 text-[11px] text-slate-500">
+        <p className="mb-3 text-[11px] text-[var(--ops-ink-dim)]">
           {STEP_HINT[activeStep] ?? "Reply — answer what they asked, one ask at most"}
         </p>
 
@@ -1199,7 +1198,7 @@ function LeadDrawer({
                 setDrafting(false);
               }
             }}
-            className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-amber-500/40 px-4 text-xs font-bold uppercase tracking-wider text-amber-200 hover:bg-amber-500/10 disabled:opacity-50"
+            className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-[var(--ops-amber-border)] px-4 text-xs font-bold uppercase tracking-wider text-[var(--ops-amber)] hover:bg-[var(--ops-amber-soft)] disabled:opacity-50"
           >
             {drafting ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -1233,30 +1232,30 @@ function LeadDrawer({
           {lead.email && (
             <a
               href={`mailto:${lead.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`}
-              className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-white/15 px-4 text-xs font-semibold uppercase tracking-wider text-slate-300 hover:border-amber-400/40"
+              className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-[var(--ops-line-strong)] px-4 text-xs font-semibold uppercase tracking-wider text-[var(--ops-ink-soft)] hover:border-[var(--ops-amber-border)]"
             >
               <Mail className="h-3.5 w-3.5" /> Open in mail
             </a>
           )}
         </div>
 
-        {existing?.error && <p className="mt-2 text-[12px] text-red-300">{existing.error}</p>}
+        {existing?.error && <p className="mt-2 text-[12px] text-[var(--ops-danger-ink)]">{existing.error}</p>}
 
-        <p className="mt-2 text-[11px] text-slate-600">
+        <p className="mt-2 text-[11px] text-[var(--ops-ink-faint)]">
           A sender line and an unsubscribe link are appended automatically at send time, so they do
           not eat into the word budget and cannot be edited away by accident.
         </p>
 
         {/* Opt-out */}
         {lead.optOutLink && !lead.doNotContact && (
-          <div className="mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-white/10 bg-white/[0.02] px-3 py-2.5">
-            <code className="flex-1 truncate text-[11px] text-slate-500">{lead.optOutLink}</code>
+          <div className="mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-[var(--ops-line)] bg-[var(--ops-card)] px-3 py-2.5">
+            <code className="flex-1 truncate text-[11px] text-[var(--ops-ink-dim)]">{lead.optOutLink}</code>
             <button
               onClick={() => {
                 void navigator.clipboard?.writeText(lead.optOutLink ?? "");
                 toast.success("Opt-out link copied");
               }}
-              className="inline-flex h-8 items-center gap-1 rounded-lg border border-white/15 px-2.5 text-[11px] text-slate-400 hover:border-amber-400/40"
+              className="inline-flex h-8 items-center gap-1 rounded-lg border border-[var(--ops-line-strong)] px-2.5 text-[11px] text-[var(--ops-ink-dim)] hover:border-[var(--ops-amber-border)]"
             >
               <Copy className="h-3 w-3" /> Copy
             </button>
@@ -1276,19 +1275,19 @@ function LeadDrawer({
                   toast.error(e instanceof Error ? e.message : "Could not record the opt-out");
                 }
               }}
-              className="inline-flex h-8 items-center gap-1 rounded-lg border border-red-500/30 px-2.5 text-[11px] font-semibold text-red-300 hover:bg-red-500/10"
+              className="inline-flex h-8 items-center gap-1 rounded-lg border border-[var(--ops-danger-border)] px-2.5 text-[11px] font-semibold text-[var(--ops-danger-ink)] hover:bg-[var(--ops-danger-bg)]"
             >
               <ShieldOff className="h-3 w-3" /> They asked to stop
             </button>
           </div>
         )}
 
-        <div className="mt-6 border-t border-white/10 pt-4">
-          <h3 className="mb-2 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">
+        <div className="mt-6 border-t border-[var(--ops-line)] pt-4">
+          <h3 className="mb-2 text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--ops-ink-dim)]">
             History
           </h3>
           {lead.touches.length === 0 ? (
-            <p className="text-sm text-slate-600">Nothing sent yet.</p>
+            <p className="text-sm text-[var(--ops-ink-faint)]">Nothing sent yet.</p>
           ) : (
             <ul className="space-y-1.5">
               {lead.touches
@@ -1299,10 +1298,10 @@ function LeadDrawer({
                     key={t.id}
                     className="flex items-baseline justify-between gap-3 text-[12.5px]"
                   >
-                    <span className="truncate text-slate-300">
+                    <span className="truncate text-[var(--ops-ink-soft)]">
                       {t.stepNo}. {t.subject || "(no subject)"}
                     </span>
-                    <span className="shrink-0 text-[11px] text-slate-600">
+                    <span className="shrink-0 text-[11px] text-[var(--ops-ink-faint)]">
                       {t.status}
                       {t.sentAt ? ` · ${t.sentAt.slice(0, 10)}` : ""}
                     </span>

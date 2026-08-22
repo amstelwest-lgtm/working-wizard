@@ -1,0 +1,100 @@
+/**
+ * Milōn Lighthouse /ops console — light + dark tokens.
+ *
+ * The ThemeToggle flips `html.dark`. These variables follow that, so the
+ * console is not locked to the hard-coded near-black it shipped with.
+ */
+
+.milon-ops {
+  --ops-bg: #f4f6f8;
+  --ops-bg-elevated: #ffffff;
+  --ops-ink: #0f172a;
+  --ops-ink-soft: #334155;
+  --ops-ink-dim: #64748b;
+  --ops-ink-faint: #94a3b8;
+  --ops-line: rgba(15, 23, 42, 0.1);
+  --ops-line-strong: rgba(15, 23, 42, 0.16);
+  --ops-card: rgba(15, 23, 42, 0.03);
+  --ops-input: #ffffff;
+  --ops-input-border: rgba(15, 23, 42, 0.14);
+  --ops-amber: #9a7200;
+  --ops-amber-soft: rgba(172, 132, 0, 0.12);
+  --ops-amber-border: rgba(172, 132, 0, 0.35);
+  --ops-glow: radial-gradient(ellipse at top, rgba(212, 175, 55, 0.14), transparent 55%);
+  --ops-danger-bg: #fff5f5;
+  --ops-danger-border: rgba(185, 28, 28, 0.25);
+  --ops-danger-ink: #991b1b;
+  --ops-sky-bg: rgba(14, 165, 233, 0.08);
+  --ops-sky-border: rgba(14, 165, 233, 0.28);
+  --ops-sky-ink: #0369a1;
+  --ops-ok-bg: rgba(16, 185, 129, 0.1);
+  --ops-ok-ink: #047857;
+  color: var(--ops-ink);
+  background: var(--ops-bg);
+  min-height: 100vh;
+}
+
+html.dark .milon-ops {
+  --ops-bg: #07070c;
+  --ops-bg-elevated: #0e0e16;
+  --ops-ink: #f1f5f9;
+  --ops-ink-soft: #e2e8f0;
+  --ops-ink-dim: #94a3b8;
+  --ops-ink-faint: #64748b;
+  --ops-line: rgba(255, 255, 255, 0.1);
+  --ops-line-strong: rgba(255, 255, 255, 0.15);
+  --ops-card: rgba(255, 255, 255, 0.03);
+  --ops-input: rgba(0, 0, 0, 0.3);
+  --ops-input-border: rgba(255, 255, 255, 0.1);
+  --ops-amber: #fbbf24;
+  --ops-amber-soft: rgba(245, 158, 11, 0.2);
+  --ops-amber-border: rgba(245, 158, 11, 0.4);
+  --ops-glow: radial-gradient(ellipse at top, rgba(212, 175, 55, 0.12), transparent 55%);
+  --ops-danger-bg: rgba(20, 12, 12, 1);
+  --ops-danger-border: rgba(239, 68, 68, 0.3);
+  --ops-danger-ink: #fca5a5;
+  --ops-sky-bg: rgba(14, 165, 233, 0.05);
+  --ops-sky-border: rgba(56, 189, 248, 0.3);
+  --ops-sky-ink: #e0f2fe;
+  --ops-ok-bg: rgba(16, 185, 129, 0.15);
+  --ops-ok-ink: #6ee7b7;
+}
+
+.milon-ops .ops-glow {
+  pointer-events: none;
+  position: fixed;
+  inset: 0;
+  background: var(--ops-glow);
+}
+
+.milon-ops .ops-panel {
+  border: 1px solid var(--ops-line);
+  background: var(--ops-card);
+  border-radius: 1rem;
+}
+
+.milon-ops .ops-input {
+  height: 2.5rem;
+  width: 100%;
+  border-radius: 0.75rem;
+  border: 1px solid var(--ops-input-border);
+  background: var(--ops-input);
+  padding: 0 0.75rem;
+  font-size: 0.875rem;
+  color: var(--ops-ink);
+  outline: none;
+}
+
+.milon-ops .ops-input::placeholder {
+  color: var(--ops-ink-faint);
+}
+
+.milon-ops .ops-input:focus {
+  border-color: var(--ops-amber-border);
+}
+
+.milon-ops textarea.ops-input {
+  height: auto;
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+}

@@ -32,6 +32,7 @@ import {
 } from "@/lib/owner-ops.functions";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { LighthousePanel } from "@/components/lighthouse-panel";
+import "@/styles/ops-console.css";
 
 export const Route = createFileRoute("/_authenticated/ops")({
   component: OwnerOpsPage,
@@ -161,9 +162,9 @@ function OwnerOpsPage() {
 
   if (authLoading || (unlocked && busy && !dash && !err)) {
     return (
-      <div className="grid min-h-screen place-items-center bg-[#07070c] text-slate-400">
+      <div className="milon-ops grid min-h-screen place-items-center text-[var(--ops-ink-dim)]">
         <div className="flex items-center gap-2 text-sm">
-          <Loader2 className="h-4 w-4 animate-spin text-amber-400" /> Loading ops…
+          <Loader2 className="h-4 w-4 animate-spin text-[var(--ops-amber)]" /> Loading ops…
         </div>
       </div>
     );
@@ -171,20 +172,20 @@ function OwnerOpsPage() {
 
   if (!unlocked) {
     return (
-      <div className="grid min-h-screen place-items-center bg-[#07070c] px-4 text-slate-200">
-        <div className="w-full max-w-md rounded-2xl border border-amber-500/20 bg-[#0e0e16] p-6 shadow-2xl">
-          <div className="mb-3 flex items-center gap-2 text-amber-400">
+      <div className="milon-ops grid min-h-screen place-items-center px-4 text-[var(--ops-ink-soft)]">
+        <div className="w-full max-w-md rounded-2xl border border-[var(--ops-amber-border)] bg-[var(--ops-bg-elevated)] p-6 shadow-2xl">
+          <div className="mb-3 flex items-center gap-2 text-[var(--ops-amber)]">
             <Lock className="h-5 w-5" />
             <span className="text-xs font-bold uppercase tracking-[0.22em]">Locked</span>
           </div>
-          <h1 className="font-serif text-2xl text-slate-50">Lighthouse</h1>
-          <p className="mt-2 text-sm text-slate-400">
+          <h1 className="font-serif text-2xl text-[var(--ops-ink)]">Lighthouse</h1>
+          <p className="mt-2 text-sm text-[var(--ops-ink-dim)]">
             You are signed in as the platform owner. Enter the operator passphrase to open the
             console — no trip back to the landing page needed.
           </p>
           <form className="mt-5 space-y-3" onSubmit={(e) => void submitUnlock(e)}>
             <div>
-              <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">
+              <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--ops-ink-dim)]">
                 Passphrase
               </label>
               <input
@@ -194,10 +195,10 @@ function OwnerOpsPage() {
                 value={unlockPass}
                 onChange={(e) => setUnlockPass(e.target.value)}
                 placeholder="Operator passphrase"
-                className="h-11 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-sm text-slate-100 outline-none placeholder:text-slate-600 focus:border-amber-500/50"
+                className="h-11 w-full rounded-xl border border-[var(--ops-line)] bg-[var(--ops-input)] px-3 text-sm text-[var(--ops-ink)] outline-none placeholder:text-[var(--ops-ink-faint)] focus:border-amber-500/50"
               />
             </div>
-            {unlockErr && <p className="text-sm text-red-300">{unlockErr}</p>}
+            {unlockErr && <p className="text-sm text-[var(--ops-danger-ink)]">{unlockErr}</p>}
             <button
               type="submit"
               disabled={unlockBusy || !unlockPass.trim()}
@@ -214,7 +215,7 @@ function OwnerOpsPage() {
           <div className="mt-5 flex flex-wrap gap-2">
             <Link
               to="/app"
-              className="inline-flex items-center gap-2 rounded-full border border-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-slate-400 hover:text-slate-200"
+              className="inline-flex items-center gap-2 rounded-full border border-[var(--ops-line)] px-4 py-2 text-xs font-semibold uppercase tracking-wider text-[var(--ops-ink-dim)] hover:text-[var(--ops-ink-soft)]"
             >
               <ArrowLeft className="h-3.5 w-3.5" /> Back to app
             </Link>
@@ -226,69 +227,69 @@ function OwnerOpsPage() {
 
   if (err && !dash) {
     return (
-      <div className="grid min-h-screen place-items-center bg-[#07070c] px-4 text-slate-200">
-        <div className="w-full max-w-lg rounded-2xl border border-red-500/30 bg-[#140c0c] p-6">
-          <h1 className="text-lg font-semibold text-red-300">Console cannot load</h1>
-          <p className="mt-2 text-sm text-slate-300 whitespace-pre-wrap">{err}</p>
+      <div className="milon-ops grid min-h-screen place-items-center px-4 text-[var(--ops-ink-soft)]">
+        <div className="w-full max-w-lg rounded-2xl border border-[var(--ops-danger-border)] bg-[var(--ops-danger-bg)] p-6">
+          <h1 className="text-lg font-semibold text-[var(--ops-danger-ink)]">Console cannot load</h1>
+          <p className="mt-2 text-sm text-[var(--ops-ink-soft)] whitespace-pre-wrap">{err}</p>
           {envDiag && (
-            <div className="mt-4 rounded-xl border border-white/10 bg-black/30 p-3 text-[12px] text-slate-400">
-              <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">
+            <div className="mt-4 rounded-xl border border-[var(--ops-line)] bg-[var(--ops-input)] p-3 text-[12px] text-[var(--ops-ink-dim)]">
+              <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--ops-ink-dim)]">
                 What the server can see
               </div>
               <ul className="space-y-1 font-mono">
                 <li>
                   SUPABASE_URL:{" "}
-                  <span className={envDiag.urlPresent ? "text-emerald-300" : "text-red-300"}>
+                  <span className={envDiag.urlPresent ? "text-[var(--ops-ok-ink)]" : "text-[var(--ops-danger-ink)]"}>
                     {envDiag.urlPresent ? `yes (${envDiag.urlFrom})` : "MISSING"}
                   </span>
                 </li>
                 <li>
                   SERVICE_ROLE:{" "}
                   <span
-                    className={envDiag.serviceRolePresent ? "text-emerald-300" : "text-red-300"}
+                    className={envDiag.serviceRolePresent ? "text-[var(--ops-ok-ink)]" : "text-[var(--ops-danger-ink)]"}
                   >
                     {envDiag.serviceRolePresent ? `yes (${envDiag.serviceRoleFrom})` : "MISSING"}
                   </span>
                 </li>
                 <li>
                   ANTHROPIC:{" "}
-                  <span className={envDiag.anthropic ? "text-emerald-300" : "text-amber-300"}>
+                  <span className={envDiag.anthropic ? "text-[var(--ops-ok-ink)]" : "text-[var(--ops-amber)]"}>
                     {envDiag.anthropic ? "yes" : "no"}
                   </span>
                 </li>
                 <li>
                   RESEND:{" "}
-                  <span className={envDiag.resend ? "text-emerald-300" : "text-amber-300"}>
+                  <span className={envDiag.resend ? "text-[var(--ops-ok-ink)]" : "text-[var(--ops-amber)]"}>
                     {envDiag.resend ? "yes" : "no"}
                   </span>
                 </li>
                 <li>
                   RESEND_WEBHOOK:{" "}
-                  <span className={envDiag.resendWebhook ? "text-emerald-300" : "text-amber-300"}>
+                  <span className={envDiag.resendWebhook ? "text-[var(--ops-ok-ink)]" : "text-[var(--ops-amber)]"}>
                     {envDiag.resendWebhook ? "yes" : "no"}
                   </span>
                 </li>
                 <li>
                   SITE_URL:{" "}
-                  <span className={envDiag.siteUrl ? "text-emerald-300" : "text-amber-300"}>
+                  <span className={envDiag.siteUrl ? "text-[var(--ops-ok-ink)]" : "text-[var(--ops-amber)]"}>
                     {envDiag.siteUrl ? "yes" : "no"}
                   </span>
                 </li>
               </ul>
-              <p className="mt-2 text-[11px] text-slate-500">{envDiag.hint}</p>
+              <p className="mt-2 text-[11px] text-[var(--ops-ink-dim)]">{envDiag.hint}</p>
             </div>
           )}
           <div className="mt-4 flex flex-wrap gap-3">
             <button
               type="button"
-              className="text-xs font-semibold uppercase tracking-wider text-amber-300"
+              className="text-xs font-semibold uppercase tracking-wider text-[var(--ops-amber)]"
               onClick={() => void refresh()}
             >
               Retry
             </button>
             <button
               type="button"
-              className="text-xs font-semibold uppercase tracking-wider text-slate-500"
+              className="text-xs font-semibold uppercase tracking-wider text-[var(--ops-ink-dim)]"
               onClick={() => navigate({ to: "/app" })}
             >
               Leave
@@ -302,25 +303,25 @@ function OwnerOpsPage() {
   if (!dash) return null;
 
   return (
-    <div className="min-h-screen bg-[#07070c] text-slate-100">
-      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(ellipse_at_top,_rgba(212,175,55,0.12),_transparent_55%)]" />
+    <div className="milon-ops">
+      <div className="ops-glow" />
       <div className="relative mx-auto max-w-6xl px-4 py-6 sm:px-6">
-        <header className="mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-4">
+        <header className="mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-[var(--ops-line)] pb-4">
           <div>
-            <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.28em] text-amber-400">
+            <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.28em] text-[var(--ops-amber)]">
               <Shield className="h-3.5 w-3.5" /> Platform owner
             </div>
-            <h1 className="mt-1 font-serif text-3xl tracking-tight text-slate-50">
+            <h1 className="mt-1 font-serif text-3xl tracking-tight text-[var(--ops-ink)]">
               Milōn Lighthouse
             </h1>
-            <p className="mt-1 text-xs text-slate-500">{dash.me.email}</p>
+            <p className="mt-1 text-xs text-[var(--ops-ink-dim)]">{dash.me.email}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <ThemeToggle />
             <button
               type="button"
               onClick={() => void refresh()}
-              className="inline-flex h-9 items-center gap-1.5 rounded-full border border-white/15 px-3 text-xs font-semibold uppercase tracking-wider text-slate-300 hover:border-amber-400/40 hover:text-amber-200"
+              className="inline-flex h-9 items-center gap-1.5 rounded-full border border-[var(--ops-line-strong)] px-3 text-xs font-semibold uppercase tracking-wider text-[var(--ops-ink-soft)] hover:border-[var(--ops-amber-border)] hover:text-[var(--ops-amber)]"
             >
               <RefreshCw className={`h-3.5 w-3.5 ${busy ? "animate-spin" : ""}`} /> Refresh
             </button>
@@ -336,14 +337,14 @@ function OwnerOpsPage() {
                   window.location.href = "/";
                 })
               }
-              className="inline-flex h-9 items-center rounded-full border border-white/15 px-3 text-xs font-semibold uppercase tracking-wider text-slate-400 hover:text-slate-200"
+              className="inline-flex h-9 items-center rounded-full border border-[var(--ops-line-strong)] px-3 text-xs font-semibold uppercase tracking-wider text-[var(--ops-ink-dim)] hover:text-[var(--ops-ink-soft)]"
             >
               Sign out
             </button>
           </div>
         </header>
 
-        <div className="mb-6 flex gap-2 border-b border-white/10">
+        <div className="mb-6 flex gap-2 border-b border-[var(--ops-line)]">
           {(
             [
               ["lighthouse", "Lighthouse — sales"],
@@ -356,8 +357,8 @@ function OwnerOpsPage() {
               onClick={() => setView(key)}
               className={`-mb-px border-b-2 px-1 pb-2.5 text-xs font-bold uppercase tracking-[0.16em] transition-colors ${
                 view === key
-                  ? "border-amber-400 text-amber-200"
-                  : "border-transparent text-slate-500 hover:text-slate-300"
+                  ? "border-amber-400 text-[var(--ops-amber)]"
+                  : "border-transparent text-[var(--ops-ink-dim)] hover:text-[var(--ops-ink-soft)]"
               }`}
             >
               {label}
@@ -370,15 +371,15 @@ function OwnerOpsPage() {
         {view === "platform" && (
           <>
             {dash.migrationHint && (
-              <div className="mb-5 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+              <div className="mb-5 rounded-xl border border-[var(--ops-amber-border)] bg-[var(--ops-amber-soft)] px-4 py-3 text-sm text-[var(--ops-amber)]">
                 {dash.migrationHint}
               </div>
             )}
 
             {/* Signups */}
             <section className="mb-8">
-              <h2 className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-slate-400">
-                <Users className="h-3.5 w-3.5 text-amber-400" /> Signups
+              <h2 className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-[var(--ops-ink-dim)]">
+                <Users className="h-3.5 w-3.5 text-[var(--ops-amber)]" /> Signups
               </h2>
               <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
                 <Stat label="Total users" value={String(dash.signups.totalUsers)} />
@@ -409,8 +410,8 @@ function OwnerOpsPage() {
 
             {/* Revenue */}
             <section className="mb-8">
-              <h2 className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-slate-400">
-                <Wallet className="h-3.5 w-3.5 text-amber-400" /> Revenue & payments
+              <h2 className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-[var(--ops-ink-dim)]">
+                <Wallet className="h-3.5 w-3.5 text-[var(--ops-amber)]" /> Revenue & payments
               </h2>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <Stat
@@ -421,13 +422,13 @@ function OwnerOpsPage() {
                 <Stat label="Pending this month" value={dash.revenue.pendingThisMonthLabel} />
                 <Stat label="YTD received" value={dash.revenue.receivedYtdLabel} />
               </div>
-              <p className="mt-2 text-[11px] text-slate-500">
+              <p className="mt-2 text-[11px] text-[var(--ops-ink-dim)]">
                 All-time received: {dash.revenue.allTimeReceivedLabel}. Billing isn’t live yet — log
                 cash here manually until Stripe/PayFast lands.
               </p>
 
               <form
-                className="mt-4 grid gap-2 rounded-2xl border border-white/10 bg-white/[0.03] p-4 sm:grid-cols-6"
+                className="mt-4 grid gap-2 rounded-2xl border border-[var(--ops-line)] bg-[var(--ops-card)] p-4 sm:grid-cols-6"
                 onSubmit={async (e) => {
                   e.preventDefault();
                   const amountZar = Number(payAmount);
@@ -517,9 +518,9 @@ function OwnerOpsPage() {
                 />
               </form>
 
-              <div className="mt-4 overflow-x-auto rounded-2xl border border-white/10">
+              <div className="mt-4 overflow-x-auto rounded-2xl border border-[var(--ops-line)]">
                 <table className="w-full min-w-[560px] text-left text-sm">
-                  <thead className="bg-white/[0.04] text-[10px] uppercase tracking-[0.16em] text-slate-500">
+                  <thead className="bg-[var(--ops-card)] text-[10px] uppercase tracking-[0.16em] text-[var(--ops-ink-dim)]">
                     <tr>
                       <th className="px-3 py-2">Date</th>
                       <th className="px-3 py-2">Amount</th>
@@ -531,20 +532,20 @@ function OwnerOpsPage() {
                   <tbody>
                     {dash.payments.length === 0 ? (
                       <tr>
-                        <td colSpan={5} className="px-3 py-6 text-center text-slate-500">
+                        <td colSpan={5} className="px-3 py-6 text-center text-[var(--ops-ink-dim)]">
                           No payments logged yet.
                         </td>
                       </tr>
                     ) : (
                       dash.payments.map((p) => (
-                        <tr key={p.id} className="border-t border-white/5">
-                          <td className="px-3 py-2 tabular-nums text-slate-300">{p.paidAt}</td>
-                          <td className="px-3 py-2 font-semibold text-amber-200">
+                        <tr key={p.id} className="border-t" style={{ borderColor: "var(--ops-line)" }}>
+                          <td className="px-3 py-2 tabular-nums text-[var(--ops-ink-soft)]">{p.paidAt}</td>
+                          <td className="px-3 py-2 font-semibold text-[var(--ops-amber)]">
                             {p.amountLabel}
                           </td>
-                          <td className="px-3 py-2 text-slate-300">{p.payerLabel ?? "—"}</td>
-                          <td className="px-3 py-2 text-slate-400">{p.planCode ?? "—"}</td>
-                          <td className="px-3 py-2 text-slate-400">{p.status}</td>
+                          <td className="px-3 py-2 text-[var(--ops-ink-soft)]">{p.payerLabel ?? "—"}</td>
+                          <td className="px-3 py-2 text-[var(--ops-ink-dim)]">{p.planCode ?? "—"}</td>
+                          <td className="px-3 py-2 text-[var(--ops-ink-dim)]">{p.status}</td>
                         </tr>
                       ))
                     )}
@@ -555,22 +556,23 @@ function OwnerOpsPage() {
 
             {/* Dev settings */}
             <section className="mb-8">
-              <h2 className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-slate-400">
-                <FlaskConical className="h-3.5 w-3.5 text-amber-400" /> Dev / pilot knobs
+              <h2 className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-[var(--ops-ink-dim)]">
+                <FlaskConical className="h-3.5 w-3.5 text-[var(--ops-amber)]" /> Dev / pilot knobs
               </h2>
               <div className="grid gap-4 lg:grid-cols-2">
-                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                  <p className="mb-3 text-xs text-slate-500">
-                    Stored in <code className="text-amber-200/80">milon_ops_settings</code>. Wire
+                <div className="rounded-2xl border border-[var(--ops-line)] bg-[var(--ops-card)] p-4">
+                  <p className="mb-3 text-xs text-[var(--ops-ink-dim)]">
+                    Stored in <code className="text-[var(--ops-amber)]/80">milon_ops_settings</code>. Wire
                     these into product gates next — toggles save immediately.
                   </p>
                   <div className="space-y-2">
                     {flagEntries.map(([key, on]) => (
                       <label
                         key={key}
-                        className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-white/5 px-3 py-2.5 hover:border-amber-500/20"
+                        className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border px-3 py-2.5 hover:border-amber-500/40"
+                          style={{ borderColor: "var(--ops-line)" }}
                       >
-                        <span className="text-sm text-slate-200">
+                        <span className="text-sm text-[var(--ops-ink-soft)]">
                           {FLAG_LABELS[key] ?? key.replaceAll("_", " ")}
                         </span>
                         <button
@@ -602,8 +604,8 @@ function OwnerOpsPage() {
                     ))}
                   </div>
                 </div>
-                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                  <label className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
+                <div className="rounded-2xl border border-[var(--ops-line)] bg-[var(--ops-card)] p-4">
+                  <label className="text-xs font-bold uppercase tracking-[0.16em] text-[var(--ops-ink-dim)]">
                     Pilot notes
                   </label>
                   <textarea
@@ -613,7 +615,7 @@ function OwnerOpsPage() {
                   />
                   <button
                     type="button"
-                    className="mt-2 inline-flex h-9 items-center rounded-full border border-amber-500/40 px-4 text-xs font-semibold uppercase tracking-wider text-amber-200 hover:bg-amber-500/10"
+                    className="mt-2 inline-flex h-9 items-center rounded-full border border-amber-500/40 px-4 text-xs font-semibold uppercase tracking-wider text-[var(--ops-amber)] hover:bg-amber-500/10"
                     onClick={async () => {
                       try {
                         await saveNotes({ data: { text: notes } });
@@ -629,18 +631,18 @@ function OwnerOpsPage() {
               </div>
             </section>
 
-            <section className="mb-10 rounded-2xl border border-white/10 bg-white/[0.03] p-5">
-              <h2 className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-slate-400">
-                <Sparkles className="h-3.5 w-3.5 text-amber-400" /> Sales engine
+            <section className="mb-10 rounded-2xl border border-[var(--ops-line)] bg-[var(--ops-card)] p-5">
+              <h2 className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-[var(--ops-ink-dim)]">
+                <Sparkles className="h-3.5 w-3.5 text-[var(--ops-amber)]" /> Sales engine
               </h2>
-              <p className="max-w-2xl text-sm text-slate-400">
+              <p className="max-w-2xl text-sm text-[var(--ops-ink-dim)]">
                 Lead generation, AI-drafted sequences, and the tracked free-trial funnel now live in
                 the Lighthouse tab above.
               </p>
               <button
                 type="button"
                 onClick={() => setView("lighthouse")}
-                className="mt-3 inline-flex h-9 items-center rounded-full border border-amber-500/40 px-4 text-xs font-semibold uppercase tracking-wider text-amber-200 hover:bg-amber-500/10"
+                className="mt-3 inline-flex h-9 items-center rounded-full border border-amber-500/40 px-4 text-xs font-semibold uppercase tracking-wider text-[var(--ops-amber)] hover:bg-amber-500/10"
               >
                 Open Lighthouse
               </button>
@@ -668,12 +670,12 @@ function Stat({
   gold?: boolean;
 }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
-      <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">
+    <div className="rounded-2xl border border-[var(--ops-line)] bg-[var(--ops-card)] px-4 py-3">
+      <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--ops-ink-dim)]">
         {label}
       </div>
       <div
-        className={`mt-1 text-2xl font-bold tabular-nums ${gold ? "text-amber-300" : "text-slate-50"}`}
+        className={`mt-1 text-2xl font-bold tabular-nums ${gold ? "text-[var(--ops-amber)]" : "text-[var(--ops-ink)]"}`}
       >
         {value}
       </div>
@@ -683,4 +685,4 @@ function Stat({
 }
 
 const inputCls =
-  "h-10 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-sm text-slate-100 outline-none placeholder:text-slate-600 focus:border-amber-500/50";
+  "h-10 w-full rounded-xl border border-[var(--ops-line)] bg-[var(--ops-input)] px-3 text-sm text-[var(--ops-ink)] outline-none placeholder:text-[var(--ops-ink-faint)] focus:border-amber-500/50";
