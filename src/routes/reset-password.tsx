@@ -59,15 +59,7 @@ function ResetPasswordPage() {
 
         {/* Logo */}
         <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:32 }}>
-          <svg viewBox="0 0 40 40" fill="none" height="30" width="30">
-            <circle cx="20" cy="20" r="18" stroke="url(#rp-ng1)" strokeWidth="1.4"/>
-            <path d="M11 27 L17 13 L23 22 L27 11" stroke="url(#rp-ng1)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-            <defs>
-              <linearGradient id="rp-ng1" x1="0" y1="0" x2="40" y2="40">
-                <stop stopColor="#fdee79"/><stop offset="1" stopColor="#ac8400"/>
-              </linearGradient>
-            </defs>
-          </svg>
+          <img src="/milon-centaur.svg" alt="" width={21} height={30}/>
           <span style={{ fontSize:18, fontWeight:700, letterSpacing:"0.04em", color:"#d4af37" }}>MILŌN</span>
         </div>
 

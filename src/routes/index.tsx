@@ -1319,22 +1319,7 @@ function LandingPage() {
               setMobileNavOpen(false);
             }}
           >
-            <svg viewBox="0 0 40 40" fill="none" height="34" width="34">
-              <circle cx="20" cy="20" r="18" stroke="url(#ng1)" strokeWidth="1.4" />
-              <path
-                d="M11 27 L17 13 L23 22 L27 11"
-                stroke="url(#ng1)"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              <defs>
-                <linearGradient id="ng1" x1="0" y1="0" x2="40" y2="40">
-                  <stop stopColor="#fdee79" />
-                  <stop offset="1" stopColor="#ac8400" />
-                </linearGradient>
-              </defs>
-            </svg>
+            <img src="/milon-centaur.svg" alt="" width={24} height={34} />
             <span className="logo-word gold-text">MILŌN</span>
           </a>
           <button
