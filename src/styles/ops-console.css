@@ -1,5 +1,5 @@
 /**
- * Milōn Lighthouse /ops console — light + dark tokens.
+ * Milōn Lighthouse /ops console — light + dark tokens + scenic backdrop.
  *
  * The ThemeToggle flips `html.dark`. These variables follow that, so the
  * console is not locked to the hard-coded near-black it shipped with.
@@ -7,70 +7,104 @@
 
 .milon-ops {
   --ops-bg: #f4f6f8;
-  --ops-bg-elevated: #ffffff;
+  --ops-bg-elevated: rgba(255, 255, 255, 0.88);
   --ops-ink: #0f172a;
   --ops-ink-soft: #334155;
-  --ops-ink-dim: #64748b;
-  --ops-ink-faint: #94a3b8;
-  --ops-line: rgba(15, 23, 42, 0.1);
-  --ops-line-strong: rgba(15, 23, 42, 0.16);
-  --ops-card: rgba(15, 23, 42, 0.03);
-  --ops-input: #ffffff;
-  --ops-input-border: rgba(15, 23, 42, 0.14);
-  --ops-amber: #9a7200;
-  --ops-amber-soft: rgba(172, 132, 0, 0.12);
-  --ops-amber-border: rgba(172, 132, 0, 0.35);
-  --ops-glow: radial-gradient(ellipse at top, rgba(212, 175, 55, 0.14), transparent 55%);
-  --ops-danger-bg: #fff5f5;
-  --ops-danger-border: rgba(185, 28, 28, 0.25);
+  --ops-ink-dim: #475569;
+  --ops-ink-faint: #64748b;
+  --ops-line: rgba(15, 23, 42, 0.12);
+  --ops-line-strong: rgba(15, 23, 42, 0.18);
+  --ops-card: rgba(255, 255, 255, 0.78);
+  --ops-input: rgba(255, 255, 255, 0.92);
+  --ops-input-border: rgba(15, 23, 42, 0.16);
+  --ops-amber: #8a6500;
+  --ops-amber-soft: rgba(172, 132, 0, 0.16);
+  --ops-amber-border: rgba(138, 101, 0, 0.4);
+  --ops-danger-bg: rgba(255, 245, 245, 0.92);
+  --ops-danger-border: rgba(185, 28, 28, 0.28);
   --ops-danger-ink: #991b1b;
-  --ops-sky-bg: rgba(14, 165, 233, 0.08);
-  --ops-sky-border: rgba(14, 165, 233, 0.28);
+  --ops-sky-bg: rgba(14, 165, 233, 0.12);
+  --ops-sky-border: rgba(14, 165, 233, 0.32);
   --ops-sky-ink: #0369a1;
-  --ops-ok-bg: rgba(16, 185, 129, 0.1);
+  --ops-ok-bg: rgba(16, 185, 129, 0.14);
   --ops-ok-ink: #047857;
+  --ops-scrim: linear-gradient(
+      180deg,
+      rgba(244, 246, 248, 0.82) 0%,
+      rgba(244, 246, 248, 0.72) 40%,
+      rgba(244, 246, 248, 0.88) 100%
+    ),
+    radial-gradient(ellipse at 18% 42%, rgba(15, 23, 42, 0.18), transparent 55%);
   color: var(--ops-ink);
   background: var(--ops-bg);
   min-height: 100vh;
+  position: relative;
+  isolation: isolate;
 }
 
 html.dark .milon-ops {
   --ops-bg: #07070c;
-  --ops-bg-elevated: #0e0e16;
+  --ops-bg-elevated: rgba(10, 10, 16, 0.9);
   --ops-ink: #f1f5f9;
   --ops-ink-soft: #e2e8f0;
   --ops-ink-dim: #94a3b8;
   --ops-ink-faint: #64748b;
-  --ops-line: rgba(255, 255, 255, 0.1);
-  --ops-line-strong: rgba(255, 255, 255, 0.15);
-  --ops-card: rgba(255, 255, 255, 0.03);
-  --ops-input: rgba(0, 0, 0, 0.3);
-  --ops-input-border: rgba(255, 255, 255, 0.1);
+  --ops-line: rgba(255, 255, 255, 0.12);
+  --ops-line-strong: rgba(255, 255, 255, 0.18);
+  --ops-card: rgba(8, 8, 14, 0.72);
+  --ops-input: rgba(0, 0, 0, 0.45);
+  --ops-input-border: rgba(255, 255, 255, 0.12);
   --ops-amber: #fbbf24;
-  --ops-amber-soft: rgba(245, 158, 11, 0.2);
-  --ops-amber-border: rgba(245, 158, 11, 0.4);
-  --ops-glow: radial-gradient(ellipse at top, rgba(212, 175, 55, 0.12), transparent 55%);
-  --ops-danger-bg: rgba(20, 12, 12, 1);
-  --ops-danger-border: rgba(239, 68, 68, 0.3);
+  --ops-amber-soft: rgba(245, 158, 11, 0.22);
+  --ops-amber-border: rgba(245, 158, 11, 0.45);
+  --ops-danger-bg: rgba(20, 12, 12, 0.92);
+  --ops-danger-border: rgba(239, 68, 68, 0.35);
   --ops-danger-ink: #fca5a5;
-  --ops-sky-bg: rgba(14, 165, 233, 0.05);
-  --ops-sky-border: rgba(56, 189, 248, 0.3);
+  --ops-sky-bg: rgba(14, 165, 233, 0.1);
+  --ops-sky-border: rgba(56, 189, 248, 0.35);
   --ops-sky-ink: #e0f2fe;
-  --ops-ok-bg: rgba(16, 185, 129, 0.15);
+  --ops-ok-bg: rgba(16, 185, 129, 0.18);
   --ops-ok-ink: #6ee7b7;
+  --ops-scrim: linear-gradient(
+      180deg,
+      rgba(7, 7, 12, 0.78) 0%,
+      rgba(7, 7, 12, 0.62) 45%,
+      rgba(7, 7, 12, 0.88) 100%
+    ),
+    radial-gradient(ellipse at 78% 55%, rgba(212, 175, 55, 0.16), transparent 50%);
+}
+
+/* Fixed scenic plane — lighthouse on the cliff, sun over the water */
+.milon-ops::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  background-color: var(--ops-bg);
+  background-image: url("/lighthouse-bg.jpg");
+  background-size: cover;
+  background-position: 30% 45%;
+  background-repeat: no-repeat;
+}
+
+.milon-ops::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: var(--ops-scrim);
 }
 
 .milon-ops .ops-glow {
-  pointer-events: none;
-  position: fixed;
-  inset: 0;
-  background: var(--ops-glow);
+  display: none;
 }
 
 .milon-ops .ops-panel {
   border: 1px solid var(--ops-line);
   background: var(--ops-card);
   border-radius: 1rem;
+  backdrop-filter: blur(10px);
 }
 
 .milon-ops .ops-input {
