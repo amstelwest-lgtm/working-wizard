@@ -28,6 +28,7 @@ import { Route as AuthenticatedDashboardRouteImport } from './routes/_authentica
 import { Route as AuthenticatedSettingsIndexRouteImport } from './routes/_authenticated/settings.index'
 import { Route as AuthenticatedReportsIndexRouteImport } from './routes/_authenticated/reports.index'
 import { Route as LovableEmailSuppressionRouteImport } from './routes/lovable/email/suppression'
+import { Route as ApiResendWebhookRouteImport } from './routes/api/resend/webhook'
 import { Route as ApiQboCallbackRouteImport } from './routes/api/qbo/callback'
 import { Route as AuthenticatedSettingsBrandRouteImport } from './routes/_authenticated/settings.brand'
 import { Route as AuthenticatedReportsDemoRouteImport } from './routes/_authenticated/reports.demo'
@@ -132,6 +133,11 @@ const LovableEmailSuppressionRoute = LovableEmailSuppressionRouteImport.update({
   path: '/lovable/email/suppression',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiResendWebhookRoute = ApiResendWebhookRouteImport.update({
+  id: '/api/resend/webhook',
+  path: '/api/resend/webhook',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiQboCallbackRoute = ApiQboCallbackRouteImport.update({
   id: '/api/qbo/callback',
   path: '/api/qbo/callback',
@@ -194,6 +200,7 @@ export interface FileRoutesByFullPath {
   '/reports/demo': typeof AuthenticatedReportsDemoRoute
   '/settings/brand': typeof AuthenticatedSettingsBrandRoute
   '/api/qbo/callback': typeof ApiQboCallbackRoute
+  '/api/resend/webhook': typeof ApiResendWebhookRoute
   '/lovable/email/suppression': typeof LovableEmailSuppressionRoute
   '/reports/': typeof AuthenticatedReportsIndexRoute
   '/settings/': typeof AuthenticatedSettingsIndexRoute
@@ -221,6 +228,7 @@ export interface FileRoutesByTo {
   '/reports/demo': typeof AuthenticatedReportsDemoRoute
   '/settings/brand': typeof AuthenticatedSettingsBrandRoute
   '/api/qbo/callback': typeof ApiQboCallbackRoute
+  '/api/resend/webhook': typeof ApiResendWebhookRoute
   '/lovable/email/suppression': typeof LovableEmailSuppressionRoute
   '/reports': typeof AuthenticatedReportsIndexRoute
   '/settings': typeof AuthenticatedSettingsIndexRoute
@@ -250,6 +258,7 @@ export interface FileRoutesById {
   '/_authenticated/reports/demo': typeof AuthenticatedReportsDemoRoute
   '/_authenticated/settings/brand': typeof AuthenticatedSettingsBrandRoute
   '/api/qbo/callback': typeof ApiQboCallbackRoute
+  '/api/resend/webhook': typeof ApiResendWebhookRoute
   '/lovable/email/suppression': typeof LovableEmailSuppressionRoute
   '/_authenticated/reports/': typeof AuthenticatedReportsIndexRoute
   '/_authenticated/settings/': typeof AuthenticatedSettingsIndexRoute
@@ -279,6 +288,7 @@ export interface FileRouteTypes {
     | '/reports/demo'
     | '/settings/brand'
     | '/api/qbo/callback'
+    | '/api/resend/webhook'
     | '/lovable/email/suppression'
     | '/reports/'
     | '/settings/'
@@ -306,6 +316,7 @@ export interface FileRouteTypes {
     | '/reports/demo'
     | '/settings/brand'
     | '/api/qbo/callback'
+    | '/api/resend/webhook'
     | '/lovable/email/suppression'
     | '/reports'
     | '/settings'
@@ -334,6 +345,7 @@ export interface FileRouteTypes {
     | '/_authenticated/reports/demo'
     | '/_authenticated/settings/brand'
     | '/api/qbo/callback'
+    | '/api/resend/webhook'
     | '/lovable/email/suppression'
     | '/_authenticated/reports/'
     | '/_authenticated/settings/'
@@ -358,6 +370,7 @@ export interface RootRouteChildren {
   LhUnsubscribeRoute: typeof LhUnsubscribeRoute
   TTokenRoute: typeof TTokenRoute
   ApiQboCallbackRoute: typeof ApiQboCallbackRoute
+  ApiResendWebhookRoute: typeof ApiResendWebhookRoute
   LovableEmailSuppressionRoute: typeof LovableEmailSuppressionRoute
   LovableEmailQueueProcessRoute: typeof LovableEmailQueueProcessRoute
   LovableEmailTransactionalPreviewRoute: typeof LovableEmailTransactionalPreviewRoute
@@ -499,6 +512,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LovableEmailSuppressionRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/resend/webhook': {
+      id: '/api/resend/webhook'
+      path: '/api/resend/webhook'
+      fullPath: '/api/resend/webhook'
+      preLoaderRoute: typeof ApiResendWebhookRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/qbo/callback': {
       id: '/api/qbo/callback'
       path: '/api/qbo/callback'
@@ -591,6 +611,7 @@ const rootRouteChildren: RootRouteChildren = {
   LhUnsubscribeRoute: LhUnsubscribeRoute,
   TTokenRoute: TTokenRoute,
   ApiQboCallbackRoute: ApiQboCallbackRoute,
+  ApiResendWebhookRoute: ApiResendWebhookRoute,
   LovableEmailSuppressionRoute: LovableEmailSuppressionRoute,
   LovableEmailQueueProcessRoute: LovableEmailQueueProcessRoute,
   LovableEmailTransactionalPreviewRoute: LovableEmailTransactionalPreviewRoute,

@@ -169,6 +169,20 @@ export function LighthousePanel() {
         </div>
       )}
 
+      <div className="mb-4 text-[11px] text-slate-500">
+        Sends today:{" "}
+        <span
+          className={
+            dash.sentToday >= dash.settings.dailySendCap
+              ? "font-semibold text-amber-300"
+              : "text-slate-300"
+          }
+        >
+          {dash.sentToday}/{dash.settings.dailySendCap}
+        </span>{" "}
+        (SAST day · hard stop when full)
+      </div>
+
       {/* Today */}
       {dash.dueToday.length > 0 && (
         <div className="mb-5 rounded-2xl border border-amber-500/25 bg-amber-500/5 px-4 py-3">
@@ -825,25 +839,25 @@ function SettingsForm({
           />
           <input
             className={`${inputCls} sm:col-span-2`}
-            placeholder="Booking link (Cal.com / Google) — kept in step with the booking_link asset"
+            placeholder="Booking link — https://cal.com/… or Google Appointments"
             value={bookingUrl}
             onChange={(e) => setBookingUrl(e.target.value)}
           />
           <input
             className={`${inputCls} sm:col-span-2`}
-            placeholder="Reply-to mailbox — where replies actually land"
+            placeholder="Reply-to — your real inbox, e.g. amstel.west@gmail.com"
             value={replyTo}
             onChange={(e) => setReplyTo(e.target.value)}
           />
           <input
             className={`${inputCls} sm:col-span-2`}
-            placeholder="Postal address for the email footer — required on cold mail"
+            placeholder="Postal address for the email footer — street, city, country"
             value={senderAddress}
             onChange={(e) => setSenderAddress(e.target.value)}
           />
           <input
             className={`${inputCls} sm:col-span-2`}
-            placeholder="Send window"
+            placeholder="Send window (reminder only — not enforced yet)"
             value={sendWindow}
             onChange={(e) => setSendWindow(e.target.value)}
           />
@@ -852,6 +866,18 @@ function SettingsForm({
           <p className="mt-2 text-[11px] text-amber-300/80">
             Without an address the footer still identifies you and carries the unsubscribe link, but
             a postal line is what most spam filters expect on cold mail.
+          </p>
+        )}
+        {!replyTo.trim() && (
+          <p className="mt-1 text-[11px] text-amber-300/80">
+            Without a reply-to, replies go to the From address. Set this to the inbox you actually
+            watch.
+          </p>
+        )}
+        {!bookingUrl.trim() && (
+          <p className="mt-1 text-[11px] text-slate-500">
+            Booking link is optional until someone replies and wants a call — then the reply drafter
+            can offer it.
           </p>
         )}
         <button
@@ -896,6 +922,10 @@ function SettingsForm({
           <li>
             Every send carries a sender line and a one-click unsubscribe header. Opting out stops
             the sequence and suppresses the address platform-wide.
+          </li>
+          <li>
+            Wire Resend webhooks to <code className="text-amber-200/80">/api/resend/webhook</code>{" "}
+            for bounces and complaints — without that, a hard bounce never stops the sequence.
           </li>
         </ul>
         <p className="mt-3 text-[11px] text-slate-600">

@@ -158,6 +158,8 @@ export type LighthouseDashboard = {
     emailConfigured: boolean;
     siteUrl: string;
   };
+  /** Sends already counted toward today's daily_send_cap (SAST calendar day). */
+  sentToday: number;
   migrationHint: string | null;
 };
 
@@ -221,6 +223,38 @@ function complianceFooter(opts: {
 function withComplianceFooter(body: string, footer: string): string {
   if (body.includes(FOOTER_MARK) || body.includes("/unsubscribe?lh=")) return body;
   return `${body.trimEnd()}\n\n${footer}`;
+}
+
+function sastDayBounds(now = new Date()): { startIso: string; endIso: string; label: string } {
+  // Cap is a calendar day in South Africa, not UTC midnight.
+  const fmt = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Africa/Johannesburg",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  const label = fmt.format(now); // YYYY-MM-DD
+  // Convert SAST midnight ↔ next midnight into UTC ISO.
+  const startIso = new Date(`${label}T00:00:00+02:00`).toISOString();
+  const endLocal = new Date(`${label}T00:00:00+02:00`);
+  endLocal.setUTCDate(endLocal.getUTCDate() + 1);
+  const endIso = endLocal.toISOString();
+  return { startIso, endIso, label };
+}
+
+async function countSentToday(admin: ReturnType<typeof adminLoose>): Promise<number> {
+  const { startIso, endIso } = sastDayBounds();
+  const { count, error } = await admin
+    .from("lighthouse_touches")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "sent")
+    .gte("sent_at", startIso)
+    .lt("sent_at", endIso);
+  if (error) {
+    // Fail closed on the cap check — better to block a send than blow past it.
+    throw new Error(`Could not check today's send count: ${error.message}`);
+  }
+  return count ?? 0;
 }
 
 function parseDraftJson(raw: string): { subject: string; body: string } | null {
@@ -383,6 +417,7 @@ export const getLighthouse = createServerFn({ method: "GET" })
           trialRatePct: null,
         },
         capability,
+        sentToday: 0,
         migrationHint: migrationHintFor(MIGRATION),
       };
       return empty;
@@ -505,6 +540,13 @@ export const getLighthouse = createServerFn({ method: "GET" })
         stepNo: Math.min(l.sequenceStep + 1, 5),
       }));
 
+    let sentToday = 0;
+    try {
+      sentToday = await countSentToday(admin);
+    } catch {
+      sentToday = 0;
+    }
+
     const dash: LighthouseDashboard = {
       leads,
       stageCounts,
@@ -524,6 +566,7 @@ export const getLighthouse = createServerFn({ method: "GET" })
         trialRatePct: contactedPlus ? Math.round((trialPlus / contactedPlus) * 1000) / 10 : null,
       },
       capability,
+      sentToday,
       migrationHint,
     };
     return dash;
@@ -893,6 +936,15 @@ export const sendLighthouseTouch = createServerFn({ method: "POST" })
     const senderName = String(sendSettings.sender_name ?? DEFAULT_SETTINGS.senderName);
     const senderAddress = String(sendSettings.sender_address ?? "");
     const replyTo = String(sendSettings.reply_to ?? "").trim();
+    const dailyCap = Number(sendSettings.daily_send_cap ?? DEFAULT_SETTINGS.dailySendCap);
+
+    // Enforce the daily send cap — previously this setting was decorative.
+    const sentToday = await countSentToday(admin);
+    if (sentToday >= dailyCap) {
+      throw new Error(
+        `Daily send cap reached (${sentToday}/${dailyCap} today, SAST). Raise the cap in Settings or wait until tomorrow.`,
+      );
+    }
 
     const bodyWithFooter = withComplianceFooter(
       data.body,
@@ -938,6 +990,10 @@ export const sendLighthouseTouch = createServerFn({ method: "POST" })
         ...(replyTo ? { reply_to: replyTo } : {}),
         subject: data.subject,
         text: bodyWithFooter,
+        tags: [
+          { name: "source", value: "lighthouse" },
+          { name: "touch_id", value: data.touchId },
+        ],
         headers: {
           // RFC 8058 one-click: mail clients show a native Unsubscribe control
           // and POST to the https target. Gmail and Yahoo bulk-sender rules
@@ -957,6 +1013,14 @@ export const sendLighthouseTouch = createServerFn({ method: "POST" })
       throw new Error(`Send failed — Resend ${res.status}: ${errText}`);
     }
 
+    let providerMessageId: string | null = null;
+    try {
+      const body = (await res.json()) as { id?: string };
+      providerMessageId = body.id ?? null;
+    } catch {
+      /* Resend usually returns { id }; missing id just weakens bounce matching */
+    }
+
     const now = new Date();
     const stepNo = Number(touch.step_no ?? 1);
 
@@ -968,6 +1032,7 @@ export const sendLighthouseTouch = createServerFn({ method: "POST" })
         status: "sent",
         sent_at: now.toISOString(),
         error: null,
+        ...(providerMessageId ? { provider_message_id: providerMessageId } : {}),
       })
       .eq("id", data.touchId);
 

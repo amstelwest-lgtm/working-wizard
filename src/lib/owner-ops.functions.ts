@@ -51,6 +51,7 @@ export const getOwnerOpsEnvStatus = createServerFn({ method: "GET" })
       ...status,
       anthropic: Boolean(process.env.ANTHROPIC_API_KEY),
       resend: Boolean(process.env.RESEND_API_KEY),
+      resendWebhook: Boolean(process.env.RESEND_WEBHOOK_SECRET),
       siteUrl: Boolean(process.env.SITE_URL || process.env.VITE_APP_URL),
     };
   });

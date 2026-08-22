@@ -75,6 +75,7 @@ function OwnerOpsPage() {
     hint: string;
     anthropic: boolean;
     resend: boolean;
+    resendWebhook: boolean;
     siteUrl: boolean;
   } | null>(null);
 
@@ -259,6 +260,12 @@ function OwnerOpsPage() {
                   RESEND:{" "}
                   <span className={envDiag.resend ? "text-emerald-300" : "text-amber-300"}>
                     {envDiag.resend ? "yes" : "no"}
+                  </span>
+                </li>
+                <li>
+                  RESEND_WEBHOOK:{" "}
+                  <span className={envDiag.resendWebhook ? "text-emerald-300" : "text-amber-300"}>
+                    {envDiag.resendWebhook ? "yes" : "no"}
                   </span>
                 </li>
                 <li>
