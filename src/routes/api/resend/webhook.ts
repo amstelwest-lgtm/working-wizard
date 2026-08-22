@@ -2,24 +2,35 @@
  * Resend → Milōn Lighthouse delivery webhooks.
  *
  * Endpoint: POST /api/resend/webhook
- * Events: email.bounced, email.complained, email.failed
+ *
+ * Safety:    email.bounced, email.complained, email.failed
+ * Signal:    email.delivered, email.clicked, email.received
  *
  * Setup in Resend → Webhooks:
  *   URL: https://www.milon.co.za/api/resend/webhook
- *   Events: email.bounced, email.complained, email.failed
+ *   Events: those six
  * Then put the signing secret in Vercel as RESEND_WEBHOOK_SECRET.
  */
 
 import { createFileRoute } from "@tanstack/react-router";
 import { createHmac, timingSafeEqual } from "node:crypto";
-import { applyLighthouseDeliveryEvent } from "@/lib/lighthouse-delivery.server";
+import {
+  applyLighthouseClicked,
+  applyLighthouseDelivered,
+  applyLighthouseDeliveryEvent,
+  applyLighthouseInbound,
+  extractEmail,
+} from "@/lib/lighthouse-delivery.server";
 
 type ResendEvent = {
   type?: string;
   data?: {
     email_id?: string;
     to?: string[] | string;
+    from?: string;
+    subject?: string;
     bounce?: { message?: string };
+    click?: { link?: string; timestamp?: string };
   };
 };
 
@@ -56,8 +67,8 @@ function verifySvix(
 
 function firstRecipient(to: string[] | string | undefined): string | null {
   if (!to) return null;
-  if (typeof to === "string") return to;
-  return to[0] ?? null;
+  if (typeof to === "string") return extractEmail(to);
+  return extractEmail(to[0]);
 }
 
 export const Route = createFileRoute("/api/resend/webhook")({
@@ -88,6 +99,38 @@ export const Route = createFileRoute("/api/resend/webhook")({
         }
 
         const type = String(event.type ?? "");
+        const email = firstRecipient(event.data?.to);
+        const messageId = event.data?.email_id ?? null;
+
+        if (type === "email.delivered") {
+          const result = await applyLighthouseDelivered({ email, messageId });
+          return Response.json({ ok: result.ok, leadsTouched: result.leadsTouched, reason: "delivered" });
+        }
+
+        if (type === "email.clicked") {
+          const result = await applyLighthouseClicked({
+            email,
+            messageId,
+            url: event.data?.click?.link ?? null,
+          });
+          return Response.json({
+            ok: result.ok,
+            leadsTouched: result.leadsTouched,
+            reason: "clicked",
+            kind: result.kind,
+          });
+        }
+
+        if (type === "email.received") {
+          const result = await applyLighthouseInbound({
+            from: event.data?.from ?? null,
+            to: firstRecipient(event.data?.to),
+            subject: event.data?.subject ?? null,
+            emailId: messageId,
+          });
+          return Response.json({ ok: result.ok, leadsTouched: result.leadsTouched, reason: "received" });
+        }
+
         const reason =
           type === "email.bounced"
             ? ("bounce" as const)
@@ -97,13 +140,9 @@ export const Route = createFileRoute("/api/resend/webhook")({
                 ? ("failed" as const)
                 : null;
 
-        // Acknowledge events we don't care about so Resend stops retrying.
         if (!reason) {
           return Response.json({ ok: true, ignored: type });
         }
-
-        const email = firstRecipient(event.data?.to);
-        const messageId = event.data?.email_id ?? null;
 
         const result = await applyLighthouseDeliveryEvent({
           email,

@@ -21,6 +21,7 @@ import { callClaudeMessages } from "@/lib/claude-messages";
 import { applyLighthouseOptOut } from "@/lib/lighthouse-optout.server";
 
 const MIGRATION = "20260820100000_milon_lighthouse.sql";
+const ENGAGEMENT_MIGRATION = "20260822210000_lighthouse_engagement.sql";
 
 export const LIGHTHOUSE_STAGES = [
   "sourced",
@@ -74,8 +75,20 @@ export type LighthouseLead = {
   doNotContact: boolean;
   optOutLink: string | null;
   optedOutAt: string | null;
+  lastClickedAt: string | null;
+  lastClickedUrl: string | null;
+  lastInboundAt: string | null;
+  inbound: LighthouseInbound[];
   createdAt: string;
   touches: LighthouseTouch[];
+};
+
+export type LighthouseInbound = {
+  id: string;
+  fromEmail: string;
+  subject: string | null;
+  body: string | null;
+  receivedAt: string;
 };
 
 export type LighthouseTouch = {
@@ -87,6 +100,9 @@ export type LighthouseTouch = {
   status: string;
   scheduledFor: string | null;
   sentAt: string | null;
+  deliveredAt: string | null;
+  clickedAt: string | null;
+  lastClickedUrl: string | null;
   error: string | null;
 };
 
@@ -375,6 +391,10 @@ function mapLead(row: Record<string, unknown>, touches: LighthouseTouch[]): Ligh
     doNotContact: Boolean(row.do_not_contact),
     optOutLink: optOutLinkFor((row.optout_token as string | null) ?? null),
     optedOutAt: (row.optout_at as string | null) ?? null,
+    lastClickedAt: (row.last_clicked_at as string | null) ?? null,
+    lastClickedUrl: (row.last_clicked_url as string | null) ?? null,
+    lastInboundAt: (row.last_inbound_at as string | null) ?? null,
+    inbound: [],
     createdAt: String(row.created_at ?? ""),
     touches,
   };
@@ -450,6 +470,9 @@ export const getLighthouse = createServerFn({ method: "GET" })
             status: String(t.status ?? "draft"),
             scheduledFor: (t.scheduled_for as string | null) ?? null,
             sentAt: (t.sent_at as string | null) ?? null,
+            deliveredAt: (t.delivered_at as string | null) ?? null,
+            clickedAt: (t.clicked_at as string | null) ?? null,
+            lastClickedUrl: (t.last_clicked_url as string | null) ?? null,
             error: (t.error as string | null) ?? null,
           });
           touchesByLead.set(leadId, list);
@@ -458,6 +481,34 @@ export const getLighthouse = createServerFn({ method: "GET" })
     }
 
     const leads = rows.map((r) => mapLead(r, touchesByLead.get(String(r.id)) ?? []));
+
+    if (ids.length) {
+      const { data: inboundRows, error: inboundErr } = await admin
+        .from("lighthouse_inbound")
+        .select("id, lead_id, from_email, subject, body, received_at")
+        .order("received_at", { ascending: false })
+        .limit(400);
+      if (inboundErr && missingRelation(inboundErr.message ?? "")) {
+        migrationHint = migrationHint ?? migrationHintFor(ENGAGEMENT_MIGRATION);
+      } else if (inboundRows) {
+        const inboundByLead = new Map<string, LighthouseInbound[]>();
+        for (const row of inboundRows as Array<Record<string, unknown>>) {
+          const leadId = String(row.lead_id ?? "");
+          const list = inboundByLead.get(leadId) ?? [];
+          list.push({
+            id: String(row.id),
+            fromEmail: String(row.from_email ?? ""),
+            subject: (row.subject as string | null) ?? null,
+            body: (row.body as string | null) ?? null,
+            receivedAt: String(row.received_at ?? ""),
+          });
+          inboundByLead.set(leadId, list);
+        }
+        for (const lead of leads) {
+          lead.inbound = inboundByLead.get(lead.id) ?? [];
+        }
+      }
+    }
 
     const stageCounts: Record<string, number> = {};
     for (const s of LIGHTHOUSE_STAGES) stageCounts[s] = 0;

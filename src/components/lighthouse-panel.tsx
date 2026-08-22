@@ -431,8 +431,17 @@ function PipelineBoard({
                   {l.signal && (
                     <div className="mt-1 line-clamp-2 text-[11px] text-[var(--ops-ink-dim)]">{l.signal}</div>
                   )}
-                  <div className="mt-1.5 flex items-center gap-2 text-[10px] text-[var(--ops-ink-faint)]">
+                  <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-[var(--ops-ink-faint)]">
                     <span>step {l.sequenceStep}/5</span>
+                    {l.lastInboundAt ? (
+                      <span className="text-[var(--ops-ok-ink)]">· inbox</span>
+                    ) : l.lastClickedAt ? (
+                      <span className="text-[var(--ops-amber)]">· clicked</span>
+                    ) : l.touches.some((t) => t.deliveredAt) ? (
+                      <span>· delivered</span>
+                    ) : l.touches.some((t) => t.sentAt) ? (
+                      <span>· sent</span>
+                    ) : null}
                     {l.nextTouchOn && <span>· next {l.nextTouchOn}</span>}
                   </div>
                 </button>
@@ -981,6 +990,13 @@ function LeadDrawer({
     setTouchId(t?.id ?? "");
   }, [activeStep, lead]);
 
+  useEffect(() => {
+    const latest = lead.inbound[0];
+    if (!latest?.body) return;
+    setTheirMessage((prev) => prev || latest.body || "");
+    setReplyOpen(true);
+  }, [lead.id, lead.inbound]);
+
   return (
     <div
       className="fixed inset-0 z-[80] flex justify-end bg-black/50 backdrop-blur-sm"
@@ -1068,6 +1084,24 @@ function LeadDrawer({
           </div>
         )}
 
+        {lead.inbound.length > 0 && (
+          <div className="mb-4 rounded-xl border border-[var(--ops-sky-border)] bg-[var(--ops-sky-bg)] px-3 py-2.5">
+            <div className="mb-1 text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--ops-sky-ink)]">
+              Inbox · {lead.inbound.length} {lead.inbound.length === 1 ? "reply" : "replies"}
+            </div>
+            <p className="text-[12.5px] font-semibold text-[var(--ops-ink)]">
+              {lead.inbound[0].subject || "(no subject)"}
+            </p>
+            <p className="mt-1 whitespace-pre-wrap text-[12.5px] text-[var(--ops-ink-soft)]">
+              {(lead.inbound[0].body ?? "").slice(0, 700) || "(body not fetched yet — run the engagement migration and keep RESEND_API_KEY set)"}
+            </p>
+            <p className="mt-1.5 text-[11px] text-[var(--ops-ink-dim)]">
+              From {lead.inbound[0].fromEmail}
+              {lead.inbound[0].receivedAt ? ` · ${lead.inbound[0].receivedAt.slice(0, 16).replace("T", " ")}` : ""}
+            </p>
+          </div>
+        )}
+
         {/* Reply helper — the one place the FAQ and booking link belong */}
         <div className="mb-4">
           <button
@@ -1075,13 +1109,13 @@ function LeadDrawer({
             className="inline-flex h-9 items-center gap-1.5 rounded-full border border-[var(--ops-line-strong)] px-3 text-xs font-semibold uppercase tracking-wider text-[var(--ops-ink-soft)] hover:border-[var(--ops-amber-border)]"
           >
             <MessageSquare className="h-3.5 w-3.5" />
-            {replyOpen ? "Close reply helper" : "They replied — draft an answer"}
+            {replyOpen ? "Close reply helper" : lead.inbound.length > 0 ? "Draft an answer" : "They replied — draft an answer"}
           </button>
           {replyOpen && (
             <div className="mt-2 rounded-2xl border border-[var(--ops-line)] bg-[var(--ops-card)] p-3">
               <textarea
                 className={`${inputCls} min-h-[100px] resize-y py-2`}
-                placeholder="Paste what they wrote back. The draft answers their actual question, and may link the objection FAQ or your booking link when those are ready."
+                placeholder="Their reply is pasted here when it lands in inbound. Otherwise paste what they wrote. The draft answers their actual question."
                 value={theirMessage}
                 onChange={(e) => setTheirMessage(e.target.value)}
               />
@@ -1154,7 +1188,7 @@ function LeadDrawer({
                   }`}
                 >
                   {n > stepCount ? "reply" : n}
-                  {t?.status === "sent" && (
+                  {(t?.clickedAt || t?.deliveredAt || t?.status === "sent") && (
                     <Check className="ml-1 inline h-3 w-3 text-[var(--ops-ok-ink)]" />
                   )}
                 </button>
@@ -1239,6 +1273,16 @@ function LeadDrawer({
           )}
         </div>
 
+        {existing && (existing.sentAt || existing.deliveredAt || existing.clickedAt) && (
+          <p className="mt-2 text-[11px] text-[var(--ops-ink-dim)]">
+            {existing.clickedAt
+              ? `Clicked${existing.lastClickedUrl ? ` ${existing.lastClickedUrl}` : ""}`
+              : existing.deliveredAt
+                ? "Delivered to their inbox"
+                : "Sent — waiting for delivery"}
+          </p>
+        )}
+
         {existing?.error && <p className="mt-2 text-[12px] text-[var(--ops-danger-ink)]">{existing.error}</p>}
 
         <p className="mt-2 text-[11px] text-[var(--ops-ink-faint)]">
@@ -1302,7 +1346,11 @@ function LeadDrawer({
                       {t.stepNo}. {t.subject || "(no subject)"}
                     </span>
                     <span className="shrink-0 text-[11px] text-[var(--ops-ink-faint)]">
-                      {t.status}
+                      {t.clickedAt
+                        ? "clicked"
+                        : t.deliveredAt
+                          ? "delivered"
+                          : t.status}
                       {t.sentAt ? ` · ${t.sentAt.slice(0, 10)}` : ""}
                     </span>
                   </li>
