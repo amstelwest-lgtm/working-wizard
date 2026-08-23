@@ -59,6 +59,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         session,
         loading,
         signOut: async () => {
+          const { clearPortalRouting } = await import("@/lib/user-roles");
+          clearPortalRouting();
           await supabase.auth.signOut();
         },
       }}

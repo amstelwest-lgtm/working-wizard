@@ -5,7 +5,12 @@ import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
 import { PlaybookDrawer } from "@/components/playbook-drawer";
 import { PortfolioHealthScatter } from "@/components/portfolio-health-scatter";
-import { shouldStayOnAccountantPortal, setPortalIntent } from "@/lib/user-roles";
+import {
+  shouldStayOnAccountantPortal,
+  setPortalIntent,
+  clearForcePortal,
+  isAccountantDoor,
+} from "@/lib/user-roles";
 import {
   healthFromFlatFinancials,
   buildTrend,
@@ -407,14 +412,25 @@ function Dashboard() {
   const navigate = useNavigate();
 
   // ── Role guard ────────────────────────────────────────────────────────────
-  // Dual-role founders (firm_admin + client_owner) and firm owners must stay
-  // here when they entered via /auth — never bounce them to the SME board.
+  // Accountant-door sessions stay here immediately — do not wait on a role
+  // query. That wait flashed the practice portal for ~1s then dumped dual-role
+  // / founder accounts onto the SME board.
   useEffect(() => {
     if (!user) return;
+    if (isAccountantDoor()) {
+      setPortalIntent("accountant");
+      clearForcePortal();
+      return;
+    }
     let cancelled = false;
-    setPortalIntent("accountant");
     void shouldStayOnAccountantPortal(user.id).then((stay) => {
-      if (!cancelled && !stay) navigate({ to: "/app" });
+      if (cancelled) return;
+      if (stay) {
+        setPortalIntent("accountant");
+        clearForcePortal();
+        return;
+      }
+      navigate({ to: "/app" });
     });
     return () => {
       cancelled = true;
