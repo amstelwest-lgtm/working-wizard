@@ -92,7 +92,9 @@ export async function shouldStayOnAccountantPortal(userId: string): Promise<bool
   return false;
 }
 
-export function setPortalIntent(intent: "accountant" | "owner"): void {
+export type PortalIntent = "accountant" | "owner";
+
+export function setPortalIntent(intent: PortalIntent): void {
   try {
     sessionStorage.setItem("milon_portal_intent", intent);
   } catch {

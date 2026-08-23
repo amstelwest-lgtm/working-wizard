@@ -15,6 +15,7 @@ import { Route as ForOwnersRouteImport } from './routes/for-owners'
 import { Route as ForAccountantsRouteImport } from './routes/for-accountants'
 import { Route as FaqRouteImport } from './routes/faq'
 import { Route as AuthRouteImport } from './routes/auth'
+import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as AppRouteImport } from './routes/app'
 import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as IndexRouteImport } from './routes/index'
@@ -65,6 +66,11 @@ const FaqRoute = FaqRouteImport.update({
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
   path: '/auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthCallbackRoute = AuthCallbackRouteImport.update({
+  id: '/auth/callback',
+  path: '/auth/callback',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AppRoute = AppRouteImport.update({
@@ -184,6 +190,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/app': typeof AppRoute
   '/auth': typeof AuthRoute
+  '/auth/callback': typeof AuthCallbackRoute
   '/faq': typeof FaqRoute
   '/for-accountants': typeof ForAccountantsRoute
   '/for-owners': typeof ForOwnersRoute
@@ -212,6 +219,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/app': typeof AppRoute
   '/auth': typeof AuthRoute
+  '/auth/callback': typeof AuthCallbackRoute
   '/faq': typeof FaqRoute
   '/for-accountants': typeof ForAccountantsRoute
   '/for-owners': typeof ForOwnersRoute
@@ -242,6 +250,7 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteWithChildren
   '/app': typeof AppRoute
   '/auth': typeof AuthRoute
+  '/auth/callback': typeof AuthCallbackRoute
   '/faq': typeof FaqRoute
   '/for-accountants': typeof ForAccountantsRoute
   '/for-owners': typeof ForOwnersRoute
@@ -272,6 +281,7 @@ export interface FileRouteTypes {
     | '/'
     | '/app'
     | '/auth'
+    | '/auth/callback'
     | '/faq'
     | '/for-accountants'
     | '/for-owners'
@@ -300,6 +310,7 @@ export interface FileRouteTypes {
     | '/'
     | '/app'
     | '/auth'
+    | '/auth/callback'
     | '/faq'
     | '/for-accountants'
     | '/for-owners'
@@ -329,6 +340,7 @@ export interface FileRouteTypes {
     | '/_authenticated'
     | '/app'
     | '/auth'
+    | '/auth/callback'
     | '/faq'
     | '/for-accountants'
     | '/for-owners'
@@ -359,6 +371,7 @@ export interface RootRouteChildren {
   AuthenticatedRoute: typeof AuthenticatedRouteWithChildren
   AppRoute: typeof AppRoute
   AuthRoute: typeof AuthRoute
+  AuthCallbackRoute: typeof AuthCallbackRoute
   FaqRoute: typeof FaqRoute
   ForAccountantsRoute: typeof ForAccountantsRoute
   ForOwnersRoute: typeof ForOwnersRoute
@@ -419,6 +432,13 @@ declare module '@tanstack/react-router' {
       path: '/auth'
       fullPath: '/auth'
       preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth/callback': {
+      id: '/auth/callback'
+      path: '/auth/callback'
+      fullPath: '/auth/callback'
+      preLoaderRoute: typeof AuthCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/app': {
@@ -600,6 +620,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRoute: AuthenticatedRouteWithChildren,
   AppRoute: AppRoute,
   AuthRoute: AuthRoute,
+  AuthCallbackRoute: AuthCallbackRoute,
   FaqRoute: FaqRoute,
   ForAccountantsRoute: ForAccountantsRoute,
   ForOwnersRoute: ForOwnersRoute,

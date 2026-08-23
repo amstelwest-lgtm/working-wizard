@@ -8,6 +8,7 @@ import { SIGNUP_ACCESS_CODE, notifySignup } from "@/lib/signup-notify";
 import { adminSignUp } from "@/lib/auth.functions";
 import { OPS_UNLOCK_KEY, unlockOwnerOps } from "@/lib/owner-ops.functions";
 import { registerLighthouseTrialVisit } from "@/lib/lighthouse.functions";
+import { AuthDivider, GoogleSignInButton } from "@/components/google-sign-in-button";
 // Inline so landing paint doesn't wait on a second stylesheet round-trip
 // (external app CSS can still load; these rules win for landing selectors).
 import landingCss from "../styles/landing.css?inline";
@@ -1194,6 +1195,13 @@ function LandingPage() {
             ) : (
               /* ── normal sign-in ── */
               <>
+                <GoogleSignInButton
+                  intent="owner"
+                  tone="landing"
+                  disabled={siBusy}
+                  onError={(msg) => setSiError(msg)}
+                />
+                <AuthDivider />
                 <form onSubmit={handleSignIn} noValidate>
                   <div className="field">
                     <label>Email</label>
@@ -2323,6 +2331,14 @@ function LandingPage() {
                       </p>
                     ) : (
                       <>
+                        <GoogleSignInButton
+                          intent="owner"
+                          tone="landing"
+                          label="Continue with Google"
+                          disabled={regBusy}
+                          onError={(msg) => toast.error(msg)}
+                        />
+                        <AuthDivider />
                         <label htmlFor="regNameField">Full name</label>
                         <input
                           id="regNameField"
