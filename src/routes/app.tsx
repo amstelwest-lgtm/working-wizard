@@ -2032,26 +2032,27 @@ function Index() {
   const [actingClientName, setActingClientName] = useState<string | null>(null);
 
   // Role guard — pure practice users belong in the portal, not the owner app.
-  // Dual-role founders (practice + client) keep /app; accountants impersonating
-  // a client (actingClientId) also stay.
+  // Dual-role founders keep /app unless they just signed in through the
+  // accountant door (force flag). Impersonating a client also stays.
   useEffect(() => {
-    if (!userRole) return;
-    if (actingClientId) return;
-    if (userRole !== "accountant" && userRole !== "firm_admin") return;
+    if (!user) return;
+    const acting =
+      actingClientId ||
+      (typeof sessionStorage !== "undefined" ? sessionStorage.getItem("acting_as_client_id") : null);
+    if (acting) return;
     let cancelled = false;
     void (async () => {
-      const { resolvePortalRoles } = await import("@/lib/user-roles");
-      const { data: u } = await supabase.auth.getUser();
-      if (!u.user || cancelled) return;
-      const portal = await resolvePortalRoles(u.user.id);
-      if (!cancelled && portal.hasPracticeRole && !portal.hasClientRole) {
+      const { shouldBounceFromOwnerApp, clearForcePortal } = await import("@/lib/user-roles");
+      const bounce = await shouldBounceFromOwnerApp(user.id, false);
+      if (!cancelled && bounce) {
+        clearForcePortal();
         navigate({ to: "/dashboard" });
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [userRole, actingClientId, navigate]);
+  }, [user, actingClientId, navigate]);
   const [v, setV] = useState<Inputs>(defaults);
   const [weeklyInputs, setWeeklyInputs] = useState<WeeklyInputs>({ weeks: {} });
   const [hydratedClientId, setHydratedClientId] = useState<string | null>(null);
