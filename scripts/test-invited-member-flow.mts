@@ -11,7 +11,7 @@
  */
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { signUpInvitedMember } from "@/lib/invite-member.server";
+import { shouldShowOwnerProfileFunnel } from "../src/lib/first-run";
 
 const SUPABASE_URL = process.env.SUPABASE_URL!;
 const ANON_KEY = process.env.SUPABASE_PUBLISHABLE_KEY!;
@@ -106,35 +106,51 @@ function testClientCodeMatch() {
 function testFirstRunGateLogic() {
   section("First-run gate logic (pure function — mirrors app.tsx clientMeta effect)");
 
-  function shouldShowOnboarding(opts: {
-    businessType: string | null;
-    actingClientId: string | null;
-    userRole: string | null;
-  }): boolean {
-    if (opts.businessType) return false;
-    if (opts.actingClientId) return false;
-    if (opts.userRole === null) return false;
-    if (opts.userRole === "client_member") return false;
-    return true;
-  }
+  shouldShowOwnerProfileFunnel({
+    hasOperatingProfile: false,
+    actingClientId: null,
+    userRole: "client_owner",
+  })
+    ? pass("Owner with no operating profile → onboarding shown")
+    : fail("Owner with no operating profile should trigger onboarding");
 
-  shouldShowOnboarding({ businessType: null, actingClientId: null, userRole: "client_owner" })
-    ? pass("Owner with no business_type → onboarding shown")
-    : fail("Owner with no business_type should trigger onboarding");
+  shouldShowOwnerProfileFunnel({
+    hasOperatingProfile: false,
+    actingClientId: null,
+    userRole: "client_owner",
+  })
+    ? pass("Owner with firm business_type but no operating profile → still onboarding")
+    : fail("Firm-picked business_type must not skip the 10-question funnel");
 
-  !shouldShowOnboarding({ businessType: "service", actingClientId: null, userRole: "client_owner" })
-    ? pass("Owner with existing business_type → no onboarding")
-    : fail("Owner with business_type set should NOT trigger onboarding");
+  !shouldShowOwnerProfileFunnel({
+    hasOperatingProfile: true,
+    actingClientId: null,
+    userRole: "client_owner",
+  })
+    ? pass("Owner with operating profile → no onboarding")
+    : fail("Owner with operating_profile set should NOT trigger onboarding");
 
-  !shouldShowOnboarding({ businessType: null, actingClientId: null, userRole: "client_member" })
-    ? pass("client_member with no business_type → NO onboarding ✓")
+  !shouldShowOwnerProfileFunnel({
+    hasOperatingProfile: false,
+    actingClientId: null,
+    userRole: "client_member",
+  })
+    ? pass("client_member with no profile → NO onboarding ✓")
     : fail("client_member MUST NOT see the first-run onboarding dialog");
 
-  !shouldShowOnboarding({ businessType: null, actingClientId: "some-client-id", userRole: "firm_admin" })
+  !shouldShowOwnerProfileFunnel({
+    hasOperatingProfile: false,
+    actingClientId: "some-client-id",
+    userRole: "firm_admin",
+  })
     ? pass("firm_admin acting as client → no onboarding")
     : fail("Acting-client mode should not show onboarding");
 
-  !shouldShowOnboarding({ businessType: null, actingClientId: null, userRole: null })
+  !shouldShowOwnerProfileFunnel({
+    hasOperatingProfile: false,
+    actingClientId: null,
+    userRole: null,
+  })
     ? pass("userRole=null → onboarding deferred")
     : fail("Should not show onboarding before userRole is known");
 }
@@ -227,6 +243,9 @@ async function testFirmOwnershipHandoff(admin: SupabaseClient) {
     result.transferredOwnership
       ? pass(`Ownership transferred to invitee ✓ (${inviteeId})`)
       : fail("Expected transferredOwnership=true for firm-created client");
+    result.clientId === clientId
+      ? pass("result.clientId is the resolved workspace UUID")
+      : fail("signUpInvitedMember must return clientId UUID", result.clientId);
   } catch (e) {
     fail("signUpInvitedMember() threw", (e as Error).message);
     await cleanupUsers(admin, [accountantId], [clientId], [firmId]);

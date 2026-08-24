@@ -20,6 +20,7 @@
     "test:ask-ai-client-switch": "vite-node --config scripts/vite-test.config.ts scripts/ask-ai-client-switch-test.mts",
     "test:onboarding": "vite-node --config scripts/vite-test.config.ts scripts/test-onboarding-rls.mts",
     "test:invited-member": "vite-node --config scripts/vite-test.config.ts scripts/test-invited-member-flow.mts",
+    "test:invite-onboarding": "vite-node --config scripts/vite-test.config.ts scripts/invite-accept-onboarding-test.mts",
     "test:industry-pulse": "vite-node --config scripts/vite-test.config.ts scripts/industry-pulse-fallback-test.mts",
     "test:cash-from-banks": "vite-node --config scripts/vite-test.config.ts scripts/cash-from-banks-pattern-test.mts",
     "test:cash-from-banks-workspace": "vite-node --config scripts/vite-test.config.ts scripts/cash-from-banks-workspace-test.mts",

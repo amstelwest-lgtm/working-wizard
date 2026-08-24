@@ -33,6 +33,8 @@ export type InviteMemberInput = {
 export type InviteMemberResult = {
   userId: string;
   email: string;
+  /** Resolved client UUID (never the opaque invite token). */
+  clientId: string;
   /** True when invitee became clients.owner_user_id (firm handoff). */
   transferredOwnership: boolean;
 };
@@ -214,6 +216,7 @@ export async function signUpInvitedMember(input: InviteMemberInput): Promise<Inv
   return {
     userId,
     email: authData.user.email ?? input.email,
+    clientId,
     transferredOwnership: shouldTransfer,
   };
 }
