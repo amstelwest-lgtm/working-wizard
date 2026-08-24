@@ -69,6 +69,14 @@ html[data-landing="1"] #atmos .grid{position:absolute;inset:0;
   -webkit-mask-image:radial-gradient(ellipse 90% 60% at 50% 0%,#000 20%,transparent 78%);
           mask-image:radial-gradient(ellipse 90% 60% at 50% 0%,#000 20%,transparent 78%);
   opacity:.5}
+@media(min-width:1440px){
+  html[data-landing="1"] #atmos .grid{
+    background-size:88px 88px;
+    -webkit-mask-image:radial-gradient(ellipse 78% 58% at 50% 8%,#000 12%,transparent 72%);
+            mask-image:radial-gradient(ellipse 78% 58% at 50% 8%,#000 12%,transparent 72%);
+    opacity:.42;
+  }
+}
 html[data-landing="1"] #atmos .glow{position:absolute;border-radius:50%;filter:blur(90px);opacity:.5;will-change:transform}
 html[data-landing="1"] #atmos .g1{width:56vw;height:56vw;top:-24vw;left:-14vw;background:radial-gradient(circle,rgba(212,175,55,.20),transparent 65%);animation:drift1 26s ease-in-out infinite alternate}
 html[data-landing="1"] #atmos .g2{width:46vw;height:46vw;top:8vh;right:-18vw;background:radial-gradient(circle,rgba(253,238,121,.10),transparent 62%);animation:drift2 32s ease-in-out infinite alternate}
@@ -184,6 +192,48 @@ html[data-landing="1"] nav.nav-open .nav-burger span:nth-child(3){transform:tran
 html[data-landing="1"] #hero{min-height:100vh;display:flex;align-items:center;padding-top:130px;padding-bottom:80px}
 html[data-landing="1"] #hero .wrap{display:grid;grid-template-columns:1.02fr .98fr;gap:64px;align-items:center}
 html[data-landing="1"] #hero h1{font-size:clamp(38px,5.4vw,66px);line-height:1.07;margin:22px 0 24px}
+html[data-landing="1"] #hero .sub{max-width:640px}
+
+/* Large desktops: scale the hero composition, not the rest of the page.
+   Global .wrap stays 1180px; only the hero (and nav, so the mark lines up)
+   open to ~80–84vw with quiet margins at the far edges. */
+@media(min-width:1440px){
+  html[data-landing="1"] #hero > .wrap,
+  html[data-landing="1"] nav > .wrap{
+    max-width:min(2080px,84vw);
+  }
+  html[data-landing="1"] #hero > .wrap{
+    grid-template-columns:minmax(28rem,.94fr) minmax(0,1.16fr);
+    gap:clamp(48px,4.6vw,96px);
+    padding-left:clamp(36px,5vw,80px);
+    padding-right:clamp(24px,3.2vw,52px);
+    align-items:center;
+  }
+  html[data-landing="1"] #hero h1{
+    font-size:clamp(66px,3.55vw,72px);
+  }
+  html[data-landing="1"] #hero .sub{
+    max-width:min(46em,100%);
+    font-size:18px;
+    line-height:1.62;
+  }
+  html[data-landing="1"] .dash-stage{
+    width:calc(100% + clamp(8px,2.4vw,40px));
+    max-width:none;
+  }
+  html[data-landing="1"] .dash{
+    padding:clamp(26px,1.55vw,34px) clamp(26px,1.55vw,36px) clamp(22px,1.4vw,28px);
+  }
+  html[data-landing="1"] .gauge{
+    width:clamp(150px,9vw,188px);
+    height:clamp(150px,9vw,188px);
+  }
+  html[data-landing="1"] .gauge svg{width:100%;height:100%}
+  html[data-landing="1"] .gauge .val b{font-size:clamp(40px,2.2vw,48px)}
+  html[data-landing="1"] .dash-main{gap:clamp(26px,1.8vw,36px)}
+  html[data-landing="1"] .hero-stats{margin-top:56px}
+  html[data-landing="1"] .hero-stats b{font-size:28px}
+}
 html[data-landing="1"] .hero-badge{display:inline-flex;gap:9px;align-items:center;border:1px solid var(--line);border-radius:999px;padding:7px 16px;font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:var(--gold);background:var(--card)}
 html[data-landing="1"] .hero-badge .pulse{width:7px;height:7px;border-radius:50%;background:var(--gold-bright);box-shadow:0 0 0 0 rgba(253,238,121,.6);animation:pulseDot 2.2s infinite}
 @keyframes pulseDot{70%{box-shadow:0 0 0 9px rgba(253,238,121,0)}100%{box-shadow:0 0 0 0 rgba(253,238,121,0)}}
