@@ -37,6 +37,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               .from("firms")
               .insert({ name: firmName, owner_user_id: s.user.id });
             if (!fErr) {
+              const { data: created } = await supabase
+                .from("firms")
+                .select("id")
+                .eq("owner_user_id", s.user.id)
+                .order("created_at", { ascending: true })
+                .limit(1)
+                .maybeSingle();
+              if (created?.id) {
+                await supabase.from("firm_memberships").insert({
+                  firm_id: created.id,
+                  user_id: s.user.id,
+                  role: "owner",
+                });
+              }
               await supabase
                 .from("user_roles")
                 .insert({ user_id: s.user.id, role: "firm_admin" });

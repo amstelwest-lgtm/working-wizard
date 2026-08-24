@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import { useAuth } from "@/hooks/use-auth";
+import { supabase } from "@/integrations/supabase/client";
 import {
   fetchUserFirm,
   firmBrandIsEmpty,
@@ -63,6 +64,8 @@ type AccountantProfileContextValue = {
   canEditBrand: boolean;
   /** Loading firm brand from Supabase. */
   brandLoading: boolean;
+  /** Re-fetch owned/member firms (after auto-provision or add-client). */
+  refreshFirms: () => Promise<void>;
   /** Persist current profile to the firm row. */
   saveProfile: () => Promise<{ ok: boolean; error?: string }>;
 };
@@ -176,10 +179,30 @@ export function AccountantProfileProvider({
 
       try {
         const preferred = readActiveFirmId(user.id);
-        const [all, row] = await Promise.all([
+        let [all, row] = await Promise.all([
           listUserFirms(user.id),
           fetchUserFirm(user.id, preferred),
         ]);
+        if (cancelled) return;
+
+        if (all.length === 0) {
+          const firmName =
+            cached.firmName ||
+            (user.user_metadata?.firm_name as string | undefined) ||
+            null;
+          const { error: ensureErr } = await supabase.rpc("ensure_practice_firm", {
+            p_name: firmName,
+          });
+          if (!ensureErr) {
+            const again = await Promise.all([
+              listUserFirms(user.id),
+              fetchUserFirm(user.id, preferred),
+            ]);
+            all = again[0];
+            row = again[1];
+          }
+        }
+
         if (cancelled) return;
         setFirms(all);
         setFirm(row);
@@ -214,6 +237,22 @@ export function AccountantProfileProvider({
     saveToStorage(userIdRef.current, DEFAULT_PROFILE);
     setProfile(DEFAULT_PROFILE);
   }, []);
+
+  const refreshFirms = useCallback(async () => {
+    if (!user) return;
+    const preferred = readActiveFirmId(user.id);
+    const [all, row] = await Promise.all([
+      listUserFirms(user.id),
+      fetchUserFirm(user.id, preferred),
+    ]);
+    setFirms(all);
+    setFirm(row);
+    if (row) {
+      writeActiveFirmId(user.id, row.id);
+      const cached = loadFromStorage(user.id);
+      setProfile(applyFirmToProfile(row, user.id, cached));
+    }
+  }, [user]);
 
   const setActiveFirm = useCallback(
     async (nextFirmId: string) => {
@@ -299,6 +338,7 @@ export function AccountantProfileProvider({
         setActiveFirm,
         canEditBrand,
         brandLoading,
+        refreshFirms,
         saveProfile,
       }}
     >
