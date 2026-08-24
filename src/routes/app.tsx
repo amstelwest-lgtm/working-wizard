@@ -1,6 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import "@/styles/founder-portal.css";
 import { useState, useMemo, useEffect, lazy, Suspense, useRef, useCallback } from "react";
+import { lazyPanel, TabErrorBoundary } from "@/components/lazy-panel";
 import { useServerFn } from "@tanstack/react-start";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
@@ -113,7 +114,7 @@ const CashForecastPanel = lazy(() =>
 const BudgetPanel = lazy(() =>
   import("@/components/budget/budget-panel").then((m) => ({ default: m.BudgetPanel })),
 );
-const ActionPlanPanel = lazy(() => import("@/components/action-plan"));
+const ActionPlanPanel = lazyPanel(() => import("@/components/action-plan"), "Action Plan");
 import { SplashScreen } from "@/components/splash-screen";
 import { WalkthroughWizard } from "@/components/walkthrough-wizard";
 import { seedBudgetFromFinancials } from "@/lib/budget.bridges";
@@ -2920,8 +2921,11 @@ function Index() {
     }
   }, []);
 
-  // Warm the Cash chunk before the tour reaches step 4 (avoids a hard fail if
-  // the lazy import races a fresh deploy / slow network).
+  // Warm lazy tab chunks before the user (or tour) opens them. A stale hashed
+  // file after a fresh deploy used to throw through the root error page.
+  useEffect(() => {
+    void import("@/components/action-plan");
+  }, []);
   useEffect(() => {
     if (firstRunStep !== null || showOnboarding || showBankDrafter || showCashFromBanks) return;
     void import("@/components/cash-forecast");
@@ -4092,33 +4096,35 @@ function Index() {
                 <span className="h-px flex-1 bg-gradient-to-r from-[#b7872a]/30 to-transparent" />
               </div>
               <div id="wizard-tasks-panel">
-                <Suspense
-                  fallback={<div className="p-6 text-sm text-slate-400">Loading tasks…</div>}
-                >
-                  {effectiveClientId ? (
-                    <ActionPlanPanel
-                      clientId={effectiveClientId}
-                      clientName={actingClientName ?? undefined}
-                      simplified={viewMode === "simplified"}
-                      isOwner={userRole !== "client_member"}
-                      moves={nextSteps.map((s) => ({
-                        key: s.key,
-                        title: s.title,
-                        ratioName: s.ratioName,
-                        impactLine: s.impactLine,
-                        health: isFinite(s.health) ? s.health : NaN,
-                      }))}
-                      onViewAnalysis={() => {
-                        setViewMode("complex");
-                        setActiveTab("today");
-                      }}
-                      focusMoveKey={planFocusKey}
-                      onFocusHandled={() => setPlanFocusKey(null)}
-                    />
-                  ) : (
-                    <div className="p-6 text-sm text-slate-400">No client linked yet.</div>
-                  )}
-                </Suspense>
+                <TabErrorBoundary label="Action Plan">
+                  <Suspense
+                    fallback={<div className="p-6 text-sm text-slate-400">Loading tasks…</div>}
+                  >
+                    {effectiveClientId ? (
+                      <ActionPlanPanel
+                        clientId={effectiveClientId}
+                        clientName={actingClientName ?? undefined}
+                        simplified={viewMode === "simplified"}
+                        isOwner={userRole !== "client_member"}
+                        moves={nextSteps.map((s) => ({
+                          key: s.key,
+                          title: s.title,
+                          ratioName: s.ratioName,
+                          impactLine: s.impactLine,
+                          health: Number.isFinite(s.health) ? s.health : Number.NaN,
+                        }))}
+                        onViewAnalysis={() => {
+                          setViewMode("complex");
+                          setActiveTab("today");
+                        }}
+                        focusMoveKey={planFocusKey}
+                        onFocusHandled={() => setPlanFocusKey(null)}
+                      />
+                    ) : (
+                      <div className="p-6 text-sm text-slate-400">No client linked yet.</div>
+                    )}
+                  </Suspense>
+                </TabErrorBoundary>
               </div>
             </TabsContent>
           </Tabs>

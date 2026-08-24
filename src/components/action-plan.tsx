@@ -151,6 +151,12 @@ const HEALTH_META: Record<Health, { label: string; color: string; bg: string }> 
   overdue:   { label: "Overdue",   color: "#ef4444", bg: "rgba(239,68,68,0.16)" },
   complete:  { label: "Done",      color: "#8a938c", bg: "rgba(138,147,140,0.15)" },
 };
+export function healthMeta(h?: string | null) {
+  return (h && h in HEALTH_META ? HEALTH_META[h as Health] : HEALTH_META.on_track);
+}
+export function driverHealthLabel(health: number) {
+  return Number.isFinite(health) ? Math.round(health) : null;
+}
 const STATUS_LABEL: Record<Status, string> = {
   not_started: "Not started", in_progress: "In progress", done: "Done", blocked: "Blocked",
 };
@@ -198,66 +204,72 @@ export default function ActionPlanPanel({ clientId, clientName, simplified, isOw
 
   // ── Load ───────────────────────────────────────────────────────────────────
   const refresh = useCallback(async () => {
-    const { data: plans } = await supabase
-      .from("action_plans").select("*")
-      .eq("client_id", clientId).eq("is_active", true)
-      .order("created_at", { ascending: false }).limit(1);
-    let p = (plans?.[0] as Plan) ?? null;
-    if (!p) {
-      // Members cannot create plans — show empty read-only state instead.
-      if (!isOwner) { setLoading(false); return; }
-      const { data: created, error } = await supabase
-        .from("action_plans")
-        .insert({
-          client_id: clientId,
-          period_label: defaultPeriodLabel(),
-          outcome_goal: "Set your outcome goal for this quarter",
-          target_date: defaultTargetDate(),
-        })
-        .select().single();
-      if (error) { toast.error(error.message); setLoading(false); return; }
-      p = created as Plan;
-    }
-    setPlan(p);
-    const [{ data: its }, { data: emps }] = await Promise.all([
-      supabase.from("action_items_v").select("*").eq("plan_id", p.id).order("seq"),
-      supabase.from("client_employees").select("id,name,email,role").eq("client_id", clientId).order("name"),
-    ]);
-    const list = (its ?? []) as Item[];
-    setItems(list);
-    setEmployees((emps ?? []) as Employee[]);
-    if (list.length) {
-      const ids = list.map((i) => i.id);
-      const [{ data: ms }, { data: emails }] = await Promise.all([
-        supabase.from("action_milestones").select("*").in("action_item_id", ids).order("week_no"),
-        supabase.from("action_emails")
-          .select("id,action_item_id,email_type,status,sent_at,created_at")
-          .in("action_item_id", ids)
-          .order("created_at", { ascending: false }),
-      ]);
-      setMilestones((ms ?? []) as Milestone[]);
-      // Build two independent maps per item (emails are ordered newest-first)
-      // nudgeMap: newest successfully delivered nudge/overdue (status != "failed")
-      // failedMap: newest failed send of any type
-      const nudgeMap: Record<string, EmailRecord> = {};
-      const failedMap: Record<string, EmailRecord> = {};
-      for (const e of (emails ?? []) as EmailRecord[]) {
-        const id = e.action_item_id;
-        if (
-          !nudgeMap[id] &&
-          (e.email_type === "nudge" || e.email_type === "overdue") &&
-          e.status !== "failed"
-        ) {
-          nudgeMap[id] = e;
-        }
-        if (!failedMap[id] && e.status === "failed") {
-          failedMap[id] = e;
-        }
+    try {
+      const { data: plans } = await supabase
+        .from("action_plans").select("*")
+        .eq("client_id", clientId).eq("is_active", true)
+        .order("created_at", { ascending: false }).limit(1);
+      let p = (plans?.[0] as Plan) ?? null;
+      if (!p) {
+        // Members cannot create plans — show empty read-only state instead.
+        if (!isOwner) return;
+        const { data: created, error } = await supabase
+          .from("action_plans")
+          .insert({
+            client_id: clientId,
+            period_label: defaultPeriodLabel(),
+            outcome_goal: "Set your outcome goal for this quarter",
+            target_date: defaultTargetDate(),
+          })
+          .select().single();
+        if (error) { toast.error(error.message); return; }
+        p = created as Plan;
       }
-      setLastNudgeEmails(nudgeMap);
-      setLastFailedEmails(failedMap);
-    } else { setMilestones([]); setLastNudgeEmails({}); setLastFailedEmails({}); }
-    setLoading(false);
+      setPlan(p);
+      const [{ data: its }, { data: emps }] = await Promise.all([
+        supabase.from("action_items_v").select("*").eq("plan_id", p.id).order("seq"),
+        supabase.from("client_employees").select("id,name,email,role").eq("client_id", clientId).order("name"),
+      ]);
+      const list = (its ?? []) as Item[];
+      setItems(list);
+      setEmployees((emps ?? []) as Employee[]);
+      if (list.length) {
+        const ids = list.map((i) => i.id);
+        const [{ data: ms }, { data: emails }] = await Promise.all([
+          supabase.from("action_milestones").select("*").in("action_item_id", ids).order("week_no"),
+          supabase.from("action_emails")
+            .select("id,action_item_id,email_type,status,sent_at,created_at")
+            .in("action_item_id", ids)
+            .order("created_at", { ascending: false }),
+        ]);
+        setMilestones((ms ?? []) as Milestone[]);
+        // Build two independent maps per item (emails are ordered newest-first)
+        // nudgeMap: newest successfully delivered nudge/overdue (status != "failed")
+        // failedMap: newest failed send of any type
+        const nudgeMap: Record<string, EmailRecord> = {};
+        const failedMap: Record<string, EmailRecord> = {};
+        for (const e of (emails ?? []) as EmailRecord[]) {
+          const id = e.action_item_id;
+          if (
+            !nudgeMap[id] &&
+            (e.email_type === "nudge" || e.email_type === "overdue") &&
+            e.status !== "failed"
+          ) {
+            nudgeMap[id] = e;
+          }
+          if (!failedMap[id] && e.status === "failed") {
+            failedMap[id] = e;
+          }
+        }
+        setLastNudgeEmails(nudgeMap);
+        setLastFailedEmails(failedMap);
+      } else { setMilestones([]); setLastNudgeEmails({}); setLastFailedEmails({}); }
+    } catch (err) {
+      console.error("[Action Plan] load failed", err);
+      toast.error("Couldn't load the action plan. Try refresh.");
+    } finally {
+      setLoading(false);
+    }
   }, [clientId, isOwner]);
 
   useEffect(() => { setLoading(true); refresh(); }, [refresh]);
@@ -462,7 +474,10 @@ export default function ActionPlanPanel({ clientId, clientName, simplified, isOw
 
   const healthCounts = useMemo(() => {
     const c: Record<Health, number> = { on_track: 0, at_risk: 0, off_track: 0, overdue: 0, complete: 0 };
-    enriched.forEach((i) => { c[i.health!]++; });
+    enriched.forEach((i) => {
+      const key = i.health && i.health in c ? i.health : "on_track";
+      c[key]++;
+    });
     return c;
   }, [enriched]);
 
@@ -846,8 +861,9 @@ function DriversStrip({ moves, onView }: { moves: StrategicMoveLite[]; onView?: 
   return (
     <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-5">
       {moves.map((m) => {
+        const score = driverHealthLabel(m.health);
         const tone =
-          m.health >= 65 ? "#22c55e" : m.health >= 40 ? "#f5a524" : "#ef4444";
+          score == null ? "#94a3b8" : score >= 65 ? "#22c55e" : score >= 40 ? "#f5a524" : "#ef4444";
         return (
           <button
             key={m.key}
@@ -859,7 +875,14 @@ function DriversStrip({ moves, onView }: { moves: StrategicMoveLite[]; onView?: 
               <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: tone }} />
             </div>
             <div className="mt-1 text-lg font-extrabold tabular-nums tracking-tight text-slate-950 dark:text-white">
-              {Math.round(m.health)}<span className="text-xs font-semibold text-slate-400">/100</span>
+              {score != null ? (
+                <>
+                  {score}
+                  <span className="text-xs font-semibold text-slate-400">/100</span>
+                </>
+              ) : (
+                <span className="text-slate-400">—</span>
+              )}
             </div>
             <div className="mt-0.5 flex items-center text-[10px] font-semibold uppercase tracking-wider text-slate-400 group-hover:text-[#b8860b] dark:group-hover:text-[#d4a550]">
               View full analysis <ChevronRight className="h-3 w-3" />
@@ -887,7 +910,7 @@ function ItemRow({ item, employees, milestones, lastNudge, lastFailed, draggable
   onPatch: (patch: Partial<Item>, log?: Partial<Update>) => void;
   onAddEmployee: (name: string, email: string) => Promise<Employee | null>;
 }) {
-  const h = HEALTH_META[item.health ?? "on_track"];
+  const h = healthMeta(item.health);
   const overdue = item.health === "overdue";
   const [editTitle, setEditTitle] = useState(false);
   const [title, setTitle] = useState(item.title);
@@ -1057,7 +1080,7 @@ function OwnerPicker({ employees, onPick, onAdd, onClose }: {
     document.addEventListener("mousedown", onDown);
     return () => document.removeEventListener("mousedown", onDown);
   }, [onClose]);
-  const list = employees.filter((e) => e.name.toLowerCase().includes(q.toLowerCase()));
+  const list = employees.filter((e) => (e.name ?? "").toLowerCase().includes(q.toLowerCase()));
   return (
     <div ref={ref} className="absolute z-30 mt-1 w-56 rounded-lg border border-amber-900/15 bg-white p-2 shadow-xl dark:border-slate-700 dark:bg-slate-900">
       {!adding ? (
@@ -1221,7 +1244,7 @@ function ItemDrawer({ item, employees, milestones, isOwner = true, onClose, onPa
   const [newMs, setNewMs] = useState("");
   const [reassigning, setReassigning] = useState(false);
   const [resending, setResending] = useState(false);
-  const h = HEALTH_META[item.health ?? "on_track"];
+  const h = healthMeta(item.health);
 
   useEffect(() => {
     Promise.all([
@@ -1585,7 +1608,7 @@ function OwnerLoad({ items, employees, onPick }: {
               </div>
               <div className="flex h-2.5 w-full gap-px overflow-hidden rounded-full bg-amber-900/5 dark:bg-slate-800/60">
                 {list.map((i) => (
-                  <div key={i.id} style={{ width: `${(1 / max) * 100}%`, background: HEALTH_META[i.health ?? "on_track"].color }} />
+                  <div key={i.id} style={{ width: `${(1 / max) * 100}%`, background: healthMeta(i.health).color }} />
                 ))}
               </div>
             </button>

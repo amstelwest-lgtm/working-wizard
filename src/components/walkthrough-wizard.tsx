@@ -342,6 +342,7 @@ export function WalkthroughWizard({
   useEffect(() => {
     if (!visible) return;
     const s = STEPS[step];
+    if (!s) return;
 
     if (prevTargetRef.current && prevTargetRef.current !== s.targetId) {
       resolveTarget(prevTargetRef.current)?.classList.remove("wizard-highlight");
@@ -510,6 +511,7 @@ export function WalkthroughWizard({
   if (!visible || !ready) return null;
 
   const s = STEPS[step];
+  if (!s) return null;
   const isFirst = step === 0;
   const isLast = step === STEPS.length - 1;
 

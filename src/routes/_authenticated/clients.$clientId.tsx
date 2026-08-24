@@ -1,5 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useRef, useState, useCallback, lazy, Suspense } from "react";
+import { useEffect, useRef, useState, useCallback, Suspense } from "react";
+import { lazyPanel, TabErrorBoundary } from "@/components/lazy-panel";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
@@ -83,7 +84,7 @@ import {
 import { upsertCurrentPeriodSnapshot } from "@/lib/financial-snapshots";
 import { stampFromSignoff } from "@/lib/review-signoff-stamp";
 
-const ActionPlanPanel = lazy(() => import("@/components/action-plan"));
+const ActionPlanPanel = lazyPanel(() => import("@/components/action-plan"), "Action Plan");
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
@@ -2137,14 +2138,16 @@ function ClientView() {
             impersonating.
           </p>
           <div className="dark" style={{ colorScheme: "dark" }}>
-            <Suspense fallback={<div style={{ padding: 24, color: "var(--ink-dim)" }}>Loading plan…</div>}>
-              <ActionPlanPanel
-                clientId={client.id}
-                clientName={client.name}
-                simplified={viewMode === "simplified"}
-                isOwner
-              />
-            </Suspense>
+            <TabErrorBoundary label="Action Plan">
+              <Suspense fallback={<div style={{ padding: 24, color: "var(--ink-dim)" }}>Loading plan…</div>}>
+                <ActionPlanPanel
+                  clientId={client.id}
+                  clientName={client.name}
+                  simplified={viewMode === "simplified"}
+                  isOwner
+                />
+              </Suspense>
+            </TabErrorBoundary>
           </div>
         </div>
 
