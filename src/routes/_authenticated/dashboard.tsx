@@ -37,7 +37,7 @@ import {
 import { useServerFn } from "@tanstack/react-start";
 import { getQboStatuses } from "@/lib/qbo.functions";
 import { createFirmClient } from "@/lib/firm-clients.functions";
-import { mintOwnerInvite } from "@/lib/invite-tokens.functions";
+import { inviteClientOwner, sendDraftedOwnerInvite } from "@/lib/client-invite.functions";
 import { effectiveCashRunwayWeeks } from "@/lib/cash-runway";
 import { countOpenQueriesByClient } from "@/lib/open-queries";
 import "@/styles/accountant-portal.css";
@@ -66,6 +66,7 @@ type Client = {
   name: string;
   business_type: string | null;
   client_code?: string | null;
+  contact_email?: string | null;
   cash_runway_weeks: number | null;
   last_forecast_at: string | null;
   last_login_at: string | null;
@@ -257,6 +258,7 @@ function AddClientDialog({
     name: string;
     firm_id: string | null;
     client_code: string | null;
+    contact_email?: string | null;
   }) => void;
   firmId: string | null;
   brandLoading?: boolean;
@@ -266,14 +268,17 @@ function AddClientDialog({
 }) {
   const [newName, setNewName] = useState("");
   const [newType, setNewType] = useState("");
+  const [ownerEmail, setOwnerEmail] = useState("");
   const [saving, setSaving] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const createClient = useServerFn(createFirmClient);
+  const inviteOwner = useServerFn(inviteClientOwner);
 
   useEffect(() => {
     if (open) {
       setNewName(defaultName);
       setNewType("");
+      setOwnerEmail("");
       setTimeout(() => inputRef.current?.focus(), 50);
     }
   }, [open, defaultName]);
@@ -285,6 +290,11 @@ function AddClientDialog({
       toast.error("Enter a business name");
       return;
     }
+    const email = ownerEmail.trim();
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      toast.error("Enter a valid owner email, or leave it blank");
+      return;
+    }
     setSaving(true);
     try {
       const created = await createClient({
@@ -294,16 +304,32 @@ function AddClientDialog({
           businessType: newType.trim() || null,
         },
       });
-      toast.success(
-        created.client_code
-          ? `Client added · ${created.client_code}`
-          : "Client added",
-      );
+      let inviteNote = created.client_code ? `Client added · ${created.client_code}` : "Client added";
+      if (email) {
+        try {
+          const inv = await inviteOwner({
+            data: { clientId: created.id, toEmail: email, sendEmail: true },
+          });
+          await navigator.clipboard?.writeText(inv.pasteText);
+          if (inv.emailed) {
+            inviteNote = `${inviteNote} · invite emailed to ${inv.email}`;
+          } else if (inv.sendError) {
+            inviteNote = `${inviteNote} · invite copied (email not sent)`;
+            toast.error(inv.sendError);
+          } else {
+            inviteNote = `${inviteNote} · invite message copied`;
+          }
+        } catch (invErr) {
+          toast.error(invErr instanceof Error ? invErr.message : "Client added, but invite failed");
+        }
+      }
+      toast.success(inviteNote);
       onAdded({
         id: created.id,
         name: created.name,
         firm_id: created.firm_id,
         client_code: created.client_code,
+        contact_email: email || null,
       });
       onClose();
     } catch (err) {
@@ -404,6 +430,42 @@ function AddClientDialog({
               placeholder="Services / Retail / SaaS…"
             />
           </div>
+          <div style={{ marginBottom: 24 }}>
+            <label
+              style={{
+                fontSize: 10.5,
+                letterSpacing: ".14em",
+                textTransform: "uppercase",
+                color: "var(--ink-dim)",
+                display: "block",
+                marginBottom: 6,
+              }}
+            >
+              Owner email (optional)
+            </label>
+            <input
+              type="email"
+              value={ownerEmail}
+              onChange={(e) => setOwnerEmail(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void add();
+              }}
+              style={{
+                width: "100%",
+                padding: "11px 14px",
+                borderRadius: 11,
+                border: "1px solid var(--line)",
+                background: "var(--bg-2)",
+                color: "var(--ink)",
+                fontFamily: "inherit",
+                fontSize: 14,
+              }}
+              placeholder="owner@business.co.za"
+            />
+            <p style={{ margin: "8px 0 0", fontSize: 12, color: "var(--ink-dim)", lineHeight: 1.45 }}>
+              We email them a claim link and copy a paste-ready message for you.
+            </p>
+          </div>
           <div style={{ display: "flex", gap: 12 }}>
             <button className="btn ghost" onClick={onClose} style={{ flex: 1 }}>
               Cancel
@@ -415,6 +477,138 @@ function AddClientDialog({
               style={{ flex: 1 }}
             >
               {saving ? "Saving…" : "Add client"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+type InviteDraftUi = {
+  clientId: string;
+  clientName: string;
+  token: string;
+  subject: string;
+  body: string;
+  pasteText: string;
+  email: string;
+  emailed: boolean;
+  sendError: string | null;
+  draftedBy: "claude" | "template";
+};
+
+function InviteOwnerDialog({
+  draft,
+  sending,
+  onClose,
+  onEmailChange,
+  onCopy,
+  onSend,
+}: {
+  draft: InviteDraftUi;
+  sending: boolean;
+  onClose: () => void;
+  onEmailChange: (email: string) => void;
+  onCopy: () => void;
+  onSend: () => void;
+}) {
+  return (
+    <>
+      <div className="veil open" onClick={onClose} />
+      <div className="drawer open" style={{ maxWidth: 480 }}>
+        <div className="drawer-head">
+          <div className="cat">Invite owner</div>
+          <h3>{draft.clientName}</h3>
+          <button className="close" onClick={onClose}>
+            ✕
+          </button>
+        </div>
+        <div className="drawer-body" style={{ padding: "24px 30px" }}>
+          {draft.emailed ? (
+            <p style={{ marginBottom: 14, fontSize: 13, color: "var(--ok)", lineHeight: 1.55 }}>
+              Invite emailed to {draft.email}. The same message is copied below if you want to
+              forward it.
+            </p>
+          ) : (
+            <p style={{ marginBottom: 14, fontSize: 13, color: "var(--ink-dim)", lineHeight: 1.55 }}>
+              {draft.sendError
+                ? `Could not send automatically (${draft.sendError}). Copy the message or try again.`
+                : "No owner email on file yet — add it to send, or copy the message into your own email."}
+            </p>
+          )}
+          <div style={{ marginBottom: 14 }}>
+            <label
+              style={{
+                fontSize: 10.5,
+                letterSpacing: ".14em",
+                textTransform: "uppercase",
+                color: "var(--ink-dim)",
+                display: "block",
+                marginBottom: 6,
+              }}
+            >
+              Owner email
+            </label>
+            <input
+              type="email"
+              value={draft.email}
+              onChange={(e) => onEmailChange(e.target.value)}
+              style={{
+                width: "100%",
+                padding: "11px 14px",
+                borderRadius: 11,
+                border: "1px solid var(--line)",
+                background: "var(--bg-2)",
+                color: "var(--ink)",
+                fontFamily: "inherit",
+                fontSize: 14,
+              }}
+              placeholder="owner@business.co.za"
+            />
+          </div>
+          <div style={{ marginBottom: 18 }}>
+            <label
+              style={{
+                fontSize: 10.5,
+                letterSpacing: ".14em",
+                textTransform: "uppercase",
+                color: "var(--ink-dim)",
+                display: "block",
+                marginBottom: 6,
+              }}
+            >
+              Message {draft.draftedBy === "claude" ? "· drafted" : ""}
+            </label>
+            <textarea
+              readOnly
+              value={draft.pasteText}
+              rows={12}
+              style={{
+                width: "100%",
+                padding: "12px 14px",
+                borderRadius: 11,
+                border: "1px solid var(--line)",
+                background: "var(--bg-2)",
+                color: "var(--ink)",
+                fontFamily: "inherit",
+                fontSize: 13,
+                lineHeight: 1.5,
+                resize: "vertical",
+              }}
+            />
+          </div>
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+            <button className="btn ghost" onClick={onCopy} style={{ flex: 1, minWidth: 140 }}>
+              Copy message
+            </button>
+            <button
+              className="btn gold"
+              onClick={onSend}
+              disabled={sending || !draft.email.trim()}
+              style={{ flex: 1, minWidth: 140 }}
+            >
+              {sending ? "Sending…" : draft.emailed ? "Send again" : "Send email"}
             </button>
           </div>
         </div>
@@ -473,6 +667,8 @@ function Dashboard() {
   const [searchQuery, setSearchQuery] = useState("");
   const [addOpen, setAddOpen] = useState(false);
   const [firstClientOpen, setFirstClientOpen] = useState(false);
+  const [inviteDraft, setInviteDraft] = useState<InviteDraftUi | null>(null);
+  const [inviteSending, setInviteSending] = useState(false);
   const [qboStatuses, setQboStatuses] = useState<
     Record<string, { companyName: string | null; lastSyncedAt: string | null; syncStatus: string }>
   >({});
@@ -492,7 +688,8 @@ function Dashboard() {
   }, []);
 
   const getStatuses = useServerFn(getQboStatuses);
-  const mintInvite = useServerFn(mintOwnerInvite);
+  const mintInvite = useServerFn(inviteClientOwner);
+  const sendDraftedInvite = useServerFn(sendDraftedOwnerInvite);
 
   // ── Load ──────────────────────────────────────────────────────────────────
   const load = async (activeFirmId: string | null, userId: string | undefined) => {
@@ -682,6 +879,84 @@ function Dashboard() {
     sessionStorage.setItem("acting_as_client_id", c.id);
     sessionStorage.setItem("acting_as_client_name", c.name);
     navigate({ to: "/app" });
+  };
+
+  const openOwnerInvite = async (c: Client) => {
+    try {
+      const inv = await mintInvite({
+        data: {
+          clientId: c.id,
+          toEmail: c.contact_email || null,
+          sendEmail: Boolean(c.contact_email),
+        },
+      });
+      await navigator.clipboard?.writeText(inv.pasteText);
+      const next: InviteDraftUi = {
+        clientId: c.id,
+        clientName: c.name,
+        token: inv.token,
+        subject: inv.subject,
+        body: inv.body,
+        pasteText: inv.pasteText,
+        email: inv.email ?? c.contact_email ?? "",
+        emailed: inv.emailed,
+        sendError: inv.sendError,
+        draftedBy: inv.draftedBy,
+      };
+      setInviteDraft(next);
+      setClientRows((rows) =>
+        rows.map((row) =>
+          row.id === c.id ? { ...row, contact_email: next.email || row.contact_email } : row,
+        ),
+      );
+      if (inv.emailed) {
+        toast.success(`Invite emailed to ${inv.email} · message copied`);
+      } else if (inv.sendError) {
+        toast.error(inv.sendError);
+      } else {
+        toast.success("Invite message copied — add an email to send it");
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not prepare invite");
+    }
+  };
+
+  const copyInviteDraft = async () => {
+    if (!inviteDraft) return;
+    await navigator.clipboard?.writeText(inviteDraft.pasteText);
+    toast.success("Invite message copied");
+  };
+
+  const sendInviteDraft = async () => {
+    if (!inviteDraft?.email.trim()) {
+      toast.error("Enter the owner's email");
+      return;
+    }
+    setInviteSending(true);
+    try {
+      const sent = await sendDraftedInvite({
+        data: {
+          clientId: inviteDraft.clientId,
+          toEmail: inviteDraft.email.trim(),
+          subject: inviteDraft.subject,
+          body: inviteDraft.body,
+          token: inviteDraft.token,
+        },
+      });
+      setInviteDraft((d) =>
+        d ? { ...d, emailed: true, email: sent.email, sendError: null } : d,
+      );
+      setClientRows((rows) =>
+        rows.map((row) =>
+          row.id === inviteDraft.clientId ? { ...row, contact_email: sent.email } : row,
+        ),
+      );
+      toast.success(`Invite emailed to ${sent.email}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not send invite");
+    } finally {
+      setInviteSending(false);
+    }
   };
 
   // ── Referral ──────────────────────────────────────────────────────────────
@@ -1331,31 +1606,8 @@ function Dashboard() {
                         {/* Invite */}
                         <button
                           className="icon-btn"
-                          title="Invite client owner to claim this workspace"
-                          onClick={() => {
-                            void (async () => {
-                              const origin =
-                                typeof window !== "undefined"
-                                  ? window.location.origin
-                                  : "https://milon.co.za";
-                              try {
-                                const { token } = await mintInvite({
-                                  data: { clientId: c.id },
-                                });
-                                const url = `${origin}/?invite=${token}&mode=signup`;
-                                await navigator.clipboard?.writeText(url);
-                                toast.success(
-                                  c.client_code
-                                    ? `Owner invite link copied for ${c.name} (${c.client_code})`
-                                    : "Owner invite link copied for " + c.name,
-                                );
-                              } catch (err) {
-                                toast.error(
-                                  err instanceof Error ? err.message : "Could not mint invite link",
-                                );
-                              }
-                            })();
-                          }}
+                          title="Invite client owner — email + copy message"
+                          onClick={() => void openOwnerInvite(c)}
                         >
                           <svg viewBox="0 0 24 24">
                             <rect x="3" y="5" width="18" height="14" rx="2" />
@@ -1467,6 +1719,17 @@ function Dashboard() {
               ? "Use a sandbox client to learn the workflow — upload statements, check Business Health, then add real clients."
               : undefined
           }
+        />
+      )}
+
+      {inviteDraft && (
+        <InviteOwnerDialog
+          draft={inviteDraft}
+          sending={inviteSending}
+          onClose={() => setInviteDraft(null)}
+          onEmailChange={(email) => setInviteDraft((d) => (d ? { ...d, email } : d))}
+          onCopy={() => void copyInviteDraft()}
+          onSend={() => void sendInviteDraft()}
         />
       )}
 
