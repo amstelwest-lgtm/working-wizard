@@ -71,3 +71,32 @@ export const mintOwnerInvite = createServerFn({ method: "POST" })
     });
     return { token };
   });
+
+/** Public: resolve an invite token to the business name + client code (no redeem). */
+export const previewOwnerInvite = createServerFn({ method: "POST" })
+  .inputValidator((input) => z.object({ token: z.string().trim().min(8).max(80) }).parse(input))
+  .handler(async ({ data }) => {
+    const { resolveInviteToClientId } = await import("@/lib/invite-tokens.resolve");
+    const resolved = await resolveInviteToClientId(data.token);
+    const first = await supabaseAdmin
+      .from("clients")
+      .select("name, client_code")
+      .eq("id", resolved.clientId)
+      .maybeSingle();
+    if (first.error && (first.error.message ?? "").includes("client_code")) {
+      const retry = await supabaseAdmin
+        .from("clients")
+        .select("name")
+        .eq("id", resolved.clientId)
+        .maybeSingle();
+      if (retry.error) throw new Error(retry.error.message);
+      if (!retry.data) throw new Error("Invite link is invalid — client not found.");
+      return { clientName: retry.data.name as string, clientCode: null as string | null };
+    }
+    if (first.error) throw new Error(first.error.message);
+    if (!first.data) throw new Error("Invite link is invalid — client not found.");
+    return {
+      clientName: first.data.name,
+      clientCode: (first.data as { client_code?: string | null }).client_code ?? null,
+    };
+  });

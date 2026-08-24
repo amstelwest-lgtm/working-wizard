@@ -135,9 +135,13 @@ export function clearPortalRouting(): void {
   removeStorage(local, PORTAL_INTENT_KEY);
 }
 
-/** True when this session just came through (or last used) the accountant door. */
+/**
+ * True only for a just-signed-in accountant-door session (one-shot force).
+ * Leftover localStorage intent must not count — that trapped SME invitees
+ * on /dashboard after they accepted an owner invite in the same browser.
+ */
 export function isAccountantDoor(): boolean {
-  return peekForcePortal() === "accountant" || getPortalIntent() === "accountant";
+  return peekForcePortal() === "accountant";
 }
 
 export type PortalRouteDecision = {
@@ -151,13 +155,14 @@ export type PortalRouteDecision = {
 /**
  * Where a generic (landing) sign-in should land.
  * A one-shot `force` from a specific door always wins.
- * Last-door `intent` wins for already-signed-in visits to `/`.
+ * SME-only users must not inherit a leftover accountant door from this browser
+ * (that was dumping invitees onto /dashboard).
  */
 export function decidePostLoginPath(d: PortalRouteDecision): "/dashboard" | "/app" {
-  if (d.force === "accountant" || (d.intent === "accountant" && d.force !== "owner")) {
-    return "/dashboard";
-  }
   if (d.force === "owner") return "/app";
+  if (d.force === "accountant") return "/dashboard";
+  if (d.hasClientRole && !d.hasPracticeRole && !d.hasFirm) return "/app";
+  if (d.intent === "accountant") return "/dashboard";
 
   if (d.hasPracticeRole && d.hasClientRole) {
     if (d.intent === "owner") return "/app";
@@ -170,14 +175,15 @@ export function decidePostLoginPath(d: PortalRouteDecision): "/dashboard" | "/ap
 }
 
 /**
- * Keep the user on /dashboard unless they are clearly a client-only user
- * who did not come through the accountant door.
+ * Keep the user on /dashboard unless they are clearly a client-only user.
+ * Stale accountant *intent* must not trap an SME invitee here; the one-shot
+ * accountant *force* flag still covers the provisioning race.
  */
 export function decideAccountantStay(d: PortalRouteDecision): boolean {
-  // Explicit accountant door — never bounce to the SME board after a role query.
-  if (d.force === "accountant" || d.intent === "accountant") return true;
+  if (d.force === "accountant") return true;
   if (d.hasPracticeRole) return true;
   if (d.hasFirm) return true;
+  if (d.intent === "accountant" && !d.hasClientRole) return true;
   return false;
 }
 
@@ -199,9 +205,9 @@ export function decideOwnerAppBounce(d: PortalRouteDecision & { actingAsClient: 
 export async function resolvePostLoginPath(userId: string): Promise<"/dashboard" | "/app"> {
   const force = peekForcePortal();
   const intent = getPortalIntent();
-  // Accountant door is decided before any role fetch so `/` cannot dump a
-  // just-signed-in practice session onto the founder board while roles load.
-  if (force === "accountant" || (intent === "accountant" && force !== "owner")) {
+  // Only the one-shot accountant *force* flag skips the role fetch. Leftover
+  // intent must not send an SME invitee to /dashboard before roles load.
+  if (force === "accountant") {
     return "/dashboard";
   }
   const portal = await resolvePortalRoles(userId);
@@ -237,7 +243,8 @@ export async function shouldBounceFromOwnerApp(
 
 /** Accountant portal may keep users who hold a practice role OR a firm. */
 export async function shouldStayOnAccountantPortal(userId: string): Promise<boolean> {
-  if (isAccountantDoor()) return true;
+  const force = peekForcePortal();
+  if (force === "accountant") return true;
   const portal = await resolvePortalRoles(userId);
   const firms = portal.hasPracticeRole ? [] : await listUserFirms(userId);
   return decideAccountantStay({
@@ -245,6 +252,6 @@ export async function shouldStayOnAccountantPortal(userId: string): Promise<bool
     hasClientRole: portal.hasClientRole,
     hasFirm: firms.length > 0,
     intent: getPortalIntent(),
-    force: peekForcePortal(),
+    force,
   });
 }

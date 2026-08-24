@@ -15,6 +15,7 @@ import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import {
   attachInviteRedeemer,
   claimInviteToken,
+  clientCodesMatch,
   releaseInviteToken,
   resolveInviteToClientId,
 } from "@/lib/invite-tokens.resolve";
@@ -25,6 +26,8 @@ export type InviteMemberInput = {
   fullName?: string;
   /** Opaque invite token or legacy client UUID. */
   inviteClientId: string;
+  /** Required when the client has a client_code (MLN-XXXXXX). */
+  inviteClientCode?: string | null;
 };
 
 export type InviteMemberResult = {
@@ -97,13 +100,42 @@ export async function signUpInvitedMember(input: InviteMemberInput): Promise<Inv
   const resolved = await resolveInviteToClientId(input.inviteClientId);
   const clientId = resolved.clientId;
 
-  const { data: client, error: clientErr } = await supabaseAdmin
+  let client: {
+    id: string;
+    owner_user_id: string;
+    firm_id: string | null;
+    client_code?: string | null;
+  } | null = null;
+
+  const first = await supabaseAdmin
     .from("clients")
-    .select("id, owner_user_id, firm_id")
+    .select("id, owner_user_id, firm_id, client_code")
     .eq("id", clientId)
     .maybeSingle();
-  if (clientErr) throw new Error(`Failed to load invite client: ${clientErr.message}`);
+  if (first.error && (first.error.message ?? "").includes("client_code")) {
+    const retry = await supabaseAdmin
+      .from("clients")
+      .select("id, owner_user_id, firm_id")
+      .eq("id", clientId)
+      .maybeSingle();
+    if (retry.error) throw new Error(`Failed to load invite client: ${retry.error.message}`);
+    client = retry.data ? { ...retry.data, client_code: null } : null;
+  } else if (first.error) {
+    throw new Error(`Failed to load invite client: ${first.error.message}`);
+  } else {
+    client = first.data;
+  }
   if (!client) throw new Error("Invite link is invalid — client not found.");
+
+  const storedCode = client.client_code ?? null;
+  if (storedCode) {
+    if (!input.inviteClientCode?.trim()) {
+      throw new Error("Enter the client code from your accountant (MLN-XXXXXX).");
+    }
+    if (!clientCodesMatch(storedCode, input.inviteClientCode)) {
+      throw new Error("That client code does not match this invite. Check the email and try again.");
+    }
+  }
 
   const shouldTransfer = await isPracticePlaceholderOwner(client.owner_user_id, client.firm_id);
   const role = shouldTransfer ? "client_owner" : "client_member";
