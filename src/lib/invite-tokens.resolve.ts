@@ -46,6 +46,15 @@ async function resolveLegacyUuid(trimmed: string): Promise<{
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+export function normalizeClientCode(raw: string): string {
+  return raw.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+}
+
+export function clientCodesMatch(a: string | null | undefined, b: string | null | undefined): boolean {
+  if (!a || !b) return false;
+  return normalizeClientCode(a) === normalizeClientCode(b);
+}
+
 /** Resolve an invite token (or legacy client UUID) to a client id. */
 export async function resolveInviteToClientId(invite: string): Promise<{
   clientId: string;

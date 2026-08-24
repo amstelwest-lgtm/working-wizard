@@ -6,6 +6,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
 import { SIGNUP_ACCESS_CODE, notifySignup } from "@/lib/signup-notify";
 import { adminSignUp } from "@/lib/auth.functions";
+import { previewOwnerInvite } from "@/lib/invite-tokens.functions";
 import { OPS_UNLOCK_KEY, unlockOwnerOps } from "@/lib/owner-ops.functions";
 import { registerLighthouseTrialVisit } from "@/lib/lighthouse.functions";
 // Inline so landing paint doesn't wait on a second stylesheet round-trip
@@ -74,12 +75,16 @@ function LandingPage() {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const doAdminSignUp = useServerFn(adminSignUp);
+  const doPreviewInvite = useServerFn(previewOwnerInvite);
   const doUnlockOps = useServerFn(unlockOwnerOps);
   const doTrialVisit = useServerFn(registerLighthouseTrialVisit);
 
   /* ── invite-link state (opaque token preferred; legacy client UUID still works) ── */
   const [inviteClientId, setInviteClientId] = useState<string | null>(null);
   const [inviteIsLegacyUuid, setInviteIsLegacyUuid] = useState(false);
+  const [inviteBusiness, setInviteBusiness] = useState<string | null>(null);
+  const [inviteNeedsCode, setInviteNeedsCode] = useState(false);
+  const [regClientCode, setRegClientCode] = useState("");
 
   /* ── Lighthouse trial link (?lh=<token>) — attribute the signup back to the lead ── */
   const [lhToken, setLhToken] = useState<string | null>(null);
@@ -102,6 +107,7 @@ function LandingPage() {
     const mode = params.get("mode");
     if (inv && mode === "signup") {
       setInviteClientId(inv);
+      void import("@/lib/user-roles").then(({ forcePortal }) => forcePortal("owner"));
       const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
       if (uuidRe.test(inv.trim())) {
         setInviteIsLegacyUuid(true);
@@ -109,13 +115,20 @@ function LandingPage() {
           "This invite link is an older format. Ask your accountant for a fresh link when you can.",
         );
       }
-      // Scroll the registration form into view so the invited user sees it immediately
+      void doPreviewInvite({ data: { token: inv } })
+        .then((preview) => {
+          setInviteBusiness(preview.clientName);
+          setInviteNeedsCode(Boolean(preview.clientCode));
+        })
+        .catch((err: unknown) => {
+          toast.error(err instanceof Error ? err.message : "This invite link is invalid.");
+        });
       setTimeout(() => {
         const el = document.getElementById("register");
         if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
       }, 400);
     }
-  }, []);
+  }, [doPreviewInvite]);
 
   /* ── sign-in modal state ── */
   const [signinOpen, setSigninOpen] = useState(false);
@@ -175,17 +188,17 @@ function LandingPage() {
         if (!cancelled) navigate({ to: "/ops" });
         return;
       }
+      // Invite accept stays on the landing form. A leftover accountant-door
+      // intent in this browser must not dump the session onto /dashboard.
+      if (inviteClientId) return;
       const { resolvePostLoginPath } = await import("@/lib/user-roles");
-      // Do not stamp owner intent here — visiting / while already signed in
-      // must not overwrite an accountant-door login and dump that session
-      // onto the founder board.
       const path = await resolvePostLoginPath(user.id);
       if (!cancelled) navigate({ to: path });
     })();
     return () => {
       cancelled = true;
     };
-  }, [user, loading, navigate]);
+  }, [user, loading, navigate, inviteClientId]);
 
   /* ── Landing theme: keep data-landing; restore prior theme on leave ── */
   useEffect(() => {
@@ -757,23 +770,34 @@ function LandingPage() {
 
     // ── Invite flow: use adminSignUp so the server writes the correct role ──
     if (inviteClientId) {
+      if (inviteNeedsCode && !regClientCode.trim()) {
+        toast.error("Enter the client code from your invite email (MLN-XXXXXX).");
+        return;
+      }
       setRegBusy(true);
       try {
+        const { forcePortal } = await import("@/lib/user-roles");
+        forcePortal("owner");
         await doAdminSignUp({
           data: {
             email: regEmail,
             password: regPassword,
             fullName: regName.trim(),
             inviteClientId,
+            inviteClientCode: regClientCode.trim() || null,
             signupType: "customer",
           },
         });
-        // adminSignUp creates a confirmed user → sign in immediately
         const { error: siErr } = await supabase.auth.signInWithPassword({
           email: regEmail,
           password: regPassword,
         });
         if (siErr) throw siErr;
+        try {
+          localStorage.setItem("pending_invite_client_id", inviteClientId);
+        } catch {
+          /* ignore */
+        }
         navigate({ to: "/app" });
       } catch (err: unknown) {
         toast.error(err instanceof Error ? err.message : "Registration failed.");
@@ -2241,7 +2265,21 @@ function LandingPage() {
                     >
                       You've been invited to your business workspace on MILŌN. Create your account
                       to take ownership and see your numbers.
+                      {inviteBusiness ? ` This link is for ${inviteBusiness}.` : ""}
                     </p>
+                    {user && (
+                      <p
+                        style={{
+                          fontSize: 12,
+                          color: "var(--ink-dim)",
+                          marginBottom: 16,
+                          lineHeight: 1.5,
+                        }}
+                      >
+                        You&apos;re already signed in. Sign out first, then accept this invite as
+                        the business owner — otherwise you&apos;ll stay in the wrong portal.
+                      </p>
+                    )}
                     {inviteIsLegacyUuid && (
                       <p
                         style={{
@@ -2286,6 +2324,24 @@ function LandingPage() {
                       value={regPassword}
                       onChange={(e) => setRegPassword(e.target.value)}
                     />
+
+                    {inviteNeedsCode && (
+                      <>
+                        <label htmlFor="regClientCodeField">Client code</label>
+                        <input
+                          id="regClientCodeField"
+                          type="text"
+                          required
+                          autoCapitalize="characters"
+                          placeholder="MLN-XXXXXX"
+                          value={regClientCode}
+                          onChange={(e) => setRegClientCode(e.target.value.toUpperCase())}
+                        />
+                        <p style={{ fontSize: 12, color: "var(--ink-dim)", marginTop: 6 }}>
+                          It&apos;s in the invite email, next to the claim link.
+                        </p>
+                      </>
+                    )}
 
                     <button
                       type="submit"

@@ -84,6 +84,25 @@ function testInviteUrlParsing() {
     : fail("mode=login should not trigger invite flow");
 }
 
+function testClientCodeMatch() {
+  section("Client code matching");
+
+  function normalizeClientCode(raw: string): string {
+    return raw.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+  }
+  function clientCodesMatch(a: string, b: string): boolean {
+    return normalizeClientCode(a) === normalizeClientCode(b);
+  }
+
+  clientCodesMatch("MLN-AB12CD", "mln ab12cd")
+    ? pass("MLN-AB12CD matches spaced/lowercase input")
+    : fail("code match should ignore case and punctuation");
+
+  !clientCodesMatch("MLN-AB12CD", "MLN-ZZZZZZ")
+    ? pass("wrong code is rejected")
+    : fail("mismatch should fail");
+}
+
 function testFirstRunGateLogic() {
   section("First-run gate logic (pure function — mirrors app.tsx clientMeta effect)");
 
@@ -417,6 +436,7 @@ async function main() {
   console.log("══════════════════════════════════════════════════════════════");
 
   testInviteUrlParsing();
+  testClientCodeMatch();
   testFirstRunGateLogic();
 
   let serviceRoleKey: string;

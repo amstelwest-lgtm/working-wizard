@@ -72,8 +72,8 @@ assert(
   "accountant-door login stays even without a practice role yet (provisioning / dual-role gap)",
 );
 assert(
-  decideAccountantStay({ ...clientOnly, intent: "accountant" }) === true,
-  "accountant-door intent keeps a founder from being yanked to /app after 1s",
+  decideAccountantStay({ ...clientOnly, intent: "accountant" }) === false,
+  "stale accountant intent must not trap an SME-only invitee on /dashboard",
 );
 assert(
   decideOwnerAppBounce({ ...dual, actingAsClient: false }) === false,
@@ -90,6 +90,14 @@ assert(
 
 assert(decidePostLoginPath(clientOnly) === "/app", "client-only → founder board");
 assert(decideAccountantStay(clientOnly) === false, "client-only does not stay on portal by role alone");
+assert(
+  decidePostLoginPath({ ...clientOnly, intent: "accountant" }) === "/app",
+  "SME-only + leftover accountant intent → founder board (invitees)",
+);
+assert(
+  decidePostLoginPath({ ...clientOnly, force: "owner" }) === "/app",
+  "invite force owner → founder board",
+);
 assert(
   decidePostLoginPath({ ...clientOnly, force: "accountant" }) === "/dashboard",
   "client-only + accountant force → practice portal (door they chose)",
@@ -109,6 +117,10 @@ assert(
 assert(
   decidePostLoginPath({ ...dual, intent: "accountant", force: "owner" }) === "/app",
   "explicit founder-door force wins over leftover accountant intent",
+);
+assert(
+  decideAccountantStay({ ...clientOnly, hasFirm: false, intent: "accountant" }) === false,
+  "SME invitee with leftover accountant intent leaves /dashboard",
 );
 
 // Impersonation must never bounce back to the firm dashboard

@@ -21,6 +21,7 @@ export const adminSignUp = createServerFn({ method: "POST" })
         fullName: z.string().optional(),
         businessName: z.string().optional(),
         inviteClientId: z.string().min(8).max(80).optional(),
+        inviteClientCode: z.string().trim().max(32).optional().nullable(),
         signupType: z.enum(["customer", "accountant"]).default("customer"),
         firmName: z.string().optional(),
       })
@@ -38,6 +39,7 @@ export const adminSignUp = createServerFn({ method: "POST" })
         password: data.password,
         fullName: data.fullName,
         inviteClientId: data.inviteClientId,
+        inviteClientCode: data.inviteClientCode,
       });
       return result;
     }
