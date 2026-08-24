@@ -4,10 +4,7 @@ import { InstallInstructions } from "./install-instructions";
 import { useShare } from "@/hooks/use-share";
 
 export function PreLoginShareButton() {
-  const { handleShare, shareOpen, setShareOpen, installOpen, setInstallOpen, appUrl } = useShare({
-    title: "Milōn — Financial Intelligence for SMEs",
-    text: "Check out Milōn — a financial intelligence platform for SMEs and their accountants. Track business health, get specific actions to improve it.",
-  });
+  const { handleShare, shareOpen, setShareOpen, installOpen, setInstallOpen, appUrl } = useShare();
 
   return (
     <>

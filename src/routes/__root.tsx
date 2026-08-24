@@ -18,6 +18,7 @@ import { NotesProvider } from "@/contexts/notes";
 import { FloatingNoteButton } from "@/components/floating-note-button";
 
 import appCss from "../styles.css?url";
+import { SHARE_DESCRIPTION, SHARE_TITLE } from "@/lib/share-copy";
 
 function NotFoundComponent() {
   return (
@@ -81,13 +82,17 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Milōn · Operating Finance" },
-      { name: "description", content: "Operating finance for owner-led businesses." },
+      { title: SHARE_TITLE },
+      { name: "description", content: SHARE_DESCRIPTION },
       { name: "author", content: "Milōn" },
-      { property: "og:title", content: "Milōn" },
-      { property: "og:description", content: "Operating finance for owner-led businesses." },
+      { property: "og:title", content: SHARE_TITLE },
+      { property: "og:description", content: SHARE_DESCRIPTION },
       { property: "og:type", content: "website" },
+      { property: "og:image", content: "/icon-512.png" },
       { name: "twitter:card", content: "summary" },
+      { name: "twitter:title", content: SHARE_TITLE },
+      { name: "twitter:description", content: SHARE_DESCRIPTION },
+      { name: "twitter:image", content: "/icon-512.png" },
       { name: "theme-color", content: "#000000" },
       { name: "apple-mobile-web-app-capable", content: "yes" },
       { name: "apple-mobile-web-app-status-bar-style", content: "default" },
@@ -101,10 +106,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { rel: "stylesheet", href: appCss },
       { rel: "stylesheet", href: "/ask-ai.css" },
       { rel: "manifest", href: "/manifest.webmanifest" },
-      { rel: "icon", href: "/favicon-32.png", type: "image/png", sizes: "32x32" },
-      { rel: "icon", href: "/icon-192.png", type: "image/png", sizes: "192x192" },
-      { rel: "icon", href: "/icon-512.png", type: "image/png", sizes: "512x512" },
-      { rel: "apple-touch-icon", href: "/apple-touch-icon.png", sizes: "180x180" },
+      { rel: "icon", href: "/favicon-32.png?v=2", type: "image/png", sizes: "32x32" },
+      { rel: "icon", href: "/icon-192.png?v=2", type: "image/png", sizes: "192x192" },
+      { rel: "icon", href: "/icon-512.png?v=2", type: "image/png", sizes: "512x512" },
+      { rel: "apple-touch-icon", href: "/apple-touch-icon.png?v=2", sizes: "180x180" },
     ],
     scripts: import.meta.env.DEV
       ? [

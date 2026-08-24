@@ -7,10 +7,7 @@ import { useShare } from "@/hooks/use-share";
 export function ShareButton() {
   const [mounted, setMounted] = useState(false);
   const [hidden, setHidden] = useState(true);
-  const { handleShare, shareOpen, setShareOpen, installOpen, setInstallOpen, appUrl } = useShare({
-    title: "Milōn — Financial Intelligence",
-    text: "Track your business financial health with 31 ratios across Profit, Assets, Financing and Cash.",
-  });
+  const { handleShare, shareOpen, setShareOpen, installOpen, setInstallOpen, appUrl } = useShare();
 
   useEffect(() => {
     const standalone =
