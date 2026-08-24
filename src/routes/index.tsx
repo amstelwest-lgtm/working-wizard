@@ -684,6 +684,10 @@ function LandingPage() {
         password: siPassword,
       });
       if (error) throw error;
+      const { waitForAuthSession, clearInviteQueryFromUrl } = await import("@/lib/invite-handoff");
+      await waitForAuthSession();
+      clearInviteQueryFromUrl();
+      setInviteClientId(null);
       setSigninOpen(false);
       let goOps = false;
       try {
@@ -787,28 +791,54 @@ function LandingPage() {
       setRegBusy(true);
       try {
         const { forcePortal } = await import("@/lib/user-roles");
+        const {
+          clearInviteQueryFromUrl,
+          isEmailAlreadyRegistered,
+          stashInviteHandoff,
+          waitForAuthSession,
+        } = await import("@/lib/invite-handoff");
         forcePortal("owner");
-        await doAdminSignUp({
-          data: {
-            email: regEmail,
-            password: regPassword,
-            fullName: regName.trim(),
-            inviteClientId,
-            inviteClientCode: regClientCode.trim() || null,
-            signupType: "customer",
-          },
-        });
+
+        // A leftover accountant session on this browser must not keep the
+        // invitee in the wrong portal after they accept as the owner.
+        if (user && user.email?.toLowerCase() !== regEmail.trim().toLowerCase()) {
+          await supabase.auth.signOut();
+        }
+
+        let clientId: string | null = null;
+        const sameAccount =
+          user?.email?.toLowerCase() === regEmail.trim().toLowerCase() && Boolean(user);
+        if (!sameAccount) {
+          try {
+            const created = (await doAdminSignUp({
+              data: {
+                email: regEmail,
+                password: regPassword,
+                fullName: regName.trim(),
+                inviteClientId,
+                inviteClientCode: regClientCode.trim() || null,
+                signupType: "customer",
+              },
+            })) as { clientId?: string } | undefined;
+            clientId = created?.clientId ?? null;
+          } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err);
+            if (!isEmailAlreadyRegistered(msg)) throw err;
+            // Account already exists from a previous attempt — sign in below.
+          }
+        }
+
         const { error: siErr } = await supabase.auth.signInWithPassword({
           email: regEmail,
           password: regPassword,
         });
         if (siErr) throw siErr;
-        try {
-          localStorage.setItem("pending_invite_client_id", inviteClientId);
-        } catch {
-          /* ignore */
-        }
-        navigate({ to: "/app" });
+        await waitForAuthSession();
+        stashInviteHandoff(clientId);
+        clearInviteQueryFromUrl();
+        setInviteClientId(null);
+        toast.success("Welcome — opening your workspace.");
+        await navigate({ to: "/app", replace: true });
       } catch (err: unknown) {
         toast.error(err instanceof Error ? err.message : "Registration failed.");
       } finally {
@@ -2289,8 +2319,12 @@ function LandingPage() {
                           lineHeight: 1.5,
                         }}
                       >
-                        You&apos;re already signed in. Sign out first, then accept this invite as
-                        the business owner — otherwise you&apos;ll stay in the wrong portal.
+                        You&apos;re signed in as {user.email}. Accepting this invite will open the
+                        owner workspace
+                        {user.email?.toLowerCase() !== regEmail.trim().toLowerCase() && regEmail
+                          ? ` as ${regEmail}`
+                          : ""}
+                        .
                       </p>
                     )}
                     {inviteIsLegacyUuid && (

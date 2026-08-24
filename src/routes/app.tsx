@@ -72,6 +72,13 @@ import {
   type ClientOperatingProfile,
 } from "@/lib/client-profile";
 import { profileIndustryLabel, profilePriorityWeight } from "@/lib/profile-signals";
+import { ownerWalkthroughReady, shouldShowOwnerProfileFunnel } from "@/lib/first-run";
+import {
+  consumeInviteHandoffFlag,
+  hasInviteHandoffFlag,
+  isClientUuid,
+  PENDING_INVITE_CLIENT_KEY,
+} from "@/lib/invite-handoff";
 
 type Benchmark = { p25: number; p50: number; p75: number; unit: string; higher_is_better: boolean };
 
@@ -1930,9 +1937,25 @@ function Index() {
   const { user, loading: authLoading, signOut } = useAuth();
   const navigate = useNavigate();
 
-  // Redirect unauthenticated users to the landing page
+  // Redirect unauthenticated users to the landing page. After invite accept,
+  // React auth state can lag the real Supabase session — don't bounce yet.
   useEffect(() => {
-    if (!authLoading && !user) navigate({ to: "/" });
+    if (authLoading) return;
+    if (user) {
+      consumeInviteHandoffFlag();
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      if (hasInviteHandoffFlag()) return;
+      const { data } = await supabase.auth.getSession();
+      if (cancelled) return;
+      if (data.session?.user) return;
+      navigate({ to: "/" });
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [user, authLoading, navigate]);
 
   // Handle QBO OAuth callback: ?qbo=connected or ?qbo=error
@@ -2079,37 +2102,43 @@ function Index() {
         return;
       }
 
-      // 1. Check if user owns a client record directly
-      const { data: own } = await supabase
-        .from("clients")
-        .select("id")
-        .eq("owner_user_id", u.user.id)
-        .limit(1)
-        .maybeSingle();
-      if (own?.id) {
-        if (!cancelled) setEffectiveClientId(own.id);
-        return;
+      const findLinkedClient = async () => {
+        const { data: own } = await supabase
+          .from("clients")
+          .select("id")
+          .eq("owner_user_id", u.user.id)
+          .limit(1)
+          .maybeSingle();
+        if (own?.id) return own.id;
+        const { data: mem } = await supabase
+          .from("client_memberships")
+          .select("client_id")
+          .eq("user_id", u.user.id)
+          .limit(1)
+          .maybeSingle();
+        return mem?.client_id ?? null;
+      };
+
+      // Invite accept can land before RLS sees the new owner row — retry briefly.
+      for (let i = 0; i < 5; i++) {
+        const linked = await findLinkedClient();
+        if (linked) {
+          try {
+            localStorage.removeItem(PENDING_INVITE_CLIENT_KEY);
+          } catch {
+            /* ignore */
+          }
+          if (!cancelled) setEffectiveClientId(linked);
+          return;
+        }
+        if (i < 4) await new Promise((r) => setTimeout(r, 250));
       }
 
-      // 2. Check client_memberships (invited clients land here after confirmation)
-      const { data: mem } = await supabase
-        .from("client_memberships")
-        .select("client_id")
-        .eq("user_id", u.user.id)
-        .limit(1)
-        .maybeSingle();
-      if (mem?.client_id) {
-        if (!cancelled) setEffectiveClientId(mem.client_id);
-        return;
-      }
-
-      // 3. Process a pending invite stored in localStorage after email confirmation
+      // 3. Process a pending invite stored after accept (UUID only — never the opaque token).
       const pendingInvite =
-        typeof localStorage !== "undefined"
-          ? localStorage.getItem("pending_invite_client_id")
-          : null;
+        typeof localStorage !== "undefined" ? localStorage.getItem(PENDING_INVITE_CLIENT_KEY) : null;
       const metaInvite = (u.user.user_metadata?.invite_client_id as string | null) ?? null;
-      const inviteClientId = pendingInvite ?? metaInvite;
+      const inviteClientId = [pendingInvite, metaInvite].find((v) => isClientUuid(v)) ?? null;
       if (inviteClientId) {
         // Prefer ownership (G25 handoff already set owner_user_id server-side).
         const { data: claimed } = await supabase
@@ -2119,7 +2148,7 @@ function Index() {
           .eq("owner_user_id", u.user.id)
           .maybeSingle();
         if (claimed?.id) {
-          localStorage.removeItem("pending_invite_client_id");
+          localStorage.removeItem(PENDING_INVITE_CLIENT_KEY);
           if (!cancelled) setEffectiveClientId(claimed.id);
           return;
         }
@@ -2139,7 +2168,7 @@ function Index() {
               { onConflict: "client_id,user_id" },
             );
         }
-        localStorage.removeItem("pending_invite_client_id");
+        localStorage.removeItem(PENDING_INVITE_CLIENT_KEY);
         if (!cancelled) setEffectiveClientId(inviteClientId);
         return;
       }
@@ -2148,6 +2177,15 @@ function Index() {
       // Uses ensure_own_client() (SECURITY DEFINER RPC) because the direct INSERT
       // RLS policy "clients insert own" does not evaluate correctly via PostgREST
       // for INSERT WITH CHECK in this Supabase project configuration.
+      // Never do this while an invite token is still pending — that would mint a
+      // blank second client and skip the invited workspace.
+      if (pendingInvite && !isClientUuid(pendingInvite)) {
+        if (!cancelled) {
+          toast.error("We couldn't open the invited workspace yet. Refresh to try again.");
+          setEffectiveClientId(null);
+        }
+        return;
+      }
       const meta = u.user.user_metadata as {
         full_name?: string;
         business_name?: string;
@@ -2178,7 +2216,7 @@ function Index() {
     return () => {
       cancelled = true;
     };
-  }, [actingClientId]);
+  }, [actingClientId, user?.id]);
 
   useEffect(() => {
     if (!effectiveClientId) {
@@ -2256,15 +2294,22 @@ function Index() {
         if (profile) {
           setOperatingProfile(profile);
           setBusinessTypeId(profile.businessTypeId);
-        } else if (data?.business_type) {
-          setBusinessTypeId(data.business_type as string);
-        } else if (!actingClientId && userRole !== null && userRole !== "client_member") {
-          // First-run: owner has no profile yet — open the 10-question funnel.
+        } else if (
+          shouldShowOwnerProfileFunnel({
+            hasOperatingProfile: false,
+            actingClientId,
+            userRole,
+          }) &&
+          firstRunStep === null
+        ) {
+          if (data?.business_type) setBusinessTypeId(data.business_type as string);
           setFirstRunStep("pick-type");
           setShowOnboarding(true);
+        } else if (data?.business_type) {
+          setBusinessTypeId(data.business_type as string);
         }
       });
-  }, [effectiveClientId, userRole, actingClientId]);
+  }, [effectiveClientId, userRole, actingClientId, firstRunStep]);
 
   // Settings → Business profile deep-link
   useEffect(() => {
@@ -2948,13 +2993,12 @@ function Index() {
         {!actingClientId && (
           <WalkthroughWizard
             variant="owner"
-            ready={
-              firstRunStep === null &&
-              !showOnboarding &&
-              !showBankDrafter &&
-              !showCashFromBanks &&
-              hasRealFinancials
-            }
+            ready={ownerWalkthroughReady({
+              firstRunStep,
+              showOnboarding,
+              showBankDrafter,
+              showCashFromBanks,
+            })}
             onTabChange={handleTourTabChange}
             userRole={userRole ?? undefined}
           />
