@@ -1,4 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import "@/styles/founder-portal.css";
 import { useState, useMemo, useEffect, lazy, Suspense, useRef, useCallback } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useAuth } from "@/hooks/use-auth";
@@ -2956,7 +2957,7 @@ function Index() {
         )}
         {actingClientId && (
           <div className="border-b border-amber-600/40 bg-amber-500/15 print:hidden">
-            <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2 px-4 py-2 text-xs text-amber-100 sm:px-6">
+            <div className="founder-shell mx-auto flex flex-wrap items-center justify-between gap-2 py-2 text-xs text-amber-100">
               <div>
                 <span className="font-semibold">Acting as client:</span>{" "}
                 <span className="text-amber-200">{actingClientName ?? "Client"}</span>
@@ -2973,7 +2974,7 @@ function Index() {
             </div>
           </div>
         )}
-        <div id="board-pack" className="mx-auto max-w-6xl px-4 py-5 sm:px-6 lg:py-7">
+        <div id="board-pack" className="founder-shell mx-auto py-5 lg:py-7">
           {/* App bar — compact single row */}
           <header className="relative mb-3 overflow-hidden rounded-xl border border-slate-200/80 bg-white/90 px-2.5 py-1.5 shadow-[0_8px_24px_rgba(15,23,42,0.05)] backdrop-blur-xl dark:border-slate-800/90 dark:bg-[#0d1420]/90 dark:shadow-[0_10px_28px_rgba(0,0,0,0.2)] sm:px-3">
             <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#d4a550]/80 to-transparent" />
@@ -3444,7 +3445,7 @@ function Index() {
                   {/* No-data empty state — shown until owner uploads or enters real financials */}
                   {!hasRealFinancials && !actingClientId ? (
                     <div>
-                      <div className="grid w-full items-start gap-4 lg:grid-cols-[minmax(0,1fr)_280px] xl:grid-cols-[minmax(0,1fr)_300px]">
+                      <div className="founder-overview-grid grid w-full items-start gap-4 lg:grid-cols-[minmax(0,1fr)_280px] xl:grid-cols-[minmax(0,1fr)_300px]">
                         <div className="flex w-full flex-col items-center gap-5 rounded-xl border border-dashed border-slate-200 bg-white/60 px-4 py-10 dark:border-slate-700 dark:bg-slate-900/40">
                           <div className="relative flex h-36 w-36 items-center justify-center">
                             <div className="absolute inset-0 rounded-full border-2 border-dashed border-[#d4a550]/25" />
@@ -3511,7 +3512,7 @@ function Index() {
                     </div>
                   ) : (
                     <div>
-                      <div className="grid w-full items-start gap-4 lg:grid-cols-[minmax(0,1fr)_280px] xl:grid-cols-[minmax(0,1fr)_300px]">
+                      <div className="founder-overview-grid grid w-full items-start gap-4 lg:grid-cols-[minmax(0,1fr)_280px] xl:grid-cols-[minmax(0,1fr)_300px]">
                         {/* Main column */}
                         <section className="flex min-w-0 flex-col gap-3">
                           <div className="rounded-xl border border-slate-200/90 bg-white px-3 py-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)] dark:border-white/10 dark:bg-[#0f172a]/40 dark:shadow-none sm:px-5">
@@ -3951,7 +3952,7 @@ function Index() {
               {/* Ask AI first — same widget as Business Health, scoped to this client */}
               <div
                 id="ask-ai-waterfall"
-                className="mx-auto mb-4 w-full max-w-[640px] rounded-xl border border-[#b7872a]/30 bg-white dark:bg-[#0a1020]/80"
+                className="mb-4 w-full rounded-xl border border-[#b7872a]/30 bg-white dark:bg-[#0a1020]/80"
               />
               <div id="wizard-profit-walk">
                 <ProfitabilityWaterfall

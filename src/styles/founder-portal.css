@@ -1,0 +1,43 @@
+/*
+ * SME founder board (/app) — large-desktop width.
+ *
+ * Default matches Tailwind max-w-6xl (72rem / 1152px). From 1440px the shell
+ * opens toward the viewport so Health / Profit / Cash no longer sit as a
+ * skinny column on a wide monitor. Quiet side margins stay so it never
+ * kisses the screen edge.
+ *
+ * Import once from src/routes/app.tsx.
+ */
+
+.founder-shell {
+  width: 100%;
+  max-width: 72rem;
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+
+@media (min-width: 640px) {
+  .founder-shell {
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+  }
+}
+
+@media (min-width: 1440px) {
+  .founder-shell {
+    max-width: min(2080px, 90vw);
+    padding-left: clamp(28px, 3.2vw, 56px);
+    padding-right: clamp(28px, 3.2vw, 56px);
+  }
+}
+
+@media (min-width: 1800px) {
+  .founder-shell {
+    max-width: min(2200px, 92vw);
+  }
+
+  .founder-overview-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(340px, 400px);
+    gap: 1.5rem;
+  }
+}

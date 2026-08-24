@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowLeft, ChevronRight, TrendingUp, Layers, Shield, Droplet, type LucideIcon } from "lucide-react";
 
 /**
@@ -260,6 +260,24 @@ function Sphere({
 
 type Level = 1 | 2 | 3;
 
+function useCompactOrbSize(compact: boolean): number {
+  const base = compact ? 196 : 280;
+  const [extra, setExtra] = useState(0);
+  useEffect(() => {
+    if (!compact) return;
+    const apply = () => {
+      const w = window.innerWidth;
+      if (w >= 1800) setExtra(52);
+      else if (w >= 1440) setExtra(28);
+      else setExtra(0);
+    };
+    apply();
+    window.addEventListener("resize", apply);
+    return () => window.removeEventListener("resize", apply);
+  }, [compact]);
+  return base + extra;
+}
+
 export function SphereHero({
   overallHealth,
   displayStatus,
@@ -275,7 +293,7 @@ export function SphereHero({
   const liveRef = useRef<HTMLDivElement>(null);
 
   const activePillar = pillars.find((p) => p.id === activePillarId) ?? null;
-  const orbSize = compact ? 196 : 280;
+  const orbSize = useCompactOrbSize(compact);
 
   const go = useCallback((next: Level, pillarId?: SpherePillar["id"]) => {
     playKlink();
