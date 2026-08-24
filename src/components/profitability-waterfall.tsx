@@ -279,7 +279,7 @@ export function ProfitabilityWaterfall({
         <CardContent className="pb-7 pt-6">
           {revenue === 0 && (
             <p className="mb-4 rounded-lg border border-amber-900/10 bg-amber-50/70 px-3 py-2 text-xs italic text-slate-600 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-400">
-              Enter revenue figures in Financial Inputs or Weekly Inputs above to populate the waterfall.
+              Enter revenue figures in Financial Inputs or Weekly Inputs below to populate the waterfall.
             </p>
           )}
 
