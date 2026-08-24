@@ -871,6 +871,7 @@ export type Database = {
           last_forecast_at: string | null
           last_login_at: string | null
           name: string
+          client_code: string | null
           open_queries_count: number
           owner_user_id: string
           reports_issued_count: number
@@ -893,6 +894,7 @@ export type Database = {
           last_forecast_at?: string | null
           last_login_at?: string | null
           name: string
+          client_code?: string | null
           open_queries_count?: number
           owner_user_id: string
           reports_issued_count?: number
@@ -915,6 +917,7 @@ export type Database = {
           last_forecast_at?: string | null
           last_login_at?: string | null
           name?: string
+          client_code?: string | null
           open_queries_count?: number
           owner_user_id?: string
           reports_issued_count?: number
@@ -1427,14 +1430,18 @@ export type Database = {
         Args: { p_client_id: string }
         Returns: string
       }
-      create_firm_client: {
-        Args: {
-          p_name: string
-          p_firm_id: string
-          p_business_type?: string | null
-        }
-        Returns: string
-      }
+          create_firm_client: {
+            Args: {
+              p_name: string
+              p_firm_id?: string | null
+              p_business_type?: string | null
+            }
+            Returns: Json
+          }
+          ensure_practice_firm: {
+            Args: { p_name?: string | null }
+            Returns: string
+          }
       has_client_access: {
         Args: { _client_id: string; _user_id: string }
         Returns: boolean

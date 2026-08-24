@@ -65,6 +65,7 @@ type Client = {
   id: string;
   name: string;
   business_type: string | null;
+  client_code?: string | null;
   cash_runway_weeks: number | null;
   last_forecast_at: string | null;
   last_login_at: string | null;
@@ -244,14 +245,21 @@ function AddClientDialog({
   onClose,
   onAdded,
   firmId,
+  brandLoading = false,
   defaultName = "",
   heading = "Add a client",
   blurb,
 }: {
   open: boolean;
   onClose: () => void;
-  onAdded: (created: { id: string; name: string }) => void;
+  onAdded: (created: {
+    id: string;
+    name: string;
+    firm_id: string | null;
+    client_code: string | null;
+  }) => void;
   firmId: string | null;
+  brandLoading?: boolean;
   defaultName?: string;
   heading?: string;
   blurb?: string;
@@ -277,21 +285,26 @@ function AddClientDialog({
       toast.error("Enter a business name");
       return;
     }
-    if (!firmId) {
-      toast.error("No practice firm found yet — refresh and try again.");
-      return;
-    }
     setSaving(true);
     try {
       const created = await createClient({
         data: {
           name: newName.trim(),
-          firmId,
+          firmId: firmId ?? undefined,
           businessType: newType.trim() || null,
         },
       });
-      toast.success("Client added");
-      onAdded({ id: created.id, name: created.name });
+      toast.success(
+        created.client_code
+          ? `Client added · ${created.client_code}`
+          : "Client added",
+      );
+      onAdded({
+        id: created.id,
+        name: created.name,
+        firm_id: created.firm_id,
+        client_code: created.client_code,
+      });
       onClose();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not add client");
@@ -319,9 +332,14 @@ function AddClientDialog({
               {blurb}
             </p>
           )}
-          {!firmId && (
-            <p style={{ marginBottom: 16, fontSize: 13, color: "var(--warn, #e8b34b)" }}>
-              Your practice firm is still loading. Wait a moment, then try again.
+          {brandLoading && !firmId && (
+            <p style={{ marginBottom: 16, fontSize: 13, color: "var(--ink-dim)" }}>
+              Loading your practice — you can still add the client.
+            </p>
+          )}
+          {!brandLoading && !firmId && (
+            <p style={{ marginBottom: 16, fontSize: 13, color: "var(--ink-dim)" }}>
+              A practice firm will be created automatically with this first client.
             </p>
           )}
           <div style={{ marginBottom: 16 }}>
@@ -393,7 +411,7 @@ function AddClientDialog({
             <button
               className="btn gold"
               onClick={() => void add()}
-              disabled={saving || !newName.trim() || !firmId}
+              disabled={saving || !newName.trim()}
               style={{ flex: 1 }}
             >
               {saving ? "Saving…" : "Add client"}
@@ -437,7 +455,7 @@ function Dashboard() {
     };
   }, [user, navigate]);
 
-  const { firmId, firms, brandLoading, profile } = useAccountantProfile();
+  const { firmId, firms, brandLoading, profile, refreshFirms } = useAccountantProfile();
   const firm: Firm | null =
     firms.find((f) => f.id === firmId) ??
     (firms[0]
@@ -701,7 +719,7 @@ function Dashboard() {
       markOnboardingDone(ACCOUNTANT_FIRST_CLIENT_KEY);
       return;
     }
-    if (!onboardingDone(ACCOUNTANT_FIRST_CLIENT_KEY) && (firm?.id || firmId)) {
+    if (!onboardingDone(ACCOUNTANT_FIRST_CLIENT_KEY) && !brandLoading) {
       setFirstClientOpen(true);
     }
   }, [loading, brandLoading, clientRows.length, firm?.id, firmId]);
@@ -1209,7 +1227,18 @@ function Dashboard() {
                   >
                     <td>
                       <div className="cname">{c.name}</div>
-                      <div className="ctype">{c.business_type ?? "—"}</div>
+                      <div className="ctype">
+                        {c.client_code ? (
+                          <>
+                            <span style={{ fontFamily: "ui-monospace, monospace", letterSpacing: "0.04em" }}>
+                              {c.client_code}
+                            </span>
+                            {c.business_type ? ` · ${c.business_type}` : ""}
+                          </>
+                        ) : (
+                          (c.business_type ?? "—")
+                        )}
+                      </div>
                     </td>
                     <td>
                       <div className="cell-health">
@@ -1315,7 +1344,11 @@ function Dashboard() {
                                 });
                                 const url = `${origin}/?invite=${token}&mode=signup`;
                                 await navigator.clipboard?.writeText(url);
-                                toast.success("Owner invite link copied for " + c.name);
+                                toast.success(
+                                  c.client_code
+                                    ? `Owner invite link copied for ${c.name} (${c.client_code})`
+                                    : "Owner invite link copied for " + c.name,
+                                );
                               } catch (err) {
                                 toast.error(
                                   err instanceof Error ? err.message : "Could not mint invite link",
@@ -1413,7 +1446,10 @@ function Dashboard() {
             const wasFirst = firstClientOpen;
             setFirstClientOpen(false);
             setAddOpen(false);
-            void load(firmId, user.id);
+            void (async () => {
+              await refreshFirms();
+              void load(created.firm_id ?? firmId, user.id);
+            })();
             if (wasFirst && created.id) {
               navigate({
                 to: "/clients/$clientId",
@@ -1423,6 +1459,7 @@ function Dashboard() {
             }
           }}
           firmId={firm?.id ?? firmId}
+          brandLoading={brandLoading}
           defaultName={firstClientOpen ? PRACTICE_TEST_CLIENT_NAME : ""}
           heading={firstClientOpen ? "Your first practice client" : "Add a client"}
           blurb={

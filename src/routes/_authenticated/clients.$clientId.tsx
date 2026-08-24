@@ -314,6 +314,7 @@ type Client = {
   id: string;
   name: string;
   business_type: string | null;
+  client_code?: string | null;
   operating_profile?: unknown;
   cash_runway_weeks: number | null;
   last_forecast_at: string | null;
@@ -669,14 +670,18 @@ function ClientView() {
         const { data, error } = await supabase
           .from("clients")
           .select(
-            "id, name, business_type, operating_profile, cash_runway_weeks, last_forecast_at, financials, financials_updated_at, reports_issued_count, cashflow",
+            "id, name, business_type, client_code, operating_profile, cash_runway_weeks, last_forecast_at, financials, financials_updated_at, reports_issued_count, cashflow",
           )
           .eq("id", clientId)
           .maybeSingle();
 
         if (error) {
           // Check if error is due to missing column
-          if (error.message?.includes("reports_issued_count") || error.code === "42703") {
+          if (
+            error.message?.includes("reports_issued_count") ||
+            error.message?.includes("client_code") ||
+            error.code === "42703"
+          ) {
             // Retry without the missing column
             const { data: data2, error: error2 } = await supabase
               .from("clients")
@@ -1359,6 +1364,17 @@ function ClientView() {
             <div>
               <h1>{client.name}</h1>
               <span className="ctype">
+                {client.client_code ? (
+                  <span
+                    style={{
+                      fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+                      letterSpacing: "0.06em",
+                      marginRight: 8,
+                    }}
+                  >
+                    {client.client_code}
+                  </span>
+                ) : null}
                 {profileIndustryLabel(
                   parseOperatingProfile(client.operating_profile),
                   client.business_type ?? "—",
