@@ -3948,10 +3948,11 @@ function Index() {
                 </span>
                 <span className="h-px flex-1 bg-gradient-to-r from-[#b7872a]/30 to-transparent" />
               </div>
-              {/* Weekly inputs — collapsible table feeding the waterfall */}
-              <div className="mb-4">
-                <WeeklyInputTable />
-              </div>
+              {/* Ask AI first — same widget as Business Health, scoped to this client */}
+              <div
+                id="ask-ai-waterfall"
+                className="mx-auto mb-4 w-full max-w-[640px] rounded-xl border border-[#b7872a]/30 bg-white dark:bg-[#0a1020]/80"
+              />
               <div id="wizard-profit-walk">
                 <ProfitabilityWaterfall
                   clientName={actingClientName ?? undefined}
@@ -3983,11 +3984,10 @@ function Index() {
                   })()}
                 />
               </div>
-              {/* Ask your numbers — edge-function chat widget */}
-              <div
-                id="ask-ai-waterfall"
-                className="mx-auto mt-4 w-full max-w-[640px] rounded-xl border border-[#b7872a]/30 bg-white dark:bg-[#0a1020]/80"
-              />
+              {/* Weekly inputs feed the waterfall — sit below so the chart stays the focus */}
+              <div className="mt-4">
+                <WeeklyInputTable />
+              </div>
             </TabsContent>
 
             <TabsContent value="next">
