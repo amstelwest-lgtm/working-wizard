@@ -76,6 +76,10 @@ assert(
   "stale accountant intent must not trap an SME-only invitee on /dashboard",
 );
 assert(
+  decideAccountantStay({ ...clientOnly, force: null, intent: "accountant" }) === false,
+  "dashboard must not treat leftover intent as a just-signed-in accountant door",
+);
+assert(
   decideOwnerAppBounce({ ...dual, actingAsClient: false }) === false,
   "dual-role later visit to /app (no force) is allowed",
 );

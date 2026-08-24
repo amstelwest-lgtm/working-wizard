@@ -35,6 +35,16 @@ export const Route = createFileRoute("/")({
 
 const LANDING_THEME_KEY = "milon.landing.theme";
 
+/** Invite claim links: `/?invite=<token>&mode=signup`. */
+function pendingInviteTokenFromUrl(): string | null {
+  if (typeof window === "undefined") return null;
+  const params = new URLSearchParams(window.location.search);
+  const inv = params.get("invite");
+  const mode = params.get("mode");
+  if (inv && mode === "signup") return inv;
+  return null;
+}
+
 function applyLandingTheme(theme: "light" | "dark") {
   const root = document.documentElement;
   const body = document.body;
@@ -101,33 +111,32 @@ function LandingPage() {
   }, [doTrialVisit]);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    const params = new URLSearchParams(window.location.search);
-    const inv = params.get("invite");
-    const mode = params.get("mode");
-    if (inv && mode === "signup") {
-      setInviteClientId(inv);
-      void import("@/lib/user-roles").then(({ forcePortal }) => forcePortal("owner"));
-      const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-      if (uuidRe.test(inv.trim())) {
-        setInviteIsLegacyUuid(true);
-        toast.message(
-          "This invite link is an older format. Ask your accountant for a fresh link when you can.",
-        );
-      }
-      void doPreviewInvite({ data: { token: inv } })
-        .then((preview) => {
-          setInviteBusiness(preview.clientName);
-          setInviteNeedsCode(Boolean(preview.clientCode));
-        })
-        .catch((err: unknown) => {
-          toast.error(err instanceof Error ? err.message : "This invite link is invalid.");
-        });
-      setTimeout(() => {
-        const el = document.getElementById("register");
-        if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-      }, 400);
+    const inv = pendingInviteTokenFromUrl();
+    if (!inv) return;
+    setInviteClientId(inv);
+    // Show the code field immediately so a slow preview cannot let them submit
+    // without it. Hide only after preview confirms this client has no code.
+    setInviteNeedsCode(true);
+    void import("@/lib/user-roles").then(({ forcePortal }) => forcePortal("owner"));
+    const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (uuidRe.test(inv.trim())) {
+      setInviteIsLegacyUuid(true);
+      toast.message(
+        "This invite link is an older format. Ask your accountant for a fresh link when you can.",
+      );
     }
+    void doPreviewInvite({ data: { token: inv } })
+      .then((preview) => {
+        setInviteBusiness(preview.clientName);
+        setInviteNeedsCode(Boolean(preview.clientCode));
+      })
+      .catch((err: unknown) => {
+        toast.error(err instanceof Error ? err.message : "This invite link is invalid.");
+      });
+    setTimeout(() => {
+      const el = document.getElementById("register");
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 400);
   }, [doPreviewInvite]);
 
   /* ── sign-in modal state ── */
@@ -188,9 +197,10 @@ function LandingPage() {
         if (!cancelled) navigate({ to: "/ops" });
         return;
       }
-      // Invite accept stays on the landing form. A leftover accountant-door
-      // intent in this browser must not dump the session onto /dashboard.
-      if (inviteClientId) return;
+      // Invite accept stays on the landing form. Read the URL here (not
+      // inviteClientId state) so a leftover accountant session cannot race
+      // the invite effect and dump the user onto /dashboard before the form paints.
+      if (pendingInviteTokenFromUrl() || inviteClientId) return;
       const { resolvePostLoginPath } = await import("@/lib/user-roles");
       const path = await resolvePostLoginPath(user.id);
       if (!cancelled) navigate({ to: path });
@@ -2266,6 +2276,9 @@ function LandingPage() {
                       You've been invited to your business workspace on MILŌN. Create your account
                       to take ownership and see your numbers.
                       {inviteBusiness ? ` This link is for ${inviteBusiness}.` : ""}
+                      {inviteNeedsCode
+                        ? " You'll need the client code from the email (MLN-XXXXXX)."
+                        : ""}
                     </p>
                     {user && (
                       <p

@@ -629,6 +629,8 @@ function Dashboard() {
   // / founder accounts onto the SME board.
   useEffect(() => {
     if (!user) return;
+    // One-shot accountant-door force only. Leftover localStorage intent must
+    // not keep an SME invitee here — shouldStayOnAccountantPortal decides.
     if (isAccountantDoor()) {
       setPortalIntent("accountant");
       clearForcePortal();

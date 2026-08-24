@@ -135,9 +135,13 @@ export function clearPortalRouting(): void {
   removeStorage(local, PORTAL_INTENT_KEY);
 }
 
-/** True when this session just came through (or last used) the accountant door. */
+/**
+ * True only for a just-signed-in accountant-door session (one-shot force).
+ * Leftover localStorage intent must not count — that trapped SME invitees
+ * on /dashboard after they accepted an owner invite in the same browser.
+ */
 export function isAccountantDoor(): boolean {
-  return peekForcePortal() === "accountant" || getPortalIntent() === "accountant";
+  return peekForcePortal() === "accountant";
 }
 
 export type PortalRouteDecision = {
