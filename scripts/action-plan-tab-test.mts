@@ -29,6 +29,8 @@ const appSrc = readFileSync(resolve("src/routes/app.tsx"), "utf8");
 assert(appSrc.includes('lazyPanel(() => import("@/components/action-plan")'), "founder board uses lazyPanel");
 assert(appSrc.includes('void import("@/components/action-plan")'), "founder board preloads Action Plan chunk");
 assert(appSrc.includes('<TabErrorBoundary label="Action Plan">'), "founder board wraps Action Plan");
+assert(appSrc.includes('<TabErrorBoundary label="Cash Forecast">'), "founder board wraps Cash Forecast");
+assert(appSrc.includes('<TabErrorBoundary label="Budget">'), "founder board wraps Budget");
 
 const clientSrc = readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8");
 assert(clientSrc.includes('lazyPanel(() => import("@/components/action-plan")'), "client board uses lazyPanel");

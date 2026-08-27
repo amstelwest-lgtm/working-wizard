@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import "@/styles/founder-portal.css";
-import { useState, useMemo, useEffect, lazy, Suspense, useRef, useCallback } from "react";
+import { useState, useMemo, useEffect, Suspense, useRef, useCallback } from "react";
 import { lazyPanel, TabErrorBoundary } from "@/components/lazy-panel";
 import { useServerFn } from "@tanstack/react-start";
 import { useAuth } from "@/hooks/use-auth";
@@ -115,11 +115,13 @@ const RATIO_KEY_TO_SNAPSHOT: Record<string, string> = {
   debtToEquity: "Debt-to-Equity",
   debtToAssets: "Debt-to-Assets",
 };
-const CashForecastPanel = lazy(() =>
-  import("@/components/cash-forecast").then((m) => ({ default: m.CashForecastPanel })),
+const CashForecastPanel = lazyPanel(
+  () => import("@/components/cash-forecast").then((m) => ({ default: m.CashForecastPanel })),
+  "Cash Forecast",
 );
-const BudgetPanel = lazy(() =>
-  import("@/components/budget/budget-panel").then((m) => ({ default: m.BudgetPanel })),
+const BudgetPanel = lazyPanel(
+  () => import("@/components/budget/budget-panel").then((m) => ({ default: m.BudgetPanel })),
+  "Budget",
 );
 const ActionPlanPanel = lazyPanel(() => import("@/components/action-plan"), "Action Plan");
 import { SplashScreen } from "@/components/splash-screen";
@@ -2241,6 +2243,7 @@ function Index() {
     financials_updated_at?: string | null;
     operating_profile?: ClientOperatingProfile | null;
   } | null>(null);
+  const [onboardingGateReady, setOnboardingGateReady] = useState(false);
   const [activeTab, setActiveTab] = useState<string>("today");
   const fetchReviewSignoffs = useServerFn(listClientReviewSignoffs);
   const [financialsSignoff, setFinancialsSignoff] = useState<ClientReviewSignoff | null>(null);
@@ -2261,8 +2264,10 @@ function Index() {
   useEffect(() => {
     if (!effectiveClientId) {
       setClientMeta(null);
+      setOnboardingGateReady(false);
       return;
     }
+    let cancelled = false;
     supabase
       .from("clients")
       .select(
@@ -2271,6 +2276,7 @@ function Index() {
       .eq("id", effectiveClientId)
       .maybeSingle()
       .then((res) => {
+        if (cancelled) return;
         const data = res.data as {
           business_type: string | null;
           cash_runway_weeks: number | null;
@@ -2308,7 +2314,17 @@ function Index() {
         } else if (data?.business_type) {
           setBusinessTypeId(data.business_type as string);
         }
+      })
+      .catch((err) => {
+        console.warn("[founder] client meta fetch failed:", err);
+        if (!cancelled) setClientMeta(null);
+      })
+      .finally(() => {
+        if (!cancelled) setOnboardingGateReady(true);
       });
+    return () => {
+      cancelled = true;
+    };
   }, [effectiveClientId, userRole, actingClientId, firstRunStep]);
 
   // Settings → Business profile deep-link
@@ -2874,27 +2890,30 @@ function Index() {
 
   // Next-steps prioritisation: Pareto (impact weighting) × Eisenhower (urgency from health) × Cynefin (problem domain).
   const nextSteps = (Object.keys(RATIO_META) as RatioKey[])
-    .map((k) => {
+    .flatMap((k) => {
       const meta = RATIO_META[k];
       const ns = NEXT_STEP_META[k];
+      if (!meta || !ns) return [];
       const health = healthMap[k];
       const urgency = isFinite(health) ? 100 - health : 50;
       // Profile answers (top pressure, stock, pay timing, team) reorder moves
       // so structurally irrelevant ratios sink and the owner's pain surfaces.
       const score = urgency * ns.impact * profilePriorityWeight(operatingProfile, meta.friendly);
-      return {
-        key: k,
-        title: meta.steps[0],
-        ratioName: meta.friendly,
-        icon: meta.icon,
-        cynefin: ns.cynefin,
-        eisenhower: eisenhowerOf(health, ns.impact),
-        impact: ns.impact,
-        impactLine: ns.impactLine,
-        health,
-        score,
-        actions: meta.steps.slice(0, 3),
-      };
+      return [
+        {
+          key: k,
+          title: meta.steps[0],
+          ratioName: meta.friendly,
+          icon: meta.icon,
+          cynefin: ns.cynefin,
+          eisenhower: eisenhowerOf(health, ns.impact),
+          impact: ns.impact,
+          impactLine: ns.impactLine,
+          health,
+          score,
+          actions: meta.steps.slice(0, 3),
+        },
+      ];
     })
     .sort((a, b) => b.score - a.score)
     .slice(0, 10);
@@ -2991,17 +3010,20 @@ function Index() {
       <main className="min-h-screen overflow-x-hidden bg-slate-950 text-slate-100">
         <SplashScreen />
         {!actingClientId && (
-          <WalkthroughWizard
-            variant="owner"
-            ready={ownerWalkthroughReady({
-              firstRunStep,
-              showOnboarding,
-              showBankDrafter,
-              showCashFromBanks,
-            })}
-            onTabChange={handleTourTabChange}
-            userRole={userRole ?? undefined}
-          />
+          <TabErrorBoundary label="Walkthrough">
+            <WalkthroughWizard
+              variant="owner"
+              ready={ownerWalkthroughReady({
+                firstRunStep,
+                showOnboarding,
+                showBankDrafter,
+                showCashFromBanks,
+                onboardingGateReady,
+              })}
+              onTabChange={handleTourTabChange}
+              userRole={userRole ?? undefined}
+            />
+          </TabErrorBoundary>
         )}
         {actingClientId && (
           <div className="border-b border-amber-600/40 bg-amber-500/15 print:hidden">
@@ -3448,6 +3470,7 @@ function Index() {
             </div>
 
             <TabsContent value="today" className="mt-0">
+              <TabErrorBoundary label="Business Health">
               {viewMode === "simplified" ? (
                 <div className="pb-6">
                   {/* Page header — aligned with rail top */}
@@ -3988,9 +4011,11 @@ function Index() {
                   </div>
                 </div>
               )}
+              </TabErrorBoundary>
             </TabsContent>
 
             <TabsContent value="waterfall">
+              <TabErrorBoundary label="Profit">
               <div className="mb-4 flex items-center gap-3 pb-3">
                 <span className="text-[9px] font-semibold uppercase tracking-[0.25em] text-[#b8860b] dark:text-[#d4a550]/80">
                   Profitability Waterfall
@@ -4037,6 +4062,7 @@ function Index() {
               <div className="mt-4">
                 <WeeklyInputTable />
               </div>
+              </TabErrorBoundary>
             </TabsContent>
 
             <TabsContent value="next">
@@ -4072,6 +4098,7 @@ function Index() {
                   </span>
                   <span className="h-px flex-1 bg-gradient-to-r from-[#b7872a]/30 to-transparent" />
                 </div>
+                <TabErrorBoundary label="Cash Forecast">
                 <Suspense
                   fallback={
                     <div className="p-6 text-sm text-slate-400">Loading cash forecast…</div>
@@ -4087,6 +4114,7 @@ function Index() {
                     reloadToken={cashForecastReloadToken}
                   />
                 </Suspense>
+                </TabErrorBoundary>
               </div>
             </TabsContent>
 
@@ -4098,6 +4126,7 @@ function Index() {
                   </span>
                   <span className="h-px flex-1 bg-gradient-to-r from-[#b7872a]/30 to-transparent" />
                 </div>
+                <TabErrorBoundary label="Budget">
                 <Suspense
                   fallback={<div className="p-6 text-sm text-slate-400">Loading budget…</div>}
                 >
@@ -4129,6 +4158,7 @@ function Index() {
                     onPushedToCash={() => setCashForecastReloadToken((n) => n + 1)}
                   />
                 </Suspense>
+                </TabErrorBoundary>
               </div>
             </TabsContent>
 

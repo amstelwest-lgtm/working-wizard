@@ -71,18 +71,40 @@ export async function waitForAuthSession(timeoutMs = 8000): Promise<void> {
 
   await new Promise<void>((resolve, reject) => {
     let settled = false;
+    let subscription: { unsubscribe: () => void } | null = null;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
     const finish = (ok: boolean, err?: Error) => {
       if (settled) return;
       settled = true;
-      clearTimeout(timer);
-      sub.subscription.unsubscribe();
+      if (timer !== undefined) clearTimeout(timer);
+      try {
+        subscription?.unsubscribe();
+      } catch {
+        /* listener may fire before the subscription handle is assigned */
+      }
       if (ok) resolve();
       else reject(err ?? new Error("Sign-in timed out. Try Sign in on the landing page."));
     };
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) finish(true);
-    });
-    const timer = setTimeout(() => finish(false), timeoutMs);
+
+    timer = setTimeout(() => finish(false), timeoutMs);
+    try {
+      const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+        if (session?.user) finish(true);
+      });
+      subscription = data.subscription;
+      if (settled) {
+        try {
+          subscription.unsubscribe();
+        } catch {
+          /* already finished during subscribe */
+        }
+      }
+    } catch (err) {
+      finish(false, err instanceof Error ? err : new Error("Sign-in failed"));
+      return;
+    }
+
     void supabase.auth.getSession().then(({ data }) => {
       if (data.session?.user) finish(true);
     });

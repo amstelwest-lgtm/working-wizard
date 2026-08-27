@@ -18,6 +18,7 @@ type CachedPulse = {
 
 function loadCache(industry: string): IndustryPulsePayload | null {
   try {
+    if (typeof sessionStorage === "undefined") return null;
     const raw = sessionStorage.getItem(`${CACHE_KEY}_${industry}`);
     if (!raw) return null;
     const { timestamp, data } = JSON.parse(raw) as CachedPulse;

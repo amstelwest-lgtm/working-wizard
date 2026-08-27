@@ -26,13 +26,20 @@ export function shouldShowOwnerProfileFunnel(opts: {
  * Feature walkthrough starts once first-run dialogs are gone.
  * Do not wait for uploaded financials — first login would otherwise never
  * tour the board if the owner skipped (or had not yet done) bank upload.
+ *
+ * `onboardingGateReady` must stay false until the first clientMeta fetch
+ * settles. Otherwise the tour mounts on the first signed-in paint (when
+ * firstRunStep and showOnboarding are still their initial values) and can
+ * crash /app before the funnel has a chance to open.
  */
 export function ownerWalkthroughReady(opts: {
   firstRunStep: FirstRunStep;
   showOnboarding: boolean;
   showBankDrafter: boolean;
   showCashFromBanks: boolean;
+  onboardingGateReady: boolean;
 }): boolean {
+  if (!opts.onboardingGateReady) return false;
   return (
     opts.firstRunStep === null &&
     !opts.showOnboarding &&

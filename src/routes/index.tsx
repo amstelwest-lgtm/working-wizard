@@ -201,9 +201,14 @@ function LandingPage() {
       // inviteClientId state) so a leftover accountant session cannot race
       // the invite effect and dump the user onto /dashboard before the form paints.
       if (pendingInviteTokenFromUrl() || inviteClientId) return;
-      const { resolvePostLoginPath } = await import("@/lib/user-roles");
-      const path = await resolvePostLoginPath(user.id);
-      if (!cancelled) navigate({ to: path });
+      try {
+        const { resolvePostLoginPath } = await import("@/lib/user-roles");
+        const path = await resolvePostLoginPath(user.id);
+        if (!cancelled) navigate({ to: path });
+      } catch (err) {
+        console.warn("[landing] post-login redirect failed:", err);
+        if (!cancelled) navigate({ to: "/app" });
+      }
     })();
     return () => {
       cancelled = true;
@@ -703,10 +708,15 @@ function LandingPage() {
         const { data: auth } = await supabase.auth.getUser();
         const uid = auth.user?.id;
         if (uid) {
-          const { resolvePostLoginPath, forcePortal } = await import("@/lib/user-roles");
-          forcePortal("owner");
-          const path = await resolvePostLoginPath(uid);
-          void navigate({ to: path, replace: true });
+          try {
+            const { resolvePostLoginPath, forcePortal } = await import("@/lib/user-roles");
+            forcePortal("owner");
+            const path = await resolvePostLoginPath(uid);
+            void navigate({ to: path, replace: true });
+          } catch (err) {
+            console.warn("[landing] post-login path failed:", err);
+            void navigate({ to: "/app", replace: true });
+          }
         } else {
           void navigate({ to: "/app", replace: true });
         }
