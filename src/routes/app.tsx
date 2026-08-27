@@ -2008,8 +2008,11 @@ function Index() {
   const [userRole, setUserRole] = useState<string | null>(null);
   const [adminOpen, setAdminOpen] = useState(false);
   const track = useTrack();
+  const [v, setV] = useState<Inputs>(defaults);
+  const [weeklyInputs, setWeeklyInputs] = useState<WeeklyInputs>({ weeks: {} });
+  const [showFinData, setShowFinData] = useState(false);
 
-  const handleStatementUpload = async (file: File) => {
+  const handleStatementUpload = useCallback(async (file: File) => {
     setUploading(true);
     try {
       const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
@@ -2071,7 +2074,7 @@ function Index() {
       setUploading(false);
       if (uploadRef.current) uploadRef.current.value = "";
     }
-  };
+  }, [doExtract, doExtractPdf]);
 
   const [actingClientId, setActingClientId] = useState<string | null>(null);
   const [actingClientName, setActingClientName] = useState<string | null>(null);
@@ -2098,8 +2101,6 @@ function Index() {
       cancelled = true;
     };
   }, [user, actingClientId, navigate]);
-  const [v, setV] = useState<Inputs>(defaults);
-  const [weeklyInputs, setWeeklyInputs] = useState<WeeklyInputs>({ weeks: {} });
   const [hydratedClientId, setHydratedClientId] = useState<string | null>(null);
   // True only when the DB returned non-null financials — prevents demo defaults from masquerading as real data
   const [hasRealFinancials, setHasRealFinancials] = useState(false);
@@ -2595,7 +2596,6 @@ function Index() {
   const [btSaveError, setBtSaveError] = useState<string | null>(null);
   const [operatingProfile, setOperatingProfile] = useState<ClientOperatingProfile | null>(null);
   const [showQboDialog, setShowQboDialog] = useState(false);
-  const [showFinData, setShowFinData] = useState(false);
   const [showBankDrafter, setShowBankDrafter] = useState(false);
   const [showCashFromBanks, setShowCashFromBanks] = useState(false);
   const [bankCashDraft, setBankCashDraft] = useState<

@@ -108,7 +108,12 @@ assert(appSrc.includes("hasInviteHandoffFlag"), "founder board does not bounce a
 assert(appSrc.includes("shouldShowOwnerProfileFunnel"), "founder board uses shared funnel gate");
 assert(appSrc.includes("ownerWalkthroughReady({"), "tour ready helper is wired");
 assert(appSrc.includes("onboardingGateReady"), "tour waits until client meta has loaded");
-assert(appSrc.includes("ssr: false"), "founder board is client-only so SSR cannot white-screen sign-in");
+assert(appSrc.includes("const [v, setV] = useState<Inputs>(defaults)"), "financials state is declared");
+assert(
+  appSrc.indexOf("const [v, setV] = useState<Inputs>(defaults)") <
+    appSrc.indexOf("const handleStatementUpload"),
+  "financials state must be initialized before the upload handler",
+);
 assert(appSrc.includes("ClientOnly"), "founder board waits for the browser before mounting");
 assert(appSrc.includes('<TabErrorBoundary label="Cash Forecast">'), "cash tab cannot white-screen /app");
 assert(appSrc.includes('<TabErrorBoundary label="Budget">'), "budget tab cannot white-screen /app");
