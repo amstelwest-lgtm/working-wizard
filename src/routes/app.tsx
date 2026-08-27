@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate, ClientOnly } from "@tanstack/react-router";
 import "@/styles/founder-portal.css";
 import { useState, useMemo, useEffect, Suspense, useRef, useCallback } from "react";
 import { lazyPanel, TabErrorBoundary } from "@/components/lazy-panel";
@@ -150,8 +150,26 @@ import {
   computeWeekChanges,
 } from "@/lib/overview-insights";
 
+function AppBootSpinner() {
+  return (
+    <div className="min-h-screen bg-[#07090f] grid place-items-center">
+      <div className="h-6 w-6 animate-spin rounded-full border-2 border-[#c9962b]/30 border-t-[#c9962b]" />
+    </div>
+  );
+}
+
 export const Route = createFileRoute("/app")({
-  component: Index,
+  // /app uses browser auth + localStorage. SSR of this tree was throwing
+  // "This page didn't load" on first paint (signed-out visit and post-login).
+  ssr: false,
+  pendingComponent: AppBootSpinner,
+  component: function AppRoute() {
+    return (
+      <ClientOnly fallback={<AppBootSpinner />}>
+        <Index />
+      </ClientOnly>
+    );
+  },
   head: () => ({
     meta: [
       { title: "Milōn · Operating Finance" },
@@ -2998,11 +3016,7 @@ function Index() {
 
   // Don't flash the dashboard while auth resolves or if unauthenticated
   if (authLoading || !user) {
-    return (
-      <div className="min-h-screen bg-[#07090f] grid place-items-center">
-        <div className="h-6 w-6 animate-spin rounded-full border-2 border-[#c9962b]/30 border-t-[#c9962b]" />
-      </div>
-    );
+    return <AppBootSpinner />;
   }
 
   return (
