@@ -114,6 +114,16 @@ assert(
     appSrc.indexOf("const handleStatementUpload"),
   "financials state must be initialized before the upload handler",
 );
+{
+  const firstRunDecl = appSrc.indexOf("const [firstRunStep, setFirstRunStep]");
+  const firstRunDeps = appSrc.indexOf("actingClientId, firstRunStep]");
+  assert(firstRunDecl !== -1, "firstRunStep state is declared");
+  assert(firstRunDeps !== -1, "client-meta effect still lists firstRunStep");
+  assert(
+    firstRunDecl < firstRunDeps,
+    "firstRunStep must be initialized before the client-meta effect reads it",
+  );
+}
 assert(appSrc.includes("ClientOnly"), "founder board waits for the browser before mounting");
 assert(appSrc.includes('<TabErrorBoundary label="Cash Forecast">'), "cash tab cannot white-screen /app");
 assert(appSrc.includes('<TabErrorBoundary label="Budget">'), "budget tab cannot white-screen /app");

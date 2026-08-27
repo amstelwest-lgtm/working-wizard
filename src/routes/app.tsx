@@ -2264,6 +2264,15 @@ function Index() {
   } | null>(null);
   const [onboardingGateReady, setOnboardingGateReady] = useState(false);
   const [activeTab, setActiveTab] = useState<string>("today");
+  // Declared before the client-meta effect: that effect's dependency array
+  // reads firstRunStep on every render. A later const is a TDZ crash
+  // (ReferenceError: Cannot access 'v'/'V' before initialization) and
+  // white-screens /app after sign-in.
+  const [businessTypeId, setBusinessTypeId] = useState<string | null>(null);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  // firstRunStep: null = not first run (or done); 'pick-type' = must complete profile funnel; 'first-data' = nudge to upload data
+  const [firstRunStep, setFirstRunStep] = useState<null | "pick-type" | "first-data">(null);
+  const [operatingProfile, setOperatingProfile] = useState<ClientOperatingProfile | null>(null);
   const fetchReviewSignoffs = useServerFn(listClientReviewSignoffs);
   const [financialsSignoff, setFinancialsSignoff] = useState<ClientReviewSignoff | null>(null);
   useEffect(() => {
@@ -2559,7 +2568,6 @@ function Index() {
       return next;
     });
   const [risk, setRisk] = useState<RiskProfile>("balanced");
-  const [businessTypeId, setBusinessTypeId] = useState<string | null>(null);
 
   const [benchmarks, setBenchmarks] = useState<Record<string, Benchmark>>({});
   useEffect(() => {
@@ -2589,12 +2597,8 @@ function Index() {
   }, [businessTypeId]);
 
   const benchmarkFor = (k: RatioKey): Benchmark | null => benchmarks[k] ?? null;
-  const [showOnboarding, setShowOnboarding] = useState(false);
-  // firstRunStep: null = not first run (or done); 'pick-type' = must complete profile funnel; 'first-data' = nudge to upload data
-  const [firstRunStep, setFirstRunStep] = useState<null | "pick-type" | "first-data">(null);
   const [btSaving, setBtSaving] = useState(false);
   const [btSaveError, setBtSaveError] = useState<string | null>(null);
-  const [operatingProfile, setOperatingProfile] = useState<ClientOperatingProfile | null>(null);
   const [showQboDialog, setShowQboDialog] = useState(false);
   const [showBankDrafter, setShowBankDrafter] = useState(false);
   const [showCashFromBanks, setShowCashFromBanks] = useState(false);
