@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { PreLoginShareButton } from "@/components/share";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
@@ -12,7 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { SIGNUP_ACCESS_CODE, notifySignup } from "@/lib/signup-notify";
 import { ensurePracticePortalAccess } from "@/lib/auth.functions";
-import { forcePortal, setPortalIntent } from "@/lib/user-roles";
+import { forcePortal, setPortalIntent, resolvePostLoginPath, clearForcePortal } from "@/lib/user-roles";
 
 export const Route = createFileRoute("/auth")({
   component: AuthPage,
@@ -43,6 +43,8 @@ function AuthPage() {
   useEffect(() => { setMounted(true); }, []);
 
   const afterAuthPath = next === "/ops" ? "/ops" : "/dashboard";
+  const landedPathRef = useRef<string | null>(null);
+  const landInflightRef = useRef<Promise<string> | null>(null);
 
   // Stamp the accountant door as soon as this page is shown — before submit —
   // so a dual-role session cannot be claimed by the founder landing redirect.
@@ -50,20 +52,49 @@ function AuthPage() {
     setPortalIntent("accountant");
   }, []);
 
-  useEffect(() => {
-    if (loading || !user) return;
-    let cancelled = false;
-    forcePortal("accountant");
-    void (async () => {
+  const landAfterAccountantAuth = async (userId: string) => {
+    if (landedPathRef.current) return landedPathRef.current;
+    if (landInflightRef.current) return landInflightRef.current;
+    const run = (async () => {
+      forcePortal("accountant");
       await ensurePractice().catch(() => {
         /* non-fatal — role guard still uses firm ownership */
       });
-      if (!cancelled) navigate({ to: afterAuthPath as "/dashboard" });
+      if (next === "/ops") {
+        landedPathRef.current = "/ops";
+        navigate({ to: "/ops" });
+        return "/ops";
+      }
+      const path = await resolvePostLoginPath(userId);
+      if (path === "/app") {
+        clearForcePortal();
+        setPortalIntent("owner");
+        toast.message("This sign-in is for accounting firms. Opening the business board instead.");
+      }
+      landedPathRef.current = path;
+      navigate({ to: path });
+      return path;
+    })();
+    landInflightRef.current = run;
+    try {
+      return await run;
+    } finally {
+      landInflightRef.current = null;
+    }
+  };
+
+  useEffect(() => {
+    if (loading || !user) return;
+    let cancelled = false;
+    void (async () => {
+      await landAfterAccountantAuth(user.id);
+      if (cancelled) return;
     })();
     return () => {
       cancelled = true;
     };
-  }, [user, loading, navigate, afterAuthPath, ensurePractice]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, loading, navigate, ensurePractice, next]);
 
   const handle = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -106,7 +137,8 @@ function AuthPage() {
         forcePortal("accountant");
         await ensurePractice().catch(() => undefined);
         toast.success("Account created");
-        navigate({ to: afterAuthPath as "/dashboard" });
+        if (data.user) await landAfterAccountantAuth(data.user.id);
+        else navigate({ to: afterAuthPath as "/dashboard" });
       } else {
         const { error, data: signInData } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
@@ -141,10 +173,12 @@ function AuthPage() {
         } catch {
           // provisioning failure is non-fatal — user proceeds to dashboard regardless
         }
-        forcePortal("accountant");
-        await ensurePractice().catch(() => undefined);
-        toast.success("Welcome back");
-        navigate({ to: afterAuthPath as "/dashboard" });
+        const path = signInData.user
+          ? await landAfterAccountantAuth(signInData.user.id)
+          : afterAuthPath;
+        if (path === "/dashboard" || path === "/ops") {
+          toast.success("Welcome back");
+        }
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Something went wrong";

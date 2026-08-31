@@ -2,11 +2,14 @@
  * Portal routing: accountant door vs SME founder board.
  * Run: pnpm test:portal-routing
  */
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import {
   summarizeRoles,
   decidePostLoginPath,
   decideAccountantStay,
   decideOwnerAppBounce,
+  isSmeOnly,
   type PortalRouteDecision,
 } from "../src/lib/user-roles";
 
@@ -68,8 +71,8 @@ assert(decidePostLoginPath(dual) === "/app", "dual-role with no intent defaults 
 // Visiting /dashboard after accountant login must not bounce anyone who chose that door
 assert(decideAccountantStay(dual) === true, "dual-role stays on accountant portal (practice role)");
 assert(
-  decideAccountantStay({ ...clientOnly, force: "accountant" }) === true,
-  "accountant-door login stays even without a practice role yet (provisioning / dual-role gap)",
+  decideAccountantStay({ ...clientOnly, force: "accountant" }) === false,
+  "SME-only cannot stay on /dashboard just because they used the accountant door",
 );
 assert(
   decideAccountantStay({ ...clientOnly, intent: "accountant" }) === false,
@@ -103,12 +106,12 @@ assert(
   "invite force owner → founder board",
 );
 assert(
-  decidePostLoginPath({ ...clientOnly, force: "accountant" }) === "/dashboard",
-  "client-only + accountant force → practice portal (door they chose)",
+  decidePostLoginPath({ ...clientOnly, force: "accountant" }) === "/app",
+  "SME-only + accountant door → founder board, not practice portal",
 );
 assert(
-  decideOwnerAppBounce({ ...clientOnly, force: "accountant", actingAsClient: false }) === true,
-  "accountant-door session on /app is sent to the practice portal",
+  decideOwnerAppBounce({ ...clientOnly, force: "accountant", actingAsClient: false }) === false,
+  "SME-only accountant-door session is not bounced into the practice portal",
 );
 
 assert(decidePostLoginPath(noRolesFirm) === "/dashboard", "firm owner with no role rows → portal");
@@ -127,10 +130,41 @@ assert(
   "SME invitee with leftover accountant intent leaves /dashboard",
 );
 
+assert(
+  decideAccountantStay(d({ force: "accountant" })) === true,
+  "no-role accountant-door provisioning race stays on portal",
+);
+assert(
+  decidePostLoginPath(d({ force: "accountant" })) === "/dashboard",
+  "no-role accountant-door lands on portal",
+);
+
 // Impersonation must never bounce back to the firm dashboard
 assert(
   decideOwnerAppBounce({ ...practiceOnly, force: "accountant", actingAsClient: true }) === false,
   "acting-as-client stays on /app",
+);
+
+assert(isSmeOnly(clientOnly) === true, "client-only is SME-only");
+assert(isSmeOnly(dual) === false, "dual-role is not SME-only");
+assert(isSmeOnly(practiceOnly) === false, "practice-only is not SME-only");
+assert(isSmeOnly(noRolesFirm) === false, "firm owner without roles is not SME-only");
+
+const authSrc = readFileSync(resolve("src/routes/auth.tsx"), "utf8");
+assert(authSrc.includes("resolvePostLoginPath"), "accountant /auth lands via role-aware path");
+assert(
+  authSrc.includes("This sign-in is for accounting firms"),
+  "accountant /auth tells SME-only users they are on the wrong door",
+);
+
+const dashSrc = readFileSync(resolve("src/routes/_authenticated/dashboard.tsx"), "utf8");
+assert(
+  !dashSrc.includes("isAccountantDoor()"),
+  "dashboard must not skip the role check for accountant-door sessions",
+);
+assert(
+  dashSrc.includes("shouldStayOnAccountantPortal"),
+  "dashboard still uses the stay helper",
 );
 
 console.log("portal-routing: all assertions passed");
