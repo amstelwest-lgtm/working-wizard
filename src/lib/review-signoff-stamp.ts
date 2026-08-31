@@ -16,5 +16,6 @@ export function stampFromSignoff(
     signedOffByTitle: signoff.signed_off_by_title,
     firmName: signoff.firm_name,
     signedOffAt: signoff.signed_off_at,
+    signatureData: signoff.signature_data ?? null,
   };
 }

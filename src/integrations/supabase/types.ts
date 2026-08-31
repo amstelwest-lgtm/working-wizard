@@ -725,6 +725,7 @@ export type Database = {
           signed_off_by_title: string | null
           firm_name: string | null
           note: string | null
+          signature_data: string | null
           signed_off_at: string
           created_at: string
         }
@@ -738,6 +739,7 @@ export type Database = {
           signed_off_by_title?: string | null
           firm_name?: string | null
           note?: string | null
+          signature_data?: string | null
           signed_off_at?: string
           created_at?: string
         }
@@ -751,6 +753,7 @@ export type Database = {
           signed_off_by_title?: string | null
           firm_name?: string | null
           note?: string | null
+          signature_data?: string | null
           signed_off_at?: string
           created_at?: string
         }
@@ -775,6 +778,7 @@ export type Database = {
           signed_off_by_title: string | null
           firm_name: string | null
           note: string | null
+          signature_data: string | null
           signed_off_at: string
           action: string
           created_at: string
@@ -789,6 +793,7 @@ export type Database = {
           signed_off_by_title?: string | null
           firm_name?: string | null
           note?: string | null
+          signature_data?: string | null
           signed_off_at?: string
           action?: string
           created_at?: string
@@ -803,6 +808,7 @@ export type Database = {
           signed_off_by_title?: string | null
           firm_name?: string | null
           note?: string | null
+          signature_data?: string | null
           signed_off_at?: string
           action?: string
           created_at?: string

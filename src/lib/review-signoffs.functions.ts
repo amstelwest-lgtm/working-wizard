@@ -5,7 +5,18 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { Database } from "@/integrations/supabase/types";
 
-export type ReviewScope = "financials" | "cash_forecast" | "budget";
+export const REVIEW_SCOPES = [
+  "financials",
+  "profitability",
+  "cash_forecast",
+  "budget",
+  "action_plan",
+  "advisory",
+] as const;
+
+export type ReviewScope = (typeof REVIEW_SCOPES)[number];
+
+const ScopeSchema = z.enum(REVIEW_SCOPES);
 
 export type ClientReviewSignoff = {
   id: string;
@@ -17,8 +28,17 @@ export type ClientReviewSignoff = {
   signed_off_by_title: string | null;
   firm_name: string | null;
   note: string | null;
+  signature_data: string | null;
   signed_off_at: string;
 };
+
+export function indexReviewSignoffs(
+  rows: ClientReviewSignoff[],
+): Partial<Record<ReviewScope, ClientReviewSignoff>> {
+  const m: Partial<Record<ReviewScope, ClientReviewSignoff>> = {};
+  for (const r of rows) m[r.scope] = r;
+  return m;
+}
 
 export type ClientReviewSignoffHistory = ClientReviewSignoff & {
   action: "sign" | "retract";
@@ -129,7 +149,7 @@ export const listClientReviewSignoffHistory = createServerFn({ method: "GET" })
   .inputValidator((input) =>
     z.object({
       clientId: z.string().uuid(),
-      scope: z.enum(["financials", "cash_forecast", "budget"]).optional(),
+      scope: ScopeSchema.optional(),
       limit: z.number().int().min(1).max(200).optional(),
     }).parse(input),
   )
@@ -159,10 +179,11 @@ export const signoffReview = createServerFn({ method: "POST" })
   .inputValidator((input) =>
     z.object({
       clientId: z.string().uuid(),
-      scope: z.enum(["financials", "cash_forecast", "budget"]),
+      scope: ScopeSchema,
       accountantTitle: z.string().max(60).optional().nullable(),
       firmName: z.string().max(120).optional().nullable(),
       note: z.string().max(1000).optional().nullable(),
+      signatureData: z.string().max(200_000).optional().nullable(),
     }).parse(input),
   )
   .handler(async ({ data }) => {
@@ -185,6 +206,10 @@ export const signoffReview = createServerFn({ method: "POST" })
       typeof meta.firm_name === "string" && meta.firm_name.trim()
         ? meta.firm_name.trim()
         : null;
+    const signatureData =
+      typeof data.signatureData === "string" && data.signatureData.startsWith("data:image/")
+        ? data.signatureData
+        : null;
 
     const { data: row, error } = await (sb as unknown as LooseSb)
       .from("client_review_signoffs")
@@ -198,6 +223,7 @@ export const signoffReview = createServerFn({ method: "POST" })
           signed_off_by_title: data.accountantTitle ?? null,
           firm_name: data.firmName?.trim() || firmFromMeta,
           note: data.note ?? null,
+          signature_data: signatureData,
           signed_off_at: new Date().toISOString(),
         },
         { onConflict: "client_id,scope" },
@@ -215,7 +241,7 @@ export const removeReviewSignoff = createServerFn({ method: "POST" })
   .inputValidator((input) =>
     z.object({
       clientId: z.string().uuid(),
-      scope: z.enum(["financials", "cash_forecast", "budget"]),
+      scope: ScopeSchema,
     }).parse(input),
   )
   .handler(async ({ data }) => {

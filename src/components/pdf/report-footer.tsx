@@ -5,7 +5,7 @@
  * SSR safety: react-pdf primitives — only import via dynamic import().
  */
 
-import { View, Text, StyleSheet } from "@react-pdf/renderer";
+import { View, Text, Image, StyleSheet } from "@react-pdf/renderer";
 import type { AccountantProfile } from "@/contexts/accountant-profile";
 import { C, resolveTheme } from "./theme";
 import { MilonMark } from "./glyphs";
@@ -69,15 +69,23 @@ export function ReportFooter({ profile, fixed, reviewSignoff }: Props) {
             Confidential — prepared for the addressee only
           </Text>
           {reviewSignoff ? (
-            <Text style={styles.signoff}>
-              Reviewed & signed off by{" "}
-              {reviewSignoff.signedOffByInitials
-                ? `${reviewSignoff.signedOffByInitials} · `
-                : ""}
-              {reviewSignoff.signedOffByName}
-              {reviewSignoff.signedOffByTitle ? `, ${reviewSignoff.signedOffByTitle}` : ""}
-              {reviewSignoff.firmName ? ` · ${reviewSignoff.firmName}` : ""} · {signoffDate}
-            </Text>
+            <View>
+              {reviewSignoff.signatureData ? (
+                <Image
+                  src={reviewSignoff.signatureData}
+                  style={{ height: 16, width: 64, objectFit: "contain", marginBottom: 2 }}
+                />
+              ) : null}
+              <Text style={styles.signoff}>
+                Reviewed & signed off by{" "}
+                {reviewSignoff.signedOffByInitials
+                  ? `${reviewSignoff.signedOffByInitials} · `
+                  : ""}
+                {reviewSignoff.signedOffByName}
+                {reviewSignoff.signedOffByTitle ? `, ${reviewSignoff.signedOffByTitle}` : ""}
+                {reviewSignoff.firmName ? ` · ${reviewSignoff.firmName}` : ""} · {signoffDate}
+              </Text>
+            </View>
           ) : null}
         </View>
 

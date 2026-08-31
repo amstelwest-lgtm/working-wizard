@@ -135,8 +135,8 @@ import { Button } from "@/components/ui/button";
 import { SphereHero } from "@/components/sphere-hero";
 import { buildSpherePillars } from "@/components/sphere-hero-adapter";
 import { useViewMode } from "@/contexts/view-mode";
-import { listClientReviewSignoffs } from "@/lib/review-signoffs.functions";
-import type { ClientReviewSignoff } from "@/lib/review-signoffs.functions";
+import { listClientReviewSignoffs, indexReviewSignoffs } from "@/lib/review-signoffs.functions";
+import type { ClientReviewSignoff, ReviewScope } from "@/lib/review-signoffs.functions";
 import { ReviewSignoffBadge, computeIsStale } from "@/components/review-signoff";
 import { upsertCurrentPeriodSnapshot } from "@/lib/financial-snapshots";
 import { stampFromSignoff } from "@/lib/review-signoff-stamp";
@@ -2274,15 +2274,18 @@ function Index() {
   const [firstRunStep, setFirstRunStep] = useState<null | "pick-type" | "first-data">(null);
   const [operatingProfile, setOperatingProfile] = useState<ClientOperatingProfile | null>(null);
   const fetchReviewSignoffs = useServerFn(listClientReviewSignoffs);
-  const [financialsSignoff, setFinancialsSignoff] = useState<ClientReviewSignoff | null>(null);
+  const [reviewSignoffs, setReviewSignoffs] = useState<Partial<Record<ReviewScope, ClientReviewSignoff>>>({});
+  const financialsSignoff = reviewSignoffs.financials ?? null;
+  const profitabilitySignoff = reviewSignoffs.profitability ?? null;
+  const actionPlanSignoff = reviewSignoffs.action_plan ?? null;
   useEffect(() => {
     if (!effectiveClientId) {
-      setFinancialsSignoff(null);
+      setReviewSignoffs({});
       return;
     }
     fetchReviewSignoffs({ data: { clientId: effectiveClientId } })
       .then(({ signoffs }) => {
-        setFinancialsSignoff(signoffs.find((s) => s.scope === "financials") ?? null);
+        setReviewSignoffs(indexReviewSignoffs(signoffs));
       })
       .catch(() => {
         // Sign-off state is a trust-signal enhancement, never block the dashboard.
@@ -3080,15 +3083,6 @@ function Index() {
                 <div className="hidden min-w-0 truncate text-[9px] font-medium uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500 md:block">
                   {actingClientName ?? "Operating finance"}
                 </div>
-                <ReviewSignoffBadge
-                  signoff={financialsSignoff}
-                  scope="financials"
-                  isStale={computeIsStale(
-                    financialsSignoff,
-                    clientMeta?.financials_updated_at ?? null,
-                  )}
-                  compact
-                />
               </div>
               <div className="flex shrink-0 items-center gap-1 print:hidden">
                 {/* Keep primary actions visible on phones; park the rest in More */}
@@ -3498,15 +3492,6 @@ function Index() {
                         <h2 className="text-lg font-semibold tracking-tight text-slate-900 dark:text-white">
                           Business Health
                         </h2>
-                        <ReviewSignoffBadge
-                          signoff={financialsSignoff}
-                          scope="financials"
-                          isStale={computeIsStale(
-                            financialsSignoff,
-                            clientMeta?.financials_updated_at ?? null,
-                          )}
-                          compact
-                        />
                       </div>
                       <p className="mt-0.5 text-[13px] text-slate-500 dark:text-slate-400">
                         Your financial pulse at a glance.
@@ -4029,6 +4014,16 @@ function Index() {
                   </div>
                 </div>
               )}
+              <div className="mt-6">
+                <ReviewSignoffBadge
+                  signoff={financialsSignoff}
+                  scope="financials"
+                  isStale={computeIsStale(
+                    financialsSignoff,
+                    clientMeta?.financials_updated_at ?? null,
+                  )}
+                />
+              </div>
               </TabErrorBoundary>
             </TabsContent>
 
@@ -4050,8 +4045,8 @@ function Index() {
                   clientName={actingClientName ?? undefined}
                   clientId={effectiveClientId ?? undefined}
                   reviewSignoff={stampFromSignoff(
-                    financialsSignoff,
-                    computeIsStale(financialsSignoff, clientMeta?.financials_updated_at ?? null),
+                    profitabilitySignoff,
+                    computeIsStale(profitabilitySignoff, clientMeta?.financials_updated_at ?? null),
                   )}
                   fallback={(() => {
                     // Mirror the accountant-side residual derivation so that
@@ -4079,6 +4074,16 @@ function Index() {
               {/* Weekly inputs feed the waterfall — sit below so the chart stays the focus */}
               <div className="mt-4">
                 <WeeklyInputTable />
+              </div>
+              <div className="mt-6">
+                <ReviewSignoffBadge
+                  signoff={profitabilitySignoff}
+                  scope="profitability"
+                  isStale={computeIsStale(
+                    profitabilitySignoff,
+                    clientMeta?.financials_updated_at ?? null,
+                  )}
+                />
               </div>
               </TabErrorBoundary>
             </TabsContent>
@@ -4217,6 +4222,13 @@ function Index() {
                     )}
                   </Suspense>
                 </TabErrorBoundary>
+                <div className="mt-6">
+                  <ReviewSignoffBadge
+                    signoff={actionPlanSignoff}
+                    scope="action_plan"
+                    isStale={false}
+                  />
+                </div>
               </div>
             </TabsContent>
           </Tabs>
