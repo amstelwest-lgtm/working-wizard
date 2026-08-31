@@ -3,6 +3,12 @@
  * Powers the Leverage PDF; never invent facilities when empty.
  */
 
+import {
+  emptyWeeklyInputs,
+  parseWeeklyInputs,
+  type WeeklyInputs,
+} from "./weekly-inputs";
+
 export type DebtFacilityType =
   | "term"
   | "revolving"
@@ -104,25 +110,35 @@ export function parseDebtSchedule(raw: unknown): DebtSchedule {
 /** Pull debt_schedule out of a financials blob without stringifying it. */
 export function splitFinancialsBlob(
   fin: Record<string, unknown> | null | undefined,
-): { scalars: Record<string, string>; debtSchedule: DebtSchedule } {
+): {
+  scalars: Record<string, string>;
+  debtSchedule: DebtSchedule;
+  weeklyInputs: WeeklyInputs;
+} {
   const scalars: Record<string, string> = {};
   let debtSchedule = emptyDebtSchedule();
-  if (!fin) return { scalars, debtSchedule };
+  let weeklyInputs = emptyWeeklyInputs();
+  if (!fin) return { scalars, debtSchedule, weeklyInputs };
   for (const [k, v] of Object.entries(fin)) {
     if (k === "debt_schedule") {
       debtSchedule = parseDebtSchedule(v);
       continue;
     }
+    if (k === "weeklyInputs") {
+      weeklyInputs = parseWeeklyInputs(v);
+      continue;
+    }
     if (v != null && typeof v === "object") continue;
     scalars[k] = v != null ? String(v) : "";
   }
-  return { scalars, debtSchedule };
+  return { scalars, debtSchedule, weeklyInputs };
 }
 
-/** Merge scalar grid + debt schedule for clients.financials write. */
+/** Merge scalar grid + debt schedule + weekly inputs for clients.financials write. */
 export function mergeFinancialsBlob(
   scalars: Record<string, string>,
   debtSchedule: DebtSchedule,
+  weeklyInputs: WeeklyInputs = emptyWeeklyInputs(),
 ): Record<string, unknown> {
   const out: Record<string, unknown> = { ...scalars };
   if (debtSchedule.lines.length > 0 || debtSchedule.drawings_ytd != null || debtSchedule.prior_equity != null) {
@@ -134,6 +150,8 @@ export function mergeFinancialsBlob(
   } else {
     delete out.debt_schedule;
   }
+  // Always persist the week map so an accountant autosave cannot wipe owner-entered weeks.
+  out.weeklyInputs = weeklyInputs;
   return out;
 }
 

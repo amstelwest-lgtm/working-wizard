@@ -56,6 +56,7 @@ import {
   type WeeklyRow,
   DEFAULT_WEEKLY_ROW,
 } from "@/contexts/financial-inputs";
+import { parseWeeklyInputs } from "@/lib/weekly-inputs";
 import { WeeklyInputTable } from "@/components/weekly-input-table";
 import { ProfitabilityWaterfall } from "@/components/profitability-waterfall";
 import { useTrack } from "@/hooks/use-track";
@@ -2446,9 +2447,11 @@ function Index() {
           const hasRealKeys = FINANCIAL_INPUT_KEYS.some(
             (k) => fin[k] !== undefined && fin[k] !== "",
           );
+          // Hydrate weeks even when period P&L keys are absent so the waterfall
+          // matches the accountant portal (which reads the same weeklyInputs blob).
+          if (fin.weeklyInputs) setWeeklyInputs(parseWeeklyInputs(fin.weeklyInputs));
           if (hasRealKeys) {
             setV({ ...defaults, ...fin });
-            if (fin.weeklyInputs) setWeeklyInputs(fin.weeklyInputs);
             setHasRealFinancials(true);
             // Only arm the skip flag when hydration actually populated real data —
             // that's the only case where the autosave effect will run right after

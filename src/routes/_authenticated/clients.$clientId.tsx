@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useRef, useState, useCallback, Suspense } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo, Suspense } from "react";
 import { lazyPanel, TabErrorBoundary } from "@/components/lazy-panel";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
@@ -36,6 +36,14 @@ import { SphereHero } from "@/components/sphere-hero";
 import { buildSpherePillars } from "@/components/sphere-hero-adapter";
 import { SimplifiedRatios } from "@/components/simplified-ratios";
 import { ProfitabilityWaterfall } from "@/components/profitability-waterfall";
+import { WeeklyInputTable } from "@/components/weekly-input-table";
+import {
+  FinancialInputsContext,
+  DEFAULT_WEEKLY_ROW,
+  type WeeklyInputs,
+  type WeeklyRow,
+} from "@/contexts/financial-inputs";
+import { emptyWeeklyInputs } from "@/lib/weekly-inputs";
 import { useServerFn } from "@tanstack/react-start";
 import { listClientReviewSignoffs } from "@/lib/review-signoffs.functions";
 import type { ClientReviewSignoff } from "@/lib/review-signoffs.functions";
@@ -488,6 +496,13 @@ function ClientView() {
   // Financials state (flat key-value for the fin-grid)
   const [financials, setFinancials] = useState<Record<string, string>>({});
   const [debtSchedule, setDebtSchedule] = useState<DebtSchedule>(emptyDebtSchedule());
+  const [weeklyInputs, setWeeklyInputs] = useState<WeeklyInputs>(emptyWeeklyInputs);
+  const financialsRef = useRef(financials);
+  financialsRef.current = financials;
+  const debtScheduleRef = useRef(debtSchedule);
+  debtScheduleRef.current = debtSchedule;
+  const weeklyInputsRef = useRef(weeklyInputs);
+  weeklyInputsRef.current = weeklyInputs;
   const [profileOpen, setProfileOpen] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [showBankDrafter, setShowBankDrafter] = useState(false);
@@ -696,11 +711,15 @@ function ClientView() {
             } else {
               setClient((data2 as Client | null) ?? null);
               const fin = (data2 as Client | null)?.financials ?? {};
-              const { scalars, debtSchedule: ds } = splitFinancialsBlob(
+              const { scalars, debtSchedule: ds, weeklyInputs: weeks } = splitFinancialsBlob(
                 fin as Record<string, unknown>,
               );
               setFinancials(scalars);
               setDebtSchedule(ds);
+              setWeeklyInputs(weeks);
+              financialsRef.current = scalars;
+              debtScheduleRef.current = ds;
+              weeklyInputsRef.current = weeks;
             }
           } else {
             toast.error(error.message);
@@ -708,11 +727,15 @@ function ClientView() {
         } else {
           setClient((data as Client | null) ?? null);
           const fin = (data as Client | null)?.financials ?? {};
-          const { scalars, debtSchedule: ds } = splitFinancialsBlob(
+          const { scalars, debtSchedule: ds, weeklyInputs: weeks } = splitFinancialsBlob(
             fin as Record<string, unknown>,
           );
           setFinancials(scalars);
           setDebtSchedule(ds);
+          setWeeklyInputs(weeks);
+          financialsRef.current = scalars;
+          debtScheduleRef.current = ds;
+          weeklyInputsRef.current = weeks;
         }
       } finally {
         setLoading(false);
@@ -809,67 +832,93 @@ function ClientView() {
 
   // ── Autosave financial field ────────────────────────────────────────────
 
+  const mergeCurrentBlob = useCallback(
+    (
+      scalars: Record<string, string> = financialsRef.current,
+      ds: DebtSchedule = debtScheduleRef.current,
+      weeks: WeeklyInputs = weeklyInputsRef.current,
+    ) => mergeFinancialsBlob(scalars, ds, weeks),
+    [],
+  );
+
+  const persistMergedFinancials = useCallback(
+    async (updated: Record<string, unknown>) => {
+      const updatedAt = new Date().toISOString();
+      const { error } = await supabase
+        .from("clients")
+        .update({ financials: updated as never, financials_updated_at: updatedAt })
+        .eq("id", clientId);
+      if (error) {
+        toast.error(`Autosave failed: ${error.message}`);
+        setAutosaveStatus("idle");
+        return false;
+      }
+      setClient((c) => (c ? { ...c, financials_updated_at: updatedAt } : c));
+      void upsertCurrentPeriodSnapshot({
+        clientId,
+        financials: updated,
+        source: "autosave",
+      });
+      setAutosaveStatus("saved");
+      setTimeout(() => setAutosaveStatus("idle"), 2000);
+      return true;
+    },
+    [clientId],
+  );
+
   const handleFinancialChange = useCallback(
     (key: string, value: string) => {
-      setFinancials((prev) => ({ ...prev, [key]: value }));
+      setFinancials((prev) => {
+        const next = { ...prev, [key]: value };
+        financialsRef.current = next;
+        return next;
+      });
       setAutosaveStatus("saving");
       if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
-      autosaveTimer.current = setTimeout(async () => {
-        const updatedScalars = { ...financials, [key]: value };
-        const updated = mergeFinancialsBlob(updatedScalars, debtSchedule);
-        const updatedAt = new Date().toISOString();
-        const { error } = await supabase
-          .from("clients")
-          .update({ financials: updated as never, financials_updated_at: updatedAt })
-          .eq("id", clientId);
-        if (error) {
-          toast.error(`Autosave failed: ${error.message}`);
-          setAutosaveStatus("idle");
-        } else {
-          setClient((c) => (c ? { ...c, financials_updated_at: updatedAt } : c));
-          // G20: keep current-period snapshot in sync so deliveries / movement
-          // reports are not stuck on null or stale snapshot ids.
-          void upsertCurrentPeriodSnapshot({
-            clientId,
-            financials: updated as Record<string, unknown>,
-            source: "autosave",
-          });
-          setAutosaveStatus("saved");
-          setTimeout(() => setAutosaveStatus("idle"), 2000);
-        }
+      autosaveTimer.current = setTimeout(() => {
+        void persistMergedFinancials(mergeCurrentBlob());
       }, 600);
     },
-    [financials, debtSchedule, clientId],
+    [mergeCurrentBlob, persistMergedFinancials],
   );
 
   const handleDebtScheduleChange = useCallback(
     (next: DebtSchedule) => {
+      debtScheduleRef.current = next;
       setDebtSchedule(next);
       setAutosaveStatus("saving");
       if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
-      autosaveTimer.current = setTimeout(async () => {
-        const updated = mergeFinancialsBlob(financials, next);
-        const updatedAt = new Date().toISOString();
-        const { error } = await supabase
-          .from("clients")
-          .update({ financials: updated as never, financials_updated_at: updatedAt })
-          .eq("id", clientId);
-        if (error) {
-          toast.error(`Debt schedule save failed: ${error.message}`);
-          setAutosaveStatus("idle");
-        } else {
-          setClient((c) => (c ? { ...c, financials_updated_at: updatedAt } : c));
-          void upsertCurrentPeriodSnapshot({
-            clientId,
-            financials: updated as Record<string, unknown>,
-            source: "autosave",
-          });
-          setAutosaveStatus("saved");
-          setTimeout(() => setAutosaveStatus("idle"), 2000);
-        }
+      autosaveTimer.current = setTimeout(() => {
+        void persistMergedFinancials(mergeCurrentBlob());
       }, 600);
     },
-    [financials, clientId],
+    [mergeCurrentBlob, persistMergedFinancials],
+  );
+
+  const updateWeek = useCallback(
+    (weekKey: string, field: keyof WeeklyRow, value: number) => {
+      setWeeklyInputs((prev) => {
+        const next: WeeklyInputs = {
+          weeks: {
+            ...prev.weeks,
+            [weekKey]: { ...(prev.weeks[weekKey] ?? DEFAULT_WEEKLY_ROW), [field]: value },
+          },
+        };
+        weeklyInputsRef.current = next;
+        return next;
+      });
+      setAutosaveStatus("saving");
+      if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
+      autosaveTimer.current = setTimeout(() => {
+        void persistMergedFinancials(mergeCurrentBlob());
+      }, 600);
+    },
+    [mergeCurrentBlob, persistMergedFinancials],
+  );
+
+  const financialInputsCtxValue = useMemo(
+    () => ({ weeklyInputs, updateWeek }),
+    [weeklyInputs, updateWeek],
   );
 
   // ── Save snapshot ────────────────────────────────────────────────────────
@@ -892,7 +941,7 @@ function ClientView() {
       const { error } = await supabase
         .from("client_financial_snapshots")
         .update({
-          financials: mergeFinancialsBlob(financials, debtSchedule) as never,
+          financials: mergeCurrentBlob() as never,
           ratios: ratiosOut as never,
         })
         .eq("id", existing.id);
@@ -902,7 +951,7 @@ function ClientView() {
         client_id: clientId,
         period_label: periodLabel,
         period_date: periodDate,
-        financials: mergeFinancialsBlob(financials, debtSchedule) as never,
+        financials: mergeCurrentBlob() as never,
         ratios: ratiosOut as never,
         source: "manual",
       });
@@ -917,7 +966,7 @@ function ClientView() {
       // what a generated report shows and must bump financials_updated_at, or a
       // prior sign-off stays "current" against data that has since changed.
       const financialsUpdatedAt = new Date().toISOString();
-      const blob = mergeFinancialsBlob(financials, debtSchedule);
+      const blob = mergeCurrentBlob();
       const { error: touchError } = await supabase
         .from("clients")
         .update({ financials: blob as never, financials_updated_at: financialsUpdatedAt })
@@ -933,7 +982,7 @@ function ClientView() {
         scoreFromRatioInputs(ratioInputs, effectiveRunway),
       );
     }
-  }, [clientId, financials, debtSchedule, ratioInputs, effectiveRunway]);
+  }, [clientId, financials, debtSchedule, ratioInputs, effectiveRunway, mergeCurrentBlob]);
 
   // ── Upload confirm ────────────────────────────────────────────────────────
 
@@ -978,22 +1027,28 @@ function ClientView() {
       }
 
       const financialsUpdatedAt = new Date().toISOString();
+      const nextScalars = {
+        ...financialsRef.current,
+        ...Object.fromEntries(
+          Object.entries(inputs).map(([k, v]) => [k, v != null ? String(v) : ""]),
+        ),
+      };
+      financialsRef.current = nextScalars;
+      const blob = mergeCurrentBlob(nextScalars);
       await supabase
         .from("clients")
-        .update({ financials: inputs as never, financials_updated_at: financialsUpdatedAt })
+        .update({ financials: blob as never, financials_updated_at: financialsUpdatedAt })
         .eq("id", clientId);
 
       await recordScoreHistory(clientId, scoreFromRatioInputs(inputs, effectiveRunway));
 
       // Update local state with new financials
-      setFinancials(
-        Object.fromEntries(Object.entries(inputs).map(([k, v]) => [k, v != null ? String(v) : ""])),
-      );
+      setFinancials(nextScalars);
       setClient((c) => (c ? { ...c, financials_updated_at: financialsUpdatedAt } : c));
       toast.success(`Financials saved for ${periodLabel}`);
       setUploadOpen(false);
     },
-    [clientId, effectiveRunway],
+    [clientId, effectiveRunway, mergeCurrentBlob],
   );
 
   // ── Deliverables bar actions ──────────────────────────────────────────────
@@ -1258,6 +1313,7 @@ function ClientView() {
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
+    <FinancialInputsContext.Provider value={financialInputsCtxValue}>
     <div className="accountant-portal">
       <WalkthroughWizard
         variant="accountant-client"
@@ -1713,11 +1769,10 @@ function ClientView() {
                       const next = Object.fromEntries(
                         Object.entries(inputs).map(([k, val]) => [k, String(val)]),
                       );
-                      setFinancials((prev) => ({ ...prev, ...next }));
-                      const updated = mergeFinancialsBlob(
-                        { ...financials, ...next },
-                        debtSchedule,
-                      );
+                      const nextScalars = { ...financialsRef.current, ...next };
+                      financialsRef.current = nextScalars;
+                      setFinancials(nextScalars);
+                      const updated = mergeCurrentBlob(nextScalars);
                       const updatedAt = new Date().toISOString();
                       void supabase
                         .from("clients")
@@ -1865,7 +1920,7 @@ function ClientView() {
                 )}
               </h3>
               <span className="hint">
-                Edit P&amp;L figures or upload a PDF — the waterfall updates live
+                Edit period P&amp;L or weekly inputs — the waterfall matches the owner board
               </span>
               <span className="chev">
                 <svg
@@ -1894,8 +1949,8 @@ function ClientView() {
                   }}
                 >
                   <p style={{ margin: 0, fontSize: 12, color: "var(--ink-dim)", maxWidth: 420 }}>
-                    Same period figures as Health &amp; Ratios. Upload an income statement PDF to
-                    extract and review values.
+                    Same period figures as Health &amp; Ratios, plus the same weekly inputs the
+                    owner enters on Profit. Weeks feed the waterfall when present.
                   </p>
                   <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                     <button
@@ -1953,6 +2008,10 @@ function ClientView() {
                 computeIsStale(financialsSignoff, client?.financials_updated_at ?? null),
               )}
             />
+            {/* Same weekly grid as the owner Profit tab — weeks feed this waterfall. */}
+            <div style={{ marginTop: 16 }}>
+              <WeeklyInputTable role="accountant" />
+            </div>
           </div>
           <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 16 }}>
             <ReviewSignoffButton
@@ -2311,15 +2370,16 @@ function ClientView() {
           const asStrings = Object.fromEntries(
             Object.entries(fields).map(([k, v]) => [k, v != null ? String(v) : ""]),
           );
-          setFinancials((prev) => ({ ...prev, ...asStrings }));
+          setFinancials((prev) => {
+            const next = { ...prev, ...asStrings };
+            financialsRef.current = next;
+            return next;
+          });
           setShowBankDrafter(false);
           setBankCashDraft(cashDraft ?? null);
 
           const financialsUpdatedAt = new Date().toISOString();
-          const merged = mergeFinancialsBlob(
-            { ...financials, ...asStrings },
-            debtSchedule,
-          );
+          const merged = mergeCurrentBlob(financialsRef.current);
           const { error } = await supabase
             .from("clients")
             .update({
@@ -2441,5 +2501,6 @@ function ClientView() {
         </DialogContent>
       </Dialog>
     </div>
+    </FinancialInputsContext.Provider>
   );
 }

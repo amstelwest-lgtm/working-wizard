@@ -26,6 +26,7 @@
     "test:cash-from-banks-workspace": "vite-node --config scripts/vite-test.config.ts scripts/cash-from-banks-workspace-test.mts",
     "test:portal-routing": "vite-node --config scripts/vite-test.config.ts scripts/portal-routing-test.mts",
     "test:action-plan-tab": "vite-node --config scripts/vite-test.config.ts scripts/action-plan-tab-test.mts",
+    "test:weekly-inputs": "vite-node --config scripts/vite-test.config.ts scripts/weekly-inputs-test.mts",
     "test:client-invite-email": "vite-node --config scripts/vite-test.config.ts scripts/client-invite-email-test.mts"
   },
   "dependencies": {

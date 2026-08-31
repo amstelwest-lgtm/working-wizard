@@ -3,6 +3,7 @@ import { ChevronDown, ChevronUp, Download } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useFinancialInputs } from "@/contexts/financial-inputs";
+import { aggregateWeeklyInputs, hasWeeklyProfitFigures } from "@/lib/weekly-inputs";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
 import { useAuth } from "@/hooks/use-auth";
 import { hashFigures, latestSnapshotId, recordDelivery, warnIfDeliveryFailed, warnIfPdfArchiveFailed } from "@/lib/advisory-deliveries";
@@ -166,18 +167,8 @@ export function ProfitabilityWaterfall({
     return () => cancelAnimationFrame(t);
   }, []);
 
-  const agg = Object.values(weeklyInputs.weeks).reduce(
-    (acc, w) => ({
-      revenue:     acc.revenue     + (w.revenue     || 0),
-      costOfSales: acc.costOfSales + (w.costOfSales || 0),
-      fixedCosts:  acc.fixedCosts  + (w.fixedCosts  || 0),
-      interest:    acc.interest    + (w.interest    || 0),
-      tax:         acc.tax         + (w.tax         || 0),
-    }),
-    { revenue: 0, costOfSales: 0, fixedCosts: 0, interest: 0, tax: 0 },
-  );
-
-  const hasWeekly = agg.revenue > 0 || agg.costOfSales > 0;
+  const agg = aggregateWeeklyInputs(weeklyInputs);
+  const hasWeekly = hasWeeklyProfitFigures(weeklyInputs);
 
   const revenue      = hasWeekly ? agg.revenue     : (fallback?.revenue    ?? 0);
   const costOfSales  = hasWeekly ? agg.costOfSales : (fallback?.cogs       ?? 0);

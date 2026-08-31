@@ -39,9 +39,9 @@ const FIELDS: Array<{ key: keyof WeeklyRow; label: string; hint: string }> = [
   { key: "tax",           label: "Income Tax",         hint: "Tax provision for this period" },
 ];
 
-export function WeeklyInputTable({ role: _role = "owner" }: { role?: "owner" | "accountant" }) {
+export function WeeklyInputTable({ role = "owner" }: { role?: "owner" | "accountant" }) {
   const { weeklyInputs, updateWeek } = useFinancialInputs();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(role === "accountant");
   const weeks = getRecentWeeks(4);
   const currentWeek = getISOWeekKey();
   const fields = FIELDS;

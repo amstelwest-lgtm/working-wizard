@@ -1,26 +1,12 @@
 import { createContext, useContext } from "react";
+import {
+  emptyWeeklyInputs,
+  type WeeklyInputs,
+  type WeeklyRow,
+} from "@/lib/weekly-inputs";
 
-export type WeeklyRow = {
-  revenue: number;
-  costOfSales: number;
-  fixedCosts: number;
-  cashMovements: number;
-  interest: number;
-  tax: number;
-};
-
-export type WeeklyInputs = {
-  weeks: Record<string, WeeklyRow>;
-};
-
-export const DEFAULT_WEEKLY_ROW: WeeklyRow = {
-  revenue: 0,
-  costOfSales: 0,
-  fixedCosts: 0,
-  cashMovements: 0,
-  interest: 0,
-  tax: 0,
-};
+export type { WeeklyInputs, WeeklyRow };
+export { DEFAULT_WEEKLY_ROW, emptyWeeklyInputs } from "@/lib/weekly-inputs";
 
 export type FinancialInputsCtx = {
   weeklyInputs: WeeklyInputs;
@@ -28,7 +14,7 @@ export type FinancialInputsCtx = {
 };
 
 export const FinancialInputsContext = createContext<FinancialInputsCtx>({
-  weeklyInputs: { weeks: {} },
+  weeklyInputs: emptyWeeklyInputs(),
   updateWeek: () => {},
 });
 
