@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Trash2, CheckCheck, CornerDownRight } from "lucide-react";
+import { Trash2, CheckCheck, CornerDownRight, X } from "lucide-react";
 import { useNotes, type NoteCollaborator } from "@/contexts/notes";
 import { useAuth } from "@/hooks/use-auth";
 
@@ -197,6 +197,7 @@ export function NoteLayer({ clientId, tab, authorName, clientName, onNotesChange
     collaborators,
     registerSurface,
     clearSurface,
+    openArchive,
   } = useNotes();
 
   const [composing, setComposing] = useState<{
@@ -292,6 +293,12 @@ export function NoteLayer({ clientId, tab, authorName, clientName, onNotesChange
     }
   }
 
+  function closeOpenNote() {
+    setOpenNoteId(null);
+    setReplyingTo(null);
+    setReplyText("");
+  }
+
   if (!mounted || !clientId) return null;
 
   const openNote = (noteId: string) => {
@@ -319,10 +326,20 @@ export function NoteLayer({ clientId, tab, authorName, clientName, onNotesChange
       {tabNotes.length > 0 && (
         <div
           data-note="true"
-          className="fixed bottom-32 right-4 z-[99993] w-[min(260px,calc(100vw-2rem))] max-h-[40vh] overflow-y-auto rounded-2xl border border-[#d4a550]/30 bg-white/95 p-2 shadow-xl backdrop-blur dark:border-[#d4a550]/25 dark:bg-[#0d1525]/95"
+          className="fixed bottom-44 right-4 z-[99993] w-[min(260px,calc(100vw-2rem))] max-h-[40vh] overflow-y-auto rounded-2xl border border-[#d4a550]/30 bg-white/95 p-2 shadow-xl backdrop-blur dark:border-[#d4a550]/25 dark:bg-[#0d1525]/95"
         >
-          <div className="mb-1.5 px-2 pt-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b8860b]">
-            Notes on this tab · {tabNotes.length}
+          <div className="mb-1.5 flex items-center justify-between gap-2 px-2 pt-1">
+            <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b8860b]">
+              Notes on this tab · {tabNotes.length}
+            </div>
+            <button
+              type="button"
+              title="Open notes archive"
+              onClick={() => openArchive("resolved")}
+              className="text-[10px] font-semibold text-slate-500 hover:text-[#b8860b]"
+            >
+              Archive
+            </button>
           </div>
           <ul className="space-y-1">
             {tabNotes.map((n) => (
@@ -413,13 +430,13 @@ export function NoteLayer({ clientId, tab, authorName, clientName, onNotesChange
                 onClick={(e) => e.stopPropagation()}
               >
                 <div className="px-4 pt-3 pb-2">
-                  <div className="mb-2 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
+                  <div className="mb-2 flex items-start justify-between gap-2">
+                    <div className="flex min-w-0 items-center gap-2">
                       <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#d4a550] text-[10px] font-extrabold text-[#0a1628]">
                         {getInitials(note.author)}
                       </div>
-                      <div>
-                        <div className="text-[12px] font-semibold text-slate-800 dark:text-white">
+                      <div className="min-w-0">
+                        <div className="truncate text-[12px] font-semibold text-slate-800 dark:text-white">
                           {note.author}
                         </div>
                         <div className="text-[10px] text-slate-400">
@@ -432,18 +449,31 @@ export function NoteLayer({ clientId, tab, authorName, clientName, onNotesChange
                         </div>
                       </div>
                     </div>
-                    {note.authorId === user?.id && (
+                    <div className="flex shrink-0 items-center">
+                      {note.authorId === user?.id && (
+                        <button
+                          type="button"
+                          title="Delete note"
+                          aria-label="Delete note"
+                          onClick={() => {
+                            void deleteNote(note.id).then(() => onNotesChanged?.());
+                            closeOpenNote();
+                          }}
+                          className="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-500 dark:text-slate-500 dark:hover:bg-red-900/30 dark:hover:text-red-400"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      )}
                       <button
-                        title="Delete note"
-                        onClick={() => {
-                          void deleteNote(note.id).then(() => onNotesChanged?.());
-                          setOpenNoteId(null);
-                        }}
-                        className="rounded p-1 text-slate-300 hover:bg-red-50 hover:text-red-500 dark:text-slate-600 dark:hover:bg-red-900/30 dark:hover:text-red-400"
+                        type="button"
+                        title="Close note"
+                        aria-label="Close note"
+                        onClick={closeOpenNote}
+                        className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-500 dark:hover:bg-white/10 dark:hover:text-slate-200"
                       >
-                        <Trash2 className="h-3.5 w-3.5" />
+                        <X className="h-4 w-4" />
                       </button>
-                    )}
+                    </div>
                   </div>
                   <div
                     className={`text-[13px] leading-relaxed ${
@@ -562,10 +592,19 @@ export function NoteLayer({ clientId, tab, authorName, clientName, onNotesChange
             transform: "translate(-50%, -50%)",
             zIndex: 99992,
           }}
-          className="w-[min(300px,calc(100vw-1.5rem))] rounded-2xl border border-black/8 bg-white shadow-[0_8px_32px_rgba(0,0,0,0.22)] dark:border-white/10 dark:bg-[#1e2d4a]"
+          className="relative w-[min(300px,calc(100vw-1.5rem))] rounded-2xl border border-black/8 bg-white shadow-[0_8px_32px_rgba(0,0,0,0.22)] dark:border-white/10 dark:bg-[#1e2d4a]"
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="flex items-center gap-2.5 px-4 pb-3 pt-4">
+          <button
+            type="button"
+            title="Close note"
+            aria-label="Close note"
+            onClick={() => setComposing(null)}
+            className="absolute right-2 top-2 rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-500 dark:hover:bg-white/10 dark:hover:text-slate-200"
+          >
+            <X className="h-4 w-4" />
+          </button>
+          <div className="flex items-center gap-2.5 px-4 pb-3 pt-4 pr-10">
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#d4a550] text-[11px] font-extrabold text-[#0a1628]">
               {initials}
             </div>

@@ -51,6 +51,10 @@ type NotesCtx = {
   resolveNote: (id: string) => Promise<void>;
   replyToNote: (noteId: string, text: string) => Promise<void>;
   getNotesForTab: (tab: string) => ClientNote[];
+  archiveOpen: boolean;
+  archiveFilter: "open" | "resolved";
+  openArchive: (filter?: "open" | "resolved") => void;
+  closeArchive: () => void;
 };
 
 const NotesContext = createContext<NotesCtx | null>(null);
@@ -98,6 +102,15 @@ export function NotesProvider({ children }: { children: ReactNode }) {
   const [clientName, setClientName] = useState("Client");
   const [loading, setLoading] = useState(false);
   const [pinMode, setPinMode] = useState(false);
+  const [archiveOpen, setArchiveOpen] = useState(false);
+  const [archiveFilter, setArchiveFilter] = useState<"open" | "resolved">("open");
+
+  const openArchive = useCallback((filter?: "open" | "resolved") => {
+    if (filter) setArchiveFilter(filter);
+    setArchiveOpen(true);
+  }, []);
+
+  const closeArchive = useCallback(() => setArchiveOpen(false), []);
 
   const fetchNotes = useServerFn(listClientNotes);
   const fetchCollaborators = useServerFn(listNoteCollaborators);
@@ -220,6 +233,20 @@ export function NotesProvider({ children }: { children: ReactNode }) {
             n.id === id ? { ...n, resolved: res.resolved } : n,
           ),
         );
+        if (res.resolved) {
+          toast.success("Note resolved", {
+            description: "It stays on the page and in Resolved notes — it is not deleted.",
+            action: {
+              label: "View archive",
+              onClick: () => {
+                setArchiveFilter("resolved");
+                setArchiveOpen(true);
+              },
+            },
+          });
+        } else {
+          toast.success("Note reopened");
+        }
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "Failed to update note");
       }
@@ -283,6 +310,10 @@ export function NotesProvider({ children }: { children: ReactNode }) {
       resolveNote,
       replyToNote,
       getNotesForTab,
+      archiveOpen,
+      archiveFilter,
+      openArchive,
+      closeArchive,
     }),
     [
       surface,
@@ -298,6 +329,10 @@ export function NotesProvider({ children }: { children: ReactNode }) {
       resolveNote,
       replyToNote,
       getNotesForTab,
+      archiveOpen,
+      archiveFilter,
+      openArchive,
+      closeArchive,
     ],
   );
 

@@ -49,6 +49,7 @@ import {
 import { profileIndustryLabel } from "@/lib/profile-signals";
 import { AccountantOperatingProfile } from "@/components/accountant-operating-profile";
 import { NoteLayer } from "@/components/note-layer";
+import { useNotes } from "@/contexts/notes";
 import { QboConnectCard } from "@/components/qbo-connect";
 import { effectiveCashRunwayWeeks, runwayWeeksFromCashflow } from "@/lib/cash-runway";
 import { countOpenQueriesForClient } from "@/lib/open-queries";
@@ -432,6 +433,7 @@ function ClientView() {
   const { clientId } = Route.useParams();
   const search = Route.useSearch();
   const { user } = useAuth();
+  const { notes: clientNotes, loading: notesLoading, openArchive } = useNotes();
   const navigate = useNavigate();
   const { profile, firmId } = useAccountantProfile();
 
@@ -1452,10 +1454,19 @@ function ClientView() {
               </b>
               <span>Last forecast</span>
             </div>
-            <div>
-              <b>{openQueriesCount}</b>
+            <button
+              type="button"
+              className="meta-notes"
+              title="Open and resolved notes"
+              onClick={() => openArchive(openQueriesCount > 0 ? "open" : "resolved")}
+            >
+              <b>
+                {notesLoading && clientNotes.length === 0
+                  ? openQueriesCount
+                  : clientNotes.filter((n) => !n.resolved).length}
+              </b>
               <span>Open queries</span>
-            </div>
+            </button>
             <div>
               <b>{reportsIssued}</b>
               <span>Reports issued</span>

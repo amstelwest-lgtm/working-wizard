@@ -16,6 +16,7 @@ import { ShareButton } from "@/components/share";
 import { AnalyticsProvider } from "@/contexts/analytics";
 import { NotesProvider } from "@/contexts/notes";
 import { FloatingNoteButton } from "@/components/floating-note-button";
+import { NoteArchiveSheet } from "@/components/note-archive";
 
 import appCss from "../styles.css?url";
 
@@ -237,6 +238,7 @@ function RootComponent() {
                 <Outlet />
                 <ShareButton />
                 <FloatingNoteButton />
+                <NoteArchiveSheet />
                 <Toaster position="top-right" richColors />
               </ViewModeProvider>
             </NotesProvider>
