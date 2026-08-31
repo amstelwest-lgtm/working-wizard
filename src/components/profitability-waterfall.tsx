@@ -3,19 +3,13 @@ import { ChevronDown, ChevronUp, Download } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useFinancialInputs } from "@/contexts/financial-inputs";
-import { aggregateWeeklyInputs, hasWeeklyProfitFigures } from "@/lib/weekly-inputs";
+import { resolveWaterfallFigures, type WaterfallFallback } from "@/lib/weekly-inputs";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
 import { useAuth } from "@/hooks/use-auth";
 import { hashFigures, latestSnapshotId, recordDelivery, warnIfDeliveryFailed, warnIfPdfArchiveFailed } from "@/lib/advisory-deliveries";
 import type { ReportSignoffStamp } from "@/components/pdf/pdf-document";
 
-export type WaterfallFallback = {
-  revenue: number;
-  cogs: number;
-  fixedCosts: number;
-  interest: number;
-  tax: number;
-};
+export type { WaterfallFallback };
 
 type StepKind = "total" | "decrease" | "subtotal";
 
@@ -167,14 +161,14 @@ export function ProfitabilityWaterfall({
     return () => cancelAnimationFrame(t);
   }, []);
 
-  const agg = aggregateWeeklyInputs(weeklyInputs);
-  const hasWeekly = hasWeeklyProfitFigures(weeklyInputs);
+  const figures = resolveWaterfallFigures(weeklyInputs, fallback);
+  const hasWeekly = figures.source === "weekly";
 
-  const revenue      = hasWeekly ? agg.revenue     : (fallback?.revenue    ?? 0);
-  const costOfSales  = hasWeekly ? agg.costOfSales : (fallback?.cogs       ?? 0);
-  const fixedCosts   = hasWeekly ? agg.fixedCosts  : (fallback?.fixedCosts ?? 0);
-  const interest     = hasWeekly ? agg.interest    : (fallback?.interest   ?? 0);
-  const tax          = hasWeekly ? agg.tax         : (fallback?.tax        ?? 0);
+  const revenue      = figures.revenue;
+  const costOfSales  = figures.costOfSales;
+  const fixedCosts   = figures.fixedCosts;
+  const interest     = figures.interest;
+  const tax          = figures.tax;
 
   const grossProfit     = revenue - costOfSales;
   const operatingProfit = grossProfit - fixedCosts;

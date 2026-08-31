@@ -56,7 +56,7 @@ import {
   type WeeklyRow,
   DEFAULT_WEEKLY_ROW,
 } from "@/contexts/financial-inputs";
-import { parseWeeklyInputs } from "@/lib/weekly-inputs";
+import { parseWeeklyInputs, derivePeriodWaterfallFallback, hasWeeklyActivity, overlayWeeklyInputs } from "@/lib/weekly-inputs";
 import { WeeklyInputTable } from "@/components/weekly-input-table";
 import { ProfitabilityWaterfall } from "@/components/profitability-waterfall";
 import { useTrack } from "@/hooks/use-track";
@@ -2449,7 +2449,10 @@ function Index() {
           );
           // Hydrate weeks even when period P&L keys are absent so the waterfall
           // matches the accountant portal (which reads the same weeklyInputs blob).
-          if (fin.weeklyInputs) setWeeklyInputs(parseWeeklyInputs(fin.weeklyInputs));
+          if (fin.weeklyInputs) {
+            setWeeklyInputs(parseWeeklyInputs(fin.weeklyInputs));
+            skipNextFinancialsAutosave.current = true;
+          }
           if (hasRealKeys) {
             setV({ ...defaults, ...fin });
             setHasRealFinancials(true);
@@ -2468,22 +2471,37 @@ function Index() {
   }, [effectiveClientId]);
 
   // Debounced autosave — fires for both owners and firm impersonation.
-  // Gated on hasRealFinancials so the initial demo defaults are never written to the DB
-  // before the owner has entered or imported any real figures.
+  // Period P&L is gated on hasRealFinancials so demo defaults are never written.
+  // Weekly inputs still persist (merged onto the existing blob) so the
+  // accountant waterfall can read the same weeks the owner just typed.
   useEffect(() => {
     if (!effectiveClientId || hydratedClientId !== effectiveClientId) return;
-    if (!hasRealFinancials) return; // never autosave placeholder defaults
     if (skipNextFinancialsAutosave.current) {
       skipNextFinancialsAutosave.current = false;
       return;
     }
+    if (!hasRealFinancials && !hasWeeklyActivity(weeklyInputs)) return;
     setSaveStatus("saving");
     const t = setTimeout(async () => {
       const financialsUpdatedAt = new Date().toISOString();
+      let blob: Record<string, unknown>;
+      if (hasRealFinancials) {
+        blob = { ...v, weeklyInputs };
+      } else {
+        const { data: row } = await supabase
+          .from("clients")
+          .select("financials")
+          .eq("id", effectiveClientId)
+          .maybeSingle();
+        blob = overlayWeeklyInputs(
+          (row?.financials as Record<string, unknown> | null) ?? {},
+          weeklyInputs,
+        );
+      }
       const { data: updated, error } = await supabase
         .from("clients")
         .update({
-          financials: { ...v, weeklyInputs } as never,
+          financials: blob as never,
           financials_updated_at: financialsUpdatedAt,
         })
         .eq("id", effectiveClientId)
@@ -2503,7 +2521,7 @@ function Index() {
         // G20: upsert this month's snapshot so deliveries / movement aren't snapshot-less.
         void upsertCurrentPeriodSnapshot({
           clientId: effectiveClientId,
-          financials: { ...v, weeklyInputs } as Record<string, unknown>,
+          financials: blob,
           source: "autosave",
         }).then(({ id }) => {
           if (id) {
@@ -4056,27 +4074,7 @@ function Index() {
                     financialsSignoff,
                     computeIsStale(financialsSignoff, clientMeta?.financials_updated_at ?? null),
                   )}
-                  fallback={(() => {
-                    // Mirror the accountant-side residual derivation so that
-                    // PDF-extracted statements (which leave fixedCosts blank)
-                    // still render meaningful operating-expense and net-profit bars.
-                    const hasFin = (key: keyof typeof v) => (v[key] ?? "") !== "";
-                    const wfGrossProfit = n.revenue - n.cogs;
-                    const wfOpex = hasFin("fixedCosts")
-                      ? n.fixedCosts
-                      : hasFin("ebit")
-                        ? wfGrossProfit - n.ebit
-                        : 0;
-                    const wfInterest = hasFin("ebit") && hasFin("ebt") ? n.ebit - n.ebt : 0;
-                    const wfTax = hasFin("ebt") && hasFin("netIncome") ? n.ebt - n.netIncome : 0;
-                    return {
-                      revenue: n.revenue,
-                      cogs: n.cogs,
-                      fixedCosts: wfOpex,
-                      interest: wfInterest,
-                      tax: wfTax,
-                    };
-                  })()}
+                  fallback={derivePeriodWaterfallFallback(v)}
                 />
               </div>
               {/* Weekly inputs feed the waterfall — sit below so the chart stays the focus */}

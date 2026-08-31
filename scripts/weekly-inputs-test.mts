@@ -13,9 +13,13 @@ import {
 } from "../src/lib/debt-schedule";
 import {
   aggregateWeeklyInputs,
+  derivePeriodWaterfallFallback,
   emptyWeeklyInputs,
+  hasWeeklyActivity,
   hasWeeklyProfitFigures,
+  overlayWeeklyInputs,
   parseWeeklyInputs,
+  resolveWaterfallFigures,
 } from "../src/lib/weekly-inputs";
 
 function assert(cond: boolean, msg: string) {
@@ -70,13 +74,50 @@ assert(again.debtSchedule.drawings_ytd === 12_000, "accountant autosave keeps de
 const ownerSrc = readFileSync(resolve("src/routes/app.tsx"), "utf8");
 assert(ownerSrc.includes("<WeeklyInputTable"), "owner Profit tab has weekly inputs");
 assert(
-  ownerSrc.includes("if (fin.weeklyInputs) setWeeklyInputs(parseWeeklyInputs(fin.weeklyInputs))"),
+  ownerSrc.includes("setWeeklyInputs(parseWeeklyInputs(fin.weeklyInputs))"),
   "owner hydrates weeks even without period P&L keys",
 );
+assert(ownerSrc.includes("overlayWeeklyInputs"), "owner persists weeks without wiping period P&L");
+assert(ownerSrc.includes("derivePeriodWaterfallFallback(v)"), "owner waterfall uses shared period fallback");
 
 const accountantSrc = readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8");
 assert(accountantSrc.includes("<WeeklyInputTable role=\"accountant\""), "accountant Profit tab has weekly inputs");
 assert(accountantSrc.includes("FinancialInputsContext.Provider"), "accountant portal provides weekly context for waterfall");
 assert(accountantSrc.includes("weeklyInputs: weeks"), "accountant load splits weeklyInputs from the blob");
+assert(
+  accountantSrc.includes("derivePeriodWaterfallFallback(financials)"),
+  "accountant waterfall uses shared period fallback",
+);
+
+const period = derivePeriodWaterfallFallback({
+  revenue: "500000",
+  cogs: "200000",
+  ebit: "180000",
+  ebt: "150000",
+  netIncome: "120000",
+});
+assert(period.fixedCosts === 120000, "opex residual = GP − EBIT when fixedCosts blank");
+assert(period.interest === 30000, "interest = EBIT − EBT");
+assert(period.tax === 30000, "tax = EBT − net");
+
+const ownerFigures = resolveWaterfallFigures(weeks, period);
+const accountantFigures = resolveWaterfallFigures(weeks, period);
+assert(ownerFigures.revenue === accountantFigures.revenue, "same weeks → same revenue");
+assert(ownerFigures.costOfSales === accountantFigures.costOfSales, "same weeks → same cogs");
+assert(ownerFigures.source === "weekly", "weekly revenue wins over larger period statement");
+assert(ownerFigures.revenue === 180_000, "weekly revenue not period 500000");
+
+const periodOnly = resolveWaterfallFigures(emptyWeeklyInputs(), period);
+assert(periodOnly.source === "period", "empty weeks fall back to period");
+assert(periodOnly.revenue === 500000, "period fallback revenue");
+
+const overlaid = overlayWeeklyInputs(
+  { revenue: "500000", cogs: "200000", debt_schedule: { lines: [{ amount: 1 }] } },
+  weeks,
+);
+assert(overlaid.revenue === "500000", "overlay keeps period scalars");
+assert((overlaid.debt_schedule as { lines: unknown[] }).lines.length === 1, "overlay keeps debt");
+assert(hasWeeklyActivity(weeks) === true, "weeks with figures count as activity");
+assert(hasWeeklyActivity(emptyWeeklyInputs()) === false, "empty weeks are not activity");
 
 console.log("weekly-inputs-test: ok");

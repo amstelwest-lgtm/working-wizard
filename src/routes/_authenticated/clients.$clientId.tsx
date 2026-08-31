@@ -43,7 +43,7 @@ import {
   type WeeklyInputs,
   type WeeklyRow,
 } from "@/contexts/financial-inputs";
-import { emptyWeeklyInputs } from "@/lib/weekly-inputs";
+import { emptyWeeklyInputs, derivePeriodWaterfallFallback } from "@/lib/weekly-inputs";
 import { useServerFn } from "@tanstack/react-start";
 import { listClientReviewSignoffs } from "@/lib/review-signoffs.functions";
 import type { ClientReviewSignoff } from "@/lib/review-signoffs.functions";
@@ -614,31 +614,7 @@ function ClientView() {
     cashRunwayWeeks: effectiveRunway,
   });
 
-  // Waterfall fallback — derived from period financials.
-  // PDF-extracted statements supply EBIT/EBT/netIncome but leave fixedCosts
-  // blank, so derive operating expenses as the residual (gross profit − EBIT)
-  // when no classified figure exists. Interest and tax stay signed so the
-  // waterfall reconciles to the reported net income even in loss periods or
-  // with non-operating income / tax credits.
-  const finNum = (key: string) => parseFloat(financials[key] || "0") || 0;
-  const hasFin = (key: string) => (financials[key] ?? "") !== "";
-  const wfRevenue = finNum("revenue");
-  const wfCogs = finNum("cogs");
-  const wfGrossProfit = wfRevenue - wfCogs;
-  const wfOpex = hasFin("fixedCosts")
-    ? finNum("fixedCosts")
-    : hasFin("ebit")
-      ? wfGrossProfit - finNum("ebit")
-      : 0;
-  const wfInterest = hasFin("ebit") && hasFin("ebt") ? finNum("ebit") - finNum("ebt") : 0;
-  const wfTax = hasFin("ebt") && hasFin("netIncome") ? finNum("ebt") - finNum("netIncome") : 0;
-  const waterfallFallback = {
-    revenue: wfRevenue,
-    cogs: wfCogs,
-    fixedCosts: wfOpex,
-    interest: wfInterest,
-    tax: wfTax,
-  };
+  const waterfallFallback = derivePeriodWaterfallFallback(financials);
 
   // ── Ask AI widget mount (same widget the owner app uses) ────────────────
   useEffect(() => {
