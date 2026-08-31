@@ -456,9 +456,10 @@ html:not(.dark) main.bg-slate-950 { background-color: #f8fafc !important; color:
   50%       { box-shadow: 0 0 0 10px rgba(201, 150, 43, 0.06), 0 0 28px rgba(201, 150, 43, 0.1); }
 }
 
-/* ===== Health Score Orb — theme-aware ===== */
-/* Dark mode: the Sphere component's inline styles already handle this beautifully. */
-/* Light mode: override with a luminous gold/pearl sphere and dark ink text. */
+/* ===== Health Score Orbs (main + pillar sub-orbs) — theme-aware ===== */
+/* Dark mode: the Sphere component's inline styles already handle this. */
+/* Light mode: luminous gold/pearl fill so dark ink labels stay readable. */
+html:not(.dark) .sphere-orb,
 html:not(.dark) .health-orb {
   background: radial-gradient(circle at 50% 34%, #fffdf3 0%, #f6e6ad 40%, #ecce78 70%, #dcb046 100%) !important;
   box-shadow:
@@ -467,12 +468,15 @@ html:not(.dark) .health-orb {
     inset 0 3px 26px rgba(255,255,255,.9),
     inset 0 -24px 55px rgba(150,110,10,.28) !important;
 }
-/* Score number: amber-300 → deep bronze */
+html:not(.dark) .sphere-orb .text-amber-300,
 html:not(.dark) .health-orb .text-amber-300 { color: #3f2f06 !important; }
-/* Caption label: slate-200 → warm ink */
-html:not(.dark) .health-orb .text-slate-200 { color: #7a6a4a !important; }
-/* Tier label and any amber variants → golden brown */
-html:not(.dark) .health-orb [class*="text-amber-"] { color: #a8791a !important; }
-/* Delta arrows */
-html:not(.dark) .health-orb .text-emerald-400 { color: #2d6e3a !important; }
-html:not(.dark) .health-orb .text-rose-400    { color: #9b2424 !important; }
+html:not(.dark) .sphere-orb .text-slate-200,
+html:not(.dark) .health-orb .text-slate-200 { color: #5c4a22 !important; }
+html:not(.dark) .sphere-orb .text-slate-400,
+html:not(.dark) .health-orb .text-slate-400 { color: #6b5a3a !important; }
+html:not(.dark) .sphere-orb [class*="text-amber-"],
+html:not(.dark) .health-orb [class*="text-amber-"] { color: #8a5a10 !important; }
+html:not(.dark) .sphere-orb .text-emerald-400,
+html:not(.dark) .health-orb .text-emerald-400 { color: #1f6b45 !important; }
+html:not(.dark) .sphere-orb .text-rose-400,
+html:not(.dark) .health-orb .text-rose-400 { color: #9b2424 !important; }

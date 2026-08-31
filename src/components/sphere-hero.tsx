@@ -214,7 +214,7 @@ function Sphere({
       onClick={onClick}
       disabled={!onClick}
       aria-label={label ? `${label} score ${fmtScore(score)}` : `Score ${fmtScore(score)}`}
-      className={`group relative flex shrink-0 select-none flex-col items-center justify-center rounded-full outline-none transition-transform duration-500 ease-out focus-visible:ring-2 focus-visible:ring-amber-400/60 enabled:cursor-pointer enabled:active:scale-95${className ? ` ${className}` : ""}`}
+      className={`sphere-orb group relative flex shrink-0 select-none flex-col items-center justify-center rounded-full outline-none transition-transform duration-500 ease-out focus-visible:ring-2 focus-visible:ring-amber-400/60 enabled:cursor-pointer enabled:active:scale-95${className ? ` ${className}` : ""}`}
       style={{
         width: size,
         height: size,
