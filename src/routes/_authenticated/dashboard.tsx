@@ -9,7 +9,6 @@ import {
   shouldStayOnAccountantPortal,
   setPortalIntent,
   clearForcePortal,
-  isAccountantDoor,
 } from "@/lib/user-roles";
 import {
   healthFromFlatFinancials,
@@ -624,18 +623,12 @@ function Dashboard() {
   const navigate = useNavigate();
 
   // ── Role guard ────────────────────────────────────────────────────────────
-  // Accountant-door sessions stay here immediately — do not wait on a role
-  // query. That wait flashed the practice portal for ~1s then dumped dual-role
-  // / founder accounts onto the SME board.
+  // SME-only accounts (business client credentials) must not sit on the
+  // practice portal even if they signed in at /auth. Dual-role and practice
+  // users stay. The role query is required — a one-shot accountant force flag
+  // used to skip it and that let Karoo-style owner logins keep this board.
   useEffect(() => {
     if (!user) return;
-    // One-shot accountant-door force only. Leftover localStorage intent must
-    // not keep an SME invitee here — shouldStayOnAccountantPortal decides.
-    if (isAccountantDoor()) {
-      setPortalIntent("accountant");
-      clearForcePortal();
-      return;
-    }
     let cancelled = false;
     void shouldStayOnAccountantPortal(user.id).then((stay) => {
       if (cancelled) return;
@@ -644,6 +637,8 @@ function Dashboard() {
         clearForcePortal();
         return;
       }
+      clearForcePortal();
+      setPortalIntent("owner");
       navigate({ to: "/app" });
     });
     return () => {
