@@ -1028,7 +1028,7 @@ function ItemRow({ item, employees, milestones, lastNudge, lastFailed, draggable
       onDragStart={onDragStart}
       onDragOver={(e) => e.preventDefault()}
       onDrop={(e) => { e.preventDefault(); onDrop(); }}
-      onClick={onOpen}
+      onClick={pickOwner ? undefined : onOpen}
       data-row-id={item.id}
     >
       {draggable && (
@@ -1070,8 +1070,12 @@ function ItemRow({ item, employees, milestones, lastNudge, lastFailed, draggable
         </div>
       </div>
 
-      {/* Owner */}
-      <div className="w-[calc(50%-0.4rem)] shrink-0 sm:w-32">
+      {/* Owner — stopPropagation so picker clicks never open the task drawer */}
+      <div
+        className="relative w-[calc(50%-0.4rem)] shrink-0 sm:w-32"
+        onClick={(e) => e.stopPropagation()}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
         {isOwner && pickOwner ? (
           <OwnerPicker
             employees={employees}

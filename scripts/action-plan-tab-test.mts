@@ -85,5 +85,6 @@ assert(!/for \(const k of keys\)[\s\S]{0,200}await addItem/.test(planSrc), "impo
 assert(planSrc.includes("Manage team"), "Action Plan has a manage-team button");
 assert(planSrc.includes("function TeamPanel"), "team list panel exists");
 assert(planSrc.includes('onClick={(e) => { e.stopPropagation(); setAdding(true); }}'), "Add employee does not open the task drawer");
+assert(planSrc.includes("onClick={pickOwner ? undefined : onOpen}"), "row click is disabled while the owner picker is open");
 
 console.log("action-plan-tab-test: ok");
