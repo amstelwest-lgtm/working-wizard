@@ -57,9 +57,6 @@ function AuthPage() {
     if (landInflightRef.current) return landInflightRef.current;
     const run = (async () => {
       forcePortal("accountant");
-      await ensurePractice().catch(() => {
-        /* non-fatal — role guard still uses firm ownership */
-      });
       if (next === "/ops") {
         landedPathRef.current = "/ops";
         navigate({ to: "/ops" });
@@ -70,7 +67,13 @@ function AuthPage() {
         clearForcePortal();
         setPortalIntent("owner");
         toast.message("This sign-in is for accounting firms. Opening the business board instead.");
+        landedPathRef.current = path;
+        navigate({ to: path });
+        return path;
       }
+      await ensurePractice().catch(() => {
+        /* non-fatal — role guard still uses firm ownership */
+      });
       landedPathRef.current = path;
       navigate({ to: path });
       return path;

@@ -113,6 +113,24 @@ export const ensurePracticePortalAccess = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const userId = context.userId;
+    const { data: existingRoles } = await supabaseAdmin
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", userId);
+    const roles = (existingRoles ?? []).map((r) => r.role as string);
+    const hasClient = roles.includes("client_owner") || roles.includes("client_member");
+    const hasPractice = roles.includes("firm_admin") || roles.includes("accountant");
+    const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(userId);
+    const meta = (authUser.user?.user_metadata ?? {}) as Record<string, unknown>;
+    const practiceSignup =
+      meta.signup_type === "accountant" ||
+      (typeof meta.firm_name === "string" && meta.firm_name.trim().length > 0);
+    if (hasClient && !practiceSignup) {
+      return { ensured: false as const, reason: "sme_only" as const };
+    }
+    if (hasPractice) {
+      return { ensured: true as const, reason: "already" as const };
+    }
     const { data: owned } = await supabaseAdmin
       .from("firms")
       .select("id")
@@ -127,14 +145,6 @@ export const ensurePracticePortalAccess = createServerFn({ method: "POST" })
       .maybeSingle();
     if (!owned && !mem) {
       return { ensured: false as const, reason: "no_firm" as const };
-    }
-    const { data: existingRoles } = await supabaseAdmin
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", userId);
-    const roles = (existingRoles ?? []).map((r) => r.role as string);
-    if (roles.includes("firm_admin") || roles.includes("accountant")) {
-      return { ensured: true as const, reason: "already" as const };
     }
     const { error } = await supabaseAdmin
       .from("user_roles")

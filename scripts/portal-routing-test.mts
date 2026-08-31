@@ -10,6 +10,8 @@ import {
   decideAccountantStay,
   decideOwnerAppBounce,
   isSmeOnly,
+  canEnterAccountantPortal,
+  isPracticeSignupMeta,
   type PortalRouteDecision,
 } from "../src/lib/user-roles";
 
@@ -24,14 +26,22 @@ function d(partial: Partial<PortalRouteDecision>): PortalRouteDecision {
     hasFirm: false,
     intent: null,
     force: null,
+    practiceSignup: false,
     ...partial,
   };
 }
 
-const dual = d({ hasPracticeRole: true, hasClientRole: true });
+const dual = d({ hasPracticeRole: true, hasClientRole: true, practiceSignup: true });
 const practiceOnly = d({ hasPracticeRole: true });
 const clientOnly = d({ hasClientRole: true });
 const noRolesFirm = d({ hasFirm: true });
+const promotedClient = d({
+  hasPracticeRole: true,
+  hasClientRole: true,
+  hasFirm: true,
+  practiceSignup: false,
+  force: "accountant",
+});
 
 // ── summarizeRoles ──────────────────────────────────────────────────────────
 const dualRoles = summarizeRoles(["firm_admin", "client_owner"]);
@@ -114,6 +124,23 @@ assert(
   "SME-only accountant-door session is not bounced into the practice portal",
 );
 
+assert(canEnterAccountantPortal(promotedClient) === false, "auto-promoted client cannot enter portal");
+assert(
+  decidePostLoginPath(promotedClient) === "/app",
+  "Karoo-style client + leftover firm_admin + accountant door → founder board",
+);
+assert(
+  decideAccountantStay(promotedClient) === false,
+  "auto-promoted client cannot stay on /dashboard",
+);
+assert(
+  decideOwnerAppBounce({ ...promotedClient, actingAsClient: false }) === false,
+  "auto-promoted client is not yanked from /app into the practice portal",
+);
+assert(isPracticeSignupMeta({ signup_type: "customer" }) === false, "customer signup is not practice");
+assert(isPracticeSignupMeta({ signup_type: "accountant" }) === true, "accountant signup is practice");
+assert(isPracticeSignupMeta({ firm_name: "Acme & Partners" }) === true, "firm_name marks practice signup");
+
 assert(decidePostLoginPath(noRolesFirm) === "/dashboard", "firm owner with no role rows → portal");
 assert(decideAccountantStay(noRolesFirm) === true, "firm owner stays");
 assert(
@@ -165,6 +192,19 @@ assert(
 assert(
   dashSrc.includes("shouldStayOnAccountantPortal"),
   "dashboard still uses the stay helper",
+);
+
+const layoutSrc = readFileSync(resolve("src/routes/_authenticated.tsx"), "utf8");
+assert(
+  layoutSrc.includes("shouldStayOnAccountantPortal"),
+  "practice routes under /_authenticated bounce business-client sessions",
+);
+
+const profileSrc = readFileSync(resolve("src/contexts/accountant-profile.tsx"), "utf8");
+assert(profileSrc.includes("isPracticeSignupMeta"), "profile provider skips minting firms for SME logins");
+assert(
+  profileSrc.includes("ensure_practice_firm"),
+  "profile provider still provisions firms for practice accounts",
 );
 
 console.log("portal-routing: all assertions passed");

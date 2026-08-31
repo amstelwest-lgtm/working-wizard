@@ -19,6 +19,7 @@ import {
   writeActiveFirmId,
   type FirmBrandRow,
 } from "@/lib/firm-brand";
+import { listAppRoles, summarizeRoles, isPracticeSignupMeta } from "@/lib/user-roles";
 
 export type AccountantProfile = {
   firmName: string;
@@ -186,20 +187,27 @@ export function AccountantProfileProvider({
         if (cancelled) return;
 
         if (all.length === 0) {
-          const firmName =
-            cached.firmName ||
-            (user.user_metadata?.firm_name as string | undefined) ||
-            null;
-          const { error: ensureErr } = await supabase.rpc("ensure_practice_firm", {
-            p_name: firmName,
-          });
-          if (!ensureErr) {
-            const again = await Promise.all([
-              listUserFirms(user.id),
-              fetchUserFirm(user.id, preferred),
-            ]);
-            all = again[0];
-            row = again[1];
+          const roles = summarizeRoles(await listAppRoles(user.id));
+          const practiceSignup = isPracticeSignupMeta(
+            user.user_metadata as Record<string, unknown> | undefined,
+          );
+          // Business-client logins must not be minted a practice firm / firm_admin.
+          if (!(roles.hasClientRole && !practiceSignup)) {
+            const firmName =
+              cached.firmName ||
+              (user.user_metadata?.firm_name as string | undefined) ||
+              null;
+            const { error: ensureErr } = await supabase.rpc("ensure_practice_firm", {
+              p_name: firmName,
+            });
+            if (!ensureErr) {
+              const again = await Promise.all([
+                listUserFirms(user.id),
+                fetchUserFirm(user.id, preferred),
+              ]);
+              all = again[0];
+              row = again[1];
+            }
           }
         }
 

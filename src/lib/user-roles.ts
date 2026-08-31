@@ -9,8 +9,9 @@
  * in through is stored as portal intent; a one-shot `force` flag makes that
  * login land on the matching side even when the other role would otherwise win.
  *
- * SME-only accounts (client_owner / client_member, no firm) must never enter
- * the practice portal — even if they typed their password on `/auth`.
+ * Business-client accounts (client_owner / client_member) must never enter
+ * the practice portal — even if they typed their password on `/auth`, and
+ * even if ensure_practice_firm later attached a leftover firm_admin row.
  */
 
 import { supabase } from "@/integrations/supabase/client";
@@ -150,17 +151,57 @@ export type PortalRouteDecision = {
   hasFirm: boolean;
   intent: PortalIntent | null;
   force: PortalIntent | null;
+  /**
+   * True when auth metadata says this account was created as a practice
+   * (`signup_type=accountant` or `firm_name`). Business-client accounts that
+   * were auto-granted firm_admin by ensure_practice_firm must stay false.
+   */
+  practiceSignup: boolean;
 };
+
+export function isPracticeSignupMeta(
+  meta: Record<string, unknown> | null | undefined,
+): boolean {
+  if (!meta) return false;
+  if (meta.signup_type === "accountant") return true;
+  if (typeof meta.firm_name === "string" && meta.firm_name.trim().length > 0) return true;
+  return false;
+}
+
+async function readPracticeSignup(): Promise<boolean> {
+  const { data } = await supabase.auth.getUser();
+  return isPracticeSignupMeta(
+    data.user?.user_metadata as Record<string, unknown> | undefined,
+  );
+}
+
+/** Pure business-client account: no practice role and no firm. */
+export function isSmeOnly(d: Pick<PortalRouteDecision, "hasPracticeRole" | "hasClientRole" | "hasFirm">): boolean {
+  return d.hasClientRole && !d.hasPracticeRole && !d.hasFirm;
+}
+
+/**
+ * May this session sit on /dashboard (practice portal)?
+ * Client credentials — including ones later given an accidental firm_admin —
+ * cannot, unless the account was actually signed up as a practice.
+ */
+export function canEnterAccountantPortal(d: PortalRouteDecision): boolean {
+  if (d.hasClientRole && !d.practiceSignup) return false;
+  if (d.hasPracticeRole) return true;
+  if (d.hasFirm) return true;
+  if (d.force === "accountant") return true;
+  if (d.intent === "accountant" && !d.hasClientRole) return true;
+  return false;
+}
 
 /**
  * Where a generic (landing) sign-in should land.
- * A one-shot `force` from a specific door wins — except SME-only accounts
- * cannot enter the practice portal by using the accountant door. Karoo-style
- * client credentials must land on /app even if they signed in at /auth.
+ * A one-shot `force` from a specific door wins — except business-client
+ * accounts cannot enter the practice portal by using the accountant door.
  */
 export function decidePostLoginPath(d: PortalRouteDecision): "/dashboard" | "/app" {
   if (d.force === "owner") return "/app";
-  if (isSmeOnly(d)) return "/app";
+  if (!canEnterAccountantPortal(d)) return "/app";
   if (d.force === "accountant") return "/dashboard";
   if (d.intent === "accountant") return "/dashboard";
 
@@ -174,34 +215,21 @@ export function decidePostLoginPath(d: PortalRouteDecision): "/dashboard" | "/ap
   return "/app";
 }
 
-/** Pure business-client account: no practice role and no firm. */
-export function isSmeOnly(d: Pick<PortalRouteDecision, "hasPracticeRole" | "hasClientRole" | "hasFirm">): boolean {
-  return d.hasClientRole && !d.hasPracticeRole && !d.hasFirm;
-}
-
 /**
- * Keep the user on /dashboard unless they are clearly a client-only user.
- * Stale accountant *intent* must not trap an SME invitee here; the one-shot
- * accountant *force* flag still covers the provisioning race for users who
- * are not already SME-only.
+ * Keep the user on /dashboard unless they are a business-client account.
  */
 export function decideAccountantStay(d: PortalRouteDecision): boolean {
-  if (isSmeOnly(d)) return false;
-  if (d.force === "accountant") return true;
-  if (d.hasPracticeRole) return true;
-  if (d.hasFirm) return true;
-  if (d.intent === "accountant" && !d.hasClientRole) return true;
-  return false;
+  return canEnterAccountantPortal(d);
 }
 
 /**
  * Send a just-signed-in accountant-door user from /app back to /dashboard.
  * Direct later visits to /app (no force flag) still work for dual-role users.
- * SME-only credentials never bounce into the practice portal.
+ * Business-client credentials never bounce into the practice portal.
  */
 export function decideOwnerAppBounce(d: PortalRouteDecision & { actingAsClient: boolean }): boolean {
   if (d.actingAsClient) return false;
-  if (isSmeOnly(d)) return false;
+  if (!canEnterAccountantPortal(d)) return false;
   if (d.force === "accountant") return true;
   if (d.hasPracticeRole && !d.hasClientRole) return true;
   return false;
@@ -214,7 +242,10 @@ export function decideOwnerAppBounce(d: PortalRouteDecision & { actingAsClient: 
 export async function resolvePostLoginPath(userId: string): Promise<"/dashboard" | "/app"> {
   const force = peekForcePortal();
   const intent = getPortalIntent();
-  const portal = await resolvePortalRoles(userId);
+  const [portal, practiceSignup] = await Promise.all([
+    resolvePortalRoles(userId),
+    readPracticeSignup(),
+  ]);
   // Need firm membership whenever practice role is missing — SME-only vs
   // unprovisioned accountant (firm exists, roles lag) vs no-role firm owner.
   const firms = portal.hasPracticeRole ? [] : await listUserFirms(userId);
@@ -224,6 +255,7 @@ export async function resolvePostLoginPath(userId: string): Promise<"/dashboard"
     hasFirm: firms.length > 0,
     intent,
     force,
+    practiceSignup,
   });
 }
 
@@ -234,7 +266,10 @@ export async function shouldBounceFromOwnerApp(
 ): Promise<boolean> {
   if (actingAsClient) return false;
   const force = peekForcePortal();
-  const portal = await resolvePortalRoles(userId);
+  const [portal, practiceSignup] = await Promise.all([
+    resolvePortalRoles(userId),
+    readPracticeSignup(),
+  ]);
   const firms = portal.hasPracticeRole || !portal.hasClientRole ? [] : await listUserFirms(userId);
   return decideOwnerAppBounce({
     hasPracticeRole: portal.hasPracticeRole,
@@ -242,14 +277,18 @@ export async function shouldBounceFromOwnerApp(
     hasFirm: firms.length > 0,
     intent: getPortalIntent(),
     force,
+    practiceSignup,
     actingAsClient,
   });
 }
 
-/** Accountant portal may keep users who hold a practice role OR a firm — never SME-only. */
+/** Accountant portal may keep practice accounts — never business-client credentials. */
 export async function shouldStayOnAccountantPortal(userId: string): Promise<boolean> {
   const force = peekForcePortal();
-  const portal = await resolvePortalRoles(userId);
+  const [portal, practiceSignup] = await Promise.all([
+    resolvePortalRoles(userId),
+    readPracticeSignup(),
+  ]);
   const firms = portal.hasPracticeRole ? [] : await listUserFirms(userId);
   return decideAccountantStay({
     hasPracticeRole: portal.hasPracticeRole,
@@ -257,5 +296,6 @@ export async function shouldStayOnAccountantPortal(userId: string): Promise<bool
     hasFirm: firms.length > 0,
     intent: getPortalIntent(),
     force,
+    practiceSignup,
   });
 }

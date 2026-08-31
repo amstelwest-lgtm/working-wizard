@@ -623,18 +623,20 @@ function Dashboard() {
   const navigate = useNavigate();
 
   // ── Role guard ────────────────────────────────────────────────────────────
-  // SME-only accounts (business client credentials) must not sit on the
-  // practice portal even if they signed in at /auth. Dual-role and practice
-  // users stay. The role query is required — a one-shot accountant force flag
-  // used to skip it and that let Karoo-style owner logins keep this board.
+  // Business-client credentials must not sit on the practice portal. Wait for
+  // the stay check before painting the board so we never flash firm UI or
+  // trigger add-client against an owner login.
+  const [portalReady, setPortalReady] = useState(false);
   useEffect(() => {
     if (!user) return;
     let cancelled = false;
+    setPortalReady(false);
     void shouldStayOnAccountantPortal(user.id).then((stay) => {
       if (cancelled) return;
       if (stay) {
         setPortalIntent("accountant");
         clearForcePortal();
+        setPortalReady(true);
         return;
       }
       clearForcePortal();
@@ -851,10 +853,10 @@ function Dashboard() {
   };
 
   useEffect(() => {
-    if (brandLoading) return;
+    if (!portalReady || brandLoading) return;
     void load(firmId, user?.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [firmId, brandLoading, user?.id]);
+  }, [firmId, brandLoading, user?.id, portalReady]);
 
   // Load playbook catalogue
   useEffect(() => {
@@ -986,7 +988,7 @@ function Dashboard() {
 
   // ── First practice client nudge ─────────────────────────────────────────
   useEffect(() => {
-    if (loading || brandLoading) return;
+    if (!portalReady || loading || brandLoading) return;
     if (clientRows.length > 0) {
       markOnboardingDone(ACCOUNTANT_FIRST_CLIENT_KEY);
       return;
@@ -994,7 +996,7 @@ function Dashboard() {
     if (!onboardingDone(ACCOUNTANT_FIRST_CLIENT_KEY) && !brandLoading) {
       setFirstClientOpen(true);
     }
-  }, [loading, brandLoading, clientRows.length, firm?.id, firmId]);
+  }, [portalReady, loading, brandLoading, clientRows.length, firm?.id, firmId]);
 
   // ── Derived stats ─────────────────────────────────────────────────────────
   // Average only scored clients — never invent 50 for empty financials.
@@ -1131,6 +1133,17 @@ function Dashboard() {
   };
 
   // ── Render ────────────────────────────────────────────────────────────────
+  if (!portalReady) {
+    return (
+      <div
+        className="accountant-portal"
+        style={{ display: "grid", placeItems: "center", minHeight: "100vh" }}
+      >
+        <span style={{ color: "var(--ink-dim)" }}>Loading…</span>
+      </div>
+    );
+  }
+
   return (
     <div className="accountant-portal">
       <WalkthroughWizard
