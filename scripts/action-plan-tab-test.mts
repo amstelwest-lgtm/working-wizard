@@ -4,7 +4,12 @@
  */
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import ActionPlan, { driverHealthLabel, healthMeta } from "../src/components/action-plan";
+import ActionPlan, {
+  allocateActionSeqs,
+  buildStrategicMoveImportRows,
+  driverHealthLabel,
+  healthMeta,
+} from "../src/components/action-plan";
 import { lazyPanel, TabErrorBoundary } from "../src/components/lazy-panel";
 
 function assert(cond: boolean, msg: string) {
@@ -38,5 +43,47 @@ assert(clientSrc.includes('<TabErrorBoundary label="Action Plan">'), "client boa
 
 const wizardSrc = readFileSync(resolve("src/components/walkthrough-wizard.tsx"), "utf8");
 assert(wizardSrc.includes("if (!s) return"), "walkthrough guards missing steps");
+
+assert(JSON.stringify(allocateActionSeqs([], 3)) === "[1,2,3]", "empty plan starts at seq 1");
+assert(JSON.stringify(allocateActionSeqs([{ seq: 2 }, { seq: 5 }], 2)) === "[6,7]", "bulk seqs continue past current max");
+assert(allocateActionSeqs([{ seq: 1 }], 0).length === 0, "zero count allocates nothing");
+{
+  const seqs = allocateActionSeqs([{ seq: 4 }], 4);
+  assert(new Set(seqs).size === 4, "allocated seqs are unique");
+}
+
+const moves = [
+  { key: "cash", title: "Collect receivables", ratioName: "Cash", impactLine: "Frees cash.", health: 40 },
+  { key: "gp", title: "Raise prices", ratioName: "Gross profit", health: 55 },
+];
+const bulk = buildStrategicMoveImportRows({
+  keys: ["cash", "gp", "cash", "unknown"],
+  moves,
+  alreadyImported: new Set(["gp"]),
+  planId: "plan-1",
+  clientId: "client-1",
+  existing: [{ seq: 3 }],
+});
+assert(bulk.length === 1, "skips already-imported, unknown, and duplicate keys");
+assert(bulk[0].seq === 4 && bulk[0].source_move_key === "cash", "imported row gets next unique seq");
+assert(bulk[0].source === "strategic_move", "imported rows are tagged as strategic moves");
+
+const two = buildStrategicMoveImportRows({
+  keys: ["cash", "gp"],
+  moves,
+  alreadyImported: new Set(),
+  planId: "plan-1",
+  clientId: "client-1",
+  existing: [],
+});
+assert(two.length === 2 && two[0].seq === 1 && two[1].seq === 2, "multi-import assigns consecutive unique seqs");
+assert(two[0].seq !== two[1].seq, "two imported rows never share seq");
+
+const planSrc = readFileSync(resolve("src/components/action-plan.tsx"), "utf8");
+assert(planSrc.includes("buildStrategicMoveImportRows"), "import uses unique-seq row builder");
+assert(!/for \(const k of keys\)[\s\S]{0,200}await addItem/.test(planSrc), "import does not loop addItem with a stale seq");
+assert(planSrc.includes("Manage team"), "Action Plan has a manage-team button");
+assert(planSrc.includes("function TeamPanel"), "team list panel exists");
+assert(planSrc.includes('onClick={(e) => { e.stopPropagation(); setAdding(true); }}'), "Add employee does not open the task drawer");
 
 console.log("action-plan-tab-test: ok");

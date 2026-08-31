@@ -19,7 +19,7 @@ import { toast } from "sonner";
 import { sendTransactionalEmail } from "@/lib/email/send";
 import {
   AlertTriangle, CalendarDays, Check, ChevronRight, GripVertical, Link as LinkIcon, Loader2, Mail, Plus,
-  RotateCcw, Send, Sparkles, Target, Trash2, UserPlus, X,
+  RotateCcw, Send, Sparkles, Target, Trash2, UserPlus, Users, X,
 } from "lucide-react";
 
 // ── Brand (matches cash-forecast / waterfall) ────────────────────────────────
@@ -157,6 +157,58 @@ export function healthMeta(h?: string | null) {
 export function driverHealthLabel(health: number) {
   return Number.isFinite(health) ? Math.round(health) : null;
 }
+
+/**
+ * action_items has unique(plan_id, seq). Bulk inserts must allocate consecutive
+ * seqs from the current max — looping addItem() reuses a stale React snapshot
+ * and collides on the second row.
+ */
+export function allocateActionSeqs(existing: { seq: number }[], count: number): number[] {
+  if (count <= 0) return [];
+  const start = existing.reduce((m, i) => Math.max(m, i.seq), 0) + 1;
+  return Array.from({ length: count }, (_, i) => start + i);
+}
+
+export type StrategicMoveImportRow = {
+  plan_id: string;
+  client_id: string;
+  seq: number;
+  title: string;
+  source: "strategic_move";
+  source_move_key: string;
+  driver_key: string;
+  outcome_why: string;
+};
+
+export function buildStrategicMoveImportRows(opts: {
+  keys: string[];
+  moves: StrategicMoveLite[];
+  alreadyImported: Set<string | null>;
+  planId: string;
+  clientId: string;
+  existing: { seq: number }[];
+}): StrategicMoveImportRow[] {
+  const seen = new Set<string>();
+  const toAdd: StrategicMoveLite[] = [];
+  for (const k of opts.keys) {
+    if (seen.has(k) || opts.alreadyImported.has(k)) continue;
+    const mv = opts.moves.find((m) => m.key === k);
+    if (!mv) continue;
+    seen.add(k);
+    toAdd.push(mv);
+  }
+  const seqs = allocateActionSeqs(opts.existing, toAdd.length);
+  return toAdd.map((mv, i) => ({
+    plan_id: opts.planId,
+    client_id: opts.clientId,
+    seq: seqs[i],
+    title: mv.title,
+    source: "strategic_move",
+    source_move_key: mv.key,
+    driver_key: mv.key,
+    outcome_why: mv.impactLine ?? `Improves ${mv.ratioName}.`,
+  }));
+}
 const STATUS_LABEL: Record<Status, string> = {
   not_started: "Not started", in_progress: "In progress", done: "Done", blocked: "Blocked",
 };
@@ -193,7 +245,9 @@ export default function ActionPlanPanel({ clientId, clientName, simplified, isOw
   const [sortBy, setSortBy] = useState<"seq" | "due" | "owner" | "status">("seq");
   const [drawerId, setDrawerId] = useState<string | null>(null);
   const [importOpen, setImportOpen] = useState(false);
+  const [teamOpen, setTeamOpen] = useState(false);
   const [sending, setSending] = useState(false);
+  const seqMaxRef = useRef(0);
   // Per-item email summary: track last nudge/overdue chase and last failure independently
   const [lastNudgeEmails, setLastNudgeEmails] = useState<Record<string, EmailRecord>>({});
   const [lastFailedEmails, setLastFailedEmails] = useState<Record<string, EmailRecord>>({});
@@ -274,6 +328,10 @@ export default function ActionPlanPanel({ clientId, clientName, simplified, isOw
 
   useEffect(() => { setLoading(true); refresh(); }, [refresh]);
 
+  useEffect(() => {
+    seqMaxRef.current = items.reduce((m, i) => Math.max(m, i.seq), 0);
+  }, [items]);
+
   // Focus the item created from a Next Move (highlight + scroll into view)
   useEffect(() => {
     if (loading || !focusMoveKey) return;
@@ -310,12 +368,17 @@ export default function ActionPlanPanel({ clientId, clientName, simplified, isOw
 
   const addItem = async (title: string, extra?: Partial<Item>) => {
     if (!plan) return;
-    const seq = (items.reduce((m, i) => Math.max(m, i.seq), 0) ?? 0) + 1;
+    const seq = seqMaxRef.current + 1;
+    seqMaxRef.current = seq;
     const { data, error } = await supabase
       .from("action_items")
-      .insert({ plan_id: plan.id, client_id: clientId, seq, title, ...extra })
+      .insert({ plan_id: plan.id, client_id: clientId, title, ...extra, seq })
       .select().single();
-    if (error) { toast.error(error.message); return; }
+    if (error) {
+      seqMaxRef.current = Math.max(0, seqMaxRef.current - 1);
+      toast.error(error.message);
+      return;
+    }
     setItems((arr) => [...arr, data as Item]);
   };
 
@@ -335,6 +398,21 @@ export default function ActionPlanPanel({ clientId, clientName, simplified, isOw
     if (error) { toast.error(error.message); return null; }
     setEmployees((arr) => [...arr, data as Employee]);
     return data as Employee;
+  };
+
+  const patchEmployee = async (id: string, patch: Partial<Pick<Employee, "name" | "email">>) => {
+    const { error } = await supabase.from("client_employees").update(patch).eq("id", id);
+    if (error) { toast.error(error.message); return false; }
+    setEmployees((arr) => arr.map((e) => (e.id === id ? { ...e, ...patch } : e)));
+    return true;
+  };
+
+  const removeEmployee = async (id: string) => {
+    if (!confirm("Remove this team member? Tasks they own stay on the plan, unassigned.")) return;
+    const { error } = await supabase.from("client_employees").delete().eq("id", id);
+    if (error) { toast.error(error.message); return; }
+    setEmployees((arr) => arr.filter((e) => e.id !== id));
+    setItems((arr) => arr.map((i) => (i.owner_id === id ? { ...i, owner_id: null, owner_name: null, owner_email: null } : i)));
   };
 
   // ── Send assignments ─────────────────────────────────────────────────────────
@@ -433,16 +511,25 @@ export default function ActionPlanPanel({ clientId, clientName, simplified, isOw
     [items],
   );
   const importMoves = async (keys: string[]) => {
-    for (const k of keys) {
-      const mv = moves.find((m) => m.key === k);
-      if (!mv || importedKeys.has(k)) continue;
-      await addItem(mv.title, {
-        source: "strategic_move",
-        source_move_key: mv.key,
-        driver_key: mv.key,
-        outcome_why: mv.impactLine ?? `Improves ${mv.ratioName}.`,
-      });
+    if (!plan) return;
+    const rows = buildStrategicMoveImportRows({
+      keys,
+      moves,
+      alreadyImported: importedKeys,
+      planId: plan.id,
+      clientId,
+      existing: items,
+    });
+    if (rows.length === 0) {
+      setImportOpen(false);
+      return;
     }
+    const { data, error } = await supabase.from("action_items").insert(rows).select();
+    if (error) { toast.error(error.message); return; }
+    const created = (data ?? []) as Item[];
+    setItems((arr) => [...arr, ...created]);
+    seqMaxRef.current = rows.reduce((m, r) => Math.max(m, r.seq), seqMaxRef.current);
+    toast.success(created.length === 1 ? "Action added to the plan" : `${created.length} actions added to the plan`);
     setImportOpen(false);
   };
 
@@ -561,6 +648,10 @@ export default function ActionPlanPanel({ clientId, clientName, simplified, isOw
                 >
                   <Plus className="mr-1 h-3.5 w-3.5" />
                   Add action
+                </Button>
+                <Button size="sm" variant="outline" className={INPUT_CLS} onClick={() => setTeamOpen(true)}>
+                  <Users className="mr-1 h-3.5 w-3.5 text-[#b8860b] dark:text-[#d4a550]" />
+                  Manage team
                 </Button>
                 {moves.length > 0 && (
                   <Button size="sm" variant="outline" className={INPUT_CLS} onClick={() => setImportOpen(true)}>
@@ -683,6 +774,16 @@ export default function ActionPlanPanel({ clientId, clientName, simplified, isOw
           importedKeys={importedKeys}
           onClose={() => setImportOpen(false)}
           onImport={importMoves}
+        />
+      )}
+
+      {teamOpen && (
+        <TeamPanel
+          employees={employees}
+          onClose={() => setTeamOpen(false)}
+          onAdd={addEmployee}
+          onPatch={patchEmployee}
+          onRemove={removeEmployee}
         />
       )}
 
@@ -974,7 +1075,10 @@ function ItemRow({ item, employees, milestones, lastNudge, lastFailed, draggable
         {isOwner && pickOwner ? (
           <OwnerPicker
             employees={employees}
-            onPick={(id) => { setPickOwner(false); if (id) onPatch({ owner_id: id, owner_name: employees.find((e) => e.id === id)?.name, sent_at: null } as any); }}
+            onPick={(id, name) => {
+              setPickOwner(false);
+              if (id) onPatch({ owner_id: id, owner_name: name ?? employees.find((e) => e.id === id)?.name, sent_at: null } as any);
+            }}
             onAdd={onAddEmployee}
             onClose={() => setPickOwner(false)}
           />
@@ -1064,7 +1168,7 @@ function ItemRow({ item, employees, milestones, lastNudge, lastFailed, draggable
 
 function OwnerPicker({ employees, onPick, onAdd, onClose }: {
   employees: Employee[];
-  onPick: (id: string | null) => void;
+  onPick: (id: string | null, name?: string | null) => void;
   onAdd: (name: string, email: string) => Promise<Employee | null>;
   onClose: () => void;
 }) {
@@ -1082,7 +1186,12 @@ function OwnerPicker({ employees, onPick, onAdd, onClose }: {
   }, [onClose]);
   const list = employees.filter((e) => (e.name ?? "").toLowerCase().includes(q.toLowerCase()));
   return (
-    <div ref={ref} className="absolute z-30 mt-1 w-56 rounded-lg border border-amber-900/15 bg-white p-2 shadow-xl dark:border-slate-700 dark:bg-slate-900">
+    <div
+      ref={ref}
+      className="absolute z-40 mt-1 w-56 rounded-lg border border-amber-900/15 bg-white p-2 shadow-xl dark:border-slate-700 dark:bg-slate-900"
+      onMouseDown={(e) => e.stopPropagation()}
+      onClick={(e) => e.stopPropagation()}
+    >
       {!adding ? (
         <>
           <Input autoFocus placeholder="Search…" className={`mb-1 h-7 text-xs ${INPUT_CLS}`} value={q}
@@ -1091,15 +1200,18 @@ function OwnerPicker({ employees, onPick, onAdd, onClose }: {
           <div className="max-h-40 overflow-auto">
             {list.map((e) => (
               <button key={e.id} className="block w-full rounded px-2 py-1.5 text-left text-xs hover:bg-amber-900/5 dark:hover:bg-slate-800"
-                onClick={() => onPick(e.id)}>
+                onClick={() => onPick(e.id, e.name)}>
                 <span className="font-semibold text-slate-800 dark:text-slate-200">{e.name}</span>
                 {!e.email && <span className="ml-1 text-[10px] text-amber-600">no email</span>}
               </button>
             ))}
             {list.length === 0 && <p className="px-2 py-1.5 text-xs text-slate-400">No matches</p>}
           </div>
-          <button className="mt-1 flex w-full items-center gap-1 rounded px-2 py-1.5 text-left text-xs font-semibold text-[#b8860b] hover:bg-amber-900/5 dark:text-[#d4a550] dark:hover:bg-slate-800"
-            onClick={() => setAdding(true)}>
+          <button
+            type="button"
+            className="mt-1 flex w-full items-center gap-1 rounded px-2 py-1.5 text-left text-xs font-semibold text-[#b8860b] hover:bg-amber-900/5 dark:text-[#d4a550] dark:hover:bg-slate-800"
+            onClick={(e) => { e.stopPropagation(); setAdding(true); }}
+          >
             <UserPlus className="h-3 w-3" /> Add employee
           </button>
         </>
@@ -1109,7 +1221,12 @@ function OwnerPicker({ employees, onPick, onAdd, onClose }: {
           <Input placeholder="Email" type="email" className={`h-7 text-xs ${INPUT_CLS}`} value={email} onChange={(e) => setEmail(e.target.value)} />
           <div className="flex gap-1">
             <Button size="sm" className="h-7 flex-1 bg-[#b8860b] text-xs text-white dark:bg-[#d4a550] dark:text-slate-950"
-              onClick={async () => { if (!name.trim()) return; const emp = await onAdd(name, email); if (emp) onPick(emp.id); }}>
+              onClick={async (e) => {
+                e.stopPropagation();
+                if (!name.trim()) return;
+                const emp = await onAdd(name, email);
+                if (emp) onPick(emp.id, emp.name);
+              }}>
               Add
             </Button>
             <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setAdding(false)}>Back</Button>
@@ -1170,9 +1287,10 @@ function ImportPanel({ moves, importedKeys, onClose, onImport }: {
   moves: StrategicMoveLite[];
   importedKeys: Set<string | null>;
   onClose: () => void;
-  onImport: (keys: string[]) => void;
+  onImport: (keys: string[]) => void | Promise<void>;
 }) {
   const [sel, setSel] = useState<Set<string>>(new Set());
+  const [busy, setBusy] = useState(false);
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center" onClick={onClose}>
       <div
@@ -1214,12 +1332,124 @@ function ImportPanel({ moves, importedKeys, onClose, onImport }: {
           })}
         </div>
         <Button
-          disabled={!sel.size}
-          onClick={() => onImport([...sel])}
+          disabled={!sel.size || busy}
+          onClick={async () => {
+            setBusy(true);
+            try { await onImport([...sel]); }
+            finally { setBusy(false); }
+          }}
           className="mt-4 w-full bg-[#b8860b] text-white hover:bg-[#9a7009] dark:bg-[#d4a550] dark:text-slate-950 dark:hover:bg-[#c69440]"
         >
-          Add {sel.size || ""} action{sel.size === 1 ? "" : "s"} to the plan
+          {busy ? "Adding…" : `Add ${sel.size || ""} action${sel.size === 1 ? "" : "s"} to the plan`}
         </Button>
+      </div>
+    </div>
+  );
+}
+
+// ═══ Team members ════════════════════════════════════════════════════════════
+function TeamPanel({ employees, onClose, onAdd, onPatch, onRemove }: {
+  employees: Employee[];
+  onClose: () => void;
+  onAdd: (name: string, email: string) => Promise<Employee | null>;
+  onPatch: (id: string, patch: Partial<Pick<Employee, "name" | "email">>) => Promise<boolean>;
+  onRemove: (id: string) => Promise<void>;
+}) {
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editEmail, setEditEmail] = useState("");
+
+  const submit = async () => {
+    if (!name.trim() || saving) return;
+    setSaving(true);
+    try {
+      const emp = await onAdd(name, email);
+      if (emp) { setName(""); setEmail(""); }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const saveEdit = async () => {
+    if (!editId || !editName.trim()) return;
+    const ok = await onPatch(editId, { name: editName.trim(), email: editEmail.trim() || null });
+    if (ok) setEditId(null);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center" onClick={onClose}>
+      <div
+        className={`w-full max-w-lg rounded-2xl p-5 ${CARD_SHELL}`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className={GOLD_RULE} />
+        <div className="mb-3 flex items-center justify-between">
+          <div>
+            <h3 className="text-base font-bold text-slate-950 dark:text-white">Team members</h3>
+            <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+              Names and emails used when assigning Action Plan work.
+            </p>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Close"><X className="h-4 w-4 text-slate-400" /></button>
+        </div>
+        <div className="max-h-80 space-y-1 overflow-auto">
+          {employees.length === 0 && (
+            <p className="px-1 py-3 text-sm text-slate-500 dark:text-slate-400">No team members yet. Add someone below.</p>
+          )}
+          {employees.map((e) => (
+            <div key={e.id} className="flex items-start gap-2 rounded-lg border border-amber-900/10 px-3 py-2 dark:border-slate-800">
+              {editId === e.id ? (
+                <div className="min-w-0 flex-1 space-y-1.5">
+                  <Input className={`h-7 text-xs ${INPUT_CLS}`} value={editName} onChange={(ev) => setEditName(ev.target.value)} placeholder="Name" />
+                  <Input className={`h-7 text-xs ${INPUT_CLS}`} type="email" value={editEmail} onChange={(ev) => setEditEmail(ev.target.value)} placeholder="Email" />
+                  <div className="flex gap-1">
+                    <Button size="sm" className="h-7 bg-[#b8860b] px-3 text-xs text-white dark:bg-[#d4a550] dark:text-slate-950" onClick={saveEdit}>Save</Button>
+                    <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setEditId(null)}>Cancel</Button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    className="min-w-0 flex-1 text-left"
+                    onClick={() => { setEditId(e.id); setEditName(e.name); setEditEmail(e.email ?? ""); }}
+                  >
+                    <span className="block truncate text-sm font-semibold text-slate-900 dark:text-slate-100">{e.name}</span>
+                    <span className="block truncate text-[11px] text-slate-500 dark:text-slate-400">
+                      {e.email || <span className="text-amber-600">no email</span>}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    className="shrink-0 rounded p-1 text-slate-400 hover:bg-amber-900/5 hover:text-[#ef4444] dark:hover:bg-slate-800"
+                    aria-label={`Remove ${e.name}`}
+                    onClick={() => onRemove(e.id)}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </>
+              )}
+            </div>
+          ))}
+        </div>
+        <div className="mt-4 space-y-1.5 border-t border-amber-900/10 pt-3 dark:border-slate-800">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Add team member</p>
+          <Input className={`h-8 text-sm ${INPUT_CLS}`} placeholder="Name" value={name} onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); submit(); } }} />
+          <Input className={`h-8 text-sm ${INPUT_CLS}`} type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); submit(); } }} />
+          <Button
+            disabled={!name.trim() || saving}
+            onClick={submit}
+            className="w-full bg-[#b8860b] text-white hover:bg-[#9a7009] dark:bg-[#d4a550] dark:text-slate-950 dark:hover:bg-[#c69440]"
+          >
+            <UserPlus className="mr-1 h-3.5 w-3.5" />
+            {saving ? "Adding…" : "Add team member"}
+          </Button>
+        </div>
       </div>
     </div>
   );
