@@ -649,10 +649,6 @@ export default function ActionPlanPanel({ clientId, clientName, simplified, isOw
                   <Plus className="mr-1 h-3.5 w-3.5" />
                   Add action
                 </Button>
-                <Button size="sm" variant="outline" className={INPUT_CLS} onClick={() => setTeamOpen(true)}>
-                  <Users className="mr-1 h-3.5 w-3.5 text-[#b8860b] dark:text-[#d4a550]" />
-                  Manage team
-                </Button>
                 {moves.length > 0 && (
                   <Button size="sm" variant="outline" className={INPUT_CLS} onClick={() => setImportOpen(true)}>
                     <Sparkles className="mr-1 h-3.5 w-3.5 text-[#b8860b] dark:text-[#d4a550]" />
@@ -701,6 +697,17 @@ export default function ActionPlanPanel({ clientId, clientName, simplified, isOw
               <option value="">All owners</option>
               {employees.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
             </select>
+            {isOwner && (
+              <Button
+                size="sm"
+                variant="outline"
+                className={`h-7 px-2 text-[11px] ${INPUT_CLS}`}
+                onClick={() => setTeamOpen(true)}
+              >
+                <Users className="mr-1 h-3 w-3 text-[#b8860b] dark:text-[#d4a550]" />
+                Team members
+              </Button>
+            )}
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as any)}
@@ -750,6 +757,7 @@ export default function ActionPlanPanel({ clientId, clientName, simplified, isOw
                 onOpen={() => setDrawerId(it.id)}
                 onPatch={(patch, log) => patchItem(it.id, patch, log)}
                 onAddEmployee={addEmployee}
+                onManageTeam={() => { setDrawerId(null); setTeamOpen(true); }}
               />
             ))}
           </div>
@@ -996,7 +1004,7 @@ function DriversStrip({ moves, onView }: { moves: StrategicMoveLite[]; onView?: 
 }
 
 // ═══ Table row ═══════════════════════════════════════════════════════════════
-function ItemRow({ item, employees, milestones, lastNudge, lastFailed, draggable, isOwner = true, onDragStart, onDrop, onOpen, onPatch, onAddEmployee, focused }: {
+function ItemRow({ item, employees, milestones, lastNudge, lastFailed, draggable, isOwner = true, onDragStart, onDrop, onOpen, onPatch, onAddEmployee, onManageTeam, focused }: {
   item: Item & { health?: Health };
   focused?: boolean;
   employees: Employee[];
@@ -1010,6 +1018,7 @@ function ItemRow({ item, employees, milestones, lastNudge, lastFailed, draggable
   onOpen: () => void;
   onPatch: (patch: Partial<Item>, log?: Partial<Update>) => void;
   onAddEmployee: (name: string, email: string) => Promise<Employee | null>;
+  onManageTeam?: () => void;
 }) {
   const h = healthMeta(item.health);
   const overdue = item.health === "overdue";
@@ -1084,6 +1093,7 @@ function ItemRow({ item, employees, milestones, lastNudge, lastFailed, draggable
               if (id) onPatch({ owner_id: id, owner_name: name ?? employees.find((e) => e.id === id)?.name, sent_at: null } as any);
             }}
             onAdd={onAddEmployee}
+            onManageTeam={onManageTeam ? () => { setPickOwner(false); onManageTeam(); } : undefined}
             onClose={() => setPickOwner(false)}
           />
         ) : (
@@ -1170,10 +1180,11 @@ function ItemRow({ item, employees, milestones, lastNudge, lastFailed, draggable
   );
 }
 
-function OwnerPicker({ employees, onPick, onAdd, onClose }: {
+function OwnerPicker({ employees, onPick, onAdd, onManageTeam, onClose }: {
   employees: Employee[];
   onPick: (id: string | null, name?: string | null) => void;
   onAdd: (name: string, email: string) => Promise<Employee | null>;
+  onManageTeam?: () => void;
   onClose: () => void;
 }) {
   const [q, setQ] = useState("");
@@ -1218,6 +1229,15 @@ function OwnerPicker({ employees, onPick, onAdd, onClose }: {
           >
             <UserPlus className="h-3 w-3" /> Add employee
           </button>
+          {onManageTeam && (
+            <button
+              type="button"
+              className="flex w-full items-center gap-1 rounded px-2 py-1.5 text-left text-xs font-medium text-slate-600 hover:bg-amber-900/5 dark:text-slate-300 dark:hover:bg-slate-800"
+              onClick={(e) => { e.stopPropagation(); onManageTeam(); }}
+            >
+              <Users className="h-3 w-3" /> Team members
+            </button>
+          )}
         </>
       ) : (
         <div className="space-y-1.5">

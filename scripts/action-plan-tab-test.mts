@@ -82,8 +82,10 @@ assert(two[0].seq !== two[1].seq, "two imported rows never share seq");
 const planSrc = readFileSync(resolve("src/components/action-plan.tsx"), "utf8");
 assert(planSrc.includes("buildStrategicMoveImportRows"), "import uses unique-seq row builder");
 assert(!/for \(const k of keys\)[\s\S]{0,200}await addItem/.test(planSrc), "import does not loop addItem with a stale seq");
-assert(planSrc.includes("Manage team"), "Action Plan has a manage-team button");
+assert(planSrc.includes("Team members"), "Action Plan has a team members control");
 assert(planSrc.includes("function TeamPanel"), "team list panel exists");
+assert(/All owners[\s\S]{0,800}Team members/.test(planSrc), "team list sits next to the owner filter");
+assert(planSrc.includes("onManageTeam"), "owner picker can open the team list");
 assert(planSrc.includes('onClick={(e) => { e.stopPropagation(); setAdding(true); }}'), "Add employee does not open the task drawer");
 assert(planSrc.includes("onClick={pickOwner ? undefined : onOpen}"), "row click is disabled while the owner picker is open");
 
