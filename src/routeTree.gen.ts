@@ -21,6 +21,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as TTokenRouteImport } from './routes/t.$token'
 import { Route as LhUnsubscribeRouteImport } from './routes/lh/unsubscribe'
 import { Route as EmailUnsubscribeRouteImport } from './routes/email/unsubscribe'
+import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as ApiClientErrorRouteImport } from './routes/api/client-error'
 import { Route as AckTokenRouteImport } from './routes/ack.$token'
 import { Route as AuthenticatedOpsRouteImport } from './routes/_authenticated/ops'
@@ -95,6 +96,11 @@ const EmailUnsubscribeRoute = EmailUnsubscribeRouteImport.update({
   id: '/email/unsubscribe',
   path: '/email/unsubscribe',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AuthCallbackRoute = AuthCallbackRouteImport.update({
+  id: '/callback',
+  path: '/callback',
+  getParentRoute: () => AuthRoute,
 } as any)
 const ApiClientErrorRoute = ApiClientErrorRouteImport.update({
   id: '/api/client-error',
@@ -183,7 +189,7 @@ const LovableEmailQueueProcessRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/app': typeof AppRoute
-  '/auth': typeof AuthRoute
+  '/auth': typeof AuthRouteWithChildren
   '/faq': typeof FaqRoute
   '/for-accountants': typeof ForAccountantsRoute
   '/for-owners': typeof ForOwnersRoute
@@ -193,6 +199,7 @@ export interface FileRoutesByFullPath {
   '/ops': typeof AuthenticatedOpsRoute
   '/ack/$token': typeof AckTokenRoute
   '/api/client-error': typeof ApiClientErrorRoute
+  '/auth/callback': typeof AuthCallbackRoute
   '/email/unsubscribe': typeof EmailUnsubscribeRoute
   '/lh/unsubscribe': typeof LhUnsubscribeRoute
   '/t/$token': typeof TTokenRoute
@@ -211,7 +218,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/app': typeof AppRoute
-  '/auth': typeof AuthRoute
+  '/auth': typeof AuthRouteWithChildren
   '/faq': typeof FaqRoute
   '/for-accountants': typeof ForAccountantsRoute
   '/for-owners': typeof ForOwnersRoute
@@ -221,6 +228,7 @@ export interface FileRoutesByTo {
   '/ops': typeof AuthenticatedOpsRoute
   '/ack/$token': typeof AckTokenRoute
   '/api/client-error': typeof ApiClientErrorRoute
+  '/auth/callback': typeof AuthCallbackRoute
   '/email/unsubscribe': typeof EmailUnsubscribeRoute
   '/lh/unsubscribe': typeof LhUnsubscribeRoute
   '/t/$token': typeof TTokenRoute
@@ -241,7 +249,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteWithChildren
   '/app': typeof AppRoute
-  '/auth': typeof AuthRoute
+  '/auth': typeof AuthRouteWithChildren
   '/faq': typeof FaqRoute
   '/for-accountants': typeof ForAccountantsRoute
   '/for-owners': typeof ForOwnersRoute
@@ -251,6 +259,7 @@ export interface FileRoutesById {
   '/_authenticated/ops': typeof AuthenticatedOpsRoute
   '/ack/$token': typeof AckTokenRoute
   '/api/client-error': typeof ApiClientErrorRoute
+  '/auth/callback': typeof AuthCallbackRoute
   '/email/unsubscribe': typeof EmailUnsubscribeRoute
   '/lh/unsubscribe': typeof LhUnsubscribeRoute
   '/t/$token': typeof TTokenRoute
@@ -281,6 +290,7 @@ export interface FileRouteTypes {
     | '/ops'
     | '/ack/$token'
     | '/api/client-error'
+    | '/auth/callback'
     | '/email/unsubscribe'
     | '/lh/unsubscribe'
     | '/t/$token'
@@ -309,6 +319,7 @@ export interface FileRouteTypes {
     | '/ops'
     | '/ack/$token'
     | '/api/client-error'
+    | '/auth/callback'
     | '/email/unsubscribe'
     | '/lh/unsubscribe'
     | '/t/$token'
@@ -338,6 +349,7 @@ export interface FileRouteTypes {
     | '/_authenticated/ops'
     | '/ack/$token'
     | '/api/client-error'
+    | '/auth/callback'
     | '/email/unsubscribe'
     | '/lh/unsubscribe'
     | '/t/$token'
@@ -358,7 +370,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRoute: typeof AuthenticatedRouteWithChildren
   AppRoute: typeof AppRoute
-  AuthRoute: typeof AuthRoute
+  AuthRoute: typeof AuthRouteWithChildren
   FaqRoute: typeof FaqRoute
   ForAccountantsRoute: typeof ForAccountantsRoute
   ForOwnersRoute: typeof ForOwnersRoute
@@ -462,6 +474,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/email/unsubscribe'
       preLoaderRoute: typeof EmailUnsubscribeRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/auth/callback': {
+      id: '/auth/callback'
+      path: '/callback'
+      fullPath: '/auth/callback'
+      preLoaderRoute: typeof AuthCallbackRouteImport
+      parentRoute: typeof AuthRoute
     }
     '/api/client-error': {
       id: '/api/client-error'
@@ -595,11 +614,21 @@ const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(
   AuthenticatedRouteChildren,
 )
 
+interface AuthRouteChildren {
+  AuthCallbackRoute: typeof AuthCallbackRoute
+}
+
+const AuthRouteChildren: AuthRouteChildren = {
+  AuthCallbackRoute: AuthCallbackRoute,
+}
+
+const AuthRouteWithChildren = AuthRoute._addFileChildren(AuthRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRoute: AuthenticatedRouteWithChildren,
   AppRoute: AppRoute,
-  AuthRoute: AuthRoute,
+  AuthRoute: AuthRouteWithChildren,
   FaqRoute: FaqRoute,
   ForAccountantsRoute: ForAccountantsRoute,
   ForOwnersRoute: ForOwnersRoute,

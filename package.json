@@ -31,7 +31,8 @@
     "test:orb-contrast": "vite-node --config scripts/vite-test.config.ts scripts/orb-contrast-test.mts",
     "test:review-signoff": "vite-node --config scripts/vite-test.config.ts scripts/review-signoff-test.mts",
     "test:client-invite-email": "vite-node --config scripts/vite-test.config.ts scripts/client-invite-email-test.mts",
-    "test:product-usage": "vite-node --config scripts/vite-test.config.ts scripts/product-usage-test.mts"
+    "test:product-usage": "vite-node --config scripts/vite-test.config.ts scripts/product-usage-test.mts",
+    "test:google-auth": "vite-node --config scripts/vite-test.config.ts scripts/google-auth-test.mts"
   },
   "dependencies": {
     "@cloudflare/vite-plugin": "^1.25.5",

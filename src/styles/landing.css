@@ -118,6 +118,14 @@ html[data-landing="1"] .btn-gold:hover{transform:translateY(-2px);box-shadow:0 1
 html[data-landing="1"] .btn-gold:hover::after{left:130%}
 html[data-landing="1"] .btn-ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
 html[data-landing="1"] .btn-ghost:hover{border-color:var(--gold);color:var(--gold);transform:translateY(-2px)}
+html[data-landing="1"] .btn-google{width:100%;justify-content:center;background:#fff;color:#1f1f1f;border:1px solid rgba(0,0,0,.12);box-shadow:0 1px 2px rgba(0,0,0,.06)}
+html[data-landing="1"] .reg-shell .btn-google{margin-top:18px}
+html[data-landing="1"] .btn-google:hover{transform:translateY(-2px);border-color:rgba(0,0,0,.2);box-shadow:0 6px 20px rgba(0,0,0,.12)}
+html[data-landing="1"] .btn-google:disabled{opacity:.65;cursor:not-allowed;transform:none}
+html[data-landing="1"][data-theme="dark"] .btn-google{background:#fff;color:#1f1f1f}
+html[data-landing="1"] .milon-auth-divider{display:flex;align-items:center;gap:12px;margin:18px 0;color:var(--ink-dim);font-size:11px;letter-spacing:.14em;text-transform:uppercase}
+html[data-landing="1"] .milon-auth-divider::before,html[data-landing="1"] .milon-auth-divider::after{content:"";flex:1;height:1px;background:var(--line)}
+html[data-landing="1"] .milon-auth-divider span{flex:none}
 html[data-landing="1"] .btn:focus-visible{outline:2px solid var(--gold-bright);outline-offset:3px}
 html[data-landing="1"] a:focus-visible,html[data-landing="1"] button:focus-visible,html[data-landing="1"] select:focus-visible,html[data-landing="1"] input:focus-visible{outline:2px solid var(--gold-bright);outline-offset:2px}
 

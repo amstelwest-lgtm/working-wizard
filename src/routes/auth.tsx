@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { SIGNUP_ACCESS_CODE, notifySignup } from "@/lib/signup-notify";
 import { ensurePracticePortalAccess } from "@/lib/auth.functions";
 import { forcePortal, setPortalIntent, resolvePostLoginPath, clearForcePortal } from "@/lib/user-roles";
+import { AuthDivider, GoogleSignInButton } from "@/components/google-sign-in-button";
 
 export const Route = createFileRoute("/auth")({
   component: AuthPage,
@@ -208,35 +209,50 @@ function AuthPage() {
               <TabsTrigger value="signin">Sign in</TabsTrigger>
               <TabsTrigger value="signup">Create firm</TabsTrigger>
             </TabsList>
-            {mounted && <form onSubmit={handle} className="space-y-3 mt-4">
-              {mode === "signup" && (
-                <>
+            {mounted && (
+              <>
+                {mode === "signin" && (
+                  <div className="mt-4">
+                    <GoogleSignInButton
+                      intent="accountant"
+                      next={afterAuthPath}
+                      disabled={busy}
+                      onError={(msg) => toast.error(msg)}
+                    />
+                    <AuthDivider />
+                  </div>
+                )}
+                <form onSubmit={handle} className={mode === "signin" ? "space-y-3" : "space-y-3 mt-4"}>
+                  {mode === "signup" && (
+                    <>
+                      <div>
+                        <Label>Your name</Label>
+                        <Input value={fullName} onChange={(e) => setFullName(e.target.value)} required />
+                      </div>
+                      <div>
+                        <Label>Firm name</Label>
+                        <Input value={firmName} onChange={(e) => setFirmName(e.target.value)} placeholder="Acme & Partners" required />
+                      </div>
+                      <div>
+                        <Label>Access code</Label>
+                        <Input value={accessCode} onChange={(e) => setAccessCode(e.target.value)} placeholder="Provided by your MILŌN contact" required />
+                      </div>
+                    </>
+                  )}
                   <div>
-                    <Label>Your name</Label>
-                    <Input value={fullName} onChange={(e) => setFullName(e.target.value)} required />
+                    <Label>Email</Label>
+                    <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
                   </div>
                   <div>
-                    <Label>Firm name</Label>
-                    <Input value={firmName} onChange={(e) => setFirmName(e.target.value)} placeholder="Acme & Partners" required />
+                    <Label>Password</Label>
+                    <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} minLength={8} required />
                   </div>
-                  <div>
-                    <Label>Access code</Label>
-                    <Input value={accessCode} onChange={(e) => setAccessCode(e.target.value)} placeholder="Provided by your MILŌN contact" required />
-                  </div>
-                </>
-              )}
-              <div>
-                <Label>Email</Label>
-                <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-              </div>
-              <div>
-                <Label>Password</Label>
-                <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} minLength={8} required />
-              </div>
-              <Button type="submit" className="w-full" disabled={busy}>
-                {busy ? "Please wait…" : mode === "signin" ? "Sign in" : "Create firm account"}
-              </Button>
-            </form>}
+                  <Button type="submit" className="w-full" disabled={busy}>
+                    {busy ? "Please wait…" : mode === "signin" ? "Sign in" : "Create firm account"}
+                  </Button>
+                </form>
+              </>
+            )}
             <TabsContent value="signin" />
             <TabsContent value="signup" />
           </Tabs>

@@ -2207,11 +2207,28 @@ function Index() {
       }
       const meta = u.user.user_metadata as {
         full_name?: string;
+        name?: string;
         business_name?: string;
         signup_type?: string;
+        firm_name?: string;
       } | null;
-      if (meta?.signup_type === "customer") {
-        const clientName = meta.business_name || meta.full_name || u.user.email || "My Business";
+      const { data: roleRows } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", u.user.id);
+      const roles = (roleRows ?? []).map((r) => r.role as string);
+      const hasPracticeRole = roles.includes("firm_admin") || roles.includes("accountant");
+      const isGoogleIdentity =
+        u.user.app_metadata?.provider === "google" ||
+        (Array.isArray(u.user.identities) &&
+          u.user.identities.some((identity) => identity.provider === "google"));
+      // Google owner sign-in has no password signup_type until the callback stamps it.
+      const shouldProvisionOwner =
+        meta?.signup_type === "customer" ||
+        Boolean(isGoogleIdentity && !hasPracticeRole && !meta?.firm_name);
+      if (shouldProvisionOwner) {
+        const clientName =
+          meta?.business_name || meta?.full_name || meta?.name || u.user.email || "My Business";
         const { data: clientId, error: rpcErr } = await supabase.rpc("ensure_own_client", {
           p_name: clientName,
         });
