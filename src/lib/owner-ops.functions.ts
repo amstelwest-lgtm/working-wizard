@@ -39,6 +39,31 @@ export const unlockOwnerOps = createServerFn({ method: "POST" })
     return { ok: true as const };
   });
 
+export type OpsAccess = {
+  allowed: boolean;
+  isOwner: boolean;
+  isItMember: boolean;
+};
+
+/**
+ * Signed-in platform owners and Milōn IT members skip the passphrase lock.
+ * The passphrase remains an obscurity layer for the public landing box.
+ */
+export const getOpsAccess = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }): Promise<OpsAccess> => {
+    try {
+      const access = await assertOpsConsoleAccess(context as AuthCtx);
+      return {
+        allowed: true,
+        isOwner: access.isOwner,
+        isItMember: access.isIt,
+      };
+    } catch {
+      return { allowed: false, isOwner: false, isItMember: false };
+    }
+  });
+
 /**
  * Owner-only: which Supabase admin env vars the server can see.
  * Never returns secret values — only presence and which name resolved.

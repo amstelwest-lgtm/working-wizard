@@ -11,11 +11,13 @@ import {
 } from "@/lib/google-auth";
 import { notifySignup } from "@/lib/signup-notify";
 import { OPS_UNLOCK_KEY } from "@/lib/owner-ops.functions";
+import { isOpsNext, lighthouseTabFromOpsNext } from "@/lib/client-note-link";
 import {
   clearForcePortal,
   forcePortal,
   resolvePostLoginPath,
   setPortalIntent,
+  shouldOpenItInbox,
 } from "@/lib/user-roles";
 
 export const Route = createFileRoute("/auth/callback")({
@@ -87,8 +89,13 @@ function AuthCallbackPage() {
       }
 
       let path: "/app" | "/dashboard" | "/ops" = "/app";
-      if (goOps || next === "/ops") {
+      let opsTab: string | undefined;
+      if (goOps || isOpsNext(next)) {
         path = "/ops";
+        opsTab = lighthouseTabFromOpsNext(next);
+      } else if (await shouldOpenItInbox(user.id)) {
+        path = "/ops";
+        opsTab = "it";
       } else {
         if (intent === "accountant") forcePortal("accountant");
         path = await resolvePostLoginPath(user.id);
@@ -97,7 +104,13 @@ function AuthCallbackPage() {
           setPortalIntent("owner");
         }
       }
-      if (!cancelled) void navigate({ to: path, replace: true });
+      if (!cancelled) {
+        if (path === "/ops") {
+          void navigate({ to: "/ops", search: opsTab ? { tab: opsTab } : {}, replace: true });
+        } else {
+          void navigate({ to: path, replace: true });
+        }
+      }
     })();
     return () => {
       cancelled = true;

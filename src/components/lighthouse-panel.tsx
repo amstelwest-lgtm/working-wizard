@@ -68,7 +68,24 @@ const STEP_HINT: Record<number, string> = {
   5: "Day 18 · breakup — shortest email, highest reply rate",
 };
 
-export function LighthousePanel() {
+export const LIGHTHOUSE_TABS = [
+  "pipeline",
+  "usage",
+  "it",
+  "playbook",
+  "assets",
+  "settings",
+] as const;
+
+export type LighthouseTab = (typeof LIGHTHOUSE_TABS)[number];
+
+export function parseLighthouseTab(raw: unknown): LighthouseTab | undefined {
+  return typeof raw === "string" && (LIGHTHOUSE_TABS as readonly string[]).includes(raw)
+    ? (raw as LighthouseTab)
+    : undefined;
+}
+
+export function LighthousePanel({ initialTab }: { initialTab?: LighthouseTab }) {
   const load = useServerFn(getLighthouse);
   const saveLead = useServerFn(upsertLighthouseLead);
   const importLeads = useServerFn(importLighthouseLeads);
@@ -82,10 +99,12 @@ export function LighthousePanel() {
   const [dash, setDash] = useState<LighthouseDashboard | null>(null);
   const [busy, setBusy] = useState(true);
   const [err, setErr] = useState("");
-  const [tab, setTab] = useState<
-    "pipeline" | "usage" | "it" | "playbook" | "assets" | "settings"
-  >("pipeline");
+  const [tab, setTab] = useState<LighthouseTab>(initialTab ?? "pipeline");
   const [openLeadId, setOpenLeadId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (initialTab) setTab(initialTab);
+  }, [initialTab]);
 
   const [addOpen, setAddOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
@@ -114,18 +133,80 @@ export function LighthousePanel() {
     [dash, openLeadId],
   );
 
+  const tabBar = (
+    <div className="mb-4 flex flex-wrap items-center gap-2">
+      {LIGHTHOUSE_TABS.map((t) => (
+        <button
+          key={t}
+          type="button"
+          onClick={() => setTab(t)}
+          className={`rounded-full px-4 py-1.5 text-xs font-semibold uppercase tracking-wider transition-colors ${
+            tab === t
+              ? "bg-[var(--ops-amber-soft)] text-[var(--ops-amber)]"
+              : "border border-[var(--ops-line)] text-[var(--ops-ink-dim)] hover:text-[var(--ops-ink-soft)]"
+          }`}
+        >
+          {t === "it" ? "IT queries" : t}
+        </button>
+      ))}
+      <span className="flex-1" />
+      {tab !== "it" ? (
+        <>
+          <button
+            type="button"
+            onClick={() => setImportOpen((o) => !o)}
+            className="inline-flex h-9 items-center gap-1.5 rounded-full border border-[var(--ops-line-strong)] px-3 text-xs font-semibold uppercase tracking-wider text-[var(--ops-ink-soft)] hover:border-[var(--ops-amber-border)]"
+          >
+            <Upload className="h-3.5 w-3.5" /> Import
+          </button>
+          <button
+            type="button"
+            onClick={() => setAddOpen((o) => !o)}
+            className="inline-flex h-9 items-center gap-1.5 rounded-full bg-gradient-to-r from-[#ac8400] via-[#d4af37] to-[#fdee79] px-4 text-xs font-bold uppercase tracking-wider text-[#1b1300]"
+          >
+            <Plus className="h-3.5 w-3.5" /> Lead
+          </button>
+        </>
+      ) : null}
+      <button
+        type="button"
+        onClick={() => void refresh()}
+        className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[var(--ops-line-strong)] text-[var(--ops-ink-dim)] hover:text-[var(--ops-amber)]"
+        title="Refresh"
+      >
+        <RefreshCw className={`h-3.5 w-3.5 ${busy ? "animate-spin" : ""}`} />
+      </button>
+    </div>
+  );
+
+  // Shared IT inbox must render even if the sales board is still loading.
+  if (tab === "it") {
+    return (
+      <div>
+        {tabBar}
+        <LighthouseItPanel />
+      </div>
+    );
+  }
+
   if (busy && !dash) {
     return (
-      <div className="flex items-center gap-2 py-16 text-sm text-[var(--ops-ink-dim)]">
-        <Loader2 className="h-4 w-4 animate-spin text-[var(--ops-amber)]" /> Loading Lighthouse…
+      <div>
+        {tabBar}
+        <div className="flex items-center gap-2 py-16 text-sm text-[var(--ops-ink-dim)]">
+          <Loader2 className="h-4 w-4 animate-spin text-[var(--ops-amber)]" /> Loading Lighthouse…
+        </div>
       </div>
     );
   }
 
   if (err && !dash) {
     return (
-      <div className="rounded-2xl border border-[var(--ops-danger-border)] bg-[var(--ops-danger-bg)] p-5 text-sm text-[var(--ops-danger-ink)]">
-        {err}
+      <div>
+        {tabBar}
+        <div className="rounded-2xl border border-[var(--ops-danger-border)] bg-[var(--ops-danger-bg)] p-5 text-sm text-[var(--ops-danger-ink)]">
+          {err}
+        </div>
       </div>
     );
   }
@@ -209,41 +290,7 @@ export function LighthousePanel() {
       )}
 
       {/* Tabs */}
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        {(["pipeline", "usage", "it", "playbook", "assets", "settings"] as const).map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`rounded-full px-4 py-1.5 text-xs font-semibold uppercase tracking-wider transition-colors ${
-              tab === t
-                ? "bg-[var(--ops-amber-soft)] text-[var(--ops-amber)]"
-                : "border border-[var(--ops-line)] text-[var(--ops-ink-dim)] hover:text-[var(--ops-ink-soft)]"
-            }`}
-          >
-            {t === "it" ? "IT queries" : t}
-          </button>
-        ))}
-        <span className="flex-1" />
-        <button
-          onClick={() => setImportOpen((o) => !o)}
-          className="inline-flex h-9 items-center gap-1.5 rounded-full border border-[var(--ops-line-strong)] px-3 text-xs font-semibold uppercase tracking-wider text-[var(--ops-ink-soft)] hover:border-[var(--ops-amber-border)]"
-        >
-          <Upload className="h-3.5 w-3.5" /> Import
-        </button>
-        <button
-          onClick={() => setAddOpen((o) => !o)}
-          className="inline-flex h-9 items-center gap-1.5 rounded-full bg-gradient-to-r from-[#ac8400] via-[#d4af37] to-[#fdee79] px-4 text-xs font-bold uppercase tracking-wider text-[#1b1300]"
-        >
-          <Plus className="h-3.5 w-3.5" /> Lead
-        </button>
-        <button
-          onClick={() => void refresh()}
-          className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[var(--ops-line-strong)] text-[var(--ops-ink-dim)] hover:text-[var(--ops-amber)]"
-          title="Refresh"
-        >
-          <RefreshCw className={`h-3.5 w-3.5 ${busy ? "animate-spin" : ""}`} />
-        </button>
-      </div>
+      {tabBar}
 
       {importOpen && (
         <div className="mb-4 rounded-2xl border border-[var(--ops-line)] bg-[var(--ops-card)] p-4">

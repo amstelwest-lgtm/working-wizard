@@ -1,6 +1,6 @@
 /**
- * Milōn Lighthouse — secret platform-owner console.
- * Route: /ops — gated by allowlisted email + prior passphrase unlock.
+ * Milōn Lighthouse — platform-owner and Milōn IT console.
+ * Route: /ops — signed-in owners and IT members skip the passphrase lock.
  */
 
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
@@ -23,19 +23,26 @@ import { useAuth } from "@/hooks/use-auth";
 import {
   OPS_UNLOCK_KEY,
   addOpsPayment,
+  getOpsAccess,
   getOwnerOpsDashboard,
   getOwnerOpsEnvStatus,
   unlockOwnerOps,
   upsertOpsFeatureFlags,
   upsertOpsPilotNotes,
+  type OpsAccess,
   type OpsDashboard,
 } from "@/lib/owner-ops.functions";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { LighthousePanel } from "@/components/lighthouse-panel";
+import { LighthousePanel, parseLighthouseTab } from "@/components/lighthouse-panel";
+import { LIGHTHOUSE_IT_INBOX_PATH } from "@/lib/client-note-link";
 import "@/styles/ops-console.css";
 
 export const Route = createFileRoute("/_authenticated/ops")({
   component: OwnerOpsPage,
+  validateSearch: (search: Record<string, unknown>): { tab?: string } => {
+    const tab = parseLighthouseTab(search.tab);
+    return tab ? { tab } : {};
+  },
   head: () => ({ meta: [{ title: "Lighthouse — Milōn" }] }),
 });
 
@@ -51,11 +58,15 @@ const FLAG_LABELS: Record<string, string> = {
 function OwnerOpsPage() {
   const { user, loading: authLoading, signOut } = useAuth();
   const navigate = useNavigate();
+  const { tab: tabSearch } = Route.useSearch();
   const loadDash = useServerFn(getOwnerOpsDashboard);
+  const loadAccess = useServerFn(getOpsAccess);
   const saveFlags = useServerFn(upsertOpsFeatureFlags);
   const saveNotes = useServerFn(upsertOpsPilotNotes);
   const createPayment = useServerFn(addOpsPayment);
   const [unlocked, setUnlocked] = useState(false);
+  const [access, setAccess] = useState<OpsAccess | null>(null);
+  const [accessChecked, setAccessChecked] = useState(false);
   const [view, setView] = useState<"lighthouse" | "platform">("lighthouse");
   const [dash, setDash] = useState<OpsDashboard | null>(null);
   const [busy, setBusy] = useState(true);
@@ -105,6 +116,28 @@ function OwnerOpsPage() {
     setUnlocked(true);
   }, []);
 
+  const authNext = tabSearch === "it" ? LIGHTHOUSE_IT_INBOX_PATH : "/ops";
+
+  useEffect(() => {
+    if (authLoading || !user) return;
+    let cancelled = false;
+    void loadAccess()
+      .then((a) => {
+        if (cancelled) return;
+        setAccess(a);
+        if (a.allowed) markUnlocked();
+      })
+      .catch(() => {
+        if (!cancelled) setAccess(null);
+      })
+      .finally(() => {
+        if (!cancelled) setAccessChecked(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [authLoading, user, loadAccess, markUnlocked]);
+
   const submitUnlock = useCallback(
     async (e: FormEvent) => {
       e.preventDefault();
@@ -144,7 +177,7 @@ function OwnerOpsPage() {
   useEffect(() => {
     if (authLoading) return;
     if (!user) {
-      navigate({ to: "/auth", search: { next: "/ops" } });
+      navigate({ to: "/auth", search: { next: authNext } });
       return;
     }
     if (!unlocked) return;
@@ -159,12 +192,47 @@ function OwnerOpsPage() {
   }, [authLoading, user, unlocked, err, loadEnvStatus]);
 
   const flagEntries = useMemo(() => Object.entries(flags), [flags]);
+  const itOnly = Boolean(access?.isItMember && !access?.isOwner);
+  const lighthouseTab = parseLighthouseTab(tabSearch) ?? (itOnly ? "it" : "pipeline");
+  const showPlatform = !itOnly;
 
-  if (authLoading || (unlocked && busy && !dash && !err)) {
+  if (authLoading || (user && !accessChecked && !unlocked) || (unlocked && busy && !dash && !err && !itOnly)) {
     return (
       <div className="milon-ops grid min-h-screen place-items-center text-[var(--ops-ink-dim)]">
         <div className="flex items-center gap-2 text-sm">
           <Loader2 className="h-4 w-4 animate-spin text-[var(--ops-amber)]" /> Loading ops…
+        </div>
+      </div>
+    );
+  }
+
+  if (accessChecked && access && !access.allowed && !unlocked) {
+    return (
+      <div className="milon-ops grid min-h-screen place-items-center px-4 text-[var(--ops-ink-soft)]">
+        <div className="w-full max-w-md rounded-2xl border border-[var(--ops-line)] bg-[var(--ops-bg-elevated)] p-6">
+          <div className="mb-3 flex items-center gap-2 text-[var(--ops-amber)]">
+            <Lock className="h-5 w-5" />
+            <span className="text-xs font-bold uppercase tracking-[0.22em]">Restricted</span>
+          </div>
+          <h1 className="font-serif text-2xl text-[var(--ops-ink)]">Lighthouse</h1>
+          <p className="mt-2 text-sm text-[var(--ops-ink-dim)]">
+            This console is for the platform owner and Milōn IT. Sign in with an IT team email
+            to open the IT queries inbox.
+          </p>
+          <div className="mt-5 flex flex-wrap gap-2">
+            <Link
+              to="/dashboard"
+              className="inline-flex items-center gap-2 rounded-full border border-[var(--ops-line)] px-4 py-2 text-xs font-semibold uppercase tracking-wider text-[var(--ops-ink-dim)] hover:text-[var(--ops-ink-soft)]"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" /> Firm dashboard
+            </Link>
+            <Link
+              to="/app"
+              className="inline-flex items-center gap-2 rounded-full border border-[var(--ops-line)] px-4 py-2 text-xs font-semibold uppercase tracking-wider text-[var(--ops-ink-dim)] hover:text-[var(--ops-ink-soft)]"
+            >
+              Business board
+            </Link>
+          </div>
         </div>
       </div>
     );
@@ -225,7 +293,7 @@ function OwnerOpsPage() {
     );
   }
 
-  if (err && !dash) {
+  if (err && !dash && !itOnly) {
     return (
       <div className="milon-ops grid min-h-screen place-items-center px-4 text-[var(--ops-ink-soft)]">
         <div className="w-full max-w-lg rounded-2xl border border-[var(--ops-danger-border)] bg-[var(--ops-danger-bg)] p-6">
@@ -300,7 +368,7 @@ function OwnerOpsPage() {
     );
   }
 
-  if (!dash) return null;
+  if (!dash && !itOnly) return null;
 
   return (
     <div className="milon-ops">
@@ -309,12 +377,12 @@ function OwnerOpsPage() {
         <header className="mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-[var(--ops-line)] pb-4">
           <div>
             <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.28em] text-[var(--ops-amber)]">
-              <Shield className="h-3.5 w-3.5" /> Platform owner
+              <Shield className="h-3.5 w-3.5" /> {itOnly ? "Milōn IT" : "Platform owner"}
             </div>
             <h1 className="mt-1 font-serif text-3xl tracking-tight text-[var(--ops-ink)]">
               Milōn Lighthouse
             </h1>
-            <p className="mt-1 text-xs text-[var(--ops-ink-dim)]">{dash.me.email}</p>
+            <p className="mt-1 text-xs text-[var(--ops-ink-dim)]">{dash?.me.email ?? user?.email}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <ThemeToggle />
@@ -344,6 +412,7 @@ function OwnerOpsPage() {
           </div>
         </header>
 
+        {showPlatform ? (
         <div className="mb-6 flex gap-2 border-b border-[var(--ops-line)]">
           {(
             [
@@ -365,10 +434,15 @@ function OwnerOpsPage() {
             </button>
           ))}
         </div>
+        ) : (
+          <div className="mb-6 text-xs text-[var(--ops-ink-dim)]">
+            Shared IT queries inbox — every team member sees the same tagged notes.
+          </div>
+        )}
 
-        {view === "lighthouse" && <LighthousePanel />}
+        {(view === "lighthouse" || itOnly) && <LighthousePanel initialTab={lighthouseTab} />}
 
-        {view === "platform" && (
+        {view === "platform" && dash && (
           <>
             {dash.migrationHint && (
               <div className="mb-5 rounded-xl border border-[var(--ops-amber-border)] bg-[var(--ops-amber-soft)] px-4 py-3 text-sm text-[var(--ops-amber)]">

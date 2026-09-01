@@ -6,7 +6,7 @@
 
 import { getSupabaseAdminOrNull } from "@/integrations/supabase/client.server";
 import type { NoteMention } from "@/lib/notes.functions";
-import { clientNoteProfileUrl } from "@/lib/client-note-link";
+import { clientNoteProfileUrl, lighthouseItInboxUrl } from "@/lib/client-note-link";
 import { inviteSiteUrl } from "@/lib/client-invite-email";
 import { ownerEmailAllowlist } from "@/lib/owner-ops.guard";
 
@@ -176,7 +176,7 @@ export type ItQueryMailContext = {
   noteId: string;
 };
 
-function buildItHtml(ctx: ItQueryMailContext, profileUrl: string): string {
+function buildItHtml(ctx: ItQueryMailContext, profileUrl: string, inboxUrl: string): string {
   const preview = escapeHtml(ctx.noteText.slice(0, 500));
   return `<!doctype html><html><body style="font-family:Arial,sans-serif;color:#0f172a">
   <p>A note on <strong>${escapeHtml(ctx.clientName)}</strong> was tagged for Milōn IT${
@@ -184,8 +184,9 @@ function buildItHtml(ctx: ItQueryMailContext, profileUrl: string): string {
   }.</p>
   <p><strong>${escapeHtml(ctx.authorName)}</strong> wrote:</p>
   <div style="border:1px solid #e2e8f0;border-radius:8px;padding:16px;background:#f8fafc;margin:16px 0;white-space:pre-wrap">${preview}</div>
+  <p><a href="${escapeHtml(inboxUrl)}" style="color:#b8860b">Open in your Lighthouse IT queries inbox</a></p>
   <p><a href="${escapeHtml(profileUrl)}" style="color:#b8860b">Open this note on the customer profile</a></p>
-  <p style="color:#94a3b8;font-size:12px">It also appears under IT queries in Milōn Lighthouse.</p>
+  <p style="color:#94a3b8;font-size:12px">Every Milōn IT team member receives this note in the same Lighthouse inbox.</p>
   </body></html>`;
 }
 
@@ -218,14 +219,16 @@ export async function dispatchMilonItQueryEmails(
   ctx: ItQueryMailContext,
 ): Promise<{ sent: string[]; failed: Array<{ email: string; error: string }> }> {
   const recipients = await loadItNotifyEmails();
-  const profileUrl = clientNoteProfileUrl(inviteSiteUrl(), ctx.clientId, ctx.noteId, ctx.tabLabel);
+  const origin = inviteSiteUrl();
+  const profileUrl = clientNoteProfileUrl(origin, ctx.clientId, ctx.noteId, ctx.tabLabel);
+  const inboxUrl = lighthouseItInboxUrl(origin);
   const sent: string[] = [];
   const failed: Array<{ email: string; error: string }> = [];
 
   for (const email of recipients) {
     const subject = `Milōn IT query · ${ctx.clientName}`;
-    const html = buildItHtml(ctx, profileUrl);
-    const text = `${ctx.authorName} tagged a note for Milōn IT on ${ctx.clientName}:\n\n${ctx.noteText}\n\nOpen: ${profileUrl}`;
+    const html = buildItHtml(ctx, profileUrl, inboxUrl);
+    const text = `${ctx.authorName} tagged a note for Milōn IT on ${ctx.clientName}:\n\n${ctx.noteText}\n\nInbox: ${inboxUrl}\nOpen note: ${profileUrl}`;
     const idempotencyKey = `note-it-${ctx.noteId}-${email}`;
     const direct = await sendViaResend({
       to: email,

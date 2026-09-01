@@ -59,7 +59,7 @@ export function LighthouseItPanel() {
       await addMember({ data: { email: email.trim(), name: name.trim() || undefined } });
       setEmail("");
       setName("");
-      toast.success("IT member added — they have master access to all profiles");
+      toast.success("IT member added — they receive tagged notes in this inbox");
       await refresh();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not add member");
@@ -172,8 +172,9 @@ export function LighthouseItPanel() {
           <Users className="h-3.5 w-3.5" /> IT team
         </div>
         <p className="mb-3 text-[11px] leading-relaxed text-[var(--ops-ink-dim)]">
-          Members have master access to every customer profile so they can open a tagged note in
-          place. They are emailed when a note is tagged Milōn IT.
+          Shared inbox — every IT member sees the same tagged notes as soon as someone tags
+          Milōn IT. Members also have master access to every customer profile so they can open
+          a note in place. They are emailed when a note is tagged.
         </p>
         <ul className="mb-4 space-y-2">
           {board.members.length === 0 && (

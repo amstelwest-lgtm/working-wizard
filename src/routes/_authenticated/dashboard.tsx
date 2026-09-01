@@ -677,6 +677,7 @@ function Dashboard() {
   const [drawerRatioKey, setDrawerRatioKey] = useState<string | null>(null);
   const [drawerRatioName, setDrawerRatioName] = useState("");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [isItMember, setIsItMember] = useState(false);
 
   // Only known after mount — reading window.location.origin during render would
   // make the server-rendered HTML differ from the client's first render and
@@ -697,6 +698,7 @@ function Dashboard() {
     if (!userId) {
       setClientRows([]);
       setQboStatuses({});
+      setIsItMember(false);
       setLoading(false);
       return;
     }
@@ -710,6 +712,7 @@ function Dashboard() {
     } catch {
       isIt = false;
     }
+    setIsItMember(isIt);
 
     // Firm-scoped list + legacy orphans (firm_id null) owned by this accountant.
     // Strict firm_id-only filtering hid pre-G27 clients and made the dashboard look empty.
@@ -1218,6 +1221,18 @@ function Dashboard() {
               </svg>
               Reports studio
             </button>
+            {isItMember ? (
+              <button
+                className="tb-btn gold"
+                type="button"
+                onClick={() => {
+                  setMobileNavOpen(false);
+                  navigate({ to: "/ops", search: { tab: "it" } });
+                }}
+              >
+                IT queries
+              </button>
+            ) : null}
             <ThemeToggle />
             <button
               className="tb-btn"
