@@ -100,8 +100,8 @@ export async function emailIsMilonItMember(email: string): Promise<boolean> {
 }
 
 /**
- * Platform owner or an IT team member may open Lighthouse IT queries
- * (and the /ops console so they can reach that tab).
+ * Platform owner or an IT team member may open the Milōn IT section of Lighthouse
+ * (and the /ops console so they can reach that section).
  */
 export async function assertOpsConsoleAccess(
   ctx: AuthCtx,

@@ -1,5 +1,5 @@
 /**
- * Lighthouse IT queries: deep links and note tag plumbing.
+ * Lighthouse IT section: deep links and note tag plumbing.
  * Run: pnpm test:lighthouse-it
  */
 import { readFileSync } from "node:fs";
@@ -18,7 +18,11 @@ function assert(cond: boolean, msg: string) {
 }
 
 assert(
-  clientNoteProfilePath("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", "11111111-2222-3333-4444-555555555555", "profit") ===
+  clientNoteProfilePath(
+    "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+    "11111111-2222-3333-4444-555555555555",
+    "profit",
+  ) ===
     "/clients/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee?note=11111111-2222-3333-4444-555555555555&tab=profit",
   "profile path includes note and tab",
 );
@@ -28,7 +32,7 @@ assert(
   ),
   "absolute url strips trailing slash",
 );
-assert(LIGHTHOUSE_IT_INBOX_PATH === "/ops?tab=it", "inbox path opens IT queries");
+assert(LIGHTHOUSE_IT_INBOX_PATH === "/ops?tab=it", "inbox path opens the Milōn IT section");
 assert(
   lighthouseItInboxUrl("https://milon.co.za/") === "https://milon.co.za/ops?tab=it",
   "inbox url is absolute /ops?tab=it",
@@ -42,15 +46,15 @@ assert(layer.includes("tagMilonIt"), "layer calls tagMilonIt");
 assert(layer.includes("focusNoteId"), "layer opens a deep-linked note");
 
 const panel = readFileSync(resolve("src/components/lighthouse-panel.tsx"), "utf8");
-assert(panel.includes("IT queries"), "Lighthouse has an IT queries tab");
-assert(panel.includes("LighthouseItPanel"), "IT tab renders the queries panel");
-assert(panel.includes("initialTab"), "IT inbox can open the queries tab first");
+assert(!panel.includes("LighthouseItPanel"), "IT is not nested inside sales Lighthouse tabs");
+assert(!panel.includes('"it"'), "sales tab list does not include it");
 
 const itUi = readFileSync(resolve("src/components/lighthouse-it.tsx"), "utf8");
 assert(itUi.includes("Open this note on the customer profile"), "each query has a profile link");
 assert(itUi.includes("Add IT member"), "IT team list can add members");
 assert(itUi.includes("Shared inbox"), "copy explains the shared team inbox");
 assert(itUi.includes("master access"), "copy explains master access");
+assert(itUi.includes(">Milōn IT<"), "IT panel is a named Lighthouse section");
 
 const fns = readFileSync(resolve("src/lib/notes.functions.ts"), "utf8");
 assert(fns.includes("tagMilonIt"), "create note accepts tagMilonIt");
@@ -59,16 +63,22 @@ assert(fns.includes("dispatchMilonItQueryEmails"), "tagging notifies IT");
 
 const mail = readFileSync(resolve("src/lib/note-mention-email.ts"), "utf8");
 assert(mail.includes("lighthouseItInboxUrl"), "IT email links to the Lighthouse inbox");
-assert(mail.includes("Open in your Lighthouse IT queries inbox"), "IT email CTA is the inbox");
+assert(mail.includes("Open in the Milōn IT section of Lighthouse"), "IT email CTA is the section");
 
 const ops = readFileSync(resolve("src/routes/_authenticated/ops.tsx"), "utf8");
 assert(ops.includes("getOpsAccess"), "signed-in IT members skip the passphrase lock");
-assert(ops.includes("initialTab={lighthouseTab}"), "ops opens the requested Lighthouse tab");
+assert(ops.includes("LighthouseItPanel"), "ops renders Milōn IT as its own section");
+assert(ops.includes('["it", "Milōn IT"]'), "owners get a Milōn IT section next to sales");
+assert(ops.includes('search.tab === "it"'), "ops URL tab=it still opens the IT section");
+assert(ops.includes("initialTab={lighthouseTab}"), "ops opens the requested sales tab");
 
 const roles = readFileSync(resolve("src/lib/user-roles.ts"), "utf8");
 assert(roles.includes("shouldOpenItInbox"), "IT-only accounts land on the query inbox");
 
-const mig = readFileSync(resolve("supabase/migrations/20260901140000_milon_it_queries.sql"), "utf8");
+const mig = readFileSync(
+  resolve("supabase/migrations/20260901140000_milon_it_queries.sql"),
+  "utf8",
+);
 assert(mig.includes("milon_it_members"), "migration creates IT team table");
 assert(mig.includes("tagged_milon_it"), "migration adds note tag column");
 assert(mig.includes("is_milon_it_member"), "migration grants IT master access helper");
@@ -82,6 +92,9 @@ const dash = readFileSync(resolve("src/routes/_authenticated/dashboard.tsx"), "u
 assert(dash.includes('search: { tab: "it" }'), "firm dashboard links IT members to the inbox");
 
 const appSrc = readFileSync(resolve("src/routes/app.tsx"), "utf8");
-assert(appSrc.includes("shouldOpenItInbox"), "IT-only accounts are sent from the owner app to the inbox");
+assert(
+  appSrc.includes("shouldOpenItInbox"),
+  "IT-only accounts are sent from the owner app to the inbox",
+);
 
 console.log("lighthouse-it-test: ok");

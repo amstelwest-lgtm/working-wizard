@@ -34,12 +34,14 @@ import {
 } from "@/lib/owner-ops.functions";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { LighthousePanel, parseLighthouseTab } from "@/components/lighthouse-panel";
+import { LighthouseItPanel } from "@/components/lighthouse-it";
 import { LIGHTHOUSE_IT_INBOX_PATH } from "@/lib/client-note-link";
 import "@/styles/ops-console.css";
 
 export const Route = createFileRoute("/_authenticated/ops")({
   component: OwnerOpsPage,
   validateSearch: (search: Record<string, unknown>): { tab?: string } => {
+    if (search.tab === "it") return { tab: "it" };
     const tab = parseLighthouseTab(search.tab);
     return tab ? { tab } : {};
   },
@@ -67,7 +69,7 @@ function OwnerOpsPage() {
   const [unlocked, setUnlocked] = useState(false);
   const [access, setAccess] = useState<OpsAccess | null>(null);
   const [accessChecked, setAccessChecked] = useState(false);
-  const [view, setView] = useState<"lighthouse" | "platform">("lighthouse");
+  const [metricsOpen, setMetricsOpen] = useState(false);
   const [dash, setDash] = useState<OpsDashboard | null>(null);
   const [busy, setBusy] = useState(true);
   const [err, setErr] = useState("");
@@ -181,8 +183,9 @@ function OwnerOpsPage() {
       return;
     }
     if (!unlocked) return;
+    if (access?.isItMember && !access?.isOwner) return;
     void refresh();
-  }, [authLoading, user, unlocked, navigate, refresh]);
+  }, [authLoading, user, unlocked, access, navigate, refresh]);
 
   useEffect(() => {
     if (authLoading || !user || !unlocked || !err) return;
@@ -193,10 +196,35 @@ function OwnerOpsPage() {
 
   const flagEntries = useMemo(() => Object.entries(flags), [flags]);
   const itOnly = Boolean(access?.isItMember && !access?.isOwner);
-  const lighthouseTab = parseLighthouseTab(tabSearch) ?? (itOnly ? "it" : "pipeline");
-  const showPlatform = !itOnly;
+  const itSection = itOnly || tabSearch === "it";
+  const view: "lighthouse" | "it" | "platform" = itSection
+    ? "it"
+    : metricsOpen
+      ? "platform"
+      : "lighthouse";
+  const lighthouseTab = parseLighthouseTab(tabSearch) ?? "pipeline";
 
-  if (authLoading || (user && !accessChecked && !unlocked) || (unlocked && busy && !dash && !err && !itOnly)) {
+  useEffect(() => {
+    if (!itOnly || tabSearch === "it") return;
+    void navigate({ to: "/ops", search: { tab: "it" }, replace: true });
+  }, [itOnly, tabSearch, navigate]);
+
+  const openSection = (key: "lighthouse" | "it" | "platform") => {
+    if (key === "it") {
+      void navigate({ to: "/ops", search: { tab: "it" } });
+      return;
+    }
+    setMetricsOpen(key === "platform");
+    if (tabSearch === "it") {
+      void navigate({ to: "/ops", search: {} });
+    }
+  };
+
+  if (
+    authLoading ||
+    (user && !accessChecked && !unlocked) ||
+    (unlocked && busy && !dash && !err && !itSection)
+  ) {
     return (
       <div className="milon-ops grid min-h-screen place-items-center text-[var(--ops-ink-dim)]">
         <div className="flex items-center gap-2 text-sm">
@@ -216,8 +244,8 @@ function OwnerOpsPage() {
           </div>
           <h1 className="font-serif text-2xl text-[var(--ops-ink)]">Lighthouse</h1>
           <p className="mt-2 text-sm text-[var(--ops-ink-dim)]">
-            This console is for the platform owner and Milōn IT. Sign in with an IT team email
-            to open the IT queries inbox.
+            This console is for the platform owner and Milōn IT. Sign in with an IT team email to
+            open the Milōn IT section.
           </p>
           <div className="mt-5 flex flex-wrap gap-2">
             <Link
@@ -293,11 +321,13 @@ function OwnerOpsPage() {
     );
   }
 
-  if (err && !dash && !itOnly) {
+  if (err && !dash && !itSection) {
     return (
       <div className="milon-ops grid min-h-screen place-items-center px-4 text-[var(--ops-ink-soft)]">
         <div className="w-full max-w-lg rounded-2xl border border-[var(--ops-danger-border)] bg-[var(--ops-danger-bg)] p-6">
-          <h1 className="text-lg font-semibold text-[var(--ops-danger-ink)]">Console cannot load</h1>
+          <h1 className="text-lg font-semibold text-[var(--ops-danger-ink)]">
+            Console cannot load
+          </h1>
           <p className="mt-2 text-sm text-[var(--ops-ink-soft)] whitespace-pre-wrap">{err}</p>
           {envDiag && (
             <div className="mt-4 rounded-xl border border-[var(--ops-line)] bg-[var(--ops-input)] p-3 text-[12px] text-[var(--ops-ink-dim)]">
@@ -307,39 +337,65 @@ function OwnerOpsPage() {
               <ul className="space-y-1 font-mono">
                 <li>
                   SUPABASE_URL:{" "}
-                  <span className={envDiag.urlPresent ? "text-[var(--ops-ok-ink)]" : "text-[var(--ops-danger-ink)]"}>
+                  <span
+                    className={
+                      envDiag.urlPresent
+                        ? "text-[var(--ops-ok-ink)]"
+                        : "text-[var(--ops-danger-ink)]"
+                    }
+                  >
                     {envDiag.urlPresent ? `yes (${envDiag.urlFrom})` : "MISSING"}
                   </span>
                 </li>
                 <li>
                   SERVICE_ROLE:{" "}
                   <span
-                    className={envDiag.serviceRolePresent ? "text-[var(--ops-ok-ink)]" : "text-[var(--ops-danger-ink)]"}
+                    className={
+                      envDiag.serviceRolePresent
+                        ? "text-[var(--ops-ok-ink)]"
+                        : "text-[var(--ops-danger-ink)]"
+                    }
                   >
                     {envDiag.serviceRolePresent ? `yes (${envDiag.serviceRoleFrom})` : "MISSING"}
                   </span>
                 </li>
                 <li>
                   ANTHROPIC:{" "}
-                  <span className={envDiag.anthropic ? "text-[var(--ops-ok-ink)]" : "text-[var(--ops-amber)]"}>
+                  <span
+                    className={
+                      envDiag.anthropic ? "text-[var(--ops-ok-ink)]" : "text-[var(--ops-amber)]"
+                    }
+                  >
                     {envDiag.anthropic ? "yes" : "no"}
                   </span>
                 </li>
                 <li>
                   RESEND:{" "}
-                  <span className={envDiag.resend ? "text-[var(--ops-ok-ink)]" : "text-[var(--ops-amber)]"}>
+                  <span
+                    className={
+                      envDiag.resend ? "text-[var(--ops-ok-ink)]" : "text-[var(--ops-amber)]"
+                    }
+                  >
                     {envDiag.resend ? "yes" : "no"}
                   </span>
                 </li>
                 <li>
                   RESEND_WEBHOOK:{" "}
-                  <span className={envDiag.resendWebhook ? "text-[var(--ops-ok-ink)]" : "text-[var(--ops-amber)]"}>
+                  <span
+                    className={
+                      envDiag.resendWebhook ? "text-[var(--ops-ok-ink)]" : "text-[var(--ops-amber)]"
+                    }
+                  >
                     {envDiag.resendWebhook ? "yes" : "no"}
                   </span>
                 </li>
                 <li>
                   SITE_URL:{" "}
-                  <span className={envDiag.siteUrl ? "text-[var(--ops-ok-ink)]" : "text-[var(--ops-amber)]"}>
+                  <span
+                    className={
+                      envDiag.siteUrl ? "text-[var(--ops-ok-ink)]" : "text-[var(--ops-amber)]"
+                    }
+                  >
                     {envDiag.siteUrl ? "yes" : "no"}
                   </span>
                 </li>
@@ -368,7 +424,7 @@ function OwnerOpsPage() {
     );
   }
 
-  if (!dash && !itOnly) return null;
+  if (!dash && !itSection) return null;
 
   return (
     <div className="milon-ops">
@@ -382,17 +438,21 @@ function OwnerOpsPage() {
             <h1 className="mt-1 font-serif text-3xl tracking-tight text-[var(--ops-ink)]">
               Milōn Lighthouse
             </h1>
-            <p className="mt-1 text-xs text-[var(--ops-ink-dim)]">{dash?.me.email ?? user?.email}</p>
+            <p className="mt-1 text-xs text-[var(--ops-ink-dim)]">
+              {dash?.me.email ?? user?.email}
+            </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <ThemeToggle />
-            <button
-              type="button"
-              onClick={() => void refresh()}
-              className="inline-flex h-9 items-center gap-1.5 rounded-full border border-[var(--ops-line-strong)] px-3 text-xs font-semibold uppercase tracking-wider text-[var(--ops-ink-soft)] hover:border-[var(--ops-amber-border)] hover:text-[var(--ops-amber)]"
-            >
-              <RefreshCw className={`h-3.5 w-3.5 ${busy ? "animate-spin" : ""}`} /> Refresh
-            </button>
+            {!itOnly ? (
+              <button
+                type="button"
+                onClick={() => void refresh()}
+                className="inline-flex h-9 items-center gap-1.5 rounded-full border border-[var(--ops-line-strong)] px-3 text-xs font-semibold uppercase tracking-wider text-[var(--ops-ink-soft)] hover:border-[var(--ops-amber-border)] hover:text-[var(--ops-amber)]"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${busy ? "animate-spin" : ""}`} /> Refresh
+              </button>
+            ) : null}
             <button
               type="button"
               onClick={() =>
@@ -412,35 +472,33 @@ function OwnerOpsPage() {
           </div>
         </header>
 
-        {showPlatform ? (
-        <div className="mb-6 flex gap-2 border-b border-[var(--ops-line)]">
-          {(
-            [
-              ["lighthouse", "Lighthouse — sales"],
-              ["platform", "Platform — metrics"],
-            ] as const
-          ).map(([key, label]) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => setView(key)}
-              className={`-mb-px border-b-2 px-1 pb-2.5 text-xs font-bold uppercase tracking-[0.16em] transition-colors ${
-                view === key
-                  ? "border-amber-400 text-[var(--ops-amber)]"
-                  : "border-transparent text-[var(--ops-ink-dim)] hover:text-[var(--ops-ink-soft)]"
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-        ) : (
-          <div className="mb-6 text-xs text-[var(--ops-ink-dim)]">
-            Shared IT queries inbox — every team member sees the same tagged notes.
+        {itOnly ? null : (
+          <div className="mb-6 flex gap-2 border-b border-[var(--ops-line)]">
+            {(
+              [
+                ["lighthouse", "Lighthouse — sales"],
+                ["it", "Milōn IT"],
+                ["platform", "Platform — metrics"],
+              ] as const
+            ).map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => openSection(key)}
+                className={`-mb-px border-b-2 px-1 pb-2.5 text-xs font-bold uppercase tracking-[0.16em] transition-colors ${
+                  view === key
+                    ? "border-amber-400 text-[var(--ops-amber)]"
+                    : "border-transparent text-[var(--ops-ink-dim)] hover:text-[var(--ops-ink-soft)]"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
           </div>
         )}
 
-        {(view === "lighthouse" || itOnly) && <LighthousePanel initialTab={lighthouseTab} />}
+        {view === "lighthouse" && <LighthousePanel initialTab={lighthouseTab} />}
+        {view === "it" && <LighthouseItPanel />}
 
         {view === "platform" && dash && (
           <>
@@ -612,13 +670,23 @@ function OwnerOpsPage() {
                       </tr>
                     ) : (
                       dash.payments.map((p) => (
-                        <tr key={p.id} className="border-t" style={{ borderColor: "var(--ops-line)" }}>
-                          <td className="px-3 py-2 tabular-nums text-[var(--ops-ink-soft)]">{p.paidAt}</td>
+                        <tr
+                          key={p.id}
+                          className="border-t"
+                          style={{ borderColor: "var(--ops-line)" }}
+                        >
+                          <td className="px-3 py-2 tabular-nums text-[var(--ops-ink-soft)]">
+                            {p.paidAt}
+                          </td>
                           <td className="px-3 py-2 font-semibold text-[var(--ops-amber)]">
                             {p.amountLabel}
                           </td>
-                          <td className="px-3 py-2 text-[var(--ops-ink-soft)]">{p.payerLabel ?? "—"}</td>
-                          <td className="px-3 py-2 text-[var(--ops-ink-dim)]">{p.planCode ?? "—"}</td>
+                          <td className="px-3 py-2 text-[var(--ops-ink-soft)]">
+                            {p.payerLabel ?? "—"}
+                          </td>
+                          <td className="px-3 py-2 text-[var(--ops-ink-dim)]">
+                            {p.planCode ?? "—"}
+                          </td>
                           <td className="px-3 py-2 text-[var(--ops-ink-dim)]">{p.status}</td>
                         </tr>
                       ))
@@ -636,15 +704,15 @@ function OwnerOpsPage() {
               <div className="grid gap-4 lg:grid-cols-2">
                 <div className="rounded-2xl border border-[var(--ops-line)] bg-[var(--ops-card)] p-4">
                   <p className="mb-3 text-xs text-[var(--ops-ink-dim)]">
-                    Stored in <code className="text-[var(--ops-amber)]/80">milon_ops_settings</code>. Wire
-                    these into product gates next — toggles save immediately.
+                    Stored in <code className="text-[var(--ops-amber)]/80">milon_ops_settings</code>
+                    . Wire these into product gates next — toggles save immediately.
                   </p>
                   <div className="space-y-2">
                     {flagEntries.map(([key, on]) => (
                       <label
                         key={key}
                         className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border px-3 py-2.5 hover:border-amber-500/40"
-                          style={{ borderColor: "var(--ops-line)" }}
+                        style={{ borderColor: "var(--ops-line)" }}
                       >
                         <span className="text-sm text-[var(--ops-ink-soft)]">
                           {FLAG_LABELS[key] ?? key.replaceAll("_", " ")}
@@ -711,11 +779,11 @@ function OwnerOpsPage() {
               </h2>
               <p className="max-w-2xl text-sm text-[var(--ops-ink-dim)]">
                 Lead generation, AI-drafted sequences, and the tracked free-trial funnel now live in
-                the Lighthouse tab above.
+                the Lighthouse — sales section above.
               </p>
               <button
                 type="button"
-                onClick={() => setView("lighthouse")}
+                onClick={() => openSection("lighthouse")}
                 className="mt-3 inline-flex h-9 items-center rounded-full border border-amber-500/40 px-4 text-xs font-semibold uppercase tracking-wider text-[var(--ops-amber)] hover:bg-amber-500/10"
               >
                 Open Lighthouse

@@ -1,5 +1,5 @@
 /**
- * Lighthouse IT queries — tagged client notes + IT team list.
+ * Milōn IT section — tagged client notes + IT team list.
  * Deny-all RLS; service role after platform-owner or IT-member guard.
  */
 

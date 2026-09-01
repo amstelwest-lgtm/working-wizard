@@ -301,7 +301,7 @@ export async function isMilonItMember(userId: string): Promise<boolean> {
 
 /**
  * IT-only accounts (on the team list, no practice role or firm) should land
- * on the shared Lighthouse IT queries inbox rather than the firm dashboard.
+ * on the Milōn IT section of Lighthouse rather than the firm dashboard.
  */
 export async function shouldOpenItInbox(userId: string): Promise<boolean> {
   if (!(await isMilonItMember(userId))) return false;
