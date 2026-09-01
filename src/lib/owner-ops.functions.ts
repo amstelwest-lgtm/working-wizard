@@ -11,6 +11,7 @@ import {
   OPS_USERNAMES,
   adminLoose,
   assertPlatformOwner,
+  assertOpsConsoleAccess,
   missingRelation,
   moneyZar,
   opsPassphrase,
@@ -119,7 +120,7 @@ export type OpsDashboard = {
 export const getOwnerOpsDashboard = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { email } = await assertPlatformOwner(context as AuthCtx);
+    const { email } = await assertOpsConsoleAccess(context as AuthCtx);
     const admin = adminLoose();
 
     const { data: roles, error: rolesErr } = await admin.from("user_roles").select("role");

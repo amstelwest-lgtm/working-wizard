@@ -290,6 +290,14 @@ export async function shouldBounceFromOwnerApp(
 
 /** Accountant portal may keep practice accounts — never business-client credentials. */
 export async function shouldStayOnAccountantPortal(userId: string): Promise<boolean> {
+  try {
+    const { data } = await supabase.rpc("is_milon_it_member" as never, {
+      _user_id: userId,
+    } as never);
+    if (data) return true;
+  } catch {
+    /* RPC not migrated yet */
+  }
   const force = peekForcePortal();
   const [portal, practiceSignup] = await Promise.all([
     resolvePortalRoles(userId),

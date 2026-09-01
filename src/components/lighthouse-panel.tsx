@@ -45,6 +45,7 @@ import {
   type LighthouseStage,
 } from "@/lib/lighthouse.functions";
 import { LighthouseUsagePanel } from "@/components/lighthouse-usage";
+import { LighthouseItPanel } from "@/components/lighthouse-it";
 
 const inputCls = "ops-input";
 
@@ -81,9 +82,9 @@ export function LighthousePanel() {
   const [dash, setDash] = useState<LighthouseDashboard | null>(null);
   const [busy, setBusy] = useState(true);
   const [err, setErr] = useState("");
-  const [tab, setTab] = useState<"pipeline" | "usage" | "playbook" | "assets" | "settings">(
-    "pipeline",
-  );
+  const [tab, setTab] = useState<
+    "pipeline" | "usage" | "it" | "playbook" | "assets" | "settings"
+  >("pipeline");
   const [openLeadId, setOpenLeadId] = useState<string | null>(null);
 
   const [addOpen, setAddOpen] = useState(false);
@@ -209,7 +210,7 @@ export function LighthousePanel() {
 
       {/* Tabs */}
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        {(["pipeline", "usage", "playbook", "assets", "settings"] as const).map((t) => (
+        {(["pipeline", "usage", "it", "playbook", "assets", "settings"] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -219,7 +220,7 @@ export function LighthousePanel() {
                 : "border border-[var(--ops-line)] text-[var(--ops-ink-dim)] hover:text-[var(--ops-ink-soft)]"
             }`}
           >
-            {t}
+            {t === "it" ? "IT queries" : t}
           </button>
         ))}
         <span className="flex-1" />
@@ -324,6 +325,8 @@ export function LighthousePanel() {
       )}
 
       {tab === "usage" && <LighthouseUsagePanel />}
+
+      {tab === "it" && <LighthouseItPanel />}
 
       {tab === "playbook" && <Playbook dash={dash} />}
 
