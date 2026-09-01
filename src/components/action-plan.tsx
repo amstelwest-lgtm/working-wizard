@@ -292,8 +292,18 @@ export default function ActionPlanPanel({ clientId, clientName, simplified, isOw
             target_date: defaultTargetDate(),
           })
           .select().single();
-        if (error) { toast.error(error.message); return; }
-        p = created as Plan;
+        if (error) {
+          // The other side may have created the active plan first — reload it
+          // instead of toasting and leaving the accountant on an empty board.
+          const { data: retry } = await supabase
+            .from("action_plans").select("*")
+            .eq("client_id", clientId).eq("is_active", true)
+            .order("created_at", { ascending: false }).limit(1);
+          p = (retry?.[0] as Plan) ?? null;
+          if (!p) { toast.error(error.message); return; }
+        } else {
+          p = created as Plan;
+        }
       }
       setPlan(p);
       const [{ data: its }, { data: emps }] = await Promise.all([
@@ -343,6 +353,21 @@ export default function ActionPlanPanel({ clientId, clientName, simplified, isOw
   }, [clientId, isOwner]);
 
   useEffect(() => { setLoading(true); refresh(); }, [refresh]);
+
+  // Owner and accountant share action_plans / action_items by client_id.
+  // Refetch when the window is focused so a plan edited on the other side
+  // is not stuck behind a stale in-memory snapshot.
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void refresh();
+    };
+    window.addEventListener("focus", onVisible);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.removeEventListener("focus", onVisible);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [refresh]);
 
   useEffect(() => {
     seqMaxRef.current = items.reduce((m, i) => Math.max(m, i.seq), 0);
