@@ -159,6 +159,22 @@ export function driverHealthLabel(health: number) {
 }
 
 /**
+ * `owner_name`, `owner_email`, `health`, and `days_remaining` exist only on the
+ * `action_items_v` view. PostgREST rejects them on `action_items` writes
+ * ("Could not find the 'owner_name' column of 'action_items' in the schema cache").
+ */
+export function toActionItemWrite(patch: Partial<Item>): Record<string, unknown> {
+  const {
+    owner_name: _ownerName,
+    owner_email: _ownerEmail,
+    health: _health,
+    days_remaining: _daysRemaining,
+    ...row
+  } = patch;
+  return row;
+}
+
+/**
  * action_items has unique(plan_id, seq). Bulk inserts must allocate consecutive
  * seqs from the current max — looping addItem() reuses a stale React snapshot
  * and collides on the second row.
@@ -351,7 +367,7 @@ export default function ActionPlanPanel({ clientId, clientName, simplified, isOw
   const patchItem = async (id: string, patch: Partial<Item>, log?: Partial<Update>) => {
     const prev = items.find((i) => i.id === id);
     setItems((arr) => arr.map((i) => (i.id === id ? { ...i, ...patch } : i)));
-    const { error } = await supabase.from("action_items").update(patch).eq("id", id);
+    const { error } = await supabase.from("action_items").update(toActionItemWrite(patch)).eq("id", id);
     if (error) { toast.error(error.message); refresh(); return; }
     if (log && prev) {
       const { data: u } = await supabase.auth.getUser();
@@ -372,7 +388,7 @@ export default function ActionPlanPanel({ clientId, clientName, simplified, isOw
     seqMaxRef.current = seq;
     const { data, error } = await supabase
       .from("action_items")
-      .insert({ plan_id: plan.id, client_id: clientId, title, ...extra, seq })
+      .insert({ plan_id: plan.id, client_id: clientId, title, ...toActionItemWrite(extra ?? {}), seq })
       .select().single();
     if (error) {
       seqMaxRef.current = Math.max(0, seqMaxRef.current - 1);
@@ -1090,7 +1106,15 @@ function ItemRow({ item, employees, milestones, lastNudge, lastFailed, draggable
             employees={employees}
             onPick={(id, name) => {
               setPickOwner(false);
-              if (id) onPatch({ owner_id: id, owner_name: name ?? employees.find((e) => e.id === id)?.name, sent_at: null } as any);
+              if (id) {
+                const emp = employees.find((e) => e.id === id);
+                onPatch({
+                  owner_id: id,
+                  owner_name: name ?? emp?.name,
+                  owner_email: emp?.email ?? null,
+                  sent_at: null,
+                });
+              }
             }}
             onAdd={onAddEmployee}
             onManageTeam={onManageTeam ? () => { setPickOwner(false); onManageTeam(); } : undefined}

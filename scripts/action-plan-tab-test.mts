@@ -9,6 +9,7 @@ import ActionPlan, {
   buildStrategicMoveImportRows,
   driverHealthLabel,
   healthMeta,
+  toActionItemWrite,
 } from "../src/components/action-plan";
 import { lazyPanel, TabErrorBoundary } from "../src/components/lazy-panel";
 
@@ -88,5 +89,22 @@ assert(/All owners[\s\S]{0,800}Team members/.test(planSrc), "team list sits next
 assert(planSrc.includes("onManageTeam"), "owner picker can open the team list");
 assert(planSrc.includes('onClick={(e) => { e.stopPropagation(); setAdding(true); }}'), "Add employee does not open the task drawer");
 assert(planSrc.includes("onClick={pickOwner ? undefined : onOpen}"), "row click is disabled while the owner picker is open");
+assert(planSrc.includes("toActionItemWrite(patch)"), "owner patches strip view-only columns before writing");
+assert(planSrc.includes("toActionItemWrite(extra ?? {})"), "inserts also strip view-only columns");
+
+const ownerWrite = toActionItemWrite({
+  owner_id: "emp-1",
+  owner_name: "Thabo Nkosi",
+  owner_email: "thabo@x.co",
+  sent_at: null,
+  health: "on_track",
+  days_remaining: 4,
+});
+assert(ownerWrite.owner_id === "emp-1", "write keeps owner_id");
+assert(ownerWrite.sent_at === null, "write keeps sent_at");
+assert(!("owner_name" in ownerWrite), "write drops view column owner_name");
+assert(!("owner_email" in ownerWrite), "write drops view column owner_email");
+assert(!("health" in ownerWrite), "write drops derived health");
+assert(!("days_remaining" in ownerWrite), "write drops derived days_remaining");
 
 console.log("action-plan-tab-test: ok");
