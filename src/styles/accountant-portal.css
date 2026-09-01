@@ -73,7 +73,19 @@ html[data-theme="light"] .accountant-portal .card.hero-card{box-shadow:0 18px 50
 
 /* ===== stats strip ===== */
 .accountant-portal .stats-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:26px}
-.accountant-portal .stat{border:1px solid var(--line);border-radius:18px;padding:20px 22px;background:var(--card);transition:transform .3s var(--ease),border-color .3s}
+.accountant-portal .stat.stat-btn{width:100%;text-align:left;font:inherit;color:inherit;cursor:pointer}
+.accountant-portal .followup-panel{border:1px solid var(--line);border-radius:20px;background:var(--card);padding:20px 22px;margin:0 0 24px}
+.accountant-portal .followup-meta{font-size:12.5px;color:var(--ink-dim)}
+.accountant-portal .followup-empty{margin:4px 0 0;font-size:13.5px;color:var(--ink-dim)}
+.accountant-portal .followup-list{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+.accountant-portal .followup-row{display:flex;align-items:center;gap:12px;width:100%;border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:color-mix(in srgb,var(--bg-2) 55%,transparent);cursor:pointer;text-align:left;color:inherit;font:inherit;transition:border-color .25s,transform .25s var(--ease)}
+.accountant-portal .followup-row:hover{border-color:rgba(212,175,55,.45);transform:translateY(-1px)}
+.accountant-portal .followup-name{font-weight:700;font-size:14px;flex:1;min-width:0}
+.accountant-portal .followup-count{font-size:12px;font-weight:700;letter-spacing:.04em;color:var(--ink-dim)}
+.accountant-portal .followup-count.overdue{color:var(--risk)}
+.accountant-portal .followup-cta{font-size:12.5px;font-weight:600;color:var(--gold);white-space:nowrap}
+.accountant-portal .followup-cell{background:none;border:0;padding:0;font:inherit;color:var(--gold);font-weight:700;cursor:pointer}
+.accountant-portal .followup-cell.overdue{color:var(--risk)}
 .accountant-portal .stat:hover{transform:translateY(-3px);border-color:var(--gold)}
 .accountant-portal .stat .k{font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-dim);margin-bottom:8px;display:flex;align-items:center;gap:7px}
 .accountant-portal .stat .k svg{width:13px;height:13px;stroke:var(--gold);stroke-width:1.8;fill:none;stroke-linecap:round}

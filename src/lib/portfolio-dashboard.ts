@@ -24,6 +24,8 @@ export type AttentionItem = {
   severityLabel: string;
   reason: string;
   detail: string;
+  /** When true, open the client's Action Plan tab (outstanding work). */
+  openPlan?: boolean;
 };
 
 export type PortfolioInsight = {
@@ -214,6 +216,7 @@ export function buildAttentionItems(
       severityLabel: severity === "critical" ? "Critical" : severity === "high" ? "High" : "Medium",
       reason,
       detail,
+      openPlan: row.overdueActions > 0 || row.openActions > 0,
     });
   }
 
@@ -353,4 +356,41 @@ export function portfolioSparkPoints(rows: Array<{ trend: Array<{ score: number 
     if (vals.length) out.push(Math.round(vals.reduce((s, v) => s + v, 0) / vals.length));
   }
   return out;
+}
+
+export type FollowUpItem = {
+  clientId: string;
+  name: string;
+  overdueActions: number;
+  openActions: number;
+};
+
+/**
+ * Clients the practice should chase this week: overdue first, then other
+ * open Action Plan work. Deep-link these to /clients/:id?tab=plan.
+ */
+export function buildFollowUpQueue(
+  rows: Array<{
+    id: string;
+    name: string;
+    overdueActions: number;
+    openActions: number;
+  }>,
+  limit = 8,
+): FollowUpItem[] {
+  return rows
+    .filter((r) => r.overdueActions > 0 || r.openActions > 0)
+    .sort(
+      (a, b) =>
+        b.overdueActions - a.overdueActions ||
+        b.openActions - a.openActions ||
+        a.name.localeCompare(b.name),
+    )
+    .slice(0, limit)
+    .map((r) => ({
+      clientId: r.id,
+      name: r.name,
+      overdueActions: r.overdueActions,
+      openActions: r.openActions,
+    }));
 }

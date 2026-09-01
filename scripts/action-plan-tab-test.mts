@@ -7,8 +7,11 @@ import { resolve } from "node:path";
 import ActionPlan, {
   allocateActionSeqs,
   buildStrategicMoveImportRows,
+  chaseEmailType,
+  chaseableItems,
   driverHealthLabel,
   healthMeta,
+  parseActionPlanFilter,
   toActionItemWrite,
 } from "../src/components/action-plan";
 import { lazyPanel, TabErrorBoundary } from "../src/components/lazy-panel";
@@ -106,5 +109,28 @@ assert(!("owner_name" in ownerWrite), "write drops view column owner_name");
 assert(!("owner_email" in ownerWrite), "write drops view column owner_email");
 assert(!("health" in ownerWrite), "write drops derived health");
 assert(!("days_remaining" in ownerWrite), "write drops derived days_remaining");
+
+assert(parseActionPlanFilter("overdue") === "overdue", "parses overdue filter");
+assert(parseActionPlanFilter("nope") === undefined, "rejects unknown filter");
+assert(chaseEmailType("overdue") === "overdue", "overdue items use overdue email");
+assert(chaseEmailType("at_risk") === "nudge", "open items use nudge email");
+{
+  const emails = { "emp-1": "a@x.co", "emp-2": null };
+  const rows = [
+    { status: "in_progress", owner_id: "emp-1", health: "overdue" },
+    { status: "in_progress", owner_id: "emp-2", health: "overdue" },
+    { status: "done", owner_id: "emp-1", health: "complete" },
+    { status: "in_progress", owner_id: "emp-1", health: "on_track" },
+    { status: "blocked", owner_id: null, health: "overdue" },
+  ];
+  assert(chaseableItems(rows, emails, true).length === 1, "batch chase is overdue + email only");
+  assert(chaseableItems(rows, emails).length === 2, "open chase includes non-overdue with email");
+}
+
+assert(planSrc.includes('sendAssignment(drawerItem, type)'), "drawer chase uses nudge/overdue not assignment");
+assert(planSrc.includes("Chase {overdueChaseReady.length} overdue"), "batch chase overdue control");
+assert(planSrc.includes("Chase overdue"), "per-item overdue chase label");
+assert(planSrc.includes("Send nudge"), "per-item nudge label");
+assert(planSrc.includes("initialFilter"), "Action Plan accepts dashboard filter deep-link");
 
 console.log("action-plan-tab-test: ok");

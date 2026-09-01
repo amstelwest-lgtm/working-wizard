@@ -113,6 +113,8 @@ interface Props {
   focusMoveKey?: string | null;
   /** Called once the focus has been applied, so the parent can clear it. */
   onFocusHandled?: () => void;
+  /** Accountant dashboard Chase links land with `?tab=plan&filter=overdue`. */
+  initialFilter?: ActionPlanFilter;
 }
 
 // ── Derived health (mirrors SQL action_item_health) ─────────────────────────
@@ -185,6 +187,38 @@ export function allocateActionSeqs(existing: { seq: number }[], count: number): 
   return Array.from({ length: count }, (_, i) => start + i);
 }
 
+export type ActionPlanFilter = "all" | "overdue" | "at_risk" | "blocked" | "done";
+export type ChaseEmailType = "nudge" | "overdue";
+
+/** Deep-link `?filter=` from the accountant dashboard follow-up queue. */
+export function parseActionPlanFilter(value: unknown): ActionPlanFilter | undefined {
+  if (value === "overdue" || value === "at_risk" || value === "blocked" || value === "done" || value === "all") {
+    return value;
+  }
+  return undefined;
+}
+
+/** Overdue work gets the overdue template; everything else still open gets a nudge. */
+export function chaseEmailType(health?: string | null): ChaseEmailType {
+  return health === "overdue" ? "overdue" : "nudge";
+}
+
+/** Open items whose owner has an email — ready for a chase/nudge. */
+export function chaseableItems<T extends { status: string; owner_id: string | null; health?: string | null }>(
+  items: T[],
+  emailByOwnerId: Map<string, string | null | undefined> | Record<string, string | null | undefined>,
+  onlyOverdue = false,
+): T[] {
+  const emailOf = (id: string) =>
+    emailByOwnerId instanceof Map ? emailByOwnerId.get(id) : emailByOwnerId[id];
+  return items.filter((i) => {
+    if (i.status === "done") return false;
+    if (onlyOverdue && i.health !== "overdue") return false;
+    if (!i.owner_id) return false;
+    return Boolean(emailOf(i.owner_id));
+  });
+}
+
 export type StrategicMoveImportRow = {
   plan_id: string;
   client_id: string;
@@ -250,13 +284,13 @@ function itemScore(it: Item): number {
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-export default function ActionPlanPanel({ clientId, clientName, simplified, isOwner = true, moves = [], onViewAnalysis, focusMoveKey, onFocusHandled }: Props) {
+export default function ActionPlanPanel({ clientId, clientName, simplified, isOwner = true, moves = [], onViewAnalysis, focusMoveKey, onFocusHandled, initialFilter }: Props) {
   const [plan, setPlan] = useState<Plan | null>(null);
   const [items, setItems] = useState<Item[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [milestones, setMilestones] = useState<Milestone[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<"all" | "overdue" | "at_risk" | "blocked" | "done">("all");
+  const [filter, setFilter] = useState<ActionPlanFilter>(initialFilter ?? "all");
   const [ownerFilter, setOwnerFilter] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<"seq" | "due" | "owner" | "status">("seq");
   const [drawerId, setDrawerId] = useState<string | null>(null);
@@ -271,6 +305,10 @@ export default function ActionPlanPanel({ clientId, clientName, simplified, isOw
   // Item briefly highlighted after arriving from Next Moves → Assign
   const [focusedItemId, setFocusedItemId] = useState<string | null>(null);
   const quickAddRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (initialFilter) setFilter(initialFilter);
+  }, [initialFilter]);
 
   // ── Load ───────────────────────────────────────────────────────────────────
   const refresh = useCallback(async () => {
@@ -449,7 +487,7 @@ export default function ActionPlanPanel({ clientId, clientName, simplified, isOw
 
   const sendAssignment = async (
     it: Item,
-    emailType: "assignment" | "nudge" = "assignment",
+    emailType: "assignment" | "nudge" | "overdue" = "assignment",
     preMintedUrl?: string,
   ) => {
     const owner = employees.find((e) => e.id === it.owner_id);
@@ -584,6 +622,27 @@ export default function ActionPlanPanel({ clientId, clientName, simplified, isOw
     return c;
   }, [enriched]);
 
+  const emailByOwnerId = useMemo(() => {
+    const map: Record<string, string | null> = {};
+    for (const e of employees) map[e.id] = e.email;
+    return map;
+  }, [employees]);
+  const overdueChaseReady = useMemo(
+    () => chaseableItems(enriched, emailByOwnerId, true),
+    [enriched, emailByOwnerId],
+  );
+  const chaseOverdue = async () => {
+    if (!overdueChaseReady.length) return;
+    setSending(true);
+    let ok = 0;
+    for (const it of overdueChaseReady) {
+      try { await sendAssignment(it, "overdue"); ok++; }
+      catch (e: any) { toast.error(`${it.title}: ${e.message ?? e}`); }
+    }
+    setSending(false);
+    if (ok) toast.success(`${ok} overdue reminder${ok > 1 ? "s" : ""} sent`);
+  };
+
   // Drag reorder
   const onDropRow = async (targetId: string) => {
     const fromId = dragSeq.current;
@@ -684,6 +743,18 @@ export default function ActionPlanPanel({ clientId, clientName, simplified, isOw
                       : `${ready.length} of ${unsent.length} ready to send`}
                   </Button>
                 )}
+                {overdueChaseReady.length > 0 && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={sending}
+                    onClick={chaseOverdue}
+                    className={`${INPUT_CLS} border-[#ef4444]/40 text-[#ef4444] hover:bg-[#ef4444]/10`}
+                  >
+                    {sending ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <Mail className="mr-1 h-3.5 w-3.5" />}
+                    Chase {overdueChaseReady.length} overdue
+                  </Button>
+                )}
               </div>
             )}
           </div>
@@ -735,6 +806,11 @@ export default function ActionPlanPanel({ clientId, clientName, simplified, isOw
               <option value="status">Sort: status</option>
             </select>
           </div>
+          {filter === "overdue" && healthCounts.overdue > 0 && (
+            <p className="mt-3 rounded-md border border-[#ef4444]/25 bg-[#ef4444]/10 px-3 py-2 text-xs text-[#b45309] dark:text-[#fbbf24]">
+              Showing overdue work. Open an item to send a chase, or use Chase overdue to remind every owner with an email on file.
+            </p>
+          )}
         </CardHeader>
         <CardContent className="px-0 pb-2 pt-0">
           {filtered.length === 0 && (
@@ -823,6 +899,13 @@ export default function ActionPlanPanel({ clientId, clientName, simplified, isOw
           onResend={async () => {
             try { await sendAssignment(drawerItem); toast.success("Link re-sent"); }
             catch (e: any) { toast.error(e.message ?? String(e)); }
+          }}
+          onChase={async () => {
+            const type = chaseEmailType(drawerItem.health);
+            try {
+              await sendAssignment(drawerItem, type);
+              toast.success(type === "overdue" ? "Overdue reminder sent" : "Nudge sent");
+            } catch (e: any) { toast.error(e.message ?? String(e)); }
           }}
           onCopyLink={async () => {
             try {
@@ -1504,7 +1587,7 @@ function TeamPanel({ employees, onClose, onAdd, onPatch, onRemove }: {
 }
 
 // ═══ Drawer ══════════════════════════════════════════════════════════════════
-function ItemDrawer({ item, employees, milestones, isOwner = true, onClose, onPatch, onDelete, onResend, onCopyLink, onReassign, onMilestonesChanged }: {
+function ItemDrawer({ item, employees, milestones, isOwner = true, onClose, onPatch, onDelete, onResend, onChase, onCopyLink, onReassign, onMilestonesChanged }: {
   item: Item & { health?: Health };
   employees: Employee[];
   milestones: Milestone[];
@@ -1513,6 +1596,7 @@ function ItemDrawer({ item, employees, milestones, isOwner = true, onClose, onPa
   onPatch: (patch: Partial<Item>, log?: Partial<Update>) => void;
   onDelete: () => void;
   onResend: () => Promise<void>;
+  onChase: () => Promise<void>;
   onCopyLink: () => Promise<void>;
   onReassign: (employeeId: string) => Promise<void>;
   onMilestonesChanged: () => void;
@@ -1522,7 +1606,10 @@ function ItemDrawer({ item, employees, milestones, isOwner = true, onClose, onPa
   const [newMs, setNewMs] = useState("");
   const [reassigning, setReassigning] = useState(false);
   const [resending, setResending] = useState(false);
+  const [chasing, setChasing] = useState(false);
   const h = healthMeta(item.health);
+  const ownerHasEmail = Boolean(item.owner_id && employees.find((e) => e.id === item.owner_id)?.email);
+  const chaseLabel = item.health === "overdue" ? "Chase overdue" : "Send nudge";
 
   useEffect(() => {
     Promise.all([
@@ -1667,7 +1754,22 @@ function ItemDrawer({ item, employees, milestones, isOwner = true, onClose, onPa
         {/* Actions — owners only */}
         {isOwner && (
           <>
-            <div className="mt-5 grid grid-cols-3 gap-1.5">
+            {item.status !== "done" && (
+              <Button
+                size="sm"
+                disabled={chasing || !ownerHasEmail}
+                onClick={async () => { setChasing(true); await onChase(); setChasing(false); }}
+                className={`mt-5 w-full ${
+                  item.health === "overdue"
+                    ? "bg-[#ef4444] text-white hover:bg-[#dc2626]"
+                    : "bg-[#b8860b] text-white hover:bg-[#9a7009] dark:bg-[#d4a550] dark:text-slate-950 dark:hover:bg-[#c69440]"
+                }`}
+              >
+                {chasing ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <Mail className="mr-1 h-3.5 w-3.5" />}
+                {ownerHasEmail ? chaseLabel : "Add an owner email to chase"}
+              </Button>
+            )}
+            <div className="mt-1.5 grid grid-cols-3 gap-1.5">
               <Button
                 size="sm" variant="outline" className={INPUT_CLS} disabled={!item.owner_id}
                 onClick={onCopyLink}
@@ -1714,7 +1816,7 @@ function ItemDrawer({ item, employees, milestones, isOwner = true, onClose, onPa
               {lastFailed && (
                 <div className="mt-1.5 flex items-center gap-2 rounded-md border border-[#ef4444]/30 bg-[#ef4444]/10 px-3 py-2 text-xs text-[#ef4444]">
                   <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-                  Last send failed — use "Resend link" above to retry.
+                  Last send failed — use Chase or Resend link above to retry.
                 </div>
               )}
               <div className="mt-1.5 space-y-1">
