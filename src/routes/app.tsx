@@ -73,7 +73,7 @@ import {
   type ClientOperatingProfile,
 } from "@/lib/client-profile";
 import { profileIndustryLabel, profilePriorityWeight } from "@/lib/profile-signals";
-import { ownerWalkthroughReady, shouldShowOwnerProfileFunnel } from "@/lib/first-run";
+import { ownerBoardReady, ownerWalkthroughReady, shouldShowOwnerProfileFunnel } from "@/lib/first-run";
 import {
   consumeInviteHandoffFlag,
   hasInviteHandoffFlag,
@@ -2004,6 +2004,7 @@ function Index() {
   // Move key to focus in the Action Plan tab (set by Next Moves → Assign)
   const [planFocusKey, setPlanFocusKey] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
+  const [roleResolved, setRoleResolved] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
   const track = useTrack();
   const [v, setV] = useState<Inputs>(defaults);
@@ -2111,10 +2112,13 @@ function Index() {
   >([]);
 
   const [effectiveClientId, setEffectiveClientId] = useState<string | null>(null);
+  const [clientLinkResolved, setClientLinkResolved] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
+    setClientLinkResolved(false);
     (async () => {
+      try {
       if (actingClientId) {
         if (!cancelled) setEffectiveClientId(actingClientId);
         return;
@@ -2252,6 +2256,9 @@ function Index() {
       }
 
       if (!cancelled) setEffectiveClientId(null);
+      } finally {
+        if (!cancelled) setClientLinkResolved(true);
+      }
     })();
     return () => {
       cancelled = true;
@@ -2317,6 +2324,9 @@ function Index() {
       setOnboardingGateReady(false);
       return;
     }
+    // Role decides whether the profile funnel opens. Wait so we do not paint
+    // the empty board and then swap to the funnel a moment later.
+    if (!roleResolved) return;
     let cancelled = false;
     supabase
       .from("clients")
@@ -2375,7 +2385,7 @@ function Index() {
     return () => {
       cancelled = true;
     };
-  }, [effectiveClientId, userRole, actingClientId, firstRunStep]);
+  }, [effectiveClientId, userRole, actingClientId, firstRunStep, roleResolved]);
 
   // Settings → Business profile deep-link
   useEffect(() => {
@@ -2386,42 +2396,54 @@ function Index() {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+    setRoleResolved(false);
     supabase.auth.getUser().then(async ({ data: { user: u } }) => {
-      if (!u) return;
-      const { resolvePortalRoles } = await import("@/lib/user-roles");
-      const portal = await resolvePortalRoles(u.id);
-      if (portal.primaryRole) {
-        setUserRole(portal.primaryRole);
-        return;
-      }
+      try {
+        if (!u) return;
+        const { resolvePortalRoles } = await import("@/lib/user-roles");
+        const portal = await resolvePortalRoles(u.id);
+        if (cancelled) return;
+        if (portal.primaryRole) {
+          setUserRole(portal.primaryRole);
+          return;
+        }
 
-      // Fallback for existing users who predate the role-normalisation migration:
-      // infer the app role from ownership / membership tables.
-      const { data: ownedClient } = await supabase
-        .from("clients")
-        .select("id")
-        .eq("owner_user_id", u.id)
-        .limit(1)
-        .maybeSingle();
-      if (ownedClient) {
-        // Infer role for this session; do not attempt a DB write — the RLS
-        // hardening migration removed authenticated INSERT on user_roles.
-        // Server-side signup (adminSignUp) is responsible for writing the row.
-        setUserRole("client_owner");
-        return;
-      }
-      const { data: mem } = await supabase
-        .from("client_memberships")
-        .select("client_id")
-        .eq("user_id", u.id)
-        .limit(1)
-        .maybeSingle();
-      if (mem) {
-        // Same: infer only, no client-side DB write.
-        setUserRole("client_member");
+        // Fallback for existing users who predate the role-normalisation migration:
+        // infer the app role from ownership / membership tables.
+        const { data: ownedClient } = await supabase
+          .from("clients")
+          .select("id")
+          .eq("owner_user_id", u.id)
+          .limit(1)
+          .maybeSingle();
+        if (cancelled) return;
+        if (ownedClient) {
+          // Infer role for this session; do not attempt a DB write — the RLS
+          // hardening migration removed authenticated INSERT on user_roles.
+          // Server-side signup (adminSignUp) is responsible for writing the row.
+          setUserRole("client_owner");
+          return;
+        }
+        const { data: mem } = await supabase
+          .from("client_memberships")
+          .select("client_id")
+          .eq("user_id", u.id)
+          .limit(1)
+          .maybeSingle();
+        if (cancelled) return;
+        if (mem) {
+          // Same: infer only, no client-side DB write.
+          setUserRole("client_member");
+        }
+      } finally {
+        if (!cancelled) setRoleResolved(true);
       }
     });
-  }, []);
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
 
   useEffect(() => {
     if (user) {
@@ -2491,6 +2513,9 @@ function Index() {
           }
           // else: keep defaults + hasRealFinancials=false (unscored empty state)
         }
+        setHydratedClientId(effectiveClientId);
+      })
+      .catch(() => {
         setHydratedClientId(effectiveClientId);
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -3065,8 +3090,18 @@ function Index() {
     void import("@/components/budget/budget-panel");
   }, [firstRunStep, showOnboarding, showBankDrafter, showCashFromBanks]);
 
-  // Don't flash the dashboard while auth resolves or if unauthenticated
-  if (authLoading || !user) {
+  // Don't flash empty-score / "add your financials" copy while auth, the
+  // client link, or the operating profile is still resolving.
+  const boardReady = ownerBoardReady({
+    roleResolved,
+    clientLinkResolved,
+    effectiveClientId,
+    onboardingGateReady,
+    firstRunStep,
+    profileFunnelOpen: showOnboarding || firstRunStep === "pick-type",
+    financialsHydrated: !!effectiveClientId && hydratedClientId === effectiveClientId,
+  });
+  if (authLoading || !user || !boardReady) {
     return <AppBootSpinner />;
   }
 

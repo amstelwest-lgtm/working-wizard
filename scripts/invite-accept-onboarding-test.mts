@@ -5,6 +5,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
+  ownerBoardReady,
   ownerWalkthroughReady,
   shouldShowOwnerProfileFunnel,
 } from "../src/lib/first-run";
@@ -90,6 +91,67 @@ assert(
   "tour waits while the first-data nudge is open",
 );
 
+assert(
+  !ownerBoardReady({
+    roleResolved: false,
+    clientLinkResolved: true,
+    effectiveClientId: "c",
+    onboardingGateReady: false,
+    firstRunStep: null,
+    profileFunnelOpen: false,
+    financialsHydrated: false,
+  }),
+  "board waits for the role before painting",
+);
+assert(
+  !ownerBoardReady({
+    roleResolved: true,
+    clientLinkResolved: true,
+    effectiveClientId: "c",
+    onboardingGateReady: true,
+    firstRunStep: null,
+    profileFunnelOpen: false,
+    financialsHydrated: false,
+  }),
+  "board does not flash empty-score copy before financials hydrate",
+);
+assert(
+  ownerBoardReady({
+    roleResolved: true,
+    clientLinkResolved: true,
+    effectiveClientId: "c",
+    onboardingGateReady: true,
+    firstRunStep: "pick-type",
+    profileFunnelOpen: true,
+    financialsHydrated: false,
+  }),
+  "profile funnel can open without waiting for financials",
+);
+assert(
+  ownerBoardReady({
+    roleResolved: true,
+    clientLinkResolved: true,
+    effectiveClientId: "c",
+    onboardingGateReady: true,
+    firstRunStep: "first-data",
+    profileFunnelOpen: false,
+    financialsHydrated: false,
+  }),
+  "first-data nudge does not drop back to a spinner",
+);
+assert(
+  ownerBoardReady({
+    roleResolved: true,
+    clientLinkResolved: true,
+    effectiveClientId: "c",
+    onboardingGateReady: true,
+    firstRunStep: null,
+    profileFunnelOpen: false,
+    financialsHydrated: true,
+  }),
+  "returning owner sees the board only after financials hydrate",
+);
+
 const indexSrc = readFileSync(resolve("src/routes/index.tsx"), "utf8");
 assert(indexSrc.includes("waitForAuthSession"), "invite accept waits for the auth session");
 assert(indexSrc.includes("clearInviteQueryFromUrl"), "invite accept strips the invite URL");
@@ -97,6 +159,7 @@ assert(indexSrc.includes("stashInviteHandoff"), "invite accept stashes the clien
 assert(indexSrc.includes("to: \"/app\", replace: true") || indexSrc.includes("to: '/app', replace: true"), "invite accept replace-navigates to /app");
 assert(indexSrc.includes("[landing] post-login path failed"), "sign-in still navigates if post-login path throws");
 assert(indexSrc.includes("[landing] post-login redirect failed"), "already-signed-in redirect cannot crash the landing page");
+assert(indexSrc.includes("Opening your workspace"), "signed-in landing does not flash hero copy while redirecting");
 
 const handoffSrc = readFileSync(resolve("src/lib/invite-handoff.ts"), "utf8");
 assert(handoffSrc.includes("let subscription"), "waitForAuthSession does not TDZ on the auth subscription");
@@ -107,6 +170,7 @@ const appSrc = readFileSync(resolve("src/routes/app.tsx"), "utf8");
 assert(appSrc.includes("hasInviteHandoffFlag"), "founder board does not bounce a just-accepted invite");
 assert(appSrc.includes("shouldShowOwnerProfileFunnel"), "founder board uses shared funnel gate");
 assert(appSrc.includes("ownerWalkthroughReady({"), "tour ready helper is wired");
+assert(appSrc.includes("ownerBoardReady({"), "founder board holds the spinner until profile/client data is ready");
 assert(appSrc.includes("onboardingGateReady"), "tour waits until client meta has loaded");
 assert(appSrc.includes("const [v, setV] = useState<Inputs>(defaults)"), "financials state is declared");
 assert(
@@ -116,7 +180,7 @@ assert(
 );
 {
   const firstRunDecl = appSrc.indexOf("const [firstRunStep, setFirstRunStep]");
-  const firstRunDeps = appSrc.indexOf("actingClientId, firstRunStep]");
+  const firstRunDeps = appSrc.indexOf("actingClientId, firstRunStep, roleResolved]");
   assert(firstRunDecl !== -1, "firstRunStep state is declared");
   assert(firstRunDeps !== -1, "client-meta effect still lists firstRunStep");
   assert(
