@@ -72,9 +72,15 @@ assert(SIGNOFF_GOLD_BTN.includes("#d4af37") || SIGNOFF_GOLD_BTN.includes("#ac840
 
 const appSrc = readFileSync(resolve("src/routes/app.tsx"), "utf8");
 assert(!/header[\s\S]{0,1200}ReviewSignoffBadge/.test(appSrc), "client header does not show a global sign-off");
+assert(!/header[\s\S]{0,1200}OwnerTabSignoffRow/.test(appSrc), "client header does not host the per-tab stamp");
+assert(!/mt-6[\s\S]{0,180}ReviewSignoffBadge/.test(appSrc), "owner stamps are not parked at the bottom of tabs");
+assert(appSrc.includes('placement="corner"'), "health orb card hosts the corner signature");
+assert(appSrc.includes("OwnerTabSignoffRow"), "other owner tabs pin the signature top-right");
 assert(appSrc.includes('scope="profitability"'), "client profit tab uses profitability scope");
 assert(appSrc.includes('scope="action_plan"'), "client action plan tab has its own sign-off");
 assert(appSrc.includes('scope="financials"'), "client health tab keeps financials sign-off");
+assert(appSrc.includes('scope="cash_forecast"'), "client cash tab has its own sign-off");
+assert(appSrc.includes('scope="budget"'), "client budget tab has its own sign-off");
 
 const clientSrc = readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8");
 assert(clientSrc.includes('scope="profitability"'), "accountant profit tab has its own sign-off");
@@ -93,6 +99,8 @@ assert(mig.includes("action_plan"), "migration allows action_plan scope");
 const uiSrc = readFileSync(resolve("src/components/review-signoff.tsx"), "utf8");
 assert(uiSrc.includes("Your signature"), "accountant can draw a signature");
 assert(uiSrc.includes("data-signoff-certificate"), "proof uses the gold certificate");
+assert(uiSrc.includes("data-signoff-corner"), "owner board uses the corner signature stamp");
+assert(uiSrc.includes('placement="corner"'), "tab headers request the corner placement");
 assert(uiSrc.includes("this deliverable only"), "copy says stamp is per deliverable");
 
 void (null as unknown as ReviewScope);

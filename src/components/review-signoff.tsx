@@ -69,28 +69,61 @@ function signerLine(signoff: ClientReviewSignoff): string {
   return `${name}${title}`;
 }
 
+export type SignoffPlacement = "block" | "compact" | "corner";
+
 function SignoffCertificate({
   signoff,
   scope,
   isStale,
-  compact = false,
+  placement = "block",
 }: {
   signoff: ClientReviewSignoff;
   scope: ReviewScope;
   isStale: boolean;
-  compact?: boolean;
+  placement?: SignoffPlacement;
 }) {
   const initials = (signoff.signed_off_by_initials || signoff.signed_off_by_name.slice(0, 2)).toUpperCase();
+  const title = isStale
+    ? `Reviewed by ${signerLine(signoff)} on ${formatDateTime(signoff.signed_off_at)} — data has changed since`
+    : `Reviewed by ${signerLine(signoff)} on ${formatDateTime(signoff.signed_off_at)}`;
 
-  if (compact) {
+  if (placement === "corner") {
+    return (
+      <div
+        data-signoff-corner
+        data-signoff-scope={scope}
+        className="flex max-w-[210px] shrink-0 flex-col items-end rounded-lg border border-[#d4a550]/40 bg-white/90 px-2.5 py-1.5 shadow-[0_6px_18px_rgba(109,79,22,0.10)] dark:bg-[#0f172a]/90"
+        title={title}
+      >
+        <span className="text-[8px] font-bold uppercase tracking-[0.22em] text-[#8a6508] dark:text-[#e1b85e]">
+          {isStale ? "Needs re-review" : "Signed off"}
+        </span>
+        {signoff.signature_data ? (
+          <img
+            src={signoff.signature_data}
+            alt={`Signature of ${signoff.signed_off_by_name}`}
+            className="mt-0.5 h-10 w-auto max-w-[180px] object-contain object-right"
+          />
+        ) : (
+          <span
+            className="mt-0.5 text-right text-lg leading-none text-[#8a6508] dark:text-[#e1b85e]"
+            style={{ fontFamily: "Georgia, 'Palatino Linotype', serif", fontStyle: "italic" }}
+          >
+            {signoff.signed_off_by_name}
+          </span>
+        )}
+        <span className="mt-0.5 text-right text-[9px] tabular-nums text-[#6b6354] dark:text-slate-400">
+          {formatDateTime(signoff.signed_off_at)}
+        </span>
+      </div>
+    );
+  }
+
+  if (placement === "compact") {
     return (
       <div
         className="inline-flex max-w-full items-center gap-2 rounded-full border border-[#d4a550]/45 bg-gradient-to-r from-[#d4a550]/15 to-[#fdee79]/10 px-2.5 py-1"
-        title={
-          isStale
-            ? `Reviewed by ${signerLine(signoff)} on ${formatDateTime(signoff.signed_off_at)} — data has changed since`
-            : `Reviewed by ${signerLine(signoff)} on ${formatDateTime(signoff.signed_off_at)}`
-        }
+        title={title}
       >
         <span
           className="grid h-5 w-5 shrink-0 place-items-center rounded-full text-[8px] font-black"
@@ -278,20 +311,55 @@ function SignaturePad({
 /**
  * Read-only sign-off certificate for the client-facing (owner) side.
  * Renders nothing when there has never been a sign-off for this scope.
+ *
+ * `corner` is the owner-board stamp: handwritten signature, top-right of
+ * that deliverable (orb card / tab header). `compact` is a gold pill.
  */
 export function ReviewSignoffBadge({
   signoff,
   scope,
   isStale,
   compact = false,
+  placement,
 }: {
   signoff: ClientReviewSignoff | null;
   scope: ReviewScope;
   isStale: boolean;
   compact?: boolean;
+  placement?: SignoffPlacement;
 }) {
   if (!signoff) return null;
-  return <SignoffCertificate signoff={signoff} scope={scope} isStale={isStale} compact={compact} />;
+  return (
+    <SignoffCertificate
+      signoff={signoff}
+      scope={scope}
+      isStale={isStale}
+      placement={placement ?? (compact ? "compact" : "block")}
+    />
+  );
+}
+
+/** Gold tab label with the sign-off signature pinned to the right. */
+export function OwnerTabSignoffRow({
+  label,
+  signoff,
+  scope,
+  isStale,
+}: {
+  label: string;
+  signoff: ClientReviewSignoff | null;
+  scope: ReviewScope;
+  isStale: boolean;
+}) {
+  return (
+    <div className="mb-4 flex items-center gap-3 pb-3">
+      <span className="text-[9px] font-semibold uppercase tracking-[0.25em] text-[#b8860b] dark:text-[#d4a550]/80">
+        {label}
+      </span>
+      <span className="h-px min-w-4 flex-1 bg-gradient-to-r from-[#b7872a]/30 to-transparent" />
+      <ReviewSignoffBadge signoff={signoff} scope={scope} isStale={isStale} placement="corner" />
+    </div>
+  );
 }
 
 /**

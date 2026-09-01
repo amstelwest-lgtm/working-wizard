@@ -138,7 +138,7 @@ import { buildSpherePillars } from "@/components/sphere-hero-adapter";
 import { useViewMode } from "@/contexts/view-mode";
 import { listClientReviewSignoffs, indexReviewSignoffs } from "@/lib/review-signoffs.functions";
 import type { ClientReviewSignoff, ReviewScope } from "@/lib/review-signoffs.functions";
-import { ReviewSignoffBadge, computeIsStale } from "@/components/review-signoff";
+import { ReviewSignoffBadge, OwnerTabSignoffRow, computeIsStale } from "@/components/review-signoff";
 import { upsertCurrentPeriodSnapshot } from "@/lib/financial-snapshots";
 import { stampFromSignoff } from "@/lib/review-signoff-stamp";
 import { useAskAiMount } from "@/hooks/use-ask-ai-mount";
@@ -2279,6 +2279,8 @@ function Index() {
     cash_runway_weeks: number | null;
     cashflow?: SavedCashflowLike | null;
     financials_updated_at?: string | null;
+    last_forecast_at?: string | null;
+    budget_updated_at?: string | null;
     operating_profile?: ClientOperatingProfile | null;
   } | null>(null);
   const [onboardingGateReady, setOnboardingGateReady] = useState(false);
@@ -2296,6 +2298,8 @@ function Index() {
   const [reviewSignoffs, setReviewSignoffs] = useState<Partial<Record<ReviewScope, ClientReviewSignoff>>>({});
   const financialsSignoff = reviewSignoffs.financials ?? null;
   const profitabilitySignoff = reviewSignoffs.profitability ?? null;
+  const cashForecastSignoff = reviewSignoffs.cash_forecast ?? null;
+  const budgetSignoff = reviewSignoffs.budget ?? null;
   const actionPlanSignoff = reviewSignoffs.action_plan ?? null;
   useEffect(() => {
     if (!effectiveClientId) {
@@ -2321,7 +2325,7 @@ function Index() {
     supabase
       .from("clients")
       .select(
-        "business_type, cash_runway_weeks, cashflow, financials_updated_at, operating_profile, financial_year_start_month",
+        "business_type, cash_runway_weeks, cashflow, financials_updated_at, last_forecast_at, budget_updated_at, operating_profile, financial_year_start_month",
       )
       .eq("id", effectiveClientId)
       .maybeSingle()
@@ -2332,6 +2336,8 @@ function Index() {
           cash_runway_weeks: number | null;
           cashflow?: SavedCashflowLike | null;
           financials_updated_at: string | null;
+          last_forecast_at: string | null;
+          budget_updated_at: string | null;
           operating_profile?: unknown;
           financial_year_start_month?: number | null;
         } | null;
@@ -2343,6 +2349,8 @@ function Index() {
                 cash_runway_weeks: data.cash_runway_weeks,
                 cashflow: data.cashflow ?? null,
                 financials_updated_at: data.financials_updated_at,
+                last_forecast_at: data.last_forecast_at,
+                budget_updated_at: data.budget_updated_at,
                 operating_profile: profile,
               }
             : null,
@@ -3634,7 +3642,18 @@ function Index() {
                       <div className="founder-overview-grid grid w-full items-start gap-4 lg:grid-cols-[minmax(0,1fr)_280px] xl:grid-cols-[minmax(0,1fr)_300px]">
                         {/* Main column */}
                         <section className="flex min-w-0 flex-col gap-3">
-                          <div className="rounded-xl border border-slate-200/90 bg-white px-3 py-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)] dark:border-white/10 dark:bg-[#0f172a]/40 dark:shadow-none sm:px-5">
+                          <div className="relative rounded-xl border border-slate-200/90 bg-white px-3 py-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)] dark:border-white/10 dark:bg-[#0f172a]/40 dark:shadow-none sm:px-5">
+                            <div className="pointer-events-none absolute right-2 top-2 z-20 sm:right-3 sm:top-3">
+                              <ReviewSignoffBadge
+                                signoff={financialsSignoff}
+                                scope="financials"
+                                isStale={computeIsStale(
+                                  financialsSignoff,
+                                  clientMeta?.financials_updated_at ?? null,
+                                )}
+                                placement="corner"
+                              />
+                            </div>
                             <SphereHero
                               compact
                               overallHealth={avgHealth}
@@ -3689,12 +3708,15 @@ function Index() {
                 </div>
               ) : (
                 <div>
-                  <div className="mb-4 flex items-center gap-3 pb-3">
-                    <span className="text-[9px] font-semibold uppercase tracking-[0.25em] text-[#b8860b] dark:text-[#d4a550]/80">
-                      Financial Ratios
-                    </span>
-                    <span className="h-px flex-1 bg-gradient-to-r from-[#b7872a]/30 to-transparent" />
-                  </div>
+                  <OwnerTabSignoffRow
+                    label="Financial Ratios"
+                    signoff={financialsSignoff}
+                    scope="financials"
+                    isStale={computeIsStale(
+                      financialsSignoff,
+                      clientMeta?.financials_updated_at ?? null,
+                    )}
+                  />
                   {!hasRealFinancials && !actingClientId && (
                     <div className="mb-4 flex items-center gap-3 rounded-lg border border-amber-700/40 bg-amber-950/20 px-4 py-2.5 text-xs text-amber-300">
                       <span className="text-amber-400">⚠</span>
@@ -4059,27 +4081,20 @@ function Index() {
                   </div>
                 </div>
               )}
-              <div className="mt-6">
-                <ReviewSignoffBadge
-                  signoff={financialsSignoff}
-                  scope="financials"
-                  isStale={computeIsStale(
-                    financialsSignoff,
-                    clientMeta?.financials_updated_at ?? null,
-                  )}
-                />
-              </div>
               </TabErrorBoundary>
             </TabsContent>
 
             <TabsContent value="waterfall">
               <TabErrorBoundary label="Profit">
-              <div className="mb-4 flex items-center gap-3 pb-3">
-                <span className="text-[9px] font-semibold uppercase tracking-[0.25em] text-[#b8860b] dark:text-[#d4a550]/80">
-                  Profitability Waterfall
-                </span>
-                <span className="h-px flex-1 bg-gradient-to-r from-[#b7872a]/30 to-transparent" />
-              </div>
+              <OwnerTabSignoffRow
+                label="Profitability Waterfall"
+                signoff={profitabilitySignoff}
+                scope="profitability"
+                isStale={computeIsStale(
+                  profitabilitySignoff,
+                  clientMeta?.financials_updated_at ?? null,
+                )}
+              />
               {/* Ask AI first — same widget as Business Health, scoped to this client */}
               <div
                 id="ask-ai-waterfall"
@@ -4099,16 +4114,6 @@ function Index() {
               {/* Weekly inputs feed the waterfall — sit below so the chart stays the focus */}
               <div className="mt-4">
                 <WeeklyInputTable />
-              </div>
-              <div className="mt-6">
-                <ReviewSignoffBadge
-                  signoff={profitabilitySignoff}
-                  scope="profitability"
-                  isStale={computeIsStale(
-                    profitabilitySignoff,
-                    clientMeta?.financials_updated_at ?? null,
-                  )}
-                />
               </div>
               </TabErrorBoundary>
             </TabsContent>
@@ -4140,12 +4145,15 @@ function Index() {
 
             <TabsContent value="cash">
               <div id="wizard-cash-panel">
-                <div className="mb-4 flex items-center gap-3 pb-3">
-                  <span className="text-[9px] font-semibold uppercase tracking-[0.25em] text-[#b8860b] dark:text-[#d4a550]/80">
-                    Cash Forecast
-                  </span>
-                  <span className="h-px flex-1 bg-gradient-to-r from-[#b7872a]/30 to-transparent" />
-                </div>
+                <OwnerTabSignoffRow
+                  label="Cash Forecast"
+                  signoff={cashForecastSignoff}
+                  scope="cash_forecast"
+                  isStale={computeIsStale(
+                    cashForecastSignoff,
+                    clientMeta?.last_forecast_at ?? null,
+                  )}
+                />
                 <TabErrorBoundary label="Cash Forecast">
                 <Suspense
                   fallback={
@@ -4159,6 +4167,7 @@ function Index() {
                     canSign={
                       (userRole === "accountant" || userRole === "firm_admin") && !!actingClientId
                     }
+                    hideReadOnlyStamp
                     reloadToken={cashForecastReloadToken}
                   />
                 </Suspense>
@@ -4168,12 +4177,12 @@ function Index() {
 
             <TabsContent value="budget">
               <div id="wizard-budget-panel">
-                <div className="mb-4 flex items-center gap-3 pb-3">
-                  <span className="text-[9px] font-semibold uppercase tracking-[0.25em] text-[#b8860b] dark:text-[#d4a550]/80">
-                    Budget
-                  </span>
-                  <span className="h-px flex-1 bg-gradient-to-r from-[#b7872a]/30 to-transparent" />
-                </div>
+                <OwnerTabSignoffRow
+                  label="Budget"
+                  signoff={budgetSignoff}
+                  scope="budget"
+                  isStale={computeIsStale(budgetSignoff, clientMeta?.budget_updated_at ?? null)}
+                />
                 <TabErrorBoundary label="Budget">
                 <Suspense
                   fallback={<div className="p-6 text-sm text-slate-400">Loading budget…</div>}
@@ -4190,6 +4199,7 @@ function Index() {
                     canSign={
                       (userRole === "accountant" || userRole === "firm_admin") && !!actingClientId
                     }
+                    hideReadOnlyStamp
                     businessTypeId={businessTypeId}
                     operatingProfile={operatingProfile}
                     onRetakeProfile={() => setShowOnboarding(true)}
@@ -4211,12 +4221,12 @@ function Index() {
             </TabsContent>
 
             <TabsContent value="tasks">
-              <div className="mb-4 flex items-center gap-3 pb-3">
-                <span className="text-[9px] font-semibold uppercase tracking-[0.25em] text-[#b8860b] dark:text-[#d4a550]/80">
-                  Action Plan
-                </span>
-                <span className="h-px flex-1 bg-gradient-to-r from-[#b7872a]/30 to-transparent" />
-              </div>
+              <OwnerTabSignoffRow
+                label="Action Plan"
+                signoff={actionPlanSignoff}
+                scope="action_plan"
+                isStale={false}
+              />
               <div id="wizard-tasks-panel">
                 <TabErrorBoundary label="Action Plan">
                   <Suspense
@@ -4247,13 +4257,6 @@ function Index() {
                     )}
                   </Suspense>
                 </TabErrorBoundary>
-                <div className="mt-6">
-                  <ReviewSignoffBadge
-                    signoff={actionPlanSignoff}
-                    scope="action_plan"
-                    isStale={false}
-                  />
-                </div>
               </div>
             </TabsContent>
           </Tabs>
