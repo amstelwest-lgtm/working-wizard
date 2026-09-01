@@ -30,6 +30,8 @@ export type AccountantProfile = {
   accountantName: string;
   accountantEmail: string;
   tagline: string | null;
+  /** Personal drawn signature (data URL). Kept local to the accountant, copied onto each sign-off. */
+  signatureDataUrl: string | null;
 };
 
 /** Legacy unscoped key — only migrated into a user-scoped key, never applied cross-user. */
@@ -48,6 +50,7 @@ export const DEFAULT_PROFILE: AccountantProfile = {
   accountantName: "",
   accountantEmail: "",
   tagline: null,
+  signatureDataUrl: null,
 };
 
 type AccountantProfileContextValue = {
@@ -122,6 +125,7 @@ function applyFirmToProfile(
       accountantName: cached.accountantName || fromDb.accountantName,
       accountantEmail: cached.accountantEmail || fromDb.accountantEmail,
       tagline: cached.tagline ?? fromDb.tagline,
+      signatureDataUrl: cached.signatureDataUrl ?? null,
     };
     saveToStorage(userId, merged);
     return merged;
@@ -132,6 +136,7 @@ function applyFirmToProfile(
     firmName: fromDb.firmName || cached.firmName,
     accountantName: fromDb.accountantName || cached.accountantName,
     accountantEmail: fromDb.accountantEmail || cached.accountantEmail,
+    signatureDataUrl: cached.signatureDataUrl ?? null,
   };
   saveToStorage(userId, merged);
   return merged;

@@ -45,8 +45,8 @@ import {
 } from "@/contexts/financial-inputs";
 import { emptyWeeklyInputs, derivePeriodWaterfallFallback } from "@/lib/weekly-inputs";
 import { useServerFn } from "@tanstack/react-start";
-import { listClientReviewSignoffs } from "@/lib/review-signoffs.functions";
-import type { ClientReviewSignoff } from "@/lib/review-signoffs.functions";
+import { listClientReviewSignoffs, indexReviewSignoffs } from "@/lib/review-signoffs.functions";
+import type { ClientReviewSignoff, ReviewScope } from "@/lib/review-signoffs.functions";
 import { ReviewSignoffButton, computeIsStale } from "@/components/review-signoff";
 import {
   parseOperatingProfile,
@@ -513,12 +513,22 @@ function ClientView() {
   const [deliveryRefresh, setDeliveryRefresh] = useState(0);
   const [queriesRefresh, setQueriesRefresh] = useState(0);
 
-  // Accountant sign-off on this period's financials / cash forecast
+  // Accountant sign-off — one stamp per deliverable tab
   const fetchReviewSignoffs = useServerFn(listClientReviewSignoffs);
-  const [financialsSignoff, setFinancialsSignoff] = useState<ClientReviewSignoff | null>(null);
-  const [cashForecastSignoff, setCashForecastSignoff] = useState<ClientReviewSignoff | null>(null);
-  const [budgetSignoff, setBudgetSignoff] = useState<ClientReviewSignoff | null>(null);
-  const [budgetUpdatedAt, setBudgetUpdatedAt] = useState<string | null>(null);
+  const [reviewSignoffs, setReviewSignoffs] = useState<Partial<Record<ReviewScope, ClientReviewSignoff>>>({});
+  const financialsSignoff = reviewSignoffs.financials ?? null;
+  const profitabilitySignoff = reviewSignoffs.profitability ?? null;
+  const actionPlanSignoff = reviewSignoffs.action_plan ?? null;
+  const advisorySignoff = reviewSignoffs.advisory ?? null;
+  const patchSignoff = (scope: ReviewScope) => (next: ClientReviewSignoff | null) => {
+    setReviewSignoffs((m) => {
+      const copy = { ...m };
+      if (next) copy[scope] = next;
+      else delete copy[scope];
+      return copy;
+    });
+  };
+
 
   // Playbook drawer
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -761,29 +771,13 @@ function ClientView() {
     if (!clientId) return;
     fetchReviewSignoffs({ data: { clientId } })
       .then(({ signoffs }) => {
-        setFinancialsSignoff(signoffs.find((s) => s.scope === "financials") ?? null);
-        setCashForecastSignoff(signoffs.find((s) => s.scope === "cash_forecast") ?? null);
-        setBudgetSignoff(signoffs.find((s) => s.scope === "budget") ?? null);
+        setReviewSignoffs(indexReviewSignoffs(signoffs));
       })
       .catch(() => {
         // Sign-off state is a trust-signal enhancement, never block the page.
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId, activeTab, cashForecastReloadToken]);
-
-  useEffect(() => {
-    if (!clientId) return;
-    supabase
-      .from("clients")
-      .select("budget_updated_at")
-      .eq("id", clientId)
-      .maybeSingle()
-      .then(({ data }) => {
-        setBudgetUpdatedAt(
-          (data as { budget_updated_at?: string | null } | null)?.budget_updated_at ?? null,
-        );
-      });
-  }, [clientId, activeTab]);
 
   // ── Impersonation exit ────────────────────────────────────────────────────
 
@@ -1813,7 +1807,7 @@ function ClientView() {
               scope="financials"
               signoff={financialsSignoff}
               isStale={computeIsStale(financialsSignoff, client?.financials_updated_at ?? null)}
-              onChange={setFinancialsSignoff}
+              onChange={patchSignoff("financials")}
             />
           </div>
 
@@ -1991,8 +1985,8 @@ function ClientView() {
               clientName={client?.name}
               clientId={client?.id}
               reviewSignoff={stampFromSignoff(
-                financialsSignoff,
-                computeIsStale(financialsSignoff, client?.financials_updated_at ?? null),
+                profitabilitySignoff,
+                computeIsStale(profitabilitySignoff, client?.financials_updated_at ?? null),
               )}
             />
             {/* Same weekly grid as the owner Profit tab — weeks feed this waterfall. */}
@@ -2004,10 +1998,10 @@ function ClientView() {
             <ReviewSignoffButton
               clientId={clientId}
               clientName={client?.name}
-              scope="financials"
-              signoff={financialsSignoff}
-              isStale={computeIsStale(financialsSignoff, client?.financials_updated_at ?? null)}
-              onChange={setFinancialsSignoff}
+              scope="profitability"
+              signoff={profitabilitySignoff}
+              isStale={computeIsStale(profitabilitySignoff, client?.financials_updated_at ?? null)}
+              onChange={patchSignoff("profitability")}
             />
           </div>
         </div>
@@ -2090,68 +2084,9 @@ function ClientView() {
           <span className="eyebrow">White-label reports — this client</span>
           <div className="h-sec">Choose a deliverable</div>
           <p className="sub">
-            Each report is generated from live figures and branded to your practice. Sign off
-            financials, cash forecast, and budget so deliverables carry your endorsement.
+            Each report is generated from live figures and branded to your practice. Sign off the matching tab
+            (Health, Profit, Cash, Budget) so that deliverable&apos;s stamp appears on its PDF — not across the whole profile.
           </p>
-          <div
-            className="card"
-            style={{
-              marginBottom: 20,
-              padding: "16px 20px",
-              display: "flex",
-              flexWrap: "wrap",
-              gap: 16,
-              justifyContent: "space-between",
-              alignItems: "flex-start",
-            }}
-          >
-            <div style={{ flex: "1 1 220px" }}>
-              <div
-                style={{
-                  fontSize: 12,
-                  fontWeight: 700,
-                  letterSpacing: "0.08em",
-                  textTransform: "uppercase",
-                  color: "var(--ink-dim)",
-                  marginBottom: 4,
-                }}
-              >
-                Report sign-offs
-              </div>
-              <p style={{ margin: 0, fontSize: 13, color: "var(--ink-dim)" }}>
-                Logs your initials, name, date and time from your account. Stamped on generated PDFs
-                until data changes.
-              </p>
-            </div>
-            <div
-              style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}
-            >
-              <ReviewSignoffButton
-                clientId={clientId}
-                clientName={client?.name}
-                scope="financials"
-                signoff={financialsSignoff}
-                isStale={computeIsStale(financialsSignoff, client?.financials_updated_at ?? null)}
-                onChange={setFinancialsSignoff}
-              />
-              <ReviewSignoffButton
-                clientId={clientId}
-                clientName={client?.name}
-                scope="cash_forecast"
-                signoff={cashForecastSignoff}
-                isStale={computeIsStale(cashForecastSignoff, client?.last_forecast_at ?? null)}
-                onChange={setCashForecastSignoff}
-              />
-              <ReviewSignoffButton
-                clientId={clientId}
-                clientName={client?.name}
-                scope="budget"
-                signoff={budgetSignoff}
-                isStale={computeIsStale(budgetSignoff, budgetUpdatedAt)}
-                onChange={setBudgetSignoff}
-              />
-            </div>
-          </div>
           <div className="rep-grid">
             {REPORT_TEMPLATES.map((r) => (
               <div key={r.key} className="rep-card">
@@ -2195,6 +2130,16 @@ function ClientView() {
               </Suspense>
             </TabErrorBoundary>
           </div>
+          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 16 }}>
+            <ReviewSignoffButton
+              clientId={clientId}
+              clientName={client?.name}
+              scope="action_plan"
+              signoff={actionPlanSignoff}
+              isStale={false}
+              onChange={patchSignoff("action_plan")}
+            />
+          </div>
         </div>
 
         {/* ===== STAFF TASKS TAB ===== */}
@@ -2210,6 +2155,16 @@ function ClientView() {
             onLogged={() => setDeliveryRefresh((n) => n + 1)}
           />
           <AdvisorySentHistory clientId={client.id} refreshToken={deliveryRefresh} />
+          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 16 }}>
+            <ReviewSignoffButton
+              clientId={clientId}
+              clientName={client?.name}
+              scope="advisory"
+              signoff={advisorySignoff}
+              isStale={false}
+              onChange={patchSignoff("advisory")}
+            />
+          </div>
         </div>
 
         <div className="footer-note">

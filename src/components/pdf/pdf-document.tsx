@@ -16,6 +16,7 @@ export type ReportSignoffStamp = {
   signedOffByTitle: string | null;
   firmName: string | null;
   signedOffAt: string;
+  signatureData?: string | null;
 };
 
 type Props = {

@@ -238,7 +238,11 @@ type ClientReportData = {
   cashForecast: CashForecastWeek[] | null;
   financialsUpdatedAt: string | null;
   lastForecastAt: string | null;
-  reviewSignoffs: { financials: ClientReviewSignoff | null; cash_forecast: ClientReviewSignoff | null };
+  reviewSignoffs: {
+    financials: ClientReviewSignoff | null;
+    cash_forecast: ClientReviewSignoff | null;
+    profitability: ClientReviewSignoff | null;
+  };
   /** Owner 10Q profile — shapes report narratives / ordering, not layout. */
   operatingProfile: ClientOperatingProfile | null;
   /**
@@ -263,7 +267,7 @@ const EMPTY_CLIENT_DATA: ClientReportData = {
   movement: [], movementPeriodLabels: DEFAULT_MOVEMENT_LABELS,
   benchmark: [], cashForecast: null,
   financialsUpdatedAt: null, lastForecastAt: null,
-  reviewSignoffs: { financials: null, cash_forecast: null },
+  reviewSignoffs: { financials: null, cash_forecast: null, profitability: null },
   operatingProfile: null,
   benchmarkSector: null,
 };
@@ -1020,6 +1024,7 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
   const reviewSignoffs = {
     financials: (signoffRes.data ?? []).find((s) => s.scope === "financials") ?? null,
     cash_forecast: (signoffRes.data ?? []).find((s) => s.scope === "cash_forecast") ?? null,
+    profitability: (signoffRes.data ?? []).find((s) => s.scope === "profitability") ?? null,
   };
   const baseEmpty = {
     ...EMPTY_CLIENT_DATA,
@@ -1131,12 +1136,13 @@ function isSignoffStale(signoff: ClientReviewSignoff | null, freshAt: string | n
 
 /** Only current (non-stale) sign-offs are stamped onto a report footer. */
 function signoffStampFor(
-  scope: "financials" | "cash_forecast",
+  scope: "financials" | "cash_forecast" | "profitability",
   cd: ClientReportData | null,
 ): ReportSignoffStamp | null {
   if (!cd) return null;
   const signoff = cd.reviewSignoffs[scope];
-  const freshAt = scope === "financials" ? cd.financialsUpdatedAt : cd.lastForecastAt;
+  const freshAt =
+    scope === "cash_forecast" ? cd.lastForecastAt : cd.financialsUpdatedAt;
   if (!signoff || isSignoffStale(signoff, freshAt)) return null;
   return {
     signedOffByName: signoff.signed_off_by_name,
@@ -1144,6 +1150,7 @@ function signoffStampFor(
     signedOffByTitle: signoff.signed_off_by_title,
     firmName: signoff.firm_name,
     signedOffAt: signoff.signed_off_at,
+    signatureData: signoff.signature_data ?? null,
   };
 }
 
@@ -1225,6 +1232,7 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
   const operatingProfile = clientData?.operatingProfile ?? null;
   const financialsStamp = signoffStampFor("financials", clientData);
   const forecastStamp = signoffStampFor("cash_forecast", clientData);
+  const profitabilityStamp = signoffStampFor("profitability", clientData);
 
   /** Live client with hasData must never fall through to MOCK_* for a missing slice. */
   function liveOrDemo<T>(slice: T | null | undefined, missingMsg: string): { isDemo: boolean; data: T | null } {
@@ -1314,7 +1322,7 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
         })(),
         accountantProfile: p,
         isDemo,
-        reviewSignoff: financialsStamp,
+        reviewSignoff: profitabilityStamp,
         operatingProfile,
       });
     },
