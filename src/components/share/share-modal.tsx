@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { X, Mail, Copy, Check, ChevronRight } from "lucide-react";
+import { SHARE_TEXT, SHARE_TITLE, shareMessageWithUrl } from "@/lib/share-copy";
 
 interface Props {
   open: boolean;
@@ -44,15 +45,11 @@ export function ShareModal({ open, onClose, onOpenInstall, appUrl }: Props) {
 
   if (!mounted) return null;
 
-  const message = `Hey, I've been using Milōn to track my business financial health. Check it out: ${appUrl}`;
+  const message = shareMessageWithUrl(appUrl);
   const waUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
 
-  const emailSubject = "Check out Milōn — Financial Intelligence for SMEs";
-  const emailBody =
-    `Hi,\r\n\r\n` +
-    `I've been using Milōn to monitor my business financial health and thought you might find it useful.\r\n\r\n` +
-    `Milōn tracks 31 financial ratios across Profit, Assets, Financing and Cash — and gives you specific steps to improve each one.\r\n\r\n` +
-    `Check it out here: ${appUrl}\r\n\r\n`;
+  const emailSubject = SHARE_TITLE;
+  const emailBody = `${SHARE_TEXT.replace(/\n/g, "\r\n")}\r\n\r\n${appUrl}\r\n`;
   const mailUrl = `mailto:?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(emailBody)}`;
 
   const handleCopy = async () => {

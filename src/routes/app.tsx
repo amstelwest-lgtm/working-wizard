@@ -150,6 +150,7 @@ import {
   computePositionPercentile,
   computeWeekChanges,
 } from "@/lib/overview-insights";
+import { SHARE_DESCRIPTION, SHARE_TITLE } from "@/lib/share-copy";
 
 function AppBootSpinner() {
   return (
@@ -173,12 +174,8 @@ export const Route = createFileRoute("/app")({
   },
   head: () => ({
     meta: [
-      { title: "Milōn · Operating Finance" },
-      {
-        name: "description",
-        content:
-          "Operating finance for owner-led businesses. Live ratios, cash runway and the next move that matters.",
-      },
+      { title: SHARE_TITLE },
+      { name: "description", content: SHARE_DESCRIPTION },
     ],
   }),
 });

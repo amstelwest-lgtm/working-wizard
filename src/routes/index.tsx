@@ -12,17 +12,17 @@ import { registerLighthouseTrialVisit } from "@/lib/lighthouse.functions";
 // Inline so landing paint doesn't wait on a second stylesheet round-trip
 // (external app CSS can still load; these rules win for landing selectors).
 import landingCss from "../styles/landing.css?inline";
+import { SHARE_DESCRIPTION, SHARE_TITLE } from "@/lib/share-copy";
 
 export const Route = createFileRoute("/")({
   component: LandingPage,
   head: () => ({
     meta: [
       { title: "MILŌN — Know your numbers. Sleep at night." },
-      {
-        name: "description",
-        content:
-          "MILŌN is the financial health platform for South African SMEs and their accountants. One score. 31 ratios. 13-week cashflow. 930+ fixes ranked for you.",
-      },
+      { name: "description", content: SHARE_DESCRIPTION },
+      { property: "og:title", content: SHARE_TITLE },
+      { property: "og:description", content: SHARE_DESCRIPTION },
+      { property: "og:image", content: "/icon-512.png" },
     ],
     styles: [{ children: landingCss }],
     scripts: [

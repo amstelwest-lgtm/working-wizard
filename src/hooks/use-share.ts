@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { SHARE_TEXT, SHARE_TITLE } from "@/lib/share-copy";
 
 function resolveAppUrl(): string {
   const fromEnv = import.meta.env.VITE_APP_URL as string | undefined;
@@ -23,10 +24,8 @@ export function useShare(options?: UseShareOptions) {
 
   const handleShare = async () => {
     const shareData = {
-      title: options?.title ?? "Milōn — Financial Intelligence for SMEs",
-      text:
-        options?.text ??
-        "Track your business financial health with 31 ratios across Profit, Assets, Financing and Cash.",
+      title: options?.title ?? SHARE_TITLE,
+      text: options?.text ?? SHARE_TEXT,
       url: appUrl || resolveAppUrl(),
     };
 

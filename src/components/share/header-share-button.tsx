@@ -4,10 +4,7 @@ import { InstallInstructions } from "./install-instructions";
 import { useShare } from "@/hooks/use-share";
 
 export function HeaderShareButton() {
-  const { handleShare, shareOpen, setShareOpen, installOpen, setInstallOpen, appUrl } = useShare({
-    title: "Milōn — Financial Intelligence for SMEs",
-    text: "I use Milōn to track my business financial health. 31 ratios across Profit, Assets, Financing and Cash — with specific steps to improve each one.",
-  });
+  const { handleShare, shareOpen, setShareOpen, installOpen, setInstallOpen, appUrl } = useShare();
 
   return (
     <>
