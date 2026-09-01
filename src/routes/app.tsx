@@ -3550,7 +3550,19 @@ function Index() {
                         Your financial pulse at a glance.
                       </p>
                     </div>
-                    {hasRealFinancials ? (
+                    <div className="flex shrink-0 flex-col items-end gap-2 sm:flex-row sm:items-start">
+                      <div className="sm:hidden">
+                        <ReviewSignoffBadge
+                          signoff={financialsSignoff}
+                          scope="financials"
+                          isStale={computeIsStale(
+                            financialsSignoff,
+                            clientMeta?.financials_updated_at ?? null,
+                          )}
+                          placement="corner"
+                        />
+                      </div>
+                      {hasRealFinancials ? (
                       <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[0.16em] text-emerald-700 dark:text-emerald-400">
                         <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
                         Live ·{" "}
@@ -3567,6 +3579,7 @@ function Index() {
                         No data yet
                       </span>
                     )}
+                    </div>
                   </div>
 
                   {/* No-data empty state — shown until owner uploads or enters real financials */}
@@ -3643,7 +3656,7 @@ function Index() {
                         {/* Main column */}
                         <section className="flex min-w-0 flex-col gap-3">
                           <div className="relative rounded-xl border border-slate-200/90 bg-white px-3 py-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)] dark:border-white/10 dark:bg-[#0f172a]/40 dark:shadow-none sm:px-5">
-                            <div className="pointer-events-none absolute right-2 top-2 z-20 sm:right-3 sm:top-3">
+                            <div className="pointer-events-none absolute right-2 top-2 z-20 hidden sm:block sm:right-3 sm:top-3">
                               <ReviewSignoffBadge
                                 signoff={financialsSignoff}
                                 scope="financials"
