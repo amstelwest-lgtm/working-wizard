@@ -3,7 +3,9 @@
  *
  * Funnel design follows current cold-outreach benchmarks: five touches over
  * ~18 days with widening gaps, one distinct angle per touch, short plain-text
- * bodies, and a breakup close. Every sequence terminates at the tracked free
+ * bodies, and a breakup close. The motion is email correspondence — replies
+ * stay in the thread so this can run around a day job. Calendar booking is
+ * optional and off by default. Every sequence terminates at the tracked free
  * trial link so the funnel ends with a signup on the Milōn site.
  */
 
@@ -142,7 +144,7 @@ export function LighthousePanel() {
           value={dash.funnel.replied}
           sub={dash.funnel.replyRatePct != null ? `${dash.funnel.replyRatePct}%` : undefined}
         />
-        <FunnelStat label="Meetings" value={dash.funnel.meeting} />
+        <FunnelStat label="Conversing" value={dash.funnel.meeting} />
         <FunnelStat
           label="Trials"
           value={dash.funnel.trial}
@@ -307,7 +309,15 @@ export function LighthousePanel() {
       )}
 
       {tab === "pipeline" && (
-        <PipelineBoard leads={dash.leads} onOpen={(id) => setOpenLeadId(id)} />
+        <>
+          <p className="mb-3 text-[12.5px] text-[var(--ops-ink-dim)]">
+            This pipeline is email correspondence, not calendar booking. Replies stay in the thread
+            so it can run around a day job. The{" "}
+            <span className="text-[var(--ops-ink-soft)]">In conversation</span> column is an email
+            back-and-forth, not a booked call. Google Appointments are optional and off by default.
+          </p>
+          <PipelineBoard leads={dash.leads} onOpen={(id) => setOpenLeadId(id)} />
+        </>
       )}
 
       {tab === "playbook" && <Playbook dash={dash} />}
@@ -580,7 +590,9 @@ function Playbook({ dash }: { dash: LighthouseDashboard }) {
         </p>
         <p className="mt-1.5 text-[var(--ops-ink-dim)]">
           Every sequence ends at the same destination: the tracked free-trial link, which lands the
-          prospect on the Milōn signup form with attribution back to their lead record.
+          prospect on the Milōn signup form with attribution back to their lead record. There is no
+          meeting step in the emails. If someone writes back, you answer in the same thread — or
+          they start the trial themselves.
         </p>
       </div>
 
@@ -787,6 +799,12 @@ function AssetCard({
             ? `Used in touch ${asset.usedInStep}`
             : "Not referenced by any sequence yet")}
       </p>
+      {asset.key === "booking_link" && (
+        <p className="mt-1 text-[11px] text-[var(--ops-ink-dim)]">
+          Optional. Leave this as a placeholder — the pipeline runs on email. Only fill it if you
+          later want the reply drafter to offer a live call.
+        </p>
+      )}
       {asset.status !== "ready" && (asset.url ?? "").trim() && (
         <p className="mt-1 text-[11px] text-[var(--ops-sky-ink)]/80">
           URL is set but the slot is not ready — nothing links here yet.
@@ -847,7 +865,7 @@ function SettingsForm({
           />
           <input
             className={`${inputCls} sm:col-span-2`}
-            placeholder="Booking link — https://cal.com/… or Google Appointments"
+            placeholder="Optional calendar link — leave blank to stay on email"
             value={bookingUrl}
             onChange={(e) => setBookingUrl(e.target.value)}
           />
@@ -882,12 +900,11 @@ function SettingsForm({
             watch.
           </p>
         )}
-        {!bookingUrl.trim() && (
-          <p className="mt-1 text-[11px] text-[var(--ops-ink-dim)]">
-            Booking link is optional until someone replies and wants a call — then the reply drafter
-            can offer it.
-          </p>
-        )}
+        <p className="mt-1 text-[11px] text-[var(--ops-ink-dim)]">
+          {bookingUrl.trim()
+            ? "A calendar link is set, so the reply drafter can offer a call if you pick that intent. Leave this blank to keep every conversation on email."
+            : "Leave this blank. The pipeline is email correspondence — replies, questions, and the trial link — so it can run around a day job. Add Cal.com or Google Appointments later only if you want live calls."}
+        </p>
         <button
           disabled={busy}
           onClick={async () => {
@@ -928,6 +945,10 @@ function SettingsForm({
           <li>Bounce rate above two percent means the list needs cleaning, not more sending.</li>
           <li>Reply-to must be a mailbox you actually watch — replies are the whole point.</li>
           <li>
+            Do not add a calendar link unless you want live calls. Email-only is the intended
+            motion while you have a day job.
+          </li>
+          <li>
             Every send carries a sender line and a one-click unsubscribe header. Opting out stops
             the sequence and suppresses the address platform-wide.
           </li>
@@ -961,7 +982,7 @@ function LeadDrawer({
   onDraft: (stepNo: number) => Promise<{ subject: string; body: string; touchId: string }>;
   onDraftReply: (
     theirMessage: string,
-    intent: "answer" | "book" | "trial",
+    intent: "answer" | "email" | "book" | "trial",
   ) => Promise<{ subject: string; body: string; touchId: string; stepNo: number }>;
   onSend: (touchId: string, subject: string, body: string) => Promise<void>;
   onStage: (stage: LighthouseStage) => Promise<void>;
@@ -980,7 +1001,7 @@ function LeadDrawer({
   const [sending, setSending] = useState(false);
   const [replyOpen, setReplyOpen] = useState(false);
   const [theirMessage, setTheirMessage] = useState("");
-  const [replyIntent, setReplyIntent] = useState<"answer" | "book" | "trial">("answer");
+  const [replyIntent, setReplyIntent] = useState<"answer" | "email" | "book" | "trial">("answer");
   const [replying, setReplying] = useState(false);
 
   useEffect(() => {
@@ -1102,7 +1123,7 @@ function LeadDrawer({
           </div>
         )}
 
-        {/* Reply helper — the one place the FAQ and booking link belong */}
+        {/* Reply helper — FAQ + email thread; a call is only offered if a booking URL is set */}
         <div className="mb-4">
           <button
             onClick={() => setReplyOpen((o) => !o)}
@@ -1115,19 +1136,22 @@ function LeadDrawer({
             <div className="mt-2 rounded-2xl border border-[var(--ops-line)] bg-[var(--ops-card)] p-3">
               <textarea
                 className={`${inputCls} min-h-[100px] resize-y py-2`}
-                placeholder="Their reply is pasted here when it lands in inbound. Otherwise paste what they wrote. The draft answers their actual question."
+                placeholder="Their reply is pasted here when it lands in inbound. Otherwise paste what they wrote. The draft answers their actual question over email."
                 value={theirMessage}
                 onChange={(e) => setTheirMessage(e.target.value)}
               />
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <select
-                  className={`${inputCls} max-w-[220px]`}
+                  className={`${inputCls} max-w-[240px]`}
                   value={replyIntent}
                   onChange={(e) => setReplyIntent(e.target.value as typeof replyIntent)}
                 >
                   <option value="answer">Just answer them</option>
-                  <option value="book">Propose a call</option>
+                  <option value="email">Keep it on email</option>
                   <option value="trial">Point at the free trial</option>
+                  {dash.settings.bookingUrl.trim() ? (
+                    <option value="book">Propose a call</option>
+                  ) : null}
                 </select>
                 <button
                   disabled={
