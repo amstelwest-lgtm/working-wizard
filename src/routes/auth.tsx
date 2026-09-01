@@ -14,6 +14,7 @@ import { SIGNUP_ACCESS_CODE, notifySignup } from "@/lib/signup-notify";
 import { ensurePracticePortalAccess } from "@/lib/auth.functions";
 import { forcePortal, setPortalIntent, resolvePostLoginPath, clearForcePortal, shouldOpenItInbox } from "@/lib/user-roles";
 import { isOpsNext, lighthouseTabFromOpsNext } from "@/lib/client-note-link";
+import { accessTokenFromNext } from "@/lib/practice-access";
 import { AuthDivider, GoogleSignInButton } from "@/components/google-sign-in-button";
 
 export const Route = createFileRoute("/auth")({
@@ -44,8 +45,8 @@ function AuthPage() {
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
 
-  const afterAuthPath = isOpsNext(next) ? "/ops" : "/dashboard";
-  const googleNext = isOpsNext(next) ? next : undefined;
+  const afterAuthPath = isOpsNext(next) ? "/ops" : next?.startsWith("/access/") ? next : "/dashboard";
+  const googleNext = isOpsNext(next) || next?.startsWith("/access/") ? next : undefined;
   const landedPathRef = useRef<string | null>(null);
   const landInflightRef = useRef<Promise<string> | null>(null);
 
@@ -60,6 +61,12 @@ function AuthPage() {
     if (landInflightRef.current) return landInflightRef.current;
     const run = (async () => {
       forcePortal("accountant");
+      const accessTok = accessTokenFromNext(next);
+      if (accessTok) {
+        landedPathRef.current = `/access/${accessTok}`;
+        navigate({ to: "/access/$token", params: { token: accessTok } });
+        return landedPathRef.current;
+      }
       if (isOpsNext(next)) {
         landedPathRef.current = "/ops";
         const tab = lighthouseTabFromOpsNext(next);
