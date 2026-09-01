@@ -125,11 +125,11 @@ export const ensurePracticePortalAccess = createServerFn({ method: "POST" })
     const practiceSignup =
       meta.signup_type === "accountant" ||
       (typeof meta.firm_name === "string" && meta.firm_name.trim().length > 0);
-    if (hasClient && !practiceSignup) {
-      return { ensured: false as const, reason: "sme_only" as const };
-    }
     if (hasPractice) {
       return { ensured: true as const, reason: "already" as const };
+    }
+    if (hasClient && !practiceSignup) {
+      return { ensured: false as const, reason: "sme_only" as const };
     }
     const { data: owned } = await supabaseAdmin
       .from("firms")

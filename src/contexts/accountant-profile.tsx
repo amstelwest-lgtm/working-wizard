@@ -196,8 +196,9 @@ export function AccountantProfileProvider({
           const practiceSignup = isPracticeSignupMeta(
             user.user_metadata as Record<string, unknown> | undefined,
           );
-          // Business-client logins must not be minted a practice firm / firm_admin.
-          if (!(roles.hasClientRole && !practiceSignup)) {
+          // Pure business-client logins must not be minted a practice firm.
+          // Dual-role (practice + client) already has an accountant profile.
+          if (!roles.hasClientRole || roles.hasPracticeRole || practiceSignup) {
             const firmName =
               cached.firmName ||
               (user.user_metadata?.firm_name as string | undefined) ||

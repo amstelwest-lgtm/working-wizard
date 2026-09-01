@@ -32,10 +32,11 @@ function d(partial: Partial<PortalRouteDecision>): PortalRouteDecision {
 }
 
 const dual = d({ hasPracticeRole: true, hasClientRole: true, practiceSignup: true });
+const dualNoMeta = d({ hasPracticeRole: true, hasClientRole: true, practiceSignup: false });
 const practiceOnly = d({ hasPracticeRole: true });
 const clientOnly = d({ hasClientRole: true });
 const noRolesFirm = d({ hasFirm: true });
-const promotedClient = d({
+const leftoverFirmAdmin = d({
   hasPracticeRole: true,
   hasClientRole: true,
   hasFirm: true,
@@ -65,8 +66,20 @@ assert(
 );
 
 assert(
-  decidePostLoginPath({ ...dual, force: "owner" }) === "/app",
-  "dual-role + owner force → founder board",
+  decidePostLoginPath({ ...dualNoMeta, force: "accountant" }) === "/dashboard",
+  "dual-role without practice signup metadata + accountant door → practice portal",
+);
+assert(
+  decideAccountantStay({ ...dualNoMeta, force: "accountant" }) === true,
+  "dual-role without practice signup metadata stays on /dashboard from accountant door",
+);
+assert(
+  decideOwnerAppBounce({ ...dualNoMeta, force: "accountant", actingAsClient: false }) === true,
+  "dual-role without metadata on /app after accountant login is sent to /dashboard",
+);
+assert(
+  decidePostLoginPath({ ...dualNoMeta, force: "owner" }) === "/app",
+  "dual-role without metadata + owner door still → founder board",
 );
 assert(
   decidePostLoginPath({ ...dual, intent: "accountant" }) === "/dashboard",
@@ -124,18 +137,18 @@ assert(
   "SME-only accountant-door session is not bounced into the practice portal",
 );
 
-assert(canEnterAccountantPortal(promotedClient) === false, "auto-promoted client cannot enter portal");
+assert(canEnterAccountantPortal(leftoverFirmAdmin) === true, "practice role counts as an accountant profile even without signup metadata");
 assert(
-  decidePostLoginPath(promotedClient) === "/app",
-  "Karoo-style client + leftover firm_admin + accountant door → founder board",
+  decidePostLoginPath(leftoverFirmAdmin) === "/dashboard",
+  "same email with practice + client roles uses accountant door → practice portal",
 );
 assert(
-  decideAccountantStay(promotedClient) === false,
-  "auto-promoted client cannot stay on /dashboard",
+  decideAccountantStay(leftoverFirmAdmin) === true,
+  "dual-role (practice + client) stays on /dashboard from the accountant door",
 );
 assert(
-  decideOwnerAppBounce({ ...promotedClient, actingAsClient: false }) === false,
-  "auto-promoted client is not yanked from /app into the practice portal",
+  decideOwnerAppBounce({ ...leftoverFirmAdmin, actingAsClient: false }) === true,
+  "dual-role accountant-door session on /app is sent to the practice portal",
 );
 assert(isPracticeSignupMeta({ signup_type: "customer" }) === false, "customer signup is not practice");
 assert(isPracticeSignupMeta({ signup_type: "accountant" }) === true, "accountant signup is practice");
@@ -202,9 +215,10 @@ assert(
 
 const profileSrc = readFileSync(resolve("src/contexts/accountant-profile.tsx"), "utf8");
 assert(profileSrc.includes("isPracticeSignupMeta"), "profile provider skips minting firms for SME logins");
+assert(profileSrc.includes("ensure_practice_firm"), "profile provider still provisions firms for practice accounts");
 assert(
-  profileSrc.includes("ensure_practice_firm"),
-  "profile provider still provisions firms for practice accounts",
+  profileSrc.includes("roles.hasPracticeRole"),
+  "profile provider still provisions firms for dual-role practice accounts",
 );
 
 console.log("portal-routing: all assertions passed");

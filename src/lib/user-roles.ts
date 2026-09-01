@@ -9,9 +9,8 @@
  * in through is stored as portal intent; a one-shot `force` flag makes that
  * login land on the matching side even when the other role would otherwise win.
  *
- * Business-client accounts (client_owner / client_member) must never enter
- * the practice portal — even if they typed their password on `/auth`, and
- * even if ensure_practice_firm later attached a leftover firm_admin row.
+ * Pure business-client accounts (client_owner / client_member, no practice role
+ * and no firm) must never enter the practice portal — even via `/auth`.
  */
 
 import { supabase } from "@/integrations/supabase/client";
@@ -182,15 +181,22 @@ export function isSmeOnly(d: Pick<PortalRouteDecision, "hasPracticeRole" | "hasC
 
 /**
  * May this session sit on /dashboard (practice portal)?
- * Client credentials — including ones later given an accidental firm_admin —
- * cannot, unless the account was actually signed up as a practice.
+ * Dual-role accounts (practice + client on the same email) may — the door they
+ * used decides which board they land on. Pure business-client credentials
+ * cannot, even via `/auth`, and even with leftover signup metadata.
  */
 export function canEnterAccountantPortal(d: PortalRouteDecision): boolean {
-  if (d.hasClientRole && !d.practiceSignup) return false;
+  // A real practice role or firm is an accountant profile, even if the same
+  // email also has a business workspace (signup_type may still be "customer").
   if (d.hasPracticeRole) return true;
   if (d.hasFirm) return true;
+  if (d.practiceSignup) return true;
+
+  // Business-client only: never the practice portal.
+  if (d.hasClientRole) return false;
+
   if (d.force === "accountant") return true;
-  if (d.intent === "accountant" && !d.hasClientRole) return true;
+  if (d.intent === "accountant") return true;
   return false;
 }
 
