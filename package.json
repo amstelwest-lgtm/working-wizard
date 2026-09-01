@@ -26,9 +26,14 @@
     "test:cash-from-banks-workspace": "vite-node --config scripts/vite-test.config.ts scripts/cash-from-banks-workspace-test.mts",
     "test:portal-routing": "vite-node --config scripts/vite-test.config.ts scripts/portal-routing-test.mts",
     "test:action-plan-tab": "vite-node --config scripts/vite-test.config.ts scripts/action-plan-tab-test.mts",
+<<<<<<< HEAD
     "test:weekly-inputs": "vite-node --config scripts/vite-test.config.ts scripts/weekly-inputs-test.mts",
     "test:notes-archive": "vite-node --config scripts/vite-test.config.ts scripts/notes-archive-test.mts",
     "test:client-invite-email": "vite-node --config scripts/vite-test.config.ts scripts/client-invite-email-test.mts"
+=======
+    "test:client-invite-email": "vite-node --config scripts/vite-test.config.ts scripts/client-invite-email-test.mts",
+    "test:orb-contrast": "vite-node --config scripts/vite-test.config.ts scripts/orb-contrast-test.mts"
+>>>>>>> origin/cursor/light-mode-sub-orbs-5d34
   },
   "dependencies": {
     "@cloudflare/vite-plugin": "^1.25.5",
