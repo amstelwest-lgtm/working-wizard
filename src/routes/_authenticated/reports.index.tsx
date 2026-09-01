@@ -1786,9 +1786,25 @@ async function recordReportIssued(clientId: string | undefined) {
   }
 }
 
-function ReportsPage() {
-  const { client: clientParam, clientId, report: reportParam, action: actionParam } =
-    Route.useSearch();
+export type ReportsStudioProps = {
+  client?: string;
+  clientId?: string;
+  report?: string;
+  action?: "preview" | "download";
+  /** Render inside the client workspace Reports tab (no full-page chrome). */
+  embedded?: boolean;
+  /** Embedded deep-links call this instead of rewriting `/reports` search. */
+  onSearchCleared?: () => void;
+};
+
+export function ReportsStudio({
+  client: clientParam,
+  clientId,
+  report: reportParam,
+  action: actionParam,
+  embedded = false,
+  onSearchCleared,
+}: ReportsStudioProps) {
   const navigate = useNavigate();
   const { profile, firmId } = useAccountantProfile();
   const { user } = useAuth();
@@ -1981,6 +1997,8 @@ function ReportsPage() {
   }
 
   function clearDeepLinkSearch() {
+    onSearchCleared?.();
+    if (embedded) return;
     void navigate({
       to: "/reports",
       search: {
@@ -2034,16 +2052,18 @@ function ReportsPage() {
         }
         // Keep the focus shell until the user closes the preview modal — avoids
         // remounting PreviewModal when flipping to the full catalogue.
-        void navigate({
-          to: "/reports",
-          search: {
-            client: clientParam,
-            clientId,
-            report: deepLinkReport.key,
-            action: undefined,
-          },
-          replace: true,
-        });
+        if (!embedded) {
+          void navigate({
+            to: "/reports",
+            search: {
+              client: clientParam,
+              clientId,
+              report: deepLinkReport.key,
+              action: undefined,
+            },
+            replace: true,
+          });
+        }
       })();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- fire once per deep-link token
@@ -2090,7 +2110,7 @@ function ReportsPage() {
   // Deep-link focus: skip painting the full catalogue until preview/download finishes.
   if (deepLinkBusy && deepLinkReport) {
     return (
-      <main className="reports-studio flex min-h-[100dvh] flex-col items-center justify-center bg-background px-4 text-foreground">
+      <main className={`reports-studio flex flex-col items-center justify-center bg-background px-4 text-foreground ${embedded ? "min-h-[40vh] py-10" : "min-h-[100dvh]"}`}>
         <div className="w-full max-w-md rounded-xl border border-border bg-card p-8 text-center shadow-sm">
           <Loader2 className="mx-auto mb-4 h-8 w-8 animate-spin text-[#c9962b]" />
           <p className="text-sm font-semibold text-foreground">
@@ -2126,19 +2146,21 @@ function ReportsPage() {
   }
 
   return (
-    <main className="reports-studio min-h-[100dvh] bg-background text-foreground px-4 py-8 sm:px-6">
+    <main className={`reports-studio text-foreground ${embedded ? "bg-transparent px-0 py-2" : "min-h-[100dvh] bg-background px-4 py-8 sm:px-6"}`}>
       <div className="mx-auto max-w-[1400px]">
 
-        {/* Back nav */}
-        <div className="mb-7 flex items-center justify-between">
-          <Link
-            to="/dashboard"
-            className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <ArrowLeft className="h-4 w-4" />Back to Dashboard
-          </Link>
-          <ThemeToggle />
-        </div>
+        {/* Back nav — standalone studio only */}
+        {!embedded && (
+          <div className="mb-7 flex items-center justify-between">
+            <Link
+              to="/dashboard"
+              className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <ArrowLeft className="h-4 w-4" />Back to Dashboard
+            </Link>
+            <ThemeToggle />
+          </div>
+        )}
 
         {/* Header */}
         <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -2205,9 +2227,6 @@ function ReportsPage() {
                 }
               </Button>
             )}
-            <Link to="/reports/demo" className="text-xs text-muted-foreground hover:text-foreground transition-colors">
-              View demo preview →
-            </Link>
           </div>
         </div>
 
@@ -2331,4 +2350,8 @@ function ReportsPage() {
       />
     </main>
   );
+}
+
+function ReportsPage() {
+  return <ReportsStudio {...Route.useSearch()} />;
 }

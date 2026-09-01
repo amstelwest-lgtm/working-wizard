@@ -1625,13 +1625,9 @@ function Dashboard() {
                           title="Generate report"
                           onClick={() =>
                             navigate({
-                              to: "/reports",
-                              search: {
-                                client: c.name,
-                                clientId: c.id,
-                                report: undefined,
-                                action: undefined,
-                              },
+                              to: "/clients/$clientId",
+                              params: { clientId: c.id },
+                              search: { tab: "reports" },
                             })
                           }
                         >
