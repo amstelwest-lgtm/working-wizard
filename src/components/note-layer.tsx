@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Trash2, CheckCheck, CornerDownRight, X } from "lucide-react";
+import { Trash2, CheckCheck, CornerDownRight, X, Shield } from "lucide-react";
 import { useNotes, type NoteCollaborator } from "@/contexts/notes";
 import { useAuth } from "@/hooks/use-auth";
 
@@ -11,6 +11,8 @@ type NoteLayerProps = {
   clientName?: string;
   /** Fired after a note create / resolve / delete / reply so parents can refresh live counts. */
   onNotesChanged?: () => void;
+  /** Switch the parent tab so a deep-linked note can open. */
+  onNeedTab?: (tab: string) => void;
 };
 
 function getInitials(name: string) {
@@ -184,7 +186,7 @@ function MentionComposer({
   );
 }
 
-export function NoteLayer({ clientId, tab, authorName, clientName, onNotesChanged }: NoteLayerProps) {
+export function NoteLayer({ clientId, tab, authorName, clientName, onNotesChanged, onNeedTab }: NoteLayerProps) {
   const { user } = useAuth();
   const {
     pinMode,
@@ -198,6 +200,11 @@ export function NoteLayer({ clientId, tab, authorName, clientName, onNotesChange
     registerSurface,
     clearSurface,
     openArchive,
+    tagMilonIt,
+    notes: allNotes,
+    focusNoteId,
+    requestOpenNote,
+    clearFocusNote,
   } = useNotes();
 
   const [composing, setComposing] = useState<{
@@ -213,6 +220,7 @@ export function NoteLayer({ clientId, tab, authorName, clientName, onNotesChange
   const [scrollY, setScrollY] = useState(0);
   const [mounted, setMounted] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [tagIt, setTagIt] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const replyRef = useRef<HTMLInputElement>(null);
 
@@ -270,8 +278,10 @@ export function NoteLayer({ clientId, tab, authorName, clientName, onNotesChange
         x: composing.pageX,
         y: composing.pageY,
         text: noteText.trim(),
+        tagMilonIt: tagIt,
       });
       setNoteText("");
+      setTagIt(false);
       setComposing(null);
       if (saved) setOpenNoteId(saved.id);
       onNotesChanged?.();
@@ -299,19 +309,35 @@ export function NoteLayer({ clientId, tab, authorName, clientName, onNotesChange
     setReplyText("");
   }
 
-  if (!mounted || !clientId) return null;
-
   const openNote = (noteId: string) => {
-    const note = tabNotes.find((n) => n.id === noteId);
+    const note = allNotes.find((n) => n.id === noteId) ?? tabNotes.find((n) => n.id === noteId);
     if (!note) return;
-    // Scroll so the pin is near the middle of the viewport, then open it.
+    if (note.tab !== tab) {
+      onNeedTab?.(note.tab);
+      requestOpenNote(noteId);
+      return;
+    }
     const targetY = Math.max(0, note.y - window.innerHeight * 0.4);
     window.scrollTo({ top: targetY, behavior: "smooth" });
     setOpenNoteId(noteId);
     setScrollY(window.scrollY);
   };
 
-  if (!pinMode && tabNotes.length === 0 && !composing) return null;
+  useEffect(() => {
+    if (!focusNoteId) return;
+    const note = allNotes.find((n) => n.id === focusNoteId);
+    if (!note) return;
+    if (note.tab !== tab) {
+      onNeedTab?.(note.tab);
+      return;
+    }
+    openNote(focusNoteId);
+    clearFocusNote();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusNoteId, allNotes, tab]);
+
+  if (!mounted || !clientId) return null;
+  if (!pinMode && tabNotes.length === 0 && !composing && !openNoteId && !focusNoteId) return null;
 
   const overlay = (
     <>
@@ -369,6 +395,7 @@ export function NoteLayer({ clientId, tab, authorName, clientName, onNotesChange
                         n.resolved ? "line-through" : ""
                       }`}
                     >
+                      {n.taggedMilonIt ? "IT · " : ""}
                       {n.text}
                     </span>
                   </span>
@@ -484,6 +511,11 @@ export function NoteLayer({ clientId, tab, authorName, clientName, onNotesChange
                   >
                     {note.text}
                   </div>
+                  {note.taggedMilonIt && (
+                    <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-[#d4a550]/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-[#b8860b]">
+                      <Shield className="h-3 w-3" /> Tagged Milōn IT
+                    </div>
+                  )}
                 </div>
 
                 {note.replies.length > 0 && (
@@ -574,6 +606,17 @@ export function NoteLayer({ clientId, tab, authorName, clientName, onNotesChange
                       <CheckCheck className="h-3 w-3" />
                       {note.resolved ? "Resolved" : "Resolve"}
                     </button>
+                    <button
+                      onClick={() => void tagMilonIt(note.id, !note.taggedMilonIt).then(() => onNotesChanged?.())}
+                      className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                        note.taggedMilonIt
+                          ? "bg-[#d4a550]/20 text-[#b8860b]"
+                          : "text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-700/60 dark:hover:text-slate-200"
+                      }`}
+                    >
+                      <Shield className="h-3 w-3" />
+                      {note.taggedMilonIt ? "IT tagged" : "Tag Milōn IT"}
+                    </button>
                   </div>
                 )}
               </div>
@@ -624,6 +667,16 @@ export function NoteLayer({ clientId, tab, authorName, clientName, onNotesChange
               autoFocus
               inputRef={inputRef}
             />
+            <label className="mt-2 flex cursor-pointer items-center gap-2 text-[11px] font-medium text-slate-600 dark:text-slate-300">
+              <input
+                type="checkbox"
+                checked={tagIt}
+                onChange={(e) => setTagIt(e.target.checked)}
+                className="accent-[#b8860b]"
+              />
+              <Shield className="h-3 w-3 text-[#b8860b]" />
+              Tag Milōn IT
+            </label>
           </div>
 
           <div className="flex justify-end gap-3 px-4 pb-4">

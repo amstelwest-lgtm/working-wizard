@@ -311,11 +311,15 @@ export const Route = createFileRoute("/_authenticated/clients/$clientId")({
     qbo?: string;
     reason?: string;
     onboard?: string;
+    note?: string;
+    tab?: string;
   } => {
-    const out: { qbo?: string; reason?: string; onboard?: string } = {};
+    const out: { qbo?: string; reason?: string; onboard?: string; note?: string; tab?: string } = {};
     if (typeof search.qbo === "string") out.qbo = search.qbo;
     if (typeof search.reason === "string") out.reason = search.reason;
     if (typeof search.onboard === "string") out.onboard = search.onboard;
+    if (typeof search.note === "string") out.note = search.note;
+    if (typeof search.tab === "string") out.tab = search.tab;
     return out;
   },
   component: ClientView,
@@ -442,7 +446,7 @@ function ClientView() {
   const { clientId } = Route.useParams();
   const search = Route.useSearch();
   const { user } = useAuth();
-  const { notes: clientNotes, loading: notesLoading, openArchive } = useNotes();
+  const { notes: clientNotes, loading: notesLoading, openArchive, requestOpenNote } = useNotes();
   const navigate = useNavigate();
   const { profile, firmId } = useAccountantProfile();
   const track = useTrack();
@@ -487,6 +491,22 @@ function ClientView() {
   const [client, setClient] = useState<Client | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<ActiveTab>("ratios");
+  useEffect(() => {
+    const allowed: ActiveTab[] = [
+      "ratios",
+      "profit",
+      "cash",
+      "budget",
+      "reports",
+      "plan",
+      "tasks",
+      "advisory",
+    ];
+    if (search.tab && allowed.includes(search.tab as ActiveTab)) {
+      setActiveTab(search.tab as ActiveTab);
+    }
+    if (search.note) requestOpenNote(search.note);
+  }, [search.note, search.tab, requestOpenNote]);
   useEffect(() => {
     track("tab_viewed", {
       tab: activeTab,
@@ -2227,6 +2247,19 @@ function ClientView() {
             ?? "Accountant"
           }
           onNotesChanged={() => setQueriesRefresh((n) => n + 1)}
+          onNeedTab={(next) => {
+            const allowed: ActiveTab[] = [
+              "ratios",
+              "profit",
+              "cash",
+              "budget",
+              "reports",
+              "plan",
+              "tasks",
+              "advisory",
+            ];
+            if (allowed.includes(next as ActiveTab)) setActiveTab(next as ActiveTab);
+          }}
         />
       )}
 

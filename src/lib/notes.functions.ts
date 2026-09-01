@@ -5,7 +5,7 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { getSupabaseAdminOrNull } from "@/integrations/supabase/client.server";
 import type { Database } from "@/integrations/supabase/types";
-import { dispatchNoteMentionEmails } from "@/lib/note-mention-email";
+import { dispatchNoteMentionEmails, dispatchMilonItQueryEmails } from "@/lib/note-mention-email";
 
 export type NoteMention = {
   userId: string;
@@ -36,6 +36,7 @@ export type ClientNote = {
   authorEmail: string | null;
   timestamp: string;
   resolved: boolean;
+  taggedMilonIt: boolean;
   mentions: NoteMention[];
   replies: NoteReply[];
 };
@@ -121,6 +122,7 @@ function mapNote(
     authorEmail: (row.author_email as string | null) ?? null,
     timestamp: String(row.created_at ?? new Date().toISOString()),
     resolved: Boolean(row.resolved),
+    taggedMilonIt: Boolean(row.tagged_milon_it),
     mentions: parseMentions(row.mentions),
     replies,
   };
@@ -362,6 +364,7 @@ export const createClientNote = createServerFn({ method: "POST" })
         y: z.number().finite(),
         text: z.string().trim().min(1).max(4000),
         mentions: z.array(mentionSchema).max(20).default([]),
+        tagMilonIt: z.boolean().optional(),
       })
       .parse(input),
   )
@@ -374,6 +377,7 @@ export const createClientNote = createServerFn({ method: "POST" })
     const author = authorFromUser(userData.user);
     // Never email yourself for self-mentions
     const mentions = data.mentions.filter((m) => m.userId !== author.authorId);
+    const tagMilonIt = Boolean(data.tagMilonIt);
 
     const loose = sb as unknown as LooseSb;
     const { data: row, error } = await loose
@@ -388,37 +392,54 @@ export const createClientNote = createServerFn({ method: "POST" })
         author_name: author.authorName,
         author_email: author.authorEmail,
         mentions,
+        tagged_milon_it: tagMilonIt,
+        tagged_milon_it_at: tagMilonIt ? new Date().toISOString() : null,
+        tagged_milon_it_by: tagMilonIt ? author.authorId : null,
       })
       .select("*")
       .single();
     if (error) throw new Error(error.message);
 
-    const mail = await (async () => {
-      let clientName = "Client";
-      try {
-        const { data: c } = await loose
-          .from("clients")
-          .select("name")
-          .eq("id", data.clientId)
-          .maybeSingle();
-        if (c?.name) clientName = String(c.name);
-      } catch {
-        /* ignore */
-      }
-      return dispatchNoteMentionEmails(mentions, {
-        authorName: author.authorName,
-        clientName,
-        noteText: data.text,
-        tabLabel: data.tab,
-        noteId: String((row as { id: string }).id),
-      });
-    })();
+    const noteId = String((row as { id: string }).id);
+    let clientName = "Client";
+    try {
+      const { data: c } = await loose
+        .from("clients")
+        .select("name")
+        .eq("id", data.clientId)
+        .maybeSingle();
+      if (c?.name) clientName = String(c.name);
+    } catch {
+      /* ignore */
+    }
+
+    const mail = await dispatchNoteMentionEmails(mentions, {
+      authorName: author.authorName,
+      clientName,
+      noteText: data.text,
+      tabLabel: data.tab,
+      noteId,
+    });
+    const itMail = tagMilonIt
+      ? await dispatchMilonItQueryEmails({
+          authorName: author.authorName,
+          clientName,
+          clientId: data.clientId,
+          noteText: data.text,
+          tabLabel: data.tab,
+          noteId,
+        })
+      : { sent: [] as string[], failed: [] as Array<{ email: string; error: string }> };
 
     return {
       note: mapNote(row as Record<string, unknown>, []),
       notifyMentions: mentions,
       authorName: author.authorName,
-      emailResult: mail,
+      emailResult: {
+        sent: [...mail.sent, ...itMail.sent],
+        failed: [...mail.failed, ...itMail.failed],
+      },
+      taggedMilonIt: tagMilonIt,
     };
   });
 
@@ -535,6 +556,85 @@ export const resolveClientNote = createServerFn({ method: "POST" })
       .single();
     if (error) throw new Error(error.message);
     return { noteId: data.noteId, resolved: Boolean(row.resolved) };
+  });
+
+export const tagClientNoteMilonIt = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) =>
+    z
+      .object({
+        clientId: z.string().uuid(),
+        noteId: z.string().uuid(),
+        tagged: z.boolean().optional(),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data }) => {
+    const sb = authedSupabase();
+    const { data: userData, error: userErr } = await sb.auth.getUser();
+    if (userErr || !userData?.user) throw new Error("Not authenticated");
+    await assertClientAccess(userData.user.id, data.clientId, sb);
+
+    const loose = sb as unknown as LooseSb;
+    const { data: existing, error: findErr } = await loose
+      .from("client_notes")
+      .select("id, tagged_milon_it, body, tab, author_name")
+      .eq("id", data.noteId)
+      .eq("client_id", data.clientId)
+      .maybeSingle();
+    if (findErr) throw new Error(findErr.message);
+    if (!existing) throw new Error("Note not found");
+
+    const next =
+      typeof data.tagged === "boolean" ? data.tagged : !existing.tagged_milon_it;
+    const patch: Record<string, unknown> = { tagged_milon_it: next };
+    if (next && !existing.tagged_milon_it) {
+      patch.tagged_milon_it_at = new Date().toISOString();
+      patch.tagged_milon_it_by = userData.user.id;
+    }
+    if (!next) {
+      patch.tagged_milon_it_at = null;
+      patch.tagged_milon_it_by = null;
+    }
+
+    const { data: row, error } = await loose
+      .from("client_notes")
+      .update(patch)
+      .eq("id", data.noteId)
+      .eq("client_id", data.clientId)
+      .select("*")
+      .single();
+    if (error) throw new Error(error.message);
+
+    let emailResult: { sent: string[]; failed: Array<{ email: string; error: string }> } | undefined;
+    if (next && !existing.tagged_milon_it) {
+      let clientName = "Client";
+      try {
+        const { data: c } = await loose
+          .from("clients")
+          .select("name")
+          .eq("id", data.clientId)
+          .maybeSingle();
+        if (c?.name) clientName = String(c.name);
+      } catch {
+        /* ignore */
+      }
+      const author = authorFromUser(userData.user);
+      emailResult = await dispatchMilonItQueryEmails({
+        authorName: author.authorName,
+        clientName,
+        clientId: data.clientId,
+        noteText: String(existing.body ?? ""),
+        tabLabel: String(existing.tab ?? ""),
+        noteId: data.noteId,
+      });
+    }
+
+    return {
+      noteId: data.noteId,
+      taggedMilonIt: Boolean(row.tagged_milon_it),
+      emailResult,
+    };
   });
 
 export const deleteClientNote = createServerFn({ method: "POST" })

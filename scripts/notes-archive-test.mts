@@ -19,6 +19,7 @@ assert(
   "close helper exists before the close button",
 );
 assert(layer.includes('openArchive("resolved")'), "on-tab tray links to the resolved archive");
+assert(layer.includes("Tag Milōn IT"), "notes can tag Milōn IT");
 assert(
   !/setNotes\(\(prev\) => prev\.filter\(\(n\) => n\.id !== id &&/.test(layer),
   "resolving a note must not remove it from the layer",

@@ -11,6 +11,7 @@ import {
   OPS_USERNAMES,
   adminLoose,
   assertPlatformOwner,
+  assertOpsConsoleAccess,
   missingRelation,
   moneyZar,
   opsPassphrase,
@@ -36,6 +37,31 @@ export const unlockOwnerOps = createServerFn({ method: "POST" })
     if (!userOk) throw new Error("Unknown operator.");
     if (data.passphrase !== opsPassphrase()) throw new Error("Incorrect passphrase.");
     return { ok: true as const };
+  });
+
+export type OpsAccess = {
+  allowed: boolean;
+  isOwner: boolean;
+  isItMember: boolean;
+};
+
+/**
+ * Signed-in platform owners and Milōn IT members skip the passphrase lock.
+ * The passphrase remains an obscurity layer for the public landing box.
+ */
+export const getOpsAccess = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }): Promise<OpsAccess> => {
+    try {
+      const access = await assertOpsConsoleAccess(context as AuthCtx);
+      return {
+        allowed: true,
+        isOwner: access.isOwner,
+        isItMember: access.isIt,
+      };
+    } catch {
+      return { allowed: false, isOwner: false, isItMember: false };
+    }
   });
 
 /**
@@ -119,7 +145,7 @@ export type OpsDashboard = {
 export const getOwnerOpsDashboard = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { email } = await assertPlatformOwner(context as AuthCtx);
+    const { email } = await assertOpsConsoleAccess(context as AuthCtx);
     const admin = adminLoose();
 
     const { data: roles, error: rolesErr } = await admin.from("user_roles").select("role");

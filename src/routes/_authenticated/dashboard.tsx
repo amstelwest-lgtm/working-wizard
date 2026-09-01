@@ -677,6 +677,7 @@ function Dashboard() {
   const [drawerRatioKey, setDrawerRatioKey] = useState<string | null>(null);
   const [drawerRatioName, setDrawerRatioName] = useState("");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [isItMember, setIsItMember] = useState(false);
 
   // Only known after mount — reading window.location.origin during render would
   // make the server-rendered HTML differ from the client's first render and
@@ -697,27 +698,41 @@ function Dashboard() {
     if (!userId) {
       setClientRows([]);
       setQboStatuses({});
+      setIsItMember(false);
       setLoading(false);
       return;
     }
 
+    let isIt = false;
+    try {
+      const { data: itFlag } = await supabase.rpc("is_milon_it_member" as never, {
+        _user_id: userId,
+      } as never);
+      isIt = Boolean(itFlag);
+    } catch {
+      isIt = false;
+    }
+    setIsItMember(isIt);
+
     // Firm-scoped list + legacy orphans (firm_id null) owned by this accountant.
     // Strict firm_id-only filtering hid pre-G27 clients and made the dashboard look empty.
+    // IT members have master access — list every client they can read.
     let query = supabase.from("clients").select("*").order("created_at", { ascending: false });
-    if (activeFirmId) {
-      query = query.or(
-        `firm_id.eq.${activeFirmId},and(firm_id.is.null,owner_user_id.eq.${userId})`,
-      );
-    } else {
-      // No firm context yet — still show clients this user owns.
-      query = query.eq("owner_user_id", userId);
+    if (!isIt) {
+      if (activeFirmId) {
+        query = query.or(
+          `firm_id.eq.${activeFirmId},and(firm_id.is.null,owner_user_id.eq.${userId})`,
+        );
+      } else {
+        query = query.eq("owner_user_id", userId);
+      }
     }
     const { data: cs, error } = await query;
     if (error) toast.error(error.message);
     let rawClients = (cs ?? []) as Client[];
 
     // Attach legacy null-firm practice clients to the active firm so they stay visible.
-    if (activeFirmId && rawClients.some((c) => !c.firm_id)) {
+    if (!isIt && activeFirmId && rawClients.some((c) => !c.firm_id)) {
       const orphanIds = rawClients.filter((c) => !c.firm_id).map((c) => c.id);
       const { error: attachErr } = await supabase
         .from("clients")
@@ -1206,6 +1221,18 @@ function Dashboard() {
               </svg>
               Reports studio
             </button>
+            {isItMember ? (
+              <button
+                className="tb-btn gold"
+                type="button"
+                onClick={() => {
+                  setMobileNavOpen(false);
+                  navigate({ to: "/ops", search: { tab: "it" } });
+                }}
+              >
+                IT queries
+              </button>
+            ) : null}
             <ThemeToggle />
             <button
               className="tb-btn"

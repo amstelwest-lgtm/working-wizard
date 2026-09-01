@@ -2088,7 +2088,11 @@ function Index() {
     if (acting) return;
     let cancelled = false;
     void (async () => {
-      const { shouldBounceFromOwnerApp, clearForcePortal } = await import("@/lib/user-roles");
+      const { shouldBounceFromOwnerApp, clearForcePortal, shouldOpenItInbox } = await import("@/lib/user-roles");
+      if (await shouldOpenItInbox(user.id)) {
+        if (!cancelled) navigate({ to: "/ops", search: { tab: "it" } });
+        return;
+      }
       const bounce = await shouldBounceFromOwnerApp(user.id, false);
       if (!cancelled && bounce) {
         clearForcePortal();

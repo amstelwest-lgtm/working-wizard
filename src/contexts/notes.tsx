@@ -18,6 +18,7 @@ import {
   listNoteCollaborators,
   replyToClientNote,
   resolveClientNote,
+  tagClientNoteMilonIt,
   type ClientNote,
   type NoteCollaborator,
   type NoteMention,
@@ -47,11 +48,16 @@ type NotesCtx = {
     x: number;
     y: number;
     text: string;
+    tagMilonIt?: boolean;
   }) => Promise<ClientNote | null>;
   deleteNote: (id: string) => Promise<void>;
   resolveNote: (id: string) => Promise<void>;
+  tagMilonIt: (id: string, tagged?: boolean) => Promise<void>;
   replyToNote: (noteId: string, text: string) => Promise<void>;
   getNotesForTab: (tab: string) => ClientNote[];
+  focusNoteId: string | null;
+  requestOpenNote: (noteId: string) => void;
+  clearFocusNote: () => void;
   archiveOpen: boolean;
   archiveFilter: "open" | "resolved";
   openArchive: (filter?: "open" | "resolved") => void;
@@ -105,6 +111,12 @@ export function NotesProvider({ children }: { children: ReactNode }) {
   const [pinMode, setPinMode] = useState(false);
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [archiveFilter, setArchiveFilter] = useState<"open" | "resolved">("open");
+  const [focusNoteId, setFocusNoteId] = useState<string | null>(null);
+
+  const requestOpenNote = useCallback((noteId: string) => {
+    setFocusNoteId(noteId);
+  }, []);
+  const clearFocusNote = useCallback(() => setFocusNoteId(null), []);
 
   const openArchive = useCallback((filter?: "open" | "resolved") => {
     if (filter) setArchiveFilter(filter);
@@ -118,6 +130,7 @@ export function NotesProvider({ children }: { children: ReactNode }) {
   const createNoteFn = useServerFn(createClientNote);
   const replyFn = useServerFn(replyToClientNote);
   const resolveFn = useServerFn(resolveClientNote);
+  const tagItFn = useServerFn(tagClientNoteMilonIt);
   const deleteFn = useServerFn(deleteClientNote);
   const track = useTrack();
 
@@ -176,7 +189,7 @@ export function NotesProvider({ children }: { children: ReactNode }) {
   }, [refresh]);
 
   const addNote = useCallback(
-    async (input: { x: number; y: number; text: string }) => {
+    async (input: { x: number; y: number; text: string; tagMilonIt?: boolean }) => {
       if (!surface?.clientId) {
         toast.error("Open a client workspace before pinning a note");
         return null;
@@ -191,6 +204,7 @@ export function NotesProvider({ children }: { children: ReactNode }) {
             y: input.y,
             text: input.text,
             mentions,
+            tagMilonIt: Boolean(input.tagMilonIt),
           },
         });
         setNotes((prev) => [...prev, res.note]);
@@ -203,7 +217,7 @@ export function NotesProvider({ children }: { children: ReactNode }) {
           res.emailResult as
             | { sent: string[]; failed: Array<{ email: string; error: string }> }
             | undefined,
-          res.notifyMentions.length,
+          res.notifyMentions.length + (res.taggedMilonIt ? 1 : 0),
         );
         return res.note;
       } catch (e) {
@@ -261,6 +275,35 @@ export function NotesProvider({ children }: { children: ReactNode }) {
     [surface?.clientId, resolveFn],
   );
 
+  const tagMilonIt = useCallback(
+    async (id: string, tagged?: boolean) => {
+      if (!surface?.clientId) return;
+      try {
+        const res = await tagItFn({
+          data: { clientId: surface.clientId, noteId: id, tagged },
+        });
+        setNotes((prev) =>
+          prev.map((n) =>
+            n.id === id ? { ...n, taggedMilonIt: res.taggedMilonIt } : n,
+          ),
+        );
+        if (res.taggedMilonIt) {
+          toastEmailResult(
+            res.emailResult as
+              | { sent: string[]; failed: Array<{ email: string; error: string }> }
+              | undefined,
+            1,
+          );
+        } else {
+          toast.success("Removed Milōn IT tag");
+        }
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Failed to tag Milōn IT");
+      }
+    },
+    [surface?.clientId, tagItFn],
+  );
+
   const replyToNote = useCallback(
     async (noteId: string, text: string) => {
       if (!surface?.clientId) return;
@@ -315,8 +358,12 @@ export function NotesProvider({ children }: { children: ReactNode }) {
       addNote,
       deleteNote,
       resolveNote,
+      tagMilonIt,
       replyToNote,
       getNotesForTab,
+      focusNoteId,
+      requestOpenNote,
+      clearFocusNote,
       archiveOpen,
       archiveFilter,
       openArchive,
@@ -334,8 +381,12 @@ export function NotesProvider({ children }: { children: ReactNode }) {
       addNote,
       deleteNote,
       resolveNote,
+      tagMilonIt,
       replyToNote,
       getNotesForTab,
+      focusNoteId,
+      requestOpenNote,
+      clearFocusNote,
       archiveOpen,
       archiveFilter,
       openArchive,

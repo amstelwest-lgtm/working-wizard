@@ -288,8 +288,32 @@ export async function shouldBounceFromOwnerApp(
   });
 }
 
+export async function isMilonItMember(userId: string): Promise<boolean> {
+  try {
+    const { data } = await supabase.rpc("is_milon_it_member" as never, {
+      _user_id: userId,
+    } as never);
+    return Boolean(data);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * IT-only accounts (on the team list, no practice role or firm) should land
+ * on the shared Lighthouse IT queries inbox rather than the firm dashboard.
+ */
+export async function shouldOpenItInbox(userId: string): Promise<boolean> {
+  if (!(await isMilonItMember(userId))) return false;
+  const portal = await resolvePortalRoles(userId);
+  if (portal.hasPracticeRole) return false;
+  const firms = await listUserFirms(userId);
+  return firms.length === 0;
+}
+
 /** Accountant portal may keep practice accounts — never business-client credentials. */
 export async function shouldStayOnAccountantPortal(userId: string): Promise<boolean> {
+  if (await isMilonItMember(userId)) return true;
   const force = peekForcePortal();
   const [portal, practiceSignup] = await Promise.all([
     resolvePortalRoles(userId),

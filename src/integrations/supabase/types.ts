@@ -626,6 +626,9 @@ export type Database = {
           author_name: string
           author_email: string | null
           resolved: boolean
+          tagged_milon_it: boolean
+          tagged_milon_it_at: string | null
+          tagged_milon_it_by: string | null
           mentions: Json
           created_at: string
           updated_at: string
@@ -641,6 +644,9 @@ export type Database = {
           author_name: string
           author_email?: string | null
           resolved?: boolean
+          tagged_milon_it?: boolean
+          tagged_milon_it_at?: string | null
+          tagged_milon_it_by?: string | null
           mentions?: Json
           created_at?: string
           updated_at?: string
@@ -656,6 +662,9 @@ export type Database = {
           author_name?: string
           author_email?: string | null
           resolved?: boolean
+          tagged_milon_it?: boolean
+          tagged_milon_it_at?: string | null
+          tagged_milon_it_by?: string | null
           mentions?: Json
           created_at?: string
           updated_at?: string
@@ -1431,6 +1440,10 @@ export type Database = {
       ensure_own_client: {
         Args: { p_name: string }
         Returns: string
+      }
+      is_milon_it_member: {
+        Args: { _user_id: string }
+        Returns: boolean
       }
       mint_owner_invite: {
         Args: { p_client_id: string }

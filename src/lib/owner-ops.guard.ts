@@ -82,6 +82,39 @@ export async function assertPlatformOwner(
   return { userId: ctx.userId, email };
 }
 
+/** True when this email is on the Milōn IT team list (service-role read). */
+export async function emailIsMilonItMember(email: string): Promise<boolean> {
+  const normalized = email.trim().toLowerCase();
+  if (!normalized) return false;
+  try {
+    const admin = adminLoose();
+    const { data } = await admin
+      .from("milon_it_members")
+      .select("id")
+      .eq("email", normalized)
+      .maybeSingle();
+    return Boolean(data?.id);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Platform owner or an IT team member may open Lighthouse IT queries
+ * (and the /ops console so they can reach that tab).
+ */
+export async function assertOpsConsoleAccess(
+  ctx: AuthCtx,
+): Promise<{ userId: string; email: string; isOwner: boolean; isIt: boolean }> {
+  const email = await resolveOwnerEmail(ctx);
+  const isOwner = Boolean(email && ownerEmailAllowlist().includes(email));
+  const isIt = email ? await emailIsMilonItMember(email) : false;
+  if (!isOwner && !isIt) {
+    throw new Error("Forbidden — this console is locked to the platform owner and Milōn IT.");
+  }
+  return { userId: ctx.userId, email, isOwner, isIt };
+}
+
 export function missingRelation(msg: string): boolean {
   return /does not exist|relation/i.test(msg);
 }

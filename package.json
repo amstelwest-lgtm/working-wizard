@@ -28,6 +28,7 @@
     "test:action-plan-tab": "vite-node --config scripts/vite-test.config.ts scripts/action-plan-tab-test.mts",
     "test:weekly-inputs": "vite-node --config scripts/vite-test.config.ts scripts/weekly-inputs-test.mts",
     "test:notes-archive": "vite-node --config scripts/vite-test.config.ts scripts/notes-archive-test.mts",
+    "test:lighthouse-it": "vite-node --config scripts/vite-test.config.ts scripts/lighthouse-it-test.mts",
     "test:orb-contrast": "vite-node --config scripts/vite-test.config.ts scripts/orb-contrast-test.mts",
     "test:review-signoff": "vite-node --config scripts/vite-test.config.ts scripts/review-signoff-test.mts",
     "test:client-invite-email": "vite-node --config scripts/vite-test.config.ts scripts/client-invite-email-test.mts",

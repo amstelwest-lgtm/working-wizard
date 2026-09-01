@@ -16,6 +16,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import {
   adminLoose,
   assertPlatformOwner,
+  assertOpsConsoleAccess,
   migrationHintFor,
   missingRelation,
   type AuthCtx,
@@ -405,7 +406,7 @@ function mapLead(row: Record<string, unknown>, touches: LighthouseTouch[]): Ligh
 export const getLighthouse = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    await assertPlatformOwner(context as AuthCtx);
+    await assertOpsConsoleAccess(context as AuthCtx);
     const admin = adminLoose();
 
     const capability = {
