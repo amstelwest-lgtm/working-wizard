@@ -44,6 +44,7 @@ import {
   type LighthouseLead,
   type LighthouseStage,
 } from "@/lib/lighthouse.functions";
+import { LighthouseUsagePanel } from "@/components/lighthouse-usage";
 
 const inputCls = "ops-input";
 
@@ -80,7 +81,9 @@ export function LighthousePanel() {
   const [dash, setDash] = useState<LighthouseDashboard | null>(null);
   const [busy, setBusy] = useState(true);
   const [err, setErr] = useState("");
-  const [tab, setTab] = useState<"pipeline" | "playbook" | "assets" | "settings">("pipeline");
+  const [tab, setTab] = useState<"pipeline" | "usage" | "playbook" | "assets" | "settings">(
+    "pipeline",
+  );
   const [openLeadId, setOpenLeadId] = useState<string | null>(null);
 
   const [addOpen, setAddOpen] = useState(false);
@@ -206,7 +209,7 @@ export function LighthousePanel() {
 
       {/* Tabs */}
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        {(["pipeline", "playbook", "assets", "settings"] as const).map((t) => (
+        {(["pipeline", "usage", "playbook", "assets", "settings"] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -319,6 +322,8 @@ export function LighthousePanel() {
           <PipelineBoard leads={dash.leads} onOpen={(id) => setOpenLeadId(id)} />
         </>
       )}
+
+      {tab === "usage" && <LighthouseUsagePanel />}
 
       {tab === "playbook" && <Playbook dash={dash} />}
 

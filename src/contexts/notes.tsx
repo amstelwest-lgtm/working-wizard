@@ -9,6 +9,7 @@ import {
 } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
+import { useTrack } from "@/hooks/use-track";
 import {
   createClientNote,
   deleteClientNote,
@@ -118,6 +119,7 @@ export function NotesProvider({ children }: { children: ReactNode }) {
   const replyFn = useServerFn(replyToClientNote);
   const resolveFn = useServerFn(resolveClientNote);
   const deleteFn = useServerFn(deleteClientNote);
+  const track = useTrack();
 
   const registerSurface = useCallback((next: NotesSurface) => {
     setSurface((prev) => {
@@ -192,6 +194,11 @@ export function NotesProvider({ children }: { children: ReactNode }) {
           },
         });
         setNotes((prev) => [...prev, res.note]);
+        track("note_created", {
+          tab: surface.tab,
+          clientId: surface.clientId,
+          mentions: res.notifyMentions.length,
+        });
         toastEmailResult(
           res.emailResult as
             | { sent: string[]; failed: Array<{ email: string; error: string }> }
@@ -204,7 +211,7 @@ export function NotesProvider({ children }: { children: ReactNode }) {
         return null;
       }
     },
-    [surface, collaborators, createNoteFn, clientName],
+    [surface, collaborators, createNoteFn, clientName, track],
   );
 
   const deleteNote = useCallback(

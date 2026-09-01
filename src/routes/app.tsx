@@ -2404,9 +2404,14 @@ function Index() {
 
   useEffect(() => {
     if (user) {
-      track("tab_viewed", { tab: activeTab, userId: user.email ?? user.id });
+      track("tab_viewed", {
+        tab: activeTab,
+        surface: "owner_app",
+        clientId: effectiveClientId,
+        path: "/app",
+      });
     }
-  }, [activeTab]);
+  }, [activeTab, effectiveClientId, track, user]);
 
   const seriesFor = (k: RatioKey): number[] => {
     const snapKey = RATIO_KEY_TO_SNAPSHOT[k];
@@ -3484,7 +3489,8 @@ function Index() {
                       setViewMode(m);
                       track("view_mode_toggled", {
                         mode: m,
-                        userId: user?.email ?? user?.id ?? "anon",
+                        surface: "owner_app",
+                        clientId: effectiveClientId,
                       });
                     }}
                     className={`rounded-full px-4 py-[5px] text-[11px] font-semibold uppercase tracking-[0.08em] transition-all ${
@@ -4253,7 +4259,7 @@ function Index() {
                 Admin · Activity Dashboard
               </DialogTitle>
               <DialogDescription className="text-[11px] text-slate-500">
-                Session analytics — in-memory, not persisted across reloads.
+                This-session snapshot. Lasting usage lives in Lighthouse → Usage.
               </DialogDescription>
             </DialogHeader>
             <AdminDashboard />
@@ -4672,6 +4678,11 @@ function Index() {
               if (allEntries.length > 0) {
                 setV((prev) => ({ ...prev, ...Object.fromEntries(allEntries) }) as Inputs);
                 setHasRealFinancials(true);
+                track("financials_uploaded", {
+                  surface: "owner_app",
+                  clientId: effectiveClientId,
+                  fields: allEntries.length,
+                });
                 toast.success(
                   `${entries.length} field${entries.length === 1 ? "" : "s"} imported from your statement — figures saved automatically.`,
                 );

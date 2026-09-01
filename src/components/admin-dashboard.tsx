@@ -56,8 +56,8 @@ export function AdminDashboard() {
         <div>
           <div className="text-lg font-extrabold text-white">Activity Dashboard</div>
           <div className="mt-0.5 text-[11px] text-slate-500">
-            All user actions since app load · {events.length} events · {uniqueUsers(events)} user
-            {uniqueUsers(events) !== 1 ? "s" : ""}
+            All user actions this session · {events.length} events · {uniqueUsers(events)} user
+            {uniqueUsers(events) !== 1 ? "s" : ""}. Lasting rankings are in Lighthouse → Usage.
           </div>
         </div>
         <Button
