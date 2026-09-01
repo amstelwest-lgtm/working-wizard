@@ -52,7 +52,6 @@ export const FEATURE_CATALOG: FeatureDef[] = [
   { key: "firm.client_budget", label: "Client budget", group: "firm" },
   { key: "firm.client_reports", label: "Client reports tab", group: "firm" },
   { key: "firm.client_action_plan", label: "Client action plan", group: "firm" },
-  { key: "firm.staff_tasks", label: "Staff tasks", group: "firm" },
   { key: "firm.advisory", label: "Advisory drafter", group: "firm" },
   { key: "firm.playbook", label: "Playbook", group: "firm" },
   { key: "firm.brand", label: "Firm brand", group: "firm" },
@@ -85,7 +84,6 @@ const FIRM_TAB_FEATURES: Record<string, string> = {
   budget: "firm.client_budget",
   reports: "firm.client_reports",
   plan: "firm.client_action_plan",
-  tasks: "firm.staff_tasks",
   advisory: "firm.advisory",
 };
 

@@ -41,6 +41,9 @@ assert(appSrc.includes('<TabErrorBoundary label="Budget">'), "founder board wrap
 const clientSrc = readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8");
 assert(clientSrc.includes('lazyPanel(() => import("@/components/action-plan")'), "client board uses lazyPanel");
 assert(clientSrc.includes('<TabErrorBoundary label="Action Plan">'), "client board wraps Action Plan");
+assert(!clientSrc.includes('label: "Staff tasks"'), "accountant portal no longer has a Staff tasks tab");
+assert(!clientSrc.includes("TasksPanel"), "accountant portal no longer mounts the staff tasks panel");
+assert(clientSrc.includes('if (tab === "tasks") return "plan"'), "old staff-tasks links open Action Plan");
 
 const wizardSrc = readFileSync(resolve("src/components/walkthrough-wizard.tsx"), "utf8");
 assert(wizardSrc.includes("if (!s) return"), "walkthrough guards missing steps");
