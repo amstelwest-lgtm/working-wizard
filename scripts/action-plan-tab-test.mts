@@ -41,6 +41,20 @@ assert(appSrc.includes('<TabErrorBoundary label="Budget">'), "founder board wrap
 const clientSrc = readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8");
 assert(clientSrc.includes('lazyPanel(() => import("@/components/action-plan")'), "client board uses lazyPanel");
 assert(clientSrc.includes('<TabErrorBoundary label="Action Plan">'), "client board wraps Action Plan");
+assert(
+  !/id="pane-plan"[\s\S]{0,1200}className="dark"/.test(clientSrc),
+  "accountant Action Plan is not forced into a Tailwind dark island (light-mode copy would vanish)",
+);
+
+const portalCss = readFileSync(resolve("src/styles/accountant-portal.css"), "utf8");
+assert(
+  portalCss.includes(".accountant-portal #wizard-action-plan"),
+  "portal isolates Action Plan --card from glass token",
+);
+assert(
+  portalCss.includes("html.dark .accountant-portal #wizard-action-plan"),
+  "dark portal still gives Action Plan a solid navy card token",
+);
 
 const wizardSrc = readFileSync(resolve("src/components/walkthrough-wizard.tsx"), "utf8");
 assert(wizardSrc.includes("if (!s) return"), "walkthrough guards missing steps");

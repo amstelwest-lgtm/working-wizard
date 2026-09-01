@@ -270,6 +270,19 @@ html[data-theme="light"] .accountant-portal .doc{background:linear-gradient(170d
 .accountant-portal .cf-note .dot{width:8px;height:8px;border-radius:50%;background:var(--warn)}
 .accountant-portal .cf-note b{color:var(--warn)}
 
+/* Action Plan uses shadcn `--card`. Portal `--card` is near-transparent glass
+   and must not leak in, or titles sit on cream with no fill. */
+.accountant-portal #wizard-action-plan{
+  --card:#fffdf8;
+  --card-foreground:#1b1608;
+  color:#1b1608;
+}
+html.dark .accountant-portal #wizard-action-plan{
+  --card:#111827;
+  --card-foreground:#f1f5f9;
+  color:#f1f5f9;
+}
+
 /* reports gallery */
 .accountant-portal .rep-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px;margin-top:18px}
 .accountant-portal .rep-card{border:1px solid var(--line);border-radius:18px;padding:22px;background:var(--card);transition:all .3s var(--ease);display:flex;flex-direction:column;gap:10px}
