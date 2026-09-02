@@ -44,6 +44,7 @@ export function BudgetPanel({
   onPushedToCash,
   onRetakeProfile,
   canSign,
+  hideReadOnlyStamp,
 }: {
   clientId?: string;
   clientName?: string;
@@ -58,6 +59,8 @@ export function BudgetPanel({
   onRetakeProfile?: () => void;
   /** Show interactive sign-off (accountant portal / acting accountant). */
   canSign?: boolean;
+  /** Owner board already stamps this deliverable in the tab header. */
+  hideReadOnlyStamp?: boolean;
 }) {
   const [loaded, setLoaded] = useState(!clientId);
   const [doc, setDoc] = useState<BudgetDocument | null>(null);
@@ -350,24 +353,26 @@ export function BudgetPanel({
           />
         )}
 
-        {clientId && (
+        {clientId && (canSign || role === "accountant") && (
           <div className="flex justify-end">
-            {canSign || role === "accountant" ? (
-              <ReviewSignoffButton
-                clientId={clientId}
-                clientName={clientName}
-                scope="budget"
-                signoff={budgetSignoff}
-                isStale={computeIsStale(budgetSignoff, budgetUpdatedAt ?? doc.updatedAt)}
-                onChange={setBudgetSignoff}
-              />
-            ) : (
-              <ReviewSignoffBadge
-                signoff={budgetSignoff}
-                scope="budget"
-                isStale={computeIsStale(budgetSignoff, budgetUpdatedAt ?? doc.updatedAt)}
-              />
-            )}
+            <ReviewSignoffButton
+              clientId={clientId}
+              clientName={clientName}
+              scope="budget"
+              signoff={budgetSignoff}
+              isStale={computeIsStale(budgetSignoff, budgetUpdatedAt ?? doc.updatedAt)}
+              onChange={setBudgetSignoff}
+            />
+          </div>
+        )}
+        {clientId && !hideReadOnlyStamp && !(canSign || role === "accountant") && (
+          <div className="flex justify-end">
+            <ReviewSignoffBadge
+              signoff={budgetSignoff}
+              scope="budget"
+              isStale={computeIsStale(budgetSignoff, budgetUpdatedAt ?? doc.updatedAt)}
+              placement="corner"
+            />
           </div>
         )}
       </div>

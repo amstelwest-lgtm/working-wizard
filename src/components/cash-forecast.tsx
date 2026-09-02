@@ -368,6 +368,7 @@ export function CashForecastPanel({
   clientName,
   simplified,
   canSign,
+  hideReadOnlyStamp,
   reloadToken,
   openBankUploadToken,
   onBankPublish,
@@ -378,6 +379,8 @@ export function CashForecastPanel({
   simplified?: boolean;
   /** Accountant view only: show the interactive sign-off control instead of the read-only badge. */
   canSign?: boolean;
+  /** Owner board already stamps this deliverable in the tab header. */
+  hideReadOnlyStamp?: boolean;
   /** Bump to re-load cashflow from Supabase (e.g. after bank→cash publish). */
   reloadToken?: number;
   /** Bump to open the bank-statement upload dialog (e.g. accountant Cash tab header). */
@@ -869,7 +872,14 @@ export function CashForecastPanel({
             </div>
             <div className="flex flex-col items-end gap-1.5">
               {heroBadge}
-              <ReviewSignoffBadge signoff={forecastSignoff} scope="cash_forecast" isStale={forecastStale} compact />
+              {!hideReadOnlyStamp && (
+                <ReviewSignoffBadge
+                  signoff={forecastSignoff}
+                  scope="cash_forecast"
+                  isStale={forecastStale}
+                  placement="corner"
+                />
+              )}
             </div>
           </div>
         </CardHeader>
@@ -946,7 +956,14 @@ export function CashForecastPanel({
             </div>
             <div className="flex items-center gap-2">
               {heroBadge}
-              <ReviewSignoffBadge signoff={forecastSignoff} scope="cash_forecast" isStale={forecastStale} compact />
+              {!hideReadOnlyStamp && (
+                <ReviewSignoffBadge
+                  signoff={forecastSignoff}
+                  scope="cash_forecast"
+                  isStale={forecastStale}
+                  placement="corner"
+                />
+              )}
               <Button
                 size="sm"
                 variant="outline"
