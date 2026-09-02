@@ -21,13 +21,19 @@ assert(parseClassification("nope") === "staff", "unknown classification falls ba
 assert(accessTokenFromNext("/access/abc123") === "abc123", "parses access next path");
 assert(accessApproveUrl("tok").endsWith("/access/tok"), "approve url points at /access/:token");
 
-const mig = readFileSync(resolve("supabase/migrations/20260901160000_practice_client_access.sql"), "utf8");
+const mig = readFileSync(
+  resolve("supabase/migrations/20260901160000_practice_client_access.sql"),
+  "utf8",
+);
 assert(mig.includes("client_practice_access"), "migration creates per-client assignments");
 assert(mig.includes("access_approval_tokens"), "migration creates approval tokens");
 assert(mig.includes("firm_staff_invites"), "migration creates staff invites");
 assert(mig.includes("has_active_practice_assignment"), "assignment helper");
 assert(mig.includes("is_firm_manager"), "firm admin helper");
-assert(mig.includes("CREATE OR REPLACE FUNCTION public.has_client_access"), "tightens has_client_access");
+assert(
+  mig.includes("CREATE OR REPLACE FUNCTION public.has_client_access"),
+  "tightens has_client_access",
+);
 
 const settings = readFileSync(resolve("src/routes/_authenticated/settings.team.tsx"), "utf8");
 assert(settings.includes("Team & access"), "accountant settings page exists");
@@ -40,13 +46,18 @@ assert(dash.includes("/settings/team"), "dashboard Team button");
 const index = readFileSync(resolve("src/routes/_authenticated/settings.index.tsx"), "utf8");
 assert(index.includes("/settings/team"), "settings hub links to team page");
 
+const ops = readFileSync(resolve("src/routes/_authenticated/ops.tsx"), "utf8");
+assert(ops.includes("LighthouseAccessPanel"), "Lighthouse Access lives in Milōn IT");
+
 const panel = readFileSync(resolve("src/components/lighthouse-panel.tsx"), "utf8");
-assert(panel.includes('"access"'), "Lighthouse has an Access tab");
-assert(panel.includes("LighthouseAccessPanel"), "Access tab renders the admin panel");
+assert(!panel.includes("LighthouseAccessPanel"), "Access is not a sales pipeline tab");
 
 const lh = readFileSync(resolve("src/components/lighthouse-access.tsx"), "utf8");
 assert(lh.includes("client_owner"), "can toggle owner roles");
-assert(lh.includes("Add to a practice firm") || lh.includes("Grant now"), "platform can grant practice access");
+assert(
+  lh.includes("Add to a practice firm") || lh.includes("Grant now"),
+  "platform can grant practice access",
+);
 
 const page = readFileSync(resolve("src/routes/access.$token.tsx"), "utf8");
 assert(page.includes("redeemAccessToken"), "public page redeems dual-approval links");
