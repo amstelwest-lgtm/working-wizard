@@ -1,6 +1,6 @@
 # MILŌN proposed event taxonomy — Phase 0
 
-**Status:** approved (Phase 0). Phase 1 spine: see [`README.md`](./README.md) and `supabase/migrations/20260902120000_analytics_events_spine.sql`.
+**Status:** approved (Phase 0). Phase 1 spine is live. Phase 2 derived layer: [`README.md`](./README.md), `src/lib/metrics/definitions.ts`, `20260902200000_analytics_derived_views.sql`, `20260902201000_analytics_commitment_stalls.sql`.
 
 Companion: [`INVENTORY.md`](./INVENTORY.md) (what exists today). This file is the **consolidated event list** we would implement in Phase 1, mapped onto **this repo’s** tables and actors — not the Claude brief’s vanilla/`entities`/`tasks` names.
 

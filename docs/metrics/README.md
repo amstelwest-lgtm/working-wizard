@@ -2,16 +2,42 @@
 
 Phase 0 inventory: [`INVENTORY.md`](./INVENTORY.md), [`PROPOSED_TAXONOMY.md`](./PROPOSED_TAXONOMY.md) (approved).
 
-Phase 1 (this folder + migration) is the **event spine**. It is not a dashboard. Cumulative `/ops` signup/revenue totals stay as bookkeeping and are not this instrument.
+Phase 1 is the **event spine**. Phase 2 is the **derived layer** (definitions, cohort views, commitment ladder, stall queue, signal log). It is not a dashboard. Cumulative `/ops` signup/revenue totals stay as bookkeeping and are not this instrument.
+
+Definitions live in one place: [`src/lib/metrics/definitions.ts`](../../src/lib/metrics/definitions.ts).
 
 ## Apply
 
-Paste these **in order** in the Supabase SQL editor:
+Phase 1 (already applied if the spine check returned rows):
 
-1. `supabase/migrations/20260902120000_analytics_events_spine.sql` (schema + RPCs)
-2. `supabase/migrations/20260902121000_analytics_events_triggers.sql` (triggers + backfill)
+1. `supabase/migrations/20260902120000_analytics_events_spine.sql`
+2. `supabase/migrations/20260902121000_analytics_events_triggers.sql`
 
-Then mark rows by hand (do not guess from names):
+Phase 2 — paste **in order** in the Supabase SQL editor:
+
+3. `supabase/migrations/20260902200000_analytics_derived_views.sql`
+4. `supabase/migrations/20260902201000_analytics_commitment_stalls.sql`
+
+Then, once, to snapshot the ladder and fill this week's call list:
+
+```sql
+select public.analytics_refresh_derived();
+```
+
+Sanity:
+
+```sql
+select cohort_week, is_founding_practice, practices, activation_14d_pct
+from analytics.v_practice_activation
+order by 1 desc;
+
+select stall_type, severity, practice_name, suggested_question
+from analytics.founder_action_queue
+where status = 'open'
+order by severity, created_at;
+```
+
+Mark rows by hand (do not guess from names):
 
 ```sql
 -- Sandbox clients
@@ -24,24 +50,52 @@ Then mark rows by hand (do not guess from names):
 -- update public.firms set is_internal = true where id in (...);
 ```
 
-Add founder emails to `analytics.founder_emails` if needed. Firms owned by those emails are set `is_internal` when the migration runs.
+## What each metric falsifies
 
-## What writes
+| Metric | Hypothesis | Bad reading means |
+|---|---|---|
+| Practice activation (14d) — `report.sent` within 14d of firm signup | H1 | Onboarding or core value is broken. Do not add features. Call stalled practices. |
+| Task completion (assigned → done, 14d) | H2 | The claimed moat is not real. Do not price or position around the loop yet. |
+| Report → assignment within 7d | H2 | Accountants want the diagnostic, not the workflow — a worse competitive position. |
+| Median entities per practice by signup month | H4 | The accountant channel does not compound. Consider a channel pivot. |
+| Month-2 active practices | H1 | Novelty, not utility. Strongest single falsifier of the value hypothesis. |
+| Extraction correction rate | H3 | **Not computed.** We cannot tell AI-fill vs a blank form. |
+
+Founding Practice rows are a **separate split**, never blended into the unaffiliated headline. Internal / demo / bot events are excluded from every view.
+
+Owner-only SMEs (no `firms` row) are **out of this practice-channel instrument**. Dual-role accounts are cohorted as practices when `practice_id` is stamped.
+
+## Loop interpretation
+
+- High assignment + low completion → the loop is theatre.
+- High engagement + low completion → task UX or content is wrong.
+- Low dispatch → engagement → deliverability, not product. Check bounces first.
+- Low assignment despite high `report.sent` → diagnostics-not-workflow. Flag in red when the dashboard exists.
+
+Human open is **`task.link.engaged` only**. GET `/t/:token` is not engagement.
+
+## Commitment ladder
+
+Weekly snapshot on `analytics.practice_commitment_weekly`. Live picture: `analytics.v_practice_commitment_current`. Highest rung wins (not a sum). `referred_another_practice` is unmeasurable until referrals exist.
+
+## Stall queue
+
+`analytics.founder_action_queue` is a call list, not a chart. Questions are past-tense and behavioural. `high_correction_rate` is not generated (H3 blocked).
+
+## Signal log
+
+`analytics.customer_signals` requires a `situation` longer than 20 characters (what they actually do today). Compliment-only rows are flagged and must be excluded from any later aggregation.
+
+## What writes (Phase 1, unchanged)
 
 | Path | Events |
 |---|---|
 | Postgres triggers | Commitment: signup, practice, entity, upload.succeeded, brand, tasks, emails, report.sent / downloaded / zip_all, QBO, sign-off, invites, payments, Ask AI submit, impersonation |
 | `public.analytics_track` (authenticated) | Intent only — allowlist in `src/lib/analytics-events.ts` |
-| `POST /api/task-engaged` | `task.link.rendered` / `task.link.engaged` (hashed actor, `is_bot` from UA + dispatch latency) |
-| Dual-run | Existing `lighthouse_product_usage` still fills; mapped keys also go to `analytics.events` |
+| `POST /api/task-engaged` | `task.link.rendered` / `task.link.engaged` |
+| Dual-run | `lighthouse_product_usage` still fills; mapped keys also go to `analytics.events` |
 
-GET `/t/:token` and GET `/ack/:token` write **no** analytics and **no** product rows. Ack confirm is a button. Task engagement is a POST beacon after a human signal (or 3s visible dwell).
-
-**Activation (H1):** `report.sent` (not `report.downloaded` / `pdf_download`) within 14 days of `practice.created`, excluding `is_internal` / `is_demo` / `is_bot`.
-
-**Loop (H2):** `task.assigned` → `task.email.dispatched` → `task.link.engaged` (not GET) → `task.completed`. Until the migration is applied, engaged will be empty.
-
-H3 (extraction corrections) is **not** instrumented — we cannot tell AI-fill vs blank form yet.
+GET `/t/:token` and GET `/ack/:token` write **no** analytics and **no** product rows.
 
 ## Rollback
 
@@ -49,4 +103,4 @@ H3 (extraction corrections) is **not** instrumented — we cannot tell AI-fill v
 
 ## What this is not
 
-No founder dashboard, cohort views, stall queue, or digest yet (Phase 2–3). Do not add NPS or customer-facing analytics.
+No founder dashboard, weekly digest, or experiment registry yet (Phase 3). Do not add NPS, customer-facing analytics, or cumulative signup/report counters on this instrument.

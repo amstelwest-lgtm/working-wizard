@@ -30,6 +30,9 @@ DO $$ BEGIN
   END IF;
 END $$;
 
+DROP FUNCTION IF EXISTS public.analytics_update_queue_item(bigint, text, text);
+DROP FUNCTION IF EXISTS public.analytics_log_signal(uuid, text, text, text, text, text, text, text, text, boolean);
+DROP FUNCTION IF EXISTS public.analytics_refresh_derived();
 DROP FUNCTION IF EXISTS public.analytics_track(text, jsonb, text, uuid, uuid, uuid, text, text);
 DROP FUNCTION IF EXISTS public.analytics_emit(text, timestamptz, text, uuid, text, uuid, uuid, uuid, text, text, text, boolean, text, jsonb);
 DROP FUNCTION IF EXISTS public.preview_advisory_delivery_ack(text);
