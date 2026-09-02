@@ -4,7 +4,8 @@
  * those are emitted by Postgres triggers / service-role emit only.
  */
 
-export const ANALYTICS_MIGRATION = "20260902120000_analytics_events_spine.sql";
+export const ANALYTICS_MIGRATION =
+  "20260902120000_analytics_events_spine.sql then 20260902121000_analytics_events_triggers.sql";
 
 export const CLIENT_WRITABLE_EVENT_KEYS = [
   "view.opened",
