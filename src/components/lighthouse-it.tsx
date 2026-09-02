@@ -93,8 +93,8 @@ export function LighthouseItPanel() {
       <div className="mb-6">
         <h2 className="font-serif text-2xl tracking-tight text-[var(--ops-ink)]">Milōn IT</h2>
         <p className="mt-1 max-w-2xl text-sm text-[var(--ops-ink-dim)]">
-          Shared inbox for notes tagged Milōn IT. Every member sees the same queries and has master
-          access to every customer profile.
+          Shared inbox for notes tagged Milōn IT. Access control and (for the platform owner) pilot
+          knobs live in this section too. Every member has master access to customer profiles.
         </p>
       </div>
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_280px]">

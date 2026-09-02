@@ -18,6 +18,7 @@ import {
   Sparkles,
   Users,
   Wallet,
+  Activity,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import {
@@ -35,18 +36,31 @@ import {
 import { ThemeToggle } from "@/components/theme-toggle";
 import { LighthousePanel, parseLighthouseTab } from "@/components/lighthouse-panel";
 import { LighthouseItPanel } from "@/components/lighthouse-it";
+import { LighthouseAccessPanel } from "@/components/lighthouse-access";
+import { LighthouseUsagePanel } from "@/components/lighthouse-usage";
 import { LIGHTHOUSE_IT_INBOX_PATH } from "@/lib/client-note-link";
 import "@/styles/ops-console.css";
 
 export const Route = createFileRoute("/_authenticated/ops")({
   component: OwnerOpsPage,
   validateSearch: (search: Record<string, unknown>): { tab?: string } => {
-    if (search.tab === "it") return { tab: "it" };
-    const tab = parseLighthouseTab(search.tab);
+    const tab = parseOpsSearchTab(search.tab);
     return tab ? { tab } : {};
   },
   head: () => ({ meta: [{ title: "Lighthouse — Milōn" }] }),
 });
+
+const OPS_CONSOLE_TABS = ["it", "access", "pilot", "usage"] as const;
+const OPS_IT_PANES = ["it", "access", "pilot"] as const;
+
+function parseOpsSearchTab(raw: unknown): string | undefined {
+  if (typeof raw === "string" && (OPS_CONSOLE_TABS as readonly string[]).includes(raw)) return raw;
+  return parseLighthouseTab(raw);
+}
+
+function isOpsItPane(raw: string | undefined): raw is (typeof OPS_IT_PANES)[number] {
+  return Boolean(raw && (OPS_IT_PANES as readonly string[]).includes(raw));
+}
 
 const FLAG_LABELS: Record<string, string> = {
   maintenance_mode: "Maintenance mode (soft gate)",
@@ -69,7 +83,6 @@ function OwnerOpsPage() {
   const [unlocked, setUnlocked] = useState(false);
   const [access, setAccess] = useState<OpsAccess | null>(null);
   const [accessChecked, setAccessChecked] = useState(false);
-  const [metricsOpen, setMetricsOpen] = useState(false);
   const [dash, setDash] = useState<OpsDashboard | null>(null);
   const [busy, setBusy] = useState(true);
   const [err, setErr] = useState("");
@@ -118,7 +131,14 @@ function OwnerOpsPage() {
     setUnlocked(true);
   }, []);
 
-  const authNext = tabSearch === "it" ? LIGHTHOUSE_IT_INBOX_PATH : "/ops";
+  const authNext =
+    tabSearch === "it"
+      ? LIGHTHOUSE_IT_INBOX_PATH
+      : tabSearch === "access" || tabSearch === "pilot"
+        ? `/ops?tab=${tabSearch}`
+        : tabSearch === "usage"
+          ? "/ops?tab=usage"
+          : "/ops";
 
   useEffect(() => {
     if (authLoading || !user) return;
@@ -196,16 +216,20 @@ function OwnerOpsPage() {
 
   const flagEntries = useMemo(() => Object.entries(flags), [flags]);
   const itOnly = Boolean(access?.isItMember && !access?.isOwner);
-  const itSection = itOnly || tabSearch === "it";
+  const itSection = itOnly || isOpsItPane(tabSearch);
   const view: "lighthouse" | "it" | "platform" = itSection
     ? "it"
-    : metricsOpen
+    : tabSearch === "usage"
       ? "platform"
       : "lighthouse";
   const lighthouseTab = parseLighthouseTab(tabSearch) ?? "pipeline";
+  const itPane: (typeof OPS_IT_PANES)[number] =
+    itOnly && tabSearch === "pilot" ? "it" : isOpsItPane(tabSearch) ? tabSearch : "it";
+  const skipDash = itOnly || (view === "it" && itPane !== "pilot");
 
   useEffect(() => {
-    if (!itOnly || tabSearch === "it") return;
+    if (!itOnly) return;
+    if (isOpsItPane(tabSearch) && tabSearch !== "pilot") return;
     void navigate({ to: "/ops", search: { tab: "it" }, replace: true });
   }, [itOnly, tabSearch, navigate]);
 
@@ -214,16 +238,17 @@ function OwnerOpsPage() {
       void navigate({ to: "/ops", search: { tab: "it" } });
       return;
     }
-    setMetricsOpen(key === "platform");
-    if (tabSearch === "it") {
-      void navigate({ to: "/ops", search: {} });
+    if (key === "platform") {
+      void navigate({ to: "/ops", search: { tab: "usage" } });
+      return;
     }
+    void navigate({ to: "/ops", search: {} });
   };
 
   if (
     authLoading ||
     (user && !accessChecked && !unlocked) ||
-    (unlocked && busy && !dash && !err && !itSection)
+    (unlocked && busy && !dash && !err && !skipDash)
   ) {
     return (
       <div className="milon-ops grid min-h-screen place-items-center text-[var(--ops-ink-dim)]">
@@ -321,7 +346,7 @@ function OwnerOpsPage() {
     );
   }
 
-  if (err && !dash && !itSection) {
+  if (err && !dash && !skipDash) {
     return (
       <div className="milon-ops grid min-h-screen place-items-center px-4 text-[var(--ops-ink-soft)]">
         <div className="w-full max-w-lg rounded-2xl border border-[var(--ops-danger-border)] bg-[var(--ops-danger-bg)] p-6">
@@ -424,7 +449,7 @@ function OwnerOpsPage() {
     );
   }
 
-  if (!dash && !itSection) return null;
+  if (!dash && !skipDash) return null;
 
   return (
     <div className="milon-ops">
@@ -498,7 +523,54 @@ function OwnerOpsPage() {
         )}
 
         {view === "lighthouse" && <LighthousePanel initialTab={lighthouseTab} />}
-        {view === "it" && <LighthouseItPanel />}
+        {view === "it" && (
+          <>
+            <div className="mb-5 flex flex-wrap gap-2">
+              {(
+                [
+                  ["it", "Queries"],
+                  ["access", "Access"],
+                  ...(itOnly ? [] : ([["pilot", "Pilot knobs"]] as const)),
+                ] as ReadonlyArray<readonly ["it" | "access" | "pilot", string]>
+              ).map(([key, label]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => void navigate({ to: "/ops", search: { tab: key } })}
+                  className={`rounded-full px-4 py-1.5 text-xs font-semibold uppercase tracking-wider transition-colors ${
+                    itPane === key
+                      ? "bg-[var(--ops-amber-soft)] text-[var(--ops-amber)]"
+                      : "border border-[var(--ops-line)] text-[var(--ops-ink-dim)] hover:text-[var(--ops-ink-soft)]"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            {itPane === "access" ? (
+              <LighthouseAccessPanel />
+            ) : itPane === "pilot" && !itOnly ? (
+              dash ? (
+                <PilotKnobs
+                  flags={flags}
+                  flagEntries={flagEntries}
+                  notes={notes}
+                  setFlags={setFlags}
+                  setNotes={setNotes}
+                  saveFlags={saveFlags}
+                  saveNotes={saveNotes}
+                />
+              ) : (
+                <div className="flex items-center gap-2 py-16 text-sm text-[var(--ops-ink-dim)]">
+                  <Loader2 className="h-4 w-4 animate-spin text-[var(--ops-amber)]" /> Loading
+                  knobs…
+                </div>
+              )
+            ) : (
+              <LighthouseItPanel />
+            )}
+          </>
+        )}
 
         {view === "platform" && dash && (
           <>
@@ -507,6 +579,13 @@ function OwnerOpsPage() {
                 {dash.migrationHint}
               </div>
             )}
+
+            <section className="mb-8">
+              <h2 className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-[var(--ops-ink-dim)]">
+                <Activity className="h-3.5 w-3.5 text-[var(--ops-amber)]" /> Product usage
+              </h2>
+              <LighthouseUsagePanel />
+            </section>
 
             {/* Signups */}
             <section className="mb-8">
@@ -696,83 +775,6 @@ function OwnerOpsPage() {
               </div>
             </section>
 
-            {/* Dev settings */}
-            <section className="mb-8">
-              <h2 className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-[var(--ops-ink-dim)]">
-                <FlaskConical className="h-3.5 w-3.5 text-[var(--ops-amber)]" /> Dev / pilot knobs
-              </h2>
-              <div className="grid gap-4 lg:grid-cols-2">
-                <div className="rounded-2xl border border-[var(--ops-line)] bg-[var(--ops-card)] p-4">
-                  <p className="mb-3 text-xs text-[var(--ops-ink-dim)]">
-                    Stored in <code className="text-[var(--ops-amber)]/80">milon_ops_settings</code>
-                    . Wire these into product gates next — toggles save immediately.
-                  </p>
-                  <div className="space-y-2">
-                    {flagEntries.map(([key, on]) => (
-                      <label
-                        key={key}
-                        className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border px-3 py-2.5 hover:border-amber-500/40"
-                        style={{ borderColor: "var(--ops-line)" }}
-                      >
-                        <span className="text-sm text-[var(--ops-ink-soft)]">
-                          {FLAG_LABELS[key] ?? key.replaceAll("_", " ")}
-                        </span>
-                        <button
-                          type="button"
-                          role="switch"
-                          aria-checked={on}
-                          className={`relative h-6 w-11 rounded-full transition-colors ${
-                            on ? "bg-amber-500" : "bg-slate-700"
-                          }`}
-                          onClick={async () => {
-                            const next = { ...flags, [key]: !on };
-                            setFlags(next);
-                            try {
-                              await saveFlags({ data: { flags: { [key]: !on } } });
-                              toast.success("Saved");
-                            } catch (ex) {
-                              setFlags(flags);
-                              toast.error(ex instanceof Error ? ex.message : "Save failed");
-                            }
-                          }}
-                        >
-                          <span
-                            className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform ${
-                              on ? "left-5" : "left-0.5"
-                            }`}
-                          />
-                        </button>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-                <div className="rounded-2xl border border-[var(--ops-line)] bg-[var(--ops-card)] p-4">
-                  <label className="text-xs font-bold uppercase tracking-[0.16em] text-[var(--ops-ink-dim)]">
-                    Pilot notes
-                  </label>
-                  <textarea
-                    className={`${inputCls} mt-2 min-h-[160px] resize-y`}
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                  />
-                  <button
-                    type="button"
-                    className="mt-2 inline-flex h-9 items-center rounded-full border border-amber-500/40 px-4 text-xs font-semibold uppercase tracking-wider text-[var(--ops-amber)] hover:bg-amber-500/10"
-                    onClick={async () => {
-                      try {
-                        await saveNotes({ data: { text: notes } });
-                        toast.success("Notes saved");
-                      } catch (ex) {
-                        toast.error(ex instanceof Error ? ex.message : "Save failed");
-                      }
-                    }}
-                  >
-                    Save notes
-                  </button>
-                </div>
-              </div>
-            </section>
-
             <section className="mb-10 rounded-2xl border border-[var(--ops-line)] bg-[var(--ops-card)] p-5">
               <h2 className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-[var(--ops-ink-dim)]">
                 <Sparkles className="h-3.5 w-3.5 text-[var(--ops-amber)]" /> Sales engine
@@ -797,6 +799,102 @@ function OwnerOpsPage() {
         </p>
       </div>
     </div>
+  );
+}
+
+function PilotKnobs({
+  flags,
+  flagEntries,
+  notes,
+  setFlags,
+  setNotes,
+  saveFlags,
+  saveNotes,
+}: {
+  flags: Record<string, boolean>;
+  flagEntries: Array<[string, boolean]>;
+  notes: string;
+  setFlags: (next: Record<string, boolean>) => void;
+  setNotes: (text: string) => void;
+  saveFlags: (args: { data: { flags: Record<string, boolean> } }) => Promise<unknown>;
+  saveNotes: (args: { data: { text: string } }) => Promise<unknown>;
+}) {
+  return (
+    <section className="mb-8">
+      <h2 className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-[var(--ops-ink-dim)]">
+        <FlaskConical className="h-3.5 w-3.5 text-[var(--ops-amber)]" /> Dev / pilot knobs
+      </h2>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <div className="rounded-2xl border border-[var(--ops-line)] bg-[var(--ops-card)] p-4">
+          <p className="mb-3 text-xs text-[var(--ops-ink-dim)]">
+            Stored in <code className="text-[var(--ops-amber)]/80">milon_ops_settings</code>. Wire
+            these into product gates next — toggles save immediately.
+          </p>
+          <div className="space-y-2">
+            {flagEntries.map(([key, on]) => (
+              <label
+                key={key}
+                className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border px-3 py-2.5 hover:border-amber-500/40"
+                style={{ borderColor: "var(--ops-line)" }}
+              >
+                <span className="text-sm text-[var(--ops-ink-soft)]">
+                  {FLAG_LABELS[key] ?? key.replaceAll("_", " ")}
+                </span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={on}
+                  className={`relative h-6 w-11 rounded-full transition-colors ${
+                    on ? "bg-amber-500" : "bg-slate-700"
+                  }`}
+                  onClick={async () => {
+                    const next = { ...flags, [key]: !on };
+                    setFlags(next);
+                    try {
+                      await saveFlags({ data: { flags: { [key]: !on } } });
+                      toast.success("Saved");
+                    } catch (ex) {
+                      setFlags(flags);
+                      toast.error(ex instanceof Error ? ex.message : "Save failed");
+                    }
+                  }}
+                >
+                  <span
+                    className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform ${
+                      on ? "left-5" : "left-0.5"
+                    }`}
+                  />
+                </button>
+              </label>
+            ))}
+          </div>
+        </div>
+        <div className="rounded-2xl border border-[var(--ops-line)] bg-[var(--ops-card)] p-4">
+          <label className="text-xs font-bold uppercase tracking-[0.16em] text-[var(--ops-ink-dim)]">
+            Pilot notes
+          </label>
+          <textarea
+            className={`${inputCls} mt-2 min-h-[160px] resize-y`}
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+          />
+          <button
+            type="button"
+            className="mt-2 inline-flex h-9 items-center rounded-full border border-amber-500/40 px-4 text-xs font-semibold uppercase tracking-wider text-[var(--ops-amber)] hover:bg-amber-500/10"
+            onClick={async () => {
+              try {
+                await saveNotes({ data: { text: notes } });
+                toast.success("Notes saved");
+              } catch (ex) {
+                toast.error(ex instanceof Error ? ex.message : "Save failed");
+              }
+            }}
+          >
+            Save notes
+          </button>
+        </div>
+      </div>
+    </section>
   );
 }
 

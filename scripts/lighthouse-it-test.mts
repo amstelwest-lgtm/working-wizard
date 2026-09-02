@@ -48,6 +48,8 @@ assert(layer.includes("focusNoteId"), "layer opens a deep-linked note");
 const panel = readFileSync(resolve("src/components/lighthouse-panel.tsx"), "utf8");
 assert(!panel.includes("LighthouseItPanel"), "IT is not nested inside sales Lighthouse tabs");
 assert(!panel.includes('"it"'), "sales tab list does not include it");
+assert(!panel.includes("LighthouseUsagePanel"), "usage is not a sales Lighthouse tab");
+assert(!panel.includes("LighthouseAccessPanel"), "access is not a sales Lighthouse tab");
 
 const itUi = readFileSync(resolve("src/components/lighthouse-it.tsx"), "utf8");
 assert(itUi.includes("Open this note on the customer profile"), "each query has a profile link");
@@ -69,7 +71,10 @@ const ops = readFileSync(resolve("src/routes/_authenticated/ops.tsx"), "utf8");
 assert(ops.includes("getOpsAccess"), "signed-in IT members skip the passphrase lock");
 assert(ops.includes("LighthouseItPanel"), "ops renders Milōn IT as its own section");
 assert(ops.includes('["it", "Milōn IT"]'), "owners get a Milōn IT section next to sales");
-assert(ops.includes('search.tab === "it"'), "ops URL tab=it still opens the IT section");
+assert(ops.includes("parseOpsSearchTab"), "ops URL tabs open the right Lighthouse section");
+assert(ops.includes('["access", "Access"]'), "IT section hosts access control");
+assert(ops.includes('["pilot", "Pilot knobs"]'), "IT section hosts pilot knobs");
+assert(ops.includes("LighthouseUsagePanel"), "product usage lives on platform metrics");
 assert(ops.includes("initialTab={lighthouseTab}"), "ops opens the requested sales tab");
 
 const roles = readFileSync(resolve("src/lib/user-roles.ts"), "utf8");

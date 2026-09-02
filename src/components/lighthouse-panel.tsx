@@ -1,6 +1,6 @@
 /**
- * Milōn Lighthouse — founder sales console (pipeline, usage, access, playbook, assets, settings).
- * Milōn IT is a sibling section on /ops, not a sales tab.
+ * Milōn Lighthouse — founder sales console (pipeline, playbook, assets, settings).
+ * Usage lives on Platform — metrics. Access and pilot knobs live on Milōn IT.
  *
  * Funnel design follows current cold-outreach benchmarks: five touches over
  * ~18 days with widening gaps, one distinct angle per touch, short plain-text
@@ -45,8 +45,6 @@ import {
   type LighthouseLead,
   type LighthouseStage,
 } from "@/lib/lighthouse.functions";
-import { LighthouseUsagePanel } from "@/components/lighthouse-usage";
-import { LighthouseAccessPanel } from "@/components/lighthouse-access";
 
 const inputCls = "ops-input";
 
@@ -69,14 +67,7 @@ const STEP_HINT: Record<number, string> = {
   5: "Day 18 · breakup — shortest email, highest reply rate",
 };
 
-export const LIGHTHOUSE_TABS = [
-  "pipeline",
-  "usage",
-  "access",
-  "playbook",
-  "assets",
-  "settings",
-] as const;
+export const LIGHTHOUSE_TABS = ["pipeline", "playbook", "assets", "settings"] as const;
 
 export type LighthouseTab = (typeof LIGHTHOUSE_TABS)[number];
 
@@ -147,28 +138,24 @@ export function LighthousePanel({ initialTab }: { initialTab?: LighthouseTab }) 
               : "border border-[var(--ops-line)] text-[var(--ops-ink-dim)] hover:text-[var(--ops-ink-soft)]"
           }`}
         >
-          {t === "access" ? "Access" : t}
+          {t}
         </button>
       ))}
       <span className="flex-1" />
-      {tab !== "access" ? (
-        <>
-          <button
-            type="button"
-            onClick={() => setImportOpen((o) => !o)}
-            className="inline-flex h-9 items-center gap-1.5 rounded-full border border-[var(--ops-line-strong)] px-3 text-xs font-semibold uppercase tracking-wider text-[var(--ops-ink-soft)] hover:border-[var(--ops-amber-border)]"
-          >
-            <Upload className="h-3.5 w-3.5" /> Import
-          </button>
-          <button
-            type="button"
-            onClick={() => setAddOpen((o) => !o)}
-            className="inline-flex h-9 items-center gap-1.5 rounded-full bg-gradient-to-r from-[#ac8400] via-[#d4af37] to-[#fdee79] px-4 text-xs font-bold uppercase tracking-wider text-[#1b1300]"
-          >
-            <Plus className="h-3.5 w-3.5" /> Lead
-          </button>
-        </>
-      ) : null}
+      <button
+        type="button"
+        onClick={() => setImportOpen((o) => !o)}
+        className="inline-flex h-9 items-center gap-1.5 rounded-full border border-[var(--ops-line-strong)] px-3 text-xs font-semibold uppercase tracking-wider text-[var(--ops-ink-soft)] hover:border-[var(--ops-amber-border)]"
+      >
+        <Upload className="h-3.5 w-3.5" /> Import
+      </button>
+      <button
+        type="button"
+        onClick={() => setAddOpen((o) => !o)}
+        className="inline-flex h-9 items-center gap-1.5 rounded-full bg-gradient-to-r from-[#ac8400] via-[#d4af37] to-[#fdee79] px-4 text-xs font-bold uppercase tracking-wider text-[#1b1300]"
+      >
+        <Plus className="h-3.5 w-3.5" /> Lead
+      </button>
       <button
         type="button"
         onClick={() => void refresh()}
@@ -179,15 +166,6 @@ export function LighthousePanel({ initialTab }: { initialTab?: LighthouseTab }) 
       </button>
     </div>
   );
-
-  if (tab === "access") {
-    return (
-      <div>
-        {tabBar}
-        <LighthouseAccessPanel />
-      </div>
-    );
-  }
 
   if (busy && !dash) {
     return (
@@ -370,8 +348,6 @@ export function LighthousePanel({ initialTab }: { initialTab?: LighthouseTab }) 
           <PipelineBoard leads={dash.leads} onOpen={(id) => setOpenLeadId(id)} />
         </>
       )}
-
-      {tab === "usage" && <LighthouseUsagePanel />}
 
       {tab === "playbook" && <Playbook dash={dash} />}
 
