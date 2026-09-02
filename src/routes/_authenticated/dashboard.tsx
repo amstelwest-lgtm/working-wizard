@@ -20,6 +20,7 @@ import {
 import {
   avgHealthDelta,
   buildAttentionItems,
+  buildFollowUpQueue,
   buildPortfolioInsights,
   clientsAddedThisMonth,
   dataAsOfLabel,
@@ -1081,6 +1082,26 @@ function Dashboard() {
     [clientRows],
   );
 
+  const followUpItems = useMemo(
+    () =>
+      buildFollowUpQueue(
+        clientRows.map((c) => ({
+          id: c.id,
+          name: c.name,
+          overdueActions: c.overdueActions,
+          openActions: c.openActions,
+        })),
+      ),
+    [clientRows],
+  );
+
+  const openClientPlan = (clientId: string, overdue: boolean) =>
+    navigate({
+      to: "/clients/$clientId",
+      params: { clientId },
+      search: overdue ? { tab: "plan", filter: "overdue" } : { tab: "plan" },
+    });
+
   const scatterClients = useMemo(
     () =>
       scoredRows
@@ -1353,7 +1374,11 @@ function Dashboard() {
             </div>
           </div>
 
-          <div className="stat">
+          <button
+            type="button"
+            className="stat stat-btn"
+            onClick={() => document.getElementById("follow-up")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+          >
             <div className="k">
               <svg viewBox="0 0 24 24">
                 <path d="M9 11l3 3L22 4" />
@@ -1364,12 +1389,12 @@ function Dashboard() {
             <div className="v">{loading ? "—" : openActionsTotal}</div>
             <div className="d">
               {actionsDueThisWeek > 0
-                ? `${actionsDueThisWeek} overdue`
+                ? `${actionsDueThisWeek} overdue — follow up`
                 : openActionsTotal > 0
-                  ? "Across action plans"
+                  ? "Across action plans — follow up"
                   : "No open actions"}
             </div>
-          </div>
+          </button>
         </div>
 
         {/* ===== PORTFOLIO HEALTH + ATTENTION ===== */}
@@ -1404,11 +1429,13 @@ function Dashboard() {
                     type="button"
                     className={`attn-card ${item.severity}`}
                     onClick={() =>
-                      navigate({
-                        to: "/clients/$clientId",
-                        params: { clientId: item.clientId },
-                        search: {},
-                      })
+                      item.openPlan
+                        ? openClientPlan(item.clientId, item.detail.includes("overdue"))
+                        : navigate({
+                            to: "/clients/$clientId",
+                            params: { clientId: item.clientId },
+                            search: {},
+                          })
                     }
                   >
                     <span className="rail" />
@@ -1426,6 +1453,44 @@ function Dashboard() {
               View all priorities
             </button>
           </div>
+        </div>
+
+        {/* ===== FOLLOW UP ON OUTSTANDING ACTIONS ===== */}
+        <div className="followup-panel" id="follow-up">
+          <div className="attn-head">
+            <h2>Follow up</h2>
+            <span className="followup-meta">
+              {loading
+                ? "Loading…"
+                : followUpItems.length
+                  ? `${followUpItems.length} client${followUpItems.length === 1 ? "" : "s"} with open Action Plan work`
+                  : "Nothing outstanding"}
+            </span>
+          </div>
+          {followUpItems.length === 0 ? (
+            <p className="followup-empty">
+              {loading ? "Checking action plans…" : "No overdue or open actions across the portfolio."}
+            </p>
+          ) : (
+            <div className="followup-list">
+              {followUpItems.map((item) => (
+                <button
+                  key={item.clientId}
+                  type="button"
+                  className="followup-row"
+                  onClick={() => openClientPlan(item.clientId, item.overdueActions > 0)}
+                >
+                  <span className="followup-name">{item.name}</span>
+                  <span className={`followup-count${item.overdueActions > 0 ? " overdue" : ""}`}>
+                    {item.overdueActions > 0
+                      ? `${item.overdueActions} overdue`
+                      : `${item.openActions} open`}
+                  </span>
+                  <span className="followup-cta">Chase →</span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* ===== PORTFOLIO INSIGHTS ===== */}
@@ -1527,6 +1592,7 @@ function Dashboard() {
                 <th className="hide-sm">Priority</th>
                 <th>Runway</th>
                 <th className="hide-sm">Queries</th>
+                <th className="hide-sm">Actions</th>
                 <th className="hide-sm">Op. profit (MTD)</th>
                 <th>Status</th>
                 <th style={{ textAlign: "right" }}>Actions</th>
@@ -1606,6 +1672,25 @@ function Dashboard() {
                         "—"
                       )}
                     </td>
+                    <td className="num hide-sm">
+                      {c.openActions > 0 ? (
+                        <button
+                          type="button"
+                          className={`followup-cell${c.overdueActions > 0 ? " overdue" : ""}`}
+                          title="Open Action Plan"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openClientPlan(c.id, c.overdueActions > 0);
+                          }}
+                        >
+                          {c.overdueActions > 0
+                            ? `${c.overdueActions} overdue`
+                            : `${c.openActions} open`}
+                        </button>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
                     <td className="num hide-sm">{opMarginStr(c)}</td>
                     <td>
                       <span className={`chip ${chip.cls}`}>
@@ -1662,6 +1747,16 @@ function Dashboard() {
                           <svg viewBox="0 0 24 24">
                             <rect x="3" y="5" width="18" height="14" rx="2" />
                             <path d="M3 7l9 6 9-6" />
+                          </svg>
+                        </button>
+                        <button
+                          className="icon-btn"
+                          title="Follow up on Action Plan"
+                          onClick={() => openClientPlan(c.id, c.overdueActions > 0)}
+                        >
+                          <svg viewBox="0 0 24 24">
+                            <path d="M9 11l3 3L22 4" />
+                            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
                           </svg>
                         </button>
                         {/* Open / Enter as client */}

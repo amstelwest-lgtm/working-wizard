@@ -312,13 +312,30 @@ export const Route = createFileRoute("/_authenticated/clients/$clientId")({
     onboard?: string;
     note?: string;
     tab?: string;
+    filter?: string;
   } => {
-    const out: { qbo?: string; reason?: string; onboard?: string; note?: string; tab?: string } = {};
+    const out: {
+      qbo?: string;
+      reason?: string;
+      onboard?: string;
+      note?: string;
+      tab?: string;
+      filter?: string;
+    } = {};
     if (typeof search.qbo === "string") out.qbo = search.qbo;
     if (typeof search.reason === "string") out.reason = search.reason;
     if (typeof search.onboard === "string") out.onboard = search.onboard;
     if (typeof search.note === "string") out.note = search.note;
     if (typeof search.tab === "string") out.tab = search.tab;
+    if (
+      search.filter === "overdue" ||
+      search.filter === "at_risk" ||
+      search.filter === "blocked" ||
+      search.filter === "done" ||
+      search.filter === "all"
+    ) {
+      out.filter = search.filter;
+    }
     return out;
   },
   component: ClientView,
@@ -2158,7 +2175,7 @@ function ClientView() {
           <span className="eyebrow">Live action plan</span>
           <div className="h-sec">What we agreed they&apos;d do</div>
           <p className="sub" style={{ marginBottom: 24 }}>
-            Same plan the owner sees under Next Moves / Action Plan — edit here without
+            Same plan the owner sees under Next Moves / Action Plan — chase overdue work from here, or edit without
             impersonating.
           </p>
           <div className="dark" style={{ colorScheme: "dark" }}>
@@ -2166,10 +2183,12 @@ function ClientView() {
               <Suspense fallback={<div style={{ padding: 24, color: "var(--ink-dim)" }}>Loading plan…</div>}>
                 {activeTab === "plan" && (
                   <ActionPlanPanel
+                    key={`${client.id}-${search.filter === "overdue" ? "overdue" : "all"}`}
                     clientId={client.id}
                     clientName={client.name}
                     simplified={viewMode === "simplified"}
                     isOwner
+                    initialFilter={search.filter === "overdue" ? "overdue" : undefined}
                   />
                 )}
               </Suspense>
