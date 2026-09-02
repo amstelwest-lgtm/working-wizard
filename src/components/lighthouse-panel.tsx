@@ -46,6 +46,7 @@ import {
 } from "@/lib/lighthouse.functions";
 import { LighthouseUsagePanel } from "@/components/lighthouse-usage";
 import { LighthouseItPanel } from "@/components/lighthouse-it";
+import { LighthouseAccessPanel } from "@/components/lighthouse-access";
 
 const inputCls = "ops-input";
 
@@ -72,6 +73,7 @@ export const LIGHTHOUSE_TABS = [
   "pipeline",
   "usage",
   "it",
+  "access",
   "playbook",
   "assets",
   "settings",
@@ -146,11 +148,11 @@ export function LighthousePanel({ initialTab }: { initialTab?: LighthouseTab }) 
               : "border border-[var(--ops-line)] text-[var(--ops-ink-dim)] hover:text-[var(--ops-ink-soft)]"
           }`}
         >
-          {t === "it" ? "IT queries" : t}
+            {t === "it" ? "IT queries" : t === "access" ? "Access" : t}
         </button>
       ))}
       <span className="flex-1" />
-      {tab !== "it" ? (
+      {tab !== "it" && tab !== "access" ? (
         <>
           <button
             type="button"
@@ -185,6 +187,15 @@ export function LighthousePanel({ initialTab }: { initialTab?: LighthouseTab }) 
       <div>
         {tabBar}
         <LighthouseItPanel />
+      </div>
+    );
+  }
+
+  if (tab === "access") {
+    return (
+      <div>
+        {tabBar}
+        <LighthouseAccessPanel />
       </div>
     );
   }

@@ -12,6 +12,7 @@ import {
 import { notifySignup } from "@/lib/signup-notify";
 import { OPS_UNLOCK_KEY } from "@/lib/owner-ops.functions";
 import { isOpsNext, lighthouseTabFromOpsNext } from "@/lib/client-note-link";
+import { accessTokenFromNext } from "@/lib/practice-access";
 import {
   clearForcePortal,
   forcePortal,
@@ -88,6 +89,11 @@ function AuthCallbackPage() {
         /* ignore */
       }
 
+      const accessTok = accessTokenFromNext(next);
+      if (accessTok) {
+        if (!cancelled) void navigate({ to: "/access/$token", params: { token: accessTok }, replace: true });
+        return;
+      }
       let path: "/app" | "/dashboard" | "/ops" = "/app";
       let opsTab: string | undefined;
       if (goOps || isOpsNext(next)) {

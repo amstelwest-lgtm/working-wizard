@@ -24,6 +24,7 @@ import { Route as EmailUnsubscribeRouteImport } from './routes/email/unsubscribe
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as ApiClientErrorRouteImport } from './routes/api/client-error'
 import { Route as AckTokenRouteImport } from './routes/ack.$token'
+import { Route as AccessTokenRouteImport } from './routes/access.$token'
 import { Route as AuthenticatedOpsRouteImport } from './routes/_authenticated/ops'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedSettingsIndexRouteImport } from './routes/_authenticated/settings.index'
@@ -31,6 +32,7 @@ import { Route as AuthenticatedReportsIndexRouteImport } from './routes/_authent
 import { Route as LovableEmailSuppressionRouteImport } from './routes/lovable/email/suppression'
 import { Route as ApiResendWebhookRouteImport } from './routes/api/resend/webhook'
 import { Route as ApiQboCallbackRouteImport } from './routes/api/qbo/callback'
+import { Route as AuthenticatedSettingsTeamRouteImport } from './routes/_authenticated/settings.team'
 import { Route as AuthenticatedSettingsBrandRouteImport } from './routes/_authenticated/settings.brand'
 import { Route as AuthenticatedReportsDemoRouteImport } from './routes/_authenticated/reports.demo'
 import { Route as AuthenticatedClientsClientIdRouteImport } from './routes/_authenticated/clients.$clientId'
@@ -112,6 +114,11 @@ const AckTokenRoute = AckTokenRouteImport.update({
   path: '/ack/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AccessTokenRoute = AccessTokenRouteImport.update({
+  id: '/access/$token',
+  path: '/access/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthenticatedOpsRoute = AuthenticatedOpsRouteImport.update({
   id: '/ops',
   path: '/ops',
@@ -149,6 +156,12 @@ const ApiQboCallbackRoute = ApiQboCallbackRouteImport.update({
   path: '/api/qbo/callback',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthenticatedSettingsTeamRoute =
+  AuthenticatedSettingsTeamRouteImport.update({
+    id: '/settings/team',
+    path: '/settings/team',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedSettingsBrandRoute =
   AuthenticatedSettingsBrandRouteImport.update({
     id: '/settings/brand',
@@ -197,6 +210,7 @@ export interface FileRoutesByFullPath {
   '/unsubscribe': typeof UnsubscribeRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/ops': typeof AuthenticatedOpsRoute
+  '/access/$token': typeof AccessTokenRoute
   '/ack/$token': typeof AckTokenRoute
   '/api/client-error': typeof ApiClientErrorRoute
   '/auth/callback': typeof AuthCallbackRoute
@@ -206,6 +220,7 @@ export interface FileRoutesByFullPath {
   '/clients/$clientId': typeof AuthenticatedClientsClientIdRoute
   '/reports/demo': typeof AuthenticatedReportsDemoRoute
   '/settings/brand': typeof AuthenticatedSettingsBrandRoute
+  '/settings/team': typeof AuthenticatedSettingsTeamRoute
   '/api/qbo/callback': typeof ApiQboCallbackRoute
   '/api/resend/webhook': typeof ApiResendWebhookRoute
   '/lovable/email/suppression': typeof LovableEmailSuppressionRoute
@@ -226,6 +241,7 @@ export interface FileRoutesByTo {
   '/unsubscribe': typeof UnsubscribeRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/ops': typeof AuthenticatedOpsRoute
+  '/access/$token': typeof AccessTokenRoute
   '/ack/$token': typeof AckTokenRoute
   '/api/client-error': typeof ApiClientErrorRoute
   '/auth/callback': typeof AuthCallbackRoute
@@ -235,6 +251,7 @@ export interface FileRoutesByTo {
   '/clients/$clientId': typeof AuthenticatedClientsClientIdRoute
   '/reports/demo': typeof AuthenticatedReportsDemoRoute
   '/settings/brand': typeof AuthenticatedSettingsBrandRoute
+  '/settings/team': typeof AuthenticatedSettingsTeamRoute
   '/api/qbo/callback': typeof ApiQboCallbackRoute
   '/api/resend/webhook': typeof ApiResendWebhookRoute
   '/lovable/email/suppression': typeof LovableEmailSuppressionRoute
@@ -257,6 +274,7 @@ export interface FileRoutesById {
   '/unsubscribe': typeof UnsubscribeRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/ops': typeof AuthenticatedOpsRoute
+  '/access/$token': typeof AccessTokenRoute
   '/ack/$token': typeof AckTokenRoute
   '/api/client-error': typeof ApiClientErrorRoute
   '/auth/callback': typeof AuthCallbackRoute
@@ -266,6 +284,7 @@ export interface FileRoutesById {
   '/_authenticated/clients/$clientId': typeof AuthenticatedClientsClientIdRoute
   '/_authenticated/reports/demo': typeof AuthenticatedReportsDemoRoute
   '/_authenticated/settings/brand': typeof AuthenticatedSettingsBrandRoute
+  '/_authenticated/settings/team': typeof AuthenticatedSettingsTeamRoute
   '/api/qbo/callback': typeof ApiQboCallbackRoute
   '/api/resend/webhook': typeof ApiResendWebhookRoute
   '/lovable/email/suppression': typeof LovableEmailSuppressionRoute
@@ -288,6 +307,7 @@ export interface FileRouteTypes {
     | '/unsubscribe'
     | '/dashboard'
     | '/ops'
+    | '/access/$token'
     | '/ack/$token'
     | '/api/client-error'
     | '/auth/callback'
@@ -297,6 +317,7 @@ export interface FileRouteTypes {
     | '/clients/$clientId'
     | '/reports/demo'
     | '/settings/brand'
+    | '/settings/team'
     | '/api/qbo/callback'
     | '/api/resend/webhook'
     | '/lovable/email/suppression'
@@ -317,6 +338,7 @@ export interface FileRouteTypes {
     | '/unsubscribe'
     | '/dashboard'
     | '/ops'
+    | '/access/$token'
     | '/ack/$token'
     | '/api/client-error'
     | '/auth/callback'
@@ -326,6 +348,7 @@ export interface FileRouteTypes {
     | '/clients/$clientId'
     | '/reports/demo'
     | '/settings/brand'
+    | '/settings/team'
     | '/api/qbo/callback'
     | '/api/resend/webhook'
     | '/lovable/email/suppression'
@@ -347,6 +370,7 @@ export interface FileRouteTypes {
     | '/unsubscribe'
     | '/_authenticated/dashboard'
     | '/_authenticated/ops'
+    | '/access/$token'
     | '/ack/$token'
     | '/api/client-error'
     | '/auth/callback'
@@ -356,6 +380,7 @@ export interface FileRouteTypes {
     | '/_authenticated/clients/$clientId'
     | '/_authenticated/reports/demo'
     | '/_authenticated/settings/brand'
+    | '/_authenticated/settings/team'
     | '/api/qbo/callback'
     | '/api/resend/webhook'
     | '/lovable/email/suppression'
@@ -376,6 +401,7 @@ export interface RootRouteChildren {
   ForOwnersRoute: typeof ForOwnersRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   UnsubscribeRoute: typeof UnsubscribeRoute
+  AccessTokenRoute: typeof AccessTokenRoute
   AckTokenRoute: typeof AckTokenRoute
   ApiClientErrorRoute: typeof ApiClientErrorRoute
   EmailUnsubscribeRoute: typeof EmailUnsubscribeRoute
@@ -496,6 +522,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AckTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/access/$token': {
+      id: '/access/$token'
+      path: '/access/$token'
+      fullPath: '/access/$token'
+      preLoaderRoute: typeof AccessTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_authenticated/ops': {
       id: '/_authenticated/ops'
       path: '/ops'
@@ -544,6 +577,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/api/qbo/callback'
       preLoaderRoute: typeof ApiQboCallbackRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/settings/team': {
+      id: '/_authenticated/settings/team'
+      path: '/settings/team'
+      fullPath: '/settings/team'
+      preLoaderRoute: typeof AuthenticatedSettingsTeamRouteImport
+      parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/settings/brand': {
       id: '/_authenticated/settings/brand'
@@ -596,6 +636,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedClientsClientIdRoute: typeof AuthenticatedClientsClientIdRoute
   AuthenticatedReportsDemoRoute: typeof AuthenticatedReportsDemoRoute
   AuthenticatedSettingsBrandRoute: typeof AuthenticatedSettingsBrandRoute
+  AuthenticatedSettingsTeamRoute: typeof AuthenticatedSettingsTeamRoute
   AuthenticatedReportsIndexRoute: typeof AuthenticatedReportsIndexRoute
   AuthenticatedSettingsIndexRoute: typeof AuthenticatedSettingsIndexRoute
 }
@@ -606,6 +647,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedClientsClientIdRoute: AuthenticatedClientsClientIdRoute,
   AuthenticatedReportsDemoRoute: AuthenticatedReportsDemoRoute,
   AuthenticatedSettingsBrandRoute: AuthenticatedSettingsBrandRoute,
+  AuthenticatedSettingsTeamRoute: AuthenticatedSettingsTeamRoute,
   AuthenticatedReportsIndexRoute: AuthenticatedReportsIndexRoute,
   AuthenticatedSettingsIndexRoute: AuthenticatedSettingsIndexRoute,
 }
@@ -634,6 +676,7 @@ const rootRouteChildren: RootRouteChildren = {
   ForOwnersRoute: ForOwnersRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   UnsubscribeRoute: UnsubscribeRoute,
+  AccessTokenRoute: AccessTokenRoute,
   AckTokenRoute: AckTokenRoute,
   ApiClientErrorRoute: ApiClientErrorRoute,
   EmailUnsubscribeRoute: EmailUnsubscribeRoute,

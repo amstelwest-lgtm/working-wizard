@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import {
+  Users,
   ArrowLeft,
   Building2,
   LogOut,
@@ -169,6 +170,13 @@ function SettingsPage() {
               </h2>
             </div>
             <div className="space-y-2">
+              <Link
+                to="/settings/team"
+                className="flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-950/50 px-4 py-3 text-sm text-slate-200 transition hover:border-[#d4a550]/50 hover:bg-[#d4a550]/10"
+              >
+                <Users className="h-4 w-4 text-[#d4a550]" />
+                Team & client access
+              </Link>
               <Link
                 to="/settings/brand"
                 className="flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-950/50 px-4 py-3 text-sm text-slate-200 transition hover:border-[#d4a550]/50 hover:bg-[#d4a550]/10"
