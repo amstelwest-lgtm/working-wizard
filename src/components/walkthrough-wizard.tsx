@@ -158,7 +158,7 @@ const ACCOUNTANT_CLIENT_STEPS: Step[] = [
     targetId: "pane-reports",
     section: "Reports",
     title: "Deliver branded advice",
-    body: "Pick a deliverable, sign off the numbers, and generate a board-ready PDF — the recurring product for the practice.",
+    body: "This is the same Reports Studio as the rest of the practice — preview or generate a board-ready PDF from this client’s figures.",
   },
   {
     tab: "plan",

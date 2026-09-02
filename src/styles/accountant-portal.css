@@ -282,15 +282,6 @@ html[data-theme="light"] .accountant-portal .doc{background:linear-gradient(170d
 .accountant-portal .cf-note .dot{width:8px;height:8px;border-radius:50%;background:var(--warn)}
 .accountant-portal .cf-note b{color:var(--warn)}
 
-/* reports gallery */
-.accountant-portal .rep-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px;margin-top:18px}
-.accountant-portal .rep-card{border:1px solid var(--line);border-radius:18px;padding:22px;background:var(--card);transition:all .3s var(--ease);display:flex;flex-direction:column;gap:10px}
-.accountant-portal .rep-card:hover{transform:translateY(-5px);border-color:var(--gold);box-shadow:var(--shadow-gold)}
-.accountant-portal .rep-card .ic{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;background:linear-gradient(150deg,rgba(212,175,55,.16),rgba(212,175,55,.04));border:1px solid var(--line)}
-.accountant-portal .rep-card .ic svg{width:20px;height:20px;stroke:var(--gold);stroke-width:1.6;fill:none;stroke-linecap:round;stroke-linejoin:round}
-.accountant-portal .rep-card b{font-size:14.5px}
-.accountant-portal .rep-card p{font-size:12px;color:var(--ink-dim);flex:1}
-.accountant-portal .rep-card .acts{display:flex;gap:8px}
 .accountant-portal .footer-note{margin-top:60px;text-align:center;font-size:12px;color:var(--ink-faint)}
 
 /* ===== dashboard greeting ===== */

@@ -94,6 +94,10 @@ import { upsertCurrentPeriodSnapshot } from "@/lib/financial-snapshots";
 import { stampFromSignoff } from "@/lib/review-signoff-stamp";
 
 const ActionPlanPanel = lazyPanel(() => import("@/components/action-plan"), "Action Plan");
+const ReportsStudioPanel = lazyPanel(
+  () => import("@/routes/_authenticated/reports.index").then((m) => ({ default: m.ReportsStudio })),
+  "Reports",
+);
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
@@ -407,71 +411,6 @@ const SPHERE_RATIO_META: Record<string, { friendly: string }> = {
 // Maps computeRatios() human-readable names → camelCase healthMap keys
 // (shared RATIO_NAME_TO_KEY from @/lib/health-score)
 
-// ── Report gallery definitions (names match Reports Studio / PDF titles) ──
-const REPORT_TEMPLATES = [
-  {
-    key: "scorecard",
-    name: "Financial Health Scorecard",
-    desc: "Overall score, four pillars, and every tracked ratio with tier badges.",
-    iconPath: "M9 17V9M13 17v-5M17 17v-8",
-  },
-  {
-    key: "intervention",
-    name: "Priority Intervention Plan",
-    desc: "Ranked action steps for at-risk and critical ratios.",
-    iconPath: "M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11",
-  },
-  {
-    key: "forecast",
-    name: "13-Week Cash Flow Forecast",
-    desc: "Weekly cash position, runway to the R50k floor, and assumptions.",
-    iconPath: "M3 17l6-6 4 4 8-8",
-  },
-  {
-    key: "cycle",
-    name: "Cash Flow Cycle Report",
-    desc: "Debtors, stock, creditors, and cash trapped in the cycle.",
-    iconPath: "M21 12a9 9 0 1 1-6.2-8.6M21 3v6h-6",
-  },
-  {
-    key: "waterfall",
-    name: "Profitability Waterfall",
-    desc: "Revenue through to net profit with margin bridges.",
-    iconPath:
-      "M12 8c-2 0-3 .9-3 2s1 1.6 3 2 3 1 3 2-1 2-3 2M12 6v2M12 16v2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0",
-  },
-  {
-    key: "leverage",
-    name: "Leverage & Solvency",
-    desc: "Debt structure, equity bridge, and financing ratios.",
-    iconPath: "M4 10h16M4 14h16M7 10V7a5 5 0 0 1 10 0v3",
-  },
-  {
-    key: "assets",
-    name: "Asset Productivity",
-    desc: "DuPont ROE tree, capex vs depreciation, and asset turns.",
-    iconPath: "M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2zM22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z",
-  },
-  {
-    key: "labor",
-    name: "Labour Productivity",
-    desc: "Revenue per employee, GP per labour rand, growth vs inflation.",
-    iconPath: "M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75",
-  },
-  {
-    key: "movement",
-    name: "Ratio Movement",
-    desc: "Tracked ratios across four periods — declines highlighted.",
-    iconPath: "M23 6l-9.5 9.5-5-5L1 18M17 6h6v6",
-  },
-  {
-    key: "benchmark",
-    name: "Industry Benchmark Report",
-    desc: "Each ratio vs sector median and top quartile.",
-    iconPath: "M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01",
-  },
-];
-
 // ── Component ──────────────────────────────────────────────────────────────
 
 function ClientView() {
@@ -523,6 +462,10 @@ function ClientView() {
   const [client, setClient] = useState<Client | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<ActiveTab>("ratios");
+  const [studioDeepLink, setStudioDeepLink] = useState<{
+    report?: string;
+    action?: "preview" | "download";
+  }>({});
   useEffect(() => {
     const next = resolveAccountantTab(search.tab);
     if (next) setActiveTab(next);
@@ -1083,12 +1026,9 @@ function ClientView() {
   // ── Deliverables bar actions ──────────────────────────────────────────────
 
   const handleGenerateReport = useCallback(() => {
-    if (!client) return;
-    navigate({
-      to: "/reports",
-      search: { client: client.name, clientId: client.id, report: undefined, action: undefined },
-    });
-  }, [client, navigate]);
+    setStudioDeepLink({});
+    setActiveTab("reports");
+  }, []);
 
   const handleExportPDF = useCallback(async () => {
     if (!client) return;
@@ -1280,22 +1220,6 @@ function ClientView() {
   }, [clientId, firmId, track]);
 
   // ── Report navigation ─────────────────────────────────────────────────────
-
-  const navigateToReport = useCallback(
-    (reportKey?: string, action: "preview" | "download" = "preview") => {
-      if (!client) return;
-      navigate({
-        to: "/reports",
-        search: {
-          client: client.name,
-          clientId: client.id,
-          report: reportKey,
-          action: reportKey ? action : undefined,
-        },
-      });
-    },
-    [client, navigate],
-  );
 
   const handleTourTabChange = useCallback((tab: string) => {
     const next = resolveAccountantTab(tab);
@@ -1562,17 +1486,10 @@ function ClientView() {
         <PeriodVarianceStrip
           chips={varianceChips}
           priorLabel={priorSnapshot?.period_label ?? null}
-          onOpenMovement={() =>
-            navigate({
-              to: "/reports",
-              search: {
-                client: client.name,
-                clientId: client.id,
-                report: "movement",
-                action: "preview",
-              },
-            })
-          }
+          onOpenMovement={() => {
+            setStudioDeepLink({ report: "movement", action: "preview" });
+            setActiveTab("reports");
+          }}
         />
 
         {/* ===== DELIVERABLES ACTION BAR ===== */}
@@ -2139,35 +2056,26 @@ function ClientView() {
           </div>
         </div>
 
-        {/* ===== REPORTS TAB ===== */}
+        {/* ===== REPORTS TAB — same Reports Studio as /reports ===== */}
         <div className={`tabpane${activeTab === "reports" ? " on" : ""}`} id="pane-reports">
-          <span className="eyebrow">White-label reports — this client</span>
-          <div className="h-sec">Choose a deliverable</div>
-          <p className="sub">
-            Each report is generated from live figures and branded to your practice. Sign off the matching tab
-            (Health, Profit, Cash, Budget) so that deliverable&apos;s stamp appears on its PDF — not across the whole profile.
+          <p className="sub" style={{ marginBottom: 8 }}>
+            Sign off Health, Profit, Cash or Budget so that deliverable&apos;s stamp appears on its PDF.
           </p>
-          <div className="rep-grid">
-            {REPORT_TEMPLATES.map((r) => (
-              <div key={r.key} className="rep-card">
-                <span className="ic">
-                  <svg viewBox="0 0 24 24">
-                    <path d={r.iconPath} />
-                  </svg>
-                </span>
-                <b>{r.name}</b>
-                <p>{r.desc}</p>
-                <div className="acts">
-                  <button className="btn ghost mini" onClick={() => navigateToReport(r.key, "preview")}>
-                    Preview
-                  </button>
-                  <button className="btn gold mini" onClick={() => navigateToReport(r.key, "download")}>
-                    Generate
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
+          {activeTab === "reports" && (
+            <TabErrorBoundary label="Reports">
+              <Suspense fallback={<div style={{ padding: 24, color: "var(--ink-dim)" }}>Loading reports…</div>}>
+                <ReportsStudioPanel
+                  key={client.id}
+                  client={client.name}
+                  clientId={client.id}
+                  report={studioDeepLink.report}
+                  action={studioDeepLink.action}
+                  embedded
+                  onSearchCleared={() => setStudioDeepLink({})}
+                />
+              </Suspense>
+            </TabErrorBoundary>
+          )}
         </div>
 
         {/* ===== ACTION PLAN TAB ===== */}
