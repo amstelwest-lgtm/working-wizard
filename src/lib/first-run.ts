@@ -23,6 +23,29 @@ export function shouldShowOwnerProfileFunnel(opts: {
 }
 
 /**
+ * Hold the boot spinner until the founder board can paint the right surface.
+ * Otherwise sign-in flashes "Add your financials" / empty-score copy, then
+ * swaps to the profile funnel (or the real orb) a beat later.
+ */
+export function ownerBoardReady(opts: {
+  roleResolved: boolean;
+  clientLinkResolved: boolean;
+  effectiveClientId: string | null;
+  onboardingGateReady: boolean;
+  firstRunStep: FirstRunStep;
+  profileFunnelOpen: boolean;
+  financialsHydrated: boolean;
+}): boolean {
+  if (!opts.roleResolved || !opts.clientLinkResolved) return false;
+  if (!opts.effectiveClientId) return true;
+  if (!opts.onboardingGateReady) return false;
+  // First-run dialogs cover the board — don't wait for financials (and don't
+  // drop back to a spinner between the profile funnel and the data nudge).
+  if (opts.profileFunnelOpen || opts.firstRunStep !== null) return true;
+  return opts.financialsHydrated;
+}
+
+/**
  * Feature walkthrough starts once first-run dialogs are gone.
  * Do not wait for uploaded financials — first login would otherwise never
  * tour the board if the owner skipped (or had not yet done) bank upload.

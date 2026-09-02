@@ -988,6 +988,27 @@ function LandingPage() {
     );
   }
 
+  /* Signed-in visitors bounce to /app or /dashboard. Don't flash the landing
+     hero while that lookup runs. Invite accept stays on this page. */
+  if (user && !loading && !inviteClientId && !pendingInviteTokenFromUrl()) {
+    return (
+      <div
+        data-milon-landing=""
+        style={{
+          minHeight: "100vh",
+          background: "#07090f",
+          display: "grid",
+          placeItems: "center",
+        }}
+      >
+        <div
+          className="h-6 w-6 animate-spin rounded-full border-2 border-[#c9962b]/30 border-t-[#c9962b]"
+          aria-label="Opening your workspace"
+        />
+      </div>
+    );
+  }
+
   /* ═══════════════════════════ MAIN RENDER ═══════════════════════════ */
   return (
     <div
