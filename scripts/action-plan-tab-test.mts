@@ -44,6 +44,10 @@ assert(clientSrc.includes('<TabErrorBoundary label="Action Plan">'), "client boa
 assert(!clientSrc.includes('label: "Staff tasks"'), "accountant portal no longer has a Staff tasks tab");
 assert(!clientSrc.includes("TasksPanel"), "accountant portal no longer mounts the staff tasks panel");
 assert(clientSrc.includes('if (tab === "tasks") return "plan"'), "old staff-tasks links open Action Plan");
+assert(
+  clientSrc.includes('{activeTab === "plan" && ('),
+  "accountant remounts Action Plan when the tab is opened so owner edits are not stale",
+);
 
 const wizardSrc = readFileSync(resolve("src/components/walkthrough-wizard.tsx"), "utf8");
 assert(wizardSrc.includes("if (!s) return"), "walkthrough guards missing steps");
@@ -94,6 +98,8 @@ assert(planSrc.includes('onClick={(e) => { e.stopPropagation(); setAdding(true);
 assert(planSrc.includes("onClick={pickOwner ? undefined : onOpen}"), "row click is disabled while the owner picker is open");
 assert(planSrc.includes("toActionItemWrite(patch)"), "owner patches strip view-only columns before writing");
 assert(planSrc.includes("toActionItemWrite(extra ?? {})"), "inserts also strip view-only columns");
+assert(planSrc.includes("visibilitychange"), "plan refetches when the window is focused again");
+assert(planSrc.includes("The other side may have created the active plan first"), "concurrent plan create reloads the shared row");
 
 const ownerWrite = toActionItemWrite({
   owner_id: "emp-1",

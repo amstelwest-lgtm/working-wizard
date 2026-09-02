@@ -2164,12 +2164,14 @@ function ClientView() {
           <div className="dark" style={{ colorScheme: "dark" }}>
             <TabErrorBoundary label="Action Plan">
               <Suspense fallback={<div style={{ padding: 24, color: "var(--ink-dim)" }}>Loading plan…</div>}>
-                <ActionPlanPanel
-                  clientId={client.id}
-                  clientName={client.name}
-                  simplified={viewMode === "simplified"}
-                  isOwner
-                />
+                {activeTab === "plan" && (
+                  <ActionPlanPanel
+                    clientId={client.id}
+                    clientName={client.name}
+                    simplified={viewMode === "simplified"}
+                    isOwner
+                  />
+                )}
               </Suspense>
             </TabErrorBoundary>
           </div>
