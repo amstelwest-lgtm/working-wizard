@@ -2086,22 +2086,23 @@ function ClientView() {
             Same plan the owner sees under Next Moves / Action Plan — chase overdue work from here, or edit without
             impersonating.
           </p>
-          <div className="dark" style={{ colorScheme: "dark" }}>
-            <TabErrorBoundary label="Action Plan">
-              <Suspense fallback={<div style={{ padding: 24, color: "var(--ink-dim)" }}>Loading plan…</div>}>
-                {activeTab === "plan" && (
-                  <ActionPlanPanel
-                    key={`${client.id}-${search.filter === "overdue" ? "overdue" : "all"}`}
-                    clientId={client.id}
-                    clientName={client.name}
-                    simplified={viewMode === "simplified"}
-                    isOwner
-                    initialFilter={search.filter === "overdue" ? "overdue" : undefined}
-                  />
-                )}
-              </Suspense>
-            </TabErrorBoundary>
-          </div>
+          {/* Follow the portal theme. A nested `.dark` island made Tailwind
+              light-on-dark copy fire while accountant `--card` stayed a
+              near-transparent cream — titles vanished in light mode. */}
+          <TabErrorBoundary label="Action Plan">
+            <Suspense fallback={<div style={{ padding: 24, color: "var(--ink-dim)" }}>Loading plan…</div>}>
+              {activeTab === "plan" && (
+                <ActionPlanPanel
+                  key={`${client.id}-${search.filter === "overdue" ? "overdue" : "all"}`}
+                  clientId={client.id}
+                  clientName={client.name}
+                  simplified={viewMode === "simplified"}
+                  isOwner
+                  initialFilter={search.filter === "overdue" ? "overdue" : undefined}
+                />
+              )}
+            </Suspense>
+          </TabErrorBoundary>
           <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 16 }}>
             <ReviewSignoffButton
               clientId={clientId}
