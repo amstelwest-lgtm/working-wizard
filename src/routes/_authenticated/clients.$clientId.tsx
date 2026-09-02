@@ -8,7 +8,6 @@ import { AdvisoryDrafter } from "@/components/advisory-drafter";
 import { CashForecastPanel } from "@/components/cash-forecast";
 import { BudgetPanel } from "@/components/budget/budget-panel";
 import type { ExistingCashflow } from "@/lib/cash-from-banks.publish";
-import { TasksPanel } from "@/components/tasks-panel";
 import { UploadFinancials } from "@/components/upload-financials";
 import { BankStatementDrafter } from "@/components/bank-statement-drafter";
 import { WalkthroughWizard } from "@/components/walkthrough-wizard";
@@ -346,8 +345,24 @@ type ActiveTab =
   | "budget"
   | "reports"
   | "plan"
-  | "tasks"
   | "advisory";
+
+const ACCOUNTANT_TABS: ActiveTab[] = [
+  "ratios",
+  "profit",
+  "cash",
+  "budget",
+  "reports",
+  "plan",
+  "advisory",
+];
+
+/** Old Staff tasks deep-links land on Action Plan. */
+function resolveAccountantTab(tab: string | undefined): ActiveTab | null {
+  if (!tab) return null;
+  if (tab === "tasks") return "plan";
+  return ACCOUNTANT_TABS.includes(tab as ActiveTab) ? (tab as ActiveTab) : null;
+}
 
 // Friendly labels for SphereHero drivers
 const SPHERE_RATIO_META: Record<string, { friendly: string }> = {
@@ -492,19 +507,8 @@ function ClientView() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<ActiveTab>("ratios");
   useEffect(() => {
-    const allowed: ActiveTab[] = [
-      "ratios",
-      "profit",
-      "cash",
-      "budget",
-      "reports",
-      "plan",
-      "tasks",
-      "advisory",
-    ];
-    if (search.tab && allowed.includes(search.tab as ActiveTab)) {
-      setActiveTab(search.tab as ActiveTab);
-    }
+    const next = resolveAccountantTab(search.tab);
+    if (next) setActiveTab(next);
     if (search.note) requestOpenNote(search.note);
   }, [search.note, search.tab, requestOpenNote]);
   useEffect(() => {
@@ -1277,18 +1281,8 @@ function ClientView() {
   );
 
   const handleTourTabChange = useCallback((tab: string) => {
-    if (
-      tab === "ratios" ||
-      tab === "profit" ||
-      tab === "cash" ||
-      tab === "budget" ||
-      tab === "reports" ||
-      tab === "plan" ||
-      tab === "tasks" ||
-      tab === "advisory"
-    ) {
-      setActiveTab(tab);
-    }
+    const next = resolveAccountantTab(tab);
+    if (next) setActiveTab(next);
   }, []);
 
   // ── Loading / error states ────────────────────────────────────────────────
@@ -1607,7 +1601,6 @@ function ClientView() {
               { id: "budget", label: "Budget" },
               { id: "reports", label: "Reports", star: true },
               { id: "plan", label: "Action Plan", star: true },
-              { id: "tasks", label: "Staff tasks" },
               { id: "advisory", label: "Advisory Drafter" },
             ] as { id: ActiveTab; label: string; star?: boolean }[]
           ).map((t) => (
@@ -2192,11 +2185,6 @@ function ClientView() {
           </div>
         </div>
 
-        {/* ===== STAFF TASKS TAB ===== */}
-        <div className={`tabpane${activeTab === "tasks" ? " on" : ""}`} id="pane-tasks">
-          <TasksPanel clientId={client.id} clientName={client.name} />
-        </div>
-
         {/* ===== ADVISORY TAB ===== */}
         <div className={`tabpane${activeTab === "advisory" ? " on" : ""}`} id="pane-advisory">
           <AdvisoryDrafter
@@ -2248,17 +2236,8 @@ function ClientView() {
           }
           onNotesChanged={() => setQueriesRefresh((n) => n + 1)}
           onNeedTab={(next) => {
-            const allowed: ActiveTab[] = [
-              "ratios",
-              "profit",
-              "cash",
-              "budget",
-              "reports",
-              "plan",
-              "tasks",
-              "advisory",
-            ];
-            if (allowed.includes(next as ActiveTab)) setActiveTab(next as ActiveTab);
+            const resolved = resolveAccountantTab(next);
+            if (resolved) setActiveTab(resolved);
           }}
         />
       )}
