@@ -9,5 +9,11 @@
       "includeFiles": "dist/server/**"
     }
   },
-  "rewrites": [{ "source": "/(.*)", "destination": "/api/server" }]
+  "rewrites": [{ "source": "/(.*)", "destination": "/api/server" }],
+  "crons": [
+    {
+      "path": "/api/metrics-digest",
+      "schedule": "0 6 * * 1"
+    }
+  ]
 }

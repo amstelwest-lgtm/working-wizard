@@ -2,7 +2,9 @@
 
 Phase 0 inventory: [`INVENTORY.md`](./INVENTORY.md), [`PROPOSED_TAXONOMY.md`](./PROPOSED_TAXONOMY.md) (approved).
 
-Phase 1 is the **event spine**. Phase 2 is the **derived layer** (definitions, cohort views, commitment ladder, stall queue, signal log). It is not a dashboard. Cumulative `/ops` signup/revenue totals stay as bookkeeping and are not this instrument.
+Phase 1 is the **event spine**. Phase 2 is the **derived layer**. Phase 3 is the **founder instrument**: `/founder/metrics`, Monday digest, experiment registry, 24-month purge RPC. Cumulative `/ops` signup/revenue totals stay as bookkeeping and are not this instrument.
+
+Phases: [`PHASES.md`](./PHASES.md). Questions: [`QUESTIONS.md`](./QUESTIONS.md).
 
 Definitions live in one place: [`src/lib/metrics/definitions.ts`](../../src/lib/metrics/definitions.ts).
 
@@ -13,10 +15,11 @@ Phase 1 (already applied if the spine check returned rows):
 1. `supabase/migrations/20260902120000_analytics_events_spine.sql`
 2. `supabase/migrations/20260902121000_analytics_events_triggers.sql`
 
-Phase 2 — paste **in order** in the Supabase SQL editor:
+Phase 2 + 3 — paste **in order** in the Supabase SQL editor (do not re-run Phase 1):
 
 3. `supabase/migrations/20260902200000_analytics_derived_views.sql`
 4. `supabase/migrations/20260902201000_analytics_commitment_stalls.sql`
+5. `supabase/migrations/20260902300000_analytics_experiments_digest.sql`
 
 Then, once, to snapshot the ladder and fill this week's call list:
 
@@ -97,10 +100,22 @@ Weekly snapshot on `analytics.practice_commitment_weekly`. Live picture: `analyt
 
 GET `/t/:token` and GET `/ack/:token` write **no** analytics and **no** product rows.
 
+## Privacy (POPIA)
+
+Raw `analytics.events` store event keys, ids, and non-financial properties. No amounts, no employee emails, no ID numbers. Magic-link actors are a hash of the token. Retention of raw events is 24 months (`analytics_purge_old_events`). Aggregates stay. Public privacy-policy copy is not changed until Theo approves question 10.
+
 ## Rollback
 
 [`ROLLBACK.sql`](./ROLLBACK.sql) drops the analytics schema and new columns. Product tables are otherwise unchanged.
 
+## Founder instrument (Phase 3)
+
+- `/founder/metrics` — platform owner only (`assertPlatformOwner`, not IT). Linked from `/ops` for owners.
+- Order on the page: one question / one number → call list → loop + interpretation → cohort tables → H1–H5 → signals → experiments.
+- Weekly digest: `GET /api/metrics-digest` without a secret writes nothing and returns no numbers. `GET`/`POST` with `CRON_SECRET` or `MILON_DIGEST_SECRET` sends. Vercel cron: Monday 06:00 UTC. Founder **Send digest** button also works.
+- Experiments require a written prediction before a result. Pivot needs a `pivot_type`.
+- Retention: `select public.analytics_purge_old_events(24);` deletes raw events only. Snapshots stay. Do not schedule until you have read the count.
+
 ## What this is not
 
-No founder dashboard, weekly digest, or experiment registry yet (Phase 3). Do not add NPS, customer-facing analytics, or cumulative signup/report counters on this instrument.
+Do not add NPS, customer-facing analytics, or cumulative signup/report counters on this instrument. Do not put these numbers on `/ops?tab=usage`.

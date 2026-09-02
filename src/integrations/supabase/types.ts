@@ -1537,6 +1537,31 @@ export type Database = {
         }
         Returns: undefined
       }
+      analytics_create_experiment: {
+        Args: {
+          p_name: string
+          p_hypothesis_id: string
+          p_prediction: string
+          p_success_metric: string
+          p_success_threshold: number
+          p_cohort_filter?: Json
+          p_ends_at?: string
+        }
+        Returns: number
+      }
+      analytics_decide_experiment: {
+        Args: {
+          p_id: number
+          p_decision: string
+          p_result: string
+          p_pivot_type?: string
+        }
+        Returns: undefined
+      }
+      analytics_purge_old_events: {
+        Args: { p_months?: number }
+        Returns: number
+      }
     }
     Enums: {
       action_health:

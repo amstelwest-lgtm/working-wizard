@@ -23,6 +23,7 @@ import { Route as LhUnsubscribeRouteImport } from './routes/lh/unsubscribe'
 import { Route as EmailUnsubscribeRouteImport } from './routes/email/unsubscribe'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as ApiTaskEngagedRouteImport } from './routes/api/task-engaged'
+import { Route as ApiMetricsDigestRouteImport } from './routes/api/metrics-digest'
 import { Route as ApiClientErrorRouteImport } from './routes/api/client-error'
 import { Route as AckTokenRouteImport } from './routes/ack.$token'
 import { Route as AccessTokenRouteImport } from './routes/access.$token'
@@ -36,6 +37,7 @@ import { Route as ApiQboCallbackRouteImport } from './routes/api/qbo/callback'
 import { Route as AuthenticatedSettingsTeamRouteImport } from './routes/_authenticated/settings.team'
 import { Route as AuthenticatedSettingsBrandRouteImport } from './routes/_authenticated/settings.brand'
 import { Route as AuthenticatedReportsDemoRouteImport } from './routes/_authenticated/reports.demo'
+import { Route as AuthenticatedFounderMetricsRouteImport } from './routes/_authenticated/founder.metrics'
 import { Route as AuthenticatedClientsClientIdRouteImport } from './routes/_authenticated/clients.$clientId'
 import { Route as LovableEmailTransactionalSendRouteImport } from './routes/lovable/email/transactional/send'
 import { Route as LovableEmailTransactionalPreviewRouteImport } from './routes/lovable/email/transactional/preview'
@@ -110,6 +112,11 @@ const ApiTaskEngagedRoute = ApiTaskEngagedRouteImport.update({
   path: '/api/task-engaged',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiMetricsDigestRoute = ApiMetricsDigestRouteImport.update({
+  id: '/api/metrics-digest',
+  path: '/api/metrics-digest',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiClientErrorRoute = ApiClientErrorRouteImport.update({
   id: '/api/client-error',
   path: '/api/client-error',
@@ -180,6 +187,12 @@ const AuthenticatedReportsDemoRoute =
     path: '/reports/demo',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedFounderMetricsRoute =
+  AuthenticatedFounderMetricsRouteImport.update({
+    id: '/founder/metrics',
+    path: '/founder/metrics',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedClientsClientIdRoute =
   AuthenticatedClientsClientIdRouteImport.update({
     id: '/clients/$clientId',
@@ -219,12 +232,14 @@ export interface FileRoutesByFullPath {
   '/access/$token': typeof AccessTokenRoute
   '/ack/$token': typeof AckTokenRoute
   '/api/client-error': typeof ApiClientErrorRoute
+  '/api/metrics-digest': typeof ApiMetricsDigestRoute
   '/api/task-engaged': typeof ApiTaskEngagedRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/email/unsubscribe': typeof EmailUnsubscribeRoute
   '/lh/unsubscribe': typeof LhUnsubscribeRoute
   '/t/$token': typeof TTokenRoute
   '/clients/$clientId': typeof AuthenticatedClientsClientIdRoute
+  '/founder/metrics': typeof AuthenticatedFounderMetricsRoute
   '/reports/demo': typeof AuthenticatedReportsDemoRoute
   '/settings/brand': typeof AuthenticatedSettingsBrandRoute
   '/settings/team': typeof AuthenticatedSettingsTeamRoute
@@ -251,12 +266,14 @@ export interface FileRoutesByTo {
   '/access/$token': typeof AccessTokenRoute
   '/ack/$token': typeof AckTokenRoute
   '/api/client-error': typeof ApiClientErrorRoute
+  '/api/metrics-digest': typeof ApiMetricsDigestRoute
   '/api/task-engaged': typeof ApiTaskEngagedRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/email/unsubscribe': typeof EmailUnsubscribeRoute
   '/lh/unsubscribe': typeof LhUnsubscribeRoute
   '/t/$token': typeof TTokenRoute
   '/clients/$clientId': typeof AuthenticatedClientsClientIdRoute
+  '/founder/metrics': typeof AuthenticatedFounderMetricsRoute
   '/reports/demo': typeof AuthenticatedReportsDemoRoute
   '/settings/brand': typeof AuthenticatedSettingsBrandRoute
   '/settings/team': typeof AuthenticatedSettingsTeamRoute
@@ -285,12 +302,14 @@ export interface FileRoutesById {
   '/access/$token': typeof AccessTokenRoute
   '/ack/$token': typeof AckTokenRoute
   '/api/client-error': typeof ApiClientErrorRoute
+  '/api/metrics-digest': typeof ApiMetricsDigestRoute
   '/api/task-engaged': typeof ApiTaskEngagedRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/email/unsubscribe': typeof EmailUnsubscribeRoute
   '/lh/unsubscribe': typeof LhUnsubscribeRoute
   '/t/$token': typeof TTokenRoute
   '/_authenticated/clients/$clientId': typeof AuthenticatedClientsClientIdRoute
+  '/_authenticated/founder/metrics': typeof AuthenticatedFounderMetricsRoute
   '/_authenticated/reports/demo': typeof AuthenticatedReportsDemoRoute
   '/_authenticated/settings/brand': typeof AuthenticatedSettingsBrandRoute
   '/_authenticated/settings/team': typeof AuthenticatedSettingsTeamRoute
@@ -319,12 +338,14 @@ export interface FileRouteTypes {
     | '/access/$token'
     | '/ack/$token'
     | '/api/client-error'
+    | '/api/metrics-digest'
     | '/api/task-engaged'
     | '/auth/callback'
     | '/email/unsubscribe'
     | '/lh/unsubscribe'
     | '/t/$token'
     | '/clients/$clientId'
+    | '/founder/metrics'
     | '/reports/demo'
     | '/settings/brand'
     | '/settings/team'
@@ -351,12 +372,14 @@ export interface FileRouteTypes {
     | '/access/$token'
     | '/ack/$token'
     | '/api/client-error'
+    | '/api/metrics-digest'
     | '/api/task-engaged'
     | '/auth/callback'
     | '/email/unsubscribe'
     | '/lh/unsubscribe'
     | '/t/$token'
     | '/clients/$clientId'
+    | '/founder/metrics'
     | '/reports/demo'
     | '/settings/brand'
     | '/settings/team'
@@ -384,12 +407,14 @@ export interface FileRouteTypes {
     | '/access/$token'
     | '/ack/$token'
     | '/api/client-error'
+    | '/api/metrics-digest'
     | '/api/task-engaged'
     | '/auth/callback'
     | '/email/unsubscribe'
     | '/lh/unsubscribe'
     | '/t/$token'
     | '/_authenticated/clients/$clientId'
+    | '/_authenticated/founder/metrics'
     | '/_authenticated/reports/demo'
     | '/_authenticated/settings/brand'
     | '/_authenticated/settings/team'
@@ -416,6 +441,7 @@ export interface RootRouteChildren {
   AccessTokenRoute: typeof AccessTokenRoute
   AckTokenRoute: typeof AckTokenRoute
   ApiClientErrorRoute: typeof ApiClientErrorRoute
+  ApiMetricsDigestRoute: typeof ApiMetricsDigestRoute
   ApiTaskEngagedRoute: typeof ApiTaskEngagedRoute
   EmailUnsubscribeRoute: typeof EmailUnsubscribeRoute
   LhUnsubscribeRoute: typeof LhUnsubscribeRoute
@@ -528,6 +554,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiTaskEngagedRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/metrics-digest': {
+      id: '/api/metrics-digest'
+      path: '/api/metrics-digest'
+      fullPath: '/api/metrics-digest'
+      preLoaderRoute: typeof ApiMetricsDigestRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/client-error': {
       id: '/api/client-error'
       path: '/api/client-error'
@@ -619,6 +652,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedReportsDemoRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/founder/metrics': {
+      id: '/_authenticated/founder/metrics'
+      path: '/founder/metrics'
+      fullPath: '/founder/metrics'
+      preLoaderRoute: typeof AuthenticatedFounderMetricsRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/clients/$clientId': {
       id: '/_authenticated/clients/$clientId'
       path: '/clients/$clientId'
@@ -654,6 +694,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedOpsRoute: typeof AuthenticatedOpsRoute
   AuthenticatedClientsClientIdRoute: typeof AuthenticatedClientsClientIdRoute
+  AuthenticatedFounderMetricsRoute: typeof AuthenticatedFounderMetricsRoute
   AuthenticatedReportsDemoRoute: typeof AuthenticatedReportsDemoRoute
   AuthenticatedSettingsBrandRoute: typeof AuthenticatedSettingsBrandRoute
   AuthenticatedSettingsTeamRoute: typeof AuthenticatedSettingsTeamRoute
@@ -665,6 +706,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedOpsRoute: AuthenticatedOpsRoute,
   AuthenticatedClientsClientIdRoute: AuthenticatedClientsClientIdRoute,
+  AuthenticatedFounderMetricsRoute: AuthenticatedFounderMetricsRoute,
   AuthenticatedReportsDemoRoute: AuthenticatedReportsDemoRoute,
   AuthenticatedSettingsBrandRoute: AuthenticatedSettingsBrandRoute,
   AuthenticatedSettingsTeamRoute: AuthenticatedSettingsTeamRoute,
@@ -699,6 +741,7 @@ const rootRouteChildren: RootRouteChildren = {
   AccessTokenRoute: AccessTokenRoute,
   AckTokenRoute: AckTokenRoute,
   ApiClientErrorRoute: ApiClientErrorRoute,
+  ApiMetricsDigestRoute: ApiMetricsDigestRoute,
   ApiTaskEngagedRoute: ApiTaskEngagedRoute,
   EmailUnsubscribeRoute: EmailUnsubscribeRoute,
   LhUnsubscribeRoute: LhUnsubscribeRoute,

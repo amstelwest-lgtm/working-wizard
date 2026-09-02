@@ -315,6 +315,44 @@ export const LOOP_INTERPRETATION = [
 
 export const SITUATION_MIN_CHARS = 21;
 
+export const HYPOTHESIS_STATUSES = [
+  "untested",
+  "supported",
+  "contradicted",
+  "inconclusive",
+  "blocked",
+] as const;
+
+export type HypothesisStatus = (typeof HYPOTHESIS_STATUSES)[number];
+
+export const EXPERIMENT_DECISIONS = [
+  "persevere",
+  "pivot",
+  "inconclusive",
+  "abandoned",
+] as const;
+
+export type ExperimentDecision = (typeof EXPERIMENT_DECISIONS)[number];
+
+export const PIVOT_TYPES = [
+  "zoom_in",
+  "zoom_out",
+  "customer_segment",
+  "customer_need",
+  "platform",
+  "business_architecture",
+  "value_capture",
+  "engine_of_growth",
+  "channel",
+  "technology",
+] as const;
+
+export type PivotType = (typeof PIVOT_TYPES)[number];
+
+export const EVENT_RETENTION_MONTHS = 24;
+
+export const PREDICTION_MIN_CHARS = 9;
+
 /** Views / tables created by Phase 2 SQL. No cumulative counters. */
 export const DERIVED_OBJECTS = {
   views: [
@@ -337,3 +375,7 @@ export const ANALYTICS_PHASE2_SQL = [
   "20260902200000_analytics_derived_views.sql",
   "20260902201000_analytics_commitment_stalls.sql",
 ] as const;
+
+export const ANALYTICS_PHASE3_SQL = ["20260902300000_analytics_experiments_digest.sql"] as const;
+
+export const ANALYTICS_SQL_TO_RUN = [...ANALYTICS_PHASE2_SQL, ...ANALYTICS_PHASE3_SQL] as const;

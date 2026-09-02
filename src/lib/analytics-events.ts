@@ -5,7 +5,7 @@
  */
 
 export const ANALYTICS_MIGRATION =
-  "20260902120000_analytics_events_spine.sql then 20260902121000_analytics_events_triggers.sql then 20260902200000_analytics_derived_views.sql then 20260902201000_analytics_commitment_stalls.sql";
+  "20260902120000_analytics_events_spine.sql then 20260902121000_analytics_events_triggers.sql then 20260902200000_analytics_derived_views.sql then 20260902201000_analytics_commitment_stalls.sql then 20260902300000_analytics_experiments_digest.sql";
 
 export const CLIENT_WRITABLE_EVENT_KEYS = [
   "view.opened",
