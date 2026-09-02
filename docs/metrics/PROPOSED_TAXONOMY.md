@@ -1,6 +1,6 @@
 # MILŌN proposed event taxonomy — Phase 0
 
-**Status:** proposal for approval. No migration until Theo signs this off.
+**Status:** approved (Phase 0). Phase 1 spine: see [`README.md`](./README.md) and `supabase/migrations/20260902120000_analytics_events_spine.sql`.
 
 Companion: [`INVENTORY.md`](./INVENTORY.md) (what exists today). This file is the **consolidated event list** we would implement in Phase 1, mapped onto **this repo’s** tables and actors — not the Claude brief’s vanilla/`entities`/`tasks` names.
 

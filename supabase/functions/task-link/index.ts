@@ -217,7 +217,7 @@ Deno.serve(async (req) => {
   const t = await resolve(token);
   if ("error" in t) return json({ error: t.error }, 404);
 
-  // ---- READ: never mutates. ----
+  // ---- READ: never mutates. No analytics row, no last_used_at, no counters.
   if (req.method === "GET") {
     const { data: item } = await db
       .from("action_items_v")

@@ -280,6 +280,31 @@ export async function latestSnapshotId(clientId: string): Promise<string | null>
   return data?.id ?? null;
 }
 
+/** GET-safe: does not mark the delivery acknowledged. */
+export async function previewDeliveryAck(
+  ackToken: string,
+): Promise<{ found: boolean; already: boolean }> {
+  const token = ackToken.trim();
+  if (!token || token.length < 16) return { found: false, already: false };
+  const { data, error } = await (supabase as unknown as {
+    rpc: (
+      fn: string,
+      args: { _token: string },
+    ) => Promise<{ data: unknown; error: { message: string; code?: string } | null }>;
+  }).rpc("preview_advisory_delivery_ack", { _token: token });
+  if (error) {
+    const msg = error.message ?? "";
+    if (msg.includes("does not exist") || error.code === "42883") {
+      // Migration not applied — still show the confirm button; POST uses the old RPC.
+      return { found: true, already: false };
+    }
+    return { found: false, already: false };
+  }
+  if (!data || typeof data !== "object") return { found: false, already: false };
+  const row = data as { found?: boolean; already?: boolean };
+  return { found: Boolean(row.found), already: Boolean(row.already) };
+}
+
 export async function acknowledgeDelivery(
   ackToken: string,
 ): Promise<{ ok: boolean; delivery: AdvisoryDelivery | null; error: string | null }> {

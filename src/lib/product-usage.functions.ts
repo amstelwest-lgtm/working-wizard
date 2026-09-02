@@ -51,6 +51,7 @@ const ingestEventSchema = z.object({
   firmId: optionalUuid,
   sessionId: z.string().max(64).optional(),
   occurredAt: z.string().max(40).optional(),
+  idempotencyKey: z.string().max(120).optional(),
   properties: z.record(z.string(), z.unknown()).optional(),
 });
 
@@ -167,6 +168,50 @@ export const ingestProductUsage = createServerFn({ method: "POST" })
       console.warn("product_usage.ingest_failed", error.message);
       return { ok: false as const, ingested: 0 };
     }
+
+    // Dual-run A: also write allowlisted intent events to the analytics spine.
+    try {
+      const { mapUsageEventToSpine } = await import("@/lib/analytics-events");
+      for (let i = 0; i < data.events.length; i++) {
+        const ev = data.events[i] as IngestEvent;
+        const mapped = mapUsageEventToSpine({ event: ev.event, tab: ev.tab, path: ev.path });
+        const row = rows[i];
+        if (!row) continue;
+        for (const m of mapped) {
+          const { error: spineErr } = await (
+            sb as {
+              rpc: (
+                fn: string,
+                args: Record<string, unknown>,
+              ) => Promise<{ error: { message: string } | null }>;
+            }
+          ).rpc("analytics_track", {
+            p_event_key: m.eventKey,
+            p_properties: {
+              ...sanitizeProps(ev.properties),
+              surface: row.surface,
+              tab: ev.tab ?? null,
+              path: ev.path ?? null,
+              feature_key: row.feature_key,
+              ...(m.extra ?? {}),
+            },
+            p_session_id: row.session_id,
+            p_entity_id: row.client_id,
+            p_practice_id: row.firm_id,
+            p_idempotency_key:
+              ev.idempotencyKey && mapped.length === 1
+                ? ev.idempotencyKey
+                : `${m.eventKey}:${row.user_id}:${row.occurred_at}:${row.feature_key}:${ev.tab ?? ""}`,
+          });
+          if (spineErr && !/does not exist|42883|not client-writable/i.test(spineErr.message ?? "")) {
+            console.warn("analytics_track failed", spineErr.message);
+          }
+        }
+      }
+    } catch {
+      /* spine is optional until the migration is applied */
+    }
+
     return { ok: true as const, ingested: rows.length };
   });
 

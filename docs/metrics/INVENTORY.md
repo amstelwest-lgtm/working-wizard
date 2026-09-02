@@ -1,6 +1,6 @@
 # MILŌN metrics inventory — Phase 0
 
-**Status:** audit only. No schema, no dashboard, no `analytics` migration until this file and `PROPOSED_TAXONOMY.md` are approved.
+**Status:** inventory complete; taxonomy approved. Phase 1 spine is in `20260902120000_analytics_events_spine.sql` — still apply it in the SQL editor before events land.
 
 **Repo walked:** `amstelwest-lgtm/working-wizard` on `main` at the time of this audit (`035aa25` and descendants). Routes under `src/routes/`, migrations under `supabase/migrations/`, Edge Functions under `supabase/functions/`, server functions under `src/lib/*.functions.ts`.
 

@@ -86,6 +86,20 @@ export const deleteOwnAccount = createServerFn({ method: "POST" })
     const userId = context.userId as string;
     const userSb = context.supabase as unknown as LooseSb;
 
+    try {
+      const { emitAnalyticsEvent } = await import("@/lib/analytics-spine.server");
+      await emitAnalyticsEvent({
+        eventKey: "account.deleted",
+        actorKind: "sme_owner",
+        actorId: userId,
+        source: "server",
+        idempotencyKey: `account.deleted:${userId}:${Date.now()}`,
+        properties: {},
+      });
+    } catch {
+      /* never block deletion */
+    }
+
     const { error } = await userSb.rpc("delete_own_account");
     if (!error) return { ok: true as const };
 
