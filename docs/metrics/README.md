@@ -6,7 +6,10 @@ Phase 1 (this folder + migration) is the **event spine**. It is not a dashboard.
 
 ## Apply
 
-Paste `supabase/migrations/20260902120000_analytics_events_spine.sql` in the Supabase SQL editor.
+Paste these **in order** in the Supabase SQL editor:
+
+1. `supabase/migrations/20260902120000_analytics_events_spine.sql` (schema + RPCs)
+2. `supabase/migrations/20260902121000_analytics_events_triggers.sql` (triggers + backfill)
 
 Then mark rows by hand (do not guess from names):
 
