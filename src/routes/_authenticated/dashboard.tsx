@@ -1251,7 +1251,7 @@ function Dashboard() {
                   navigate({ to: "/ops", search: { tab: "it" } });
                 }}
               >
-                IT queries
+                Milōn IT
               </button>
             ) : null}
             <button

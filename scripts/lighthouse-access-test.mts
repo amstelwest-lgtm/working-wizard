@@ -16,14 +16,14 @@ const panel = readFileSync(resolve("src/components/lighthouse-panel.tsx"), "utf8
 assert(panel.includes('"access"'), "Access is a Lighthouse tab");
 assert(panel.includes("LighthouseAccessPanel"), "Access tab renders the directory");
 assert(panel.includes('t === "access" ? "Access"'), "tab is labelled Access");
-assert(panel.includes('tab !== "it" && tab !== "access"'), "sales Import/Lead stay off Access");
+assert(panel.includes('tab !== "access"'), "sales Import/Lead stay off Access");
 
 const ui = readFileSync(resolve("src/components/lighthouse-access.tsx"), "utf8");
 assert(ui.includes("Every person who can sign in"), "copy covers everyone");
 assert(ui.includes("Business owner"), "business owner role is togglable");
 assert(ui.includes("Add to a practice firm"), "can grant firm membership");
 assert(ui.includes("Add to a business file"), "can grant client membership");
-assert(ui.includes("IT queries tab"), "IT roster stays on the IT tab");
+assert(ui.includes("Milōn IT section"), "IT roster stays on the Milōn IT section");
 
 const fns = readFileSync(resolve("src/lib/lighthouse-access.functions.ts"), "utf8");
 assert(fns.includes("assertOpsConsoleAccess"), "Access board is ops-guarded");

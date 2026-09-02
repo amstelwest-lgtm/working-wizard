@@ -1,5 +1,6 @@
 /**
- * Milōn Lighthouse — founder sales console.
+ * Milōn Lighthouse — founder sales console (pipeline, usage, access, playbook, assets, settings).
+ * Milōn IT is a sibling section on /ops, not a sales tab.
  *
  * Funnel design follows current cold-outreach benchmarks: five touches over
  * ~18 days with widening gaps, one distinct angle per touch, short plain-text
@@ -45,7 +46,6 @@ import {
   type LighthouseStage,
 } from "@/lib/lighthouse.functions";
 import { LighthouseUsagePanel } from "@/components/lighthouse-usage";
-import { LighthouseItPanel } from "@/components/lighthouse-it";
 import { LighthouseAccessPanel } from "@/components/lighthouse-access";
 
 const inputCls = "ops-input";
@@ -73,7 +73,6 @@ export const LIGHTHOUSE_TABS = [
   "pipeline",
   "usage",
   "access",
-  "it",
   "playbook",
   "assets",
   "settings",
@@ -148,11 +147,11 @@ export function LighthousePanel({ initialTab }: { initialTab?: LighthouseTab }) 
               : "border border-[var(--ops-line)] text-[var(--ops-ink-dim)] hover:text-[var(--ops-ink-soft)]"
           }`}
         >
-          {t === "it" ? "IT queries" : t === "access" ? "Access" : t}
+          {t === "access" ? "Access" : t}
         </button>
       ))}
       <span className="flex-1" />
-      {tab !== "it" && tab !== "access" ? (
+      {tab !== "access" ? (
         <>
           <button
             type="button"
@@ -180,16 +179,6 @@ export function LighthousePanel({ initialTab }: { initialTab?: LighthouseTab }) 
       </button>
     </div>
   );
-
-  // Shared IT inbox must render even if the sales board is still loading.
-  if (tab === "it") {
-    return (
-      <div>
-        {tabBar}
-        <LighthouseItPanel />
-      </div>
-    );
-  }
 
   if (tab === "access") {
     return (
@@ -383,8 +372,6 @@ export function LighthousePanel({ initialTab }: { initialTab?: LighthouseTab }) 
       )}
 
       {tab === "usage" && <LighthouseUsagePanel />}
-
-      {tab === "it" && <LighthouseItPanel />}
 
       {tab === "playbook" && <Playbook dash={dash} />}
 

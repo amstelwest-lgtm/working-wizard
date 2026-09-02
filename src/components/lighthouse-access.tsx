@@ -142,7 +142,7 @@ export function LighthouseAccessPanel() {
       <p className="mb-4 text-[12px] text-[var(--ops-ink-dim)]">
         Every person who can sign in — practice accountants, business owners, and staff on a
         client file. Portal roles control which door they use. Firm and file grants control what
-        they see. IT master access is listed here; the roster lives on the IT queries tab.
+        they see. IT master access is listed here; the roster lives in the Milōn IT section.
       </p>
 
       <div className="mb-3 flex flex-wrap gap-1.5">

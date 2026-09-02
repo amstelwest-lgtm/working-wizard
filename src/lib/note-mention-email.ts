@@ -184,9 +184,9 @@ function buildItHtml(ctx: ItQueryMailContext, profileUrl: string, inboxUrl: stri
   }.</p>
   <p><strong>${escapeHtml(ctx.authorName)}</strong> wrote:</p>
   <div style="border:1px solid #e2e8f0;border-radius:8px;padding:16px;background:#f8fafc;margin:16px 0;white-space:pre-wrap">${preview}</div>
-  <p><a href="${escapeHtml(inboxUrl)}" style="color:#b8860b">Open in your Lighthouse IT queries inbox</a></p>
+  <p><a href="${escapeHtml(inboxUrl)}" style="color:#b8860b">Open in the Milōn IT section of Lighthouse</a></p>
   <p><a href="${escapeHtml(profileUrl)}" style="color:#b8860b">Open this note on the customer profile</a></p>
-  <p style="color:#94a3b8;font-size:12px">Every Milōn IT team member receives this note in the same Lighthouse inbox.</p>
+  <p style="color:#94a3b8;font-size:12px">Every Milōn IT team member receives this note in the same Lighthouse section.</p>
   </body></html>`;
 }
 
