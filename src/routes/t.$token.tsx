@@ -105,6 +105,61 @@ function TaskPage() {
     return () => { alive = false; };
   }, [token, intent]);
 
+  // Human-engagement beacon. POST only. GET (this page load / task-link) writes nothing.
+  useEffect(() => {
+    if (!data || errorKind) return;
+    let sentEngaged = false;
+    const started = Date.now();
+
+    const post = (event: "task.link.rendered" | "task.link.engaged", reason: string) => {
+      const payload = JSON.stringify({
+        token,
+        event,
+        reason,
+        ms_on_page: Date.now() - started,
+        visible: typeof document !== "undefined" && document.visibilityState === "visible",
+      });
+      try {
+        const blob = new Blob([payload], { type: "application/json" });
+        if (typeof navigator !== "undefined" && navigator.sendBeacon) {
+          navigator.sendBeacon("/api/task-engaged", blob);
+          return;
+        }
+      } catch {
+        /* fall through to fetch */
+      }
+      void fetch("/api/task-engaged", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: payload,
+        keepalive: true,
+      }).catch(() => {});
+    };
+
+    post("task.link.rendered", "js");
+
+    const engaged = (reason: string) => {
+      if (sentEngaged) return;
+      sentEngaged = true;
+      post("task.link.engaged", reason);
+    };
+
+    const onSignal = (ev: Event) => engaged(ev.type);
+    ["pointermove", "keydown", "scroll", "click", "touchstart"].forEach((name) => {
+      window.addEventListener(name, onSignal, { once: true, passive: true });
+    });
+    const dwell = window.setTimeout(() => {
+      if (document.visibilityState === "visible") engaged("dwell_3s");
+    }, 3000);
+
+    return () => {
+      window.clearTimeout(dwell);
+      ["pointermove", "keydown", "scroll", "click", "touchstart"].forEach((name) => {
+        window.removeEventListener(name, onSignal);
+      });
+    };
+  }, [data, errorKind, token]);
+
   const save = async () => {
     if (status === "blocked" && !note.trim()) {
       setSaveError("Tell us what's blocking you — a blocker without a reason isn't information.");

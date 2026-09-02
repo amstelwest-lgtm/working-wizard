@@ -58,6 +58,7 @@ type Queued = {
   firmId?: string | null;
   sessionId?: string;
   occurredAt?: string;
+  idempotencyKey?: string;
   properties?: Record<string, unknown>;
 };
 
@@ -162,6 +163,10 @@ export function AnalyticsProvider({ children }: { children: ReactNode }) {
         firmId: properties.firmId ?? firmIdRef.current,
         sessionId: usageSessionId(),
         occurredAt: timestamp,
+        idempotencyKey:
+          typeof crypto !== "undefined" && "randomUUID" in crypto
+            ? crypto.randomUUID()
+            : `${timestamp}-${eventName}`,
         properties,
       });
       if (queueRef.current.length >= 20) {
@@ -178,12 +183,20 @@ export function AnalyticsProvider({ children }: { children: ReactNode }) {
     const onHide = () => void flush();
     document.addEventListener("visibilitychange", onHide);
     window.addEventListener("pagehide", onHide);
+    const onDead = (e: MouseEvent) => {
+      const el = (e.target as HTMLElement | null)?.closest?.("[data-track-dead]");
+      if (!(el instanceof HTMLElement)) return;
+      const label = el.dataset.trackDead || "unknown";
+      track("friction.dead_click", { label, path: window.location.pathname });
+    };
+    document.addEventListener("click", onDead);
     return () => {
       document.removeEventListener("visibilitychange", onHide);
       window.removeEventListener("pagehide", onHide);
+      document.removeEventListener("click", onDead);
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, [flush]);
+  }, [flush, track]);
 
   useEffect(() => {
     if (!userIdRef.current) return;

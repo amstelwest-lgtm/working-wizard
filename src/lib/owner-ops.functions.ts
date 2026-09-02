@@ -386,6 +386,7 @@ export const addOpsPayment = createServerFn({ method: "POST" })
         planCode: z.string().max(64).optional(),
         status: z.enum(["received", "pending", "refunded"]).default("received"),
         note: z.string().max(1000).optional(),
+        firmId: z.string().uuid().optional(),
       })
       .parse(input),
   )
@@ -402,6 +403,7 @@ export const addOpsPayment = createServerFn({ method: "POST" })
       note: data.note?.trim() || null,
       created_by: userId,
       currency: "ZAR",
+      firm_id: data.firmId ?? null,
     });
     if (error) {
       if (missingRelation(error.message)) {

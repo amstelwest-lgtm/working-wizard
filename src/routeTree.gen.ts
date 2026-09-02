@@ -22,6 +22,7 @@ import { Route as TTokenRouteImport } from './routes/t.$token'
 import { Route as LhUnsubscribeRouteImport } from './routes/lh/unsubscribe'
 import { Route as EmailUnsubscribeRouteImport } from './routes/email/unsubscribe'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
+import { Route as ApiTaskEngagedRouteImport } from './routes/api/task-engaged'
 import { Route as ApiClientErrorRouteImport } from './routes/api/client-error'
 import { Route as AckTokenRouteImport } from './routes/ack.$token'
 import { Route as AccessTokenRouteImport } from './routes/access.$token'
@@ -103,6 +104,11 @@ const AuthCallbackRoute = AuthCallbackRouteImport.update({
   id: '/callback',
   path: '/callback',
   getParentRoute: () => AuthRoute,
+} as any)
+const ApiTaskEngagedRoute = ApiTaskEngagedRouteImport.update({
+  id: '/api/task-engaged',
+  path: '/api/task-engaged',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const ApiClientErrorRoute = ApiClientErrorRouteImport.update({
   id: '/api/client-error',
@@ -213,6 +219,7 @@ export interface FileRoutesByFullPath {
   '/access/$token': typeof AccessTokenRoute
   '/ack/$token': typeof AckTokenRoute
   '/api/client-error': typeof ApiClientErrorRoute
+  '/api/task-engaged': typeof ApiTaskEngagedRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/email/unsubscribe': typeof EmailUnsubscribeRoute
   '/lh/unsubscribe': typeof LhUnsubscribeRoute
@@ -244,6 +251,7 @@ export interface FileRoutesByTo {
   '/access/$token': typeof AccessTokenRoute
   '/ack/$token': typeof AckTokenRoute
   '/api/client-error': typeof ApiClientErrorRoute
+  '/api/task-engaged': typeof ApiTaskEngagedRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/email/unsubscribe': typeof EmailUnsubscribeRoute
   '/lh/unsubscribe': typeof LhUnsubscribeRoute
@@ -277,6 +285,7 @@ export interface FileRoutesById {
   '/access/$token': typeof AccessTokenRoute
   '/ack/$token': typeof AckTokenRoute
   '/api/client-error': typeof ApiClientErrorRoute
+  '/api/task-engaged': typeof ApiTaskEngagedRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/email/unsubscribe': typeof EmailUnsubscribeRoute
   '/lh/unsubscribe': typeof LhUnsubscribeRoute
@@ -310,6 +319,7 @@ export interface FileRouteTypes {
     | '/access/$token'
     | '/ack/$token'
     | '/api/client-error'
+    | '/api/task-engaged'
     | '/auth/callback'
     | '/email/unsubscribe'
     | '/lh/unsubscribe'
@@ -341,6 +351,7 @@ export interface FileRouteTypes {
     | '/access/$token'
     | '/ack/$token'
     | '/api/client-error'
+    | '/api/task-engaged'
     | '/auth/callback'
     | '/email/unsubscribe'
     | '/lh/unsubscribe'
@@ -373,6 +384,7 @@ export interface FileRouteTypes {
     | '/access/$token'
     | '/ack/$token'
     | '/api/client-error'
+    | '/api/task-engaged'
     | '/auth/callback'
     | '/email/unsubscribe'
     | '/lh/unsubscribe'
@@ -404,6 +416,7 @@ export interface RootRouteChildren {
   AccessTokenRoute: typeof AccessTokenRoute
   AckTokenRoute: typeof AckTokenRoute
   ApiClientErrorRoute: typeof ApiClientErrorRoute
+  ApiTaskEngagedRoute: typeof ApiTaskEngagedRoute
   EmailUnsubscribeRoute: typeof EmailUnsubscribeRoute
   LhUnsubscribeRoute: typeof LhUnsubscribeRoute
   TTokenRoute: typeof TTokenRoute
@@ -507,6 +520,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/auth/callback'
       preLoaderRoute: typeof AuthCallbackRouteImport
       parentRoute: typeof AuthRoute
+    }
+    '/api/task-engaged': {
+      id: '/api/task-engaged'
+      path: '/api/task-engaged'
+      fullPath: '/api/task-engaged'
+      preLoaderRoute: typeof ApiTaskEngagedRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/api/client-error': {
       id: '/api/client-error'
@@ -679,6 +699,7 @@ const rootRouteChildren: RootRouteChildren = {
   AccessTokenRoute: AccessTokenRoute,
   AckTokenRoute: AckTokenRoute,
   ApiClientErrorRoute: ApiClientErrorRoute,
+  ApiTaskEngagedRoute: ApiTaskEngagedRoute,
   EmailUnsubscribeRoute: EmailUnsubscribeRoute,
   LhUnsubscribeRoute: LhUnsubscribeRoute,
   TTokenRoute: TTokenRoute,

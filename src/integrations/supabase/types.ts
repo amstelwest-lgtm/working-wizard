@@ -890,6 +890,7 @@ export type Database = {
           open_queries_count: number
           owner_user_id: string
           reports_issued_count: number
+          is_demo: boolean
         }
         Insert: {
           business_type?: string | null
@@ -913,6 +914,7 @@ export type Database = {
           open_queries_count?: number
           owner_user_id: string
           reports_issued_count?: number
+          is_demo?: boolean
         }
         Update: {
           business_type?: string | null
@@ -936,6 +938,7 @@ export type Database = {
           open_queries_count?: number
           owner_user_id?: string
           reports_issued_count?: number
+          is_demo?: boolean
         }
         Relationships: [
           {
@@ -1040,6 +1043,8 @@ export type Database = {
           owner_user_id: string
           referral_code: string | null
           logo_url: string | null
+          is_internal: boolean
+          is_founding_practice: boolean
           accent_color: string | null
           primary_color: string | null
           secondary_color: string | null
@@ -1055,6 +1060,8 @@ export type Database = {
           owner_user_id: string
           referral_code?: string | null
           logo_url?: string | null
+          is_internal?: boolean
+          is_founding_practice?: boolean
           accent_color?: string | null
           primary_color?: string | null
           secondary_color?: string | null
@@ -1070,6 +1077,8 @@ export type Database = {
           owner_user_id?: string
           referral_code?: string | null
           logo_url?: string | null
+          is_internal?: boolean
+          is_founding_practice?: boolean
           accent_color?: string | null
           primary_color?: string | null
           secondary_color?: string | null
@@ -1483,6 +1492,23 @@ export type Database = {
       acknowledge_advisory_delivery: {
         Args: { _token: string }
         Returns: Database["public"]["Tables"]["advisory_deliveries"]["Row"]
+      }
+      preview_advisory_delivery_ack: {
+        Args: { _token: string }
+        Returns: Json
+      }
+      analytics_track: {
+        Args: {
+          p_event_key: string
+          p_properties?: Json
+          p_session_id?: string
+          p_entity_id?: string
+          p_practice_id?: string
+          p_object_id?: string
+          p_object_type?: string
+          p_idempotency_key?: string
+        }
+        Returns: undefined
       }
     }
     Enums: {
