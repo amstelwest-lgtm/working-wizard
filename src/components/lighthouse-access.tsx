@@ -1,40 +1,61 @@
 /**
- * Lighthouse — Access: every profile, role, firm, and client assignment.
+ * Lighthouse — Access: every profile that can enter Milōn
+ * (accountants, firm admins, business owners, client staff, IT).
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { Loader2, RefreshCw, Shield, Search } from "lucide-react";
+import { Loader2, RefreshCw, Search, Shield, X } from "lucide-react";
 import {
   getLighthouseAccessBoard,
-  lighthouseGrantClientAccess,
-  lighthouseRevokeClientAccess,
+  lighthouseSetClientMembership,
+  lighthouseSetFirmMembership,
   lighthouseSetUserRole,
+  PORTAL_ROLES,
   type LighthouseAccessBoard,
   type LighthouseAccessUser,
+  type PortalRole,
 } from "@/lib/lighthouse-access.functions";
-import {
-  CLASSIFICATION_LABELS,
-  CLASSIFICATIONS,
-  type PracticeClassification,
-} from "@/lib/practice-access";
 
-const ROLE_OPTIONS = ["accountant", "firm_admin", "client_owner", "client_member"] as const;
+const ROLE_LABEL: Record<PortalRole, string> = {
+  accountant: "Accountant",
+  firm_admin: "Firm admin",
+  client_owner: "Business owner",
+  client_member: "Business staff",
+};
+
+type Crowd = "all" | "practice" | "business" | "it" | "none";
+
+function crowdOf(u: LighthouseAccessUser): Crowd[] {
+  const out: Crowd[] = [];
+  if (u.itMember) out.push("it");
+  if (u.roles.includes("accountant") || u.roles.includes("firm_admin") || u.firms.length > 0) {
+    out.push("practice");
+  }
+  if (u.roles.includes("client_owner") || u.roles.includes("client_member") || u.ownedClients.length > 0 || u.clientMemberships.length > 0) {
+    out.push("business");
+  }
+  if (out.length === 0 && u.roles.length === 0) out.push("none");
+  return out;
+}
 
 export function LighthouseAccessPanel() {
   const load = useServerFn(getLighthouseAccessBoard);
-  const grant = useServerFn(lighthouseGrantClientAccess);
-  const revoke = useServerFn(lighthouseRevokeClientAccess);
   const setRole = useServerFn(lighthouseSetUserRole);
+  const setFirm = useServerFn(lighthouseSetFirmMembership);
+  const setClient = useServerFn(lighthouseSetClientMembership);
 
   const [board, setBoard] = useState<LighthouseAccessBoard | null>(null);
   const [busy, setBusy] = useState(true);
   const [err, setErr] = useState("");
   const [q, setQ] = useState("");
-  const [grantUser, setGrantUser] = useState("");
-  const [grantClient, setGrantClient] = useState("");
-  const [grantClass, setGrantClass] = useState<PracticeClassification>("staff");
+  const [crowd, setCrowd] = useState<Crowd>("all");
+  const [firmUser, setFirmUser] = useState("");
+  const [firmId, setFirmId] = useState("");
+  const [clientUser, setClientUser] = useState("");
+  const [clientId, setClientId] = useState("");
+  const [saving, setSaving] = useState(false);
 
   const refresh = useCallback(async () => {
     setBusy(true);
@@ -55,14 +76,23 @@ export function LighthouseAccessPanel() {
   const users = useMemo(() => {
     if (!board) return [];
     const needle = q.trim().toLowerCase();
-    if (!needle) return board.users;
-    return board.users.filter(
-      (u) =>
-        u.email.toLowerCase().includes(needle) ||
-        u.name.toLowerCase().includes(needle) ||
-        u.roles.some((r) => r.includes(needle)),
-    );
-  }, [board, q]);
+    return board.users.filter((u) => {
+      if (crowd !== "all" && !crowdOf(u).includes(crowd)) return false;
+      if (!needle) return true;
+      const hay = [
+        u.email,
+        u.name,
+        ...u.roles,
+        ...u.firms.map((f) => f.name),
+        ...u.ownedClients.map((c) => c.name),
+        ...u.clientMemberships.map((c) => c.clientName),
+        u.itMember ? "it lighthouse" : "",
+      ]
+        .join(" ")
+        .toLowerCase();
+      return hay.includes(needle);
+    });
+  }, [board, q, crowd]);
 
   if (busy && !board) {
     return (
@@ -80,27 +110,25 @@ export function LighthouseAccessPanel() {
   }
   if (!board) return null;
 
-  const toggleRole = async (user: LighthouseAccessUser, role: (typeof ROLE_OPTIONS)[number]) => {
+  const toggleRole = async (user: LighthouseAccessUser, role: PortalRole) => {
     const enabled = !user.roles.includes(role);
+    setSaving(true);
     try {
       await setRole({ data: { userId: user.id, role, enabled } });
       await refresh();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not update role");
+    } finally {
+      setSaving(false);
     }
   };
 
   return (
     <div>
-      {board.migrationHint && (
-        <div className="mb-4 rounded-xl border border-[var(--ops-amber-border)] bg-[var(--ops-amber-soft)] px-4 py-3 text-sm text-[var(--ops-amber)]">
-          {board.migrationHint}
-        </div>
-      )}
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--ops-amber)]">
           <Shield className="mr-1 inline h-3.5 w-3.5" />
-          Access · {board.users.length} profiles · cap {board.cap} per client
+          Access · {board.users.length} profiles
         </div>
         <span className="flex-1" />
         <button
@@ -112,147 +140,230 @@ export function LighthouseAccessPanel() {
         </button>
       </div>
       <p className="mb-4 text-[12px] text-[var(--ops-ink-dim)]">
-        Platform override for accountants and business owners. Day-to-day grants still go through
-        practice Settings → Team & access (dual email approval). This tab can activate or revoke
-        immediately.
+        Every person who can sign in — practice accountants, business owners, and staff on a
+        client file. Portal roles control which door they use. Firm and file grants control what
+        they see. IT master access is listed here; the roster lives on the IT queries tab.
       </p>
+
+      <div className="mb-3 flex flex-wrap gap-1.5">
+        {(
+          [
+            ["all", "Everyone"],
+            ["practice", "Practice"],
+            ["business", "Business"],
+            ["it", "Milōn IT"],
+            ["none", "No roles"],
+          ] as const
+        ).map(([k, label]) => (
+          <button
+            key={k}
+            type="button"
+            onClick={() => setCrowd(k)}
+            className={`rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-wider ${
+              crowd === k
+                ? "bg-[var(--ops-amber-soft)] text-[var(--ops-amber)]"
+                : "border border-[var(--ops-line)] text-[var(--ops-ink-dim)]"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
 
       <div className="mb-4 flex items-center gap-2 rounded-xl border border-[var(--ops-line)] bg-[var(--ops-input)] px-3">
         <Search className="h-3.5 w-3.5 text-[var(--ops-ink-dim)]" />
         <input
           className="h-10 w-full bg-transparent text-sm text-[var(--ops-ink)] outline-none"
-          placeholder="Search name, email, role"
+          placeholder="Search name, email, firm, client, role"
           value={q}
           onChange={(e) => setQ(e.target.value)}
         />
       </div>
 
-      <div className="mb-6 grid gap-2 rounded-2xl border border-[var(--ops-line)] bg-[var(--ops-card)] p-4 sm:grid-cols-4">
-        <select
-          className="ops-input"
-          value={grantUser}
-          onChange={(e) => setGrantUser(e.target.value)}
-        >
-          <option value="">Profile…</option>
-          {board.users.map((u) => (
-            <option key={u.id} value={u.id}>
-              {u.name} ({u.email})
-            </option>
-          ))}
-        </select>
-        <select
-          className="ops-input"
-          value={grantClient}
-          onChange={(e) => setGrantClient(e.target.value)}
-        >
-          <option value="">Client file…</option>
-          {board.clients.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-              {c.firmName ? ` · ${c.firmName}` : ""}
-            </option>
-          ))}
-        </select>
-        <select
-          className="ops-input"
-          value={grantClass}
-          onChange={(e) => setGrantClass(e.target.value as PracticeClassification)}
-        >
-          {CLASSIFICATIONS.map((c) => (
-            <option key={c} value={c}>
-              {CLASSIFICATION_LABELS[c]}
-            </option>
-          ))}
-        </select>
-        <button
-          type="button"
-          disabled={!grantUser || !grantClient}
-          onClick={() =>
-            void grant({
-              data: { userId: grantUser, clientId: grantClient, classification: grantClass },
-            })
-              .then(() => {
-                toast.success("Access granted (platform override)");
-                setGrantUser("");
-                setGrantClient("");
-                return refresh();
-              })
-              .catch((e) => toast.error(e instanceof Error ? e.message : "Grant failed"))
-          }
-          className="inline-flex h-10 items-center justify-center rounded-xl bg-gradient-to-r from-[#ac8400] via-[#d4af37] to-[#fdee79] px-3 text-[11px] font-bold uppercase tracking-wider text-[#1b1300] disabled:opacity-50"
-        >
-          Grant now
-        </button>
+      <div className="mb-6 grid gap-3 lg:grid-cols-2">
+        <div className="rounded-2xl border border-[var(--ops-line)] bg-[var(--ops-card)] p-4">
+          <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-[var(--ops-ink-dim)]">
+            Add to a practice firm
+          </p>
+          <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
+            <select className="ops-input" value={firmUser} onChange={(e) => setFirmUser(e.target.value)}>
+              <option value="">Profile…</option>
+              {board.users.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.name} ({u.email})
+                </option>
+              ))}
+            </select>
+            <select className="ops-input" value={firmId} onChange={(e) => setFirmId(e.target.value)}>
+              <option value="">Firm…</option>
+              {board.firms.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.name}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              disabled={!firmUser || !firmId || saving}
+              onClick={() =>
+                void setFirm({ data: { userId: firmUser, firmId, enabled: true } })
+                  .then(() => {
+                    toast.success("Added to practice firm");
+                    setFirmUser("");
+                    setFirmId("");
+                    return refresh();
+                  })
+                  .catch((e) => toast.error(e instanceof Error ? e.message : "Could not add to firm"))
+              }
+              className="inline-flex h-10 items-center justify-center rounded-xl bg-gradient-to-r from-[#ac8400] via-[#d4af37] to-[#fdee79] px-3 text-[11px] font-bold uppercase tracking-wider text-[#1b1300] disabled:opacity-50"
+            >
+              Grant
+            </button>
+          </div>
+        </div>
+        <div className="rounded-2xl border border-[var(--ops-line)] bg-[var(--ops-card)] p-4">
+          <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-[var(--ops-ink-dim)]">
+            Add to a business file
+          </p>
+          <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
+            <select className="ops-input" value={clientUser} onChange={(e) => setClientUser(e.target.value)}>
+              <option value="">Profile…</option>
+              {board.users.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.name} ({u.email})
+                </option>
+              ))}
+            </select>
+            <select className="ops-input" value={clientId} onChange={(e) => setClientId(e.target.value)}>
+              <option value="">Client…</option>
+              {board.clients.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                  {c.firmName ? ` · ${c.firmName}` : ""}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              disabled={!clientUser || !clientId || saving}
+              onClick={() =>
+                void setClient({ data: { userId: clientUser, clientId, enabled: true } })
+                  .then(() => {
+                    toast.success("Added to business file");
+                    setClientUser("");
+                    setClientId("");
+                    return refresh();
+                  })
+                  .catch((e) => toast.error(e instanceof Error ? e.message : "Could not add to client"))
+              }
+              className="inline-flex h-10 items-center justify-center rounded-xl bg-gradient-to-r from-[#ac8400] via-[#d4af37] to-[#fdee79] px-3 text-[11px] font-bold uppercase tracking-wider text-[#1b1300] disabled:opacity-50"
+            >
+              Grant
+            </button>
+          </div>
+        </div>
       </div>
 
       <div className="space-y-3">
+        {users.length === 0 && (
+          <p className="text-sm text-[var(--ops-ink-dim)]">No profiles match this filter.</p>
+        )}
         {users.map((u) => (
-          <article
-            key={u.id}
-            className="rounded-2xl border border-[var(--ops-line)] bg-[var(--ops-card)] p-4"
-          >
+          <article key={u.id} className="rounded-2xl border border-[var(--ops-line)] bg-[var(--ops-card)] p-4">
             <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
               <div>
-                <div className="text-sm font-semibold text-[var(--ops-ink)]">{u.name}</div>
+                <div className="text-sm font-semibold text-[var(--ops-ink)]">
+                  {u.name}
+                  {u.itMember ? (
+                    <span className="ml-2 rounded-full bg-[var(--ops-amber-soft)] px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-[var(--ops-amber)]">
+                      IT
+                    </span>
+                  ) : null}
+                </div>
                 <div className="text-[11px] text-[var(--ops-ink-dim)]">{u.email}</div>
               </div>
               <div className="flex flex-wrap gap-1">
-                {ROLE_OPTIONS.map((role) => {
+                {PORTAL_ROLES.map((role) => {
                   const on = u.roles.includes(role);
                   return (
                     <button
                       key={role}
                       type="button"
+                      disabled={saving}
                       onClick={() => void toggleRole(u, role)}
-                      className={`rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider ${
+                      className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${
                         on
                           ? "bg-[var(--ops-amber-soft)] text-[var(--ops-amber)]"
                           : "border border-[var(--ops-line)] text-[var(--ops-ink-dim)]"
                       }`}
                     >
-                      {role.replace("_", " ")}
+                      {ROLE_LABEL[role]}
                     </button>
                   );
                 })}
               </div>
             </div>
-            {u.firms.length > 0 && (
-              <p className="mb-1 text-[11px] text-[var(--ops-ink-dim)]">
-                Firms: {u.firms.map((f) => `${f.name} (${f.role})`).join(" · ")}
-              </p>
-            )}
-            {u.ownedClients.length > 0 && (
-              <p className="mb-1 text-[11px] text-[var(--ops-ink-dim)]">
-                Owns: {u.ownedClients.map((c) => c.name).join(", ")}
-              </p>
-            )}
-            {u.clientAccess.length > 0 && (
-              <ul className="mt-2 space-y-1">
-                {u.clientAccess.map((a) => (
-                  <li
-                    key={a.accessId}
-                    className="flex items-center justify-between gap-2 text-[12px] text-[var(--ops-ink-soft)]"
-                  >
-                    <span>
-                      {a.clientName} · {CLASSIFICATION_LABELS[a.classification]} · {a.status}
+            <div className="grid gap-2 text-[11px] text-[var(--ops-ink-dim)] sm:grid-cols-3">
+              <div>
+                <div className="mb-1 font-bold uppercase tracking-wider">Practice</div>
+                {u.firms.length === 0 && <span>No firm</span>}
+                {u.firms.map((f) => (
+                  <div key={`${f.id}-${f.membershipId ?? "owner"}`} className="flex items-center gap-1">
+                    <span className="text-[var(--ops-ink-soft)]">
+                      {f.name} · {f.role}
                     </span>
-                    {a.status !== "revoked" && a.status !== "declined" ? (
+                    {f.membershipId ? (
                       <button
                         type="button"
-                        className="text-[10px] font-semibold uppercase tracking-wider text-[var(--ops-danger-ink)]"
+                        title="Remove from firm"
                         onClick={() =>
-                          void revoke({ data: { accessId: a.accessId } })
+                          void setFirm({ data: { userId: u.id, firmId: f.id, enabled: false } })
                             .then(() => refresh())
-                            .catch((e) => toast.error(e instanceof Error ? e.message : "Revoke failed"))
+                            .catch((e) => toast.error(e instanceof Error ? e.message : "Remove failed"))
                         }
+                        className="rounded p-0.5 hover:text-[var(--ops-danger-ink)]"
                       >
-                        Revoke
+                        <X className="h-3 w-3" />
                       </button>
-                    ) : null}
-                  </li>
+                    ) : (
+                      <span className="text-[9px] uppercase">owner</span>
+                    )}
+                  </div>
                 ))}
-              </ul>
-            )}
+              </div>
+              <div>
+                <div className="mb-1 font-bold uppercase tracking-wider">Owns</div>
+                {u.ownedClients.length === 0 && <span>No business file</span>}
+                {u.ownedClients.map((c) => (
+                  <div key={c.id} className="text-[var(--ops-ink-soft)]">
+                    {c.name}
+                  </div>
+                ))}
+              </div>
+              <div>
+                <div className="mb-1 font-bold uppercase tracking-wider">Business team</div>
+                {u.clientMemberships.length === 0 && <span>No staff files</span>}
+                {u.clientMemberships.map((c) => (
+                  <div key={c.id} className="flex items-center gap-1">
+                    <span className="text-[var(--ops-ink-soft)]">
+                      {c.clientName} · {c.role}
+                    </span>
+                    <button
+                      type="button"
+                      title="Remove from file"
+                      onClick={() =>
+                        void setClient({ data: { userId: u.id, clientId: c.clientId, enabled: false } })
+                          .then(() => refresh())
+                          .catch((e) => toast.error(e instanceof Error ? e.message : "Remove failed"))
+                      }
+                      className="rounded p-0.5 hover:text-[var(--ops-danger-ink)]"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
           </article>
         ))}
       </div>

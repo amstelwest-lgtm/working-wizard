@@ -45,8 +45,8 @@ assert(panel.includes('"access"'), "Lighthouse has an Access tab");
 assert(panel.includes("LighthouseAccessPanel"), "Access tab renders the admin panel");
 
 const lh = readFileSync(resolve("src/components/lighthouse-access.tsx"), "utf8");
-assert(lh.includes("Grant now"), "platform can override grants");
 assert(lh.includes("client_owner"), "can toggle owner roles");
+assert(lh.includes("Add to a practice firm") || lh.includes("Grant now"), "platform can grant practice access");
 
 const page = readFileSync(resolve("src/routes/access.$token.tsx"), "utf8");
 assert(page.includes("redeemAccessToken"), "public page redeems dual-approval links");

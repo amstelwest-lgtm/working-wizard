@@ -72,8 +72,8 @@ const STEP_HINT: Record<number, string> = {
 export const LIGHTHOUSE_TABS = [
   "pipeline",
   "usage",
-  "it",
   "access",
+  "it",
   "playbook",
   "assets",
   "settings",
@@ -148,7 +148,7 @@ export function LighthousePanel({ initialTab }: { initialTab?: LighthouseTab }) 
               : "border border-[var(--ops-line)] text-[var(--ops-ink-dim)] hover:text-[var(--ops-ink-soft)]"
           }`}
         >
-            {t === "it" ? "IT queries" : t === "access" ? "Access" : t}
+          {t === "it" ? "IT queries" : t === "access" ? "Access" : t}
         </button>
       ))}
       <span className="flex-1" />
