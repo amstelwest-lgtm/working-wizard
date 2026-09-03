@@ -102,7 +102,7 @@ GET `/t/:token` and GET `/ack/:token` write **no** analytics and **no** product 
 
 ## Privacy (POPIA)
 
-Raw `analytics.events` store event keys, ids, and non-financial properties. No amounts, no employee emails, no ID numbers. Magic-link actors are a hash of the token. Retention of raw events is 24 months (`analytics_purge_old_events`). Aggregates stay. Public privacy-policy copy is not changed until Theo approves question 10.
+Raw `analytics.events` store event keys, ids, and non-financial properties. No amounts, no employee emails, no ID numbers. Magic-link actors are a hash of the token. Retention of raw events is 24 months (`analytics_purge_old_events`). Aggregates stay. Public copy lives on `/faq` (“Do you track how I use the product?”).
 
 ## Rollback
 

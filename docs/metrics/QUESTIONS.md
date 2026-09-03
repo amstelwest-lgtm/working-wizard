@@ -1,16 +1,14 @@
-# Questions for Theo (do not block the instrument)
+# Questions for Theo — answers 3 Sep 2026
 
-Defaults already shipped are in brackets. Answer these when you have a minute — the SQL below still runs without the answers.
-
-1. **Founding Practice firm IDs** — which `firms.id` rows are the personal / first-wave cohort that must stay out of headline PMF? `[none flagged; founder-owned firms are already is_internal]`
-2. **Demo / sandbox client IDs** — which `clients.id` rows should be `is_demo = true`? `[none flagged; do not guess from the name “Demo”]`
-3. **Extra internal firms** — any test practices not owned by `amstel.west@gmail.com`? `[founder-owned auto-flagged]`
-4. **Extra digest recipients** — anyone besides `MILON_OWNER_EMAILS` / `analytics.founder_emails`? `[amstel.west@gmail.com]`
-5. **Cron secret** — confirm `CRON_SECRET` or `MILON_DIGEST_SECRET` is set on Vercel so Monday 06:00 UTC can send. Without it, use **Send digest** on `/founder/metrics`.
-6. **Owner-only SMEs** — keep them out of this practice-channel instrument? `[yes]`
-7. **H5 (price)** — wait until unaffiliated `payment.recorded` exists before showing a conversion number? `[yes — H5 stays untested]`
-8. **Referrals** — when should `referred_another_practice` become measurable? `[unmeasurable until a real referral event exists]`
-9. **H3** — leave extraction correction blocked until we can tell AI-fill from a blank form? `[yes]`
-10. **Privacy policy** — OK to add one sentence that we store product-event keys (not financial amounts, not employee emails) for 24 months? `[not written into the public page until you say so]`
-11. **Purge** — run `analytics_purge_old_events(24)` later by hand, never on a schedule, until you have read the count? `[yes]`
-12. **Practice access SQL** — has `20260901160000_practice_client_access.sql` already been pasted live?
+1. **Founding Practice** — explained below. No firm IDs flagged yet. Founder-owned firms are already `is_internal`.
+2. **Demo client** — named **Karoobosveld**. Lookup SQL is in the chat; flag after the id is confirmed.
+3. **Extra internal firms** — not understood; explained below. Default: only founder-owned firms are internal.
+4. **Extra digest recipients** — no.
+5. **Cron secret** — unknown / maybe not set. Generate one in Vercel; or use **Send digest** on `/founder/metrics`.
+6. **Owner-only SMEs out of this instrument** — yes.
+7. **H5 untested until unaffiliated payments exist** — yes.
+8. **Referrals** — still unmeasurable. There is no referral feature / event yet. Explained below.
+9. **H3 blocked** — yes, until we can tell AI-fill from a blank form. Explained below.
+10. **Privacy sentence** — yes. Written on `/faq`.
+11. **Purge by hand, not scheduled** — yes. Explained below.
+12. **Practice-access SQL** — unknown; Theo will say once everything is pasted.
