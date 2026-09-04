@@ -130,7 +130,7 @@ export function trafficLight(
   return "bad";
 }
 
-function latestClosed<T extends { cohort_week: string }>(
+export function latestClosed<T extends { cohort_week: string }>(
   rows: T[],
   now: number,
 ): T | undefined {
@@ -139,12 +139,43 @@ function latestClosed<T extends { cohort_week: string }>(
     .sort((a, b) => Date.parse(b.cohort_week) - Date.parse(a.cohort_week))[0];
 }
 
-function latestMonth<T extends { cohort_month: string }>(rows: T[]): T | undefined {
+export function latestMonth<T extends { cohort_month: string }>(rows: T[]): T | undefined {
   return [...rows].sort((a, b) => Date.parse(b.cohort_month) - Date.parse(a.cohort_month))[0];
 }
 
-function unaffiliated<T extends { is_founding_practice?: boolean }>(rows: T[]): T[] {
+export function unaffiliated<T extends { is_founding_practice?: boolean }>(rows: T[]): T[] {
   return rows.filter((r) => !r.is_founding_practice);
+}
+
+export type ClosedReadings = {
+  activationPct: number | null;
+  loopPct: number | null;
+  adoptionPct: number | null;
+  retentionPct: number | null;
+  medianEntities: number | null;
+  activationRow?: ActivationRow;
+  loopRow?: LoopRow;
+};
+
+export function readClosedMetrics(input: DigestInput): ClosedReadings {
+  const now = input.now ?? Date.now();
+  const actReal = unaffiliated(input.activation);
+  const expReal = unaffiliated(input.expansion);
+  const retReal = unaffiliated(input.retention);
+  const loopClosed = latestClosed(input.loop.filter((r) => r.tasks_assigned > 0), now);
+  const actClosed = latestClosed(actReal.filter((r) => r.practices > 0), now);
+  const adoptClosed = latestClosed(input.adoption.filter((r) => r.entities_with_send > 0), now);
+  const retLatest = latestMonth(retReal.filter((r) => r.active_month1 > 0));
+  const expLatest = latestMonth(expReal.filter((r) => r.practices > 0));
+  return {
+    activationPct: actClosed?.activation_14d_pct ?? null,
+    loopPct: loopClosed?.completion_14d_pct ?? null,
+    adoptionPct: adoptClosed?.assignment_adoption_pct ?? null,
+    retentionPct: retLatest?.month2_retention_pct ?? null,
+    medianEntities: expLatest?.median_entities ?? null,
+    activationRow: actClosed,
+    loopRow: loopClosed,
+  };
 }
 
 function combineStatus(flags: Traffic[]): HypothesisStatus {

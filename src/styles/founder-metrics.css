@@ -1,23 +1,41 @@
 /**
- * Founder instrument — reuse Lighthouse tokens, add display type + traffic colours.
- * Forbidden on this page: cumulative totals, NPS, blended founding headlines.
+ * Founder instrument — readable first, ops tokens second.
+ * Forbidden: cumulative totals, NPS, blended founding headlines.
  */
 
 .founder-metrics {
   --gold: #d4af37;
 }
 
-.founder-metrics .fm-display {
-  font-family: "Bebas Neue", "Cormorant Garamond", serif;
-  letter-spacing: 0.04em;
+.founder-metrics .fm-kicker {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ops-amber);
+}
+
+.founder-metrics .fm-title {
+  font-size: clamp(1.6rem, 3vw, 2rem);
+  font-weight: 650;
+  letter-spacing: -0.03em;
+  color: var(--ops-ink);
+}
+
+.founder-metrics .fm-section {
+  font-size: 13px;
+  font-weight: 750;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ops-ink-dim);
+  margin-bottom: 12px;
 }
 
 .founder-metrics .fm-number {
-  font-family: "Bebas Neue", "Cormorant Garamond", serif;
-  font-size: clamp(4.5rem, 12vw, 7.5rem);
-  line-height: 0.9;
-  letter-spacing: -0.02em;
-  color: var(--gold, #d4af37);
+  font-size: clamp(2.4rem, 6vw, 3.6rem);
+  font-weight: 650;
+  line-height: 1;
+  letter-spacing: -0.04em;
 }
 
 .founder-metrics .fm-traffic-healthy {
@@ -34,11 +52,64 @@
 }
 
 .founder-metrics .fm-founding {
-  box-shadow: inset 4px 0 0 var(--gold, #d4af37);
+  box-shadow: inset 3px 0 0 var(--gold, #d4af37);
 }
 
 .founder-metrics .fm-status-blocked {
-  opacity: 0.7;
+  opacity: 0.72;
+}
+
+.founder-metrics .fm-now {
+  border-color: var(--ops-amber-border);
+  background: color-mix(in srgb, var(--ops-amber-soft) 70%, var(--ops-card));
+}
+
+.founder-metrics .fm-score {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(168px, 1fr));
+  gap: 10px;
+}
+
+.founder-metrics .fm-score article {
+  padding: 14px 14px 12px;
+}
+
+.founder-metrics .fm-score .fm-score-val {
+  font-size: 1.65rem;
+  font-weight: 650;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+}
+
+.founder-metrics .fm-bar {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--ops-line);
+  overflow: hidden;
+}
+
+.founder-metrics .fm-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--ops-amber);
+}
+
+.founder-metrics .fm-bar.is-ok > span {
+  background: var(--ops-ok-ink);
+}
+
+.founder-metrics .fm-bar.is-bad > span {
+  background: var(--ops-danger-ink);
+}
+
+.founder-metrics .fm-who {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ops-ink-dim);
 }
 
 .founder-metrics table th,
@@ -53,4 +124,25 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.12em;
+}
+
+.founder-metrics .fm-pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  border: 1px solid var(--ops-line-strong);
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.founder-metrics .fm-pill-bad {
+  border-color: var(--ops-danger-border);
+  color: var(--ops-danger-ink);
+}
+
+.founder-metrics .fm-pill-ok {
+  color: var(--ops-ok-ink);
 }
