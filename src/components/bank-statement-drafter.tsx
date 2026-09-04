@@ -35,6 +35,7 @@ import {
   type BankFileSlot,
 } from "@/lib/bank-files";
 import { useMarketFormat } from "@/contexts/market";
+import { selectionPayload } from "@/lib/market";
 import { MovementsTrialBalancePanel } from "@/components/movements-trial-balance-panel";
 
 export interface BankDraftApplyPayload {
@@ -67,7 +68,7 @@ function fmt(n: number, currency: string | null, money: (n: number) => string): 
 }
 
 export function BankStatementDrafter({ open, onClose, onApply }: Props) {
-  const { money, t } = useMarketFormat();
+  const { money, t, selection } = useMarketFormat();
   const checking = t("checking");
   const inputRef = useRef<HTMLInputElement>(null);
   const [slots, setSlots] = useState<BankFileSlot[]>([]);
@@ -130,9 +131,10 @@ export function BankStatementDrafter({ open, onClose, onApply }: Props) {
       setEncodedFiles(payloadFiles);
       setDraftProgress("Drafting P&L and cash movements from the same pack…");
 
+      const market = selectionPayload(selection);
       const [pnlResult, cashResult] = await Promise.all([
-        doDraftPnL({ data: { files: payloadFiles } }),
-        doDraftCash({ data: { files: payloadFiles } }),
+        doDraftPnL({ data: { files: payloadFiles, market } }),
+        doDraftCash({ data: { files: payloadFiles, market } }),
       ]);
 
       setDraft(pnlResult.draft);

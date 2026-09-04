@@ -19,6 +19,7 @@ import type { ValidationIssue } from "@/lib/validateFinancials";
 import { UPLOAD_QUALITY_DISCLAIMER, preflightUploadFile } from "@/lib/upload-quality";
 import { UploadQualityDisclaimer } from "@/components/upload-quality-disclaimer";
 import { useMarketFormat } from "@/contexts/market";
+import { selectionPayload } from "@/lib/market";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -91,7 +92,7 @@ export type UploadFinancialsProps = {
 };
 
 export function UploadFinancials({ onConfirm }: UploadFinancialsProps) {
-  const { number } = useMarketFormat();
+  const { number, selection } = useMarketFormat();
   const inputRef = useRef<HTMLInputElement>(null);
   const [status, setStatus] = useState<"idle" | "loading" | "review">("idle");
   const [result, setResult] = useState<ExtractionResult | null>(null);
@@ -114,7 +115,7 @@ export function UploadFinancials({ onConfirm }: UploadFinancialsProps) {
     setStatus("loading");
     try {
       const pdfBase64 = await fileToBase64(file);
-      const res = await extract({ data: { pdfBase64 } });
+      const res = await extract({ data: { pdfBase64, market: selectionPayload(selection) } });
       setResult(res.data);
       setIssues(res.issues);
       setAutoSafe(res.autoImportSafe);

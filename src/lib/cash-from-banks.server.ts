@@ -9,6 +9,12 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { callClaudeMessages, parseClaudeJson, type ClaudeContentPart } from "@/lib/claude-messages";
 import {
+  cashExtractPrompt,
+  marketInputSchema,
+  promptCurrencyCode,
+  resolvePromptMarket,
+} from "@/lib/market";
+import {
   buildDraftLinesFromExtract,
   nextForecastStartDate,
   resolveOpeningBalance,
@@ -38,7 +44,11 @@ const BUCKETS = [
 ] as const;
 
 const txnSchema = z.object({
-  txn_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  txn_date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .nullable()
+    .optional(),
   amount: z.number().finite(),
   direction: z.enum(["in", "out"]),
   description: z.string().max(300).optional().nullable(),
@@ -56,8 +66,16 @@ const accountSchema = z.object({
 });
 
 const extractSchema = z.object({
-  period_start: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
-  period_end: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  period_start: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .nullable()
+    .optional(),
+  period_end: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .nullable()
+    .optional(),
   opening_balance: z.number().finite().nullable().optional(),
   closing_balance: z.number().finite().nullable().optional(),
   currency: z.string().max(10).nullable().optional(),
@@ -67,69 +85,10 @@ const extractSchema = z.object({
   balance_check_notes: z.string().max(2000).nullable().optional(),
 });
 
-const EXTRACT_PROMPT = `
-You are a cash-flow analyst for South African SMEs. You are given one or more
-BANK STATEMENTS that may cover MULTIPLE bank accounts (cheque, credit card,
-savings, etc.). Each file may be labelled with an account name. Extract a
-transaction-level cash view (NOT an income statement).
-
-Rules:
-1. List individual transactions (or tightly grouped same-day same-counterparty
-   movements). Prefer the most material lines — up to 200 transactions.
-2. amount is always a POSITIVE number. direction is "in" (money received) or
-   "out" (money paid).
-3. ai_bucket must be one of:
-   trading, cos, opex, payroll, rent, loan, interest, tax, vat, owner, capex,
-   transfer, other
-4. Mark excluded=true for pure inter-account transfers that are not business
-   cash movement. Still include them in the list with ai_bucket "transfer".
-5. counterparty = merchant / payee / payer name when clear, else null.
-6. For EACH distinct bank account, fill accounts[] with account_label,
-   opening_balance, closing_balance (printed statement balances), and the
-   file_names that belong to that account. Also set consolidated
-   opening_balance / closing_balance as the SUM across accounts.
-7. Tag every transaction with account_label matching accounts[].
-8. period_start / period_end = earliest and latest transaction dates (YYYY-MM-DD).
-9. BALANCE CHECK (required): For each account, mentally verify
-   opening + sum(in) - sum(out) ≈ closing (including transfers). If it does
-   not tie, explain the gap in balance_check_notes (missing pages, uncleared
-   items, OCR uncertainty). Never invent transactions to force a tie.
-10. Do NOT annualise. Do NOT invent transactions. If unsure of bucket, use
-    "other" and mention it in notes.
-
-Return ONLY JSON (no markdown) matching:
-{
-  "period_start": "YYYY-MM-DD"|null,
-  "period_end": "YYYY-MM-DD"|null,
-  "opening_balance": number|null,
-  "closing_balance": number|null,
-  "currency": "ZAR"|null,
-  "accounts": [
-    {
-      "account_label": string,
-      "opening_balance": number|null,
-      "closing_balance": number|null,
-      "file_names": string[]
-    }
-  ],
-  "transactions": [
-    {
-      "txn_date": "YYYY-MM-DD",
-      "amount": number,
-      "direction": "in"|"out",
-      "description": string,
-      "counterparty": string|null,
-      "ai_bucket": "trading"|...,
-      "excluded": boolean,
-      "account_label": string|null
-    }
-  ],
-  "notes": string|null,
-  "balance_check_notes": string|null
-}
-`.trim();
-
-function normalizeExtract(raw: z.infer<typeof extractSchema>): CashBankExtract {
+function normalizeExtract(
+  raw: z.infer<typeof extractSchema>,
+  defaultCurrency: string,
+): CashBankExtract {
   const transactions: CashStatementTransaction[] = raw.transactions
     .filter((t) => Number.isFinite(t.amount) && t.amount > 0)
     .map((t) => ({
@@ -167,7 +126,7 @@ function normalizeExtract(raw: z.infer<typeof extractSchema>): CashBankExtract {
     period_end: raw.period_end ?? null,
     opening_balance: opening,
     closing_balance: closing,
-    currency: raw.currency ?? "ZAR",
+    currency: raw.currency ?? defaultCurrency,
     transactions,
     notes: raw.notes ?? null,
     accounts,
@@ -187,10 +146,13 @@ export const draftCashForecastFromBankStatements = createServerFn({ method: "POS
     z
       .object({
         files: z.array(fileInputSchema).min(1).max(MAX_BANK_FILES),
+        market: marketInputSchema,
       })
       .parse(input),
   )
   .handler(async ({ data }): Promise<CashFromBanksDraftResult> => {
+    const market = resolvePromptMarket(data.market);
+    const prompt = cashExtractPrompt(market);
     let totalBytes = 0;
     const content: ClaudeContentPart[] = [];
     for (const f of data.files) {
@@ -220,7 +182,7 @@ export const draftCashForecastFromBankStatements = createServerFn({ method: "POS
         `Statements are too large (${(totalBytes / 1024 / 1024).toFixed(1)} MB total). Max 40 MB.`,
       );
     }
-    content.push({ type: "text", text: EXTRACT_PROMPT });
+    content.push({ type: "text", text: prompt });
 
     const rawText = await callClaudeMessages({
       content,
@@ -236,7 +198,7 @@ export const draftCashForecastFromBankStatements = createServerFn({ method: "POS
     }
 
     const validated = extractSchema.parse(parsed);
-    const extract = normalizeExtract(validated);
+    const extract = normalizeExtract(validated, promptCurrencyCode(market));
     if (extract.transactions.length === 0) {
       throw new Error("No transactions could be extracted from these statements.");
     }
@@ -266,7 +228,9 @@ export const draftCashForecastFromBankStatements = createServerFn({ method: "POS
       warnings.push(`AI balance notes: ${validated.balance_check_notes}`);
     }
     if (lines.filter((l) => l.status !== "excluded").length === 0) {
-      warnings.push("All detected lines look like transfers/exclusions — review before publishing.");
+      warnings.push(
+        "All detected lines look like transfers/exclusions — review before publishing.",
+      );
     }
     if (extract.notes) warnings.push(extract.notes);
     if (extract.accounts && extract.accounts.length > 1) {

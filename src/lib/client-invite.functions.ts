@@ -14,6 +14,7 @@ import {
   inviteSiteUrl,
   sendInviteViaResend,
 } from "@/lib/client-invite-email";
+import { isMissingMarketSupport } from "@/lib/market";
 
 const emailSchema = z.string().trim().email().max(200).optional().nullable();
 
@@ -68,21 +69,52 @@ export const inviteClientOwner = createServerFn({ method: "POST" })
       contact_email: string | null;
       firm_id: string | null;
       client_code?: string | null;
+      market?: unknown;
     } | null = null;
 
     const first = await supabaseAdmin
       .from("clients")
-      .select("id, name, client_code, contact_email, firm_id")
+      .select("id, name, client_code, contact_email, firm_id, market")
       .eq("id", data.clientId)
       .maybeSingle();
-    if (first.error && (first.error.message ?? "").includes("client_code")) {
+    if (first.error && isMissingMarketSupport(first.error)) {
       const retry = await supabaseAdmin
         .from("clients")
-        .select("id, name, contact_email, firm_id")
+        .select("id, name, client_code, contact_email, firm_id")
         .eq("id", data.clientId)
         .maybeSingle();
-      if (retry.error) throw new Error(retry.error.message);
-      client = retry.data ? { ...retry.data, client_code: null } : null;
+      if (retry.error && (retry.error.message ?? "").includes("client_code")) {
+        const retry2 = await supabaseAdmin
+          .from("clients")
+          .select("id, name, contact_email, firm_id")
+          .eq("id", data.clientId)
+          .maybeSingle();
+        if (retry2.error) throw new Error(retry2.error.message);
+        client = retry2.data ? { ...retry2.data, client_code: null } : null;
+      } else if (retry.error) {
+        throw new Error(retry.error.message);
+      } else {
+        client = retry.data;
+      }
+    } else if (first.error && (first.error.message ?? "").includes("client_code")) {
+      const retry = await supabaseAdmin
+        .from("clients")
+        .select("id, name, contact_email, firm_id, market")
+        .eq("id", data.clientId)
+        .maybeSingle();
+      if (retry.error && isMissingMarketSupport(retry.error)) {
+        const retry2 = await supabaseAdmin
+          .from("clients")
+          .select("id, name, contact_email, firm_id")
+          .eq("id", data.clientId)
+          .maybeSingle();
+        if (retry2.error) throw new Error(retry2.error.message);
+        client = retry2.data ? { ...retry2.data, client_code: null } : null;
+      } else if (retry.error) {
+        throw new Error(retry.error.message);
+      } else {
+        client = retry.data ? { ...retry.data, client_code: null } : null;
+      }
     } else if (first.error) {
       throw new Error(first.error.message);
     } else {
@@ -127,6 +159,7 @@ export const inviteClientOwner = createServerFn({ method: "POST" })
       firmName,
       accountantName,
       accountantEmail,
+      market: client.market,
     });
 
     if (toEmail && toEmail !== (client.contact_email ?? "").toLowerCase()) {

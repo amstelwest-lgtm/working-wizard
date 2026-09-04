@@ -1,11 +1,25 @@
 import { useState, useEffect } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Loader2, TrendingUp, Scissors, Settings2, Users, Building2, Wallet, ShieldAlert, AlertTriangle } from "lucide-react";
+import {
+  Loader2,
+  TrendingUp,
+  Scissors,
+  Settings2,
+  Users,
+  Building2,
+  Wallet,
+  ShieldAlert,
+  AlertTriangle,
+} from "lucide-react";
 import { getPlaybookSteps } from "@/lib/playbook.functions";
 import type { PlaybookStep } from "@/lib/playbook.functions";
 import { listInterventionSignoffs, type InterventionSignoff } from "@/lib/intervention.functions";
-import { InterventionSignoffButton, SignoffBadgeReadonly } from "@/components/intervention-signoff-button";
+import {
+  InterventionSignoffButton,
+  SignoffBadgeReadonly,
+} from "@/components/intervention-signoff-button";
+import { useMarket } from "@/contexts/market";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -20,7 +34,10 @@ const TIMEFRAME_LABELS: Record<string, string> = {
 
 const TIMEFRAME_ORDER = ["immediate", "week_1_2", "month_1", "month_1_3", "month_3_6", "year_1"];
 
-const TIER_STYLES: Record<string, { badge: string; stepDot: string; label: string; border: string }> = {
+const TIER_STYLES: Record<
+  string,
+  { badge: string; stepDot: string; label: string; border: string }
+> = {
   critical: {
     badge: "bg-red-950/80 text-red-200 border border-red-700/80",
     stepDot: "bg-red-600 text-white",
@@ -54,7 +71,10 @@ const IMPACT_STYLES: Record<string, string> = {
   high: "bg-emerald-800 text-emerald-50",
 };
 
-const CATEGORY_STYLES: Record<string, { cls: string; Icon: React.ComponentType<{ className?: string }> }> = {
+const CATEGORY_STYLES: Record<
+  string,
+  { cls: string; Icon: React.ComponentType<{ className?: string }> }
+> = {
   revenue: { cls: "bg-blue-900/70 text-blue-100", Icon: TrendingUp },
   cost: { cls: "bg-amber-900/70 text-amber-100", Icon: Scissors },
   operations: { cls: "bg-purple-900/70 text-purple-100", Icon: Settings2 },
@@ -108,16 +128,27 @@ export function PlaybookDrawer({
   const [signoffs, setSignoffs] = useState<Record<number, InterventionSignoff>>({});
   const loadSignoffs = useServerFn(listInterventionSignoffs);
   const signoffEnabled = Boolean(clientId && ratioKey);
+  const { selection } = useMarket();
 
   useEffect(() => {
-    if (!open || !ratioKey) { setSteps([]); return; }
+    if (!open || !ratioKey) {
+      setSteps([]);
+      return;
+    }
     setLoading(true);
     setSteps([]);
-    getPlaybookSteps({ data: { ratioKey, tier: healthTier } })
+    getPlaybookSteps({
+      data: {
+        ratioKey,
+        tier: healthTier,
+        country: selection.country,
+        regionCode: selection.regionCode,
+      },
+    })
       .then(setSteps)
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [open, ratioKey, healthTier]);
+  }, [open, ratioKey, healthTier, selection]);
 
   useEffect(() => {
     if (!open || !signoffEnabled || !clientId || !ratioKey) {
@@ -148,7 +179,12 @@ export function PlaybookDrawer({
   const grouped = groupByTimeframe(steps);
 
   return (
-    <Sheet open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
+    <Sheet
+      open={open}
+      onOpenChange={(v) => {
+        if (!v) onClose();
+      }}
+    >
       {/*
         Force a dark surface regardless of page theme. SheetTitle defaults to
         text-foreground (near-black in light mode) which was invisible on this drawer.
@@ -163,7 +199,9 @@ export function PlaybookDrawer({
             <SheetTitle className="!text-slate-50 flex-1 text-left text-base font-semibold leading-tight">
               {ratioName}
             </SheetTitle>
-            <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${tier.badge}`}>
+            <span
+              className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${tier.badge}`}
+            >
               {tier.label}
             </span>
           </div>
@@ -172,8 +210,8 @@ export function PlaybookDrawer({
               {steps.length > 0
                 ? `${steps.length} action steps — ordered by priority and timeframe`
                 : loading
-                ? "Loading playbook…"
-                : "No playbook available for this ratio yet."}
+                  ? "Loading playbook…"
+                  : "No playbook available for this ratio yet."}
             </p>
             {signoffEnabled && steps.length > 0 && (
               <p className="flex-shrink-0 text-[11px] font-normal text-slate-400">
@@ -195,87 +233,103 @@ export function PlaybookDrawer({
           {!loading && steps.length === 0 && (
             <div className="flex flex-col items-center justify-center gap-3 py-16 text-center text-slate-400">
               <AlertTriangle className="h-8 w-8 text-slate-500" />
-              <p className="text-sm text-slate-300">No playbook steps found for this ratio and tier.</p>
+              <p className="text-sm text-slate-300">
+                No playbook steps found for this ratio and tier.
+              </p>
               <p className="text-xs text-slate-500">Check back after the next data import.</p>
             </div>
           )}
 
-          {!loading && grouped.map(({ timeframe, label, steps: phaseSteps }) => (
-            <div key={timeframe}>
-              {/* Phase divider */}
-              <div className="mb-3 flex items-center gap-2">
-                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">{label}</span>
-                <div className="flex-1 border-t border-slate-700" />
-              </div>
+          {!loading &&
+            grouped.map(({ timeframe, label, steps: phaseSteps }) => (
+              <div key={timeframe}>
+                {/* Phase divider */}
+                <div className="mb-3 flex items-center gap-2">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                    {label}
+                  </span>
+                  <div className="flex-1 border-t border-slate-700" />
+                </div>
 
-              <div className="space-y-3">
-                {phaseSteps.map((step) => {
-                  const cat = CATEGORY_STYLES[step.category] ?? CATEGORY_STYLES.operations;
-                  const CatIcon = cat.Icon;
-                  return (
-                    <div
-                      key={step.step_number}
-                      className={`rounded-lg border border-slate-700 border-l-2 ${tier.border} bg-slate-900/80 p-4`}
-                    >
-                      <div className="flex items-start gap-3">
-                        {/* Step number */}
-                        <span className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${tier.stepDot}`}>
-                          {step.step_number}
-                        </span>
+                <div className="space-y-3">
+                  {phaseSteps.map((step) => {
+                    const cat = CATEGORY_STYLES[step.category] ?? CATEGORY_STYLES.operations;
+                    const CatIcon = cat.Icon;
+                    return (
+                      <div
+                        key={step.step_number}
+                        className={`rounded-lg border border-slate-700 border-l-2 ${tier.border} bg-slate-900/80 p-4`}
+                      >
+                        <div className="flex items-start gap-3">
+                          {/* Step number */}
+                          <span
+                            className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${tier.stepDot}`}
+                          >
+                            {step.step_number}
+                          </span>
 
-                        <div className="min-w-0 flex-1">
-                          <p className="mb-1.5 text-sm font-semibold leading-snug text-slate-50">
-                            {step.step_title}
-                          </p>
-                          <p className="mb-3 text-xs leading-relaxed text-slate-300">
-                            {step.step_description}
-                          </p>
+                          <div className="min-w-0 flex-1">
+                            <p className="mb-1.5 text-sm font-semibold leading-snug text-slate-50">
+                              {step.step_title}
+                            </p>
+                            <p className="mb-3 text-xs leading-relaxed text-slate-300">
+                              {step.step_description}
+                            </p>
 
-                          {/* Tags */}
-                          <div className="flex flex-wrap gap-1.5">
-                            <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium ${EFFORT_STYLES[step.effort] ?? EFFORT_STYLES.medium}`}>
-                              Effort: {step.effort}
-                            </span>
-                            <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium ${IMPACT_STYLES[step.impact] ?? IMPACT_STYLES.medium}`}>
-                              Impact: {step.impact}
-                            </span>
-                            <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium ${cat.cls}`}>
-                              <CatIcon className="h-2.5 w-2.5" />
-                              {step.category}
-                            </span>
+                            {/* Tags */}
+                            <div className="flex flex-wrap gap-1.5">
+                              <span
+                                className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium ${EFFORT_STYLES[step.effort] ?? EFFORT_STYLES.medium}`}
+                              >
+                                Effort: {step.effort}
+                              </span>
+                              <span
+                                className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium ${IMPACT_STYLES[step.impact] ?? IMPACT_STYLES.medium}`}
+                              >
+                                Impact: {step.impact}
+                              </span>
+                              <span
+                                className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium ${cat.cls}`}
+                              >
+                                <CatIcon className="h-2.5 w-2.5" />
+                                {step.category}
+                              </span>
+                            </div>
+
+                            {/* Sign-off (accountant view only) */}
+                            {signoffEnabled && clientId && ratioKey && isAccountant && (
+                              <InterventionSignoffButton
+                                clientId={clientId}
+                                clientName={clientName}
+                                ratioKey={ratioKey}
+                                stepNumber={step.step_number}
+                                signoff={signoffs[step.step_number] ?? null}
+                                onChange={(next) => {
+                                  setSignoffs((prev) => {
+                                    const copy = { ...prev };
+                                    if (next) copy[step.step_number] = next;
+                                    else delete copy[step.step_number];
+                                    return copy;
+                                  });
+                                }}
+                              />
+                            )}
+
+                            {/* Sign-off (SME read-only view) */}
+                            {signoffEnabled && !isAccountant && signoffs[step.step_number] && (
+                              <SignoffBadgeReadonly
+                                signoff={signoffs[step.step_number]}
+                                clientName={clientName}
+                              />
+                            )}
                           </div>
-
-                          {/* Sign-off (accountant view only) */}
-                          {signoffEnabled && clientId && ratioKey && isAccountant && (
-                            <InterventionSignoffButton
-                              clientId={clientId}
-                              clientName={clientName}
-                              ratioKey={ratioKey}
-                              stepNumber={step.step_number}
-                              signoff={signoffs[step.step_number] ?? null}
-                              onChange={(next) => {
-                                setSignoffs((prev) => {
-                                  const copy = { ...prev };
-                                  if (next) copy[step.step_number] = next;
-                                  else delete copy[step.step_number];
-                                  return copy;
-                                });
-                              }}
-                            />
-                          )}
-
-                          {/* Sign-off (SME read-only view) */}
-                          {signoffEnabled && !isAccountant && signoffs[step.step_number] && (
-                            <SignoffBadgeReadonly signoff={signoffs[step.step_number]} clientName={clientName} />
-                          )}
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
         </div>
       </SheetContent>
     </Sheet>

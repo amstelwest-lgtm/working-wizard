@@ -5,16 +5,21 @@
 import { fmtRand } from "../src/components/pdf/theme";
 import {
   assertMarketSelection,
+  bankDraftPrompt,
   coerceMarketSelection,
   currencySymbol,
   draftToSelection,
+  financialExtractionPrompt,
   formatMoney,
   formatMoneyCompact,
   formatMoneyUnit,
   formatNumber,
   localizeCopy,
+  localizePlaybookStep,
   MarketSelectionError,
+  newsSearchUrl,
   parseMarketSelection,
+  playbookStepFitsMarket,
   resolveMarket,
   US_STATES,
   ZA_MARKET,
@@ -174,5 +179,68 @@ assert(
 assert(localizeCopy("GP per R1 of labour", tx) === "GP per $1 of labor", "US labour/R1");
 assert(fmtRand(40, tx).startsWith("$"), `fmtRand US ${fmtRand(40, tx)}`);
 assert(fmtRand(40, ZA_MARKET).startsWith("R"), `fmtRand ZA ${fmtRand(40, ZA_MARKET)}`);
+
+const zaExtract = financialExtractionPrompt(ZA_MARKET);
+assert(zaExtract.includes("South African"), "ZA extraction prompt names South Africa");
+assert(zaExtract.includes('"functional_currency": "ZAR"'), "ZA extraction currency key");
+
+const usExtract = financialExtractionPrompt(tx);
+assert(usExtract.includes("United States"), "US extraction prompt names United States");
+assert(usExtract.includes('"functional_currency": "USD"'), "US extraction currency key");
+assert(usExtract.includes("debtors"), "US extraction keeps debtors JSON key");
+
+const bankUs = bankDraftPrompt(tx);
+assert(/sales tax/i.test(bankUs), "US bank draft mentions sales tax");
+assert(!/provisional tax/i.test(bankUs), "US bank draft omits provisional tax");
+assert(!/VAT payments/i.test(bankUs), "US bank draft omits VAT payments");
+
+const newsUs = newsSearchUrl("foo", tx);
+assert(newsUs.includes("gl=US"), `US news search gl ${newsUs}`);
+assert(newsSearchUrl("foo", ZA_MARKET).includes("gl=ZA"), "ZA news search gl");
+
+assert(
+  !playbookStepFitsMarket(
+    { step_title: "File with SARS", step_description: "Submit the FNB 32-day notice return" },
+    tx,
+  ),
+  "US hides SARS/FNB playbook step",
+);
+assert(
+  playbookStepFitsMarket(
+    { step_title: "Chase slow payers", step_description: "Call customers who owe you this week" },
+    tx,
+  ),
+  "US keeps generic playbook step",
+);
+assert(
+  !playbookStepFitsMarket(
+    {
+      step_title: "Sales tax remittance",
+      step_description: "collect sales tax on every invoice this month",
+    },
+    or,
+  ),
+  "Oregon hides sales-tax-only step",
+);
+assert(
+  playbookStepFitsMarket(
+    {
+      step_title: "Sales tax remittance",
+      step_description: "collect sales tax on every invoice this month",
+    },
+    tx,
+  ),
+  "Texas keeps sales-tax step",
+);
+
+const localized = localizePlaybookStep(
+  { step_title: "Protect every rand", step_description: "Cut rand waste in opex" },
+  tx,
+);
+assert(localized.step_title.includes("dollar"), `localize title ${localized.step_title}`);
+assert(
+  localized.step_description.includes("dollar"),
+  `localize body ${localized.step_description}`,
+);
 
 console.log("market kernel ok");

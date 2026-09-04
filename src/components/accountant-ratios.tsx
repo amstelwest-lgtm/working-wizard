@@ -24,7 +24,13 @@ import { ExtractionReviewModal } from "@/components/extraction-review-modal";
 import type { MergedExtractionResult } from "@/lib/extraction-types";
 import type { MappedInputs } from "@/components/extraction-review-modal";
 import { useMarketFormat } from "@/contexts/market";
-import { formatMoney, localizeCopy, ZA_MARKET, type MoneyMarket } from "@/lib/market";
+import {
+  formatMoney,
+  localizeCopy,
+  selectionPayload,
+  ZA_MARKET,
+  type MoneyMarket,
+} from "@/lib/market";
 
 type Benchmark = { p25: number; p50: number; p75: number; unit: string; higher_is_better: boolean };
 
@@ -155,7 +161,7 @@ export function AccountantRatiosPanel({
   clientId: string;
   clientName: string;
 }) {
-  const { market } = useMarketFormat();
+  const { market, selection } = useMarketFormat();
   const doExtract = useServerFn(extractFinancials);
   const [v, setV] = useState<Inputs>(DEFAULTS);
   const [loaded, setLoaded] = useState(false);
@@ -180,7 +186,13 @@ export function AccountantRatiosPanel({
     const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
     if (ext === "csv" || file.type === "text/csv" || ext === "txt") {
       try {
-        const result = await doExtract({ data: { fileName: file.name, text: await file.text() } });
+        const result = await doExtract({
+          data: {
+            fileName: file.name,
+            text: await file.text(),
+            market: selectionPayload(selection),
+          },
+        });
         const extracted = (result as { financials?: Record<string, string> })?.financials ?? {};
         const filledKeys = Object.keys(extracted);
         if (filledKeys.length === 0) {
@@ -202,7 +214,13 @@ export function AccountantRatiosPanel({
           parts.push(`--- Sheet: ${name} ---`);
           parts.push(XLSX.utils.sheet_to_csv(wb.Sheets[name]));
         }
-        const result = await doExtract({ data: { fileName: file.name, text: parts.join("\n") } });
+        const result = await doExtract({
+          data: {
+            fileName: file.name,
+            text: parts.join("\n"),
+            market: selectionPayload(selection),
+          },
+        });
         const extracted = (result as { financials?: Record<string, string> })?.financials ?? {};
         const filledKeys = Object.keys(extracted);
         if (filledKeys.length === 0) {

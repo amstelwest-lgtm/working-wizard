@@ -4,6 +4,7 @@
  */
 
 import { callClaudeMessages, parseClaudeJson } from "@/lib/claude-messages";
+import { inviteDraftPrompt, resolvePromptMarket } from "@/lib/market";
 
 export type InviteDraftInput = {
   clientName: string;
@@ -12,6 +13,7 @@ export type InviteDraftInput = {
   firmName: string;
   accountantName: string;
   accountantEmail: string | null;
+  market?: unknown;
 };
 
 export type InviteDraft = {
@@ -61,24 +63,7 @@ export async function draftOwnerInviteEmail(input: InviteDraftInput): Promise<In
   const fallback = templateInviteDraft(input);
   if (!process.env.ANTHROPIC_API_KEY) return fallback;
 
-  const prompt = `You write a short email from a South African accountant to their SME client, inviting them to claim a MILŌN workspace.
-
-Rules:
-- Warm, calm, professional. No hype, no emojis, no "excited to partner", no sales pitch.
-- Plain text only. South African English (organisation, not organization) is fine but keep it simple.
-- Body under 140 words.
-- MUST include this exact URL on its own line, unchanged: ${input.inviteUrl}
-- ${input.clientCode ? `MUST mention the client code ${input.clientCode} once.` : "No client code."}
-- Sign off as ${input.accountantName || "the accountant"}${input.firmName ? `, ${input.firmName}` : ""}.
-- Do not invent extra links, prices, or product claims.
-
-Context:
-- Business: ${input.clientName}
-- Firm: ${input.firmName || "the practice"}
-- Accountant: ${input.accountantName || "the accountant"}
-
-Return ONLY JSON: {"subject":"...","body":"..."}
-The body must already be signed off and ready to paste into email.`;
+  const prompt = inviteDraftPrompt(resolvePromptMarket(input.market), input);
 
   try {
     const raw = await callClaudeMessages({
