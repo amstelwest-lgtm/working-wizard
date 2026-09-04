@@ -4,16 +4,13 @@
 
 import { useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
+import { useMarketFormat } from "@/contexts/market";
 import {
   type DebtSchedule,
   type DebtFacility,
   newDebtFacility,
   totalDebtFromSchedule,
 } from "@/lib/debt-schedule";
-
-function money(n: number): string {
-  return `R ${Math.round(n).toLocaleString("en-ZA")}`;
-}
 
 export function DebtScheduleEditor({
   value,
@@ -24,6 +21,7 @@ export function DebtScheduleEditor({
   onChange: (next: DebtSchedule) => void;
   disabled?: boolean;
 }) {
+  const { money } = useMarketFormat();
   const [open, setOpen] = useState(value.lines.length > 0);
 
   const patchLine = (id: string, patch: Partial<DebtFacility>) => {
@@ -86,10 +84,7 @@ export function DebtScheduleEditor({
         <div style={{ borderTop: "1px solid var(--line)", padding: "12px 18px 16px" }}>
           <div style={{ display: "grid", gap: 10 }}>
             {value.lines.map((line) => (
-              <div
-                key={line.id}
-                className="debt-line"
-              >
+              <div key={line.id} className="debt-line">
                 <label style={{ fontSize: 11, color: "var(--ink-dim)" }}>
                   Facility
                   <input
@@ -139,8 +134,7 @@ export function DebtScheduleEditor({
                     value={line.annual_rate_pct ?? ""}
                     onChange={(e) =>
                       patchLine(line.id, {
-                        annual_rate_pct:
-                          e.target.value === "" ? null : parseFloat(e.target.value),
+                        annual_rate_pct: e.target.value === "" ? null : parseFloat(e.target.value),
                       })
                     }
                     style={{
@@ -163,8 +157,7 @@ export function DebtScheduleEditor({
                     value={line.maturity_year ?? ""}
                     onChange={(e) =>
                       patchLine(line.id, {
-                        maturity_year:
-                          e.target.value === "" ? null : parseInt(e.target.value, 10),
+                        maturity_year: e.target.value === "" ? null : parseInt(e.target.value, 10),
                       })
                     }
                     placeholder="2028"

@@ -20,7 +20,7 @@ import { DuPontStrip } from "@/components/pdf/dupont";
 import { computeOverallHealth, type HealthPillarId } from "@/lib/health-score";
 import type { ClientOperatingProfile } from "@/lib/client-profile";
 import { diagnoseDuPont, healthNarrative } from "./narrative";
-
+import { ZA_MARKET, type ResolvedMarket } from "@/lib/market";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -46,6 +46,7 @@ export type HealthScorecardPDFProps = {
   reviewSignoff?: ReportSignoffStamp | null;
   /** When known, blended into the cash pillar (same rule as dashboard / client header). */
   cashRunwayWeeks?: number | null;
+  market?: ResolvedMarket;
 };
 
 // ── Constants ──────────────────────────────────────────────────────────────
@@ -188,6 +189,7 @@ export function HealthScorecardPDF({
   reviewSignoff,
   operatingProfile,
   cashRunwayWeeks,
+  market,
 }: HealthScorecardPDFProps) {
   const overall = computeOverallHealth({
     scoredRatios: ratioResults.map((r) => ({
@@ -295,6 +297,7 @@ export function HealthScorecardPDF({
     pillarData.map((p) => ({ label: PILLAR_LABEL[p.pillar], score: p.score })),
     dupont,
     operatingProfile,
+    market ?? ZA_MARKET,
   );
 
   return (
@@ -305,6 +308,7 @@ export function HealthScorecardPDF({
       accountantProfile={accountantProfile}
       isDemo={isDemo}
       reviewSignoff={reviewSignoff}
+      market={market ?? ZA_MARKET}
     >
       {/* ── PAGE 1 ── */}
       <ReportTitle

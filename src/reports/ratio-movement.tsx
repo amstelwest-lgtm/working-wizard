@@ -16,7 +16,7 @@ import { Sparkline } from "@/components/pdf/sparkline";
 import { C, resolveTheme } from "@/components/pdf/theme";
 import { movementNarrative } from "./narrative";
 import type { ClientOperatingProfile } from "@/lib/client-profile";
-
+import { ZA_MARKET, type ResolvedMarket } from "@/lib/market";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -46,6 +46,7 @@ export type RatioMovementPDFProps = {
   accountantProfile: AccountantProfile;
   isDemo?: boolean;
   reviewSignoff?: ReportSignoffStamp | null;
+  market?: ResolvedMarket;
 };
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -120,7 +121,13 @@ const S = StyleSheet.create({
   name: { fontSize: 8, fontFamily: "Helvetica", color: C.body },
   val: { fontSize: 7.5, fontFamily: "Helvetica", color: C.muted, textAlign: "right" },
   cur: { fontSize: 8, fontFamily: "Helvetica-Bold", color: C.ink, textAlign: "right" },
-  verdictChip: { borderRadius: 3, paddingHorizontal: 4, paddingVertical: 2, alignItems: "center", width: 52 },
+  verdictChip: {
+    borderRadius: 3,
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    alignItems: "center",
+    width: 52,
+  },
   verdictText: { fontSize: 5, fontFamily: "Helvetica-Bold", letterSpacing: 0.4 },
   sparkCell: { width: 52, alignItems: "flex-end", paddingRight: 4 },
 });
@@ -135,6 +142,7 @@ export function RatioMovementPDF({
   isDemo,
   reviewSignoff,
   operatingProfile,
+  market,
 }: RatioMovementPDFProps) {
   const theme = resolveTheme(accountantProfile);
   const labels = periodLabels ?? {
@@ -182,6 +190,7 @@ export function RatioMovementPDF({
       accountantProfile={accountantProfile}
       isDemo={isDemo}
       reviewSignoff={reviewSignoff}
+      market={market ?? ZA_MARKET}
     >
       <ReportTitle
         kicker="Advisory Report 09"
@@ -190,7 +199,10 @@ export function RatioMovementPDF({
         isDemo={isDemo}
       />
 
-      <ExecSummary figures={figures} narrative={movementNarrative(counts, operatingProfile)} />
+      <ExecSummary
+        figures={figures}
+        narrative={movementNarrative(counts, operatingProfile, market ?? ZA_MARKET)}
+      />
 
       {pillars.map((pillar) => {
         const rows = withVerdicts.filter((x) => x.row.pillar === pillar);
@@ -200,9 +212,15 @@ export function RatioMovementPDF({
             {/* column headers */}
             <View style={S.headerRow}>
               <Text style={[S.headerCell, { flex: 2.2 }]}>Ratio</Text>
-              <Text style={[S.headerCell, { flex: 1, textAlign: "right" }]}>{labels.twelve_months}</Text>
-              <Text style={[S.headerCell, { flex: 1, textAlign: "right" }]}>{labels.six_months}</Text>
-              <Text style={[S.headerCell, { flex: 1, textAlign: "right" }]}>{labels.three_months}</Text>
+              <Text style={[S.headerCell, { flex: 1, textAlign: "right" }]}>
+                {labels.twelve_months}
+              </Text>
+              <Text style={[S.headerCell, { flex: 1, textAlign: "right" }]}>
+                {labels.six_months}
+              </Text>
+              <Text style={[S.headerCell, { flex: 1, textAlign: "right" }]}>
+                {labels.three_months}
+              </Text>
               <Text style={[S.headerCell, { flex: 1, textAlign: "right" }]}>{labels.current}</Text>
               <View style={{ width: 52 + 8 }} />
               <View style={{ width: 52 }} />
@@ -221,7 +239,12 @@ export function RatioMovementPDF({
                     { backgroundColor: highlight ? C.redSoft : i % 2 === 1 ? C.soft : C.white },
                   ]}
                 >
-                  <Text style={[S.name, { flex: 2.2, fontFamily: highlight ? "Helvetica-Bold" : "Helvetica" }]}>
+                  <Text
+                    style={[
+                      S.name,
+                      { flex: 2.2, fontFamily: highlight ? "Helvetica-Bold" : "Helvetica" },
+                    ]}
+                  >
                     {row.ratio_name}
                   </Text>
                   <Text style={[S.val, { flex: 1 }]}>{fmt(row.twelve_months, row.unit)}</Text>
@@ -233,7 +256,13 @@ export function RatioMovementPDF({
                       values={series}
                       width={44}
                       height={10}
-                      color={verdict === "improving" ? C.green : verdict.startsWith("declining") ? C.red : C.blue}
+                      color={
+                        verdict === "improving"
+                          ? C.green
+                          : verdict.startsWith("declining")
+                            ? C.red
+                            : C.blue
+                      }
                     />
                   </View>
                   <View style={[S.verdictChip, { backgroundColor: meta.bg }]}>
@@ -246,7 +275,15 @@ export function RatioMovementPDF({
         );
       })}
 
-      <Text style={{ fontSize: 6.5, fontFamily: "Helvetica", color: C.faint, marginTop: 12, lineHeight: 1.5 }}>
+      <Text
+        style={{
+          fontSize: 6.5,
+          fontFamily: "Helvetica",
+          color: C.faint,
+          marginTop: 12,
+          lineHeight: 1.5,
+        }}
+      >
         Comparison columns show the closest uploaded snapshot to each target date. A dash means no
         snapshot was available for that window — trends will fill in automatically as more periods
         are uploaded.

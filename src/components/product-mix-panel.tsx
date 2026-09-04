@@ -10,6 +10,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useFinancialInputs } from "@/contexts/financial-inputs";
+import { useMarketFormat } from "@/contexts/market";
+import { currencySymbol } from "@/lib/market";
 import {
   PRODUCT_MIX_MAX_LINES,
   PRODUCT_MIX_VERSION,
@@ -54,15 +56,17 @@ function MoneyField({
   value,
   onChange,
   placeholder,
+  symbol,
 }: {
   value: number | undefined;
   onChange: (n: number | undefined) => void;
   placeholder: string;
+  symbol: string;
 }) {
   return (
     <div className="relative">
       <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-500">
-        R
+        {symbol}
       </span>
       <input
         type="number"
@@ -103,6 +107,9 @@ function ProductMixFunnel({
   onSave: (mix: ProductMix) => void;
   totalRevenue: number;
 }) {
+  const { market, t } = useMarketFormat();
+  const symbol = currencySymbol(market);
+  const fmt = (n: number | undefined) => formatRand(n, market);
   const [step, setStep] = useState(0);
   const [draft, setDraft] = useState<ProductMix>(emptyProductMix);
   const [nameSlots, setNameSlots] = useState<string[]>(() => Array(PRODUCT_MIX_MAX_LINES).fill(""));
@@ -124,10 +131,7 @@ function ProductMixFunnel({
 
   const named = namedProductLines(draft);
   const statedTotal = totalRevenue > 0 ? totalRevenue : 0;
-  const q5Preview = useMemo(
-    () => applyUnitEconomics(draft, statedTotal),
-    [draft, statedTotal],
-  );
+  const q5Preview = useMemo(() => applyUnitEconomics(draft, statedTotal), [draft, statedTotal]);
   const allocated = allocatedRevenue(draft.lines);
   const leftover = statedTotal > 0 ? statedTotal - allocated : 0;
 
@@ -170,8 +174,8 @@ function ProductMixFunnel({
 
   const q5Hint =
     statedTotal > 0
-      ? `Total revenue on this Profit tab is ${formatRand(statedTotal)}. One question — fill in the rand from each line you named.`
-      : "Total revenue is not on this Profit tab yet. Enter the rand from each named line — shares will be of the amounts you allocate.";
+      ? `Total revenue on this Profit tab is ${fmt(statedTotal)}. One question — fill in the ${t("currencyWord")} from each line you named.`
+      : `Total revenue is not on this Profit tab yet. Enter the ${t("currencyWord")} from each named line — shares will be of the amounts you allocate.`;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -189,10 +193,13 @@ function ProductMixFunnel({
           </p>
           <h3 className="mt-1 text-lg font-semibold text-slate-100">{TITLES[step]}</h3>
           <p className="mt-1 text-sm text-slate-400">
-            {step === 0 && "If one line covers the book, we skip this — the Profit tab stays simple."}
+            {step === 0 &&
+              "If one line covers the book, we skip this — the Profit tab stays simple."}
             {step === 1 && "Up to 5. Skip the long tail — just what you'd discuss in a review."}
-            {step === 2 && "What a customer pays for one unit of this line. Rand, typical selling price."}
-            {step === 3 && "What it costs you to deliver one unit. Margin is calculated from price minus this."}
+            {step === 2 &&
+              "What a customer pays for one unit of this line. Rand, typical selling price."}
+            {step === 3 &&
+              "What it costs you to deliver one unit. Margin is calculated from price minus this."}
             {step === 4 && q5Hint}
           </p>
         </div>
@@ -200,10 +207,15 @@ function ProductMixFunnel({
         <div className="space-y-2">
           {step === 0 && (
             <>
-              <button type="button" className={choiceClass(q1 === "yes")} onClick={() => setQ1("yes")}>
+              <button
+                type="button"
+                className={choiceClass(q1 === "yes")}
+                onClick={() => setQ1("yes")}
+              >
                 <div className="text-sm font-semibold">Yes — a few lines matter</div>
                 <div className="mt-1 text-[11px] text-slate-400">
-                  We will take selling price, cost, and rand of total revenue for each
+                  We will take selling price, cost, and {t("currencyWord")} of total revenue for
+                  each
                 </div>
                 {q1 === "yes" && (
                   <div className="mt-2 text-[10px] font-semibold uppercase tracking-wider text-[#d4a550]">
@@ -211,7 +223,11 @@ function ProductMixFunnel({
                   </div>
                 )}
               </button>
-              <button type="button" className={choiceClass(q1 === "no")} onClick={() => setQ1("no")}>
+              <button
+                type="button"
+                className={choiceClass(q1 === "no")}
+                onClick={() => setQ1("no")}
+              >
                 <div className="text-sm font-semibold">No — one main line covers it</div>
                 <div className="mt-1 text-[11px] text-slate-400">
                   We will leave the Profit tab as it is. You can add this later.
@@ -237,7 +253,13 @@ function ProductMixFunnel({
                     return next;
                   })
                 }
-                placeholder={i === 0 ? "e.g. Retail shop" : i === 1 ? "e.g. Wholesale" : `Line ${i + 1} (optional)`}
+                placeholder={
+                  i === 0
+                    ? "e.g. Retail shop"
+                    : i === 1
+                      ? "e.g. Wholesale"
+                      : `Line ${i + 1} (optional)`
+                }
                 className="w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-600 focus:border-[#d4a550] focus:outline-none"
               />
             ))}
@@ -249,6 +271,7 @@ function ProductMixFunnel({
                 <MoneyField
                   value={line.sellPrice}
                   placeholder="0.00"
+                  symbol={symbol}
                   onChange={(n) => patchLine(line.id, { sellPrice: n })}
                 />
               </div>
@@ -258,24 +281,34 @@ function ProductMixFunnel({
             named.map((line) => {
               const pct = unitMarginPct(line.sellPrice, line.unitCost);
               return (
-                <div key={line.id} className="rounded-xl border border-slate-700 bg-slate-900/60 p-3">
+                <div
+                  key={line.id}
+                  className="rounded-xl border border-slate-700 bg-slate-900/60 p-3"
+                >
                   <div className="mb-1 flex items-center justify-between gap-2">
                     <div className="text-sm font-semibold text-slate-100">{line.name}</div>
-                    <div className="text-[11px] text-slate-500">Sells {formatRand(line.sellPrice)}</div>
+                    <div className="text-[11px] text-slate-500">Sells {fmt(line.sellPrice)}</div>
                   </div>
                   <MoneyField
                     value={line.unitCost}
                     placeholder="0.00"
+                    symbol={symbol}
                     onChange={(n) => patchLine(line.id, { unitCost: n })}
                   />
                   <div
                     className={`mt-2 text-xs font-semibold ${
-                      pct == null ? "text-slate-500" : pct >= 40 ? "text-emerald-400" : pct >= 20 ? "text-[#d4a550]" : "text-red-400"
+                      pct == null
+                        ? "text-slate-500"
+                        : pct >= 40
+                          ? "text-emerald-400"
+                          : pct >= 20
+                            ? "text-[#d4a550]"
+                            : "text-red-400"
                     }`}
                   >
                     Margin {formatMarginPct(pct)}
                     {pct != null && line.sellPrice != null && line.unitCost != null
-                      ? ` · ${formatRand(line.sellPrice - line.unitCost)} a unit`
+                      ? ` · ${fmt(line.sellPrice - line.unitCost)} a unit`
                       : ""}
                   </div>
                 </div>
@@ -287,9 +320,12 @@ function ProductMixFunnel({
               {named.map((line) => {
                 const preview = q5Preview.lines.find((l) => l.id === line.id);
                 const contrast = shareContrastLabel(preview?.revenueSharePct, preview?.gpSharePct);
-                const totalLabel = statedTotal > 0 ? formatRand(statedTotal) : "total revenue";
+                const totalLabel = statedTotal > 0 ? fmt(statedTotal) : "total revenue";
                 return (
-                  <div key={line.id} className="rounded-xl border border-slate-700 bg-slate-900/60 p-3">
+                  <div
+                    key={line.id}
+                    className="rounded-xl border border-slate-700 bg-slate-900/60 p-3"
+                  >
                     <div className="mb-2 flex flex-wrap items-baseline gap-x-2 gap-y-1 text-sm text-slate-200">
                       <span className="text-slate-400">______ of</span>
                       <span className="font-semibold text-slate-100">{totalLabel}</span>
@@ -299,6 +335,7 @@ function ProductMixFunnel({
                     <MoneyField
                       value={line.revenueAmount}
                       placeholder="0"
+                      symbol={symbol}
                       onChange={(n) => patchLine(line.id, { revenueAmount: n })}
                     />
                     {contrast ? (
@@ -315,19 +352,18 @@ function ProductMixFunnel({
                 {statedTotal > 0 ? (
                   leftover >= 0 ? (
                     <>
-                      Allocated {formatRand(allocated)} of {formatRand(statedTotal)}
+                      Allocated {fmt(allocated)} of {fmt(statedTotal)}
                       {leftover > 0
-                        ? ` · ${formatRand(leftover)} unallocated (other — no GP share)`
+                        ? ` · ${fmt(leftover)} unallocated (other — no GP share)`
                         : " · fully allocated"}
                     </>
                   ) : (
                     <>
-                      Allocated {formatRand(allocated)} of {formatRand(statedTotal)} · over by{" "}
-                      {formatRand(-leftover)}
+                      Allocated {fmt(allocated)} of {fmt(statedTotal)} · over by {fmt(-leftover)}
                     </>
                   )
                 ) : (
-                  <>Allocated {formatRand(allocated)} across named lines</>
+                  <>Allocated {fmt(allocated)} across named lines</>
                 )}
               </div>
             </>
@@ -423,6 +459,8 @@ function ProductMixFunnel({
 }
 
 function MixBars({ mix }: { mix: ProductMix }) {
+  const { market } = useMarketFormat();
+  const fmt = (n: number | undefined) => formatRand(n, market);
   const ranked = rankProductLines(mix);
   if (!ranked.length) return null;
   const stated = mix.totalRevenue ?? 0;
@@ -461,7 +499,9 @@ function MixBars({ mix }: { mix: ProductMix }) {
             </div>
             <div className="space-y-1">
               <div className="flex items-center gap-2">
-                <span className="w-10 shrink-0 text-[9px] uppercase tracking-wider text-slate-500">Sales</span>
+                <span className="w-10 shrink-0 text-[9px] uppercase tracking-wider text-slate-500">
+                  Sales
+                </span>
                 <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-800">
                   <div
                     className="h-full rounded-full bg-[#d4a550]"
@@ -470,25 +510,30 @@ function MixBars({ mix }: { mix: ProductMix }) {
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <span className="w-10 shrink-0 text-[9px] uppercase tracking-wider text-slate-500">GP</span>
+                <span className="w-10 shrink-0 text-[9px] uppercase tracking-wider text-slate-500">
+                  GP
+                </span>
                 <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-800">
-                  <div className="h-full rounded-full" style={{ width: barWidth(row.gpSharePct), background: tone }} />
+                  <div
+                    className="h-full rounded-full"
+                    style={{ width: barWidth(row.gpSharePct), background: tone }}
+                  />
                 </div>
               </div>
             </div>
             <div className="mt-1 text-[10px] text-slate-500">
-              {formatRand(row.revenueAmount)}
-              {stated > 0 ? ` of ${formatRand(stated)}` : ""}
+              {fmt(row.revenueAmount)}
+              {stated > 0 ? ` of ${fmt(stated)}` : ""}
               {" · "}
-              {formatRand(row.sellPrice)} sell · {formatRand(row.unitCost)} cost · {formatMarginPct(row.marginPct)}{" "}
-              margin
+              {fmt(row.sellPrice)} sell · {fmt(row.unitCost)} cost ·{" "}
+              {formatMarginPct(row.marginPct)} margin
             </div>
           </div>
         );
       })}
       {stated > 0 && leftover > 0 && (
         <p className="text-[10px] text-slate-500">
-          {formatRand(leftover)} of {formatRand(stated)} unallocated — other (no GP share)
+          {fmt(leftover)} of {fmt(stated)} unallocated — other (no GP share)
         </p>
       )}
     </div>
@@ -497,6 +542,7 @@ function MixBars({ mix }: { mix: ProductMix }) {
 
 export function ProductMixPanel({ totalRevenue = 0 }: { totalRevenue?: number }) {
   const { productMix, saveProductMix } = useFinancialInputs();
+  const { t } = useMarketFormat();
   const [open, setOpen] = useState(false);
   const [funnelOpen, setFunnelOpen] = useState(false);
   const answered = hasProductMixAnswer(productMix);
@@ -571,9 +617,9 @@ export function ProductMixPanel({ totalRevenue = 0 }: { totalRevenue?: number })
               <>
                 <MixBars mix={productMix} />
                 <p className="mt-3 text-[10px] text-slate-500">
-                  Sales share is rand of stated total revenue. GP share uses that amount × unit
-                  margin. A high-margin line can be a small slice of sales and most of the profit.
-                  Does not change the waterfall figures.
+                  Sales share is {t("currencyWord")} of stated total revenue. GP share uses that
+                  amount × unit margin. A high-margin line can be a small slice of sales and most of
+                  the profit. Does not change the waterfall figures.
                 </p>
               </>
             )}

@@ -1,7 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Trash2, CheckCheck, CornerDownRight, X, Shield, ChevronDown, ChevronUp } from "lucide-react";
+import {
+  Trash2,
+  CheckCheck,
+  CornerDownRight,
+  X,
+  Shield,
+  ChevronDown,
+  ChevronUp,
+} from "lucide-react";
 import { useNotes, type NoteCollaborator } from "@/contexts/notes";
+import { useMarketFormat } from "@/contexts/market";
 
 type NoteLayerProps = {
   clientId: string | null | undefined;
@@ -166,10 +175,7 @@ function MentionComposer({
                 const caret = inputRef?.current?.selectionStart ?? value.length;
                 const before = value.slice(0, caret);
                 const after = value.slice(caret);
-                const replaced = before.replace(
-                  /@([a-zA-Z0-9._%+-@]*)$/,
-                  `@${email} `,
-                );
+                const replaced = before.replace(/@([a-zA-Z0-9._%+-@]*)$/, `@${email} `);
                 onChange(replaced + after);
                 setMentionQuery(null);
               }}
@@ -185,7 +191,15 @@ function MentionComposer({
   );
 }
 
-export function NoteLayer({ clientId, tab, authorName, clientName, onNotesChanged, onNeedTab }: NoteLayerProps) {
+export function NoteLayer({
+  clientId,
+  tab,
+  authorName,
+  clientName,
+  onNotesChanged,
+  onNeedTab,
+}: NoteLayerProps) {
+  const { dateTime } = useMarketFormat();
   const {
     pinMode,
     setPinMode,
@@ -475,10 +489,7 @@ export function NoteLayer({ clientId, tab, authorName, clientName, onNotesChange
         const vpX = note.x - window.scrollX;
         const vpY = note.y - scrollY;
         const inView =
-          vpX > -60 &&
-          vpX < window.innerWidth + 60 &&
-          vpY > -60 &&
-          vpY < window.innerHeight + 60;
+          vpX > -60 && vpX < window.innerWidth + 60 && vpY > -60 && vpY < window.innerHeight + 60;
         // Keep open notes visible even if slightly off-screen; otherwise only
         // render pins in view (tray still lists everything).
         if (!inView && openNoteId !== note.id) return null;
@@ -532,7 +543,7 @@ export function NoteLayer({ clientId, tab, authorName, clientName, onNotesChange
                           {note.author}
                         </div>
                         <div className="text-[10px] text-slate-400">
-                          {new Date(note.timestamp).toLocaleString("en-ZA", {
+                          {dateTime(note.timestamp, {
                             day: "numeric",
                             month: "short",
                             hour: "2-digit",
@@ -596,7 +607,7 @@ export function NoteLayer({ clientId, tab, authorName, clientName, onNotesChange
                             {r.text}
                           </span>
                           <div className="text-[10px] text-slate-400">
-                            {new Date(r.timestamp).toLocaleString("en-ZA", {
+                            {dateTime(r.timestamp, {
                               day: "numeric",
                               month: "short",
                               hour: "2-digit",
@@ -670,7 +681,9 @@ export function NoteLayer({ clientId, tab, authorName, clientName, onNotesChange
                       {note.resolved ? "Resolved" : "Resolve"}
                     </button>
                     <button
-                      onClick={() => void tagMilonIt(note.id, !note.taggedMilonIt).then(() => onNotesChanged?.())}
+                      onClick={() =>
+                        void tagMilonIt(note.id, !note.taggedMilonIt).then(() => onNotesChanged?.())
+                      }
                       className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${
                         note.taggedMilonIt
                           ? "bg-[#d4a550]/20 text-[#b8860b]"

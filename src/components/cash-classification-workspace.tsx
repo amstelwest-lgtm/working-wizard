@@ -4,14 +4,7 @@
  */
 
 import { useMemo, useState } from "react";
-import {
-  AlertTriangle,
-  Check,
-  Combine,
-  GripVertical,
-  Scissors,
-  Trash2,
-} from "lucide-react";
+import { AlertTriangle, Check, Combine, GripVertical, Scissors, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -41,6 +34,7 @@ import {
   type ExistingCashflow,
   type PublishPolicy,
 } from "@/lib/cash-from-banks.publish";
+import { useMarketFormat } from "@/contexts/market";
 
 const CADENCE_LABEL: Record<CashCadence, string> = {
   once_off: "Once-off",
@@ -50,10 +44,6 @@ const CADENCE_LABEL: Record<CashCadence, string> = {
   split_weeks: "Split weeks",
   split_months: "Split months",
 };
-
-function fmt(n: number): string {
-  return `R ${n.toLocaleString("en-ZA", { maximumFractionDigits: 0 })}`;
-}
 
 export type WorkspacePublishRequest = {
   lines: CashForecastDraftLine[];
@@ -92,6 +82,7 @@ export function CashClassificationWorkspace({
   onPublish,
   onBack,
 }: Props) {
+  const { money: fmt } = useMarketFormat();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [dragId, setDragId] = useState<string | null>(null);
   const [policyOpen, setPolicyOpen] = useState(false);
@@ -127,7 +118,11 @@ export function CashClassificationWorkspace({
   };
 
   const updateLine = (id: string, patch: Partial<CashForecastDraftLine>) => {
-    onChange(lines.map((l) => (l.id === id ? { ...l, ...patch, source: l.source === "ai" ? "manual" : l.source } : l)));
+    onChange(
+      lines.map((l) =>
+        l.id === id ? { ...l, ...patch, source: l.source === "ai" ? "manual" : l.source } : l,
+      ),
+    );
   };
 
   const requestPublish = () => {
@@ -155,16 +150,31 @@ export function CashClassificationWorkspace({
     <div className="space-y-4">
       <div className="grid gap-3 sm:grid-cols-4">
         <div className="space-y-1">
-          <Label className="text-[10px] uppercase tracking-wider text-slate-500">Forecast start</Label>
-          <Input type="date" value={startDate} onChange={(e) => onStartDateChange(e.target.value)} className="h-8 text-xs" />
+          <Label className="text-[10px] uppercase tracking-wider text-slate-500">
+            Forecast start
+          </Label>
+          <Input
+            type="date"
+            value={startDate}
+            onChange={(e) => onStartDateChange(e.target.value)}
+            className="h-8 text-xs"
+          />
         </div>
         <div className="space-y-1">
-          <Label className="text-[10px] uppercase tracking-wider text-slate-500">Opening balance</Label>
-          <Input type="number" value={openingBalance} onChange={(e) => onOpeningBalanceChange(e.target.value)} className="h-8 text-xs" />
+          <Label className="text-[10px] uppercase tracking-wider text-slate-500">
+            Opening balance
+          </Label>
+          <Input
+            type="number"
+            value={openingBalance}
+            onChange={(e) => onOpeningBalanceChange(e.target.value)}
+            className="h-8 text-xs"
+          />
         </div>
         <div className="rounded-lg border border-amber-900/10 bg-white/70 px-3 py-2 text-[11px] dark:border-slate-800 dark:bg-slate-900/40 sm:col-span-2">
           <div className="font-semibold text-slate-800 dark:text-slate-100">
-            {activeCount} active lines · {lines.length - activeCount} excluded · {transactions.length} source txns
+            {activeCount} active lines · {lines.length - activeCount} excluded ·{" "}
+            {transactions.length} source txns
           </div>
           <div className="mt-0.5 text-slate-500">
             Drag lines between buckets. Merge similar rows. Split lumps the AI over-grouped.
@@ -317,7 +327,9 @@ export function CashClassificationWorkspace({
                         <div className="grid grid-cols-3 gap-1.5">
                           <Select
                             value={line.side}
-                            onValueChange={(v) => updateLine(line.id, { side: v as "inflow" | "outflow" })}
+                            onValueChange={(v) =>
+                              updateLine(line.id, { side: v as "inflow" | "outflow" })
+                            }
                           >
                             <SelectTrigger className="h-7 text-[10px]">
                               <SelectValue />
@@ -329,7 +341,9 @@ export function CashClassificationWorkspace({
                           </Select>
                           <Select
                             value={line.cadence}
-                            onValueChange={(v) => updateLine(line.id, { cadence: v as CashCadence })}
+                            onValueChange={(v) =>
+                              updateLine(line.id, { cadence: v as CashCadence })
+                            }
                           >
                             <SelectTrigger className="h-7 text-[10px]">
                               <SelectValue />
@@ -345,7 +359,9 @@ export function CashClassificationWorkspace({
                           <Input
                             type="number"
                             value={line.amount}
-                            onChange={(e) => updateLine(line.id, { amount: parseFloat(e.target.value) || 0 })}
+                            onChange={(e) =>
+                              updateLine(line.id, { amount: parseFloat(e.target.value) || 0 })
+                            }
                             className="h-7 text-right text-xs"
                           />
                         </div>
@@ -359,7 +375,10 @@ export function CashClassificationWorkspace({
                               value={line.start_week}
                               onChange={(e) =>
                                 updateLine(line.id, {
-                                  start_week: Math.max(1, Math.min(13, parseInt(e.target.value, 10) || 1)),
+                                  start_week: Math.max(
+                                    1,
+                                    Math.min(13, parseInt(e.target.value, 10) || 1),
+                                  ),
                                 })
                               }
                               className="h-6 w-12 text-[10px]"
@@ -437,7 +456,9 @@ export function CashClassificationWorkspace({
               }`}
             >
               <div className="font-semibold">Replace</div>
-              <div className="mt-0.5 text-slate-500">Overwrite money-in / money-out lines with this draft.</div>
+              <div className="mt-0.5 text-slate-500">
+                Overwrite money-in / money-out lines with this draft.
+              </div>
             </button>
             <button
               type="button"
@@ -449,7 +470,9 @@ export function CashClassificationWorkspace({
               }`}
             >
               <div className="font-semibold">Merge</div>
-              <div className="mt-0.5 text-slate-500">Keep existing lines and append these bank-seeded ones.</div>
+              <div className="mt-0.5 text-slate-500">
+                Keep existing lines and append these bank-seeded ones.
+              </div>
             </button>
           </div>
           <label className="mt-3 flex items-center gap-2 text-[11px] text-slate-600 dark:text-slate-300">
@@ -470,7 +493,11 @@ export function CashClassificationWorkspace({
               disabled={publishing}
               onClick={() => void doPublish(policy)}
             >
-              {publishing ? "Publishing…" : policy === "merge" ? "Merge & publish" : "Replace & publish"}
+              {publishing
+                ? "Publishing…"
+                : policy === "merge"
+                  ? "Merge & publish"
+                  : "Replace & publish"}
             </Button>
           </div>
         </div>
@@ -486,9 +513,19 @@ export function CashClassificationWorkspace({
         )}
         <div className="flex items-center gap-3">
           <span className="text-[11px] text-slate-500">
-            In {fmt(lines.filter((l) => l.status !== "excluded" && l.side === "inflow").reduce((s, l) => s + l.amount, 0))}
+            In{" "}
+            {fmt(
+              lines
+                .filter((l) => l.status !== "excluded" && l.side === "inflow")
+                .reduce((s, l) => s + l.amount, 0),
+            )}
             {" · "}
-            Out {fmt(lines.filter((l) => l.status !== "excluded" && l.side === "outflow").reduce((s, l) => s + l.amount, 0))}
+            Out{" "}
+            {fmt(
+              lines
+                .filter((l) => l.status !== "excluded" && l.side === "outflow")
+                .reduce((s, l) => s + l.amount, 0),
+            )}
           </span>
           <Button
             disabled={publishing || activeCount === 0 || policyOpen}

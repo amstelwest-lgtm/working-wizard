@@ -2,11 +2,17 @@
  * Market kernel: region + US state, formatters, sales-tax vs VAT cash.
  * Run: pnpm test:market
  */
+import { fmtRand } from "../src/components/pdf/theme";
 import {
   assertMarketSelection,
   coerceMarketSelection,
+  currencySymbol,
   draftToSelection,
   formatMoney,
+  formatMoneyCompact,
+  formatMoneyUnit,
+  formatNumber,
+  localizeCopy,
   MarketSelectionError,
   parseMarketSelection,
   resolveMarket,
@@ -49,7 +55,10 @@ assert(draftToSelection({ country: "US", regionCode: "CA" })?.regionCode === "CA
 const za = resolveMarket({ country: "ZA", regionCode: null });
 assert(za.currency === "ZAR" && za.locale === "en-ZA", "ZA currency/locale");
 assert(za.fyStartMonthDefault === 3, "ZA FY March");
-assert(za.tax.regime === "vat" && za.tax.regime === "vat" && za.tax.vatRate === ZA_VAT_RATE, "ZA VAT 15%");
+assert(
+  za.tax.regime === "vat" && za.tax.regime === "vat" && za.tax.vatRate === ZA_VAT_RATE,
+  "ZA VAT 15%",
+);
 assert(za.timezone === "Africa/Johannesburg", "ZA tz");
 
 const tx = resolveMarket({ country: "US", regionCode: "TX" });
@@ -97,7 +106,10 @@ zaDoc.wc.inventoryDays = 0;
 const zaRows = computeBudgetMonths(zaDoc, "base");
 assert(zaRows[0].revenue === 1000, `ZA rev ${zaRows[0].revenue}`);
 assert(Math.round(zaRows[0].cashIn) === 1150, `ZA cashIn still includes VAT ${zaRows[0].cashIn}`);
-assert(Math.round(zaRows[0].vatNet) === Math.round(150 - 90), `ZA VAT net output-input ${zaRows[0].vatNet}`);
+assert(
+  Math.round(zaRows[0].vatNet) === Math.round(150 - 90),
+  `ZA VAT net output-input ${zaRows[0].vatNet}`,
+);
 
 const txDoc = createBudgetDocument({ templateId: "retail_units", qualification: q, market: tx });
 assert(txDoc.fyStartMonth === 1, "TX budget FY January");
@@ -110,9 +122,18 @@ txDoc.wc.inventoryDays = 0;
 const txRows = computeBudgetMonths(txDoc, "base");
 const txRate = tx.tax.regime === "sales_tax" ? tx.tax.combinedRate : 0;
 assert(txRows[0].revenue === 1000, `TX P&L is ex-tax ${txRows[0].revenue}`);
-assert(Math.round(txRows[0].cashIn) === Math.round(1000 * (1 + txRate)), `TX cashIn includes collections ${txRows[0].cashIn}`);
-assert(Math.round(txRows[0].vatNet) === Math.round(1000 * txRate), `TX remits collections, no input credit ${txRows[0].vatNet}`);
-assert(Math.round(txRows[0].netCash) === 400, `TX sales tax is a same-month wash ${txRows[0].netCash}`);
+assert(
+  Math.round(txRows[0].cashIn) === Math.round(1000 * (1 + txRate)),
+  `TX cashIn includes collections ${txRows[0].cashIn}`,
+);
+assert(
+  Math.round(txRows[0].vatNet) === Math.round(1000 * txRate),
+  `TX remits collections, no input credit ${txRows[0].vatNet}`,
+);
+assert(
+  Math.round(txRows[0].netCash) === 400,
+  `TX sales tax is a same-month wash ${txRows[0].netCash}`,
+);
 
 const orDoc = createBudgetDocument({ templateId: "retail_units", qualification: q, market: or });
 orDoc.revenueLines[0].months[orDoc.fyStart] = { volume: 10, price: 100 };
@@ -123,5 +144,35 @@ orDoc.wc.inventoryDays = 0;
 const orRows = computeBudgetMonths(orDoc, "base");
 assert(orRows[0].cashIn === 1000, `OR cashIn ${orRows[0].cashIn}`);
 assert(orRows[0].vatNet === 0, "OR no sales tax remittance");
+
+assert(
+  formatMoneyCompact(1_250_000, ZA_MARKET) === "R\u00a01.3m",
+  `ZA compact ${formatMoneyCompact(1_250_000, ZA_MARKET)}`,
+);
+assert(
+  formatMoneyCompact(1_250_000, tx) === "$1.3m",
+  `US compact ${formatMoneyCompact(1_250_000, tx)}`,
+);
+assert(formatNumber(1299, ZA_MARKET).includes("1"), "ZA formatNumber digits");
+assert(formatNumber(1299, tx).includes("1"), "US formatNumber digits");
+assert(currencySymbol(ZA_MARKET) === "R", "ZA symbol");
+assert(currencySymbol(tx) === "$", "US symbol");
+assert(formatMoneyUnit(1, ZA_MARKET) === "R1", "ZA unit");
+assert(formatMoneyUnit(1, tx) === "$1", "US unit");
+assert(formatMoneyUnit(100, tx) === "$100", "US unit 100");
+assert(localizeCopy("Debtor Days", ZA_MARKET) === "Debtor Days", "ZA copy unchanged");
+assert(localizeCopy("Debtor Days", tx) === "Days sales outstanding", "US Debtor Days");
+assert(
+  localizeCopy("Of every R1", tx) === "Of every $1",
+  `US R1 ${localizeCopy("Of every R1", tx)}`,
+);
+assert(localizeCopy("each rand of sales", tx) === "each dollar of sales", "US rand word");
+assert(
+  localizeCopy("Debtors slow, stock heavy", tx) === "Accounts receivable slow, stock heavy",
+  "US Debtors",
+);
+assert(localizeCopy("GP per R1 of labour", tx) === "GP per $1 of labor", "US labour/R1");
+assert(fmtRand(40, tx).startsWith("$"), `fmtRand US ${fmtRand(40, tx)}`);
+assert(fmtRand(40, ZA_MARKET).startsWith("R"), `fmtRand ZA ${fmtRand(40, ZA_MARKET)}`);
 
 console.log("market kernel ok");

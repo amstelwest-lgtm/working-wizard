@@ -17,9 +17,25 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { sendTransactionalEmail } from "@/lib/email/send";
+import { useMarketFormat } from "@/contexts/market";
 import {
-  AlertTriangle, CalendarDays, Check, ChevronRight, GripVertical, Link as LinkIcon, Loader2, Mail, Plus,
-  RotateCcw, Send, Sparkles, Target, Trash2, UserPlus, Users, X,
+  AlertTriangle,
+  CalendarDays,
+  Check,
+  ChevronRight,
+  GripVertical,
+  Link as LinkIcon,
+  Loader2,
+  Mail,
+  Plus,
+  RotateCcw,
+  Send,
+  Sparkles,
+  Target,
+  Trash2,
+  UserPlus,
+  Users,
+  X,
 } from "lucide-react";
 
 // ── Brand (matches cash-forecast / waterfall) ────────────────────────────────
@@ -77,7 +93,13 @@ type Item = {
 };
 
 type Employee = { id: string; name: string; email: string | null; role: string | null };
-type Milestone = { id: string; action_item_id: string; week_no: number; label: string; is_done: boolean };
+type Milestone = {
+  id: string;
+  action_item_id: string;
+  week_no: number;
+  label: string;
+  is_done: boolean;
+};
 type EmailRecord = {
   id: string;
   action_item_id: string;
@@ -87,10 +109,15 @@ type EmailRecord = {
   created_at: string;
 };
 type Update = {
-  id: string; actor_type: string; actor_label: string;
-  status_from: Status | null; status_to: Status | null;
-  progress_from: number | null; progress_to: number | null;
-  note: string | null; created_at: string;
+  id: string;
+  actor_type: string;
+  actor_label: string;
+  status_from: Status | null;
+  status_to: Status | null;
+  progress_from: number | null;
+  progress_to: number | null;
+  note: string | null;
+  created_at: string;
 };
 
 export type StrategicMoveLite = {
@@ -118,9 +145,12 @@ interface Props {
 }
 
 // ── Derived health (mirrors SQL action_item_health) ─────────────────────────
-function deriveHealth(it: Pick<Item, "status" | "due_date" | "progress_pct" | "created_at">): Health {
+function deriveHealth(
+  it: Pick<Item, "status" | "due_date" | "progress_pct" | "created_at">,
+): Health {
   if (it.status === "done") return "complete";
-  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
   if (it.due_date && new Date(it.due_date + "T00:00:00") < today) return "overdue";
   if (it.status === "blocked") return "off_track";
   if (!it.due_date) return "on_track";
@@ -147,14 +177,14 @@ function expectedPct(it: Pick<Item, "due_date" | "created_at">): number | null {
 }
 
 const HEALTH_META: Record<Health, { label: string; color: string; bg: string }> = {
-  on_track:  { label: "On track",  color: "#22c55e", bg: "rgba(34,197,94,0.12)" },
-  at_risk:   { label: "At risk",   color: "#f5a524", bg: "rgba(245,165,36,0.12)" },
+  on_track: { label: "On track", color: "#22c55e", bg: "rgba(34,197,94,0.12)" },
+  at_risk: { label: "At risk", color: "#f5a524", bg: "rgba(245,165,36,0.12)" },
   off_track: { label: "Off track", color: "#ef4444", bg: "rgba(239,68,68,0.12)" },
-  overdue:   { label: "Overdue",   color: "#ef4444", bg: "rgba(239,68,68,0.16)" },
-  complete:  { label: "Done",      color: "#8a938c", bg: "rgba(138,147,140,0.15)" },
+  overdue: { label: "Overdue", color: "#ef4444", bg: "rgba(239,68,68,0.16)" },
+  complete: { label: "Done", color: "#8a938c", bg: "rgba(138,147,140,0.15)" },
 };
 export function healthMeta(h?: string | null) {
-  return (h && h in HEALTH_META ? HEALTH_META[h as Health] : HEALTH_META.on_track);
+  return h && h in HEALTH_META ? HEALTH_META[h as Health] : HEALTH_META.on_track;
 }
 export function driverHealthLabel(health: number) {
   return Number.isFinite(health) ? Math.round(health) : null;
@@ -192,7 +222,13 @@ export type ChaseEmailType = "nudge" | "overdue";
 
 /** Deep-link `?filter=` from the accountant dashboard follow-up queue. */
 export function parseActionPlanFilter(value: unknown): ActionPlanFilter | undefined {
-  if (value === "overdue" || value === "at_risk" || value === "blocked" || value === "done" || value === "all") {
+  if (
+    value === "overdue" ||
+    value === "at_risk" ||
+    value === "blocked" ||
+    value === "done" ||
+    value === "all"
+  ) {
     return value;
   }
   return undefined;
@@ -204,9 +240,13 @@ export function chaseEmailType(health?: string | null): ChaseEmailType {
 }
 
 /** Open items whose owner has an email — ready for a chase/nudge. */
-export function chaseableItems<T extends { status: string; owner_id: string | null; health?: string | null }>(
+export function chaseableItems<
+  T extends { status: string; owner_id: string | null; health?: string | null },
+>(
   items: T[],
-  emailByOwnerId: Map<string, string | null | undefined> | Record<string, string | null | undefined>,
+  emailByOwnerId:
+    | Map<string, string | null | undefined>
+    | Record<string, string | null | undefined>,
   onlyOverdue = false,
 ): T[] {
   const emailOf = (id: string) =>
@@ -260,13 +300,12 @@ export function buildStrategicMoveImportRows(opts: {
   }));
 }
 const STATUS_LABEL: Record<Status, string> = {
-  not_started: "Not started", in_progress: "In progress", done: "Done", blocked: "Blocked",
+  not_started: "Not started",
+  in_progress: "In progress",
+  done: "Done",
+  blocked: "Blocked",
 };
 
-function fmtDue(d: string | null) {
-  if (!d) return "—";
-  return new Date(d + "T00:00:00").toLocaleDateString("en-ZA", { day: "numeric", month: "short" });
-}
 function defaultPeriodLabel() {
   const now = new Date();
   return `Q${Math.floor(now.getMonth() / 3) + 1} ${now.getFullYear()}`;
@@ -284,7 +323,18 @@ function itemScore(it: Item): number {
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-export default function ActionPlanPanel({ clientId, clientName, simplified, isOwner = true, moves = [], onViewAnalysis, focusMoveKey, onFocusHandled, initialFilter }: Props) {
+export default function ActionPlanPanel({
+  clientId,
+  clientName,
+  simplified,
+  isOwner = true,
+  moves = [],
+  onViewAnalysis,
+  focusMoveKey,
+  onFocusHandled,
+  initialFilter,
+}: Props) {
+  const { date } = useMarketFormat();
   const [plan, setPlan] = useState<Plan | null>(null);
   const [items, setItems] = useState<Item[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -314,9 +364,12 @@ export default function ActionPlanPanel({ clientId, clientName, simplified, isOw
   const refresh = useCallback(async () => {
     try {
       const { data: plans } = await supabase
-        .from("action_plans").select("*")
-        .eq("client_id", clientId).eq("is_active", true)
-        .order("created_at", { ascending: false }).limit(1);
+        .from("action_plans")
+        .select("*")
+        .eq("client_id", clientId)
+        .eq("is_active", true)
+        .order("created_at", { ascending: false })
+        .limit(1);
       let p = (plans?.[0] as Plan) ?? null;
       if (!p) {
         // Members cannot create plans — show empty read-only state instead.
@@ -329,16 +382,23 @@ export default function ActionPlanPanel({ clientId, clientName, simplified, isOw
             outcome_goal: "Set your outcome goal for this quarter",
             target_date: defaultTargetDate(),
           })
-          .select().single();
+          .select()
+          .single();
         if (error) {
           // The other side may have created the active plan first — reload it
           // instead of toasting and leaving the accountant on an empty board.
           const { data: retry } = await supabase
-            .from("action_plans").select("*")
-            .eq("client_id", clientId).eq("is_active", true)
-            .order("created_at", { ascending: false }).limit(1);
+            .from("action_plans")
+            .select("*")
+            .eq("client_id", clientId)
+            .eq("is_active", true)
+            .order("created_at", { ascending: false })
+            .limit(1);
           p = (retry?.[0] as Plan) ?? null;
-          if (!p) { toast.error(error.message); return; }
+          if (!p) {
+            toast.error(error.message);
+            return;
+          }
         } else {
           p = created as Plan;
         }
@@ -346,7 +406,11 @@ export default function ActionPlanPanel({ clientId, clientName, simplified, isOw
       setPlan(p);
       const [{ data: its }, { data: emps }] = await Promise.all([
         supabase.from("action_items_v").select("*").eq("plan_id", p.id).order("seq"),
-        supabase.from("client_employees").select("id,name,email,role").eq("client_id", clientId).order("name"),
+        supabase
+          .from("client_employees")
+          .select("id,name,email,role")
+          .eq("client_id", clientId)
+          .order("name"),
       ]);
       const list = (its ?? []) as Item[];
       setItems(list);
@@ -355,7 +419,8 @@ export default function ActionPlanPanel({ clientId, clientName, simplified, isOw
         const ids = list.map((i) => i.id);
         const [{ data: ms }, { data: emails }] = await Promise.all([
           supabase.from("action_milestones").select("*").in("action_item_id", ids).order("week_no"),
-          supabase.from("action_emails")
+          supabase
+            .from("action_emails")
             .select("id,action_item_id,email_type,status,sent_at,created_at")
             .in("action_item_id", ids)
             .order("created_at", { ascending: false }),
@@ -381,7 +446,11 @@ export default function ActionPlanPanel({ clientId, clientName, simplified, isOw
         }
         setLastNudgeEmails(nudgeMap);
         setLastFailedEmails(failedMap);
-      } else { setMilestones([]); setLastNudgeEmails({}); setLastFailedEmails({}); }
+      } else {
+        setMilestones([]);
+        setLastNudgeEmails({});
+        setLastFailedEmails({});
+      }
     } catch (err) {
       console.error("[Action Plan] load failed", err);
       toast.error("Couldn't load the action plan. Try refresh.");
@@ -390,7 +459,10 @@ export default function ActionPlanPanel({ clientId, clientName, simplified, isOw
     }
   }, [clientId, isOwner]);
 
-  useEffect(() => { setLoading(true); refresh(); }, [refresh]);
+  useEffect(() => {
+    setLoading(true);
+    refresh();
+  }, [refresh]);
 
   // Owner and accountant share action_plans / action_items by client_id.
   // Refetch when the window is focused so a plan edited on the other side
@@ -419,7 +491,9 @@ export default function ActionPlanPanel({ clientId, clientName, simplified, isOw
     if (!target) return;
     setFocusedItemId(target.id);
     requestAnimationFrame(() => {
-      document.querySelector(`[data-row-id="${target.id}"]`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+      document
+        .querySelector(`[data-row-id="${target.id}"]`)
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
     });
     const t = setTimeout(() => setFocusedItemId(null), 4000);
     return () => clearTimeout(t);
@@ -430,16 +504,26 @@ export default function ActionPlanPanel({ clientId, clientName, simplified, isOw
   const patchItem = async (id: string, patch: Partial<Item>, log?: Partial<Update>) => {
     const prev = items.find((i) => i.id === id);
     setItems((arr) => arr.map((i) => (i.id === id ? { ...i, ...patch } : i)));
-    const { error } = await supabase.from("action_items").update(toActionItemWrite(patch)).eq("id", id);
-    if (error) { toast.error(error.message); refresh(); return; }
+    const { error } = await supabase
+      .from("action_items")
+      .update(toActionItemWrite(patch))
+      .eq("id", id);
+    if (error) {
+      toast.error(error.message);
+      refresh();
+      return;
+    }
     if (log && prev) {
       const { data: u } = await supabase.auth.getUser();
       await supabase.from("action_updates").insert({
-        action_item_id: id, client_id: clientId,
+        action_item_id: id,
+        client_id: clientId,
         actor_type: "owner_app",
         actor_label: u.user?.email?.split("@")[0] ?? "Owner",
-        status_from: prev.status, status_to: (patch.status as Status) ?? prev.status,
-        progress_from: prev.progress_pct, progress_to: patch.progress_pct ?? prev.progress_pct,
+        status_from: prev.status,
+        status_to: (patch.status as Status) ?? prev.status,
+        progress_from: prev.progress_pct,
+        progress_to: patch.progress_pct ?? prev.progress_pct,
         ...log,
       });
     }
@@ -451,8 +535,15 @@ export default function ActionPlanPanel({ clientId, clientName, simplified, isOw
     seqMaxRef.current = seq;
     const { data, error } = await supabase
       .from("action_items")
-      .insert({ plan_id: plan.id, client_id: clientId, title, ...toActionItemWrite(extra ?? {}), seq })
-      .select().single();
+      .insert({
+        plan_id: plan.id,
+        client_id: clientId,
+        title,
+        ...toActionItemWrite(extra ?? {}),
+        seq,
+      })
+      .select()
+      .single();
     if (error) {
       seqMaxRef.current = Math.max(0, seqMaxRef.current - 1);
       toast.error(error.message);
@@ -466,22 +557,32 @@ export default function ActionPlanPanel({ clientId, clientName, simplified, isOw
     setItems((arr) => arr.filter((i) => i.id !== id));
     setDrawerId(null);
     const { error } = await supabase.from("action_items").delete().eq("id", id);
-    if (error) { toast.error(error.message); refresh(); }
+    if (error) {
+      toast.error(error.message);
+      refresh();
+    }
   };
 
   const addEmployee = async (name: string, email: string): Promise<Employee | null> => {
     const { data, error } = await supabase
       .from("client_employees")
       .insert({ client_id: clientId, name: name.trim(), email: email.trim() || null })
-      .select("id,name,email,role").single();
-    if (error) { toast.error(error.message); return null; }
+      .select("id,name,email,role")
+      .single();
+    if (error) {
+      toast.error(error.message);
+      return null;
+    }
     setEmployees((arr) => [...arr, data as Employee]);
     return data as Employee;
   };
 
   const patchEmployee = async (id: string, patch: Partial<Pick<Employee, "name" | "email">>) => {
     const { error } = await supabase.from("client_employees").update(patch).eq("id", id);
-    if (error) { toast.error(error.message); return false; }
+    if (error) {
+      toast.error(error.message);
+      return false;
+    }
     setEmployees((arr) => arr.map((e) => (e.id === id ? { ...e, ...patch } : e)));
     return true;
   };
@@ -489,13 +590,24 @@ export default function ActionPlanPanel({ clientId, clientName, simplified, isOw
   const removeEmployee = async (id: string) => {
     if (!confirm("Remove this team member? Tasks they own stay on the plan, unassigned.")) return;
     const { error } = await supabase.from("client_employees").delete().eq("id", id);
-    if (error) { toast.error(error.message); return; }
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
     setEmployees((arr) => arr.filter((e) => e.id !== id));
-    setItems((arr) => arr.map((i) => (i.owner_id === id ? { ...i, owner_id: null, owner_name: null, owner_email: null } : i)));
+    setItems((arr) =>
+      arr.map((i) =>
+        i.owner_id === id ? { ...i, owner_id: null, owner_name: null, owner_email: null } : i,
+      ),
+    );
   };
 
   // ── Send assignments ─────────────────────────────────────────────────────────
-  const mintLink = async (itemId: string, action: "mint" | "reassign" = "mint", employeeId?: string) => {
+  const mintLink = async (
+    itemId: string,
+    action: "mint" | "reassign" = "mint",
+    employeeId?: string,
+  ) => {
     const { data: sess } = await supabase.auth.getSession();
     const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/task-admin`, {
       method: "POST",
@@ -532,7 +644,7 @@ export default function ActionPlanPanel({ clientId, clientName, simplified, isOw
           taskTitle: it.title,
           outcomeWhy: it.outcome_why ?? undefined,
           dueDate: it.due_date
-            ? new Date(it.due_date + "T00:00:00").toLocaleDateString("en-ZA", { day: "numeric", month: "long", year: "numeric" })
+            ? date(it.due_date + "T00:00:00", { day: "numeric", month: "long", year: "numeric" })
             : undefined,
           periodLabel: plan?.period_label,
           milestones: ms.map((m) => ({ week_no: m.week_no, label: m.label })),
@@ -545,23 +657,43 @@ export default function ActionPlanPanel({ clientId, clientName, simplified, isOw
       sendOk = true;
     } catch {
       // Log the failure so the firm can see it in the drawer
-      const { data: failedRecord } = await supabase.from("action_emails").insert({
-        action_item_id: it.id, client_id: clientId,
-        recipient_email: owner.email, email_type: emailType, status: "failed",
-        sent_at: now,
-      }).select("id,action_item_id,email_type,status,sent_at,created_at").single();
+      const { data: failedRecord } = await supabase
+        .from("action_emails")
+        .insert({
+          action_item_id: it.id,
+          client_id: clientId,
+          recipient_email: owner.email,
+          email_type: emailType,
+          status: "failed",
+          sent_at: now,
+        })
+        .select("id,action_item_id,email_type,status,sent_at,created_at")
+        .single();
       if (failedRecord) {
         setLastFailedEmails((prev) => ({ ...prev, [it.id]: failedRecord as EmailRecord }));
       }
-      try { await navigator.clipboard.writeText(url); } catch { /* clipboard unavailable */ }
-      throw new Error("Email sending isn't set up yet — the task link was copied to your clipboard instead. Share it with the employee directly.");
+      try {
+        await navigator.clipboard.writeText(url);
+      } catch {
+        /* clipboard unavailable */
+      }
+      throw new Error(
+        "Email sending isn't set up yet — the task link was copied to your clipboard instead. Share it with the employee directly.",
+      );
     }
     if (sendOk) {
-      const { data: sentRecord } = await supabase.from("action_emails").insert({
-        action_item_id: it.id, client_id: clientId,
-        recipient_email: owner.email, email_type: emailType, status: "queued",
-        sent_at: now,
-      }).select("id,action_item_id,email_type,status,sent_at,created_at").single();
+      const { data: sentRecord } = await supabase
+        .from("action_emails")
+        .insert({
+          action_item_id: it.id,
+          client_id: clientId,
+          recipient_email: owner.email,
+          email_type: emailType,
+          status: "queued",
+          sent_at: now,
+        })
+        .select("id,action_item_id,email_type,status,sent_at,created_at")
+        .single();
       if (sentRecord && emailType !== "assignment") {
         setLastNudgeEmails((prev) => ({ ...prev, [it.id]: sentRecord as EmailRecord }));
       }
@@ -571,14 +703,20 @@ export default function ActionPlanPanel({ clientId, clientName, simplified, isOw
   };
 
   const unsent = items.filter((i) => !i.sent_at && i.status !== "done");
-  const ready = unsent.filter((i) => i.owner_id && i.due_date && employees.find((e) => e.id === i.owner_id)?.email);
+  const ready = unsent.filter(
+    (i) => i.owner_id && i.due_date && employees.find((e) => e.id === i.owner_id)?.email,
+  );
   const sendBatch = async () => {
     if (!ready.length) return;
     setSending(true);
     let ok = 0;
     for (const it of ready) {
-      try { await sendAssignment(it); ok++; }
-      catch (e: any) { toast.error(`${it.title}: ${e.message ?? e}`); }
+      try {
+        await sendAssignment(it);
+        ok++;
+      } catch (e: any) {
+        toast.error(`${it.title}: ${e.message ?? e}`);
+      }
     }
     setSending(false);
     if (ok) toast.success(`${ok} assignment${ok > 1 ? "s" : ""} sent`);
@@ -604,29 +742,36 @@ export default function ActionPlanPanel({ clientId, clientName, simplified, isOw
       return;
     }
     const { data, error } = await supabase.from("action_items").insert(rows).select();
-    if (error) { toast.error(error.message); return; }
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
     const created = (data ?? []) as Item[];
     setItems((arr) => [...arr, ...created]);
     seqMaxRef.current = rows.reduce((m, r) => Math.max(m, r.seq), seqMaxRef.current);
-    toast.success(created.length === 1 ? "Action added to the plan" : `${created.length} actions added to the plan`);
+    toast.success(
+      created.length === 1
+        ? "Action added to the plan"
+        : `${created.length} actions added to the plan`,
+    );
     setImportOpen(false);
   };
 
   // ── Derived views ─────────────────────────────────────────────────────────────
-  const enriched = useMemo(
-    () => items.map((i) => ({ ...i, health: deriveHealth(i) })),
-    [items],
-  );
+  const enriched = useMemo(() => items.map((i) => ({ ...i, health: deriveHealth(i) })), [items]);
   const filtered = useMemo(() => {
     let list = enriched;
     if (filter === "overdue") list = list.filter((i) => i.health === "overdue");
-    else if (filter === "at_risk") list = list.filter((i) => i.health === "at_risk" || i.health === "off_track");
+    else if (filter === "at_risk")
+      list = list.filter((i) => i.health === "at_risk" || i.health === "off_track");
     else if (filter === "blocked") list = list.filter((i) => i.status === "blocked");
     else if (filter === "done") list = list.filter((i) => i.status === "done");
     if (ownerFilter) list = list.filter((i) => i.owner_id === ownerFilter);
     const by = [...list];
-    if (sortBy === "due") by.sort((a, b) => (a.due_date ?? "9999").localeCompare(b.due_date ?? "9999"));
-    else if (sortBy === "owner") by.sort((a, b) => (a.owner_name ?? "").localeCompare(b.owner_name ?? ""));
+    if (sortBy === "due")
+      by.sort((a, b) => (a.due_date ?? "9999").localeCompare(b.due_date ?? "9999"));
+    else if (sortBy === "owner")
+      by.sort((a, b) => (a.owner_name ?? "").localeCompare(b.owner_name ?? ""));
     else if (sortBy === "status") by.sort((a, b) => a.status.localeCompare(b.status));
     else by.sort((a, b) => a.seq - b.seq);
     return by;
@@ -639,7 +784,13 @@ export default function ActionPlanPanel({ clientId, clientName, simplified, isOw
   }, [enriched]);
 
   const healthCounts = useMemo(() => {
-    const c: Record<Health, number> = { on_track: 0, at_risk: 0, off_track: 0, overdue: 0, complete: 0 };
+    const c: Record<Health, number> = {
+      on_track: 0,
+      at_risk: 0,
+      off_track: 0,
+      overdue: 0,
+      complete: 0,
+    };
     enriched.forEach((i) => {
       const key = i.health && i.health in c ? i.health : "on_track";
       c[key]++;
@@ -661,8 +812,12 @@ export default function ActionPlanPanel({ clientId, clientName, simplified, isOw
     setSending(true);
     let ok = 0;
     for (const it of overdueChaseReady) {
-      try { await sendAssignment(it, "overdue"); ok++; }
-      catch (e: any) { toast.error(`${it.title}: ${e.message ?? e}`); }
+      try {
+        await sendAssignment(it, "overdue");
+        ok++;
+      } catch (e: any) {
+        toast.error(`${it.title}: ${e.message ?? e}`);
+      }
     }
     setSending(false);
     if (ok) toast.success(`${ok} overdue reminder${ok > 1 ? "s" : ""} sent`);
@@ -682,10 +837,16 @@ export default function ActionPlanPanel({ clientId, clientName, simplified, isOw
     // two-phase to dodge the (plan_id, seq) unique constraint
     setItems(ordered.map((i, idx) => ({ ...i, seq: idx + 1 })));
     for (let idx = 0; idx < ordered.length; idx++) {
-      await supabase.from("action_items").update({ seq: 1000 + idx }).eq("id", ordered[idx].id);
+      await supabase
+        .from("action_items")
+        .update({ seq: 1000 + idx })
+        .eq("id", ordered[idx].id);
     }
     for (let idx = 0; idx < ordered.length; idx++) {
-      await supabase.from("action_items").update({ seq: idx + 1 }).eq("id", ordered[idx].id);
+      await supabase
+        .from("action_items")
+        .update({ seq: idx + 1 })
+        .eq("id", ordered[idx].id);
     }
     setSortBy("seq");
   };
@@ -701,27 +862,34 @@ export default function ActionPlanPanel({ clientId, clientName, simplified, isOw
     if (!isOwner) {
       return (
         <div className="rounded-xl border border-amber-900/10 bg-white/60 p-8 text-center dark:border-slate-800 dark:bg-slate-900/50">
-          <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">No action plan yet</p>
-          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">The owner hasn't set up an action plan for this period.</p>
+          <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+            No action plan yet
+          </p>
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+            The owner hasn't set up an action plan for this period.
+          </p>
         </div>
       );
     }
     return <div className="p-6 text-sm text-slate-500">Couldn't load the plan.</div>;
   }
 
-  const drawerItem = drawerId ? enriched.find((i) => i.id === drawerId) ?? null : null;
+  const drawerItem = drawerId ? (enriched.find((i) => i.id === drawerId) ?? null) : null;
 
   return (
     <div id="wizard-action-plan" className="space-y-5">
-      <GoalHeader plan={plan} confidence={confidence} isOwner={isOwner} onChange={async (patch) => {
-        setPlan({ ...plan, ...patch });
-        const { error } = await supabase.from("action_plans").update(patch).eq("id", plan.id);
-        if (error) toast.error(error.message);
-      }} />
+      <GoalHeader
+        plan={plan}
+        confidence={confidence}
+        isOwner={isOwner}
+        onChange={async (patch) => {
+          setPlan({ ...plan, ...patch });
+          const { error } = await supabase.from("action_plans").update(patch).eq("id", plan.id);
+          if (error) toast.error(error.message);
+        }}
+      />
 
-      {moves.length > 0 && (
-        <DriversStrip moves={moves.slice(0, 5)} onView={onViewAnalysis} />
-      )}
+      {moves.length > 0 && <DriversStrip moves={moves.slice(0, 5)} onView={onViewAnalysis} />}
 
       {/* ── The table ── */}
       <Card id="wizard-action-list" className={CARD_SHELL}>
@@ -733,7 +901,8 @@ export default function ActionPlanPanel({ clientId, clientName, simplified, isOw
                 Actions
               </CardTitle>
               <span className="mt-0.5 block text-xs text-slate-600 dark:text-slate-400">
-                {enriched.filter((i) => i.status !== "done").length} open · assigned work, visible progress
+                {enriched.filter((i) => i.status !== "done").length} open · assigned work, visible
+                progress
               </span>
             </div>
             {isOwner && (
@@ -750,7 +919,12 @@ export default function ActionPlanPanel({ clientId, clientName, simplified, isOw
                   Add action
                 </Button>
                 {moves.length > 0 && (
-                  <Button size="sm" variant="outline" className={INPUT_CLS} onClick={() => setImportOpen(true)}>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className={INPUT_CLS}
+                    onClick={() => setImportOpen(true)}
+                  >
                     <Sparkles className="mr-1 h-3.5 w-3.5 text-[#b8860b] dark:text-[#d4a550]" />
                     Import from Strategic Moves
                   </Button>
@@ -762,7 +936,11 @@ export default function ActionPlanPanel({ clientId, clientName, simplified, isOw
                     onClick={sendBatch}
                     className="bg-[#b8860b] text-white hover:bg-[#9a7009] dark:bg-[#d4a550] dark:text-slate-950 dark:hover:bg-[#c69440]"
                   >
-                    {sending ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <Send className="mr-1 h-3.5 w-3.5" />}
+                    {sending ? (
+                      <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Send className="mr-1 h-3.5 w-3.5" />
+                    )}
                     {ready.length === unsent.length
                       ? `Send ${ready.length} assignment${ready.length === 1 ? "" : "s"}`
                       : `${ready.length} of ${unsent.length} ready to send`}
@@ -776,7 +954,11 @@ export default function ActionPlanPanel({ clientId, clientName, simplified, isOw
                     onClick={chaseOverdue}
                     className={`${INPUT_CLS} border-[#ef4444]/40 text-[#ef4444] hover:bg-[#ef4444]/10`}
                   >
-                    {sending ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <Mail className="mr-1 h-3.5 w-3.5" />}
+                    {sending ? (
+                      <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Mail className="mr-1 h-3.5 w-3.5" />
+                    )}
                     Chase {overdueChaseReady.length} overdue
                   </Button>
                 )}
@@ -785,9 +967,15 @@ export default function ActionPlanPanel({ clientId, clientName, simplified, isOw
           </div>
           {/* Filters */}
           <div className="mt-3 flex flex-wrap items-center gap-1.5">
-            {([
-              ["all", "All"], ["overdue", "Overdue"], ["at_risk", "At risk"], ["blocked", "Blocked"], ["done", "Done"],
-            ] as const).map(([k, label]) => (
+            {(
+              [
+                ["all", "All"],
+                ["overdue", "Overdue"],
+                ["at_risk", "At risk"],
+                ["blocked", "Blocked"],
+                ["done", "Done"],
+              ] as const
+            ).map(([k, label]) => (
               <button
                 key={k}
                 onClick={() => setFilter(k)}
@@ -807,7 +995,11 @@ export default function ActionPlanPanel({ clientId, clientName, simplified, isOw
               className={`rounded-md border px-2 py-1 text-[11px] ${INPUT_CLS}`}
             >
               <option value="">All owners</option>
-              {employees.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
+              {employees.map((e) => (
+                <option key={e.id} value={e.id}>
+                  {e.name}
+                </option>
+              ))}
             </select>
             {isOwner && (
               <Button
@@ -833,7 +1025,8 @@ export default function ActionPlanPanel({ clientId, clientName, simplified, isOw
           </div>
           {filter === "overdue" && healthCounts.overdue > 0 && (
             <p className="mt-3 rounded-md border border-[#ef4444]/25 bg-[#ef4444]/10 px-3 py-2 text-xs text-[#b45309] dark:text-[#fbbf24]">
-              Showing overdue work. Open an item to send a chase, or use Chase overdue to remind every owner with an email on file.
+              Showing overdue work. Open an item to send a chase, or use Chase overdue to remind
+              every owner with an email on file.
             </p>
           )}
         </CardHeader>
@@ -869,12 +1062,17 @@ export default function ActionPlanPanel({ clientId, clientName, simplified, isOw
                 lastFailed={lastFailedEmails[it.id] ?? null}
                 draggable={isOwner && sortBy === "seq"}
                 isOwner={isOwner}
-                onDragStart={() => { dragSeq.current = it.id; }}
+                onDragStart={() => {
+                  dragSeq.current = it.id;
+                }}
                 onDrop={() => onDropRow(it.id)}
                 onOpen={() => setDrawerId(it.id)}
                 onPatch={(patch, log) => patchItem(it.id, patch, log)}
                 onAddEmployee={addEmployee}
-                onManageTeam={() => { setDrawerId(null); setTeamOpen(true); }}
+                onManageTeam={() => {
+                  setDrawerId(null);
+                  setTeamOpen(true);
+                }}
               />
             ))}
           </div>
@@ -885,9 +1083,21 @@ export default function ActionPlanPanel({ clientId, clientName, simplified, isOw
       {/* ── Footer visuals ── */}
       {enriched.length > 0 && (
         <div className="grid gap-4 md:grid-cols-3">
-          <HealthDonut counts={healthCounts} total={enriched.length} onPick={(h) => {
-            setFilter(h === "overdue" ? "overdue" : h === "at_risk" || h === "off_track" ? "at_risk" : h === "complete" ? "done" : "all");
-          }} />
+          <HealthDonut
+            counts={healthCounts}
+            total={enriched.length}
+            onPick={(h) => {
+              setFilter(
+                h === "overdue"
+                  ? "overdue"
+                  : h === "at_risk" || h === "off_track"
+                    ? "at_risk"
+                    : h === "complete"
+                      ? "done"
+                      : "all",
+              );
+            }}
+          />
           <BurnUp plan={plan} items={enriched} confidence={confidence} />
           <OwnerLoad items={enriched} employees={employees} onPick={setOwnerFilter} />
         </div>
@@ -922,36 +1132,62 @@ export default function ActionPlanPanel({ clientId, clientName, simplified, isOw
           onPatch={(patch, log) => patchItem(drawerItem.id, patch, log)}
           onDelete={() => deleteItem(drawerItem.id)}
           onResend={async () => {
-            try { await sendAssignment(drawerItem); toast.success("Link re-sent"); }
-            catch (e: any) { toast.error(e.message ?? String(e)); }
+            try {
+              await sendAssignment(drawerItem);
+              toast.success("Link re-sent");
+            } catch (e: any) {
+              toast.error(e.message ?? String(e));
+            }
           }}
           onChase={async () => {
             const type = chaseEmailType(drawerItem.health);
             try {
               await sendAssignment(drawerItem, type);
               toast.success(type === "overdue" ? "Overdue reminder sent" : "Nudge sent");
-            } catch (e: any) { toast.error(e.message ?? String(e)); }
+            } catch (e: any) {
+              toast.error(e.message ?? String(e));
+            }
           }}
           onCopyLink={async () => {
             try {
               const url = await mintLink(drawerItem.id);
               await navigator.clipboard.writeText(url);
               toast.success("Task link copied — share it with the employee");
-            } catch (e: any) { toast.error(e.message ?? String(e)); }
+            } catch (e: any) {
+              toast.error(e.message ?? String(e));
+            }
           }}
           onReassign={async (empId) => {
             const emp = employees.find((e) => e.id === empId);
             const old = employees.find((e) => e.id === drawerItem.owner_id);
             if (!emp) return;
-            if (old && !confirm(`${old.name}'s link will stop working. Send ${emp.name} a new one?`)) return;
+            if (
+              old &&
+              !confirm(`${old.name}'s link will stop working. Send ${emp.name} a new one?`)
+            )
+              return;
             try {
               const newUrl = await mintLink(drawerItem.id, "reassign", empId);
-              setItems((arr) => arr.map((i) => (i.id === drawerItem.id ? { ...i, owner_id: empId, owner_name: emp.name, owner_email: emp.email, sent_at: null } : i)));
+              setItems((arr) =>
+                arr.map((i) =>
+                  i.id === drawerItem.id
+                    ? {
+                        ...i,
+                        owner_id: empId,
+                        owner_name: emp.name,
+                        owner_email: emp.email,
+                        sent_at: null,
+                      }
+                    : i,
+                ),
+              );
               if (emp.email) {
                 await sendAssignment({ ...drawerItem, owner_id: empId }, "assignment", newUrl);
                 toast.success(`Reassigned & emailed ${emp.name}`);
               } else toast.success(`Reassigned to ${emp.name} (no email on file)`);
-            } catch (e: any) { toast.error(e.message ?? String(e)); }
+            } catch (e: any) {
+              toast.error(e.message ?? String(e));
+            }
           }}
           onMilestonesChanged={refresh}
         />
@@ -961,11 +1197,18 @@ export default function ActionPlanPanel({ clientId, clientName, simplified, isOw
 }
 
 // ═══ Goal header ═════════════════════════════════════════════════════════════
-function GoalHeader({ plan, confidence, isOwner = true, onChange }: {
-  plan: Plan; confidence: number | null;
+function GoalHeader({
+  plan,
+  confidence,
+  isOwner = true,
+  onChange,
+}: {
+  plan: Plan;
+  confidence: number | null;
   isOwner?: boolean;
   onChange: (patch: Partial<Plan>) => void;
 }) {
+  const { date, number } = useMarketFormat();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(plan);
   useEffect(() => setDraft(plan), [plan]);
@@ -1005,38 +1248,119 @@ function GoalHeader({ plan, confidence, isOwner = true, onChange }: {
                   {plan.outcome_goal}
                 </h2>
                 {plan.why_statement && (
-                  <p className="mt-1.5 max-w-2xl text-sm text-slate-600 dark:text-slate-400">{plan.why_statement}</p>
+                  <p className="mt-1.5 max-w-2xl text-sm text-slate-600 dark:text-slate-400">
+                    {plan.why_statement}
+                  </p>
                 )}
                 <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
                   <CalendarDays className="mr-1 inline h-3.5 w-3.5" />
-                  Target {new Date(plan.target_date + "T00:00:00").toLocaleDateString("en-ZA", { day: "numeric", month: "long", year: "numeric" })}
+                  Target{" "}
+                  {date(plan.target_date + "T00:00:00", {
+                    day: "numeric",
+                    month: "long",
+                    year: "numeric",
+                  })}
                 </p>
               </>
             ) : (
               <div className="mt-3 grid max-w-2xl gap-2.5">
                 <div className="grid gap-2 sm:grid-cols-2">
-                  <div><div className={LABEL_CLS}>Period</div>
-                    <Input className={INPUT_CLS} value={draft.period_label} onChange={(e) => setDraft({ ...draft, period_label: e.target.value })} /></div>
-                  <div><div className={LABEL_CLS}>Target date</div>
-                    <Input className={INPUT_CLS} type="date" value={draft.target_date} onChange={(e) => setDraft({ ...draft, target_date: e.target.value })} /></div>
-                </div>
-                <div><div className={LABEL_CLS}>Outcome goal</div>
-                  <Input className={INPUT_CLS} value={draft.outcome_goal} onChange={(e) => setDraft({ ...draft, outcome_goal: e.target.value })} /></div>
-                <div><div className={LABEL_CLS}>Why (first principles)</div>
-                  <Input className={INPUT_CLS} value={draft.why_statement ?? ""} onChange={(e) => setDraft({ ...draft, why_statement: e.target.value })} /></div>
-                <div className="grid gap-2 sm:grid-cols-4">
-                  <div><div className={LABEL_CLS}>Metric</div>
-                    <Input className={INPUT_CLS} placeholder="Cash on hand" value={draft.metric_name ?? ""} onChange={(e) => setDraft({ ...draft, metric_name: e.target.value })} /></div>
-                  <div><div className={LABEL_CLS}>Start</div>
-                    <Input className={INPUT_CLS} type="number" value={draft.metric_start ?? ""} onChange={(e) => setDraft({ ...draft, metric_start: e.target.value === "" ? null : Number(e.target.value) })} /></div>
-                  <div><div className={LABEL_CLS}>Current</div>
-                    <Input className={INPUT_CLS} type="number" value={draft.metric_current ?? ""} onChange={(e) => setDraft({ ...draft, metric_current: e.target.value === "" ? null : Number(e.target.value) })} /></div>
-                  <div><div className={LABEL_CLS}>Target</div>
-                    <Input className={INPUT_CLS} type="number" value={draft.metric_target ?? ""} onChange={(e) => setDraft({ ...draft, metric_target: e.target.value === "" ? null : Number(e.target.value) })} /></div>
+                  <div>
+                    <div className={LABEL_CLS}>Period</div>
+                    <Input
+                      className={INPUT_CLS}
+                      value={draft.period_label}
+                      onChange={(e) => setDraft({ ...draft, period_label: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <div className={LABEL_CLS}>Target date</div>
+                    <Input
+                      className={INPUT_CLS}
+                      type="date"
+                      value={draft.target_date}
+                      onChange={(e) => setDraft({ ...draft, target_date: e.target.value })}
+                    />
+                  </div>
                 </div>
                 <div>
-                  <Button size="sm" className="bg-[#b8860b] text-white hover:bg-[#9a7009] dark:bg-[#d4a550] dark:text-slate-950"
-                    onClick={() => { onChange(draft); setEditing(false); }}>
+                  <div className={LABEL_CLS}>Outcome goal</div>
+                  <Input
+                    className={INPUT_CLS}
+                    value={draft.outcome_goal}
+                    onChange={(e) => setDraft({ ...draft, outcome_goal: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <div className={LABEL_CLS}>Why (first principles)</div>
+                  <Input
+                    className={INPUT_CLS}
+                    value={draft.why_statement ?? ""}
+                    onChange={(e) => setDraft({ ...draft, why_statement: e.target.value })}
+                  />
+                </div>
+                <div className="grid gap-2 sm:grid-cols-4">
+                  <div>
+                    <div className={LABEL_CLS}>Metric</div>
+                    <Input
+                      className={INPUT_CLS}
+                      placeholder="Cash on hand"
+                      value={draft.metric_name ?? ""}
+                      onChange={(e) => setDraft({ ...draft, metric_name: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <div className={LABEL_CLS}>Start</div>
+                    <Input
+                      className={INPUT_CLS}
+                      type="number"
+                      value={draft.metric_start ?? ""}
+                      onChange={(e) =>
+                        setDraft({
+                          ...draft,
+                          metric_start: e.target.value === "" ? null : Number(e.target.value),
+                        })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <div className={LABEL_CLS}>Current</div>
+                    <Input
+                      className={INPUT_CLS}
+                      type="number"
+                      value={draft.metric_current ?? ""}
+                      onChange={(e) =>
+                        setDraft({
+                          ...draft,
+                          metric_current: e.target.value === "" ? null : Number(e.target.value),
+                        })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <div className={LABEL_CLS}>Target</div>
+                    <Input
+                      className={INPUT_CLS}
+                      type="number"
+                      value={draft.metric_target ?? ""}
+                      onChange={(e) =>
+                        setDraft({
+                          ...draft,
+                          metric_target: e.target.value === "" ? null : Number(e.target.value),
+                        })
+                      }
+                    />
+                  </div>
+                </div>
+                <div>
+                  <Button
+                    size="sm"
+                    className="bg-[#b8860b] text-white hover:bg-[#9a7009] dark:bg-[#d4a550] dark:text-slate-950"
+                    onClick={() => {
+                      onChange(draft);
+                      setEditing(false);
+                    }}
+                  >
                     <Check className="mr-1 h-3.5 w-3.5" /> Save goal
                   </Button>
                 </div>
@@ -1048,7 +1372,9 @@ function GoalHeader({ plan, confidence, isOwner = true, onChange }: {
               <div className={LABEL_CLS}>Plan confidence</div>
               <div
                 className="mt-0.5 text-3xl font-black tabular-nums tracking-tight"
-                style={{ color: confidence >= 75 ? "#22c55e" : confidence >= 50 ? "#f5a524" : "#ef4444" }}
+                style={{
+                  color: confidence >= 75 ? "#22c55e" : confidence >= 50 ? "#f5a524" : "#ef4444",
+                }}
               >
                 {confidence}%
               </div>
@@ -1060,14 +1386,21 @@ function GoalHeader({ plan, confidence, isOwner = true, onChange }: {
         {hasBar && (
           <div className="mt-5">
             <div className="mb-1 flex justify-between text-[11px] tabular-nums text-slate-500 dark:text-slate-400">
-              <span>{plan.metric_name ?? "Metric"}: {s!.toLocaleString("en-ZA")}</span>
-              <span className="font-semibold text-slate-800 dark:text-slate-200">{(c ?? s)!.toLocaleString("en-ZA")}</span>
-              <span>Target {t!.toLocaleString("en-ZA")}</span>
+              <span>
+                {plan.metric_name ?? "Metric"}: {number(s!)}
+              </span>
+              <span className="font-semibold text-slate-800 dark:text-slate-200">
+                {number((c ?? s)!)}
+              </span>
+              <span>Target {number(t!)}</span>
             </div>
             <div className="relative h-3 overflow-visible rounded-full bg-amber-900/10 dark:bg-slate-800">
               <div
                 className="h-3 rounded-full transition-all"
-                style={{ width: `${pct}%`, background: `linear-gradient(90deg, ${GOLD_DARK}, ${GOLD})` }}
+                style={{
+                  width: `${pct}%`,
+                  background: `linear-gradient(90deg, ${GOLD_DARK}, ${GOLD})`,
+                }}
               />
               {/* pace marker — where you SHOULD be today */}
               <div
@@ -1078,9 +1411,13 @@ function GoalHeader({ plan, confidence, isOwner = true, onChange }: {
             </div>
             <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
               The dark tick is where you should be today.{" "}
-              {pct >= timePct
-                ? <span className="font-semibold text-[#22c55e]">Ahead of pace.</span>
-                : <span className="font-semibold text-[#ef4444]">Behind pace — the gap is the work below.</span>}
+              {pct >= timePct ? (
+                <span className="font-semibold text-[#22c55e]">Ahead of pace.</span>
+              ) : (
+                <span className="font-semibold text-[#ef4444]">
+                  Behind pace — the gap is the work below.
+                </span>
+              )}
             </p>
           </div>
         )}
@@ -1090,7 +1427,13 @@ function GoalHeader({ plan, confidence, isOwner = true, onChange }: {
 }
 
 // ═══ Drivers strip ═══════════════════════════════════════════════════════════
-function DriversStrip({ moves, onView }: { moves: StrategicMoveLite[]; onView?: (k?: string) => void }) {
+function DriversStrip({
+  moves,
+  onView,
+}: {
+  moves: StrategicMoveLite[];
+  onView?: (k?: string) => void;
+}) {
   return (
     <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-5">
       {moves.map((m) => {
@@ -1128,7 +1471,22 @@ function DriversStrip({ moves, onView }: { moves: StrategicMoveLite[]; onView?: 
 }
 
 // ═══ Table row ═══════════════════════════════════════════════════════════════
-function ItemRow({ item, employees, milestones, lastNudge, lastFailed, draggable, isOwner = true, onDragStart, onDrop, onOpen, onPatch, onAddEmployee, onManageTeam, focused }: {
+function ItemRow({
+  item,
+  employees,
+  milestones,
+  lastNudge,
+  lastFailed,
+  draggable,
+  isOwner = true,
+  onDragStart,
+  onDrop,
+  onOpen,
+  onPatch,
+  onAddEmployee,
+  onManageTeam,
+  focused,
+}: {
   item: Item & { health?: Health };
   focused?: boolean;
   employees: Employee[];
@@ -1144,6 +1502,7 @@ function ItemRow({ item, employees, milestones, lastNudge, lastFailed, draggable
   onAddEmployee: (name: string, email: string) => Promise<Employee | null>;
   onManageTeam?: () => void;
 }) {
+  const { date } = useMarketFormat();
   const h = healthMeta(item.health);
   const overdue = item.health === "overdue";
   const [editTitle, setEditTitle] = useState(false);
@@ -1160,13 +1519,18 @@ function ItemRow({ item, employees, milestones, lastNudge, lastFailed, draggable
       draggable={draggable}
       onDragStart={onDragStart}
       onDragOver={(e) => e.preventDefault()}
-      onDrop={(e) => { e.preventDefault(); onDrop(); }}
+      onDrop={(e) => {
+        e.preventDefault();
+        onDrop();
+      }}
       onClick={pickOwner ? undefined : onOpen}
       data-row-id={item.id}
     >
       {draggable && (
-        <GripVertical className="hidden h-4 w-4 shrink-0 cursor-grab text-slate-300 opacity-0 transition-opacity group-hover:opacity-100 dark:text-slate-600 sm:block"
-          onClick={(e) => e.stopPropagation()} />
+        <GripVertical
+          className="hidden h-4 w-4 shrink-0 cursor-grab text-slate-300 opacity-0 transition-opacity group-hover:opacity-100 dark:text-slate-600 sm:block"
+          onClick={(e) => e.stopPropagation()}
+        />
       )}
       <span className="w-5 shrink-0 text-right text-[11px] font-bold tabular-nums text-slate-400 dark:text-slate-500">
         {item.seq}
@@ -1180,15 +1544,35 @@ function ItemRow({ item, employees, milestones, lastNudge, lastFailed, draggable
             className={`h-7 text-sm ${INPUT_CLS}`}
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            onBlur={() => { setEditTitle(false); if (title.trim() && title !== item.title) onPatch({ title: title.trim() }); }}
-            onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); if (e.key === "Escape") { setTitle(item.title); setEditTitle(false); } }}
+            onBlur={() => {
+              setEditTitle(false);
+              if (title.trim() && title !== item.title) onPatch({ title: title.trim() });
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+              if (e.key === "Escape") {
+                setTitle(item.title);
+                setEditTitle(false);
+              }
+            }}
           />
         ) : (
           <button
             className={`block w-full truncate text-left text-sm font-semibold ${item.status === "done" ? "text-slate-400 line-through dark:text-slate-500" : "text-slate-900 dark:text-slate-100"}`}
-            onDoubleClick={isOwner ? (e) => { e.stopPropagation(); setEditTitle(true); } : undefined}
+            onDoubleClick={
+              isOwner
+                ? (e) => {
+                    e.stopPropagation();
+                    setEditTitle(true);
+                  }
+                : undefined
+            }
             onClick={(e) => e.stopPropagation()}
-            title={isOwner ? "Double-click to edit title — click row to open details" : "Click row to open details"}
+            title={
+              isOwner
+                ? "Double-click to edit title — click row to open details"
+                : "Click row to open details"
+            }
           >
             {item.title}
           </button>
@@ -1225,15 +1609,34 @@ function ItemRow({ item, employees, milestones, lastNudge, lastFailed, draggable
               }
             }}
             onAdd={onAddEmployee}
-            onManageTeam={onManageTeam ? () => { setPickOwner(false); onManageTeam(); } : undefined}
+            onManageTeam={
+              onManageTeam
+                ? () => {
+                    setPickOwner(false);
+                    onManageTeam();
+                  }
+                : undefined
+            }
             onClose={() => setPickOwner(false)}
           />
         ) : (
           <button
             className={`w-full truncate rounded-md px-1.5 py-1 text-left text-xs font-medium text-slate-700 dark:text-slate-300 ${isOwner ? "hover:bg-amber-900/5 dark:hover:bg-slate-800" : "cursor-default"}`}
-            onClick={isOwner ? (e) => { e.stopPropagation(); setPickOwner(true); } : (e) => e.stopPropagation()}
+            onClick={
+              isOwner
+                ? (e) => {
+                    e.stopPropagation();
+                    setPickOwner(true);
+                  }
+                : (e) => e.stopPropagation()
+            }
           >
-            {item.owner_name ?? (isOwner ? <span className="text-slate-400 dark:text-slate-500">+ Owner</span> : <span className="text-slate-400 dark:text-slate-500">—</span>)}
+            {item.owner_name ??
+              (isOwner ? (
+                <span className="text-slate-400 dark:text-slate-500">+ Owner</span>
+              ) : (
+                <span className="text-slate-400 dark:text-slate-500">—</span>
+              ))}
           </button>
         )}
       </div>
@@ -1243,7 +1646,9 @@ function ItemRow({ item, employees, milestones, lastNudge, lastFailed, draggable
         <input
           type="date"
           value={item.due_date ?? ""}
-          onChange={isOwner ? (e) => onPatch({ due_date: e.target.value || null } as any) : undefined}
+          onChange={
+            isOwner ? (e) => onPatch({ due_date: e.target.value || null } as any) : undefined
+          }
           onClick={(e) => e.stopPropagation()}
           readOnly={!isOwner}
           className={`w-full rounded-md border-0 bg-transparent px-1 py-1 text-xs font-medium tabular-nums ${isOwner ? "cursor-pointer" : "cursor-default"} ${overdue ? "text-[#ef4444] font-bold" : "text-slate-700 dark:text-slate-300"}`}
@@ -1253,14 +1658,24 @@ function ItemRow({ item, employees, milestones, lastNudge, lastFailed, draggable
       {/* Progress + pace marker */}
       <div className="hidden w-28 shrink-0 sm:block">
         <div className="relative h-1.5 rounded-full bg-amber-900/10 dark:bg-slate-800">
-          <div className="h-1.5 rounded-full" style={{ width: `${item.progress_pct}%`, background: h.color }} />
+          <div
+            className="h-1.5 rounded-full"
+            style={{ width: `${item.progress_pct}%`, background: h.color }}
+          />
           {exp != null && item.status !== "done" && (
-            <div className="absolute -top-[3px] h-3 w-px bg-slate-500 dark:bg-slate-400" style={{ left: `${exp}%` }} />
+            <div
+              className="absolute -top-[3px] h-3 w-px bg-slate-500 dark:bg-slate-400"
+              style={{ left: `${exp}%` }}
+            />
           )}
         </div>
         <div className="mt-0.5 flex justify-between text-[10px] tabular-nums text-slate-400 dark:text-slate-500">
           <span>{item.progress_pct}%</span>
-          {milestones.length > 0 && <span>{msDone}/{milestones.length} wk</span>}
+          {milestones.length > 0 && (
+            <span>
+              {msDone}/{milestones.length} wk
+            </span>
+          )}
         </div>
       </div>
 
@@ -1278,7 +1693,7 @@ function ItemRow({ item, employees, milestones, lastNudge, lastFailed, draggable
           {lastNudge ? (
             <span
               className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-600 dark:text-amber-400"
-              title={`Last ${lastNudge.email_type === "nudge" ? "nudge" : "overdue reminder"} sent ${lastNudge.sent_at ? new Date(lastNudge.sent_at).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" }) : ""}`}
+              title={`Last ${lastNudge.email_type === "nudge" ? "nudge" : "overdue reminder"} sent ${lastNudge.sent_at ? date(lastNudge.sent_at, { day: "numeric", month: "short", year: "numeric" }) : ""}`}
             >
               <Mail className="h-3 w-3" />
               {lastNudge.email_type === "nudge" ? "Nudged" : "Overdue"}
@@ -1288,11 +1703,13 @@ function ItemRow({ item, employees, milestones, lastNudge, lastFailed, draggable
               <Mail className="h-3 w-3" /> Sent
             </span>
           ) : !lastFailed ? (
-            <span className="text-[10px] font-semibold uppercase text-slate-400 dark:text-slate-500">Not sent</span>
+            <span className="text-[10px] font-semibold uppercase text-slate-400 dark:text-slate-500">
+              Not sent
+            </span>
           ) : null}
           {lastNudge?.sent_at && (
             <span className="text-[10px] tabular-nums text-slate-400 dark:text-slate-500">
-              {new Date(lastNudge.sent_at).toLocaleDateString("en-ZA", { day: "numeric", month: "short" })}
+              {date(lastNudge.sent_at, { day: "numeric", month: "short" })}
             </span>
           )}
         </div>
@@ -1312,7 +1729,13 @@ function ItemRow({ item, employees, milestones, lastNudge, lastFailed, draggable
   );
 }
 
-function OwnerPicker({ employees, onPick, onAdd, onManageTeam, onClose }: {
+function OwnerPicker({
+  employees,
+  onPick,
+  onAdd,
+  onManageTeam,
+  onClose,
+}: {
   employees: Employee[];
   onPick: (id: string | null, name?: string | null) => void;
   onAdd: (name: string, email: string) => Promise<Employee | null>;
@@ -1341,13 +1764,23 @@ function OwnerPicker({ employees, onPick, onAdd, onManageTeam, onClose }: {
     >
       {!adding ? (
         <>
-          <Input autoFocus placeholder="Search…" className={`mb-1 h-7 text-xs ${INPUT_CLS}`} value={q}
+          <Input
+            autoFocus
+            placeholder="Search…"
+            className={`mb-1 h-7 text-xs ${INPUT_CLS}`}
+            value={q}
             onChange={(e) => setQ(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Escape") onClose(); }} />
+            onKeyDown={(e) => {
+              if (e.key === "Escape") onClose();
+            }}
+          />
           <div className="max-h-40 overflow-auto">
             {list.map((e) => (
-              <button key={e.id} className="block w-full rounded px-2 py-1.5 text-left text-xs hover:bg-amber-900/5 dark:hover:bg-slate-800"
-                onClick={() => onPick(e.id, e.name)}>
+              <button
+                key={e.id}
+                className="block w-full rounded px-2 py-1.5 text-left text-xs hover:bg-amber-900/5 dark:hover:bg-slate-800"
+                onClick={() => onPick(e.id, e.name)}
+              >
                 <span className="font-semibold text-slate-800 dark:text-slate-200">{e.name}</span>
                 {!e.email && <span className="ml-1 text-[10px] text-amber-600">no email</span>}
               </button>
@@ -1357,7 +1790,10 @@ function OwnerPicker({ employees, onPick, onAdd, onManageTeam, onClose }: {
           <button
             type="button"
             className="mt-1 flex w-full items-center gap-1 rounded px-2 py-1.5 text-left text-xs font-semibold text-[#b8860b] hover:bg-amber-900/5 dark:text-[#d4a550] dark:hover:bg-slate-800"
-            onClick={(e) => { e.stopPropagation(); setAdding(true); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              setAdding(true);
+            }}
           >
             <UserPlus className="h-3 w-3" /> Add employee
           </button>
@@ -1365,7 +1801,10 @@ function OwnerPicker({ employees, onPick, onAdd, onManageTeam, onClose }: {
             <button
               type="button"
               className="flex w-full items-center gap-1 rounded px-2 py-1.5 text-left text-xs font-medium text-slate-600 hover:bg-amber-900/5 dark:text-slate-300 dark:hover:bg-slate-800"
-              onClick={(e) => { e.stopPropagation(); onManageTeam(); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                onManageTeam();
+              }}
             >
               <Users className="h-3 w-3" /> Team members
             </button>
@@ -1373,19 +1812,41 @@ function OwnerPicker({ employees, onPick, onAdd, onManageTeam, onClose }: {
         </>
       ) : (
         <div className="space-y-1.5">
-          <Input autoFocus placeholder="Name" className={`h-7 text-xs ${INPUT_CLS}`} value={name} onChange={(e) => setName(e.target.value)} />
-          <Input placeholder="Email" type="email" className={`h-7 text-xs ${INPUT_CLS}`} value={email} onChange={(e) => setEmail(e.target.value)} />
+          <Input
+            autoFocus
+            placeholder="Name"
+            className={`h-7 text-xs ${INPUT_CLS}`}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+          <Input
+            placeholder="Email"
+            type="email"
+            className={`h-7 text-xs ${INPUT_CLS}`}
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
           <div className="flex gap-1">
-            <Button size="sm" className="h-7 flex-1 bg-[#b8860b] text-xs text-white dark:bg-[#d4a550] dark:text-slate-950"
+            <Button
+              size="sm"
+              className="h-7 flex-1 bg-[#b8860b] text-xs text-white dark:bg-[#d4a550] dark:text-slate-950"
               onClick={async (e) => {
                 e.stopPropagation();
                 if (!name.trim()) return;
                 const emp = await onAdd(name, email);
                 if (emp) onPick(emp.id, emp.name);
-              }}>
+              }}
+            >
               Add
             </Button>
-            <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setAdding(false)}>Back</Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 text-xs"
+              onClick={() => setAdding(false)}
+            >
+              Back
+            </Button>
           </div>
         </div>
       )}
@@ -1439,7 +1900,12 @@ function QuickAdd({
 }
 
 // ═══ Import panel ════════════════════════════════════════════════════════════
-function ImportPanel({ moves, importedKeys, onClose, onImport }: {
+function ImportPanel({
+  moves,
+  importedKeys,
+  onClose,
+  onImport,
+}: {
   moves: StrategicMoveLite[];
   importedKeys: Set<string | null>;
   onClose: () => void;
@@ -1448,15 +1914,22 @@ function ImportPanel({ moves, importedKeys, onClose, onImport }: {
   const [sel, setSel] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center"
+      onClick={onClose}
+    >
       <div
         className={`w-full max-w-lg rounded-2xl p-5 ${CARD_SHELL}`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className={GOLD_RULE} />
         <div className="mb-3 flex items-center justify-between">
-          <h3 className="text-base font-bold text-slate-950 dark:text-white">Import from Strategic Moves</h3>
-          <button onClick={onClose} aria-label="Close"><X className="h-4 w-4 text-slate-400" /></button>
+          <h3 className="text-base font-bold text-slate-950 dark:text-white">
+            Import from Strategic Moves
+          </h3>
+          <button onClick={onClose} aria-label="Close">
+            <X className="h-4 w-4 text-slate-400" />
+          </button>
         </div>
         <div className="max-h-80 space-y-1.5 overflow-auto">
           {moves.map((m) => {
@@ -1466,7 +1939,13 @@ function ImportPanel({ moves, importedKeys, onClose, onImport }: {
               <button
                 key={m.key}
                 disabled={added}
-                onClick={() => setSel((s) => { const n = new Set(s); checked ? n.delete(m.key) : n.add(m.key); return n; })}
+                onClick={() =>
+                  setSel((s) => {
+                    const n = new Set(s);
+                    checked ? n.delete(m.key) : n.add(m.key);
+                    return n;
+                  })
+                }
                 className={`flex w-full items-start gap-3 rounded-lg border px-3 py-2.5 text-left transition-colors ${
                   added
                     ? "cursor-default border-transparent opacity-45"
@@ -1475,14 +1954,29 @@ function ImportPanel({ moves, importedKeys, onClose, onImport }: {
                       : "border-amber-900/10 hover:border-[#d4a550]/40 dark:border-slate-800"
                 }`}
               >
-                <span className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[10px] font-black ${
-                  checked ? "border-[#b8860b] bg-[#b8860b] text-white dark:border-[#d4a550] dark:bg-[#d4a550] dark:text-slate-950" : "border-slate-300 dark:border-slate-600"
-                }`}>{checked && "✓"}</span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-semibold text-slate-900 dark:text-slate-100">{m.title}</span>
-                  <span className="block text-[11px] text-slate-500 dark:text-slate-400">{m.ratioName}{m.impactLine ? ` · ${m.impactLine}` : ""}</span>
+                <span
+                  className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[10px] font-black ${
+                    checked
+                      ? "border-[#b8860b] bg-[#b8860b] text-white dark:border-[#d4a550] dark:bg-[#d4a550] dark:text-slate-950"
+                      : "border-slate-300 dark:border-slate-600"
+                  }`}
+                >
+                  {checked && "✓"}
                 </span>
-                {added && <span className="shrink-0 text-[10px] font-bold uppercase text-slate-400">Added</span>}
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
+                    {m.title}
+                  </span>
+                  <span className="block text-[11px] text-slate-500 dark:text-slate-400">
+                    {m.ratioName}
+                    {m.impactLine ? ` · ${m.impactLine}` : ""}
+                  </span>
+                </span>
+                {added && (
+                  <span className="shrink-0 text-[10px] font-bold uppercase text-slate-400">
+                    Added
+                  </span>
+                )}
               </button>
             );
           })}
@@ -1491,12 +1985,17 @@ function ImportPanel({ moves, importedKeys, onClose, onImport }: {
           disabled={!sel.size || busy}
           onClick={async () => {
             setBusy(true);
-            try { await onImport([...sel]); }
-            finally { setBusy(false); }
+            try {
+              await onImport([...sel]);
+            } finally {
+              setBusy(false);
+            }
           }}
           className="mt-4 w-full bg-[#b8860b] text-white hover:bg-[#9a7009] dark:bg-[#d4a550] dark:text-slate-950 dark:hover:bg-[#c69440]"
         >
-          {busy ? "Adding…" : `Add ${sel.size || ""} action${sel.size === 1 ? "" : "s"} to the plan`}
+          {busy
+            ? "Adding…"
+            : `Add ${sel.size || ""} action${sel.size === 1 ? "" : "s"} to the plan`}
         </Button>
       </div>
     </div>
@@ -1504,7 +2003,13 @@ function ImportPanel({ moves, importedKeys, onClose, onImport }: {
 }
 
 // ═══ Team members ════════════════════════════════════════════════════════════
-function TeamPanel({ employees, onClose, onAdd, onPatch, onRemove }: {
+function TeamPanel({
+  employees,
+  onClose,
+  onAdd,
+  onPatch,
+  onRemove,
+}: {
   employees: Employee[];
   onClose: () => void;
   onAdd: (name: string, email: string) => Promise<Employee | null>;
@@ -1523,7 +2028,10 @@ function TeamPanel({ employees, onClose, onAdd, onPatch, onRemove }: {
     setSaving(true);
     try {
       const emp = await onAdd(name, email);
-      if (emp) { setName(""); setEmail(""); }
+      if (emp) {
+        setName("");
+        setEmail("");
+      }
     } finally {
       setSaving(false);
     }
@@ -1536,7 +2044,10 @@ function TeamPanel({ employees, onClose, onAdd, onPatch, onRemove }: {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center"
+      onClick={onClose}
+    >
       <div
         className={`w-full max-w-lg rounded-2xl p-5 ${CARD_SHELL}`}
         onClick={(e) => e.stopPropagation()}
@@ -1549,21 +2060,52 @@ function TeamPanel({ employees, onClose, onAdd, onPatch, onRemove }: {
               Names and emails used when assigning Action Plan work.
             </p>
           </div>
-          <button type="button" onClick={onClose} aria-label="Close"><X className="h-4 w-4 text-slate-400" /></button>
+          <button type="button" onClick={onClose} aria-label="Close">
+            <X className="h-4 w-4 text-slate-400" />
+          </button>
         </div>
         <div className="max-h-80 space-y-1 overflow-auto">
           {employees.length === 0 && (
-            <p className="px-1 py-3 text-sm text-slate-500 dark:text-slate-400">No team members yet. Add someone below.</p>
+            <p className="px-1 py-3 text-sm text-slate-500 dark:text-slate-400">
+              No team members yet. Add someone below.
+            </p>
           )}
           {employees.map((e) => (
-            <div key={e.id} className="flex items-start gap-2 rounded-lg border border-amber-900/10 px-3 py-2 dark:border-slate-800">
+            <div
+              key={e.id}
+              className="flex items-start gap-2 rounded-lg border border-amber-900/10 px-3 py-2 dark:border-slate-800"
+            >
               {editId === e.id ? (
                 <div className="min-w-0 flex-1 space-y-1.5">
-                  <Input className={`h-7 text-xs ${INPUT_CLS}`} value={editName} onChange={(ev) => setEditName(ev.target.value)} placeholder="Name" />
-                  <Input className={`h-7 text-xs ${INPUT_CLS}`} type="email" value={editEmail} onChange={(ev) => setEditEmail(ev.target.value)} placeholder="Email" />
+                  <Input
+                    className={`h-7 text-xs ${INPUT_CLS}`}
+                    value={editName}
+                    onChange={(ev) => setEditName(ev.target.value)}
+                    placeholder="Name"
+                  />
+                  <Input
+                    className={`h-7 text-xs ${INPUT_CLS}`}
+                    type="email"
+                    value={editEmail}
+                    onChange={(ev) => setEditEmail(ev.target.value)}
+                    placeholder="Email"
+                  />
                   <div className="flex gap-1">
-                    <Button size="sm" className="h-7 bg-[#b8860b] px-3 text-xs text-white dark:bg-[#d4a550] dark:text-slate-950" onClick={saveEdit}>Save</Button>
-                    <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setEditId(null)}>Cancel</Button>
+                    <Button
+                      size="sm"
+                      className="h-7 bg-[#b8860b] px-3 text-xs text-white dark:bg-[#d4a550] dark:text-slate-950"
+                      onClick={saveEdit}
+                    >
+                      Save
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 text-xs"
+                      onClick={() => setEditId(null)}
+                    >
+                      Cancel
+                    </Button>
                   </div>
                 </div>
               ) : (
@@ -1571,9 +2113,15 @@ function TeamPanel({ employees, onClose, onAdd, onPatch, onRemove }: {
                   <button
                     type="button"
                     className="min-w-0 flex-1 text-left"
-                    onClick={() => { setEditId(e.id); setEditName(e.name); setEditEmail(e.email ?? ""); }}
+                    onClick={() => {
+                      setEditId(e.id);
+                      setEditName(e.name);
+                      setEditEmail(e.email ?? "");
+                    }}
                   >
-                    <span className="block truncate text-sm font-semibold text-slate-900 dark:text-slate-100">{e.name}</span>
+                    <span className="block truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
+                      {e.name}
+                    </span>
                     <span className="block truncate text-[11px] text-slate-500 dark:text-slate-400">
                       {e.email || <span className="text-amber-600">no email</span>}
                     </span>
@@ -1592,11 +2140,34 @@ function TeamPanel({ employees, onClose, onAdd, onPatch, onRemove }: {
           ))}
         </div>
         <div className="mt-4 space-y-1.5 border-t border-amber-900/10 pt-3 dark:border-slate-800">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Add team member</p>
-          <Input className={`h-8 text-sm ${INPUT_CLS}`} placeholder="Name" value={name} onChange={(e) => setName(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); submit(); } }} />
-          <Input className={`h-8 text-sm ${INPUT_CLS}`} type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); submit(); } }} />
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            Add team member
+          </p>
+          <Input
+            className={`h-8 text-sm ${INPUT_CLS}`}
+            placeholder="Name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                submit();
+              }
+            }}
+          />
+          <Input
+            className={`h-8 text-sm ${INPUT_CLS}`}
+            type="email"
+            placeholder="Email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                submit();
+              }
+            }}
+          />
           <Button
             disabled={!name.trim() || saving}
             onClick={submit}
@@ -1612,7 +2183,20 @@ function TeamPanel({ employees, onClose, onAdd, onPatch, onRemove }: {
 }
 
 // ═══ Drawer ══════════════════════════════════════════════════════════════════
-function ItemDrawer({ item, employees, milestones, isOwner = true, onClose, onPatch, onDelete, onResend, onChase, onCopyLink, onReassign, onMilestonesChanged }: {
+function ItemDrawer({
+  item,
+  employees,
+  milestones,
+  isOwner = true,
+  onClose,
+  onPatch,
+  onDelete,
+  onResend,
+  onChase,
+  onCopyLink,
+  onReassign,
+  onMilestonesChanged,
+}: {
   item: Item & { health?: Health };
   employees: Employee[];
   milestones: Milestone[];
@@ -1626,6 +2210,7 @@ function ItemDrawer({ item, employees, milestones, isOwner = true, onClose, onPa
   onReassign: (employeeId: string) => Promise<void>;
   onMilestonesChanged: () => void;
 }) {
+  const { dateTime } = useMarketFormat();
   const [updates, setUpdates] = useState<Update[]>([]);
   const [emailHistory, setEmailHistory] = useState<EmailRecord[]>([]);
   const [newMs, setNewMs] = useState("");
@@ -1633,16 +2218,24 @@ function ItemDrawer({ item, employees, milestones, isOwner = true, onClose, onPa
   const [resending, setResending] = useState(false);
   const [chasing, setChasing] = useState(false);
   const h = healthMeta(item.health);
-  const ownerHasEmail = Boolean(item.owner_id && employees.find((e) => e.id === item.owner_id)?.email);
+  const ownerHasEmail = Boolean(
+    item.owner_id && employees.find((e) => e.id === item.owner_id)?.email,
+  );
   const chaseLabel = item.health === "overdue" ? "Chase overdue" : "Send nudge";
 
   useEffect(() => {
     Promise.all([
-      supabase.from("action_updates").select("*")
-        .eq("action_item_id", item.id).order("created_at", { ascending: false }).limit(30),
-      supabase.from("action_emails")
+      supabase
+        .from("action_updates")
+        .select("*")
+        .eq("action_item_id", item.id)
+        .order("created_at", { ascending: false })
+        .limit(30),
+      supabase
+        .from("action_emails")
         .select("id,action_item_id,email_type,status,sent_at,created_at")
-        .eq("action_item_id", item.id).order("created_at", { ascending: false }),
+        .eq("action_item_id", item.id)
+        .order("created_at", { ascending: false }),
     ]).then(([{ data: updData }, { data: emailData }]) => {
       setUpdates((updData ?? []) as Update[]);
       setEmailHistory((emailData ?? []) as EmailRecord[]);
@@ -1652,16 +2245,25 @@ function ItemDrawer({ item, employees, milestones, isOwner = true, onClose, onPa
   const addMilestone = async () => {
     if (!newMs.trim()) return;
     const week = (milestones.reduce((m, x) => Math.max(m, x.week_no), 0) ?? 0) + 1;
-    if (week > 12) { toast.error("Max 12 weekly milestones"); return; }
+    if (week > 12) {
+      toast.error("Max 12 weekly milestones");
+      return;
+    }
     const { error } = await supabase.from("action_milestones").insert({
-      action_item_id: item.id, week_no: week, label: newMs.trim(),
+      action_item_id: item.id,
+      week_no: week,
+      label: newMs.trim(),
     });
-    if (error) { toast.error(error.message); return; }
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
     setNewMs("");
     onMilestonesChanged();
   };
   const toggleMs = async (m: Milestone) => {
-    await supabase.from("action_milestones")
+    await supabase
+      .from("action_milestones")
       .update({ is_done: !m.is_done, done_at: !m.is_done ? new Date().toISOString() : null })
       .eq("id", m.id);
     onMilestonesChanged();
@@ -1679,13 +2281,22 @@ function ItemDrawer({ item, employees, milestones, isOwner = true, onClose, onPa
       >
         <div className="mb-4 flex items-start justify-between gap-3">
           <div>
-            <span className="rounded-md px-2 py-0.5 text-[11px] font-bold" style={{ color: h.color, background: h.bg }}>
+            <span
+              className="rounded-md px-2 py-0.5 text-[11px] font-bold"
+              style={{ color: h.color, background: h.bg }}
+            >
               {h.label}
             </span>
-            <h3 className="mt-2 text-lg font-black leading-tight text-slate-950 dark:text-white">{item.title}</h3>
-            {item.outcome_why && <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{item.outcome_why}</p>}
+            <h3 className="mt-2 text-lg font-black leading-tight text-slate-950 dark:text-white">
+              {item.title}
+            </h3>
+            {item.outcome_why && (
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{item.outcome_why}</p>
+            )}
           </div>
-          <button onClick={onClose} aria-label="Close"><X className="h-4 w-4 text-slate-400" /></button>
+          <button onClick={onClose} aria-label="Close">
+            <X className="h-4 w-4 text-slate-400" />
+          </button>
         </div>
 
         {/* Status override + progress — owners only */}
@@ -1696,10 +2307,17 @@ function ItemDrawer({ item, employees, milestones, isOwner = true, onClose, onPa
               {(Object.keys(STATUS_LABEL) as Status[]).map((s) => (
                 <button
                   key={s}
-                  onClick={() => onPatch(
-                    { status: s, ...(s === "done" ? { progress_pct: 100, completed_at: new Date().toISOString() } : { completed_at: null }) } as any,
-                    {},
-                  )}
+                  onClick={() =>
+                    onPatch(
+                      {
+                        status: s,
+                        ...(s === "done"
+                          ? { progress_pct: 100, completed_at: new Date().toISOString() }
+                          : { completed_at: null }),
+                      } as any,
+                      {},
+                    )
+                  }
                   className={`rounded-md px-2.5 py-1 text-[11px] font-semibold ${
                     item.status === s
                       ? "bg-[#b8860b] text-white dark:bg-[#d4a550] dark:text-slate-950"
@@ -1717,7 +2335,10 @@ function ItemDrawer({ item, employees, milestones, isOwner = true, onClose, onPa
             )}
             <div className={`mt-4 ${LABEL_CLS}`}>Progress — {item.progress_pct}%</div>
             <input
-              type="range" min={0} max={100} step={5}
+              type="range"
+              min={0}
+              max={100}
+              step={5}
               value={item.progress_pct}
               onChange={(e) => onPatch({ progress_pct: Number(e.target.value) } as any, {})}
               className="mt-1 w-full accent-[#d4a550]"
@@ -1736,7 +2357,10 @@ function ItemDrawer({ item, employees, milestones, isOwner = true, onClose, onPa
             )}
             <div className={`mt-4 ${LABEL_CLS}`}>Progress — {item.progress_pct}%</div>
             <div className="mt-1 h-2 w-full overflow-hidden rounded-full bg-amber-900/10 dark:bg-slate-800">
-              <div className="h-2 rounded-full bg-[#d4a550]" style={{ width: `${item.progress_pct}%` }} />
+              <div
+                className="h-2 rounded-full bg-[#d4a550]"
+                style={{ width: `${item.progress_pct}%` }}
+              />
             </div>
           </>
         )}
@@ -1750,15 +2374,23 @@ function ItemDrawer({ item, employees, milestones, isOwner = true, onClose, onPa
                 onClick={isOwner ? () => toggleMs(m) : undefined}
                 disabled={!isOwner}
                 className={`flex h-4.5 w-4.5 h-[18px] w-[18px] shrink-0 items-center justify-center rounded border text-[10px] font-black ${
-                  m.is_done ? "border-[#22c55e] bg-[#22c55e] text-white" : "border-slate-300 dark:border-slate-600"
+                  m.is_done
+                    ? "border-[#22c55e] bg-[#22c55e] text-white"
+                    : "border-slate-300 dark:border-slate-600"
                 } ${!isOwner ? "cursor-default" : ""}`}
               >
                 {m.is_done && "✓"}
               </button>
               <span className="w-7 text-[10px] font-bold text-slate-400">W{m.week_no}</span>
-              <span className={`flex-1 text-xs ${m.is_done ? "text-slate-400 line-through" : "text-slate-800 dark:text-slate-200"}`}>{m.label}</span>
+              <span
+                className={`flex-1 text-xs ${m.is_done ? "text-slate-400 line-through" : "text-slate-800 dark:text-slate-200"}`}
+              >
+                {m.label}
+              </span>
               {isOwner && (
-                <button onClick={() => deleteMs(m)} className="opacity-0 group-hover:opacity-100"><Trash2 className="h-3 w-3 text-slate-400" /></button>
+                <button onClick={() => deleteMs(m)} className="opacity-0 group-hover:opacity-100">
+                  <Trash2 className="h-3 w-3 text-slate-400" />
+                </button>
               )}
             </div>
           ))}
@@ -1770,9 +2402,18 @@ function ItemDrawer({ item, employees, milestones, isOwner = true, onClose, onPa
               className={`h-7 text-xs ${INPUT_CLS}`}
               value={newMs}
               onChange={(e) => setNewMs(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") addMilestone(); }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") addMilestone();
+              }}
             />
-            <Button size="sm" variant="outline" className={`h-7 ${INPUT_CLS}`} onClick={addMilestone}><Plus className="h-3 w-3" /></Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className={`h-7 ${INPUT_CLS}`}
+              onClick={addMilestone}
+            >
+              <Plus className="h-3 w-3" />
+            </Button>
           </div>
         )}
 
@@ -1783,32 +2424,60 @@ function ItemDrawer({ item, employees, milestones, isOwner = true, onClose, onPa
               <Button
                 size="sm"
                 disabled={chasing || !ownerHasEmail}
-                onClick={async () => { setChasing(true); await onChase(); setChasing(false); }}
+                onClick={async () => {
+                  setChasing(true);
+                  await onChase();
+                  setChasing(false);
+                }}
                 className={`mt-5 w-full ${
                   item.health === "overdue"
                     ? "bg-[#ef4444] text-white hover:bg-[#dc2626]"
                     : "bg-[#b8860b] text-white hover:bg-[#9a7009] dark:bg-[#d4a550] dark:text-slate-950 dark:hover:bg-[#c69440]"
                 }`}
               >
-                {chasing ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <Mail className="mr-1 h-3.5 w-3.5" />}
+                {chasing ? (
+                  <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Mail className="mr-1 h-3.5 w-3.5" />
+                )}
                 {ownerHasEmail ? chaseLabel : "Add an owner email to chase"}
               </Button>
             )}
             <div className="mt-1.5 grid grid-cols-3 gap-1.5">
               <Button
-                size="sm" variant="outline" className={INPUT_CLS} disabled={!item.owner_id}
+                size="sm"
+                variant="outline"
+                className={INPUT_CLS}
+                disabled={!item.owner_id}
                 onClick={onCopyLink}
               >
                 <LinkIcon className="mr-1 h-3 w-3" /> Copy link
               </Button>
               <Button
-                size="sm" variant="outline" className={INPUT_CLS} disabled={resending || !item.owner_id}
-                onClick={async () => { setResending(true); await onResend(); setResending(false); }}
+                size="sm"
+                variant="outline"
+                className={INPUT_CLS}
+                disabled={resending || !item.owner_id}
+                onClick={async () => {
+                  setResending(true);
+                  await onResend();
+                  setResending(false);
+                }}
               >
-                {resending ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <RotateCcw className="mr-1 h-3 w-3" />} Resend link
+                {resending ? (
+                  <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                ) : (
+                  <RotateCcw className="mr-1 h-3 w-3" />
+                )}{" "}
+                Resend link
               </Button>
               {!reassigning ? (
-                <Button size="sm" variant="outline" className={INPUT_CLS} onClick={() => setReassigning(true)}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className={INPUT_CLS}
+                  onClick={() => setReassigning(true)}
+                >
                   <UserPlus className="mr-1 h-3 w-3" /> Reassign
                 </Button>
               ) : (
@@ -1816,66 +2485,97 @@ function ItemDrawer({ item, employees, milestones, isOwner = true, onClose, onPa
                   autoFocus
                   className={`rounded-md border px-2 py-1 text-xs ${INPUT_CLS}`}
                   defaultValue=""
-                  onChange={async (e) => { if (e.target.value) { await onReassign(e.target.value); setReassigning(false); } }}
+                  onChange={async (e) => {
+                    if (e.target.value) {
+                      await onReassign(e.target.value);
+                      setReassigning(false);
+                    }
+                  }}
                   onBlur={() => setReassigning(false)}
                 >
-                  <option value="" disabled>Pick new owner…</option>
-                  {employees.filter((e) => e.id !== item.owner_id).map((e) => (
-                    <option key={e.id} value={e.id}>{e.name}{e.email ? "" : " (no email)"}</option>
-                  ))}
+                  <option value="" disabled>
+                    Pick new owner…
+                  </option>
+                  {employees
+                    .filter((e) => e.id !== item.owner_id)
+                    .map((e) => (
+                      <option key={e.id} value={e.id}>
+                        {e.name}
+                        {e.email ? "" : " (no email)"}
+                      </option>
+                    ))}
                 </select>
               )}
             </div>
-            <Button size="sm" variant="ghost" className="mt-1.5 text-[#ef4444] hover:text-[#ef4444]" onClick={onDelete}>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="mt-1.5 text-[#ef4444] hover:text-[#ef4444]"
+              onClick={onDelete}
+            >
               <Trash2 className="mr-1 h-3 w-3" /> Delete action
             </Button>
           </>
         )}
 
         {/* Nudge history */}
-        {emailHistory.length > 0 && (() => {
-          const lastFailed = emailHistory[0]?.status === "failed";
-          return (
-            <div className="mt-5">
-              <div className={LABEL_CLS}>Email history</div>
-              {lastFailed && (
-                <div className="mt-1.5 flex items-center gap-2 rounded-md border border-[#ef4444]/30 bg-[#ef4444]/10 px-3 py-2 text-xs text-[#ef4444]">
-                  <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-                  Last send failed — use Chase or Resend link above to retry.
-                </div>
-              )}
-              <div className="mt-1.5 space-y-1">
-                {emailHistory.map((e) => {
-                  const failed = e.status === "failed";
-                  const typeLabel =
-                    e.email_type === "assignment" ? "Assignment"
-                    : e.email_type === "nudge" ? "Nudge"
-                    : e.email_type === "overdue" ? "Overdue reminder"
-                    : e.email_type === "done" ? "Done confirmation"
-                    : e.email_type;
-                  return (
-                    <div key={e.id} className="flex items-center justify-between gap-2 text-[11px]">
-                      <span className="flex items-center gap-1.5">
-                        {failed
-                          ? <AlertTriangle className="h-3 w-3 text-[#ef4444]" />
-                          : <Mail className="h-3 w-3 text-slate-400 dark:text-slate-500" />}
-                        <span className={failed ? "font-semibold text-[#ef4444]" : "text-slate-700 dark:text-slate-300"}>
-                          {typeLabel}
-                          {failed && " (failed)"}
+        {emailHistory.length > 0 &&
+          (() => {
+            const lastFailed = emailHistory[0]?.status === "failed";
+            return (
+              <div className="mt-5">
+                <div className={LABEL_CLS}>Email history</div>
+                {lastFailed && (
+                  <div className="mt-1.5 flex items-center gap-2 rounded-md border border-[#ef4444]/30 bg-[#ef4444]/10 px-3 py-2 text-xs text-[#ef4444]">
+                    <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                    Last send failed — use Chase or Resend link above to retry.
+                  </div>
+                )}
+                <div className="mt-1.5 space-y-1">
+                  {emailHistory.map((e) => {
+                    const failed = e.status === "failed";
+                    const typeLabel =
+                      e.email_type === "assignment"
+                        ? "Assignment"
+                        : e.email_type === "nudge"
+                          ? "Nudge"
+                          : e.email_type === "overdue"
+                            ? "Overdue reminder"
+                            : e.email_type === "done"
+                              ? "Done confirmation"
+                              : e.email_type;
+                    return (
+                      <div
+                        key={e.id}
+                        className="flex items-center justify-between gap-2 text-[11px]"
+                      >
+                        <span className="flex items-center gap-1.5">
+                          {failed ? (
+                            <AlertTriangle className="h-3 w-3 text-[#ef4444]" />
+                          ) : (
+                            <Mail className="h-3 w-3 text-slate-400 dark:text-slate-500" />
+                          )}
+                          <span
+                            className={
+                              failed
+                                ? "font-semibold text-[#ef4444]"
+                                : "text-slate-700 dark:text-slate-300"
+                            }
+                          >
+                            {typeLabel}
+                            {failed && " (failed)"}
+                          </span>
                         </span>
-                      </span>
-                      <span className="tabular-nums text-slate-400 dark:text-slate-500">
-                        {e.sent_at
-                          ? new Date(e.sent_at).toLocaleString("en-ZA", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })
-                          : "—"}
-                      </span>
-                    </div>
-                  );
-                })}
+                        <span className="tabular-nums text-slate-400 dark:text-slate-500">
+                          {e.sent_at ? dateTime(e.sent_at) : "—"}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          );
-        })()}
+            );
+          })()}
 
         {/* Timeline */}
         <div className={`mt-5 ${LABEL_CLS}`}>Activity</div>
@@ -1886,12 +2586,27 @@ function ItemDrawer({ item, employees, milestones, isOwner = true, onClose, onPa
               <span className="absolute -left-[17px] top-1 h-2 w-2 rounded-full bg-[#d4a550]" />
               <p className="text-xs text-slate-800 dark:text-slate-200">
                 <span className="font-semibold">{u.actor_label}</span>
-                {u.status_from !== u.status_to && u.status_to && <> · {STATUS_LABEL[u.status_from ?? "not_started"]} → <span className="font-semibold">{STATUS_LABEL[u.status_to]}</span></>}
-                {u.progress_from !== u.progress_to && <> · {u.progress_from ?? 0}% → {u.progress_to ?? 0}%</>}
+                {u.status_from !== u.status_to && u.status_to && (
+                  <>
+                    {" "}
+                    · {STATUS_LABEL[u.status_from ?? "not_started"]} →{" "}
+                    <span className="font-semibold">{STATUS_LABEL[u.status_to]}</span>
+                  </>
+                )}
+                {u.progress_from !== u.progress_to && (
+                  <>
+                    {" "}
+                    · {u.progress_from ?? 0}% → {u.progress_to ?? 0}%
+                  </>
+                )}
               </p>
-              {u.note && <p className="mt-0.5 text-xs italic text-slate-500 dark:text-slate-400">"{u.note}"</p>}
+              {u.note && (
+                <p className="mt-0.5 text-xs italic text-slate-500 dark:text-slate-400">
+                  "{u.note}"
+                </p>
+              )}
               <p className="text-[10px] text-slate-400">
-                {new Date(u.created_at).toLocaleString("en-ZA", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                {dateTime(u.created_at)}
                 {u.actor_type === "assignee_link" && " · via task link"}
               </p>
             </div>
@@ -1915,24 +2630,45 @@ function VizCard({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-function HealthDonut({ counts, total, onPick }: {
-  counts: Record<Health, number>; total: number; onPick: (h: Health) => void;
+function HealthDonut({
+  counts,
+  total,
+  onPick,
+}: {
+  counts: Record<Health, number>;
+  total: number;
+  onPick: (h: Health) => void;
 }) {
   const order: Health[] = ["on_track", "at_risk", "off_track", "overdue", "complete"];
-  const r = 42, cx = 55, cy = 55, C = 2 * Math.PI * r;
+  const r = 42,
+    cx = 55,
+    cy = 55,
+    C = 2 * Math.PI * r;
   let acc = 0;
   return (
     <VizCard title="Action health">
       <div className="flex items-center gap-4">
         <svg width={110} height={110} className="shrink-0 -rotate-90">
-          <circle cx={cx} cy={cy} r={r} fill="none" strokeWidth={12} className="stroke-amber-900/10 dark:stroke-slate-800" />
+          <circle
+            cx={cx}
+            cy={cy}
+            r={r}
+            fill="none"
+            strokeWidth={12}
+            className="stroke-amber-900/10 dark:stroke-slate-800"
+          />
           {order.map((k) => {
             const frac = total ? counts[k] / total : 0;
             const dash = frac * C;
             const el = counts[k] > 0 && (
               <circle
-                key={k} cx={cx} cy={cy} r={r} fill="none"
-                stroke={HEALTH_META[k].color} strokeWidth={12}
+                key={k}
+                cx={cx}
+                cy={cy}
+                r={r}
+                fill="none"
+                stroke={HEALTH_META[k].color}
+                strokeWidth={12}
                 strokeDasharray={`${dash} ${C - dash}`}
                 strokeDashoffset={-acc}
                 className="cursor-pointer transition-opacity hover:opacity-75"
@@ -1942,54 +2678,124 @@ function HealthDonut({ counts, total, onPick }: {
             acc += dash;
             return el;
           })}
-          <text x={cx} y={cy} textAnchor="middle" dominantBaseline="central"
+          <text
+            x={cx}
+            y={cy}
+            textAnchor="middle"
+            dominantBaseline="central"
             transform={`rotate(90 ${cx} ${cy})`}
-            className="fill-slate-950 text-xl font-black tabular-nums dark:fill-white">
+            className="fill-slate-950 text-xl font-black tabular-nums dark:fill-white"
+          >
             {total}
           </text>
         </svg>
         <div className="space-y-1">
-          {order.filter((k) => counts[k] > 0).map((k) => (
-            <button key={k} onClick={() => onPick(k)} className="flex items-center gap-2 text-xs text-slate-600 hover:underline dark:text-slate-300">
-              <span className="h-2 w-2 rounded-full" style={{ background: HEALTH_META[k].color }} />
-              {HEALTH_META[k].label} · <span className="font-bold tabular-nums">{counts[k]}</span>
-            </button>
-          ))}
+          {order
+            .filter((k) => counts[k] > 0)
+            .map((k) => (
+              <button
+                key={k}
+                onClick={() => onPick(k)}
+                className="flex items-center gap-2 text-xs text-slate-600 hover:underline dark:text-slate-300"
+              >
+                <span
+                  className="h-2 w-2 rounded-full"
+                  style={{ background: HEALTH_META[k].color }}
+                />
+                {HEALTH_META[k].label} · <span className="font-bold tabular-nums">{counts[k]}</span>
+              </button>
+            ))}
         </div>
       </div>
     </VizCard>
   );
 }
 
-function BurnUp({ plan, items, confidence }: { plan: Plan; items: Item[]; confidence: number | null }) {
+function BurnUp({
+  plan,
+  items,
+  confidence,
+}: {
+  plan: Plan;
+  items: Item[];
+  confidence: number | null;
+}) {
   // Planned: straight line from plan start → target date. Actual: mean progress today.
   const start = new Date(plan.created_at).getTime();
   const end = new Date(plan.target_date + "T23:59:59").getTime();
   const nowFrac = end > start ? Math.max(0, Math.min(1, (Date.now() - start) / (end - start))) : 1;
-  const actual = items.length ? items.reduce((s, i) => s + i.progress_pct, 0) / items.length / 100 : 0;
-  const W = 240, H = 96, P = 8;
+  const actual = items.length
+    ? items.reduce((s, i) => s + i.progress_pct, 0) / items.length / 100
+    : 0;
+  const W = 240,
+    H = 96,
+    P = 8;
   const x = (f: number) => P + f * (W - 2 * P);
   const y = (f: number) => H - P - f * (H - 2 * P);
   const gap = Math.round((actual - nowFrac) * 100);
   return (
     <VizCard title="Burn-up · planned vs actual">
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full">
-        <line x1={x(0)} y1={y(0)} x2={x(1)} y2={y(1)} stroke={GOLD} strokeDasharray="4 3" strokeWidth={1.5} opacity={0.7} />
-        <line x1={x(0)} y1={y(0)} x2={x(nowFrac)} y2={y(actual)} stroke={actual >= nowFrac ? "#22c55e" : "#ef4444"} strokeWidth={2.5} strokeLinecap="round" />
-        <circle cx={x(nowFrac)} cy={y(actual)} r={4} fill={actual >= nowFrac ? "#22c55e" : "#ef4444"} />
-        <line x1={x(nowFrac)} y1={y(0)} x2={x(nowFrac)} y2={y(1)} stroke="currentColor" strokeWidth={1} className="text-slate-300 dark:text-slate-600" strokeDasharray="2 3" />
+        <line
+          x1={x(0)}
+          y1={y(0)}
+          x2={x(1)}
+          y2={y(1)}
+          stroke={GOLD}
+          strokeDasharray="4 3"
+          strokeWidth={1.5}
+          opacity={0.7}
+        />
+        <line
+          x1={x(0)}
+          y1={y(0)}
+          x2={x(nowFrac)}
+          y2={y(actual)}
+          stroke={actual >= nowFrac ? "#22c55e" : "#ef4444"}
+          strokeWidth={2.5}
+          strokeLinecap="round"
+        />
+        <circle
+          cx={x(nowFrac)}
+          cy={y(actual)}
+          r={4}
+          fill={actual >= nowFrac ? "#22c55e" : "#ef4444"}
+        />
+        <line
+          x1={x(nowFrac)}
+          y1={y(0)}
+          x2={x(nowFrac)}
+          y2={y(1)}
+          stroke="currentColor"
+          strokeWidth={1}
+          className="text-slate-300 dark:text-slate-600"
+          strokeDasharray="2 3"
+        />
       </svg>
       <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
-        {gap >= 0
-          ? <><span className="font-bold text-[#22c55e]">{gap}pt ahead</span> of the planned line.</>
-          : <><span className="font-bold text-[#ef4444]">{Math.abs(gap)}pt behind</span> the planned line — that gap is the confidence number{confidence != null ? ` (${confidence}%)` : ""}.</>}
+        {gap >= 0 ? (
+          <>
+            <span className="font-bold text-[#22c55e]">{gap}pt ahead</span> of the planned line.
+          </>
+        ) : (
+          <>
+            <span className="font-bold text-[#ef4444]">{Math.abs(gap)}pt behind</span> the planned
+            line — that gap is the confidence number{confidence != null ? ` (${confidence}%)` : ""}.
+          </>
+        )}
       </p>
     </VizCard>
   );
 }
 
-function OwnerLoad({ items, employees, onPick }: {
-  items: (Item & { health?: Health })[]; employees: Employee[]; onPick: (id: string | null) => void;
+function OwnerLoad({
+  items,
+  employees,
+  onPick,
+}: {
+  items: (Item & { health?: Health })[];
+  employees: Employee[];
+  onPick: (id: string | null) => void;
 }) {
   const open = items.filter((i) => i.status !== "done");
   const byOwner = new Map<string, (Item & { health?: Health })[]>();
@@ -2004,16 +2810,26 @@ function OwnerLoad({ items, employees, onPick }: {
       <div className="space-y-2">
         {rows.length === 0 && <p className="text-xs text-slate-400">All actions complete.</p>}
         {rows.map(([ownerId, list]) => {
-          const name = ownerId === "unassigned" ? "Unassigned" : employees.find((e) => e.id === ownerId)?.name ?? "—";
+          const name =
+            ownerId === "unassigned"
+              ? "Unassigned"
+              : (employees.find((e) => e.id === ownerId)?.name ?? "—");
           return (
-            <button key={ownerId} className="block w-full text-left" onClick={() => onPick(ownerId === "unassigned" ? null : ownerId)}>
+            <button
+              key={ownerId}
+              className="block w-full text-left"
+              onClick={() => onPick(ownerId === "unassigned" ? null : ownerId)}
+            >
               <div className="mb-0.5 flex justify-between text-[11px]">
                 <span className="font-semibold text-slate-700 dark:text-slate-300">{name}</span>
                 <span className="tabular-nums text-slate-400">{list.length}</span>
               </div>
               <div className="flex h-2.5 w-full gap-px overflow-hidden rounded-full bg-amber-900/5 dark:bg-slate-800/60">
                 {list.map((i) => (
-                  <div key={i.id} style={{ width: `${(1 / max) * 100}%`, background: healthMeta(i.health).color }} />
+                  <div
+                    key={i.id}
+                    style={{ width: `${(1 / max) * 100}%`, background: healthMeta(i.health).color }}
+                  />
                 ))}
               </div>
             </button>

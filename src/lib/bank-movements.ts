@@ -3,7 +3,12 @@
  * Pure functions — safe for client and server.
  */
 
-import type { CashBankExtract, CashBucket, CashStatementTransaction } from "@/lib/cash-from-banks.types";
+import type {
+  CashBankExtract,
+  CashBucket,
+  CashStatementTransaction,
+} from "@/lib/cash-from-banks.types";
+import { formatMoney, ZA_MARKET } from "@/lib/market";
 
 export type BankAccountBalance = {
   accountLabel: string;
@@ -138,11 +143,11 @@ export function buildMovementsTrialBalance(
   const openingCash =
     accounts && accounts.length > 0
       ? accounts.reduce((s, a) => s + (a.openingBalance ?? 0), 0)
-      : extract.opening_balance ?? 0;
+      : (extract.opening_balance ?? 0);
   const closingCash =
     accounts && accounts.length > 0
       ? accounts.reduce((s, a) => s + (a.closingBalance ?? 0), 0)
-      : extract.closing_balance ?? 0;
+      : (extract.closing_balance ?? 0);
 
   const byBucket = new Map<CashBucket, { in: number; out: number }>();
   for (const t of txns) {
@@ -205,8 +210,7 @@ export function buildMovementsTrialBalance(
       const accountTxns = txns.filter(
         (t) =>
           (t as CashStatementTransaction & { account_label?: string | null }).account_label ===
-            a.accountLabel ||
-          accounts.length === 1,
+            a.accountLabel || accounts.length === 1,
       );
       // If txns lack account labels, run consolidated only once below
       if (
@@ -217,12 +221,7 @@ export function buildMovementsTrialBalance(
         )
       ) {
         balanceChecks.push(
-          checkBankBalanceTieOut(
-            a.openingBalance,
-            a.closingBalance,
-            accountTxns,
-            a.accountLabel,
-          ),
+          checkBankBalanceTieOut(a.openingBalance, a.closingBalance, accountTxns, a.accountLabel),
         );
       }
     }
@@ -231,12 +230,10 @@ export function buildMovementsTrialBalance(
   // Always include consolidated check
   balanceChecks.push(
     checkBankBalanceTieOut(
-      extract.opening_balance ?? (accounts?.every((a) => a.openingBalance != null)
-        ? openingCash
-        : extract.opening_balance),
-      extract.closing_balance ?? (accounts?.every((a) => a.closingBalance != null)
-        ? closingCash
-        : extract.closing_balance),
+      extract.opening_balance ??
+        (accounts?.every((a) => a.openingBalance != null) ? openingCash : extract.opening_balance),
+      extract.closing_balance ??
+        (accounts?.every((a) => a.closingBalance != null) ? closingCash : extract.closing_balance),
       txns,
       accounts && accounts.length > 1 ? "All accounts (consolidated)" : "Bank statement",
     ),
@@ -266,6 +263,6 @@ export function buildMovementsTrialBalance(
 }
 
 export function fmtMoney(n: number, currency: string | null = "R"): string {
-  const sign = n < 0 ? "-" : "";
-  return `${sign}${currency ?? "R"} ${Math.abs(n).toLocaleString("en-ZA", { maximumFractionDigits: 0 })}`;
+  const usd = currency === "USD" || currency === "$";
+  return formatMoney(n, usd ? { currency: "USD", locale: "en-US" } : ZA_MARKET);
 }

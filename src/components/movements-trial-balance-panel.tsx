@@ -4,14 +4,10 @@
 
 import { AlertTriangle, CheckCircle2 } from "lucide-react";
 import type { MovementsTrialBalance } from "@/lib/bank-movements";
-import { fmtMoney } from "@/lib/bank-movements";
+import { useMarketFormat } from "@/contexts/market";
 
-export function MovementsTrialBalancePanel({
-  movements,
-}: {
-  movements: MovementsTrialBalance;
-}) {
-  const currency = movements.currency ?? "R";
+export function MovementsTrialBalancePanel({ movements }: { movements: MovementsTrialBalance }) {
+  const { money } = useMarketFormat();
 
   return (
     <div className="space-y-3 rounded-lg border border-amber-900/15 bg-amber-50/40 p-3 dark:border-slate-800 dark:bg-slate-900/60">
@@ -21,8 +17,8 @@ export function MovementsTrialBalancePanel({
             Movements in balances
           </p>
           <p className="mt-0.5 text-xs text-slate-600 dark:text-slate-400">
-            Trial balance from the same bank statements ·{" "}
-            {movements.periodStart ?? "?"} → {movements.periodEnd ?? "?"}
+            Trial balance from the same bank statements · {movements.periodStart ?? "?"} →{" "}
+            {movements.periodEnd ?? "?"}
           </p>
         </div>
         <span
@@ -64,10 +60,10 @@ export function MovementsTrialBalancePanel({
             >
               <td className="py-1 pr-2 text-slate-800 dark:text-slate-200">{line.label}</td>
               <td className="py-1 text-right tabular-nums text-slate-700 dark:text-slate-300">
-                {line.debit ? fmtMoney(line.debit, currency) : "—"}
+                {line.debit ? money(line.debit) : "—"}
               </td>
               <td className="py-1 text-right tabular-nums text-slate-700 dark:text-slate-300">
-                {line.credit ? fmtMoney(line.credit, currency) : "—"}
+                {line.credit ? money(line.credit) : "—"}
               </td>
             </tr>
           ))}
@@ -94,8 +90,7 @@ export function MovementsTrialBalancePanel({
                 <strong>{c.scope}:</strong> {c.notes}
                 {c.expectedClosing != null && c.statedClosing != null && (
                   <span className="mt-0.5 block text-slate-500 dark:text-slate-400">
-                    In {fmtMoney(c.inflowTotal, currency)} · Out{" "}
-                    {fmtMoney(c.outflowTotal, currency)}
+                    In {money(c.inflowTotal)} · Out {money(c.outflowTotal)}
                   </span>
                 )}
               </span>

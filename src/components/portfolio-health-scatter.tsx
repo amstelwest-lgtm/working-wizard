@@ -18,6 +18,7 @@ export type ScatterClient = {
   score: number;
   trendDelta: number;
   revenue: number | null;
+  revenueLabel?: string;
   status: HealthTier;
 };
 
@@ -58,7 +59,10 @@ function CustomTooltip({
       </div>
       {c.revenue != null && (
         <div className="ph-tooltip-row">
-          Revenue <b>{c.revenue.toLocaleString("en-ZA", { maximumFractionDigits: 0 })}</b>
+          Revenue{" "}
+          <b>
+            {c.revenueLabel ?? c.revenue.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+          </b>
         </div>
       )}
       <div className="ph-tooltip-hint">Click to open</div>

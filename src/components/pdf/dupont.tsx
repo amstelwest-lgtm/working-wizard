@@ -10,14 +10,16 @@
  */
 
 import { View, Text, StyleSheet } from "@react-pdf/renderer";
+import { t } from "@/lib/market";
 import { C, fmtPct } from "./theme";
+import { usePdfMarket } from "./pdf-market";
 import type { DuPontDiagnosis, DuPontLevers } from "@/reports/narrative";
 
 // ── Shared lever config ────────────────────────────────────────────────────
 
 type LeverKey = "margin" | "turnover" | "leverage";
 
-function leverCards(l: DuPontLevers) {
+function leverCards(l: DuPontLevers, currencyWord: string) {
   return [
     {
       key: "margin" as LeverKey,
@@ -29,13 +31,13 @@ function leverCards(l: DuPontLevers) {
       key: "turnover" as LeverKey,
       label: "Asset Turnover",
       value: Number.isFinite(l.assetTurnover) ? `${l.assetTurnover.toFixed(2)}×` : "n/m",
-      sub: "Efficiency — revenue per rand of assets",
+      sub: `Efficiency — revenue per ${currencyWord} of assets`,
     },
     {
       key: "leverage" as LeverKey,
       label: "Equity Multiplier",
       value: Number.isFinite(l.equityMultiplier) ? `${l.equityMultiplier.toFixed(2)}×` : "n/m",
-      sub: "Leverage — assets funded per rand of equity",
+      sub: `Leverage — assets funded per ${currencyWord} of equity`,
     },
   ];
 }
@@ -128,7 +130,8 @@ export function DuPontDiagram({
   levers: DuPontLevers;
   diagnosis: DuPontDiagnosis;
 }) {
-  const cards = leverCards(levers);
+  const market = usePdfMarket();
+  const cards = leverCards(levers, t("currencyWord", market));
   const roeOk = Number.isFinite(levers.roe);
 
   return (
@@ -164,9 +167,7 @@ export function DuPontDiagram({
               )}
               <View style={[D.card, isWeak ? D.cardWeak : {}]}>
                 <Text style={D.cardLabel}>{card.label}</Text>
-                <Text style={[D.cardValue, isWeak ? { color: C.redDeep } : {}]}>
-                  {card.value}
-                </Text>
+                <Text style={[D.cardValue, isWeak ? { color: C.redDeep } : {}]}>{card.value}</Text>
                 <Text style={D.cardSub}>{card.sub}</Text>
                 {isWeak && (
                   <View style={D.dragChip}>
@@ -180,12 +181,7 @@ export function DuPontDiagram({
       </View>
 
       {/* Weak-lever callout */}
-      <View
-        style={[
-          D.callout,
-          { borderLeftColor: diagnosis.weakLever ? C.red : C.green },
-        ]}
-      >
+      <View style={[D.callout, { borderLeftColor: diagnosis.weakLever ? C.red : C.green }]}>
         <Text style={D.calloutTitle}>
           {diagnosis.weakLever ? `Diagnosis — ${diagnosis.weakLeverLabel}` : "Diagnosis — Balanced"}
         </Text>
@@ -249,7 +245,8 @@ export function DuPontStrip({
   levers: DuPontLevers;
   diagnosis: DuPontDiagnosis;
 }) {
-  const cards = leverCards(levers);
+  const market = usePdfMarket();
+  const cards = leverCards(levers, t("currencyWord", market));
   const pointer = diagnosis.weakLever
     ? `${diagnosis.sentence} See the ${WEAK_LEVER_REPORT[diagnosis.weakLever]} for the deep dive.`
     : `${diagnosis.sentence} The Asset Productivity report holds the full decomposition.`;
@@ -262,9 +259,7 @@ export function DuPontStrip({
         <View style={S.row}>
           <View style={S.cell}>
             <Text style={S.label}>Return on Equity</Text>
-            <Text style={S.value}>
-              {Number.isFinite(levers.roe) ? fmtPct(levers.roe) : "n/m"}
-            </Text>
+            <Text style={S.value}>{Number.isFinite(levers.roe) ? fmtPct(levers.roe) : "n/m"}</Text>
           </View>
           <Text style={S.eq}>=</Text>
           {cards.map((card, i) => {

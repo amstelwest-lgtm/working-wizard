@@ -5,6 +5,8 @@
  * are derived. Hidden on the Profit tab until opted in via a 5-question funnel.
  */
 
+import { formatMoney, ZA_MARKET, type MoneyMarket } from "@/lib/market";
+
 export const PRODUCT_MIX_VERSION = 3 as const;
 export const PRODUCT_MIX_MAX_LINES = 5;
 
@@ -95,9 +97,9 @@ export function marginBandFromPct(pct: number | null): ProductMarginBand {
   return "low";
 }
 
-export function formatRand(n: number | undefined): string {
+export function formatRand(n: number | undefined, market: MoneyMarket = ZA_MARKET): string {
   if (n == null || !Number.isFinite(n)) return "—";
-  return `R\u00a0${n.toLocaleString("en-ZA", { maximumFractionDigits: 2 })}`;
+  return formatMoney(n, market, { maximumFractionDigits: 2 });
 }
 
 export function formatMarginPct(pct: number | null | undefined): string {
@@ -157,8 +159,10 @@ export function parseProductMix(raw: unknown): ProductMix {
   }
   const confirmedAt = typeof o.confirmedAt === "string" && o.confirmedAt ? o.confirmedAt : null;
   const derived = deriveBestWorst(lines);
-  const bestLineId = typeof o.bestLineId === "string" && o.bestLineId ? o.bestLineId : derived.bestLineId;
-  const worstLineId = typeof o.worstLineId === "string" && o.worstLineId ? o.worstLineId : derived.worstLineId;
+  const bestLineId =
+    typeof o.bestLineId === "string" && o.bestLineId ? o.bestLineId : derived.bestLineId;
+  const worstLineId =
+    typeof o.worstLineId === "string" && o.worstLineId ? o.worstLineId : derived.worstLineId;
   const ids = new Set(lines.map((l) => l.id));
   return {
     version: PRODUCT_MIX_VERSION,
@@ -215,7 +219,11 @@ export function canAdvanceFromRevenue(lines: ProductMixLine[]): boolean {
 }
 
 export function canSaveUnitMix(mix: ProductMix): boolean {
-  return canAdvanceFromPrices(mix.lines) && canAdvanceFromCosts(mix.lines) && canAdvanceFromRevenue(mix.lines);
+  return (
+    canAdvanceFromPrices(mix.lines) &&
+    canAdvanceFromCosts(mix.lines) &&
+    canAdvanceFromRevenue(mix.lines)
+  );
 }
 
 export function linesFromNames(names: string[], prev: ProductMixLine[] = []): ProductMixLine[] {
@@ -238,12 +246,19 @@ function deriveBestWorst(lines: ProductMixLine[]): { bestLineId?: string; worstL
     gp: l.gpSharePct,
     margin: unitMarginPct(l.sellPrice, l.unitCost),
   }));
-  const byGp = scored.filter((r) => r.gp != null) as Array<{ id: string; gp: number; margin: number | null }>;
+  const byGp = scored.filter((r) => r.gp != null) as Array<{
+    id: string;
+    gp: number;
+    margin: number | null;
+  }>;
   if (byGp.length >= 2) {
-    const sorted = [...byGp].sort((a, b) => b.gp - a.gp || (b.margin ?? -Infinity) - (a.margin ?? -Infinity));
+    const sorted = [...byGp].sort(
+      (a, b) => b.gp - a.gp || (b.margin ?? -Infinity) - (a.margin ?? -Infinity),
+    );
     const best = sorted[0];
     const worst = sorted[sorted.length - 1];
-    if (best && worst && best.id !== worst.id) return { bestLineId: best.id, worstLineId: worst.id };
+    if (best && worst && best.id !== worst.id)
+      return { bestLineId: best.id, worstLineId: worst.id };
   }
   const byMargin = scored.filter((r) => r.margin != null) as Array<{ id: string; margin: number }>;
   if (byMargin.length < 2) return {};
@@ -262,7 +277,10 @@ export function allocatedRevenue(lines: ProductMixLine[]): number {
 }
 
 /** Stamp margin, revenue share, GP share, and best/worst. */
-export function applyUnitEconomics(mix: ProductMix, totalRevenue = mix.totalRevenue ?? 0): ProductMix {
+export function applyUnitEconomics(
+  mix: ProductMix,
+  totalRevenue = mix.totalRevenue ?? 0,
+): ProductMix {
   const withMargin = namedProductLines(mix).map((l) => {
     const marginPct = unitMarginPct(l.sellPrice, l.unitCost) ?? undefined;
     return {
@@ -278,7 +296,9 @@ export function applyUnitEconomics(mix: ProductMix, totalRevenue = mix.totalReve
     const revenueSharePct =
       denom > 0 && revenueAmount != null ? (revenueAmount / denom) * 100 : undefined;
     const gpAmount =
-      revenueAmount != null && l.marginPct != null ? revenueAmount * (l.marginPct / 100) : undefined;
+      revenueAmount != null && l.marginPct != null
+        ? revenueAmount * (l.marginPct / 100)
+        : undefined;
     return { ...l, revenueSharePct, gpAmount };
   });
   const totalGp = withRev.reduce((s, l) => s + (l.gpAmount ?? 0), 0);
@@ -299,12 +319,12 @@ export function applyUnitEconomics(mix: ProductMix, totalRevenue = mix.totalReve
 }
 
 export function shareContrastLabel(revenueSharePct?: number, gpSharePct?: number): string {
-  const sales = revenueSharePct != null && Number.isFinite(revenueSharePct)
-    ? `${revenueSharePct.toFixed(0)}% of sales`
-    : null;
-  const gp = gpSharePct != null && Number.isFinite(gpSharePct)
-    ? `${gpSharePct.toFixed(0)}% of GP`
-    : null;
+  const sales =
+    revenueSharePct != null && Number.isFinite(revenueSharePct)
+      ? `${revenueSharePct.toFixed(0)}% of sales`
+      : null;
+  const gp =
+    gpSharePct != null && Number.isFinite(gpSharePct) ? `${gpSharePct.toFixed(0)}% of GP` : null;
   if (sales && gp) return `${sales} · ${gp}`;
   return sales ?? gp ?? "";
 }
@@ -359,10 +379,7 @@ export function rankProductLines(mix: ProductMix): RankedProductLine[] {
     const mb = b.marginPct ?? -Infinity;
     return mb - ma || b.sharePct - a.sharePct || a.name.localeCompare(b.name);
   });
-  const max = Math.max(
-    1,
-    ...rows.map((r) => Math.max(0, r.gpSharePct ?? r.marginPct ?? 0)),
-  );
+  const max = Math.max(1, ...rows.map((r) => Math.max(0, r.gpSharePct ?? r.marginPct ?? 0)));
   return rows.map((r) => {
     const weight = r.gpSharePct ?? r.marginPct;
     return {

@@ -18,6 +18,7 @@ import type { ExtractionResult, Money } from "@/lib/financialSchema";
 import type { ValidationIssue } from "@/lib/validateFinancials";
 import { UPLOAD_QUALITY_DISCLAIMER, preflightUploadFile } from "@/lib/upload-quality";
 import { UploadQualityDisclaimer } from "@/components/upload-quality-disclaimer";
+import { useMarketFormat } from "@/contexts/market";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -29,9 +30,9 @@ async function fileToBase64(file: File): Promise<string> {
   return btoa(binary);
 }
 
-function fmt(v: Money) {
+function fmt(v: Money, formatNumber: (n: number) => string) {
   if (v === null || v === undefined) return "—";
-  return new Intl.NumberFormat("en-ZA", { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(v);
+  return formatNumber(v);
 }
 
 // ─── sub-components ───────────────────────────────────────────────────────────
@@ -59,6 +60,7 @@ function Row({
 }
 
 function IssueList({ issues }: { issues: ValidationIssue[] }) {
+  const { number } = useMarketFormat();
   if (!issues.length) return null;
   return (
     <div className="space-y-1.5 mt-3">
@@ -74,7 +76,7 @@ function IssueList({ issues }: { issues: ValidationIssue[] }) {
           <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
           <span>{i.message}</span>
           {i.difference !== null && (
-            <span className="ml-auto font-mono shrink-0">Δ {fmt(i.difference)}</span>
+            <span className="ml-auto font-mono shrink-0">Δ {fmt(i.difference, number)}</span>
           )}
         </div>
       ))}
@@ -89,6 +91,7 @@ export type UploadFinancialsProps = {
 };
 
 export function UploadFinancials({ onConfirm }: UploadFinancialsProps) {
+  const { number } = useMarketFormat();
   const inputRef = useRef<HTMLInputElement>(null);
   const [status, setStatus] = useState<"idle" | "loading" | "review">("idle");
   const [result, setResult] = useState<ExtractionResult | null>(null);
@@ -140,9 +143,11 @@ export function UploadFinancials({ onConfirm }: UploadFinancialsProps) {
     const assets = bs.total_assets;
     if (eq == null || liab == null || assets == null) return null;
     return Math.round((eq + liab - assets) * 100) / 100;
-  }, [result?.current_period.figures.balance_sheet.equity.total,
-      result?.current_period.figures.balance_sheet.total_liabilities,
-      result?.current_period.figures.balance_sheet.total_assets]);
+  }, [
+    result?.current_period.figures.balance_sheet.equity.total,
+    result?.current_period.figures.balance_sheet.total_liabilities,
+    result?.current_period.figures.balance_sheet.total_assets,
+  ]);
 
   // ── idle / loading ──────────────────────────────────────────────────────────
   if (status !== "review") {
@@ -152,9 +157,10 @@ export function UploadFinancials({ onConfirm }: UploadFinancialsProps) {
           onClick={() => inputRef.current?.click()}
           disabled={status === "loading"}
           className={`w-full flex flex-col items-center gap-3 rounded-xl border-2 border-dashed px-6 py-12 transition-colors
-            ${status === "loading"
-              ? "border-amber-500/30 cursor-default"
-              : "border-white/10 hover:border-amber-500/50 cursor-pointer"
+            ${
+              status === "loading"
+                ? "border-amber-500/30 cursor-default"
+                : "border-white/10 hover:border-amber-500/50 cursor-pointer"
             }`}
         >
           {status === "loading" ? (
@@ -209,8 +215,16 @@ export function UploadFinancials({ onConfirm }: UploadFinancialsProps) {
             <span className="font-semibold">{result.entity_name ?? "Extracted statement"}</span>
           </div>
           <div className="flex flex-wrap gap-1.5 mt-1.5">
-            {result.currency && <Badge variant="outline" className="text-xs">{result.currency}</Badge>}
-            {result.units && <Badge variant="outline" className="text-xs">in {result.units}</Badge>}
+            {result.currency && (
+              <Badge variant="outline" className="text-xs">
+                {result.currency}
+              </Badge>
+            )}
+            {result.units && (
+              <Badge variant="outline" className="text-xs">
+                in {result.units}
+              </Badge>
+            )}
             {result.statement_basis && (
               <Badge variant="outline" className="text-xs capitalize">
                 {result.statement_basis.replace(/_/g, " ")}
@@ -223,15 +237,22 @@ export function UploadFinancials({ onConfirm }: UploadFinancialsProps) {
             )}
           </div>
         </div>
-        <div className={`flex items-center gap-1.5 text-xs font-medium rounded-full px-3 py-1 ${
-          autoSafe
-            ? "bg-emerald-950/50 border border-emerald-700/50 text-emerald-400"
-            : "bg-red-950/50 border border-red-800/50 text-red-400"
-        }`}>
-          {autoSafe
-            ? <><CheckCircle2 className="h-3.5 w-3.5" /> Arithmetic checks passed</>
-            : <><AlertTriangle className="h-3.5 w-3.5" /> Review required before import</>
-          }
+        <div
+          className={`flex items-center gap-1.5 text-xs font-medium rounded-full px-3 py-1 ${
+            autoSafe
+              ? "bg-emerald-950/50 border border-emerald-700/50 text-emerald-400"
+              : "bg-red-950/50 border border-red-800/50 text-red-400"
+          }`}
+        >
+          {autoSafe ? (
+            <>
+              <CheckCircle2 className="h-3.5 w-3.5" /> Arithmetic checks passed
+            </>
+          ) : (
+            <>
+              <AlertTriangle className="h-3.5 w-3.5" /> Review required before import
+            </>
+          )}
         </div>
       </div>
 
@@ -242,7 +263,8 @@ export function UploadFinancials({ onConfirm }: UploadFinancialsProps) {
       {liveBalance !== null && Math.abs(liveBalance) > 1 && (
         <div className="text-xs text-amber-400 flex items-center gap-1.5">
           <AlertTriangle className="h-3 w-3" />
-          Balance sheet is out by {fmt(liveBalance)} — adjust figures below before confirming.
+          Balance sheet is out by {fmt(liveBalance, number)} — adjust figures below before
+          confirming.
         </div>
       )}
 
@@ -261,15 +283,78 @@ export function UploadFinancials({ onConfirm }: UploadFinancialsProps) {
             Income statement
           </p>
           <div className="rounded-lg bg-black/20 border border-white/5 px-3 py-1">
-            <Row label="Revenue" value={is.revenue} onChange={(v) => { is.revenue = v; setResult({ ...result }); }} />
-            <Row label="Cost of sales" value={is.cost_of_sales} onChange={(v) => { is.cost_of_sales = v; setResult({ ...result }); }} />
-            <Row label="Gross profit" value={is.gross_profit} onChange={(v) => { is.gross_profit = v; setResult({ ...result }); }} />
-            <Row label="Operating expenses" value={is.operating_expenses} onChange={(v) => { is.operating_expenses = v; setResult({ ...result }); }} />
-            <Row label="Operating profit" value={is.operating_profit} onChange={(v) => { is.operating_profit = v; setResult({ ...result }); }} />
-            <Row label="Finance costs" value={is.finance_costs} onChange={(v) => { is.finance_costs = v; setResult({ ...result }); }} />
-            <Row label="Profit before tax" value={is.profit_before_tax} onChange={(v) => { is.profit_before_tax = v; setResult({ ...result }); }} />
-            <Row label="Income tax" value={is.income_tax} onChange={(v) => { is.income_tax = v; setResult({ ...result }); }} />
-            <Row label="Profit after tax" value={is.profit_after_tax} onChange={(v) => { is.profit_after_tax = v; setResult({ ...result }); }} />
+            <Row
+              label="Revenue"
+              value={is.revenue}
+              onChange={(v) => {
+                is.revenue = v;
+                setResult({ ...result });
+              }}
+            />
+            <Row
+              label="Cost of sales"
+              value={is.cost_of_sales}
+              onChange={(v) => {
+                is.cost_of_sales = v;
+                setResult({ ...result });
+              }}
+            />
+            <Row
+              label="Gross profit"
+              value={is.gross_profit}
+              onChange={(v) => {
+                is.gross_profit = v;
+                setResult({ ...result });
+              }}
+            />
+            <Row
+              label="Operating expenses"
+              value={is.operating_expenses}
+              onChange={(v) => {
+                is.operating_expenses = v;
+                setResult({ ...result });
+              }}
+            />
+            <Row
+              label="Operating profit"
+              value={is.operating_profit}
+              onChange={(v) => {
+                is.operating_profit = v;
+                setResult({ ...result });
+              }}
+            />
+            <Row
+              label="Finance costs"
+              value={is.finance_costs}
+              onChange={(v) => {
+                is.finance_costs = v;
+                setResult({ ...result });
+              }}
+            />
+            <Row
+              label="Profit before tax"
+              value={is.profit_before_tax}
+              onChange={(v) => {
+                is.profit_before_tax = v;
+                setResult({ ...result });
+              }}
+            />
+            <Row
+              label="Income tax"
+              value={is.income_tax}
+              onChange={(v) => {
+                is.income_tax = v;
+                setResult({ ...result });
+              }}
+            />
+            <Row
+              label="Profit after tax"
+              value={is.profit_after_tax}
+              onChange={(v) => {
+                is.profit_after_tax = v;
+                setResult({ ...result });
+              }}
+            />
           </div>
         </div>
 
@@ -279,17 +364,94 @@ export function UploadFinancials({ onConfirm }: UploadFinancialsProps) {
             Balance sheet
           </p>
           <div className="rounded-lg bg-black/20 border border-white/5 px-3 py-1">
-            <Row label="Total non-current assets" value={bs.non_current_assets.total} onChange={(v) => { bs.non_current_assets.total = v; setResult({ ...result }); }} />
-            <Row label="Inventories" value={bs.current_assets.inventories} onChange={(v) => { bs.current_assets.inventories = v; setResult({ ...result }); }} />
-            <Row label="Trade receivables" value={bs.current_assets.trade_and_other_receivables} onChange={(v) => { bs.current_assets.trade_and_other_receivables = v; setResult({ ...result }); }} />
-            <Row label="Cash & equivalents" value={bs.current_assets.cash_and_cash_equivalents} onChange={(v) => { bs.current_assets.cash_and_cash_equivalents = v; setResult({ ...result }); }} />
-            <Row label="Total current assets" value={bs.current_assets.total} onChange={(v) => { bs.current_assets.total = v; setResult({ ...result }); }} />
-            <Row label="Total assets" value={bs.total_assets} onChange={(v) => { bs.total_assets = v; setResult({ ...result }); }} />
-            <Row label="Total equity" value={bs.equity.total} onChange={(v) => { bs.equity.total = v; setResult({ ...result }); }} />
-            <Row label="Trade payables" value={bs.current_liabilities.trade_and_other_payables} onChange={(v) => { bs.current_liabilities.trade_and_other_payables = v; setResult({ ...result }); }} />
-            <Row label="Total current liabilities" value={bs.current_liabilities.total} onChange={(v) => { bs.current_liabilities.total = v; setResult({ ...result }); }} />
-            <Row label="Total non-current liabilities" value={bs.non_current_liabilities.total} onChange={(v) => { bs.non_current_liabilities.total = v; setResult({ ...result }); }} />
-            <Row label="Total liabilities" value={bs.total_liabilities} onChange={(v) => { bs.total_liabilities = v; setResult({ ...result }); }} />
+            <Row
+              label="Total non-current assets"
+              value={bs.non_current_assets.total}
+              onChange={(v) => {
+                bs.non_current_assets.total = v;
+                setResult({ ...result });
+              }}
+            />
+            <Row
+              label="Inventories"
+              value={bs.current_assets.inventories}
+              onChange={(v) => {
+                bs.current_assets.inventories = v;
+                setResult({ ...result });
+              }}
+            />
+            <Row
+              label="Trade receivables"
+              value={bs.current_assets.trade_and_other_receivables}
+              onChange={(v) => {
+                bs.current_assets.trade_and_other_receivables = v;
+                setResult({ ...result });
+              }}
+            />
+            <Row
+              label="Cash & equivalents"
+              value={bs.current_assets.cash_and_cash_equivalents}
+              onChange={(v) => {
+                bs.current_assets.cash_and_cash_equivalents = v;
+                setResult({ ...result });
+              }}
+            />
+            <Row
+              label="Total current assets"
+              value={bs.current_assets.total}
+              onChange={(v) => {
+                bs.current_assets.total = v;
+                setResult({ ...result });
+              }}
+            />
+            <Row
+              label="Total assets"
+              value={bs.total_assets}
+              onChange={(v) => {
+                bs.total_assets = v;
+                setResult({ ...result });
+              }}
+            />
+            <Row
+              label="Total equity"
+              value={bs.equity.total}
+              onChange={(v) => {
+                bs.equity.total = v;
+                setResult({ ...result });
+              }}
+            />
+            <Row
+              label="Trade payables"
+              value={bs.current_liabilities.trade_and_other_payables}
+              onChange={(v) => {
+                bs.current_liabilities.trade_and_other_payables = v;
+                setResult({ ...result });
+              }}
+            />
+            <Row
+              label="Total current liabilities"
+              value={bs.current_liabilities.total}
+              onChange={(v) => {
+                bs.current_liabilities.total = v;
+                setResult({ ...result });
+              }}
+            />
+            <Row
+              label="Total non-current liabilities"
+              value={bs.non_current_liabilities.total}
+              onChange={(v) => {
+                bs.non_current_liabilities.total = v;
+                setResult({ ...result });
+              }}
+            />
+            <Row
+              label="Total liabilities"
+              value={bs.total_liabilities}
+              onChange={(v) => {
+                bs.total_liabilities = v;
+                setResult({ ...result });
+              }}
+            />
           </div>
         </div>
       </div>
@@ -305,11 +467,46 @@ export function UploadFinancials({ onConfirm }: UploadFinancialsProps) {
               const cf = result.current_period.figures.cash_flow!;
               return (
                 <>
-                  <Row label="Operating activities" value={cf.cash_from_operating} onChange={(v) => { cf.cash_from_operating = v; setResult({ ...result }); }} />
-                  <Row label="Investing activities" value={cf.cash_from_investing} onChange={(v) => { cf.cash_from_investing = v; setResult({ ...result }); }} />
-                  <Row label="Financing activities" value={cf.cash_from_financing} onChange={(v) => { cf.cash_from_financing = v; setResult({ ...result }); }} />
-                  <Row label="Net change in cash" value={cf.net_change_in_cash} onChange={(v) => { cf.net_change_in_cash = v; setResult({ ...result }); }} />
-                  <Row label="Closing cash" value={cf.cash_at_end} onChange={(v) => { cf.cash_at_end = v; setResult({ ...result }); }} />
+                  <Row
+                    label="Operating activities"
+                    value={cf.cash_from_operating}
+                    onChange={(v) => {
+                      cf.cash_from_operating = v;
+                      setResult({ ...result });
+                    }}
+                  />
+                  <Row
+                    label="Investing activities"
+                    value={cf.cash_from_investing}
+                    onChange={(v) => {
+                      cf.cash_from_investing = v;
+                      setResult({ ...result });
+                    }}
+                  />
+                  <Row
+                    label="Financing activities"
+                    value={cf.cash_from_financing}
+                    onChange={(v) => {
+                      cf.cash_from_financing = v;
+                      setResult({ ...result });
+                    }}
+                  />
+                  <Row
+                    label="Net change in cash"
+                    value={cf.net_change_in_cash}
+                    onChange={(v) => {
+                      cf.net_change_in_cash = v;
+                      setResult({ ...result });
+                    }}
+                  />
+                  <Row
+                    label="Closing cash"
+                    value={cf.cash_at_end}
+                    onChange={(v) => {
+                      cf.cash_at_end = v;
+                      setResult({ ...result });
+                    }}
+                  />
                 </>
               );
             })()}

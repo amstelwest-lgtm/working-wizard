@@ -18,9 +18,10 @@ import { ReportTitle } from "@/components/pdf/report-title";
 import { SectionHeader } from "@/components/pdf/section-header";
 import { ExecSummary, type HeadlineFigure } from "@/components/pdf/exec-summary";
 import { C, fmtRand, fmtRandCompact, fmtPct, resolveTheme } from "@/components/pdf/theme";
+import { usePdfMarket } from "@/components/pdf/pdf-market";
 import { cashCycleNarrative } from "./narrative";
 import type { ClientOperatingProfile } from "@/lib/client-profile";
-
+import { t, ZA_MARKET, type ResolvedMarket } from "@/lib/market";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -59,6 +60,7 @@ export type CashCyclePDFProps = {
   accountantProfile: AccountantProfile;
   isDemo?: boolean;
   reviewSignoff?: ReportSignoffStamp | null;
+  market?: ResolvedMarket;
 };
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -79,9 +81,22 @@ const TL_ROW_H = 26;
 const tl = StyleSheet.create({
   wrap: { marginBottom: 6 },
   axis: { position: "relative", height: 16 },
-  axisLine: { position: "absolute", left: 0, right: 0, top: 10, height: 0.75, backgroundColor: C.line },
+  axisLine: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    top: 10,
+    height: 0.75,
+    backgroundColor: C.line,
+  },
   axisTick: { position: "absolute", top: 7, width: 0.75, height: 7, backgroundColor: C.line },
-  axisLabel: { position: "absolute", top: 0, fontSize: 5.5, fontFamily: "Helvetica", color: C.faint },
+  axisLabel: {
+    position: "absolute",
+    top: 0,
+    fontSize: 5.5,
+    fontFamily: "Helvetica",
+    color: C.faint,
+  },
   row: { position: "relative", height: TL_ROW_H },
   segBar: {
     position: "absolute",
@@ -91,9 +106,28 @@ const tl = StyleSheet.create({
     justifyContent: "center",
   },
   segLabelIn: { fontSize: 6, fontFamily: "Helvetica-Bold", color: C.white, paddingLeft: 6 },
-  segLabelOut: { position: "absolute", top: 8, fontSize: 6, fontFamily: "Helvetica-Bold", color: C.body },
-  rowName: { position: "absolute", top: 19, fontSize: 5.5, fontFamily: "Helvetica", color: C.faint },
-  gapLine: { position: "absolute", top: 0, bottom: 0, width: 0.6, backgroundColor: C.faint, opacity: 0.5 },
+  segLabelOut: {
+    position: "absolute",
+    top: 8,
+    fontSize: 6,
+    fontFamily: "Helvetica-Bold",
+    color: C.body,
+  },
+  rowName: {
+    position: "absolute",
+    top: 19,
+    fontSize: 5.5,
+    fontFamily: "Helvetica",
+    color: C.faint,
+  },
+  gapLine: {
+    position: "absolute",
+    top: 0,
+    bottom: 0,
+    width: 0.6,
+    backgroundColor: C.faint,
+    opacity: 0.5,
+  },
   cccRow: { position: "relative", height: 34, marginTop: 4 },
   cccBar: {
     position: "absolute",
@@ -104,11 +138,26 @@ const tl = StyleSheet.create({
     alignItems: "center",
   },
   cccText: { fontSize: 7, fontFamily: "Helvetica-Bold", color: C.white },
-  cccCaption: { position: "absolute", top: 25, fontSize: 5.5, fontFamily: "Helvetica-Bold", color: C.redDeep },
-  legendNote: { fontSize: 7, fontFamily: "Helvetica", color: C.muted, lineHeight: 1.5, marginTop: 8 },
+  cccCaption: {
+    position: "absolute",
+    top: 25,
+    fontSize: 5.5,
+    fontFamily: "Helvetica-Bold",
+    color: C.redDeep,
+  },
+  legendNote: {
+    fontSize: 7,
+    fontFamily: "Helvetica",
+    color: C.muted,
+    lineHeight: 1.5,
+    marginTop: 8,
+  },
 });
 
 function CycleTimeline({ d, accent }: { d: WorkingCapitalData; accent: string }) {
+  const market = usePdfMarket();
+  const receivables = t("receivables", market);
+  const payables = t("payables", market);
   const opDays = d.inventory_days + d.wip_days + d.debtor_days; // operating cycle length
   const total = Math.max(opDays, d.creditor_days, 1);
   const x = (days: number) => (days / total) * TL_W;
@@ -122,7 +171,12 @@ function CycleTimeline({ d, accent }: { d: WorkingCapitalData; accent: string })
   const segs = [
     { name: "Inventory", days: d.inventory_days, start: 0, color: accent },
     { name: "Work in Progress", days: d.wip_days, start: d.inventory_days, color: C.blue },
-    { name: "Debtors", days: d.debtor_days, start: d.inventory_days + d.wip_days, color: C.blueLight },
+    {
+      name: receivables,
+      days: d.debtor_days,
+      start: d.inventory_days + d.wip_days,
+      color: C.blueLight,
+    },
   ].filter((s) => s.days > 0);
 
   return (
@@ -146,10 +200,14 @@ function CycleTimeline({ d, accent }: { d: WorkingCapitalData; accent: string })
           return (
             <Fragment key={s.name}>
               <View style={[tl.segBar, { left: x(s.start), width: w, backgroundColor: s.color }]}>
-                {wide ? <Text style={tl.segLabelIn}>{`${s.name} · ${Math.round(s.days)}d`}</Text> : null}
+                {wide ? (
+                  <Text style={tl.segLabelIn}>{`${s.name} · ${Math.round(s.days)}d`}</Text>
+                ) : null}
               </View>
               {!wide ? (
-                <Text style={[tl.segLabelOut, { left: x(s.start) + w + 3 }]}>{`${Math.round(s.days)}d`}</Text>
+                <Text
+                  style={[tl.segLabelOut, { left: x(s.start) + w + 3 }]}
+                >{`${Math.round(s.days)}d`}</Text>
               ) : null}
               <Text style={[tl.rowName, { left: x(s.start) }]}>{wide ? "" : s.name}</Text>
             </Fragment>
@@ -159,14 +217,21 @@ function CycleTimeline({ d, accent }: { d: WorkingCapitalData; accent: string })
 
       {/* Creditor days (money you hold) */}
       <View style={tl.row}>
-        <View style={[tl.segBar, { left: 0, width: Math.max(3, x(d.creditor_days)), backgroundColor: C.green }]}>
+        <View
+          style={[
+            tl.segBar,
+            { left: 0, width: Math.max(3, x(d.creditor_days)), backgroundColor: C.green },
+          ]}
+        >
           {x(d.creditor_days) > 80 ? (
-            <Text style={tl.segLabelIn}>{`Creditors pay-out delay · ${Math.round(d.creditor_days)}d`}</Text>
+            <Text
+              style={tl.segLabelIn}
+            >{`${payables} pay-out delay · ${Math.round(d.creditor_days)}d`}</Text>
           ) : null}
         </View>
         {x(d.creditor_days) <= 80 ? (
           <Text style={[tl.segLabelOut, { left: x(d.creditor_days) + 3 }]}>
-            {`Creditors · ${Math.round(d.creditor_days)}d`}
+            {`${payables} · ${Math.round(d.creditor_days)}d`}
           </Text>
         ) : null}
       </View>
@@ -185,7 +250,9 @@ function CycleTimeline({ d, accent }: { d: WorkingCapitalData; accent: string })
             },
           ]}
         >
-          <Text style={tl.cccText}>{`Funding gap · ${Math.round(d.cash_conversion_cycle)} days`}</Text>
+          <Text
+            style={tl.cccText}
+          >{`Funding gap · ${Math.round(d.cash_conversion_cycle)} days`}</Text>
         </View>
         <Text style={[tl.cccCaption, { left: x(Math.min(d.creditor_days, opDays)) }]}>
           Cash Conversion Cycle — days the business must fund itself
@@ -193,9 +260,9 @@ function CycleTimeline({ d, accent }: { d: WorkingCapitalData; accent: string })
       </View>
 
       <Text style={tl.legendNote}>
-        Cash leaves the business on day 0 (stock purchased) and only returns once debtors pay on
-        day {Math.round(opDays)}. Suppliers are paid on day {Math.round(d.creditor_days)} — the red
-        band is the gap the business must finance from its own cash or borrowings.
+        Cash leaves the business on day 0 (stock purchased) and only returns once debtors pay on day{" "}
+        {Math.round(opDays)}. Suppliers are paid on day {Math.round(d.creditor_days)} — the red band
+        is the gap the business must finance from its own cash or borrowings.
       </Text>
     </View>
   );
@@ -210,8 +277,12 @@ export function CashCyclePDF({
   isDemo,
   reviewSignoff,
   operatingProfile,
+  market,
 }: CashCyclePDFProps) {
   const theme = resolveTheme(accountantProfile);
+  const m = market ?? ZA_MARKET;
+  const dso = t("dso", m);
+  const dpo = t("dpo", m);
   const hs = d.health_scores ?? {};
   const dailyRevenue = d.annual_revenue / 365;
 
@@ -221,47 +292,89 @@ export function CashCyclePDF({
     {
       label: "Cash Conversion Cycle",
       value: `${Math.round(d.cash_conversion_cycle)} d`,
-      direction: cccDelta === undefined ? undefined : cccDelta < 0 ? "down" : cccDelta > 0 ? "up" : "flat",
+      direction:
+        cccDelta === undefined ? undefined : cccDelta < 0 ? "down" : cccDelta > 0 ? "up" : "flat",
       good: cccDelta === undefined ? d.cash_conversion_cycle <= 60 : cccDelta <= 0,
-      note: cccDelta !== undefined ? `${cccDelta > 0 ? "+" : ""}${Math.round(cccDelta)}d vs prior` : undefined,
+      note:
+        cccDelta !== undefined
+          ? `${cccDelta > 0 ? "+" : ""}${Math.round(cccDelta)}d vs prior`
+          : undefined,
     },
     {
       label: "Cash Trapped",
-      value: fmtRandCompact(d.cash_trapped_rands),
+      value: fmtRandCompact(d.cash_trapped_rands, m),
       good: false,
       note: "locked in working capital",
     },
     {
-      label: "Debtor Days",
+      label: dso,
       value: `${Math.round(d.debtor_days)} d`,
-      direction: d.debtor_days_prior === undefined ? undefined : d.debtor_days < d.debtor_days_prior ? "down" : "up",
-      good: d.debtor_days_prior === undefined ? d.debtor_days <= 45 : d.debtor_days <= d.debtor_days_prior,
+      direction:
+        d.debtor_days_prior === undefined
+          ? undefined
+          : d.debtor_days < d.debtor_days_prior
+            ? "down"
+            : "up",
+      good:
+        d.debtor_days_prior === undefined
+          ? d.debtor_days <= 45
+          : d.debtor_days <= d.debtor_days_prior,
     },
     {
       label: "1-Day Improvement",
-      value: fmtRandCompact(dailyRevenue),
+      value: fmtRandCompact(dailyRevenue, m),
       good: true,
       note: "cash released per day saved",
     },
   ];
 
-  const narrative = cashCycleNarrative({
-    ccc: Math.round(d.cash_conversion_cycle),
-    cccPrior: d.ccc_prior !== undefined ? Math.round(d.ccc_prior) : undefined,
-    cashTrapped: d.cash_trapped_rands,
-    dailyRevenue,
-  }, operatingProfile);
+  const narrative = cashCycleNarrative(
+    {
+      ccc: Math.round(d.cash_conversion_cycle),
+      cccPrior: d.ccc_prior !== undefined ? Math.round(d.ccc_prior) : undefined,
+      cashTrapped: d.cash_trapped_rands,
+      dailyRevenue,
+    },
+    operatingProfile,
+    m,
+  );
 
   const ratioRows = [
-    { name: "Debtor Days", value: `${Math.round(d.debtor_days)} d`, score: hs.debtor_days ?? daysScore(d.debtor_days, 40) },
-    { name: "Inventory Days", value: `${Math.round(d.inventory_days)} d`, score: hs.inventory_days ?? daysScore(d.inventory_days, 45) },
+    {
+      name: dso,
+      value: `${Math.round(d.debtor_days)} d`,
+      score: hs.debtor_days ?? daysScore(d.debtor_days, 40),
+    },
+    {
+      name: "Inventory Days",
+      value: `${Math.round(d.inventory_days)} d`,
+      score: hs.inventory_days ?? daysScore(d.inventory_days, 45),
+    },
     ...(d.wip_days > 0
-      ? [{ name: "WIP Days", value: `${Math.round(d.wip_days)} d`, score: hs.wip_days ?? daysScore(d.wip_days, 15) }]
+      ? [
+          {
+            name: "WIP Days",
+            value: `${Math.round(d.wip_days)} d`,
+            score: hs.wip_days ?? daysScore(d.wip_days, 15),
+          },
+        ]
       : []),
-    { name: "Creditor Days", value: `${Math.round(d.creditor_days)} d`, score: hs.creditor_days ?? 70 },
-    { name: "Working Capital Days", value: `${Math.round(d.working_capital_days)} d`, score: hs.working_capital_days ?? daysScore(d.working_capital_days, 60) },
-    { name: "WC Funding Intensity", value: fmtPct(d.working_capital_funding), score: hs.working_capital_funding ?? 50 },
-    { name: "WC Utilization", value: fmtPct(d.working_capital_utilization), score: hs.working_capital_utilization ?? 60 },
+    { name: dpo, value: `${Math.round(d.creditor_days)} d`, score: hs.creditor_days ?? 70 },
+    {
+      name: "Working Capital Days",
+      value: `${Math.round(d.working_capital_days)} d`,
+      score: hs.working_capital_days ?? daysScore(d.working_capital_days, 60),
+    },
+    {
+      name: "WC Funding Intensity",
+      value: fmtPct(d.working_capital_funding),
+      score: hs.working_capital_funding ?? 50,
+    },
+    {
+      name: "WC Utilization",
+      value: fmtPct(d.working_capital_utilization),
+      score: hs.working_capital_utilization ?? 60,
+    },
   ];
 
   return (
@@ -272,12 +385,13 @@ export function CashCyclePDF({
       accountantProfile={accountantProfile}
       isDemo={isDemo}
       reviewSignoff={reviewSignoff}
+      market={m}
     >
       {/* ── PAGE 1 ── */}
       <ReportTitle
         kicker="Advisory Report 04"
         title="Cash Flow Cycle"
-        subtitle="How long each rand is trapped between paying suppliers and collecting from customers"
+        subtitle={`How long each ${t("currencyWord", m)} is trapped between paying suppliers and collecting from customers`}
         isDemo={isDemo}
       />
 
@@ -299,7 +413,7 @@ export function CashCyclePDF({
           accentColor={theme.accent}
         />
         <MetricBox
-          label="Debtor Days"
+          label={dso}
           value={`${Math.round(d.debtor_days)} d`}
           change={
             d.debtor_days_prior !== undefined && d.debtor_days_prior !== 0
@@ -310,7 +424,7 @@ export function CashCyclePDF({
           accentColor={C.blue}
         />
         <MetricBox
-          label="Creditor Days"
+          label={dpo}
           value={`${Math.round(d.creditor_days)} d`}
           change={
             d.creditor_days_prior !== undefined && d.creditor_days_prior !== 0
@@ -347,13 +461,20 @@ export function CashCyclePDF({
             marginBottom: 6,
           }}
         >
-          <Text style={{ fontSize: 16, fontFamily: "Helvetica-Bold", color: C.redDeep, marginBottom: 4 }}>
-            {fmtRand(d.cash_trapped_rands)}
+          <Text
+            style={{
+              fontSize: 16,
+              fontFamily: "Helvetica-Bold",
+              color: C.redDeep,
+              marginBottom: 4,
+            }}
+          >
+            {fmtRand(d.cash_trapped_rands, m)}
           </Text>
           <Text style={{ fontSize: 8.5, fontFamily: "Helvetica", color: C.body, lineHeight: 1.55 }}>
             is currently locked up funding the {Math.round(d.cash_conversion_cycle)}-day gap between
             paying suppliers and collecting from customers. Shortening the cycle by just one day
-            releases approximately {fmtRand(dailyRevenue)} of cash back into the business.
+            releases approximately {fmtRand(dailyRevenue, m)} of cash back into the business.
           </Text>
         </View>
 

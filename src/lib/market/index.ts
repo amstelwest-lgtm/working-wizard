@@ -1,14 +1,19 @@
 export { isMissingMarketSupport, withMarketRpcFallback } from "./compat";
 export type { CopyKey } from "./copy";
-export { SALES_TAX_HONESTY, t } from "./copy";
+export { localizeCopy, SALES_TAX_HONESTY, t } from "./copy";
 export { ZA_VAT_RATE } from "./defaults";
 export {
+  currencySymbol,
   formatDate,
   formatDateTime,
   formatMoney,
+  formatMoneyCompact,
+  formatMoneyUnit,
   formatMonthLabel,
+  formatNumber,
   formatPercentRate,
 } from "./format";
+export type { MoneyMarket } from "./format";
 export {
   assertMarketSelection,
   coerceMarketSelection,

@@ -5,6 +5,7 @@
 
 import { GOAL_TO_PRESSURE } from "@/lib/client-profile";
 import type { ClientOperatingProfile, PrimaryPressure } from "@/lib/client-profile";
+import { localizeCopy, ZA_MARKET, type ResolvedMarket } from "@/lib/market";
 
 /** Ratio families each pressure should surface first. */
 const PRESSURE_BOOSTS: Record<PrimaryPressure, string[]> = {
@@ -212,6 +213,7 @@ const PAY_MOTION_LABEL: Record<ClientOperatingProfile["payMotion"], string> = {
 /** Display rows for accountant / owner profile summary. */
 export function profileDisplayRows(
   profile: ClientOperatingProfile,
+  market: Pick<ResolvedMarket, "locale"> = ZA_MARKET,
 ): Array<{ label: string; value: string }> {
   const payTiming =
     profile.debtorDaysDefault === 0
@@ -241,7 +243,7 @@ export function profileDisplayRows(
     { label: "Owner goal", value: GOAL_LABEL[profile.ownerGoal] },
     {
       label: "FY starts",
-      value: new Date(2000, profile.fyStartMonth - 1, 1).toLocaleString("en-ZA", {
+      value: new Date(2000, profile.fyStartMonth - 1, 1).toLocaleString(market.locale, {
         month: "long",
       }),
     },
@@ -289,86 +291,90 @@ export type ReportNarrativeKind =
 export function reportProfileCoda(
   profile: ClientOperatingProfile | null | undefined,
   kind: ReportNarrativeKind,
+  market: Pick<ResolvedMarket, "copyPack" | "currency"> = ZA_MARKET,
 ): string | null {
   if (!profile) return null;
   const goal = GOAL_LABEL[profile.ownerGoal];
   const industry = profileIndustryLabel(profile, "this business");
 
-  switch (kind) {
-    case "health":
-      return `Read in light of the owner's stated aim — ${goal.toLowerCase()} — for a ${industry.toLowerCase()} business.`;
-    case "intervention":
-      return `Steps are ordered with that aim in mind${
-        profile.customerConcentration === "single_dominant" ||
-        profile.customerConcentration === "concentrated"
-          ? ", and customer concentration is treated as a material risk"
-          : ""
-      }${
-        profile.debtPosition === "heavy" || profile.debtPosition === "seeking"
-          ? "; debt and funding pressure also elevate leverage-related actions"
-          : ""
-      }.`;
-    case "forecast":
-      if (profile.seasonality === "strong") {
-        return "Owner profile flags strong seasonality — weekly swings in receipts are more likely than a flat run-rate implies.";
-      }
-      if (profile.debtorDaysDefault >= 45) {
-        return `Owner profile indicates customers typically pay around ${profile.debtorDaysDefault} days — collection lag is already baked into how this business funds itself.`;
-      }
-      if (profile.ownerGoal === "survive_cash") {
-        return "The owner flagged a cash squeeze as the priority — treat any weeks near the minimum as immediate action triggers.";
-      }
-      return null;
-    case "cycle":
-      if (profile.inventoryIntensity === "none") {
-        return "This business carries little or no stock — focus the cycle on debtors and creditor terms rather than inventory days.";
-      }
-      if (profile.inventoryIntensity === "heavy") {
-        return "Owner profile flags material inventory or WIP — stock days are a primary cash lever here.";
-      }
-      if (profile.debtorDaysDefault === 0) {
-        return "Sales are largely cash-on-sale — debtor days should stay near zero; any rise is a red flag.";
-      }
-      return null;
-    case "profit":
-      if (profile.costShape === "payroll_heavy") {
-        return "Cost base is payroll-heavy — wage productivity and utilisation matter as much as gross margin.";
-      }
-      if (profile.ownerGoal === "lift_margins") {
-        return "The owner's aim is to keep more of each rand of sales — price, mix, and cost of sales deserve first attention.";
-      }
-      return null;
-    case "leverage":
-      if (profile.debtPosition === "heavy") {
-        return "Owner profile says debt is already a strain — further borrowing should be a last resort until cash generation improves.";
-      }
-      if (profile.debtPosition === "seeking") {
-        return "The owner is looking to raise funding this year — lenders will read these leverage ratios closely.";
-      }
-      if (profile.debtPosition === "none") {
-        return "The business is self-funded with little or no debt — leverage is not the constraint; cash generation and returns are.";
-      }
-      return null;
-    case "assets":
-      if (profile.payMotion === "access_capacity" || profile.payMotion === "recurring_rights") {
-        return "Revenue is capacity- or subscription-driven — asset productivity shows up as utilisation and recurring yield, not just turnover.";
-      }
-      return null;
-    case "labor":
-      if (profile.costShape === "payroll_heavy") {
-        return "People are the main cost — sales per employee and gross profit per labour rand are the controlling metrics.";
-      }
-      if (profile.ownerGoal === "reduce_founder_dependence") {
-        return "The owner wants the business to run without them — labour productivity and delegation capacity are strategic, not just cost lines.";
-      }
-      return null;
-    case "movement":
-      return `Trends matter most against the owner's aim (${goal.toLowerCase()}) — declining ratios that block that aim should move first.`;
-    case "benchmark":
-      return `Peer set framed as ${industry}; interpret gaps with the owner's goal (${goal.toLowerCase()}) in mind.`;
-    default:
-      return null;
-  }
+  const raw = ((): string | null => {
+    switch (kind) {
+      case "health":
+        return `Read in light of the owner's stated aim — ${goal.toLowerCase()} — for a ${industry.toLowerCase()} business.`;
+      case "intervention":
+        return `Steps are ordered with that aim in mind${
+          profile.customerConcentration === "single_dominant" ||
+          profile.customerConcentration === "concentrated"
+            ? ", and customer concentration is treated as a material risk"
+            : ""
+        }${
+          profile.debtPosition === "heavy" || profile.debtPosition === "seeking"
+            ? "; debt and funding pressure also elevate leverage-related actions"
+            : ""
+        }.`;
+      case "forecast":
+        if (profile.seasonality === "strong") {
+          return "Owner profile flags strong seasonality — weekly swings in receipts are more likely than a flat run-rate implies.";
+        }
+        if (profile.debtorDaysDefault >= 45) {
+          return `Owner profile indicates customers typically pay around ${profile.debtorDaysDefault} days — collection lag is already baked into how this business funds itself.`;
+        }
+        if (profile.ownerGoal === "survive_cash") {
+          return "The owner flagged a cash squeeze as the priority — treat any weeks near the minimum as immediate action triggers.";
+        }
+        return null;
+      case "cycle":
+        if (profile.inventoryIntensity === "none") {
+          return "This business carries little or no stock — focus the cycle on debtors and creditor terms rather than inventory days.";
+        }
+        if (profile.inventoryIntensity === "heavy") {
+          return "Owner profile flags material inventory or WIP — stock days are a primary cash lever here.";
+        }
+        if (profile.debtorDaysDefault === 0) {
+          return "Sales are largely cash-on-sale — debtor days should stay near zero; any rise is a red flag.";
+        }
+        return null;
+      case "profit":
+        if (profile.costShape === "payroll_heavy") {
+          return "Cost base is payroll-heavy — wage productivity and utilisation matter as much as gross margin.";
+        }
+        if (profile.ownerGoal === "lift_margins") {
+          return "The owner's aim is to keep more of each rand of sales — price, mix, and cost of sales deserve first attention.";
+        }
+        return null;
+      case "leverage":
+        if (profile.debtPosition === "heavy") {
+          return "Owner profile says debt is already a strain — further borrowing should be a last resort until cash generation improves.";
+        }
+        if (profile.debtPosition === "seeking") {
+          return "The owner is looking to raise funding this year — lenders will read these leverage ratios closely.";
+        }
+        if (profile.debtPosition === "none") {
+          return "The business is self-funded with little or no debt — leverage is not the constraint; cash generation and returns are.";
+        }
+        return null;
+      case "assets":
+        if (profile.payMotion === "access_capacity" || profile.payMotion === "recurring_rights") {
+          return "Revenue is capacity- or subscription-driven — asset productivity shows up as utilisation and recurring yield, not just turnover.";
+        }
+        return null;
+      case "labor":
+        if (profile.costShape === "payroll_heavy") {
+          return "People are the main cost — sales per employee and gross profit per labour rand are the controlling metrics.";
+        }
+        if (profile.ownerGoal === "reduce_founder_dependence") {
+          return "The owner wants the business to run without them — labour productivity and delegation capacity are strategic, not just cost lines.";
+        }
+        return null;
+      case "movement":
+        return `Trends matter most against the owner's aim (${goal.toLowerCase()}) — declining ratios that block that aim should move first.`;
+      case "benchmark":
+        return `Peer set framed as ${industry}; interpret gaps with the owner's goal (${goal.toLowerCase()}) in mind.`;
+      default:
+        return null;
+    }
+  })();
+  return raw ? localizeCopy(raw, market) : null;
 }
 
 /** Profile-aware cash-forecast assumption bullets (appended to defaults). */
@@ -378,7 +384,9 @@ export function profileCashAssumptions(
   if (!profile) return [];
   const out: string[] = [];
   if (profile.seasonality === "strong") {
-    out.push("Strong seasonality flagged by owner — do not treat weekly receipts as a flat average.");
+    out.push(
+      "Strong seasonality flagged by owner — do not treat weekly receipts as a flat average.",
+    );
   } else if (profile.seasonality === "mild") {
     out.push("Mild seasonality flagged — allow for holiday and peak-week swings.");
   }
@@ -393,7 +401,9 @@ export function profileCashAssumptions(
     out.push("Debt repayments are a strain — protect the minimum cash threshold aggressively.");
   }
   if (profile.debtPosition === "seeking") {
-    out.push("Funding raise planned — runway and covenant headroom will be scrutinised by funders.");
+    out.push(
+      "Funding raise planned — runway and covenant headroom will be scrutinised by funders.",
+    );
   }
   return out;
 }
