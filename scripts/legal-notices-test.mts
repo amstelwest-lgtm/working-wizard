@@ -86,8 +86,8 @@ assert(
   "landing declares draftMarket before persist effect deps (avoids TDZ crash)",
 );
 assert(landing.includes("if (!mounted) return;"), "landing persist waits for mount");
-assert(landingCss.includes(".milon-market-select"), "landing CSS styles the US state select");
-assert(landingCss.includes("appearance:none"), "landing state select is not a raw OS control");
+assert(landingCss.includes(".milon-market-dd-btn"), "landing CSS styles the US state picker");
+assert(landingCss.includes(".milon-market-dd-list"), "landing state picker uses a custom list, not a native select");
 assert(landing.includes('id="landing-sky"'), "landing has a scrolling starfield band");
 assert(landing.includes("landing-sky-photo"), "landing starfield has a photo layer");
 assert(landing.includes("url(/landing-sky.jpg)"), "landing photo layer points at the starfield asset");

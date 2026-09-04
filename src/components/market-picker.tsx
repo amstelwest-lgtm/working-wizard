@@ -1,7 +1,74 @@
+import { useEffect, useRef, useState } from "react";
 import { US_STATES, type DraftMarket, type MarketId, type UsStateCode } from "@/lib/market";
 
 const CARD =
   "rounded-xl border px-4 py-3 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#d4a550]";
+
+function LandingStateMenu({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: DraftMarket;
+  onChange: (next: DraftMarket) => void;
+  disabled?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const selected = US_STATES.find((s) => s.code === value.regionCode) ?? null;
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  return (
+    <div ref={wrapRef} className={`milon-market-dd${open ? " is-open" : ""}`}>
+      <button
+        type="button"
+        id="milon-us-state"
+        disabled={disabled}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        className={`milon-market-dd-btn${selected ? " has-value" : ""}`}
+        onClick={() => setOpen((v) => !v)}
+      >
+        {selected ? selected.name : "Select a state"}
+      </button>
+      {open && (
+        <ul className="milon-market-dd-list" role="listbox" aria-labelledby="milon-us-state">
+          {US_STATES.map((s) => (
+            <li key={s.code}>
+              <button
+                type="button"
+                role="option"
+                aria-selected={s.code === value.regionCode}
+                className={s.code === value.regionCode ? "is-on" : undefined}
+                onClick={() => {
+                  onChange({ country: "US", regionCode: s.code });
+                  setOpen(false);
+                }}
+              >
+                {s.name}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
 
 function StateSelect({
   id,
@@ -86,15 +153,7 @@ export function MarketPicker({
             <label className="milon-market-label" htmlFor="milon-us-state">
               State
             </label>
-            <div className="milon-market-select-wrap">
-              <StateSelect
-                id="milon-us-state"
-                value={value}
-                onChange={onChange}
-                disabled={disabled}
-                className="milon-market-select"
-              />
-            </div>
+            <LandingStateMenu value={value} onChange={onChange} disabled={disabled} />
             <p className="milon-market-help">
               Required for sales tax. You can set a different state per client later.
             </p>
