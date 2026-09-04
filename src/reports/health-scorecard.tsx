@@ -66,9 +66,10 @@ const TIER_DESC: Record<string, string> = {
   critical: "Immediate action required — key metrics indicate significant financial stress.",
 };
 
-function avg(nums: number[]): number {
-  if (!nums.length) return 0;
-  return nums.reduce((s, n) => s + n, 0) / nums.length;
+function avg(nums: number[]): number | null {
+  const finite = nums.filter((n) => Number.isFinite(n));
+  if (!finite.length) return null;
+  return finite.reduce((s, n) => s + n, 0) / finite.length;
 }
 
 // ── Styles ─────────────────────────────────────────────────────────────────
@@ -140,20 +141,23 @@ function PillarBox({
   counts,
 }: {
   pillar: string;
-  score: number;
+  score: number | null;
   counts: { critical: number; at_risk: number; healthy: number };
 }) {
-  const rounded = Math.round(score);
+  const hasScore = score != null && Number.isFinite(score);
+  const rounded = hasScore ? Math.round(score) : null;
 
   return (
     <View style={styles.pillarBox}>
       <Text style={styles.pillarName}>{PILLAR_LABEL[pillar]}</Text>
       <View style={styles.pillarScoreRow}>
-        <Text style={[styles.pillarScore, { color: scoreColor(rounded) }]}>{rounded}</Text>
+        <Text style={[styles.pillarScore, { color: hasScore ? scoreColor(rounded!) : C.faint }]}>
+          {rounded ?? "—"}
+        </Text>
         <Text style={styles.pillarOutOf}>/ 100</Text>
       </View>
       <View style={styles.pillarGaugeRow}>
-        <HealthScoreGauge score={score} height={5} />
+        <HealthScoreGauge score={hasScore ? score : 0} height={5} />
       </View>
       <View style={styles.pillarCountRow}>
         {counts.critical > 0 && (
@@ -199,14 +203,14 @@ export function HealthScorecardPDF({
     })),
     cashRunwayWeeks,
   });
-  const overallScore = overall.overall ?? 0;
+  const overallScore = overall.overall;
   const overallTier = overall.displayStatus;
   const overallColor = TIER_META[overallTier].color;
 
   const pillarData = PILLARS.map((pillar) => {
     const fromOverall = overall.pillars.find((p) => p.id === pillar);
     const ratios = ratioResults.filter((r) => r.pillar === pillar);
-    const score = fromOverall?.score ?? avg(ratios.map((r) => r.health_score || 0));
+    const score = fromOverall?.score ?? avg(ratios.map((r) => r.health_score));
     const counts = {
       critical: ratios.filter((r) => r.health_tier === "critical").length,
       at_risk: ratios.filter((r) => r.health_tier === "at_risk").length,
@@ -249,40 +253,47 @@ export function HealthScorecardPDF({
     Number.isFinite(levers.equityMultiplier);
   const dupont = diagnoseDuPont(levers);
 
-  // Executive summary figures
-  const worstPillar = [...pillarData].sort((a, b) => a.score - b.score)[0];
-  const bestPillar = [...pillarData].sort((a, b) => b.score - a.score)[0];
+  // Executive summary figures — only pillars that actually have a score
+  const scoredPillarData = pillarData.filter(
+    (p): p is typeof p & { score: number } => p.score != null && Number.isFinite(p.score),
+  );
+  const worstPillar = [...scoredPillarData].sort((a, b) => a.score - b.score)[0];
+  const bestPillar = [...scoredPillarData].sort((a, b) => b.score - a.score)[0];
   const priorAvg = ratioResults.some((r) => r.prior_period_score !== undefined)
     ? avg(ratioResults.map((r) => r.prior_period_score ?? r.health_score))
     : undefined;
   const figures: HeadlineFigure[] = [
     {
       label: "Overall Score",
-      value: `${overallScore}`,
+      value: overallScore != null ? `${overallScore}` : "—",
       direction:
-        priorAvg === undefined
+        priorAvg == null || overallScore == null
           ? undefined
           : overallScore > priorAvg + 1
             ? "up"
             : overallScore < priorAvg - 1
               ? "down"
               : "flat",
-      good: priorAvg === undefined ? undefined : overallScore >= priorAvg,
+      good: priorAvg == null || overallScore == null ? undefined : overallScore >= priorAvg,
       note: "out of 100",
     },
     {
       label: "Strongest Pillar",
-      value: `${Math.round(bestPillar.score)}`,
+      value: bestPillar ? `${Math.round(bestPillar.score)}` : "—",
       good: true,
       direction: "up",
-      note: PILLAR_LABEL[bestPillar.pillar],
+      note: bestPillar ? PILLAR_LABEL[bestPillar.pillar] : "no data",
     },
     {
       label: "Weakest Pillar",
-      value: `${Math.round(worstPillar.score)}`,
-      good: tierForScore(worstPillar.score) === "healthy",
-      direction: tierForScore(worstPillar.score) === "healthy" ? "up" : "down",
-      note: PILLAR_LABEL[worstPillar.pillar],
+      value: worstPillar ? `${Math.round(worstPillar.score)}` : "—",
+      good: worstPillar ? tierForScore(worstPillar.score) === "healthy" : undefined,
+      direction: worstPillar
+        ? tierForScore(worstPillar.score) === "healthy"
+          ? "up"
+          : "down"
+        : undefined,
+      note: worstPillar ? PILLAR_LABEL[worstPillar.pillar] : "no data",
     },
     {
       label: "Ratios in Critical",
@@ -293,8 +304,8 @@ export function HealthScorecardPDF({
   ];
 
   const narrative = healthNarrative(
-    overallScore,
-    pillarData.map((p) => ({ label: PILLAR_LABEL[p.pillar], score: p.score })),
+    overallScore ?? Number.NaN,
+    scoredPillarData.map((p) => ({ label: PILLAR_LABEL[p.pillar], score: p.score })),
     dupont,
     operatingProfile,
     market ?? ZA_MARKET,
@@ -323,7 +334,9 @@ export function HealthScorecardPDF({
       {/* Overall score band */}
       <View style={styles.scoreBand}>
         <View style={styles.scoreLeft}>
-          <Text style={[styles.overallNumber, { color: overallColor }]}>{overallScore}</Text>
+          <Text style={[styles.overallNumber, { color: overallColor }]}>
+            {overallScore != null ? overallScore : "—"}
+          </Text>
           <Text style={styles.outOf}>OVERALL SCORE / 100</Text>
           <View style={[styles.tierBadge, { backgroundColor: overallColor }]}>
             <Text style={styles.tierBadgeText}>{TIER_META[overallTier].label}</Text>
@@ -331,7 +344,7 @@ export function HealthScorecardPDF({
         </View>
         <View style={styles.scoreRight}>
           <View style={styles.gaugeRow}>
-            <HealthScoreGauge score={overallScore} height={9} />
+            <HealthScoreGauge score={overallScore ?? 0} height={9} />
           </View>
           <View style={styles.gaugeScale}>
             <Text style={styles.gaugeScaleText}>0 · CRITICAL</Text>

@@ -67,6 +67,8 @@ export function buildSpherePillars(args: BuildSphereArgs): SpherePillar[] {
         description: ratioMeta[k]?.techName,
         health: healthMap[k],
       }));
+    // Drivers with no score still render as "—" so the owner sees what's missing.
+    // Pillar health itself comes from computeOverallHealth (finite scores only).
     const health = pillarHealths[id];
     return {
       id,
