@@ -1,10 +1,10 @@
 /**
  * Optional product-line mix on clients.financials.productMix.
- * Directional (bands + best/worst), not SKU-level COGS. Hidden on the Profit
- * tab until the owner or accountant opts in via a 5-question funnel.
+ * Per-unit selling price and cost → margin is calculated, not guessed.
+ * Hidden on the Profit tab until opted in via a 5-question funnel.
  */
 
-export const PRODUCT_MIX_VERSION = 1 as const;
+export const PRODUCT_MIX_VERSION = 2 as const;
 export const PRODUCT_MIX_MAX_LINES = 5;
 
 export type ProductShareBand = "small" | "quarter" | "half" | "most";
@@ -14,6 +14,12 @@ export type ProductMixLine = {
   id: string;
   name: string;
   shareBand?: ProductShareBand;
+  /** Selling price per unit (rand). */
+  sellPrice?: number;
+  /** Direct cost per unit (rand). */
+  unitCost?: number;
+  /** (price − cost) / price, 0–100. Derived on save. */
+  marginPct?: number;
   marginBand?: ProductMarginBand;
 };
 
@@ -64,6 +70,36 @@ export function shareBandLabel(band?: ProductShareBand): string {
   return SHARE_BANDS.find((b) => b.id === band)?.label ?? "—";
 }
 
+export function parseMoney(raw: unknown): number | undefined {
+  if (raw == null || raw === "") return undefined;
+  const n = typeof raw === "number" ? raw : parseFloat(String(raw).replace(/,/g, ""));
+  if (!Number.isFinite(n) || n < 0) return undefined;
+  return n;
+}
+
+/** Gross margin % from selling price and unit cost. Null if price is missing or 0. */
+export function unitMarginPct(sellPrice?: number, unitCost?: number): number | null {
+  if (sellPrice == null || sellPrice <= 0 || unitCost == null) return null;
+  return ((sellPrice - unitCost) / sellPrice) * 100;
+}
+
+export function marginBandFromPct(pct: number | null): ProductMarginBand {
+  if (pct == null) return "unknown";
+  if (pct >= 40) return "high";
+  if (pct >= 20) return "mid";
+  return "low";
+}
+
+export function formatRand(n: number | undefined): string {
+  if (n == null || !Number.isFinite(n)) return "—";
+  return `R\u00a0${n.toLocaleString("en-ZA", { maximumFractionDigits: 2 })}`;
+}
+
+export function formatMarginPct(pct: number | null | undefined): string {
+  if (pct == null || !Number.isFinite(pct)) return "—";
+  return `${pct.toFixed(0)}%`;
+}
+
 function parseShareBand(raw: unknown): ProductShareBand | undefined {
   return typeof raw === "string" && SHARE_IDS.has(raw as ProductShareBand)
     ? (raw as ProductShareBand)
@@ -80,11 +116,18 @@ function parseLine(raw: unknown, index: number): ProductMixLine | null {
   const name = typeof r.name === "string" ? r.name.trim() : "";
   if (!name) return null;
   const id = typeof r.id === "string" && r.id ? r.id : `pl-${index}`;
+  const sellPrice = parseMoney(r.sellPrice);
+  const unitCost = parseMoney(r.unitCost);
+  const computed = unitMarginPct(sellPrice, unitCost);
+  const storedPct = parseMoney(r.marginPct);
   return {
     id,
     name,
     shareBand: parseShareBand(r.shareBand),
-    marginBand: parseMarginBand(r.marginBand),
+    sellPrice,
+    unitCost,
+    marginPct: computed ?? storedPct,
+    marginBand: parseMarginBand(r.marginBand) ?? marginBandFromPct(computed),
   };
 }
 
@@ -104,16 +147,17 @@ export function parseProductMix(raw: unknown): ProductMix {
     lines.push({ ...line, id });
   }
   const confirmedAt = typeof o.confirmedAt === "string" && o.confirmedAt ? o.confirmedAt : null;
-  const bestLineId = typeof o.bestLineId === "string" && o.bestLineId ? o.bestLineId : undefined;
-  const worstLineId = typeof o.worstLineId === "string" && o.worstLineId ? o.worstLineId : undefined;
+  const derived = deriveBestWorst(lines);
+  const bestLineId = typeof o.bestLineId === "string" && o.bestLineId ? o.bestLineId : derived.bestLineId;
+  const worstLineId = typeof o.worstLineId === "string" && o.worstLineId ? o.worstLineId : derived.worstLineId;
   const ids = new Set(lines.map((l) => l.id));
   return {
     version: PRODUCT_MIX_VERSION,
     confirmedAt,
     active: o.active === true && lines.length > 0,
     lines,
-    bestLineId: bestLineId && ids.has(bestLineId) ? bestLineId : undefined,
-    worstLineId: worstLineId && ids.has(worstLineId) ? worstLineId : undefined,
+    bestLineId: bestLineId && ids.has(bestLineId) ? bestLineId : derived.bestLineId,
+    worstLineId: worstLineId && ids.has(worstLineId) ? worstLineId : derived.worstLineId,
   };
 }
 
@@ -140,9 +184,19 @@ export function trimmedLineNames(names: string[]): string[] {
   return out;
 }
 
-/** Q2: at least two named lines before ranking. */
+/** Q2: at least two named lines before unit economics. */
 export function canAdvanceFromNames(names: string[]): boolean {
   return trimmedLineNames(names).length >= 2;
+}
+
+export function canAdvanceFromPrices(lines: ProductMixLine[]): boolean {
+  const named = namedProductLines({ ...emptyProductMix(), lines });
+  return named.length >= 2 && named.every((l) => l.sellPrice != null && l.sellPrice > 0);
+}
+
+export function canAdvanceFromCosts(lines: ProductMixLine[]): boolean {
+  const named = namedProductLines({ ...emptyProductMix(), lines });
+  return named.length >= 2 && named.every((l) => l.unitCost != null);
 }
 
 export function canAdvanceFromShares(lines: ProductMixLine[]): boolean {
@@ -150,13 +204,8 @@ export function canAdvanceFromShares(lines: ProductMixLine[]): boolean {
   return named.length >= 2 && named.every((l) => l.shareBand != null);
 }
 
-export function canSaveRanking(mix: ProductMix): boolean {
-  const named = namedProductLines(mix);
-  if (named.length < 2) return false;
-  const ids = new Set(named.map((l) => l.id));
-  if (!mix.bestLineId || !mix.worstLineId) return false;
-  if (mix.bestLineId === mix.worstLineId) return false;
-  return ids.has(mix.bestLineId) && ids.has(mix.worstLineId);
+export function canSaveUnitMix(mix: ProductMix): boolean {
+  return canAdvanceFromPrices(mix.lines) && canAdvanceFromCosts(mix.lines) && canAdvanceFromShares(mix.lines);
 }
 
 export function linesFromNames(names: string[], prev: ProductMixLine[] = []): ProductMixLine[] {
@@ -173,17 +222,36 @@ export function linesFromNames(names: string[], prev: ProductMixLine[] = []): Pr
   });
 }
 
-export function applyMarginFlags(mix: ProductMix): ProductMix {
-  const named = namedProductLines(mix);
+function deriveBestWorst(lines: ProductMixLine[]): { bestLineId?: string; worstLineId?: string } {
+  const scored = lines
+    .map((l) => ({ id: l.id, pct: unitMarginPct(l.sellPrice, l.unitCost) }))
+    .filter((r) => r.pct != null) as Array<{ id: string; pct: number }>;
+  if (scored.length < 2) return {};
+  const byPct = [...scored].sort((a, b) => b.pct - a.pct || a.id.localeCompare(b.id));
+  const best = byPct[0];
+  const worst = byPct[byPct.length - 1];
+  if (!best || !worst || best.id === worst.id) return { bestLineId: best?.id };
+  return { bestLineId: best.id, worstLineId: worst.id };
+}
+
+/** Stamp computed margin % / bands and best/worst from unit economics. */
+export function applyUnitEconomics(mix: ProductMix): ProductMix {
+  const named = namedProductLines(mix).map((l) => {
+    const marginPct = unitMarginPct(l.sellPrice, l.unitCost) ?? undefined;
+    return {
+      ...l,
+      marginPct,
+      marginBand: marginBandFromPct(marginPct ?? null),
+    };
+  });
+  const flags = deriveBestWorst(named);
   return {
     ...mix,
     version: PRODUCT_MIX_VERSION,
     active: named.length > 0,
-    lines: named.map((l) => ({
-      ...l,
-      marginBand:
-        l.id === mix.bestLineId ? "high" : l.id === mix.worstLineId ? "low" : mix.bestLineId || mix.worstLineId ? "mid" : "unknown",
-    })),
+    lines: named,
+    bestLineId: flags.bestLineId,
+    worstLineId: flags.worstLineId,
   };
 }
 
@@ -192,38 +260,54 @@ export type RankedProductLine = {
   name: string;
   shareBand?: ProductShareBand;
   sharePct: number;
+  sellPrice?: number;
+  unitCost?: number;
+  marginPct: number | null;
   marginBand?: ProductMarginBand;
   isBest: boolean;
   isWorst: boolean;
   barPct: number;
 };
 
-/** Rank by rough sales share; best/worst are margin callouts, not a second sort. */
+/** Rank by unit margin (most profitable per unit). Bar width follows margin, floored so zeros still show. */
 export function rankProductLines(mix: ProductMix): RankedProductLine[] {
   if (!mix.active) return [];
   const named = namedProductLines(mix);
-  const rows = named.map((l) => ({
-    id: l.id,
-    name: l.name,
-    shareBand: l.shareBand,
-    sharePct: shareBandPct(l.shareBand),
-    marginBand: l.marginBand,
-    isBest: l.id === mix.bestLineId,
-    isWorst: l.id === mix.worstLineId,
+  const rows = named.map((l) => {
+    const marginPct = unitMarginPct(l.sellPrice, l.unitCost);
+    return {
+      id: l.id,
+      name: l.name,
+      shareBand: l.shareBand,
+      sharePct: shareBandPct(l.shareBand),
+      sellPrice: l.sellPrice,
+      unitCost: l.unitCost,
+      marginPct,
+      marginBand: l.marginBand ?? marginBandFromPct(marginPct),
+      isBest: l.id === mix.bestLineId,
+      isWorst: l.id === mix.worstLineId,
+    };
+  });
+  rows.sort((a, b) => {
+    const ma = a.marginPct ?? -Infinity;
+    const mb = b.marginPct ?? -Infinity;
+    return mb - ma || b.sharePct - a.sharePct || a.name.localeCompare(b.name);
+  });
+  const max = Math.max(1, ...rows.map((r) => Math.max(0, r.marginPct ?? 0)));
+  return rows.map((r) => ({
+    ...r,
+    barPct: r.marginPct != null ? Math.max(8, Math.round((Math.max(0, r.marginPct) / max) * 100)) : 12,
   }));
-  rows.sort((a, b) => b.sharePct - a.sharePct || a.name.localeCompare(b.name));
-  const max = Math.max(1, ...rows.map((r) => r.sharePct));
-  return rows.map((r) => ({ ...r, barPct: r.sharePct ? Math.round((r.sharePct / max) * 100) : 28 }));
 }
 
 export function productMixSummary(mix: ProductMix): string {
-  if (!hasProductMixAnswer(mix)) return "See which lines drive margin — 5 quick questions";
+  if (!hasProductMixAnswer(mix)) return "Unit price and cost — 5 questions, margin calculated";
   if (!mix.active || mix.lines.length === 0) return "One main line — breakdown skipped";
   const ranked = rankProductLines(mix);
-  const best = ranked.find((r) => r.isBest);
-  const worst = ranked.find((r) => r.isWorst);
-  if (best && worst) {
-    return `${ranked.length} lines · ${best.name} strongest · ${worst.name} needs a look`;
+  const best = ranked.find((r) => r.isBest) ?? ranked[0];
+  const worst = ranked.find((r) => r.isWorst) ?? ranked[ranked.length - 1];
+  if (best && worst && best.id !== worst.id) {
+    return `${ranked.length} lines · ${best.name} ${formatMarginPct(best.marginPct)} · ${worst.name} ${formatMarginPct(worst.marginPct)}`;
   }
   return `${ranked.length} product lines`;
 }

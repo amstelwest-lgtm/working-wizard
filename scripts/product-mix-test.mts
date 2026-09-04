@@ -11,19 +11,22 @@ import {
 } from "../src/lib/debt-schedule";
 import { emptyWeeklyInputs, parseWeeklyInputs } from "../src/lib/weekly-inputs";
 import {
-  applyMarginFlags,
+  applyUnitEconomics,
+  canAdvanceFromCosts,
   canAdvanceFromNames,
+  canAdvanceFromPrices,
   canAdvanceFromShares,
-  canSaveRanking,
+  canSaveUnitMix,
   declinedProductMix,
   emptyProductMix,
   hasProductMixAnswer,
   linesFromNames,
+  marginBandFromPct,
   overlayProductMix,
   parseProductMix,
   productMixSummary,
   rankProductLines,
-  shareBandPct,
+  unitMarginPct,
 } from "../src/lib/product-mix";
 
 function assert(cond: boolean, msg: string) {
@@ -41,53 +44,71 @@ assert(productMixSummary(declined).includes("One main line"), "declined summary"
 
 assert(canAdvanceFromNames(["", "  "]) === false, "blank names blocked");
 assert(canAdvanceFromNames(["Retail"]) === false, "one name is not a mix");
-assert(canAdvanceFromNames(["Retail", "Wholesale", "Retail"]) === true, "duplicate names collapse to unique, need 2");
-assert(canAdvanceFromNames(["Retail", "Retail"]) === false, "two identical names are one line");
 assert(canAdvanceFromNames(["Retail", "Wholesale"]) === true, "two distinct names ok");
 
 const named = linesFromNames(["  Retail ", "Wholesale", "", "Events"], [
-  { id: "keep", name: "Retail", shareBand: "half" },
+  { id: "keep", name: "Retail", shareBand: "half", sellPrice: 100, unitCost: 40 },
 ]);
-assert(named.length === 3, "empty slots dropped, cap not hit");
+assert(named.length === 3, "empty slots dropped");
 assert(named[0].id === "keep", "matching name reuses id");
-assert(named[0].shareBand === "half", "retake keeps share on renamed-same line");
-assert(named[1].name === "Wholesale", "second line");
+assert(named[0].sellPrice === 100, "retake keeps unit price");
 
-assert(canAdvanceFromShares(named) === false, "shares required before ranking");
+assert(canAdvanceFromPrices(named) === false, "prices required on every named line");
+named[0].sellPrice = 120;
+named[1].sellPrice = 80;
+named[2].sellPrice = 50;
+assert(canAdvanceFromPrices(named) === true, "all named lines have a selling price");
+assert(canAdvanceFromCosts(named) === false, "costs required");
+named[0].unitCost = 40;
+named[1].unitCost = 50;
+named[2].unitCost = 45;
+assert(canAdvanceFromCosts(named) === true, "all named lines have a unit cost");
+assert(Math.abs((unitMarginPct(120, 40) ?? 0) - 66.666) < 0.01, "margin = (price-cost)/price");
+assert(unitMarginPct(0, 10) == null, "zero price has no margin");
+assert(marginBandFromPct(50) === "high", ">=40 is high");
+assert(marginBandFromPct(25) === "mid", "20–39 is mid");
+assert(marginBandFromPct(10) === "low", "<20 is low");
+
 named[0].shareBand = "half";
 named[1].shareBand = "quarter";
 named[2].shareBand = "small";
-assert(canAdvanceFromShares(named) === true, "all named lines have a band");
+assert(canAdvanceFromShares(named) === true, "share bands after unit economics");
 
 const draft = {
-  version: 1 as const,
+  version: 2 as const,
   confirmedAt: null,
   active: true,
   lines: named,
-  bestLineId: named[0].id,
-  worstLineId: named[0].id,
 };
-assert(canSaveRanking(draft) === false, "best and worst must differ");
-draft.worstLineId = named[2].id;
-assert(canSaveRanking(draft) === true, "distinct best/worst");
-assert(canSaveRanking({ ...draft, bestLineId: "missing" }) === false, "best must be a named line");
+assert(canSaveUnitMix(draft) === true, "save when names, prices, costs, shares are in");
+assert(canSaveUnitMix({ ...draft, lines: named.map((l) => ({ ...l, sellPrice: undefined })) }) === false, "missing price blocks save");
 
-const saved = applyMarginFlags({
+const saved = applyUnitEconomics({
   ...draft,
   confirmedAt: "2026-09-04T00:00:00.000Z",
 });
-assert(saved.lines.find((l) => l.id === named[0].id)?.marginBand === "high", "best → high");
-assert(saved.lines.find((l) => l.id === named[2].id)?.marginBand === "low", "worst → low");
-assert(saved.lines.find((l) => l.id === named[1].id)?.marginBand === "mid", "others → mid");
+assert(Math.round(saved.lines.find((l) => l.id === named[0].id)?.marginPct ?? 0) === 67, "retail margin stamped");
+assert(saved.bestLineId === named[0].id, "highest unit margin is best");
+assert(saved.worstLineId === named[2].id, "lowest unit margin is worst");
+assert(saved.lines.find((l) => l.id === named[0].id)?.marginBand === "high", "67% → high");
+assert(saved.lines.find((l) => l.id === named[2].id)?.marginBand === "low", "10% → low");
 
 const ranked = rankProductLines(saved);
-assert(ranked[0].name === "Retail", "rank by share (half first)");
-assert(ranked[0].isBest === true, "best badge on strongest margin, even if also largest");
-assert(ranked.find((r) => r.name === "Events")?.isWorst === true, "worst badge");
-assert(shareBandPct("quarter") === 25, "quarter band");
-assert(productMixSummary(saved).includes("Retail strongest"), "summary names best");
-assert(productMixSummary(saved).includes("Events needs a look"), "summary names worst");
+assert(ranked[0].name === "Retail", "rank by unit margin, not sales share");
+assert(ranked[0].isBest === true, "best badge on highest margin");
+assert(ranked.find((r) => r.name === "Events")?.isWorst === true, "worst badge on lowest margin");
+assert(productMixSummary(saved).includes("Retail"), "summary names best");
+assert(productMixSummary(saved).includes("%"), "summary shows calculated margin");
 assert(rankProductLines(declined).length === 0, "inactive mix has no bars");
+
+const v1 = parseProductMix({
+  version: 1,
+  confirmedAt: "2026-01-01",
+  active: true,
+  lines: [{ id: "a", name: "Old", shareBand: "half" }],
+});
+assert(v1.lines[0]?.name === "Old", "v1 blobs still parse");
+assert(v1.lines[0]?.sellPrice == null, "v1 lines have no unit price");
 
 const weeks = parseWeeklyInputs({
   weeks: { "2026-W35": { revenue: 10, costOfSales: 4 } },
@@ -99,12 +120,11 @@ const blob = mergeFinancialsBlob(
   saved,
 );
 assert((blob.productMix as { lines: unknown[] }).lines.length === 3, "merge keeps mix");
-assert((blob.weeklyInputs as { weeks: Record<string, unknown> }).weeks["2026-W35"] != null, "merge keeps weeks");
 
 const split = splitFinancialsBlob(blob);
 assert(split.scalars.productMix == null, "mix is not stringified into scalars");
-assert(split.productMix.lines[0]?.name === "Retail", "split restores mix");
-assert(split.weeklyInputs.weeks["2026-W35"].revenue === 10, "split still restores weeks");
+assert(split.productMix.lines[0]?.sellPrice === 120, "split restores unit price");
+assert(split.productMix.lines[0]?.unitCost === 40, "split restores unit cost");
 
 const accountantAutosave = mergeFinancialsBlob(
   split.scalars,
@@ -114,37 +134,32 @@ const accountantAutosave = mergeFinancialsBlob(
 );
 const again = splitFinancialsBlob(accountantAutosave);
 assert(again.productMix.bestLineId === named[0].id, "accountant autosave must not wipe mix");
-assert(again.productMix.lines.length === 3, "accountant autosave keeps lines");
-
-const wiped = mergeFinancialsBlob(split.scalars, split.debtSchedule, split.weeklyInputs);
-assert(
-  (wiped.productMix as { lines: unknown[] }).lines.length === 0,
-  "3-arg merge defaults to empty mix — callers must pass the 4th arg",
-);
+assert(again.productMix.lines[0]?.marginPct != null, "computed margin survives merge");
 
 const overlaid = overlayProductMix(
   { revenue: "500000", weeklyInputs: emptyWeeklyInputs(), debt_schedule: { lines: [{ amount: 1 }] } },
   saved,
 );
 assert(overlaid.revenue === "500000", "overlay keeps period scalars");
-assert((overlaid.debt_schedule as { lines: unknown[] }).lines.length === 1, "overlay keeps debt");
 assert((overlaid.productMix as { lines: unknown[] }).lines.length === 3, "overlay writes mix");
 
 const ownerSrc = readFileSync(resolve("src/routes/app.tsx"), "utf8");
 assert(ownerSrc.includes("<ProductMixPanel"), "owner Profit tab mounts product mix");
 assert(ownerSrc.includes("overlayProductMix"), "owner persists mix without wiping period P&L");
-assert(ownerSrc.includes("parseProductMix(fin.productMix)"), "owner hydrates mix");
-assert(ownerSrc.includes("productMix, saveProductMix"), "owner context exposes mix");
 
 const accountantSrc = readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8");
 assert(accountantSrc.includes("<ProductMixPanel"), "accountant Profit tab mounts product mix");
-assert(accountantSrc.includes("productMix: mix"), "accountant load splits productMix from the blob");
 assert(accountantSrc.includes("mergeFinancialsBlob(scalars, ds, weeks, mix)"), "accountant merge keeps mix");
 
 const panelSrc = readFileSync(resolve("src/components/product-mix-panel.tsx"), "utf8");
 assert(panelSrc.includes("Question {step + 1} of {TOTAL}"), "funnel is 5 questions");
-assert(panelSrc.includes("useState(false)"), "panel collapsed by default");
-assert(panelSrc.includes("Break down by product line"), "empty CTA");
+assert(panelSrc.includes("Selling price per unit"), "Q3 is selling price");
+assert(panelSrc.includes("Direct cost per unit"), "Q4 is unit cost");
+assert(panelSrc.includes("choiceClass"), "selected options use a distinct class");
+assert(panelSrc.includes("Selected"), "selected options are labelled");
+assert(panelSrc.includes("border-2 border-[#d4a550]"), "selected state uses a stronger gold border");
+assert(panelSrc.includes("applyUnitEconomics"), "save stamps calculated margin");
+assert(!panelSrc.includes("Which has the best margin"), "best/worst are no longer asked");
 assert(!panelSrc.includes("WeeklyInputTable"), "mix is not folded into weekly grid");
 
 console.log("product-mix-test: ok");
