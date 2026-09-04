@@ -20,7 +20,13 @@ import {
   assertBehavioralQuestion,
   isBehavioralQuestion,
 } from "../src/lib/metrics/definitions";
-import { buildDigestText, buildInstrument } from "../src/lib/metrics/digest";
+import { buildDigestText, buildInstrument, readClosedMetrics } from "../src/lib/metrics/digest";
+import {
+  buildNextMove,
+  buildScorecard,
+  stallTitle,
+  stallWho,
+} from "../src/lib/metrics/instrument-view";
 
 function assert(cond: unknown, msg: string) {
   if (!cond) throw new Error(msg);
@@ -107,6 +113,7 @@ const fns = readFileSync(resolve("src/lib/metrics.functions.ts"), "utf8");
 assert(fns.includes("assertPlatformOwner"), "derived metrics are founder-only");
 assert(!fns.includes("assertOpsConsoleAccess"), "IT members do not get the founder instrument");
 assert(fns.includes("analytics_founder_bundle"), "instrument reads via public RPC");
+assert(fns.includes("conversations"), "Lighthouse conversations ride with the instrument");
 assert(!fns.includes('.schema("analytics")'), "do not hit PostgREST analytics schema");
 
 const dash = readFileSync(resolve("src/routes/_authenticated/founder.metrics.tsx"), "utf8");
@@ -115,7 +122,12 @@ assert(dash.includes("getFounderInstrument"), "dashboard loads the instrument");
 assert(dash.includes("SQL 7"), "error copy asks for SQL 7, not a re-paste of 3–6");
 assert(!/Paste SQL 3–5/.test(dash), "do not tell the founder to re-paste SQL 3–5");
 assert(!/total signups|NPS|cumulative/i.test(dash), "dashboard has no vanity copy");
-assert(dash.includes("LOOP_INTERPRETATION"), "loop rules are on the page");
+assert(dash.includes("This week's learning") || dash.includes("This week"), "page leads with what to do");
+assert(dash.includes("Five readings"), "all five metrics are on the page");
+assert(dash.includes("How far each practice has gone"), "commitment ladder is shown");
+assert(dash.includes("Conversations"), "Lighthouse conversations are on the page");
+assert(dash.includes("What we watch"), "input inventory is honest");
+assert(dash.includes("The loop is theatre") || dash.includes("theatre"), "loop rules are on the page");
 
 const sql5 = readFileSync(
   resolve("supabase/migrations/20260902300000_analytics_experiments_digest.sql"),
@@ -194,6 +206,41 @@ assert(inst.headline.metricKey === "LOOP_COMPLETION_RATE", "default headline is 
 assert(inst.hypotheses.find((h) => h.id === "H3")?.status === "blocked", "H3 stays blocked");
 assert(inst.hypotheses.find((h) => h.id === "H2")?.status === "contradicted", "low loop contradicts H2");
 assert(inst.worstLine.includes("WORST THIS WEEK"), "worst line is blunt");
+
+const cards = buildScorecard(readClosedMetrics({
+  activation: inst.headline.metricKey === "ACTIVATION_RATE" ? [] : [
+    { cohort_week: closedWeek, is_founding_practice: false, practices: 4, activation_14d_pct: 10 },
+  ],
+  loop: [
+    {
+      cohort_week: closedWeek,
+      tasks_assigned: 8,
+      emails_dispatched: 8,
+      links_engaged_by_human: 1,
+      status_progressed: 0,
+      completed: 1,
+      completion_14d_pct: 12,
+    },
+  ],
+  adoption: [
+    { cohort_week: closedWeek, entities_with_send: 5, assigned_within_7d: 1, assignment_adoption_pct: 20 },
+  ],
+  expansion: [],
+  retention: [],
+  queue: [],
+}));
+assert(cards.length === 5, "scorecard has all five readings");
+assert(cards.some((c) => c.who === "Accountant"), "scorecard names the accountant");
+assert(cards.some((c) => c.who === "Owner / staff"), "scorecard names the owner");
+assert(stallTitle("send_no_assign").includes("never assigned"), "stalls are in English");
+assert(stallWho("assign_no_completion") === "Owner / staff", "completion stall is an owner movement");
+assert(
+  buildNextMove(
+    [{ id: 1, practice_name: "Harbour", stall_type: "send_no_assign", severity: "high", suggested_question: "After the client saw the report, what did you actually do to get things fixed?" }],
+    inst,
+  ).kind === "call",
+  "next move is a call when the queue has a stall",
+);
 
 const foundingOnly = buildInstrument({
   activation: [

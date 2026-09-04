@@ -68,6 +68,53 @@ function founderBundleMissing(message: string): boolean {
 const SQL7_HINT =
   "Paste SQL 7 only (`supabase/migrations/20260904130000_analytics_founder_bundle.sql`). SQL 3–6 already created the tables; the API cannot read the analytics schema directly.";
 
+async function loadConversationPulse(): Promise<{
+  available: boolean;
+  sourced: number;
+  contacted: number;
+  replied: number;
+  meeting: number;
+  trial: number;
+  won: number;
+  replyRatePct: number | null;
+}> {
+  const empty = {
+    available: false,
+    sourced: 0,
+    contacted: 0,
+    replied: 0,
+    meeting: 0,
+    trial: 0,
+    won: 0,
+    replyRatePct: null as number | null,
+  };
+  try {
+    const admin = analyticsAdmin();
+    const { data, error } = await admin.from("milon_ops_leads").select("stage");
+    if (error || !Array.isArray(data)) return empty;
+    const stages = data.map((r) => String((r as { stage?: string }).stage ?? ""));
+    const count = (names: string[]) => stages.filter((s) => names.includes(s)).length;
+    const sourced = stages.length;
+    const contacted = count(["contacted", "replied", "meeting", "trial", "activated", "won"]);
+    const replied = count(["replied", "meeting", "trial", "activated", "won"]);
+    const meeting = count(["meeting", "trial", "activated", "won"]);
+    const trial = count(["trial", "activated", "won"]);
+    const won = count(["won"]);
+    return {
+      available: true,
+      sourced,
+      contacted,
+      replied,
+      meeting,
+      trial,
+      won,
+      replyRatePct: contacted ? Math.round((replied / contacted) * 1000) / 10 : null,
+    };
+  } catch {
+    return empty;
+  }
+}
+
 async function fetchFounderBag(): Promise<Record<string, unknown>> {
   const admin = analyticsAdmin();
   const { data, error } = await admin.rpc("analytics_founder_bundle");
@@ -253,6 +300,8 @@ async function loadDerivedBundle() {
     queue: openQueue,
   });
 
+  const conversations = await loadConversationPulse();
+
   return {
     activation,
     loop,
@@ -264,6 +313,7 @@ async function loadDerivedBundle() {
     signals: realSignals,
     experiments: experiments.sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at)),
     founderEmails,
+    conversations,
     instrument,
     catalog: {
       hypotheses: HYPOTHESES,
