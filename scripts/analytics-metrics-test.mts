@@ -96,8 +96,8 @@ for (const rule of STALL_RULES) {
 }
 
 assert(ANALYTICS_PHASE2_SQL.length === 2, "two editor-sized SQL files");
-assert(ANALYTICS_PHASE3_SQL.length === 2, "two Phase 3 SQL files");
-assert(ANALYTICS_SQL_TO_RUN.length === 4, "four remaining editor files");
+assert(ANALYTICS_PHASE3_SQL.length === 3, "three Phase 3 SQL files");
+assert(ANALYTICS_SQL_TO_RUN.length === 5, "five remaining editor files");
 assert(PREDICTION_MIN_CHARS > 8, "prediction friction matches SQL check");
 
 const defs = readFileSync(resolve("src/lib/metrics/definitions.ts"), "utf8");
@@ -106,10 +106,14 @@ assert(!defs.includes("public/js/track.js"), "no vanilla tracker");
 const fns = readFileSync(resolve("src/lib/metrics.functions.ts"), "utf8");
 assert(fns.includes("assertPlatformOwner"), "derived metrics are founder-only");
 assert(!fns.includes("assertOpsConsoleAccess"), "IT members do not get the founder instrument");
+assert(fns.includes("analytics_founder_bundle"), "instrument reads via public RPC");
+assert(!fns.includes('.schema("analytics")'), "do not hit PostgREST analytics schema");
 
 const dash = readFileSync(resolve("src/routes/_authenticated/founder.metrics.tsx"), "utf8");
 assert(dash.includes("assertPlatformOwner") === false, "guard lives in the server fn, not the page");
 assert(dash.includes("getFounderInstrument"), "dashboard loads the instrument");
+assert(dash.includes("SQL 7"), "error copy asks for SQL 7, not a re-paste of 3–6");
+assert(!/Paste SQL 3–5/.test(dash), "do not tell the founder to re-paste SQL 3–5");
 assert(!/total signups|NPS|cumulative/i.test(dash), "dashboard has no vanity copy");
 assert(dash.includes("LOOP_INTERPRETATION"), "loop rules are on the page");
 
@@ -121,6 +125,14 @@ assert(sql5.includes("experiment_prediction_required"), "prediction is required"
 assert(sql5.includes("analytics_purge_old_events"), "purge exists");
 assert(!/cron\.schedule.*purge/i.test(sql5), "purge is not scheduled");
 assert(sql5.includes("digest_log"), "digest log table");
+
+const sql7 = readFileSync(
+  resolve("supabase/migrations/20260904130000_analytics_founder_bundle.sql"),
+  "utf8",
+);
+assert(sql7.includes("analytics_founder_bundle"), "SQL 7 is the public bundle RPC");
+assert(sql7.includes("Invalid schema"), "SQL 7 names the PostgREST error");
+assert(!sql7.includes("CREATE SCHEMA"), "SQL 7 does not recreate analytics");
 
 const digestRoute = readFileSync(resolve("src/routes/api/metrics-digest.ts"), "utf8");
 assert(digestRoute.includes("wrote: false"), "unauthenticated GET does not send");
