@@ -14,6 +14,7 @@ import {
   formatMoneyCompact,
   formatMoneyUnit,
   formatNumber,
+  LIST_PRICES,
   localizeCopy,
   localizePlaybookStep,
   MarketSelectionError,
@@ -21,7 +22,9 @@ import {
   parseMarketSelection,
   playbookStepFitsMarket,
   resolveMarket,
+  t,
   US_STATES,
+  visitorCopyPack,
   ZA_MARKET,
   ZA_VAT_RATE,
 } from "../src/lib/market";
@@ -242,5 +245,15 @@ assert(
   localized.step_description.includes("dollar"),
   `localize body ${localized.step_description}`,
 );
+
+assert(visitorCopyPack({ country: "US" }) === "us", "US visitor copy pack");
+assert(visitorCopyPack({ country: "ZA" }) === "za", "ZA visitor copy pack");
+assert(visitorCopyPack({ country: null }) === "za", "unset visitor defaults ZA");
+assert(LIST_PRICES.us.orbit.startsWith("$"), "US Orbit is dollars");
+assert(LIST_PRICES.za.orbit.startsWith("R"), "ZA Orbit is rand");
+assert(LIST_PRICES.us.firm150.startsWith("$"), "US firm price is dollars");
+assert(t("nameExample", tx) === "Jordan Hale", "US name example");
+assert(t("nameExample", ZA_MARKET) === "Thabo Nkosi", "ZA name example");
+assert(t("entityExample", tx) === "Acme LLC", "US entity example");
 
 console.log("market kernel ok");

@@ -14,6 +14,7 @@ export type CopyKey =
   | "sharePrimary"
   | "entityExample"
   | "emailExample"
+  | "nameExample"
   | "currencyWord"
   | "currencyWordPlural";
 
@@ -31,6 +32,7 @@ const ZA: Record<CopyKey, string> = {
   sharePrimary: "WhatsApp",
   entityExample: "Karoo Traders (Pty) Ltd",
   emailExample: "owner@business.co.za",
+  nameExample: "Thabo Nkosi",
   currencyWord: "rand",
   currencyWordPlural: "rands",
 };
@@ -49,6 +51,7 @@ const US: Record<CopyKey, string> = {
   sharePrimary: "Email",
   entityExample: "Acme LLC",
   emailExample: "owner@business.com",
+  nameExample: "Jordan Hale",
   currencyWord: "dollar",
   currencyWordPlural: "dollars",
 };

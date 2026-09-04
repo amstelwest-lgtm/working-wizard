@@ -6,7 +6,34 @@
  * anyone having to open a design tool.
  */
 
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
+import {
+  applyVisitorMarketToDocument,
+  readVisitorDraft,
+  writeVisitorDraft,
+  type DraftMarket,
+} from "@/lib/market";
+
+export function MarketCopy({ za, us }: { za: ReactNode; us: ReactNode }) {
+  return (
+    <>
+      <span className="mk-copy-za">{za}</span>
+      <span className="mk-copy-us">{us}</span>
+    </>
+  );
+}
+
+function applyPack(country: DraftMarket["country"]) {
+  const cur = readVisitorDraft();
+  const next: DraftMarket =
+    country === "US"
+      ? { country: "US", regionCode: cur.regionCode }
+      : country === "ZA"
+        ? { country: "ZA", regionCode: null }
+        : { country: null, regionCode: null };
+  writeVisitorDraft(next);
+  applyVisitorMarketToDocument(next);
+}
 
 export function MarketingShell({
   eyebrow,
@@ -30,6 +57,10 @@ export function MarketingShell({
   /** Quiet heading for legal notices that should not read as marketing. */
   heroTone?: "default" | "plain";
 }) {
+  useEffect(() => {
+    applyVisitorMarketToDocument(readVisitorDraft());
+  }, []);
+
   return (
     <div className="mk" data-milon-marketing>
       <header className="mk-top">
@@ -74,12 +105,26 @@ export function MarketingShell({
         </section>
 
         <footer className="mk-foot">
-          <span>Milōn — financial health for South African and US businesses.</span>
+          <span>
+            <MarketCopy
+              za="Milōn — financial health for South African businesses."
+              us="Milōn — financial health for US small businesses."
+            />
+          </span>
           <a href="/">milon.co.za</a>
           <a href="/faq">Questions</a>
           <a href="/privacy">Privacy</a>
           <a href="/terms">Terms</a>
           <a href="/ai">AI notice</a>
+          <span className="mk-print-hide mk-market-switch">
+            <button type="button" onClick={() => applyPack("ZA")}>
+              South Africa
+            </button>
+            {" · "}
+            <button type="button" onClick={() => applyPack("US")}>
+              United States
+            </button>
+          </span>
           <span className="mk-print-hide">Print this page to save it as a PDF.</span>
         </footer>
       </div>

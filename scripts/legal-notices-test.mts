@@ -39,11 +39,21 @@ assert(privacy.includes("powered by"), "privacy says AI is used");
 assert(privacy.includes("Claude"), "privacy names Claude");
 assert(privacy.includes("anonymised"), "privacy says financials are anonymised");
 assert(privacy.includes("Protection of Personal Information"), "privacy mentions POPIA");
+assert(privacy.includes("privacy contact"), "US privacy names a privacy contact");
+assert(privacy.includes("California resident"), "US privacy mentions California requests");
+assert(privacy.includes("not in borrowed American boilerplate"), "ZA privacy keeps its voice");
+assert(privacy.includes("mk-copy-us"), "privacy has a US pack");
 
 assert(terms.includes("not a substitute"), "terms: not a substitute");
 assert(terms.includes("Claude"), "terms name Claude");
 assert(terms.includes("anonymised"), "terms repeat anonymisation");
 assert(terms.includes("South Africa"), "terms sit under SA law");
+assert(
+  terms.includes("not tax, legal, or investment advice"),
+  "US terms: not tax/legal/investment advice",
+);
+assert(terms.includes("IRS"), "US terms mention IRS");
+assert(terms.includes("choice of law"), "US terms do not invent a US venue");
 
 assert(ai.includes("Claude"), "AI notice names Claude");
 assert(ai.includes("Anthropic"), "AI notice names the supplier");
@@ -53,16 +63,20 @@ assert(ai.includes("No company names"), "AI notice: no company names");
 assert(ai.includes("No raw amounts"), "AI notice: no raw amounts");
 assert(ai.includes("anonymised"), "AI notice: anonymised");
 assert(ai.includes("VAT"), "AI notice: VAT stripped");
+assert(ai.includes("EIN"), "AI notice: EIN stripped on US pack");
 
 assert(faq.includes('href="/ai"'), "FAQ links to the AI notice");
 assert(faq.includes("powered by Claude"), "FAQ names Claude");
+assert(faq.includes("dollar sign glued on"), "FAQ has US invert of the SA-built line");
+assert(faq.includes("LIST_PRICES"), "FAQ prices come from the marketing pack");
 
 assert(landing.includes('href="/privacy"'), "landing footer links to privacy");
 assert(landing.includes('href="/terms"'), "landing footer links to terms");
 assert(landing.includes('href="/ai"'), "landing footer links to AI notice");
 assert(!landing.includes('href="/faq">Privacy'), "landing no longer labels FAQ as Privacy");
 assert(landing.includes("Eish2oh (Pty) Ltd"), "landing copyright uses the registered company");
-assert(!landing.includes("MILŌN Financial Technologies"), "landing no longer invents a company name");
+assert(landing.includes("LIST_PRICES"), "landing prices come from the marketing pack");
+assert(landing.includes("MarketCopy"), "landing dual-copy for US visitors");
 
 assert(shell.includes('href="/privacy"'), "collateral footer links to privacy");
 assert(shell.includes('href="/terms"'), "collateral footer links to terms");

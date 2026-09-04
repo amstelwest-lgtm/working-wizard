@@ -1,11 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { MarketingShell } from "@/components/marketing-shell";
+import { MarketCopy, MarketingShell } from "@/components/marketing-shell";
 import {
   LEGAL_ADDRESS_LINES,
   LEGAL_EFFECTIVE,
   LEGAL_ENTITY,
   LEGAL_INFORMATION_OFFICER,
 } from "@/lib/legal";
+import { VISITOR_MARKET_BOOT_SCRIPT } from "@/lib/market";
 import marketingCss from "../styles/marketing.css?inline";
 
 export const Route = createFileRoute("/privacy")({
@@ -20,6 +21,7 @@ export const Route = createFileRoute("/privacy")({
       },
     ],
     styles: [{ children: marketingCss }],
+    scripts: [{ children: VISITOR_MARKET_BOOT_SCRIPT }],
   }),
 });
 
@@ -34,10 +36,21 @@ function PrivacyPage() {
         </>
       }
       lead={
-        <>
-          {LEGAL_ENTITY} runs Milōn. This notice is the first public version — written in the same
-          voice as the product, not in borrowed American boilerplate. Effective {LEGAL_EFFECTIVE}.
-        </>
+        <MarketCopy
+          za={
+            <>
+              {LEGAL_ENTITY} runs Milōn. This notice is the first public version — written in the
+              same voice as the product, not in borrowed American boilerplate. Effective{" "}
+              {LEGAL_EFFECTIVE}.
+            </>
+          }
+          us={
+            <>
+              {LEGAL_ENTITY}, a South African company, runs Milōn for US businesses in early access.
+              This notice says what we keep and what the AI never sees. Effective {LEGAL_EFFECTIVE}.
+            </>
+          }
+        />
       }
       ctaTitle={<>Read how the AI is used</>}
       ctaBody={
@@ -49,18 +62,34 @@ function PrivacyPage() {
       ctaLabel="AI notice ✦"
       ctaHref="/ai"
     >
-      <p className="mk-legal-updated">Effective {LEGAL_EFFECTIVE} · South Africa</p>
+      <p className="mk-legal-updated">
+        Effective {LEGAL_EFFECTIVE} ·{" "}
+        <MarketCopy za="South Africa" us="US early access · RSA company" />
+      </p>
 
       <h2>Who we are</h2>
-      <p>
-        {LEGAL_ENTITY} is a South African company. We trade as Milōn — a financial-health workspace
-        for business owners and the accountants they invite. The responsible party for personal
-        information processed on this platform is {LEGAL_ENTITY}.
-      </p>
-      <p>
-        The Information Officer is {LEGAL_INFORMATION_OFFICER}. Write to him at the address below,
-        reply to the email that brought you here, or write from inside the product.
-      </p>
+      <div className="mk-copy-za">
+        <p>
+          {LEGAL_ENTITY} is a South African company. We trade as Milōn — a financial-health
+          workspace for business owners and the accountants they invite. The responsible party for
+          personal information processed on this platform is {LEGAL_ENTITY}.
+        </p>
+        <p>
+          The Information Officer is {LEGAL_INFORMATION_OFFICER}. Write to him at the address below,
+          reply to the email that brought you here, or write from inside the product.
+        </p>
+      </div>
+      <div className="mk-copy-us">
+        <p>
+          {LEGAL_ENTITY} is a South African company trading as Milōn. US workspaces are early
+          access: the same product, offered by the same company, from the same address. We have not
+          formed a US legal entity.
+        </p>
+        <p>
+          The privacy contact is {LEGAL_INFORMATION_OFFICER}. Write to him at the address below,
+          reply to the email that brought you here, or write from inside the product.
+        </p>
+      </div>
       <p className="mk-legal-address">
         {LEGAL_ENTITY}
         <br />
@@ -89,8 +118,8 @@ function PrivacyPage() {
         </li>
         <li>
           <strong>Product events</strong> — keys such as “report sent”, not financial amounts, ID
-          numbers, or employee emails. Kept so we can tell whether the product works. Raw events
-          are kept for 24 months; weekly totals stay.
+          numbers, or employee emails. Kept so we can tell whether the product works. Raw events are
+          kept for 24 months; weekly totals stay.
         </li>
       </ul>
 
@@ -108,21 +137,26 @@ function PrivacyPage() {
       <h2>How AI is used</h2>
       <p>
         Milōn uses AI. It is powered by <strong>Claude</strong> (Anthropic).{" "}
-        <strong>Financial information sent to the model is anonymised</strong> — no company names,
-        no raw rand amounts, and VAT numbers and account numbers are stripped before anything
-        leaves the platform. What remains is ratio context and industry labels, so the assistant
-        can talk about the shape of the business without seeing who you are or the exact figures.
+        <strong>Financial information sent to the model is anonymised</strong> — no company names,{" "}
+        <MarketCopy
+          za="no raw rand amounts, and VAT numbers and account numbers are stripped"
+          us="no raw dollar amounts, and EIN / tax IDs and account numbers are stripped"
+        />{" "}
+        before anything leaves the platform. What remains is ratio context and industry labels, so
+        the assistant can talk about the shape of the business without seeing who you are or the
+        exact figures.
       </p>
       <p>
-        Where AI drafts a report for an accountant, a human reads and signs it before a client
-        ever sees it. The longer version of this is on the{" "}
-        <a href="/ai">AI notice</a>.
+        Where AI drafts a report for an accountant, a human reads and signs it before a client ever
+        sees it. The longer version of this is on the <a href="/ai">AI notice</a>.
       </p>
 
       <h2>What we do not do</h2>
       <ul className="mk-list">
         <li>We do not sell your figures, your email list, or your client book.</li>
-        <li>We do not store card details. Nothing is being billed yet, so there is nothing to store.</li>
+        <li>
+          We do not store card details. Nothing is being billed yet, so there is nothing to store.
+        </li>
         <li>We do not use your financials to train a public model of our own.</li>
       </ul>
 
@@ -134,16 +168,28 @@ function PrivacyPage() {
       </p>
 
       <h2>Your rights</h2>
-      <p>
-        Under the Protection of Personal Information Act you can ask what we hold, ask us to
-        correct it, or ask us to delete it. The fastest path for deletion is Settings. For anything
-        else, write to {LEGAL_INFORMATION_OFFICER} (Information Officer) at the address above, or
-        reply to the email that brought you. You can also lodge a complaint with the{" "}
-        <a href="https://inforegulator.org.za" target="_blank" rel="noreferrer">
-          Information Regulator
-        </a>
-        .
-      </p>
+      <div className="mk-copy-za">
+        <p>
+          Under the Protection of Personal Information Act you can ask what we hold, ask us to
+          correct it, or ask us to delete it. The fastest path for deletion is Settings. For
+          anything else, write to {LEGAL_INFORMATION_OFFICER} (Information Officer) at the address
+          above, or reply to the email that brought you. You can also lodge a complaint with the{" "}
+          <a href="https://inforegulator.org.za" target="_blank" rel="noreferrer">
+            Information Regulator
+          </a>
+          .
+        </p>
+      </div>
+      <div className="mk-copy-us">
+        <p>
+          You can ask what we hold, ask us to correct it, or ask us to delete it. The fastest path
+          for deletion is Settings. For anything else, write to {LEGAL_INFORMATION_OFFICER} (privacy
+          contact) at the address above, or reply to the email that brought you. We do not sell
+          personal information. If you are a California resident, the same requests go to the same
+          contact — we will respond; this is not a claim that we are a CCPA “business” with a full
+          statutory notice yet.
+        </p>
+      </div>
 
       <h2>Cookies and local storage</h2>
       <p>

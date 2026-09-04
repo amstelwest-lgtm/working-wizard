@@ -1,6 +1,13 @@
 export { isMissingMarketSupport, withMarketRpcFallback } from "./compat";
 export type { CopyKey } from "./copy";
 export { localizeCopy, SALES_TAX_HONESTY, t } from "./copy";
+export {
+  applyVisitorMarketToDocument,
+  LIST_PRICES,
+  visitorCopyPack,
+  VISITOR_MARKET_BOOT_SCRIPT,
+} from "./marketing";
+export type { VisitorCopyPack } from "./marketing";
 export { isZaOnlyPlaybookStep, localizePlaybookStep, playbookStepFitsMarket } from "./playbook";
 export type { PlaybookMarketTag } from "./playbook";
 export {

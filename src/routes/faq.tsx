@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { MarketingShell } from "@/components/marketing-shell";
+import { MarketCopy, MarketingShell } from "@/components/marketing-shell";
+import { LIST_PRICES, VISITOR_MARKET_BOOT_SCRIPT } from "@/lib/market";
 import marketingCss from "../styles/marketing.css?inline";
 
 export const Route = createFileRoute("/faq")({
@@ -14,6 +15,7 @@ export const Route = createFileRoute("/faq")({
       },
     ],
     styles: [{ children: marketingCss }],
+    scripts: [{ children: VISITOR_MARKET_BOOT_SCRIPT }],
   }),
 });
 
@@ -53,11 +55,19 @@ function FaqPage() {
       <h2>Money</h2>
 
       <Qa q="What does it cost?">
-        <p>
+        <p className="mk-copy-za">
           Spark is free during early access and does not ask for a card. Two paid tiers are
-          published — Orbit at R699 a month and Constellation at R1 299 a month — but neither is
-          being billed yet. For practices, firm pricing is planned at R4 500 a month up to 150
-          clients and R7 200 a month for unlimited, also not yet billed.
+          published — Orbit at {LIST_PRICES.za.orbit} a month and Constellation at{" "}
+          {LIST_PRICES.za.constellation} a month — but neither is being billed yet. For practices,
+          firm pricing is planned at {LIST_PRICES.za.firm150} a month up to 150 clients and{" "}
+          {LIST_PRICES.za.firmUnlimited} a month for unlimited, also not yet billed.
+        </p>
+        <p className="mk-copy-us">
+          Spark is free during early access and does not ask for a card. Two paid tiers are
+          published — Orbit at {LIST_PRICES.us.orbit} a month and Constellation at{" "}
+          {LIST_PRICES.us.constellation} a month — but neither is being billed yet. For practices,
+          firm pricing is planned at {LIST_PRICES.us.firm150} a month up to 150 clients and{" "}
+          {LIST_PRICES.us.firmUnlimited} a month for unlimited, also not yet billed.
         </p>
       </Qa>
 
@@ -96,10 +106,11 @@ function FaqPage() {
 
       <Qa q="What does the AI see?">
         <p>
-          We use AI. It is powered by Claude. Financial information sent to the model is
-          anonymised — no company names and no raw amounts — with VAT and account numbers stripped
-          before anything leaves the platform. Where an AI drafts a report for an accountant, a
-          human reads and signs it before a client ever sees it. The{" "}
+          We use AI. It is powered by Claude. Financial information sent to the model is anonymised
+          — no company names and no raw amounts — with{" "}
+          <MarketCopy za="VAT and account numbers" us="EIN / tax IDs and account numbers" />{" "}
+          stripped before anything leaves the platform. Where an AI drafts a report for an
+          accountant, a human reads and signs it before a client ever sees it. The{" "}
           <a href="/ai">AI notice</a> is the public version of that sentence.
         </p>
       </Qa>
@@ -152,13 +163,25 @@ function FaqPage() {
         </p>
       </Qa>
 
-      <Qa q="Is this built for South Africa or bolted on?">
-        <p>
-          Built for it. SARS and VAT timing, ZAR throughout, load-shedding as a real line item in
-          the cost of doing business, and benchmarks drawn from South African context rather than
-          from a US template with the currency symbol swapped.
-        </p>
-      </Qa>
+      <div className="mk-copy-za">
+        <Qa q="Is this built for South Africa or bolted on?">
+          <p>
+            Built for it. SARS and VAT timing, ZAR throughout, load-shedding as a real line item in
+            the cost of doing business, and benchmarks drawn from South African context rather than
+            from a US template with the currency symbol swapped.
+          </p>
+        </Qa>
+      </div>
+      <div className="mk-copy-us">
+        <Qa q="Is this a South African product with a dollar sign glued on?">
+          <p>
+            No. Choosing the United States switches currency, dates, sales tax (not VAT), and the
+            advice pack. It is not a rand product with the symbol swapped. US industry medians are
+            still being built, so we show days and percentages rather than pretending SA bands are
+            Texas ones.
+          </p>
+        </Qa>
+      </div>
 
       <h2>The cold email</h2>
 
