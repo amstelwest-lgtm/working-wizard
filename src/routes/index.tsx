@@ -2643,7 +2643,7 @@ function LandingPage() {
           </nav>
           <div className="copy">
             <span>
-              © {new Date().getFullYear()} MILŌN Financial Technologies (Pty) Ltd. All rights
+              © {new Date().getFullYear()} Eish2oh (Pty) Ltd. Trading as MILŌN. All rights
               reserved.
             </span>
             <span>

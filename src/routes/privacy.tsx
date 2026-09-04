@@ -1,6 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { MarketingShell } from "@/components/marketing-shell";
-import { LEGAL_EFFECTIVE, LEGAL_ENTITY } from "@/lib/legal";
+import {
+  LEGAL_ADDRESS_LINES,
+  LEGAL_EFFECTIVE,
+  LEGAL_ENTITY,
+  LEGAL_INFORMATION_OFFICER,
+} from "@/lib/legal";
 import marketingCss from "../styles/marketing.css?inline";
 
 export const Route = createFileRoute("/privacy")({
@@ -48,13 +53,23 @@ function PrivacyPage() {
 
       <h2>Who we are</h2>
       <p>
-        {LEGAL_ENTITY} is a South African company. We provide Milōn — a financial-health workspace
+        {LEGAL_ENTITY} is a South African company. We trade as Milōn — a financial-health workspace
         for business owners and the accountants they invite. The responsible party for personal
         information processed on this platform is {LEGAL_ENTITY}.
       </p>
       <p>
-        If you need to ask about this notice, reply to the email that brought you here, or write
-        from inside the product. A person answers.
+        The Information Officer is {LEGAL_INFORMATION_OFFICER}. Write to him at the address below,
+        reply to the email that brought you here, or write from inside the product.
+      </p>
+      <p className="mk-legal-address">
+        {LEGAL_ENTITY}
+        <br />
+        {LEGAL_ADDRESS_LINES.map((line) => (
+          <span key={line}>
+            {line}
+            <br />
+          </span>
+        ))}
       </p>
 
       <h2>What we collect</h2>
@@ -122,7 +137,12 @@ function PrivacyPage() {
       <p>
         Under the Protection of Personal Information Act you can ask what we hold, ask us to
         correct it, or ask us to delete it. The fastest path for deletion is Settings. For anything
-        else, reply to the email that brought you.
+        else, write to {LEGAL_INFORMATION_OFFICER} (Information Officer) at the address above, or
+        reply to the email that brought you. You can also lodge a complaint with the{" "}
+        <a href="https://inforegulator.org.za" target="_blank" rel="noreferrer">
+          Information Regulator
+        </a>
+        .
       </p>
 
       <h2>Cookies and local storage</h2>

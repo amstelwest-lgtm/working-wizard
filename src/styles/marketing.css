@@ -341,6 +341,16 @@ html .mk .mk-legal-updated {
   color: var(--ink-dim) !important;
 }
 
+html .mk .mk-legal-address {
+  margin: 8px 0 20px;
+  padding: 14px 16px;
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--ink) !important;
+}
+
 html .mk .mk-wrap p a,
 html .mk .mk-qa a,
 html .mk .mk-note a,

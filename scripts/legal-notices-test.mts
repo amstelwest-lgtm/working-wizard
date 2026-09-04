@@ -4,7 +4,12 @@
  */
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { LEGAL_EFFECTIVE, LEGAL_ENTITY } from "../src/lib/legal";
+import {
+  LEGAL_ADDRESS,
+  LEGAL_EFFECTIVE,
+  LEGAL_ENTITY,
+  LEGAL_INFORMATION_OFFICER,
+} from "../src/lib/legal";
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
@@ -22,7 +27,13 @@ const tree = readFileSync(resolve("src/routeTree.gen.ts"), "utf8");
 
 assert(privacy.includes("{LEGAL_ENTITY}"), "privacy names the company");
 assert(privacy.includes("{LEGAL_EFFECTIVE}"), "privacy has an effective date");
-assert(LEGAL_ENTITY.includes("MILŌN"), "legal entity is MILŌN");
+assert(privacy.includes("{LEGAL_INFORMATION_OFFICER}"), "privacy names the Information Officer");
+assert(privacy.includes("{LEGAL_ADDRESS_LINES"), "privacy shows the registered address");
+assert(LEGAL_ENTITY === "Eish2oh (Pty) Ltd", "legal entity is Eish2oh (Pty) Ltd");
+assert(LEGAL_INFORMATION_OFFICER === "Theo", "Information Officer is Theo");
+assert(LEGAL_ADDRESS.includes("152 Melville Street"), "address is Melville Street");
+assert(LEGAL_ADDRESS.includes("Sunnyside"), "address is Sunnyside Pretoria");
+assert(!LEGAL_ENTITY.includes("MILŌN"), "product name is not the registered company");
 assert(/\d{4}/.test(LEGAL_EFFECTIVE), "effective date has a year");
 assert(privacy.includes("powered by"), "privacy says AI is used");
 assert(privacy.includes("Claude"), "privacy names Claude");
@@ -47,6 +58,8 @@ assert(landing.includes('href="/privacy"'), "landing footer links to privacy");
 assert(landing.includes('href="/terms"'), "landing footer links to terms");
 assert(landing.includes('href="/ai"'), "landing footer links to AI notice");
 assert(!landing.includes('href="/faq">Privacy'), "landing no longer labels FAQ as Privacy");
+assert(landing.includes("Eish2oh (Pty) Ltd"), "landing copyright uses the registered company");
+assert(!landing.includes("MILŌN Financial Technologies"), "landing no longer invents a company name");
 
 assert(shell.includes('href="/privacy"'), "collateral footer links to privacy");
 assert(shell.includes('href="/terms"'), "collateral footer links to terms");
