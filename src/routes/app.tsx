@@ -58,7 +58,15 @@ import {
   DEFAULT_WEEKLY_ROW,
 } from "@/contexts/financial-inputs";
 import { parseWeeklyInputs, derivePeriodWaterfallFallback, hasWeeklyActivity, overlayWeeklyInputs } from "@/lib/weekly-inputs";
+import {
+  emptyProductMix,
+  hasProductMixAnswer,
+  overlayProductMix,
+  parseProductMix,
+  type ProductMix,
+} from "@/lib/product-mix";
 import { WeeklyInputTable } from "@/components/weekly-input-table";
+import { ProductMixPanel } from "@/components/product-mix-panel";
 import { ProfitabilityWaterfall } from "@/components/profitability-waterfall";
 import { useTrack } from "@/hooks/use-track";
 import { IndustryPulse, IndustryNewsBand } from "@/components/industry-pulse";
@@ -2010,6 +2018,7 @@ function Index() {
   const track = useTrack();
   const [v, setV] = useState<Inputs>(defaults);
   const [weeklyInputs, setWeeklyInputs] = useState<WeeklyInputs>({ weeks: {} });
+  const [productMix, setProductMix] = useState<ProductMix>(emptyProductMix);
   const [showFinData, setShowFinData] = useState(false);
 
   const handleStatementUpload = useCallback(async (file: File) => {
@@ -2482,7 +2491,7 @@ function Index() {
     setActingClientName(sessionStorage.getItem("acting_as_client_name"));
   }, []);
 
-  // Keys that indicate real user-entered financials (excludes weeklyInputs and other metadata)
+  // Keys that indicate real user-entered financials (excludes weeklyInputs, productMix, and other metadata)
   const FINANCIAL_INPUT_KEYS = Object.keys(defaults) as (keyof Inputs)[];
 
   // Guards against the autosave effect firing the instant hydration finishes —
@@ -2496,6 +2505,7 @@ function Index() {
     setHasRealFinancials(false); // reset on client switch until confirmed
     setV(defaults); // reset inputs so no previous client's data bleeds through
     setWeeklyInputs({ weeks: {} });
+    setProductMix(emptyProductMix());
     supabase
       .from("clients")
       .select("financials")
@@ -2503,7 +2513,10 @@ function Index() {
       .maybeSingle()
       .then(({ data }) => {
         if (data?.financials) {
-          const fin = data.financials as Partial<Inputs> & { weeklyInputs?: WeeklyInputs };
+          const fin = data.financials as Partial<Inputs> & {
+            weeklyInputs?: WeeklyInputs;
+            productMix?: unknown;
+          };
           // Only treat as real data if at least one recognised financial key is present and non-empty.
           // Empty objects ({}) or objects containing only weeklyInputs do not qualify.
           const hasRealKeys = FINANCIAL_INPUT_KEYS.some(
@@ -2513,6 +2526,10 @@ function Index() {
           // matches the accountant portal (which reads the same weeklyInputs blob).
           if (fin.weeklyInputs) {
             setWeeklyInputs(parseWeeklyInputs(fin.weeklyInputs));
+            skipNextFinancialsAutosave.current = true;
+          }
+          if (fin.productMix) {
+            setProductMix(parseProductMix(fin.productMix));
             skipNextFinancialsAutosave.current = true;
           }
           if (hasRealKeys) {
@@ -2545,22 +2562,25 @@ function Index() {
       skipNextFinancialsAutosave.current = false;
       return;
     }
-    if (!hasRealFinancials && !hasWeeklyActivity(weeklyInputs)) return;
+    if (!hasRealFinancials && !hasWeeklyActivity(weeklyInputs) && !hasProductMixAnswer(productMix)) return;
     setSaveStatus("saving");
     const t = setTimeout(async () => {
       const financialsUpdatedAt = new Date().toISOString();
       let blob: Record<string, unknown>;
       if (hasRealFinancials) {
-        blob = { ...v, weeklyInputs };
+        blob = { ...v, weeklyInputs, productMix };
       } else {
         const { data: row } = await supabase
           .from("clients")
           .select("financials")
           .eq("id", effectiveClientId)
           .maybeSingle();
-        blob = overlayWeeklyInputs(
-          (row?.financials as Record<string, unknown> | null) ?? {},
-          weeklyInputs,
+        blob = overlayProductMix(
+          overlayWeeklyInputs(
+            (row?.financials as Record<string, unknown> | null) ?? {},
+            weeklyInputs,
+          ),
+          productMix,
         );
       }
       const { data: updated, error } = await supabase
@@ -2613,7 +2633,7 @@ function Index() {
       }
     }, 700);
     return () => clearTimeout(t);
-  }, [v, weeklyInputs, effectiveClientId, hydratedClientId, hasRealFinancials]);
+  }, [v, weeklyInputs, productMix, effectiveClientId, hydratedClientId, hasRealFinancials]);
 
   useAskAiMount({ effectiveClientId, activeTab, viewMode, hasRealFinancials });
 
@@ -3079,9 +3099,13 @@ function Index() {
     // so it must not mark real financials or trigger the scored dashboard.
   }, []);
 
+  const saveProductMix = useCallback((mix: ProductMix) => {
+    setProductMix(mix);
+  }, []);
+
   const financialInputsCtxValue = useMemo(
-    () => ({ weeklyInputs, updateWeek }),
-    [weeklyInputs, updateWeek],
+    () => ({ weeklyInputs, updateWeek, productMix, saveProductMix }),
+    [weeklyInputs, updateWeek, productMix, saveProductMix],
   );
 
   const handleTourTabChange = useCallback((tab: string) => {
@@ -4164,6 +4188,10 @@ function Index() {
                   )}
                   fallback={derivePeriodWaterfallFallback(v)}
                 />
+              </div>
+              {/* Optional product-line mix — collapsed until the owner opts in */}
+              <div className="mt-4">
+                <ProductMixPanel />
               </div>
               {/* Weekly inputs feed the waterfall — sit below so the chart stays the focus */}
               <div className="mt-4">

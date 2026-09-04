@@ -36,6 +36,7 @@ import { buildSpherePillars } from "@/components/sphere-hero-adapter";
 import { SimplifiedRatios } from "@/components/simplified-ratios";
 import { ProfitabilityWaterfall } from "@/components/profitability-waterfall";
 import { WeeklyInputTable } from "@/components/weekly-input-table";
+import { ProductMixPanel } from "@/components/product-mix-panel";
 import {
   FinancialInputsContext,
   DEFAULT_WEEKLY_ROW,
@@ -43,6 +44,7 @@ import {
   type WeeklyRow,
 } from "@/contexts/financial-inputs";
 import { emptyWeeklyInputs, derivePeriodWaterfallFallback } from "@/lib/weekly-inputs";
+import { emptyProductMix, type ProductMix } from "@/lib/product-mix";
 import { useServerFn } from "@tanstack/react-start";
 import { listClientReviewSignoffs, indexReviewSignoffs } from "@/lib/review-signoffs.functions";
 import type { ClientReviewSignoff, ReviewScope } from "@/lib/review-signoffs.functions";
@@ -494,12 +496,15 @@ function ClientView() {
   const [financials, setFinancials] = useState<Record<string, string>>({});
   const [debtSchedule, setDebtSchedule] = useState<DebtSchedule>(emptyDebtSchedule());
   const [weeklyInputs, setWeeklyInputs] = useState<WeeklyInputs>(emptyWeeklyInputs);
+  const [productMix, setProductMix] = useState<ProductMix>(emptyProductMix);
   const financialsRef = useRef(financials);
   financialsRef.current = financials;
   const debtScheduleRef = useRef(debtSchedule);
   debtScheduleRef.current = debtSchedule;
   const weeklyInputsRef = useRef(weeklyInputs);
   weeklyInputsRef.current = weeklyInputs;
+  const productMixRef = useRef(productMix);
+  productMixRef.current = productMix;
   const [profileOpen, setProfileOpen] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [showBankDrafter, setShowBankDrafter] = useState(false);
@@ -694,15 +699,16 @@ function ClientView() {
             } else {
               setClient((data2 as Client | null) ?? null);
               const fin = (data2 as Client | null)?.financials ?? {};
-              const { scalars, debtSchedule: ds, weeklyInputs: weeks } = splitFinancialsBlob(
-                fin as Record<string, unknown>,
-              );
+              const { scalars, debtSchedule: ds, weeklyInputs: weeks, productMix: mix } =
+                splitFinancialsBlob(fin as Record<string, unknown>);
               setFinancials(scalars);
               setDebtSchedule(ds);
               setWeeklyInputs(weeks);
+              setProductMix(mix);
               financialsRef.current = scalars;
               debtScheduleRef.current = ds;
               weeklyInputsRef.current = weeks;
+              productMixRef.current = mix;
             }
           } else {
             toast.error(error.message);
@@ -710,15 +716,16 @@ function ClientView() {
         } else {
           setClient((data as Client | null) ?? null);
           const fin = (data as Client | null)?.financials ?? {};
-          const { scalars, debtSchedule: ds, weeklyInputs: weeks } = splitFinancialsBlob(
-            fin as Record<string, unknown>,
-          );
+          const { scalars, debtSchedule: ds, weeklyInputs: weeks, productMix: mix } =
+            splitFinancialsBlob(fin as Record<string, unknown>);
           setFinancials(scalars);
           setDebtSchedule(ds);
           setWeeklyInputs(weeks);
+          setProductMix(mix);
           financialsRef.current = scalars;
           debtScheduleRef.current = ds;
           weeklyInputsRef.current = weeks;
+          productMixRef.current = mix;
         }
       } finally {
         setLoading(false);
@@ -804,7 +811,8 @@ function ClientView() {
       scalars: Record<string, string> = financialsRef.current,
       ds: DebtSchedule = debtScheduleRef.current,
       weeks: WeeklyInputs = weeklyInputsRef.current,
-    ) => mergeFinancialsBlob(scalars, ds, weeks),
+      mix: ProductMix = productMixRef.current,
+    ) => mergeFinancialsBlob(scalars, ds, weeks, mix),
     [],
   );
 
@@ -883,9 +891,20 @@ function ClientView() {
     [mergeCurrentBlob, persistMergedFinancials],
   );
 
+  const saveProductMix = useCallback(
+    (mix: ProductMix) => {
+      productMixRef.current = mix;
+      setProductMix(mix);
+      setAutosaveStatus("saving");
+      if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
+      void persistMergedFinancials(mergeCurrentBlob());
+    },
+    [mergeCurrentBlob, persistMergedFinancials],
+  );
+
   const financialInputsCtxValue = useMemo(
-    () => ({ weeklyInputs, updateWeek }),
-    [weeklyInputs, updateWeek],
+    () => ({ weeklyInputs, updateWeek, productMix, saveProductMix }),
+    [weeklyInputs, updateWeek, productMix, saveProductMix],
   );
 
   // ── Save snapshot ────────────────────────────────────────────────────────
@@ -1966,6 +1985,9 @@ function ClientView() {
                 computeIsStale(profitabilitySignoff, client?.financials_updated_at ?? null),
               )}
             />
+            <div style={{ marginTop: 16 }}>
+              <ProductMixPanel />
+            </div>
             {/* Same weekly grid as the owner Profit tab — weeks feed this waterfall. */}
             <div style={{ marginTop: 16 }}>
               <WeeklyInputTable role="accountant" />
