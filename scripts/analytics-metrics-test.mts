@@ -82,9 +82,10 @@ assert(!/sum\(.*signups|total_users|count\(\*\) as total_reports/i.test(viewsSql
 assert(stallSql.includes("situation_required"), "signals require a situation");
 assert(stallSql.includes("high_correction_rate") === false, "SQL must not emit H3 stalls");
 assert(
-  !/GENERATED ALWAYS AS \(\(date_trunc\('week', created_at\)\)/i.test(stallSql),
-  "week_start must not be a generated timestamptz trunc (42P17)",
+  !/week_start\s+date GENERATED ALWAYS/i.test(stallSql),
+  "week_start must not be a generated column (42P17)",
 );
+assert(stallSql.includes("SQL4_RETRY_42P17"), "retry marker present so the paste can be identified");
 
 for (const rule of STALL_RULES) {
   assert(

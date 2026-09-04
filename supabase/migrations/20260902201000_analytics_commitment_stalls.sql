@@ -1,8 +1,10 @@
 -- ============================================================================
 -- MILŌN analytics Phase 2 — SQL 2 of 2
+-- SQL4_RETRY_42P17
 -- Commitment ladder, stall queue, signal log, refresh RPC.
 -- Run AFTER 20260902200000_analytics_derived_views.sql
 -- Questions are past-tense / behavioural. H3 stall is not generated.
+-- If this file still contains "GENERATED ALWAYS AS ((date_trunc" you have the OLD paste.
 -- ============================================================================
 
 CREATE OR REPLACE FUNCTION analytics.is_founder_uid(p_uid uuid)
@@ -35,9 +37,8 @@ CREATE TABLE IF NOT EXISTS analytics.practice_commitment_weekly (
 CREATE TABLE IF NOT EXISTS analytics.founder_action_queue (
   id                 bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   created_at         timestamptz NOT NULL DEFAULT now(),
-  -- Plain date, not GENERATED. date_trunc(timestamptz) is STABLE (timezone),
-  -- which Postgres rejects with 42P17 on a generated column.
-  week_start         date NOT NULL DEFAULT ((date_trunc('week', timezone('UTC', now())))::date),
+  -- No generated column and no date_trunc in DDL (Postgres 42P17).
+  week_start         date NOT NULL,
   practice_id        uuid NOT NULL REFERENCES public.firms(id) ON DELETE CASCADE,
   practice_name      text,
   entity_id          uuid,
