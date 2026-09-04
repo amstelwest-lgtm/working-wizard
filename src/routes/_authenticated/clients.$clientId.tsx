@@ -1,4 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { openPracticeSettings } from "@/lib/user-roles";
 import { useEffect, useRef, useState, useCallback, useMemo, Suspense } from "react";
 import { lazyPanel, TabErrorBoundary } from "@/components/lazy-panel";
 import { supabase } from "@/integrations/supabase/client";
@@ -1404,6 +1405,7 @@ function ClientView() {
                   type="button"
                   onClick={() => {
                     setMobileNavOpen(false);
+                    openPracticeSettings();
                     navigate({ to: "/settings" });
                   }}
                 >

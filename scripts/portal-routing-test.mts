@@ -9,6 +9,8 @@ import {
   decidePostLoginPath,
   decideAccountantStay,
   decideOwnerAppBounce,
+  decideSettingsView,
+  settingsBackPath,
   isSmeOnly,
   canEnterAccountantPortal,
   isPracticeSignupMeta,
@@ -189,6 +191,41 @@ assert(isSmeOnly(clientOnly) === true, "client-only is SME-only");
 assert(isSmeOnly(dual) === false, "dual-role is not SME-only");
 assert(isSmeOnly(practiceOnly) === false, "practice-only is not SME-only");
 assert(isSmeOnly(noRolesFirm) === false, "firm owner without roles is not SME-only");
+
+assert(decideSettingsView({ ...dual, returnTo: "/app" }) === "owner", "dual from /app → owner settings");
+assert(
+  settingsBackPath(decideSettingsView({ ...dual, returnTo: "/app" })) === "/app",
+  "dual from /app settings Back → /app",
+);
+assert(
+  decideSettingsView({ ...dual, returnTo: "/dashboard" }) === "practice",
+  "dual from /dashboard → practice settings",
+);
+assert(
+  settingsBackPath(decideSettingsView({ ...dual, returnTo: "/dashboard" })) === "/dashboard",
+  "dual from /dashboard settings Back → /dashboard",
+);
+assert(
+  decideSettingsView({ ...dual, intent: "owner" }) === "owner",
+  "dual with owner intent (no return stamp) → owner settings",
+);
+assert(
+  decideSettingsView({ ...dual, intent: "accountant" }) === "practice",
+  "dual with accountant intent → practice settings",
+);
+assert(decideSettingsView(clientOnly) === "owner", "SME-only settings are owner");
+assert(decideSettingsView(practiceOnly) === "practice", "practice-only settings are practice");
+assert(
+  decideSettingsView({ ...clientOnly, returnTo: "/dashboard" }) === "owner",
+  "SME-only cannot be shown practice settings just because return said /dashboard",
+);
+
+const appSrc = readFileSync(resolve("src/routes/app.tsx"), "utf8");
+assert(appSrc.includes("openOwnerSettings"), "/app stamps owner settings return");
+const settingsSrc = readFileSync(resolve("src/routes/_authenticated/settings.index.tsx"), "utf8");
+assert(settingsSrc.includes("decideSettingsView"), "settings uses door-aware view, not primaryRole");
+assert(settingsSrc.includes("settingsBackPath"), "settings Back follows the door");
+assert(!settingsSrc.includes("primaryRole"), "settings no longer treats dual-role as accountant via primaryRole");
 
 const authSrc = readFileSync(resolve("src/routes/auth.tsx"), "utf8");
 assert(authSrc.includes("resolvePostLoginPath"), "accountant /auth lands via role-aware path");

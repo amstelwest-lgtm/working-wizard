@@ -33,6 +33,19 @@ import {
 import { ThemeToggle } from "@/components/theme-toggle";
 import { MarketSettingsCard } from "@/components/market-settings-card";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
+import { listUserFirms } from "@/lib/firm-brand";
+import {
+  decideSettingsView,
+  getPortalIntent,
+  isPracticeSignupMeta,
+  peekForcePortal,
+  peekSettingsReturn,
+  resolvePortalRoles,
+  setPortalIntent,
+  setSettingsReturn,
+  settingsBackPath,
+  type SettingsView,
+} from "@/lib/user-roles";
 
 export const Route = createFileRoute("/_authenticated/settings/")({
   component: SettingsPage,
@@ -45,27 +58,45 @@ function SettingsPage() {
   const doDelete = useServerFn(deleteOwnAccount);
   const { firmId } = useAccountantProfile();
 
-  const [role, setRole] = useState<string | null>(null);
+  const [view, setView] = useState<SettingsView>("owner");
+  const [hasPractice, setHasPractice] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmText, setConfirmText] = useState("");
   const [deleting, setDeleting] = useState(false);
   const [ownerClientId, setOwnerClientId] = useState<string | null>(null);
   const [marketBlob, setMarketBlob] = useState<unknown>(null);
 
-  const isAccountant =
-    role === "firm_admin" || role === "accountant";
+  const isPractice = view === "practice";
 
   useEffect(() => {
     if (!user) return;
-    void import("@/lib/user-roles").then(async ({ resolvePortalRoles }) => {
+    let cancelled = false;
+    void (async () => {
       const portal = await resolvePortalRoles(user.id);
-      setRole(portal.primaryRole);
-    });
+      const firms = portal.hasPracticeRole ? [] : await listUserFirms(user.id);
+      if (cancelled) return;
+      const next = decideSettingsView({
+        hasPracticeRole: portal.hasPracticeRole,
+        hasClientRole: portal.hasClientRole,
+        hasFirm: firms.length > 0,
+        intent: getPortalIntent(),
+        force: peekForcePortal(),
+        practiceSignup: isPracticeSignupMeta(
+          user.user_metadata as Record<string, unknown> | undefined,
+        ),
+        returnTo: peekSettingsReturn(),
+      });
+      setView(next);
+      setHasPractice(portal.hasPracticeRole || firms.length > 0);
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [user]);
 
   useEffect(() => {
     if (!user) return;
-    if (isAccountant && firmId) {
+    if (isPractice && firmId) {
       void supabase
         .from("firms")
         .select("market")
@@ -74,7 +105,7 @@ function SettingsPage() {
         .then(({ data }) => setMarketBlob((data as { market?: unknown } | null)?.market ?? null));
       return;
     }
-    if (!isAccountant) {
+    if (!isPractice) {
       void supabase
         .from("clients")
         .select("id, market")
@@ -88,9 +119,9 @@ function SettingsPage() {
           setMarketBlob(row?.market ?? null);
         });
     }
-  }, [user, isAccountant, firmId]);
+  }, [user, isPractice, firmId]);
 
-  const backTo = isAccountant ? "/dashboard" : "/app";
+  const backTo = settingsBackPath(view);
 
   const handleDelete = async () => {
     if (confirmText.trim().toUpperCase() !== "DELETE") return;
@@ -107,7 +138,7 @@ function SettingsPage() {
   };
 
   const handleRestartTour = () => {
-    resetOnboardingTours(isAccountant ? "accountant" : "owner");
+    resetOnboardingTours(isPractice ? "accountant" : "owner");
     toast.success("Guided tour will show next time you open the board");
   };
 
@@ -118,17 +149,23 @@ function SettingsPage() {
           <div>
             <button
               type="button"
-              onClick={() => navigate({ to: backTo })}
+              onClick={() => {
+                if (backTo === "/app") setPortalIntent("owner");
+                else setPortalIntent("accountant");
+                navigate({ to: backTo });
+              }}
               className="mb-3 inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-[#d4a550]"
             >
               <ArrowLeft className="h-3.5 w-3.5" />
-              Back
+              {backTo === "/app" ? "Back to board" : "Back to practice"}
             </button>
             <h1 className="text-2xl font-semibold tracking-tight text-slate-50">
               Settings
             </h1>
             <p className="mt-1 text-sm text-slate-400">
-              Profile, practice preferences, and account controls
+              {isPractice
+                ? "Profile, practice preferences, and account controls"
+                : "Profile, workspace, and account controls"}
             </p>
           </div>
           <ThemeToggle />
@@ -149,7 +186,7 @@ function SettingsPage() {
               <p className="mt-1 text-sm text-slate-100">{user?.email ?? "—"}</p>
             </div>
 
-            {!isAccountant && (
+            {!isPractice && (
               <Button
                 type="button"
                 variant="outline"
@@ -164,7 +201,7 @@ function SettingsPage() {
               </Button>
             )}
 
-            {isAccountant && (
+            {isPractice && (
               <p className="text-xs text-slate-500">
                 Client business profiles are edited inside each client workspace.
               </p>
@@ -173,7 +210,7 @@ function SettingsPage() {
             <div className="rounded-xl border border-rose-900/50 bg-rose-950/20 p-4">
               <p className="text-sm font-semibold text-rose-300">Delete account</p>
               <p className="mt-1 text-xs leading-relaxed text-rose-200/70">
-                {isAccountant
+                {isPractice
                   ? "Permanently deletes your practice login, firms you own, and practice clients you created. This cannot be undone."
                   : "Permanently deletes your login and this business’s client data on Milōn (figures, budget, forecasts, action plan). This cannot be undone."}
               </p>
@@ -194,13 +231,33 @@ function SettingsPage() {
         </section>
 
         <MarketSettingsCard
-          kind={isAccountant ? "firm" : "client"}
-          recordId={isAccountant ? firmId : ownerClientId}
+          kind={isPractice ? "firm" : "client"}
+          recordId={isPractice ? firmId : ownerClientId}
           initial={marketBlob}
         />
 
+        {!isPractice && hasPractice && (
+          <section className="mb-6 rounded-2xl border border-slate-800 bg-slate-900/60 p-5 sm:p-6">
+            <p className="text-xs text-slate-500">
+              This login also has a practice portal. Opening it leaves the business board.
+            </p>
+            <button
+              type="button"
+              className="mt-3 flex w-full items-center gap-2 rounded-xl border border-slate-700 bg-slate-950/50 px-4 py-3 text-left text-sm text-slate-200 transition hover:border-[#d4a550]/50 hover:bg-[#d4a550]/10"
+              onClick={() => {
+                setSettingsReturn("/dashboard");
+                setPortalIntent("accountant");
+                navigate({ to: "/dashboard" });
+              }}
+            >
+              <Building2 className="h-4 w-4 text-[#d4a550]" />
+              Open practice portal
+            </button>
+          </section>
+        )}
+
         {/* ── Practice (accountants) ──────────────────────────────────────── */}
-        {isAccountant && (
+        {isPractice && (
           <section className="mb-6 rounded-2xl border border-slate-800 bg-slate-900/60 p-5 sm:p-6">
             <div className="mb-4 flex items-center gap-2">
               <Palette className="h-4 w-4 text-[#d4a550]" />
