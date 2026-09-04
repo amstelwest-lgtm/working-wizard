@@ -94,6 +94,10 @@ assert(settings.includes('href="/privacy"'), "settings links to privacy");
 assert(settings.includes("anonymised"), "settings restates anonymisation");
 assert(auth.includes('href="/terms"'), "firm signup links to terms");
 assert(auth.includes("anonymised"), "firm signup restates anonymisation");
+assert(!landing.includes("Access code"), "landing signup does not ask for an access code");
+assert(!landing.includes("SIGNUP_ACCESS_CODE"), "landing has no access-code gate");
+assert(!auth.includes("Access code"), "firm signup does not ask for an access code");
+assert(!auth.includes("SIGNUP_ACCESS_CODE"), "firm signup has no access-code gate");
 
 assert(tree.includes("path: '/privacy'"), "router registers /privacy");
 assert(tree.includes("path: '/terms'"), "router registers /terms");

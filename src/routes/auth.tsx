@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { SIGNUP_ACCESS_CODE, notifySignup } from "@/lib/signup-notify";
+import { notifySignup } from "@/lib/signup-notify";
 import { ensurePracticePortalAccess } from "@/lib/auth.functions";
 import {
   forcePortal,
@@ -52,7 +52,6 @@ function AuthPage() {
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
   const [firmName, setFirmName] = useState("");
-  const [accessCode, setAccessCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [draftMarket, setDraftMarket] = useState<DraftMarket>({ country: null, regionCode: null });
 
@@ -145,10 +144,6 @@ function AuthPage() {
 
   const handle = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (mode === "signup" && accessCode.trim() !== SIGNUP_ACCESS_CODE) {
-      toast.error("Invalid access code. Contact us to get access.");
-      return;
-    }
     const market = mode === "signup" ? draftToSelection(draftMarket) : null;
     if (mode === "signup" && !market) {
       toast.error("Pick South Africa or the United States (and a state) first.");
@@ -322,15 +317,6 @@ function AuthPage() {
                         />
                       </div>
                       <MarketPicker value={draftMarket} onChange={setDraftMarket} />
-                      <div>
-                        <Label>Access code</Label>
-                        <Input
-                          value={accessCode}
-                          onChange={(e) => setAccessCode(e.target.value)}
-                          placeholder="Provided by your MILŌN contact"
-                          required
-                        />
-                      </div>
                     </>
                   )}
                   <div>

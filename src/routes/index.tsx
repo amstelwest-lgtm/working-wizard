@@ -4,7 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
-import { SIGNUP_ACCESS_CODE, notifySignup } from "@/lib/signup-notify";
+import { notifySignup } from "@/lib/signup-notify";
 import { adminSignUp } from "@/lib/auth.functions";
 import { previewOwnerInvite } from "@/lib/invite-tokens.functions";
 import { OPS_UNLOCK_KEY, unlockOwnerOps } from "@/lib/owner-ops.functions";
@@ -204,7 +204,6 @@ function LandingPage() {
   const [regName, setRegName] = useState("");
   const [regEmail, setRegEmail] = useState("");
   const [regPassword, setRegPassword] = useState("");
-  const [regCode, setRegCode] = useState("");
   const [regBusiness, setRegBusiness] = useState("");
   const [regPlan, setRegPlan] = useState("Spark — Free early access");
   const [regBusy, setRegBusy] = useState(false);
@@ -931,12 +930,6 @@ function LandingPage() {
     // ── Standard owner signup ──────────────────────────────────────────────
     if (regRole === "Accountant / Advisory firm") {
       navigate({ to: "/auth", search: {} });
-      return;
-    }
-    // Lighthouse trial links carry their own invitation, so the access code
-    // gate does not apply to prospects arriving from an outreach sequence.
-    if (!lhToken && regCode.trim() !== SIGNUP_ACCESS_CODE) {
-      toast.error("Invalid access code. Contact us to get access.");
       return;
     }
     const market = draftToSelection(draftMarket);
@@ -2709,20 +2702,6 @@ function LandingPage() {
                           value={regPassword}
                           onChange={(e) => setRegPassword(e.target.value)}
                         />
-
-                        {!lhToken && (
-                          <>
-                            <label htmlFor="regCodeField">Access code</label>
-                            <input
-                              id="regCodeField"
-                              type="text"
-                              required
-                              placeholder="Provided by your MILŌN contact"
-                              value={regCode}
-                              onChange={(e) => setRegCode(e.target.value)}
-                            />
-                          </>
-                        )}
 
                         <label htmlFor="regBusinessField">Business name</label>
                         <input
