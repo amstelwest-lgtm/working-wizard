@@ -57,7 +57,7 @@ import {
   type WeeklyRow,
   DEFAULT_WEEKLY_ROW,
 } from "@/contexts/financial-inputs";
-import { parseWeeklyInputs, derivePeriodWaterfallFallback, hasWeeklyActivity, overlayWeeklyInputs } from "@/lib/weekly-inputs";
+import { parseWeeklyInputs, derivePeriodWaterfallFallback, hasWeeklyActivity, overlayWeeklyInputs, resolveWaterfallFigures } from "@/lib/weekly-inputs";
 import {
   emptyProductMix,
   hasProductMixAnswer,
@@ -4191,7 +4191,11 @@ function Index() {
               </div>
               {/* Optional product-line mix — collapsed until the owner opts in */}
               <div className="mt-4">
-                <ProductMixPanel />
+                <ProductMixPanel
+                  totalRevenue={
+                    resolveWaterfallFigures(weeklyInputs, derivePeriodWaterfallFallback(v)).revenue
+                  }
+                />
               </div>
               {/* Weekly inputs feed the waterfall — sit below so the chart stays the focus */}
               <div className="mt-4">
