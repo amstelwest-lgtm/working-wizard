@@ -22,6 +22,8 @@ Phase 2 + 3 — paste **in order** in the Supabase SQL editor (do not re-run Pha
    (`week_start` is a plain date. Do not use an older paste that generated it from `created_at` — that hits Postgres error 42P17.)
 5. `supabase/migrations/20260902300000_analytics_experiments_digest.sql`
 6. `supabase/migrations/20260904093000_analytics_refresh_sql_editor.sql` (SQL editor may run `analytics_refresh_derived`)
+7. `supabase/migrations/20260904130000_analytics_founder_bundle.sql`
+   (required for `/founder/metrics`. SQL 3–6 live in the `analytics` schema, which PostgREST does not expose — without this RPC the page errors `Invalid schema: analytics` even after a successful paste.)
 
 Then, once, to snapshot the ladder and fill this week's call list:
 

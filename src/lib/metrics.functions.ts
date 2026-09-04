@@ -52,16 +52,34 @@ function analyticsAdmin(): AnalyticsAdmin {
   return adminLoose() as AnalyticsAdmin;
 }
 
-async function selectView<T>(table: string): Promise<T[]> {
+function asRows<T>(raw: unknown): T[] {
+  return Array.isArray(raw) ? (raw as T[]) : [];
+}
+
+function founderBundleMissing(message: string): boolean {
+  return (
+    missingRelation(message) ||
+    /invalid schema/i.test(message) ||
+    /42883|does not exist/i.test(message) ||
+    /analytics_founder_bundle/i.test(message)
+  );
+}
+
+const SQL7_HINT =
+  "Paste SQL 7 only (`supabase/migrations/20260904130000_analytics_founder_bundle.sql`). SQL 3–6 already created the tables; the API cannot read the analytics schema directly.";
+
+async function fetchFounderBag(): Promise<Record<string, unknown>> {
   const admin = analyticsAdmin();
-  const { data, error } = await admin.schema("analytics").from(table).select("*");
+  const { data, error } = await admin.rpc("analytics_founder_bundle");
   if (error) {
-    if (missingRelation(error.message) || /schema "analytics"/i.test(error.message)) {
-      return [];
+    if (founderBundleMissing(error.message)) {
+      throw new Error(SQL7_HINT);
     }
     throw new Error(error.message);
   }
-  return (data ?? []) as T[];
+  return data && typeof data === "object" && !Array.isArray(data)
+    ? (data as Record<string, unknown>)
+    : {};
 }
 
 export const getMetricsCatalog = createServerFn({ method: "GET" })
@@ -101,37 +119,17 @@ export const getAnalyticsDerived = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     await assertPlatformOwner(context as AuthCtx);
-    const [activation, loop, adoption, expansion, retention, commitment, queue] = await Promise.all([
-      selectView("v_practice_activation"),
-      selectView("v_accountability_loop"),
-      selectView("v_assignment_adoption"),
-      selectView("v_entity_expansion"),
-      selectView("v_month2_retention"),
-      selectView("v_practice_commitment_current"),
-      selectView("founder_action_queue"),
-    ]);
-
-    const openQueue = queue
-      .filter((row: { status?: string }) => row.status === "open")
-      .sort((a: { severity?: string }, b: { severity?: string }) => {
-        const rank = { high: 0, medium: 1, low: 2 } as Record<string, number>;
-        return (rank[a.severity ?? "low"] ?? 9) - (rank[b.severity ?? "low"] ?? 9);
-      });
-
+    const bundle = await loadDerivedBundle();
     return {
-      activation,
-      loop,
-      adoption,
-      expansion,
-      retention,
-      commitment,
-      queue: openQueue,
-      catalog: {
-        hypotheses: HYPOTHESES,
-        metrics: METRICS,
-        loopInterpretation: LOOP_INTERPRETATION,
-      },
-      sql: ANALYTICS_SQL_TO_RUN,
+      activation: bundle.activation,
+      loop: bundle.loop,
+      adoption: bundle.adoption,
+      expansion: bundle.expansion,
+      retention: bundle.retention,
+      commitment: bundle.commitment,
+      queue: bundle.queue,
+      catalog: bundle.catalog,
+      sql: bundle.sql,
     };
   });
 
@@ -222,18 +220,17 @@ type ExperimentRow = {
 };
 
 async function loadDerivedBundle() {
-  const [activation, loop, adoption, expansion, retention, commitment, queue, signals, experiments] =
-    await Promise.all([
-      selectView<ActivationRow>("v_practice_activation"),
-      selectView<LoopRow>("v_accountability_loop"),
-      selectView<AdoptionRow>("v_assignment_adoption"),
-      selectView<ExpansionRow>("v_entity_expansion"),
-      selectView<RetentionRow>("v_month2_retention"),
-      selectView("v_practice_commitment_current"),
-      selectView<QueueRow>("founder_action_queue"),
-      selectView<SignalRow>("customer_signals"),
-      selectView<ExperimentRow>("experiments"),
-    ]);
+  const bag = await fetchFounderBag();
+  const activation = asRows<ActivationRow>(bag.activation);
+  const loop = asRows<LoopRow>(bag.loop);
+  const adoption = asRows<AdoptionRow>(bag.adoption);
+  const expansion = asRows<ExpansionRow>(bag.expansion);
+  const retention = asRows<RetentionRow>(bag.retention);
+  const commitment = asRows(bag.commitment);
+  const queue = asRows<QueueRow>(bag.queue);
+  const signals = asRows<SignalRow>(bag.signals);
+  const experiments = asRows<ExperimentRow>(bag.experiments);
+  const founderEmails = asRows<{ email: string }>(bag.founder_emails);
 
   const openQueue = queue
     .filter((row) => (row.status ?? "open") === "open")
@@ -266,6 +263,7 @@ async function loadDerivedBundle() {
     queue: openQueue,
     signals: realSignals,
     experiments: experiments.sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at)),
+    founderEmails,
     instrument,
     catalog: {
       hypotheses: HYPOTHESES,
@@ -338,14 +336,11 @@ export const decideExperiment = createServerFn({ method: "POST" })
     return { ok: true as const };
   });
 
-async function digestRecipients(): Promise<string[]> {
+async function digestRecipients(extra: { email: string }[] = []): Promise<string[]> {
   const env = ownerEmailAllowlist();
-  try {
-    const rows = await selectView<{ email: string }>("founder_emails");
-    return [...new Set([...env, ...rows.map((r) => r.email.trim().toLowerCase()).filter(Boolean)])];
-  } catch {
-    return env;
-  }
+  return [
+    ...new Set([...env, ...extra.map((r) => r.email.trim().toLowerCase()).filter(Boolean)]),
+  ];
 }
 
 export async function composeDigestPreview() {
@@ -362,7 +357,7 @@ export async function composeDigestPreview() {
     subject: digestSubject(bundle.instrument.worstLine),
     body,
     worstLine: bundle.instrument.worstLine,
-    recipients: await digestRecipients(),
+    recipients: await digestRecipients(bundle.founderEmails),
   };
 }
 
@@ -376,12 +371,12 @@ export async function deliverDigest(triggeredBy: string) {
   const admin = analyticsAdmin();
   for (const to of preview.recipients) {
     try {
-      await admin.schema("analytics").from("digest_log").insert({
-        recipient: to,
-        subject: preview.subject,
-        body: preview.body,
-        triggered_by: triggeredBy,
-        worst_line: preview.worstLine,
+      await admin.rpc("analytics_log_digest", {
+        p_recipient: to,
+        p_subject: preview.subject,
+        p_body: preview.body,
+        p_triggered_by: triggeredBy,
+        p_worst_line: preview.worstLine,
       });
     } catch {
       /* log is bookkeeping — sending already happened */

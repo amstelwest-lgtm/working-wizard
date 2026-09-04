@@ -379,6 +379,7 @@ export const ANALYTICS_PHASE2_SQL = [
 export const ANALYTICS_PHASE3_SQL = [
   "20260902300000_analytics_experiments_digest.sql",
   "20260904093000_analytics_refresh_sql_editor.sql",
+  "20260904130000_analytics_founder_bundle.sql",
 ] as const;
 
 export const ANALYTICS_SQL_TO_RUN = [...ANALYTICS_PHASE2_SQL, ...ANALYTICS_PHASE3_SQL] as const;

@@ -112,7 +112,9 @@ function FounderMetricsPage() {
       <div className="milon-ops founder-metrics min-h-screen px-6 py-10">
         <p className="text-sm text-[var(--ops-danger-ink)]">{err}</p>
         <p className="mt-3 text-xs text-[var(--ops-ink-dim)]">
-          Paste SQL 3–5 from <code>docs/metrics/README.md</code> if the schema is missing.
+          If you already pasted SQL 3–6, you only need SQL 7 from <code>docs/metrics/README.md</code>{" "}
+          (<code>analytics_founder_bundle</code>). The tables are in the <code>analytics</code> schema,
+          which the API cannot read directly.
         </p>
         <Link to="/ops" className="mt-4 inline-block text-xs uppercase tracking-wider text-[var(--ops-amber)]">
           Back to Lighthouse
