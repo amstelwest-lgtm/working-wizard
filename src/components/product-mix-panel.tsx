@@ -12,12 +12,13 @@ import {
 import { useFinancialInputs } from "@/contexts/financial-inputs";
 import {
   PRODUCT_MIX_MAX_LINES,
-  SHARE_BANDS,
+  PRODUCT_MIX_VERSION,
+  allocatedRevenue,
   applyUnitEconomics,
   canAdvanceFromCosts,
   canAdvanceFromNames,
   canAdvanceFromPrices,
-  canAdvanceFromShares,
+  canAdvanceFromRevenue,
   canSaveUnitMix,
   declinedProductMix,
   emptyProductMix,
@@ -28,7 +29,7 @@ import {
   namedProductLines,
   productMixSummary,
   rankProductLines,
-  shareBandLabel,
+  shareContrastLabel,
   unitMarginPct,
   type ProductMix,
 } from "@/lib/product-mix";
@@ -40,15 +41,7 @@ const TITLES = [
   "Name the lines that matter",
   "Selling price per unit",
   "Direct cost per unit",
-  "Rough share of sales for each",
-];
-
-const HINTS = [
-  "If one line covers the book, we skip this — the Profit tab stays simple.",
-  "Up to 5. Skip the long tail — just what you'd discuss in a review.",
-  "What a customer pays for one unit of this line. Rand, typical selling price.",
-  "What it costs you to deliver one unit. Margin is calculated from price minus this.",
-  "Bands, not a spreadsheet. Ranking uses the unit margins you just entered.",
+  "Of total revenue, how much is from each line",
 ];
 
 function choiceClass(on: boolean) {
@@ -92,16 +85,23 @@ function MoneyField({
   );
 }
 
+function barWidth(pct: number | undefined): string {
+  if (pct == null || !Number.isFinite(pct)) return "0%";
+  return `${Math.max(0, Math.min(100, pct))}%`;
+}
+
 function ProductMixFunnel({
   open,
   onOpenChange,
   initial,
   onSave,
+  totalRevenue,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   initial: ProductMix;
   onSave: (mix: ProductMix) => void;
+  totalRevenue: number;
 }) {
   const [step, setStep] = useState(0);
   const [draft, setDraft] = useState<ProductMix>(emptyProductMix);
@@ -123,6 +123,13 @@ function ProductMixFunnel({
   }, [open]);
 
   const named = namedProductLines(draft);
+  const statedTotal = totalRevenue > 0 ? totalRevenue : 0;
+  const q5Preview = useMemo(
+    () => applyUnitEconomics(draft, statedTotal),
+    [draft, statedTotal],
+  );
+  const allocated = allocatedRevenue(draft.lines);
+  const leftover = statedTotal > 0 ? statedTotal - allocated : 0;
 
   const goNext = () => setStep((s) => Math.min(TOTAL - 1, s + 1));
   const goBack = () => setStep((s) => Math.max(0, s - 1));
@@ -148,15 +155,23 @@ function ProductMixFunnel({
   const finish = () => {
     if (!canSaveUnitMix(draft)) return;
     onSave(
-      applyUnitEconomics({
-        ...draft,
-        version: 2,
-        active: true,
-        confirmedAt: new Date().toISOString(),
-      }),
+      applyUnitEconomics(
+        {
+          ...draft,
+          version: PRODUCT_MIX_VERSION,
+          active: true,
+          confirmedAt: new Date().toISOString(),
+        },
+        statedTotal,
+      ),
     );
     onOpenChange(false);
   };
+
+  const q5Hint =
+    statedTotal > 0
+      ? `Total revenue on this Profit tab is ${formatRand(statedTotal)}. One question — fill in the rand from each line you named.`
+      : "Total revenue is not on this Profit tab yet. Enter the rand from each named line — shares will be of the amounts you allocate.";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -173,7 +188,13 @@ function ProductMixFunnel({
             Profitability · unit economics
           </p>
           <h3 className="mt-1 text-lg font-semibold text-slate-100">{TITLES[step]}</h3>
-          <p className="mt-1 text-sm text-slate-400">{HINTS[step]}</p>
+          <p className="mt-1 text-sm text-slate-400">
+            {step === 0 && "If one line covers the book, we skip this — the Profit tab stays simple."}
+            {step === 1 && "Up to 5. Skip the long tail — just what you'd discuss in a review."}
+            {step === 2 && "What a customer pays for one unit of this line. Rand, typical selling price."}
+            {step === 3 && "What it costs you to deliver one unit. Margin is calculated from price minus this."}
+            {step === 4 && q5Hint}
+          </p>
         </div>
 
         <div className="space-y-2">
@@ -182,7 +203,7 @@ function ProductMixFunnel({
               <button type="button" className={choiceClass(q1 === "yes")} onClick={() => setQ1("yes")}>
                 <div className="text-sm font-semibold">Yes — a few lines matter</div>
                 <div className="mt-1 text-[11px] text-slate-400">
-                  We will take selling price and cost per unit for each
+                  We will take selling price, cost, and rand of total revenue for each
                 </div>
                 {q1 === "yes" && (
                   <div className="mt-2 text-[10px] font-semibold uppercase tracking-wider text-[#d4a550]">
@@ -261,36 +282,56 @@ function ProductMixFunnel({
               );
             })}
 
-          {step === 4 &&
-            named.map((line) => {
-              const pct = unitMarginPct(line.sellPrice, line.unitCost);
-              return (
-                <div key={line.id} className="rounded-xl border border-slate-700 bg-slate-900/60 p-3">
-                  <div className="mb-2 flex items-center justify-between gap-2">
-                    <div className="text-sm font-semibold text-slate-100">{line.name}</div>
-                    <div className="text-[11px] font-semibold text-[#d4a550]">{formatMarginPct(pct)} margin</div>
+          {step === 4 && (
+            <>
+              {named.map((line) => {
+                const preview = q5Preview.lines.find((l) => l.id === line.id);
+                const contrast = shareContrastLabel(preview?.revenueSharePct, preview?.gpSharePct);
+                const totalLabel = statedTotal > 0 ? formatRand(statedTotal) : "total revenue";
+                return (
+                  <div key={line.id} className="rounded-xl border border-slate-700 bg-slate-900/60 p-3">
+                    <div className="mb-2 flex flex-wrap items-baseline gap-x-2 gap-y-1 text-sm text-slate-200">
+                      <span className="text-slate-400">______ of</span>
+                      <span className="font-semibold text-slate-100">{totalLabel}</span>
+                      <span className="text-slate-400">is from</span>
+                      <span className="font-semibold text-slate-100">&quot;{line.name}&quot;</span>
+                    </div>
+                    <MoneyField
+                      value={line.revenueAmount}
+                      placeholder="0"
+                      onChange={(n) => patchLine(line.id, { revenueAmount: n })}
+                    />
+                    {contrast ? (
+                      <div className="mt-2 text-xs font-semibold text-[#d4a550]">{contrast}</div>
+                    ) : (
+                      <div className="mt-2 text-[11px] text-slate-500">
+                        Sales share and GP share appear once this amount is in.
+                      </div>
+                    )}
                   </div>
-                  <div className="grid grid-cols-2 gap-1.5">
-                    {SHARE_BANDS.map((b) => (
-                      <button
-                        key={b.id}
-                        type="button"
-                        className={`${choiceClass(line.shareBand === b.id)} p-2`}
-                        onClick={() => patchLine(line.id, { shareBand: b.id })}
-                      >
-                        <div className="text-xs font-semibold">{b.label}</div>
-                        <div className="text-[10px] text-slate-400">{b.hint}</div>
-                        {line.shareBand === b.id && (
-                          <div className="mt-1 text-[10px] font-semibold uppercase tracking-wider text-[#d4a550]">
-                            Selected
-                          </div>
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })}
+              <div className="rounded-lg border border-slate-800 bg-slate-950/80 px-3 py-2 text-[11px] text-slate-400">
+                {statedTotal > 0 ? (
+                  leftover >= 0 ? (
+                    <>
+                      Allocated {formatRand(allocated)} of {formatRand(statedTotal)}
+                      {leftover > 0
+                        ? ` · ${formatRand(leftover)} unallocated (other — no GP share)`
+                        : " · fully allocated"}
+                    </>
+                  ) : (
+                    <>
+                      Allocated {formatRand(allocated)} of {formatRand(statedTotal)} · over by{" "}
+                      {formatRand(-leftover)}
+                    </>
+                  )
+                ) : (
+                  <>Allocated {formatRand(allocated)} across named lines</>
+                )}
+              </div>
+            </>
+          )}
         </div>
 
         <div className="flex items-center gap-2 border-t border-slate-800 pt-3">
@@ -367,7 +408,7 @@ function ProductMixFunnel({
             {step === 4 && (
               <Button
                 size="sm"
-                disabled={!canSaveUnitMix(draft)}
+                disabled={!canAdvanceFromRevenue(draft.lines) || !canSaveUnitMix(draft)}
                 className="bg-[#d4a550] text-[#0a0e1a] hover:bg-[#c49a45]"
                 onClick={finish}
               >
@@ -384,10 +425,14 @@ function ProductMixFunnel({
 function MixBars({ mix }: { mix: ProductMix }) {
   const ranked = rankProductLines(mix);
   if (!ranked.length) return null;
+  const stated = mix.totalRevenue ?? 0;
+  const allocated = allocatedRevenue(mix.lines);
+  const leftover = stated > 0 ? stated - allocated : 0;
   return (
     <div className="space-y-3">
       {ranked.map((row) => {
         const tone = row.isBest ? "#4caf82" : row.isWorst ? "#e05c5c" : "#d4a550";
+        const contrast = shareContrastLabel(row.revenueSharePct, row.gpSharePct);
         return (
           <div key={row.id}>
             <div className="mb-1 flex items-center justify-between gap-2">
@@ -398,7 +443,7 @@ function MixBars({ mix }: { mix: ProductMix }) {
                     className="shrink-0 rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider"
                     style={{ color: "#4caf82", background: "rgba(76,175,130,0.15)" }}
                   >
-                    Best margin
+                    Most of GP
                   </span>
                 )}
                 {row.isWorst && (
@@ -406,32 +451,51 @@ function MixBars({ mix }: { mix: ProductMix }) {
                     className="shrink-0 rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider"
                     style={{ color: "#e05c5c", background: "rgba(224,92,92,0.15)" }}
                   >
-                    Weakest
+                    Least of GP
                   </span>
                 )}
               </div>
               <span className="shrink-0 text-xs font-semibold" style={{ color: tone }}>
-                {formatMarginPct(row.marginPct)}
+                {contrast || formatMarginPct(row.marginPct)}
               </span>
             </div>
-            <div className="h-1.5 overflow-hidden rounded-full bg-slate-800">
-              <div
-                className="h-full rounded-full"
-                style={{ width: `${row.barPct}%`, background: tone }}
-              />
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="w-10 shrink-0 text-[9px] uppercase tracking-wider text-slate-500">Sales</span>
+                <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-800">
+                  <div
+                    className="h-full rounded-full bg-[#d4a550]"
+                    style={{ width: barWidth(row.revenueSharePct) }}
+                  />
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="w-10 shrink-0 text-[9px] uppercase tracking-wider text-slate-500">GP</span>
+                <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-800">
+                  <div className="h-full rounded-full" style={{ width: barWidth(row.gpSharePct), background: tone }} />
+                </div>
+              </div>
             </div>
             <div className="mt-1 text-[10px] text-slate-500">
-              {formatRand(row.sellPrice)} sell · {formatRand(row.unitCost)} cost
-              {row.shareBand ? ` · ${shareBandLabel(row.shareBand)} of sales` : ""}
+              {formatRand(row.revenueAmount)}
+              {stated > 0 ? ` of ${formatRand(stated)}` : ""}
+              {" · "}
+              {formatRand(row.sellPrice)} sell · {formatRand(row.unitCost)} cost · {formatMarginPct(row.marginPct)}{" "}
+              margin
             </div>
           </div>
         );
       })}
+      {stated > 0 && leftover > 0 && (
+        <p className="text-[10px] text-slate-500">
+          {formatRand(leftover)} of {formatRand(stated)} unallocated — other (no GP share)
+        </p>
+      )}
     </div>
   );
 }
 
-export function ProductMixPanel() {
+export function ProductMixPanel({ totalRevenue = 0 }: { totalRevenue?: number }) {
   const { productMix, saveProductMix } = useFinancialInputs();
   const [open, setOpen] = useState(false);
   const [funnelOpen, setFunnelOpen] = useState(false);
@@ -486,8 +550,8 @@ export function ProductMixPanel() {
             {!answered && (
               <div className="flex flex-col items-start gap-2">
                 <p className="text-xs text-slate-400">
-                  Optional. Selling price and cost per unit — margin is calculated. Does not change
-                  the waterfall.
+                  Optional. Of the stated total revenue, how much is from each line — then sales
+                  share vs GP share. Does not change the waterfall.
                 </p>
                 <Button
                   size="sm"
@@ -507,8 +571,9 @@ export function ProductMixPanel() {
               <>
                 <MixBars mix={productMix} />
                 <p className="mt-3 text-[10px] text-slate-500">
-                  Margin = (selling price − unit cost) ÷ selling price. Does not change the waterfall
-                  figures.
+                  Sales share is rand of stated total revenue. GP share uses that amount × unit
+                  margin. A high-margin line can be a small slice of sales and most of the profit.
+                  Does not change the waterfall figures.
                 </p>
               </>
             )}
@@ -521,6 +586,7 @@ export function ProductMixPanel() {
         onOpenChange={setFunnelOpen}
         initial={productMix}
         onSave={saveProductMix}
+        totalRevenue={totalRevenue}
       />
     </>
   );

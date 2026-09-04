@@ -43,7 +43,7 @@ import {
   type WeeklyInputs,
   type WeeklyRow,
 } from "@/contexts/financial-inputs";
-import { emptyWeeklyInputs, derivePeriodWaterfallFallback } from "@/lib/weekly-inputs";
+import { emptyWeeklyInputs, derivePeriodWaterfallFallback, resolveWaterfallFigures } from "@/lib/weekly-inputs";
 import { emptyProductMix, type ProductMix } from "@/lib/product-mix";
 import { useServerFn } from "@tanstack/react-start";
 import { listClientReviewSignoffs, indexReviewSignoffs } from "@/lib/review-signoffs.functions";
@@ -1986,7 +1986,9 @@ function ClientView() {
               )}
             />
             <div style={{ marginTop: 16 }}>
-              <ProductMixPanel />
+              <ProductMixPanel
+                totalRevenue={resolveWaterfallFigures(weeklyInputs, waterfallFallback).revenue}
+              />
             </div>
             {/* Same weekly grid as the owner Profit tab — weeks feed this waterfall. */}
             <div style={{ marginTop: 16 }}>
