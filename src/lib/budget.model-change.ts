@@ -94,6 +94,7 @@ export function applyTemplateChange(
     cogsMode: prev.cogsMode,
     vatMode: prev.vatMode,
     vatRate: prev.vatRate ?? fresh.vatRate,
+    tax: prev.tax ?? fresh.tax,
     openingCash: prev.openingCash ?? 0,
     activeScenario: prev.activeScenario,
     scenarios: prev.scenarios,
@@ -108,9 +109,7 @@ export function applyTemplateChange(
       ...fresh.wc,
       debtorDays: prev.wc.debtorDays || fresh.wc.debtorDays,
       creditorDays: prev.wc.creditorDays || fresh.wc.creditorDays,
-      inventoryDays: tpl.showInventoryDays
-        ? prev.wc.inventoryDays || fresh.wc.inventoryDays
-        : 0,
+      inventoryDays: tpl.showInventoryDays ? prev.wc.inventoryDays || fresh.wc.inventoryDays : 0,
     },
     capex: prev.capex.map((c) => ({
       ...c,
@@ -118,9 +117,7 @@ export function applyTemplateChange(
       residual: c.residual ?? 0,
     })),
     notes: prev.notes ?? [],
-    cogsPerUnit: Object.fromEntries(
-      mappedLines.map((l) => [l.id, prev.cogsPerUnit[l.id] ?? 0]),
-    ),
+    cogsPerUnit: Object.fromEntries(mappedLines.map((l) => [l.id, prev.cogsPerUnit[l.id] ?? 0])),
     updatedAt: new Date().toISOString(),
   };
 

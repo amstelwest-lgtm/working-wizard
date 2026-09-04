@@ -8,14 +8,11 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import type {
-  BudgetActuals,
-  BudgetDocument,
-  BudgetScenarioId,
-} from "@/lib/budget.types";
+import type { BudgetActuals, BudgetDocument, BudgetScenarioId } from "@/lib/budget.types";
 import { BUDGET_TEMPLATES } from "@/lib/budget.templates";
-import { fyMonths, formatMonthLabel } from "@/lib/budget.months";
-import { computeBudgetMonths, fmtZar, lowestCashTrough } from "@/lib/budget.compute";
+import { fyMonths, formatMonthLabel as formatMonthLabelMarket } from "@/lib/budget.months";
+import { computeBudgetMonths, fmtBudgetMoney, lowestCashTrough } from "@/lib/budget.compute";
+import { useMarket } from "@/contexts/market";
 
 const SCENARIOS: BudgetScenarioId[] = ["base", "upside", "downside"];
 
@@ -55,6 +52,9 @@ export function BudgetSimpleView({
   actuals?: BudgetActuals | null;
   onChangeModel?: () => void;
 }) {
+  const { market } = useMarket();
+  const money = (n: number) => fmtBudgetMoney(n, market);
+  const monthLabel = (ym: string) => formatMonthLabelMarket(ym, market);
   const months = useMemo(() => fyMonths(doc.fyStart), [doc.fyStart]);
   const [focusMonth, setFocusMonth] = useState(() => {
     const now = new Date();
@@ -64,10 +64,7 @@ export function BudgetSimpleView({
   const [sameEveryMonth, setSameEveryMonth] = useState(false);
   const [showMore, setShowMore] = useState(false);
 
-  const results = useMemo(
-    () => computeBudgetMonths(doc, doc.activeScenario),
-    [doc],
-  );
+  const results = useMemo(() => computeBudgetMonths(doc, doc.activeScenario), [doc]);
   const focus = results.find((r) => r.month === focusMonth) ?? results[0];
   const trough = useMemo(() => lowestCashTrough(results), [results]);
   const tpl = BUDGET_TEMPLATES[doc.templateId];
@@ -148,7 +145,7 @@ export function BudgetSimpleView({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#b8860b]">
-            {tpl.label} · {formatMonthLabel(doc.fyStart)} FY
+            {tpl.label} · {monthLabel(doc.fyStart)} FY
           </p>
           <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Your budget</h2>
           <p className="text-xs text-slate-500">
@@ -179,33 +176,31 @@ export function BudgetSimpleView({
       {focus && (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {[
-            { l: "Revenue", v: focus.revenue, sub: formatMonthLabel(focusMonth) },
+            { l: "Revenue", v: focus.revenue, sub: monthLabel(focusMonth) },
             {
               l: "Gross profit",
               v: focus.grossProfit,
               sub: `${focus.gpPct.toFixed(0)}% margin`,
             },
-            { l: "Cash at month-end", v: focus.closingCash, sub: formatMonthLabel(focusMonth) },
+            { l: "Cash at month-end", v: focus.closingCash, sub: monthLabel(focusMonth) },
             {
               l: "Cash trough",
               v: trough?.closingCash ?? 0,
-              sub: trough ? formatMonthLabel(trough.month) : "—",
+              sub: trough ? monthLabel(trough.month) : "—",
               warn: (trough?.closingCash ?? 0) < 0,
             },
           ].map((s) => (
             <div
               key={s.l}
               className={`rounded-xl border px-3 py-3 ${
-                s.warn
-                  ? "border-red-500/40 bg-red-500/10"
-                  : "border-[#d4a550]/25 bg-[#d4a550]/5"
+                s.warn ? "border-red-500/40 bg-red-500/10" : "border-[#d4a550]/25 bg-[#d4a550]/5"
               }`}
             >
               <div className="text-[10px] font-semibold uppercase tracking-wider text-[#b8860b]">
                 {s.l}
               </div>
               <div className="mt-1 text-xl font-semibold tabular-nums text-slate-900 dark:text-slate-100">
-                {fmtZar(s.v)}
+                {money(s.v)}
               </div>
               <div className="text-[11px] text-slate-500">{s.sub}</div>
             </div>
@@ -228,7 +223,7 @@ export function BudgetSimpleView({
               <ChevronLeft className="h-4 w-4" />
             </Button>
             <div className="min-w-[7rem] text-center text-sm font-semibold text-slate-900 dark:text-slate-100">
-              {formatMonthLabel(focusMonth)}
+              {monthLabel(focusMonth)}
             </div>
             <Button
               type="button"
@@ -287,7 +282,7 @@ export function BudgetSimpleView({
         </div>
 
         <div className="mt-4 space-y-2 rounded-lg border border-slate-100 bg-slate-50/80 px-3 py-3 text-sm dark:border-slate-800 dark:bg-slate-900/40">
-          <Row label="Revenue" value={fmtZar(focus?.revenue ?? 0)} strong />
+          <Row label="Revenue" value={money(focus?.revenue ?? 0)} strong />
           <div className="grid gap-2 sm:grid-cols-[1fr_auto] sm:items-center">
             <Label className="text-xs text-slate-600 dark:text-slate-300">Gross profit %</Label>
             <Input
@@ -297,7 +292,7 @@ export function BudgetSimpleView({
               onChange={(e) => setGp(parseFloat(e.target.value) || 0)}
             />
           </div>
-          <Row label="COGS" value={fmtZar(focus?.cogs ?? 0)} muted />
+          <Row label="COGS" value={money(focus?.cogs ?? 0)} muted />
           <div className="grid gap-2 sm:grid-cols-[1fr_auto] sm:items-center">
             <Label className="text-xs text-slate-600 dark:text-slate-300">
               Fixed overheads (this month)
@@ -309,20 +304,27 @@ export function BudgetSimpleView({
               onChange={(e) => setOverhead(parseFloat(e.target.value) || 0)}
             />
           </div>
-          <Row label="What’s left (EBITDA)" value={fmtZar(focus?.ebitda ?? 0)} strong />
+          <Row label="What’s left (EBITDA)" value={money(focus?.ebitda ?? 0)} strong />
         </div>
       </section>
 
       {/* Year strip */}
       <section>
         <div className="mb-2 flex flex-wrap items-end justify-between gap-2">
-          <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Year at a glance</h3>
+          <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+            Year at a glance
+          </h3>
           <div className="text-[11px] text-slate-500">
-            FY revenue <span className="font-semibold tabular-nums text-slate-800 dark:text-slate-200">{fmtZar(fyTotals.revenue)}</span>
+            FY revenue{" "}
+            <span className="font-semibold tabular-nums text-slate-800 dark:text-slate-200">
+              {money(fyTotals.revenue)}
+            </span>
             {" · "}
             FY-end cash{" "}
-            <span className={`font-semibold tabular-nums ${fyTotals.closingEnd < 0 ? "text-red-600" : "text-slate-800 dark:text-slate-200"}`}>
-              {fmtZar(fyTotals.closingEnd)}
+            <span
+              className={`font-semibold tabular-nums ${fyTotals.closingEnd < 0 ? "text-red-600" : "text-slate-800 dark:text-slate-200"}`}
+            >
+              {money(fyTotals.closingEnd)}
             </span>
           </div>
         </div>
@@ -336,9 +338,11 @@ export function BudgetSimpleView({
                 type="button"
                 onClick={() => setFocusMonth(r.month)}
                 className={`flex flex-col items-center gap-1 rounded-lg px-0.5 py-1.5 ${
-                  active ? "bg-[#d4a550]/20 ring-1 ring-[#d4a550]" : "hover:bg-slate-100 dark:hover:bg-slate-900"
+                  active
+                    ? "bg-[#d4a550]/20 ring-1 ring-[#d4a550]"
+                    : "hover:bg-slate-100 dark:hover:bg-slate-900"
                 }`}
-                title={`${formatMonthLabel(r.month)} · ${fmtZar(r.revenue)}`}
+                title={`${monthLabel(r.month)} · ${money(r.revenue)}`}
               >
                 <div className="flex h-14 w-full items-end justify-center">
                   <div
@@ -349,7 +353,7 @@ export function BudgetSimpleView({
                   />
                 </div>
                 <span className="text-[9px] font-medium text-slate-500">
-                  {formatMonthLabel(r.month).split(" ")[0]}
+                  {monthLabel(r.month).split(" ")[0]}
                 </span>
               </button>
             );
@@ -378,7 +382,7 @@ export function BudgetSimpleView({
                   t.v < 0 ? "text-red-600" : "text-slate-900 dark:text-slate-100"
                 }`}
               >
-                {fmtZar(t.v)}
+                {money(t.v)}
               </div>
             </div>
           ))}
@@ -409,7 +413,9 @@ export function BudgetSimpleView({
         {showMore && (
           <div className="mt-3 grid gap-3 rounded-xl border border-slate-200 p-4 dark:border-slate-800 sm:grid-cols-3">
             <div>
-              <Label className="text-[10px] uppercase tracking-wider text-slate-500">Opening cash</Label>
+              <Label className="text-[10px] uppercase tracking-wider text-slate-500">
+                Opening cash
+              </Label>
               <Input
                 type="number"
                 className="mt-1 h-8"
@@ -424,7 +430,9 @@ export function BudgetSimpleView({
               />
             </div>
             <div>
-              <Label className="text-[10px] uppercase tracking-wider text-slate-500">Debtor days</Label>
+              <Label className="text-[10px] uppercase tracking-wider text-slate-500">
+                Debtor days
+              </Label>
               <Input
                 type="number"
                 className="mt-1 h-8"
@@ -439,7 +447,9 @@ export function BudgetSimpleView({
               />
             </div>
             <div>
-              <Label className="text-[10px] uppercase tracking-wider text-slate-500">Creditor days</Label>
+              <Label className="text-[10px] uppercase tracking-wider text-slate-500">
+                Creditor days
+              </Label>
               <Input
                 type="number"
                 className="mt-1 h-8"
@@ -455,7 +465,13 @@ export function BudgetSimpleView({
             </div>
             {onChangeModel && (
               <div className="sm:col-span-3">
-                <Button type="button" variant="outline" size="sm" className="text-xs" onClick={onChangeModel}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="text-xs"
+                  onClick={onChangeModel}
+                >
                   Change business model
                 </Button>
                 <p className="mt-1 text-[11px] text-slate-500">
@@ -483,12 +499,16 @@ function Row({
 }) {
   return (
     <div className="flex items-center justify-between gap-3">
-      <span className={`text-xs ${muted ? "text-slate-500" : "text-slate-600 dark:text-slate-300"}`}>
+      <span
+        className={`text-xs ${muted ? "text-slate-500" : "text-slate-600 dark:text-slate-300"}`}
+      >
         {label}
       </span>
       <span
         className={`tabular-nums ${
-          strong ? "text-sm font-semibold text-slate-900 dark:text-slate-100" : "text-xs text-slate-700 dark:text-slate-200"
+          strong
+            ? "text-sm font-semibold text-slate-900 dark:text-slate-100"
+            : "text-xs text-slate-700 dark:text-slate-200"
         }`}
       >
         {value}
@@ -497,24 +517,18 @@ function Row({
   );
 }
 
-function CompareMini({
-  label,
-  budget,
-  actual,
-}: {
-  label: string;
-  budget: number;
-  actual: number;
-}) {
+function CompareMini({ label, budget, actual }: { label: string; budget: number; actual: number }) {
+  const { market } = useMarket();
+  const money = (n: number) => fmtBudgetMoney(n, market);
   const delta = budget - actual;
   return (
     <div>
       <div className="text-[10px] uppercase tracking-wider text-slate-400">{label}</div>
       <div className="tabular-nums text-slate-800 dark:text-slate-100">
-        Budget {fmtZar(budget)} · Actual {fmtZar(actual)}
+        Budget {money(budget)} · Actual {money(actual)}
       </div>
       <div className={`tabular-nums ${delta >= 0 ? "text-emerald-600" : "text-red-600"}`}>
-        Δ {fmtZar(delta)}
+        Δ {money(delta)}
       </div>
     </div>
   );

@@ -10,6 +10,15 @@ import { previewOwnerInvite } from "@/lib/invite-tokens.functions";
 import { OPS_UNLOCK_KEY, unlockOwnerOps } from "@/lib/owner-ops.functions";
 import { registerLighthouseTrialVisit } from "@/lib/lighthouse.functions";
 import { AuthDivider, GoogleSignInButton } from "@/components/google-sign-in-button";
+import { MarketPicker } from "@/components/market-picker";
+import {
+  draftToSelection,
+  isDraftComplete,
+  readVisitorDraft,
+  withMarketRpcFallback,
+  writeVisitorDraft,
+  type DraftMarket,
+} from "@/lib/market";
 // Inline so landing paint doesn't wait on a second stylesheet round-trip
 // (external app CSS can still load; these rules win for landing selectors).
 import landingCss from "../styles/landing.css?inline";
@@ -167,7 +176,14 @@ function LandingPage() {
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
     setMounted(true);
+    setDraftMarket(readVisitorDraft());
   }, []);
+
+  useEffect(() => {
+    writeVisitorDraft(draftMarket);
+    (window as unknown as { __milonDraftMarket?: DraftMarket }).__milonDraftMarket = draftMarket;
+    document.body.classList.toggle("market-us", draftMarket.country === "US");
+  }, [draftMarket]);
 
   /* ── register form state ── */
   const [regRole, setRegRole] = useState("Business owner");
@@ -179,6 +195,7 @@ function LandingPage() {
   const [regPlan, setRegPlan] = useState("Spark — Free early access");
   const [regBusy, setRegBusy] = useState(false);
   const [regDone, setRegDone] = useState(false);
+  const [draftMarket, setDraftMarket] = useState<DraftMarket>({ country: null, regionCode: null });
 
   /* ── redirect if already signed in ──
      Honour a pending Lighthouse unlock so the /app bounce cannot steal the
@@ -535,10 +552,37 @@ function LandingPage() {
       answers: Record<string, { em: string; label: string }> = {};
 
     function startQuiz(r: string) {
+      const draft = (window as unknown as { __milonDraftMarket?: DraftMarket }).__milonDraftMarket;
+      if (!draft?.country || (draft.country === "US" && !draft.regionCode)) {
+        document.getElementById("market")?.scrollIntoView({ behavior: "smooth", block: "start" });
+        return;
+      }
       qRole = r;
       step = 0;
       answers = {};
       document.body.className = "persona-" + r;
+      if (draft.country === "US") document.body.classList.add("market-us");
+      const ownerQuiz = QUIZ.owner as Array<{ key: string; q: string; opts: string[][] }>;
+      const sizeQ = ownerQuiz.find((s) => s.key === "size");
+      if (sizeQ) {
+        if (draft.country === "US") {
+          sizeQ.q = "Roughly, your annual revenue?";
+          sizeQ.opts = [
+            ["🌑", "Under $1m"],
+            ["🌓", "$1m – $5m"],
+            ["🌔", "$5m – $20m"],
+            ["🌕", "$20m+"],
+          ];
+        } else {
+          sizeQ.q = "Roughly, your annual turnover?";
+          sizeQ.opts = [
+            ["🌑", "Under R1m"],
+            ["🌓", "R1m – R5m"],
+            ["🌔", "R5m – R20m"],
+            ["🌕", "R20m+"],
+          ];
+        }
+      }
       const quiz = document.getElementById("quiz");
       if (quiz) {
         quiz.classList.add("active");
@@ -869,6 +913,12 @@ function LandingPage() {
       toast.error("Invalid access code. Contact us to get access.");
       return;
     }
+    const market = draftToSelection(draftMarket);
+    if (!market) {
+      toast.error("Pick South Africa or the United States (and a state) first.");
+      document.getElementById("market")?.scrollIntoView({ behavior: "smooth" });
+      return;
+    }
     setRegBusy(true);
     try {
       const { data, error } = await supabase.auth.signUp({
@@ -881,6 +931,8 @@ function LandingPage() {
             business_name: regBusiness.trim() || regName.trim(),
             signup_type: "customer",
             plan: regPlan,
+            market_country: market.country,
+            market_region: market.regionCode,
           },
         },
       });
@@ -894,7 +946,14 @@ function LandingPage() {
         // a PostgREST WITH CHECK quirk in this project, so the SECURITY DEFINER
         // RPC is the reliable path for both auto-confirm and email-confirm signups.
         const clientName = regBusiness.trim() || regName.trim() || regEmail;
-        const { error: rpcErr } = await supabase.rpc("ensure_own_client", { p_name: clientName });
+        const { error: rpcErr } = await withMarketRpcFallback(
+          () =>
+            supabase.rpc("ensure_own_client", {
+              p_name: clientName,
+              p_market: { country: market.country, regionCode: market.regionCode },
+            }),
+          () => supabase.rpc("ensure_own_client", { p_name: clientName }),
+        );
         if (rpcErr) {
           // Don't block navigation — the /app effectiveClientId flow will retry.
           console.error("[signup] ensure_own_client failed:", rpcErr.message);
@@ -1747,7 +1806,7 @@ function LandingPage() {
               <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
               <path d="M16 3.13a4 4 0 0 1 0 7.75" />
             </svg>
-            <span>Built for SA SMEs</span>
+            <span>{draftMarket.country === "US" ? "Built for US SMBs" : "Built for SA SMEs"}</span>
           </div>
           <div className="item">
             <svg
@@ -1768,6 +1827,32 @@ function LandingPage() {
         </div>
       </div>
 
+      {/* ══════════════════════════ MARKET ══════════════════════════ */}
+      <section id="market">
+        <div className="wrap">
+          <div className="section-head center reveal">
+            <span className="eyebrow">First, where you operate</span>
+            <h2>South Africa or the United States?</h2>
+            <p className="sub">
+              One product. Currency, dates, and tax follow this choice. The US needs a state so
+              sales tax is not guessed.
+            </p>
+          </div>
+          <div className="reveal" style={{ maxWidth: 560, margin: "36px auto 0" }}>
+            <MarketPicker
+              value={draftMarket}
+              onChange={setDraftMarket}
+              variant="landing"
+            />
+            {!isDraftComplete(draftMarket) && (
+              <p style={{ marginTop: 14, fontSize: 13, color: "var(--ink-dim)", textAlign: "center" }}>
+                Choose a region{draftMarket.country === "US" ? " and state" : ""} to continue.
+              </p>
+            )}
+          </div>
+        </div>
+      </section>
+
       {/* ══════════════════════════ PERSONA ══════════════════════════ */}
       <section id="persona">
         <div className="wrap">
@@ -1780,7 +1865,10 @@ function LandingPage() {
             </p>
           </div>
           <div className="persona-grid stagger">
-            <div className="persona-card" onClick={() => (window as any).__mq_start?.("owner")}>
+            <div
+              className={`persona-card${isDraftComplete(draftMarket) ? "" : " is-locked"}`}
+              onClick={() => (window as any).__mq_start?.("owner")}
+            >
               <div className="icon">
                 <svg viewBox="0 0 24 24">
                   <rect x="3" y="3" width="7" height="7" />
@@ -1799,7 +1887,7 @@ function LandingPage() {
               </div>
             </div>
             <div
-              className="persona-card"
+              className={`persona-card${isDraftComplete(draftMarket) ? "" : " is-locked"}`}
               onClick={() => (window as any).__mq_start?.("accountant")}
             >
               <div className="icon">
@@ -1963,9 +2051,19 @@ function LandingPage() {
             </h2>
           </div>
           <p className="sub reveal" style={{ marginTop: 24 }}>
-            South African SMEs operate with accountants they see once a quarter, software that
-            reports the past, and no model for what comes next. The result: smart owners, flying
-            blind. MILŌN is the instrument panel that was missing.
+            {draftMarket.country === "US" ? (
+              <>
+                US businesses operate with accountants they see once a quarter, software that
+                reports the past, and no model for what comes next. The result: smart owners, flying
+                blind. MILŌN is the instrument panel that was missing.
+              </>
+            ) : (
+              <>
+                South African SMEs operate with accountants they see once a quarter, software that
+                reports the past, and no model for what comes next. The result: smart owners, flying
+                blind. MILŌN is the instrument panel that was missing.
+              </>
+            )}
           </p>
           <div className="steps stagger" style={{ marginTop: 56 }}>
             <div className="step-card">
@@ -1981,8 +2079,7 @@ function LandingPage() {
               <span className="n">02</span>
               <h3>MILŌN scores your business</h3>
               <p>
-                31 ratios, 4 pillar scores, one overall health score — mapped against 120 SA
-                industry benchmarks.
+              mapped against {draftMarket.country === "US" ? "industry" : "120 SA industry"}{" "}
               </p>
               <span className="time">Instantly</span>
             </div>
@@ -2490,11 +2587,18 @@ function LandingPage() {
                       </p>
                     ) : (
                       <>
+                        <div style={{ margin: "8px 0 18px" }}>
+                          <MarketPicker
+                            value={draftMarket}
+                            onChange={setDraftMarket}
+                            variant="landing"
+                          />
+                        </div>
                         <GoogleSignInButton
                           intent="owner"
                           tone="landing"
                           label="Continue with Google"
-                          disabled={regBusy}
+                          disabled={regBusy || !isDraftComplete(draftMarket)}
                           onError={(msg) => toast.error(msg)}
                         />
                         <AuthDivider />
@@ -2613,7 +2717,9 @@ function LandingPage() {
             <span style={{ fontSize: 12, color: "var(--ink-dim)" }}>
               The financial health platform
               <br />
-              for South African SMEs
+              {draftMarket.country === "US"
+                ? "for US small businesses"
+                : "for South African SMEs"}
             </span>
           </div>
           <nav className="fnav" aria-label="Footer navigation">

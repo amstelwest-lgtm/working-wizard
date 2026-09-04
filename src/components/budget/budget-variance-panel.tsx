@@ -21,7 +21,8 @@ import type { BudgetDocument } from "@/lib/budget.types";
 import { preflightUploadFile } from "@/lib/upload-quality";
 import { UploadQualityDisclaimer } from "@/components/upload-quality-disclaimer";
 import { fyMonths, formatMonthLabel } from "@/lib/budget.months";
-import { computeBudgetMonths, fmtZar } from "@/lib/budget.compute";
+import { computeBudgetMonths, fmtBudgetMoney } from "@/lib/budget.compute";
+import { useMarket } from "@/contexts/market";
 import {
   actualsFromExtraction,
   computeMonthVariance,
@@ -46,18 +47,11 @@ function priorCalendarMonth(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
-export function BudgetVariancePanel({
-  clientId,
-  doc,
-}: {
-  clientId?: string;
-  doc: BudgetDocument;
-}) {
+export function BudgetVariancePanel({ clientId, doc }: { clientId?: string; doc: BudgetDocument }) {
+  const { market } = useMarket();
+  const money = (n: number) => fmtBudgetMoney(n, market);
   const months = useMemo(() => fyMonths(doc.fyStart), [doc.fyStart]);
-  const budgetResults = useMemo(
-    () => computeBudgetMonths(doc, doc.activeScenario),
-    [doc],
-  );
+  const budgetResults = useMemo(() => computeBudgetMonths(doc, doc.activeScenario), [doc]);
   const budgetByMonth = useMemo(() => {
     const m = new Map<string, (typeof budgetResults)[0]>();
     for (const r of budgetResults) m.set(r.month, r);
@@ -134,8 +128,7 @@ export function BudgetVariancePanel({
 
   const openReviewFromExtraction = (extraction: MergedExtractionResult, fileName: string) => {
     const mapped = actualsFromExtraction(extraction);
-    const month =
-      mapped.month && months.includes(mapped.month) ? mapped.month : focusMonth;
+    const month = mapped.month && months.includes(mapped.month) ? mapped.month : focusMonth;
     setDraftMonth(month);
     setDraftTotals(mapped.totals);
     setDraftWarnings(mapped.warnings);
@@ -215,8 +208,8 @@ export function BudgetVariancePanel({
       setReviewOpen(false);
       toast.success(
         status === "confirmed"
-          ? `Actuals confirmed for ${formatMonthLabel(res.actual.month)}`
-          : `Draft actuals saved for ${formatMonthLabel(res.actual.month)}`,
+          ? `Actuals confirmed for ${formatMonthLabel(res.actual.month, market)}`
+          : `Draft actuals saved for ${formatMonthLabel(res.actual.month, market)}`,
       );
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not save actuals");
@@ -228,7 +221,7 @@ export function BudgetVariancePanel({
     try {
       await removeActual({ data: { clientId, month } });
       setRows((prev) => prev.filter((r) => r.month !== month));
-      toast.success(`Removed actuals for ${formatMonthLabel(month)}`);
+      toast.success(`Removed actuals for ${formatMonthLabel(month, market)}`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not delete");
     }
@@ -303,7 +296,7 @@ export function BudgetVariancePanel({
             const has = actualByMonth.has(m);
             return (
               <option key={m} value={m}>
-                {formatMonthLabel(m)}
+                {formatMonthLabel(m, market)}
                 {has ? " · actuals" : ""}
               </option>
             );
@@ -319,7 +312,7 @@ export function BudgetVariancePanel({
 
       {!focusActual && (
         <div className="rounded-lg border border-dashed border-slate-200 px-3 py-4 text-center text-xs text-slate-500 dark:border-slate-700">
-          No actuals for <strong>{formatMonthLabel(focusMonth)}</strong> yet. Upload that
+          No actuals for <strong>{formatMonthLabel(focusMonth, market)}</strong> yet. Upload that
           month’s management accounts PDF to generate variance.
         </div>
       )}
@@ -348,15 +341,12 @@ export function BudgetVariancePanel({
               </thead>
               <tbody>
                 {report.lines.map((l) => (
-                  <tr
-                    key={l.key}
-                    className="border-b border-slate-50 dark:border-slate-900"
-                  >
+                  <tr key={l.key} className="border-b border-slate-50 dark:border-slate-900">
                     <td className="px-3 py-1.5 font-medium text-slate-700 dark:text-slate-200">
                       {l.label}
                     </td>
-                    <td className="px-2 py-1.5 text-right tabular-nums">{fmtZar(l.budget)}</td>
-                    <td className="px-2 py-1.5 text-right tabular-nums">{fmtZar(l.actual)}</td>
+                    <td className="px-2 py-1.5 text-right tabular-nums">{money(l.budget)}</td>
+                    <td className="px-2 py-1.5 text-right tabular-nums">{money(l.actual)}</td>
                     <td
                       className={`px-2 py-1.5 text-right tabular-nums ${
                         l.signal === "adverse"
@@ -366,7 +356,7 @@ export function BudgetVariancePanel({
                             : "text-slate-500"
                       }`}
                     >
-                      {fmtZar(l.delta)}
+                      {money(l.delta)}
                     </td>
                     <td className="px-2 py-1.5 text-right tabular-nums text-slate-500">
                       {formatVariancePct(l.deltaPct)}
@@ -399,8 +389,7 @@ export function BudgetVariancePanel({
             <DialogTitle>Confirm month actuals</DialogTitle>
             <DialogDescription>
               Check the month and totals extracted from{" "}
-              {draftSourceRef ? <strong>{draftSourceRef}</strong> : "the PDF"} before
-              saving.
+              {draftSourceRef ? <strong>{draftSourceRef}</strong> : "the PDF"} before saving.
             </DialogDescription>
           </DialogHeader>
 
@@ -421,7 +410,7 @@ export function BudgetVariancePanel({
               >
                 {months.map((m) => (
                   <option key={m} value={m}>
-                    {formatMonthLabel(m)}
+                    {formatMonthLabel(m, market)}
                   </option>
                 ))}
               </select>

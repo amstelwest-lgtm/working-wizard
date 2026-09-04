@@ -174,6 +174,8 @@ export type BudgetQualification = {
   confirmedAt: string;
 };
 
+import type { IndirectTaxProfile } from "@/lib/market/types";
+
 export type BudgetDocument = {
   version: 1;
   qualification: BudgetQualification;
@@ -183,8 +185,13 @@ export type BudgetDocument = {
   /** First month of the FY this budget covers, YYYY-MM */
   fyStart: string;
   vatMode: BudgetVatMode;
-  /** SA standard rate — editable (Phase 2). */
+  /** SA standard rate — editable (Phase 2). Also the US combined sales-tax rate when tax.regime is sales_tax. */
   vatRate: number;
+  /**
+   * Indirect tax engine. Missing on legacy ZA docs — treat as VAT at vatRate.
+   * US sales tax does not reclaim input tax.
+   */
+  tax?: IndirectTaxProfile;
   /** Opening bank balance at FY start (Phase 2). */
   openingCash: number;
   activeScenario: BudgetScenarioId;

@@ -74,7 +74,7 @@ export function MarketingShell({
         </section>
 
         <footer className="mk-foot">
-          <span>Milōn — financial health for South African businesses.</span>
+          <span>Milōn — financial health for South African and US businesses.</span>
           <a href="/">milon.co.za</a>
           <a href="/faq">Questions</a>
           <a href="/privacy">Privacy</a>

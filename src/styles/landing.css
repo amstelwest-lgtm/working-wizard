@@ -336,6 +336,10 @@ html[data-landing="1"] .persona-card p{color:var(--ink-dim);font-size:15px}
 html[data-landing="1"] .persona-card .go{margin-top:24px;color:var(--gold);font-weight:600;font-size:14px;letter-spacing:.08em;display:inline-flex;align-items:center;gap:8px}
 html[data-landing="1"] .persona-card .go i{transition:transform .3s var(--ease);font-style:normal}
 html[data-landing="1"] .persona-card:hover .go i{transform:translateX(6px)}
+html[data-landing="1"] #market{padding:72px 0 12px}
+html[data-landing="1"] .persona-card.is-locked{opacity:.55}
+html[data-landing="1"] .persona-card.is-locked:hover{transform:none;box-shadow:none;border-color:var(--line)}
+html[data-landing="1"] .persona-card.is-locked .go{opacity:.85}
 @media(max-width:760px){html[data-landing="1"] .persona-grid{grid-template-columns:1fr}}
 
 html[data-landing="1"] #quiz{display:none;padding-top:40px}

@@ -31,6 +31,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { MarketSettingsCard } from "@/components/market-settings-card";
+import { useAccountantProfile } from "@/contexts/accountant-profile";
 
 export const Route = createFileRoute("/_authenticated/settings/")({
   component: SettingsPage,
@@ -41,11 +43,14 @@ function SettingsPage() {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const doDelete = useServerFn(deleteOwnAccount);
+  const { firmId } = useAccountantProfile();
 
   const [role, setRole] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmText, setConfirmText] = useState("");
   const [deleting, setDeleting] = useState(false);
+  const [ownerClientId, setOwnerClientId] = useState<string | null>(null);
+  const [marketBlob, setMarketBlob] = useState<unknown>(null);
 
   const isAccountant =
     role === "firm_admin" || role === "accountant";
@@ -57,6 +62,33 @@ function SettingsPage() {
       setRole(portal.primaryRole);
     });
   }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    if (isAccountant && firmId) {
+      void supabase
+        .from("firms")
+        .select("market")
+        .eq("id", firmId)
+        .maybeSingle()
+        .then(({ data }) => setMarketBlob((data as { market?: unknown } | null)?.market ?? null));
+      return;
+    }
+    if (!isAccountant) {
+      void supabase
+        .from("clients")
+        .select("id, market")
+        .eq("owner_user_id", user.id)
+        .is("firm_id", null)
+        .limit(1)
+        .maybeSingle()
+        .then(({ data }) => {
+          const row = data as { id?: string; market?: unknown } | null;
+          setOwnerClientId(row?.id ?? null);
+          setMarketBlob(row?.market ?? null);
+        });
+    }
+  }, [user, isAccountant, firmId]);
 
   const backTo = isAccountant ? "/dashboard" : "/app";
 
@@ -160,6 +192,12 @@ function SettingsPage() {
             </div>
           </div>
         </section>
+
+        <MarketSettingsCard
+          kind={isAccountant ? "firm" : "client"}
+          recordId={isAccountant ? firmId : ownerClientId}
+          initial={marketBlob}
+        />
 
         {/* ── Practice (accountants) ──────────────────────────────────────── */}
         {isAccountant && (

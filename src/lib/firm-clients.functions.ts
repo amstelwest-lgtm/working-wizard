@@ -5,6 +5,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { US_STATE_CODES } from "@/lib/market/types";
+import { assertMarketSelection, isMissingMarketSupport, marketToJson } from "@/lib/market";
 
 type RpcClient = {
   rpc: (
@@ -31,20 +33,43 @@ export const createFirmClient = createServerFn({ method: "POST" })
         name: z.string().trim().min(1).max(200),
         firmId: z.string().uuid().optional().nullable(),
         businessType: z.string().trim().max(120).optional().nullable(),
+        marketCountry: z.enum(["ZA", "US"]).optional(),
+        marketRegion: z.enum(US_STATE_CODES).nullable().optional(),
       })
       .parse(input),
   )
   .handler(async ({ data, context }) => {
     const sb = context.supabase as unknown as RpcClient;
 
-    const { data: raw, error } = await sb.rpc("create_firm_client", {
+    let p_market: { country: "ZA" | "US"; regionCode: string | null } | null = null;
+    if (data.marketCountry) {
+      p_market = marketToJson(
+        assertMarketSelection({
+          country: data.marketCountry,
+          regionCode: data.marketCountry === "US" ? (data.marketRegion ?? null) : null,
+        }),
+      );
+    }
+
+    let { data: raw, error } = await sb.rpc("create_firm_client", {
       p_name: data.name,
       p_firm_id: data.firmId ?? null,
       p_business_type: data.businessType ?? null,
+      p_market,
     });
 
+    if (error && p_market && isMissingMarketSupport(error)) {
+      const retry = await sb.rpc("create_firm_client", {
+        p_name: data.name,
+        p_firm_id: data.firmId ?? null,
+        p_business_type: data.businessType ?? null,
+      });
+      raw = retry.data;
+      error = retry.error;
+    }
+
     if (error) {
-      if (missingRpc(error)) {
+      if (missingRpc(error) || isMissingMarketSupport(error)) {
         throw new Error(
           "Add-client RPC missing — run migration 20260824120000_client_code_ensure_firm.sql in Supabase.",
         );
@@ -55,7 +80,12 @@ export const createFirmClient = createServerFn({ method: "POST" })
     // New RPC returns jsonb { id, client_code, firm_id, name }.
     // Older uuid-only RPC is still accepted until the migration runs.
     if (typeof raw === "string") {
-      return { id: raw, name: data.name, firm_id: data.firmId ?? null, client_code: null as string | null };
+      return {
+        id: raw,
+        name: data.name,
+        firm_id: data.firmId ?? null,
+        client_code: null as string | null,
+      };
     }
     const row = (raw ?? {}) as {
       id?: string;

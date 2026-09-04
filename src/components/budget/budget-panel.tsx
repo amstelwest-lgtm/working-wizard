@@ -25,12 +25,17 @@ import { Button } from "@/components/ui/button";
 import { useServerFn } from "@tanstack/react-start";
 import { listClientReviewSignoffs } from "@/lib/review-signoffs.functions";
 import type { ClientReviewSignoff } from "@/lib/review-signoffs.functions";
-import { ReviewSignoffButton, ReviewSignoffBadge, computeIsStale } from "@/components/review-signoff";
+import {
+  ReviewSignoffButton,
+  ReviewSignoffBadge,
+  computeIsStale,
+} from "@/components/review-signoff";
 import {
   parseOperatingProfile,
   profileToBudgetQualification,
   type ClientOperatingProfile,
 } from "@/lib/client-profile";
+import { useMarket } from "@/contexts/market";
 
 export function BudgetPanel({
   clientId,
@@ -40,7 +45,7 @@ export function BudgetPanel({
   financials,
   businessTypeId,
   operatingProfile: operatingProfileProp,
-  fyStartMonthDefault = 3,
+  fyStartMonthDefault,
   onPushedToCash,
   onRetakeProfile,
   canSign,
@@ -62,6 +67,8 @@ export function BudgetPanel({
   /** Owner board already stamps this deliverable in the tab header. */
   hideReadOnlyStamp?: boolean;
 }) {
+  const { market } = useMarket();
+  const fyDefault = fyStartMonthDefault ?? market.fyStartMonthDefault;
   const [loaded, setLoaded] = useState(!clientId);
   const [doc, setDoc] = useState<BudgetDocument | null>(null);
   const [profile, setProfile] = useState<ClientOperatingProfile | null>(
@@ -143,8 +150,9 @@ export function BudgetPanel({
       .limit(1)
       .maybeSingle()
       .then(({ data }) => {
-        const fin = (data as { period_label?: string; financials?: Record<string, string | number> } | null)
-          ?.financials;
+        const fin = (
+          data as { period_label?: string; financials?: Record<string, string | number> } | null
+        )?.financials;
         if (!fin) {
           setSnapshotActuals(null);
           return;
@@ -207,7 +215,8 @@ export function BudgetPanel({
       }
     : null;
   const actuals =
-    snapshotActuals && (snapshotActuals.revenue || snapshotActuals.cogs || snapshotActuals.fixedCosts)
+    snapshotActuals &&
+    (snapshotActuals.revenue || snapshotActuals.cogs || snapshotActuals.fixedCosts)
       ? snapshotActuals
       : liveActuals && (liveActuals.revenue || liveActuals.cogs || liveActuals.fixedCosts)
         ? liveActuals
@@ -219,7 +228,7 @@ export function BudgetPanel({
       qualification: BudgetQualification;
       fyStartMonth: number;
     }) => {
-      const next = createBudgetDocument(args);
+      const next = createBudgetDocument({ ...args, market });
       if (args.qualification.inventoryProfile === "none") {
         next.showInventoryDays = false;
       } else if (args.qualification.inventoryProfile) {
@@ -230,7 +239,7 @@ export function BudgetPanel({
       setUnmapped(null);
       toast.success(`Budget ready · ${BUDGET_TEMPLATES[args.templateId].label}`);
     },
-    [],
+    [market],
   );
 
   // Seed budget from operating profile when none exists yet
@@ -240,9 +249,9 @@ export function BudgetPanel({
     startFresh({
       templateId: profile.templateId,
       qualification: profileToBudgetQualification(profile, "none"),
-      fyStartMonth: profile.fyStartMonth || fyStartMonthDefault,
+      fyStartMonth: profile.fyStartMonth || fyDefault,
     });
-  }, [loaded, doc, profile, fyStartMonthDefault, startFresh]);
+  }, [loaded, doc, profile, fyDefault, startFresh]);
 
   const beginModelChange = () => {
     if (onRetakeProfile) {
@@ -258,7 +267,7 @@ export function BudgetPanel({
         startFresh({
           templateId: nextProfile.templateId,
           qualification: profileToBudgetQualification(nextProfile, "none"),
-          fyStartMonth: nextProfile.fyStartMonth || fyStartMonthDefault,
+          fyStartMonth: nextProfile.fyStartMonth || fyDefault,
         });
         return;
       }
@@ -283,7 +292,7 @@ export function BudgetPanel({
         `Budget model updated · ${result.mappedCount} drivers carried across (${result.overlapPct.toFixed(0)}% overlap)`,
       );
     },
-    [doc, fyStartMonthDefault, startFresh],
+    [doc, fyDefault, startFresh],
   );
 
   // When parent profile changes after a retake, remap budget
@@ -307,7 +316,9 @@ export function BudgetPanel({
   if (!doc) {
     return (
       <div className="space-y-3 rounded-xl border border-dashed border-slate-300 p-6 text-sm dark:border-slate-700">
-        <p className="font-semibold text-slate-800 dark:text-slate-100">Budget needs your business profile</p>
+        <p className="font-semibold text-slate-800 dark:text-slate-100">
+          Budget needs your business profile
+        </p>
         <p className="text-slate-500">
           Answer the intro questions once — we use them to pick the right volume × price drivers
           (and to tune health, cash, and advice across Milōn).
@@ -413,9 +424,7 @@ export function BudgetPanel({
                 if (!pendingChange) return;
                 setDoc(pendingChange.result.next);
                 setUnmapped(
-                  pendingChange.result.unmapped.length
-                    ? pendingChange.result.unmapped
-                    : null,
+                  pendingChange.result.unmapped.length ? pendingChange.result.unmapped : null,
                 );
                 setPendingChange(null);
                 setLowOverlapOpen(false);
