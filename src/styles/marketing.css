@@ -207,6 +207,30 @@ html .mk .mk-lead {
   max-width: 62ch;
 }
 
+html .mk .mk-hero-plain {
+  padding: 48px 0 20px;
+}
+
+html .mk .mk-hero-plain::before {
+  display: none;
+}
+
+html .mk .mk-hero-plain h1 {
+  font-size: 22px;
+  font-weight: 550;
+  letter-spacing: 0;
+  line-height: 1.35;
+  margin: 0 0 10px;
+  text-wrap: pretty;
+}
+
+html .mk .mk-hero-plain .mk-lead {
+  font-size: 15.5px;
+  font-weight: 400;
+  line-height: 1.6;
+  max-width: 68ch;
+}
+
 html .mk strong {
   color: var(--ink) !important;
   font-weight: 680;

@@ -21,25 +21,16 @@ export const Route = createFileRoute("/ai")({
 function AiNoticePage() {
   return (
     <MarketingShell
+      heroTone="plain"
       eyebrow="AI notice"
-      title={
-        <>
-          We use AI. It is powered by <span className="mk-gold">Claude</span>. Financial
-          information sent to it is anonymised.
-        </>
-      }
-      lead={
-        <>
-          That is the whole point of this page. The rest is what “anonymised” means in practice,
-          and what a person still has to do before a client sees a draft.
-        </>
-      }
+      title="Use of an AI model"
+      lead="Milōn uses an AI model (Claude, from Anthropic). Financial information sent to the model is anonymised. This page records what that means."
       ctaTitle={<>The rest of the legal pages</>}
       ctaBody={<>Privacy covers what we store. Terms cover how the workspace may be used.</>}
       ctaLabel="Privacy ✦"
       ctaHref="/privacy"
     >
-      <p className="mk-legal-updated">Effective {LEGAL_EFFECTIVE} · Powered by Claude</p>
+      <p className="mk-legal-updated">Effective {LEGAL_EFFECTIVE}</p>
 
       <h2>What we send — and what we do not</h2>
       <p>
@@ -68,11 +59,10 @@ function AiNoticePage() {
         business from the payload.
       </p>
 
-      <h2>Why Claude</h2>
+      <h2>The model</h2>
       <p>
-        Claude is the model we use, from Anthropic. We chose it because the product needs a
-        careful reader of financial language, not a generic chatbot bolted on. Landing-page copy
-        that says “Powered by Claude AI” is the same fact as this page, not a different one.
+        The model is Claude, supplied by Anthropic. That is a processing fact, not an endorsement
+        line. The same statement appears in the site footer.
       </p>
 
       <h2>A person still signs the work that leaves the firm</h2>

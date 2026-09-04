@@ -17,6 +17,7 @@ export function MarketingShell({
   ctaBody,
   ctaLabel = "Start free ✦",
   ctaHref = "/#register",
+  heroTone = "default",
 }: {
   eyebrow: string;
   title: ReactNode;
@@ -26,6 +27,8 @@ export function MarketingShell({
   ctaBody: ReactNode;
   ctaLabel?: string;
   ctaHref?: string;
+  /** Quiet heading for legal notices that should not read as marketing. */
+  heroTone?: "default" | "plain";
 }) {
   return (
     <div className="mk" data-milon-marketing>
@@ -49,7 +52,7 @@ export function MarketingShell({
       </header>
 
       <div className="mk-wrap">
-        <section className="mk-hero">
+        <section className={heroTone === "plain" ? "mk-hero mk-hero-plain" : "mk-hero"}>
           <span className="mk-eyebrow">{eyebrow}</span>
           <h1>{title}</h1>
           <p className="mk-lead">{lead}</p>

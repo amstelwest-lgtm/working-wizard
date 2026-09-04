@@ -45,7 +45,10 @@ assert(terms.includes("Claude"), "terms name Claude");
 assert(terms.includes("anonymised"), "terms repeat anonymisation");
 assert(terms.includes("South Africa"), "terms sit under SA law");
 
-assert(ai.includes("Powered by Claude") || ai.includes("powered by"), "AI notice names Claude");
+assert(ai.includes("Claude"), "AI notice names Claude");
+assert(ai.includes("Anthropic"), "AI notice names the supplier");
+assert(!ai.includes("mk-gold"), "AI notice does not gold-highlight Claude");
+assert(ai.includes('heroTone="plain"'), "AI notice uses the quiet hero");
 assert(ai.includes("No company names"), "AI notice: no company names");
 assert(ai.includes("No raw amounts"), "AI notice: no raw amounts");
 assert(ai.includes("anonymised"), "AI notice: anonymised");
