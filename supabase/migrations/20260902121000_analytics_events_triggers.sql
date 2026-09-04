@@ -536,8 +536,8 @@ INSERT INTO analytics.events (
   object_id, object_type, source, is_internal, is_demo, idempotency_key, properties
 )
 SELECT
-  'practice.created', f.created_at, 'practice_admin', f.owner_user_id, f.id, NULL,
-  f.id, 'firm', 'db_trigger', f.is_internal, false,
+  'practice.created', f.created_at, 'practice_admin'::analytics.actor_kind, f.owner_user_id, f.id, NULL,
+  f.id, 'firm', 'db_trigger'::analytics.event_source, f.is_internal, false,
   'practice.created:' || f.id, '{}'::jsonb
 FROM public.firms f
 ON CONFLICT (idempotency_key) DO NOTHING;
@@ -548,7 +548,7 @@ INSERT INTO analytics.events (
 )
 SELECT
   'practice.brand.configured', coalesce(f.brand_updated_at, f.created_at),
-  'practice_admin', f.owner_user_id, f.id, NULL, f.id, 'firm', 'db_trigger',
+  'practice_admin'::analytics.actor_kind, f.owner_user_id, f.id, NULL, f.id, 'firm', 'db_trigger'::analytics.event_source,
   f.is_internal, false, 'practice.brand.configured:' || f.id,
   jsonb_build_object('has_logo', true)
 FROM public.firms f
@@ -561,8 +561,8 @@ INSERT INTO analytics.events (
 )
 SELECT
   'entity.created', c.created_at,
-  CASE WHEN c.firm_id IS NOT NULL THEN 'accountant' ELSE 'sme_owner' END,
-  c.owner_user_id, c.firm_id, c.id, c.id, 'client', 'db_trigger',
+  CASE WHEN c.firm_id IS NOT NULL THEN 'accountant'::analytics.actor_kind ELSE 'sme_owner'::analytics.actor_kind END,
+  c.owner_user_id, c.firm_id, c.id, c.id, 'client', 'db_trigger'::analytics.event_source,
   coalesce(f.is_internal, false), c.is_demo,
   'entity.created:' || c.id,
   jsonb_build_object(
@@ -579,8 +579,8 @@ INSERT INTO analytics.events (
 )
 SELECT
   'upload.succeeded', coalesce(c.financials_updated_at, c.created_at),
-  CASE WHEN c.firm_id IS NOT NULL THEN 'accountant' ELSE 'sme_owner' END,
-  c.owner_user_id, c.firm_id, c.id, c.id, 'client', 'db_trigger',
+  CASE WHEN c.firm_id IS NOT NULL THEN 'accountant'::analytics.actor_kind ELSE 'sme_owner'::analytics.actor_kind END,
+  c.owner_user_id, c.firm_id, c.id, c.id, 'client', 'db_trigger'::analytics.event_source,
   coalesce(f.is_internal, false), c.is_demo,
   'upload.succeeded:' || c.id,
   jsonb_build_object('kind', 'unknown')
@@ -595,7 +595,7 @@ INSERT INTO analytics.events (
 )
 SELECT
   'signup.completed', ur.created_at, analytics.actor_kind_for(ur.user_id, NULL),
-  ur.user_id, NULL, NULL, ur.user_id, 'user', 'db_trigger',
+  ur.user_id, NULL, NULL, ur.user_id, 'user', 'db_trigger'::analytics.event_source,
   false, false, 'signup.completed:' || ur.user_id::text,
   jsonb_build_object(
     'signup_type', CASE
@@ -617,8 +617,8 @@ INSERT INTO analytics.events (
   object_id, object_type, source, is_internal, is_demo, idempotency_key, properties
 )
 SELECT
-  'task.created', i.created_at, 'sme_owner', NULL, c.firm_id, i.client_id,
-  i.id, 'task', 'db_trigger', coalesce(f.is_internal, false), c.is_demo,
+  'task.created', i.created_at, 'sme_owner'::analytics.actor_kind, NULL, c.firm_id, i.client_id,
+  i.id, 'task', 'db_trigger'::analytics.event_source, coalesce(f.is_internal, false), c.is_demo,
   'task.created:' || i.id,
   jsonb_build_object('source', i.source::text, 'ratio_code', i.source_move_key)
 FROM public.action_items i
@@ -631,8 +631,8 @@ INSERT INTO analytics.events (
   object_id, object_type, source, is_internal, is_demo, idempotency_key, properties
 )
 SELECT
-  'task.assigned', i.created_at, 'sme_owner', NULL, c.firm_id, i.client_id,
-  i.id, 'task', 'db_trigger', coalesce(f.is_internal, false), c.is_demo,
+  'task.assigned', i.created_at, 'sme_owner'::analytics.actor_kind, NULL, c.firm_id, i.client_id,
+  i.id, 'task', 'db_trigger'::analytics.event_source, coalesce(f.is_internal, false), c.is_demo,
   'task.assigned:' || i.id, jsonb_build_object('has_email', true)
 FROM public.action_items i
 JOIN public.clients c ON c.id = i.client_id
@@ -645,8 +645,8 @@ INSERT INTO analytics.events (
   object_id, object_type, source, is_internal, is_demo, idempotency_key, properties
 )
 SELECT
-  'task.completed', i.completed_at, 'sme_employee', NULL, c.firm_id, i.client_id,
-  i.id, 'task', 'db_trigger', coalesce(f.is_internal, false), c.is_demo,
+  'task.completed', i.completed_at, 'sme_employee'::analytics.actor_kind, NULL, c.firm_id, i.client_id,
+  i.id, 'task', 'db_trigger'::analytics.event_source, coalesce(f.is_internal, false), c.is_demo,
   'task.completed:' || i.id, '{}'::jsonb
 FROM public.action_items i
 JOIN public.clients c ON c.id = i.client_id
@@ -659,8 +659,8 @@ INSERT INTO analytics.events (
   object_id, object_type, source, is_internal, is_demo, idempotency_key, properties
 )
 SELECT
-  'task.email.dispatched', coalesce(e.sent_at, e.created_at), 'sme_owner', NULL,
-  c.firm_id, e.client_id, e.action_item_id, 'task', 'db_trigger',
+  'task.email.dispatched', coalesce(e.sent_at, e.created_at), 'sme_owner'::analytics.actor_kind, NULL,
+  c.firm_id, e.client_id, e.action_item_id, 'task', 'db_trigger'::analytics.event_source,
   coalesce(f.is_internal, false), c.is_demo,
   'task.email.dispatched:' || e.id,
   jsonb_build_object('email_type', e.email_type)
@@ -679,8 +679,8 @@ SELECT
     WHEN d.channel = 'pdf_download' THEN 'report.downloaded'
     ELSE 'report.sent'
   END,
-  d.created_at, 'accountant', d.created_by, d.firm_id, d.client_id,
-  d.id, 'delivery', 'db_trigger',
+  d.created_at, 'accountant'::analytics.actor_kind, d.created_by, d.firm_id, d.client_id,
+  d.id, 'delivery', 'db_trigger'::analytics.event_source,
   coalesce(f.is_internal, false), coalesce(c.is_demo, false),
   CASE
     WHEN d.report_key = 'zip_all' THEN 'report.zip_all:' || d.id
@@ -698,8 +698,8 @@ INSERT INTO analytics.events (
   object_id, object_type, source, is_internal, is_demo, idempotency_key, properties
 )
 SELECT
-  'qbo.connected', coalesce(q.connected_at, now()), 'accountant', NULL,
-  c.firm_id, q.client_id, q.id, 'qbo', 'db_trigger',
+  'qbo.connected', coalesce(q.connected_at, now()), 'accountant'::analytics.actor_kind, NULL,
+  c.firm_id, q.client_id, q.id, 'qbo', 'db_trigger'::analytics.event_source,
   coalesce(f.is_internal, false), c.is_demo,
   'qbo.connected:' || q.id, '{}'::jsonb
 FROM public.qbo_connections q
@@ -714,8 +714,8 @@ DO $$ BEGIN
       object_id, object_type, source, is_internal, is_demo, idempotency_key, properties
     )
     SELECT
-      'payment.recorded', p.paid_at::timestamptz, 'platform_owner', p.created_by,
-      p.firm_id, NULL, p.id, 'payment', 'db_trigger', false, false,
+      'payment.recorded', p.paid_at::timestamptz, 'platform_owner'::analytics.actor_kind, p.created_by,
+      p.firm_id, NULL, p.id, 'payment', 'db_trigger'::analytics.event_source, false, false,
       'payment.recorded:' || p.id,
       jsonb_build_object('status', p.status, 'plan_code', p.plan_code)
     FROM public.milon_ops_payments p

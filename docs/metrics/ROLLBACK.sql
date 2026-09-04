@@ -30,6 +30,13 @@ DO $$ BEGIN
   END IF;
 END $$;
 
+DROP FUNCTION IF EXISTS public.analytics_purge_old_events(integer);
+DROP FUNCTION IF EXISTS public.analytics_decide_experiment(bigint, text, text, text);
+DROP FUNCTION IF EXISTS public.analytics_create_experiment(text, text, text, text, numeric, jsonb, timestamptz);
+DROP FUNCTION IF EXISTS public.analytics_update_queue_item(bigint, text, text);
+DROP FUNCTION IF EXISTS public.analytics_log_signal(uuid, text, text, text, text, text, text, text, text, boolean);
+DROP FUNCTION IF EXISTS public.analytics_refresh_derived();
+DROP FUNCTION IF EXISTS analytics.caller_may_operate();
 DROP FUNCTION IF EXISTS public.analytics_track(text, jsonb, text, uuid, uuid, uuid, text, text);
 DROP FUNCTION IF EXISTS public.analytics_emit(text, timestamptz, text, uuid, text, uuid, uuid, uuid, text, text, text, boolean, text, jsonb);
 DROP FUNCTION IF EXISTS public.preview_advisory_delivery_ack(text);

@@ -2586,6 +2586,7 @@ function LandingPage() {
             <a href="#features">Platform</a>
             <a href="#pricing">Pricing</a>
             <a href="/auth">Accountant portal</a>
+            <a href="/faq">Privacy</a>
             <button
               onClick={() => setSigninOpen(true)}
               style={{
@@ -2606,7 +2607,13 @@ function LandingPage() {
               © {new Date().getFullYear()} MILŌN Financial Technologies (Pty) Ltd. All rights
               reserved.
             </span>
-            <span>Built for South Africa · Powered by Claude AI</span>
+            <span>
+              <a href="/faq" style={{ color: "inherit" }}>
+                Privacy
+              </a>
+              {" · "}
+              Built for South Africa · Powered by Claude AI
+            </span>
           </div>
         </div>
       </footer>

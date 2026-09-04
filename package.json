@@ -38,6 +38,8 @@
     "test:client-invite-email": "vite-node --config scripts/vite-test.config.ts scripts/client-invite-email-test.mts",
     "test:product-usage": "vite-node --config scripts/vite-test.config.ts scripts/product-usage-test.mts",
     "test:analytics-events": "vite-node --config scripts/vite-test.config.ts scripts/analytics-events-test.mts",
+    "test:analytics-metrics": "vite-node --config scripts/vite-test.config.ts scripts/analytics-metrics-test.mts",
+    "test:analytics-digest": "vite-node --config scripts/vite-test.config.ts scripts/analytics-metrics-test.mts",
     "test:google-auth": "vite-node --config scripts/vite-test.config.ts scripts/google-auth-test.mts"
   },
   "dependencies": {

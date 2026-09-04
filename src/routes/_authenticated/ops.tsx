@@ -470,13 +470,21 @@ function OwnerOpsPage() {
           <div className="flex flex-wrap items-center gap-2">
             <ThemeToggle />
             {!itOnly ? (
-              <button
-                type="button"
-                onClick={() => void refresh()}
-                className="inline-flex h-9 items-center gap-1.5 rounded-full border border-[var(--ops-line-strong)] px-3 text-xs font-semibold uppercase tracking-wider text-[var(--ops-ink-soft)] hover:border-[var(--ops-amber-border)] hover:text-[var(--ops-amber)]"
-              >
-                <RefreshCw className={`h-3.5 w-3.5 ${busy ? "animate-spin" : ""}`} /> Refresh
-              </button>
+              <>
+                <Link
+                  to="/founder/metrics"
+                  className="inline-flex h-9 items-center rounded-full border border-amber-500/40 px-3 text-xs font-semibold uppercase tracking-wider text-[var(--ops-amber)] hover:bg-amber-500/10"
+                >
+                  Founder instrument
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => void refresh()}
+                  className="inline-flex h-9 items-center gap-1.5 rounded-full border border-[var(--ops-line-strong)] px-3 text-xs font-semibold uppercase tracking-wider text-[var(--ops-ink-soft)] hover:border-[var(--ops-amber-border)] hover:text-[var(--ops-amber)]"
+                >
+                  <RefreshCw className={`h-3.5 w-3.5 ${busy ? "animate-spin" : ""}`} /> Refresh
+                </button>
+              </>
             ) : null}
             <button
               type="button"

@@ -107,6 +107,15 @@ function FaqPage() {
         <p>No. Nothing is being billed yet, so there is nothing to store.</p>
       </Qa>
 
+      <Qa q="Do you track how I use the product?">
+        <p>
+          We keep product-event keys — things like “report sent” or “task completed” — so we can
+          tell whether the product is actually working. We do not store financial amounts, ID
+          numbers, or employee emails in that log. Magic-link clicks are stored as a hash of the
+          link, not a name. Those raw events are kept for 24 months; the weekly totals stay.
+        </p>
+      </Qa>
+
       <h2>The obvious objections</h2>
 
       <Qa q="My accountant already does this.">

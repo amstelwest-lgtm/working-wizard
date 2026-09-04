@@ -1,0 +1,56 @@
+/**
+ * Founder instrument — reuse Lighthouse tokens, add display type + traffic colours.
+ * Forbidden on this page: cumulative totals, NPS, blended founding headlines.
+ */
+
+.founder-metrics {
+  --gold: #d4af37;
+}
+
+.founder-metrics .fm-display {
+  font-family: "Bebas Neue", "Cormorant Garamond", serif;
+  letter-spacing: 0.04em;
+}
+
+.founder-metrics .fm-number {
+  font-family: "Bebas Neue", "Cormorant Garamond", serif;
+  font-size: clamp(4.5rem, 12vw, 7.5rem);
+  line-height: 0.9;
+  letter-spacing: -0.02em;
+  color: var(--gold, #d4af37);
+}
+
+.founder-metrics .fm-traffic-healthy {
+  color: var(--ops-ok-ink);
+}
+
+.founder-metrics .fm-traffic-watch {
+  color: var(--ops-amber);
+}
+
+.founder-metrics .fm-traffic-bad,
+.founder-metrics .fm-traffic-empty {
+  color: var(--ops-danger-ink);
+}
+
+.founder-metrics .fm-founding {
+  box-shadow: inset 4px 0 0 var(--gold, #d4af37);
+}
+
+.founder-metrics .fm-status-blocked {
+  opacity: 0.7;
+}
+
+.founder-metrics table th,
+.founder-metrics table td {
+  padding: 0.45rem 0.65rem;
+  text-align: left;
+  font-size: 0.75rem;
+}
+
+.founder-metrics table th {
+  color: var(--ops-ink-dim);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}

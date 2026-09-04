@@ -1510,6 +1510,58 @@ export type Database = {
         }
         Returns: undefined
       }
+      analytics_refresh_derived: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
+      analytics_log_signal: {
+        Args: {
+          p_practice_id?: string
+          p_source: string
+          p_situation: string
+          p_literal_ask?: string
+          p_underlying_job?: string
+          p_frequency_stated?: string
+          p_workaround_today?: string
+          p_commitment_observed?: string
+          p_hypothesis_id?: string
+          p_is_compliment_only?: boolean
+        }
+        Returns: number
+      }
+      analytics_update_queue_item: {
+        Args: {
+          p_id: number
+          p_status: string
+          p_outcome_notes?: string
+        }
+        Returns: undefined
+      }
+      analytics_create_experiment: {
+        Args: {
+          p_name: string
+          p_hypothesis_id: string
+          p_prediction: string
+          p_success_metric: string
+          p_success_threshold: number
+          p_cohort_filter?: Json
+          p_ends_at?: string
+        }
+        Returns: number
+      }
+      analytics_decide_experiment: {
+        Args: {
+          p_id: number
+          p_decision: string
+          p_result: string
+          p_pivot_type?: string
+        }
+        Returns: undefined
+      }
+      analytics_purge_old_events: {
+        Args: { p_months?: number }
+        Returns: number
+      }
     }
     Enums: {
       action_health:

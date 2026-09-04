@@ -72,6 +72,7 @@ export function MarketingShell({
           <span>Milōn — financial health for South African businesses.</span>
           <a href="/">milon.co.za</a>
           <a href="/faq">Questions and objections</a>
+          <a href="/faq">Privacy</a>
           <span className="mk-print-hide">Print this page to save it as a PDF.</span>
         </footer>
       </div>
