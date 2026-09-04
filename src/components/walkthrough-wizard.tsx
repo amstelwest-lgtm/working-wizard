@@ -112,6 +112,13 @@ const ACCOUNTANT_DASH_STEPS: Step[] = [
 
 const ACCOUNTANT_CLIENT_STEPS: Step[] = [
   {
+    tab: "ask",
+    targetId: "ask-ai-accountant",
+    section: "Ask AI",
+    title: "Start with Ask AI",
+    body: "This tab is the first stop in studio. Ask against this client’s filled deliverables — ratios, waterfall, cash outlook, product lines, next moves, and the action plan — before a call.",
+  },
+  {
     tab: "ratios",
     targetId: "finCollapse",
     section: "Figures",
@@ -124,13 +131,6 @@ const ACCOUNTANT_CLIENT_STEPS: Step[] = [
     section: "Business Health",
     title: "Read the score with the owner",
     body: "Same orb the SME sees. Drill the pillars so you can explain what’s driving the number before you prescribe fixes.",
-  },
-  {
-    tab: "ratios",
-    targetId: "ask-ai-accountant",
-    section: "Ask AI",
-    title: "Prep with Ask AI",
-    body: "Ask against this client’s live figures before a call — useful for “what changed?” and “what’s the first move?”",
   },
   {
     tab: "profit",

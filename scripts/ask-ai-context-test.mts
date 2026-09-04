@@ -181,4 +181,10 @@ assert(classify("What's on the action plan?") === "full", "action plan question 
 const nonePrompt = buildPrompt("What is a ratio?", ctx, "none");
 assert(!nonePrompt.user.includes("BUSINESS CONTEXT"), "definitional questions get no client dump");
 
+const accountantPrompt = buildPrompt("What should I focus on this month?", ctx, "full", "accountant");
+assert(
+  accountantPrompt.system.includes("this client"),
+  "accountant audience talks about the client, not the owner as you",
+);
+
 console.log("ask-ai-context-test: all assertions passed");

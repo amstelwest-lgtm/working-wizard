@@ -39,6 +39,11 @@ assert(
     "firm.client_cash",
   "firm cash tab",
 );
+assert(
+  resolveFeatureKey({ event: "tab_viewed", tab: "ask", surface: "accountant_portal" }) ===
+    "firm.client_ask_ai",
+  "firm Ask AI tab",
+);
 assert(resolveFeatureKey({ event: "page_viewed", path: "/dashboard" }) === "firm.dashboard", "dashboard page");
 assert(resolveFeatureKey({ event: "report_downloaded" }) === "firm.report_download", "report download");
 assert(

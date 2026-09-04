@@ -226,6 +226,86 @@
   50%       { opacity: 0.45; }
 }
 
+/* Studio variant — first-class accountant (and any always-open) surface */
+.ask-ai-studio .ask-ai-panel {
+  padding: 8px 4px 4px;
+  gap: 18px;
+}
+.ask-ai-studio .ask-ai-header {
+  font-size: 13px;
+  letter-spacing: 0.22em;
+}
+.ask-ai-studio .ask-ai-textarea {
+  min-height: 168px;
+  padding: 18px 20px;
+  font-size: 16px;
+  line-height: 1.55;
+  border-radius: 14px;
+  border-width: 1.5px;
+}
+.ask-ai-studio .ask-ai-chip {
+  padding: 8px 16px;
+  font-size: 12.5px;
+}
+.ask-ai-studio .ask-ai-send {
+  padding: 12px 22px;
+  font-size: 12px;
+  border-radius: 10px;
+}
+.ask-ai-studio .ask-ai-answer {
+  padding: 22px 24px;
+  font-size: 15px;
+  line-height: 1.7;
+  border-radius: 14px;
+}
+.ask-ai-studio .ask-ai-thinking {
+  font-size: 14px;
+}
+
+.ask-ai-studio-shell {
+  position: relative;
+  overflow: hidden;
+  min-height: min(72vh, 720px);
+}
+.ask-ai-studio-shell::before {
+  content: "";
+  pointer-events: none;
+  position: absolute;
+  width: 56%;
+  height: 70%;
+  top: -28%;
+  right: -8%;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(212, 175, 55, 0.2), transparent 68%);
+  filter: blur(8px);
+}
+.ask-ai-studio-kicker {
+  position: relative;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: #d4af37;
+  margin: 0 0 10px;
+}
+.ask-ai-studio-title {
+  position: relative;
+  margin: 0 0 10px;
+  font-size: clamp(28px, 4vw, 42px);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+  color: inherit;
+}
+.ask-ai-studio-lede {
+  position: relative;
+  margin: 0 0 28px;
+  max-width: 46rem;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--ink-dim, #9b958a);
+}
+
 /* Dark mode — driven by the app's .dark class only (never OS preference),
    so light app theme + dark OS never gets pale text on a white background. */
 .dark .ask-ai-trigger { color: rgba(241, 230, 200, 0.6); }

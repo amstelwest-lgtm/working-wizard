@@ -64,10 +64,15 @@ export function buildPrompt(
   question: string,
   ctx: AskAiContext,
   tier: DisclosureTier,
+  audience: "owner" | "accountant" = "owner",
 ): { system: string; user: string } {
   const lines: string[] = [];
   const copyPack = ctx.copyPack ?? "za";
   let system = askAiSystemBase(copyPack);
+  if (audience === "accountant") {
+    system +=
+      "\n- You are briefing an accountant about this SME client. Address the accountant. Say \"this client\" or \"the owner\" for the business — not \"you\" unless you mean the accountant's next action.";
+  }
   if (copyPack === "us") {
     system +=
       "\n- Days and percentage bands are global SME bands, not US industry medians. Do not present them as US sector medians. Do not invent US money benchmarks.";

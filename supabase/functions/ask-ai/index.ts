@@ -81,7 +81,7 @@ Deno.serve(async (req: Request) => {
   if (authErr || !user) return respond({ error: "Unauthorised" }, 401);
 
   // ── Parse body ────────────────────────────────────────────────────────────
-  let body: { clientId?: string; question?: string };
+  let body: { clientId?: string; question?: string; audience?: string };
   try {
     body = await req.json();
   } catch {
@@ -89,6 +89,7 @@ Deno.serve(async (req: Request) => {
   }
 
   const { clientId, question: rawQuestion } = body;
+  const audience = body.audience === "accountant" ? "accountant" : "owner";
   if (!clientId || !rawQuestion?.trim()) {
     return respond({ error: "clientId and question are required" }, 400);
   }
@@ -171,7 +172,7 @@ Deno.serve(async (req: Request) => {
 
   // ── Build context (userClient — RLS enforced on tenant data reads) ────────
   const ctx = await buildContext(userClient, clientId, tier, question);
-  const { system, user: userPrompt } = buildPrompt(question, ctx, tier);
+  const { system, user: userPrompt } = buildPrompt(question, ctx, tier, audience);
 
   // ── Call Claude Sonnet 4.6 ────────────────────────────────────────────────
   let claudeResult;

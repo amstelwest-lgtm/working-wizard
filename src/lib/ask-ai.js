@@ -13,6 +13,13 @@ const DEFAULT_CHIPS = [
   "Where am I weakest vs industry?",
 ];
 
+const ACCOUNTANT_CHIPS = [
+  "What's the biggest risk for this client?",
+  "Where is cash leaking this quarter?",
+  "Which ratio should I raise in the next meeting?",
+  "Is the action plan aimed at the right lever?",
+];
+
 // ── Minimal safe markdown → HTML renderer ───────────────────────────────
 // Escapes all HTML first, then converts the subset Claude actually emits:
 // headings, bold, italics, tables, bullet/numbered lists, paragraphs.
@@ -98,9 +105,28 @@ export function renderMarkdown(md) {
 }
 
 export function mountAskAi(container, options) {
-  const { endpoint, getToken } = options;
+  const {
+    endpoint,
+    getToken,
+    variant = "compact",
+    audience = "owner",
+    chips: chipOverride,
+    placeholder: placeholderOverride,
+    heading: headingOverride,
+  } = options || {};
+  const studio = variant === "studio";
+  const accountant = audience === "accountant";
+  const suggestionChips = chipOverride || (accountant ? ACCOUNTANT_CHIPS : DEFAULT_CHIPS);
+  const heading =
+    headingOverride ||
+    (accountant ? "Ask about this business" : "Ask your numbers");
+  const placeholder =
+    placeholderOverride ||
+    (accountant
+      ? "e.g. What's the first move for this client this month? Where is cash leaking?"
+      : "e.g. Can I afford to hire a junior next month? What's killing my margin?");
 
-  let open = false;
+  let open = studio;
   let loading = false;
   let question = "";
   let answer = "";
@@ -111,14 +137,14 @@ export function mountAskAi(container, options) {
     container.innerHTML = "";
 
     const widget = document.createElement("div");
-    widget.className = "ask-ai-widget";
+    widget.className = studio ? "ask-ai-widget ask-ai-studio" : "ask-ai-widget";
 
     if (!open) {
       const trigger = document.createElement("button");
       trigger.type = "button";
       trigger.className = "ask-ai-trigger";
       trigger.innerHTML = `<span class="ask-ai-icon">${SPARKLES_SVG}</span>
-        <span>Ask anything about your numbers…</span>`;
+        <span>${accountant ? "Ask anything about this client…" : "Ask anything about your numbers…"}</span>`;
       trigger.addEventListener("click", () => { open = true; render(); });
       widget.appendChild(trigger);
     } else {
@@ -128,7 +154,7 @@ export function mountAskAi(container, options) {
       // Header
       const header = document.createElement("div");
       header.className = "ask-ai-header";
-      header.innerHTML = `<span class="ask-ai-icon" style="width:14px;height:14px">${SPARKLES_SVG}</span> Ask your numbers`;
+      header.innerHTML = `<span class="ask-ai-icon" style="width:14px;height:14px">${SPARKLES_SVG}</span> ${heading}`;
       panel.appendChild(header);
 
       // Build sendBtn first so textarea and chip handlers can update its disabled state.
@@ -142,7 +168,7 @@ export function mountAskAi(container, options) {
       // Textarea
       const ta = document.createElement("textarea");
       ta.className = "ask-ai-textarea";
-      ta.placeholder = "e.g. Can I afford to hire a junior next month? What's killing my margin?";
+      ta.placeholder = placeholder;
       ta.value = question;
       ta.disabled = loading;
       ta.addEventListener("input", (e) => {
@@ -158,7 +184,7 @@ export function mountAskAi(container, options) {
       if (!answer) {
         const chips = document.createElement("div");
         chips.className = "ask-ai-chips";
-        DEFAULT_CHIPS.forEach((c) => {
+        suggestionChips.forEach((c) => {
           const btn = document.createElement("button");
           btn.type = "button";
           btn.className = "ask-ai-chip";
@@ -181,9 +207,10 @@ export function mountAskAi(container, options) {
       const cancelBtn = document.createElement("button");
       cancelBtn.type = "button";
       cancelBtn.className = "ask-ai-cancel";
-      cancelBtn.textContent = "Cancel";
+      cancelBtn.textContent = studio ? "Clear" : "Cancel";
       cancelBtn.addEventListener("click", () => {
-        open = false; question = ""; answer = ""; answerChips = []; errorMsg = "";
+        question = ""; answer = ""; answerChips = []; errorMsg = "";
+        if (!studio) open = false;
         render();
       });
       actions.appendChild(cancelBtn);
@@ -272,7 +299,11 @@ export function mountAskAi(container, options) {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ clientId, question: q }),
+        body: JSON.stringify({
+          clientId,
+          question: q,
+          ...(accountant ? { audience: "accountant" } : {}),
+        }),
       });
 
       const data = await res.json();

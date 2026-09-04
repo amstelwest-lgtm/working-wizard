@@ -378,9 +378,18 @@ type Client = {
   market?: unknown;
 };
 
-type ActiveTab = "ratios" | "profit" | "cash" | "budget" | "reports" | "plan" | "advisory";
+type ActiveTab =
+  | "ask"
+  | "ratios"
+  | "profit"
+  | "cash"
+  | "budget"
+  | "reports"
+  | "plan"
+  | "advisory";
 
 const ACCOUNTANT_TABS: ActiveTab[] = [
+  "ask",
   "ratios",
   "profit",
   "cash",
@@ -473,7 +482,7 @@ function ClientView() {
 
   const [client, setClient] = useState<Client | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<ActiveTab>("ratios");
+  const [activeTab, setActiveTab] = useState<ActiveTab>("ask");
   const [studioDeepLink, setStudioDeepLink] = useState<{
     report?: string;
     action?: "preview" | "download";
@@ -677,6 +686,8 @@ function ClientView() {
         el.dataset.askAiMounted = "1";
         mod.mountAskAi(el, {
           endpoint: `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ask-ai`,
+          variant: "studio",
+          audience: "accountant",
           getToken: async () => {
             const { data } = await supabase.auth.getSession();
             return data.session?.access_token ?? null;
@@ -689,7 +700,7 @@ function ClientView() {
     return () => {
       cancelled = true;
     };
-  }, [client, clientId]);
+  }, [client, clientId, activeTab]);
 
   // Autosave debounce ref
   const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1629,6 +1640,7 @@ function ClientView() {
             <div className="tabs">
               {(
                 [
+                  { id: "ask", label: "Ask AI", star: true },
                   { id: "ratios", label: "Health & Ratios" },
                   { id: "profit", label: "Profitability" },
                   { id: "cash", label: "13-Week Cash Forecast", star: true },
@@ -1650,8 +1662,14 @@ function ClientView() {
               ))}
             </div>
 
-            {/* Simplified / Complex — global for ratios, budget, and action plan (mirrors owner app) */}
-            <div style={{ display: "flex", justifyContent: "center", margin: "8px 0 20px" }}>
+            {/* Simplified / Complex — Health, Budget, Action Plan (not Ask AI) */}
+            <div
+              style={{
+                display: activeTab === "ask" ? "none" : "flex",
+                justifyContent: "center",
+                margin: "8px 0 20px",
+              }}
+            >
               <div
                 style={{
                   display: "flex",
@@ -1694,6 +1712,20 @@ function ClientView() {
                     {m}
                   </button>
                 ))}
+              </div>
+            </div>
+
+            {/* ===== ASK AI TAB ===== */}
+            <div className={`tabpane${activeTab === "ask" ? " on" : ""}`} id="pane-ask">
+              <div className="card hero-card pad ask-ai-studio-shell">
+                <p className="ask-ai-studio-kicker">Ask AI · this client</p>
+                <h2 className="ask-ai-studio-title">Ask about {client.name}</h2>
+                <p className="ask-ai-studio-lede">
+                  Same rules as the owner copilot: answers come from filled profile questions,
+                  ratios, the profitability waterfall, cash-forecast outlook, product lines, next
+                  moves, and planned or outstanding action-plan tasks — not the raw statements.
+                </p>
+                <div id="ask-ai-accountant" />
               </div>
             </div>
 
@@ -1744,11 +1776,6 @@ function ClientView() {
                   </div>
                 </div>
               )}
-
-              {/* Ask AI — question widget scoped to this client */}
-              <div className="card" style={{ marginBottom: 20, padding: "6px 8px" }}>
-                <div id="ask-ai-accountant" />
-              </div>
 
               {/* Collapsible Financials */}
               <div className={`card collapse${finOpen ? " open" : ""}`} id="finCollapse">

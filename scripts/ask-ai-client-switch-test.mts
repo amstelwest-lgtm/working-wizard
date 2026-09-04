@@ -364,6 +364,31 @@ await test("Scenario 2d: missing token throws — no fetch called", async () => 
   assert(calls.length === 0, `fetch should not be called when token is missing; got ${calls.length} call(s)`);
 });
 
+await test("Scenario 3: studio accountant variant starts open and sends audience", async () => {
+  const { mockFetch, calls } = makeMockFetch();
+  (globalThis as Record<string, unknown>).fetch = mockFetch;
+
+  const container = makeContainer("studio-client");
+  mountAskAi(container, {
+    endpoint: "https://example.com/functions/v1/ask-ai",
+    variant: "studio",
+    audience: "accountant",
+    getToken: async () => "test-token",
+  });
+
+  const widget = container.find((el) => el.className.includes("ask-ai-studio"));
+  assert(!!widget, "studio class is on the widget");
+  const ta = container.find((el) => el.className.includes("ask-ai-textarea"));
+  assert(!!ta, "studio variant is open without clicking the trigger");
+
+  fillAndSend(container, "What's the biggest risk for this client?");
+  await new Promise((r) => setTimeout(r, 0));
+
+  assert(calls.length === 1, `expected 1 fetch call, got ${calls.length}`);
+  assert(calls[0].body.clientId === "studio-client", "studio still scopes to the current client");
+  assert(calls[0].body.audience === "accountant", "studio POST marks accountant audience");
+});
+
 // ── Summary ───────────────────────────────────────────────────────────────────
 
 console.log(`\n─────────────────────────────────────`);

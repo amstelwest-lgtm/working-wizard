@@ -19,6 +19,7 @@
     "test:reports": "vite-node --config scripts/vite-test.config.ts scripts/render-reports-test.mts",
     "test:ask-ai-client-switch": "vite-node --config scripts/vite-test.config.ts scripts/ask-ai-client-switch-test.mts",
     "test:ask-ai-context": "vite-node --config scripts/vite-test.config.ts scripts/ask-ai-context-test.mts",
+    "test:accountant-ask-ai-tab": "vite-node --config scripts/vite-test.config.ts scripts/accountant-ask-ai-tab-test.mts",
     "test:onboarding": "vite-node --config scripts/vite-test.config.ts scripts/test-onboarding-rls.mts",
     "test:invited-member": "vite-node --config scripts/vite-test.config.ts scripts/test-invited-member-flow.mts",
     "test:invite-onboarding": "vite-node --config scripts/vite-test.config.ts scripts/invite-accept-onboarding-test.mts",
