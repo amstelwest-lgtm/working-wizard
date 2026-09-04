@@ -29,6 +29,7 @@
     "test:accountant-followup": "vite-node --config scripts/vite-test.config.ts scripts/accountant-followup-test.mts",
     "test:accountant-reports-studio": "vite-node --config scripts/vite-test.config.ts scripts/accountant-reports-studio-test.mts",
     "test:weekly-inputs": "vite-node --config scripts/vite-test.config.ts scripts/weekly-inputs-test.mts",
+    "test:product-mix": "vite-node --config scripts/vite-test.config.ts scripts/product-mix-test.mts",
     "test:notes-archive": "vite-node --config scripts/vite-test.config.ts scripts/notes-archive-test.mts",
     "test:lighthouse-it": "vite-node --config scripts/vite-test.config.ts scripts/lighthouse-it-test.mts",
     "test:practice-access": "vite-node --config scripts/vite-test.config.ts scripts/practice-access-test.mts",

@@ -8,6 +8,7 @@ import {
   parseWeeklyInputs,
   type WeeklyInputs,
 } from "./weekly-inputs";
+import { emptyProductMix, parseProductMix, type ProductMix } from "./product-mix";
 
 export type DebtFacilityType =
   | "term"
@@ -114,11 +115,13 @@ export function splitFinancialsBlob(
   scalars: Record<string, string>;
   debtSchedule: DebtSchedule;
   weeklyInputs: WeeklyInputs;
+  productMix: ProductMix;
 } {
   const scalars: Record<string, string> = {};
   let debtSchedule = emptyDebtSchedule();
   let weeklyInputs = emptyWeeklyInputs();
-  if (!fin) return { scalars, debtSchedule, weeklyInputs };
+  let productMix = emptyProductMix();
+  if (!fin) return { scalars, debtSchedule, weeklyInputs, productMix };
   for (const [k, v] of Object.entries(fin)) {
     if (k === "debt_schedule") {
       debtSchedule = parseDebtSchedule(v);
@@ -128,17 +131,22 @@ export function splitFinancialsBlob(
       weeklyInputs = parseWeeklyInputs(v);
       continue;
     }
+    if (k === "productMix") {
+      productMix = parseProductMix(v);
+      continue;
+    }
     if (v != null && typeof v === "object") continue;
     scalars[k] = v != null ? String(v) : "";
   }
-  return { scalars, debtSchedule, weeklyInputs };
+  return { scalars, debtSchedule, weeklyInputs, productMix };
 }
 
-/** Merge scalar grid + debt schedule + weekly inputs for clients.financials write. */
+/** Merge scalar grid + debt schedule + weekly inputs + product mix for clients.financials write. */
 export function mergeFinancialsBlob(
   scalars: Record<string, string>,
   debtSchedule: DebtSchedule,
   weeklyInputs: WeeklyInputs = emptyWeeklyInputs(),
+  productMix: ProductMix = emptyProductMix(),
 ): Record<string, unknown> {
   const out: Record<string, unknown> = { ...scalars };
   if (debtSchedule.lines.length > 0 || debtSchedule.drawings_ytd != null || debtSchedule.prior_equity != null) {
@@ -150,8 +158,9 @@ export function mergeFinancialsBlob(
   } else {
     delete out.debt_schedule;
   }
-  // Always persist the week map so an accountant autosave cannot wipe owner-entered weeks.
+  // Always persist nested blobs so an accountant autosave cannot wipe owner-entered weeks or mix.
   out.weeklyInputs = weeklyInputs;
+  out.productMix = productMix;
   return out;
 }
 
