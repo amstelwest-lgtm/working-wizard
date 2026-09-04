@@ -14,7 +14,7 @@ import {
 } from "@/integrations/supabase/client.server";
 
 export const DEFAULT_OWNER_EMAILS = "amstel.west@gmail.com";
-export const DEFAULT_PASSPHRASE = "MilonOpsForge";
+export const DEFAULT_PASSPHRASE = "fishwherethefishare";
 
 /** Session key set by the landing unlock; also read by /ops. */
 export const OPS_UNLOCK_KEY = "milon_ops_unlock_v1";
