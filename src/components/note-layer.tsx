@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Trash2, CheckCheck, CornerDownRight, X, Shield } from "lucide-react";
+import { Trash2, CheckCheck, CornerDownRight, X, Shield, ChevronDown, ChevronUp } from "lucide-react";
 import { useNotes, type NoteCollaborator } from "@/contexts/notes";
-import { useAuth } from "@/hooks/use-auth";
 
 type NoteLayerProps = {
   clientId: string | null | undefined;
@@ -187,7 +186,6 @@ function MentionComposer({
 }
 
 export function NoteLayer({ clientId, tab, authorName, clientName, onNotesChanged, onNeedTab }: NoteLayerProps) {
-  const { user } = useAuth();
   const {
     pinMode,
     setPinMode,
@@ -221,6 +219,8 @@ export function NoteLayer({ clientId, tab, authorName, clientName, onNotesChange
   const [mounted, setMounted] = useState(false);
   const [saving, setSaving] = useState(false);
   const [tagIt, setTagIt] = useState(false);
+  const [trayExpanded, setTrayExpanded] = useState(false);
+  const [trayHidden, setTrayHidden] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const replyRef = useRef<HTMLInputElement>(null);
 
@@ -283,7 +283,12 @@ export function NoteLayer({ clientId, tab, authorName, clientName, onNotesChange
       setNoteText("");
       setTagIt(false);
       setComposing(null);
-      if (saved) setOpenNoteId(saved.id);
+      // Stay on the pin — do not leave the composer card open over the page.
+      if (saved) {
+        setOpenNoteId(null);
+        setTrayHidden(false);
+        setTrayExpanded(false);
+      }
       onNotesChanged?.();
     } finally {
       setSaving(false);
@@ -336,6 +341,15 @@ export function NoteLayer({ clientId, tab, authorName, clientName, onNotesChange
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusNoteId, allNotes, tab]);
 
+  useEffect(() => {
+    setTrayExpanded(false);
+    setTrayHidden(false);
+  }, [tab]);
+
+  useEffect(() => {
+    if (pinMode) setTrayHidden(false);
+  }, [pinMode]);
+
   if (!mounted || !clientId) return null;
   if (!pinMode && tabNotes.length === 0 && !composing && !openNoteId && !focusNoteId) return null;
 
@@ -348,61 +362,112 @@ export function NoteLayer({ clientId, tab, authorName, clientName, onNotesChange
         />
       )}
 
-      {/* Always-visible tray so notes remain findable after hard refresh / scroll */}
-      {tabNotes.length > 0 && (
+      {/* Collapsed-by-default tray — existing notes stay findable without covering the page */}
+      {tabNotes.length > 0 && !trayHidden && (
         <div
           data-note="true"
-          className="fixed bottom-44 right-4 z-[99993] w-[min(260px,calc(100vw-2rem))] max-h-[40vh] overflow-y-auto rounded-2xl border border-[#d4a550]/30 bg-white/95 p-2 shadow-xl backdrop-blur dark:border-[#d4a550]/25 dark:bg-[#0d1525]/95"
+          className="fixed bottom-44 right-4 z-[99993] w-[min(280px,calc(100vw-2rem))] rounded-2xl border border-[#d4a550]/30 bg-white/95 p-2 shadow-xl backdrop-blur dark:border-[#d4a550]/25 dark:bg-[#0d1525]/95"
         >
-          <div className="mb-1.5 flex items-center justify-between gap-2 px-2 pt-1">
-            <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b8860b]">
-              Notes on this tab · {tabNotes.length}
-            </div>
+          <div className="flex items-center justify-between gap-1 px-1">
+            <button
+              type="button"
+              onClick={() => setTrayExpanded((o) => !o)}
+              className="flex min-w-0 flex-1 items-center gap-2 rounded-xl px-2 py-1.5 text-left hover:bg-[#d4a550]/10"
+              title={trayExpanded ? "Minimise notes" : "Show notes on this tab"}
+            >
+              <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b8860b]">
+                Notes · {tabNotes.length}
+              </span>
+              <span className="text-[#d4a550]">
+                {trayExpanded ? (
+                  <ChevronDown className="h-3.5 w-3.5" />
+                ) : (
+                  <ChevronUp className="h-3.5 w-3.5" />
+                )}
+              </span>
+            </button>
             <button
               type="button"
               title="Open notes archive"
               onClick={() => openArchive("resolved")}
-              className="text-[10px] font-semibold text-slate-500 hover:text-[#b8860b]"
+              className="px-1.5 text-[10px] font-semibold text-slate-500 hover:text-[#b8860b]"
             >
               Archive
             </button>
+            <button
+              type="button"
+              title="Close notes panel"
+              aria-label="Close notes panel"
+              onClick={() => setTrayHidden(true)}
+              className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-white/10 dark:hover:text-slate-200"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
           </div>
-          <ul className="space-y-1">
-            {tabNotes.map((n) => (
-              <li key={n.id}>
-                <button
-                  type="button"
-                  onClick={() => openNote(n.id)}
-                  className={`flex w-full items-start gap-2 rounded-xl px-2 py-1.5 text-left text-[11px] transition hover:bg-[#d4a550]/10 ${
-                    openNoteId === n.id ? "bg-[#d4a550]/15" : ""
-                  }`}
-                >
-                  <span
-                    className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[9px] font-bold ${
-                      n.resolved
-                        ? "bg-emerald-600/20 text-emerald-500"
-                        : "bg-[#d4a550]/25 text-[#b8860b]"
+          {trayExpanded && (
+            <ul className="mt-1 max-h-[36vh] space-y-1 overflow-y-auto">
+              {tabNotes.map((n) => (
+                <li key={n.id} className="flex items-start gap-0.5">
+                  <button
+                    type="button"
+                    onClick={() => openNote(n.id)}
+                    className={`flex min-w-0 flex-1 items-start gap-2 rounded-xl px-2 py-1.5 text-left text-[11px] transition hover:bg-[#d4a550]/10 ${
+                      openNoteId === n.id ? "bg-[#d4a550]/15" : ""
                     }`}
                   >
-                    {n.resolved ? "✓" : getInitials(n.author)}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate font-semibold text-slate-800 dark:text-slate-100">
-                      {n.author}
-                    </span>
                     <span
-                      className={`block truncate text-slate-500 dark:text-slate-400 ${
-                        n.resolved ? "line-through" : ""
+                      className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[9px] font-bold ${
+                        n.resolved
+                          ? "bg-emerald-600/20 text-emerald-500"
+                          : "bg-[#d4a550]/25 text-[#b8860b]"
                       }`}
                     >
-                      {n.taggedMilonIt ? "IT · " : ""}
-                      {n.text}
+                      {n.resolved ? "✓" : getInitials(n.author)}
                     </span>
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate font-semibold text-slate-800 dark:text-slate-100">
+                        {n.author}
+                      </span>
+                      <span
+                        className={`block truncate text-slate-500 dark:text-slate-400 ${
+                          n.resolved ? "line-through" : ""
+                        }`}
+                      >
+                        {n.taggedMilonIt ? "IT · " : ""}
+                        {n.text}
+                      </span>
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    title="Close note"
+                    aria-label="Close note"
+                    onClick={() => {
+                      if (openNoteId === n.id) closeOpenNote();
+                      if (!n.resolved) void resolveNote(n.id).then(() => onNotesChanged?.());
+                    }}
+                    className="mt-1 shrink-0 rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-white/10 dark:hover:text-slate-200"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    title="Delete note"
+                    aria-label="Delete note"
+                    onClick={() => {
+                      void deleteNote(n.id).then(() => {
+                        if (openNoteId === n.id) closeOpenNote();
+                        onNotesChanged?.();
+                      });
+                    }}
+                    className="mt-1 shrink-0 rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-900/30 dark:hover:text-red-400"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
 
@@ -477,20 +542,18 @@ export function NoteLayer({ clientId, tab, authorName, clientName, onNotesChange
                       </div>
                     </div>
                     <div className="flex shrink-0 items-center">
-                      {note.authorId === user?.id && (
-                        <button
-                          type="button"
-                          title="Delete note"
-                          aria-label="Delete note"
-                          onClick={() => {
-                            void deleteNote(note.id).then(() => onNotesChanged?.());
-                            closeOpenNote();
-                          }}
-                          className="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-500 dark:text-slate-500 dark:hover:bg-red-900/30 dark:hover:text-red-400"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        title="Delete note"
+                        aria-label="Delete note"
+                        onClick={() => {
+                          void deleteNote(note.id).then(() => onNotesChanged?.());
+                          closeOpenNote();
+                        }}
+                        className="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-500 dark:text-slate-500 dark:hover:bg-red-900/30 dark:hover:text-red-400"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
                       <button
                         type="button"
                         title="Close note"
