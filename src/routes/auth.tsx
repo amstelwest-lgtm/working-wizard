@@ -265,6 +265,22 @@ function AuthPage() {
                   <Button type="submit" className="w-full" disabled={busy}>
                     {busy ? "Please wait…" : mode === "signin" ? "Sign in" : "Create firm account"}
                   </Button>
+                  {mode === "signup" && (
+                    <p className="pt-1 text-center text-[11px] leading-relaxed text-muted-foreground">
+                      By creating a firm account you agree to the{" "}
+                      <a href="/terms" className="underline">
+                        Terms
+                      </a>
+                      . AI is powered by Claude; financial information sent to it is anonymised.{" "}
+                      <a href="/privacy" className="underline">
+                        Privacy
+                      </a>
+                      {" · "}
+                      <a href="/ai" className="underline">
+                        AI notice
+                      </a>
+                    </p>
+                  )}
                 </form>
               </>
             )}

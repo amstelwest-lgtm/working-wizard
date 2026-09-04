@@ -9,6 +9,7 @@ import {
   LogOut,
   Palette,
   RotateCcw,
+  Scale,
   Trash2,
   User,
 } from "lucide-react";
@@ -216,6 +217,39 @@ function SettingsPage() {
             <RotateCcw className="mr-2 h-4 w-4 text-[#d4a550]" />
             Restart guided onboarding tour
           </Button>
+        </section>
+
+        {/* ── Legal ───────────────────────────────────────────────────────── */}
+        <section className="mb-6 rounded-2xl border border-slate-800 bg-slate-900/60 p-5 sm:p-6">
+          <div className="mb-4 flex items-center gap-2">
+            <Scale className="h-4 w-4 text-[#d4a550]" />
+            <h2 className="text-sm font-semibold uppercase tracking-[0.14em] text-[#d4a550]">
+              Legal
+            </h2>
+          </div>
+          <p className="mb-3 text-xs text-slate-500">
+            AI is powered by Claude. Financial information sent to the model is anonymised.
+          </p>
+          <div className="flex flex-col gap-2">
+            <a
+              href="/privacy"
+              className="flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-950/50 px-4 py-3 text-sm text-slate-200 transition hover:border-[#d4a550]/50 hover:bg-[#d4a550]/10"
+            >
+              Privacy
+            </a>
+            <a
+              href="/terms"
+              className="flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-950/50 px-4 py-3 text-sm text-slate-200 transition hover:border-[#d4a550]/50 hover:bg-[#d4a550]/10"
+            >
+              Terms of use
+            </a>
+            <a
+              href="/ai"
+              className="flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-950/50 px-4 py-3 text-sm text-slate-200 transition hover:border-[#d4a550]/50 hover:bg-[#d4a550]/10"
+            >
+              AI notice
+            </a>
+          </div>
         </section>
 
         {/* ── Session ─────────────────────────────────────────────────────── */}

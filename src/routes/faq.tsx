@@ -96,10 +96,11 @@ function FaqPage() {
 
       <Qa q="What does the AI see?">
         <p>
-          The in-app assistant works from anonymised ratio context — no company names and no raw
-          amounts — with VAT and account numbers stripped before anything leaves the platform. Where
-          an AI drafts a report for an accountant, a human reads and signs it before a client ever
-          sees it.
+          We use AI. It is powered by Claude. Financial information sent to the model is
+          anonymised — no company names and no raw amounts — with VAT and account numbers stripped
+          before anything leaves the platform. Where an AI drafts a report for an accountant, a
+          human reads and signs it before a client ever sees it. The{" "}
+          <a href="/ai">AI notice</a> is the public version of that sentence.
         </p>
       </Qa>
 
@@ -179,7 +180,8 @@ function FaqPage() {
 
       <div className="mk-note">
         If any answer on this page turns out to be wrong, tell us and we will fix the page. We would
-        rather correct something publicly than defend it.
+        rather correct something publicly than defend it. Legal notices:{" "}
+        <a href="/privacy">Privacy</a> · <a href="/terms">Terms</a> · <a href="/ai">AI notice</a>.
       </div>
     </MarketingShell>
   );

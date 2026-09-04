@@ -2435,9 +2435,32 @@ function LandingPage() {
                       disabled={regBusy}
                       style={{ width: "100%", justifyContent: "center", marginTop: 28 }}
                     >
-                      {regBusy ? "Joining workspace…" : "Accept invitation ✦"}
-                    </button>
-                  </>
+                          {regBusy ? "Joining workspace…" : "Accept invitation ✦"}
+                        </button>
+                        <p
+                          style={{
+                            textAlign: "center",
+                            fontSize: 11,
+                            color: "var(--ink-dim)",
+                            marginTop: 14,
+                            lineHeight: 1.5,
+                          }}
+                        >
+                          By joining you agree to the{" "}
+                          <a href="/terms" style={{ color: "inherit" }}>
+                            Terms
+                          </a>
+                          . AI is powered by Claude; financial information sent to it is
+                          anonymised.{" "}
+                          <a href="/privacy" style={{ color: "inherit" }}>
+                            Privacy
+                          </a>
+                          {" · "}
+                          <a href="/ai" style={{ color: "inherit" }}>
+                            AI notice
+                          </a>
+                        </p>
+                      </>
                 ) : (
                   /* ── Standard signup form ── */
                   <>
@@ -2557,7 +2580,20 @@ function LandingPage() {
                             lineHeight: 1.5,
                           }}
                         >
-                          No credit card for Spark. Paid plans are not billed yet.
+                          No credit card for Spark. Paid plans are not billed yet. By creating an
+                          account you agree to the{" "}
+                          <a href="/terms" style={{ color: "inherit" }}>
+                            Terms
+                          </a>
+                          . AI is powered by Claude; financial information sent to it is
+                          anonymised.{" "}
+                          <a href="/privacy" style={{ color: "inherit" }}>
+                            Privacy
+                          </a>
+                          {" · "}
+                          <a href="/ai" style={{ color: "inherit" }}>
+                            AI notice
+                          </a>
                         </p>
                       </>
                     )}
@@ -2586,7 +2622,10 @@ function LandingPage() {
             <a href="#features">Platform</a>
             <a href="#pricing">Pricing</a>
             <a href="/auth">Accountant portal</a>
-            <a href="/faq">Privacy</a>
+            <a href="/privacy">Privacy</a>
+            <a href="/terms">Terms</a>
+            <a href="/ai">AI notice</a>
+            <a href="/faq">Questions</a>
             <button
               onClick={() => setSigninOpen(true)}
               style={{
@@ -2608,8 +2647,16 @@ function LandingPage() {
               reserved.
             </span>
             <span>
-              <a href="/faq" style={{ color: "inherit" }}>
+              <a href="/privacy" style={{ color: "inherit" }}>
                 Privacy
+              </a>
+              {" · "}
+              <a href="/terms" style={{ color: "inherit" }}>
+                Terms
+              </a>
+              {" · "}
+              <a href="/ai" style={{ color: "inherit" }}>
+                AI notice
               </a>
               {" · "}
               Built for South Africa · Powered by Claude AI

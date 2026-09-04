@@ -10,12 +10,15 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as UnsubscribeRouteImport } from './routes/unsubscribe'
+import { Route as TermsRouteImport } from './routes/terms'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
+import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as ForOwnersRouteImport } from './routes/for-owners'
 import { Route as ForAccountantsRouteImport } from './routes/for-accountants'
 import { Route as FaqRouteImport } from './routes/faq'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AppRouteImport } from './routes/app'
+import { Route as AiRouteImport } from './routes/ai'
 import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as TTokenRouteImport } from './routes/t.$token'
@@ -48,9 +51,19 @@ const UnsubscribeRoute = UnsubscribeRouteImport.update({
   path: '/unsubscribe',
   getParentRoute: () => rootRouteImport,
 } as any)
+const TermsRoute = TermsRouteImport.update({
+  id: '/terms',
+  path: '/terms',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ResetPasswordRoute = ResetPasswordRouteImport.update({
   id: '/reset-password',
   path: '/reset-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PrivacyRoute = PrivacyRouteImport.update({
+  id: '/privacy',
+  path: '/privacy',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ForOwnersRoute = ForOwnersRouteImport.update({
@@ -76,6 +89,11 @@ const AuthRoute = AuthRouteImport.update({
 const AppRoute = AppRouteImport.update({
   id: '/app',
   path: '/app',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AiRoute = AiRouteImport.update({
+  id: '/ai',
+  path: '/ai',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedRoute = AuthenticatedRouteImport.update({
@@ -220,12 +238,15 @@ const LovableEmailQueueProcessRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/ai': typeof AiRoute
   '/app': typeof AppRoute
   '/auth': typeof AuthRouteWithChildren
   '/faq': typeof FaqRoute
   '/for-accountants': typeof ForAccountantsRoute
   '/for-owners': typeof ForOwnersRoute
+  '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/terms': typeof TermsRoute
   '/unsubscribe': typeof UnsubscribeRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/ops': typeof AuthenticatedOpsRoute
@@ -254,12 +275,15 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/ai': typeof AiRoute
   '/app': typeof AppRoute
   '/auth': typeof AuthRouteWithChildren
   '/faq': typeof FaqRoute
   '/for-accountants': typeof ForAccountantsRoute
   '/for-owners': typeof ForOwnersRoute
+  '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/terms': typeof TermsRoute
   '/unsubscribe': typeof UnsubscribeRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/ops': typeof AuthenticatedOpsRoute
@@ -290,12 +314,15 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteWithChildren
+  '/ai': typeof AiRoute
   '/app': typeof AppRoute
   '/auth': typeof AuthRouteWithChildren
   '/faq': typeof FaqRoute
   '/for-accountants': typeof ForAccountantsRoute
   '/for-owners': typeof ForOwnersRoute
+  '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/terms': typeof TermsRoute
   '/unsubscribe': typeof UnsubscribeRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/ops': typeof AuthenticatedOpsRoute
@@ -326,12 +353,15 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/ai'
     | '/app'
     | '/auth'
     | '/faq'
     | '/for-accountants'
     | '/for-owners'
+    | '/privacy'
     | '/reset-password'
+    | '/terms'
     | '/unsubscribe'
     | '/dashboard'
     | '/ops'
@@ -360,12 +390,15 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/ai'
     | '/app'
     | '/auth'
     | '/faq'
     | '/for-accountants'
     | '/for-owners'
+    | '/privacy'
     | '/reset-password'
+    | '/terms'
     | '/unsubscribe'
     | '/dashboard'
     | '/ops'
@@ -395,12 +428,15 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/_authenticated'
+    | '/ai'
     | '/app'
     | '/auth'
     | '/faq'
     | '/for-accountants'
     | '/for-owners'
+    | '/privacy'
     | '/reset-password'
+    | '/terms'
     | '/unsubscribe'
     | '/_authenticated/dashboard'
     | '/_authenticated/ops'
@@ -431,12 +467,15 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRoute: typeof AuthenticatedRouteWithChildren
+  AiRoute: typeof AiRoute
   AppRoute: typeof AppRoute
   AuthRoute: typeof AuthRouteWithChildren
   FaqRoute: typeof FaqRoute
   ForAccountantsRoute: typeof ForAccountantsRoute
   ForOwnersRoute: typeof ForOwnersRoute
+  PrivacyRoute: typeof PrivacyRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
+  TermsRoute: typeof TermsRoute
   UnsubscribeRoute: typeof UnsubscribeRoute
   AccessTokenRoute: typeof AccessTokenRoute
   AckTokenRoute: typeof AckTokenRoute
@@ -463,11 +502,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof UnsubscribeRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/terms': {
+      id: '/terms'
+      path: '/terms'
+      fullPath: '/terms'
+      preLoaderRoute: typeof TermsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/reset-password': {
       id: '/reset-password'
       path: '/reset-password'
       fullPath: '/reset-password'
       preLoaderRoute: typeof ResetPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/privacy': {
+      id: '/privacy'
+      path: '/privacy'
+      fullPath: '/privacy'
+      preLoaderRoute: typeof PrivacyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/for-owners': {
@@ -503,6 +556,13 @@ declare module '@tanstack/react-router' {
       path: '/app'
       fullPath: '/app'
       preLoaderRoute: typeof AppRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ai': {
+      id: '/ai'
+      path: '/ai'
+      fullPath: '/ai'
+      preLoaderRoute: typeof AiRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated': {
@@ -731,12 +791,15 @@ const AuthRouteWithChildren = AuthRoute._addFileChildren(AuthRouteChildren)
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRoute: AuthenticatedRouteWithChildren,
+  AiRoute: AiRoute,
   AppRoute: AppRoute,
   AuthRoute: AuthRouteWithChildren,
   FaqRoute: FaqRoute,
   ForAccountantsRoute: ForAccountantsRoute,
   ForOwnersRoute: ForOwnersRoute,
+  PrivacyRoute: PrivacyRoute,
   ResetPasswordRoute: ResetPasswordRoute,
+  TermsRoute: TermsRoute,
   UnsubscribeRoute: UnsubscribeRoute,
   AccessTokenRoute: AccessTokenRoute,
   AckTokenRoute: AckTokenRoute,

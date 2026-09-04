@@ -42,7 +42,8 @@
     "test:analytics-metrics": "vite-node --config scripts/vite-test.config.ts scripts/analytics-metrics-test.mts",
     "test:analytics-digest": "vite-node --config scripts/vite-test.config.ts scripts/analytics-metrics-test.mts",
     "test:upload-quality": "vite-node --config scripts/vite-test.config.ts scripts/upload-quality-test.mts",
-    "test:google-auth": "vite-node --config scripts/vite-test.config.ts scripts/google-auth-test.mts"
+    "test:google-auth": "vite-node --config scripts/vite-test.config.ts scripts/google-auth-test.mts",
+    "test:legal-notices": "vite-node --config scripts/vite-test.config.ts scripts/legal-notices-test.mts"
   },
   "dependencies": {
     "@cloudflare/vite-plugin": "^1.25.5",

@@ -1,5 +1,6 @@
 /* ==========================================================================
-   Milōn public collateral pages (/for-owners, /for-accountants, /faq).
+   Milōn public collateral pages (/for-owners, /for-accountants, /faq,
+   /privacy, /terms, /ai).
 
    Self-contained so these pages never wait on the app stylesheet, and so
    Cmd-P produces a clean one-pager instead of a screenshot of a dark site.
@@ -330,6 +331,28 @@ html .mk .mk-note {
   margin: 24px 0;
   font-size: 14.5px;
   color: var(--ink-soft) !important;
+}
+
+html .mk .mk-legal-updated {
+  margin: 0 0 8px;
+  font-size: 12.5px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-dim) !important;
+}
+
+html .mk .mk-wrap p a,
+html .mk .mk-qa a,
+html .mk .mk-note a,
+html .mk .mk-list a {
+  color: var(--gold-deep);
+}
+
+html.dark .mk .mk-wrap p a,
+html.dark .mk .mk-qa a,
+html.dark .mk .mk-note a,
+html.dark .mk .mk-list a {
+  color: var(--gold);
 }
 
 /* ── CTA ────────────────────────────────────────────────────────────────── */
