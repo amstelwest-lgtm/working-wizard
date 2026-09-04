@@ -31,6 +31,10 @@ const PRACTICE: AppRole[] = ["firm_admin", "accountant"];
 const CLIENT: AppRole[] = ["client_owner", "client_member"];
 export const PORTAL_INTENT_KEY = "milon_portal_intent";
 export const PORTAL_FORCE_KEY = "milon_force_portal";
+/** Which board Settings should return to. Survives the shared /settings page. */
+export const SETTINGS_RETURN_KEY = "milon_settings_return";
+export type SettingsReturn = "/app" | "/dashboard";
+export type SettingsView = "owner" | "practice";
 
 export async function listAppRoles(userId: string): Promise<AppRole[]> {
   const { data, error } = await supabase.from("user_roles").select("role").eq("user_id", userId);
@@ -132,7 +136,61 @@ export function clearPortalRouting(): void {
   const { local, session } = webStorage();
   removeStorage(session, PORTAL_INTENT_KEY);
   removeStorage(session, PORTAL_FORCE_KEY);
+  removeStorage(session, SETTINGS_RETURN_KEY);
   removeStorage(local, PORTAL_INTENT_KEY);
+}
+
+export function setSettingsReturn(to: SettingsReturn): void {
+  const { session } = webStorage();
+  writeStorage(session, SETTINGS_RETURN_KEY, to);
+}
+
+export function peekSettingsReturn(): SettingsReturn | null {
+  const { session } = webStorage();
+  const raw = readStorage(session, SETTINGS_RETURN_KEY);
+  return raw === "/app" || raw === "/dashboard" ? raw : null;
+}
+
+/** Open Settings from the founder board — keep the user on the owner side. */
+export function openOwnerSettings(): void {
+  setSettingsReturn("/app");
+  setPortalIntent("owner");
+}
+
+/** Open Settings from the practice portal. */
+export function openPracticeSettings(): void {
+  setSettingsReturn("/dashboard");
+  setPortalIntent("accountant");
+}
+
+/**
+ * Which Settings chrome to show. Dual-role accounts (practice + client) must
+ * follow the door they came from — primaryRole is always firm_admin and would
+ * otherwise dump an /app visitor onto Team / Brand / /dashboard.
+ */
+export function decideSettingsView(
+  d: PortalRouteDecision & { returnTo?: SettingsReturn | null },
+): SettingsView {
+  if (d.returnTo === "/app") return "owner";
+  if (d.returnTo === "/dashboard") {
+    return canEnterAccountantPortal(d) ? "practice" : "owner";
+  }
+  if (d.force === "owner") return "owner";
+  if (d.intent === "owner" && (d.hasClientRole || !canEnterAccountantPortal(d))) return "owner";
+  if (
+    (d.force === "accountant" || d.intent === "accountant") &&
+    canEnterAccountantPortal(d)
+  ) {
+    return "practice";
+  }
+  if (d.hasClientRole && !d.hasPracticeRole) return "owner";
+  if (d.hasPracticeRole && !d.hasClientRole) return "practice";
+  if (d.hasClientRole) return "owner";
+  return canEnterAccountantPortal(d) ? "practice" : "owner";
+}
+
+export function settingsBackPath(view: SettingsView): SettingsReturn {
+  return view === "practice" ? "/dashboard" : "/app";
 }
 
 /**

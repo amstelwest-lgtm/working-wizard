@@ -5,7 +5,12 @@ import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
 import { PlaybookDrawer } from "@/components/playbook-drawer";
 import { PortfolioHealthScatter } from "@/components/portfolio-health-scatter";
-import { shouldStayOnAccountantPortal, setPortalIntent, clearForcePortal } from "@/lib/user-roles";
+import {
+  shouldStayOnAccountantPortal,
+  setPortalIntent,
+  clearForcePortal,
+  openPracticeSettings,
+} from "@/lib/user-roles";
 import {
   healthFromFlatFinancials,
   buildTrend,
@@ -1322,6 +1327,7 @@ function Dashboard() {
               type="button"
               onClick={() => {
                 setMobileNavOpen(false);
+                openPracticeSettings();
                 navigate({ to: "/settings" });
               }}
             >
