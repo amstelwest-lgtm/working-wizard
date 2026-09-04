@@ -125,7 +125,10 @@ assert(planSrc.includes("Team members"), "Action Plan has a team members control
 assert(planSrc.includes("function TeamPanel"), "team list panel exists");
 assert(/All owners[\s\S]{0,800}Team members/.test(planSrc), "team list sits next to the owner filter");
 assert(planSrc.includes("onManageTeam"), "owner picker can open the team list");
-assert(planSrc.includes('onClick={(e) => { e.stopPropagation(); setAdding(true); }}'), "Add employee does not open the task drawer");
+assert(
+  /onClick=\{\(e\) => \{\s*e\.stopPropagation\(\);\s*setAdding\(true\);/.test(planSrc),
+  "Add employee does not open the task drawer",
+);
 assert(planSrc.includes("onClick={pickOwner ? undefined : onOpen}"), "row click is disabled while the owner picker is open");
 assert(planSrc.includes("toActionItemWrite(patch)"), "owner patches strip view-only columns before writing");
 assert(planSrc.includes("toActionItemWrite(extra ?? {})"), "inserts also strip view-only columns");
