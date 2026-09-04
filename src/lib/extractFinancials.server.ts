@@ -10,6 +10,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { type ExtractionResult } from "@/lib/financialSchema";
 import { validateFigures, isClean } from "@/lib/validateFinancials";
 import { callClaudeMessages, parseClaudeJson } from "@/lib/claude-messages";
+import { assessPortalFigures, assertUsable } from "@/lib/upload-quality";
 
 const EXTRACTION_PROMPT = `
 You are extracting figures from a South African financial statement PDF for an
@@ -149,6 +150,7 @@ export const extractFinancialsFromPDF = createServerFn({ method: "POST" })
     }
 
     const issues = validateFigures(extracted.current_period.figures);
+    assertUsable(assessPortalFigures(extracted.current_period.figures));
 
     return {
       data: extracted,

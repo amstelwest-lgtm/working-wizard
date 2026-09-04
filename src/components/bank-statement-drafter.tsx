@@ -367,8 +367,9 @@ export function BankStatementDrafter({ open, onClose, onApply }: Props) {
             )}
 
             <p className="text-[11px] text-slate-500 dark:text-slate-400">
-              Next step uses these same statements for the 13-week cash forecast — you will not be
-              asked to upload again.
+              The quality of the financial information we produce depends on the accuracy of the
+              information you upload. Next step uses these same statements for the 13-week cash
+              forecast — you will not be asked to upload again.
             </p>
 
             <div className="flex gap-2">

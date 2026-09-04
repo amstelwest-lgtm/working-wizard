@@ -16,6 +16,8 @@ import { Badge } from "@/components/ui/badge";
 import { extractFinancialsFromPDF } from "@/lib/extractFinancials.server";
 import type { ExtractionResult, Money } from "@/lib/financialSchema";
 import type { ValidationIssue } from "@/lib/validateFinancials";
+import { UPLOAD_QUALITY_DISCLAIMER, preflightUploadFile } from "@/lib/upload-quality";
+import { UploadQualityDisclaimer } from "@/components/upload-quality-disclaimer";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -92,12 +94,18 @@ export function UploadFinancials({ onConfirm }: UploadFinancialsProps) {
   const [result, setResult] = useState<ExtractionResult | null>(null);
   const [issues, setIssues] = useState<ValidationIssue[]>([]);
   const [autoSafe, setAutoSafe] = useState(false);
+  const [acceptedQuality, setAcceptedQuality] = useState(false);
 
   const extract = useServerFn(extractFinancialsFromPDF);
 
   async function handleFile(file: File) {
     if (file.type !== "application/pdf") {
       toast.error("Please upload a PDF file.");
+      return;
+    }
+    const pre = preflightUploadFile(file);
+    if (pre) {
+      toast.error(pre);
       return;
     }
     setStatus("loading");
@@ -119,6 +127,7 @@ export function UploadFinancials({ onConfirm }: UploadFinancialsProps) {
     setResult(null);
     setIssues([]);
     setAutoSafe(false);
+    setAcceptedQuality(false);
     if (inputRef.current) inputRef.current.value = "";
   }
 
@@ -163,6 +172,9 @@ export function UploadFinancials({ onConfirm }: UploadFinancialsProps) {
                 <p className="text-sm font-medium">Drop a financial statement PDF</p>
                 <p className="text-xs text-muted-foreground mt-1">
                   Income statement + balance sheet — up to 32 MB
+                </p>
+                <p className="text-[11px] text-muted-foreground/80 mt-2 max-w-sm mx-auto">
+                  {UPLOAD_QUALITY_DISCLAIMER}
                 </p>
               </div>
             </>
@@ -306,13 +318,15 @@ export function UploadFinancials({ onConfirm }: UploadFinancialsProps) {
       )}
 
       {/* Actions */}
+      <UploadQualityDisclaimer accepted={acceptedQuality} onChange={setAcceptedQuality} />
       <div className="flex items-center gap-3 pt-2">
         <Button
           onClick={() => {
             onConfirm?.(result);
             toast.success("Financials imported successfully.");
           }}
-          className="bg-amber-500 hover:bg-amber-400 text-black font-semibold"
+          disabled={!acceptedQuality}
+          className="bg-amber-500 hover:bg-amber-400 text-black font-semibold disabled:opacity-50"
         >
           <CheckCircle2 className="h-4 w-4 mr-1.5" />
           Confirm &amp; import
