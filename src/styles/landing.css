@@ -67,39 +67,40 @@ html[data-landing="1"] ::selection{background:rgba(212,175,55,.3)}
 html[data-landing="1"] [data-milon-landing]{position:relative}
 html[data-landing="1"] #landing-sky{
   position:absolute;top:0;left:0;right:0;z-index:0;pointer-events:none;overflow:hidden;
-  height:min(236vh, 2280px);
+  /* Hero + persona + method, then the mask hands back to --bg. */
+  height:min(252vh, 2480px);
 }
 html[data-landing="1"] #landing-sky .landing-sky-photo{
   position:absolute;inset:0;
   background:url(/landing-sky.jpg) top center / cover no-repeat;
-  -webkit-mask-image:linear-gradient(to bottom,#000 0%,#000 64%,transparent 100%);
-          mask-image:linear-gradient(to bottom,#000 0%,#000 64%,transparent 100%);
+  -webkit-mask-image:linear-gradient(to bottom,#000 0%,#000 76%,transparent 100%);
+          mask-image:linear-gradient(to bottom,#000 0%,#000 76%,transparent 100%);
 }
 html[data-landing="1"] #landing-sky .landing-sky-veil{
   position:absolute;inset:0;
   background:linear-gradient(to bottom,
-    rgba(5,5,7,.32) 0%,
-    rgba(5,5,7,.48) 58%,
+    rgba(5,5,7,.26) 0%,
+    rgba(5,5,7,.38) 72%,
     var(--bg) 100%);
 }
 html[data-landing="1"][data-theme="dark"] #landing-sky .landing-sky-photo{
-  opacity:.82;
-  filter:saturate(.94) brightness(.9);
+  opacity:.86;
+  filter:saturate(.96) brightness(.92);
 }
 /* Light: invert so stars read as charcoal specks on cream, not a black hole. */
 html[data-landing="1"][data-theme="light"] #landing-sky .landing-sky-photo{
-  opacity:.4;
-  filter:invert(1) hue-rotate(22deg) saturate(.28) contrast(1.08) brightness(1.06);
+  opacity:.55;
+  filter:invert(1) hue-rotate(18deg) saturate(.32) contrast(1.18) brightness(1.02);
   mix-blend-mode:multiply;
 }
 html[data-landing="1"][data-theme="light"] #landing-sky .landing-sky-veil{
   background:linear-gradient(to bottom,
-    rgba(247,244,236,.58) 0%,
-    rgba(247,244,236,.78) 62%,
+    rgba(247,244,236,.42) 0%,
+    rgba(247,244,236,.68) 74%,
     var(--bg) 100%);
 }
 @media(max-width:760px){
-  html[data-landing="1"] #landing-sky{height:min(210vh, 1880px)}
+  html[data-landing="1"] #landing-sky{height:min(228vh, 2040px)}
 }
 
 html[data-landing="1"] #atmos{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
