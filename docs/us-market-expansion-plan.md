@@ -1,6 +1,7 @@
 # Milōn US-market expansion plan
 
 **Status:** planning only — no product code changed yet.
+**Build sequence (region + US state first):** see [`us-market-build-from-selection.md`](./us-market-build-from-selection.md).
 **Intent:** keep serving South Africa, and make the same product credible for US SMEs and US accounting practices.
 **Principle:** do not fork the app. Add a **market profile** (country / currency / locale / tax regime / copy pack) at firm and client level, then swap presentation, defaults, legal, and advice. A US visitor who still sees “rand”, SARS, VAT at 15%, and milon.co.za will not trust the rest of the product.
 
