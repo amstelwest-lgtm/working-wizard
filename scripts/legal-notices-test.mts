@@ -20,6 +20,7 @@ const terms = readFileSync(resolve("src/routes/terms.tsx"), "utf8");
 const ai = readFileSync(resolve("src/routes/ai.tsx"), "utf8");
 const faq = readFileSync(resolve("src/routes/faq.tsx"), "utf8");
 const landing = readFileSync(resolve("src/routes/index.tsx"), "utf8");
+const landingCss = readFileSync(resolve("src/styles/landing.css"), "utf8");
 const shell = readFileSync(resolve("src/components/marketing-shell.tsx"), "utf8");
 const settings = readFileSync(resolve("src/routes/_authenticated/settings.index.tsx"), "utf8");
 const auth = readFileSync(resolve("src/routes/auth.tsx"), "utf8");
@@ -85,10 +86,11 @@ assert(
   "landing declares draftMarket before persist effect deps (avoids TDZ crash)",
 );
 assert(landing.includes("if (!mounted) return;"), "landing persist waits for mount");
+assert(landingCss.includes(".milon-market-select"), "landing CSS styles the US state select");
+assert(landingCss.includes("appearance:none"), "landing state select is not a raw OS control");
 assert(landing.includes('id="landing-sky"'), "landing has a scrolling starfield band");
 assert(landing.includes("landing-sky-photo"), "landing starfield has a photo layer");
 assert(landing.includes("url(/landing-sky.jpg)"), "landing photo layer points at the starfield asset");
-const landingCss = readFileSync(resolve("src/styles/landing.css"), "utf8");
 assert(landingCss.includes("#landing-sky"), "landing CSS scopes the starfield band");
 
 assert(shell.includes('href="/privacy"'), "collateral footer links to privacy");

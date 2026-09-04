@@ -381,6 +381,27 @@ html[data-landing="1"] .persona-card .go{margin-top:24px;color:var(--gold);font-
 html[data-landing="1"] .persona-card .go i{transition:transform .3s var(--ease);font-style:normal}
 html[data-landing="1"] .persona-card:hover .go i{transform:translateX(6px)}
 html[data-landing="1"] #market{padding:72px 0 12px}
+
+/* Market picker — landing classes beat the global *{padding:0} reset so the
+   Tailwind cards/native select cannot look crushed against persona cards. */
+html[data-landing="1"] .milon-market{display:flex;flex-direction:column;gap:18px}
+html[data-landing="1"] .milon-market-label{display:block;font-size:11px;letter-spacing:.28em;text-transform:uppercase;color:var(--gold);font-weight:600}
+html[data-landing="1"] .milon-market-choices{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+html[data-landing="1"] .milon-market-choice{position:relative;border:1px solid var(--line);border-radius:18px;padding:22px 18px;background:var(--card);color:var(--ink);font-family:inherit;cursor:pointer;text-align:left;transition:transform .35s var(--ease),border-color .35s,box-shadow .35s}
+html[data-landing="1"] .milon-market-choice strong{display:block;font-size:16px;font-weight:700;letter-spacing:.01em}
+html[data-landing="1"] .milon-market-choice span{display:block;margin-top:6px;font-size:12.5px;line-height:1.45;color:var(--ink-dim)}
+html[data-landing="1"] .milon-market-choice:hover{transform:translateY(-3px);border-color:var(--gold);box-shadow:var(--shadow-gold)}
+html[data-landing="1"] .milon-market-choice.is-on{border-color:var(--gold);background:linear-gradient(180deg,rgba(212,175,55,.12),var(--card));box-shadow:var(--shadow-gold)}
+html[data-landing="1"] .milon-market-choice:disabled{opacity:.55;cursor:not-allowed;transform:none}
+html[data-landing="1"] .milon-market-state{display:flex;flex-direction:column;gap:8px}
+html[data-landing="1"] .milon-market-select-wrap{position:relative}
+html[data-landing="1"] .milon-market-select-wrap::after{content:"";position:absolute;right:18px;top:50%;width:8px;height:8px;margin-top:-6px;border-right:1.5px solid var(--gold);border-bottom:1.5px solid var(--gold);transform:rotate(45deg);pointer-events:none}
+html[data-landing="1"] .milon-market-select{-webkit-appearance:none;appearance:none;width:100%;padding:15px 44px 15px 18px;border-radius:16px;border:1px solid var(--line);background:var(--bg-2);color:var(--ink);font-family:inherit;font-size:15px;font-weight:500;letter-spacing:.02em;cursor:pointer;transition:border-color .3s,box-shadow .3s}
+html[data-landing="1"] .milon-market-select:hover{border-color:var(--gold);box-shadow:var(--shadow-gold)}
+html[data-landing="1"] .milon-market-select:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px rgba(212,175,55,.16)}
+html[data-landing="1"] .milon-market-select option{background:var(--bg-2);color:var(--ink)}
+html[data-landing="1"] .milon-market-help{font-size:12.5px;line-height:1.5;color:var(--ink-dim)}
+@media(max-width:560px){html[data-landing="1"] .milon-market-choices{grid-template-columns:1fr}}
 html[data-landing="1"] .persona-card.is-locked{opacity:.55}
 html[data-landing="1"] .persona-card.is-locked:hover{transform:none;box-shadow:none;border-color:var(--line)}
 html[data-landing="1"] .persona-card.is-locked .go{opacity:.85}
