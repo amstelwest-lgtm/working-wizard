@@ -1,4 +1,5 @@
 import type { AskAiContext, DisclosureTier } from "./types.ts";
+import { fmtPct } from "./deliverable-summaries.ts";
 
 /** Duplicated from src/lib/market/prompt.ts — Deno edge cannot import @/lib. */
 function askAiSystemBase(copyPack: "za" | "us"): string {
@@ -16,6 +17,8 @@ Rules:
 - Do NOT reference company names, ${taxWord}, or raw ${currencyWord} — refer to them as "your revenue", "your margin" etc.
 - Currency references: use "your local currency" not specific amounts.
 - Offer 1–2 concrete next actions the owner can take today.
+- Ground answers in the filled deliverables provided: profile answers, ratios, profitability waterfall (as % of revenue), cash-forecast outlook, product lines, recommended next moves, and action-plan tasks.
+- Do not invent statement line items. Raw income-statement / balance-sheet inputs are not provided — use the outputs above.
 ${locale}`;
 }
 
@@ -78,7 +81,33 @@ export function buildPrompt(
     };
   }
 
-  if (ctx.profile) {
+  const deliverables = ctx.deliverables ?? [];
+  const profileQuestions = ctx.profileQuestions ?? [];
+  const productLines = ctx.productLines ?? [];
+  const nextSteps = ctx.nextSteps ?? [];
+
+  if (deliverables.length > 0) {
+    const filled = deliverables.filter((d) => d.filled);
+    if (filled.length > 0) {
+      lines.push(
+        "Filled deliverables: " +
+          filled
+            .map((d) => `${d.label}${d.signedOff ? " (signed off)" : ""}`)
+            .join("; "),
+      );
+    }
+    const empty = deliverables.filter((d) => !d.filled);
+    if (empty.length > 0) {
+      lines.push("Not yet filled: " + empty.map((d) => d.label).join("; "));
+    }
+  }
+
+  if (profileQuestions.length > 0) {
+    lines.push("\nCompany profile answers:");
+    for (const q of profileQuestions) {
+      lines.push(`  ${q.label}: ${q.value}`);
+    }
+  } else if (ctx.profile) {
     if (ctx.profile.business_type) lines.push(`Business type: ${ctx.profile.business_type}`);
     const op = ctx.profile.operating;
     if (op) {
@@ -96,21 +125,21 @@ export function buildPrompt(
       lines.push(`Debt position: ${op.debtPosition.replace(/_/g, " ")}`);
       lines.push(`Owner's stated goal: ${op.ownerGoal.replace(/_/g, " ")}`);
     }
-    if (ctx.profile.annual_revenue) {
-      // Bucket revenue to avoid exact amounts
-      const r = ctx.profile.annual_revenue;
-      const bucket =
-        r < 1_000_000
-          ? "under 1M"
-          : r < 5_000_000
-            ? "1M–5M"
-            : r < 20_000_000
-              ? "5M–20M"
-              : r < 100_000_000
-                ? "20M–100M"
-                : "over 100M";
-      lines.push(`Revenue band: ${bucket}`);
-    }
+  }
+
+  if (ctx.profile?.annual_revenue) {
+    const r = ctx.profile.annual_revenue;
+    const bucket =
+      r < 1_000_000
+        ? "under 1M"
+        : r < 5_000_000
+          ? "1M–5M"
+          : r < 20_000_000
+            ? "5M–20M"
+            : r < 100_000_000
+              ? "20M–100M"
+              : "over 100M";
+    lines.push(`Revenue band: ${bucket}`);
   }
 
   if (ctx.scores?.overall_score !== null && ctx.scores?.overall_score !== undefined) {
@@ -121,6 +150,74 @@ export function buildPrompt(
     lines.push("\nKey ratios:");
     for (const r of ctx.ratios) {
       lines.push(`  ${formatRatio(r, copyPack)}`);
+    }
+  }
+
+  if (ctx.waterfall?.hasData) {
+    lines.push(`\nProfitability waterfall (${ctx.waterfall.source} figures, % of revenue):`);
+    for (const step of ctx.waterfall.steps) {
+      lines.push(`  ${step.label}: ${fmtPct(step.pctOfRevenue)}`);
+    }
+  }
+
+  if (ctx.cashForecast?.hasData) {
+    const c = ctx.cashForecast;
+    lines.push("\nCash forecast outlook (13-week, no raw balances):");
+    lines.push(
+      `  ${c.shortfall ? `Shortfall in week ${c.lowestWeek}` : "In the black across the horizon"}`,
+    );
+    if (c.runwayWeeks != null) {
+      lines.push(
+        `  Cash runway: ${c.runwayWeeks >= c.horizonWeeks ? `${c.horizonWeeks}+` : c.runwayWeeks} weeks above the floor`,
+      );
+    }
+    lines.push(`  Negative weeks: ${c.negativeWeeks}`);
+    if (c.trajectory) {
+      lines.push(`  Trajectory: ${c.trajectory} · week-13 close vs opening: ${c.closingVsOpening}`);
+    }
+  }
+
+  if (productLines.length > 0) {
+    lines.push("\nProduct lines (share and margin only):");
+    for (const line of productLines) {
+      const tags = [line.isBest ? "best" : null, line.isWorst ? "watch" : null]
+        .filter(Boolean)
+        .join(", ");
+      lines.push(
+        `  ${line.name}: margin ${fmtPct(line.marginPct, 0)} · sales share ${fmtPct(line.revenueSharePct, 0)} · GP share ${fmtPct(line.gpSharePct, 0)}${tags ? ` (${tags})` : ""}`,
+      );
+    }
+  }
+
+  if (nextSteps.length > 0) {
+    lines.push("\nTop recommended next moves:");
+    for (const step of nextSteps) {
+      lines.push(`  ${step.rank}. ${step.title} (lever: ${step.ratioName})`);
+    }
+  }
+
+  if (ctx.actionPlan) {
+    lines.push("\nAction plan:");
+    if (ctx.actionPlan.outcomeGoal) {
+      lines.push(`  Outcome goal: ${ctx.actionPlan.outcomeGoal}`);
+    }
+    if (ctx.actionPlan.open.length === 0) {
+      lines.push(
+        ctx.actionPlan.doneCount > 0
+          ? `  No outstanding tasks (${ctx.actionPlan.doneCount} completed).`
+          : "  No tasks planned yet.",
+      );
+    } else {
+      lines.push("  Planned / outstanding:");
+      for (const task of ctx.actionPlan.open) {
+        const due = task.dueDate ? ` · due ${task.dueDate}` : "";
+        lines.push(
+          `  - ${task.title} [${task.status}, ${task.progressPct}%]${due}`,
+        );
+      }
+      if (ctx.actionPlan.doneCount > 0) {
+        lines.push(`  Completed: ${ctx.actionPlan.doneCount}`);
+      }
     }
   }
 

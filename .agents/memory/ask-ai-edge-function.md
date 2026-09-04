@@ -29,5 +29,8 @@ description: Design decisions and gotchas from the ask-ai Supabase edge function
 ## Monetary derived metrics → privacy
 **Rule:** Exclude `salesPerEmployee` and `gpToLabor` from AI context. They expose derived currency amounts (revenue/employee, GP/labor), violating the no-raw-amounts privacy contract.
 
+## Filled deliverables, not raw statements
+**Rule:** Ask AI context is the owner-board *outputs*: filled profile answers, ratios, profitability waterfall as % of revenue, cash-forecast outlook (runway / shortfall / trajectory — no balances), product-line shares and margins, ranked next moves, and planned/outstanding action-plan tasks. Never dump `clients.financials` statement line items (inventory, receivables, full P&L) into the prompt.
+
 ## Vanilla JS widget send-button state
 **Rule:** When building a vanilla JS widget where the send button must enable/disable as the user types, declare the button element BEFORE the textarea so the textarea's input handler and chip-click handlers can reference `sendBtn.disabled` directly.

@@ -569,6 +569,7 @@ Rules:
 - Do NOT reference company names, ${taxWord}, or raw ${currencyWord} — refer to them as "your revenue", "your margin" etc.
 - Currency references: use "your local currency" not specific amounts.
 - Offer 1–2 concrete next actions the owner can take today.
+- Ground answers in filled deliverables: profile answers, ratios, profitability waterfall (% of revenue), cash-forecast outlook, product lines, next moves, and action-plan tasks — not raw statement line items.
 ${locale}${benches}`;
 }
 
