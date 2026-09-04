@@ -81,6 +81,10 @@ assert(!/sum\(.*signups|total_users|count\(\*\) as total_reports/i.test(viewsSql
 
 assert(stallSql.includes("situation_required"), "signals require a situation");
 assert(stallSql.includes("high_correction_rate") === false, "SQL must not emit H3 stalls");
+assert(
+  !/GENERATED ALWAYS AS \(\(date_trunc\('week', created_at\)\)/i.test(stallSql),
+  "week_start must not be a generated timestamptz trunc (42P17)",
+);
 
 for (const rule of STALL_RULES) {
   assert(

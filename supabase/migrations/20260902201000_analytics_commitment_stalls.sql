@@ -35,7 +35,9 @@ CREATE TABLE IF NOT EXISTS analytics.practice_commitment_weekly (
 CREATE TABLE IF NOT EXISTS analytics.founder_action_queue (
   id                 bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   created_at         timestamptz NOT NULL DEFAULT now(),
-  week_start         date GENERATED ALWAYS AS ((date_trunc('week', created_at))::date) STORED,
+  -- Plain date, not GENERATED. date_trunc(timestamptz) is STABLE (timezone),
+  -- which Postgres rejects with 42P17 on a generated column.
+  week_start         date NOT NULL DEFAULT ((date_trunc('week', timezone('UTC', now())))::date),
   practice_id        uuid NOT NULL REFERENCES public.firms(id) ON DELETE CASCADE,
   practice_name      text,
   entity_id          uuid,
@@ -264,9 +266,10 @@ DECLARE
 BEGIN
   -- signup_no_entity
   INSERT INTO analytics.founder_action_queue (
-    practice_id, practice_name, is_founding_practice, stall_type, severity, suggested_question
+    week_start, practice_id, practice_name, is_founding_practice, stall_type, severity, suggested_question
   )
   SELECT
+    (date_trunc('week', timezone('UTC', now())))::date,
     f.id, f.name, coalesce(f.is_founding_practice, false),
     'signup_no_entity', 'medium',
     'Walk me through what you did right after you signed up — where did you get stuck?'
@@ -281,9 +284,10 @@ BEGIN
 
   -- upload_no_report
   INSERT INTO analytics.founder_action_queue (
-    practice_id, practice_name, entity_id, is_founding_practice, stall_type, severity, suggested_question
+    week_start, practice_id, practice_name, entity_id, is_founding_practice, stall_type, severity, suggested_question
   )
   SELECT DISTINCT ON (f.id)
+    (date_trunc('week', timezone('UTC', now())))::date,
     f.id, f.name, e.entity_id, coalesce(f.is_founding_practice, false),
     'upload_no_report', 'high',
     'You uploaded a client''s statements but didn''t generate a report — what happened next?'
@@ -301,9 +305,10 @@ BEGIN
 
   -- report_no_send
   INSERT INTO analytics.founder_action_queue (
-    practice_id, practice_name, entity_id, is_founding_practice, stall_type, severity, suggested_question
+    week_start, practice_id, practice_name, entity_id, is_founding_practice, stall_type, severity, suggested_question
   )
   SELECT DISTINCT ON (f.id)
+    (date_trunc('week', timezone('UTC', now())))::date,
     f.id, f.name, d.entity_id, coalesce(f.is_founding_practice, false),
     'report_no_send', 'high',
     'You made a report for a client but didn''t send it. What stopped you?'
@@ -321,9 +326,10 @@ BEGIN
 
   -- send_no_assign
   INSERT INTO analytics.founder_action_queue (
-    practice_id, practice_name, entity_id, is_founding_practice, stall_type, severity, suggested_question
+    week_start, practice_id, practice_name, entity_id, is_founding_practice, stall_type, severity, suggested_question
   )
   SELECT DISTINCT ON (f.id)
+    (date_trunc('week', timezone('UTC', now())))::date,
     f.id, f.name, s.entity_id, coalesce(f.is_founding_practice, false),
     'send_no_assign', 'high',
     'After the client saw the report, what did you actually do to get things fixed?'
@@ -340,9 +346,10 @@ BEGIN
 
   -- assign_no_completion
   INSERT INTO analytics.founder_action_queue (
-    practice_id, practice_name, entity_id, is_founding_practice, stall_type, severity, suggested_question
+    week_start, practice_id, practice_name, entity_id, is_founding_practice, stall_type, severity, suggested_question
   )
   SELECT DISTINCT ON (f.id)
+    (date_trunc('week', timezone('UTC', now())))::date,
     f.id, f.name, a.entity_id, coalesce(f.is_founding_practice, false),
     'assign_no_completion', 'high',
     'Talk me through the last task you assigned — what did the person on the other end do?'
@@ -359,9 +366,10 @@ BEGIN
 
   -- month2_dormant
   INSERT INTO analytics.founder_action_queue (
-    practice_id, practice_name, is_founding_practice, stall_type, severity, suggested_question
+    week_start, practice_id, practice_name, is_founding_practice, stall_type, severity, suggested_question
   )
   SELECT
+    (date_trunc('week', timezone('UTC', now())))::date,
     f.id, f.name, coalesce(f.is_founding_practice, false),
     'month2_dormant', 'high',
     'What were you using instead of MILŌN this month?'
