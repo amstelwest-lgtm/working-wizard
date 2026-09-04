@@ -18,6 +18,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import type { BudgetDocument } from "@/lib/budget.types";
+import { preflightUploadFile } from "@/lib/upload-quality";
+import { UploadQualityDisclaimer } from "@/components/upload-quality-disclaimer";
 import { fyMonths, formatMonthLabel } from "@/lib/budget.months";
 import { computeBudgetMonths, fmtZar } from "@/lib/budget.compute";
 import {
@@ -81,6 +83,7 @@ export function BudgetVariancePanel({
   const [draftSourceRef, setDraftSourceRef] = useState<string | null>(null);
   const [draftPeriodStart, setDraftPeriodStart] = useState<string | null>(null);
   const [draftPeriodEnd, setDraftPeriodEnd] = useState<string | null>(null);
+  const [acceptedQuality, setAcceptedQuality] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const listActuals = useServerFn(listBudgetMonthActuals);
@@ -140,6 +143,7 @@ export function BudgetVariancePanel({
     setDraftSourceRef(fileName);
     setDraftPeriodStart(mapped.periodStart);
     setDraftPeriodEnd(mapped.periodEnd);
+    setAcceptedQuality(false);
     setReviewOpen(true);
   };
 
@@ -155,6 +159,11 @@ export function BudgetVariancePanel({
     const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
     if (ext !== "pdf" && file.type !== "application/pdf") {
       toast.error("Upload a PDF of the month’s management accounts / P&L");
+      return;
+    }
+    const pre = preflightUploadFile(file);
+    if (pre) {
+      toast.error(pre);
       return;
     }
     setUploading(true);
@@ -452,11 +461,17 @@ export function BudgetVariancePanel({
             </div>
           </div>
 
+          <UploadQualityDisclaimer accepted={acceptedQuality} onChange={setAcceptedQuality} />
+
           <DialogFooter className="gap-2 sm:gap-0">
             <Button type="button" variant="outline" onClick={() => void saveDraft("draft")}>
               Save draft
             </Button>
-            <Button type="button" onClick={() => void saveDraft("confirmed")}>
+            <Button
+              type="button"
+              disabled={!acceptedQuality}
+              onClick={() => void saveDraft("confirmed")}
+            >
               Confirm & show variance
             </Button>
           </DialogFooter>

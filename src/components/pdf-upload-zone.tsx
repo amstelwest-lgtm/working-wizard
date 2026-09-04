@@ -62,6 +62,11 @@ export function PDFUploadZone({ onComplete, onError }: Props) {
       setErrorMsg(`"${oversized.name}" exceeds 32 MB. Please compress or split the file.`);
       return;
     }
+    const empty = pdfs.find((f) => f.size < 400);
+    if (empty) {
+      setErrorMsg(`"${empty.name}" is too small to be a financial statement.`);
+      return;
+    }
     setErrorMsg(null);
     setFiles((prev) => {
       const combined = [...prev, ...pdfs.map((f) => ({ file: f, id: crypto.randomUUID() }))];
@@ -152,6 +157,10 @@ export function PDFUploadZone({ onComplete, onError }: Props) {
             : "Drop another PDF, or click to add more"}
         </p>
         <p className="text-xs text-slate-500 mt-1">PDF only · max 32 MB per file · up to 3 files</p>
+        <p className="text-[11px] text-slate-500 mt-2 max-w-sm mx-auto">
+          The quality of the financial information we produce depends on the accuracy of the
+          information you upload.
+        </p>
 
         {/* Tooltip */}
         <div className="absolute top-2 right-2 group">

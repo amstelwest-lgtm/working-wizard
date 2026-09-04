@@ -29,6 +29,7 @@ import { extractionToInputs, ExtractionReviewModal } from "@/components/extracti
 import { BankStatementDrafter } from "@/components/bank-statement-drafter";
 import { CashFromBanksDrafter } from "@/components/cash-from-banks-drafter";
 import type { MergedExtractionResult } from "@/lib/extraction-types";
+import { preflightUploadFile, UPLOAD_QUALITY_DISCLAIMER } from "@/lib/upload-quality";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -2012,6 +2013,11 @@ function Index() {
   const [showFinData, setShowFinData] = useState(false);
 
   const handleStatementUpload = useCallback(async (file: File) => {
+    const pre = preflightUploadFile(file);
+    if (pre) {
+      toast.error(pre);
+      return;
+    }
     setUploading(true);
     try {
       const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
@@ -4452,7 +4458,7 @@ function Index() {
               </div>
               <DialogDescription className="text-xs text-slate-600 dark:text-slate-400">
                 Bring in your figures — upload financial statements, or connect your accounting
-                software.
+                software. {UPLOAD_QUALITY_DISCLAIMER}
               </DialogDescription>
             </DialogHeader>
             <input

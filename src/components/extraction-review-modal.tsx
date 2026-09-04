@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { MergedExtractionResult, MergeConflict } from "@/lib/extraction-types";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { CheckCircle2, HelpCircle, Pencil, ChevronDown, ChevronRight, AlertTriangle, Info } from "lucide-react";
+import { UploadQualityDisclaimer } from "@/components/upload-quality-disclaimer";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -164,6 +165,11 @@ export function ExtractionReviewModal({ result, open, onClose, onConfirm }: Prop
   const [editValues, setEditValues] = useState<Record<string, string>>({});
   const [conflicts, setConflicts] = useState<MergeConflict[]>(result.conflicts ?? []);
   const [conflictSelections, setConflictSelections] = useState<Record<string, "1" | "2">>({});
+  const [acceptedQuality, setAcceptedQuality] = useState(false);
+
+  useEffect(() => {
+    if (open) setAcceptedQuality(false);
+  }, [open]);
 
   const meta = result.document_metadata;
   const is = result.current_period?.income_statement;
@@ -501,10 +507,15 @@ export function ExtractionReviewModal({ result, open, onClose, onConfirm }: Prop
           )}
 
           {/* ── Footer actions ── */}
+          <UploadQualityDisclaimer
+            accepted={acceptedQuality}
+            onChange={setAcceptedQuality}
+            className="text-slate-400"
+          />
           <div className="flex flex-col sm:flex-row gap-2 pt-2 border-t border-slate-800">
             <Button
               onClick={handleConfirm}
-              disabled={unresolvedConflicts.length > 0}
+              disabled={unresolvedConflicts.length > 0 || !acceptedQuality}
               className="flex-1 bg-[#b7872a] hover:bg-[#d4a550] text-white font-semibold"
             >
               <CheckCircle2 className="h-4 w-4 mr-1.5" />

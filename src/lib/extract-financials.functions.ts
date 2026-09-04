@@ -17,6 +17,7 @@ import type {
   BalanceSheet,
   CashFlowStatement,
 } from "@/lib/extraction-types";
+import { assessFlatExtraction, assessMergedExtraction, assertUsable } from "@/lib/upload-quality";
 
 // ─── Claude extraction prompt ──────────────────────────────────────────────────
 
@@ -312,6 +313,8 @@ export const extractPDFsWithAI = createServerFn({ method: "POST" })
       file_names: data.files.map((f) => f.fileName),
     };
 
+    assertUsable(assessMergedExtraction(result));
+
     return result;
   });
 
@@ -443,5 +446,6 @@ export const extractFinancials = createServerFn({ method: "POST" })
     const aiResult = await aiExtractText(docText, data.fileName);
     const patternResult = patternExtract(docText);
     const merged: Record<string, string> = { ...patternResult, ...aiResult };
+    assertUsable(assessFlatExtraction(Object.keys(merged).length));
     return { financials: merged, fieldCount: Object.keys(merged).length };
   });

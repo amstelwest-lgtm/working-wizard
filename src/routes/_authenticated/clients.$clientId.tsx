@@ -2219,7 +2219,8 @@ function ClientView() {
               }}
             >
               Claude reads the PDF and extracts the income statement and balance sheet. Review every
-              figure before confirming.
+              figure before confirming. The quality of the financial information we produce depends
+              on the accuracy of the information you upload.
             </p>
             <UploadFinancials onConfirm={handleConfirmFinancials} />
           </div>
