@@ -15,6 +15,8 @@ import { seedBudgetFromFinancials } from "@/lib/budget.bridges";
 import { normalizeBudgetDocument } from "@/lib/budget.compute";
 import type { BudgetDocument } from "@/lib/budget.types";
 import { createBudgetDocument, currentFyStart } from "@/lib/budget.months";
+import { MarketProvider } from "@/contexts/market";
+import { coerceMarketSelection, parseMarketSelection, resolveMarket } from "@/lib/market";
 import { PlaybookDrawer } from "@/components/playbook-drawer";
 import type { ExtractionResult } from "@/lib/financialSchema";
 import { computeRatios, scoreTier } from "@/lib/ratios";
@@ -359,6 +361,7 @@ type Client = {
   financials?: Record<string, string | number | null> | null;
   financials_updated_at?: string | null;
   cashflow?: ExistingCashflow | null;
+  market?: unknown;
 };
 
 type ActiveTab =
@@ -674,27 +677,48 @@ function ClientView() {
         const { data, error } = await supabase
           .from("clients")
           .select(
-            "id, name, business_type, client_code, operating_profile, cash_runway_weeks, last_forecast_at, financials, financials_updated_at, reports_issued_count, cashflow",
+            "id, name, business_type, client_code, operating_profile, cash_runway_weeks, last_forecast_at, financials, financials_updated_at, reports_issued_count, cashflow, market",
           )
           .eq("id", clientId)
           .maybeSingle();
 
         if (error) {
-          // Check if error is due to missing column
-          if (
-            error.message?.includes("reports_issued_count") ||
-            error.message?.includes("client_code") ||
-            error.code === "42703"
-          ) {
-            // Retry without the missing column
+          const msg = error.message ?? "";
+          const missingMarket = /market/i.test(msg) || error.code === "42703";
+          if (missingMarket || msg.includes("reports_issued_count") || msg.includes("client_code")) {
+            const withoutMarket =
+              "id, name, business_type, client_code, operating_profile, cash_runway_weeks, last_forecast_at, financials, financials_updated_at, reports_issued_count, cashflow";
+            const stripped =
+              "id, name, business_type, operating_profile, cash_runway_weeks, last_forecast_at, financials, financials_updated_at, cashflow";
+            const retrySelect = /market/i.test(msg) ? withoutMarket : stripped;
             const { data: data2, error: error2 } = await supabase
               .from("clients")
-              .select(
-                "id, name, business_type, operating_profile, cash_runway_weeks, last_forecast_at, financials, financials_updated_at, cashflow",
-              )
+              .select(retrySelect)
               .eq("id", clientId)
               .maybeSingle();
-            if (error2) {
+            if (error2 && retrySelect !== stripped) {
+              const { data: data3, error: error3 } = await supabase
+                .from("clients")
+                .select(stripped)
+                .eq("id", clientId)
+                .maybeSingle();
+              if (error3) {
+                toast.error(error3.message);
+              } else {
+                setClient((data3 as Client | null) ?? null);
+                const fin = (data3 as Client | null)?.financials ?? {};
+                const { scalars, debtSchedule: ds, weeklyInputs: weeks, productMix: mix } =
+                  splitFinancialsBlob(fin as Record<string, unknown>);
+                setFinancials(scalars);
+                setDebtSchedule(ds);
+                setWeeklyInputs(weeks);
+                setProductMix(mix);
+                financialsRef.current = scalars;
+                debtScheduleRef.current = ds;
+                weeklyInputsRef.current = weeks;
+                productMixRef.current = mix;
+              }
+            } else if (error2) {
               toast.error(error2.message);
             } else {
               setClient((data2 as Client | null) ?? null);
@@ -1281,6 +1305,7 @@ function ClientView() {
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
+    <MarketProvider selection={parseMarketSelection(client.market) ?? coerceMarketSelection(client.market)}>
     <FinancialInputsContext.Provider value={financialInputsCtxValue}>
     <div className="accountant-portal">
       <WalkthroughWizard
@@ -2068,7 +2093,8 @@ function ClientView() {
               operatingProfile={parseOperatingProfile(client.operating_profile)}
               financials={financials}
               fyStartMonthDefault={
-                parseOperatingProfile(client.operating_profile)?.fyStartMonth ?? 3
+                parseOperatingProfile(client.operating_profile)?.fyStartMonth ??
+                resolveMarket(coerceMarketSelection(client.market)).fyStartMonthDefault
               }
               onRetakeProfile={() => setProfileOpen(true)}
               onPushedToCash={() => {
@@ -2367,6 +2393,7 @@ function ClientView() {
                 qualification: profileToBudgetQualification(profile),
                 fyStartMonth: fyMonth,
                 fyStart: currentFyStart(fyMonth),
+                market: resolveMarket(coerceMarketSelection(client.market)),
               });
             }
             if (doc) {
@@ -2441,5 +2468,6 @@ function ClientView() {
       </Dialog>
     </div>
     </FinancialInputsContext.Provider>
+    </MarketProvider>
   );
 }

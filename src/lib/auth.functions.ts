@@ -3,6 +3,8 @@ import { z } from "zod";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { signUpInvitedMember } from "@/lib/invite-member.server";
+import { US_STATE_CODES } from "@/lib/market/types";
+import { assertMarketSelection, isMissingMarketSupport, marketToJson } from "@/lib/market";
 
 /**
  * Admin signup — creates the user with email_confirm: true so no
@@ -24,6 +26,8 @@ export const adminSignUp = createServerFn({ method: "POST" })
         inviteClientCode: z.string().trim().max(32).optional().nullable(),
         signupType: z.enum(["customer", "accountant"]).default("customer"),
         firmName: z.string().optional(),
+        marketCountry: z.enum(["ZA", "US"]).optional(),
+        marketRegion: z.enum(US_STATE_CODES).nullable().optional(),
       })
       .parse(input),
   )
@@ -61,14 +65,36 @@ export const adminSignUp = createServerFn({ method: "POST" })
     if (!authData.user) throw new Error("User creation failed");
 
     const userId = authData.user.id;
+    let marketJson: { country: "ZA" | "US"; regionCode: string | null } | null = null;
+    if (data.marketCountry) {
+      marketJson = marketToJson(
+        assertMarketSelection({
+          country: data.marketCountry,
+          regionCode: data.marketCountry === "US" ? (data.marketRegion ?? null) : null,
+        }),
+      );
+    }
 
     if (data.signupType === "accountant") {
       if (data.firmName?.trim()) {
-        const { data: firm, error: fErr } = await supabaseAdmin
+        let { data: firm, error: fErr } = await supabaseAdmin
           .from("firms")
-          .insert({ name: data.firmName.trim(), owner_user_id: userId })
+          .insert({
+            name: data.firmName.trim(),
+            owner_user_id: userId,
+            ...(marketJson ? { market: marketJson } : {}),
+          })
           .select("id")
           .single();
+        if (fErr && marketJson && isMissingMarketSupport(fErr)) {
+          const retry = await supabaseAdmin
+            .from("firms")
+            .insert({ name: data.firmName.trim(), owner_user_id: userId })
+            .select("id")
+            .single();
+          firm = retry.data;
+          fErr = retry.error;
+        }
         if (fErr) console.error("[adminSignUp] firm insert:", fErr.message);
         if (firm) {
           await supabaseAdmin
@@ -86,10 +112,21 @@ export const adminSignUp = createServerFn({ method: "POST" })
         .limit(1)
         .maybeSingle();
       if (!existing) {
-        await supabaseAdmin.from("clients").insert({
+        const baseRow = {
           name: data.businessName?.trim() || data.fullName?.trim() || data.email,
           owner_user_id: userId,
-        });
+        };
+        const withMarket = marketJson
+          ? {
+              ...baseRow,
+              market: marketJson,
+              financial_year_start_month: marketJson.country === "US" ? 1 : 3,
+            }
+          : baseRow;
+        const { error: cErr } = await supabaseAdmin.from("clients").insert(withMarket);
+        if (cErr && marketJson && isMissingMarketSupport(cErr)) {
+          await supabaseAdmin.from("clients").insert(baseRow);
+        }
       }
       // Keep any existing practice role (dual-role founders). Only ensure client_owner.
       const { data: existingRoles } = await supabaseAdmin

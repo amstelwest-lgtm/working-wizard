@@ -891,6 +891,7 @@ export type Database = {
           owner_user_id: string
           reports_issued_count: number
           is_demo: boolean
+          market: Json | null
         }
         Insert: {
           business_type?: string | null
@@ -915,6 +916,7 @@ export type Database = {
           owner_user_id: string
           reports_issued_count?: number
           is_demo?: boolean
+          market?: Json | null
         }
         Update: {
           business_type?: string | null
@@ -939,6 +941,7 @@ export type Database = {
           owner_user_id?: string
           reports_issued_count?: number
           is_demo?: boolean
+          market?: Json | null
         }
         Relationships: [
           {
@@ -1052,6 +1055,7 @@ export type Database = {
           brand_contact_name: string | null
           brand_contact_email: string | null
           brand_updated_at: string | null
+          market: Json | null
         }
         Insert: {
           created_at?: string
@@ -1069,6 +1073,7 @@ export type Database = {
           brand_contact_name?: string | null
           brand_contact_email?: string | null
           brand_updated_at?: string | null
+          market?: Json | null
         }
         Update: {
           created_at?: string
@@ -1086,6 +1091,7 @@ export type Database = {
           brand_contact_name?: string | null
           brand_contact_email?: string | null
           brand_updated_at?: string | null
+          market?: Json | null
         }
         Relationships: []
       }
@@ -1447,7 +1453,7 @@ export type Database = {
         Returns: boolean
       }
       ensure_own_client: {
-        Args: { p_name: string }
+        Args: { p_name: string; p_market?: Json | null }
         Returns: string
       }
       is_milon_it_member: {
@@ -1458,18 +1464,19 @@ export type Database = {
         Args: { p_client_id: string }
         Returns: string
       }
-          create_firm_client: {
-            Args: {
-              p_name: string
-              p_firm_id?: string | null
-              p_business_type?: string | null
-            }
-            Returns: Json
-          }
-          ensure_practice_firm: {
-            Args: { p_name?: string | null }
-            Returns: string
-          }
+      create_firm_client: {
+        Args: {
+          p_name: string
+          p_firm_id?: string | null
+          p_business_type?: string | null
+          p_market?: Json | null
+        }
+        Returns: Json
+      }
+      ensure_practice_firm: {
+        Args: { p_name?: string | null }
+        Returns: string
+      }
       has_client_access: {
         Args: { _client_id: string; _user_id: string }
         Returns: boolean

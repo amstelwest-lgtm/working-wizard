@@ -12,10 +12,25 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { SIGNUP_ACCESS_CODE, notifySignup } from "@/lib/signup-notify";
 import { ensurePracticePortalAccess } from "@/lib/auth.functions";
-import { forcePortal, setPortalIntent, resolvePostLoginPath, clearForcePortal, shouldOpenItInbox } from "@/lib/user-roles";
+import {
+  forcePortal,
+  setPortalIntent,
+  resolvePostLoginPath,
+  clearForcePortal,
+  shouldOpenItInbox,
+} from "@/lib/user-roles";
 import { isOpsNext, lighthouseTabFromOpsNext } from "@/lib/client-note-link";
 import { accessTokenFromNext } from "@/lib/practice-access";
 import { AuthDivider, GoogleSignInButton } from "@/components/google-sign-in-button";
+import { MarketPicker } from "@/components/market-picker";
+import {
+  draftToSelection,
+  isDraftComplete,
+  marketToJson,
+  readVisitorDraft,
+  writeVisitorDraft,
+  type DraftMarket,
+} from "@/lib/market";
 
 export const Route = createFileRoute("/auth")({
   component: AuthPage,
@@ -39,13 +54,26 @@ function AuthPage() {
   const [firmName, setFirmName] = useState("");
   const [accessCode, setAccessCode] = useState("");
   const [busy, setBusy] = useState(false);
+  const [draftMarket, setDraftMarket] = useState<DraftMarket>({ country: null, regionCode: null });
 
   /* Client-only form gate — browser password managers (LastPass etc.) inject
      DOM nodes into password forms, causing fatal SSR hydration mismatches. */
   const [mounted, setMounted] = useState(false);
-  useEffect(() => { setMounted(true); }, []);
+  useEffect(() => {
+    setMounted(true);
+    setDraftMarket(readVisitorDraft());
+  }, []);
 
-  const afterAuthPath = isOpsNext(next) ? "/ops" : next?.startsWith("/access/") ? next : "/dashboard";
+  useEffect(() => {
+    if (!mounted) return;
+    writeVisitorDraft(draftMarket);
+  }, [draftMarket, mounted]);
+
+  const afterAuthPath = isOpsNext(next)
+    ? "/ops"
+    : next?.startsWith("/access/")
+      ? next
+      : "/dashboard";
   const googleNext = isOpsNext(next) || next?.startsWith("/access/") ? next : undefined;
   const landedPathRef = useRef<string | null>(null);
   const landInflightRef = useRef<Promise<string> | null>(null);
@@ -121,6 +149,11 @@ function AuthPage() {
       toast.error("Invalid access code. Contact us to get access.");
       return;
     }
+    const market = mode === "signup" ? draftToSelection(draftMarket) : null;
+    if (mode === "signup" && !market) {
+      toast.error("Pick South Africa or the United States (and a state) first.");
+      return;
+    }
     setBusy(true);
     try {
       if (mode === "signup") {
@@ -129,7 +162,14 @@ function AuthPage() {
           password,
           options: {
             emailRedirectTo: `${window.location.origin}/dashboard`,
-            data: { full_name: fullName, firm_name: firmName.trim() },
+            data: {
+              full_name: fullName,
+              firm_name: firmName.trim(),
+              signup_type: "accountant",
+              ...(market
+                ? { market_country: market.country, market_region: market.regionCode }
+                : {}),
+            },
           },
         });
         if (error) throw error;
@@ -139,19 +179,32 @@ function AuthPage() {
           return;
         }
         if (data.user && firmName.trim()) {
-          const { data: firm } = await supabase
+          const payload = {
+            name: firmName.trim(),
+            owner_user_id: data.user.id,
+            ...(market ? { market: marketToJson(market) } : {}),
+          };
+          let { data: firm, error: firmErr } = await supabase
             .from("firms")
-            .insert({ name: firmName.trim(), owner_user_id: data.user.id })
+            .insert(payload)
             .select("id")
             .single();
+          if (firmErr && market && /market|42703/i.test(firmErr.message ?? "")) {
+            const retry = await supabase
+              .from("firms")
+              .insert({ name: firmName.trim(), owner_user_id: data.user.id })
+              .select("id")
+              .single();
+            firm = retry.data;
+            firmErr = retry.error;
+          }
+          if (firmErr) toast.error(firmErr.message);
           if (firm) {
             await supabase
               .from("firm_memberships")
               .insert({ firm_id: firm.id, user_id: data.user.id, role: "owner" });
           }
-          await supabase
-            .from("user_roles")
-            .insert({ user_id: data.user.id, role: "firm_admin" });
+          await supabase.from("user_roles").insert({ user_id: data.user.id, role: "firm_admin" });
         }
         forcePortal("accountant");
         await ensurePractice().catch(() => undefined);
@@ -159,13 +212,19 @@ function AuthPage() {
         if (data.user) await landAfterAccountantAuth(data.user.id);
         else navigate({ to: afterAuthPath as "/dashboard" });
       } else {
-        const { error, data: signInData } = await supabase.auth.signInWithPassword({ email, password });
+        const { error, data: signInData } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
         if (error) throw error;
         // Lazy firm provisioning — runs in a separate try/catch so any failure
         // here never blocks the user from signing in.
         try {
           if (signInData.user) {
-            const meta = signInData.user.user_metadata as { firm_name?: string; full_name?: string } | null;
+            const meta = signInData.user.user_metadata as {
+              firm_name?: string;
+              full_name?: string;
+            } | null;
             if (meta?.firm_name) {
               const { data: existing } = await supabase
                 .from("firms")
@@ -215,7 +274,9 @@ function AuthPage() {
           <CardTitle className="text-lg">Accountant Portal</CardTitle>
           <CardDescription>
             For accounting firms and advisory practices only.{" "}
-            <Link to="/" className="underline text-primary">Back home</Link>
+            <Link to="/" className="underline text-primary">
+              Back home
+            </Link>
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -237,32 +298,65 @@ function AuthPage() {
                     <AuthDivider />
                   </div>
                 )}
-                <form onSubmit={handle} className={mode === "signin" ? "space-y-3" : "space-y-3 mt-4"}>
+                <form
+                  onSubmit={handle}
+                  className={mode === "signin" ? "space-y-3" : "space-y-3 mt-4"}
+                >
                   {mode === "signup" && (
                     <>
                       <div>
                         <Label>Your name</Label>
-                        <Input value={fullName} onChange={(e) => setFullName(e.target.value)} required />
+                        <Input
+                          value={fullName}
+                          onChange={(e) => setFullName(e.target.value)}
+                          required
+                        />
                       </div>
                       <div>
                         <Label>Firm name</Label>
-                        <Input value={firmName} onChange={(e) => setFirmName(e.target.value)} placeholder="Acme & Partners" required />
+                        <Input
+                          value={firmName}
+                          onChange={(e) => setFirmName(e.target.value)}
+                          placeholder="Acme & Partners"
+                          required
+                        />
                       </div>
+                      <MarketPicker value={draftMarket} onChange={setDraftMarket} />
                       <div>
                         <Label>Access code</Label>
-                        <Input value={accessCode} onChange={(e) => setAccessCode(e.target.value)} placeholder="Provided by your MILŌN contact" required />
+                        <Input
+                          value={accessCode}
+                          onChange={(e) => setAccessCode(e.target.value)}
+                          placeholder="Provided by your MILŌN contact"
+                          required
+                        />
                       </div>
                     </>
                   )}
                   <div>
                     <Label>Email</Label>
-                    <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+                    <Input
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      required
+                    />
                   </div>
                   <div>
                     <Label>Password</Label>
-                    <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} minLength={8} required />
+                    <Input
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      minLength={8}
+                      required
+                    />
                   </div>
-                  <Button type="submit" className="w-full" disabled={busy}>
+                  <Button
+                    type="submit"
+                    className="w-full"
+                    disabled={busy || (mode === "signup" && !isDraftComplete(draftMarket))}
+                  >
                     {busy ? "Please wait…" : mode === "signin" ? "Sign in" : "Create firm account"}
                   </Button>
                   {mode === "signup" && (

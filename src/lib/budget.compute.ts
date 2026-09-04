@@ -1,5 +1,5 @@
 /**
- * Budget P&L + monthly cash (WC, VAT, inventory, capex depreciation).
+ * Budget P&L + monthly cash (WC, VAT / sales tax, inventory, capex depreciation).
  */
 
 import type {
@@ -12,6 +12,20 @@ import { DEFAULT_VAT_RATE } from "@/lib/budget.types";
 import { fyMonths } from "@/lib/budget.months";
 import { BUDGET_TEMPLATES, resolveTemplateId } from "@/lib/budget.templates";
 import { migrateLegacyQualification } from "@/lib/budget.taxonomy";
+import { formatMoney, type IndirectTaxProfile } from "@/lib/market";
+import { ZA_MARKET } from "@/lib/market";
+
+function documentTax(doc: BudgetDocument): IndirectTaxProfile {
+  if (doc.tax) return doc.tax;
+  const rate = doc.vatRate > 0 ? doc.vatRate : DEFAULT_VAT_RATE;
+  return { regime: "vat", vatRate: rate, vatMode: doc.vatMode ?? "exclusive" };
+}
+
+function salesTaxRate(tax: IndirectTaxProfile): number {
+  if (tax.regime === "sales_tax" && tax.collects) return tax.combinedRate;
+  if (tax.regime === "vat") return tax.vatRate;
+  return 0;
+}
 
 function scenarioFactors(doc: BudgetDocument, scenario: BudgetScenarioId) {
   return doc.scenarios[scenario] ?? doc.scenarios.base;
@@ -65,7 +79,10 @@ export function computeBudgetMonths(
 ): BudgetMonthResult[] {
   const months = fyMonths(doc.fyStart);
   const f = scenarioFactors(doc, scenario);
-  const rate = doc.vatRate > 0 ? doc.vatRate : DEFAULT_VAT_RATE;
+  const tax = documentTax(doc);
+  const vatMode = tax.regime === "vat" ? tax.vatMode : (doc.vatMode ?? "exclusive");
+  const rate =
+    tax.regime === "vat" ? (tax.vatRate > 0 ? tax.vatRate : DEFAULT_VAT_RATE) : salesTaxRate(tax);
   const opening = doc.openingCash || 0;
   const results: BudgetMonthResult[] = [];
   let cash = opening;
@@ -101,11 +118,11 @@ export function computeBudgetMonths(
       cogsEntered = revenueEntered * (1 - gp);
     }
 
-    const revenue = toExVat(revenueEntered, doc.vatMode, rate);
+    const revenue = toExVat(revenueEntered, vatMode, rate);
     const cogs =
       doc.cogsMode === "gp_pct"
         ? revenue * (1 - Math.min(100, Math.max(0, doc.gpPct)) / 100)
-        : toExVat(cogsEntered, doc.vatMode, rate);
+        : toExVat(cogsEntered, vatMode, rate);
 
     let overheads = 0;
     for (const oh of doc.overheads) {
@@ -124,6 +141,7 @@ export function computeBudgetMonths(
   }
 
   let prevInventoryStock = 0;
+  let accruedSalesTax = 0;
 
   for (let i = 0; i < months.length; i++) {
     const mo = months[i];
@@ -148,17 +166,88 @@ export function computeBudgetMonths(
     const laggedRev = revenueByMonth[Math.max(0, i - receiptLag)] ?? 0;
     const laggedCogs = cogsByMonth[Math.max(0, i - payLag)] ?? 0;
 
-    // Cash receipts / payments at gross (incl. VAT) based on ex-VAT P&L
-    const cashIn = withOutputVat(laggedRev, doc.vatMode, rate);
-    // Purchases ≈ lagged COGS + inventory build (stock increase uses cash now)
     const purchaseExVat = laggedCogs + Math.max(0, inventoryBuild);
-    const cashOutPurchases =
-      withInputVat(purchaseExVat, doc.vatMode, rate) + Math.min(0, inventoryBuild);
+    const overheadCash = overheads;
+    const salesTax = tax.regime === "sales_tax" && tax.collects && rate > 0;
 
-    const overheadCash = overheads; // overheads treated as VAT-exempt for simplicity
+    let cashIn: number;
+    let cashOutPurchases: number;
+    let vatNet: number;
+
+    if (salesTax) {
+      // US: collections are a liability, not income. Purchases get no input credit.
+      cashIn = laggedRev * (1 + rate);
+      cashOutPurchases = purchaseExVat + Math.min(0, inventoryBuild);
+      const collected = laggedRev * rate;
+      accruedSalesTax += collected;
+      let remitted = 0;
+      const cadence = tax.remittance;
+      if (cadence === "monthly") {
+        remitted = collected;
+        accruedSalesTax -= collected;
+      } else if (cadence === "quarterly" && (i + 1) % 3 === 0) {
+        remitted = accruedSalesTax;
+        accruedSalesTax = 0;
+      }
+      vatNet = remitted;
+      const cashOut = cashOutPurchases + overheadCash + capexCash + remitted;
+      const netCash = cashIn - cashOut;
+      cash += netCash;
+      results.push({
+        month: mo,
+        revenue,
+        cogs,
+        grossProfit,
+        gpPct,
+        overheads,
+        depreciation,
+        ebitda,
+        ebit,
+        capexCash,
+        inventoryBuild,
+        vatNet,
+        cashIn,
+        cashOut,
+        netCash,
+        closingCash: cash,
+      });
+      continue;
+    }
+
+    if (tax.regime === "none" || rate <= 0) {
+      cashIn = laggedRev;
+      cashOutPurchases = purchaseExVat + Math.min(0, inventoryBuild);
+      vatNet = 0;
+      const cashOut = cashOutPurchases + overheadCash + capexCash;
+      const netCash = cashIn - cashOut;
+      cash += netCash;
+      results.push({
+        month: mo,
+        revenue,
+        cogs,
+        grossProfit,
+        gpPct,
+        overheads,
+        depreciation,
+        ebitda,
+        ebit,
+        capexCash,
+        inventoryBuild,
+        vatNet,
+        cashIn,
+        cashOut,
+        netCash,
+        closingCash: cash,
+      });
+      continue;
+    }
+
+    // ZA VAT: cash includes VAT; input VAT is reclaimable.
+    cashIn = withOutputVat(laggedRev, vatMode, rate);
+    cashOutPurchases = withInputVat(purchaseExVat, vatMode, rate) + Math.min(0, inventoryBuild);
     const vatOnReceipts = cashIn - laggedRev;
-    const vatOnPurchases = withInputVat(purchaseExVat, doc.vatMode, rate) - purchaseExVat;
-    const vatNet = vatOnReceipts - vatOnPurchases;
+    const vatOnPurchases = withInputVat(purchaseExVat, vatMode, rate) - purchaseExVat;
+    vatNet = vatOnReceipts - vatOnPurchases;
 
     const cashOut = cashOutPurchases + overheadCash + capexCash;
     const netCash = cashIn - cashOut;
@@ -192,15 +281,19 @@ export function lowestCashTrough(results: BudgetMonthResult[]): {
   closingCash: number;
 } | null {
   if (!results.length) return null;
-  return results.reduce((min, r) =>
-    r.closingCash < min.closingCash ? { month: r.month, closingCash: r.closingCash } : min,
-  { month: results[0].month, closingCash: results[0].closingCash });
+  return results.reduce(
+    (min, r) =>
+      r.closingCash < min.closingCash ? { month: r.month, closingCash: r.closingCash } : min,
+    { month: results[0].month, closingCash: results[0].closingCash },
+  );
 }
 
 export function fmtZar(n: number): string {
-  const sign = n < 0 ? "-" : "";
-  const abs = Math.abs(Math.round(n));
-  return `${sign}R${abs.toLocaleString("en-ZA")}`;
+  return formatMoney(n, ZA_MARKET);
+}
+
+export function fmtBudgetMoney(n: number, market = ZA_MARKET): string {
+  return formatMoney(n, market);
 }
 
 /** Ensure older saved budgets get Phase 2/3 defaults + new qualification fields. */
@@ -229,7 +322,8 @@ export function normalizeBudgetDocument(raw: BudgetDocument): BudgetDocument {
       payMotion: migrated.payMotion,
       volumeUnit: migrated.volumeUnit,
       secondaryVolumeUnits: q.secondaryVolumeUnits ?? [],
-      driverKind: q.driverKind ?? BUDGET_TEMPLATES[migrated.templateId]?.driverKind ?? "units_price",
+      driverKind:
+        q.driverKind ?? BUDGET_TEMPLATES[migrated.templateId]?.driverKind ?? "units_price",
       costShape: q.costShape ?? "balanced",
       debtorDaysDefault: q.debtorDaysDefault ?? 30,
       capexMode: q.capexMode ?? "none",
@@ -250,6 +344,11 @@ export function normalizeBudgetDocument(raw: BudgetDocument): BudgetDocument {
     templateId,
     qualification,
     vatRate: raw.vatRate > 0 ? raw.vatRate : DEFAULT_VAT_RATE,
+    tax: raw.tax ?? {
+      regime: "vat" as const,
+      vatRate: raw.vatRate > 0 ? raw.vatRate : DEFAULT_VAT_RATE,
+      vatMode: raw.vatMode ?? "exclusive",
+    },
     openingCash: raw.openingCash ?? 0,
     scenarios,
     capex: (raw.capex ?? []).map((c) => ({

@@ -2,6 +2,8 @@
  * FY month helpers + budget document factory.
  */
 
+import type { ResolvedMarket } from "@/lib/market";
+import { ZA_MARKET, formatMonthLabel as formatMonthLabelMarket } from "@/lib/market";
 import type {
   BudgetDocument,
   BudgetMonthCell,
@@ -46,13 +48,11 @@ export function emptyAmountMap(months: string[], amount = 0) {
   return Object.fromEntries(months.map((mo) => [mo, amount]));
 }
 
-export function formatMonthLabel(ym: string): string {
-  const [y, m] = ym.split("-").map(Number);
-  return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString("en-ZA", {
-    month: "short",
-    year: "2-digit",
-    timeZone: "UTC",
-  });
+export function formatMonthLabel(
+  ym: string,
+  market: Pick<ResolvedMarket, "locale"> = ZA_MARKET,
+): string {
+  return formatMonthLabelMarket(ym, market);
 }
 
 export function createBudgetDocument(input: {
@@ -60,8 +60,10 @@ export function createBudgetDocument(input: {
   qualification: BudgetQualification;
   fyStartMonth?: number;
   fyStart?: string;
+  market?: ResolvedMarket;
 }): BudgetDocument {
-  const fyStartMonth = input.fyStartMonth ?? 3;
+  const market = input.market ?? ZA_MARKET;
+  const fyStartMonth = input.fyStartMonth ?? market.fyStartMonthDefault;
   const fyStart = input.fyStart ?? currentFyStart(fyStartMonth);
   const months = fyMonths(fyStart);
   const tpl = BUDGET_TEMPLATES[input.templateId];
@@ -101,7 +103,8 @@ export function createBudgetDocument(input: {
   const showInventory =
     tpl.showInventoryDays ||
     secondary.some(
-      (vu) => BUDGET_TEMPLATES[resolveTemplateId({ payMotion: "mix", volumeUnit: vu })].showInventoryDays,
+      (vu) =>
+        BUDGET_TEMPLATES[resolveTemplateId({ payMotion: "mix", volumeUnit: vu })].showInventoryDays,
     );
 
   return {
@@ -110,14 +113,38 @@ export function createBudgetDocument(input: {
     templateId: input.templateId,
     fyStartMonth,
     fyStart,
-    vatMode: "exclusive",
-    vatRate: 0.15,
+    vatMode: market.tax.regime === "vat" ? market.tax.vatMode : "exclusive",
+    vatRate:
+      market.tax.regime === "vat"
+        ? market.tax.vatRate
+        : market.tax.regime === "sales_tax"
+          ? market.tax.combinedRate
+          : 0,
+    tax: market.tax,
     openingCash: 0,
     activeScenario: "base",
     scenarios: {
-      base: { label: "Base", volumeFactor: 1, priceFactor: 1, overheadFactor: 1, debtorDaysDelta: 0 },
-      upside: { label: "Upside", volumeFactor: 1.1, priceFactor: 1.05, overheadFactor: 1, debtorDaysDelta: -5 },
-      downside: { label: "Downside", volumeFactor: 0.9, priceFactor: 0.97, overheadFactor: 1.05, debtorDaysDelta: 15 },
+      base: {
+        label: "Base",
+        volumeFactor: 1,
+        priceFactor: 1,
+        overheadFactor: 1,
+        debtorDaysDelta: 0,
+      },
+      upside: {
+        label: "Upside",
+        volumeFactor: 1.1,
+        priceFactor: 1.05,
+        overheadFactor: 1,
+        debtorDaysDelta: -5,
+      },
+      downside: {
+        label: "Downside",
+        volumeFactor: 0.9,
+        priceFactor: 0.97,
+        overheadFactor: 1.05,
+        debtorDaysDelta: 15,
+      },
     },
     revenueLines,
     cogsMode: "gp_pct",
@@ -129,7 +156,10 @@ export function createBudgetDocument(input: {
       name: b.name,
       months: emptyAmountMap(months),
     })),
-    wc: { ...tpl.defaultWc, debtorDays: input.qualification.debtorDaysDefault || tpl.defaultWc.debtorDays },
+    wc: {
+      ...tpl.defaultWc,
+      debtorDays: input.qualification.debtorDaysDefault || tpl.defaultWc.debtorDays,
+    },
     capex: [],
     showInventoryDays: showInventory,
     notes: [],

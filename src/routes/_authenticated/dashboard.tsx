@@ -45,6 +45,14 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { FirmSwitcher } from "@/components/firm-switcher";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
 import { WalkthroughWizard } from "@/components/walkthrough-wizard";
+import { MarketPicker } from "@/components/market-picker";
+import {
+  coerceMarketSelection,
+  draftToSelection,
+  isDraftComplete,
+  parseMarketSelection,
+  type DraftMarket,
+} from "@/lib/market";
 import {
   ACCOUNTANT_FIRST_CLIENT_KEY,
   PRACTICE_TEST_CLIENT_NAME,
@@ -270,6 +278,7 @@ function AddClientDialog({
   const [newType, setNewType] = useState("");
   const [ownerEmail, setOwnerEmail] = useState("");
   const [saving, setSaving] = useState(false);
+  const [draftMarket, setDraftMarket] = useState<DraftMarket>({ country: "ZA", regionCode: null });
   const inputRef = useRef<HTMLInputElement>(null);
   const createClient = useServerFn(createFirmClient);
   const inviteOwner = useServerFn(inviteClientOwner);
@@ -279,9 +288,23 @@ function AddClientDialog({
       setNewName(defaultName);
       setNewType("");
       setOwnerEmail("");
+      setDraftMarket({ country: "ZA", regionCode: null });
+      if (firmId) {
+        void supabase
+          .from("firms")
+          .select("market")
+          .eq("id", firmId)
+          .maybeSingle()
+          .then(({ data }) => {
+            const sel =
+              parseMarketSelection((data as { market?: unknown } | null)?.market) ??
+              coerceMarketSelection(null);
+            setDraftMarket({ country: sel.country, regionCode: sel.regionCode });
+          });
+      }
       setTimeout(() => inputRef.current?.focus(), 50);
     }
-  }, [open, defaultName]);
+  }, [open, defaultName, firmId]);
 
   if (!open) return null;
 
@@ -295,6 +318,11 @@ function AddClientDialog({
       toast.error("Enter a valid owner email, or leave it blank");
       return;
     }
+    const market = draftToSelection(draftMarket);
+    if (!market) {
+      toast.error("Pick a region — and a US state if this client is in the United States.");
+      return;
+    }
     setSaving(true);
     try {
       const created = await createClient({
@@ -302,6 +330,8 @@ function AddClientDialog({
           name: newName.trim(),
           firmId: firmId ?? undefined,
           businessType: newType.trim() || null,
+          marketCountry: market.country,
+          marketRegion: market.regionCode,
         },
       });
       let inviteNote = created.client_code ? `Client added · ${created.client_code}` : "Client added";
@@ -402,6 +432,9 @@ function AddClientDialog({
             />
           </div>
           <div style={{ marginBottom: 24 }}>
+            <MarketPicker value={draftMarket} onChange={setDraftMarket} variant="app" />
+          </div>
+          <div style={{ marginBottom: 24 }}>
             <label
               style={{
                 fontSize: 10.5,
@@ -473,7 +506,7 @@ function AddClientDialog({
             <button
               className="btn gold"
               onClick={() => void add()}
-              disabled={saving || !newName.trim()}
+              disabled={saving || !newName.trim() || !isDraftComplete(draftMarket)}
               style={{ flex: 1 }}
             >
               {saving ? "Saving…" : "Add client"}

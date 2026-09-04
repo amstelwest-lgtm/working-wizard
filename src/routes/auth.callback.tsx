@@ -10,6 +10,7 @@ import {
   isFreshAuthUser,
 } from "@/lib/google-auth";
 import { notifySignup } from "@/lib/signup-notify";
+import { readVisitorMarket, withMarketRpcFallback } from "@/lib/market";
 import { OPS_UNLOCK_KEY } from "@/lib/owner-ops.functions";
 import { isOpsNext, lighthouseTabFromOpsNext } from "@/lib/client-note-link";
 import { accessTokenFromNext } from "@/lib/practice-access";
@@ -70,7 +71,14 @@ function AuthCallbackPage() {
         } catch {
           /* metadata stamp is best-effort */
         }
-        const { error: rpcErr } = await supabase.rpc("ensure_own_client", { p_name: displayName });
+        const { error: rpcErr } = await withMarketRpcFallback(
+          () =>
+            supabase.rpc("ensure_own_client", {
+              p_name: displayName,
+              p_market: readVisitorMarket() ?? { country: "ZA", regionCode: null },
+            }),
+          () => supabase.rpc("ensure_own_client", { p_name: displayName }),
+        );
         if (rpcErr) console.error("[google] ensure_own_client failed:", rpcErr.message);
         if (isFreshAuthUser(user.created_at)) {
           notifySignup("Business owner (Google)", user.email ?? "", displayName);
@@ -91,7 +99,8 @@ function AuthCallbackPage() {
 
       const accessTok = accessTokenFromNext(next);
       if (accessTok) {
-        if (!cancelled) void navigate({ to: "/access/$token", params: { token: accessTok }, replace: true });
+        if (!cancelled)
+          void navigate({ to: "/access/$token", params: { token: accessTok }, replace: true });
         return;
       }
       let path: "/app" | "/dashboard" | "/ops" = "/app";

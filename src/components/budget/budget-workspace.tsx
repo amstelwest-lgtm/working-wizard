@@ -15,11 +15,10 @@ import type {
 } from "@/lib/budget.types";
 import { BUDGET_TEMPLATES, newId } from "@/lib/budget.templates";
 import { fyMonths, formatMonthLabel } from "@/lib/budget.months";
-import { computeBudgetMonths, fmtZar, lowestCashTrough } from "@/lib/budget.compute";
-import {
-  keepUnmappedAsExtraLine,
-  reassignUnmappedDriver,
-} from "@/lib/budget.model-change";
+import { computeBudgetMonths, fmtBudgetMoney, lowestCashTrough } from "@/lib/budget.compute";
+import { useMarket } from "@/contexts/market";
+import { SALES_TAX_HONESTY, formatPercentRate, resolveMarket, t } from "@/lib/market";
+import { keepUnmappedAsExtraLine, reassignUnmappedDriver } from "@/lib/budget.model-change";
 import { BudgetSimpleView } from "@/components/budget/budget-simple-view";
 import { BudgetVariancePanel } from "@/components/budget/budget-variance-panel";
 
@@ -100,8 +99,8 @@ function UnmappedReviewBlock({
         Review unmapped drivers
       </div>
       <p className="mt-1 text-xs text-amber-800/80 dark:text-amber-200/70">
-        These came from your previous model and have no matching key. Reassign or keep as an
-        extra line — we never silently discard.
+        These came from your previous model and have no matching key. Reassign or keep as an extra
+        line — we never silently discard.
       </p>
       <ul className="mt-3 space-y-2">
         {items.map((u) => (
@@ -166,20 +165,22 @@ function BudgetComplexWorkspace({
   clientId?: string;
 }) {
   const months = useMemo(() => fyMonths(doc.fyStart), [doc.fyStart]);
+  const { market } = useMarket();
+  const money = (n: number) => fmtBudgetMoney(n, market);
+  const monthLabel = (ym: string) => formatMonthLabel(ym, market);
+  const tax = doc.tax;
+  const usTax = tax?.regime === "sales_tax" || tax?.regime === "none";
+  const taxCol = t("indirectTaxNet", market);
   const focusMonths = months;
   const [focusMonth, setFocusMonth] = useState(months[0] ?? doc.fyStart);
-  const results = useMemo(
-    () => computeBudgetMonths(doc, doc.activeScenario),
-    [doc],
-  );
+  const results = useMemo(() => computeBudgetMonths(doc, doc.activeScenario), [doc]);
   const baseResults = useMemo(() => computeBudgetMonths(doc, "base"), [doc]);
   const focus = results.find((r) => r.month === focusMonth) ?? results[0];
   const baseFocus = baseResults.find((r) => r.month === focusMonth) ?? baseResults[0];
   const trough = useMemo(() => lowestCashTrough(results), [results]);
   const tpl = BUDGET_TEMPLATES[doc.templateId];
   const fyTotals = useMemo(() => {
-    const sum = (fn: (r: (typeof results)[0]) => number) =>
-      results.reduce((a, r) => a + fn(r), 0);
+    const sum = (fn: (r: (typeof results)[0]) => number) => results.reduce((a, r) => a + fn(r), 0);
     return {
       revenue: sum((r) => r.revenue),
       cogs: sum((r) => r.cogs),
@@ -192,7 +193,11 @@ function BudgetComplexWorkspace({
     };
   }, [results]);
 
-  const patchLine = (lineId: string, month: string, patch: Partial<{ volume: number; price: number }>) => {
+  const patchLine = (
+    lineId: string,
+    month: string,
+    patch: Partial<{ volume: number; price: number }>,
+  ) => {
     onChange({
       ...doc,
       revenueLines: doc.revenueLines.map((l) => {
@@ -223,7 +228,7 @@ function BudgetComplexWorkspace({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#b8860b]">
-            {tpl.label} · FY from {formatMonthLabel(doc.fyStart)}
+            {tpl.label} · FY from {monthLabel(doc.fyStart)}
           </p>
           <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Budget</h2>
           <p className="text-xs text-slate-500">
@@ -250,7 +255,13 @@ function BudgetComplexWorkspace({
             ))}
           </div>
           {onChangeModel && (
-            <Button type="button" variant="outline" size="sm" className="text-xs" onClick={onChangeModel}>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="text-xs"
+              onClick={onChangeModel}
+            >
               Change model
             </Button>
           )}
@@ -271,7 +282,9 @@ function BudgetComplexWorkspace({
       {/* Assumptions */}
       <section className="grid gap-3 rounded-xl border border-slate-200/80 bg-white/70 p-4 dark:border-slate-800 dark:bg-slate-950/50 sm:grid-cols-3 lg:grid-cols-6">
         <div>
-          <Label className="text-[10px] uppercase tracking-wider text-slate-500">Opening cash</Label>
+          <Label className="text-[10px] uppercase tracking-wider text-slate-500">
+            Opening cash
+          </Label>
           <Input
             type="number"
             value={doc.openingCash ?? 0}
@@ -286,7 +299,9 @@ function BudgetComplexWorkspace({
           />
         </div>
         <div>
-          <Label className="text-[10px] uppercase tracking-wider text-slate-500">Gross profit %</Label>
+          <Label className="text-[10px] uppercase tracking-wider text-slate-500">
+            Gross profit %
+          </Label>
           <Input
             type="number"
             value={doc.gpPct}
@@ -317,7 +332,9 @@ function BudgetComplexWorkspace({
           />
         </div>
         <div>
-          <Label className="text-[10px] uppercase tracking-wider text-slate-500">Creditor days</Label>
+          <Label className="text-[10px] uppercase tracking-wider text-slate-500">
+            Creditor days
+          </Label>
           <Input
             type="number"
             value={doc.wc.creditorDays}
@@ -333,7 +350,9 @@ function BudgetComplexWorkspace({
         </div>
         {doc.showInventoryDays ? (
           <div>
-            <Label className="text-[10px] uppercase tracking-wider text-slate-500">Inventory days</Label>
+            <Label className="text-[10px] uppercase tracking-wider text-slate-500">
+              Inventory days
+            </Label>
             <Input
               type="number"
               value={doc.wc.inventoryDays}
@@ -347,9 +366,11 @@ function BudgetComplexWorkspace({
               className="mt-1 h-8"
             />
           </div>
-        ) : (
+        ) : !usTax ? (
           <div>
-            <Label className="text-[10px] uppercase tracking-wider text-slate-500">VAT rate %</Label>
+            <Label className="text-[10px] uppercase tracking-wider text-slate-500">
+              VAT rate %
+            </Label>
             <Input
               type="number"
               value={Math.round((doc.vatRate || 0.15) * 1000) / 10}
@@ -363,47 +384,133 @@ function BudgetComplexWorkspace({
               className="mt-1 h-8"
             />
           </div>
-        )}
-        <div>
-          <Label className="text-[10px] uppercase tracking-wider text-slate-500">VAT mode</Label>
-          <select
-            className="mt-1 h-8 w-full rounded-md border border-slate-200 bg-white px-2 text-sm dark:border-slate-700 dark:bg-slate-950"
-            value={doc.vatMode}
-            onChange={(e) =>
-              onChange({
-                ...doc,
-                vatMode: e.target.value as BudgetDocument["vatMode"],
-                updatedAt: new Date().toISOString(),
-              })
-            }
-          >
-            <option value="exclusive">Exclusive (P&L ex-VAT)</option>
-            <option value="inclusive">Inclusive (strip VAT for P&L)</option>
-          </select>
-        </div>
-        {doc.showInventoryDays && (
-          <div className="sm:col-span-3 lg:col-span-6">
-            <Label className="text-[10px] uppercase tracking-wider text-slate-500">VAT rate %</Label>
+        ) : (
+          <div>
+            <Label className="text-[10px] uppercase tracking-wider text-slate-500">
+              Combined sales tax %
+            </Label>
             <Input
               type="number"
-              value={Math.round((doc.vatRate || 0.15) * 1000) / 10}
-              onChange={(e) =>
+              step="0.1"
+              value={Math.round((doc.vatRate || 0) * 1000) / 10}
+              onChange={(e) => {
+                const vatRate = Math.max(0, (parseFloat(e.target.value) || 0) / 100);
                 onChange({
                   ...doc,
-                  vatRate: (parseFloat(e.target.value) || 0) / 100,
+                  vatRate,
+                  tax:
+                    tax?.regime === "sales_tax"
+                      ? {
+                          ...tax,
+                          combinedRate: vatRate,
+                          localRate: Math.max(0, vatRate - tax.stateRate),
+                          collects: vatRate > 0,
+                        }
+                      : vatRate > 0 && tax?.regime === "none"
+                        ? tax
+                        : tax,
                   updatedAt: new Date().toISOString(),
-                })
-              }
-              className="mt-1 h-8 max-w-[140px]"
+                });
+              }}
+              className="mt-1 h-8"
             />
           </div>
+        )}
+        {usTax ? (
+          <div className="sm:col-span-3 lg:col-span-6 space-y-2">
+            <label className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400">
+              <input
+                type="checkbox"
+                checked={tax?.regime === "sales_tax"}
+                onChange={(e) => {
+                  if (!e.target.checked) {
+                    onChange({
+                      ...doc,
+                      vatRate: 0,
+                      tax: { regime: "none" },
+                      updatedAt: new Date().toISOString(),
+                    });
+                    return;
+                  }
+                  onChange({
+                    ...doc,
+                    tax: (() => {
+                      if (tax?.regime === "sales_tax") return tax;
+                      const stateCode = market.regionCode;
+                      if (!stateCode) return { regime: "none" as const };
+                      const restored = resolveMarket(
+                        { country: "US", regionCode: stateCode },
+                        { collects: true },
+                      ).tax;
+                      if (restored.regime === "sales_tax") return restored;
+                      return { regime: "none" as const };
+                    })(),
+                    vatRate:
+                      market.tax.regime === "sales_tax" ? market.tax.combinedRate : doc.vatRate,
+                    updatedAt: new Date().toISOString(),
+                  });
+                }}
+              />
+              This business collects sales tax
+            </label>
+            {tax?.regime === "sales_tax" && (
+              <p className="text-[11px] leading-relaxed text-slate-500">
+                {market.regionCode} default {formatPercentRate(tax.combinedRate)} (state{" "}
+                {formatPercentRate(tax.stateRate)} + local {formatPercentRate(tax.localRate)}).{" "}
+                {SALES_TAX_HONESTY}
+              </p>
+            )}
+          </div>
+        ) : (
+          <>
+            <div>
+              <Label className="text-[10px] uppercase tracking-wider text-slate-500">
+                VAT mode
+              </Label>
+              <select
+                className="mt-1 h-8 w-full rounded-md border border-slate-200 bg-white px-2 text-sm dark:border-slate-700 dark:bg-slate-950"
+                value={doc.vatMode}
+                onChange={(e) =>
+                  onChange({
+                    ...doc,
+                    vatMode: e.target.value as BudgetDocument["vatMode"],
+                    updatedAt: new Date().toISOString(),
+                  })
+                }
+              >
+                <option value="exclusive">Exclusive (P&L ex-VAT)</option>
+                <option value="inclusive">Inclusive (strip VAT for P&L)</option>
+              </select>
+            </div>
+            {doc.showInventoryDays && (
+              <div className="sm:col-span-3 lg:col-span-6">
+                <Label className="text-[10px] uppercase tracking-wider text-slate-500">
+                  VAT rate %
+                </Label>
+                <Input
+                  type="number"
+                  value={Math.round((doc.vatRate || 0.15) * 1000) / 10}
+                  onChange={(e) =>
+                    onChange({
+                      ...doc,
+                      vatRate: (parseFloat(e.target.value) || 0) / 100,
+                      updatedAt: new Date().toISOString(),
+                    })
+                  }
+                  className="mt-1 h-8 max-w-[140px]"
+                />
+              </div>
+            )}
+          </>
         )}
       </section>
 
       {/* Revenue drivers */}
       <section className="space-y-3">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Revenue drivers</h3>
+          <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+            Revenue drivers
+          </h3>
           {doc.revenueLines.length < 5 && (
             <Button
               type="button"
@@ -453,7 +560,9 @@ function BudgetComplexWorkspace({
                 }
                 className="h-7 max-w-xs border-0 bg-transparent px-0 text-sm font-semibold shadow-none"
               />
-              <span className="text-[10px] uppercase tracking-wider text-slate-400">{line.driverKey}</span>
+              <span className="text-[10px] uppercase tracking-wider text-slate-400">
+                {line.driverKey}
+              </span>
               {doc.revenueLines.length > 1 && (
                 <button
                   type="button"
@@ -476,7 +585,7 @@ function BudgetComplexWorkspace({
                   <th className="px-3 py-2">Driver</th>
                   {focusMonths.map((m) => (
                     <th key={m} className="px-2 py-2 text-right">
-                      {formatMonthLabel(m)}
+                      {monthLabel(m)}
                     </th>
                   ))}
                 </tr>
@@ -523,7 +632,7 @@ function BudgetComplexWorkspace({
                         key={m}
                         className="px-2 py-1.5 text-right text-[11px] font-semibold tabular-nums text-slate-800 dark:text-slate-100"
                       >
-                        {fmtZar(cell.volume * cell.price)}
+                        {money(cell.volume * cell.price)}
                       </td>
                     );
                   })}
@@ -536,7 +645,7 @@ function BudgetComplexWorkspace({
                     colSpan={focusMonths.length}
                     className="px-2 py-1.5 text-right text-xs font-semibold tabular-nums text-slate-900 dark:text-slate-100"
                   >
-                    {fmtZar(
+                    {money(
                       focusMonths.reduce((s, m) => {
                         const cell = line.months[m] ?? { volume: 0, price: 0 };
                         return s + cell.volume * cell.price;
@@ -552,7 +661,9 @@ function BudgetComplexWorkspace({
 
       {/* Overheads */}
       <section className="space-y-2">
-        <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Fixed overheads</h3>
+        <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+          Fixed overheads
+        </h3>
         <div className="overflow-x-auto rounded-xl border border-slate-200/80 dark:border-slate-800">
           <table className="w-full min-w-[640px] text-xs">
             <thead>
@@ -560,7 +671,7 @@ function BudgetComplexWorkspace({
                 <th className="px-3 py-2">Bucket</th>
                 {focusMonths.map((m) => (
                   <th key={m} className="px-2 py-2 text-right">
-                    {formatMonthLabel(m)}
+                    {monthLabel(m)}
                   </th>
                 ))}
               </tr>
@@ -568,7 +679,9 @@ function BudgetComplexWorkspace({
             <tbody>
               {doc.overheads.map((oh) => (
                 <tr key={oh.id} className="border-b border-slate-50 dark:border-slate-900">
-                  <td className="px-3 py-1 font-medium text-slate-700 dark:text-slate-200">{oh.name}</td>
+                  <td className="px-3 py-1 font-medium text-slate-700 dark:text-slate-200">
+                    {oh.name}
+                  </td>
                   {focusMonths.map((m) => (
                     <td key={m} className="px-1 py-1">
                       <Input
@@ -592,7 +705,7 @@ function BudgetComplexWorkspace({
                     key={m}
                     className="px-2 py-2 text-right text-[11px] font-semibold tabular-nums text-slate-800 dark:text-slate-100"
                   >
-                    {fmtZar(doc.overheads.reduce((s, oh) => s + (oh.months[m] ?? 0), 0))}
+                    {money(doc.overheads.reduce((s, oh) => s + (oh.months[m] ?? 0), 0))}
                   </td>
                 ))}
               </tr>
@@ -604,10 +717,9 @@ function BudgetComplexWorkspace({
                   colSpan={focusMonths.length}
                   className="px-2 py-1.5 text-right text-xs font-semibold tabular-nums"
                 >
-                  {fmtZar(
+                  {money(
                     focusMonths.reduce(
-                      (s, m) =>
-                        s + doc.overheads.reduce((a, oh) => a + (oh.months[m] ?? 0), 0),
+                      (s, m) => s + doc.overheads.reduce((a, oh) => a + (oh.months[m] ?? 0), 0),
                       0,
                     ),
                   )}
@@ -639,8 +751,8 @@ function BudgetComplexWorkspace({
           </div>
         </summary>
         <div className="space-y-2 border-t border-slate-100 px-4 pb-4 pt-3 dark:border-slate-800">
-            {doc.capex.length < 3 && (
-              <div className="flex justify-end">
+          {doc.capex.length < 3 && (
+            <div className="flex justify-end">
               <Button
                 type="button"
                 size="sm"
@@ -668,10 +780,12 @@ function BudgetComplexWorkspace({
               >
                 <Plus className="mr-1 h-3 w-3" /> Add
               </Button>
-              </div>
-            )}
+            </div>
+          )}
           {doc.capex.length === 0 ? (
-            <p className="text-xs text-slate-500">No capex lines yet — add up to three planned purchases.</p>
+            <p className="text-xs text-slate-500">
+              No capex lines yet — add up to three planned purchases.
+            </p>
           ) : (
             <div className="space-y-2">
               {doc.capex.map((c) => (
@@ -684,7 +798,9 @@ function BudgetComplexWorkspace({
                     onChange={(e) =>
                       onChange({
                         ...doc,
-                        capex: doc.capex.map((x) => (x.id === c.id ? { ...x, name: e.target.value } : x)),
+                        capex: doc.capex.map((x) =>
+                          x.id === c.id ? { ...x, name: e.target.value } : x,
+                        ),
                         updatedAt: new Date().toISOString(),
                       })
                     }
@@ -696,14 +812,16 @@ function BudgetComplexWorkspace({
                     onChange={(e) =>
                       onChange({
                         ...doc,
-                        capex: doc.capex.map((x) => (x.id === c.id ? { ...x, month: e.target.value } : x)),
+                        capex: doc.capex.map((x) =>
+                          x.id === c.id ? { ...x, month: e.target.value } : x,
+                        ),
                         updatedAt: new Date().toISOString(),
                       })
                     }
                   >
                     {months.map((m) => (
                       <option key={m} value={m}>
-                        {formatMonthLabel(m)}
+                        {monthLabel(m)}
                       </option>
                     ))}
                   </select>
@@ -747,7 +865,10 @@ function BudgetComplexWorkspace({
                         ...doc,
                         capex: doc.capex.map((x) =>
                           x.id === c.id
-                            ? { ...x, usefulLifeMonths: Math.max(1, parseInt(e.target.value, 10) || 36) }
+                            ? {
+                                ...x,
+                                usefulLifeMonths: Math.max(1, parseInt(e.target.value, 10) || 36),
+                              }
                             : x,
                         ),
                         updatedAt: new Date().toISOString(),
@@ -794,9 +915,12 @@ function BudgetComplexWorkspace({
 
       {/* Sensitivity */}
       <section className="rounded-xl border border-slate-200/80 bg-white/70 p-4 dark:border-slate-800 dark:bg-slate-950/40">
-        <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Sensitivity (active scenario)</h3>
+        <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+          Sensitivity (active scenario)
+        </h3>
         <p className="mb-3 text-xs text-slate-500">
-          Tweaks factors on {doc.scenarios[doc.activeScenario].label}. Base stays at 1.0× unless you edit it.
+          Tweaks factors on {doc.scenarios[doc.activeScenario].label}. Base stays at 1.0× unless you
+          edit it.
         </p>
         <div className="grid gap-3 sm:grid-cols-3">
           <div>
@@ -853,7 +977,8 @@ function BudgetComplexWorkspace({
           </div>
           <div>
             <Label className="text-[10px] uppercase tracking-wider text-slate-500">
-              Debtor days Δ ({(doc.scenarios[doc.activeScenario].debtorDaysDelta ?? 0) >= 0 ? "+" : ""}
+              Debtor days Δ (
+              {(doc.scenarios[doc.activeScenario].debtorDaysDelta ?? 0) >= 0 ? "+" : ""}
               {doc.scenarios[doc.activeScenario].debtorDaysDelta ?? 0} days)
             </Label>
             <input
@@ -894,7 +1019,7 @@ function BudgetComplexWorkspace({
           >
             {months.map((m) => (
               <option key={m} value={m}>
-                Focus: {formatMonthLabel(m)}
+                Focus: {monthLabel(m)}
               </option>
             ))}
           </select>
@@ -917,7 +1042,7 @@ function BudgetComplexWorkspace({
                   {s.l}
                 </div>
                 <div className="mt-1 text-lg font-semibold tabular-nums text-slate-900 dark:text-slate-100">
-                  {fmtZar(s.v)}
+                  {money(s.v)}
                 </div>
               </div>
             ))}
@@ -932,12 +1057,12 @@ function BudgetComplexWorkspace({
                 : "border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300"
             }`}
           >
-            Cash trough: <strong>{formatMonthLabel(trough.month)}</strong> at{" "}
-            <strong className="tabular-nums">{fmtZar(trough.closingCash)}</strong>
+            Cash trough: <strong>{monthLabel(trough.month)}</strong> at{" "}
+            <strong className="tabular-nums">{money(trough.closingCash)}</strong>
             {doc.activeScenario !== "base" && baseFocus && focus && (
               <span className="ml-2 text-slate-500">
-                · vs base focus month cash {fmtZar(baseFocus.closingCash)} (Δ{" "}
-                {fmtZar(focus.closingCash - baseFocus.closingCash)})
+                · vs base focus month cash {money(baseFocus.closingCash)} (Δ{" "}
+                {money(focus.closingCash - baseFocus.closingCash)})
               </span>
             )}
           </div>
@@ -951,7 +1076,11 @@ function BudgetComplexWorkspace({
             <div className="grid gap-2 sm:grid-cols-3">
               <CompareRow label="Revenue" budget={focus.revenue} actual={actuals.revenue ?? 0} />
               <CompareRow label="COGS" budget={focus.cogs} actual={actuals.cogs ?? 0} />
-              <CompareRow label="Overheads" budget={focus.overheads} actual={actuals.fixedCosts ?? 0} />
+              <CompareRow
+                label="Overheads"
+                budget={focus.overheads}
+                actual={actuals.fixedCosts ?? 0}
+              />
             </div>
           </div>
         )}
@@ -967,7 +1096,7 @@ function BudgetComplexWorkspace({
                 <th className="px-2 py-2 text-right">Overheads</th>
                 <th className="px-2 py-2 text-right">Deprec.</th>
                 <th className="px-2 py-2 text-right">EBIT</th>
-                <th className="px-2 py-2 text-right">VAT net</th>
+                <th className="px-2 py-2 text-right">{taxCol}</th>
                 <th className="px-2 py-2 text-right">Net cash</th>
                 <th className="px-2 py-2 text-right">Closing cash</th>
               </tr>
@@ -980,19 +1109,23 @@ function BudgetComplexWorkspace({
                     r.month === focusMonth ? "bg-[#d4a550]/10" : ""
                   }`}
                 >
-                  <td className="px-3 py-1.5 font-medium">{formatMonthLabel(r.month)}</td>
-                  <td className="px-2 py-1.5 text-right tabular-nums">{fmtZar(r.revenue)}</td>
-                  <td className="px-2 py-1.5 text-right tabular-nums">{fmtZar(r.cogs)}</td>
+                  <td className="px-3 py-1.5 font-medium">{monthLabel(r.month)}</td>
+                  <td className="px-2 py-1.5 text-right tabular-nums">{money(r.revenue)}</td>
+                  <td className="px-2 py-1.5 text-right tabular-nums">{money(r.cogs)}</td>
                   <td className="px-2 py-1.5 text-right tabular-nums">{r.gpPct.toFixed(1)}%</td>
-                  <td className="px-2 py-1.5 text-right tabular-nums">{fmtZar(r.overheads)}</td>
-                  <td className="px-2 py-1.5 text-right tabular-nums">{fmtZar(r.depreciation)}</td>
-                  <td className="px-2 py-1.5 text-right tabular-nums">{fmtZar(r.ebit)}</td>
-                  <td className="px-2 py-1.5 text-right tabular-nums">{fmtZar(r.vatNet)}</td>
-                  <td className={`px-2 py-1.5 text-right tabular-nums ${r.netCash < 0 ? "text-red-600" : ""}`}>
-                    {fmtZar(r.netCash)}
+                  <td className="px-2 py-1.5 text-right tabular-nums">{money(r.overheads)}</td>
+                  <td className="px-2 py-1.5 text-right tabular-nums">{money(r.depreciation)}</td>
+                  <td className="px-2 py-1.5 text-right tabular-nums">{money(r.ebit)}</td>
+                  <td className="px-2 py-1.5 text-right tabular-nums">{money(r.vatNet)}</td>
+                  <td
+                    className={`px-2 py-1.5 text-right tabular-nums ${r.netCash < 0 ? "text-red-600" : ""}`}
+                  >
+                    {money(r.netCash)}
                   </td>
-                  <td className={`px-2 py-1.5 text-right tabular-nums ${r.closingCash < 0 ? "text-red-600" : ""}`}>
-                    {fmtZar(r.closingCash)}
+                  <td
+                    className={`px-2 py-1.5 text-right tabular-nums ${r.closingCash < 0 ? "text-red-600" : ""}`}
+                  >
+                    {money(r.closingCash)}
                   </td>
                 </tr>
               ))}
@@ -1002,23 +1135,25 @@ function BudgetComplexWorkspace({
                 <td className="px-3 py-2 text-[10px] uppercase tracking-wider text-slate-500">
                   FY total
                 </td>
-                <td className="px-2 py-2 text-right tabular-nums">{fmtZar(fyTotals.revenue)}</td>
-                <td className="px-2 py-2 text-right tabular-nums">{fmtZar(fyTotals.cogs)}</td>
+                <td className="px-2 py-2 text-right tabular-nums">{money(fyTotals.revenue)}</td>
+                <td className="px-2 py-2 text-right tabular-nums">{money(fyTotals.cogs)}</td>
                 <td className="px-2 py-2 text-right tabular-nums text-slate-400">—</td>
-                <td className="px-2 py-2 text-right tabular-nums">{fmtZar(fyTotals.overheads)}</td>
-                <td className="px-2 py-2 text-right tabular-nums">{fmtZar(fyTotals.depreciation)}</td>
-                <td className="px-2 py-2 text-right tabular-nums">{fmtZar(fyTotals.ebit)}</td>
-                <td className="px-2 py-2 text-right tabular-nums">{fmtZar(fyTotals.vatNet)}</td>
+                <td className="px-2 py-2 text-right tabular-nums">{money(fyTotals.overheads)}</td>
+                <td className="px-2 py-2 text-right tabular-nums">
+                  {money(fyTotals.depreciation)}
+                </td>
+                <td className="px-2 py-2 text-right tabular-nums">{money(fyTotals.ebit)}</td>
+                <td className="px-2 py-2 text-right tabular-nums">{money(fyTotals.vatNet)}</td>
                 <td
                   className={`px-2 py-2 text-right tabular-nums ${fyTotals.netCash < 0 ? "text-red-600" : ""}`}
                 >
-                  {fmtZar(fyTotals.netCash)}
+                  {money(fyTotals.netCash)}
                 </td>
                 <td
                   className={`px-2 py-2 text-right tabular-nums ${fyTotals.closingEnd < 0 ? "text-red-600" : ""}`}
                   title="FY-end closing cash (not a sum of monthly closings)"
                 >
-                  {fmtZar(fyTotals.closingEnd)}
+                  {money(fyTotals.closingEnd)}
                   <span className="ml-1 text-[9px] font-normal text-slate-400">end</span>
                 </td>
               </tr>
@@ -1027,7 +1162,8 @@ function BudgetComplexWorkspace({
         </div>
         {role === "accountant" && (
           <p className="text-[11px] text-slate-500">
-            Accountant view: full FY grid in complex mode. Challenge driver assumptions against benchmarks before sign-off.
+            Accountant view: full FY grid in complex mode. Challenge driver assumptions against
+            benchmarks before sign-off.
           </p>
         )}
       </section>
@@ -1035,24 +1171,18 @@ function BudgetComplexWorkspace({
   );
 }
 
-function CompareRow({
-  label,
-  budget,
-  actual,
-}: {
-  label: string;
-  budget: number;
-  actual: number;
-}) {
+function CompareRow({ label, budget, actual }: { label: string; budget: number; actual: number }) {
+  const { market } = useMarket();
+  const money = (n: number) => fmtBudgetMoney(n, market);
   const delta = budget - actual;
   return (
     <div>
       <div className="text-[10px] uppercase tracking-wider text-slate-400">{label}</div>
       <div className="tabular-nums text-slate-800 dark:text-slate-100">
-        Budget {fmtZar(budget)} · Actual {fmtZar(actual)}
+        Budget {money(budget)} · Actual {money(actual)}
       </div>
       <div className={`tabular-nums ${delta >= 0 ? "text-emerald-600" : "text-red-600"}`}>
-        Δ {fmtZar(delta)}
+        Δ {money(delta)}
       </div>
     </div>
   );

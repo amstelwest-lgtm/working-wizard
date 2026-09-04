@@ -23,6 +23,18 @@ import {
 } from "lucide-react";
 import { NextStepsPanel } from "@/components/next-steps-panel";
 import { formatVal, HealthBar, tierColor } from "@/components/owner-board-ui";
+import { MarketProvider } from "@/contexts/market";
+import { MarketGate } from "@/components/market-gate";
+import {
+  coerceMarketSelection,
+  isMissingMarketSupport,
+  marketToJson,
+  parseMarketSelection,
+  readVisitorMarket,
+  resolveMarket,
+  withMarketRpcFallback,
+  type MarketSelection,
+} from "@/lib/market";
 import { HeaderShareButton } from "@/components/share";
 import { extractFinancials, extractPDFsWithAI } from "@/lib/extract-financials.functions";
 import { extractionToInputs, ExtractionReviewModal } from "@/components/extraction-review-modal";
@@ -2252,9 +2264,15 @@ function Index() {
       if (shouldProvisionOwner) {
         const clientName =
           meta?.business_name || meta?.full_name || meta?.name || u.user.email || "My Business";
-        const { data: clientId, error: rpcErr } = await supabase.rpc("ensure_own_client", {
-          p_name: clientName,
-        });
+        const visitorMarket = readVisitorMarket() ?? { country: "ZA" as const, regionCode: null };
+        const { data: clientId, error: rpcErr } = await withMarketRpcFallback(
+          () =>
+            supabase.rpc("ensure_own_client", {
+              p_name: clientName,
+              p_market: visitorMarket,
+            }),
+          () => supabase.rpc("ensure_own_client", { p_name: clientName }),
+        );
         if (!cancelled) {
           if (rpcErr) {
             // Surface the failure so the owner isn't left with a silent blank dashboard.
@@ -2316,6 +2334,8 @@ function Index() {
   // firstRunStep: null = not first run (or done); 'pick-type' = must complete profile funnel; 'first-data' = nudge to upload data
   const [firstRunStep, setFirstRunStep] = useState<null | "pick-type" | "first-data">(null);
   const [operatingProfile, setOperatingProfile] = useState<ClientOperatingProfile | null>(null);
+  const [workspaceMarket, setWorkspaceMarket] = useState<MarketSelection | null>(null);
+  const [marketNeedsGate, setMarketNeedsGate] = useState(false);
   const fetchReviewSignoffs = useServerFn(listClientReviewSignoffs);
   const [reviewSignoffs, setReviewSignoffs] = useState<Partial<Record<ReviewScope, ClientReviewSignoff>>>({});
   const financialsSignoff = reviewSignoffs.financials ?? null;
@@ -2347,26 +2367,39 @@ function Index() {
     // the empty board and then swap to the funnel a moment later.
     if (!roleResolved) return;
     let cancelled = false;
-    supabase
-      .from("clients")
-      .select(
-        "business_type, cash_runway_weeks, cashflow, financials_updated_at, last_forecast_at, budget_updated_at, operating_profile, financial_year_start_month",
-      )
-      .eq("id", effectiveClientId)
-      .maybeSingle()
-      .then((res) => {
-        if (cancelled) return;
-        const data = res.data as {
-          business_type: string | null;
-          cash_runway_weeks: number | null;
-          cashflow?: SavedCashflowLike | null;
-          financials_updated_at: string | null;
-          last_forecast_at: string | null;
-          budget_updated_at: string | null;
-          operating_profile?: unknown;
-          financial_year_start_month?: number | null;
-        } | null;
-        const profile = parseOperatingProfile(data?.operating_profile);
+    const loadMeta = async () => {
+      const fullSelect =
+        "business_type, cash_runway_weeks, cashflow, financials_updated_at, last_forecast_at, budget_updated_at, operating_profile, financial_year_start_month, market";
+      const legacySelect =
+        "business_type, cash_runway_weeks, cashflow, financials_updated_at, last_forecast_at, budget_updated_at, operating_profile, financial_year_start_month";
+      let res = await supabase.from("clients").select(fullSelect).eq("id", effectiveClientId).maybeSingle();
+      let marketColumnMissing = false;
+      if (res.error && isMissingMarketSupport(res.error)) {
+        marketColumnMissing = true;
+        res = await supabase.from("clients").select(legacySelect).eq("id", effectiveClientId).maybeSingle();
+      }
+      if (cancelled) return;
+      try {
+      const data = res.data as {
+        business_type: string | null;
+        cash_runway_weeks: number | null;
+        cashflow?: SavedCashflowLike | null;
+        financials_updated_at: string | null;
+        last_forecast_at: string | null;
+        budget_updated_at: string | null;
+        operating_profile?: unknown;
+        financial_year_start_month?: number | null;
+        market?: unknown;
+      } | null;
+      const profile = parseOperatingProfile(data?.operating_profile);
+      const parsedMarket = parseMarketSelection(data?.market);
+      if (!marketColumnMissing && data && data.market == null && res.error == null) {
+        setMarketNeedsGate(true);
+        setWorkspaceMarket(null);
+      } else {
+        setMarketNeedsGate(false);
+        setWorkspaceMarket(parsedMarket ?? coerceMarketSelection(data?.market ?? null));
+      }
         setClientMeta(
           data
             ? {
@@ -2397,14 +2430,14 @@ function Index() {
         } else if (data?.business_type) {
           setBusinessTypeId(data.business_type as string);
         }
-      })
-      .catch((err) => {
+      } catch (err) {
         console.warn("[founder] client meta fetch failed:", err);
         if (!cancelled) setClientMeta(null);
-      })
-      .finally(() => {
+      } finally {
         if (!cancelled) setOnboardingGateReady(true);
-      });
+      }
+    };
+    void loadMeta();
     return () => {
       cancelled = true;
     };
@@ -3144,8 +3177,30 @@ function Index() {
   }
 
   return (
+    <MarketProvider selection={workspaceMarket}>
     <FinancialInputsContext.Provider value={financialInputsCtxValue}>
       <main className="min-h-screen overflow-x-hidden bg-slate-950 text-slate-100">
+        {marketNeedsGate && effectiveClientId && (
+          <MarketGate
+            onSave={async (draft) => {
+              const sel = parseMarketSelection({
+                country: draft.country,
+                regionCode: draft.regionCode,
+              });
+              if (!sel) throw new Error("Pick a region and, for the US, a state.");
+              const { error } = await supabase
+                .from("clients")
+                .update({
+                  market: marketToJson(sel),
+                  financial_year_start_month: sel.country === "US" ? 1 : 3,
+                })
+                .eq("id", effectiveClientId);
+              if (error) throw error;
+              setWorkspaceMarket(sel);
+              setMarketNeedsGate(false);
+            }}
+          />
+        )}
         <SplashScreen />
         {!actingClientId && (
           <TabErrorBoundary label="Walkthrough">
@@ -4288,6 +4343,10 @@ function Index() {
                     hideReadOnlyStamp
                     businessTypeId={businessTypeId}
                     operatingProfile={operatingProfile}
+                    fyStartMonthDefault={
+                      operatingProfile?.fyStartMonth ??
+                      resolveMarket(coerceMarketSelection(workspaceMarket)).fyStartMonthDefault
+                    }
                     onRetakeProfile={() => setShowOnboarding(true)}
                     financials={{
                       revenue: v.revenue,
@@ -4677,6 +4736,7 @@ function Index() {
                     qualification: q,
                     fyStartMonth: fyMonth,
                     fyStart: currentFyStart(fyMonth),
+                    market: resolveMarket(coerceMarketSelection(workspaceMarket)),
                   });
                 }
                 if (doc) {
@@ -4902,6 +4962,7 @@ function Index() {
         </Dialog>
       </main>
     </FinancialInputsContext.Provider>
+    </MarketProvider>
   );
 }
 

@@ -1,0 +1,127 @@
+/**
+ * Market kernel: region + US state, formatters, sales-tax vs VAT cash.
+ * Run: pnpm test:market
+ */
+import {
+  assertMarketSelection,
+  coerceMarketSelection,
+  draftToSelection,
+  formatMoney,
+  MarketSelectionError,
+  parseMarketSelection,
+  resolveMarket,
+  US_STATES,
+  ZA_MARKET,
+  ZA_VAT_RATE,
+} from "../src/lib/market";
+import { computeBudgetMonths } from "../src/lib/budget.compute";
+import { createBudgetDocument } from "../src/lib/budget.months";
+import type { BudgetQualification } from "../src/lib/budget.types";
+
+function assert(cond: boolean, msg: string) {
+  if (!cond) throw new Error(msg);
+}
+
+assert(US_STATES.length === 51, `expected 51 jurisdictions, got ${US_STATES.length}`);
+
+assert(parseMarketSelection({ country: "ZA", regionCode: null })?.country === "ZA", "parse ZA");
+assert(parseMarketSelection({ country: "US" }) == null, "US without state is incomplete");
+assert(parseMarketSelection({ country: "US", regionCode: "TX" })?.regionCode === "TX", "parse TX");
+
+try {
+  assertMarketSelection({ country: "US", regionCode: null });
+  throw new Error("US without state should throw");
+} catch (e) {
+  assert(e instanceof MarketSelectionError, "US missing state is MarketSelectionError");
+}
+
+try {
+  assertMarketSelection({ country: "ZA", regionCode: "TX" });
+  throw new Error("ZA with state should throw");
+} catch (e) {
+  assert(e instanceof MarketSelectionError, "ZA+state is MarketSelectionError");
+}
+
+assert(coerceMarketSelection(null).country === "ZA", "legacy null is ZA");
+assert(draftToSelection({ country: "US", regionCode: null }) == null, "draft US incomplete");
+assert(draftToSelection({ country: "US", regionCode: "CA" })?.regionCode === "CA", "draft CA");
+
+const za = resolveMarket({ country: "ZA", regionCode: null });
+assert(za.currency === "ZAR" && za.locale === "en-ZA", "ZA currency/locale");
+assert(za.fyStartMonthDefault === 3, "ZA FY March");
+assert(za.tax.regime === "vat" && za.tax.regime === "vat" && za.tax.vatRate === ZA_VAT_RATE, "ZA VAT 15%");
+assert(za.timezone === "Africa/Johannesburg", "ZA tz");
+
+const tx = resolveMarket({ country: "US", regionCode: "TX" });
+assert(tx.currency === "USD" && tx.locale === "en-US", "TX currency/locale");
+assert(tx.fyStartMonthDefault === 1, "US FY January");
+assert(tx.tax.regime === "sales_tax", "TX sales tax");
+if (tx.tax.regime !== "sales_tax") throw new Error("unreachable");
+assert(Math.abs(tx.tax.stateRate - 0.0625) < 1e-9, `TX state ${tx.tax.stateRate}`);
+assert(Math.abs(tx.tax.combinedRate - 0.082) < 1e-9, `TX combined ${tx.tax.combinedRate}`);
+assert(tx.tax.collects === true, "TX collects by default");
+
+const or = resolveMarket({ country: "US", regionCode: "OR" });
+assert(or.tax.regime === "none", "Oregon has no sales tax");
+
+const ak = resolveMarket({ country: "US", regionCode: "AK" });
+assert(ak.tax.regime === "none", "Alaska defaults to no collect (local optional)");
+
+const caNo = resolveMarket({ country: "US", regionCode: "CA" }, { collects: false });
+assert(caNo.tax.regime === "none", "CA opt-out of collecting");
+
+assert(formatMoney(1299, ZA_MARKET).includes("1"), "ZA money has digits");
+assert(formatMoney(1299, ZA_MARKET).startsWith("R"), "ZA money uses R");
+assert(formatMoney(1299, tx).startsWith("$"), "US money uses $");
+assert(formatMoney(-40, tx) === "-$40", `US negative ${formatMoney(-40, tx)}`);
+
+const q: BudgetQualification = {
+  payModel: "products",
+  subtype: "retail",
+  driverKind: "units_price",
+  costShape: "balanced",
+  debtorDaysDefault: 0,
+  capexMode: "none",
+  confirmedAt: new Date().toISOString(),
+};
+
+const zaDoc = createBudgetDocument({ templateId: "retail_units", qualification: q, market: za });
+assert(zaDoc.fyStartMonth === 3, "ZA budget FY");
+assert(zaDoc.vatRate === 0.15, "ZA budget VAT");
+zaDoc.revenueLines[0].months[zaDoc.fyStart] = { volume: 10, price: 100 };
+zaDoc.gpPct = 40;
+zaDoc.openingCash = 5000;
+zaDoc.wc.debtorDays = 0;
+zaDoc.wc.creditorDays = 0;
+zaDoc.wc.inventoryDays = 0;
+const zaRows = computeBudgetMonths(zaDoc, "base");
+assert(zaRows[0].revenue === 1000, `ZA rev ${zaRows[0].revenue}`);
+assert(Math.round(zaRows[0].cashIn) === 1150, `ZA cashIn still includes VAT ${zaRows[0].cashIn}`);
+assert(Math.round(zaRows[0].vatNet) === Math.round(150 - 90), `ZA VAT net output-input ${zaRows[0].vatNet}`);
+
+const txDoc = createBudgetDocument({ templateId: "retail_units", qualification: q, market: tx });
+assert(txDoc.fyStartMonth === 1, "TX budget FY January");
+txDoc.revenueLines[0].months[txDoc.fyStart] = { volume: 10, price: 100 };
+txDoc.gpPct = 40;
+txDoc.openingCash = 5000;
+txDoc.wc.debtorDays = 0;
+txDoc.wc.creditorDays = 0;
+txDoc.wc.inventoryDays = 0;
+const txRows = computeBudgetMonths(txDoc, "base");
+const txRate = tx.tax.regime === "sales_tax" ? tx.tax.combinedRate : 0;
+assert(txRows[0].revenue === 1000, `TX P&L is ex-tax ${txRows[0].revenue}`);
+assert(Math.round(txRows[0].cashIn) === Math.round(1000 * (1 + txRate)), `TX cashIn includes collections ${txRows[0].cashIn}`);
+assert(Math.round(txRows[0].vatNet) === Math.round(1000 * txRate), `TX remits collections, no input credit ${txRows[0].vatNet}`);
+assert(Math.round(txRows[0].netCash) === 400, `TX sales tax is a same-month wash ${txRows[0].netCash}`);
+
+const orDoc = createBudgetDocument({ templateId: "retail_units", qualification: q, market: or });
+orDoc.revenueLines[0].months[orDoc.fyStart] = { volume: 10, price: 100 };
+orDoc.gpPct = 40;
+orDoc.wc.debtorDays = 0;
+orDoc.wc.creditorDays = 0;
+orDoc.wc.inventoryDays = 0;
+const orRows = computeBudgetMonths(orDoc, "base");
+assert(orRows[0].cashIn === 1000, `OR cashIn ${orRows[0].cashIn}`);
+assert(orRows[0].vatNet === 0, "OR no sales tax remittance");
+
+console.log("market kernel ok");
