@@ -3724,32 +3724,34 @@ function Index() {
                 ))}
               </TabsList>
 
-              {/* Simplified / Complex toggle — below tabs, never overlaid on the tab strip */}
-              <div className="relative z-10 mb-4 mt-1 flex justify-center">
-                <div className="flex items-center gap-0.5 rounded-full border border-slate-200/80 bg-slate-100/80 p-[3px] dark:border-white/10 dark:bg-white/5">
-                  {(["simplified", "complex"] as const).map((m) => (
-                    <button
-                      key={m}
-                      type="button"
-                      onClick={() => {
-                        setViewMode(m);
-                        track("view_mode_toggled", {
-                          mode: m,
-                          surface: "owner_app",
-                          clientId: effectiveClientId,
-                        });
-                      }}
-                      className={`rounded-full px-4 py-[5px] text-[11px] font-semibold uppercase tracking-[0.08em] transition-all ${
-                        viewMode === m
-                          ? "bg-[#d4a550] text-[#0a0e1a] shadow-[0_2px_8px_rgba(212,165,80,0.35)]"
-                          : "bg-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400/70 dark:hover:text-slate-300"
-                      }`}
-                    >
-                      {m}
-                    </button>
-                  ))}
+              {/* View mode only changes Health, Cash, Budget, and Next moves. */}
+              {["today", "cash", "budget", "next"].includes(activeTab) && (
+                <div className="relative z-10 mb-4 mt-1 flex justify-center">
+                  <div className="flex items-center gap-0.5 rounded-full border border-slate-200/80 bg-slate-100/80 p-[3px] dark:border-white/10 dark:bg-white/5">
+                    {(["simplified", "complex"] as const).map((m) => (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => {
+                          setViewMode(m);
+                          track("view_mode_toggled", {
+                            mode: m,
+                            surface: "owner_app",
+                            clientId: effectiveClientId,
+                          });
+                        }}
+                        className={`rounded-full px-4 py-[5px] text-[11px] font-semibold uppercase tracking-[0.08em] transition-all ${
+                          viewMode === m
+                            ? "bg-[#d4a550] text-[#0a0e1a] shadow-[0_2px_8px_rgba(212,165,80,0.35)]"
+                            : "bg-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400/70 dark:hover:text-slate-300"
+                        }`}
+                      >
+                        {m}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
 
               <TabsContent value="today" className="mt-0">
                 <TabErrorBoundary label="Business Health">

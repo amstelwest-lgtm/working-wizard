@@ -40,6 +40,16 @@ assert(appSrc.includes('void import("@/components/action-plan")'), "founder boar
 assert(appSrc.includes('<TabErrorBoundary label="Action Plan">'), "founder board wraps Action Plan");
 assert(appSrc.includes('<TabErrorBoundary label="Cash Forecast">'), "founder board wraps Cash Forecast");
 assert(appSrc.includes('<TabErrorBoundary label="Budget">'), "founder board wraps Budget");
+assert(
+  appSrc.includes('["today", "cash", "budget", "next"].includes(activeTab)'),
+  "owner view-mode toggle only renders on tabs that actually change",
+);
+{
+  const toggleGate = appSrc.match(/\[["']today["'],\s*["']cash["'],\s*["']budget["'],\s*["']next["']\]\.includes\(activeTab\)/);
+  assert(!!toggleGate, "view-mode toggle gate lists Health, Cash, Budget, Next moves");
+  assert(!toggleGate![0].includes("waterfall"), "Profit tab is not in the view-mode toggle gate");
+  assert(!toggleGate![0].includes("tasks"), "Action Plan tab is not in the view-mode toggle gate");
+}
 
 const clientSrc = readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8");
 assert(clientSrc.includes('lazyPanel(() => import("@/components/action-plan")'), "client board uses lazyPanel");
@@ -47,6 +57,10 @@ assert(clientSrc.includes('<TabErrorBoundary label="Action Plan">'), "client boa
 assert(!clientSrc.includes('label: "Staff tasks"'), "accountant portal no longer has a Staff tasks tab");
 assert(!clientSrc.includes("TasksPanel"), "accountant portal no longer mounts the staff tasks panel");
 assert(clientSrc.includes('if (tab === "tasks") return "plan"'), "old staff-tasks links open Action Plan");
+assert(
+  !clientSrc.includes('["today", "cash", "budget", "next"].includes(activeTab)'),
+  "accountant portal view-mode toggle is not gated by owner-board tabs",
+);
 assert(
   clientSrc.includes('{activeTab === "plan" && ('),
   "accountant remounts Action Plan when the tab is opened so owner edits are not stale",
