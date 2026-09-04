@@ -3,6 +3,7 @@
  * Run: pnpm exec vite-node --config scripts/vite-test.config.ts scripts/industry-pulse-fallback-test.mts
  */
 import { fallbackIndustryPulse, resolveNewsUrl } from "../src/lib/industry-news.functions";
+import { resolveMarket, ZA_MARKET } from "../src/lib/market";
 
 function assert(cond: unknown, msg: string) {
   if (!cond) throw new Error(msg);
@@ -46,4 +47,21 @@ for (const industry of sectors) {
   }
 }
 
-console.log(`ok — ${sectors.length} industry fallback packs validated`);
+const tx = resolveMarket({ country: "US", regionCode: "TX" });
+const saasUs = fallbackIndustryPulse("SaaS / Software", tx);
+assert(saasUs.items.length >= 3, "US saas fallback has items");
+assert(
+  !/\brand\b/i.test(saasUs.items.map((i) => `${i.headline} ${i.summary}`).join(" ")),
+  "US saas fallback must not mention rand",
+);
+assert(
+  !/businesslive\.co\.za|moneyweb\.co\.za|news24\.com/i.test(
+    saasUs.items.map((i) => i.url ?? "").join(" "),
+  ),
+  "US saas fallback must not keep SA news hosts",
+);
+const missingUrl = resolveNewsUrl({ headline: "foo", url: null }, tx);
+assert(missingUrl.includes("gl=US"), `US news search fallback ${missingUrl}`);
+assert(resolveNewsUrl({ headline: "foo", url: null }, ZA_MARKET).includes("gl=ZA"), "ZA gl");
+
+console.log(`ok — ${sectors.length} industry fallback packs validated (+ US saas)`);

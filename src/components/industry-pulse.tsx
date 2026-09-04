@@ -1,7 +1,7 @@
 import { ExternalLink, RefreshCw } from "lucide-react";
 import { useIndustryPulse } from "@/hooks/use-industry-pulse";
 import { resolveNewsUrl, type NewsItem, type PulseMetric } from "@/lib/industry-news.functions";
-import { useMarketFormat } from "@/contexts/market";
+import { useMarket, useMarketFormat } from "@/contexts/market";
 
 const TAG_COLORS: Record<string, { bg: string; color: string }> = {
   green: { bg: "rgba(76,175,130,0.15)", color: "#2f9d6a" },
@@ -94,8 +94,9 @@ export function IndustryPulse({ industry, vertical }: { industry: string; vertic
 }
 
 function NewsLinkCard({ item }: { item: NewsItem }) {
+  const { market } = useMarket();
   const tc = TAG_COLORS[item.tagColor] ?? TAG_COLORS.amber;
-  const href = resolveNewsUrl(item);
+  const href = resolveNewsUrl(item, market);
   return (
     <a
       href={href}

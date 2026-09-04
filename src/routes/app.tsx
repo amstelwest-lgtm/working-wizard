@@ -35,6 +35,7 @@ import {
   parseMarketSelection,
   readVisitorMarket,
   resolveMarket,
+  selectionPayload,
   withMarketRpcFallback,
   type MarketSelection,
 } from "@/lib/market";
@@ -1989,6 +1990,7 @@ function Index() {
   const { viewMode, setViewMode } = useViewMode();
   const { user, loading: authLoading, signOut } = useAuth();
   const navigate = useNavigate();
+  const [workspaceMarket, setWorkspaceMarket] = useState<MarketSelection | null>(null);
 
   // Redirect unauthenticated users to the landing page. After invite accept,
   // React auth state can lag the real Supabase session — don't bounce yet.
@@ -2079,7 +2081,10 @@ function Index() {
             reader.readAsDataURL(file);
           });
           const extraction = (await doExtractPdf({
-            data: { files: [{ base64, fileName: file.name }] },
+            data: {
+              files: [{ base64, fileName: file.name }],
+              market: selectionPayload(coerceMarketSelection(workspaceMarket)),
+            },
           })) as MergedExtractionResult;
           // Open review modal — user confirms before values are applied
           setExtractionForReview(extraction);
@@ -2091,7 +2096,12 @@ function Index() {
           return;
         }
 
-        const result = await doExtract({ data: payload });
+        const result = await doExtract({
+          data: {
+            ...payload,
+            market: selectionPayload(coerceMarketSelection(workspaceMarket)),
+          },
+        });
         const extracted = (result as { financials?: Record<string, string> })?.financials ?? {};
         const filledKeys = Object.keys(extracted);
         if (filledKeys.length === 0) {
@@ -2116,7 +2126,7 @@ function Index() {
         if (uploadRef.current) uploadRef.current.value = "";
       }
     },
-    [doExtract, doExtractPdf],
+    [doExtract, doExtractPdf, workspaceMarket],
   );
 
   const [actingClientId, setActingClientId] = useState<string | null>(null);
@@ -2356,7 +2366,6 @@ function Index() {
   // firstRunStep: null = not first run (or done); 'pick-type' = must complete profile funnel; 'first-data' = nudge to upload data
   const [firstRunStep, setFirstRunStep] = useState<null | "pick-type" | "first-data">(null);
   const [operatingProfile, setOperatingProfile] = useState<ClientOperatingProfile | null>(null);
-  const [workspaceMarket, setWorkspaceMarket] = useState<MarketSelection | null>(null);
   const boardMarket = useMemo(
     () => resolveMarket(coerceMarketSelection(workspaceMarket)),
     [workspaceMarket],

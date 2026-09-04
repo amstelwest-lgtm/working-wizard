@@ -1,10 +1,5 @@
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
-import type {
-  AskAiContext,
-  ProfileRow,
-  RatioRow,
-  ScoreRow,
-} from "./types.ts";
+import type { AskAiContext, ProfileRow, RatioRow, ScoreRow } from "./types.ts";
 import type { DisclosureTier } from "./types.ts";
 import { pillarsFor } from "./classifier.ts";
 
@@ -14,23 +9,23 @@ import { pillarsFor } from "./classifier.ts";
  * Mirrors BUSINESS_TYPE_TO_BENCHMARK in src/lib/ratios.ts (kept in sync manually).
  */
 const BUSINESS_TYPE_TO_BENCHMARK: Record<string, string> = {
-  service:       "services",
-  agency:        "services",
-  product:       "other",
-  saas:          "saas",
-  marketplace:   "other",
-  asset_heavy:   "other",
-  distribution:  "other",
-  retail:        "retail",
+  service: "services",
+  agency: "services",
+  product: "other",
+  saas: "saas",
+  marketplace: "other",
+  asset_heavy: "other",
+  distribution: "other",
+  retail: "retail",
   manufacturing: "manufacturing",
-  project:       "professional",
-  franchise:     "retail",
-  subscription:  "saas",
-  logistics:     "other",
-  hospitality:   "hospitality",
-  healthcare:    "professional",
-  construction:  "construction",
-  hybrid:        "other",
+  project: "professional",
+  franchise: "retail",
+  subscription: "saas",
+  logistics: "other",
+  hospitality: "hospitality",
+  healthcare: "professional",
+  construction: "construction",
+  hybrid: "other",
 };
 
 /**
@@ -41,30 +36,30 @@ const BUSINESS_TYPE_TO_BENCHMARK: Record<string, string> = {
  * This mapping is the single source of truth for that translation inside the edge function.
  */
 const DISPLAY_TO_CAMEL: Record<string, string> = {
-  "Net Margin":                  "netMargin",
-  "Operating Margin":            "operatingMargin",
-  "Gross Margin":                "grossMargin",
-  "Return on Equity":            "roe",
-  "Return on Assets":            "roa",
-  "Asset Turnover":              "assetTurnover",
-  "Equity Multiplier":           "equityMultiplier",
-  "Interest Burden":             "interestBurden",
-  "Tax Burden":                  "taxBurden",
-  "Debtor Days":                 "debtorDays",
-  "Inventory Days":              "inventoryDays",
-  "Creditor Days":               "creditorDays",
-  "Working Capital Days":        "workingCapitalDays",
-  "Fixed Cost Ratio":            "fixedCostRatio",
-  "Degree of Operating Leverage":"dol",
-  "Top-5 Customer Share":        "customerConcentration",
-  "Gross Profit / Labor":        "gpToLabor",
-  "Sales-per-Employee Ratio":    "salesPerEmployee",
-  "OCF / EBITDA":                "ocfToEbitda",
+  "Net Margin": "netMargin",
+  "Operating Margin": "operatingMargin",
+  "Gross Margin": "grossMargin",
+  "Return on Equity": "roe",
+  "Return on Assets": "roa",
+  "Asset Turnover": "assetTurnover",
+  "Equity Multiplier": "equityMultiplier",
+  "Interest Burden": "interestBurden",
+  "Tax Burden": "taxBurden",
+  "Debtor Days": "debtorDays",
+  "Inventory Days": "inventoryDays",
+  "Creditor Days": "creditorDays",
+  "Working Capital Days": "workingCapitalDays",
+  "Fixed Cost Ratio": "fixedCostRatio",
+  "Degree of Operating Leverage": "dol",
+  "Top-5 Customer Share": "customerConcentration",
+  "Gross Profit / Labor": "gpToLabor",
+  "Sales-per-Employee Ratio": "salesPerEmployee",
+  "OCF / EBITDA": "ocfToEbitda",
 };
 
 /** Infer display format from the canonical camelCase key. */
 function inferFormat(camelKey: string): string {
-  if (camelKey.endsWith("Days"))                          return "days";
+  if (camelKey.endsWith("Days")) return "days";
   if (
     camelKey.endsWith("Margin") ||
     camelKey.endsWith("Ratio") ||
@@ -82,7 +77,8 @@ function inferFormat(camelKey: string): string {
     camelKey === "revenueGrowth" ||
     camelKey === "capexIntensity" ||
     camelKey === "assetReinvestmentRatio"
-  )                                                       return "pct";
+  )
+    return "pct";
   return "x"; // multiplier / dimensionless ratio
 }
 
@@ -97,25 +93,25 @@ function inferFormat(camelKey: string): string {
  */
 const MONETARY_DERIVED_KEYS = new Set(["salesPerEmployee", "gpToLabor"]);
 
+function copyPackFromMarket(raw: unknown): "za" | "us" {
+  if (raw && typeof raw === "object" && "country" in raw) {
+    const country = (raw as { country?: unknown }).country;
+    if (country === "US") return "us";
+  }
+  return "za";
+}
+
 const PILLAR_RATIO_KEYS: Record<string, string[]> = {
-  cash: [
-    "debtorDays", "creditorDays", "inventoryDays", "workingCapitalDays",
-    "ocfToEbitda",
-  ],
-  profit: [
-    "grossMargin", "operatingMargin", "netMargin",
-    "fixedCostRatio", "dol",
-  ],
-  leverage: [
-    "equityMultiplier", "interestBurden", "taxBurden",
-  ],
+  cash: ["debtorDays", "creditorDays", "inventoryDays", "workingCapitalDays", "ocfToEbitda"],
+  profit: ["grossMargin", "operatingMargin", "netMargin", "fixedCostRatio", "dol"],
+  leverage: ["equityMultiplier", "interestBurden", "taxBurden"],
   efficiency: [
-    "assetTurnover", "roa", "roe",
+    "assetTurnover",
+    "roa",
+    "roe",
     // salesPerEmployee and gpToLabor excluded — they expose currency amounts
   ],
-  risk: [
-    "customerConcentration", "fixedCostRatio", "dol",
-  ],
+  risk: ["customerConcentration", "fixedCostRatio", "dol"],
 };
 
 export async function buildContext(
@@ -125,15 +121,29 @@ export async function buildContext(
   question: string,
 ): Promise<AskAiContext> {
   // ── Profile ───────────────────────────────────────────────────────────────
+  let copyPack: "za" | "us" = "za";
   let profile: ProfileRow | null = null;
   if (tier !== "none") {
-    const { data } = await supabase
+    let { data, error } = await supabase
       .from("clients")
-      .select("id, business_type, financials, operating_profile")
+      .select("id, business_type, financials, operating_profile, market")
       .eq("id", clientId)
       .maybeSingle();
+    if (error && /column ["']?market["']?/i.test(error.message ?? "")) {
+      const retry = await supabase
+        .from("clients")
+        .select("id, business_type, financials, operating_profile")
+        .eq("id", clientId)
+        .maybeSingle();
+      data = retry.data;
+      error = retry.error;
+    }
+    if (error) {
+      /* profile stays null; copy pack remains ZA */
+    }
 
     if (data) {
+      copyPack = copyPackFromMarket((data as { market?: unknown }).market);
       const fin = (data.financials ?? {}) as Record<string, unknown>;
       const rawRevenue = fin["annual_revenue"] ?? fin["revenue"];
       const op = (data.operating_profile ?? null) as Record<string, unknown> | null;
@@ -158,6 +168,13 @@ export async function buildContext(
             : null,
       };
     }
+  } else {
+    const { data } = await supabase
+      .from("clients")
+      .select("market")
+      .eq("id", clientId)
+      .maybeSingle();
+    copyPack = copyPackFromMarket(data?.market);
   }
 
   // ── Scores ────────────────────────────────────────────────────────────────
@@ -226,9 +243,10 @@ export async function buildContext(
           .eq("business_type", businessType)
           .in("metric_key", camelKeys);
 
-        const benchMap = new Map<string, { p25: number; p50: number; p75: number; higher_is_better: boolean }>(
-          (benchmarks ?? []).map((b) => [b.metric_key, b]),
-        );
+        const benchMap = new Map<
+          string,
+          { p25: number; p50: number; p75: number; higher_is_better: boolean }
+        >((benchmarks ?? []).map((b) => [b.metric_key, b]));
 
         for (const { camelKey, value } of entries) {
           const b = benchMap.get(camelKey);
@@ -246,5 +264,5 @@ export async function buildContext(
     }
   }
 
-  return { profile, scores, ratios, playbook: [] };
+  return { profile, scores, ratios, playbook: [], copyPack };
 }

@@ -44,6 +44,7 @@ export interface AskAiContext {
   scores: ScoreRow | null;
   ratios: RatioRow[];
   playbook: PlaybookRow[];
+  copyPack: "za" | "us";
 }
 
 export interface AskAiRequest {

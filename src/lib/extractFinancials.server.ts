@@ -10,6 +10,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { type ExtractionResult } from "@/lib/financialSchema";
 import { validateFigures, isClean } from "@/lib/validateFinancials";
 import { callClaudeMessages, parseClaudeJson } from "@/lib/claude-messages";
+import { isUsCopy, marketInputSchema, resolvePromptMarket } from "@/lib/market";
 import { assessPortalFigures, assertUsable } from "@/lib/upload-quality";
 
 const EXTRACTION_PROMPT = `
@@ -116,18 +117,30 @@ Return ONLY valid JSON matching this shape (no markdown, no prose):
 export const extractFinancialsFromPDF = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input) =>
-    z.object({
-      pdfBase64: z.string().max(45_000_000),
-      mimeType: z.string().optional(),
-    }).parse(input),
+    z
+      .object({
+        pdfBase64: z.string().max(45_000_000),
+        mimeType: z.string().optional(),
+        market: marketInputSchema,
+      })
+      .parse(input),
   )
   .handler(async ({ data }) => {
     const { pdfBase64, mimeType = "application/pdf" } = data;
+    const market = resolvePromptMarket(data.market);
+    const prompt = isUsCopy(market)
+      ? EXTRACTION_PROMPT.replace(
+          "South African financial statement PDF",
+          "United States financial statement PDF",
+        )
+      : EXTRACTION_PROMPT;
 
     // Size check: base64 inflates ~33%, so actual bytes ≈ base64.length × 0.75
     const approxBytes = Math.ceil((pdfBase64.length * 3) / 4);
     if (approxBytes > 32 * 1024 * 1024) {
-      throw new Error(`PDF is too large (${(approxBytes / 1024 / 1024).toFixed(1)} MB). Max 32 MB.`);
+      throw new Error(
+        `PDF is too large (${(approxBytes / 1024 / 1024).toFixed(1)} MB). Max 32 MB.`,
+      );
     }
 
     const raw = await callClaudeMessages({
@@ -136,7 +149,7 @@ export const extractFinancialsFromPDF = createServerFn({ method: "POST" })
           type: "document",
           source: { type: "base64", media_type: mimeType, data: pdfBase64 },
         },
-        { type: "text", text: EXTRACTION_PROMPT },
+        { type: "text", text: prompt },
       ],
       maxTokens: 8192,
       timeoutMs: 90_000,

@@ -26,6 +26,8 @@ import {
 } from "@/components/cash-classification-workspace";
 import { MovementsTrialBalancePanel } from "@/components/movements-trial-balance-panel";
 import { MAX_BANK_FILES } from "@/lib/bank-files";
+import { useMarket } from "@/contexts/market";
+import { selectionPayload } from "@/lib/market";
 
 interface Props {
   open: boolean;
@@ -59,6 +61,7 @@ export function CashFromBanksDrafter({
   const [startDate, setStartDate] = useState("");
   const [openingBalance, setOpeningBalance] = useState("0");
   const doDraft = useServerFn(draftCashForecastFromBankStatements);
+  const { selection } = useMarket();
 
   const hydrate = (draft: CashFromBanksDraftResult) => {
     setResult(draft);
@@ -128,7 +131,9 @@ export function CashFromBanksDrafter({
           return { fileName: f.name, base64 };
         }),
       );
-      const draft = await doDraft({ data: { files: payloadFiles } });
+      const draft = await doDraft({
+        data: { files: payloadFiles, market: selectionPayload(selection) },
+      });
       setResult(draft);
       setLines(draft.lines);
       setStartDate(draft.startDate);
@@ -144,7 +149,12 @@ export function CashFromBanksDrafter({
   const handleLinesChange = (next: typeof lines) => {
     setLines(next);
     if (result) {
-      const draft = { ...result, lines: next, startDate, openingBalance: parseFloat(openingBalance) || 0 };
+      const draft = {
+        ...result,
+        lines: next,
+        startDate,
+        openingBalance: parseFloat(openingBalance) || 0,
+      };
       void onSaveDraft?.(draft);
     }
   };

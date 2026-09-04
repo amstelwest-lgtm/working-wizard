@@ -4,6 +4,8 @@ import { extractPDFsWithAI } from "@/lib/extract-financials.functions";
 import type { MergedExtractionResult } from "@/lib/extraction-types";
 import { Button } from "@/components/ui/button";
 import { X, FileText, Loader2, Upload, Info, AlertCircle } from "lucide-react";
+import { useMarket } from "@/contexts/market";
+import { selectionPayload } from "@/lib/market";
 
 type Stage = "idle" | "uploading" | "reading" | "extracting" | "verifying" | "done" | "error";
 
@@ -20,9 +22,18 @@ const STAGE_LABELS: Record<Stage, string> = {
 const STAGE_ORDER: Stage[] = ["uploading", "reading", "extracting", "verifying", "done"];
 
 const CONFIDENCE_CHIP: Record<string, { cls: string; label: string }> = {
-  high:   { cls: "bg-emerald-950/60 text-emerald-400 border border-emerald-700", label: "High confidence extraction" },
-  medium: { cls: "bg-amber-950/60 text-amber-400 border border-amber-700",       label: "Medium confidence — please review carefully" },
-  low:    { cls: "bg-red-950/60 text-red-400 border border-red-700",             label: "Low confidence — manual review required" },
+  high: {
+    cls: "bg-emerald-950/60 text-emerald-400 border border-emerald-700",
+    label: "High confidence extraction",
+  },
+  medium: {
+    cls: "bg-amber-950/60 text-amber-400 border border-amber-700",
+    label: "Medium confidence — please review carefully",
+  },
+  low: {
+    cls: "bg-red-950/60 text-red-400 border border-red-700",
+    label: "Low confidence — manual review required",
+  },
 };
 
 interface UploadedFile {
@@ -41,6 +52,7 @@ function formatBytes(bytes: number) {
 }
 
 export function PDFUploadZone({ onComplete, onError }: Props) {
+  const { selection } = useMarket();
   const doExtract = useServerFn(extractPDFsWithAI);
   const [files, setFiles] = useState<UploadedFile[]>([]);
   const [dragging, setDragging] = useState(false);
@@ -51,8 +63,12 @@ export function PDFUploadZone({ onComplete, onError }: Props) {
 
   const addFiles = useCallback((incoming: FileList | null) => {
     if (!incoming) return;
-    const pdfs = Array.from(incoming).filter((f) => f.type === "application/pdf" || f.name.endsWith(".pdf"));
-    const nonPdf = Array.from(incoming).find((f) => f.type !== "application/pdf" && !f.name.endsWith(".pdf"));
+    const pdfs = Array.from(incoming).filter(
+      (f) => f.type === "application/pdf" || f.name.endsWith(".pdf"),
+    );
+    const nonPdf = Array.from(incoming).find(
+      (f) => f.type !== "application/pdf" && !f.name.endsWith(".pdf"),
+    );
     if (nonPdf) {
       setErrorMsg("Please upload PDF files only.");
       return;
@@ -76,11 +92,14 @@ export function PDFUploadZone({ onComplete, onError }: Props) {
 
   const removeFile = (id: string) => setFiles((prev) => prev.filter((f) => f.id !== id));
 
-  const onDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setDragging(false);
-    addFiles(e.dataTransfer.files);
-  }, [addFiles]);
+  const onDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      setDragging(false);
+      addFiles(e.dataTransfer.files);
+    },
+    [addFiles],
+  );
 
   const runExtraction = async () => {
     if (!files.length) return;
@@ -88,12 +107,14 @@ export function PDFUploadZone({ onComplete, onError }: Props) {
     setErrorMsg(null);
     setResult(null);
 
-    const stageTimer = (s: Stage, delay: number) =>
-      setTimeout(() => setStage(s), delay);
+    const stageTimer = (s: Stage, delay: number) => setTimeout(() => setStage(s), delay);
 
     const t1 = stageTimer("reading", 1500);
     const t2 = stageTimer("extracting", 3500);
-    const t3 = stageTimer("verifying", files.reduce((acc, f) => acc + f.file.size, 0) > 5 * 1024 * 1024 ? 12_000 : 8_000);
+    const t3 = stageTimer(
+      "verifying",
+      files.reduce((acc, f) => acc + f.file.size, 0) > 5 * 1024 * 1024 ? 12_000 : 8_000,
+    );
 
     try {
       const filePayloads = await Promise.all(
@@ -108,14 +129,20 @@ export function PDFUploadZone({ onComplete, onError }: Props) {
         }),
       );
 
-      const extraction = await doExtract({ data: { files: filePayloads } });
+      const extraction = await doExtract({
+        data: { files: filePayloads, market: selectionPayload(selection) },
+      });
 
-      clearTimeout(t1); clearTimeout(t2); clearTimeout(t3);
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
       setStage("done");
       setResult(extraction as MergedExtractionResult);
       onComplete(extraction as MergedExtractionResult);
     } catch (e) {
-      clearTimeout(t1); clearTimeout(t2); clearTimeout(t3);
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
       const msg = (e as Error).message ?? "Could not read this document automatically.";
       setStage("error");
       setErrorMsg(msg);
@@ -132,7 +159,10 @@ export function PDFUploadZone({ onComplete, onError }: Props) {
     <div className="space-y-3">
       {/* Drop zone */}
       <div
-        onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDragging(true);
+        }}
         onDragLeave={() => setDragging(false)}
         onDrop={onDrop}
         onClick={() => !isProcessing && inputRef.current?.click()}
@@ -146,15 +176,18 @@ export function PDFUploadZone({ onComplete, onError }: Props) {
           accept="application/pdf,.pdf"
           multiple
           className="hidden"
-          onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }}
+          onChange={(e) => {
+            addFiles(e.target.files);
+            e.target.value = "";
+          }}
         />
         <Upload className="mx-auto h-8 w-8 text-slate-500 mb-2" />
         <p className="text-sm font-medium text-slate-300">
           {files.length === 0
             ? "Drop PDF statements here, or click to browse"
             : files.length >= 3
-            ? "Maximum 3 files"
-            : "Drop another PDF, or click to add more"}
+              ? "Maximum 3 files"
+              : "Drop another PDF, or click to add more"}
         </p>
         <p className="text-xs text-slate-500 mt-1">PDF only · max 32 MB per file · up to 3 files</p>
         <p className="text-[11px] text-slate-500 mt-2 max-w-sm mx-auto">
@@ -166,7 +199,8 @@ export function PDFUploadZone({ onComplete, onError }: Props) {
         <div className="absolute top-2 right-2 group">
           <Info className="h-3.5 w-3.5 text-slate-600 hover:text-slate-400 cursor-help" />
           <div className="absolute right-0 top-5 z-10 hidden group-hover:block w-56 rounded-lg bg-slate-800 border border-slate-700 text-xs text-slate-300 p-2.5 leading-relaxed shadow-xl">
-            We use AI to read your statement. Your document is processed securely and is never stored on our servers.
+            We use AI to read your statement. Your document is processed securely and is never
+            stored on our servers.
           </div>
         </div>
       </div>
@@ -175,19 +209,30 @@ export function PDFUploadZone({ onComplete, onError }: Props) {
       {files.length > 0 && (
         <div className="space-y-1.5">
           {files.map(({ file, id }) => (
-            <div key={id} className="flex items-center gap-2 rounded-lg bg-slate-900 border border-slate-800 px-3 py-2">
+            <div
+              key={id}
+              className="flex items-center gap-2 rounded-lg bg-slate-900 border border-slate-800 px-3 py-2"
+            >
               <FileText className="h-4 w-4 text-violet-400 flex-shrink-0" />
               <span className="flex-1 text-xs text-slate-300 truncate">{file.name}</span>
               <span className="text-[10px] text-slate-500">{formatBytes(file.size)}</span>
               {!isProcessing && (
-                <button onClick={(e) => { e.stopPropagation(); removeFile(id); }} className="ml-1 text-slate-500 hover:text-slate-300">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    removeFile(id);
+                  }}
+                  className="ml-1 text-slate-500 hover:text-slate-300"
+                >
                   <X className="h-3.5 w-3.5" />
                 </button>
               )}
             </div>
           ))}
           {totalSize > 5 * 1024 * 1024 && !isProcessing && (
-            <p className="text-[10px] text-amber-400 pl-1">Large file detected — this may take up to 30 seconds</p>
+            <p className="text-[10px] text-amber-400 pl-1">
+              Large file detected — this may take up to 30 seconds
+            </p>
           )}
         </div>
       )}
@@ -215,7 +260,9 @@ export function PDFUploadZone({ onComplete, onError }: Props) {
       {/* Done + confidence */}
       {stage === "done" && confidence && (
         <div className="flex items-center gap-2">
-          <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${CONFIDENCE_CHIP[confidence]?.cls}`}>
+          <span
+            className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${CONFIDENCE_CHIP[confidence]?.cls}`}
+          >
             {CONFIDENCE_CHIP[confidence]?.label}
           </span>
         </div>
@@ -238,7 +285,10 @@ export function PDFUploadZone({ onComplete, onError }: Props) {
           size="sm"
         >
           {isProcessing ? (
-            <><Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />Processing…</>
+            <>
+              <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />
+              Processing…
+            </>
           ) : (
             `Extract from ${files.length} document${files.length > 1 ? "s" : ""}`
           )}

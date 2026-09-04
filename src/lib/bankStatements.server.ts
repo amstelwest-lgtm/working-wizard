@@ -14,11 +14,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import {
-  callClaudeMessages,
-  parseClaudeJson,
-  type ClaudeContentPart,
-} from "@/lib/claude-messages";
+import { callClaudeMessages, parseClaudeJson, type ClaudeContentPart } from "@/lib/claude-messages";
+import { bankDraftPrompt, marketInputSchema, resolvePromptMarket } from "@/lib/market";
 
 export interface BankDraftOpexLine {
   category: string;
@@ -26,21 +23,21 @@ export interface BankDraftOpexLine {
 }
 
 export interface BankDraftStatement {
-  period_start: string | null;      // ISO date of earliest transaction
-  period_end: string | null;        // ISO date of latest transaction
-  months_covered: number | null;    // e.g. 3 for a quarter of statements
+  period_start: string | null; // ISO date of earliest transaction
+  period_end: string | null; // ISO date of latest transaction
+  months_covered: number | null; // e.g. 3 for a quarter of statements
   currency: string | null;
   revenue: number;
-  cost_of_sales: number;            // positive magnitude
+  cost_of_sales: number; // positive magnitude
   gross_profit: number;
   other_income: number;
   opex_breakdown: BankDraftOpexLine[]; // exactly 5 main deductible expense buckets
-  total_opex: number;               // positive magnitude, sum of breakdown
-  interest_paid: number;            // positive magnitude
-  tax_paid: number;                 // positive magnitude
+  total_opex: number; // positive magnitude, sum of breakdown
+  interest_paid: number; // positive magnitude
+  tax_paid: number; // positive magnitude
   net_profit: number;
-  excluded_items: string[];         // transfers, loan drawdowns, owner drawings etc.
-  notes: string | null;             // judgement calls a human should check
+  excluded_items: string[]; // transfers, loan drawdowns, owner drawings etc.
+  notes: string | null; // judgement calls a human should check
 }
 
 const money = z.number().finite();
@@ -70,75 +67,30 @@ const draftSchema = z
   })
   .strict();
 
-const DRAFT_PROMPT = `
-You are an accountant's assistant. You are given one or more BANK STATEMENTS
-for a small business (South African context; currency is usually ZAR unless the
-statements clearly show otherwise). Files may cover MULTIPLE bank accounts
-(cheque, credit card, savings) — treat them as one consolidated business cash
-picture. Build a draft basic income statement from the transaction activity,
-following these rules exactly:
-
-1. Classify every transaction. Money IN that is clearly trading income =
-   revenue. Money OUT that is clearly direct cost of goods/services sold
-   (suppliers, stock, raw materials, direct subcontractors) = cost_of_sales.
-2. other_income = non-trading inflows that are genuine income (interest
-   received, rebates, insurance payouts) — NOT capital injections, loan
-   drawdowns, inter-account transfers, or owner deposits.
-3. Group ALL remaining operating outflows into EXACTLY 5 opex categories,
-   choosing the 5 most significant deductible expense groupings present in the
-   data (typical examples: Salaries & wages; Rent & utilities; Bank charges &
-   insurance; Marketing & advertising; Professional & admin fees; Motor &
-   travel; Repairs & maintenance). Use an "Other operating costs" bucket as the
-   5th category if needed so nothing is dropped. Each amount is a POSITIVE
-   magnitude.
-4. interest_paid = loan/overdraft/finance interest outflows. tax_paid =
-   payments that are clearly income tax / provisional tax (NOT VAT — treat VAT
-   payments to the revenue service as excluded, noting them).
-5. EXCLUDE and list in excluded_items: inter-account transfers, loan principal
-   drawdowns/repayments (principal portion), owner drawings/injections, asset
-   purchases (capex), VAT payments/refunds. Never count these in revenue or
-   expenses.
-6. Compute: gross_profit = revenue - cost_of_sales.
-   net_profit = gross_profit + other_income - total_opex - interest_paid - tax_paid.
-   total_opex must equal the sum of opex_breakdown amounts.
-7. Report the ACTUAL period covered: period_start (earliest transaction date),
-   period_end (latest), months_covered (rounded to 1 decimal). Do NOT annualise
-   any figure — report actuals for the period only.
-8. Flag every judgement call briefly in notes (e.g. ambiguous counterparties,
-   possible personal expenses, cash deposits assumed to be sales, multi-account
-   consolidation). Silently cross-check that major bank outflows classified as
-   expenses are consistent with statement activity — call out material gaps.
-
-Return ONLY a JSON object with exactly these keys and types, no prose, no
-markdown fences:
-{"period_start": "YYYY-MM-DD"|null, "period_end": "YYYY-MM-DD"|null,
- "months_covered": number|null, "currency": string|null, "revenue": number,
- "cost_of_sales": number, "gross_profit": number, "other_income": number,
- "opex_breakdown": [{"category": string, "amount": number} x5],
- "total_opex": number, "interest_paid": number, "tax_paid": number,
- "net_profit": number, "excluded_items": string[], "notes": string|null}
-`.trim();
-
 export const draftFinancialsFromBankStatements = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input) =>
-    z.object({
-      files: z
-        .array(
-          z.object({
-            fileName: z.string(),
-            accountLabel: z.string().max(80).optional(),
-            // Exactly one of base64 (PDF) or text (CSV/TXT) must be provided.
-            // 14M base64 chars ≈ 10 MB per file; aggregate is checked below too.
-            base64: z.string().max(14_000_000).optional(),
-            text: z.string().max(2_000_000).optional(),
-          }),
-        )
-        .min(1)
-        .max(12),
-    }).parse(input),
+    z
+      .object({
+        files: z
+          .array(
+            z.object({
+              fileName: z.string(),
+              accountLabel: z.string().max(80).optional(),
+              // Exactly one of base64 (PDF) or text (CSV/TXT) must be provided.
+              // 14M base64 chars ≈ 10 MB per file; aggregate is checked below too.
+              base64: z.string().max(14_000_000).optional(),
+              text: z.string().max(2_000_000).optional(),
+            }),
+          )
+          .min(1)
+          .max(12),
+        market: marketInputSchema,
+      })
+      .parse(input),
   )
   .handler(async ({ data }) => {
+    const prompt = bankDraftPrompt(resolvePromptMarket(data.market));
     let totalBytes = 0;
     const content: ClaudeContentPart[] = [];
     for (const f of data.files) {
@@ -168,7 +120,7 @@ export const draftFinancialsFromBankStatements = createServerFn({ method: "POST"
         `Statements are too large (${(totalBytes / 1024 / 1024).toFixed(1)} MB total). Max 40 MB — try fewer files.`,
       );
     }
-    content.push({ type: "text", text: DRAFT_PROMPT });
+    content.push({ type: "text", text: prompt });
 
     const raw = await callClaudeMessages({
       content,
@@ -188,15 +140,23 @@ export const draftFinancialsFromBankStatements = createServerFn({ method: "POST"
     const warnings: string[] = [];
     const sumOpex = draft.opex_breakdown.reduce((s, l) => s + l.amount, 0);
     if (Math.abs(sumOpex - draft.total_opex) > 1) {
-      warnings.push(`Opex breakdown (${sumOpex.toFixed(0)}) doesn't sum to total opex (${draft.total_opex.toFixed(0)}).`);
+      warnings.push(
+        `Opex breakdown (${sumOpex.toFixed(0)}) doesn't sum to total opex (${draft.total_opex.toFixed(0)}).`,
+      );
     }
     if (Math.abs(draft.revenue - draft.cost_of_sales - draft.gross_profit) > 1) {
       warnings.push("Gross profit doesn't equal revenue minus cost of sales.");
     }
     const expectedNet =
-      draft.gross_profit + draft.other_income - draft.total_opex - draft.interest_paid - draft.tax_paid;
+      draft.gross_profit +
+      draft.other_income -
+      draft.total_opex -
+      draft.interest_paid -
+      draft.tax_paid;
     if (Math.abs(expectedNet - draft.net_profit) > 1) {
-      warnings.push(`Net profit (${draft.net_profit.toFixed(0)}) doesn't tie back to the components (expected ${expectedNet.toFixed(0)}).`);
+      warnings.push(
+        `Net profit (${draft.net_profit.toFixed(0)}) doesn't tie back to the components (expected ${expectedNet.toFixed(0)}).`,
+      );
     }
 
     return { draft, warnings };

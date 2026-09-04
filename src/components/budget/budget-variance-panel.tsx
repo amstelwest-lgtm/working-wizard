@@ -39,6 +39,7 @@ import {
 } from "@/lib/budget-actuals.functions";
 import { extractPDFsWithAI } from "@/lib/extract-financials.functions";
 import type { MergedExtractionResult } from "@/lib/extraction-types";
+import { selectionPayload } from "@/lib/market";
 
 function priorCalendarMonth(): string {
   const d = new Date();
@@ -48,7 +49,7 @@ function priorCalendarMonth(): string {
 }
 
 export function BudgetVariancePanel({ clientId, doc }: { clientId?: string; doc: BudgetDocument }) {
-  const { market } = useMarket();
+  const { market, selection } = useMarket();
   const money = (n: number) => fmtBudgetMoney(n, market);
   const months = useMemo(() => fyMonths(doc.fyStart), [doc.fyStart]);
   const budgetResults = useMemo(() => computeBudgetMonths(doc, doc.activeScenario), [doc]);
@@ -168,7 +169,10 @@ export function BudgetVariancePanel({ clientId, doc }: { clientId?: string; doc:
         reader.readAsDataURL(file);
       });
       const extraction = (await doExtractPdf({
-        data: { files: [{ base64, fileName: file.name }] },
+        data: {
+          files: [{ base64, fileName: file.name }],
+          market: selectionPayload(selection),
+        },
       })) as MergedExtractionResult;
       openReviewFromExtraction(extraction, file.name);
     } catch (e) {
