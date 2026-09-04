@@ -181,16 +181,23 @@ function LandingPage() {
   /* ── mounted gate — form is client-only to prevent browser-extension
      (e.g. LastPass) DOM injections from causing a hydration mismatch crash ── */
   const [mounted, setMounted] = useState(false);
+  // Declared before the persist effect: that effect's dependency array
+  // reads draftMarket on every render. A later const is a TDZ crash
+  // (ReferenceError: Cannot access 'draftMarket' before initialization)
+  // and white-screens the landing page.
+  const [draftMarket, setDraftMarket] = useState<DraftMarket>({ country: null, regionCode: null });
+  const copyMarket = { copyPack: visitorCopyPack(draftMarket) };
   useEffect(() => {
     setMounted(true);
     setDraftMarket(readVisitorDraft());
   }, []);
 
   useEffect(() => {
+    if (!mounted) return;
     writeVisitorDraft(draftMarket);
     (window as unknown as { __milonDraftMarket?: DraftMarket }).__milonDraftMarket = draftMarket;
     applyVisitorMarketToDocument(draftMarket);
-  }, [draftMarket]);
+  }, [draftMarket, mounted]);
 
   /* ── register form state ── */
   const [regRole, setRegRole] = useState("Business owner");
@@ -202,8 +209,6 @@ function LandingPage() {
   const [regPlan, setRegPlan] = useState("Spark — Free early access");
   const [regBusy, setRegBusy] = useState(false);
   const [regDone, setRegDone] = useState(false);
-  const [draftMarket, setDraftMarket] = useState<DraftMarket>({ country: null, regionCode: null });
-  const copyMarket = { copyPack: visitorCopyPack(draftMarket) };
 
   /* ── redirect if already signed in ──
      Honour a pending Lighthouse unlock so the /app bounce cannot steal the

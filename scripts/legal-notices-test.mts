@@ -77,6 +77,14 @@ assert(!landing.includes('href="/faq">Privacy'), "landing no longer labels FAQ a
 assert(landing.includes("Eish2oh (Pty) Ltd"), "landing copyright uses the registered company");
 assert(landing.includes("LIST_PRICES"), "landing prices come from the marketing pack");
 assert(landing.includes("MarketCopy"), "landing dual-copy for US visitors");
+const draftDecl = landing.indexOf("const [draftMarket, setDraftMarket]");
+const draftDeps = landing.indexOf("}, [draftMarket");
+assert(draftDecl !== -1 && draftDeps !== -1, "landing has draftMarket state + persist effect");
+assert(
+  draftDecl < draftDeps,
+  "landing declares draftMarket before persist effect deps (avoids TDZ crash)",
+);
+assert(landing.includes("if (!mounted) return;"), "landing persist waits for mount");
 
 assert(shell.includes('href="/privacy"'), "collateral footer links to privacy");
 assert(shell.includes('href="/terms"'), "collateral footer links to terms");
