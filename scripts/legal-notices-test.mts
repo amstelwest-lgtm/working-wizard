@@ -87,8 +87,8 @@ assert(
 assert(landing.includes("if (!mounted) return;"), "landing persist waits for mount");
 assert(landing.includes('id="landing-sky"'), "landing has a scrolling starfield band");
 assert(landing.includes("landing-sky-photo"), "landing starfield has a photo layer");
+assert(landing.includes("url(/landing-sky.jpg)"), "landing photo layer points at the starfield asset");
 const landingCss = readFileSync(resolve("src/styles/landing.css"), "utf8");
-assert(landingCss.includes("/landing-sky.jpg"), "landing CSS points at the starfield asset");
 assert(landingCss.includes("#landing-sky"), "landing CSS scopes the starfield band");
 
 assert(shell.includes('href="/privacy"'), "collateral footer links to privacy");

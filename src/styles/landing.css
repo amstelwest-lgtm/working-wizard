@@ -72,7 +72,10 @@ html[data-landing="1"] #landing-sky{
 }
 html[data-landing="1"] #landing-sky .landing-sky-photo{
   position:absolute;inset:0;
-  background:url(/landing-sky.jpg) top center / cover no-repeat;
+  /* Image URL is set in JSX — url() inside ?inline CSS breaks the Vercel/Vite build. */
+  background-position:top center;
+  background-size:cover;
+  background-repeat:no-repeat;
   -webkit-mask-image:linear-gradient(to bottom,#000 0%,#000 76%,transparent 100%);
           mask-image:linear-gradient(to bottom,#000 0%,#000 76%,transparent 100%);
 }

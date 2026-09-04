@@ -1489,7 +1489,10 @@ function LandingPage() {
 
       {/* Night sky: scrolls through the opening sections, then fades to --bg. */}
       <div id="landing-sky" aria-hidden="true">
-        <div className="landing-sky-photo" />
+        <div
+          className="landing-sky-photo"
+          style={{ backgroundImage: "url(/landing-sky.jpg)" }}
+        />
         <div className="landing-sky-veil" />
       </div>
       {/* ── atmosphere ── */}
