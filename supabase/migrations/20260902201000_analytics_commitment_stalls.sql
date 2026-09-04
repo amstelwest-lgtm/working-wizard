@@ -397,6 +397,30 @@ BEGIN
 END;
 $$;
 
+CREATE OR REPLACE FUNCTION analytics.caller_may_operate()
+RETURNS boolean
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = analytics, public
+AS $$
+DECLARE
+  v_role text := coalesce(auth.role(), '');
+  v_uid uuid := auth.uid();
+BEGIN
+  IF v_role = 'service_role' THEN
+    RETURN true;
+  END IF;
+  IF v_uid IS NOT NULL AND analytics.is_founder_uid(v_uid) THEN
+    RETURN true;
+  END IF;
+  IF v_uid IS NULL AND v_role NOT IN ('authenticated', 'anon') THEN
+    RETURN true;
+  END IF;
+  RETURN false;
+END;
+$$;
+
 CREATE OR REPLACE FUNCTION public.analytics_refresh_derived()
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -407,8 +431,7 @@ DECLARE
   v_commit int;
   v_queue int;
 BEGIN
-  IF coalesce(auth.role(), '') <> 'service_role'
-     AND NOT analytics.is_founder_uid(auth.uid()) THEN
+  IF NOT analytics.caller_may_operate() THEN
     RAISE EXCEPTION 'analytics_refresh_derived is founder / service_role only';
   END IF;
   v_commit := analytics.snapshot_commitment_weekly();

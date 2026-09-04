@@ -96,8 +96,8 @@ for (const rule of STALL_RULES) {
 }
 
 assert(ANALYTICS_PHASE2_SQL.length === 2, "two editor-sized SQL files");
-assert(ANALYTICS_PHASE3_SQL.length === 1, "one Phase 3 SQL file");
-assert(ANALYTICS_SQL_TO_RUN.length === 3, "three remaining editor files");
+assert(ANALYTICS_PHASE3_SQL.length === 2, "two Phase 3 SQL files");
+assert(ANALYTICS_SQL_TO_RUN.length === 4, "four remaining editor files");
 assert(PREDICTION_MIN_CHARS > 8, "prediction friction matches SQL check");
 
 const defs = readFileSync(resolve("src/lib/metrics/definitions.ts"), "utf8");

@@ -21,6 +21,7 @@ Phase 2 + 3 — paste **in order** in the Supabase SQL editor (do not re-run Pha
 4. `supabase/migrations/20260902201000_analytics_commitment_stalls.sql`
    (`week_start` is a plain date. Do not use an older paste that generated it from `created_at` — that hits Postgres error 42P17.)
 5. `supabase/migrations/20260902300000_analytics_experiments_digest.sql`
+6. `supabase/migrations/20260904093000_analytics_refresh_sql_editor.sql` (SQL editor may run `analytics_refresh_derived`)
 
 Then, once, to snapshot the ladder and fill this week's call list:
 
