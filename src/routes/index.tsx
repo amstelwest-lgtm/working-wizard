@@ -2096,10 +2096,14 @@ function LandingPage() {
           <div className="steps stagger" style={{ marginTop: 56 }}>
             <div className="step-card">
               <span className="n">01</span>
-              <h3>You upload your financials</h3>
+              <h3>
+                <MarketCopy za="You upload your financials" us="Connect QuickBooks or upload" />
+              </h3>
               <p>
-                Your accountant uploads your income statement, balance sheet, and cash flow — or you
-                do. One PDF, extracted by AI in seconds.
+                <MarketCopy
+                  za="Your accountant uploads your income statement, balance sheet, and cash flow — or you do. One PDF, extracted by AI in seconds."
+                  us="Connect QuickBooks Online, or upload Excel, CSV, or a bank PDF. One file is enough to start. Xero is also on the list — we do not lead with it."
+                />
               </p>
               <span className="time">Under 60 seconds</span>
             </div>

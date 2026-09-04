@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
+import { useMarket } from "@/contexts/market";
+import { isUsCopy } from "@/lib/market";
 import {
   Loader2,
   Sparkles,
@@ -67,6 +69,8 @@ export function AdvisoryDrafter({
 }) {
   const { profile, firmId } = useAccountantProfile();
   const { user } = useAuth();
+  const { market } = useMarket();
+  const usCopy = isUsCopy(market);
   const run = useServerFn(draftAdvisory);
 
   const [kind, setKind] = useState<Kind>("client_email");
@@ -97,10 +101,7 @@ export function AdvisoryDrafter({
     }
   };
 
-  const logShare = async (
-    channel: "copy" | "mailto" | "whatsapp",
-    draft: DraftResult,
-  ) => {
+  const logShare = async (channel: "copy" | "mailto" | "whatsapp", draft: DraftResult) => {
     if (!user) return { body: draft.body, ackToken: null as string | null };
     const snapId = await latestSnapshotId(clientId);
     const logged = await recordDelivery({
@@ -128,9 +129,7 @@ export function AdvisoryDrafter({
     if (!result) return;
     try {
       const logged = await logShare("copy", result);
-      const text = result.subject
-        ? `Subject: ${result.subject}\n\n${logged.body}`
-        : logged.body;
+      const text = result.subject ? `Subject: ${result.subject}\n\n${logged.body}` : logged.body;
       await navigator.clipboard.writeText(text);
       setCopied(true);
       setTimeout(() => setCopied(false), 1600);
@@ -165,8 +164,8 @@ export function AdvisoryDrafter({
       </div>
       <p className="mt-1 text-xs text-slate-400">
         Drafts a deliverable from this client&apos;s real movement and your signed-off moves, in
-        your voice. Copy / mailto / WhatsApp are logged to Sent history (share opened — not postal
-        proof).
+        your voice. Copy / email / WhatsApp are logged to Sent history (share opened — not postal
+        proof). {usCopy ? "Email is the primary share path for US clients." : ""}
       </p>
 
       <div className="mt-4 grid grid-cols-3 gap-2">
@@ -239,10 +238,14 @@ export function AdvisoryDrafter({
               <button
                 type="button"
                 onClick={openMailto}
-                className="flex items-center gap-1 rounded-md border border-slate-700 px-2 py-1 text-[11px] text-slate-300 hover:border-amber-500/50"
+                className={
+                  usCopy
+                    ? "flex items-center gap-1 rounded-md bg-amber-500/15 border border-amber-500/40 px-2 py-1 text-[11px] text-amber-100 hover:border-amber-400"
+                    : "flex items-center gap-1 rounded-md border border-slate-700 px-2 py-1 text-[11px] text-slate-300 hover:border-amber-500/50"
+                }
               >
                 <Mail className="h-3 w-3" />
-                Mailto
+                Email
               </button>
               <button
                 type="button"
@@ -257,12 +260,15 @@ export function AdvisoryDrafter({
           {result.subject && (
             <p className="mb-2 text-sm font-semibold text-amber-100">{result.subject}</p>
           )}
-          <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-200">{result.body}</p>
+          <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-200">
+            {result.body}
+          </p>
           <p className="mt-3 border-t border-slate-800 pt-2 text-[11px] text-slate-500">
             Grounded in {result.grounding.currentPeriod}
-            {result.grounding.priorPeriod ? ` vs ${result.grounding.priorPeriod}` : " (baseline)"} ·{" "}
-            {result.grounding.movementCount} movements · {result.grounding.signoffCount} signed-off
-            moves
+            {result.grounding.priorPeriod
+              ? ` vs ${result.grounding.priorPeriod}`
+              : " (baseline)"} · {result.grounding.movementCount} movements ·{" "}
+            {result.grounding.signoffCount} signed-off moves
           </p>
         </div>
       )}

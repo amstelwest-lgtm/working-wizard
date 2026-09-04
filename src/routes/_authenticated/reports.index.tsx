@@ -75,6 +75,7 @@ import {
   localizeCopy,
   parseMarketSelection,
   resolveMarket,
+  salesPerEmployeeHealthy,
   ZA_MARKET,
   type ResolvedMarket,
 } from "@/lib/market";
@@ -1142,8 +1143,8 @@ function getNum(fin: Record<string, string>, key: string): number {
   return v && v.trim() !== "" ? parseFloat(v) : NaN;
 }
 
-function scoreForRatio(name: string, val: number): number {
-  return scoreRatio(name, val);
+function scoreForRatio(name: string, val: number, market: ResolvedMarket = ZA_MARKET): number {
+  return scoreRatio(name, val, market);
 }
 
 function fmtRatioVal(name: string, val: number): string {
@@ -1163,11 +1164,14 @@ function pillarForRatio(name: string): "profit" | "assets" | "financing" | "cash
   return pillarForRatioName(name);
 }
 
-function buildRatioResults(rawRatios: Record<string, number>): RatioResult[] {
+function buildRatioResults(
+  rawRatios: Record<string, number>,
+  market: ResolvedMarket = ZA_MARKET,
+): RatioResult[] {
   return Object.entries(rawRatios)
     .filter(([, v]) => Number.isFinite(v))
     .map(([name, val]) => {
-      const score = Math.round(scoreForRatio(name, val));
+      const score = Math.round(scoreForRatio(name, val, market));
       return {
         ratio_key: name.toLowerCase().replace(/[^a-z0-9]/g, "_"),
         ratio_name: name,
@@ -1635,6 +1639,7 @@ function buildLaborData(
   fin: Record<string, string>,
   _rawRatios: Record<string, number>,
   priorFin?: Record<string, string> | null,
+  market: ResolvedMarket = ZA_MARKET,
 ): LaborProductivityData | null {
   const revenue = getNum(fin, "revenue");
   const laborCost = getNum(fin, "laborCost");
@@ -1681,7 +1686,9 @@ function buildLaborData(
         gpPerLabor != null
           ? Math.round(Math.min(100, Math.max(0, (gpPerLabor / 0.6) * 100)))
           : null,
-      salesPerEmployee: Math.round(Math.min(100, Math.max(0, (rpe / 300_000) * 100))),
+      salesPerEmployee: Math.round(
+        Math.min(100, Math.max(0, (rpe / salesPerEmployeeHealthy(market)) * 100)),
+      ),
       revenueGrowth:
         revenueGrowth != null
           ? Math.round(Math.min(100, Math.max(0, ((revenueGrowth + 0.05) / 0.25) * 100)))
@@ -2042,7 +2049,7 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
       ratios: (s.ratios as Record<string, number>) ?? null,
     })),
   );
-  let ratioResults = buildRatioResults(rawRatios);
+  let ratioResults = buildRatioResults(rawRatios, market);
   ratioResults = withPriorRatioScores(ratioResults, priorSnap?.ratios ?? null);
 
   const priorEquityNum = (() => {
@@ -2077,7 +2084,7 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
     profitability: buildProfitabilityData(fin, priorFinForProfit),
     leverage: buildLeverageData(fin, rawRatios, priorEquityNum),
     assets: buildAssetData(rawRatios),
-    labor: buildLaborData(fin, rawRatios, priorFinForProfit),
+    labor: buildLaborData(fin, rawRatios, priorFinForProfit, market),
     movement: movementRows,
     movementPeriodLabels: movementLabels,
     benchmark: buildBenchmarkRows(rawRatios, ratioResults, sectorBench),

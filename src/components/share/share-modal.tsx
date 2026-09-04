@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { X, Mail, Copy, Check, ChevronRight } from "lucide-react";
+import { useResolvedCopyPack } from "@/contexts/market";
+import { t } from "@/lib/market";
 import { SHARE_TEXT, SHARE_TITLE, shareMessageWithUrl } from "@/lib/share-copy";
 
 interface Props {
@@ -18,6 +20,8 @@ function WhatsAppIcon({ className }: { className?: string }) {
 }
 
 export function ShareModal({ open, onClose, onOpenInstall, appUrl }: Props) {
+  const copyPack = useResolvedCopyPack();
+  const emailFirst = copyPack === "us";
   const [copied, setCopied] = useState(false);
   const [mounted, setMounted] = useState(false);
 
@@ -69,7 +73,9 @@ export function ShareModal({ open, onClose, onOpenInstall, appUrl }: Props) {
         document.execCommand("copy");
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
-      } catch { /* noop */ }
+      } catch {
+        /* noop */
+      }
       document.body.removeChild(ta);
     }
   };
@@ -110,7 +116,9 @@ export function ShareModal({ open, onClose, onOpenInstall, appUrl }: Props) {
           <div className="min-w-0">
             <h2 className="text-lg font-semibold text-foreground">Share Milōn</h2>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              Invite your accountant or share with a colleague
+              {emailFirst
+                ? `Invite your accountant or share with a colleague — ${t("sharePrimary", { copyPack })} first`
+                : "Invite your accountant or share with a colleague"}
             </p>
           </div>
           <button
@@ -125,22 +133,49 @@ export function ShareModal({ open, onClose, onOpenInstall, appUrl }: Props) {
 
         {/* Options */}
         <div className="divide-y divide-border border-y border-border">
-          <Row
-            iconBg="bg-[#25D366]/10"
-            iconColor="text-[#25D366]"
-            Icon={WhatsAppIcon}
-            label="Share via WhatsApp"
-            sublabel="Send a link to a contact"
-            onClick={() => window.open(waUrl, "_blank", "noopener,noreferrer")}
-          />
-          <Row
-            iconBg="bg-primary/10"
-            iconColor="text-primary"
-            Icon={Mail}
-            label="Share via Email"
-            sublabel="Send to someone's inbox"
-            onClick={() => { window.location.href = mailUrl; }}
-          />
+          {emailFirst ? (
+            <>
+              <Row
+                iconBg="bg-primary/10"
+                iconColor="text-primary"
+                Icon={Mail}
+                label="Share via Email"
+                sublabel="Primary for US — send to someone's inbox"
+                onClick={() => {
+                  window.location.href = mailUrl;
+                }}
+              />
+              <Row
+                iconBg="bg-[#25D366]/10"
+                iconColor="text-[#25D366]"
+                Icon={WhatsAppIcon}
+                label="Share via WhatsApp"
+                sublabel="Also available"
+                onClick={() => window.open(waUrl, "_blank", "noopener,noreferrer")}
+              />
+            </>
+          ) : (
+            <>
+              <Row
+                iconBg="bg-[#25D366]/10"
+                iconColor="text-[#25D366]"
+                Icon={WhatsAppIcon}
+                label="Share via WhatsApp"
+                sublabel="Send a link to a contact"
+                onClick={() => window.open(waUrl, "_blank", "noopener,noreferrer")}
+              />
+              <Row
+                iconBg="bg-primary/10"
+                iconColor="text-primary"
+                Icon={Mail}
+                label="Share via Email"
+                sublabel="Send to someone's inbox"
+                onClick={() => {
+                  window.location.href = mailUrl;
+                }}
+              />
+            </>
+          )}
           <Row
             iconBg={copied ? "bg-emerald-500/10" : "bg-muted"}
             iconColor={copied ? "text-emerald-500" : "text-foreground"}

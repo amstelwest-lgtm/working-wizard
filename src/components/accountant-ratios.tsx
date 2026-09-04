@@ -25,9 +25,15 @@ import type { MergedExtractionResult } from "@/lib/extraction-types";
 import type { MappedInputs } from "@/components/extraction-review-modal";
 import { useMarketFormat } from "@/contexts/market";
 import {
+  canShowIndustryMedian,
   formatMoney,
+  industryBenchmarkCaption,
+  isUsCopy,
   localizeCopy,
+  salesPerEmployeeBenchmarkLabel,
+  salesPerEmployeeHealthy,
   selectionPayload,
+  t,
   ZA_MARKET,
   type MoneyMarket,
 } from "@/lib/market";
@@ -704,8 +710,8 @@ export function AccountantRatiosPanel({
         formula: "Revenue / Headcount",
         value: spe,
         format: "money",
-        health: hH(spe, 200),
-        benchmark: "≥ 200",
+        health: hH(spe, salesPerEmployeeHealthy(market)),
+        benchmark: salesPerEmployeeBenchmarkLabel(market),
         nextSteps: [
           "Set per-role revenue contribution targets.",
           "Outsource non-core roles.",
@@ -727,7 +733,7 @@ export function AccountantRatiosPanel({
         ],
       },
     ];
-  }, [v]);
+  }, [v, market]);
 
   const sorted = useMemo(() => [...rows].sort((a, b) => a.health - b.health), [rows]);
   const worst3 = sorted.slice(0, 3);
@@ -870,7 +876,11 @@ Your Milōn accountant`;
         <CardHeader className="flex flex-row items-center justify-between gap-3 flex-wrap">
           <div>
             <CardTitle className="text-base">Actions</CardTitle>
-            <CardDescription>Export, email a draft, or WhatsApp the client.</CardDescription>
+            <CardDescription>
+              {isUsCopy(market)
+                ? `Export, ${t("sharePrimary", market).toLowerCase()} a draft, or WhatsApp the client.`
+                : "Export, email a draft, or WhatsApp the client."}
+            </CardDescription>
           </div>
           <div className="flex gap-2 flex-wrap">
             <Button size="sm" variant="outline" onClick={onPdf}>
@@ -883,7 +893,10 @@ Your Milōn accountant`;
             </Button>
             <Button
               size="sm"
-              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+              variant={isUsCopy(market) ? "outline" : "default"}
+              className={
+                isUsCopy(market) ? undefined : "bg-emerald-600 hover:bg-emerald-700 text-white"
+              }
               onClick={onWhatsapp}
             >
               <MessageCircle className="h-4 w-4 mr-1" />
@@ -929,6 +942,7 @@ Your Milōn accountant`;
           <CardTitle className="text-base">Ratios — accountant summary</CardTitle>
           <CardDescription>
             Click any row to see suggested next steps for the client.
+            {isUsCopy(market) ? ` ${industryBenchmarkCaption(market)}` : ""}
           </CardDescription>
         </CardHeader>
         <CardContent className="overflow-x-auto p-0">
@@ -988,7 +1002,14 @@ Your Milōn accountant`;
                         {(() => {
                           const mk = TECHNICAL_TO_METRIC_KEY[r.technical];
                           const b = mk ? benchmarks[mk] : null;
-                          return b ? (
+                          const show =
+                            b &&
+                            canShowIndustryMedian(market, {
+                              metricKey: mk,
+                              unit: b.unit,
+                              format: r.format,
+                            });
+                          return show && b ? (
                             <div className="flex flex-col gap-1">
                               <BenchmarkBar value={r.value} benchmark={b} width={140} />
                               <span className="text-[10px] font-mono text-muted-foreground tabular-nums">
@@ -1112,7 +1133,7 @@ Your Milōn accountant`;
               <Input
                 value={contact.phone}
                 onChange={(e) => setContact({ ...contact, phone: e.target.value })}
-                placeholder="+27821234567"
+                placeholder={t("phoneExample", market)}
               />
             </div>
             <Button

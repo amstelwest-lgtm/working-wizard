@@ -250,7 +250,9 @@ export function BudgetVariancePanel({ clientId, doc }: { clientId?: string; doc:
             Budget vs actuals
           </h3>
           <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
-            Month-true variance. Upload a PDF P&L now — QuickBooks / Xero later.
+            {market.copyPack === "us"
+              ? "Month-true variance. Upload a PDF P&L now — QuickBooks later. Xero is also on the list."
+              : "Month-true variance. Upload a PDF P&L now — QuickBooks / Xero later."}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">

@@ -19,6 +19,7 @@ import { MarketProvider } from "@/contexts/market";
 import {
   coerceMarketSelection,
   formatDate,
+  isUsCopy,
   localizeCopy,
   parseMarketSelection,
   resolveMarket,
@@ -267,8 +268,12 @@ function formatRatioValue(name: string, val: number): string {
 }
 
 // Score from ratio value — delegated to the shared health-score module
-function ratioHealthScore(name: string, val: number): number {
-  return scoreRatio(name, val);
+function ratioHealthScore(
+  name: string,
+  val: number,
+  market?: Parameters<typeof scoreRatio>[2],
+): number {
+  return scoreRatio(name, val, market);
 }
 
 /** Health ring SVG */
@@ -571,11 +576,22 @@ function ClientView() {
     client?.cash_runway_weeks,
     client?.cashflow as Parameters<typeof effectiveCashRunwayWeeks>[1],
   );
-  const overallHealth: OverallHealth = healthFromRatioInputs(ratioInputs, effectiveRunway);
+  const clientMarket = useMemo(
+    () =>
+      resolveMarket(
+        parseMarketSelection(client?.market) ?? coerceMarketSelection(client?.market ?? null),
+      ),
+    [client?.market],
+  );
+  const overallHealth: OverallHealth = healthFromRatioInputs(
+    ratioInputs,
+    effectiveRunway,
+    clientMarket,
+  );
   const healthScoreRounded = overallHealth.overall ?? 0;
 
   // ── Health orb & pillar computation (same source as header / score history) ──
-  const healthMap = healthMapFromRatios(ratios as Record<string, number>);
+  const healthMap = healthMapFromRatios(ratios as Record<string, number>, clientMarket);
 
   const pillarById = Object.fromEntries(
     overallHealth.pillars.map((p) => [p.id, p.score ?? NaN]),
@@ -589,14 +605,6 @@ function ClientView() {
   };
 
   const avgHealth = overallHealth.overall ?? NaN;
-
-  const clientMarket = useMemo(
-    () =>
-      resolveMarket(
-        parseMarketSelection(client?.market) ?? coerceMarketSelection(client?.market ?? null),
-      ),
-    [client?.market],
-  );
 
   const sphereRatioMeta = useMemo(
     () =>
@@ -1117,7 +1125,7 @@ function ClientView() {
       const ratioEntries = Object.entries(ratios)
         .filter(([, val]) => Number.isFinite(val as number))
         .map(([name, val]) => {
-          const score = Math.round(scoreRatio(name, val as number));
+          const score = Math.round(scoreRatio(name, val as number, clientMarket));
           const tier = scoreTier(score);
           return {
             ratio_key: name.toLowerCase().replace(/[^a-z0-9]/g, "_"),
@@ -1887,7 +1895,7 @@ function ClientView() {
                   </p>
                   <div className="ratio-rows">
                     {Object.entries(ratios).map(([name, val]) => {
-                      const score = Math.round(ratioHealthScore(name, val as number));
+                      const score = Math.round(ratioHealthScore(name, val as number, clientMarket));
                       const tier = scoreTier(score);
                       const band = tierToBand(tier);
                       const color = bandColor(band);
@@ -2350,37 +2358,68 @@ function ClientView() {
                   Practice client · Step 1
                 </p>
                 <DialogTitle className="text-xl text-slate-100 mt-1">
-                  Upload 3 months of bank statements
+                  {isUsCopy(clientMarket)
+                    ? "Upload Excel, CSV, or PDF — or bank statements"
+                    : "Upload 3 months of bank statements"}
                 </DialogTitle>
                 <DialogDescription className="text-slate-400">
-                  Fastest path for this client: drop ~3 months of statements (every bank account).
-                  One pack drafts P&amp;L, seeds budget, builds cash forecast, and shows movements
-                  in balances — then tour the workspace.
+                  {isUsCopy(clientMarket)
+                    ? "Fastest US path for this client: Excel, CSV, or a PDF pack. Bank statements also work. Connect QuickBooks from the financials panel when QBO is configured. Xero is also on the list, not the lead path."
+                    : "Fastest path for this client: drop ~3 months of statements (every bank account). One pack drafts P&L, seeds budget, builds cash forecast, and shows movements in balances — then tour the workspace."}
                 </DialogDescription>
               </DialogHeader>
               <div className="flex flex-col gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setFirstDataOpen(false);
-                    setShowBankDrafter(true);
-                  }}
-                  className="btn gold"
-                  style={{ width: "100%", justifyContent: "center" }}
-                >
-                  Upload bank statements
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setFirstDataOpen(false);
-                    setUploadOpen(true);
-                  }}
-                  className="btn ghost"
-                  style={{ width: "100%", justifyContent: "center" }}
-                >
-                  Upload a financial statement instead
-                </button>
+                {isUsCopy(clientMarket) ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFirstDataOpen(false);
+                        setUploadOpen(true);
+                      }}
+                      className="btn gold"
+                      style={{ width: "100%", justifyContent: "center" }}
+                    >
+                      Upload Excel, CSV, or PDF
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFirstDataOpen(false);
+                        setShowBankDrafter(true);
+                      }}
+                      className="btn ghost"
+                      style={{ width: "100%", justifyContent: "center" }}
+                    >
+                      Upload bank statements
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFirstDataOpen(false);
+                        setShowBankDrafter(true);
+                      }}
+                      className="btn gold"
+                      style={{ width: "100%", justifyContent: "center" }}
+                    >
+                      Upload bank statements
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFirstDataOpen(false);
+                        setUploadOpen(true);
+                      }}
+                      className="btn ghost"
+                      style={{ width: "100%", justifyContent: "center" }}
+                    >
+                      Upload a financial statement instead
+                    </button>
+                  </>
+                )}
                 <button
                   type="button"
                   onClick={() => setFirstDataOpen(false)}

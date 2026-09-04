@@ -296,8 +296,9 @@ export function benchmarkNarrative(
       : aboveOrTop >= d.total * 0.4
         ? "a mid-pack performer with clear areas to close on the leaders"
         : "trailing its sector on most measures — the gaps below map the catch-up agenda";
+  const medianLabel = market.copyPack === "us" ? "global SME bands" : "the sector median";
   const base =
-    `Against ${d.industryName} peers, ${aboveOrTop} of ${d.total} ratios sit at or above the sector median` +
+    `Against ${d.industryName} peers, ${aboveOrTop} of ${d.total} ratios sit at or above ${medianLabel}` +
     `${d.topQ > 0 ? ` and ${d.topQ} reach${d.topQ === 1 ? "es" : ""} the top quartile` : ""}, making the business ${standing}.`;
   return withCoda(base, profile, "benchmark", market);
 }

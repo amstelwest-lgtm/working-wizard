@@ -29,7 +29,7 @@ export function AdvisorySentHistory({
   clientId: string;
   refreshToken?: number;
 }) {
-  const { dateTime } = useMarketFormat();
+  const { dateTime, market } = useMarketFormat();
   const [rows, setRows] = useState<AdvisoryDelivery[]>([]);
   const [loading, setLoading] = useState(true);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
@@ -93,7 +93,8 @@ export function AdvisorySentHistory({
         Sent history
       </div>
       <p style={{ margin: "6px 0 12px", fontSize: 13, color: "var(--ink-dim)" }}>
-        Logged shares and PDF downloads with stamped figures. Mailto / WhatsApp rows mean the share
+        Logged shares and PDF downloads with stamped figures.{" "}
+        {market.copyPack === "us" ? "Email / WhatsApp" : "Mailto / WhatsApp"} rows mean the share
         sheet was opened — not postal proof — until the client acknowledges. Archived PDFs can be
         re-downloaded when a file was stored with the row.
       </p>

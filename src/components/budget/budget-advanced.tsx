@@ -11,12 +11,11 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { BUSINESS_TYPE_TO_BENCHMARK } from "@/lib/ratios";
+import { industryBenchmarkCaption, isUsCopy } from "@/lib/market";
+import { useMarket } from "@/contexts/market";
 import type { BudgetDocument } from "@/lib/budget.types";
 import { newId } from "@/lib/budget.templates";
-import {
-  seedBudgetFromFinancials,
-  budgetToCashForecastPayload,
-} from "@/lib/budget.bridges";
+import { seedBudgetFromFinancials, budgetToCashForecastPayload } from "@/lib/budget.bridges";
 import { runwayWeeksFromCashflow } from "@/lib/cash-runway";
 import type { CashForecastPublishPayload } from "@/lib/cash-from-banks.types";
 
@@ -43,6 +42,7 @@ export function BudgetAdvancedPanel({
   clientId?: string;
   onPushedToCash?: () => void;
 }) {
+  const { market } = useMarket();
   const [open, setOpen] = useState(role === "accountant");
   const [bench, setBench] = useState<BenchmarkHint | null>(null);
   const [noteText, setNoteText] = useState("");
@@ -51,8 +51,7 @@ export function BudgetAdvancedPanel({
   const [pushing, setPushing] = useState(false);
 
   useEffect(() => {
-    const sector =
-      (businessTypeId && BUSINESS_TYPE_TO_BENCHMARK[businessTypeId]) || "other";
+    const sector = (businessTypeId && BUSINESS_TYPE_TO_BENCHMARK[businessTypeId]) || "other";
     supabase
       .from("industry_benchmarks")
       .select("metric_key, p50")
@@ -66,12 +65,8 @@ export function BudgetAdvancedPanel({
       });
   }, [businessTypeId]);
 
-  const gpDelta =
-    bench?.gpP50 != null ? Math.round((doc.gpPct - bench.gpP50) * 10) / 10 : null;
-  const ddDelta =
-    bench?.debtorP50 != null
-      ? Math.round(doc.wc.debtorDays - bench.debtorP50)
-      : null;
+  const gpDelta = bench?.gpP50 != null ? Math.round((doc.gpPct - bench.gpP50) * 10) / 10 : null;
+  const ddDelta = bench?.debtorP50 != null ? Math.round(doc.wc.debtorDays - bench.debtorP50) : null;
 
   const addNote = () => {
     const text = noteText.trim();
@@ -161,7 +156,9 @@ export function BudgetAdvancedPanel({
           {/* COGS mode */}
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
-              <Label className="text-[10px] uppercase tracking-wider text-slate-500">COGS mode</Label>
+              <Label className="text-[10px] uppercase tracking-wider text-slate-500">
+                COGS mode
+              </Label>
               <select
                 className="mt-1 h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-sm dark:border-slate-700 dark:bg-slate-950"
                 value={doc.cogsMode}
@@ -204,8 +201,12 @@ export function BudgetAdvancedPanel({
           {/* Benchmarks */}
           <div className="rounded-lg border border-[#d4a550]/30 bg-[#d4a550]/5 p-3 text-xs">
             <div className="font-semibold text-[#b8860b]">
-              Industry benchmarks {bench ? `(${bench.sector})` : ""}
+              {isUsCopy(market) ? "Global SME bands" : "Industry benchmarks"}{" "}
+              {bench ? `(${bench.sector})` : ""}
             </div>
+            {isUsCopy(market) && (
+              <p className="mt-1 text-[11px] text-slate-500">{industryBenchmarkCaption(market)}</p>
+            )}
             <div className="mt-2 grid gap-2 sm:grid-cols-2">
               <div>
                 <div className="text-slate-500">Gross margin p50</div>
@@ -248,7 +249,13 @@ export function BudgetAdvancedPanel({
 
           {/* Bridges */}
           <div className="flex flex-wrap gap-2">
-            <Button type="button" size="sm" variant="outline" className="gap-1.5 text-xs" onClick={seed}>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="gap-1.5 text-xs"
+              onClick={seed}
+            >
               <Sparkles className="h-3.5 w-3.5" />
               Seed from financials
             </Button>
@@ -298,7 +305,13 @@ export function BudgetAdvancedPanel({
                 />
               </div>
             </div>
-            <Button type="button" size="sm" variant="outline" className="gap-1.5 text-xs" onClick={addNote}>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="gap-1.5 text-xs"
+              onClick={addNote}
+            >
               <MessageSquarePlus className="h-3.5 w-3.5" />
               Add to log
             </Button>
@@ -317,7 +330,12 @@ export function BudgetAdvancedPanel({
                     <span>·</span>
                     <span>{n.by}</span>
                     <span>·</span>
-                    <span>{new Date(n.at).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" })}</span>
+                    <span>
+                      {new Date(n.at).toLocaleString("en-GB", {
+                        dateStyle: "medium",
+                        timeStyle: "short",
+                      })}
+                    </span>
                   </div>
                   <div className="mt-1 text-slate-800 dark:text-slate-100">{n.text}</div>
                 </li>
