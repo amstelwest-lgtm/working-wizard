@@ -1,5 +1,4 @@
-import { Archive, CheckCheck, Trash2 } from "lucide-react";
-import { useAuth } from "@/hooks/use-auth";
+import { Archive, CheckCheck, Trash2, X } from "lucide-react";
 import { useNotes, type Note } from "@/contexts/notes";
 import {
   Sheet,
@@ -37,9 +36,7 @@ function formatWhen(iso: string) {
 }
 
 function ArchiveRow({ note }: { note: Note }) {
-  const { user } = useAuth();
   const { resolveNote, deleteNote } = useNotes();
-  const canDelete = note.authorId === user?.id;
 
   return (
     <article className="rounded-xl border border-black/8 bg-white p-3 dark:border-white/10 dark:bg-[#16233d]">
@@ -50,17 +47,24 @@ function ArchiveRow({ note }: { note: Note }) {
         <span className="min-w-0 flex-1 truncate text-[11px] text-slate-500">
           {note.author} · {formatWhen(note.timestamp)}
         </span>
-        {canDelete && (
-          <button
-            type="button"
-            title="Delete note"
-            aria-label="Delete note"
-            onClick={() => void deleteNote(note.id)}
-            className="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-900/30 dark:hover:text-red-400"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </button>
-        )}
+        <button
+          type="button"
+          title={note.resolved ? "Reopen note" : "Close note"}
+          aria-label={note.resolved ? "Reopen note" : "Close note"}
+          onClick={() => void resolveNote(note.id)}
+          className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-white/10 dark:hover:text-slate-200"
+        >
+          {note.resolved ? <CheckCheck className="h-3.5 w-3.5" /> : <X className="h-3.5 w-3.5" />}
+        </button>
+        <button
+          type="button"
+          title="Delete note"
+          aria-label="Delete note"
+          onClick={() => void deleteNote(note.id)}
+          className="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-900/30 dark:hover:text-red-400"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
       </div>
       <p
         className={`text-[13px] leading-relaxed ${
@@ -104,7 +108,7 @@ export function NoteArchiveSheet() {
         side="right"
         className="z-[100000] flex w-full flex-col gap-0 overflow-hidden border-l border-black/10 bg-[#f7f8fb] p-0 sm:max-w-md dark:border-white/10 dark:bg-[#0d1526]"
       >
-        <SheetHeader className="border-b border-black/8 px-5 py-4 text-left dark:border-white/10">
+        <SheetHeader className="border-b border-black/8 px-5 py-4 pr-12 text-left dark:border-white/10">
           <SheetTitle className="flex items-center gap-2 text-base">
             <Archive className="h-4 w-4 text-[#c9962b]" />
             Notes

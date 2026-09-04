@@ -647,20 +647,23 @@ export const deleteClientNote = createServerFn({ method: "POST" })
       })
       .parse(input),
   )
-  .handler(async ({ data }) => {
+  .handler(async ({ data: input }) => {
     const sb = authedSupabase();
     const { data: userData, error: userErr } = await sb.auth.getUser();
     if (userErr || !userData?.user) throw new Error("Not authenticated");
-    await assertClientAccess(userData.user.id, data.clientId, sb);
+    await assertClientAccess(userData.user.id, input.clientId, sb);
 
-    const loose = sb as unknown as LooseSb;
-    const { error } = await loose
+    // Access already checked — admin fallback covers notes whose author_id
+    // would fail the old author-only RLS (legacy / other-user notes).
+    const db = (getSupabaseAdminOrNull() ?? sb) as unknown as LooseSb;
+    const { data: deleted, error } = await db
       .from("client_notes")
       .delete()
-      .eq("id", data.noteId)
-      .eq("client_id", data.clientId)
-      .eq("author_id", userData.user.id);
+      .eq("id", input.noteId)
+      .eq("client_id", input.clientId)
+      .select("id");
     if (error) throw new Error(error.message);
+    if (!deleted?.length) throw new Error("Note could not be deleted");
     return { ok: true };
   });
 
