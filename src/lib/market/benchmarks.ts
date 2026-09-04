@@ -41,7 +41,7 @@ export function scoreSalesPerEmployee(
   val: number,
   market?: Pick<ResolvedMarket, "country" | "copyPack"> | null,
 ): number {
-  if (!Number.isFinite(val)) return 50;
+  if (!Number.isFinite(val)) return Number.NaN;
   const target = salesPerEmployeeHealthy(market);
   return Math.min(100, Math.max(0, (val / target) * 100));
 }

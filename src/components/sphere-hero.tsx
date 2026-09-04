@@ -82,6 +82,7 @@ function tierFromDisplayStatus(
   status: "healthy" | "at_risk" | "critical" | null | undefined,
   score: number,
 ): Tier {
+  if (!isFinite(score)) return "nodata";
   if (status == null) return tierOf(score);
   if (status === "healthy") return "healthy";
   if (status === "at_risk") return "watch";

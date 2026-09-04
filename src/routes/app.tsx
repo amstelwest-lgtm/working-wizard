@@ -2985,6 +2985,11 @@ function Index() {
 
   // Per-ratio scores — shared scoreRatio SSOT (same as accountant client / scorecard).
   // Owner-only extras use scoreRatio aliases; missing inputs stay NaN (never invent 50).
+  const inputFilled = (...keys: (keyof Inputs)[]) =>
+    keys.every((k) => {
+      const s = String(v[k] ?? "").trim();
+      return s !== "" && Number.isFinite(parseFloat(s));
+    });
   const ssotHealth = healthMapFromRatios(computedRatios as Record<string, number>, boardMarket);
   const healthMap: Record<RatioKey, number> = {
     taxBurden:
@@ -3011,41 +3016,56 @@ function Index() {
     gpToLabor: ssotHealth.gpToLabor ?? NaN,
     salesPerEmployee: ssotHealth.salesPerEmployee ?? NaN,
     ocfToEbitda: ssotHealth.ocfToEbitda ?? NaN,
-    revenuePerFounderHour: isFinite(revenuePerFounderHour)
-      ? Math.round(clamp((revenuePerFounderHour / 2500) * 100))
-      : NaN,
+    revenuePerFounderHour:
+      inputFilled("revenue", "founderHours") && isFinite(revenuePerFounderHour)
+        ? Math.round(clamp((revenuePerFounderHour / 2500) * 100))
+        : NaN,
     grossMargin: ssotHealth.grossMargin ?? NaN,
-    directCostsRatio: isFinite(directCostsRatio)
-      ? Math.round(clamp(((0.65 - directCostsRatio) / 0.65) * 100))
-      : NaN,
-    fundingStructure: isFinite(fundingStructureRatio)
-      ? Math.round(clamp((fundingStructureRatio / 0.3) * 100))
-      : NaN,
-    workingCapitalUtilization: isFinite(workingCapitalUtilization)
-      ? Math.round(clamp((workingCapitalUtilization / 2.0) * 100))
-      : NaN,
-    fixedCapitalUtilization: isFinite(fixedCapitalUtilization)
-      ? Math.round(clamp((fixedCapitalUtilization / 1.5) * 100))
-      : NaN,
-    workingCapitalFunding: isFinite(workingCapitalFunding)
-      ? Math.round(clamp(((0.25 - workingCapitalFunding) / 0.25) * 100))
-      : NaN,
-    revenueGrowth: isFinite(revenueGrowth)
-      ? Math.round(scoreRatio("Revenue Growth", revenueGrowth, boardMarket))
-      : NaN,
-    capexIntensity: isFinite(capexIntensity) ? Math.round(hRange(capexIntensity, 0.02, 0.1)) : NaN,
+    directCostsRatio:
+      inputFilled("cogs", "revenue") && isFinite(directCostsRatio)
+        ? Math.round(clamp(((0.65 - directCostsRatio) / 0.65) * 100))
+        : NaN,
+    fundingStructure:
+      inputFilled("equity", "totalAssets") && isFinite(fundingStructureRatio)
+        ? Math.round(clamp((fundingStructureRatio / 0.3) * 100))
+        : NaN,
+    workingCapitalUtilization:
+      inputFilled("revenue", "receivables", "inventory", "payables") &&
+      isFinite(workingCapitalUtilization)
+        ? Math.round(clamp((workingCapitalUtilization / 2.0) * 100))
+        : NaN,
+    fixedCapitalUtilization:
+      inputFilled("revenue", "totalAssets") && isFinite(fixedCapitalUtilization)
+        ? Math.round(clamp((fixedCapitalUtilization / 1.5) * 100))
+        : NaN,
+    workingCapitalFunding:
+      inputFilled("revenue", "receivables", "inventory", "payables") &&
+      isFinite(workingCapitalFunding)
+        ? Math.round(clamp(((0.25 - workingCapitalFunding) / 0.25) * 100))
+        : NaN,
+    revenueGrowth:
+      inputFilled("revenue", "priorRevenue") && isFinite(revenueGrowth)
+        ? Math.round(scoreRatio("Revenue Growth", revenueGrowth, boardMarket))
+        : NaN,
+    capexIntensity:
+      inputFilled("capex", "revenue") && isFinite(capexIntensity)
+        ? Math.round(hRange(capexIntensity, 0.02, 0.1))
+        : NaN,
     assetReinvestmentRatio: isFinite(assetReinvestmentRatio)
       ? Math.round(hRange(assetReinvestmentRatio, 0.8, 1.5))
       : NaN,
-    currentRatio: isFinite(currentRatio)
-      ? Math.round(scoreRatio("Current Ratio", currentRatio, boardMarket))
-      : NaN,
-    debtToEquity: isFinite(debtToEquity)
-      ? Math.round(scoreRatio("Debt-to-Equity", debtToEquity, boardMarket))
-      : NaN,
-    debtToAssets: isFinite(debtToAssets)
-      ? Math.round(scoreRatio("Debt-to-Assets", debtToAssets, boardMarket))
-      : NaN,
+    currentRatio:
+      inputFilled("currentAssets", "currentLiabilities") && isFinite(currentRatio)
+        ? Math.round(scoreRatio("Current Ratio", currentRatio, boardMarket))
+        : NaN,
+    debtToEquity:
+      inputFilled("totalAssets", "equity") && isFinite(debtToEquity)
+        ? Math.round(scoreRatio("Debt-to-Equity", debtToEquity, boardMarket))
+        : NaN,
+    debtToAssets:
+      inputFilled("totalAssets", "equity") && isFinite(debtToAssets)
+        ? Math.round(scoreRatio("Debt-to-Assets", debtToAssets, boardMarket))
+        : NaN,
   };
 
   // Overall + pillars — same computeOverallHealth as accountant dashboard / scorecard.

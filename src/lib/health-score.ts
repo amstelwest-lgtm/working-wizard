@@ -86,8 +86,10 @@ export function healthMapFromRatios(
   const map: Record<string, number> = {};
   for (const [name, val] of Object.entries(ratios)) {
     if (!Number.isFinite(val)) continue;
+    const scored = scoreRatio(name, val, market);
+    if (!Number.isFinite(scored)) continue;
     const key = RATIO_NAME_TO_KEY[name];
-    if (key) map[key] = Math.round(scoreRatio(name, val, market));
+    if (key) map[key] = Math.round(scored);
   }
   return map;
 }
@@ -114,9 +116,18 @@ function clamp(n: number): number {
   return Math.min(100, Math.max(0, n));
 }
 
+/** Mean of finite scores only. Empty / non-finite inputs are omitted — never 0 or 50. */
 function avg(nums: number[]): number | null {
-  if (!nums.length) return null;
-  return nums.reduce((s, n) => s + n, 0) / nums.length;
+  const finite = nums.filter((n) => Number.isFinite(n));
+  if (!finite.length) return null;
+  return finite.reduce((s, n) => s + n, 0) / finite.length;
+}
+
+/** Real numeric ratio only — empty string / null / NaN are missing, not 0. */
+function toFiniteNumber(val: unknown): number | null {
+  if (val == null || val === "") return null;
+  const n = typeof val === "number" ? val : Number(val);
+  return Number.isFinite(n) ? n : null;
 }
 
 function emptyRatioInputs(): RatioInputs {
@@ -160,7 +171,8 @@ export function flatToRatioInputs(financials: FlatFinancials): RatioInputs {
  * and overall aggregation.
  */
 export function scoreRatio(name: string, val: number, market?: ScoreMarket): number {
-  if (!Number.isFinite(val)) return 50;
+  // Missing / not-yet-calculated ratios must not become a fake midpoint.
+  if (!Number.isFinite(val)) return Number.NaN;
 
   // Margins / returns — higher is better
   if (name === "Net Margin") return clamp((val / 0.15) * 100);
@@ -212,7 +224,7 @@ export function scoreRatio(name: string, val: number, market?: ScoreMarket): num
  * Aligns with scoreTier bands: ≥12 wk healthy, 4–12 watch, <4 critical.
  */
 export function scoreCashRunway(weeks: number): number {
-  if (!Number.isFinite(weeks)) return 50;
+  if (!Number.isFinite(weeks)) return Number.NaN;
   if (weeks >= 16) return 100;
   if (weeks >= 12) return 85;
   if (weeks >= 8) return 65;
@@ -300,9 +312,12 @@ export function computeOverallHealth(input: ComputeOverallHealthInput): OverallH
     }
   } else if (input.ratios) {
     for (const [name, val] of Object.entries(input.ratios)) {
-      if (val == null || !Number.isFinite(val)) continue;
+      const n = toFiniteNumber(val);
+      if (n == null) continue;
+      const scored = scoreRatio(name, n, input.market);
+      if (!Number.isFinite(scored)) continue;
       const pillar = pillarForRatioName(name);
-      bucket[pillar].push(scoreRatio(name, val, input.market));
+      bucket[pillar].push(scored);
     }
   }
 

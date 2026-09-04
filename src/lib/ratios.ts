@@ -8,7 +8,7 @@ export type HealthTier = "critical" | "at_risk" | "healthy";
  * 65 cutoff and could show the wrong tier's interventions for scores 65-69.
  */
 export function scoreTier(score?: number | null): HealthTier {
-  if (score == null) return "at_risk";
+  if (score == null || !Number.isFinite(score)) return "at_risk";
   if (score >= 65) return "healthy";
   if (score >= 40) return "at_risk";
   return "critical";
@@ -65,11 +65,15 @@ export function computeRatios(v: RatioInputs): Record<string, number> {
   const n = Object.fromEntries(
     Object.entries(v).map(([k, val]) => [k, num(val as string)]),
   ) as Record<keyof RatioInputs, number>;
-  // b === 0 still short-circuits to 0 for a genuine zero denominator from a
-  // real (non-blank) input — e.g. a service business with R0 COGS is a
-  // true "no cost" case, not missing data. NaN inputs propagate naturally
-  // since NaN !== 0 and any arithmetic on NaN yields NaN.
-  const safe = (a: number, b: number) => (b === 0 ? 0 : a / b);
+  // Genuine 0/0 from *entered* zeros still short-circuits to 0 — e.g. a
+  // service business with R0 COGS and R0 inventory is a true "no stock"
+  // case. A missing (NaN) numerator must not collapse to 0 just because
+  // the denominator happens to be 0; that invented 0 then gets scored
+  // and averaged into health orbs.
+  const safe = (a: number, b: number) => {
+    if (!Number.isFinite(a) || !Number.isFinite(b)) return NaN;
+    return b === 0 ? 0 : a / b;
+  };
 
   const operatingMargin = safe(n.ebit, n.revenue);
   const netMargin = safe(n.netIncome, n.revenue);

@@ -101,9 +101,17 @@ export function healthNarrative(
   profile?: NarrativeProfile,
   market: MoneyMarket = ZA_MARKET,
 ): string {
-  const sorted = [...pillars].sort((a, b) => a.score - b.score);
+  const sorted = [...pillars].filter((p) => Number.isFinite(p.score)).sort((a, b) => a.score - b.score);
   const weakest = sorted[0];
   const strongest = sorted[sorted.length - 1];
+  if (!weakest || !strongest || !Number.isFinite(overallScore)) {
+    return withCoda(
+      "Not enough scored ratios yet to write a health narrative — add the missing figures first.",
+      profile,
+      "health",
+      market,
+    );
+  }
   const tier = tierForScore(overallScore);
   const opening =
     tier === "healthy"
