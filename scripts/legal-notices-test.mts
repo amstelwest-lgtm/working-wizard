@@ -85,6 +85,11 @@ assert(
   "landing declares draftMarket before persist effect deps (avoids TDZ crash)",
 );
 assert(landing.includes("if (!mounted) return;"), "landing persist waits for mount");
+assert(landing.includes('id="landing-sky"'), "landing has a scrolling starfield band");
+assert(landing.includes("landing-sky-photo"), "landing starfield has a photo layer");
+const landingCss = readFileSync(resolve("src/styles/landing.css"), "utf8");
+assert(landingCss.includes("/landing-sky.jpg"), "landing CSS points at the starfield asset");
+assert(landingCss.includes("#landing-sky"), "landing CSS scopes the starfield band");
 
 assert(shell.includes('href="/privacy"'), "collateral footer links to privacy");
 assert(shell.includes('href="/terms"'), "collateral footer links to terms");
