@@ -7,26 +7,27 @@
  */
 
 import type { AccountantProfile } from "@/contexts/accountant-profile";
+import { formatMoney, formatMoneyCompact, ZA_MARKET, type MoneyMarket } from "@/lib/market";
 
 // ── Palette ────────────────────────────────────────────────────────────────
 
 export const C = {
   // Neutrals / typography
-  ink: "#0c1a2e",       // near-black navy — headings
-  body: "#3b4a5e",      // body copy
-  muted: "#64748b",     // secondary text
-  faint: "#94a3b8",     // tertiary / captions
-  line: "#e2e8f0",      // borders
-  hairline: "#eef2f6",  // subtle dividers
-  soft: "#f8fafc",      // panel background
-  softBlue: "#f2f6fb",  // tinted panel background
+  ink: "#0c1a2e", // near-black navy — headings
+  body: "#3b4a5e", // body copy
+  muted: "#64748b", // secondary text
+  faint: "#94a3b8", // tertiary / captions
+  line: "#e2e8f0", // borders
+  hairline: "#eef2f6", // subtle dividers
+  soft: "#f8fafc", // panel background
+  softBlue: "#f2f6fb", // tinted panel background
   white: "#ffffff",
 
   // Finance blues
-  blue: "#1e5b9e",      // primary data blue
-  blueDeep: "#0c2f57",  // deep navy — emphasis fills
+  blue: "#1e5b9e", // primary data blue
+  blueDeep: "#0c2f57", // deep navy — emphasis fills
   blueLight: "#7ea8d4", // secondary series
-  blueSoft: "#e6eef7",  // blue tint fills
+  blueSoft: "#e6eef7", // blue tint fills
 
   // Signals
   green: "#0f9d6b",
@@ -71,8 +72,7 @@ export type ReportTheme = {
  */
 export function resolveTheme(profile: AccountantProfile): ReportTheme {
   const raw = (profile.accentColor || "").trim().toLowerCase();
-  const hasCustomAccent =
-    /^#[0-9a-f]{6}$/.test(raw) && !LEGACY_DEFAULT_ACCENTS.includes(raw);
+  const hasCustomAccent = /^#[0-9a-f]{6}$/.test(raw) && !LEGACY_DEFAULT_ACCENTS.includes(raw);
   const hasClientBrand = Boolean(profile.logoUrl) || hasCustomAccent;
   return {
     accent: hasCustomAccent ? raw : MILON.accent,
@@ -107,14 +107,12 @@ export const T = {
 
 export type Tier = "critical" | "at_risk" | "healthy";
 
-export const TIER_META: Record<
-  Tier,
-  { label: string; color: string; soft: string; deep: string }
-> = {
-  healthy: { label: "HEALTHY", color: C.green, soft: C.greenSoft, deep: C.greenDeep },
-  at_risk: { label: "WATCH", color: C.amber, soft: C.amberSoft, deep: C.amberDeep },
-  critical: { label: "CRITICAL", color: C.red, soft: C.redSoft, deep: C.redDeep },
-};
+export const TIER_META: Record<Tier, { label: string; color: string; soft: string; deep: string }> =
+  {
+    healthy: { label: "HEALTHY", color: C.green, soft: C.greenSoft, deep: C.greenDeep },
+    at_risk: { label: "WATCH", color: C.amber, soft: C.amberSoft, deep: C.amberDeep },
+    critical: { label: "CRITICAL", color: C.red, soft: C.redSoft, deep: C.redDeep },
+  };
 
 export function tierForScore(score?: number | null): Tier {
   if (score == null || !Number.isFinite(score)) return "at_risk";
@@ -129,17 +127,12 @@ export function scoreColor(score?: number | null): string {
 
 // ── Formatting helpers ─────────────────────────────────────────────────────
 
-export function fmtRand(value: number): string {
-  const abs = Math.abs(Math.round(value));
-  return (value < 0 ? "-R " : "R ") + abs.toLocaleString("en-ZA");
+export function fmtRand(value: number, market: MoneyMarket = ZA_MARKET): string {
+  return formatMoney(Math.round(value), market);
 }
 
-export function fmtRandCompact(value: number): string {
-  const abs = Math.abs(value);
-  const sign = value < 0 ? "-" : "";
-  if (abs >= 1_000_000) return `${sign}R${(abs / 1_000_000).toFixed(1)}m`;
-  if (abs >= 1_000) return `${sign}R${Math.round(abs / 1_000)}k`;
-  return `${sign}R${Math.round(abs)}`;
+export function fmtRandCompact(value: number, market: MoneyMarket = ZA_MARKET): string {
+  return formatMoneyCompact(value, market);
 }
 
 export function fmtPct(value: number, dp = 1): string {

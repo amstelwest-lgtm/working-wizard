@@ -7,9 +7,11 @@
 
 import { View, Text, Image, StyleSheet } from "@react-pdf/renderer";
 import type { AccountantProfile } from "@/contexts/accountant-profile";
+import { formatDateTime } from "@/lib/market";
 import { C, resolveTheme } from "./theme";
 import { MilonMark } from "./glyphs";
 import type { ReportSignoffStamp } from "./pdf-document";
+import { usePdfMarket } from "./pdf-market";
 
 type Props = {
   profile: AccountantProfile;
@@ -50,8 +52,9 @@ const styles = StyleSheet.create({
 
 export function ReportFooter({ profile, fixed, reviewSignoff }: Props) {
   const theme = resolveTheme(profile);
+  const market = usePdfMarket();
   const signoffDate = reviewSignoff
-    ? new Date(reviewSignoff.signedOffAt).toLocaleString("en-ZA", {
+    ? formatDateTime(reviewSignoff.signedOffAt, market, {
         day: "numeric",
         month: "short",
         year: "numeric",
@@ -65,9 +68,7 @@ export function ReportFooter({ profile, fixed, reviewSignoff }: Props) {
       <View style={styles.hairline} />
       <View style={styles.row}>
         <View style={{ flex: 2 }}>
-          <Text style={styles.confidential}>
-            Confidential — prepared for the addressee only
-          </Text>
+          <Text style={styles.confidential}>Confidential — prepared for the addressee only</Text>
           {reviewSignoff ? (
             <View>
               {reviewSignoff.signatureData ? (
@@ -78,9 +79,7 @@ export function ReportFooter({ profile, fixed, reviewSignoff }: Props) {
               ) : null}
               <Text style={styles.signoff}>
                 Reviewed & signed off by{" "}
-                {reviewSignoff.signedOffByInitials
-                  ? `${reviewSignoff.signedOffByInitials} · `
-                  : ""}
+                {reviewSignoff.signedOffByInitials ? `${reviewSignoff.signedOffByInitials} · ` : ""}
                 {reviewSignoff.signedOffByName}
                 {reviewSignoff.signedOffByTitle ? `, ${reviewSignoff.signedOffByTitle}` : ""}
                 {reviewSignoff.firmName ? ` · ${reviewSignoff.firmName}` : ""} · {signoffDate}
@@ -91,15 +90,11 @@ export function ReportFooter({ profile, fixed, reviewSignoff }: Props) {
 
         <Text
           style={styles.pageNumber}
-          render={({ pageNumber, totalPages }) =>
-            `${pageNumber} / ${totalPages}`
-          }
+          render={({ pageNumber, totalPages }) => `${pageNumber} / ${totalPages}`}
         />
 
         <View style={styles.brandBlock}>
-          {theme.firmName ? (
-            <Text style={styles.firmName}>{theme.firmName}</Text>
-          ) : null}
+          {theme.firmName ? <Text style={styles.firmName}>{theme.firmName}</Text> : null}
           <View style={styles.milonRow}>
             <Text style={styles.milon}>Prepared with</Text>
             <MilonMark fontSize={6.5} />

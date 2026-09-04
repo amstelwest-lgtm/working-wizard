@@ -2,13 +2,33 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { toast } from "sonner";
 import {
-  Download, Eye, Loader2, FileText, Lightbulb, BarChart2,
-  Droplets, TrendingUp, ShieldCheck, Layers, Users,
-  BarChart, Trophy, Settings, Zap, ExternalLink, ArrowLeft,
+  Download,
+  Eye,
+  Loader2,
+  FileText,
+  Lightbulb,
+  BarChart2,
+  Droplets,
+  TrendingUp,
+  ShieldCheck,
+  Layers,
+  Users,
+  BarChart,
+  Trophy,
+  Settings,
+  Zap,
+  ExternalLink,
+  ArrowLeft,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
@@ -21,7 +41,13 @@ import {
   effectiveCashRunwayWeeks,
   runwayWeeksFromClosings,
 } from "@/lib/cash-runway";
-import { hashFigures, latestSnapshotId, recordDelivery, warnIfDeliveryFailed, warnIfPdfArchiveFailed } from "@/lib/advisory-deliveries";
+import {
+  hashFigures,
+  latestSnapshotId,
+  recordDelivery,
+  warnIfDeliveryFailed,
+  warnIfPdfArchiveFailed,
+} from "@/lib/advisory-deliveries";
 import { useAuth } from "@/hooks/use-auth";
 import { useTrack } from "@/hooks/use-track";
 import { PlaybookDrawer } from "@/components/playbook-drawer";
@@ -40,16 +66,18 @@ import type { RatioMovementRow } from "@/reports/ratio-movement";
 import type { BenchmarkRow } from "@/reports/benchmark-report";
 import type { ClientReviewSignoff } from "@/lib/review-signoffs.functions";
 import type { ReportSignoffStamp } from "@/components/pdf/pdf-document";
-import {
-  parseOperatingProfile,
-  type ClientOperatingProfile,
-} from "@/lib/client-profile";
-import {
-  profileIndustryLabel,
-  profilePriorityWeight,
-} from "@/lib/profile-signals";
+import { parseOperatingProfile, type ClientOperatingProfile } from "@/lib/client-profile";
+import { profileIndustryLabel, profilePriorityWeight } from "@/lib/profile-signals";
 import { parseDebtSchedule, totalDebtFromSchedule } from "@/lib/debt-schedule";
 import { resolvePriorSnapshot, withPriorRatioScores } from "@/lib/prior-period";
+import {
+  coerceMarketSelection,
+  localizeCopy,
+  parseMarketSelection,
+  resolveMarket,
+  ZA_MARKET,
+  type ResolvedMarket,
+} from "@/lib/market";
 
 export const Route = createFileRoute("/_authenticated/reports/")({
   validateSearch: (search: Record<string, unknown>) => ({
@@ -81,8 +109,18 @@ const REPORT_KEYS = [
 // ── Constants ──────────────────────────────────────────────────────────────
 
 const MONTHS = [
-  "January","February","March","April","May","June",
-  "July","August","September","October","November","December",
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
 ];
 const CURRENT_YEAR = new Date().getFullYear();
 const YEARS = [CURRENT_YEAR - 2, CURRENT_YEAR - 1, CURRENT_YEAR, CURRENT_YEAR + 1].map(String);
@@ -125,93 +163,905 @@ type Settings = {
 // ── Mock data (demo) ───────────────────────────────────────────────────────
 
 const MOCK_RATIOS: RatioResult[] = [
-  { ratio_key: "grossMargin", ratio_name: "Gross Margin", pillar: "profit", current_value: 0.38, health_score: 62, health_tier: "at_risk", prior_period_value: 0.35, prior_period_score: 54, formatted_value: "38.0%" },
-  { ratio_key: "operatingMargin", ratio_name: "Operating Margin", pillar: "profit", current_value: 0.19, health_score: 76, health_tier: "healthy", prior_period_value: 0.17, prior_period_score: 68, formatted_value: "19.0%" },
-  { ratio_key: "revenueGrowth", ratio_name: "Revenue Growth", pillar: "profit", current_value: 0.136, health_score: 41, health_tier: "at_risk", prior_period_value: 0.04, prior_period_score: 33, formatted_value: "13.6%" },
-  { ratio_key: "fixedCostRatio", ratio_name: "Fixed Cost Ratio", pillar: "profit", current_value: 0.28, health_score: 71, health_tier: "healthy", prior_period_value: 0.30, prior_period_score: 65, formatted_value: "28.0%" },
-  { ratio_key: "assetTurnover", ratio_name: "Asset Turnover", pillar: "assets", current_value: 1.30, health_score: 74, health_tier: "healthy", prior_period_value: 1.22, prior_period_score: 68, formatted_value: "1.30×" },
-  { ratio_key: "roa", ratio_name: "Return on Assets", pillar: "assets", current_value: 0.14, health_score: 83, health_tier: "healthy", prior_period_value: 0.12, prior_period_score: 74, formatted_value: "14.0%" },
-  { ratio_key: "inventoryDays", ratio_name: "Inventory Days", pillar: "assets", current_value: 47, health_score: 55, health_tier: "at_risk", prior_period_value: 52, prior_period_score: 48, formatted_value: "47 d" },
-  { ratio_key: "equityMultiplier", ratio_name: "Equity Multiplier", pillar: "financing", current_value: 2.1, health_score: 70, health_tier: "healthy", prior_period_value: 2.3, prior_period_score: 63, formatted_value: "2.10×" },
-  { ratio_key: "debtToEquity", ratio_name: "Debt-to-Equity", pillar: "financing", current_value: 1.1, health_score: 67, health_tier: "at_risk", prior_period_value: 1.2, prior_period_score: 62, formatted_value: "1.10×" },
-  { ratio_key: "debtToAssets", ratio_name: "Debt-to-Assets", pillar: "financing", current_value: 0.52, health_score: 61, health_tier: "at_risk", prior_period_value: 0.55, prior_period_score: 55, formatted_value: "52.0%" },
-  { ratio_key: "currentRatio", ratio_name: "Current Ratio", pillar: "cash", current_value: 1.15, health_score: 28, health_tier: "critical", prior_period_value: 1.40, prior_period_score: 46, formatted_value: "1.15×" },
-  { ratio_key: "debtorDays", ratio_name: "Debtor Days", pillar: "cash", current_value: 54, health_score: 40, health_tier: "at_risk", prior_period_value: 49, prior_period_score: 49, formatted_value: "54 d" },
-  { ratio_key: "ocfToEbitda", ratio_name: "Cash Quality", pillar: "cash", current_value: 0.72, health_score: 60, health_tier: "at_risk", prior_period_value: 0.79, prior_period_score: 67, formatted_value: "0.72×" },
-  { ratio_key: "workingCapitalFunding", ratio_name: "WC Funding", pillar: "cash", current_value: 0.31, health_score: 32, health_tier: "critical", prior_period_value: 0.27, prior_period_score: 42, formatted_value: "31.0%" },
+  {
+    ratio_key: "grossMargin",
+    ratio_name: "Gross Margin",
+    pillar: "profit",
+    current_value: 0.38,
+    health_score: 62,
+    health_tier: "at_risk",
+    prior_period_value: 0.35,
+    prior_period_score: 54,
+    formatted_value: "38.0%",
+  },
+  {
+    ratio_key: "operatingMargin",
+    ratio_name: "Operating Margin",
+    pillar: "profit",
+    current_value: 0.19,
+    health_score: 76,
+    health_tier: "healthy",
+    prior_period_value: 0.17,
+    prior_period_score: 68,
+    formatted_value: "19.0%",
+  },
+  {
+    ratio_key: "revenueGrowth",
+    ratio_name: "Revenue Growth",
+    pillar: "profit",
+    current_value: 0.136,
+    health_score: 41,
+    health_tier: "at_risk",
+    prior_period_value: 0.04,
+    prior_period_score: 33,
+    formatted_value: "13.6%",
+  },
+  {
+    ratio_key: "fixedCostRatio",
+    ratio_name: "Fixed Cost Ratio",
+    pillar: "profit",
+    current_value: 0.28,
+    health_score: 71,
+    health_tier: "healthy",
+    prior_period_value: 0.3,
+    prior_period_score: 65,
+    formatted_value: "28.0%",
+  },
+  {
+    ratio_key: "assetTurnover",
+    ratio_name: "Asset Turnover",
+    pillar: "assets",
+    current_value: 1.3,
+    health_score: 74,
+    health_tier: "healthy",
+    prior_period_value: 1.22,
+    prior_period_score: 68,
+    formatted_value: "1.30×",
+  },
+  {
+    ratio_key: "roa",
+    ratio_name: "Return on Assets",
+    pillar: "assets",
+    current_value: 0.14,
+    health_score: 83,
+    health_tier: "healthy",
+    prior_period_value: 0.12,
+    prior_period_score: 74,
+    formatted_value: "14.0%",
+  },
+  {
+    ratio_key: "inventoryDays",
+    ratio_name: "Inventory Days",
+    pillar: "assets",
+    current_value: 47,
+    health_score: 55,
+    health_tier: "at_risk",
+    prior_period_value: 52,
+    prior_period_score: 48,
+    formatted_value: "47 d",
+  },
+  {
+    ratio_key: "equityMultiplier",
+    ratio_name: "Equity Multiplier",
+    pillar: "financing",
+    current_value: 2.1,
+    health_score: 70,
+    health_tier: "healthy",
+    prior_period_value: 2.3,
+    prior_period_score: 63,
+    formatted_value: "2.10×",
+  },
+  {
+    ratio_key: "debtToEquity",
+    ratio_name: "Debt-to-Equity",
+    pillar: "financing",
+    current_value: 1.1,
+    health_score: 67,
+    health_tier: "at_risk",
+    prior_period_value: 1.2,
+    prior_period_score: 62,
+    formatted_value: "1.10×",
+  },
+  {
+    ratio_key: "debtToAssets",
+    ratio_name: "Debt-to-Assets",
+    pillar: "financing",
+    current_value: 0.52,
+    health_score: 61,
+    health_tier: "at_risk",
+    prior_period_value: 0.55,
+    prior_period_score: 55,
+    formatted_value: "52.0%",
+  },
+  {
+    ratio_key: "currentRatio",
+    ratio_name: "Current Ratio",
+    pillar: "cash",
+    current_value: 1.15,
+    health_score: 28,
+    health_tier: "critical",
+    prior_period_value: 1.4,
+    prior_period_score: 46,
+    formatted_value: "1.15×",
+  },
+  {
+    ratio_key: "debtorDays",
+    ratio_name: "Debtor Days",
+    pillar: "cash",
+    current_value: 54,
+    health_score: 40,
+    health_tier: "at_risk",
+    prior_period_value: 49,
+    prior_period_score: 49,
+    formatted_value: "54 d",
+  },
+  {
+    ratio_key: "ocfToEbitda",
+    ratio_name: "Cash Quality",
+    pillar: "cash",
+    current_value: 0.72,
+    health_score: 60,
+    health_tier: "at_risk",
+    prior_period_value: 0.79,
+    prior_period_score: 67,
+    formatted_value: "0.72×",
+  },
+  {
+    ratio_key: "workingCapitalFunding",
+    ratio_name: "WC Funding",
+    pillar: "cash",
+    current_value: 0.31,
+    health_score: 32,
+    health_tier: "critical",
+    prior_period_value: 0.27,
+    prior_period_score: 42,
+    formatted_value: "31.0%",
+  },
 ];
 
 const MOCK_INTERVENTIONS: Intervention[] = [
-  { ratio_key: "currentRatio", ratio_name: "Current Ratio", health_tier: "critical", step_number: 1, step_title: "Build a 13-week rolling cash flow forecast", step_description: "Create a weekly cash projection covering the next 13 weeks. Update every Monday with actual vs. forecast figures.", timeframe: "1–2 weeks", effort: "Low", impact: "9/10", category: "cash" },
-  { ratio_key: "workingCapitalFunding", ratio_name: "WC Funding", health_tier: "critical", step_number: 1, step_title: "Invoice immediately on job completion — same-day billing", step_description: "Set a business rule: every completed job is invoiced the same day. Late invoicing is the #1 cause of high working capital funding intensity.", timeframe: "1 week", effort: "Low", impact: "8/10", category: "cash" },
-  { ratio_key: "debtorDays", ratio_name: "Debtor Days", health_tier: "at_risk", step_number: 1, step_title: "Launch a structured 3-stage debtor chasing schedule", step_description: "Implement a formal collection process: reminder at 25 days, phone call at 35 days, final notice at 45 days.", timeframe: "2 weeks", effort: "Medium", impact: "8/10", category: "cash" },
-  { ratio_key: "grossMargin", ratio_name: "Gross Margin", health_tier: "at_risk", step_number: 1, step_title: "Raise prices on top 3 products by 5%", step_description: "A 5% price increase on top-selling lines goes straight to gross margin. Test on new customers first.", timeframe: "2–4 weeks", effort: "Low", impact: "10/10", category: "profit" },
+  {
+    ratio_key: "currentRatio",
+    ratio_name: "Current Ratio",
+    health_tier: "critical",
+    step_number: 1,
+    step_title: "Build a 13-week rolling cash flow forecast",
+    step_description:
+      "Create a weekly cash projection covering the next 13 weeks. Update every Monday with actual vs. forecast figures.",
+    timeframe: "1–2 weeks",
+    effort: "Low",
+    impact: "9/10",
+    category: "cash",
+  },
+  {
+    ratio_key: "workingCapitalFunding",
+    ratio_name: "WC Funding",
+    health_tier: "critical",
+    step_number: 1,
+    step_title: "Invoice immediately on job completion — same-day billing",
+    step_description:
+      "Set a business rule: every completed job is invoiced the same day. Late invoicing is the #1 cause of high working capital funding intensity.",
+    timeframe: "1 week",
+    effort: "Low",
+    impact: "8/10",
+    category: "cash",
+  },
+  {
+    ratio_key: "debtorDays",
+    ratio_name: "Debtor Days",
+    health_tier: "at_risk",
+    step_number: 1,
+    step_title: "Launch a structured 3-stage debtor chasing schedule",
+    step_description:
+      "Implement a formal collection process: reminder at 25 days, phone call at 35 days, final notice at 45 days.",
+    timeframe: "2 weeks",
+    effort: "Medium",
+    impact: "8/10",
+    category: "cash",
+  },
+  {
+    ratio_key: "grossMargin",
+    ratio_name: "Gross Margin",
+    health_tier: "at_risk",
+    step_number: 1,
+    step_title: "Raise prices on top 3 products by 5%",
+    step_description:
+      "A 5% price increase on top-selling lines goes straight to gross margin. Test on new customers first.",
+    timeframe: "2–4 weeks",
+    effort: "Low",
+    impact: "10/10",
+    category: "profit",
+  },
 ];
 
 const MOCK_FORECAST: CashForecastWeek[] = [
-  { period_label: "Week 1", opening_balance: 245000, total_receipts: 185000, total_payments: 210000, net_movement: -25000, closing_balance: 220000, scenario: "moderate", runway_weeks: 13 },
-  { period_label: "Week 2", opening_balance: 220000, total_receipts: 195000, total_payments: 205000, net_movement: -10000, closing_balance: 210000, scenario: "moderate", runway_weeks: 12 },
-  { period_label: "Week 3", opening_balance: 210000, total_receipts: 165000, total_payments: 220000, net_movement: -55000, closing_balance: 155000, scenario: "moderate", runway_weeks: 11 },
-  { period_label: "Week 4", opening_balance: 155000, total_receipts: 210000, total_payments: 195000, net_movement: 15000, closing_balance: 170000, scenario: "moderate", runway_weeks: 10 },
-  { period_label: "Week 5", opening_balance: 170000, total_receipts: 145000, total_payments: 230000, net_movement: -85000, closing_balance: 85000, scenario: "moderate", runway_weeks: 9 },
-  { period_label: "Week 6", opening_balance: 85000, total_receipts: 275000, total_payments: 195000, net_movement: 80000, closing_balance: 165000, scenario: "moderate", runway_weeks: 8 },
-  { period_label: "Week 7", opening_balance: 165000, total_receipts: 155000, total_payments: 210000, net_movement: -55000, closing_balance: 110000, scenario: "moderate", runway_weeks: 7 },
-  { period_label: "Week 8", opening_balance: 110000, total_receipts: 190000, total_payments: 195000, net_movement: -5000, closing_balance: 105000, scenario: "moderate", runway_weeks: 6 },
-  { period_label: "Week 9", opening_balance: 105000, total_receipts: 160000, total_payments: 215000, net_movement: -55000, closing_balance: 50000, scenario: "moderate", runway_weeks: 5 },
-  { period_label: "Week 10", opening_balance: 50000, total_receipts: 290000, total_payments: 195000, net_movement: 95000, closing_balance: 145000, scenario: "moderate", runway_weeks: 4 },
-  { period_label: "Week 11", opening_balance: 145000, total_receipts: 175000, total_payments: 200000, net_movement: -25000, closing_balance: 120000, scenario: "moderate", runway_weeks: 3 },
-  { period_label: "Week 12", opening_balance: 120000, total_receipts: 205000, total_payments: 195000, net_movement: 10000, closing_balance: 130000, scenario: "moderate", runway_weeks: 2 },
-  { period_label: "Week 13", opening_balance: 130000, total_receipts: 215000, total_payments: 195000, net_movement: 20000, closing_balance: 150000, scenario: "moderate", runway_weeks: 1 },
+  {
+    period_label: "Week 1",
+    opening_balance: 245000,
+    total_receipts: 185000,
+    total_payments: 210000,
+    net_movement: -25000,
+    closing_balance: 220000,
+    scenario: "moderate",
+    runway_weeks: 13,
+  },
+  {
+    period_label: "Week 2",
+    opening_balance: 220000,
+    total_receipts: 195000,
+    total_payments: 205000,
+    net_movement: -10000,
+    closing_balance: 210000,
+    scenario: "moderate",
+    runway_weeks: 12,
+  },
+  {
+    period_label: "Week 3",
+    opening_balance: 210000,
+    total_receipts: 165000,
+    total_payments: 220000,
+    net_movement: -55000,
+    closing_balance: 155000,
+    scenario: "moderate",
+    runway_weeks: 11,
+  },
+  {
+    period_label: "Week 4",
+    opening_balance: 155000,
+    total_receipts: 210000,
+    total_payments: 195000,
+    net_movement: 15000,
+    closing_balance: 170000,
+    scenario: "moderate",
+    runway_weeks: 10,
+  },
+  {
+    period_label: "Week 5",
+    opening_balance: 170000,
+    total_receipts: 145000,
+    total_payments: 230000,
+    net_movement: -85000,
+    closing_balance: 85000,
+    scenario: "moderate",
+    runway_weeks: 9,
+  },
+  {
+    period_label: "Week 6",
+    opening_balance: 85000,
+    total_receipts: 275000,
+    total_payments: 195000,
+    net_movement: 80000,
+    closing_balance: 165000,
+    scenario: "moderate",
+    runway_weeks: 8,
+  },
+  {
+    period_label: "Week 7",
+    opening_balance: 165000,
+    total_receipts: 155000,
+    total_payments: 210000,
+    net_movement: -55000,
+    closing_balance: 110000,
+    scenario: "moderate",
+    runway_weeks: 7,
+  },
+  {
+    period_label: "Week 8",
+    opening_balance: 110000,
+    total_receipts: 190000,
+    total_payments: 195000,
+    net_movement: -5000,
+    closing_balance: 105000,
+    scenario: "moderate",
+    runway_weeks: 6,
+  },
+  {
+    period_label: "Week 9",
+    opening_balance: 105000,
+    total_receipts: 160000,
+    total_payments: 215000,
+    net_movement: -55000,
+    closing_balance: 50000,
+    scenario: "moderate",
+    runway_weeks: 5,
+  },
+  {
+    period_label: "Week 10",
+    opening_balance: 50000,
+    total_receipts: 290000,
+    total_payments: 195000,
+    net_movement: 95000,
+    closing_balance: 145000,
+    scenario: "moderate",
+    runway_weeks: 4,
+  },
+  {
+    period_label: "Week 11",
+    opening_balance: 145000,
+    total_receipts: 175000,
+    total_payments: 200000,
+    net_movement: -25000,
+    closing_balance: 120000,
+    scenario: "moderate",
+    runway_weeks: 3,
+  },
+  {
+    period_label: "Week 12",
+    opening_balance: 120000,
+    total_receipts: 205000,
+    total_payments: 195000,
+    net_movement: 10000,
+    closing_balance: 130000,
+    scenario: "moderate",
+    runway_weeks: 2,
+  },
+  {
+    period_label: "Week 13",
+    opening_balance: 130000,
+    total_receipts: 215000,
+    total_payments: 195000,
+    net_movement: 20000,
+    closing_balance: 150000,
+    scenario: "moderate",
+    runway_weeks: 1,
+  },
 ];
 
-const MOCK_WC: WorkingCapitalData = { debtor_days: 54, debtor_days_prior: 49, inventory_days: 47, inventory_days_prior: 52, wip_days: 12, wip_days_prior: 14, creditor_days: 35, creditor_days_prior: 33, cash_conversion_cycle: 78, ccc_prior: 82, working_capital_funding: 0.31, working_capital_utilization: 0.65, working_capital_days: 90, annual_revenue: 12_500_000, cash_trapped_rands: 854_167, health_scores: { debtor_days: 40, inventory_days: 55, creditor_days: 75, wip_days: 68, working_capital_days: 48, working_capital_funding: 32, working_capital_utilization: 58 } };
+const MOCK_WC: WorkingCapitalData = {
+  debtor_days: 54,
+  debtor_days_prior: 49,
+  inventory_days: 47,
+  inventory_days_prior: 52,
+  wip_days: 12,
+  wip_days_prior: 14,
+  creditor_days: 35,
+  creditor_days_prior: 33,
+  cash_conversion_cycle: 78,
+  ccc_prior: 82,
+  working_capital_funding: 0.31,
+  working_capital_utilization: 0.65,
+  working_capital_days: 90,
+  annual_revenue: 12_500_000,
+  cash_trapped_rands: 854_167,
+  health_scores: {
+    debtor_days: 40,
+    inventory_days: 55,
+    creditor_days: 75,
+    wip_days: 68,
+    working_capital_days: 48,
+    working_capital_funding: 32,
+    working_capital_utilization: 58,
+  },
+};
 
-const MOCK_PROFIT: ProfitabilityData = { revenue: 12_500_000, gross_profit: 4_750_000, gross_margin_pct: 0.38, gross_margin_score: 62, gross_margin_tier: "at_risk", operating_profit: 2_375_000, operating_margin_pct: 0.19, operating_margin_score: 76, operating_margin_tier: "healthy", ebt: 2_218_750, interest_burden_pct: 0.177, interest_burden_score: 72, tax: 554_688, tax_burden_pct: 0.044, tax_burden_score: 74, net_profit: 1_664_063, net_margin_pct: 0.133, net_margin_score: 68, net_margin_tier: "at_risk", prior_period: { revenue: 11_000_000, gross_profit: 3_850_000, gross_margin_pct: 0.35, gross_margin_score: 54, operating_profit: 1_980_000, operating_margin_pct: 0.18, operating_margin_score: 68, ebt: 1_848_000, interest_burden_pct: 0.168, interest_burden_score: 65, tax: 462_000, tax_burden_pct: 0.042, tax_burden_score: 68, net_profit: 1_386_000, net_margin_pct: 0.126, net_margin_score: 62 } };
+const MOCK_PROFIT: ProfitabilityData = {
+  revenue: 12_500_000,
+  gross_profit: 4_750_000,
+  gross_margin_pct: 0.38,
+  gross_margin_score: 62,
+  gross_margin_tier: "at_risk",
+  operating_profit: 2_375_000,
+  operating_margin_pct: 0.19,
+  operating_margin_score: 76,
+  operating_margin_tier: "healthy",
+  ebt: 2_218_750,
+  interest_burden_pct: 0.177,
+  interest_burden_score: 72,
+  tax: 554_688,
+  tax_burden_pct: 0.044,
+  tax_burden_score: 74,
+  net_profit: 1_664_063,
+  net_margin_pct: 0.133,
+  net_margin_score: 68,
+  net_margin_tier: "at_risk",
+  prior_period: {
+    revenue: 11_000_000,
+    gross_profit: 3_850_000,
+    gross_margin_pct: 0.35,
+    gross_margin_score: 54,
+    operating_profit: 1_980_000,
+    operating_margin_pct: 0.18,
+    operating_margin_score: 68,
+    ebt: 1_848_000,
+    interest_burden_pct: 0.168,
+    interest_burden_score: 65,
+    tax: 462_000,
+    tax_burden_pct: 0.042,
+    tax_burden_score: 68,
+    net_profit: 1_386_000,
+    net_margin_pct: 0.126,
+    net_margin_score: 62,
+  },
+};
 
-const MOCK_LEVERAGE: LeverageSolvencyData = { total_debt: 3_800_000, total_equity: 3_530_000, total_assets: 7_330_000, debt_facilities_captured: true, net_profit: 450_000, drawings: 120_000, prior_equity: 3_200_000, debt_lines: [{ label: "ABSA Business Term Loan", amount: 1_500_000, annual_rate_pct: 11.5, maturity_year: 2026 }, { label: "Working Capital Facility", amount: 850_000, annual_rate_pct: 13.0, maturity_year: 2025 }, { label: "Equipment Finance (John Deere)", amount: 950_000, annual_rate_pct: 9.8, maturity_year: 2028 }, { label: "Director Loan Account", amount: 500_000, annual_rate_pct: 0, maturity_year: 2027 }], health_scores: { fundingStructure: 52, equityMultiplier: 70, debtToEquity: 67, debtToAssets: 61, interestBurden: 72 } };
+const MOCK_LEVERAGE: LeverageSolvencyData = {
+  total_debt: 3_800_000,
+  total_equity: 3_530_000,
+  total_assets: 7_330_000,
+  debt_facilities_captured: true,
+  net_profit: 450_000,
+  drawings: 120_000,
+  prior_equity: 3_200_000,
+  debt_lines: [
+    {
+      label: "ABSA Business Term Loan",
+      amount: 1_500_000,
+      annual_rate_pct: 11.5,
+      maturity_year: 2026,
+    },
+    {
+      label: "Working Capital Facility",
+      amount: 850_000,
+      annual_rate_pct: 13.0,
+      maturity_year: 2025,
+    },
+    {
+      label: "Equipment Finance (John Deere)",
+      amount: 950_000,
+      annual_rate_pct: 9.8,
+      maturity_year: 2028,
+    },
+    { label: "Director Loan Account", amount: 500_000, annual_rate_pct: 0, maturity_year: 2027 },
+  ],
+  health_scores: {
+    fundingStructure: 52,
+    equityMultiplier: 70,
+    debtToEquity: 67,
+    debtToAssets: 61,
+    interestBurden: 72,
+  },
+};
 
-const MOCK_ASSETS: AssetProductivityData = { roe: 0.127, net_margin: 0.133, asset_turnover: 1.30, equity_multiplier: 2.1, capex_periods: [{ label: "Jun 2024", capex: 320_000, depreciation: 280_000 }, { label: "Sep 2024", capex: 180_000, depreciation: 285_000 }, { label: "Dec 2024", capex: 240_000, depreciation: 290_000 }, { label: "Jun 2025", capex: 410_000, depreciation: 295_000 }], health_scores: { assetTurnover: 74, roa: 83, fixedCapitalUtilization: 65, assetReinvestmentRatio: 68, capexIntensity: 71 }, ratios: { assetTurnover: { value: "1.30×" }, roa: { value: "14.0%" }, fixedCapitalUtilization: { value: "68.0%" }, assetReinvestmentRatio: { value: "1.39×" }, capexIntensity: { value: "3.3%" } } };
+const MOCK_ASSETS: AssetProductivityData = {
+  roe: 0.127,
+  net_margin: 0.133,
+  asset_turnover: 1.3,
+  equity_multiplier: 2.1,
+  capex_periods: [
+    { label: "Jun 2024", capex: 320_000, depreciation: 280_000 },
+    { label: "Sep 2024", capex: 180_000, depreciation: 285_000 },
+    { label: "Dec 2024", capex: 240_000, depreciation: 290_000 },
+    { label: "Jun 2025", capex: 410_000, depreciation: 295_000 },
+  ],
+  health_scores: {
+    assetTurnover: 74,
+    roa: 83,
+    fixedCapitalUtilization: 65,
+    assetReinvestmentRatio: 68,
+    capexIntensity: 71,
+  },
+  ratios: {
+    assetTurnover: { value: "1.30×" },
+    roa: { value: "14.0%" },
+    fixedCapitalUtilization: { value: "68.0%" },
+    assetReinvestmentRatio: { value: "1.39×" },
+    capexIntensity: { value: "3.3%" },
+  },
+};
 
-const MOCK_LABOR: LaborProductivityData = { employee_count: 47, total_labor_cost: 8_750_000, total_revenue: 12_500_000, total_gp: 4_750_000, gp_known: true, revenue_per_employee: 265_957, rpe_prior: 244_444, gp_per_labor_rand: 0.543, revenue_growth: 0.136, inflation_rate: 0.057, periods: [{ label: "Jun 2024", revenue: 10_250_000, employees: 42, labor_cost: 7_350_000 }, { label: "Sep 2024", revenue: 10_800_000, employees: 44, labor_cost: 7_750_000 }, { label: "Dec 2024", revenue: 11_500_000, employees: 45, labor_cost: 8_200_000 }, { label: "Jun 2025", revenue: 12_500_000, employees: 47, labor_cost: 8_750_000 }], health_scores: { gpToLabor: 64, salesPerEmployee: 72, revenueGrowth: 41 } };
+const MOCK_LABOR: LaborProductivityData = {
+  employee_count: 47,
+  total_labor_cost: 8_750_000,
+  total_revenue: 12_500_000,
+  total_gp: 4_750_000,
+  gp_known: true,
+  revenue_per_employee: 265_957,
+  rpe_prior: 244_444,
+  gp_per_labor_rand: 0.543,
+  revenue_growth: 0.136,
+  inflation_rate: 0.057,
+  periods: [
+    { label: "Jun 2024", revenue: 10_250_000, employees: 42, labor_cost: 7_350_000 },
+    { label: "Sep 2024", revenue: 10_800_000, employees: 44, labor_cost: 7_750_000 },
+    { label: "Dec 2024", revenue: 11_500_000, employees: 45, labor_cost: 8_200_000 },
+    { label: "Jun 2025", revenue: 12_500_000, employees: 47, labor_cost: 8_750_000 },
+  ],
+  health_scores: { gpToLabor: 64, salesPerEmployee: 72, revenueGrowth: 41 },
+};
 
 const MOCK_MOVEMENT: RatioMovementRow[] = [
-  { ratio_key: "grossMargin", ratio_name: "Gross Margin", pillar: "profit", unit: "%", current: 0.38, three_months: 0.37, six_months: 0.36, twelve_months: 0.35 },
-  { ratio_key: "operatingMargin", ratio_name: "Operating Margin", pillar: "profit", unit: "%", current: 0.19, three_months: 0.18, six_months: 0.18, twelve_months: 0.17 },
-  { ratio_key: "revenueGrowth", ratio_name: "Revenue Growth", pillar: "profit", unit: "%", current: 0.136, three_months: 0.11, six_months: 0.08, twelve_months: 0.04 },
-  { ratio_key: "fixedCostRatio", ratio_name: "Fixed Cost Ratio", pillar: "profit", unit: "%", current: 0.28, three_months: 0.29, six_months: 0.30, twelve_months: 0.31, lower_is_better: true },
-  { ratio_key: "netMargin", ratio_name: "Net Margin", pillar: "profit", unit: "%", current: 0.133, three_months: 0.128, six_months: 0.121, twelve_months: 0.126 },
-  { ratio_key: "assetTurnover", ratio_name: "Asset Turnover", pillar: "assets", unit: "×", current: 1.30, three_months: 1.27, six_months: 1.24, twelve_months: 1.22 },
-  { ratio_key: "roa", ratio_name: "Return on Assets", pillar: "assets", unit: "%", current: 0.14, three_months: 0.135, six_months: 0.13, twelve_months: 0.12 },
-  { ratio_key: "inventoryDays", ratio_name: "Inventory Days", pillar: "assets", unit: "d", current: 47, three_months: 49, six_months: 50, twelve_months: 52, lower_is_better: true },
-  { ratio_key: "fcUtilization", ratio_name: "Fixed Capital Utilization", pillar: "assets", unit: "%", current: 0.68, three_months: 0.66, six_months: 0.65, twelve_months: 0.63 },
-  { ratio_key: "capexIntensity", ratio_name: "Capex Intensity", pillar: "assets", unit: "%", current: 0.033, three_months: 0.028, six_months: 0.032, twelve_months: 0.025 },
-  { ratio_key: "equityMultiplier", ratio_name: "Equity Multiplier", pillar: "financing", unit: "×", current: 2.1, three_months: 2.15, six_months: 2.2, twelve_months: 2.3, lower_is_better: true },
-  { ratio_key: "debtToEquity", ratio_name: "Debt-to-Equity", pillar: "financing", unit: "×", current: 1.10, three_months: 1.15, six_months: 1.18, twelve_months: 1.20, lower_is_better: true },
-  { ratio_key: "debtToAssets", ratio_name: "Debt-to-Assets", pillar: "financing", unit: "%", current: 0.52, three_months: 0.53, six_months: 0.54, twelve_months: 0.55, lower_is_better: true },
-  { ratio_key: "interestBurden", ratio_name: "Interest Burden", pillar: "financing", unit: "%", current: 0.177, three_months: 0.182, six_months: 0.185, twelve_months: 0.168, lower_is_better: true },
-  { ratio_key: "fundingStructure", ratio_name: "Funding Structure", pillar: "financing", unit: "%", current: 0.52, three_months: 0.53, six_months: 0.55, twelve_months: 0.55, lower_is_better: true },
-  { ratio_key: "currentRatio", ratio_name: "Current Ratio", pillar: "cash", unit: "×", current: 1.15, three_months: 1.22, six_months: 1.32, twelve_months: 1.40 },
-  { ratio_key: "debtorDays", ratio_name: "Debtor Days", pillar: "cash", unit: "d", current: 54, three_months: 52, six_months: 51, twelve_months: 49, lower_is_better: true },
-  { ratio_key: "ocfToEbitda", ratio_name: "Cash Quality (OCF/EBITDA)", pillar: "cash", unit: "×", current: 0.72, three_months: 0.75, six_months: 0.77, twelve_months: 0.79 },
-  { ratio_key: "wcFunding", ratio_name: "WC Funding Ratio", pillar: "cash", unit: "%", current: 0.31, three_months: 0.30, six_months: 0.28, twelve_months: 0.27, lower_is_better: true },
-  { ratio_key: "ccc", ratio_name: "Cash Conversion Cycle", pillar: "cash", unit: "d", current: 78, three_months: 80, six_months: 81, twelve_months: 82, lower_is_better: true },
+  {
+    ratio_key: "grossMargin",
+    ratio_name: "Gross Margin",
+    pillar: "profit",
+    unit: "%",
+    current: 0.38,
+    three_months: 0.37,
+    six_months: 0.36,
+    twelve_months: 0.35,
+  },
+  {
+    ratio_key: "operatingMargin",
+    ratio_name: "Operating Margin",
+    pillar: "profit",
+    unit: "%",
+    current: 0.19,
+    three_months: 0.18,
+    six_months: 0.18,
+    twelve_months: 0.17,
+  },
+  {
+    ratio_key: "revenueGrowth",
+    ratio_name: "Revenue Growth",
+    pillar: "profit",
+    unit: "%",
+    current: 0.136,
+    three_months: 0.11,
+    six_months: 0.08,
+    twelve_months: 0.04,
+  },
+  {
+    ratio_key: "fixedCostRatio",
+    ratio_name: "Fixed Cost Ratio",
+    pillar: "profit",
+    unit: "%",
+    current: 0.28,
+    three_months: 0.29,
+    six_months: 0.3,
+    twelve_months: 0.31,
+    lower_is_better: true,
+  },
+  {
+    ratio_key: "netMargin",
+    ratio_name: "Net Margin",
+    pillar: "profit",
+    unit: "%",
+    current: 0.133,
+    three_months: 0.128,
+    six_months: 0.121,
+    twelve_months: 0.126,
+  },
+  {
+    ratio_key: "assetTurnover",
+    ratio_name: "Asset Turnover",
+    pillar: "assets",
+    unit: "×",
+    current: 1.3,
+    three_months: 1.27,
+    six_months: 1.24,
+    twelve_months: 1.22,
+  },
+  {
+    ratio_key: "roa",
+    ratio_name: "Return on Assets",
+    pillar: "assets",
+    unit: "%",
+    current: 0.14,
+    three_months: 0.135,
+    six_months: 0.13,
+    twelve_months: 0.12,
+  },
+  {
+    ratio_key: "inventoryDays",
+    ratio_name: "Inventory Days",
+    pillar: "assets",
+    unit: "d",
+    current: 47,
+    three_months: 49,
+    six_months: 50,
+    twelve_months: 52,
+    lower_is_better: true,
+  },
+  {
+    ratio_key: "fcUtilization",
+    ratio_name: "Fixed Capital Utilization",
+    pillar: "assets",
+    unit: "%",
+    current: 0.68,
+    three_months: 0.66,
+    six_months: 0.65,
+    twelve_months: 0.63,
+  },
+  {
+    ratio_key: "capexIntensity",
+    ratio_name: "Capex Intensity",
+    pillar: "assets",
+    unit: "%",
+    current: 0.033,
+    three_months: 0.028,
+    six_months: 0.032,
+    twelve_months: 0.025,
+  },
+  {
+    ratio_key: "equityMultiplier",
+    ratio_name: "Equity Multiplier",
+    pillar: "financing",
+    unit: "×",
+    current: 2.1,
+    three_months: 2.15,
+    six_months: 2.2,
+    twelve_months: 2.3,
+    lower_is_better: true,
+  },
+  {
+    ratio_key: "debtToEquity",
+    ratio_name: "Debt-to-Equity",
+    pillar: "financing",
+    unit: "×",
+    current: 1.1,
+    three_months: 1.15,
+    six_months: 1.18,
+    twelve_months: 1.2,
+    lower_is_better: true,
+  },
+  {
+    ratio_key: "debtToAssets",
+    ratio_name: "Debt-to-Assets",
+    pillar: "financing",
+    unit: "%",
+    current: 0.52,
+    three_months: 0.53,
+    six_months: 0.54,
+    twelve_months: 0.55,
+    lower_is_better: true,
+  },
+  {
+    ratio_key: "interestBurden",
+    ratio_name: "Interest Burden",
+    pillar: "financing",
+    unit: "%",
+    current: 0.177,
+    three_months: 0.182,
+    six_months: 0.185,
+    twelve_months: 0.168,
+    lower_is_better: true,
+  },
+  {
+    ratio_key: "fundingStructure",
+    ratio_name: "Funding Structure",
+    pillar: "financing",
+    unit: "%",
+    current: 0.52,
+    three_months: 0.53,
+    six_months: 0.55,
+    twelve_months: 0.55,
+    lower_is_better: true,
+  },
+  {
+    ratio_key: "currentRatio",
+    ratio_name: "Current Ratio",
+    pillar: "cash",
+    unit: "×",
+    current: 1.15,
+    three_months: 1.22,
+    six_months: 1.32,
+    twelve_months: 1.4,
+  },
+  {
+    ratio_key: "debtorDays",
+    ratio_name: "Debtor Days",
+    pillar: "cash",
+    unit: "d",
+    current: 54,
+    three_months: 52,
+    six_months: 51,
+    twelve_months: 49,
+    lower_is_better: true,
+  },
+  {
+    ratio_key: "ocfToEbitda",
+    ratio_name: "Cash Quality (OCF/EBITDA)",
+    pillar: "cash",
+    unit: "×",
+    current: 0.72,
+    three_months: 0.75,
+    six_months: 0.77,
+    twelve_months: 0.79,
+  },
+  {
+    ratio_key: "wcFunding",
+    ratio_name: "WC Funding Ratio",
+    pillar: "cash",
+    unit: "%",
+    current: 0.31,
+    three_months: 0.3,
+    six_months: 0.28,
+    twelve_months: 0.27,
+    lower_is_better: true,
+  },
+  {
+    ratio_key: "ccc",
+    ratio_name: "Cash Conversion Cycle",
+    pillar: "cash",
+    unit: "d",
+    current: 78,
+    three_months: 80,
+    six_months: 81,
+    twelve_months: 82,
+    lower_is_better: true,
+  },
 ];
 
 const MOCK_BENCHMARK: BenchmarkRow[] = [
-  { ratio_key: "grossMargin", ratio_name: "Gross Margin", pillar: "profit", current_value: 0.38, formatted_current: "38.0%", health_score: 62, health_tier: "at_risk", sector_median: 0.32, sector_top_quartile: 0.45, formatted_median: "32.0%", formatted_top_quartile: "45.0%" },
-  { ratio_key: "operatingMargin", ratio_name: "Operating Margin", pillar: "profit", current_value: 0.19, formatted_current: "19.0%", health_score: 76, health_tier: "healthy", sector_median: 0.12, sector_top_quartile: 0.22, formatted_median: "12.0%", formatted_top_quartile: "22.0%" },
-  { ratio_key: "revenueGrowth", ratio_name: "Revenue Growth", pillar: "profit", current_value: 0.136, formatted_current: "13.6%", health_score: 41, health_tier: "at_risk", sector_median: 0.08, sector_top_quartile: 0.18, formatted_median: "8.0%", formatted_top_quartile: "18.0%" },
-  { ratio_key: "netMargin", ratio_name: "Net Margin", pillar: "profit", current_value: 0.133, formatted_current: "13.3%", health_score: 68, health_tier: "at_risk", sector_median: 0.07, sector_top_quartile: 0.15, formatted_median: "7.0%", formatted_top_quartile: "15.0%" },
-  { ratio_key: "assetTurnover", ratio_name: "Asset Turnover", pillar: "assets", current_value: 1.30, formatted_current: "1.30×", health_score: 74, health_tier: "healthy", sector_median: 1.10, sector_top_quartile: 1.45, formatted_median: "1.10×", formatted_top_quartile: "1.45×" },
-  { ratio_key: "roa", ratio_name: "Return on Assets", pillar: "assets", current_value: 0.14, formatted_current: "14.0%", health_score: 83, health_tier: "healthy", sector_median: 0.09, sector_top_quartile: 0.16, formatted_median: "9.0%", formatted_top_quartile: "16.0%" },
-  { ratio_key: "inventoryDays", ratio_name: "Inventory Days", pillar: "assets", current_value: 47, formatted_current: "47d", health_score: 55, health_tier: "at_risk", sector_median: 45, sector_top_quartile: 30, formatted_median: "45d", formatted_top_quartile: "30d", lower_is_better: true },
-  { ratio_key: "equityMultiplier", ratio_name: "Equity Multiplier", pillar: "financing", current_value: 2.1, formatted_current: "2.10×", health_score: 70, health_tier: "healthy", sector_median: 2.3, sector_top_quartile: 1.8, formatted_median: "2.30×", formatted_top_quartile: "1.80×", lower_is_better: true },
-  { ratio_key: "debtToEquity", ratio_name: "Debt-to-Equity", pillar: "financing", current_value: 1.1, formatted_current: "1.10×", health_score: 67, health_tier: "at_risk", sector_median: 1.05, sector_top_quartile: 0.7, formatted_median: "1.05×", formatted_top_quartile: "0.70×", lower_is_better: true },
-  { ratio_key: "debtToAssets", ratio_name: "Debt-to-Assets", pillar: "financing", current_value: 0.52, formatted_current: "52.0%", health_score: 61, health_tier: "at_risk", sector_median: 0.48, sector_top_quartile: 0.35, formatted_median: "48.0%", formatted_top_quartile: "35.0%", lower_is_better: true },
-  { ratio_key: "currentRatio", ratio_name: "Current Ratio", pillar: "cash", current_value: 1.15, formatted_current: "1.15×", health_score: 28, health_tier: "critical", sector_median: 1.50, sector_top_quartile: 2.10, formatted_median: "1.50×", formatted_top_quartile: "2.10×" },
-  { ratio_key: "debtorDays", ratio_name: "Debtor Days", pillar: "cash", current_value: 54, formatted_current: "54d", health_score: 40, health_tier: "at_risk", sector_median: 45, sector_top_quartile: 30, formatted_median: "45d", formatted_top_quartile: "30d", lower_is_better: true },
-  { ratio_key: "wcFunding", ratio_name: "WC Funding Ratio", pillar: "cash", current_value: 0.31, formatted_current: "31.0%", health_score: 32, health_tier: "critical", sector_median: 0.22, sector_top_quartile: 0.14, formatted_median: "22.0%", formatted_top_quartile: "14.0%", lower_is_better: true },
-  { ratio_key: "ccc", ratio_name: "Cash Conversion Cycle", pillar: "cash", current_value: 78, formatted_current: "78d", health_score: 38, health_tier: "critical", sector_median: 55, sector_top_quartile: 38, formatted_median: "55d", formatted_top_quartile: "38d", lower_is_better: true },
+  {
+    ratio_key: "grossMargin",
+    ratio_name: "Gross Margin",
+    pillar: "profit",
+    current_value: 0.38,
+    formatted_current: "38.0%",
+    health_score: 62,
+    health_tier: "at_risk",
+    sector_median: 0.32,
+    sector_top_quartile: 0.45,
+    formatted_median: "32.0%",
+    formatted_top_quartile: "45.0%",
+  },
+  {
+    ratio_key: "operatingMargin",
+    ratio_name: "Operating Margin",
+    pillar: "profit",
+    current_value: 0.19,
+    formatted_current: "19.0%",
+    health_score: 76,
+    health_tier: "healthy",
+    sector_median: 0.12,
+    sector_top_quartile: 0.22,
+    formatted_median: "12.0%",
+    formatted_top_quartile: "22.0%",
+  },
+  {
+    ratio_key: "revenueGrowth",
+    ratio_name: "Revenue Growth",
+    pillar: "profit",
+    current_value: 0.136,
+    formatted_current: "13.6%",
+    health_score: 41,
+    health_tier: "at_risk",
+    sector_median: 0.08,
+    sector_top_quartile: 0.18,
+    formatted_median: "8.0%",
+    formatted_top_quartile: "18.0%",
+  },
+  {
+    ratio_key: "netMargin",
+    ratio_name: "Net Margin",
+    pillar: "profit",
+    current_value: 0.133,
+    formatted_current: "13.3%",
+    health_score: 68,
+    health_tier: "at_risk",
+    sector_median: 0.07,
+    sector_top_quartile: 0.15,
+    formatted_median: "7.0%",
+    formatted_top_quartile: "15.0%",
+  },
+  {
+    ratio_key: "assetTurnover",
+    ratio_name: "Asset Turnover",
+    pillar: "assets",
+    current_value: 1.3,
+    formatted_current: "1.30×",
+    health_score: 74,
+    health_tier: "healthy",
+    sector_median: 1.1,
+    sector_top_quartile: 1.45,
+    formatted_median: "1.10×",
+    formatted_top_quartile: "1.45×",
+  },
+  {
+    ratio_key: "roa",
+    ratio_name: "Return on Assets",
+    pillar: "assets",
+    current_value: 0.14,
+    formatted_current: "14.0%",
+    health_score: 83,
+    health_tier: "healthy",
+    sector_median: 0.09,
+    sector_top_quartile: 0.16,
+    formatted_median: "9.0%",
+    formatted_top_quartile: "16.0%",
+  },
+  {
+    ratio_key: "inventoryDays",
+    ratio_name: "Inventory Days",
+    pillar: "assets",
+    current_value: 47,
+    formatted_current: "47d",
+    health_score: 55,
+    health_tier: "at_risk",
+    sector_median: 45,
+    sector_top_quartile: 30,
+    formatted_median: "45d",
+    formatted_top_quartile: "30d",
+    lower_is_better: true,
+  },
+  {
+    ratio_key: "equityMultiplier",
+    ratio_name: "Equity Multiplier",
+    pillar: "financing",
+    current_value: 2.1,
+    formatted_current: "2.10×",
+    health_score: 70,
+    health_tier: "healthy",
+    sector_median: 2.3,
+    sector_top_quartile: 1.8,
+    formatted_median: "2.30×",
+    formatted_top_quartile: "1.80×",
+    lower_is_better: true,
+  },
+  {
+    ratio_key: "debtToEquity",
+    ratio_name: "Debt-to-Equity",
+    pillar: "financing",
+    current_value: 1.1,
+    formatted_current: "1.10×",
+    health_score: 67,
+    health_tier: "at_risk",
+    sector_median: 1.05,
+    sector_top_quartile: 0.7,
+    formatted_median: "1.05×",
+    formatted_top_quartile: "0.70×",
+    lower_is_better: true,
+  },
+  {
+    ratio_key: "debtToAssets",
+    ratio_name: "Debt-to-Assets",
+    pillar: "financing",
+    current_value: 0.52,
+    formatted_current: "52.0%",
+    health_score: 61,
+    health_tier: "at_risk",
+    sector_median: 0.48,
+    sector_top_quartile: 0.35,
+    formatted_median: "48.0%",
+    formatted_top_quartile: "35.0%",
+    lower_is_better: true,
+  },
+  {
+    ratio_key: "currentRatio",
+    ratio_name: "Current Ratio",
+    pillar: "cash",
+    current_value: 1.15,
+    formatted_current: "1.15×",
+    health_score: 28,
+    health_tier: "critical",
+    sector_median: 1.5,
+    sector_top_quartile: 2.1,
+    formatted_median: "1.50×",
+    formatted_top_quartile: "2.10×",
+  },
+  {
+    ratio_key: "debtorDays",
+    ratio_name: "Debtor Days",
+    pillar: "cash",
+    current_value: 54,
+    formatted_current: "54d",
+    health_score: 40,
+    health_tier: "at_risk",
+    sector_median: 45,
+    sector_top_quartile: 30,
+    formatted_median: "45d",
+    formatted_top_quartile: "30d",
+    lower_is_better: true,
+  },
+  {
+    ratio_key: "wcFunding",
+    ratio_name: "WC Funding Ratio",
+    pillar: "cash",
+    current_value: 0.31,
+    formatted_current: "31.0%",
+    health_score: 32,
+    health_tier: "critical",
+    sector_median: 0.22,
+    sector_top_quartile: 0.14,
+    formatted_median: "22.0%",
+    formatted_top_quartile: "14.0%",
+    lower_is_better: true,
+  },
+  {
+    ratio_key: "ccc",
+    ratio_name: "Cash Conversion Cycle",
+    pillar: "cash",
+    current_value: 78,
+    formatted_current: "78d",
+    health_score: 38,
+    health_tier: "critical",
+    sector_median: 55,
+    sector_top_quartile: 38,
+    formatted_median: "55d",
+    formatted_top_quartile: "38d",
+    lower_is_better: true,
+  },
 ];
 
 // ── Client report data ─────────────────────────────────────────────────────
@@ -251,6 +1101,7 @@ type ClientReportData = {
    * profile). Null in demo / when type unset — never invent a sector label.
    */
   benchmarkSector: { code: string; name: string } | null;
+  market: ResolvedMarket;
 };
 
 const DEFAULT_MOVEMENT_LABELS = {
@@ -261,16 +1112,27 @@ const DEFAULT_MOVEMENT_LABELS = {
 };
 
 const EMPTY_CLIENT_DATA: ClientReportData = {
-  hasData: false, clientName: "", cashRunwayWeeks: null,
-  financials: {}, rawRatios: {}, ratioResults: [],
-  workingCapital: null, profitability: null, leverage: null,
-  assets: null, labor: null,
-  movement: [], movementPeriodLabels: DEFAULT_MOVEMENT_LABELS,
-  benchmark: [], cashForecast: null,
-  financialsUpdatedAt: null, lastForecastAt: null,
+  hasData: false,
+  clientName: "",
+  cashRunwayWeeks: null,
+  financials: {},
+  rawRatios: {},
+  ratioResults: [],
+  workingCapital: null,
+  profitability: null,
+  leverage: null,
+  assets: null,
+  labor: null,
+  movement: [],
+  movementPeriodLabels: DEFAULT_MOVEMENT_LABELS,
+  benchmark: [],
+  cashForecast: null,
+  financialsUpdatedAt: null,
+  lastForecastAt: null,
   reviewSignoffs: { financials: null, cash_forecast: null, profitability: null },
   operatingProfile: null,
   benchmarkSector: null,
+  market: ZA_MARKET,
 };
 
 // ── Data-builder helpers ────────────────────────────────────────────────────
@@ -287,8 +1149,12 @@ function scoreForRatio(name: string, val: number): number {
 function fmtRatioVal(name: string, val: number): string {
   if (!Number.isFinite(val)) return "—";
   if (name.includes("Days")) return `${Math.round(val)}d`;
-  if (name === "Asset Turnover" || name === "Equity Multiplier" ||
-      name === "Degree of Operating Leverage" || name === "OCF / EBITDA")
+  if (
+    name === "Asset Turnover" ||
+    name === "Equity Multiplier" ||
+    name === "Degree of Operating Leverage" ||
+    name === "OCF / EBITDA"
+  )
     return `${val.toFixed(2)}×`;
   return `${(val * 100).toFixed(1)}%`;
 }
@@ -426,25 +1292,39 @@ function buildBenchmarkRows(
 
 // Ratio Movement row definitions
 const MOVEMENT_META: Array<{
-  name: string; key: string;
+  name: string;
+  key: string;
   pillar: "profit" | "assets" | "financing" | "cash";
-  unit: string; lower?: boolean;
+  unit: string;
+  lower?: boolean;
 }> = [
-  { name: "Gross Margin",         key: "gross_margin",          pillar: "profit",    unit: "%" },
-  { name: "Operating Margin",     key: "operating_margin",      pillar: "profit",    unit: "%" },
-  { name: "Net Margin",           key: "net_margin",            pillar: "profit",    unit: "%" },
-  { name: "Asset Turnover",       key: "asset_turnover",        pillar: "assets",    unit: "×" },
-  { name: "Return on Assets",     key: "return_on_assets",      pillar: "assets",    unit: "%" },
-  { name: "Inventory Days",       key: "inventory_days",        pillar: "assets",    unit: "d", lower: true },
-  { name: "Equity Multiplier",    key: "equity_multiplier",     pillar: "financing", unit: "×", lower: true },
-  { name: "Debtor Days",          key: "debtor_days",           pillar: "cash",      unit: "d", lower: true },
-  { name: "Working Capital Days", key: "working_capital_days",  pillar: "cash",      unit: "d", lower: true },
-  { name: "OCF / EBITDA",         key: "ocf_ebitda",            pillar: "cash",      unit: "×" },
+  { name: "Gross Margin", key: "gross_margin", pillar: "profit", unit: "%" },
+  { name: "Operating Margin", key: "operating_margin", pillar: "profit", unit: "%" },
+  { name: "Net Margin", key: "net_margin", pillar: "profit", unit: "%" },
+  { name: "Asset Turnover", key: "asset_turnover", pillar: "assets", unit: "×" },
+  { name: "Return on Assets", key: "return_on_assets", pillar: "assets", unit: "%" },
+  { name: "Inventory Days", key: "inventory_days", pillar: "assets", unit: "d", lower: true },
+  {
+    name: "Equity Multiplier",
+    key: "equity_multiplier",
+    pillar: "financing",
+    unit: "×",
+    lower: true,
+  },
+  { name: "Debtor Days", key: "debtor_days", pillar: "cash", unit: "d", lower: true },
+  {
+    name: "Working Capital Days",
+    key: "working_capital_days",
+    pillar: "cash",
+    unit: "d",
+    lower: true,
+  },
+  { name: "OCF / EBITDA", key: "ocf_ebitda", pillar: "cash", unit: "×" },
 ];
 
 type DatedSnapshot = {
   period_label: string;
-  period_date: string;          // ISO YYYY-MM-DD
+  period_date: string; // ISO YYYY-MM-DD
   ratios: Record<string, number>;
 };
 
@@ -476,35 +1356,39 @@ function buildMovementRows(
   refDate: Date,
 ): { rows: RatioMovementRow[]; labels: ClientReportData["movementPeriodLabels"] } {
   // Target dates for each comparison column
-  const t3m  = new Date(refDate); t3m.setMonth(t3m.getMonth() - 3);
-  const t6m  = new Date(refDate); t6m.setMonth(t6m.getMonth() - 6);
-  const t12m = new Date(refDate); t12m.setFullYear(t12m.getFullYear() - 1);
+  const t3m = new Date(refDate);
+  t3m.setMonth(t3m.getMonth() - 3);
+  const t6m = new Date(refDate);
+  t6m.setMonth(t6m.getMonth() - 6);
+  const t12m = new Date(refDate);
+  t12m.setFullYear(t12m.getFullYear() - 1);
 
   // ±45 days window for 3m/6m; ±60 days for 12m
-  const s3m  = closestSnapshot(snapshots, t3m,  45);
-  const s6m  = closestSnapshot(snapshots, t6m,  45);
+  const s3m = closestSnapshot(snapshots, t3m, 45);
+  const s6m = closestSnapshot(snapshots, t6m, 45);
   const s12m = closestSnapshot(snapshots, t12m, 60);
 
   const labels: ClientReportData["movementPeriodLabels"] = {
-    current:      "Current",
-    three_months: s3m  ? s3m.period_label  : "3 Months Ago",
-    six_months:   s6m  ? s6m.period_label  : "6 Months Ago",
-    twelve_months:s12m ? s12m.period_label : "12 Months Ago",
+    current: "Current",
+    three_months: s3m ? s3m.period_label : "3 Months Ago",
+    six_months: s6m ? s6m.period_label : "6 Months Ago",
+    twelve_months: s12m ? s12m.period_label : "12 Months Ago",
   };
 
-  const rows = MOVEMENT_META
-    .filter(({ name }) => Number.isFinite(rawRatios[name]))
-    .map(({ name, key, pillar, unit, lower }) => ({
-      ratio_key: key,
-      ratio_name: name,
-      pillar,
-      unit,
-      current:       rawRatios[name],
-      three_months:  s3m  && s3m.ratios[name]  != null ? Number(s3m.ratios[name])  : null,
-      six_months:    s6m  && s6m.ratios[name]  != null ? Number(s6m.ratios[name])  : null,
-      twelve_months: s12m && s12m.ratios[name] != null ? Number(s12m.ratios[name]) : null,
-      lower_is_better: lower,
-    } as RatioMovementRow));
+  const rows = MOVEMENT_META.filter(({ name }) => Number.isFinite(rawRatios[name])).map(
+    ({ name, key, pillar, unit, lower }) =>
+      ({
+        ratio_key: key,
+        ratio_name: name,
+        pillar,
+        unit,
+        current: rawRatios[name],
+        three_months: s3m && s3m.ratios[name] != null ? Number(s3m.ratios[name]) : null,
+        six_months: s6m && s6m.ratios[name] != null ? Number(s6m.ratios[name]) : null,
+        twelve_months: s12m && s12m.ratios[name] != null ? Number(s12m.ratios[name]) : null,
+        lower_is_better: lower,
+      }) as RatioMovementRow,
+  );
 
   return { rows, labels };
 }
@@ -515,14 +1399,18 @@ function buildWorkingCapitalData(
 ): WorkingCapitalData | null {
   const revenue = getNum(fin, "revenue");
   if (!Number.isFinite(revenue) || revenue <= 0) return null;
-  const dd = Number.isFinite(rawRatios["Debtor Days"])    ? rawRatios["Debtor Days"]    : 0;
+  const dd = Number.isFinite(rawRatios["Debtor Days"]) ? rawRatios["Debtor Days"] : 0;
   const id = Number.isFinite(rawRatios["Inventory Days"]) ? rawRatios["Inventory Days"] : 0;
-  const cd = Number.isFinite(rawRatios["Creditor Days"])  ? rawRatios["Creditor Days"]  : 0;
-  if (!Number.isFinite(rawRatios["Debtor Days"]) && !Number.isFinite(rawRatios["Inventory Days"])) return null;
+  const cd = Number.isFinite(rawRatios["Creditor Days"]) ? rawRatios["Creditor Days"] : 0;
+  if (!Number.isFinite(rawRatios["Debtor Days"]) && !Number.isFinite(rawRatios["Inventory Days"]))
+    return null;
   const ccc = dd + id - cd;
   const wcFunding = ccc / 365;
   return {
-    debtor_days: dd, inventory_days: id, wip_days: 0, creditor_days: cd,
+    debtor_days: dd,
+    inventory_days: id,
+    wip_days: 0,
+    creditor_days: cd,
     cash_conversion_cycle: ccc,
     working_capital_funding: wcFunding,
     working_capital_utilization: Math.min(1, Math.max(0, wcFunding * 2)),
@@ -530,13 +1418,13 @@ function buildWorkingCapitalData(
     annual_revenue: revenue,
     cash_trapped_rands: revenue * Math.max(0, wcFunding),
     health_scores: {
-      debtor_days:              Math.round(scoreForRatio("Debtor Days", dd)),
-      inventory_days:           Math.round(scoreForRatio("Inventory Days", id)),
-      creditor_days:            Math.round(scoreForRatio("Creditor Days", cd)),
+      debtor_days: Math.round(scoreForRatio("Debtor Days", dd)),
+      inventory_days: Math.round(scoreForRatio("Inventory Days", id)),
+      creditor_days: Math.round(scoreForRatio("Creditor Days", cd)),
       // WIP not in financials — score 0 days honestly (not a soft-demo 68).
-      wip_days:                 Math.round(scoreForRatio("Inventory Days", 0)),
-      working_capital_days:     Math.round(scoreForRatio("Working Capital Days", ccc)),
-      working_capital_funding:  Math.round(Math.min(100, Math.max(0, (1 - wcFunding) * 100))),
+      wip_days: Math.round(scoreForRatio("Inventory Days", 0)),
+      working_capital_days: Math.round(scoreForRatio("Working Capital Days", ccc)),
+      working_capital_funding: Math.round(Math.min(100, Math.max(0, (1 - wcFunding) * 100))),
       working_capital_utilization: Math.round(Math.min(100, Math.max(0, (1 - wcFunding) * 90))),
     },
   };
@@ -547,36 +1435,41 @@ function buildProfitabilityData(
   priorFin?: Record<string, string> | null,
 ): ProfitabilityData | null {
   const revenue = getNum(fin, "revenue");
-  const cogs    = getNum(fin, "cogs");
-  const ebit    = getNum(fin, "ebit");
-  const ebt     = getNum(fin, "ebt");
-  const net     = getNum(fin, "netIncome");
+  const cogs = getNum(fin, "cogs");
+  const ebit = getNum(fin, "ebit");
+  const ebt = getNum(fin, "ebt");
+  const net = getNum(fin, "netIncome");
   if (!Number.isFinite(revenue) || !Number.isFinite(ebit) || !Number.isFinite(net)) return null;
   // Never invent GP from 50% of revenue — COGS required for gross margin.
   if (!Number.isFinite(cogs)) return null;
-  const gp    = revenue - cogs;
+  const gp = revenue - cogs;
   const gmPct = gp / revenue;
   const omPct = ebit / revenue;
   const ebtVal = Number.isFinite(ebt) ? ebt : ebit;
-  const ibPct  = ebit > 0 ? Math.max(0, (ebit - ebtVal) / ebit) : 0;
-  const tax    = Math.max(0, ebtVal - net);
-  const tbPct  = ebtVal > 0 ? tax / ebtVal : 0;
-  const nmPct  = net / revenue;
+  const ibPct = ebit > 0 ? Math.max(0, (ebit - ebtVal) / ebit) : 0;
+  const tax = Math.max(0, ebtVal - net);
+  const tbPct = ebtVal > 0 ? tax / ebtVal : 0;
+  const nmPct = net / revenue;
   const current = {
-    revenue, gross_profit: gp, gross_margin_pct: gmPct,
+    revenue,
+    gross_profit: gp,
+    gross_margin_pct: gmPct,
     gross_margin_score: Math.round(scoreForRatio("Gross Margin", gmPct)),
-    gross_margin_tier:  scoreTier(Math.round(scoreForRatio("Gross Margin", gmPct))),
-    operating_profit: ebit, operating_margin_pct: omPct,
+    gross_margin_tier: scoreTier(Math.round(scoreForRatio("Gross Margin", gmPct))),
+    operating_profit: ebit,
+    operating_margin_pct: omPct,
     operating_margin_score: Math.round(scoreForRatio("Operating Margin", omPct)),
-    operating_margin_tier:  scoreTier(Math.round(scoreForRatio("Operating Margin", omPct))),
+    operating_margin_tier: scoreTier(Math.round(scoreForRatio("Operating Margin", omPct))),
     ebt: ebtVal,
-    interest_burden_pct:   ibPct,
+    interest_burden_pct: ibPct,
     interest_burden_score: Math.round(scoreForRatio("Interest Burden", 1 - ibPct)),
-    tax, tax_burden_pct: tbPct,
+    tax,
+    tax_burden_pct: tbPct,
     tax_burden_score: Math.round(Math.max(0, 100 - tbPct * 100)),
-    net_profit: net, net_margin_pct: nmPct,
+    net_profit: net,
+    net_margin_pct: nmPct,
     net_margin_score: Math.round(scoreForRatio("Net Margin", nmPct)),
-    net_margin_tier:  scoreTier(Math.round(scoreForRatio("Net Margin", nmPct))),
+    net_margin_tier: scoreTier(Math.round(scoreForRatio("Net Margin", nmPct))),
   };
 
   let prior_period: ProfitabilityData["prior_period"] | undefined;
@@ -586,7 +1479,12 @@ function buildProfitabilityData(
     const pEbit = getNum(priorFin, "ebit");
     const pEbt = getNum(priorFin, "ebt");
     const pNet = getNum(priorFin, "netIncome");
-    if (Number.isFinite(pRev) && Number.isFinite(pEbit) && Number.isFinite(pNet) && Number.isFinite(pCogs)) {
+    if (
+      Number.isFinite(pRev) &&
+      Number.isFinite(pEbit) &&
+      Number.isFinite(pNet) &&
+      Number.isFinite(pCogs)
+    ) {
       const pGp = pRev - pCogs;
       const pEbtVal = Number.isFinite(pEbt) ? pEbt : pEbit;
       const pIb = pEbit > 0 ? Math.max(0, (pEbit - pEbtVal) / pEbit) : 0;
@@ -601,7 +1499,9 @@ function buildProfitabilityData(
         operating_profit: pEbit,
         operating_margin_pct: pEbit / pRev,
         operating_margin_score: Math.round(scoreForRatio("Operating Margin", pEbit / pRev)),
-        operating_margin_tier: scoreTier(Math.round(scoreForRatio("Operating Margin", pEbit / pRev))),
+        operating_margin_tier: scoreTier(
+          Math.round(scoreForRatio("Operating Margin", pEbit / pRev)),
+        ),
         ebt: pEbtVal,
         interest_burden_pct: pIb,
         interest_burden_score: Math.round(scoreForRatio("Interest Burden", 1 - pIb)),
@@ -647,17 +1547,16 @@ function buildLeverageData(
   const fromSchedule = totalDebtFromSchedule(schedule);
   const debt_facilities_captured = schedule.lines.some((l) => l.amount > 0 || l.label.trim());
   const totalDebt = debt_facilities_captured ? fromSchedule : 0;
-  const debt_lines =
-    debt_facilities_captured
-      ? schedule.lines
-          .filter((l) => l.label.trim() || l.amount > 0)
-          .map((l) => ({
-            label: l.label.trim() || "Facility",
-            amount: l.amount,
-            annual_rate_pct: l.annual_rate_pct ?? 0,
-            maturity_year: l.maturity_year ?? new Date().getFullYear() + 3,
-          }))
-      : [];
+  const debt_lines = debt_facilities_captured
+    ? schedule.lines
+        .filter((l) => l.label.trim() || l.amount > 0)
+        .map((l) => ({
+          label: l.label.trim() || "Facility",
+          amount: l.amount,
+          annual_rate_pct: l.annual_rate_pct ?? 0,
+          maturity_year: l.maturity_year ?? new Date().getFullYear() + 3,
+        }))
+    : [];
 
   const d2a = debt_facilities_captured && totalAssets > 0 ? totalDebt / totalAssets : NaN;
   const d2e = debt_facilities_captured && equity > 0 ? totalDebt / equity : NaN;
@@ -687,7 +1586,9 @@ function buildLeverageData(
       fundingStructure: Number.isFinite(d2a)
         ? Math.round(Math.min(100, Math.max(0, (1 - d2a) * 100)))
         : null,
-      equityMultiplier: Number.isFinite(em) ? Math.round(scoreForRatio("Equity Multiplier", em)) : null,
+      equityMultiplier: Number.isFinite(em)
+        ? Math.round(scoreForRatio("Equity Multiplier", em))
+        : null,
       debtToEquity: Number.isFinite(d2e)
         ? Math.round(Math.min(100, Math.max(0, ((2 - d2e) / 2) * 100)))
         : null,
@@ -707,22 +1608,25 @@ function buildAssetData(rawRatios: Record<string, number>): AssetProductivityDat
   const roa = nm * at;
   const roe = roa * em;
   return {
-    roe, net_margin: nm, asset_turnover: at, equity_multiplier: em,
+    roe,
+    net_margin: nm,
+    asset_turnover: at,
+    equity_multiplier: em,
     capex_periods: [],
     health_scores: {
-      assetTurnover:           Math.round(scoreForRatio("Asset Turnover", at)),
-      roa:                     Math.round(scoreForRatio("Return on Assets", roa)),
+      assetTurnover: Math.round(scoreForRatio("Asset Turnover", at)),
+      roa: Math.round(scoreForRatio("Return on Assets", roa)),
       // Capex / fixed-asset ratios need inputs we do not yet capture — never invent.
       fixedCapitalUtilization: null,
-      assetReinvestmentRatio:  null,
-      capexIntensity:          null,
+      assetReinvestmentRatio: null,
+      capexIntensity: null,
     },
     ratios: {
-      assetTurnover:           { value: `${at.toFixed(2)}×` },
-      roa:                     { value: `${(roa * 100).toFixed(1)}%` },
+      assetTurnover: { value: `${at.toFixed(2)}×` },
+      roa: { value: `${(roa * 100).toFixed(1)}%` },
       fixedCapitalUtilization: { value: "—" },
-      assetReinvestmentRatio:  { value: "—" },
-      capexIntensity:          { value: "—" },
+      assetReinvestmentRatio: { value: "—" },
+      capexIntensity: { value: "—" },
     },
   };
 }
@@ -732,12 +1636,18 @@ function buildLaborData(
   _rawRatios: Record<string, number>,
   priorFin?: Record<string, string> | null,
 ): LaborProductivityData | null {
-  const revenue   = getNum(fin, "revenue");
+  const revenue = getNum(fin, "revenue");
   const laborCost = getNum(fin, "laborCost");
   const employees = getNum(fin, "employees");
-  const cogs      = getNum(fin, "cogs");
-  if (!Number.isFinite(revenue) || !Number.isFinite(employees) ||
-      !Number.isFinite(laborCost) || employees <= 0 || laborCost <= 0) return null;
+  const cogs = getNum(fin, "cogs");
+  if (
+    !Number.isFinite(revenue) ||
+    !Number.isFinite(employees) ||
+    !Number.isFinite(laborCost) ||
+    employees <= 0 ||
+    laborCost <= 0
+  )
+    return null;
   const gpKnown = Number.isFinite(cogs);
   const gp = gpKnown ? revenue - cogs : 0;
   const rpe = revenue / employees;
@@ -763,7 +1673,9 @@ function buildLaborData(
     gp_per_labor_rand: gpPerLabor,
     revenue_growth: revenueGrowth,
     inflation_rate: null, // never invent CPI
-    periods: [{ label: "Current Period", revenue, employees: Math.round(employees), labor_cost: laborCost }],
+    periods: [
+      { label: "Current Period", revenue, employees: Math.round(employees), labor_cost: laborCost },
+    ],
     health_scores: {
       gpToLabor:
         gpPerLabor != null
@@ -784,19 +1696,37 @@ function buildLaborData(
 // src/components/cash-forecast.tsx so the PDF uses exactly the same
 // weekly figures the accountant configured in the panel.
 
-type CfFrequency = "recurring-weekly" | "recurring-monthly" | "once-off" | "split-weeks" | "split-months";
+type CfFrequency =
+  | "recurring-weekly"
+  | "recurring-monthly"
+  | "once-off"
+  | "split-weeks"
+  | "split-months";
 
 type CfLineItem = {
-  id: string; name: string; amount: string;
-  frequency: CfFrequency; startWeek: number; splitCount: number;
+  id: string;
+  name: string;
+  amount: string;
+  frequency: CfFrequency;
+  startWeek: number;
+  splitCount: number;
 };
 
 type SavedCashflow = {
-  startDate?: string; openingBalance?: string;
-  revenue?: CfLineItem[]; expenses?: CfLineItem[]; other?: CfLineItem[];
-  revAdj?: number; expAdj?: number; collectDelay?: number;
-  headcountDelta?: number; avgSalary?: string; fixedCostDelta?: string;
-  revGrowthPct?: number; capexAmount?: string; capexWeek?: number;
+  startDate?: string;
+  openingBalance?: string;
+  revenue?: CfLineItem[];
+  expenses?: CfLineItem[];
+  other?: CfLineItem[];
+  revAdj?: number;
+  expAdj?: number;
+  collectDelay?: number;
+  headcountDelta?: number;
+  avgSalary?: string;
+  fixedCostDelta?: string;
+  revGrowthPct?: number;
+  capexAmount?: string;
+  capexWeek?: number;
 };
 
 const CF_WEEKS = 13;
@@ -839,25 +1769,23 @@ function buildCashForecastFromSavedCashflow(
   cf: SavedCashflow,
   cashRunwayWeeks: number | null,
 ): CashForecastWeek[] | null {
-  const revenue  = cf.revenue  ?? [];
+  const revenue = cf.revenue ?? [];
   const expenses = cf.expenses ?? [];
-  const other    = cf.other    ?? [];
+  const other = cf.other ?? [];
 
   // Require at least one non-zero line item — empty panel = no real data
-  const hasAmount = [...revenue, ...expenses, ...other].some(
-    (l) => parseFloat(l.amount) > 0
-  );
+  const hasAmount = [...revenue, ...expenses, ...other].some((l) => parseFloat(l.amount) > 0);
   if (!hasAmount) return null;
 
-  const revAdj       = (cf.revAdj ?? 100) / 100;
-  const expAdj       = (cf.expAdj ?? 100) / 100;
+  const revAdj = (cf.revAdj ?? 100) / 100;
+  const expAdj = (cf.expAdj ?? 100) / 100;
   const collectDelay = Math.max(0, Math.min(CF_WEEKS - 1, Math.round(cf.collectDelay ?? 0)));
-  const headDelta    = cf.headcountDelta ?? 0;
-  const avgSal       = parseFloat(cf.avgSalary ?? "0") || 0;
-  const fixedDelta   = parseFloat(cf.fixedCostDelta ?? "0") || 0;
-  const revGrowth    = cf.revGrowthPct ?? 0;
-  const capexAmt     = parseFloat(cf.capexAmount ?? "0") || 0;
-  const capexWk      = cf.capexWeek ?? 1;
+  const headDelta = cf.headcountDelta ?? 0;
+  const avgSal = parseFloat(cf.avgSalary ?? "0") || 0;
+  const fixedDelta = parseFloat(cf.fixedCostDelta ?? "0") || 0;
+  const revGrowth = cf.revGrowthPct ?? 0;
+  const capexAmt = parseFloat(cf.capexAmount ?? "0") || 0;
+  const capexWk = cf.capexWeek ?? 1;
 
   const shiftVals = (vals: number[]) => {
     if (!collectDelay) return vals;
@@ -870,14 +1798,18 @@ function buildCashForecastFromSavedCashflow(
   };
   const growthMul = (i: number) => Math.pow(1 + revGrowth / 100, i);
 
-  const inflow  = new Array(CF_WEEKS).fill(0) as number[];
+  const inflow = new Array(CF_WEEKS).fill(0) as number[];
   const outflow = new Array(CF_WEEKS).fill(0) as number[];
 
   revenue.forEach((l) => {
-    shiftVals(cfDistribute(l).map((v) => v * revAdj)).forEach((v, i) => (inflow[i] += v * growthMul(i)));
+    shiftVals(cfDistribute(l).map((v) => v * revAdj)).forEach(
+      (v, i) => (inflow[i] += v * growthMul(i)),
+    );
   });
   [...expenses, ...other].forEach((l) => {
-    cfDistribute(l).map((v) => v * expAdj).forEach((v, i) => (outflow[i] += v));
+    cfDistribute(l)
+      .map((v) => v * expAdj)
+      .forEach((v, i) => (outflow[i] += v));
   });
   // Scenario adjustments (mirrors CashForecastPanel.computeScenario)
   if (headDelta !== 0) {
@@ -932,36 +1864,36 @@ async function buildInterventions(
 ): Promise<Intervention[]> {
   // Map the snake_case ratio_key from ratioResults back to camelCase playbook keys
   const KEY_MAP: Record<string, string> = {
-    gross_margin:         "grossMargin",
-    net_margin:           "netMargin",
-    operating_margin:     "operatingMargin",
-    return_on_assets:     "roa",
-    asset_turnover:       "assetTurnover",
-    debtor_days:          "debtorDays",
-    inventory_days:       "inventoryDays",
-    creditor_days:        "creditorDays",
-    equity_multiplier:    "equityMultiplier",
+    gross_margin: "grossMargin",
+    net_margin: "netMargin",
+    operating_margin: "operatingMargin",
+    return_on_assets: "roa",
+    asset_turnover: "assetTurnover",
+    debtor_days: "debtorDays",
+    inventory_days: "inventoryDays",
+    creditor_days: "creditorDays",
+    equity_multiplier: "equityMultiplier",
     working_capital_days: "workingCapitalFunding",
-    ocf_ebitda:           "ocfToEbitda",
-    ocf___ebitda:         "ocfToEbitda",
+    ocf_ebitda: "ocfToEbitda",
+    ocf___ebitda: "ocfToEbitda",
     gross_profit___labor: "gpToLabor",
     sales_per_employee_ratio: "salesPerEmployee",
-    fixed_cost_ratio:     "fixedCostRatio",
-    interest_burden:      "interestBurden",
+    fixed_cost_ratio: "fixedCostRatio",
+    interest_burden: "interestBurden",
   };
 
   const rawPlaybook = await import("@/lib/playbook-data.json");
   const allSteps = (rawPlaybook.default ?? rawPlaybook) as Intervention[];
 
   const atRiskRatios = ratioResults.filter(
-    (r) => r.health_tier === "critical" || r.health_tier === "at_risk"
+    (r) => r.health_tier === "critical" || r.health_tier === "at_risk",
   );
 
   const result: Intervention[] = [];
   for (const rr of atRiskRatios) {
     const playbookKey = KEY_MAP[rr.ratio_key] ?? rr.ratio_key;
     const steps = allSteps.filter(
-      (s) => s.ratio_key === playbookKey && s.health_tier === rr.health_tier
+      (s) => s.ratio_key === playbookKey && s.health_tier === rr.health_tier,
     );
     // Only include step 1 per ratio to keep the report concise
     if (steps.length > 0) {
@@ -986,16 +1918,31 @@ async function buildInterventions(
 
 async function loadClientReportData(clientId: string): Promise<ClientReportData> {
   const [clientRes, snapshotRes, signoffRes] = await Promise.all([
-    supabase.from("clients")
-      .select("id, name, cash_runway_weeks, financials, cashflow, financials_updated_at, last_forecast_at, operating_profile, business_type")
+    supabase
+      .from("clients")
+      .select(
+        "id, name, cash_runway_weeks, financials, cashflow, financials_updated_at, last_forecast_at, operating_profile, business_type, market",
+      )
       .eq("id", clientId)
       .maybeSingle(),
-    supabase.from("client_financial_snapshots")
+    supabase
+      .from("client_financial_snapshots")
       .select("id, period_label, period_date, ratios, financials")
       .eq("client_id", clientId)
       .order("period_date", { ascending: false })
-      .limit(20),  // fetch enough history to cover 12-month windows
-    (supabase as unknown as { from: (t: string) => { select: (c: string) => { eq: (k: string, v: string) => Promise<{ data: ClientReviewSignoff[] | null; error: { message: string } | null }> } } })
+      .limit(20), // fetch enough history to cover 12-month windows
+    (
+      supabase as unknown as {
+        from: (t: string) => {
+          select: (c: string) => {
+            eq: (
+              k: string,
+              v: string,
+            ) => Promise<{ data: ClientReviewSignoff[] | null; error: { message: string } | null }>;
+          };
+        };
+      }
+    )
       .from("client_review_signoffs")
       .select("*")
       .eq("client_id", clientId),
@@ -1008,14 +1955,21 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
   }
 
   const clientRow = clientRes.data as unknown as {
-    name: string; cash_runway_weeks: number | null; financials: unknown;
-    cashflow: unknown; financials_updated_at: string | null; last_forecast_at: string | null;
+    name: string;
+    cash_runway_weeks: number | null;
+    financials: unknown;
+    cashflow: unknown;
+    financials_updated_at: string | null;
+    last_forecast_at: string | null;
     operating_profile?: unknown;
     business_type?: string | null;
+    market?: unknown;
   } | null;
+  const market = resolveMarket(
+    parseMarketSelection(clientRow?.market) ?? coerceMarketSelection(clientRow?.market ?? null),
+  );
   const operatingProfile = parseOperatingProfile(clientRow?.operating_profile);
-  const businessTypeId =
-    clientRow?.business_type ?? operatingProfile?.businessTypeId ?? null;
+  const businessTypeId = clientRow?.business_type ?? operatingProfile?.businessTypeId ?? null;
   const sectorBench = await loadSectorBenchmarks(businessTypeId);
   const benchmarkSector = resolveBenchmarkSector(businessTypeId, operatingProfile);
   const effectiveRunway = effectiveCashRunwayWeeks(
@@ -1036,6 +1990,7 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
     reviewSignoffs,
     operatingProfile,
     benchmarkSector,
+    market,
   };
   if (!clientRow?.financials) return baseEmpty;
 
@@ -1048,27 +2003,34 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
   ) as Record<string, string>;
   // Keep debt_schedule as a JSON string key so buildLeverageData can parse it
   if (debtRaw != null) {
-    fin["debt_schedule"] =
-      typeof debtRaw === "string" ? debtRaw : JSON.stringify(debtRaw);
+    fin["debt_schedule"] = typeof debtRaw === "string" ? debtRaw : JSON.stringify(debtRaw);
   }
   if (!fin["revenue"] || fin["revenue"].trim() === "") return { ...baseEmpty, financials: fin };
 
   const ratioInputs: RatioInputs = {
-    revenue: fin["revenue"] ?? "", cogs: fin["cogs"] ?? "",
-    ebit: fin["ebit"] ?? "", ebt: fin["ebt"] ?? "",
-    netIncome: fin["netIncome"] ?? "", ebitda: fin["ebitda"] ?? "",
+    revenue: fin["revenue"] ?? "",
+    cogs: fin["cogs"] ?? "",
+    ebit: fin["ebit"] ?? "",
+    ebt: fin["ebt"] ?? "",
+    netIncome: fin["netIncome"] ?? "",
+    ebitda: fin["ebitda"] ?? "",
     operatingCashflow: fin["operatingCashflow"] ?? "",
-    totalAssets: fin["totalAssets"] ?? "", equity: fin["equity"] ?? "",
-    receivables: fin["receivables"] ?? "", inventory: fin["inventory"] ?? "",
-    payables: fin["payables"] ?? "", fixedCosts: fin["fixedCosts"] ?? "",
-    variableCosts: fin["variableCosts"] ?? "", top5Revenue: fin["top5Revenue"] ?? "",
-    laborCost: fin["laborCost"] ?? "", employees: fin["employees"] ?? "",
+    totalAssets: fin["totalAssets"] ?? "",
+    equity: fin["equity"] ?? "",
+    receivables: fin["receivables"] ?? "",
+    inventory: fin["inventory"] ?? "",
+    payables: fin["payables"] ?? "",
+    fixedCosts: fin["fixedCosts"] ?? "",
+    variableCosts: fin["variableCosts"] ?? "",
+    top5Revenue: fin["top5Revenue"] ?? "",
+    laborCost: fin["laborCost"] ?? "",
+    employees: fin["employees"] ?? "",
     founderHours: fin["founderHours"] ?? "",
   };
   const rawRatios = computeRatios(ratioInputs);
   const snapshots: DatedSnapshot[] = (snapshotRes.data ?? []).map((s) => ({
     period_label: s.period_label,
-    period_date:  s.period_date as string,
+    period_date: s.period_date as string,
     ratios: (s.ratios as Record<string, number>) ?? {},
   }));
   const priorSnap = resolvePriorSnapshot(
@@ -1098,8 +2060,11 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
       ) as Record<string, string>)
     : null;
 
-  const { rows: movementRows, labels: movementLabels } =
-    buildMovementRows(rawRatios, snapshots, new Date());
+  const { rows: movementRows, labels: movementLabels } = buildMovementRows(
+    rawRatios,
+    snapshots,
+    new Date(),
+  );
 
   return {
     hasData: true,
@@ -1109,14 +2074,14 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
     rawRatios,
     ratioResults,
     workingCapital: buildWorkingCapitalData(fin, rawRatios),
-    profitability:  buildProfitabilityData(fin, priorFinForProfit),
-    leverage:       buildLeverageData(fin, rawRatios, priorEquityNum),
-    assets:         buildAssetData(rawRatios),
-    labor:          buildLaborData(fin, rawRatios, priorFinForProfit),
-    movement:       movementRows,
+    profitability: buildProfitabilityData(fin, priorFinForProfit),
+    leverage: buildLeverageData(fin, rawRatios, priorEquityNum),
+    assets: buildAssetData(rawRatios),
+    labor: buildLaborData(fin, rawRatios, priorFinForProfit),
+    movement: movementRows,
     movementPeriodLabels: movementLabels,
-    benchmark:      buildBenchmarkRows(rawRatios, ratioResults, sectorBench),
-    cashForecast:   buildCashForecastFromSavedCashflow(
+    benchmark: buildBenchmarkRows(rawRatios, ratioResults, sectorBench),
+    cashForecast: buildCashForecastFromSavedCashflow(
       (clientRow as unknown as { cashflow: SavedCashflow | null }).cashflow ?? {},
       effectiveRunway,
     ),
@@ -1125,6 +2090,7 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
     reviewSignoffs,
     operatingProfile,
     benchmarkSector,
+    market,
   };
 }
 
@@ -1142,8 +2108,7 @@ function signoffStampFor(
 ): ReportSignoffStamp | null {
   if (!cd) return null;
   const signoff = cd.reviewSignoffs[scope];
-  const freshAt =
-    scope === "cash_forecast" ? cd.lastForecastAt : cd.financialsUpdatedAt;
+  const freshAt = scope === "cash_forecast" ? cd.lastForecastAt : cd.financialsUpdatedAt;
   if (!signoff || isSignoffStale(signoff, freshAt)) return null;
   return {
     signedOffByName: signoff.signed_off_by_name,
@@ -1192,8 +2157,10 @@ function resolveBenchmarkSector(
 function triggerDownload(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
-  a.href = url; a.download = filename;
-  document.body.appendChild(a); a.click();
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
   document.body.removeChild(a);
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
@@ -1231,12 +2198,16 @@ function makeSmeWithNote(s: Settings, isDemo: boolean): { name: string; period: 
 function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
   const cd = clientData?.hasData ? clientData : null;
   const operatingProfile = clientData?.operatingProfile ?? null;
+  const market = clientData?.market ?? ZA_MARKET;
   const financialsStamp = signoffStampFor("financials", clientData);
   const forecastStamp = signoffStampFor("cash_forecast", clientData);
   const profitabilityStamp = signoffStampFor("profitability", clientData);
 
   /** Live client with hasData must never fall through to MOCK_* for a missing slice. */
-  function liveOrDemo<T>(slice: T | null | undefined, missingMsg: string): { isDemo: boolean; data: T | null } {
+  function liveOrDemo<T>(
+    slice: T | null | undefined,
+    missingMsg: string,
+  ): { isDemo: boolean; data: T | null } {
     if (!cd) return { isDemo: true, data: null };
     if (slice == null) throw new Error(missingMsg);
     return { isDemo: false, data: slice };
@@ -1246,7 +2217,9 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
     scorecard: async (s, p) => {
       const { HealthScorecardPDF } = await import("@/reports/health-scorecard");
       if (cd && cd.ratioResults.length === 0) {
-        throw new Error("No scorable ratios yet — complete financials before generating the scorecard.");
+        throw new Error(
+          "No scorable ratios yet — complete financials before generating the scorecard.",
+        );
       }
       const isDemo = !cd;
       const ratioRows = isDemo ? MOCK_RATIOS : cd!.ratioResults;
@@ -1258,12 +2231,15 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
         reviewSignoff: financialsStamp,
         operatingProfile,
         cashRunwayWeeks: isDemo ? null : (cd!.cashRunwayWeeks ?? null),
+        market,
       });
     },
     intervention: async (s, p) => {
       const { InterventionPriorityPDF } = await import("@/reports/intervention-priority");
       if (cd && cd.ratioResults.length === 0) {
-        throw new Error("No scorable ratios yet — complete financials before generating interventions.");
+        throw new Error(
+          "No scorable ratios yet — complete financials before generating interventions.",
+        );
       }
       const isDemo = !cd;
       const interventions = isDemo
@@ -1276,6 +2252,7 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
         isDemo,
         reviewSignoff: financialsStamp,
         operatingProfile,
+        market,
       });
     },
     forecast: async (s, p) => {
@@ -1292,6 +2269,7 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
         isDemo,
         reviewSignoff: forecastStamp,
         operatingProfile,
+        market,
       });
     },
     cycle: async (s, p) => {
@@ -1307,6 +2285,7 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
         isDemo,
         reviewSignoff: financialsStamp,
         operatingProfile,
+        market,
       });
     },
     waterfall: async (s, p) => {
@@ -1325,6 +2304,7 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
         isDemo,
         reviewSignoff: profitabilityStamp,
         operatingProfile,
+        market,
       });
     },
     leverage: async (s, p) => {
@@ -1340,6 +2320,7 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
         isDemo,
         reviewSignoff: financialsStamp,
         operatingProfile,
+        market,
       });
     },
     assets: async (s, p) => {
@@ -1355,6 +2336,7 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
         isDemo,
         reviewSignoff: financialsStamp,
         operatingProfile,
+        market,
       });
     },
     labor: async (s, p) => {
@@ -1371,12 +2353,15 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
         isDemo,
         reviewSignoff: financialsStamp,
         operatingProfile,
+        market,
       });
     },
     movement: async (s, p) => {
       const { RatioMovementPDF } = await import("@/reports/ratio-movement");
       if (cd && cd.movement.length === 0) {
-        throw new Error("No period history yet — save at least one snapshot before the movement report.");
+        throw new Error(
+          "No period history yet — save at least one snapshot before the movement report.",
+        );
       }
       const isDemo = !cd;
       return renderToBlob(RatioMovementPDF, {
@@ -1387,6 +2372,7 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
         isDemo,
         reviewSignoff: financialsStamp,
         operatingProfile,
+        market,
       });
     },
     benchmark: async (s, p) => {
@@ -1413,6 +2399,7 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
         isDemo,
         reviewSignoff: financialsStamp,
         operatingProfile,
+        market,
       });
     },
   };
@@ -1434,16 +2421,136 @@ type ReportMeta = {
 };
 
 const REPORTS: ReportMeta[] = [
-  { id: 1, key: "scorecard", name: "Financial Health Scorecard", description: "Overall score, 4-pillar breakdown, all 14 ratios with tier badges and movement arrows.", pages: "2 pages", category: "essential", icon: <FileText className="h-4 w-4 text-blue-400" />, iconBg: "bg-blue-500/15", btnBg: "bg-blue-700 hover:bg-blue-800", filename: "HealthScorecard" },
-  { id: 2, key: "intervention", name: "Priority Intervention Plan", description: "Ranked action steps per failing ratio — sorted critical-first, with effort and impact ratings.", pages: "2–3 pages", category: "essential", icon: <Lightbulb className="h-4 w-4 text-amber-400" />, iconBg: "bg-amber-500/15", btnBg: "bg-amber-600 hover:bg-amber-700", filename: "InterventionPlan" },
-  { id: 3, key: "forecast", name: "13-Week Cash Flow Forecast", description: "Colour-coded bar chart, scenario badge, weekly data table, and assumptions section.", pages: "2 pages", category: "essential", icon: <BarChart2 className="h-4 w-4 text-violet-400" />, iconBg: "bg-violet-500/15", btnBg: "bg-violet-700 hover:bg-violet-800", filename: "CashForecast" },
-  { id: 4, key: "cycle", name: "Cash Flow Cycle Report", description: "Visual cycle diagram (Inventory → WIP → Debtors), creditor offset, and cash-trapped callout.", pages: "2 pages", category: "essential", icon: <Droplets className="h-4 w-4 text-cyan-400" />, iconBg: "bg-cyan-500/15", btnBg: "bg-cyan-700 hover:bg-cyan-800", filename: "CashCycleReport" },
-  { id: 5, key: "waterfall", name: "Profitability Waterfall", description: "Revenue → Gross Profit → Operating Profit → EBT → Net Profit with tier badges and prior period compare.", pages: "2 pages", category: "essential", icon: <TrendingUp className="h-4 w-4 text-emerald-400" />, iconBg: "bg-emerald-500/15", btnBg: "bg-emerald-700 hover:bg-emerald-800", filename: "ProfitabilityWaterfall" },
-  { id: 6, key: "leverage", name: "Leverage & Solvency", description: "Debt breakdown table, 5-year maturity bar chart, equity bridge, and financing ratio analysis.", pages: "2 pages", category: "optional", icon: <ShieldCheck className="h-4 w-4 text-rose-400" />, iconBg: "bg-rose-500/15", btnBg: "bg-rose-700 hover:bg-rose-800", filename: "LeverageSolvency" },
-  { id: 7, key: "assets", name: "Asset Productivity", description: "DuPont ROE decomposition tree, Capex vs Depreciation trend, and asset ratio deep-dive.", pages: "2 pages", category: "optional", icon: <Layers className="h-4 w-4 text-indigo-400" />, iconBg: "bg-indigo-500/15", btnBg: "bg-indigo-700 hover:bg-indigo-800", filename: "AssetProductivity" },
-  { id: 8, key: "labor", name: "Labour Productivity", description: "Revenue per employee trend, GP per R1 of labour visual, and growth vs inflation comparison.", pages: "2 pages", category: "optional", icon: <Users className="h-4 w-4 text-teal-400" />, iconBg: "bg-teal-500/15", btnBg: "bg-teal-700 hover:bg-teal-800", filename: "LabourProductivity" },
-  { id: 9, key: "movement", name: "Ratio Movement", description: "All ratios across 4 time periods — red rows for sustained declines, amber for 3-period deterioration.", pages: "2–3 pages", category: "optional", icon: <BarChart className="h-4 w-4 text-orange-400" />, iconBg: "bg-orange-500/15", btnBg: "bg-orange-700 hover:bg-orange-800", filename: "RatioMovement" },
-  { id: 10, key: "benchmark", name: "Industry Benchmark Report", description: "Every ratio vs sector median and top quartile with position badges (Below / Above / Top Quartile).", pages: "2–3 pages", category: "optional", icon: <Trophy className="h-4 w-4 text-yellow-400" />, iconBg: "bg-yellow-500/15", btnBg: "bg-yellow-600 hover:bg-yellow-700", filename: "BenchmarkReport" },
+  {
+    id: 1,
+    key: "scorecard",
+    name: "Financial Health Scorecard",
+    description:
+      "Overall score, 4-pillar breakdown, all 14 ratios with tier badges and movement arrows.",
+    pages: "2 pages",
+    category: "essential",
+    icon: <FileText className="h-4 w-4 text-blue-400" />,
+    iconBg: "bg-blue-500/15",
+    btnBg: "bg-blue-700 hover:bg-blue-800",
+    filename: "HealthScorecard",
+  },
+  {
+    id: 2,
+    key: "intervention",
+    name: "Priority Intervention Plan",
+    description:
+      "Ranked action steps per failing ratio — sorted critical-first, with effort and impact ratings.",
+    pages: "2–3 pages",
+    category: "essential",
+    icon: <Lightbulb className="h-4 w-4 text-amber-400" />,
+    iconBg: "bg-amber-500/15",
+    btnBg: "bg-amber-600 hover:bg-amber-700",
+    filename: "InterventionPlan",
+  },
+  {
+    id: 3,
+    key: "forecast",
+    name: "13-Week Cash Flow Forecast",
+    description:
+      "Colour-coded bar chart, scenario badge, weekly data table, and assumptions section.",
+    pages: "2 pages",
+    category: "essential",
+    icon: <BarChart2 className="h-4 w-4 text-violet-400" />,
+    iconBg: "bg-violet-500/15",
+    btnBg: "bg-violet-700 hover:bg-violet-800",
+    filename: "CashForecast",
+  },
+  {
+    id: 4,
+    key: "cycle",
+    name: "Cash Flow Cycle Report",
+    description:
+      "Visual cycle diagram (Inventory → WIP → Debtors), creditor offset, and cash-trapped callout.",
+    pages: "2 pages",
+    category: "essential",
+    icon: <Droplets className="h-4 w-4 text-cyan-400" />,
+    iconBg: "bg-cyan-500/15",
+    btnBg: "bg-cyan-700 hover:bg-cyan-800",
+    filename: "CashCycleReport",
+  },
+  {
+    id: 5,
+    key: "waterfall",
+    name: "Profitability Waterfall",
+    description:
+      "Revenue → Gross Profit → Operating Profit → EBT → Net Profit with tier badges and prior period compare.",
+    pages: "2 pages",
+    category: "essential",
+    icon: <TrendingUp className="h-4 w-4 text-emerald-400" />,
+    iconBg: "bg-emerald-500/15",
+    btnBg: "bg-emerald-700 hover:bg-emerald-800",
+    filename: "ProfitabilityWaterfall",
+  },
+  {
+    id: 6,
+    key: "leverage",
+    name: "Leverage & Solvency",
+    description:
+      "Debt breakdown table, 5-year maturity bar chart, equity bridge, and financing ratio analysis.",
+    pages: "2 pages",
+    category: "optional",
+    icon: <ShieldCheck className="h-4 w-4 text-rose-400" />,
+    iconBg: "bg-rose-500/15",
+    btnBg: "bg-rose-700 hover:bg-rose-800",
+    filename: "LeverageSolvency",
+  },
+  {
+    id: 7,
+    key: "assets",
+    name: "Asset Productivity",
+    description:
+      "DuPont ROE decomposition tree, Capex vs Depreciation trend, and asset ratio deep-dive.",
+    pages: "2 pages",
+    category: "optional",
+    icon: <Layers className="h-4 w-4 text-indigo-400" />,
+    iconBg: "bg-indigo-500/15",
+    btnBg: "bg-indigo-700 hover:bg-indigo-800",
+    filename: "AssetProductivity",
+  },
+  {
+    id: 8,
+    key: "labor",
+    name: "Labour Productivity",
+    description:
+      "Revenue per employee trend, GP per R1 of labour visual, and growth vs inflation comparison.",
+    pages: "2 pages",
+    category: "optional",
+    icon: <Users className="h-4 w-4 text-teal-400" />,
+    iconBg: "bg-teal-500/15",
+    btnBg: "bg-teal-700 hover:bg-teal-800",
+    filename: "LabourProductivity",
+  },
+  {
+    id: 9,
+    key: "movement",
+    name: "Ratio Movement",
+    description:
+      "All ratios across 4 time periods — red rows for sustained declines, amber for 3-period deterioration.",
+    pages: "2–3 pages",
+    category: "optional",
+    icon: <BarChart className="h-4 w-4 text-orange-400" />,
+    iconBg: "bg-orange-500/15",
+    btnBg: "bg-orange-700 hover:bg-orange-800",
+    filename: "RatioMovement",
+  },
+  {
+    id: 10,
+    key: "benchmark",
+    name: "Industry Benchmark Report",
+    description:
+      "Every ratio vs sector median and top quartile with position badges (Below / Above / Top Quartile).",
+    pages: "2–3 pages",
+    category: "optional",
+    icon: <Trophy className="h-4 w-4 text-yellow-400" />,
+    iconBg: "bg-yellow-500/15",
+    btnBg: "bg-yellow-600 hover:bg-yellow-700",
+    filename: "BenchmarkReport",
+  },
 ];
 
 // ── Preview state ──────────────────────────────────────────────────────────
@@ -1458,8 +2565,16 @@ type PreviewState = {
 // ── Report card ────────────────────────────────────────────────────────────
 
 function ReportCard({
-  report, isGenerating, isPreviewing, isClient, dataLoading, blocked, highlight,
-  onGenerate, onPreview,
+  report,
+  isGenerating,
+  isPreviewing,
+  isClient,
+  dataLoading,
+  blocked,
+  highlight,
+  onGenerate,
+  onPreview,
+  market = ZA_MARKET,
 }: {
   report: ReportMeta;
   isGenerating: boolean;
@@ -1470,6 +2585,7 @@ function ReportCard({
   highlight?: boolean;
   onGenerate: () => void;
   onPreview: () => void;
+  market?: ResolvedMarket;
 }) {
   const disabled = !isClient || dataLoading || blocked;
   return (
@@ -1481,19 +2597,27 @@ function ReportCard({
     >
       <div className="p-4 pb-3 flex-1">
         <div className="flex items-start gap-3">
-          <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${report.iconBg}`}>
+          <div
+            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${report.iconBg}`}
+          >
             {report.icon}
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 mb-1 flex-wrap">
               <span className="text-[10px] font-semibold text-muted-foreground">#{report.id}</span>
-              <span className={`rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${report.category === "essential" ? "bg-[#c9962b]/10 text-[#a8791a] dark:text-[#e5c66b]" : "bg-muted text-muted-foreground"}`}>
+              <span
+                className={`rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${report.category === "essential" ? "bg-[#c9962b]/10 text-[#a8791a] dark:text-[#e5c66b]" : "bg-muted text-muted-foreground"}`}
+              >
                 {report.category}
               </span>
               <span className="text-[10px] text-muted-foreground">{report.pages}</span>
             </div>
-            <h3 className="text-sm font-semibold leading-snug text-foreground mb-1">{report.name}</h3>
-            <p className="text-[11px] leading-relaxed text-muted-foreground">{report.description}</p>
+            <h3 className="text-sm font-semibold leading-snug text-foreground mb-1">
+              {localizeCopy(report.name, market)}
+            </h3>
+            <p className="text-[11px] leading-relaxed text-muted-foreground">
+              {localizeCopy(report.description, market)}
+            </p>
           </div>
         </div>
       </div>
@@ -1507,7 +2631,11 @@ function ReportCard({
           disabled={disabled || isPreviewing}
           title={blocked ? "Upload financials before generating client reports" : undefined}
         >
-          {isPreviewing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Eye className="h-3.5 w-3.5" />}
+          {isPreviewing ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Eye className="h-3.5 w-3.5" />
+          )}
           {dataLoading ? "Loading…" : "Preview"}
         </Button>
         <Button
@@ -1517,7 +2645,11 @@ function ReportCard({
           disabled={disabled || isGenerating}
           title={blocked ? "Upload financials before generating client reports" : undefined}
         >
-          {isGenerating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+          {isGenerating ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Download className="h-3.5 w-3.5" />
+          )}
           Download
         </Button>
       </div>
@@ -1528,7 +2660,10 @@ function ReportCard({
 // ── Settings panel ─────────────────────────────────────────────────────────
 
 function SettingsPanel({
-  settings, onChange, profile, clientSector = null,
+  settings,
+  onChange,
+  profile,
+  clientSector = null,
 }: {
   settings: Settings;
   onChange: (patch: Partial<Settings>) => void;
@@ -1536,7 +2671,8 @@ function SettingsPanel({
   /** When set (live client with business type), Benchmark PDF uses this — picker is display-only. */
   clientSector?: { code: string; name: string } | null;
 }) {
-  const inputCls = "w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-[#c9962b] focus:outline-none focus:ring-1 focus:ring-[#c9962b]/40";
+  const inputCls =
+    "w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-[#c9962b] focus:outline-none focus:ring-1 focus:ring-[#c9962b]/40";
 
   return (
     <div className="rounded-xl border border-border bg-card p-5 space-y-5 shadow-sm sticky top-6">
@@ -1547,7 +2683,9 @@ function SettingsPanel({
 
       {/* SME Name */}
       <div>
-        <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Client / SME Name</label>
+        <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+          Client / SME Name
+        </label>
         <input
           className={inputCls}
           value={settings.smeName}
@@ -1558,14 +2696,20 @@ function SettingsPanel({
 
       {/* Reporting period */}
       <div>
-        <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Reporting Period</label>
+        <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+          Reporting Period
+        </label>
         <div className="grid grid-cols-2 gap-2">
           <Select value={settings.periodMonth} onValueChange={(v) => onChange({ periodMonth: v })}>
             <SelectTrigger className="border-input bg-background text-foreground text-sm h-9">
               <SelectValue />
             </SelectTrigger>
             <SelectContent className="bg-popover border-border">
-              {MONTHS.map((m) => <SelectItem key={m} value={m} className="text-popover-foreground focus:bg-muted">{m}</SelectItem>)}
+              {MONTHS.map((m) => (
+                <SelectItem key={m} value={m} className="text-popover-foreground focus:bg-muted">
+                  {m}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
           <Select value={settings.periodYear} onValueChange={(v) => onChange({ periodYear: v })}>
@@ -1573,7 +2717,11 @@ function SettingsPanel({
               <SelectValue />
             </SelectTrigger>
             <SelectContent className="bg-popover border-border">
-              {YEARS.map((y) => <SelectItem key={y} value={y} className="text-popover-foreground focus:bg-muted">{y}</SelectItem>)}
+              {YEARS.map((y) => (
+                <SelectItem key={y} value={y} className="text-popover-foreground focus:bg-muted">
+                  {y}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
@@ -1581,21 +2729,35 @@ function SettingsPanel({
 
       {/* Industry */}
       <div>
-        <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Industry (Benchmark Report)</label>
+        <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+          Industry (Benchmark Report)
+        </label>
         {clientSector ? (
           <div className="rounded-lg border border-border bg-muted/40 px-3 py-2.5">
             <p className="text-sm font-medium text-foreground">{clientSector.name}</p>
             <p className="mt-0.5 text-[10px] text-muted-foreground">
-              From this client&apos;s business type / profile — matches the sector benchmarks in the PDF.
+              From this client&apos;s business type / profile — matches the sector benchmarks in the
+              PDF.
             </p>
           </div>
         ) : (
-          <Select value={settings.industryCode} onValueChange={(v) => onChange({ industryCode: v })}>
+          <Select
+            value={settings.industryCode}
+            onValueChange={(v) => onChange({ industryCode: v })}
+          >
             <SelectTrigger className="border-input bg-background text-foreground text-sm h-9 w-full">
               <SelectValue />
             </SelectTrigger>
             <SelectContent className="bg-popover border-border">
-              {INDUSTRIES.map((i) => <SelectItem key={i.code} value={i.code} className="text-popover-foreground focus:bg-muted text-xs">{i.name}</SelectItem>)}
+              {INDUSTRIES.map((i) => (
+                <SelectItem
+                  key={i.code}
+                  value={i.code}
+                  className="text-popover-foreground focus:bg-muted text-xs"
+                >
+                  {i.name}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         )}
@@ -1605,7 +2767,9 @@ function SettingsPanel({
       <div className="flex items-center justify-between">
         <div>
           <p className="text-xs font-semibold text-foreground">Include Prior Period</p>
-          <p className="text-[10px] text-muted-foreground mt-0.5">Show comparison columns in tables</p>
+          <p className="text-[10px] text-muted-foreground mt-0.5">
+            Show comparison columns in tables
+          </p>
         </div>
         <Switch
           checked={settings.includePrior}
@@ -1614,27 +2778,40 @@ function SettingsPanel({
         />
       </div>
 
-        <hr className="border-border" />
+      <hr className="border-border" />
 
       {/* Brand preview */}
       <div>
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">Report Branding</p>
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+          Report Branding
+        </p>
         {profile.firmName ? (
           <div className="flex items-center gap-3 rounded-lg border border-border bg-muted/40 px-3 py-2.5">
-            <div className="h-8 w-8 shrink-0 rounded" style={{ backgroundColor: profile.accentColor }} />
+            <div
+              className="h-8 w-8 shrink-0 rounded"
+              style={{ backgroundColor: profile.accentColor }}
+            />
             <div>
               <p className="text-xs font-semibold text-foreground">{profile.firmName}</p>
-              {profile.tagline && <p className="text-[10px] text-muted-foreground">{profile.tagline}</p>}
+              {profile.tagline && (
+                <p className="text-[10px] text-muted-foreground">{profile.tagline}</p>
+              )}
             </div>
           </div>
         ) : (
           <div className="rounded-lg border border-amber-900/40 bg-amber-950/20 px-3 py-2.5">
             <p className="text-xs text-amber-400">No brand configured</p>
-            <p className="text-[10px] text-amber-500/70 mt-0.5">PDFs will use default Milōn branding</p>
+            <p className="text-[10px] text-amber-500/70 mt-0.5">
+              PDFs will use default Milōn branding
+            </p>
           </div>
         )}
-        <Link to="/settings/brand" className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors">
-          <ExternalLink className="h-3 w-3" />Brand Settings
+        <Link
+          to="/settings/brand"
+          className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <ExternalLink className="h-3 w-3" />
+          Brand Settings
         </Link>
       </div>
     </div>
@@ -1643,16 +2820,35 @@ function SettingsPanel({
 
 // ── Preview modal ──────────────────────────────────────────────────────────
 
-function PreviewModal({ state, onClose, onDownload }: { state: PreviewState | null; onClose: () => void; onDownload: () => void }) {
+function PreviewModal({
+  state,
+  onClose,
+  onDownload,
+}: {
+  state: PreviewState | null;
+  onClose: () => void;
+  onDownload: () => void;
+}) {
   return (
-    <Dialog open={state !== null} onOpenChange={(open) => { if (!open) onClose(); }}>
+    <Dialog
+      open={state !== null}
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
       <DialogContent className="max-w-5xl h-[88vh] flex flex-col bg-background border-border p-0 gap-0">
         <DialogHeader className="flex-row items-center justify-between px-5 py-3 border-b border-border shrink-0 space-y-0">
           <DialogTitle className="text-sm font-semibold text-foreground">
             {state?.name ?? "Report Preview"}
           </DialogTitle>
-          <Button size="sm" variant="outline" className="gap-1.5 border-border text-foreground hover:bg-muted text-xs" onClick={onDownload}>
-            <Download className="h-3.5 w-3.5" />Download
+          <Button
+            size="sm"
+            variant="outline"
+            className="gap-1.5 border-border text-foreground hover:bg-muted text-xs"
+            onClick={onDownload}
+          >
+            <Download className="h-3.5 w-3.5" />
+            Download
           </Button>
         </DialogHeader>
 
@@ -1678,12 +2874,12 @@ function PreviewModal({ state, onClose, onDownload }: { state: PreviewState | nu
 // ── Playbook catalogue ──────────────────────────────────────────────────────
 
 const PLAYBOOK_PILLARS = [
-  { key: "profit",     name: "Profitability",             color: "#b45309" },
-  { key: "financing",  name: "Leverage & Financing",      color: "#7c3aed" },
-  { key: "cash",       name: "Cash & Working Capital",    color: "#047857" },
-  { key: "assets",     name: "Asset Productivity",        color: "#1d4ed8" },
-  { key: "labour",     name: "Labour Productivity",       color: "#0e7490" },
-  { key: "risk",       name: "Business Risk",             color: "#dc2626" },
+  { key: "profit", name: "Profitability", color: "#b45309" },
+  { key: "financing", name: "Leverage & Financing", color: "#7c3aed" },
+  { key: "cash", name: "Cash & Working Capital", color: "#047857" },
+  { key: "assets", name: "Asset Productivity", color: "#1d4ed8" },
+  { key: "labour", name: "Labour Productivity", color: "#0e7490" },
+  { key: "risk", name: "Business Risk", color: "#dc2626" },
 ] as const;
 
 type PlaybookPillarKey = (typeof PLAYBOOK_PILLARS)[number]["key"];
@@ -1698,43 +2894,163 @@ interface PlaybookRatio {
 
 const PLAYBOOK_RATIOS: PlaybookRatio[] = [
   // Profitability
-  { ratio_key: "grossMargin",         ratio_name: "Gross Profit Margin",   pillar: "profit",    health_tier: "at_risk",  health_score: 62 },
-  { ratio_key: "directCostsRatio",    ratio_name: "Direct Cost Burden",    pillar: "profit",    health_tier: "at_risk",  health_score: 58 },
-  { ratio_key: "fixedCostRatio",      ratio_name: "Fixed Cost Burden",     pillar: "profit",    health_tier: "healthy",  health_score: 71 },
-  { ratio_key: "netMargin",           ratio_name: "Net Margin",            pillar: "profit",    health_tier: "at_risk",  health_score: 68 },
-  { ratio_key: "revenueGrowth",       ratio_name: "Revenue Growth",        pillar: "profit",    health_tier: "at_risk",  health_score: 41 },
-  { ratio_key: "dol",                 ratio_name: "Operating Leverage",    pillar: "profit",    health_tier: "at_risk",  health_score: 50 },
+  {
+    ratio_key: "grossMargin",
+    ratio_name: "Gross Profit Margin",
+    pillar: "profit",
+    health_tier: "at_risk",
+    health_score: 62,
+  },
+  {
+    ratio_key: "directCostsRatio",
+    ratio_name: "Direct Cost Burden",
+    pillar: "profit",
+    health_tier: "at_risk",
+    health_score: 58,
+  },
+  {
+    ratio_key: "fixedCostRatio",
+    ratio_name: "Fixed Cost Burden",
+    pillar: "profit",
+    health_tier: "healthy",
+    health_score: 71,
+  },
+  {
+    ratio_key: "netMargin",
+    ratio_name: "Net Margin",
+    pillar: "profit",
+    health_tier: "at_risk",
+    health_score: 68,
+  },
+  {
+    ratio_key: "revenueGrowth",
+    ratio_name: "Revenue Growth",
+    pillar: "profit",
+    health_tier: "at_risk",
+    health_score: 41,
+  },
+  {
+    ratio_key: "dol",
+    ratio_name: "Operating Leverage",
+    pillar: "profit",
+    health_tier: "at_risk",
+    health_score: 50,
+  },
   // Financing
-  { ratio_key: "interestBurden",      ratio_name: "Interest Burden",       pillar: "financing", health_tier: "healthy",  health_score: 72 },
-  { ratio_key: "debtToEquity",        ratio_name: "Debt-to-Equity",        pillar: "financing", health_tier: "at_risk",  health_score: 67 },
-  { ratio_key: "debtToAssets",        ratio_name: "Debt-to-Assets",        pillar: "financing", health_tier: "at_risk",  health_score: 61 },
+  {
+    ratio_key: "interestBurden",
+    ratio_name: "Interest Burden",
+    pillar: "financing",
+    health_tier: "healthy",
+    health_score: 72,
+  },
+  {
+    ratio_key: "debtToEquity",
+    ratio_name: "Debt-to-Equity",
+    pillar: "financing",
+    health_tier: "at_risk",
+    health_score: 67,
+  },
+  {
+    ratio_key: "debtToAssets",
+    ratio_name: "Debt-to-Assets",
+    pillar: "financing",
+    health_tier: "at_risk",
+    health_score: 61,
+  },
   // Cash & Working Capital
-  { ratio_key: "currentRatio",        ratio_name: "Current Ratio",         pillar: "cash",      health_tier: "critical", health_score: 28 },
-  { ratio_key: "debtorDays",          ratio_name: "Debtor Days",           pillar: "cash",      health_tier: "at_risk",  health_score: 40 },
-  { ratio_key: "creditorDays",        ratio_name: "Creditor Days",         pillar: "cash",      health_tier: "healthy",  health_score: 75 },
-  { ratio_key: "wipDays",             ratio_name: "WIP Days",              pillar: "cash",      health_tier: "healthy",  health_score: 68 },
-  { ratio_key: "workingCapitalFunding", ratio_name: "WC Funding Intensity", pillar: "cash",     health_tier: "critical", health_score: 32 },
-  { ratio_key: "ocfToEbitda",         ratio_name: "Cash Quality",          pillar: "cash",      health_tier: "at_risk",  health_score: 60 },
+  {
+    ratio_key: "currentRatio",
+    ratio_name: "Current Ratio",
+    pillar: "cash",
+    health_tier: "critical",
+    health_score: 28,
+  },
+  {
+    ratio_key: "debtorDays",
+    ratio_name: "Debtor Days",
+    pillar: "cash",
+    health_tier: "at_risk",
+    health_score: 40,
+  },
+  {
+    ratio_key: "creditorDays",
+    ratio_name: "Creditor Days",
+    pillar: "cash",
+    health_tier: "healthy",
+    health_score: 75,
+  },
+  {
+    ratio_key: "wipDays",
+    ratio_name: "WIP Days",
+    pillar: "cash",
+    health_tier: "healthy",
+    health_score: 68,
+  },
+  {
+    ratio_key: "workingCapitalFunding",
+    ratio_name: "WC Funding Intensity",
+    pillar: "cash",
+    health_tier: "critical",
+    health_score: 32,
+  },
+  {
+    ratio_key: "ocfToEbitda",
+    ratio_name: "Cash Quality",
+    pillar: "cash",
+    health_tier: "at_risk",
+    health_score: 60,
+  },
   // Assets
-  { ratio_key: "assetReinvestmentRatio", ratio_name: "Asset Reinvestment", pillar: "assets",   health_tier: "healthy",  health_score: 68 },
-  { ratio_key: "capexIntensity",      ratio_name: "Capex Intensity",       pillar: "assets",    health_tier: "healthy",  health_score: 71 },
+  {
+    ratio_key: "assetReinvestmentRatio",
+    ratio_name: "Asset Reinvestment",
+    pillar: "assets",
+    health_tier: "healthy",
+    health_score: 68,
+  },
+  {
+    ratio_key: "capexIntensity",
+    ratio_name: "Capex Intensity",
+    pillar: "assets",
+    health_tier: "healthy",
+    health_score: 71,
+  },
   // Labour
-  { ratio_key: "gpToLabor",           ratio_name: "Labour ROI",            pillar: "labour",    health_tier: "at_risk",  health_score: 64 },
-  { ratio_key: "salesPerEmployee",    ratio_name: "Revenue per Employee",  pillar: "labour",    health_tier: "healthy",  health_score: 72 },
+  {
+    ratio_key: "gpToLabor",
+    ratio_name: "Labour ROI",
+    pillar: "labour",
+    health_tier: "at_risk",
+    health_score: 64,
+  },
+  {
+    ratio_key: "salesPerEmployee",
+    ratio_name: "Revenue per Employee",
+    pillar: "labour",
+    health_tier: "healthy",
+    health_score: 72,
+  },
   // Risk
-  { ratio_key: "customerConcentration", ratio_name: "Customer Dependency", pillar: "risk",     health_tier: "at_risk",  health_score: 52 },
+  {
+    ratio_key: "customerConcentration",
+    ratio_name: "Customer Dependency",
+    pillar: "risk",
+    health_tier: "at_risk",
+    health_score: 52,
+  },
 ];
 
 const TIER_CHIP: Record<string, string> = {
   critical: "bg-red-950/60 text-red-400 border border-red-800",
-  at_risk:  "bg-amber-950/60 text-amber-400 border border-amber-800",
-  healthy:  "bg-emerald-950/60 text-emerald-400 border border-emerald-800",
+  at_risk: "bg-amber-950/60 text-amber-400 border border-amber-800",
+  healthy: "bg-emerald-950/60 text-emerald-400 border border-emerald-800",
 };
 
 const TIER_DOT: Record<string, string> = {
   critical: "bg-red-500",
-  at_risk:  "bg-amber-500",
-  healthy:  "bg-emerald-500",
+  at_risk: "bg-amber-500",
+  healthy: "bg-emerald-500",
 };
 
 // ── Playbook ratio card ─────────────────────────────────────────────────────
@@ -1747,8 +3063,14 @@ function PlaybookRatioCard({ ratio, onClick }: { ratio: PlaybookRatio; onClick: 
     >
       <div className="flex items-start justify-between gap-2 mb-2">
         <p className="text-xs font-medium text-foreground leading-snug">{ratio.ratio_name}</p>
-        <span className={`flex-shrink-0 inline-flex items-center rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${TIER_CHIP[ratio.health_tier]}`}>
-          {ratio.health_tier === "at_risk" ? "At Risk" : ratio.health_tier === "critical" ? "Critical" : "Healthy"}
+        <span
+          className={`flex-shrink-0 inline-flex items-center rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${TIER_CHIP[ratio.health_tier]}`}
+        >
+          {ratio.health_tier === "at_risk"
+            ? "At Risk"
+            : ratio.health_tier === "critical"
+              ? "Critical"
+              : "Healthy"}
         </span>
       </div>
       {/* Score bar */}
@@ -1758,7 +3080,9 @@ function PlaybookRatioCard({ ratio, onClick }: { ratio: PlaybookRatio; onClick: 
           style={{ width: `${ratio.health_score}%` }}
         />
       </div>
-      <p className="text-[10px] text-muted-foreground group-hover:text-foreground transition-colors">Score {ratio.health_score} · View steps →</p>
+      <p className="text-[10px] text-muted-foreground group-hover:text-foreground transition-colors">
+        Score {ratio.health_score} · View steps →
+      </p>
     </button>
   );
 }
@@ -1840,20 +3164,21 @@ export function ReportsStudio({
   const deepLinkHandled = useRef<string | null>(null);
   const deepLinkReport =
     reportParam && REPORT_KEYS.includes(reportParam as (typeof REPORT_KEYS)[number])
-      ? REPORTS.find((r) => r.key === reportParam) ?? null
+      ? (REPORTS.find((r) => r.key === reportParam) ?? null)
       : null;
   const [deepLinkBusy, setDeepLinkBusy] = useState(() => Boolean(deepLinkReport));
 
   /** Client-linked studio never ships mock figures — upload first. */
-  const blockedForClient =
-    Boolean(clientId) && !dataLoading && !(clientData?.hasData);
+  const blockedForClient = Boolean(clientId) && !dataLoading && !clientData?.hasData;
 
   function openPlaybook(ratio: PlaybookRatio) {
     setSelectedPlaybook(ratio);
     setPlaybookOpen(true);
   }
 
-  useEffect(() => { setIsClient(true); }, []);
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   // Open preview shell immediately for deep-links (avoids catalogue flash).
   useEffect(() => {
@@ -1882,22 +3207,27 @@ export function ReportsStudio({
       return;
     }
     let cancelled = false;
-    setClientData(null);   // clear before async starts
+    setClientData(null); // clear before async starts
     setDataLoading(true);
     deepLinkHandled.current = null;
-    loadClientReportData(clientId).then((data) => {
-      if (cancelled) return;
-      setClientData(data);
-      // Keep smeName in sync with the client's real name if it differs
-      if (data.clientName) {
-        setSettings((prev) => ({ ...prev, smeName: data.clientName }));
-      }
-    }).catch((err) => {
-      console.error("Failed to load client report data:", err);
-    }).finally(() => {
-      if (!cancelled) setDataLoading(false);
-    });
-    return () => { cancelled = true; };
+    loadClientReportData(clientId)
+      .then((data) => {
+        if (cancelled) return;
+        setClientData(data);
+        // Keep smeName in sync with the client's real name if it differs
+        if (data.clientName) {
+          setSettings((prev) => ({ ...prev, smeName: data.clientName }));
+        }
+      })
+      .catch((err) => {
+        console.error("Failed to load client report data:", err);
+      })
+      .finally(() => {
+        if (!cancelled) setDataLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [clientId]);
 
   // Build the GEN map from real client data (or null = demo data)
@@ -1914,7 +3244,9 @@ export function ReportsStudio({
   function assertCanGenerate(): boolean {
     if (!isClient || dataLoading) return false;
     if (blockedForClient) {
-      toast.error("Upload financials for this client before generating reports. Demo figures are never shipped under a client name.");
+      toast.error(
+        "Upload financials for this client before generating reports. Demo figures are never shipped under a client name.",
+      );
       return false;
     }
     return true;
@@ -2067,7 +3399,15 @@ export function ReportsStudio({
       })();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- fire once per deep-link token
-  }, [isClient, dataLoading, reportParam, actionParam, clientId, blockedForClient, clientData?.hasData]);
+  }, [
+    isClient,
+    dataLoading,
+    reportParam,
+    actionParam,
+    clientId,
+    blockedForClient,
+    clientData?.hasData,
+  ]);
 
   // ── Generate all as ZIP ──────────────────────────────────────────────────
 
@@ -2090,7 +3430,9 @@ export function ReportsStudio({
       }
 
       const zipBlob = await zip.generateAsync({ type: "blob" });
-      const sme = (settings.smeName || "Client").replace(/[^a-zA-Z0-9]+/g, "_").replace(/^_|_$/g, "");
+      const sme = (settings.smeName || "Client")
+        .replace(/[^a-zA-Z0-9]+/g, "_")
+        .replace(/^_|_$/g, "");
       triggerDownload(zipBlob, `${sme}_${settings.periodMonth}_${settings.periodYear}_Reports.zip`);
       toast.success("All reports downloaded as ZIP.");
       await recordReportIssued(clientId);
@@ -2110,7 +3452,9 @@ export function ReportsStudio({
   // Deep-link focus: skip painting the full catalogue until preview/download finishes.
   if (deepLinkBusy && deepLinkReport) {
     return (
-      <main className={`reports-studio flex flex-col items-center justify-center bg-background px-4 text-foreground ${embedded ? "min-h-[40vh] py-10" : "min-h-[100dvh]"}`}>
+      <main
+        className={`reports-studio flex flex-col items-center justify-center bg-background px-4 text-foreground ${embedded ? "min-h-[40vh] py-10" : "min-h-[100dvh]"}`}
+      >
         <div className="w-full max-w-md rounded-xl border border-border bg-card p-8 text-center shadow-sm">
           <Loader2 className="mx-auto mb-4 h-8 w-8 animate-spin text-[#c9962b]" />
           <p className="text-sm font-semibold text-foreground">
@@ -2146,9 +3490,10 @@ export function ReportsStudio({
   }
 
   return (
-    <main className={`reports-studio text-foreground ${embedded ? "bg-transparent px-0 py-2" : "min-h-[100dvh] bg-background px-4 py-8 sm:px-6"}`}>
+    <main
+      className={`reports-studio text-foreground ${embedded ? "bg-transparent px-0 py-2" : "min-h-[100dvh] bg-background px-4 py-8 sm:px-6"}`}
+    >
       <div className="mx-auto max-w-[1400px]">
-
         {/* Back nav — standalone studio only */}
         {!embedded && (
           <div className="mb-7 flex items-center justify-between">
@@ -2156,7 +3501,8 @@ export function ReportsStudio({
               to="/dashboard"
               className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
             >
-              <ArrowLeft className="h-4 w-4" />Back to Dashboard
+              <ArrowLeft className="h-4 w-4" />
+              Back to Dashboard
             </Link>
             <ThemeToggle />
           </div>
@@ -2167,11 +3513,16 @@ export function ReportsStudio({
           <div>
             <div className="flex items-center gap-2 mb-1">
               <Zap className="h-4 w-4 text-[#c9962b]" />
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Milōn Report Suite</span>
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Milōn Report Suite
+              </span>
             </div>
-            <h1 className="text-2xl font-semibold tracking-tight text-foreground">Financial Reports</h1>
+            <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+              Financial Reports
+            </h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              10 white-label PDF reports — configure settings then generate or preview individual reports.
+              10 white-label PDF reports — configure settings then generate or preview individual
+              reports.
             </p>
             {/* Client data status badge */}
             {clientId && (
@@ -2202,7 +3553,8 @@ export function ReportsStudio({
               <div className="mt-2 flex items-center gap-1.5">
                 <span className="inline-block h-1.5 w-1.5 rounded-full bg-amber-500" />
                 <span className="text-[11px] text-amber-700 dark:text-amber-400">
-                  No client linked — PDFs use illustrative demo data (watermarked). Open a client for live reports.
+                  No client linked — PDFs use illustrative demo data (watermarked). Open a client
+                  for live reports.
                 </span>
               </div>
             )}
@@ -2211,7 +3563,9 @@ export function ReportsStudio({
           <div className="flex flex-col items-end gap-2">
             {zipProgress ? (
               <div className="w-60">
-                <p className="text-xs text-muted-foreground mb-1.5">Generating {zipProgress.done}/{zipProgress.total} reports…</p>
+                <p className="text-xs text-muted-foreground mb-1.5">
+                  Generating {zipProgress.done}/{zipProgress.total} reports…
+                </p>
                 <Progress value={zipPct} className="h-2 bg-muted" />
               </div>
             ) : (
@@ -2219,12 +3573,23 @@ export function ReportsStudio({
                 className="gap-2 bg-[#c9962b] hover:bg-[#b8851f] font-semibold text-white"
                 onClick={handleGenerateAll}
                 disabled={!isClient || dataLoading || blockedForClient}
-                title={blockedForClient ? "Upload financials before generating client reports" : undefined}
-              >
-                {dataLoading
-                  ? <><Loader2 className="h-4 w-4 animate-spin" />Loading client data…</>
-                  : <><Download className="h-4 w-4" />Generate All as ZIP</>
+                title={
+                  blockedForClient
+                    ? "Upload financials before generating client reports"
+                    : undefined
                 }
+              >
+                {dataLoading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Loading client data…
+                  </>
+                ) : (
+                  <>
+                    <Download className="h-4 w-4" />
+                    Generate All as ZIP
+                  </>
+                )}
               </Button>
             )}
           </div>
@@ -2232,13 +3597,14 @@ export function ReportsStudio({
 
         {/* Main layout */}
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_300px]">
-
           {/* Card grid */}
           <div className="space-y-6">
             {/* Essential */}
             <section>
               <div className="mb-3 flex items-center gap-2">
-                <span className="rounded-full bg-[#c9962b]/10 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[#a8791a] dark:text-[#e5c66b]">Essential — {essential.length} Reports</span>
+                <span className="rounded-full bg-[#c9962b]/10 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[#a8791a] dark:text-[#e5c66b]">
+                  Essential — {essential.length} Reports
+                </span>
                 <div className="flex-1 border-t border-border" />
               </div>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -2254,6 +3620,7 @@ export function ReportsStudio({
                     highlight={reportParam === r.key}
                     onGenerate={() => handleGenerate(r)}
                     onPreview={() => handlePreview(r)}
+                    market={clientData?.market ?? ZA_MARKET}
                   />
                 ))}
               </div>
@@ -2262,7 +3629,9 @@ export function ReportsStudio({
             {/* Optional */}
             <section>
               <div className="mb-3 flex items-center gap-2">
-                <span className="rounded-full bg-muted px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Optional — {optional.length} Reports</span>
+                <span className="rounded-full bg-muted px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                  Optional — {optional.length} Reports
+                </span>
                 <div className="flex-1 border-t border-border" />
               </div>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -2278,6 +3647,7 @@ export function ReportsStudio({
                     highlight={reportParam === r.key}
                     onGenerate={() => handleGenerate(r)}
                     onPreview={() => handlePreview(r)}
+                    market={clientData?.market ?? ZA_MARKET}
                   />
                 ))}
               </div>
@@ -2292,7 +3662,8 @@ export function ReportsStudio({
                 <div className="flex-1 border-t border-border" />
               </div>
               <p className="text-xs text-muted-foreground mb-5">
-                Step-by-step recovery and optimisation plans for every ratio, tailored to the current health tier. Click any ratio to open its 10-step playbook.
+                Step-by-step recovery and optimisation plans for every ratio, tailored to the
+                current health tier. Click any ratio to open its 10-step playbook.
               </p>
               <div className="space-y-5">
                 {PLAYBOOK_PILLARS.map((pillar) => {
@@ -2300,12 +3671,19 @@ export function ReportsStudio({
                   if (!ratios.length) return null;
                   return (
                     <div key={pillar.key}>
-                      <p className="text-[10px] font-semibold uppercase tracking-widest mb-2" style={{ color: pillar.color }}>
+                      <p
+                        className="text-[10px] font-semibold uppercase tracking-widest mb-2"
+                        style={{ color: pillar.color }}
+                      >
                         {pillar.name}
                       </p>
                       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                         {ratios.map((ratio) => (
-                          <PlaybookRatioCard key={ratio.ratio_key} ratio={ratio} onClick={() => openPlaybook(ratio)} />
+                          <PlaybookRatioCard
+                            key={ratio.ratio_key}
+                            ratio={ratio}
+                            onClick={() => openPlaybook(ratio)}
+                          />
                         ))}
                       </div>
                     </div>

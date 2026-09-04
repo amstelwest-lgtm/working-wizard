@@ -5,11 +5,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
 import { PlaybookDrawer } from "@/components/playbook-drawer";
 import { PortfolioHealthScatter } from "@/components/portfolio-health-scatter";
-import {
-  shouldStayOnAccountantPortal,
-  setPortalIntent,
-  clearForcePortal,
-} from "@/lib/user-roles";
+import { shouldStayOnAccountantPortal, setPortalIntent, clearForcePortal } from "@/lib/user-roles";
 import {
   healthFromFlatFinancials,
   buildTrend,
@@ -49,8 +45,10 @@ import { MarketPicker } from "@/components/market-picker";
 import {
   coerceMarketSelection,
   draftToSelection,
+  formatMoney,
   isDraftComplete,
   parseMarketSelection,
+  resolveMarket,
   type DraftMarket,
 } from "@/lib/market";
 import {
@@ -84,6 +82,7 @@ type Client = {
   created_at?: string | null;
   // reports_issued_count may not exist until migration runs
   reports_issued_count?: number | null;
+  market?: unknown;
 };
 
 type ClientRow = Client & {
@@ -334,7 +333,9 @@ function AddClientDialog({
           marketRegion: market.regionCode,
         },
       });
-      let inviteNote = created.client_code ? `Client added · ${created.client_code}` : "Client added";
+      let inviteNote = created.client_code
+        ? `Client added · ${created.client_code}`
+        : "Client added";
       if (email) {
         try {
           const inv = await inviteOwner({
@@ -495,7 +496,9 @@ function AddClientDialog({
               }}
               placeholder="owner@business.co.za"
             />
-            <p style={{ margin: "8px 0 0", fontSize: 12, color: "var(--ink-dim)", lineHeight: 1.45 }}>
+            <p
+              style={{ margin: "8px 0 0", fontSize: 12, color: "var(--ink-dim)", lineHeight: 1.45 }}
+            >
               We email them a claim link and copy a paste-ready message for you.
             </p>
           </div>
@@ -564,7 +567,9 @@ function InviteOwnerDialog({
               forward it.
             </p>
           ) : (
-            <p style={{ marginBottom: 14, fontSize: 13, color: "var(--ink-dim)", lineHeight: 1.55 }}>
+            <p
+              style={{ marginBottom: 14, fontSize: 13, color: "var(--ink-dim)", lineHeight: 1.55 }}
+            >
               {draft.sendError
                 ? `Could not send automatically (${draft.sendError}). Copy the message or try again.`
                 : "No owner email on file yet — add it to send, or copy the message into your own email."}
@@ -739,9 +744,12 @@ function Dashboard() {
 
     let isIt = false;
     try {
-      const { data: itFlag } = await supabase.rpc("is_milon_it_member" as never, {
-        _user_id: userId,
-      } as never);
+      const { data: itFlag } = await supabase.rpc(
+        "is_milon_it_member" as never,
+        {
+          _user_id: userId,
+        } as never,
+      );
       isIt = Boolean(itFlag);
     } catch {
       isIt = false;
@@ -991,9 +999,7 @@ function Dashboard() {
           token: inviteDraft.token,
         },
       });
-      setInviteDraft((d) =>
-        d ? { ...d, emailed: true, email: sent.email, sendError: null } : d,
-      );
+      setInviteDraft((d) => (d ? { ...d, emailed: true, email: sent.email, sendError: null } : d));
       setClientRows((rows) =>
         rows.map((row) =>
           row.id === inviteDraft.clientId ? { ...row, contact_email: sent.email } : row,
@@ -1145,6 +1151,13 @@ function Dashboard() {
           score: c.score as number,
           trendDelta: c.trendDelta ?? 0,
           revenue: c.revenue,
+          revenueLabel:
+            c.revenue != null
+              ? formatMoney(
+                  c.revenue,
+                  resolveMarket(parseMarketSelection(c.market) ?? coerceMarketSelection(c.market)),
+                )
+              : undefined,
           status: c.health.displayStatus,
         })),
     [scoredRows],
@@ -1176,12 +1189,12 @@ function Dashboard() {
     const ebit = parseFloat(String(f.ebit ?? ""));
     const revenue = parseFloat(String(f.revenue ?? ""));
     if (!isFinite(ebit)) return "—";
+    const market = resolveMarket(parseMarketSelection(c.market) ?? coerceMarketSelection(c.market));
     if (isFinite(revenue) && revenue > 0) {
       const pct = ((ebit / revenue) * 100).toFixed(1);
-      const money = ebit.toLocaleString("en-ZA", { maximumFractionDigits: 0 });
-      return `${pct}% R${money}`;
+      return `${pct}% ${formatMoney(ebit, market)}`;
     }
-    return ebit.toLocaleString("en-ZA", { maximumFractionDigits: 0 });
+    return formatMoney(ebit, market);
   }
 
   function runwayStr(c: ClientRow): string {
@@ -1410,7 +1423,11 @@ function Dashboard() {
           <button
             type="button"
             className="stat stat-btn"
-            onClick={() => document.getElementById("follow-up")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+            onClick={() =>
+              document
+                .getElementById("follow-up")
+                ?.scrollIntoView({ behavior: "smooth", block: "start" })
+            }
           >
             <div className="k">
               <svg viewBox="0 0 24 24">
@@ -1502,7 +1519,9 @@ function Dashboard() {
           </div>
           {followUpItems.length === 0 ? (
             <p className="followup-empty">
-              {loading ? "Checking action plans…" : "No overdue or open actions across the portfolio."}
+              {loading
+                ? "Checking action plans…"
+                : "No overdue or open actions across the portfolio."}
             </p>
           ) : (
             <div className="followup-list">
@@ -1616,195 +1635,200 @@ function Dashboard() {
           </div>
         ) : (
           <div className="ctable-scroll">
-          <table className="ctable">
-            <thead>
-              <tr>
-                <th>Client</th>
-                <th>Health</th>
-                <th className="hide-sm">Trend (30d)</th>
-                <th className="hide-sm">Priority</th>
-                <th>Runway</th>
-                <th className="hide-sm">Queries</th>
-                <th className="hide-sm">Actions</th>
-                <th className="hide-sm">Op. profit (MTD)</th>
-                <th>Status</th>
-                <th style={{ textAlign: "right" }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredRows.map((c) => {
-                const chip = chipFromHealth(c.health);
-                const score = c.score != null ? Math.round(c.score) : null;
-                const qbo = qboStatuses[c.id];
-                return (
-                  <tr
-                    key={c.id}
-                    className="row"
-                    data-client-row
-                    onClick={() =>
-                      navigate({
-                        to: "/clients/$clientId",
-                        params: { clientId: c.id },
-                        search: {},
-                      })
-                    }
-                  >
-                    <td>
-                      <div className="cname">{c.name}</div>
-                      <div className="ctype">
-                        {c.client_code ? (
-                          <>
-                            <span style={{ fontFamily: "ui-monospace, monospace", letterSpacing: "0.04em" }}>
-                              {c.client_code}
-                            </span>
-                            {c.business_type ? ` · ${c.business_type}` : ""}
-                          </>
+            <table className="ctable">
+              <thead>
+                <tr>
+                  <th>Client</th>
+                  <th>Health</th>
+                  <th className="hide-sm">Trend (30d)</th>
+                  <th className="hide-sm">Priority</th>
+                  <th>Runway</th>
+                  <th className="hide-sm">Queries</th>
+                  <th className="hide-sm">Actions</th>
+                  <th className="hide-sm">Op. profit (MTD)</th>
+                  <th>Status</th>
+                  <th style={{ textAlign: "right" }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredRows.map((c) => {
+                  const chip = chipFromHealth(c.health);
+                  const score = c.score != null ? Math.round(c.score) : null;
+                  const qbo = qboStatuses[c.id];
+                  return (
+                    <tr
+                      key={c.id}
+                      className="row"
+                      data-client-row
+                      onClick={() =>
+                        navigate({
+                          to: "/clients/$clientId",
+                          params: { clientId: c.id },
+                          search: {},
+                        })
+                      }
+                    >
+                      <td>
+                        <div className="cname">{c.name}</div>
+                        <div className="ctype">
+                          {c.client_code ? (
+                            <>
+                              <span
+                                style={{
+                                  fontFamily: "ui-monospace, monospace",
+                                  letterSpacing: "0.04em",
+                                }}
+                              >
+                                {c.client_code}
+                              </span>
+                              {c.business_type ? ` · ${c.business_type}` : ""}
+                            </>
+                          ) : (
+                            (c.business_type ?? "—")
+                          )}
+                        </div>
+                      </td>
+                      <td>
+                        <div className="cell-health">
+                          <span className="ring">
+                            <RingSvg score={score} status={c.health.displayStatus} />
+                            <b>{score ?? "—"}</b>
+                          </span>
+                        </div>
+                      </td>
+                      <td className="hide-sm">
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <SparkSvg trend={c.trend} />
+                          <span
+                            className="num"
+                            style={{
+                              fontSize: 12,
+                              color:
+                                (c.trendDelta ?? 0) > 0
+                                  ? "var(--ok)"
+                                  : (c.trendDelta ?? 0) < 0
+                                    ? "var(--risk)"
+                                    : "var(--ink-dim)",
+                            }}
+                          >
+                            {trendLabel(c)}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="hide-sm">
+                        <span className={`prio ${c.priority}`}>
+                          <i />
+                          {c.priorityLabel}
+                        </span>
+                      </td>
+                      <td className="num">{runwayStr(c)}</td>
+                      <td className="num hide-sm">
+                        {c.openQueries > 0 ? (
+                          <span title="Unresolved notes on this client">{c.openQueries}</span>
                         ) : (
-                          (c.business_type ?? "—")
+                          "—"
                         )}
-                      </div>
-                    </td>
-                    <td>
-                      <div className="cell-health">
-                        <span className="ring">
-                          <RingSvg score={score} status={c.health.displayStatus} />
-                          <b>{score ?? "—"}</b>
+                      </td>
+                      <td className="num hide-sm">
+                        {c.openActions > 0 ? (
+                          <button
+                            type="button"
+                            className={`followup-cell${c.overdueActions > 0 ? " overdue" : ""}`}
+                            title="Open Action Plan"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openClientPlan(c.id, c.overdueActions > 0);
+                            }}
+                          >
+                            {c.overdueActions > 0
+                              ? `${c.overdueActions} overdue`
+                              : `${c.openActions} open`}
+                          </button>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
+                      <td className="num hide-sm">{opMarginStr(c)}</td>
+                      <td>
+                        <span className={`chip ${chip.cls}`}>
+                          <i />
+                          {chip.label}
                         </span>
-                      </div>
-                    </td>
-                    <td className="hide-sm">
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <SparkSvg trend={c.trend} />
-                        <span
-                          className="num"
-                          style={{
-                            fontSize: 12,
-                            color:
-                              (c.trendDelta ?? 0) > 0
-                                ? "var(--ok)"
-                                : (c.trendDelta ?? 0) < 0
-                                  ? "var(--risk)"
-                                  : "var(--ink-dim)",
-                          }}
-                        >
-                          {trendLabel(c)}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="hide-sm">
-                      <span className={`prio ${c.priority}`}>
-                        <i />
-                        {c.priorityLabel}
-                      </span>
-                    </td>
-                    <td className="num">{runwayStr(c)}</td>
-                    <td className="num hide-sm">
-                      {c.openQueries > 0 ? (
-                        <span title="Unresolved notes on this client">{c.openQueries}</span>
-                      ) : (
-                        "—"
-                      )}
-                    </td>
-                    <td className="num hide-sm">
-                      {c.openActions > 0 ? (
-                        <button
-                          type="button"
-                          className={`followup-cell${c.overdueActions > 0 ? " overdue" : ""}`}
-                          title="Open Action Plan"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            openClientPlan(c.id, c.overdueActions > 0);
-                          }}
-                        >
-                          {c.overdueActions > 0
-                            ? `${c.overdueActions} overdue`
-                            : `${c.openActions} open`}
-                        </button>
-                      ) : (
-                        "—"
-                      )}
-                    </td>
-                    <td className="num hide-sm">{opMarginStr(c)}</td>
-                    <td>
-                      <span className={`chip ${chip.cls}`}>
-                        <i />
-                        {chip.label}
-                      </span>
-                      {qbo && (
-                        <span
-                          title={`QuickBooks${qbo.companyName ? ` — ${qbo.companyName}` : ""}`}
-                          style={{
-                            fontSize: 9,
-                            fontWeight: 800,
-                            letterSpacing: "0.08em",
-                            color: "#fff",
-                            background: "#2CA01C",
-                            padding: "2px 6px",
-                            borderRadius: 4,
-                            marginLeft: 6,
-                          }}
-                        >
-                          QB
-                        </span>
-                      )}
-                    </td>
-                    <td>
-                      <div className="row-actions" onClick={(e) => e.stopPropagation()}>
-                        {/* Reports */}
-                        <button
-                          className="icon-btn"
-                          title="Generate report"
-                          onClick={() =>
-                            navigate({
-                              to: "/clients/$clientId",
-                              params: { clientId: c.id },
-                              search: { tab: "reports" },
-                            })
-                          }
-                        >
-                          <svg viewBox="0 0 24 24">
-                            <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
-                            <path d="M14 3v6h6" />
-                          </svg>
-                        </button>
-                        {/* Invite */}
-                        <button
-                          className="icon-btn"
-                          title="Invite client owner — email + copy message"
-                          onClick={() => void openOwnerInvite(c)}
-                        >
-                          <svg viewBox="0 0 24 24">
-                            <rect x="3" y="5" width="18" height="14" rx="2" />
-                            <path d="M3 7l9 6 9-6" />
-                          </svg>
-                        </button>
-                        <button
-                          className="icon-btn"
-                          title="Follow up on Action Plan"
-                          onClick={() => openClientPlan(c.id, c.overdueActions > 0)}
-                        >
-                          <svg viewBox="0 0 24 24">
-                            <path d="M9 11l3 3L22 4" />
-                            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
-                          </svg>
-                        </button>
-                        {/* Open / Enter as client */}
-                        <button
-                          className="icon-btn"
-                          title="Enter as client"
-                          onClick={() => enterAsClient(c)}
-                        >
-                          <svg viewBox="0 0 24 24">
-                            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3" />
-                          </svg>
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                        {qbo && (
+                          <span
+                            title={`QuickBooks${qbo.companyName ? ` — ${qbo.companyName}` : ""}`}
+                            style={{
+                              fontSize: 9,
+                              fontWeight: 800,
+                              letterSpacing: "0.08em",
+                              color: "#fff",
+                              background: "#2CA01C",
+                              padding: "2px 6px",
+                              borderRadius: 4,
+                              marginLeft: 6,
+                            }}
+                          >
+                            QB
+                          </span>
+                        )}
+                      </td>
+                      <td>
+                        <div className="row-actions" onClick={(e) => e.stopPropagation()}>
+                          {/* Reports */}
+                          <button
+                            className="icon-btn"
+                            title="Generate report"
+                            onClick={() =>
+                              navigate({
+                                to: "/clients/$clientId",
+                                params: { clientId: c.id },
+                                search: { tab: "reports" },
+                              })
+                            }
+                          >
+                            <svg viewBox="0 0 24 24">
+                              <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
+                              <path d="M14 3v6h6" />
+                            </svg>
+                          </button>
+                          {/* Invite */}
+                          <button
+                            className="icon-btn"
+                            title="Invite client owner — email + copy message"
+                            onClick={() => void openOwnerInvite(c)}
+                          >
+                            <svg viewBox="0 0 24 24">
+                              <rect x="3" y="5" width="18" height="14" rx="2" />
+                              <path d="M3 7l9 6 9-6" />
+                            </svg>
+                          </button>
+                          <button
+                            className="icon-btn"
+                            title="Follow up on Action Plan"
+                            onClick={() => openClientPlan(c.id, c.overdueActions > 0)}
+                          >
+                            <svg viewBox="0 0 24 24">
+                              <path d="M9 11l3 3L22 4" />
+                              <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+                            </svg>
+                          </button>
+                          {/* Open / Enter as client */}
+                          <button
+                            className="icon-btn"
+                            title="Enter as client"
+                            onClick={() => enterAsClient(c)}
+                          >
+                            <svg viewBox="0 0 24 24">
+                              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3" />
+                            </svg>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         )}
 

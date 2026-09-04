@@ -4,6 +4,7 @@
 
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { useMarketFormat } from "@/contexts/market";
 import {
   listDeliveries,
   channelHonestyLabel,
@@ -28,6 +29,7 @@ export function AdvisorySentHistory({
   clientId: string;
   refreshToken?: number;
 }) {
+  const { dateTime } = useMarketFormat();
   const [rows, setRows] = useState<AdvisoryDelivery[]>([]);
   const [loading, setLoading] = useState(true);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
@@ -91,9 +93,9 @@ export function AdvisorySentHistory({
         Sent history
       </div>
       <p style={{ margin: "6px 0 12px", fontSize: 13, color: "var(--ink-dim)" }}>
-        Logged shares and PDF downloads with stamped figures. Mailto / WhatsApp rows mean the
-        share sheet was opened — not postal proof — until the client acknowledges. Archived PDFs
-        can be re-downloaded when a file was stored with the row.
+        Logged shares and PDF downloads with stamped figures. Mailto / WhatsApp rows mean the share
+        sheet was opened — not postal proof — until the client acknowledges. Archived PDFs can be
+        re-downloaded when a file was stored with the row.
       </p>
       {loading ? (
         <p style={{ fontSize: 13, color: "var(--ink-dim)" }}>Loading…</p>
@@ -123,7 +125,7 @@ export function AdvisorySentHistory({
                   {r.subject ? ` — ${r.subject}` : ""}
                 </div>
                 <div style={{ marginTop: 2, fontSize: 12, color: "var(--ink-dim)" }}>
-                  {new Date(r.created_at).toLocaleString("en-ZA", {
+                  {dateTime(r.created_at, {
                     day: "numeric",
                     month: "short",
                     year: "numeric",

@@ -3,19 +3,20 @@
  */
 
 import type { VarianceChip } from "@/lib/prior-period";
+import { useMarketFormat } from "@/contexts/market";
 
-function fmt(chip: VarianceChip): string {
+function fmt(chip: VarianceChip, money: (n: number) => string): string {
   if (chip.current == null) return "—";
   if (chip.unit === "pct") return `${(chip.current * 100).toFixed(1)}%`;
   if (chip.unit === "days") return `${Math.round(chip.current)}d`;
   if (chip.unit === "score") return `${Math.round(chip.current)}`;
   if (Math.abs(chip.current) >= 1000) {
-    return `R ${Math.round(chip.current).toLocaleString("en-ZA")}`;
+    return money(Math.round(chip.current));
   }
   return chip.current.toFixed(1);
 }
 
-function fmtDelta(chip: VarianceChip): string {
+function fmtDelta(chip: VarianceChip, money: (n: number) => string): string {
   if (chip.delta == null) return "vs prior —";
   if (chip.unit === "pct") {
     const pts = chip.delta * 100;
@@ -24,7 +25,8 @@ function fmtDelta(chip: VarianceChip): string {
   if (chip.unit === "days") return `${chip.delta >= 0 ? "+" : ""}${Math.round(chip.delta)}d`;
   if (chip.unit === "score") return `${chip.delta >= 0 ? "+" : ""}${Math.round(chip.delta)}`;
   if (Math.abs(chip.delta) >= 1000) {
-    return `${chip.delta >= 0 ? "+" : ""}R ${Math.round(Math.abs(chip.delta)).toLocaleString("en-ZA")}`;
+    const body = money(Math.abs(Math.round(chip.delta)));
+    return `${chip.delta >= 0 ? "+" : "-"}${body.replace(/^-/, "")}`;
   }
   return `${chip.delta >= 0 ? "+" : ""}${chip.delta.toFixed(1)}`;
 }
@@ -46,6 +48,7 @@ export function PeriodVarianceStrip({
   priorLabel?: string | null;
   onOpenMovement?: () => void;
 }) {
+  const { money } = useMarketFormat();
   if (!chips.length) {
     return (
       <div className="card" style={{ marginTop: 12, padding: "14px 18px" }}>
@@ -111,8 +114,7 @@ export function PeriodVarianceStrip({
       >
         {chips.map((chip) => {
           const t = tone(chip);
-          const color =
-            t === "ok" ? "var(--ok)" : t === "risk" ? "var(--risk)" : "var(--ink-dim)";
+          const color = t === "ok" ? "var(--ok)" : t === "risk" ? "var(--risk)" : "var(--ink-dim)";
           return (
             <div
               key={chip.key}
@@ -134,10 +136,10 @@ export function PeriodVarianceStrip({
                 {chip.label}
               </div>
               <div style={{ marginTop: 4, fontSize: 18, fontWeight: 700, color: "var(--ink)" }}>
-                {fmt(chip)}
+                {fmt(chip, money)}
               </div>
               <div style={{ marginTop: 2, fontSize: 12, color, fontWeight: 600 }}>
-                {fmtDelta(chip)}
+                {fmtDelta(chip, money)}
               </div>
             </div>
           );

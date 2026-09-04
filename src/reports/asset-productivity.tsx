@@ -21,7 +21,7 @@ import { ExecSummary, type HeadlineFigure } from "@/components/pdf/exec-summary"
 import { DuPontDiagram } from "@/components/pdf/dupont";
 import { assetNarrative, diagnoseDuPont } from "./narrative";
 import type { ClientOperatingProfile } from "@/lib/client-profile";
-
+import { ZA_MARKET, type ResolvedMarket } from "@/lib/market";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -62,6 +62,7 @@ export type AssetProductivityPDFProps = {
   accountantProfile: AccountantProfile;
   isDemo?: boolean;
   reviewSignoff?: ReportSignoffStamp | null;
+  market?: ResolvedMarket;
 };
 
 // ── Styles ─────────────────────────────────────────────────────────────────
@@ -70,7 +71,13 @@ const S = StyleSheet.create({
   metricsRow: { flexDirection: "row", gap: 10, marginBottom: 6 },
   chartContainer: { position: "relative", backgroundColor: C.soft, borderRadius: 5 },
   bar: { position: "absolute", borderTopLeftRadius: 2, borderTopRightRadius: 2 },
-  barLabel: { position: "absolute", fontSize: 6.5, textAlign: "center", fontFamily: "Helvetica", color: C.muted },
+  barLabel: {
+    position: "absolute",
+    fontSize: 6.5,
+    textAlign: "center",
+    fontFamily: "Helvetica",
+    color: C.muted,
+  },
   legend: { flexDirection: "row", gap: 16, marginTop: 8 },
   legendItem: { flexDirection: "row", alignItems: "center", gap: 4 },
   legendDot: { width: 8, height: 8, borderRadius: 2 },
@@ -92,7 +99,13 @@ const S = StyleSheet.create({
     padding: 18,
     alignItems: "center",
   },
-  emptyText: { fontSize: 8, color: C.muted, fontFamily: "Helvetica", textAlign: "center", lineHeight: 1.5 },
+  emptyText: {
+    fontSize: 8,
+    color: C.muted,
+    fontFamily: "Helvetica",
+    textAlign: "center",
+    lineHeight: 1.5,
+  },
 });
 
 // ── Capex vs Depreciation chart ────────────────────────────────────────────
@@ -106,8 +119,8 @@ function CapexChart({ periods, accent }: { periods: CapexPeriod[]; accent: strin
     return (
       <View style={S.emptyChart}>
         <Text style={S.emptyText}>
-          Capex and depreciation history will appear here once investment figures are captured
-          for at least one period.
+          Capex and depreciation history will appear here once investment figures are captured for
+          at least one period.
         </Text>
       </View>
     );
@@ -141,9 +154,33 @@ function CapexChart({ periods, accent }: { periods: CapexPeriod[]; accent: strin
           const slotLeft = i * slot + 5;
           return (
             <Fragment key={i}>
-              <View style={[S.bar, { bottom: CX_LABEL_H, left: slotLeft, width: barW, height: capexH, backgroundColor: accent }]} />
-              <View style={[S.bar, { bottom: CX_LABEL_H, left: slotLeft + barW + 3, width: barW, height: depH, backgroundColor: C.blueLight }]} />
-              <Text style={[S.barLabel, { bottom: 3, left: i * slot, width: slot }]}>{period.label}</Text>
+              <View
+                style={[
+                  S.bar,
+                  {
+                    bottom: CX_LABEL_H,
+                    left: slotLeft,
+                    width: barW,
+                    height: capexH,
+                    backgroundColor: accent,
+                  },
+                ]}
+              />
+              <View
+                style={[
+                  S.bar,
+                  {
+                    bottom: CX_LABEL_H,
+                    left: slotLeft + barW + 3,
+                    width: barW,
+                    height: depH,
+                    backgroundColor: C.blueLight,
+                  },
+                ]}
+              />
+              <Text style={[S.barLabel, { bottom: 3, left: i * slot, width: slot }]}>
+                {period.label}
+              </Text>
             </Fragment>
           );
         })}
@@ -162,8 +199,8 @@ function CapexChart({ periods, accent }: { periods: CapexPeriod[]; accent: strin
         <Text style={S.explainText}>
           When Capex consistently exceeds Depreciation, the asset base is growing. A reinvestment
           ratio above 1.0× indicates net asset investment. Watch for periods where Capex falls
-          sharply below Depreciation — this can signal underinvestment that erodes future
-          productive capacity.
+          sharply below Depreciation — this can signal underinvestment that erodes future productive
+          capacity.
         </Text>
       </View>
     </View>
@@ -179,6 +216,7 @@ export function AssetProductivityPDF({
   isDemo,
   reviewSignoff,
   operatingProfile,
+  market,
 }: AssetProductivityPDFProps) {
   const theme = resolveTheme(accountantProfile);
   const hs = data.health_scores;
@@ -244,6 +282,7 @@ export function AssetProductivityPDF({
       accountantProfile={accountantProfile}
       isDemo={isDemo}
       reviewSignoff={reviewSignoff}
+      market={market ?? ZA_MARKET}
     >
       {/* ── PAGE 1 ── */}
       <ReportTitle
@@ -253,7 +292,10 @@ export function AssetProductivityPDF({
         isDemo={isDemo}
       />
 
-      <ExecSummary figures={figures} narrative={assetNarrative(levers, dupont, operatingProfile)} />
+      <ExecSummary
+        figures={figures}
+        narrative={assetNarrative(levers, dupont, operatingProfile, market ?? ZA_MARKET)}
+      />
 
       <SectionHeader title="DuPont Decomposition — ROE Driver Analysis" color={theme.accent} />
       <DuPontDiagram levers={levers} diagnosis={dupont} />

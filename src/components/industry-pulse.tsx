@@ -1,6 +1,7 @@
 import { ExternalLink, RefreshCw } from "lucide-react";
 import { useIndustryPulse } from "@/hooks/use-industry-pulse";
 import { resolveNewsUrl, type NewsItem, type PulseMetric } from "@/lib/industry-news.functions";
+import { useMarketFormat } from "@/contexts/market";
 
 const TAG_COLORS: Record<string, { bg: string; color: string }> = {
   green: { bg: "rgba(76,175,130,0.15)", color: "#2f9d6a" },
@@ -16,8 +17,7 @@ function MetricRow({ metric }: { metric: PulseMetric }) {
       : metric.sentiment === "bad"
         ? "text-rose-600 dark:text-rose-400"
         : "text-amber-600 dark:text-amber-300";
-  const arrow =
-    metric.direction === "up" ? "↑ " : metric.direction === "down" ? "↓ " : "→ ";
+  const arrow = metric.direction === "up" ? "↑ " : metric.direction === "down" ? "↓ " : "→ ";
   const value = /^[↑↓→]/.test(metric.value.trim()) ? metric.value : `${arrow}${metric.value}`;
   return (
     <div className="flex items-center justify-between gap-3 py-1 text-[12px]">
@@ -28,14 +28,9 @@ function MetricRow({ metric }: { metric: PulseMetric }) {
 }
 
 /** Compact rail card: headline + metrics only (news lives in IndustryNewsBand). */
-export function IndustryPulse({
-  industry,
-  vertical,
-}: {
-  industry: string;
-  vertical?: boolean;
-}) {
+export function IndustryPulse({ industry, vertical }: { industry: string; vertical?: boolean }) {
   void vertical;
+  const { date } = useMarketFormat();
   const { display, loading, lastRefresh, error, refresh } = useIndustryPulse(industry);
 
   return (
@@ -53,7 +48,7 @@ export function IndustryPulse({
           </div>
           <p className="mt-0.5 pl-4 text-[10px] text-slate-500">
             {display.source === "ai" ? "Claude · Live" : "Sector baseline"} ·{" "}
-            {lastRefresh ? lastRefresh.toLocaleDateString("en-ZA") : "Updated today"}
+            {lastRefresh ? date(lastRefresh) : "Updated today"}
           </p>
         </div>
         <button

@@ -16,9 +16,10 @@ import { ReportTitle } from "@/components/pdf/report-title";
 import { SectionHeader } from "@/components/pdf/section-header";
 import { ExecSummary, type HeadlineFigure } from "@/components/pdf/exec-summary";
 import { C, fmtRand, fmtRandCompact, fmtPct, resolveTheme } from "@/components/pdf/theme";
+import { usePdfMarket } from "@/components/pdf/pdf-market";
 import { leverageNarrative } from "./narrative";
 import type { ClientOperatingProfile } from "@/lib/client-profile";
-
+import { ZA_MARKET, type ResolvedMarket } from "@/lib/market";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -57,12 +58,19 @@ export type LeverageSolvencyPDFProps = {
   accountantProfile: AccountantProfile;
   isDemo?: boolean;
   reviewSignoff?: ReportSignoffStamp | null;
+  market?: ResolvedMarket;
 };
 
 // ── Funding structure bar ──────────────────────────────────────────────────
 
 const fs = StyleSheet.create({
-  barRow: { flexDirection: "row", height: 26, borderRadius: 5, overflow: "hidden", marginBottom: 8 },
+  barRow: {
+    flexDirection: "row",
+    height: 26,
+    borderRadius: 5,
+    overflow: "hidden",
+    marginBottom: 8,
+  },
   seg: { justifyContent: "center", paddingLeft: 10 },
   segText: { fontSize: 7.5, fontFamily: "Helvetica-Bold", color: C.white },
   legend: { flexDirection: "row", gap: 18, marginBottom: 4 },
@@ -73,6 +81,7 @@ const fs = StyleSheet.create({
 });
 
 function FundingBar({ debt, equity, accent }: { debt: number; equity: number; accent: string }) {
+  const market = usePdfMarket();
   const total = debt + equity || 1;
   const debtPct = debt / total;
   return (
@@ -81,7 +90,15 @@ function FundingBar({ debt, equity, accent }: { debt: number; equity: number; ac
         <View style={[fs.seg, { flex: Math.max(0.0001, debtPct), backgroundColor: C.blueDeep }]}>
           {debtPct > 0.18 && <Text style={fs.segText}>Debt {fmtPct(debtPct)}</Text>}
         </View>
-        <View style={[fs.seg, { flex: Math.max(0.0001, 1 - debtPct), backgroundColor: accent === C.blueDeep ? C.blue : accent }]}>
+        <View
+          style={[
+            fs.seg,
+            {
+              flex: Math.max(0.0001, 1 - debtPct),
+              backgroundColor: accent === C.blueDeep ? C.blue : accent,
+            },
+          ]}
+        >
           {1 - debtPct > 0.18 && <Text style={fs.segText}>Equity {fmtPct(1 - debtPct)}</Text>}
         </View>
       </View>
@@ -89,12 +106,14 @@ function FundingBar({ debt, equity, accent }: { debt: number; equity: number; ac
         <View style={fs.legendItem}>
           <View style={[fs.legendDot, { backgroundColor: C.blueDeep }]} />
           <Text style={fs.legendLabel}>Debt</Text>
-          <Text style={fs.legendValue}>{fmtRand(debt)}</Text>
+          <Text style={fs.legendValue}>{fmtRand(debt, market)}</Text>
         </View>
         <View style={fs.legendItem}>
-          <View style={[fs.legendDot, { backgroundColor: accent === C.blueDeep ? C.blue : accent }]} />
+          <View
+            style={[fs.legendDot, { backgroundColor: accent === C.blueDeep ? C.blue : accent }]}
+          />
           <Text style={fs.legendLabel}>Equity</Text>
-          <Text style={fs.legendValue}>{fmtRand(equity)}</Text>
+          <Text style={fs.legendValue}>{fmtRand(equity, market)}</Text>
         </View>
       </View>
     </View>
@@ -104,16 +123,42 @@ function FundingBar({ debt, equity, accent }: { debt: number; equity: number; ac
 // ── Debt facilities table ──────────────────────────────────────────────────
 
 const dt = StyleSheet.create({
-  wrapper: { borderRadius: 5, overflow: "hidden", borderWidth: 0.75, borderColor: C.line, marginBottom: 10 },
+  wrapper: {
+    borderRadius: 5,
+    overflow: "hidden",
+    borderWidth: 0.75,
+    borderColor: C.line,
+    marginBottom: 10,
+  },
   headerRow: { flexDirection: "row", paddingHorizontal: 12, paddingVertical: 8 },
-  headerCell: { fontSize: 6.5, fontFamily: "Helvetica-Bold", color: C.white, letterSpacing: 0.4, textTransform: "uppercase" },
-  row: { flexDirection: "row", paddingHorizontal: 12, paddingVertical: 7.5, borderTopWidth: 0.5, borderTopColor: C.hairline },
+  headerCell: {
+    fontSize: 6.5,
+    fontFamily: "Helvetica-Bold",
+    color: C.white,
+    letterSpacing: 0.4,
+    textTransform: "uppercase",
+  },
+  row: {
+    flexDirection: "row",
+    paddingHorizontal: 12,
+    paddingVertical: 7.5,
+    borderTopWidth: 0.5,
+    borderTopColor: C.hairline,
+  },
   cell: { fontSize: 8, fontFamily: "Helvetica", color: C.body },
-  totalRow: { flexDirection: "row", paddingHorizontal: 12, paddingVertical: 8, borderTopWidth: 0.75, borderTopColor: C.line, backgroundColor: C.soft },
+  totalRow: {
+    flexDirection: "row",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderTopWidth: 0.75,
+    borderTopColor: C.line,
+    backgroundColor: C.soft,
+  },
   totalCell: { fontSize: 8, fontFamily: "Helvetica-Bold", color: C.ink },
 });
 
 function DebtTable({ lines, accent }: { lines: DebtLine[]; accent: string }) {
+  const market = usePdfMarket();
   const total = lines.reduce((s, l) => s + l.amount, 0);
   return (
     <View style={dt.wrapper}>
@@ -126,8 +171,12 @@ function DebtTable({ lines, accent }: { lines: DebtLine[]; accent: string }) {
       </View>
       {lines.map((l, i) => (
         <View key={i} style={[dt.row, { backgroundColor: i % 2 === 1 ? C.soft : C.white }]}>
-          <Text style={[dt.cell, { flex: 2.5, fontFamily: "Helvetica-Bold", color: C.ink }]}>{l.label}</Text>
-          <Text style={[dt.cell, { flex: 1.3, textAlign: "right" }]}>{fmtRand(l.amount)}</Text>
+          <Text style={[dt.cell, { flex: 2.5, fontFamily: "Helvetica-Bold", color: C.ink }]}>
+            {l.label}
+          </Text>
+          <Text style={[dt.cell, { flex: 1.3, textAlign: "right" }]}>
+            {fmtRand(l.amount, market)}
+          </Text>
           <Text style={[dt.cell, { flex: 1, textAlign: "right" }]}>
             {l.annual_rate_pct > 0 ? `${l.annual_rate_pct.toFixed(1)}%` : "—"}
           </Text>
@@ -139,7 +188,9 @@ function DebtTable({ lines, accent }: { lines: DebtLine[]; accent: string }) {
       ))}
       <View style={dt.totalRow}>
         <Text style={[dt.totalCell, { flex: 2.5 }]}>Total Debt</Text>
-        <Text style={[dt.totalCell, { flex: 1.3, textAlign: "right" }]}>{fmtRand(total)}</Text>
+        <Text style={[dt.totalCell, { flex: 1.3, textAlign: "right" }]}>
+          {fmtRand(total, market)}
+        </Text>
         <Text style={{ flex: 3 }} />
       </View>
     </View>
@@ -155,8 +206,10 @@ export function LeverageSolvencyPDF({
   isDemo,
   reviewSignoff,
   operatingProfile,
+  market,
 }: LeverageSolvencyPDFProps) {
   const theme = resolveTheme(accountantProfile);
+  const m = market ?? ZA_MARKET;
   const hs = d.health_scores;
   const hasDebt = d.debt_facilities_captured;
   const totalAssets = d.total_assets > 0 ? d.total_assets : d.total_debt + d.total_equity;
@@ -179,7 +232,7 @@ export function LeverageSolvencyPDF({
     },
     {
       label: "Total Debt",
-      value: hasDebt ? fmtRandCompact(d.total_debt) : "—",
+      value: hasDebt ? fmtRandCompact(d.total_debt, m) : "—",
       note: hasDebt
         ? Number.isFinite(weightedRate)
           ? `avg. rate ${weightedRate.toFixed(1)}%`
@@ -188,24 +241,28 @@ export function LeverageSolvencyPDF({
     },
     {
       label: "Total Equity",
-      value: fmtRandCompact(d.total_equity),
+      value: fmtRandCompact(d.total_equity, m),
       direction: equityMovement >= 0 ? "up" : "down",
       good: equityMovement >= 0,
-      note: `${equityMovement >= 0 ? "+" : ""}${fmtRandCompact(equityMovement)} this period`,
+      note: `${equityMovement >= 0 ? "+" : ""}${fmtRandCompact(equityMovement, m)} this period`,
     },
     {
       label: "Retained This Period",
-      value: fmtRandCompact(retained),
+      value: fmtRandCompact(retained, m),
       good: retained >= 0,
       note: "profit less drawings",
     },
   ];
 
-  const narrative = leverageNarrative({
-    debtToEquity: Number.isFinite(debtToEquity) ? debtToEquity : 0,
-    totalDebt: hasDebt ? d.total_debt : 0,
-    totalEquity: d.total_equity,
-  }, operatingProfile);
+  const narrative = leverageNarrative(
+    {
+      debtToEquity: Number.isFinite(debtToEquity) ? debtToEquity : 0,
+      totalDebt: hasDebt ? d.total_debt : 0,
+      totalEquity: d.total_equity,
+    },
+    operatingProfile,
+    m,
+  );
 
   const ratioRows = [
     {
@@ -243,6 +300,7 @@ export function LeverageSolvencyPDF({
       accountantProfile={accountantProfile}
       isDemo={isDemo}
       reviewSignoff={reviewSignoff}
+      market={m}
     >
       {/* ── PAGE 1 ── */}
       <ReportTitle
@@ -259,7 +317,8 @@ export function LeverageSolvencyPDF({
         <FundingBar debt={d.total_debt} equity={d.total_equity} accent={theme.accent} />
       ) : (
         <Text style={{ fontSize: 8, color: C.muted, marginBottom: 8, fontFamily: "Helvetica" }}>
-          No debt facilities captured on the client page — enter the schedule before quoting leverage totals.
+          No debt facilities captured on the client page — enter the schedule before quoting
+          leverage totals.
         </Text>
       )}
 
@@ -300,14 +359,22 @@ export function LeverageSolvencyPDF({
 
         <SectionHeader title="Equity Movement" color={theme.accent} />
         <View style={{ flexDirection: "row", gap: 10 }}>
-          <MetricBox label="Opening Equity" value={fmtRand(d.prior_equity)} accentColor={theme.accent} />
-          <MetricBox label="Net Profit" value={fmtRand(d.net_profit)} accentColor={C.green} />
-          <MetricBox label="Drawings" value={`(${fmtRand(Math.abs(d.drawings))})`} accentColor={C.red} />
+          <MetricBox
+            label="Opening Equity"
+            value={fmtRand(d.prior_equity, m)}
+            accentColor={theme.accent}
+          />
+          <MetricBox label="Net Profit" value={fmtRand(d.net_profit, m)} accentColor={C.green} />
+          <MetricBox
+            label="Drawings"
+            value={`(${fmtRand(Math.abs(d.drawings), m)})`}
+            accentColor={C.red}
+          />
           <MetricBox
             label="Closing Equity"
-            value={fmtRand(d.total_equity)}
+            value={fmtRand(d.total_equity, m)}
             accentColor={equityMovement >= 0 ? C.green : C.red}
-            note={`${equityMovement >= 0 ? "+" : ""}${fmtRandCompact(equityMovement)} movement`}
+            note={`${equityMovement >= 0 ? "+" : ""}${fmtRandCompact(equityMovement, m)} movement`}
           />
         </View>
       </View>

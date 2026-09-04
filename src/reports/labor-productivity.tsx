@@ -19,7 +19,7 @@ import { ExecSummary, type HeadlineFigure } from "@/components/pdf/exec-summary"
 import { C, fmtRand, fmtRandCompact, fmtPct, resolveTheme } from "@/components/pdf/theme";
 import { laborNarrative } from "./narrative";
 import type { ClientOperatingProfile } from "@/lib/client-profile";
-
+import { currencySymbol, t, ZA_MARKET, type ResolvedMarket } from "@/lib/market";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -61,6 +61,7 @@ export type LaborProductivityPDFProps = {
   accountantProfile: AccountantProfile;
   isDemo?: boolean;
   reviewSignoff?: ReportSignoffStamp | null;
+  market?: ResolvedMarket;
 };
 
 // ── Trend chart (grouped bars: revenue vs labor cost) ─────────────────────
@@ -73,8 +74,21 @@ const ch = StyleSheet.create({
   container: { position: "relative", height: CH_H + CH_LABEL_H, marginBottom: 4 },
   gridLine: { position: "absolute", left: 0, right: 0, height: 0.5, backgroundColor: C.hairline },
   bar: { position: "absolute", borderTopLeftRadius: 2, borderTopRightRadius: 2 },
-  label: { position: "absolute", bottom: 3, fontSize: 6, textAlign: "center", fontFamily: "Helvetica", color: C.muted },
-  empLabel: { position: "absolute", fontSize: 5.5, textAlign: "center", fontFamily: "Helvetica-Bold", color: C.ink },
+  label: {
+    position: "absolute",
+    bottom: 3,
+    fontSize: 6,
+    textAlign: "center",
+    fontFamily: "Helvetica",
+    color: C.muted,
+  },
+  empLabel: {
+    position: "absolute",
+    fontSize: 5.5,
+    textAlign: "center",
+    fontFamily: "Helvetica-Bold",
+    color: C.ink,
+  },
   legend: { flexDirection: "row", gap: 16, marginTop: 4, marginBottom: 10 },
   legendItem: { flexDirection: "row", alignItems: "center", gap: 4 },
   legendDot: { width: 7, height: 7, borderRadius: 2 },
@@ -88,7 +102,13 @@ const ch = StyleSheet.create({
     alignItems: "center",
     marginBottom: 10,
   },
-  emptyText: { fontSize: 8, color: C.muted, fontFamily: "Helvetica", textAlign: "center", lineHeight: 1.5 },
+  emptyText: {
+    fontSize: 8,
+    color: C.muted,
+    fontFamily: "Helvetica",
+    textAlign: "center",
+    lineHeight: 1.5,
+  },
 });
 
 function LaborTrend({ periods, accent }: { periods: LaborPeriod[]; accent: string }) {
@@ -119,9 +139,30 @@ function LaborTrend({ periods, accent }: { periods: LaborPeriod[]; accent: strin
           const left = i * slot + 6;
           return (
             <Fragment key={i}>
-              <View style={[ch.bar, { left, bottom: CH_LABEL_H, width: barW, height: revH, backgroundColor: accent }]} />
-              <View style={[ch.bar, { left: left + barW + 3, bottom: CH_LABEL_H, width: barW, height: labH, backgroundColor: C.blueLight }]} />
-              <Text style={[ch.empLabel, { left: i * slot, width: slot, bottom: CH_LABEL_H + revH + 3 }]}>
+              <View
+                style={[
+                  ch.bar,
+                  { left, bottom: CH_LABEL_H, width: barW, height: revH, backgroundColor: accent },
+                ]}
+              />
+              <View
+                style={[
+                  ch.bar,
+                  {
+                    left: left + barW + 3,
+                    bottom: CH_LABEL_H,
+                    width: barW,
+                    height: labH,
+                    backgroundColor: C.blueLight,
+                  },
+                ]}
+              />
+              <Text
+                style={[
+                  ch.empLabel,
+                  { left: i * slot, width: slot, bottom: CH_LABEL_H + revH + 3 },
+                ]}
+              >
                 {p.employees} staff
               </Text>
               <Text style={[ch.label, { left: i * slot, width: slot }]}>{p.label}</Text>
@@ -152,8 +193,11 @@ export function LaborProductivityPDF({
   isDemo,
   reviewSignoff,
   operatingProfile,
+  market,
 }: LaborProductivityPDFProps) {
   const theme = resolveTheme(accountantProfile);
+  const m = market ?? ZA_MARKET;
+  const sym = currencySymbol(m);
   const hs = d.health_scores;
   const realGrowth =
     d.revenue_growth != null && d.inflation_rate != null
@@ -169,14 +213,17 @@ export function LaborProductivityPDF({
   const figures: HeadlineFigure[] = [
     {
       label: "Revenue / Employee",
-      value: fmtRandCompact(d.revenue_per_employee),
+      value: fmtRandCompact(d.revenue_per_employee, m),
       direction: rpeChange === undefined ? undefined : rpeChange >= 0 ? "up" : "down",
       good: rpeChange === undefined ? undefined : rpeChange >= 0,
-      note: rpeChange !== undefined ? `${rpeChange >= 0 ? "+" : ""}${rpeChange.toFixed(1)}% vs prior` : "No prior period",
+      note:
+        rpeChange !== undefined
+          ? `${rpeChange >= 0 ? "+" : ""}${rpeChange.toFixed(1)}% vs prior`
+          : "No prior period",
     },
     {
-      label: "GP per R1 of Wages",
-      value: gpPerLabor != null ? `R${gpPerLabor.toFixed(2)}` : "—",
+      label: `GP per ${sym}1 of Wages`,
+      value: gpPerLabor != null ? `${sym}${gpPerLabor.toFixed(2)}` : "—",
       good: gpPerLabor != null ? gpPerLabor >= 0.5 : undefined,
       note: d.gp_known ? undefined : "COGS required",
     },
@@ -190,25 +237,30 @@ export function LaborProductivityPDF({
       value: realGrowth != null ? fmtPct(realGrowth) : "—",
       direction: realGrowth == null ? undefined : realGrowth >= 0 ? "up" : "down",
       good: realGrowth == null ? undefined : realGrowth >= 0,
-      note: realGrowth != null ? "revenue growth less inflation" : "Needs prior revenue + inflation",
+      note:
+        realGrowth != null ? "revenue growth less inflation" : "Needs prior revenue + inflation",
     },
   ];
 
-  const narrative = laborNarrative({
-    revenuePerEmployee: d.revenue_per_employee,
-    gpPerLaborRand: gpPerLabor ?? 0,
-    realGrowth: realGrowth ?? 0,
-  }, operatingProfile);
+  const narrative = laborNarrative(
+    {
+      revenuePerEmployee: d.revenue_per_employee,
+      gpPerLaborRand: gpPerLabor ?? 0,
+      realGrowth: realGrowth ?? 0,
+    },
+    operatingProfile,
+    m,
+  );
 
   const ratioRows = [
     {
       name: "GP-to-Labor Ratio",
-      value: gpPerLabor != null ? `R${gpPerLabor.toFixed(2)} / R1` : "—",
+      value: gpPerLabor != null ? `${sym}${gpPerLabor.toFixed(2)} / ${sym}1` : "—",
       score: hs.gpToLabor,
     },
     {
       name: "Sales per Employee",
-      value: fmtRandCompact(d.revenue_per_employee),
+      value: fmtRandCompact(d.revenue_per_employee, m),
       score: hs.salesPerEmployee,
     },
     {
@@ -226,23 +278,33 @@ export function LaborProductivityPDF({
       accountantProfile={accountantProfile}
       isDemo={isDemo}
       reviewSignoff={reviewSignoff}
+      market={m}
     >
       {/* ── PAGE 1 ── */}
       <ReportTitle
         kicker="Advisory Report 08"
         title="Labor Productivity"
-        subtitle="What each employee and each rand of wages contributes to revenue and profit"
+        subtitle={`What each employee and each ${t("currencyWord", m)} of wages contributes to revenue and profit`}
         isDemo={isDemo}
       />
 
       <ExecSummary figures={figures} narrative={narrative} />
 
       <View style={{ flexDirection: "row", gap: 10, marginBottom: 6 }}>
-        <MetricBox label="Total Revenue" value={fmtRand(d.total_revenue)} accentColor={theme.accent} />
-        <MetricBox label="Total Labor Cost" value={fmtRand(d.total_labor_cost)} accentColor={C.blue} note={fmtPct(laborShare) + " of revenue"} />
+        <MetricBox
+          label="Total Revenue"
+          value={fmtRand(d.total_revenue, m)}
+          accentColor={theme.accent}
+        />
+        <MetricBox
+          label="Total Labor Cost"
+          value={fmtRand(d.total_labor_cost, m)}
+          accentColor={C.blue}
+          note={fmtPct(laborShare) + " of revenue"}
+        />
         <MetricBox
           label="Gross Profit"
-          value={d.gp_known ? fmtRand(d.total_gp) : "—"}
+          value={d.gp_known ? fmtRand(d.total_gp, m) : "—"}
           accentColor={C.green}
           note={d.gp_known ? undefined : "COGS required"}
         />
@@ -254,8 +316,23 @@ export function LaborProductivityPDF({
       {/* ── PAGE 2 ── */}
       <View break>
         <SectionHeader title="Period Detail" color={theme.accent} />
-        <View style={{ borderRadius: 5, overflow: "hidden", borderWidth: 0.75, borderColor: C.line, marginBottom: 10 }}>
-          <View style={{ flexDirection: "row", paddingHorizontal: 12, paddingVertical: 8, backgroundColor: theme.accent }}>
+        <View
+          style={{
+            borderRadius: 5,
+            overflow: "hidden",
+            borderWidth: 0.75,
+            borderColor: C.line,
+            marginBottom: 10,
+          }}
+        >
+          <View
+            style={{
+              flexDirection: "row",
+              paddingHorizontal: 12,
+              paddingVertical: 8,
+              backgroundColor: theme.accent,
+            }}
+          >
             {["Period", "Revenue", "Employees", "Labor Cost", "Rev / Employee"].map((h, i) => (
               <Text
                 key={h}
@@ -285,12 +362,52 @@ export function LaborProductivityPDF({
                 backgroundColor: i % 2 === 1 ? C.soft : C.white,
               }}
             >
-              <Text style={{ flex: 1.4, fontSize: 8, fontFamily: "Helvetica-Bold", color: C.ink }}>{p.label}</Text>
-              <Text style={{ flex: 1.2, fontSize: 8, fontFamily: "Helvetica", color: C.body, textAlign: "right" }}>{fmtRand(p.revenue)}</Text>
-              <Text style={{ flex: 1.2, fontSize: 8, fontFamily: "Helvetica", color: C.body, textAlign: "right" }}>{p.employees}</Text>
-              <Text style={{ flex: 1.2, fontSize: 8, fontFamily: "Helvetica", color: C.body, textAlign: "right" }}>{fmtRand(p.labor_cost)}</Text>
-              <Text style={{ flex: 1.2, fontSize: 8, fontFamily: "Helvetica", color: C.body, textAlign: "right" }}>
-                {p.employees > 0 ? fmtRandCompact(p.revenue / p.employees) : "—"}
+              <Text style={{ flex: 1.4, fontSize: 8, fontFamily: "Helvetica-Bold", color: C.ink }}>
+                {p.label}
+              </Text>
+              <Text
+                style={{
+                  flex: 1.2,
+                  fontSize: 8,
+                  fontFamily: "Helvetica",
+                  color: C.body,
+                  textAlign: "right",
+                }}
+              >
+                {fmtRand(p.revenue, m)}
+              </Text>
+              <Text
+                style={{
+                  flex: 1.2,
+                  fontSize: 8,
+                  fontFamily: "Helvetica",
+                  color: C.body,
+                  textAlign: "right",
+                }}
+              >
+                {p.employees}
+              </Text>
+              <Text
+                style={{
+                  flex: 1.2,
+                  fontSize: 8,
+                  fontFamily: "Helvetica",
+                  color: C.body,
+                  textAlign: "right",
+                }}
+              >
+                {fmtRand(p.labor_cost, m)}
+              </Text>
+              <Text
+                style={{
+                  flex: 1.2,
+                  fontSize: 8,
+                  fontFamily: "Helvetica",
+                  color: C.body,
+                  textAlign: "right",
+                }}
+              >
+                {p.employees > 0 ? fmtRandCompact(p.revenue / p.employees, m) : "—"}
               </Text>
             </View>
           ))}

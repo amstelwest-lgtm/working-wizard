@@ -15,7 +15,7 @@ import { ExecSummary, type HeadlineFigure } from "@/components/pdf/exec-summary"
 import { C, resolveTheme } from "@/components/pdf/theme";
 import { interventionNarrative } from "./narrative";
 import type { ClientOperatingProfile } from "@/lib/client-profile";
-
+import { ZA_MARKET, type ResolvedMarket } from "@/lib/market";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -40,12 +40,19 @@ export type InterventionPriorityPDFProps = {
   accountantProfile: AccountantProfile;
   isDemo?: boolean;
   reviewSignoff?: ReportSignoffStamp | null;
+  market?: ResolvedMarket;
 };
 
 // ── Styles ─────────────────────────────────────────────────────────────────
 
 const S = StyleSheet.create({
-  waveDesc: { fontSize: 7.5, fontFamily: "Helvetica", color: C.muted, marginBottom: 8, lineHeight: 1.5 },
+  waveDesc: {
+    fontSize: 7.5,
+    fontFamily: "Helvetica",
+    color: C.muted,
+    marginBottom: 8,
+    lineHeight: 1.5,
+  },
   empty: {
     borderRadius: 6,
     borderWidth: 0.75,
@@ -67,6 +74,7 @@ export function InterventionPriorityPDF({
   isDemo,
   reviewSignoff,
   operatingProfile,
+  market,
 }: InterventionPriorityPDFProps) {
   const theme = resolveTheme(accountantProfile);
 
@@ -99,11 +107,15 @@ export function InterventionPriorityPDF({
     },
   ];
 
-  const narrative = interventionNarrative({
-    critical: critical.length,
-    atRisk: atRisk.length,
-    total: interventions.length,
-  }, operatingProfile);
+  const narrative = interventionNarrative(
+    {
+      critical: critical.length,
+      atRisk: atRisk.length,
+      total: interventions.length,
+    },
+    operatingProfile,
+    market ?? ZA_MARKET,
+  );
 
   let counter = 0;
   const renderCards = (items: Intervention[]) =>
@@ -133,6 +145,7 @@ export function InterventionPriorityPDF({
       accountantProfile={accountantProfile}
       isDemo={isDemo}
       reviewSignoff={reviewSignoff}
+      market={market ?? ZA_MARKET}
     >
       <ReportTitle
         kicker="Advisory Report 05"
@@ -157,8 +170,8 @@ export function InterventionPriorityPDF({
         <View>
           <SectionHeader title="Wave 1 — Act Now" color={C.red} />
           <Text style={S.waveDesc}>
-            These steps address ratios in critical territory. Begin within the next two weeks —
-            each carries outsized impact on business survival and stability.
+            These steps address ratios in critical territory. Begin within the next two weeks — each
+            carries outsized impact on business survival and stability.
           </Text>
           {renderCards(critical)}
         </View>

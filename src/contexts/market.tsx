@@ -1,7 +1,15 @@
 import { createContext, useCallback, useContext, useMemo, type ReactNode } from "react";
 import {
   coerceMarketSelection,
+  formatDate,
+  formatDateTime,
+  formatMoney,
+  formatMoneyCompact,
+  formatMonthLabel,
+  formatNumber,
   resolveMarket,
+  t,
+  type CopyKey,
   type MarketSelection,
   type MarketTaxOverrides,
   type ResolvedMarket,
@@ -51,4 +59,31 @@ export function useMarket(): MarketContextValue {
     };
   }
   return ctx;
+}
+
+export function useMarketFormat() {
+  const { market, selection, setSelection } = useMarket();
+  return useMemo(
+    () => ({
+      market,
+      selection,
+      setSelection,
+      money: (
+        n: number,
+        opts?: { maximumFractionDigits?: number; minimumFractionDigits?: number },
+      ) => formatMoney(n, market, opts),
+      moneyCompact: (n: number) => formatMoneyCompact(n, market),
+      number: (
+        n: number,
+        opts?: { maximumFractionDigits?: number; minimumFractionDigits?: number },
+      ) => formatNumber(n, market, opts),
+      date: (d: Date | string | number, opts?: Intl.DateTimeFormatOptions) =>
+        formatDate(d, market, opts),
+      dateTime: (d: Date | string | number, opts?: Intl.DateTimeFormatOptions) =>
+        formatDateTime(d, market, opts),
+      month: (ym: string) => formatMonthLabel(ym, market),
+      t: (key: CopyKey) => t(key, market),
+    }),
+    [market, selection, setSelection],
+  );
 }

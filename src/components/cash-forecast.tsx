@@ -43,17 +43,31 @@ import {
 import { useAccountantProfile } from "@/contexts/accountant-profile";
 import { useAuth } from "@/hooks/use-auth";
 import { useServerFn } from "@tanstack/react-start";
+import { useMarketFormat } from "@/contexts/market";
 import { listClientReviewSignoffs } from "@/lib/review-signoffs.functions";
 import type { ClientReviewSignoff } from "@/lib/review-signoffs.functions";
-import { ReviewSignoffBadge, ReviewSignoffButton, computeIsStale } from "@/components/review-signoff";
+import {
+  ReviewSignoffBadge,
+  ReviewSignoffButton,
+  computeIsStale,
+} from "@/components/review-signoff";
 import { CashFromBanksDrafter } from "@/components/cash-from-banks-drafter";
-import type { CashForecastPublishPayload, CashFromBanksDraftResult } from "@/lib/cash-from-banks.types";
+import type {
+  CashForecastPublishPayload,
+  CashFromBanksDraftResult,
+} from "@/lib/cash-from-banks.types";
 import {
   CASH_RUNWAY_THRESHOLD_RAND,
   runwayWeeksFromCashflow,
   runwayWeeksFromClosings,
 } from "@/lib/cash-runway";
-import { hashFigures, latestSnapshotId, recordDelivery, warnIfDeliveryFailed, warnIfPdfArchiveFailed } from "@/lib/advisory-deliveries";
+import {
+  hashFigures,
+  latestSnapshotId,
+  recordDelivery,
+  warnIfDeliveryFailed,
+  warnIfPdfArchiveFailed,
+} from "@/lib/advisory-deliveries";
 import { stampFromSignoff } from "@/lib/review-signoff-stamp";
 // @react-pdf/renderer + the branded report are dynamically imported inside
 // exportPDF to avoid blocking initial hydration.
@@ -146,18 +160,6 @@ function distribute(line: LineItem): number[] {
   return out;
 }
 
-function fmtR(n: number) {
-  return `R ${n.toLocaleString("en-ZA", { maximumFractionDigits: 0 })}`;
-}
-
-function fmtCompact(n: number) {
-  const abs = Math.abs(n);
-  const sign = n < 0 ? "-" : "";
-  if (abs >= 1_000_000) return `${sign}R\u00a0${(abs / 1_000_000).toFixed(abs >= 10_000_000 ? 0 : 1)}m`;
-  if (abs >= 1_000) return `${sign}R\u00a0${(abs / 1_000).toFixed(abs >= 100_000 ? 0 : 1)}k`;
-  return `${sign}R\u00a0${Math.round(abs).toLocaleString("en-ZA")}`;
-}
-
 // ── Brand palette (matches profitability waterfall / accountant reports) ─────
 const GOLD = "#d4a550";
 const GOLD_DARK = "#b8860b";
@@ -170,8 +172,7 @@ const GOLD_RULE =
   "pointer-events-none absolute left-0 top-0 h-1 w-full bg-gradient-to-r from-[#b7872a] via-[#f1d28b] to-transparent";
 const INPUT_CLS =
   "border-amber-900/15 bg-white/70 text-slate-900 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-100";
-const LABEL_CLS =
-  "text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400";
+const LABEL_CLS = "text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400";
 
 // ── Collapsible section card ─────────────────────────────────────────────────
 function SectionCard({
@@ -277,9 +278,7 @@ function LineEditor({
   tone: "revenue" | "expense";
 }) {
   const accent =
-    tone === "revenue"
-      ? "border-l-[3px] border-l-[#4caf82]"
-      : "border-l-[3px] border-l-[#e05c5c]";
+    tone === "revenue" ? "border-l-[3px] border-l-[#4caf82]" : "border-l-[3px] border-l-[#e05c5c]";
   const showSplit = line.frequency === "split-weeks" || line.frequency === "split-months";
   return (
     <div
@@ -392,6 +391,7 @@ export function CashForecastPanel({
 } = {}) {
   const { profile, firmId } = useAccountantProfile();
   const { user } = useAuth();
+  const { money: fmtR, moneyCompact: fmtCompact, date, market } = useMarketFormat();
   const fetchReviewSignoffs = useServerFn(listClientReviewSignoffs);
   const [exporting, setExporting] = useState(false);
   const [forecastSignoff, setForecastSignoff] = useState<ClientReviewSignoff | null>(null);
@@ -513,15 +513,30 @@ export function CashForecastPanel({
 
   useEffect(() => {
     if (!clientId) return;
-    supabase.from("clients").select("cashflow, last_forecast_at").eq("id", clientId).maybeSingle()
+    supabase
+      .from("clients")
+      .select("cashflow, last_forecast_at")
+      .eq("id", clientId)
+      .maybeSingle()
       .then(({ data }) => {
-        setLastForecastAt((data as { last_forecast_at?: string | null } | null)?.last_forecast_at ?? null);
+        setLastForecastAt(
+          (data as { last_forecast_at?: string | null } | null)?.last_forecast_at ?? null,
+        );
         const cf = data?.cashflow as {
-          startDate?: string; openingBalance?: string;
-          revenue?: LineItem[]; expenses?: LineItem[]; other?: LineItem[];
-          revAdj?: number; expAdj?: number; collectDelay?: number;
-          headcountDelta?: number; avgSalary?: string; fixedCostDelta?: string;
-          revGrowthPct?: number; capexAmount?: string; capexWeek?: number;
+          startDate?: string;
+          openingBalance?: string;
+          revenue?: LineItem[];
+          expenses?: LineItem[];
+          other?: LineItem[];
+          revAdj?: number;
+          expAdj?: number;
+          collectDelay?: number;
+          headcountDelta?: number;
+          avgSalary?: string;
+          fixedCostDelta?: string;
+          revGrowthPct?: number;
+          capexAmount?: string;
+          capexWeek?: number;
         } | null;
         if (cf) {
           if (cf.startDate) setStartDate(cf.startDate);
@@ -551,7 +566,22 @@ export function CashForecastPanel({
       return;
     }
     const t = setTimeout(async () => {
-      const payload = { startDate, openingBalance, revenue, expenses, other, revAdj, expAdj, collectDelay, headcountDelta, avgSalary, fixedCostDelta, revGrowthPct, capexAmount, capexWeek };
+      const payload = {
+        startDate,
+        openingBalance,
+        revenue,
+        expenses,
+        other,
+        revAdj,
+        expAdj,
+        collectDelay,
+        headcountDelta,
+        avgSalary,
+        fixedCostDelta,
+        revGrowthPct,
+        capexAmount,
+        capexWeek,
+      };
       const forecastUpdatedAt = new Date().toISOString();
       const runway = runwayWeeksFromCashflow(payload);
       const { error } = await supabase
@@ -566,21 +596,44 @@ export function CashForecastPanel({
       else setLastForecastAt(forecastUpdatedAt);
     }, 800);
     return () => clearTimeout(t);
-  }, [clientId, loaded, startDate, openingBalance, revenue, expenses, other, revAdj, expAdj, collectDelay, headcountDelta, avgSalary, fixedCostDelta, revGrowthPct, capexAmount, capexWeek]);
+  }, [
+    clientId,
+    loaded,
+    startDate,
+    openingBalance,
+    revenue,
+    expenses,
+    other,
+    revAdj,
+    expAdj,
+    collectDelay,
+    headcountDelta,
+    avgSalary,
+    fixedCostDelta,
+    revGrowthPct,
+    capexAmount,
+    capexWeek,
+  ]);
 
   const weeks = useMemo(() => {
     const d = new Date(startDate);
     return Array.from({ length: WEEKS }, (_, i) => {
       const w = new Date(d);
       w.setDate(d.getDate() + i * 7);
-      return w.toLocaleDateString("en-ZA", { day: "2-digit", month: "short" });
+      return date(w, { day: "2-digit", month: "short" });
     });
-  }, [startDate]);
+  }, [startDate, date]);
 
   const computeScenario = (opts: {
-    rMul: number; eMul: number; shift: number;
-    headcountDelta: number; avgSalary: number; fixedCostDelta: number;
-    revGrowthPct: number; capexAmount: number; capexWeek: number;
+    rMul: number;
+    eMul: number;
+    shift: number;
+    headcountDelta: number;
+    avgSalary: number;
+    fixedCostDelta: number;
+    revGrowthPct: number;
+    capexAmount: number;
+    capexWeek: number;
   }) => {
     const shift = Math.max(0, Math.min(WEEKS - 1, Math.round(opts.shift)));
     const shiftVals = (vals: number[]) => {
@@ -635,20 +688,53 @@ export function CashForecastPanel({
     return { revRows, expRows: allExpRows, inflow, outflow, net, closing, opening };
   };
 
-  const calc = useMemo(() => computeScenario({
-    rMul: revAdj / 100, eMul: expAdj / 100, shift: collectDelay,
-    headcountDelta, avgSalary: parseFloat(avgSalary) || 0,
-    fixedCostDelta: parseFloat(fixedCostDelta) || 0,
-    revGrowthPct, capexAmount: parseFloat(capexAmount) || 0, capexWeek,
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [revenue, expenses, other, openingBalance, revAdj, expAdj, collectDelay, headcountDelta, avgSalary, fixedCostDelta, revGrowthPct, capexAmount, capexWeek]);
+  const calc = useMemo(
+    () =>
+      computeScenario({
+        rMul: revAdj / 100,
+        eMul: expAdj / 100,
+        shift: collectDelay,
+        headcountDelta,
+        avgSalary: parseFloat(avgSalary) || 0,
+        fixedCostDelta: parseFloat(fixedCostDelta) || 0,
+        revGrowthPct,
+        capexAmount: parseFloat(capexAmount) || 0,
+        capexWeek,
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+      }),
+    [
+      revenue,
+      expenses,
+      other,
+      openingBalance,
+      revAdj,
+      expAdj,
+      collectDelay,
+      headcountDelta,
+      avgSalary,
+      fixedCostDelta,
+      revGrowthPct,
+      capexAmount,
+      capexWeek,
+    ],
+  );
 
-  const baseCalc = useMemo(() => computeScenario({
-    rMul: 1, eMul: 1, shift: 0,
-    headcountDelta: 0, avgSalary: 0, fixedCostDelta: 0,
-    revGrowthPct: 0, capexAmount: 0, capexWeek: 1,
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [revenue, expenses, other, openingBalance]);
+  const baseCalc = useMemo(
+    () =>
+      computeScenario({
+        rMul: 1,
+        eMul: 1,
+        shift: 0,
+        headcountDelta: 0,
+        avgSalary: 0,
+        fixedCostDelta: 0,
+        revGrowthPct: 0,
+        capexAmount: 0,
+        capexWeek: 1,
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+      }),
+    [revenue, expenses, other, openingBalance],
+  );
 
   const updateAt = (
     list: LineItem[],
@@ -667,8 +753,13 @@ export function CashForecastPanel({
   const trajectory = closingW13 - calc.opening;
   const runwayWeeks = runwayWeeksFromClosings(calc.closing, CASH_RUNWAY_THRESHOLD_RAND);
   const scenarioActive =
-    revAdj !== 100 || expAdj !== 100 || collectDelay !== 0 || headcountDelta !== 0 ||
-    (parseFloat(fixedCostDelta) || 0) !== 0 || revGrowthPct !== 0 || (parseFloat(capexAmount) || 0) !== 0;
+    revAdj !== 100 ||
+    expAdj !== 100 ||
+    collectDelay !== 0 ||
+    headcountDelta !== 0 ||
+    (parseFloat(fixedCostDelta) || 0) !== 0 ||
+    revGrowthPct !== 0 ||
+    (parseFloat(capexAmount) || 0) !== 0;
 
   const chartData = weeks.map((w, i) => ({
     week: `W${i + 1}`,
@@ -710,7 +801,9 @@ export function CashForecastPanel({
           ? `Customer collections are delayed by ${collectDelay} week${collectDelay === 1 ? "" : "s"}.`
           : "Customer collections land in the week they are invoiced.",
         ...(headcountDelta !== 0
-          ? [`Headcount change of ${headcountDelta > 0 ? "+" : ""}${headcountDelta} at ${fmtR(parseFloat(avgSalary) || 0)} average monthly salary.`]
+          ? [
+              `Headcount change of ${headcountDelta > 0 ? "+" : ""}${headcountDelta} at ${fmtR(parseFloat(avgSalary) || 0)} average monthly salary.`,
+            ]
           : []),
         ...((parseFloat(capexAmount) || 0) !== 0
           ? [`One-off capex of ${fmtR(parseFloat(capexAmount) || 0)} in week ${capexWeek}.`]
@@ -718,7 +811,7 @@ export function CashForecastPanel({
       ];
 
       const now = new Date();
-      const period = now.toLocaleDateString("en-ZA", { month: "long", year: "numeric" });
+      const period = date(now, { month: "long", year: "numeric" });
       const name = clientName?.trim() || "Your Business";
 
       const blob = await pdf(
@@ -727,7 +820,8 @@ export function CashForecastPanel({
           cashForecast: forecastWeeks,
           scenario: "moderate",
           accountantProfile: profile,
-// Same R50k floor as on-screen runway — never 0 (that invents breaches).
+          market,
+          // Same R50k floor as on-screen runway — never 0 (that invents breaches).
           minimumThreshold: CASH_RUNWAY_THRESHOLD_RAND,
           assumptions,
           reviewSignoff: stampFromSignoff(forecastSignoff, forecastStale),
@@ -802,7 +896,10 @@ export function CashForecastPanel({
               color: "#f1f5f9",
             }}
             labelStyle={{ color: "#d4a550", fontWeight: 700 }}
-            formatter={(v: number, name: string) => [fmtR(v), name === "base" ? "Base" : "Scenario"]}
+            formatter={(v: number, name: string) => [
+              fmtR(v),
+              name === "base" ? "Base" : "Scenario",
+            ]}
             labelFormatter={(l, payload) => {
               const p = payload?.[0]?.payload as { label?: string } | undefined;
               return p?.label ? `${l} · ${p.label}` : String(l);
@@ -990,7 +1087,11 @@ export function CashForecastPanel({
             </div>
           )}
           <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <Stat label="Opening balance" value={fmtCompact(calc.opening)} sub={`Start ${startDate}`} />
+            <Stat
+              label="Opening balance"
+              value={fmtCompact(calc.opening)}
+              sub={`Start ${startDate}`}
+            />
             <Stat
               label="Closing · Week 13"
               value={fmtCompact(closingW13)}
@@ -1060,9 +1161,15 @@ export function CashForecastPanel({
               className="h-7 px-2 text-[10px] text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100"
               onClick={(e) => {
                 e.stopPropagation();
-                setRevAdj(100); setExpAdj(100); setCollectDelay(0);
-                setHeadcountDelta(0); setAvgSalary("0"); setFixedCostDelta("0");
-                setRevGrowthPct(0); setCapexAmount("0"); setCapexWeek(1);
+                setRevAdj(100);
+                setExpAdj(100);
+                setCollectDelay(0);
+                setHeadcountDelta(0);
+                setAvgSalary("0");
+                setFixedCostDelta("0");
+                setRevGrowthPct(0);
+                setCapexAmount("0");
+                setCapexWeek(1);
               }}
             >
               Reset all
@@ -1086,7 +1193,13 @@ export function CashForecastPanel({
                 {revAdj}%
               </span>
             </div>
-            <Slider value={[revAdj]} min={50} max={150} step={5} onValueChange={(v) => setRevAdj(v[0])} />
+            <Slider
+              value={[revAdj]}
+              min={50}
+              max={150}
+              step={5}
+              onValueChange={(v) => setRevAdj(v[0])}
+            />
           </div>
           <div>
             <div className="mb-2 flex items-center justify-between text-xs">
@@ -1103,31 +1216,74 @@ export function CashForecastPanel({
                 {expAdj}%
               </span>
             </div>
-            <Slider value={[expAdj]} min={50} max={150} step={5} onValueChange={(v) => setExpAdj(v[0])} />
+            <Slider
+              value={[expAdj]}
+              min={50}
+              max={150}
+              step={5}
+              onValueChange={(v) => setExpAdj(v[0])}
+            />
           </div>
           <div>
             <div className="mb-2 flex items-center justify-between text-xs">
               <Label className={LABEL_CLS}>Collection delay</Label>
-              <span className={`font-bold ${collectDelay > 0 ? "text-[#c0392b] dark:text-[#ef6b6b]" : "text-slate-700 dark:text-slate-200"}`}>
+              <span
+                className={`font-bold ${collectDelay > 0 ? "text-[#c0392b] dark:text-[#ef6b6b]" : "text-slate-700 dark:text-slate-200"}`}
+              >
                 +{collectDelay}w
               </span>
             </div>
-            <Slider value={[collectDelay]} min={0} max={6} step={1} onValueChange={(v) => setCollectDelay(v[0])} />
+            <Slider
+              value={[collectDelay]}
+              min={0}
+              max={6}
+              step={1}
+              onValueChange={(v) => setCollectDelay(v[0])}
+            />
           </div>
           <div className="mt-2 grid gap-5 border-t border-amber-900/10 pt-4 dark:border-slate-800 md:col-span-3 md:grid-cols-3">
             <div>
               <Label className={LABEL_CLS}>Headcount Δ (people)</Label>
               <div className="mt-1 flex items-center gap-2">
-                <Button size="sm" variant="outline" className="h-8 w-8 p-0" onClick={() => setHeadcountDelta(headcountDelta - 1)}>−</Button>
-                <Input type="number" value={headcountDelta} onChange={(e) => setHeadcountDelta(parseInt(e.target.value) || 0)} className={`${INPUT_CLS} text-center`} />
-                <Button size="sm" variant="outline" className="h-8 w-8 p-0" onClick={() => setHeadcountDelta(headcountDelta + 1)}>+</Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 w-8 p-0"
+                  onClick={() => setHeadcountDelta(headcountDelta - 1)}
+                >
+                  −
+                </Button>
+                <Input
+                  type="number"
+                  value={headcountDelta}
+                  onChange={(e) => setHeadcountDelta(parseInt(e.target.value) || 0)}
+                  className={`${INPUT_CLS} text-center`}
+                />
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 w-8 p-0"
+                  onClick={() => setHeadcountDelta(headcountDelta + 1)}
+                >
+                  +
+                </Button>
               </div>
               <Label className={`mt-2 block ${LABEL_CLS}`}>Avg monthly salary (R)</Label>
-              <Input type="number" value={avgSalary} onChange={(e) => setAvgSalary(e.target.value)} className={INPUT_CLS} />
+              <Input
+                type="number"
+                value={avgSalary}
+                onChange={(e) => setAvgSalary(e.target.value)}
+                className={INPUT_CLS}
+              />
             </div>
             <div>
               <Label className={LABEL_CLS}>Fixed cost Δ (monthly R, +/-)</Label>
-              <Input type="number" value={fixedCostDelta} onChange={(e) => setFixedCostDelta(e.target.value)} className={INPUT_CLS} />
+              <Input
+                type="number"
+                value={fixedCostDelta}
+                onChange={(e) => setFixedCostDelta(e.target.value)}
+                className={INPUT_CLS}
+              />
               <div className="mb-1 mt-3 flex items-center justify-between text-xs">
                 <Label className={LABEL_CLS}>Revenue growth / week</Label>
                 <span
@@ -1139,16 +1295,35 @@ export function CashForecastPanel({
                         : "text-slate-700 dark:text-slate-200"
                   }`}
                 >
-                  {revGrowthPct > 0 ? "+" : ""}{revGrowthPct}%
+                  {revGrowthPct > 0 ? "+" : ""}
+                  {revGrowthPct}%
                 </span>
               </div>
-              <Slider value={[revGrowthPct]} min={-10} max={10} step={0.5} onValueChange={(v) => setRevGrowthPct(v[0])} />
+              <Slider
+                value={[revGrowthPct]}
+                min={-10}
+                max={10}
+                step={0.5}
+                onValueChange={(v) => setRevGrowthPct(v[0])}
+              />
             </div>
             <div>
               <Label className={LABEL_CLS}>One-off capex (R)</Label>
-              <Input type="number" value={capexAmount} onChange={(e) => setCapexAmount(e.target.value)} className={INPUT_CLS} />
+              <Input
+                type="number"
+                value={capexAmount}
+                onChange={(e) => setCapexAmount(e.target.value)}
+                className={INPUT_CLS}
+              />
               <Label className={`mt-2 block ${LABEL_CLS}`}>In week #</Label>
-              <Input type="number" min={1} max={WEEKS} value={capexWeek} onChange={(e) => setCapexWeek(parseInt(e.target.value) || 1)} className={INPUT_CLS} />
+              <Input
+                type="number"
+                min={1}
+                max={WEEKS}
+                value={capexWeek}
+                onChange={(e) => setCapexWeek(parseInt(e.target.value) || 1)}
+                className={INPUT_CLS}
+              />
             </div>
           </div>
         </div>
@@ -1168,19 +1343,28 @@ export function CashForecastPanel({
           <table className="w-full min-w-[900px] text-xs">
             <thead>
               <tr className="border-b border-amber-900/15 text-slate-500 dark:border-slate-700 dark:text-slate-400">
-                <th className="sticky left-0 bg-[#fdfaf3] px-2 py-2 text-left dark:bg-[#101827]">Item</th>
+                <th className="sticky left-0 bg-[#fdfaf3] px-2 py-2 text-left dark:bg-[#101827]">
+                  Item
+                </th>
                 {weeks.map((w, i) => (
                   <th key={i} className="px-2 py-2 text-right">
                     W{i + 1}
-                    <div className="text-[9px] font-normal text-slate-400 dark:text-slate-500">{w}</div>
+                    <div className="text-[9px] font-normal text-slate-400 dark:text-slate-500">
+                      {w}
+                    </div>
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {calc.revRows.map((r, i) => (
-                <tr key={`r${i}`} className="border-b border-amber-900/10 text-slate-700 dark:border-slate-800 dark:text-slate-300">
-                  <td className="sticky left-0 bg-[#fdfaf3] px-2 py-1 dark:bg-[#101827]">{r.name}</td>
+                <tr
+                  key={`r${i}`}
+                  className="border-b border-amber-900/10 text-slate-700 dark:border-slate-800 dark:text-slate-300"
+                >
+                  <td className="sticky left-0 bg-[#fdfaf3] px-2 py-1 dark:bg-[#101827]">
+                    {r.name}
+                  </td>
                   {r.vals.map((v, j) => (
                     <td key={j} className="px-2 py-1 text-right">
                       {v ? fmtR(v) : "—"}
@@ -1189,7 +1373,9 @@ export function CashForecastPanel({
                 </tr>
               ))}
               <tr className="border-b border-amber-900/15 bg-[#4caf82]/10 font-semibold text-[#3f9c72] dark:border-slate-700 dark:text-[#5cc492]">
-                <td className="sticky left-0 bg-[#f2f8f2] px-2 py-1 dark:bg-[#0e1a20]">Total inflow</td>
+                <td className="sticky left-0 bg-[#f2f8f2] px-2 py-1 dark:bg-[#0e1a20]">
+                  Total inflow
+                </td>
                 {calc.inflow.map((v, j) => (
                   <td key={j} className="px-2 py-1 text-right">
                     {fmtR(v)}
@@ -1197,8 +1383,13 @@ export function CashForecastPanel({
                 ))}
               </tr>
               {calc.expRows.map((r, i) => (
-                <tr key={`e${i}`} className="border-b border-amber-900/10 text-slate-700 dark:border-slate-800 dark:text-slate-300">
-                  <td className="sticky left-0 bg-[#fdfaf3] px-2 py-1 dark:bg-[#101827]">{r.name}</td>
+                <tr
+                  key={`e${i}`}
+                  className="border-b border-amber-900/10 text-slate-700 dark:border-slate-800 dark:text-slate-300"
+                >
+                  <td className="sticky left-0 bg-[#fdfaf3] px-2 py-1 dark:bg-[#101827]">
+                    {r.name}
+                  </td>
                   {r.vals.map((v, j) => (
                     <td key={j} className="px-2 py-1 text-right">
                       {v ? `(${fmtR(v)})` : "—"}
@@ -1207,7 +1398,9 @@ export function CashForecastPanel({
                 </tr>
               ))}
               <tr className="border-b border-amber-900/15 bg-[#e05c5c]/10 font-semibold text-[#c0392b] dark:border-slate-700 dark:text-[#ef6b6b]">
-                <td className="sticky left-0 bg-[#faf1f0] px-2 py-1 dark:bg-[#1a1216]">Total outflow</td>
+                <td className="sticky left-0 bg-[#faf1f0] px-2 py-1 dark:bg-[#1a1216]">
+                  Total outflow
+                </td>
                 {calc.outflow.map((v, j) => (
                   <td key={j} className="px-2 py-1 text-right">
                     ({fmtR(v)})
@@ -1226,7 +1419,9 @@ export function CashForecastPanel({
                 ))}
               </tr>
               <tr className="bg-[#d4a550]/15 font-bold text-slate-950 dark:text-white">
-                <td className="sticky left-0 bg-[#f7efdd] px-2 py-1 dark:bg-[#1c1a12]">Closing balance</td>
+                <td className="sticky left-0 bg-[#f7efdd] px-2 py-1 dark:bg-[#1c1a12]">
+                  Closing balance
+                </td>
                 {calc.closing.map((v, j) => (
                   <td
                     key={j}
@@ -1299,7 +1494,11 @@ export function CashForecastPanel({
                 line={l}
                 tone="revenue"
                 onChange={(n) => updateAt(revenue, setRevenue, i, n)}
-                onRemove={revenue.length > 1 ? () => setRevenue(revenue.filter((_, x) => x !== i)) : undefined}
+                onRemove={
+                  revenue.length > 1
+                    ? () => setRevenue(revenue.filter((_, x) => x !== i))
+                    : undefined
+                }
               />
             ))}
             <Button
@@ -1332,7 +1531,9 @@ export function CashForecastPanel({
                 line={l}
                 tone="expense"
                 onChange={(n) => updateAt(other, setOther, i, n)}
-                onRemove={other.length > 1 ? () => setOther(other.filter((_, x) => x !== i)) : undefined}
+                onRemove={
+                  other.length > 1 ? () => setOther(other.filter((_, x) => x !== i)) : undefined
+                }
               />
             ))}
             <Button

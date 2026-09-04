@@ -28,6 +28,8 @@ import {
   type InventoryIntensity,
   type OwnerGoal,
 } from "@/lib/client-profile";
+import { useMarket } from "@/contexts/market";
+import { localizeCopy } from "@/lib/market";
 
 const TOTAL = 10;
 
@@ -190,6 +192,8 @@ export function ProfileFunnel({
   onComplete: (profile: ClientOperatingProfile) => void | Promise<void>;
   onCancel?: () => void;
 }) {
+  const { market } = useMarket();
+  const loc = (s: string) => localizeCopy(s, market);
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
   const [payMotion, setPayMotion] = useState<BudgetPayMotion | null>(initial?.payMotion ?? null);
@@ -348,7 +352,7 @@ export function ProfileFunnel({
             >
               <div className="text-sm font-semibold text-slate-100">{o.label}</div>
               <div className="text-xs text-slate-400">{o.hint}</div>
-              <div className="mt-1 text-[11px] text-slate-500">e.g. {o.examples}</div>
+              <div className="mt-1 text-[11px] text-slate-500">e.g. {loc(o.examples)}</div>
             </button>
           ))}
 
@@ -367,7 +371,7 @@ export function ProfileFunnel({
             >
               <div className="text-sm font-semibold text-slate-100">{o.label}</div>
               <div className="text-xs text-slate-400">{o.hint}</div>
-              <div className="mt-1 text-[11px] text-slate-500">e.g. {o.examples}</div>
+              <div className="mt-1 text-[11px] text-slate-500">e.g. {loc(o.examples)}</div>
             </button>
           ))}
 
@@ -399,7 +403,7 @@ export function ProfileFunnel({
                     {on ? "✓ " : ""}
                     {o.label}
                   </div>
-                  <div className="mt-1 text-[11px] text-slate-500">e.g. {o.examples}</div>
+                  <div className="mt-1 text-[11px] text-slate-500">e.g. {loc(o.examples)}</div>
                 </button>
               );
             })}
@@ -425,7 +429,7 @@ export function ProfileFunnel({
               }}
             >
               <div className="text-sm font-semibold text-slate-100">{o.label}</div>
-              <div className="mt-1 text-[11px] text-slate-500">e.g. {o.examples}</div>
+              <div className="mt-1 text-[11px] text-slate-500">e.g. {loc(o.examples)}</div>
             </button>
           ))}
 
@@ -441,7 +445,7 @@ export function ProfileFunnel({
               }}
             >
               <div className="text-sm font-semibold text-slate-100">{o.label}</div>
-              <div className="mt-1 text-[11px] text-slate-500">e.g. {o.examples}</div>
+              <div className="mt-1 text-[11px] text-slate-500">e.g. {loc(o.examples)}</div>
             </button>
           ))}
 
@@ -457,7 +461,7 @@ export function ProfileFunnel({
               }}
             >
               <div className="text-sm font-semibold text-slate-100">{o.label}</div>
-              <div className="mt-1 text-[11px] text-slate-500">e.g. {o.examples}</div>
+              <div className="mt-1 text-[11px] text-slate-500">e.g. {loc(o.examples)}</div>
             </button>
           ))}
 
@@ -473,7 +477,7 @@ export function ProfileFunnel({
               }}
             >
               <div className="text-sm font-semibold text-slate-100">{o.label}</div>
-              <div className="mt-1 text-[11px] text-slate-500">e.g. {o.examples}</div>
+              <div className="mt-1 text-[11px] text-slate-500">e.g. {loc(o.examples)}</div>
             </button>
           ))}
 
@@ -489,7 +493,7 @@ export function ProfileFunnel({
               }}
             >
               <div className="text-sm font-semibold text-slate-100">{o.label}</div>
-              <div className="mt-1 text-[11px] text-slate-500">e.g. {o.examples}</div>
+              <div className="mt-1 text-[11px] text-slate-500">e.g. {loc(o.examples)}</div>
             </button>
           ))}
 
@@ -505,7 +509,7 @@ export function ProfileFunnel({
               }}
             >
               <div className="text-sm font-semibold text-slate-100">{o.label}</div>
-              <div className="mt-1 text-[11px] text-slate-500">e.g. {o.examples}</div>
+              <div className="mt-1 text-[11px] text-slate-500">e.g. {loc(o.examples)}</div>
             </button>
           ))}
 
@@ -519,7 +523,7 @@ export function ProfileFunnel({
                 onClick={() => setOwnerGoal(o.id)}
               >
                 <div className="text-sm font-semibold text-slate-100">{o.label}</div>
-                <div className="mt-1 text-[11px] text-slate-500">e.g. {o.examples}</div>
+                <div className="mt-1 text-[11px] text-slate-500">e.g. {loc(o.examples)}</div>
               </button>
             ))}
             <div className="mt-2 rounded-xl border border-slate-700 bg-slate-900/60 p-3">

@@ -5,15 +5,20 @@
 
 import { fmtPct, fmtRandCompact, tierForScore } from "@/components/pdf/theme";
 import type { ClientOperatingProfile } from "@/lib/client-profile";
-import {
-  reportProfileCoda,
-  type ReportNarrativeKind,
-} from "@/lib/profile-signals";
+import { currencySymbol, formatMoneyUnit, ZA_MARKET, type ResolvedMarket } from "@/lib/market";
+import { reportProfileCoda, type ReportNarrativeKind } from "@/lib/profile-signals";
+
+type MoneyMarket = Pick<ResolvedMarket, "currency" | "locale" | "copyPack">;
 
 export type NarrativeProfile = ClientOperatingProfile | null | undefined;
 
-function withCoda(base: string, profile: NarrativeProfile, kind: ReportNarrativeKind): string {
-  const coda = reportProfileCoda(profile, kind);
+function withCoda(
+  base: string,
+  profile: NarrativeProfile,
+  kind: ReportNarrativeKind,
+  market: MoneyMarket = ZA_MARKET,
+): string {
+  const coda = reportProfileCoda(profile, kind, market);
   return coda ? `${base} ${coda}` : base;
 }
 
@@ -39,13 +44,25 @@ export type DuPontDiagnosis = {
 export function diagnoseDuPont(l: DuPontLevers): DuPontDiagnosis {
   const gaps: { lever: "margin" | "turnover" | "leverage"; label: string; gap: number }[] = [];
   if (Number.isFinite(l.netMargin)) {
-    gaps.push({ lever: "margin", label: "Net Profit Margin", gap: Math.max(0, (0.1 - l.netMargin) / 0.1) });
+    gaps.push({
+      lever: "margin",
+      label: "Net Profit Margin",
+      gap: Math.max(0, (0.1 - l.netMargin) / 0.1),
+    });
   }
   if (Number.isFinite(l.assetTurnover)) {
-    gaps.push({ lever: "turnover", label: "Asset Turnover", gap: Math.max(0, (1.0 - l.assetTurnover) / 1.0) });
+    gaps.push({
+      lever: "turnover",
+      label: "Asset Turnover",
+      gap: Math.max(0, (1.0 - l.assetTurnover) / 1.0),
+    });
   }
   if (Number.isFinite(l.equityMultiplier)) {
-    gaps.push({ lever: "leverage", label: "Equity Multiplier", gap: Math.max(0, (l.equityMultiplier - 2.5) / 2.5) });
+    gaps.push({
+      lever: "leverage",
+      label: "Equity Multiplier",
+      gap: Math.max(0, (l.equityMultiplier - 2.5) / 2.5),
+    });
   }
   gaps.sort((a, b) => b.gap - a.gap);
   const worst = gaps[0];
@@ -82,6 +99,7 @@ export function healthNarrative(
   pillars: { label: string; score: number }[],
   dupont: DuPontDiagnosis,
   profile?: NarrativeProfile,
+  market: MoneyMarket = ZA_MARKET,
 ): string {
   const sorted = [...pillars].sort((a, b) => a.score - b.score);
   const weakest = sorted[0];
@@ -97,7 +115,7 @@ export function healthNarrative(
     `${opening} ${strongest.label} is the strongest pillar (${Math.round(strongest.score)}), ` +
     `while ${weakest.label} is ${TIER_PHRASE[tierForScore(weakest.score)]} at ${Math.round(weakest.score)}. ` +
     dupont.sentence;
-  return withCoda(base, profile, "health");
+  return withCoda(base, profile, "health", market);
 }
 
 export function profitabilityNarrative(
@@ -109,6 +127,7 @@ export function profitabilityNarrative(
     priorNetMargin?: number;
   },
   profile?: NarrativeProfile,
+  market: MoneyMarket = ZA_MARKET,
 ): string {
   const kept = d.net_margin_pct * 100;
   const trendBit =
@@ -123,11 +142,14 @@ export function profitabilityNarrative(
       : kept >= 5
         ? "an adequate but improvable conversion of sales into profit"
         : "a thin conversion that leaves little buffer for shocks";
+  const sym = currencySymbol(market);
+  const unit100 = `${sym}100`;
+  const keptUnit = `${sym}${kept.toFixed(2)}`;
   const base =
-    `Of every R100 earned, R${kept.toFixed(2)} reaches the bottom line — ${verdict}. ` +
-    `Gross margin stands at ${fmtPct(d.gross_margin_pct)} on revenue of ${fmtRandCompact(d.revenue)}.` +
+    `Of every ${unit100} earned, ${keptUnit} reaches the bottom line — ${verdict}. ` +
+    `Gross margin stands at ${fmtPct(d.gross_margin_pct)} on revenue of ${fmtRandCompact(d.revenue, market)}.` +
     trendBit;
-  return withCoda(base, profile, "profit");
+  return withCoda(base, profile, "profit", market);
 }
 
 export function cashForecastNarrative(
@@ -138,6 +160,7 @@ export function cashForecastNarrative(
     weeksBelow: number;
   },
   profile?: NarrativeProfile,
+  market: MoneyMarket = ZA_MARKET,
 ): string {
   const runwayBit =
     d.runwayWeeks >= 13
@@ -145,9 +168,9 @@ export function cashForecastNarrative(
       : `Projected runway is ${d.runwayWeeks} weeks`;
   const lowBit =
     d.weeksBelow > 0
-      ? ` The balance dips below the ${fmtRandCompact(d.threshold)} minimum in ${d.weeksBelow} week${d.weeksBelow > 1 ? "s" : ""}, bottoming out at ${fmtRandCompact(d.minBalance)} — the shaded danger zone on the chart marks where action is needed.`
-      : ` The lowest projected balance is ${fmtRandCompact(d.minBalance)}, comfortably above the ${fmtRandCompact(d.threshold)} minimum.`;
-  return withCoda(`${runwayBit}.${lowBit}`, profile, "forecast");
+      ? ` The balance dips below the ${fmtRandCompact(d.threshold, market)} minimum in ${d.weeksBelow} week${d.weeksBelow > 1 ? "s" : ""}, bottoming out at ${fmtRandCompact(d.minBalance, market)} — the shaded danger zone on the chart marks where action is needed.`
+      : ` The lowest projected balance is ${fmtRandCompact(d.minBalance, market)}, comfortably above the ${fmtRandCompact(d.threshold, market)} minimum.`;
+  return withCoda(`${runwayBit}.${lowBit}`, profile, "forecast", market);
 }
 
 export function cashCycleNarrative(
@@ -158,6 +181,7 @@ export function cashCycleNarrative(
     dailyRevenue: number;
   },
   profile?: NarrativeProfile,
+  market: MoneyMarket = ZA_MARKET,
 ): string {
   const trend =
     d.cccPrior !== undefined
@@ -171,10 +195,11 @@ export function cashCycleNarrative(
       : d.ccc <= 75
         ? "a moderate cycle with room to tighten"
         : "a slow cycle that is starving the business of cash";
+  const unit1 = formatMoneyUnit(1, market);
   const base =
-    `It takes ${d.ccc} days for R1 spent to return as cash${trend} — ${verdict}. ` +
-    `${fmtRandCompact(d.cashTrapped)} is currently trapped in working capital; every 1-day improvement releases roughly ${fmtRandCompact(d.dailyRevenue)}.`;
-  return withCoda(base, profile, "cycle");
+    `It takes ${d.ccc} days for ${unit1} spent to return as cash${trend} — ${verdict}. ` +
+    `${fmtRandCompact(d.cashTrapped, market)} is currently trapped in working capital; every 1-day improvement releases roughly ${fmtRandCompact(d.dailyRevenue, market)}.`;
+  return withCoda(base, profile, "cycle", market);
 }
 
 export function leverageNarrative(
@@ -184,6 +209,7 @@ export function leverageNarrative(
     totalEquity: number;
   },
   profile?: NarrativeProfile,
+  market: MoneyMarket = ZA_MARKET,
 ): string {
   const verdict =
     d.debtToEquity <= 1
@@ -192,9 +218,9 @@ export function leverageNarrative(
         ? "a balanced structure, though further borrowing should be weighed carefully"
         : "a leveraged structure where debt reduction should take priority";
   const base =
-    `The business carries ${fmtRandCompact(d.totalDebt)} of debt against ${fmtRandCompact(d.totalEquity)} of equity ` +
+    `The business carries ${fmtRandCompact(d.totalDebt, market)} of debt against ${fmtRandCompact(d.totalEquity, market)} of equity ` +
     `(${d.debtToEquity.toFixed(2)}× debt-to-equity) — ${verdict}.`;
-  return withCoda(base, profile, "leverage");
+  return withCoda(base, profile, "leverage", market);
 }
 
 export function laborNarrative(
@@ -204,19 +230,24 @@ export function laborNarrative(
     realGrowth: number;
   },
   profile?: NarrativeProfile,
+  market: MoneyMarket = ZA_MARKET,
 ): string {
+  const unit1 = formatMoneyUnit(1, market);
+  const gpUnit = `${currencySymbol(market)}${d.gpPerLaborRand.toFixed(2)}`;
+  const floorUnit = `${currencySymbol(market)}0.50`;
   const gpBit =
     d.gpPerLaborRand >= 0.5
-      ? `Each R1 of wages generates R${d.gpPerLaborRand.toFixed(2)} of gross profit — a productive team.`
-      : `Each R1 of wages generates only R${d.gpPerLaborRand.toFixed(2)} of gross profit, below the R0.50 comfort level.`;
+      ? `Each ${unit1} of wages generates ${gpUnit} of gross profit — a productive team.`
+      : `Each ${unit1} of wages generates only ${gpUnit} of gross profit, below the ${floorUnit} comfort level.`;
   const growthBit =
     d.realGrowth > 0
       ? ` Revenue is outpacing inflation by ${fmtPct(d.realGrowth)} in real terms.`
       : ` Revenue growth is trailing inflation by ${fmtPct(Math.abs(d.realGrowth))} — pricing needs attention.`;
   return withCoda(
-    `Revenue per employee stands at ${fmtRandCompact(d.revenuePerEmployee)}. ${gpBit}${growthBit}`,
+    `Revenue per employee stands at ${fmtRandCompact(d.revenuePerEmployee, market)}. ${gpBit}${growthBit}`,
     profile,
     "labor",
+    market,
   );
 }
 
@@ -228,6 +259,7 @@ export function movementNarrative(
     total: number;
   },
   profile?: NarrativeProfile,
+  market: MoneyMarket = ZA_MARKET,
 ): string {
   const declining = counts.decliningAll + counts.decliningMost;
   if (counts.total === 0) {
@@ -235,6 +267,7 @@ export function movementNarrative(
       "No ratio history is available yet — upload further periods to unlock trend analysis.",
       profile,
       "movement",
+      market,
     );
   }
   const opening = `${counts.improving} of ${counts.total} tracked ratios are improving`;
@@ -242,7 +275,7 @@ export function movementNarrative(
     declining > 0
       ? `, while ${declining} show${declining === 1 ? "s" : ""} a sustained decline${counts.decliningAll > 0 ? ` (${counts.decliningAll} deteriorating across every period on record)` : ""}. The highlighted rows below deserve first attention.`
       : `, with no ratio in sustained decline — momentum is on the business's side.`;
-  return withCoda(opening + declineBit, profile, "movement");
+  return withCoda(opening + declineBit, profile, "movement", market);
 }
 
 export function benchmarkNarrative(
@@ -254,6 +287,7 @@ export function benchmarkNarrative(
     industryName: string;
   },
   profile?: NarrativeProfile,
+  market: MoneyMarket = ZA_MARKET,
 ): string {
   const aboveOrTop = d.topQ + d.above;
   const standing =
@@ -265,7 +299,7 @@ export function benchmarkNarrative(
   const base =
     `Against ${d.industryName} peers, ${aboveOrTop} of ${d.total} ratios sit at or above the sector median` +
     `${d.topQ > 0 ? ` and ${d.topQ} reach${d.topQ === 1 ? "es" : ""} the top quartile` : ""}, making the business ${standing}.`;
-  return withCoda(base, profile, "benchmark");
+  return withCoda(base, profile, "benchmark", market);
 }
 
 export function interventionNarrative(
@@ -275,12 +309,14 @@ export function interventionNarrative(
     total: number;
   },
   profile?: NarrativeProfile,
+  market: MoneyMarket = ZA_MARKET,
 ): string {
   if (d.total === 0) {
     return withCoda(
       "No intervention steps are required at present — all tracked ratios are healthy.",
       profile,
       "intervention",
+      market,
     );
   }
   const urgency =
@@ -290,13 +326,14 @@ export function interventionNarrative(
   const base =
     `This roadmap prioritises ${d.total} action step${d.total > 1 ? "s" : ""} by severity and impact: ${urgency}` +
     `${d.atRisk > 0 ? `, with ${d.atRisk} further step${d.atRisk > 1 ? "s" : ""} targeting at-risk measures` : ""}.`;
-  return withCoda(base, profile, "intervention");
+  return withCoda(base, profile, "intervention", market);
 }
 
 export function assetNarrative(
   l: DuPontLevers,
   dupont: DuPontDiagnosis,
   profile?: NarrativeProfile,
+  market: MoneyMarket = ZA_MARKET,
 ): string {
   const roeBit = Number.isFinite(l.roe)
     ? `Return on equity stands at ${fmtPct(l.roe)}${l.roe >= 0.15 ? " — a strong return on the owners' capital" : l.roe >= 0.08 ? " — a moderate return with room to build" : " — below what the owners' capital should earn"}.`
@@ -305,5 +342,6 @@ export function assetNarrative(
     `${roeBit} ${dupont.sentence} The decomposition below shows exactly which lever to work.`,
     profile,
     "assets",
+    market,
   );
 }

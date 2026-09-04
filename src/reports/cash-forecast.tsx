@@ -16,11 +16,12 @@ import { ReportTitle } from "@/components/pdf/report-title";
 import { SectionHeader } from "@/components/pdf/section-header";
 import { ExecSummary, type HeadlineFigure } from "@/components/pdf/exec-summary";
 import { C, fmtRand, fmtRandCompact, resolveTheme } from "@/components/pdf/theme";
+import { usePdfMarket } from "@/components/pdf/pdf-market";
 import { cashForecastNarrative } from "./narrative";
 import type { ClientOperatingProfile } from "@/lib/client-profile";
 import { profileCashAssumptions } from "@/lib/profile-signals";
 import { CASH_RUNWAY_THRESHOLD_RAND } from "@/lib/cash-runway";
-
+import { ZA_MARKET, type ResolvedMarket } from "@/lib/market";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -46,6 +47,7 @@ export type CashForecastPDFProps = {
   assumptions?: string[];
   isDemo?: boolean;
   reviewSignoff?: ReportSignoffStamp | null;
+  market?: ResolvedMarket;
 };
 
 // ── Constants ──────────────────────────────────────────────────────────────
@@ -73,7 +75,13 @@ const DEFAULT_ASSUMPTIONS = [
 const ch = StyleSheet.create({
   container: { position: "relative", height: CHART_H + LABEL_H, marginBottom: 6 },
   gridLine: { position: "absolute", left: 0, right: 0, height: 0.5, backgroundColor: C.hairline },
-  gridLabel: { position: "absolute", left: 0, fontSize: 5.5, fontFamily: "Helvetica", color: C.faint },
+  gridLabel: {
+    position: "absolute",
+    left: 0,
+    fontSize: 5.5,
+    fontFamily: "Helvetica",
+    color: C.faint,
+  },
   dangerZone: {
     position: "absolute",
     left: 0,
@@ -120,6 +128,7 @@ function RunwayChart({
   threshold: number;
   accent: string;
 }) {
+  const market = usePdfMarket();
   const values = weeks.map((w) => w.closing_balance);
   const maxVal = Math.max(...values, threshold, 1);
   const minVal = Math.min(...values, 0);
@@ -173,7 +182,7 @@ function RunwayChart({
         {/* threshold line on top */}
         <View style={[ch.thresholdLine, { bottom: thresholdY }]} />
         <Text style={[ch.thresholdTag, { bottom: thresholdY + 2 }]}>
-          MINIMUM {fmtRandCompact(threshold)}
+          MINIMUM {fmtRandCompact(threshold, market)}
         </Text>
       </View>
 
@@ -202,14 +211,41 @@ function RunwayChart({
 // ── Weekly table ───────────────────────────────────────────────────────────
 
 const tbl = StyleSheet.create({
-  wrapper: { borderRadius: 5, overflow: "hidden", borderWidth: 0.75, borderColor: C.line, marginBottom: 12 },
+  wrapper: {
+    borderRadius: 5,
+    overflow: "hidden",
+    borderWidth: 0.75,
+    borderColor: C.line,
+    marginBottom: 12,
+  },
   headerRow: { flexDirection: "row", paddingHorizontal: 10, paddingVertical: 8 },
-  headerCell: { fontSize: 6.5, fontFamily: "Helvetica-Bold", color: C.white, letterSpacing: 0.4, textTransform: "uppercase" },
-  row: { flexDirection: "row", paddingHorizontal: 10, paddingVertical: 6, borderTopWidth: 0.5, borderTopColor: C.hairline },
+  headerCell: {
+    fontSize: 6.5,
+    fontFamily: "Helvetica-Bold",
+    color: C.white,
+    letterSpacing: 0.4,
+    textTransform: "uppercase",
+  },
+  row: {
+    flexDirection: "row",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderTopWidth: 0.5,
+    borderTopColor: C.hairline,
+  },
   cell: { fontSize: 7.5, fontFamily: "Helvetica", color: C.body },
 });
 
-function WeekTable({ weeks, threshold, accent }: { weeks: CashForecastWeek[]; threshold: number; accent: string }) {
+function WeekTable({
+  weeks,
+  threshold,
+  accent,
+}: {
+  weeks: CashForecastWeek[];
+  threshold: number;
+  accent: string;
+}) {
+  const market = usePdfMarket();
   const cols = [
     { label: "Week", flex: 1.1 },
     { label: "Opening", flex: 1.4, right: true },
@@ -222,7 +258,10 @@ function WeekTable({ weeks, threshold, accent }: { weeks: CashForecastWeek[]; th
     <View style={tbl.wrapper}>
       <View style={[tbl.headerRow, { backgroundColor: accent }]}>
         {cols.map((c, i) => (
-          <Text key={i} style={[tbl.headerCell, { flex: c.flex, textAlign: c.right ? "right" : "left" }]}>
+          <Text
+            key={i}
+            style={[tbl.headerCell, { flex: c.flex, textAlign: c.right ? "right" : "left" }]}
+          >
             {c.label}
           </Text>
         ))}
@@ -232,17 +271,47 @@ function WeekTable({ weeks, threshold, accent }: { weeks: CashForecastWeek[]; th
         return (
           <View
             key={i}
-            style={[tbl.row, { backgroundColor: danger ? C.redSoft : i % 2 === 1 ? C.soft : C.white }]}
+            style={[
+              tbl.row,
+              { backgroundColor: danger ? C.redSoft : i % 2 === 1 ? C.soft : C.white },
+            ]}
           >
-            <Text style={[tbl.cell, { flex: 1.1, fontFamily: "Helvetica-Bold", color: C.ink }]}>{w.period_label}</Text>
-            <Text style={[tbl.cell, { flex: 1.4, textAlign: "right" }]}>{fmtRand(w.opening_balance)}</Text>
-            <Text style={[tbl.cell, { flex: 1.4, textAlign: "right", color: C.greenDeep }]}>{fmtRand(w.total_receipts)}</Text>
-            <Text style={[tbl.cell, { flex: 1.4, textAlign: "right", color: C.redDeep }]}>({fmtRand(Math.abs(w.total_payments))})</Text>
-            <Text style={[tbl.cell, { flex: 1.3, textAlign: "right", color: w.net_movement >= 0 ? C.greenDeep : C.redDeep }]}>
-              {fmtRand(w.net_movement)}
+            <Text style={[tbl.cell, { flex: 1.1, fontFamily: "Helvetica-Bold", color: C.ink }]}>
+              {w.period_label}
             </Text>
-            <Text style={[tbl.cell, { flex: 1.4, textAlign: "right", fontFamily: "Helvetica-Bold", color: danger ? C.redDeep : C.ink }]}>
-              {fmtRand(w.closing_balance)}
+            <Text style={[tbl.cell, { flex: 1.4, textAlign: "right" }]}>
+              {fmtRand(w.opening_balance, market)}
+            </Text>
+            <Text style={[tbl.cell, { flex: 1.4, textAlign: "right", color: C.greenDeep }]}>
+              {fmtRand(w.total_receipts, market)}
+            </Text>
+            <Text style={[tbl.cell, { flex: 1.4, textAlign: "right", color: C.redDeep }]}>
+              ({fmtRand(Math.abs(w.total_payments), market)})
+            </Text>
+            <Text
+              style={[
+                tbl.cell,
+                {
+                  flex: 1.3,
+                  textAlign: "right",
+                  color: w.net_movement >= 0 ? C.greenDeep : C.redDeep,
+                },
+              ]}
+            >
+              {fmtRand(w.net_movement, market)}
+            </Text>
+            <Text
+              style={[
+                tbl.cell,
+                {
+                  flex: 1.4,
+                  textAlign: "right",
+                  fontFamily: "Helvetica-Bold",
+                  color: danger ? C.redDeep : C.ink,
+                },
+              ]}
+            >
+              {fmtRand(w.closing_balance, market)}
             </Text>
           </View>
         );
@@ -263,14 +332,13 @@ export function CashForecastPDF({
   isDemo,
   reviewSignoff,
   operatingProfile,
+  market,
 }: CashForecastPDFProps) {
   const theme = resolveTheme(accountantProfile);
+  const m = market ?? ZA_MARKET;
   const weeks = cashForecast;
   const scenarioMeta = SCENARIO_META[scenario] ?? SCENARIO_META.moderate;
-  const resolvedAssumptions = [
-    ...assumptions,
-    ...profileCashAssumptions(operatingProfile),
-  ];
+  const resolvedAssumptions = [...assumptions, ...profileCashAssumptions(operatingProfile)];
 
   const closings = weeks.map((w) => w.closing_balance);
   const minBalance = Math.min(...closings);
@@ -288,35 +356,39 @@ export function CashForecastPDF({
       value: firstBreach === -1 ? `${weeks.length}+ wks` : `${runwayWeeks} wks`,
       good: firstBreach === -1,
       direction: firstBreach === -1 ? "up" : "down",
-      note: `above ${fmtRandCompact(minimumThreshold)} minimum`,
+      note: `above ${fmtRandCompact(minimumThreshold, m)} minimum`,
     },
     {
       label: "Lowest Balance",
-      value: fmtRandCompact(minBalance),
+      value: fmtRandCompact(minBalance, m),
       good: minBalance >= minimumThreshold,
       note: "projected trough",
     },
     {
       label: "Closing Position",
-      value: fmtRandCompact(endBalance),
+      value: fmtRandCompact(endBalance, m),
       direction: endBalance >= startBalance ? "up" : "down",
       good: endBalance >= startBalance,
       note: "end of horizon",
     },
     {
       label: "Net Flow",
-      value: fmtRandCompact(totalReceipts - totalPayments),
+      value: fmtRandCompact(totalReceipts - totalPayments, m),
       good: totalReceipts >= totalPayments,
       note: "over 13 weeks",
     },
   ];
 
-  const narrative = cashForecastNarrative({
-    runwayWeeks,
-    minBalance,
-    threshold: minimumThreshold,
-    weeksBelow,
-  }, operatingProfile);
+  const narrative = cashForecastNarrative(
+    {
+      runwayWeeks,
+      minBalance,
+      threshold: minimumThreshold,
+      weeksBelow,
+    },
+    operatingProfile,
+    m,
+  );
 
   return (
     <PDFDocument
@@ -326,6 +398,7 @@ export function CashForecastPDF({
       accountantProfile={accountantProfile}
       isDemo={isDemo}
       reviewSignoff={reviewSignoff}
+      market={m}
     >
       {/* ── PAGE 1 ── */}
       <ReportTitle
@@ -341,8 +414,18 @@ export function CashForecastPDF({
       <RunwayChart weeks={weeks} threshold={minimumThreshold} accent={theme.accent} />
 
       <View style={{ flexDirection: "row", gap: 10 }}>
-        <MetricBox label="Total Receipts" value={fmtRand(totalReceipts)} accentColor={C.green} note="13-week inflows" />
-        <MetricBox label="Total Payments" value={fmtRand(totalPayments)} accentColor={C.red} note="13-week outflows" />
+        <MetricBox
+          label="Total Receipts"
+          value={fmtRand(totalReceipts, m)}
+          accentColor={C.green}
+          note="13-week inflows"
+        />
+        <MetricBox
+          label="Total Payments"
+          value={fmtRand(totalPayments, m)}
+          accentColor={C.red}
+          note="13-week outflows"
+        />
         <MetricBox
           label="Weeks Below Minimum"
           value={`${weeksBelow}`}
@@ -367,9 +450,25 @@ export function CashForecastPDF({
           }}
         >
           {resolvedAssumptions.map((a, i) => (
-            <View key={i} style={{ flexDirection: "row", marginBottom: i < resolvedAssumptions.length - 1 ? 6 : 0 }}>
+            <View
+              key={i}
+              style={{
+                flexDirection: "row",
+                marginBottom: i < resolvedAssumptions.length - 1 ? 6 : 0,
+              }}
+            >
               <Text style={{ fontSize: 8, color: C.faint, width: 12 }}>•</Text>
-              <Text style={{ fontSize: 8, color: C.body, fontFamily: "Helvetica", lineHeight: 1.5, flex: 1 }}>{a}</Text>
+              <Text
+                style={{
+                  fontSize: 8,
+                  color: C.body,
+                  fontFamily: "Helvetica",
+                  lineHeight: 1.5,
+                  flex: 1,
+                }}
+              >
+                {a}
+              </Text>
             </View>
           ))}
         </View>

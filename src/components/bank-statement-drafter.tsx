@@ -11,7 +11,11 @@ import { Loader2, Upload, FileText, X, Sparkles, AlertTriangle, Plus } from "luc
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
-  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
 } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -30,6 +34,7 @@ import {
   type BankFilePayload,
   type BankFileSlot,
 } from "@/lib/bank-files";
+import { useMarketFormat } from "@/contexts/market";
 import { MovementsTrialBalancePanel } from "@/components/movements-trial-balance-panel";
 
 export interface BankDraftApplyPayload {
@@ -48,11 +53,22 @@ interface Props {
   onApply: (payload: BankDraftApplyPayload) => void;
 }
 
-function fmt(n: number, currency: string | null): string {
-  return `${currency ?? "R"} ${n.toLocaleString("en-ZA", { maximumFractionDigits: 0 })}`;
+function fmt(n: number, currency: string | null, money: (n: number) => string): string {
+  if (
+    currency &&
+    currency !== "R" &&
+    currency !== "ZAR" &&
+    currency !== "$" &&
+    currency !== "USD"
+  ) {
+    return `${currency} ${n.toLocaleString()}`;
+  }
+  return money(n);
 }
 
 export function BankStatementDrafter({ open, onClose, onApply }: Props) {
+  const { money, t } = useMarketFormat();
+  const checking = t("checking");
   const inputRef = useRef<HTMLInputElement>(null);
   const [slots, setSlots] = useState<BankFileSlot[]>([]);
   const [drafting, setDrafting] = useState(false);
@@ -77,7 +93,8 @@ export function BankStatementDrafter({ open, onClose, onApply }: Props) {
     setDraftProgress("");
   };
 
-  const addFiles = (list: FileList | null, defaultLabel = "Cheque account") => {
+  const addFiles = (list: FileList | null, defaultLabel?: string) => {
+    const labelBase = defaultLabel ?? checking;
     if (!list) return;
     const next = [...slots];
     for (const f of Array.from(list)) {
@@ -99,7 +116,7 @@ export function BankStatementDrafter({ open, onClose, onApply }: Props) {
         toast.error("Combined files exceed 40 MB.");
         continue;
       }
-      next.push({ file: f, accountLabel: defaultLabel });
+      next.push({ file: f, accountLabel: labelBase });
     }
     setSlots(next);
   };
@@ -122,9 +139,7 @@ export function BankStatementDrafter({ open, onClose, onApply }: Props) {
       setCashDraft(cashResult);
       setWarnings([
         ...pnlResult.warnings,
-        ...(cashResult.warnings ?? []).filter(
-          (w) => !pnlResult.warnings.includes(w),
-        ),
+        ...(cashResult.warnings ?? []).filter((w) => !pnlResult.warnings.includes(w)),
       ]);
     } catch (e) {
       toast.error(`Drafting failed: ${(e as Error).message}`);
@@ -135,9 +150,7 @@ export function BankStatementDrafter({ open, onClose, onApply }: Props) {
   };
 
   const factor =
-    annualise && draft?.months_covered && draft.months_covered > 0
-      ? 12 / draft.months_covered
-      : 1;
+    annualise && draft?.months_covered && draft.months_covered > 0 ? 12 / draft.months_covered : 1;
   const scale = (n: number) => Math.round(n * factor);
 
   const apply = () => {
@@ -174,10 +187,20 @@ export function BankStatementDrafter({ open, onClose, onApply }: Props) {
       { label: "Net profit", value: draft.net_profit, strong: true },
     ];
 
-  const accountLabels = Array.from(new Set(slots.map((s) => s.accountLabel.trim()).filter(Boolean)));
+  const accountLabels = Array.from(
+    new Set(slots.map((s) => s.accountLabel.trim()).filter(Boolean)),
+  );
 
   return (
-    <Dialog open={open} onOpenChange={(o) => { if (!o) { reset(); onClose(); } }}>
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        if (!o) {
+          reset();
+          onClose();
+        }
+      }}
+    >
       <DialogContent className="max-h-[min(90vh,100dvh-1rem)] w-[calc(100vw-1rem)] max-w-3xl overflow-y-auto border border-amber-900/15 bg-white p-4 text-slate-950 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-50 sm:p-6">
         <DialogHeader>
           <DialogTitle className="text-[15px] font-semibold uppercase tracking-[0.15em]">
@@ -198,7 +221,7 @@ export function BankStatementDrafter({ open, onClose, onApply }: Props) {
               accept=".pdf,.csv,.txt"
               className="hidden"
               onChange={(e) => {
-                addFiles(e.target.files, accountLabels[0] || "Cheque account");
+                addFiles(e.target.files, accountLabels[0] || checking);
                 if (inputRef.current) inputRef.current.value = "";
               }}
             />
@@ -294,7 +317,10 @@ export function BankStatementDrafter({ open, onClose, onApply }: Props) {
                 )}
               </span>
               <span className="flex items-center gap-2">
-                <Label htmlFor="annualise-toggle" className="text-xs text-slate-600 dark:text-slate-400">
+                <Label
+                  htmlFor="annualise-toggle"
+                  className="text-xs text-slate-600 dark:text-slate-400"
+                >
                   Annualised view (×{(12 / (draft.months_covered || 12)).toFixed(1)})
                 </Label>
                 <Switch
@@ -315,15 +341,25 @@ export function BankStatementDrafter({ open, onClose, onApply }: Props) {
                   {rows.map((r, i) => (
                     <tr
                       key={i}
-                      className={r.strong ? "border-t border-amber-900/15 font-semibold dark:border-slate-700" : ""}
+                      className={
+                        r.strong
+                          ? "border-t border-amber-900/15 font-semibold dark:border-slate-700"
+                          : ""
+                      }
                     >
-                      <td className={`py-1 ${r.indent ? "pl-5 text-slate-600 dark:text-slate-400" : ""}`}>
+                      <td
+                        className={`py-1 ${r.indent ? "pl-5 text-slate-600 dark:text-slate-400" : ""}`}
+                      >
                         {r.label}
                       </td>
                       <td
                         className={`py-1 text-right tabular-nums ${r.value < 0 ? "text-red-700 dark:text-red-400" : ""}`}
                       >
-                        {fmt(scale(Math.abs(r.value)) * Math.sign(r.value || 1), draft.currency)}
+                        {fmt(
+                          scale(Math.abs(r.value)) * Math.sign(r.value || 1),
+                          draft.currency,
+                          money,
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -331,14 +367,15 @@ export function BankStatementDrafter({ open, onClose, onApply }: Props) {
               </table>
             </div>
 
-            {cashDraft?.movements && (
-              <MovementsTrialBalancePanel movements={cashDraft.movements} />
-            )}
+            {cashDraft?.movements && <MovementsTrialBalancePanel movements={cashDraft.movements} />}
 
             {(warnings.length > 0 || draft.excluded_items.length > 0 || draft.notes) && (
               <div className="space-y-1.5 rounded-md border border-amber-700/30 bg-amber-50 p-3 text-xs dark:border-amber-700/40 dark:bg-amber-950/30">
                 {warnings.map((w, i) => (
-                  <p key={i} className="flex items-start gap-1.5 text-amber-900 dark:text-amber-300">
+                  <p
+                    key={i}
+                    className="flex items-start gap-1.5 text-amber-900 dark:text-amber-300"
+                  >
                     <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" /> {w}
                   </p>
                 ))}
@@ -355,7 +392,8 @@ export function BankStatementDrafter({ open, onClose, onApply }: Props) {
                 )}
                 {draft.excluded_items.length > 0 && (
                   <p className="text-slate-700 dark:text-slate-300">
-                    <strong>Excluded (not income/expenses):</strong> {draft.excluded_items.join("; ")}
+                    <strong>Excluded (not income/expenses):</strong>{" "}
+                    {draft.excluded_items.join("; ")}
                   </p>
                 )}
                 {draft.notes && (
@@ -386,7 +424,11 @@ export function BankStatementDrafter({ open, onClose, onApply }: Props) {
               >
                 Back
               </Button>
-              <Button className="flex-1" onClick={apply} disabled={warnings.length > 0 && !ackWarnings}>
+              <Button
+                className="flex-1"
+                onClick={apply}
+                disabled={warnings.length > 0 && !ackWarnings}
+              >
                 Apply &amp; continue to cash forecast
               </Button>
             </div>

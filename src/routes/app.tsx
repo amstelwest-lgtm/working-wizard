@@ -23,11 +23,14 @@ import {
 } from "lucide-react";
 import { NextStepsPanel } from "@/components/next-steps-panel";
 import { formatVal, HealthBar, tierColor } from "@/components/owner-board-ui";
-import { MarketProvider } from "@/contexts/market";
+import { MarketProvider, useMarket } from "@/contexts/market";
 import { MarketGate } from "@/components/market-gate";
 import {
   coerceMarketSelection,
+  formatDate,
+  formatNumber,
   isMissingMarketSupport,
+  localizeCopy,
   marketToJson,
   parseMarketSelection,
   readVisitorMarket,
@@ -69,7 +72,13 @@ import {
   type WeeklyRow,
   DEFAULT_WEEKLY_ROW,
 } from "@/contexts/financial-inputs";
-import { parseWeeklyInputs, derivePeriodWaterfallFallback, hasWeeklyActivity, overlayWeeklyInputs, resolveWaterfallFigures } from "@/lib/weekly-inputs";
+import {
+  parseWeeklyInputs,
+  derivePeriodWaterfallFallback,
+  hasWeeklyActivity,
+  overlayWeeklyInputs,
+  resolveWaterfallFigures,
+} from "@/lib/weekly-inputs";
 import {
   emptyProductMix,
   hasProductMixAnswer,
@@ -94,7 +103,11 @@ import {
   type ClientOperatingProfile,
 } from "@/lib/client-profile";
 import { profileIndustryLabel, profilePriorityWeight } from "@/lib/profile-signals";
-import { ownerBoardReady, ownerWalkthroughReady, shouldShowOwnerProfileFunnel } from "@/lib/first-run";
+import {
+  ownerBoardReady,
+  ownerWalkthroughReady,
+  shouldShowOwnerProfileFunnel,
+} from "@/lib/first-run";
 import {
   consumeInviteHandoffFlag,
   hasInviteHandoffFlag,
@@ -159,7 +172,11 @@ import { buildSpherePillars } from "@/components/sphere-hero-adapter";
 import { useViewMode } from "@/contexts/view-mode";
 import { listClientReviewSignoffs, indexReviewSignoffs } from "@/lib/review-signoffs.functions";
 import type { ClientReviewSignoff, ReviewScope } from "@/lib/review-signoffs.functions";
-import { ReviewSignoffBadge, OwnerTabSignoffRow, computeIsStale } from "@/components/review-signoff";
+import {
+  ReviewSignoffBadge,
+  OwnerTabSignoffRow,
+  computeIsStale,
+} from "@/components/review-signoff";
 import { upsertCurrentPeriodSnapshot } from "@/lib/financial-snapshots";
 import { stampFromSignoff } from "@/lib/review-signoff-stamp";
 import { useAskAiMount } from "@/hooks/use-ask-ai-mount";
@@ -194,10 +211,7 @@ export const Route = createFileRoute("/app")({
     );
   },
   head: () => ({
-    meta: [
-      { title: SHARE_TITLE },
-      { name: "description", content: SHARE_DESCRIPTION },
-    ],
+    meta: [{ title: SHARE_TITLE }, { name: "description", content: SHARE_DESCRIPTION }],
   }),
 });
 
@@ -2033,74 +2047,77 @@ function Index() {
   const [productMix, setProductMix] = useState<ProductMix>(emptyProductMix);
   const [showFinData, setShowFinData] = useState(false);
 
-  const handleStatementUpload = useCallback(async (file: File) => {
-    const pre = preflightUploadFile(file);
-    if (pre) {
-      toast.error(pre);
-      return;
-    }
-    setUploading(true);
-    try {
-      const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
-      let payload: { fileName: string; mimeType?: string; text?: string; base64?: string };
+  const handleStatementUpload = useCallback(
+    async (file: File) => {
+      const pre = preflightUploadFile(file);
+      if (pre) {
+        toast.error(pre);
+        return;
+      }
+      setUploading(true);
+      try {
+        const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+        let payload: { fileName: string; mimeType?: string; text?: string; base64?: string };
 
-      if (ext === "csv" || file.type === "text/csv" || ext === "txt") {
-        payload = { fileName: file.name, text: await file.text() };
-      } else if (ext === "xlsx" || ext === "xls") {
-        const XLSX = await import("xlsx");
-        const buf = await file.arrayBuffer();
-        const wb = XLSX.read(buf, { type: "array" });
-        const parts: string[] = [];
-        for (const name of wb.SheetNames) {
-          parts.push(`--- Sheet: ${name} ---`);
-          parts.push(XLSX.utils.sheet_to_csv(wb.Sheets[name]));
+        if (ext === "csv" || file.type === "text/csv" || ext === "txt") {
+          payload = { fileName: file.name, text: await file.text() };
+        } else if (ext === "xlsx" || ext === "xls") {
+          const XLSX = await import("xlsx");
+          const buf = await file.arrayBuffer();
+          const wb = XLSX.read(buf, { type: "array" });
+          const parts: string[] = [];
+          for (const name of wb.SheetNames) {
+            parts.push(`--- Sheet: ${name} ---`);
+            parts.push(XLSX.utils.sheet_to_csv(wb.Sheets[name]));
+          }
+          payload = { fileName: file.name, text: parts.join("\n") };
+        } else if (ext === "pdf" || file.type === "application/pdf") {
+          const base64 = await new Promise<string>((res, rej) => {
+            const reader = new FileReader();
+            reader.onload = () => res((reader.result as string).split(",")[1]);
+            reader.onerror = () => rej(new Error("Could not read file"));
+            reader.readAsDataURL(file);
+          });
+          const extraction = (await doExtractPdf({
+            data: { files: [{ base64, fileName: file.name }] },
+          })) as MergedExtractionResult;
+          // Open review modal — user confirms before values are applied
+          setExtractionForReview(extraction);
+          setShowFinData(false);
+          setReviewOpen(true);
+          return;
+        } else {
+          toast.error("Unsupported file type. Use PDF, CSV, or Excel.");
+          return;
         }
-        payload = { fileName: file.name, text: parts.join("\n") };
-      } else if (ext === "pdf" || file.type === "application/pdf") {
-        const base64 = await new Promise<string>((res, rej) => {
-          const reader = new FileReader();
-          reader.onload = () => res((reader.result as string).split(",")[1]);
-          reader.onerror = () => rej(new Error("Could not read file"));
-          reader.readAsDataURL(file);
-        });
-        const extraction = (await doExtractPdf({
-          data: { files: [{ base64, fileName: file.name }] },
-        })) as MergedExtractionResult;
-        // Open review modal — user confirms before values are applied
-        setExtractionForReview(extraction);
-        setShowFinData(false);
-        setReviewOpen(true);
-        return;
-      } else {
-        toast.error("Unsupported file type. Use PDF, CSV, or Excel.");
-        return;
-      }
 
-      const result = await doExtract({ data: payload });
-      const extracted = (result as { financials?: Record<string, string> })?.financials ?? {};
-      const filledKeys = Object.keys(extracted);
-      if (filledKeys.length === 0) {
-        toast.warning("Couldn't extract figures from that file. Try a text-based PDF or CSV.");
-      } else {
-        // Capture fields not surfaced in MergedExtractionResult so they aren't lost
-        const csvExtras: Partial<Inputs> = {};
-        if (extracted.variableCosts) csvExtras.variableCosts = extracted.variableCosts;
-        if (extracted.top5Revenue) csvExtras.top5Revenue = extracted.top5Revenue;
-        if (extracted.founderHours) csvExtras.founderHours = extracted.founderHours;
-        if (Object.keys(csvExtras).length) setPendingCsvExtras(csvExtras);
-        // Open review modal so owner can verify values before they are applied
-        const reviewResult = flatExtractionToMergedResult(extracted, file.name);
-        setExtractionForReview(reviewResult);
-        setShowFinData(false);
-        setReviewOpen(true);
+        const result = await doExtract({ data: payload });
+        const extracted = (result as { financials?: Record<string, string> })?.financials ?? {};
+        const filledKeys = Object.keys(extracted);
+        if (filledKeys.length === 0) {
+          toast.warning("Couldn't extract figures from that file. Try a text-based PDF or CSV.");
+        } else {
+          // Capture fields not surfaced in MergedExtractionResult so they aren't lost
+          const csvExtras: Partial<Inputs> = {};
+          if (extracted.variableCosts) csvExtras.variableCosts = extracted.variableCosts;
+          if (extracted.top5Revenue) csvExtras.top5Revenue = extracted.top5Revenue;
+          if (extracted.founderHours) csvExtras.founderHours = extracted.founderHours;
+          if (Object.keys(csvExtras).length) setPendingCsvExtras(csvExtras);
+          // Open review modal so owner can verify values before they are applied
+          const reviewResult = flatExtractionToMergedResult(extracted, file.name);
+          setExtractionForReview(reviewResult);
+          setShowFinData(false);
+          setReviewOpen(true);
+        }
+      } catch (e) {
+        toast.error(`Upload failed: ${(e as Error).message}`);
+      } finally {
+        setUploading(false);
+        if (uploadRef.current) uploadRef.current.value = "";
       }
-    } catch (e) {
-      toast.error(`Upload failed: ${(e as Error).message}`);
-    } finally {
-      setUploading(false);
-      if (uploadRef.current) uploadRef.current.value = "";
-    }
-  }, [doExtract, doExtractPdf]);
+    },
+    [doExtract, doExtractPdf],
+  );
 
   const [actingClientId, setActingClientId] = useState<string | null>(null);
   const [actingClientName, setActingClientName] = useState<string | null>(null);
@@ -2112,11 +2129,14 @@ function Index() {
     if (!user) return;
     const acting =
       actingClientId ||
-      (typeof sessionStorage !== "undefined" ? sessionStorage.getItem("acting_as_client_id") : null);
+      (typeof sessionStorage !== "undefined"
+        ? sessionStorage.getItem("acting_as_client_id")
+        : null);
     if (acting) return;
     let cancelled = false;
     void (async () => {
-      const { shouldBounceFromOwnerApp, clearForcePortal, shouldOpenItInbox } = await import("@/lib/user-roles");
+      const { shouldBounceFromOwnerApp, clearForcePortal, shouldOpenItInbox } =
+        await import("@/lib/user-roles");
       if (await shouldOpenItInbox(user.id)) {
         if (!cancelled) navigate({ to: "/ops", search: { tab: "it" } });
         return;
@@ -2146,149 +2166,151 @@ function Index() {
     setClientLinkResolved(false);
     (async () => {
       try {
-      if (actingClientId) {
-        if (!cancelled) setEffectiveClientId(actingClientId);
-        return;
-      }
-      const { data: u } = await supabase.auth.getUser();
-      if (!u.user) {
-        if (!cancelled) setEffectiveClientId(null);
-        return;
-      }
-
-      const findLinkedClient = async () => {
-        const { data: own } = await supabase
-          .from("clients")
-          .select("id")
-          .eq("owner_user_id", u.user.id)
-          .limit(1)
-          .maybeSingle();
-        if (own?.id) return own.id;
-        const { data: mem } = await supabase
-          .from("client_memberships")
-          .select("client_id")
-          .eq("user_id", u.user.id)
-          .limit(1)
-          .maybeSingle();
-        return mem?.client_id ?? null;
-      };
-
-      // Invite accept can land before RLS sees the new owner row — retry briefly.
-      for (let i = 0; i < 5; i++) {
-        const linked = await findLinkedClient();
-        if (linked) {
-          try {
-            localStorage.removeItem(PENDING_INVITE_CLIENT_KEY);
-          } catch {
-            /* ignore */
-          }
-          if (!cancelled) setEffectiveClientId(linked);
+        if (actingClientId) {
+          if (!cancelled) setEffectiveClientId(actingClientId);
           return;
         }
-        if (i < 4) await new Promise((r) => setTimeout(r, 250));
-      }
-
-      // 3. Process a pending invite stored after accept (UUID only — never the opaque token).
-      const pendingInvite =
-        typeof localStorage !== "undefined" ? localStorage.getItem(PENDING_INVITE_CLIENT_KEY) : null;
-      const metaInvite = (u.user.user_metadata?.invite_client_id as string | null) ?? null;
-      const inviteClientId = [pendingInvite, metaInvite].find((v) => isClientUuid(v)) ?? null;
-      if (inviteClientId) {
-        // Prefer ownership (G25 handoff already set owner_user_id server-side).
-        const { data: claimed } = await supabase
-          .from("clients")
-          .select("id")
-          .eq("id", inviteClientId)
-          .eq("owner_user_id", u.user.id)
-          .maybeSingle();
-        if (claimed?.id) {
-          localStorage.removeItem(PENDING_INVITE_CLIENT_KEY);
-          if (!cancelled) setEffectiveClientId(claimed.id);
+        const { data: u } = await supabase.auth.getUser();
+        if (!u.user) {
+          if (!cancelled) setEffectiveClientId(null);
           return;
         }
-        // Staff invite / legacy path — membership only. Never upsert client_member
-        // over an existing client_owner membership row.
-        const { data: existingMem } = await supabase
-          .from("client_memberships")
-          .select("client_id, role")
-          .eq("client_id", inviteClientId)
-          .eq("user_id", u.user.id)
-          .maybeSingle();
-        if (!existingMem) {
-          await supabase
+
+        const findLinkedClient = async () => {
+          const { data: own } = await supabase
+            .from("clients")
+            .select("id")
+            .eq("owner_user_id", u.user.id)
+            .limit(1)
+            .maybeSingle();
+          if (own?.id) return own.id;
+          const { data: mem } = await supabase
             .from("client_memberships")
-            .upsert(
-              { client_id: inviteClientId, user_id: u.user.id, role: "client_member" },
-              { onConflict: "client_id,user_id" },
-            );
-        }
-        localStorage.removeItem(PENDING_INVITE_CLIENT_KEY);
-        if (!cancelled) setEffectiveClientId(inviteClientId);
-        return;
-      }
+            .select("client_id")
+            .eq("user_id", u.user.id)
+            .limit(1)
+            .maybeSingle();
+          return mem?.client_id ?? null;
+        };
 
-      // 4. Self-signup with no invite — create a client record from their profile.
-      // Uses ensure_own_client() (SECURITY DEFINER RPC) because the direct INSERT
-      // RLS policy "clients insert own" does not evaluate correctly via PostgREST
-      // for INSERT WITH CHECK in this Supabase project configuration.
-      // Never do this while an invite token is still pending — that would mint a
-      // blank second client and skip the invited workspace.
-      if (pendingInvite && !isClientUuid(pendingInvite)) {
-        if (!cancelled) {
-          toast.error("We couldn't open the invited workspace yet. Refresh to try again.");
-          setEffectiveClientId(null);
-        }
-        return;
-      }
-      const meta = u.user.user_metadata as {
-        full_name?: string;
-        name?: string;
-        business_name?: string;
-        signup_type?: string;
-        firm_name?: string;
-      } | null;
-      const { data: roleRows } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", u.user.id);
-      const roles = (roleRows ?? []).map((r) => r.role as string);
-      const hasPracticeRole = roles.includes("firm_admin") || roles.includes("accountant");
-      const isGoogleIdentity =
-        u.user.app_metadata?.provider === "google" ||
-        (Array.isArray(u.user.identities) &&
-          u.user.identities.some((identity) => identity.provider === "google"));
-      // Google owner sign-in has no password signup_type until the callback stamps it.
-      const shouldProvisionOwner =
-        meta?.signup_type === "customer" ||
-        Boolean(isGoogleIdentity && !hasPracticeRole && !meta?.firm_name);
-      if (shouldProvisionOwner) {
-        const clientName =
-          meta?.business_name || meta?.full_name || meta?.name || u.user.email || "My Business";
-        const visitorMarket = readVisitorMarket() ?? { country: "ZA" as const, regionCode: null };
-        const { data: clientId, error: rpcErr } = await withMarketRpcFallback(
-          () =>
-            supabase.rpc("ensure_own_client", {
-              p_name: clientName,
-              p_market: visitorMarket,
-            }),
-          () => supabase.rpc("ensure_own_client", { p_name: clientName }),
-        );
-        if (!cancelled) {
-          if (rpcErr) {
-            // Surface the failure so the owner isn't left with a silent blank dashboard.
-            // They can refresh to retry; the RPC is idempotent (returns existing record if any).
-            console.error("[effectiveClientId] ensure_own_client failed:", rpcErr.message);
-            toast.error(
-              "We couldn't finish setting up your account. Refresh the page to try again.",
-              { duration: 10000 },
-            );
+        // Invite accept can land before RLS sees the new owner row — retry briefly.
+        for (let i = 0; i < 5; i++) {
+          const linked = await findLinkedClient();
+          if (linked) {
+            try {
+              localStorage.removeItem(PENDING_INVITE_CLIENT_KEY);
+            } catch {
+              /* ignore */
+            }
+            if (!cancelled) setEffectiveClientId(linked);
+            return;
           }
-          setEffectiveClientId(clientId ?? null);
+          if (i < 4) await new Promise((r) => setTimeout(r, 250));
         }
-        return;
-      }
 
-      if (!cancelled) setEffectiveClientId(null);
+        // 3. Process a pending invite stored after accept (UUID only — never the opaque token).
+        const pendingInvite =
+          typeof localStorage !== "undefined"
+            ? localStorage.getItem(PENDING_INVITE_CLIENT_KEY)
+            : null;
+        const metaInvite = (u.user.user_metadata?.invite_client_id as string | null) ?? null;
+        const inviteClientId = [pendingInvite, metaInvite].find((v) => isClientUuid(v)) ?? null;
+        if (inviteClientId) {
+          // Prefer ownership (G25 handoff already set owner_user_id server-side).
+          const { data: claimed } = await supabase
+            .from("clients")
+            .select("id")
+            .eq("id", inviteClientId)
+            .eq("owner_user_id", u.user.id)
+            .maybeSingle();
+          if (claimed?.id) {
+            localStorage.removeItem(PENDING_INVITE_CLIENT_KEY);
+            if (!cancelled) setEffectiveClientId(claimed.id);
+            return;
+          }
+          // Staff invite / legacy path — membership only. Never upsert client_member
+          // over an existing client_owner membership row.
+          const { data: existingMem } = await supabase
+            .from("client_memberships")
+            .select("client_id, role")
+            .eq("client_id", inviteClientId)
+            .eq("user_id", u.user.id)
+            .maybeSingle();
+          if (!existingMem) {
+            await supabase
+              .from("client_memberships")
+              .upsert(
+                { client_id: inviteClientId, user_id: u.user.id, role: "client_member" },
+                { onConflict: "client_id,user_id" },
+              );
+          }
+          localStorage.removeItem(PENDING_INVITE_CLIENT_KEY);
+          if (!cancelled) setEffectiveClientId(inviteClientId);
+          return;
+        }
+
+        // 4. Self-signup with no invite — create a client record from their profile.
+        // Uses ensure_own_client() (SECURITY DEFINER RPC) because the direct INSERT
+        // RLS policy "clients insert own" does not evaluate correctly via PostgREST
+        // for INSERT WITH CHECK in this Supabase project configuration.
+        // Never do this while an invite token is still pending — that would mint a
+        // blank second client and skip the invited workspace.
+        if (pendingInvite && !isClientUuid(pendingInvite)) {
+          if (!cancelled) {
+            toast.error("We couldn't open the invited workspace yet. Refresh to try again.");
+            setEffectiveClientId(null);
+          }
+          return;
+        }
+        const meta = u.user.user_metadata as {
+          full_name?: string;
+          name?: string;
+          business_name?: string;
+          signup_type?: string;
+          firm_name?: string;
+        } | null;
+        const { data: roleRows } = await supabase
+          .from("user_roles")
+          .select("role")
+          .eq("user_id", u.user.id);
+        const roles = (roleRows ?? []).map((r) => r.role as string);
+        const hasPracticeRole = roles.includes("firm_admin") || roles.includes("accountant");
+        const isGoogleIdentity =
+          u.user.app_metadata?.provider === "google" ||
+          (Array.isArray(u.user.identities) &&
+            u.user.identities.some((identity) => identity.provider === "google"));
+        // Google owner sign-in has no password signup_type until the callback stamps it.
+        const shouldProvisionOwner =
+          meta?.signup_type === "customer" ||
+          Boolean(isGoogleIdentity && !hasPracticeRole && !meta?.firm_name);
+        if (shouldProvisionOwner) {
+          const clientName =
+            meta?.business_name || meta?.full_name || meta?.name || u.user.email || "My Business";
+          const visitorMarket = readVisitorMarket() ?? { country: "ZA" as const, regionCode: null };
+          const { data: clientId, error: rpcErr } = await withMarketRpcFallback(
+            () =>
+              supabase.rpc("ensure_own_client", {
+                p_name: clientName,
+                p_market: visitorMarket,
+              }),
+            () => supabase.rpc("ensure_own_client", { p_name: clientName }),
+          );
+          if (!cancelled) {
+            if (rpcErr) {
+              // Surface the failure so the owner isn't left with a silent blank dashboard.
+              // They can refresh to retry; the RPC is idempotent (returns existing record if any).
+              console.error("[effectiveClientId] ensure_own_client failed:", rpcErr.message);
+              toast.error(
+                "We couldn't finish setting up your account. Refresh the page to try again.",
+                { duration: 10000 },
+              );
+            }
+            setEffectiveClientId(clientId ?? null);
+          }
+          return;
+        }
+
+        if (!cancelled) setEffectiveClientId(null);
       } finally {
         if (!cancelled) setClientLinkResolved(true);
       }
@@ -2335,9 +2357,15 @@ function Index() {
   const [firstRunStep, setFirstRunStep] = useState<null | "pick-type" | "first-data">(null);
   const [operatingProfile, setOperatingProfile] = useState<ClientOperatingProfile | null>(null);
   const [workspaceMarket, setWorkspaceMarket] = useState<MarketSelection | null>(null);
+  const boardMarket = useMemo(
+    () => resolveMarket(coerceMarketSelection(workspaceMarket)),
+    [workspaceMarket],
+  );
   const [marketNeedsGate, setMarketNeedsGate] = useState(false);
   const fetchReviewSignoffs = useServerFn(listClientReviewSignoffs);
-  const [reviewSignoffs, setReviewSignoffs] = useState<Partial<Record<ReviewScope, ClientReviewSignoff>>>({});
+  const [reviewSignoffs, setReviewSignoffs] = useState<
+    Partial<Record<ReviewScope, ClientReviewSignoff>>
+  >({});
   const financialsSignoff = reviewSignoffs.financials ?? null;
   const profitabilitySignoff = reviewSignoffs.profitability ?? null;
   const cashForecastSignoff = reviewSignoffs.cash_forecast ?? null;
@@ -2372,34 +2400,42 @@ function Index() {
         "business_type, cash_runway_weeks, cashflow, financials_updated_at, last_forecast_at, budget_updated_at, operating_profile, financial_year_start_month, market";
       const legacySelect =
         "business_type, cash_runway_weeks, cashflow, financials_updated_at, last_forecast_at, budget_updated_at, operating_profile, financial_year_start_month";
-      let res = await supabase.from("clients").select(fullSelect).eq("id", effectiveClientId).maybeSingle();
+      let res = await supabase
+        .from("clients")
+        .select(fullSelect)
+        .eq("id", effectiveClientId)
+        .maybeSingle();
       let marketColumnMissing = false;
       if (res.error && isMissingMarketSupport(res.error)) {
         marketColumnMissing = true;
-        res = await supabase.from("clients").select(legacySelect).eq("id", effectiveClientId).maybeSingle();
+        res = await supabase
+          .from("clients")
+          .select(legacySelect)
+          .eq("id", effectiveClientId)
+          .maybeSingle();
       }
       if (cancelled) return;
       try {
-      const data = res.data as {
-        business_type: string | null;
-        cash_runway_weeks: number | null;
-        cashflow?: SavedCashflowLike | null;
-        financials_updated_at: string | null;
-        last_forecast_at: string | null;
-        budget_updated_at: string | null;
-        operating_profile?: unknown;
-        financial_year_start_month?: number | null;
-        market?: unknown;
-      } | null;
-      const profile = parseOperatingProfile(data?.operating_profile);
-      const parsedMarket = parseMarketSelection(data?.market);
-      if (!marketColumnMissing && data && data.market == null && res.error == null) {
-        setMarketNeedsGate(true);
-        setWorkspaceMarket(null);
-      } else {
-        setMarketNeedsGate(false);
-        setWorkspaceMarket(parsedMarket ?? coerceMarketSelection(data?.market ?? null));
-      }
+        const data = res.data as {
+          business_type: string | null;
+          cash_runway_weeks: number | null;
+          cashflow?: SavedCashflowLike | null;
+          financials_updated_at: string | null;
+          last_forecast_at: string | null;
+          budget_updated_at: string | null;
+          operating_profile?: unknown;
+          financial_year_start_month?: number | null;
+          market?: unknown;
+        } | null;
+        const profile = parseOperatingProfile(data?.operating_profile);
+        const parsedMarket = parseMarketSelection(data?.market);
+        if (!marketColumnMissing && data && data.market == null && res.error == null) {
+          setMarketNeedsGate(true);
+          setWorkspaceMarket(null);
+        } else {
+          setMarketNeedsGate(false);
+          setWorkspaceMarket(parsedMarket ?? coerceMarketSelection(data?.market ?? null));
+        }
         setClientMeta(
           data
             ? {
@@ -2595,7 +2631,8 @@ function Index() {
       skipNextFinancialsAutosave.current = false;
       return;
     }
-    if (!hasRealFinancials && !hasWeeklyActivity(weeklyInputs) && !hasProductMixAnswer(productMix)) return;
+    if (!hasRealFinancials && !hasWeeklyActivity(weeklyInputs) && !hasProductMixAnswer(productMix))
+      return;
     setSaveStatus("saving");
     const t = setTimeout(async () => {
       const financialsUpdatedAt = new Date().toISOString();
@@ -3178,1790 +3215,1807 @@ function Index() {
 
   return (
     <MarketProvider selection={workspaceMarket}>
-    <FinancialInputsContext.Provider value={financialInputsCtxValue}>
-      <main className="min-h-screen overflow-x-hidden bg-slate-950 text-slate-100">
-        {marketNeedsGate && effectiveClientId && (
-          <MarketGate
-            onSave={async (draft) => {
-              const sel = parseMarketSelection({
-                country: draft.country,
-                regionCode: draft.regionCode,
-              });
-              if (!sel) throw new Error("Pick a region and, for the US, a state.");
-              const { error } = await supabase
-                .from("clients")
-                .update({
-                  market: marketToJson(sel),
-                  financial_year_start_month: sel.country === "US" ? 1 : 3,
-                })
-                .eq("id", effectiveClientId);
-              if (error) throw error;
-              setWorkspaceMarket(sel);
-              setMarketNeedsGate(false);
-            }}
-          />
-        )}
-        <SplashScreen />
-        {!actingClientId && (
-          <TabErrorBoundary label="Walkthrough">
-            <WalkthroughWizard
-              variant="owner"
-              ready={ownerWalkthroughReady({
-                firstRunStep,
-                showOnboarding,
-                showBankDrafter,
-                showCashFromBanks,
-                onboardingGateReady,
-              })}
-              onTabChange={handleTourTabChange}
-              userRole={userRole ?? undefined}
+      <FinancialInputsContext.Provider value={financialInputsCtxValue}>
+        <main className="min-h-screen overflow-x-hidden bg-slate-950 text-slate-100">
+          {marketNeedsGate && effectiveClientId && (
+            <MarketGate
+              onSave={async (draft) => {
+                const sel = parseMarketSelection({
+                  country: draft.country,
+                  regionCode: draft.regionCode,
+                });
+                if (!sel) throw new Error("Pick a region and, for the US, a state.");
+                const { error } = await supabase
+                  .from("clients")
+                  .update({
+                    market: marketToJson(sel),
+                    financial_year_start_month: sel.country === "US" ? 1 : 3,
+                  })
+                  .eq("id", effectiveClientId);
+                if (error) throw error;
+                setWorkspaceMarket(sel);
+                setMarketNeedsGate(false);
+              }}
             />
-          </TabErrorBoundary>
-        )}
-        {actingClientId && (
-          <div className="border-b border-amber-600/40 bg-amber-500/15 print:hidden">
-            <div className="founder-shell mx-auto flex flex-wrap items-center justify-between gap-2 py-2 text-xs text-amber-100">
-              <div>
-                <span className="font-semibold">Acting as client:</span>{" "}
-                <span className="text-amber-200">{actingClientName ?? "Client"}</span>
-                <span className="ml-2 text-amber-200/70">
-                  (audited — changes save to this client)
-                </span>
+          )}
+          <SplashScreen />
+          {!actingClientId && (
+            <TabErrorBoundary label="Walkthrough">
+              <WalkthroughWizard
+                variant="owner"
+                ready={ownerWalkthroughReady({
+                  firstRunStep,
+                  showOnboarding,
+                  showBankDrafter,
+                  showCashFromBanks,
+                  onboardingGateReady,
+                })}
+                onTabChange={handleTourTabChange}
+                userRole={userRole ?? undefined}
+              />
+            </TabErrorBoundary>
+          )}
+          {actingClientId && (
+            <div className="border-b border-amber-600/40 bg-amber-500/15 print:hidden">
+              <div className="founder-shell mx-auto flex flex-wrap items-center justify-between gap-2 py-2 text-xs text-amber-100">
+                <div>
+                  <span className="font-semibold">Acting as client:</span>{" "}
+                  <span className="text-amber-200">{actingClientName ?? "Client"}</span>
+                  <span className="ml-2 text-amber-200/70">
+                    (audited — changes save to this client)
+                  </span>
+                </div>
+                <button
+                  onClick={exitImpersonation}
+                  className="inline-flex items-center gap-1 rounded-md border border-amber-400/40 bg-amber-500/20 px-2 py-1 text-amber-50 hover:bg-amber-500/30"
+                >
+                  <ArrowLeft className="h-3 w-3" /> Exit to firm dashboard
+                </button>
               </div>
-              <button
-                onClick={exitImpersonation}
-                className="inline-flex items-center gap-1 rounded-md border border-amber-400/40 bg-amber-500/20 px-2 py-1 text-amber-50 hover:bg-amber-500/30"
-              >
-                <ArrowLeft className="h-3 w-3" /> Exit to firm dashboard
-              </button>
             </div>
-          </div>
-        )}
-        <div id="board-pack" className="founder-shell mx-auto py-5 lg:py-7">
-          {/* App bar — compact single row */}
-          <header className="relative mb-3 overflow-hidden rounded-xl border border-slate-200/80 bg-white/90 px-2.5 py-1.5 shadow-[0_8px_24px_rgba(15,23,42,0.05)] backdrop-blur-xl dark:border-slate-800/90 dark:bg-[#0d1420]/90 dark:shadow-[0_10px_28px_rgba(0,0,0,0.2)] sm:px-3">
-            <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#d4a550]/80 to-transparent" />
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex min-w-0 items-center gap-2">
-                <div className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-[#d4a550]/30 bg-[#d4a550]/10">
-                  <Database className="h-3.5 w-3.5 text-[#a8791a] dark:text-[#d4a550]" />
+          )}
+          <div id="board-pack" className="founder-shell mx-auto py-5 lg:py-7">
+            {/* App bar — compact single row */}
+            <header className="relative mb-3 overflow-hidden rounded-xl border border-slate-200/80 bg-white/90 px-2.5 py-1.5 shadow-[0_8px_24px_rgba(15,23,42,0.05)] backdrop-blur-xl dark:border-slate-800/90 dark:bg-[#0d1420]/90 dark:shadow-[0_10px_28px_rgba(0,0,0,0.2)] sm:px-3">
+              <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#d4a550]/80 to-transparent" />
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex min-w-0 items-center gap-2">
+                  <div className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-[#d4a550]/30 bg-[#d4a550]/10">
+                    <Database className="h-3.5 w-3.5 text-[#a8791a] dark:text-[#d4a550]" />
+                  </div>
+                  <img
+                    src="/milon-wordmark.png"
+                    alt="Milōn"
+                    className="h-4 w-auto shrink-0 dark:brightness-110 sm:h-[18px]"
+                    style={{ filter: "brightness(0.85) saturate(1.2)" }}
+                  />
+                  <div className="hidden min-w-0 truncate text-[9px] font-medium uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500 md:block">
+                    {actingClientName ?? "Operating finance"}
+                  </div>
                 </div>
-                <img
-                  src="/milon-wordmark.png"
-                  alt="Milōn"
-                  className="h-4 w-auto shrink-0 dark:brightness-110 sm:h-[18px]"
-                  style={{ filter: "brightness(0.85) saturate(1.2)" }}
-                />
-                <div className="hidden min-w-0 truncate text-[9px] font-medium uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500 md:block">
-                  {actingClientName ?? "Operating finance"}
-                </div>
-              </div>
-              <div className="flex shrink-0 items-center gap-1 print:hidden">
-                {/* Keep primary actions visible on phones; park the rest in More */}
-                {userRole !== "client_member" && (
-                  <button
-                    onClick={() => setShowFinData(true)}
-                    className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-[#b7872a]/50 bg-gradient-to-b from-[#d4a550]/20 to-[#b7872a]/10 px-2.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-[#8a6508] shadow-[0_1px_6px_rgba(212,165,80,0.16)] transition-colors hover:border-[#b7872a]/80 hover:from-[#d4a550]/30 hover:to-[#b7872a]/20 dark:text-[#e1b85e]"
-                    title="Upload financial statements or connect QuickBooks Online"
-                  >
-                    <Upload className="h-3 w-3 shrink-0" />
-                    <span className="hidden sm:inline">Upload</span>
-                  </button>
-                )}
-                <ThemeToggle className="h-7 rounded-lg border-slate-200 px-2 py-0 text-[9px] font-semibold uppercase tracking-[0.14em] dark:border-slate-700/80" />
-                <HeaderShareButton />
-
-                <div className="hidden items-center gap-1 sm:flex">
-                  {userRole !== "client_member" ? (
+                <div className="flex shrink-0 items-center gap-1 print:hidden">
+                  {/* Keep primary actions visible on phones; park the rest in More */}
+                  {userRole !== "client_member" && (
                     <button
-                      onClick={() => setShowOnboarding(true)}
-                      className="inline-flex h-7 max-w-[11rem] items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50/80 px-2 text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-600 transition-colors hover:border-[#b7872a]/50 hover:bg-[#d4a550]/10 dark:border-slate-700/80 dark:bg-slate-900/70 dark:text-slate-300"
-                      title={
-                        operatingProfile
-                          ? `Profile: ${profileShortLabel(operatingProfile)} — click to retake`
-                          : "Set up your business profile"
-                      }
+                      onClick={() => setShowFinData(true)}
+                      className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-[#b7872a]/50 bg-gradient-to-b from-[#d4a550]/20 to-[#b7872a]/10 px-2.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-[#8a6508] shadow-[0_1px_6px_rgba(212,165,80,0.16)] transition-colors hover:border-[#b7872a]/80 hover:from-[#d4a550]/30 hover:to-[#b7872a]/20 dark:text-[#e1b85e]"
+                      title="Upload financial statements or connect QuickBooks Online"
                     >
-                      <Building2 className="h-3 w-3 shrink-0" />
-                      {operatingProfile || businessType ? (
-                        <>
-                          <span className="truncate">
-                            {profileShortLabel(operatingProfile) !== "Set up profile"
-                              ? profileShortLabel(operatingProfile)
-                              : businessType?.label}
-                          </span>
-                          <Pencil className="h-2.5 w-2.5 shrink-0 opacity-40" />
-                        </>
-                      ) : (
-                        <span className="text-[#8a6508] dark:text-[#d4a550]">Profile</span>
-                      )}
+                      <Upload className="h-3 w-3 shrink-0" />
+                      <span className="hidden sm:inline">Upload</span>
                     </button>
-                  ) : operatingProfile || businessType ? (
-                    <div
-                      className="inline-flex h-7 max-w-[11rem] items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50/80 px-2 text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-600 dark:border-slate-700/80 dark:bg-slate-900/70 dark:text-slate-300"
-                      title={`Profile: ${profileShortLabel(operatingProfile) || businessType?.label}`}
+                  )}
+                  <ThemeToggle className="h-7 rounded-lg border-slate-200 px-2 py-0 text-[9px] font-semibold uppercase tracking-[0.14em] dark:border-slate-700/80" />
+                  <HeaderShareButton />
+
+                  <div className="hidden items-center gap-1 sm:flex">
+                    {userRole !== "client_member" ? (
+                      <button
+                        onClick={() => setShowOnboarding(true)}
+                        className="inline-flex h-7 max-w-[11rem] items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50/80 px-2 text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-600 transition-colors hover:border-[#b7872a]/50 hover:bg-[#d4a550]/10 dark:border-slate-700/80 dark:bg-slate-900/70 dark:text-slate-300"
+                        title={
+                          operatingProfile
+                            ? `Profile: ${profileShortLabel(operatingProfile)} — click to retake`
+                            : "Set up your business profile"
+                        }
+                      >
+                        <Building2 className="h-3 w-3 shrink-0" />
+                        {operatingProfile || businessType ? (
+                          <>
+                            <span className="truncate">
+                              {profileShortLabel(operatingProfile) !== "Set up profile"
+                                ? profileShortLabel(operatingProfile)
+                                : businessType?.label}
+                            </span>
+                            <Pencil className="h-2.5 w-2.5 shrink-0 opacity-40" />
+                          </>
+                        ) : (
+                          <span className="text-[#8a6508] dark:text-[#d4a550]">Profile</span>
+                        )}
+                      </button>
+                    ) : operatingProfile || businessType ? (
+                      <div
+                        className="inline-flex h-7 max-w-[11rem] items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50/80 px-2 text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-600 dark:border-slate-700/80 dark:bg-slate-900/70 dark:text-slate-300"
+                        title={`Profile: ${profileShortLabel(operatingProfile) || businessType?.label}`}
+                      >
+                        <Building2 className="h-3 w-3 shrink-0" />
+                        <span className="truncate">
+                          {profileShortLabel(operatingProfile) !== "Set up profile"
+                            ? profileShortLabel(operatingProfile)
+                            : businessType?.label}
+                        </span>
+                      </div>
+                    ) : null}
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <button
+                          className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50/80 px-2 text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-600 transition-colors hover:border-[#b7872a]/50 hover:bg-[#d4a550]/10 dark:border-slate-700/80 dark:bg-slate-900/70 dark:text-slate-300"
+                          title="Risk Profile"
+                        >
+                          <Shield className="h-3 w-3 shrink-0" />
+                          <span className="capitalize">{risk}</span>
+                          <ChevronDown className="h-3 w-3 opacity-50" />
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent
+                        className="w-44 border border-slate-700 bg-slate-900 p-2 shadow-xl"
+                        align="end"
+                      >
+                        <p className="mb-2 px-1 text-[9px] font-semibold uppercase tracking-[0.22em] text-slate-500">
+                          Risk Profile
+                        </p>
+                        <div className="flex flex-col gap-1">
+                          {(["conservative", "balanced", "aggressive"] as RiskProfile[]).map(
+                            (r) => (
+                              <button
+                                key={r}
+                                onClick={() => setRisk(r)}
+                                className={`rounded px-2 py-1.5 text-left text-[11px] font-medium capitalize transition-colors ${
+                                  risk === r
+                                    ? "border border-[#b7872a]/40 bg-[#b7872a]/15 text-[#d4a550]"
+                                    : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+                                }`}
+                              >
+                                {RISK_TUNING[r].label}
+                              </button>
+                            ),
+                          )}
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                    {userRole === "firm_admin" && (
+                      <button
+                        onClick={() => setAdminOpen(true)}
+                        className="inline-flex h-7 items-center gap-1 rounded-lg border border-[#d4a550]/30 bg-[#d4a550]/10 px-2 text-[9px] font-semibold uppercase tracking-[0.14em] text-[#8a6508] transition-colors hover:border-[#d4a550]/60 hover:bg-[#d4a550]/20 dark:text-[#d4a550]"
+                        title="Admin Dashboard"
+                      >
+                        ⬡ Admin
+                      </button>
+                    )}
+                    <button
+                      onClick={() => navigate({ to: "/settings" })}
+                      className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50/80 px-2 text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-600 transition-colors hover:border-[#b7872a]/50 hover:bg-[#d4a550]/10 dark:border-slate-700/80 dark:bg-slate-900/70 dark:text-slate-300"
+                      title="Settings"
                     >
-                      <Building2 className="h-3 w-3 shrink-0" />
-                      <span className="truncate">
-                        {profileShortLabel(operatingProfile) !== "Set up profile"
-                          ? profileShortLabel(operatingProfile)
-                          : businessType?.label}
-                      </span>
-                    </div>
-                  ) : null}
+                      Settings
+                    </button>
+                    <button
+                      onClick={() =>
+                        signOut().then(() => {
+                          window.location.href = "/";
+                        })
+                      }
+                      className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50/80 px-2 text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-600 transition-colors hover:border-[#b7872a]/50 hover:bg-[#d4a550]/10 dark:border-slate-700/80 dark:bg-slate-900/70 dark:text-slate-300"
+                      title="Sign out"
+                    >
+                      Sign out
+                    </button>
+                  </div>
+
                   <Popover>
                     <PopoverTrigger asChild>
                       <button
-                        className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50/80 px-2 text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-600 transition-colors hover:border-[#b7872a]/50 hover:bg-[#d4a550]/10 dark:border-slate-700/80 dark:bg-slate-900/70 dark:text-slate-300"
-                        title="Risk Profile"
+                        className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200 bg-slate-50/80 text-slate-600 transition-colors hover:border-[#b7872a]/50 hover:bg-[#d4a550]/10 dark:border-slate-700/80 dark:bg-slate-900/70 dark:text-slate-300 sm:hidden"
+                        title="More"
+                        aria-label="More actions"
                       >
-                        <Shield className="h-3 w-3 shrink-0" />
-                        <span className="capitalize">{risk}</span>
-                        <ChevronDown className="h-3 w-3 opacity-50" />
+                        <MoreHorizontal className="h-4 w-4" />
                       </button>
                     </PopoverTrigger>
                     <PopoverContent
-                      className="w-44 border border-slate-700 bg-slate-900 p-2 shadow-xl"
+                      className="w-56 border border-slate-200 bg-white p-2 shadow-xl dark:border-slate-700 dark:bg-slate-900"
                       align="end"
                     >
-                      <p className="mb-2 px-1 text-[9px] font-semibold uppercase tracking-[0.22em] text-slate-500">
-                        Risk Profile
-                      </p>
                       <div className="flex flex-col gap-1">
+                        {userRole !== "client_member" && (
+                          <button
+                            onClick={() => setShowOnboarding(true)}
+                            className="flex items-center gap-2 rounded-md px-2 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
+                          >
+                            <Building2 className="h-3.5 w-3.5" /> Profile
+                          </button>
+                        )}
+                        <div className="px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                          Risk · {risk}
+                        </div>
                         {(["conservative", "balanced", "aggressive"] as RiskProfile[]).map((r) => (
                           <button
                             key={r}
                             onClick={() => setRisk(r)}
-                            className={`rounded px-2 py-1.5 text-left text-[11px] font-medium capitalize transition-colors ${
+                            className={`rounded-md px-2 py-1.5 text-left text-xs capitalize ${
                               risk === r
-                                ? "border border-[#b7872a]/40 bg-[#b7872a]/15 text-[#d4a550]"
-                                : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+                                ? "bg-[#b7872a]/15 font-semibold text-[#8a6508] dark:text-[#d4a550]"
+                                : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
                             }`}
                           >
                             {RISK_TUNING[r].label}
                           </button>
                         ))}
+                        {userRole === "firm_admin" && (
+                          <button
+                            onClick={() => setAdminOpen(true)}
+                            className="flex items-center gap-2 rounded-md px-2 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
+                          >
+                            Admin
+                          </button>
+                        )}
+                        <button
+                          onClick={() => navigate({ to: "/settings" })}
+                          className="flex items-center gap-2 rounded-md px-2 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
+                        >
+                          <Settings className="h-3.5 w-3.5" /> Settings
+                        </button>
+                        <button
+                          onClick={() =>
+                            signOut().then(() => {
+                              window.location.href = "/";
+                            })
+                          }
+                          className="flex items-center gap-2 rounded-md px-2 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
+                        >
+                          <LogOut className="h-3.5 w-3.5" /> Sign out
+                        </button>
                       </div>
                     </PopoverContent>
                   </Popover>
-                  {userRole === "firm_admin" && (
-                    <button
-                      onClick={() => setAdminOpen(true)}
-                      className="inline-flex h-7 items-center gap-1 rounded-lg border border-[#d4a550]/30 bg-[#d4a550]/10 px-2 text-[9px] font-semibold uppercase tracking-[0.14em] text-[#8a6508] transition-colors hover:border-[#d4a550]/60 hover:bg-[#d4a550]/20 dark:text-[#d4a550]"
-                      title="Admin Dashboard"
-                    >
-                      ⬡ Admin
-                    </button>
-                  )}
-                  <button
-                    onClick={() => navigate({ to: "/settings" })}
-                    className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50/80 px-2 text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-600 transition-colors hover:border-[#b7872a]/50 hover:bg-[#d4a550]/10 dark:border-slate-700/80 dark:bg-slate-900/70 dark:text-slate-300"
-                    title="Settings"
-                  >
-                    Settings
-                  </button>
-                  <button
-                    onClick={() =>
-                      signOut().then(() => {
-                        window.location.href = "/";
-                      })
-                    }
-                    className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50/80 px-2 text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-600 transition-colors hover:border-[#b7872a]/50 hover:bg-[#d4a550]/10 dark:border-slate-700/80 dark:bg-slate-900/70 dark:text-slate-300"
-                    title="Sign out"
-                  >
-                    Sign out
-                  </button>
                 </div>
-
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <button
-                      className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200 bg-slate-50/80 text-slate-600 transition-colors hover:border-[#b7872a]/50 hover:bg-[#d4a550]/10 dark:border-slate-700/80 dark:bg-slate-900/70 dark:text-slate-300 sm:hidden"
-                      title="More"
-                      aria-label="More actions"
-                    >
-                      <MoreHorizontal className="h-4 w-4" />
-                    </button>
-                  </PopoverTrigger>
-                  <PopoverContent
-                    className="w-56 border border-slate-200 bg-white p-2 shadow-xl dark:border-slate-700 dark:bg-slate-900"
-                    align="end"
-                  >
-                    <div className="flex flex-col gap-1">
-                      {userRole !== "client_member" && (
-                        <button
-                          onClick={() => setShowOnboarding(true)}
-                          className="flex items-center gap-2 rounded-md px-2 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
-                        >
-                          <Building2 className="h-3.5 w-3.5" /> Profile
-                        </button>
-                      )}
-                      <div className="px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                        Risk · {risk}
-                      </div>
-                      {(["conservative", "balanced", "aggressive"] as RiskProfile[]).map((r) => (
-                        <button
-                          key={r}
-                          onClick={() => setRisk(r)}
-                          className={`rounded-md px-2 py-1.5 text-left text-xs capitalize ${
-                            risk === r
-                              ? "bg-[#b7872a]/15 font-semibold text-[#8a6508] dark:text-[#d4a550]"
-                              : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
-                          }`}
-                        >
-                          {RISK_TUNING[r].label}
-                        </button>
-                      ))}
-                      {userRole === "firm_admin" && (
-                        <button
-                          onClick={() => setAdminOpen(true)}
-                          className="flex items-center gap-2 rounded-md px-2 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
-                        >
-                          Admin
-                        </button>
-                      )}
-                      <button
-                        onClick={() => navigate({ to: "/settings" })}
-                        className="flex items-center gap-2 rounded-md px-2 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
-                      >
-                        <Settings className="h-3.5 w-3.5" /> Settings
-                      </button>
-                      <button
-                        onClick={() =>
-                          signOut().then(() => {
-                            window.location.href = "/";
-                          })
-                        }
-                        className="flex items-center gap-2 rounded-md px-2 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
-                      >
-                        <LogOut className="h-3.5 w-3.5" /> Sign out
-                      </button>
-                    </div>
-                  </PopoverContent>
-                </Popover>
               </div>
-            </div>
-          </header>
+            </header>
 
-          {/* Business profile funnel — required on first run, retakeable thereafter */}
-          <Dialog
-            open={showOnboarding}
-            onOpenChange={(open) => {
-              if (!open && firstRunStep === "pick-type") return;
-              setShowOnboarding(open);
-            }}
-          >
-            <DialogContent
-              onInteractOutside={
-                firstRunStep === "pick-type" ? (e) => e.preventDefault() : undefined
-              }
-              onEscapeKeyDown={firstRunStep === "pick-type" ? (e) => e.preventDefault() : undefined}
-              className={`flex h-[min(90vh,calc(100dvh-1rem))] max-h-[min(90vh,calc(100dvh-1rem))] w-[calc(100vw-1rem)] max-w-3xl flex-col gap-0 overflow-hidden border border-slate-800 bg-slate-950 p-4 text-slate-50 sm:p-6 ${firstRunStep === "pick-type" ? "[&>button:first-of-type]:hidden" : ""}`}
+            {/* Business profile funnel — required on first run, retakeable thereafter */}
+            <Dialog
+              open={showOnboarding}
+              onOpenChange={(open) => {
+                if (!open && firstRunStep === "pick-type") return;
+                setShowOnboarding(open);
+              }}
             >
-              <DialogHeader className="sr-only">
-                <DialogTitle>Business profile</DialogTitle>
-                <DialogDescription>
-                  Ten questions that tune Milōn to your business
-                </DialogDescription>
-              </DialogHeader>
-              <ProfileFunnel
-                mode={firstRunStep === "pick-type" ? "first-run" : "retake"}
-                initial={operatingProfile}
-                initialFyStartMonth={operatingProfile?.fyStartMonth ?? 3}
-                onCancel={firstRunStep === "pick-type" ? undefined : () => setShowOnboarding(false)}
-                onComplete={async (profile) => {
-                  setBtSaveError(null);
-                  const stamped = stampProfileProvenance(profile, "owner", undefined);
-                  setOperatingProfile(stamped);
-                  setBusinessTypeId(stamped.businessTypeId);
-                  if (effectiveClientId) {
-                    setBtSaving(true);
-                    const { error } = await supabase
-                      .from("clients")
-                      .update({
-                        business_type: stamped.businessTypeId,
-                        operating_profile: stamped as unknown as Record<string, unknown>,
-                        financial_year_start_month: stamped.fyStartMonth,
-                      } as never)
-                      .eq("id", effectiveClientId);
-                    setBtSaving(false);
-                    if (error) {
-                      setBtSaveError("Could not save your profile — please try again.");
-                      return;
+              <DialogContent
+                onInteractOutside={
+                  firstRunStep === "pick-type" ? (e) => e.preventDefault() : undefined
+                }
+                onEscapeKeyDown={
+                  firstRunStep === "pick-type" ? (e) => e.preventDefault() : undefined
+                }
+                className={`flex h-[min(90vh,calc(100dvh-1rem))] max-h-[min(90vh,calc(100dvh-1rem))] w-[calc(100vw-1rem)] max-w-3xl flex-col gap-0 overflow-hidden border border-slate-800 bg-slate-950 p-4 text-slate-50 sm:p-6 ${firstRunStep === "pick-type" ? "[&>button:first-of-type]:hidden" : ""}`}
+              >
+                <DialogHeader className="sr-only">
+                  <DialogTitle>Business profile</DialogTitle>
+                  <DialogDescription>
+                    Ten questions that tune Milōn to your business
+                  </DialogDescription>
+                </DialogHeader>
+                <ProfileFunnel
+                  mode={firstRunStep === "pick-type" ? "first-run" : "retake"}
+                  initial={operatingProfile}
+                  initialFyStartMonth={operatingProfile?.fyStartMonth ?? 3}
+                  onCancel={
+                    firstRunStep === "pick-type" ? undefined : () => setShowOnboarding(false)
+                  }
+                  onComplete={async (profile) => {
+                    setBtSaveError(null);
+                    const stamped = stampProfileProvenance(profile, "owner", undefined);
+                    setOperatingProfile(stamped);
+                    setBusinessTypeId(stamped.businessTypeId);
+                    if (effectiveClientId) {
+                      setBtSaving(true);
+                      const { error } = await supabase
+                        .from("clients")
+                        .update({
+                          business_type: stamped.businessTypeId,
+                          operating_profile: stamped as unknown as Record<string, unknown>,
+                          financial_year_start_month: stamped.fyStartMonth,
+                        } as never)
+                        .eq("id", effectiveClientId);
+                      setBtSaving(false);
+                      if (error) {
+                        setBtSaveError("Could not save your profile — please try again.");
+                        return;
+                      }
                     }
-                  }
-                  setShowOnboarding(false);
-                  if (firstRunStep === "pick-type") {
-                    setFirstRunStep("first-data");
-                  } else {
-                    toast.success("Business profile updated");
-                  }
-                }}
-              />
-              {btSaveError && (
-                <p className="mt-2 rounded-md border border-red-800/50 bg-red-950/30 px-3 py-2 text-xs text-red-400">
-                  {btSaveError}
-                </p>
-              )}
-              {btSaving && (
-                <p className="flex items-center gap-2 text-xs text-slate-400">
-                  <Loader2 className="h-3.5 w-3.5 animate-spin text-[#d4a550]" /> Saving profile…
-                </p>
-              )}
-            </DialogContent>
-          </Dialog>
+                    setShowOnboarding(false);
+                    if (firstRunStep === "pick-type") {
+                      setFirstRunStep("first-data");
+                    } else {
+                      toast.success("Business profile updated");
+                    }
+                  }}
+                />
+                {btSaveError && (
+                  <p className="mt-2 rounded-md border border-red-800/50 bg-red-950/30 px-3 py-2 text-xs text-red-400">
+                    {btSaveError}
+                  </p>
+                )}
+                {btSaving && (
+                  <p className="flex items-center gap-2 text-xs text-slate-400">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin text-[#d4a550]" /> Saving profile…
+                  </p>
+                )}
+              </DialogContent>
+            </Dialog>
 
-          {/* First-data nudge — after profile: 3 months of bank statements first */}
-          <Dialog open={firstRunStep === "first-data"} onOpenChange={() => setFirstRunStep(null)}>
-            <DialogContent className="border border-slate-800 bg-slate-950 text-slate-50 max-w-md">
-              <DialogHeader>
-                <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#d4a550]">
-                  Step 2 of 2 · Bring in your numbers
-                </p>
-                <DialogTitle className="text-xl text-slate-100 mt-1">
-                  Upload 3 months of bank statements
-                </DialogTitle>
-                <DialogDescription className="text-slate-400">
-                  Fastest path: drop the last ~3 months of statements (add every bank account). We
-                  draft your P&amp;L, pre-fill budget, build a cash forecast, and show movements in
-                  balances — from one upload.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="flex flex-col gap-3 pt-2">
-                <button
-                  onClick={() => {
-                    setFirstRunStep(null);
-                    setShowBankDrafter(true);
-                  }}
-                  className="flex items-center gap-3 rounded-lg border border-[#d4a550]/40 bg-[#d4a550]/10 p-4 text-left hover:border-[#d4a550]/70 hover:bg-[#d4a550]/15 transition-all"
-                >
-                  <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#d4a550]/20 text-[#d4a550]">
-                    <Upload className="h-4 w-4" />
-                  </span>
-                  <div>
-                    <p className="font-semibold text-slate-100 text-sm">
-                      Upload bank statements (recommended)
-                    </p>
-                    <p className="text-[11px] text-slate-400 mt-0.5">
-                      PDF or CSV · ~3 months · AI drafts your figures
-                    </p>
-                  </div>
-                </button>
-                <button
-                  onClick={() => {
-                    setFirstRunStep(null);
-                    setShowFinData(true);
-                    setTimeout(() => uploadRef.current?.click(), 150);
-                  }}
-                  className="flex items-center gap-3 rounded-lg border border-slate-700 bg-slate-900 p-4 text-left hover:border-[#d4a550]/50 hover:bg-slate-800 transition-all"
-                >
-                  <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-700 text-slate-300">
-                    <Database className="h-4 w-4" />
-                  </span>
-                  <div>
-                    <p className="font-semibold text-slate-100 text-sm">
-                      Upload a financial statement instead
-                    </p>
-                    <p className="text-[11px] text-slate-400 mt-0.5">
-                      PDF, Excel or CSV management accounts
-                    </p>
-                  </div>
-                </button>
-                <button
-                  onClick={() => {
-                    setFirstRunStep(null);
-                    setShowQboDialog(true);
-                  }}
-                  className="flex items-center gap-3 rounded-lg border border-slate-700 bg-slate-900 p-4 text-left hover:border-[#d4a550]/50 hover:bg-slate-800 transition-all"
-                >
-                  <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400">
-                    <Plug2 className="h-4 w-4" />
-                  </span>
-                  <div>
-                    <p className="font-semibold text-slate-100 text-sm">
-                      Connect QuickBooks Online
-                    </p>
-                    <p className="text-[11px] text-slate-400 mt-0.5">
-                      Sync live books when QBO is configured (Xero not available yet)
-                    </p>
-                  </div>
-                </button>
-                <button
-                  onClick={() => {
-                    setFirstRunStep(null);
-                    setShowFinData(true);
-                    setShowInputs(true);
-                  }}
-                  className="text-xs text-slate-500 hover:text-slate-400 underline pt-1 text-center"
-                >
-                  Enter figures manually
-                </button>
-                <button
-                  onClick={() => setFirstRunStep(null)}
-                  className="text-xs text-slate-600 hover:text-slate-400 pt-0.5 text-center"
-                >
-                  Skip for now — add figures when you are ready
-                </button>
-              </div>
-            </DialogContent>
-          </Dialog>
-
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="mb-2 flex h-auto w-full gap-0 overflow-x-auto rounded-none border-0 border-b border-[#b7872a]/20 bg-transparent p-0 [-ms-overflow-style:none] [scrollbar-width:none] sm:grid sm:grid-cols-6 [&::-webkit-scrollbar]:hidden">
-              {[
-                { value: "today", label: "Business Health", short: "Health" },
-                { value: "waterfall", label: "Profit", short: "Profit" },
-                { value: "cash", label: "Cash Forecast", short: "Cash" },
-                { value: "budget", label: "Budget", short: "Budget" },
-                { value: "next", label: "Next moves", short: "Moves" },
-                { value: "tasks", label: "Action Plan", short: "Plan" },
-              ].map((t) => (
-                <TabsTrigger
-                  key={t.value}
-                  value={t.value}
-                  className="min-w-[4.5rem] flex-1 whitespace-nowrap rounded-none border-0 border-b-2 border-transparent bg-transparent px-2 py-2.5 text-center text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400 shadow-none transition-all data-[state=active]:border-[#d4a550] data-[state=active]:bg-transparent data-[state=active]:text-[#b8860b] data-[state=active]:shadow-none dark:text-slate-500 dark:data-[state=active]:text-[#d4a550] sm:min-w-0 sm:px-1 sm:text-[10px] sm:tracking-[0.18em]"
-                >
-                  <span className="sm:hidden">{t.short}</span>
-                  <span className="hidden sm:inline">{t.label}</span>
-                </TabsTrigger>
-              ))}
-            </TabsList>
-
-            {/* Simplified / Complex toggle — below tabs, never overlaid on the tab strip */}
-            <div className="relative z-10 mb-4 mt-1 flex justify-center">
-              <div className="flex items-center gap-0.5 rounded-full border border-slate-200/80 bg-slate-100/80 p-[3px] dark:border-white/10 dark:bg-white/5">
-                {(["simplified", "complex"] as const).map((m) => (
+            {/* First-data nudge — after profile: 3 months of bank statements first */}
+            <Dialog open={firstRunStep === "first-data"} onOpenChange={() => setFirstRunStep(null)}>
+              <DialogContent className="border border-slate-800 bg-slate-950 text-slate-50 max-w-md">
+                <DialogHeader>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#d4a550]">
+                    Step 2 of 2 · Bring in your numbers
+                  </p>
+                  <DialogTitle className="text-xl text-slate-100 mt-1">
+                    Upload 3 months of bank statements
+                  </DialogTitle>
+                  <DialogDescription className="text-slate-400">
+                    Fastest path: drop the last ~3 months of statements (add every bank account). We
+                    draft your P&amp;L, pre-fill budget, build a cash forecast, and show movements
+                    in balances — from one upload.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="flex flex-col gap-3 pt-2">
                   <button
-                    key={m}
-                    type="button"
                     onClick={() => {
-                      setViewMode(m);
-                      track("view_mode_toggled", {
-                        mode: m,
-                        surface: "owner_app",
-                        clientId: effectiveClientId,
-                      });
+                      setFirstRunStep(null);
+                      setShowBankDrafter(true);
                     }}
-                    className={`rounded-full px-4 py-[5px] text-[11px] font-semibold uppercase tracking-[0.08em] transition-all ${
-                      viewMode === m
-                        ? "bg-[#d4a550] text-[#0a0e1a] shadow-[0_2px_8px_rgba(212,165,80,0.35)]"
-                        : "bg-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400/70 dark:hover:text-slate-300"
-                    }`}
+                    className="flex items-center gap-3 rounded-lg border border-[#d4a550]/40 bg-[#d4a550]/10 p-4 text-left hover:border-[#d4a550]/70 hover:bg-[#d4a550]/15 transition-all"
                   >
-                    {m}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <TabsContent value="today" className="mt-0">
-              <TabErrorBoundary label="Business Health">
-              {viewMode === "simplified" ? (
-                <div className="pb-6">
-                  {/* Page header — aligned with rail top */}
-                  <div className="mb-3 flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h2 className="text-lg font-semibold tracking-tight text-slate-900 dark:text-white">
-                          Business Health
-                        </h2>
-                      </div>
-                      <p className="mt-0.5 text-[13px] text-slate-500 dark:text-slate-400">
-                        Your financial pulse at a glance.
+                    <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#d4a550]/20 text-[#d4a550]">
+                      <Upload className="h-4 w-4" />
+                    </span>
+                    <div>
+                      <p className="font-semibold text-slate-100 text-sm">
+                        Upload bank statements (recommended)
+                      </p>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        PDF or CSV · ~3 months · AI drafts your figures
                       </p>
                     </div>
-                    <div className="flex shrink-0 flex-col items-end gap-2 sm:flex-row sm:items-start">
-                      <div className="sm:hidden">
-                        <ReviewSignoffBadge
-                          signoff={financialsSignoff}
-                          scope="financials"
-                          isStale={computeIsStale(
-                            financialsSignoff,
-                            clientMeta?.financials_updated_at ?? null,
-                          )}
-                          placement="corner"
-                        />
-                      </div>
-                      {hasRealFinancials ? (
-                      <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[0.16em] text-emerald-700 dark:text-emerald-400">
-                        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
-                        Live ·{" "}
-                        {new Date()
-                          .toLocaleDateString("en-ZA", {
-                            day: "2-digit",
-                            month: "short",
-                            year: "numeric",
-                          })
-                          .toUpperCase()}
-                      </span>
-                    ) : (
-                      <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:border-slate-700 dark:bg-slate-800/60">
-                        No data yet
-                      </span>
-                    )}
-                    </div>
-                  </div>
-
-                  {/* No-data empty state — shown until owner uploads or enters real financials */}
-                  {!hasRealFinancials && !actingClientId ? (
+                  </button>
+                  <button
+                    onClick={() => {
+                      setFirstRunStep(null);
+                      setShowFinData(true);
+                      setTimeout(() => uploadRef.current?.click(), 150);
+                    }}
+                    className="flex items-center gap-3 rounded-lg border border-slate-700 bg-slate-900 p-4 text-left hover:border-[#d4a550]/50 hover:bg-slate-800 transition-all"
+                  >
+                    <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-700 text-slate-300">
+                      <Database className="h-4 w-4" />
+                    </span>
                     <div>
-                      <div className="founder-overview-grid grid w-full items-start gap-4 lg:grid-cols-[minmax(0,1fr)_280px] xl:grid-cols-[minmax(0,1fr)_300px]">
-                        <div className="flex w-full flex-col items-center gap-5 rounded-xl border border-dashed border-slate-200 bg-white/60 px-4 py-10 dark:border-slate-700 dark:bg-slate-900/40">
-                          <div className="relative flex h-36 w-36 items-center justify-center">
-                            <div className="absolute inset-0 rounded-full border-2 border-dashed border-[#d4a550]/25" />
-                            <div className="absolute inset-5 rounded-full border border-[#d4a550]/15" />
-                            <div className="flex flex-col items-center gap-1">
-                              <span className="text-3xl font-bold text-slate-400">—</span>
-                              <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">
-                                No score yet
-                              </span>
-                            </div>
+                      <p className="font-semibold text-slate-100 text-sm">
+                        Upload a financial statement instead
+                      </p>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        PDF, Excel or CSV management accounts
+                      </p>
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setFirstRunStep(null);
+                      setShowQboDialog(true);
+                    }}
+                    className="flex items-center gap-3 rounded-lg border border-slate-700 bg-slate-900 p-4 text-left hover:border-[#d4a550]/50 hover:bg-slate-800 transition-all"
+                  >
+                    <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400">
+                      <Plug2 className="h-4 w-4" />
+                    </span>
+                    <div>
+                      <p className="font-semibold text-slate-100 text-sm">
+                        Connect QuickBooks Online
+                      </p>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        Sync live books when QBO is configured (Xero not available yet)
+                      </p>
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setFirstRunStep(null);
+                      setShowFinData(true);
+                      setShowInputs(true);
+                    }}
+                    className="text-xs text-slate-500 hover:text-slate-400 underline pt-1 text-center"
+                  >
+                    Enter figures manually
+                  </button>
+                  <button
+                    onClick={() => setFirstRunStep(null)}
+                    className="text-xs text-slate-600 hover:text-slate-400 pt-0.5 text-center"
+                  >
+                    Skip for now — add figures when you are ready
+                  </button>
+                </div>
+              </DialogContent>
+            </Dialog>
+
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+              <TabsList className="mb-2 flex h-auto w-full gap-0 overflow-x-auto rounded-none border-0 border-b border-[#b7872a]/20 bg-transparent p-0 [-ms-overflow-style:none] [scrollbar-width:none] sm:grid sm:grid-cols-6 [&::-webkit-scrollbar]:hidden">
+                {[
+                  { value: "today", label: "Business Health", short: "Health" },
+                  { value: "waterfall", label: "Profit", short: "Profit" },
+                  { value: "cash", label: "Cash Forecast", short: "Cash" },
+                  { value: "budget", label: "Budget", short: "Budget" },
+                  { value: "next", label: "Next moves", short: "Moves" },
+                  { value: "tasks", label: "Action Plan", short: "Plan" },
+                ].map((t) => (
+                  <TabsTrigger
+                    key={t.value}
+                    value={t.value}
+                    className="min-w-[4.5rem] flex-1 whitespace-nowrap rounded-none border-0 border-b-2 border-transparent bg-transparent px-2 py-2.5 text-center text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400 shadow-none transition-all data-[state=active]:border-[#d4a550] data-[state=active]:bg-transparent data-[state=active]:text-[#b8860b] data-[state=active]:shadow-none dark:text-slate-500 dark:data-[state=active]:text-[#d4a550] sm:min-w-0 sm:px-1 sm:text-[10px] sm:tracking-[0.18em]"
+                  >
+                    <span className="sm:hidden">{t.short}</span>
+                    <span className="hidden sm:inline">{t.label}</span>
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+
+              {/* Simplified / Complex toggle — below tabs, never overlaid on the tab strip */}
+              <div className="relative z-10 mb-4 mt-1 flex justify-center">
+                <div className="flex items-center gap-0.5 rounded-full border border-slate-200/80 bg-slate-100/80 p-[3px] dark:border-white/10 dark:bg-white/5">
+                  {(["simplified", "complex"] as const).map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => {
+                        setViewMode(m);
+                        track("view_mode_toggled", {
+                          mode: m,
+                          surface: "owner_app",
+                          clientId: effectiveClientId,
+                        });
+                      }}
+                      className={`rounded-full px-4 py-[5px] text-[11px] font-semibold uppercase tracking-[0.08em] transition-all ${
+                        viewMode === m
+                          ? "bg-[#d4a550] text-[#0a0e1a] shadow-[0_2px_8px_rgba(212,165,80,0.35)]"
+                          : "bg-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400/70 dark:hover:text-slate-300"
+                      }`}
+                    >
+                      {m}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <TabsContent value="today" className="mt-0">
+                <TabErrorBoundary label="Business Health">
+                  {viewMode === "simplified" ? (
+                    <div className="pb-6">
+                      {/* Page header — aligned with rail top */}
+                      <div className="mb-3 flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h2 className="text-lg font-semibold tracking-tight text-slate-900 dark:text-white">
+                              Business Health
+                            </h2>
                           </div>
-                          <div className="max-w-sm text-center">
-                            <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100">
-                              Add your financials to see your score
-                            </h3>
-                            <p className="mt-1.5 text-sm text-slate-500">
-                              Upload a statement or enter figures manually. MILŌN calculates your
-                              health score and highest-impact first move instantly.
-                            </p>
+                          <p className="mt-0.5 text-[13px] text-slate-500 dark:text-slate-400">
+                            Your financial pulse at a glance.
+                          </p>
+                        </div>
+                        <div className="flex shrink-0 flex-col items-end gap-2 sm:flex-row sm:items-start">
+                          <div className="sm:hidden">
+                            <ReviewSignoffBadge
+                              signoff={financialsSignoff}
+                              scope="financials"
+                              isStale={computeIsStale(
+                                financialsSignoff,
+                                clientMeta?.financials_updated_at ?? null,
+                              )}
+                              placement="corner"
+                            />
                           </div>
-                          {userRole !== "client_member" ? (
-                            <div className="flex w-full max-w-sm flex-col gap-2.5 sm:flex-row">
-                              <button
-                                onClick={() => {
-                                  setShowFinData(true);
-                                  setTimeout(() => uploadRef.current?.click(), 150);
-                                }}
-                                className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-[#b7872a] px-4 py-2.5 text-sm font-semibold text-white transition-all hover:bg-[#d4a550]"
-                              >
-                                <Upload className="h-4 w-4" />
-                                Upload statement
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setShowFinData(true);
-                                  setShowInputs(true);
-                                }}
-                                className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
-                              >
-                                <Database className="h-4 w-4" />
-                                Enter manually
-                              </button>
-                            </div>
+                          {hasRealFinancials ? (
+                            <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[0.16em] text-emerald-700 dark:text-emerald-400">
+                              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
+                              Live ·{" "}
+                              {formatDate(new Date(), boardMarket, {
+                                day: "2-digit",
+                                month: "short",
+                                year: "numeric",
+                              }).toUpperCase()}
+                            </span>
                           ) : (
-                            <p className="max-w-sm text-center text-sm text-slate-500">
-                              Financial data hasn't been added yet. The owner will set this up.
-                            </p>
+                            <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:border-slate-700 dark:bg-slate-800/60">
+                              No data yet
+                            </span>
                           )}
                         </div>
-                        <OverviewRail
-                          healthBand={null}
-                          weekChanges={[]}
-                          cashTrajectory={null}
-                          onOpenCash={() => setActiveTab("cash")}
-                          onOpenMoves={() => setActiveTab("next")}
-                          onOpenBenchmarks={() => {
-                            setActiveTab("today");
-                            setViewMode("complex");
-                          }}
-                          industryPulse={<IndustryPulse industry={industryLabel} vertical />}
-                        />
                       </div>
-                      <IndustryNewsBand industry={industryLabel} />
+
+                      {/* No-data empty state — shown until owner uploads or enters real financials */}
+                      {!hasRealFinancials && !actingClientId ? (
+                        <div>
+                          <div className="founder-overview-grid grid w-full items-start gap-4 lg:grid-cols-[minmax(0,1fr)_280px] xl:grid-cols-[minmax(0,1fr)_300px]">
+                            <div className="flex w-full flex-col items-center gap-5 rounded-xl border border-dashed border-slate-200 bg-white/60 px-4 py-10 dark:border-slate-700 dark:bg-slate-900/40">
+                              <div className="relative flex h-36 w-36 items-center justify-center">
+                                <div className="absolute inset-0 rounded-full border-2 border-dashed border-[#d4a550]/25" />
+                                <div className="absolute inset-5 rounded-full border border-[#d4a550]/15" />
+                                <div className="flex flex-col items-center gap-1">
+                                  <span className="text-3xl font-bold text-slate-400">—</span>
+                                  <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">
+                                    No score yet
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="max-w-sm text-center">
+                                <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100">
+                                  Add your financials to see your score
+                                </h3>
+                                <p className="mt-1.5 text-sm text-slate-500">
+                                  Upload a statement or enter figures manually. MILŌN calculates
+                                  your health score and highest-impact first move instantly.
+                                </p>
+                              </div>
+                              {userRole !== "client_member" ? (
+                                <div className="flex w-full max-w-sm flex-col gap-2.5 sm:flex-row">
+                                  <button
+                                    onClick={() => {
+                                      setShowFinData(true);
+                                      setTimeout(() => uploadRef.current?.click(), 150);
+                                    }}
+                                    className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-[#b7872a] px-4 py-2.5 text-sm font-semibold text-white transition-all hover:bg-[#d4a550]"
+                                  >
+                                    <Upload className="h-4 w-4" />
+                                    Upload statement
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setShowFinData(true);
+                                      setShowInputs(true);
+                                    }}
+                                    className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
+                                  >
+                                    <Database className="h-4 w-4" />
+                                    Enter manually
+                                  </button>
+                                </div>
+                              ) : (
+                                <p className="max-w-sm text-center text-sm text-slate-500">
+                                  Financial data hasn't been added yet. The owner will set this up.
+                                </p>
+                              )}
+                            </div>
+                            <OverviewRail
+                              healthBand={null}
+                              weekChanges={[]}
+                              cashTrajectory={null}
+                              onOpenCash={() => setActiveTab("cash")}
+                              onOpenMoves={() => setActiveTab("next")}
+                              onOpenBenchmarks={() => {
+                                setActiveTab("today");
+                                setViewMode("complex");
+                              }}
+                              industryPulse={<IndustryPulse industry={industryLabel} vertical />}
+                            />
+                          </div>
+                          <IndustryNewsBand industry={industryLabel} />
+                        </div>
+                      ) : (
+                        <div>
+                          <div className="founder-overview-grid grid w-full items-start gap-4 lg:grid-cols-[minmax(0,1fr)_280px] xl:grid-cols-[minmax(0,1fr)_300px]">
+                            {/* Main column */}
+                            <section className="flex min-w-0 flex-col gap-3">
+                              <div className="relative rounded-xl border border-slate-200/90 bg-white px-3 py-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)] dark:border-white/10 dark:bg-[#0f172a]/40 dark:shadow-none sm:px-5">
+                                <div className="pointer-events-none absolute right-2 top-2 z-20 hidden sm:block sm:right-3 sm:top-3">
+                                  <ReviewSignoffBadge
+                                    signoff={financialsSignoff}
+                                    scope="financials"
+                                    isStale={computeIsStale(
+                                      financialsSignoff,
+                                      clientMeta?.financials_updated_at ?? null,
+                                    )}
+                                    placement="corner"
+                                  />
+                                </div>
+                                <SphereHero
+                                  compact
+                                  overallHealth={avgHealth}
+                                  displayStatus={overallHealth.displayStatus}
+                                  pillars={spherePillars}
+                                  caption={overviewCaption}
+                                  topPriority={
+                                    nextSteps[0]
+                                      ? {
+                                          title: nextSteps[0].title,
+                                          description:
+                                            nextSteps[0].key === "debtorDays"
+                                              ? "Cash conversion is your biggest constraint."
+                                              : `Your ${nextSteps[0].ratioName} is your highest-impact lever right now.`,
+                                          actions: nextSteps[0].actions,
+                                          impactLabel: nextMoveImpactLabel,
+                                        }
+                                      : {
+                                          title: "Upload your financial data",
+                                          description:
+                                            "Add your figures to get a personalised score and first move.",
+                                        }
+                                  }
+                                  onTopPriority={() => setActiveTab("next")}
+                                />
+                              </div>
+
+                              <div
+                                id="ask-ai-overview"
+                                className="min-h-[88px] w-full rounded-xl border border-[#b7872a]/35 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)] dark:bg-[#0a1020]/80"
+                              />
+                            </section>
+
+                            {/* Insight rail — pulse metrics + compact cards only */}
+                            <OverviewRail
+                              healthBand={healthBand}
+                              positionPercentile={positionPercentile}
+                              weekChanges={weekChanges}
+                              cashTrajectory={cashTrajectory}
+                              onOpenCash={() => setActiveTab("cash")}
+                              onOpenMoves={() => setActiveTab("next")}
+                              onOpenBenchmarks={() => {
+                                setActiveTab("today");
+                                setViewMode("complex");
+                              }}
+                              industryPulse={<IndustryPulse industry={industryLabel} vertical />}
+                            />
+                          </div>
+                          <IndustryNewsBand industry={industryLabel} />
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <div>
-                      <div className="founder-overview-grid grid w-full items-start gap-4 lg:grid-cols-[minmax(0,1fr)_280px] xl:grid-cols-[minmax(0,1fr)_300px]">
-                        {/* Main column */}
-                        <section className="flex min-w-0 flex-col gap-3">
-                          <div className="relative rounded-xl border border-slate-200/90 bg-white px-3 py-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)] dark:border-white/10 dark:bg-[#0f172a]/40 dark:shadow-none sm:px-5">
-                            <div className="pointer-events-none absolute right-2 top-2 z-20 hidden sm:block sm:right-3 sm:top-3">
-                              <ReviewSignoffBadge
-                                signoff={financialsSignoff}
-                                scope="financials"
-                                isStale={computeIsStale(
-                                  financialsSignoff,
-                                  clientMeta?.financials_updated_at ?? null,
-                                )}
-                                placement="corner"
-                              />
-                            </div>
-                            <SphereHero
-                              compact
-                              overallHealth={avgHealth}
-                              displayStatus={overallHealth.displayStatus}
-                              pillars={spherePillars}
-                              caption={overviewCaption}
-                              topPriority={
-                                nextSteps[0]
-                                  ? {
-                                      title: nextSteps[0].title,
-                                      description:
-                                        nextSteps[0].key === "debtorDays"
-                                          ? "Cash conversion is your biggest constraint."
-                                          : `Your ${nextSteps[0].ratioName} is your highest-impact lever right now.`,
-                                      actions: nextSteps[0].actions,
-                                      impactLabel: nextMoveImpactLabel,
-                                    }
-                                  : {
-                                      title: "Upload your financial data",
-                                      description:
-                                        "Add your figures to get a personalised score and first move.",
-                                    }
-                              }
-                              onTopPriority={() => setActiveTab("next")}
-                            />
+                      <OwnerTabSignoffRow
+                        label="Financial Ratios"
+                        signoff={financialsSignoff}
+                        scope="financials"
+                        isStale={computeIsStale(
+                          financialsSignoff,
+                          clientMeta?.financials_updated_at ?? null,
+                        )}
+                      />
+                      {!hasRealFinancials && !actingClientId && (
+                        <div className="mb-4 flex items-center gap-3 rounded-lg border border-amber-700/40 bg-amber-950/20 px-4 py-2.5 text-xs text-amber-300">
+                          <span className="text-amber-400">⚠</span>
+                          <span>
+                            <span className="font-semibold">No financial data yet</span> — ratios
+                            below show zero or undefined until figures are added.{" "}
+                            {userRole !== "client_member" ? (
+                              <>
+                                <button
+                                  onClick={() => {
+                                    setShowFinData(true);
+                                    setTimeout(() => uploadRef.current?.click(), 150);
+                                  }}
+                                  className="underline hover:text-amber-200"
+                                >
+                                  Upload your statement
+                                </button>{" "}
+                                or{" "}
+                                <button
+                                  onClick={() => {
+                                    setShowFinData(true);
+                                    setShowInputs(true);
+                                  }}
+                                  className="underline hover:text-amber-200"
+                                >
+                                  enter figures manually
+                                </button>{" "}
+                                to see your real score.
+                              </>
+                            ) : (
+                              "The owner will add financial data."
+                            )}
+                          </span>
+                        </div>
+                      )}
+                      <div className="space-y-3">
+                        {/* Break-even callout */}
+                        {isFinite(breakevenRevenue) && breakevenRevenue > 0 && (
+                          <div className="rounded-md border border-amber-800/40 bg-amber-950/20 px-4 py-2 text-xs text-amber-200 flex items-center gap-2">
+                            <span className="text-amber-400">⚡</span>
+                            Estimated break-even revenue:{" "}
+                            <span className="font-mono font-semibold ml-1">
+                              R{breakevenRevenue.toFixed(0)}
+                            </span>
                           </div>
+                        )}
 
+                        {/* PPE movement callout — only shown when PPE inputs are provided */}
+                        {isFinite(netPpe) && (
+                          <div className="rounded-md border border-slate-700/60 bg-slate-800/30 px-4 py-3 text-xs text-slate-300">
+                            <div className="mb-1.5 font-semibold text-slate-200 uppercase tracking-wide text-[10px]">
+                              PPE Movement
+                            </div>
+                            <div className="grid grid-cols-2 gap-x-6 gap-y-1 sm:grid-cols-4">
+                              <div>
+                                <span className="text-slate-500">Net PPE (current)</span>
+                                <div className="font-mono text-slate-200">
+                                  R{netPpe.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                                </div>
+                              </div>
+                              {isFinite(priorNetPpe) && (
+                                <div>
+                                  <span className="text-slate-500">Net PPE (prior)</span>
+                                  <div className="font-mono text-slate-200">
+                                    R
+                                    {priorNetPpe.toLocaleString(undefined, {
+                                      maximumFractionDigits: 0,
+                                    })}
+                                  </div>
+                                </div>
+                              )}
+                              {isFinite(ppeMovement) && (
+                                <div>
+                                  <span className="text-slate-500">PPE Movement</span>
+                                  <div
+                                    className={`font-mono font-semibold ${ppeMovement >= 0 ? "text-emerald-400" : "text-red-400"}`}
+                                  >
+                                    {ppeMovement >= 0 ? "+" : ""}R
+                                    {ppeMovement.toLocaleString(undefined, {
+                                      maximumFractionDigits: 0,
+                                    })}
+                                  </div>
+                                </div>
+                              )}
+                              {isFinite(impliedCapex) && (
+                                <div>
+                                  <span className="text-slate-500">Implied CAPEX</span>
+                                  <div className="font-mono text-slate-200">
+                                    R
+                                    {impliedCapex.toLocaleString(undefined, {
+                                      maximumFractionDigits: 0,
+                                    })}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Ratio section tables */}
+                        {(
+                          [
+                            {
+                              id: "profit",
+                              title: "Profit Drivers",
+                              desc: "How your business converts sales into profit",
+                              rows: [
+                                { sub: "Revenue" },
+                                { key: "revenueGrowth", indent: true },
+                                { key: "salesPerEmployee", indent: true },
+                                { sub: "Margins" },
+                                { key: "grossMargin", indent: true },
+                                { key: "directCostsRatio", indent: true },
+                                { key: "operatingMargin", indent: true },
+                                { key: "netMargin", indent: true },
+                                { sub: "Operating Expenses (OpEx)" },
+                                { key: "fixedCostRatio", indent: true },
+                                { key: "dol", indent: true },
+                                { sub: "Below-the-Line" },
+                                { key: "interestBurden", indent: true },
+                                { key: "taxBurden", indent: true },
+                              ],
+                            },
+                            {
+                              id: "asset",
+                              title: "Asset Productivity",
+                              desc: "How efficiently assets generate revenue and return",
+                              rows: [
+                                { sub: "Returns" },
+                                { key: "assetTurnover", indent: true },
+                                { key: "roa", indent: true },
+                                { sub: "Working Capital Utilisation" },
+                                { key: "workingCapitalUtilization", indent: true },
+                                { key: "workingCapitalDays", indent: true },
+                                { sub: "Fixed Capital Utilisation" },
+                                { key: "fixedCapitalUtilization", indent: true },
+                                { key: "inventoryDays", indent: true },
+                                { sub: "Capex" },
+                                { key: "capexIntensity", indent: true },
+                                { key: "assetReinvestmentRatio", indent: true },
+                              ],
+                            },
+                            {
+                              id: "leverage",
+                              title: "Leverage & Finance",
+                              desc: "Capital structure and shareholder return",
+                              rows: [
+                                { sub: "Funding Structure" },
+                                { key: "fundingStructure", indent: true },
+                                { key: "debtToEquity", indent: true },
+                                { key: "debtToAssets", indent: true },
+                                { sub: "Shareholder Return" },
+                                { key: "equityMultiplier", indent: true },
+                                { key: "roe", indent: true },
+                              ],
+                            },
+                            {
+                              id: "cash",
+                              title: "Cash Flow",
+                              desc: "Working capital cycle and cash quality",
+                              rows: [
+                                { sub: "Working Capital Cycle" },
+                                { key: "debtorDays", indent: true },
+                                { key: "creditorDays", indent: true },
+                                { sub: "Liquidity" },
+                                { key: "currentRatio", indent: true },
+                                { key: "workingCapitalFunding", indent: true },
+                                { sub: "Cash Quality" },
+                                { key: "ocfToEbitda", indent: true },
+                              ],
+                            },
+                            {
+                              id: "people",
+                              title: "People & Systems",
+                              desc: "Team productivity, customer dependency, and founder reliance",
+                              rows: [
+                                { key: "customerConcentration" },
+                                { key: "gpToLabor" },
+                                { key: "revenuePerFounderHour" },
+                              ],
+                            },
+                          ] as Array<{
+                            id: string;
+                            title: string;
+                            desc: string;
+                            rows: Array<{ key: RatioKey; indent?: boolean } | { sub: string }>;
+                          }>
+                        ).map((section) => (
                           <div
-                            id="ask-ai-overview"
-                            className="min-h-[88px] w-full rounded-xl border border-[#b7872a]/35 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)] dark:bg-[#0a1020]/80"
-                          />
-                        </section>
-
-                        {/* Insight rail — pulse metrics + compact cards only */}
-                        <OverviewRail
-                          healthBand={healthBand}
-                          positionPercentile={positionPercentile}
-                          weekChanges={weekChanges}
-                          cashTrajectory={cashTrajectory}
-                          onOpenCash={() => setActiveTab("cash")}
-                          onOpenMoves={() => setActiveTab("next")}
-                          onOpenBenchmarks={() => {
-                            setActiveTab("today");
-                            setViewMode("complex");
-                          }}
-                          industryPulse={<IndustryPulse industry={industryLabel} vertical />}
-                        />
+                            key={section.id}
+                            className="overflow-hidden rounded-xl border border-amber-900/15 bg-white/80 shadow-[0_10px_30px_rgba(109,79,22,0.06)] dark:border-slate-800 dark:bg-slate-900/50 dark:shadow-none"
+                          >
+                            <div className="flex items-baseline gap-3 border-b border-amber-900/10 bg-amber-50/60 px-4 py-3 dark:border-slate-700/50 dark:bg-slate-800/60">
+                              <span className="text-sm font-semibold text-slate-950 dark:text-slate-100">
+                                {section.title}
+                              </span>
+                              <span className="hidden text-xs text-slate-600 dark:text-slate-400 sm:inline">
+                                {section.desc}
+                              </span>
+                            </div>
+                            <table className="w-full text-sm">
+                              <thead>
+                                <tr className="border-b border-amber-900/10 bg-amber-50/25 dark:border-slate-800/80 dark:bg-slate-900/30">
+                                  <th className="w-44 px-4 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-500">
+                                    Metric
+                                  </th>
+                                  <th className="hidden px-4 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-500 md:table-cell">
+                                    Description
+                                  </th>
+                                  <th className="w-20 px-4 py-2 text-center text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-500">
+                                    Trend
+                                  </th>
+                                  <th className="w-20 px-4 py-2 text-center text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-500">
+                                    vs Industry
+                                  </th>
+                                  <th className="w-24 px-4 py-2 text-right text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-500">
+                                    Health
+                                  </th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {section.rows.map((row, ri) => {
+                                  if ("sub" in row) {
+                                    return (
+                                      <tr
+                                        key={`sub-${ri}`}
+                                        className="border-t border-amber-900/10 bg-amber-50/30 dark:border-slate-700/20 dark:bg-slate-800/25"
+                                      >
+                                        <td
+                                          colSpan={5}
+                                          className="pl-8 px-4 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-400"
+                                        >
+                                          ↳ {row.sub}
+                                        </td>
+                                      </tr>
+                                    );
+                                  }
+                                  const k = row.key;
+                                  const meta = RATIO_META[k];
+                                  const rawVal = valueMap[k].value;
+                                  const fmt = valueMap[k].format;
+                                  const health = healthMap[k];
+                                  const series = seriesFor(k);
+                                  const delta = pctDelta(series);
+                                  const bm = benchmarkFor(k);
+                                  const quintile = isFinite(health)
+                                    ? Math.min(5, Math.max(1, Math.ceil(health / 20)))
+                                    : 0;
+                                  const qCols = [
+                                    "bg-rose-600",
+                                    "bg-orange-500",
+                                    "bg-amber-400",
+                                    "bg-lime-500",
+                                    "bg-emerald-500",
+                                  ] as const;
+                                  const fmtd = !isFinite(rawVal)
+                                    ? "—"
+                                    : fmt === "pct"
+                                      ? `${(rawVal * 100).toFixed(1)}%`
+                                      : fmt === "x"
+                                        ? `${rawVal.toFixed(2)}×`
+                                        : fmt === "days"
+                                          ? `${Math.round(rawVal)} d`
+                                          : formatNumber(rawVal, boardMarket);
+                                  const hCls = !isFinite(health)
+                                    ? "text-slate-400"
+                                    : health >= 65
+                                      ? "text-emerald-400"
+                                      : health >= 40
+                                        ? "text-amber-400"
+                                        : "text-rose-400";
+                                  const hLabelCls = !isFinite(health)
+                                    ? "text-slate-500/70"
+                                    : health >= 65
+                                      ? "text-emerald-500/70"
+                                      : health >= 40
+                                        ? "text-amber-500/70"
+                                        : "text-rose-500/70";
+                                  return (
+                                    <tr
+                                      key={k}
+                                      data-row-id={k}
+                                      onClick={() => setOpenRatio(k)}
+                                      className={`cursor-pointer border-b border-amber-900/10 transition-colors dark:border-slate-800/40 ${row.indent ? "bg-amber-50/25 dark:bg-slate-800/10" : ""} ${k === highlightId ? "bg-[#f7d98a]/15 ring-2 ring-inset ring-[#b7872a] dark:bg-[rgba(247,217,138,0.08)]" : "hover:bg-amber-50/60 dark:hover:bg-slate-800/50"}`}
+                                    >
+                                      <td className="px-4 py-3">
+                                        <div className="text-[13px] font-medium leading-tight text-slate-950 dark:text-slate-100">
+                                          {meta.friendly}
+                                        </div>
+                                        <div className="mt-0.5 font-mono text-[10px] text-slate-600 dark:text-slate-500">
+                                          {localizeCopy(meta.techName, boardMarket)}
+                                        </div>
+                                        <div
+                                          className={`text-xs font-semibold tabular-nums mt-0.5 ${hCls}`}
+                                        >
+                                          {fmtd}
+                                        </div>
+                                      </td>
+                                      <td
+                                        className="hidden px-4 py-3 text-xs leading-relaxed text-slate-600 dark:text-slate-400 md:table-cell"
+                                        style={{ maxWidth: 240 }}
+                                      >
+                                        {meta.hint}
+                                      </td>
+                                      <td className="px-4 py-3 text-center">
+                                        {series.length >= 2 ? (
+                                          <div className="flex flex-col items-center gap-0.5">
+                                            <KpiTrendline values={series} width={52} height={18} />
+                                            {delta !== null && (
+                                              <span
+                                                className={`text-[9px] tabular-nums ${delta >= 0 ? "text-emerald-400" : "text-rose-400"}`}
+                                              >
+                                                {delta >= 0 ? "+" : ""}
+                                                {(delta * 100).toFixed(1)}%
+                                              </span>
+                                            )}
+                                          </div>
+                                        ) : (
+                                          <span className="text-[11px] text-slate-700">—</span>
+                                        )}
+                                      </td>
+                                      <td className="px-2 py-3 text-center">
+                                        {bm && isFinite(rawVal) ? (
+                                          <div
+                                            className="flex gap-[2px] justify-center"
+                                            title={`Industry benchmark: p25=${bm.p25} p50=${bm.p50} p75=${bm.p75}`}
+                                          >
+                                            {qCols.map((c, qi) => (
+                                              <div
+                                                key={qi}
+                                                className={`h-2 w-2.5 rounded-[2px] sm:h-2.5 sm:w-3.5 sm:rounded-[3px] ${qi === quintile - 1 ? c : "bg-slate-700/50"}`}
+                                              />
+                                            ))}
+                                          </div>
+                                        ) : (
+                                          <span className="text-[11px] text-slate-700">—</span>
+                                        )}
+                                      </td>
+                                      <td className="px-4 py-3 text-right">
+                                        <div className={`text-sm font-bold tabular-nums ${hCls}`}>
+                                          {isFinite(health) ? `${Math.round(health)}%` : "—"}
+                                        </div>
+                                        <div className={`text-[10px] ${hLabelCls}`}>
+                                          {isFinite(health)
+                                            ? health >= 65
+                                              ? "Healthy"
+                                              : health >= 40
+                                                ? "Watch"
+                                                : "Action"
+                                            : "—"}
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        ))}
                       </div>
-                      <IndustryNewsBand industry={industryLabel} />
                     </div>
                   )}
-                </div>
-              ) : (
-                <div>
+                </TabErrorBoundary>
+              </TabsContent>
+
+              <TabsContent value="waterfall">
+                <TabErrorBoundary label="Profit">
                   <OwnerTabSignoffRow
-                    label="Financial Ratios"
-                    signoff={financialsSignoff}
-                    scope="financials"
+                    label="Profitability Waterfall"
+                    signoff={profitabilitySignoff}
+                    scope="profitability"
                     isStale={computeIsStale(
-                      financialsSignoff,
+                      profitabilitySignoff,
                       clientMeta?.financials_updated_at ?? null,
                     )}
                   />
-                  {!hasRealFinancials && !actingClientId && (
-                    <div className="mb-4 flex items-center gap-3 rounded-lg border border-amber-700/40 bg-amber-950/20 px-4 py-2.5 text-xs text-amber-300">
-                      <span className="text-amber-400">⚠</span>
-                      <span>
-                        <span className="font-semibold">No financial data yet</span> — ratios below
-                        show zero or undefined until figures are added.{" "}
-                        {userRole !== "client_member" ? (
-                          <>
-                            <button
-                              onClick={() => {
-                                setShowFinData(true);
-                                setTimeout(() => uploadRef.current?.click(), 150);
-                              }}
-                              className="underline hover:text-amber-200"
-                            >
-                              Upload your statement
-                            </button>{" "}
-                            or{" "}
-                            <button
-                              onClick={() => {
-                                setShowFinData(true);
-                                setShowInputs(true);
-                              }}
-                              className="underline hover:text-amber-200"
-                            >
-                              enter figures manually
-                            </button>{" "}
-                            to see your real score.
-                          </>
-                        ) : (
-                          "The owner will add financial data."
+                  {/* Ask AI first — same widget as Business Health, scoped to this client */}
+                  <div
+                    id="ask-ai-waterfall"
+                    className="mb-4 w-full rounded-xl border border-[#b7872a]/30 bg-white dark:bg-[#0a1020]/80"
+                  />
+                  <div id="wizard-profit-walk">
+                    <ProfitabilityWaterfall
+                      clientName={actingClientName ?? undefined}
+                      clientId={effectiveClientId ?? undefined}
+                      reviewSignoff={stampFromSignoff(
+                        profitabilitySignoff,
+                        computeIsStale(
+                          profitabilitySignoff,
+                          clientMeta?.financials_updated_at ?? null,
+                        ),
+                      )}
+                      fallback={derivePeriodWaterfallFallback(v)}
+                    />
+                  </div>
+                  {/* Optional product-line mix — collapsed until the owner opts in */}
+                  <div className="mt-4">
+                    <ProductMixPanel
+                      totalRevenue={
+                        resolveWaterfallFigures(weeklyInputs, derivePeriodWaterfallFallback(v))
+                          .revenue
+                      }
+                    />
+                  </div>
+                  {/* Weekly inputs feed the waterfall — sit below so the chart stays the focus */}
+                  <div className="mt-4">
+                    <WeeklyInputTable />
+                  </div>
+                </TabErrorBoundary>
+              </TabsContent>
+
+              <TabsContent value="next">
+                <div className="mb-4 flex items-center gap-3 pb-3">
+                  <span className="text-[9px] font-semibold uppercase tracking-[0.25em] text-[#b8860b] dark:text-[#d4a550]/80">
+                    Next Moves
+                  </span>
+                  <span className="h-px flex-1 bg-gradient-to-r from-[#b7872a]/30 to-transparent" />
+                </div>
+                <div id="wizard-moves-list">
+                  <NextStepsPanel
+                    steps={nextSteps}
+                    simplified={viewMode === "simplified"}
+                    done={doneSteps}
+                    onToggleDone={toggleDone}
+                    onOpenSop={(k) => setOpenSop(k)}
+                    clientId={effectiveClientId}
+                    clientName={actingClientName ?? undefined}
+                    isOwner={userRole !== "client_member"}
+                    onGoToPlan={(k) => {
+                      setPlanFocusKey(k);
+                      setActiveTab("tasks");
+                    }}
+                  />
+                </div>
+              </TabsContent>
+
+              <TabsContent value="cash">
+                <div id="wizard-cash-panel">
+                  <OwnerTabSignoffRow
+                    label="Cash Forecast"
+                    signoff={cashForecastSignoff}
+                    scope="cash_forecast"
+                    isStale={computeIsStale(
+                      cashForecastSignoff,
+                      clientMeta?.last_forecast_at ?? null,
+                    )}
+                  />
+                  <TabErrorBoundary label="Cash Forecast">
+                    <Suspense
+                      fallback={
+                        <div className="p-6 text-sm text-slate-400">Loading cash forecast…</div>
+                      }
+                    >
+                      <CashForecastPanel
+                        clientId={effectiveClientId ?? undefined}
+                        clientName={actingClientName ?? undefined}
+                        simplified={viewMode === "simplified"}
+                        canSign={
+                          (userRole === "accountant" || userRole === "firm_admin") &&
+                          !!actingClientId
+                        }
+                        hideReadOnlyStamp
+                        reloadToken={cashForecastReloadToken}
+                      />
+                    </Suspense>
+                  </TabErrorBoundary>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="budget">
+                <div id="wizard-budget-panel">
+                  <OwnerTabSignoffRow
+                    label="Budget"
+                    signoff={budgetSignoff}
+                    scope="budget"
+                    isStale={computeIsStale(budgetSignoff, clientMeta?.budget_updated_at ?? null)}
+                  />
+                  <TabErrorBoundary label="Budget">
+                    <Suspense
+                      fallback={<div className="p-6 text-sm text-slate-400">Loading budget…</div>}
+                    >
+                      <BudgetPanel
+                        clientId={effectiveClientId ?? undefined}
+                        clientName={actingClientName ?? undefined}
+                        simplified={viewMode === "simplified"}
+                        role={
+                          userRole === "accountant" || userRole === "firm_admin"
+                            ? "accountant"
+                            : "owner"
+                        }
+                        canSign={
+                          (userRole === "accountant" || userRole === "firm_admin") &&
+                          !!actingClientId
+                        }
+                        hideReadOnlyStamp
+                        businessTypeId={businessTypeId}
+                        operatingProfile={operatingProfile}
+                        fyStartMonthDefault={
+                          operatingProfile?.fyStartMonth ??
+                          resolveMarket(coerceMarketSelection(workspaceMarket)).fyStartMonthDefault
+                        }
+                        onRetakeProfile={() => setShowOnboarding(true)}
+                        financials={{
+                          revenue: v.revenue,
+                          cogs: v.cogs,
+                          fixedCosts: v.fixedCosts,
+                          laborCost: v.laborCost,
+                          receivables: v.receivables,
+                          payables: v.payables,
+                          inventory: v.inventory,
+                          operatingCashflow: v.operatingCashflow,
+                        }}
+                        onPushedToCash={() => setCashForecastReloadToken((n) => n + 1)}
+                      />
+                    </Suspense>
+                  </TabErrorBoundary>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="tasks">
+                <OwnerTabSignoffRow
+                  label="Action Plan"
+                  signoff={actionPlanSignoff}
+                  scope="action_plan"
+                  isStale={false}
+                />
+                <div id="wizard-tasks-panel">
+                  <TabErrorBoundary label="Action Plan">
+                    <Suspense
+                      fallback={<div className="p-6 text-sm text-slate-400">Loading tasks…</div>}
+                    >
+                      {effectiveClientId ? (
+                        <ActionPlanPanel
+                          clientId={effectiveClientId}
+                          clientName={actingClientName ?? undefined}
+                          simplified={viewMode === "simplified"}
+                          isOwner={userRole !== "client_member"}
+                          moves={nextSteps.map((s) => ({
+                            key: s.key,
+                            title: s.title,
+                            ratioName: s.ratioName,
+                            impactLine: s.impactLine,
+                            health: Number.isFinite(s.health) ? s.health : Number.NaN,
+                          }))}
+                          onViewAnalysis={() => {
+                            setViewMode("complex");
+                            setActiveTab("today");
+                          }}
+                          focusMoveKey={planFocusKey}
+                          onFocusHandled={() => setPlanFocusKey(null)}
+                        />
+                      ) : (
+                        <div className="p-6 text-sm text-slate-400">No client linked yet.</div>
+                      )}
+                    </Suspense>
+                  </TabErrorBoundary>
+                </div>
+              </TabsContent>
+            </Tabs>
+          </div>
+
+          {/* Contextual Notes overlay — fixed to viewport, tab-scoped, persisted per client */}
+          <NoteLayer
+            clientId={effectiveClientId}
+            tab={activeTab}
+            clientName={actingClientName ?? undefined}
+            authorName={
+              (user?.user_metadata as { full_name?: string; name?: string } | null)?.full_name ??
+              (user?.user_metadata as { full_name?: string; name?: string } | null)?.name ??
+              user?.email ??
+              "User"
+            }
+          />
+
+          {/* Admin Dashboard Dialog — firm_admin only */}
+          <Dialog open={adminOpen} onOpenChange={setAdminOpen}>
+            <DialogContent className="max-h-[80vh] max-w-xl overflow-y-auto border border-[#d4a550]/30 bg-[#0d1628] text-slate-100">
+              <DialogHeader>
+                <DialogTitle className="text-base font-bold tracking-wide text-[#d4a550]">
+                  Admin · Activity Dashboard
+                </DialogTitle>
+                <DialogDescription className="text-[11px] text-slate-500">
+                  This-session snapshot. Lasting usage lives in Lighthouse → Usage.
+                </DialogDescription>
+              </DialogHeader>
+              <AdminDashboard />
+            </DialogContent>
+          </Dialog>
+
+          <Dialog open={openRatio !== null} onOpenChange={(o) => !o && setOpenRatio(null)}>
+            <DialogContent className="max-w-lg border-2 border-sky-500/50 bg-slate-900 text-slate-50">
+              {openRatio && (
+                <>
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center gap-3 text-2xl">
+                      <span className="text-3xl">{RATIO_META[openRatio].icon}</span>
+                      <span>{RATIO_META[openRatio].friendly}</span>
+                    </DialogTitle>
+                    <DialogDescription className="text-slate-400">
+                      {RATIO_META[openRatio].techName} ·{" "}
+                      {localizeCopy(RATIO_META[openRatio].formula, boardMarket)}
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="rounded-lg border border-slate-700/40 bg-slate-950/60 p-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs uppercase tracking-wider text-slate-400">
+                        Current
+                      </span>
+                      <span className="font-mono text-2xl font-bold text-slate-100">
+                        {formatVal(
+                          valueMap[openRatio].value,
+                          valueMap[openRatio].format,
+                          boardMarket,
                         )}
                       </span>
                     </div>
-                  )}
-                  <div className="space-y-3">
-                    {/* Break-even callout */}
-                    {isFinite(breakevenRevenue) && breakevenRevenue > 0 && (
-                      <div className="rounded-md border border-amber-800/40 bg-amber-950/20 px-4 py-2 text-xs text-amber-200 flex items-center gap-2">
-                        <span className="text-amber-400">⚡</span>
-                        Estimated break-even revenue:{" "}
-                        <span className="font-mono font-semibold ml-1">
-                          R{breakevenRevenue.toFixed(0)}
-                        </span>
-                      </div>
-                    )}
-
-                    {/* PPE movement callout — only shown when PPE inputs are provided */}
-                    {isFinite(netPpe) && (
-                      <div className="rounded-md border border-slate-700/60 bg-slate-800/30 px-4 py-3 text-xs text-slate-300">
-                        <div className="mb-1.5 font-semibold text-slate-200 uppercase tracking-wide text-[10px]">
-                          PPE Movement
-                        </div>
-                        <div className="grid grid-cols-2 gap-x-6 gap-y-1 sm:grid-cols-4">
-                          <div>
-                            <span className="text-slate-500">Net PPE (current)</span>
-                            <div className="font-mono text-slate-200">
-                              R{netPpe.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-                            </div>
-                          </div>
-                          {isFinite(priorNetPpe) && (
-                            <div>
-                              <span className="text-slate-500">Net PPE (prior)</span>
-                              <div className="font-mono text-slate-200">
-                                R
-                                {priorNetPpe.toLocaleString(undefined, {
-                                  maximumFractionDigits: 0,
-                                })}
-                              </div>
-                            </div>
-                          )}
-                          {isFinite(ppeMovement) && (
-                            <div>
-                              <span className="text-slate-500">PPE Movement</span>
-                              <div
-                                className={`font-mono font-semibold ${ppeMovement >= 0 ? "text-emerald-400" : "text-red-400"}`}
-                              >
-                                {ppeMovement >= 0 ? "+" : ""}R
-                                {ppeMovement.toLocaleString(undefined, {
-                                  maximumFractionDigits: 0,
-                                })}
-                              </div>
-                            </div>
-                          )}
-                          {isFinite(impliedCapex) && (
-                            <div>
-                              <span className="text-slate-500">Implied CAPEX</span>
-                              <div className="font-mono text-slate-200">
-                                R
-                                {impliedCapex.toLocaleString(undefined, {
-                                  maximumFractionDigits: 0,
-                                })}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Ratio section tables */}
-                    {(
-                      [
-                        {
-                          id: "profit",
-                          title: "Profit Drivers",
-                          desc: "How your business converts sales into profit",
-                          rows: [
-                            { sub: "Revenue" },
-                            { key: "revenueGrowth", indent: true },
-                            { key: "salesPerEmployee", indent: true },
-                            { sub: "Margins" },
-                            { key: "grossMargin", indent: true },
-                            { key: "directCostsRatio", indent: true },
-                            { key: "operatingMargin", indent: true },
-                            { key: "netMargin", indent: true },
-                            { sub: "Operating Expenses (OpEx)" },
-                            { key: "fixedCostRatio", indent: true },
-                            { key: "dol", indent: true },
-                            { sub: "Below-the-Line" },
-                            { key: "interestBurden", indent: true },
-                            { key: "taxBurden", indent: true },
-                          ],
-                        },
-                        {
-                          id: "asset",
-                          title: "Asset Productivity",
-                          desc: "How efficiently assets generate revenue and return",
-                          rows: [
-                            { sub: "Returns" },
-                            { key: "assetTurnover", indent: true },
-                            { key: "roa", indent: true },
-                            { sub: "Working Capital Utilisation" },
-                            { key: "workingCapitalUtilization", indent: true },
-                            { key: "workingCapitalDays", indent: true },
-                            { sub: "Fixed Capital Utilisation" },
-                            { key: "fixedCapitalUtilization", indent: true },
-                            { key: "inventoryDays", indent: true },
-                            { sub: "Capex" },
-                            { key: "capexIntensity", indent: true },
-                            { key: "assetReinvestmentRatio", indent: true },
-                          ],
-                        },
-                        {
-                          id: "leverage",
-                          title: "Leverage & Finance",
-                          desc: "Capital structure and shareholder return",
-                          rows: [
-                            { sub: "Funding Structure" },
-                            { key: "fundingStructure", indent: true },
-                            { key: "debtToEquity", indent: true },
-                            { key: "debtToAssets", indent: true },
-                            { sub: "Shareholder Return" },
-                            { key: "equityMultiplier", indent: true },
-                            { key: "roe", indent: true },
-                          ],
-                        },
-                        {
-                          id: "cash",
-                          title: "Cash Flow",
-                          desc: "Working capital cycle and cash quality",
-                          rows: [
-                            { sub: "Working Capital Cycle" },
-                            { key: "debtorDays", indent: true },
-                            { key: "creditorDays", indent: true },
-                            { sub: "Liquidity" },
-                            { key: "currentRatio", indent: true },
-                            { key: "workingCapitalFunding", indent: true },
-                            { sub: "Cash Quality" },
-                            { key: "ocfToEbitda", indent: true },
-                          ],
-                        },
-                        {
-                          id: "people",
-                          title: "People & Systems",
-                          desc: "Team productivity, customer dependency, and founder reliance",
-                          rows: [
-                            { key: "customerConcentration" },
-                            { key: "gpToLabor" },
-                            { key: "revenuePerFounderHour" },
-                          ],
-                        },
-                      ] as Array<{
-                        id: string;
-                        title: string;
-                        desc: string;
-                        rows: Array<{ key: RatioKey; indent?: boolean } | { sub: string }>;
-                      }>
-                    ).map((section) => (
-                      <div
-                        key={section.id}
-                        className="overflow-hidden rounded-xl border border-amber-900/15 bg-white/80 shadow-[0_10px_30px_rgba(109,79,22,0.06)] dark:border-slate-800 dark:bg-slate-900/50 dark:shadow-none"
-                      >
-                        <div className="flex items-baseline gap-3 border-b border-amber-900/10 bg-amber-50/60 px-4 py-3 dark:border-slate-700/50 dark:bg-slate-800/60">
-                          <span className="text-sm font-semibold text-slate-950 dark:text-slate-100">
-                            {section.title}
-                          </span>
-                          <span className="hidden text-xs text-slate-600 dark:text-slate-400 sm:inline">
-                            {section.desc}
-                          </span>
-                        </div>
-                        <table className="w-full text-sm">
-                          <thead>
-                            <tr className="border-b border-amber-900/10 bg-amber-50/25 dark:border-slate-800/80 dark:bg-slate-900/30">
-                              <th className="w-44 px-4 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-500">
-                                Metric
-                              </th>
-                              <th className="hidden px-4 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-500 md:table-cell">
-                                Description
-                              </th>
-                              <th className="w-20 px-4 py-2 text-center text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-500">
-                                Trend
-                              </th>
-                              <th className="w-20 px-4 py-2 text-center text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-500">
-                                vs Industry
-                              </th>
-                              <th className="w-24 px-4 py-2 text-right text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-500">
-                                Health
-                              </th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {section.rows.map((row, ri) => {
-                              if ("sub" in row) {
-                                return (
-                                  <tr
-                                    key={`sub-${ri}`}
-                                    className="border-t border-amber-900/10 bg-amber-50/30 dark:border-slate-700/20 dark:bg-slate-800/25"
-                                  >
-                                    <td
-                                      colSpan={5}
-                                      className="pl-8 px-4 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-400"
-                                    >
-                                      ↳ {row.sub}
-                                    </td>
-                                  </tr>
-                                );
-                              }
-                              const k = row.key;
-                              const meta = RATIO_META[k];
-                              const rawVal = valueMap[k].value;
-                              const fmt = valueMap[k].format;
-                              const health = healthMap[k];
-                              const series = seriesFor(k);
-                              const delta = pctDelta(series);
-                              const bm = benchmarkFor(k);
-                              const quintile = isFinite(health)
-                                ? Math.min(5, Math.max(1, Math.ceil(health / 20)))
-                                : 0;
-                              const qCols = [
-                                "bg-rose-600",
-                                "bg-orange-500",
-                                "bg-amber-400",
-                                "bg-lime-500",
-                                "bg-emerald-500",
-                              ] as const;
-                              const fmtd = !isFinite(rawVal)
-                                ? "—"
-                                : fmt === "pct"
-                                  ? `${(rawVal * 100).toFixed(1)}%`
-                                  : fmt === "x"
-                                    ? `${rawVal.toFixed(2)}×`
-                                    : fmt === "days"
-                                      ? `${Math.round(rawVal)} d`
-                                      : rawVal.toLocaleString("en-ZA", {
-                                          maximumFractionDigits: 0,
-                                        });
-                              const hCls = !isFinite(health)
-                                ? "text-slate-400"
-                                : health >= 65
-                                  ? "text-emerald-400"
-                                  : health >= 40
-                                    ? "text-amber-400"
-                                    : "text-rose-400";
-                              const hLabelCls = !isFinite(health)
-                                ? "text-slate-500/70"
-                                : health >= 65
-                                  ? "text-emerald-500/70"
-                                  : health >= 40
-                                    ? "text-amber-500/70"
-                                    : "text-rose-500/70";
-                              return (
-                                <tr
-                                  key={k}
-                                  data-row-id={k}
-                                  onClick={() => setOpenRatio(k)}
-                                  className={`cursor-pointer border-b border-amber-900/10 transition-colors dark:border-slate-800/40 ${row.indent ? "bg-amber-50/25 dark:bg-slate-800/10" : ""} ${k === highlightId ? "bg-[#f7d98a]/15 ring-2 ring-inset ring-[#b7872a] dark:bg-[rgba(247,217,138,0.08)]" : "hover:bg-amber-50/60 dark:hover:bg-slate-800/50"}`}
-                                >
-                                  <td className="px-4 py-3">
-                                    <div className="text-[13px] font-medium leading-tight text-slate-950 dark:text-slate-100">
-                                      {meta.friendly}
-                                    </div>
-                                    <div className="mt-0.5 font-mono text-[10px] text-slate-600 dark:text-slate-500">
-                                      {meta.techName}
-                                    </div>
-                                    <div
-                                      className={`text-xs font-semibold tabular-nums mt-0.5 ${hCls}`}
-                                    >
-                                      {fmtd}
-                                    </div>
-                                  </td>
-                                  <td
-                                    className="hidden px-4 py-3 text-xs leading-relaxed text-slate-600 dark:text-slate-400 md:table-cell"
-                                    style={{ maxWidth: 240 }}
-                                  >
-                                    {meta.hint}
-                                  </td>
-                                  <td className="px-4 py-3 text-center">
-                                    {series.length >= 2 ? (
-                                      <div className="flex flex-col items-center gap-0.5">
-                                        <KpiTrendline values={series} width={52} height={18} />
-                                        {delta !== null && (
-                                          <span
-                                            className={`text-[9px] tabular-nums ${delta >= 0 ? "text-emerald-400" : "text-rose-400"}`}
-                                          >
-                                            {delta >= 0 ? "+" : ""}
-                                            {(delta * 100).toFixed(1)}%
-                                          </span>
-                                        )}
-                                      </div>
-                                    ) : (
-                                      <span className="text-[11px] text-slate-700">—</span>
-                                    )}
-                                  </td>
-                                  <td className="px-2 py-3 text-center">
-                                    {bm && isFinite(rawVal) ? (
-                                      <div
-                                        className="flex gap-[2px] justify-center"
-                                        title={`Industry benchmark: p25=${bm.p25} p50=${bm.p50} p75=${bm.p75}`}
-                                      >
-                                        {qCols.map((c, qi) => (
-                                          <div
-                                            key={qi}
-                                            className={`h-2 w-2.5 rounded-[2px] sm:h-2.5 sm:w-3.5 sm:rounded-[3px] ${qi === quintile - 1 ? c : "bg-slate-700/50"}`}
-                                          />
-                                        ))}
-                                      </div>
-                                    ) : (
-                                      <span className="text-[11px] text-slate-700">—</span>
-                                    )}
-                                  </td>
-                                  <td className="px-4 py-3 text-right">
-                                    <div className={`text-sm font-bold tabular-nums ${hCls}`}>
-                                      {isFinite(health) ? `${Math.round(health)}%` : "—"}
-                                    </div>
-                                    <div className={`text-[10px] ${hLabelCls}`}>
-                                      {isFinite(health)
-                                        ? health >= 65
-                                          ? "Healthy"
-                                          : health >= 40
-                                            ? "Watch"
-                                            : "Action"
-                                        : "—"}
-                                    </div>
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    ))}
+                    <div className="mt-3">
+                      <HealthBar health={healthMap[openRatio]} />
+                    </div>
                   </div>
-                </div>
-              )}
-              </TabErrorBoundary>
-            </TabsContent>
-
-            <TabsContent value="waterfall">
-              <TabErrorBoundary label="Profit">
-              <OwnerTabSignoffRow
-                label="Profitability Waterfall"
-                signoff={profitabilitySignoff}
-                scope="profitability"
-                isStale={computeIsStale(
-                  profitabilitySignoff,
-                  clientMeta?.financials_updated_at ?? null,
-                )}
-              />
-              {/* Ask AI first — same widget as Business Health, scoped to this client */}
-              <div
-                id="ask-ai-waterfall"
-                className="mb-4 w-full rounded-xl border border-[#b7872a]/30 bg-white dark:bg-[#0a1020]/80"
-              />
-              <div id="wizard-profit-walk">
-                <ProfitabilityWaterfall
-                  clientName={actingClientName ?? undefined}
-                  clientId={effectiveClientId ?? undefined}
-                  reviewSignoff={stampFromSignoff(
-                    profitabilitySignoff,
-                    computeIsStale(profitabilitySignoff, clientMeta?.financials_updated_at ?? null),
-                  )}
-                  fallback={derivePeriodWaterfallFallback(v)}
-                />
-              </div>
-              {/* Optional product-line mix — collapsed until the owner opts in */}
-              <div className="mt-4">
-                <ProductMixPanel
-                  totalRevenue={
-                    resolveWaterfallFigures(weeklyInputs, derivePeriodWaterfallFallback(v)).revenue
-                  }
-                />
-              </div>
-              {/* Weekly inputs feed the waterfall — sit below so the chart stays the focus */}
-              <div className="mt-4">
-                <WeeklyInputTable />
-              </div>
-              </TabErrorBoundary>
-            </TabsContent>
-
-            <TabsContent value="next">
-              <div className="mb-4 flex items-center gap-3 pb-3">
-                <span className="text-[9px] font-semibold uppercase tracking-[0.25em] text-[#b8860b] dark:text-[#d4a550]/80">
-                  Next Moves
-                </span>
-                <span className="h-px flex-1 bg-gradient-to-r from-[#b7872a]/30 to-transparent" />
-              </div>
-              <div id="wizard-moves-list">
-                <NextStepsPanel
-                  steps={nextSteps}
-                  simplified={viewMode === "simplified"}
-                  done={doneSteps}
-                  onToggleDone={toggleDone}
-                  onOpenSop={(k) => setOpenSop(k)}
-                  clientId={effectiveClientId}
-                  clientName={actingClientName ?? undefined}
-                  isOwner={userRole !== "client_member"}
-                  onGoToPlan={(k) => {
-                    setPlanFocusKey(k);
-                    setActiveTab("tasks");
-                  }}
-                />
-              </div>
-            </TabsContent>
-
-            <TabsContent value="cash">
-              <div id="wizard-cash-panel">
-                <OwnerTabSignoffRow
-                  label="Cash Forecast"
-                  signoff={cashForecastSignoff}
-                  scope="cash_forecast"
-                  isStale={computeIsStale(
-                    cashForecastSignoff,
-                    clientMeta?.last_forecast_at ?? null,
-                  )}
-                />
-                <TabErrorBoundary label="Cash Forecast">
-                <Suspense
-                  fallback={
-                    <div className="p-6 text-sm text-slate-400">Loading cash forecast…</div>
-                  }
-                >
-                  <CashForecastPanel
-                    clientId={effectiveClientId ?? undefined}
-                    clientName={actingClientName ?? undefined}
-                    simplified={viewMode === "simplified"}
-                    canSign={
-                      (userRole === "accountant" || userRole === "firm_admin") && !!actingClientId
-                    }
-                    hideReadOnlyStamp
-                    reloadToken={cashForecastReloadToken}
-                  />
-                </Suspense>
-                </TabErrorBoundary>
-              </div>
-            </TabsContent>
-
-            <TabsContent value="budget">
-              <div id="wizard-budget-panel">
-                <OwnerTabSignoffRow
-                  label="Budget"
-                  signoff={budgetSignoff}
-                  scope="budget"
-                  isStale={computeIsStale(budgetSignoff, clientMeta?.budget_updated_at ?? null)}
-                />
-                <TabErrorBoundary label="Budget">
-                <Suspense
-                  fallback={<div className="p-6 text-sm text-slate-400">Loading budget…</div>}
-                >
-                  <BudgetPanel
-                    clientId={effectiveClientId ?? undefined}
-                    clientName={actingClientName ?? undefined}
-                    simplified={viewMode === "simplified"}
-                    role={
-                      userRole === "accountant" || userRole === "firm_admin"
-                        ? "accountant"
-                        : "owner"
-                    }
-                    canSign={
-                      (userRole === "accountant" || userRole === "firm_admin") && !!actingClientId
-                    }
-                    hideReadOnlyStamp
-                    businessTypeId={businessTypeId}
-                    operatingProfile={operatingProfile}
-                    fyStartMonthDefault={
-                      operatingProfile?.fyStartMonth ??
-                      resolveMarket(coerceMarketSelection(workspaceMarket)).fyStartMonthDefault
-                    }
-                    onRetakeProfile={() => setShowOnboarding(true)}
-                    financials={{
-                      revenue: v.revenue,
-                      cogs: v.cogs,
-                      fixedCosts: v.fixedCosts,
-                      laborCost: v.laborCost,
-                      receivables: v.receivables,
-                      payables: v.payables,
-                      inventory: v.inventory,
-                      operatingCashflow: v.operatingCashflow,
+                  <button
+                    onClick={() => {
+                      const k = openRatio;
+                      setOpenRatio(null);
+                      setOpenVideo(k);
                     }}
-                    onPushedToCash={() => setCashForecastReloadToken((n) => n + 1)}
-                  />
-                </Suspense>
-                </TabErrorBoundary>
-              </div>
-            </TabsContent>
-
-            <TabsContent value="tasks">
-              <OwnerTabSignoffRow
-                label="Action Plan"
-                signoff={actionPlanSignoff}
-                scope="action_plan"
-                isStale={false}
-              />
-              <div id="wizard-tasks-panel">
-                <TabErrorBoundary label="Action Plan">
-                  <Suspense
-                    fallback={<div className="p-6 text-sm text-slate-400">Loading tasks…</div>}
+                    className="flex w-full items-center justify-center gap-2 rounded-md border-2 border-sky-500/60 bg-gradient-to-r from-sky-600/20 to-sky-500/20 px-4 py-2.5 text-sm font-bold uppercase tracking-wider text-slate-200 transition-all hover:from-sky-600/40 hover:to-sky-500/40 hover:text-slate-50"
                   >
-                    {effectiveClientId ? (
-                      <ActionPlanPanel
-                        clientId={effectiveClientId}
-                        clientName={actingClientName ?? undefined}
-                        simplified={viewMode === "simplified"}
-                        isOwner={userRole !== "client_member"}
-                        moves={nextSteps.map((s) => ({
-                          key: s.key,
-                          title: s.title,
-                          ratioName: s.ratioName,
-                          impactLine: s.impactLine,
-                          health: Number.isFinite(s.health) ? s.health : Number.NaN,
-                        }))}
-                        onViewAnalysis={() => {
-                          setViewMode("complex");
-                          setActiveTab("today");
-                        }}
-                        focusMoveKey={planFocusKey}
-                        onFocusHandled={() => setPlanFocusKey(null)}
-                      />
-                    ) : (
-                      <div className="p-6 text-sm text-slate-400">No client linked yet.</div>
-                    )}
-                  </Suspense>
-                </TabErrorBoundary>
-              </div>
-            </TabsContent>
-          </Tabs>
-        </div>
+                    ▶ Explanation Video (5 min)
+                  </button>
+                  <div>
+                    <p className="mb-3 text-xs font-bold uppercase tracking-[0.2em] text-sky-400">
+                      Strategic Moves to Improve
+                    </p>
+                    <ol className="space-y-2">
+                      {RATIO_META[openRatio].steps.map((step, i) => (
+                        <li
+                          key={i}
+                          className="group flex items-start gap-3 rounded-md border border-slate-700/30 bg-slate-950/40 p-3 transition-all hover:border-sky-500/60 hover:bg-slate-900/30"
+                        >
+                          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-sky-500/60 bg-sky-500/10 font-mono text-xs font-bold text-sky-300">
+                            {i + 1}
+                          </span>
+                          <span className="text-sm text-slate-200">{step}</span>
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+                </>
+              )}
+            </DialogContent>
+          </Dialog>
 
-        {/* Contextual Notes overlay — fixed to viewport, tab-scoped, persisted per client */}
-        <NoteLayer
-          clientId={effectiveClientId}
-          tab={activeTab}
-          clientName={actingClientName ?? undefined}
-          authorName={
-            (user?.user_metadata as { full_name?: string; name?: string } | null)?.full_name ??
-            (user?.user_metadata as { full_name?: string; name?: string } | null)?.name ??
-            user?.email ??
-            "User"
-          }
-        />
+          {/* Explanation video dialog (placeholder until real videos shipped) */}
+          <Dialog open={openVideo !== null} onOpenChange={(o) => !o && setOpenVideo(null)}>
+            <DialogContent className="max-w-2xl border-2 border-sky-500/50 bg-slate-900 text-slate-50">
+              {openVideo && (
+                <>
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center gap-3 text-xl">
+                      <span className="text-2xl">{RATIO_META[openVideo].icon}</span>
+                      <span>{RATIO_META[openVideo].friendly} — Explanation Video</span>
+                    </DialogTitle>
+                    <DialogDescription className="text-slate-400">
+                      {RATIO_META[openVideo].techName} · ~5 min
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="relative flex aspect-video items-center justify-center overflow-hidden rounded-lg border-2 border-slate-700/40 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
+                    <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,hsl(210_90%_55%/0.08),transparent_70%)]" />
+                    <div className="relative text-center">
+                      <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full border-2 border-sky-500/60 bg-sky-500/10 text-3xl text-sky-300 shadow-[0_0_30px_-5px_rgb(245,158,11,0.5)]">
+                        ▶
+                      </div>
+                      <p className="mt-4 text-sm font-bold uppercase tracking-widest text-sky-300">
+                        Video Coming Soon
+                      </p>
+                      <p className="mt-1 text-xs text-slate-400">
+                        This explainer will be available soon.
+                      </p>
+                    </div>
+                  </div>
+                  <p className="rounded-md border border-slate-700/30 bg-slate-950/60 p-3 text-sm italic text-slate-300">
+                    {RATIO_META[openVideo].videoSummary}
+                  </p>
+                </>
+              )}
+            </DialogContent>
+          </Dialog>
 
-        {/* Admin Dashboard Dialog — firm_admin only */}
-        <Dialog open={adminOpen} onOpenChange={setAdminOpen}>
-          <DialogContent className="max-h-[80vh] max-w-xl overflow-y-auto border border-[#d4a550]/30 bg-[#0d1628] text-slate-100">
-            <DialogHeader>
-              <DialogTitle className="text-base font-bold tracking-wide text-[#d4a550]">
-                Admin · Activity Dashboard
-              </DialogTitle>
-              <DialogDescription className="text-[11px] text-slate-500">
-                This-session snapshot. Lasting usage lives in Lighthouse → Usage.
-              </DialogDescription>
-            </DialogHeader>
-            <AdminDashboard />
-          </DialogContent>
-        </Dialog>
-
-        <Dialog open={openRatio !== null} onOpenChange={(o) => !o && setOpenRatio(null)}>
-          <DialogContent className="max-w-lg border-2 border-sky-500/50 bg-slate-900 text-slate-50">
-            {openRatio && (
-              <>
-                <DialogHeader>
-                  <DialogTitle className="flex items-center gap-3 text-2xl">
-                    <span className="text-3xl">{RATIO_META[openRatio].icon}</span>
-                    <span>{RATIO_META[openRatio].friendly}</span>
+          {/* Financial data dialog — upload financials or connect accounting software */}
+          <Dialog open={showFinData} onOpenChange={setShowFinData}>
+            <DialogContent className="max-h-[85vh] max-w-3xl overflow-y-auto border border-amber-900/15 bg-white text-slate-950 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-50">
+              <DialogHeader>
+                <div className="flex items-center gap-3">
+                  <DialogTitle className="text-[15px] font-semibold uppercase tracking-[0.15em]">
+                    Financial Data
                   </DialogTitle>
-                  <DialogDescription className="text-slate-400">
-                    {RATIO_META[openRatio].techName} · {RATIO_META[openRatio].formula}
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="rounded-lg border border-slate-700/40 bg-slate-950/60 p-4">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs uppercase tracking-wider text-slate-400">Current</span>
-                    <span className="font-mono text-2xl font-bold text-slate-100">
-                      {formatVal(valueMap[openRatio].value, valueMap[openRatio].format)}
+                  {saveStatus === "saving" && (
+                    <span className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wider text-slate-400">
+                      <Loader2 className="h-3 w-3 animate-spin" /> Saving…
                     </span>
-                  </div>
-                  <div className="mt-3">
-                    <HealthBar health={healthMap[openRatio]} />
-                  </div>
+                  )}
+                  {saveStatus === "saved" && (
+                    <span className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+                      <Check className="h-3 w-3" /> Saved
+                    </span>
+                  )}
                 </div>
+                <DialogDescription className="text-xs text-slate-600 dark:text-slate-400">
+                  Bring in your figures — upload financial statements, or connect your accounting
+                  software. {UPLOAD_QUALITY_DISCLAIMER}
+                </DialogDescription>
+              </DialogHeader>
+              <input
+                ref={uploadRef}
+                type="file"
+                accept=".pdf,.csv,.xlsx,.xls,.txt"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) handleStatementUpload(f);
+                }}
+              />
+              <div className="grid gap-3 sm:grid-cols-2">
+                <button
+                  disabled={uploading}
+                  onClick={() => uploadRef.current?.click()}
+                  className="flex flex-col items-start gap-1.5 rounded-lg border border-amber-700/30 bg-amber-50 p-4 text-left transition-colors hover:border-amber-700/60 hover:bg-amber-100 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-[#b7872a]/60 dark:hover:bg-slate-800"
+                >
+                  <span className="flex items-center gap-2 text-sm font-semibold text-amber-900 dark:text-slate-100">
+                    {uploading ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Upload className="h-4 w-4" />
+                    )}
+                    {uploading ? "Reading…" : "Upload PDF financials"}
+                  </span>
+                  <span className="text-xs text-slate-600 dark:text-slate-400">
+                    PDF, CSV or Excel financial statements — figures are read automatically.
+                  </span>
+                </button>
                 <button
                   onClick={() => {
-                    const k = openRatio;
-                    setOpenRatio(null);
-                    setOpenVideo(k);
+                    setShowFinData(false);
+                    setShowQboDialog(true);
                   }}
-                  className="flex w-full items-center justify-center gap-2 rounded-md border-2 border-sky-500/60 bg-gradient-to-r from-sky-600/20 to-sky-500/20 px-4 py-2.5 text-sm font-bold uppercase tracking-wider text-slate-200 transition-all hover:from-sky-600/40 hover:to-sky-500/40 hover:text-slate-50"
+                  className="flex flex-col items-start gap-1.5 rounded-lg border border-amber-700/30 bg-amber-50 p-4 text-left transition-colors hover:border-amber-700/60 hover:bg-amber-100 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-[#b7872a]/60 dark:hover:bg-slate-800"
                 >
-                  ▶ Explanation Video (5 min)
+                  <span className="flex items-center gap-2 text-sm font-semibold text-amber-900 dark:text-slate-100">
+                    <Plug2 className="h-4 w-4" />
+                    Connect QuickBooks Online
+                  </span>
+                  <span className="text-xs text-slate-600 dark:text-slate-400">
+                    Sync live accounting data when QBO is configured for this workspace. Xero is not
+                    available yet.
+                  </span>
                 </button>
-                <div>
-                  <p className="mb-3 text-xs font-bold uppercase tracking-[0.2em] text-sky-400">
-                    Strategic Moves to Improve
-                  </p>
-                  <ol className="space-y-2">
-                    {RATIO_META[openRatio].steps.map((step, i) => (
-                      <li
-                        key={i}
-                        className="group flex items-start gap-3 rounded-md border border-slate-700/30 bg-slate-950/40 p-3 transition-all hover:border-sky-500/60 hover:bg-slate-900/30"
-                      >
-                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-sky-500/60 bg-sky-500/10 font-mono text-xs font-bold text-sky-300">
-                          {i + 1}
-                        </span>
-                        <span className="text-sm text-slate-200">{step}</span>
-                      </li>
+                <button
+                  onClick={() => {
+                    setShowFinData(false);
+                    setShowBankDrafter(true);
+                  }}
+                  className="flex flex-col items-start gap-1.5 rounded-lg border border-amber-700/30 bg-amber-50 p-4 text-left transition-colors hover:border-amber-700/60 hover:bg-amber-100 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-[#b7872a]/60 dark:hover:bg-slate-800"
+                >
+                  <span className="flex items-center gap-2 text-sm font-semibold text-amber-900 dark:text-slate-100">
+                    <Database className="h-4 w-4" />
+                    Draft financials from bank statements
+                  </span>
+                  <span className="text-xs text-slate-600 dark:text-slate-400">
+                    Upload statements and AI drafts a basic income statement for P&amp;L / ratios.
+                  </span>
+                </button>
+                <button
+                  onClick={async () => {
+                    setShowFinData(false);
+                    if (effectiveClientId) {
+                      const { data } = await supabase
+                        .from("clients")
+                        .select("cashflow")
+                        .eq("id", effectiveClientId)
+                        .maybeSingle();
+                      setExistingCashflowForBanks(
+                        (data?.cashflow as Record<string, unknown> | null) ?? null,
+                      );
+                    } else {
+                      setExistingCashflowForBanks(null);
+                    }
+                    setShowCashFromBanks(true);
+                  }}
+                  className="flex flex-col items-start gap-1.5 rounded-lg border border-amber-700/30 bg-amber-50 p-4 text-left transition-colors hover:border-amber-700/60 hover:bg-amber-100 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-[#b7872a]/60 dark:hover:bg-slate-800"
+                >
+                  <span className="flex items-center gap-2 text-sm font-semibold text-amber-900 dark:text-slate-100">
+                    <Database className="h-4 w-4" />
+                    Build cash forecast from bank statements
+                  </span>
+                  <span className="text-xs text-slate-600 dark:text-slate-400">
+                    Claude groups repeating cash movements; classify cadence, then publish to Cash
+                    Forecast.
+                  </span>
+                </button>
+              </div>
+              <div>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="px-2 text-xs text-slate-600 hover:text-slate-950 dark:text-slate-400 dark:hover:text-slate-100"
+                  onClick={() => setShowInputs((s) => !s)}
+                >
+                  {showInputs ? "▲ Hide manual entry" : "▼ Enter figures manually"}
+                </Button>
+                {showInputs && (
+                  <div className="mt-3 grid gap-x-6 gap-y-2 sm:grid-cols-2">
+                    {(
+                      [
+                        { k: "revenue", l: "Revenue" },
+                        { k: "cogs", l: "COGS" },
+                        { k: "ebit", l: "EBIT" },
+                        { k: "ebt", l: "EBT" },
+                        { k: "netIncome", l: "Net Income" },
+                        { k: "ebitda", l: "EBITDA" },
+                        { k: "operatingCashflow", l: "Operating Cash Flow" },
+                        { k: "totalAssets", l: "Total Assets" },
+                        { k: "equity", l: "Equity" },
+                        { k: "receivables", l: "Receivables" },
+                        { k: "inventory", l: "Inventory" },
+                        { k: "payables", l: "Payables" },
+                        { k: "fixedCosts", l: "Fixed Costs" },
+                        { k: "variableCosts", l: "Variable Costs" },
+                        { k: "laborCost", l: "Labor Cost" },
+                        { k: "top5Revenue", l: "Top-5 Customer Rev." },
+                        { k: "employees", l: "Employees" },
+                        { k: "founderHours", l: "Founder Hours/yr" },
+                        { k: "priorRevenue", l: "Prior Period Revenue" },
+                        { k: "currentAssets", l: "Current Assets" },
+                        { k: "currentLiabilities", l: "Current Liabilities" },
+                        { k: "capex", l: "Capital Expenditure" },
+                        { k: "ppeGross", l: "PPE at Cost (Gross)" },
+                        { k: "accumulatedDepreciation", l: "Accumulated Depreciation" },
+                        { k: "priorPpeGross", l: "Prior Year PPE (Gross)" },
+                        { k: "priorAccumDep", l: "Prior Year Accum. Dep." },
+                      ] as Array<{ k: keyof Inputs; l: string }>
+                    ).map(({ k, l }) => (
+                      <div key={k} className="flex items-center gap-2 min-w-0">
+                        <Label className="w-36 shrink-0 truncate text-xs text-slate-700 dark:text-slate-400">
+                          {l}
+                        </Label>
+                        <Input
+                          className="h-7 min-w-0 border-amber-900/15 bg-amber-50/40 text-slate-950 text-xs dark:border-slate-700 dark:bg-slate-950/60 dark:text-slate-100"
+                          value={v[k]}
+                          onChange={(e) => set(k)(e.target.value)}
+                        />
+                      </div>
                     ))}
-                  </ol>
-                </div>
-              </>
-            )}
-          </DialogContent>
-        </Dialog>
-
-        {/* Explanation video dialog (placeholder until real videos shipped) */}
-        <Dialog open={openVideo !== null} onOpenChange={(o) => !o && setOpenVideo(null)}>
-          <DialogContent className="max-w-2xl border-2 border-sky-500/50 bg-slate-900 text-slate-50">
-            {openVideo && (
-              <>
-                <DialogHeader>
-                  <DialogTitle className="flex items-center gap-3 text-xl">
-                    <span className="text-2xl">{RATIO_META[openVideo].icon}</span>
-                    <span>{RATIO_META[openVideo].friendly} — Explanation Video</span>
-                  </DialogTitle>
-                  <DialogDescription className="text-slate-400">
-                    {RATIO_META[openVideo].techName} · ~5 min
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="relative flex aspect-video items-center justify-center overflow-hidden rounded-lg border-2 border-slate-700/40 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
-                  <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,hsl(210_90%_55%/0.08),transparent_70%)]" />
-                  <div className="relative text-center">
-                    <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full border-2 border-sky-500/60 bg-sky-500/10 text-3xl text-sky-300 shadow-[0_0_30px_-5px_rgb(245,158,11,0.5)]">
-                      ▶
-                    </div>
-                    <p className="mt-4 text-sm font-bold uppercase tracking-widest text-sky-300">
-                      Video Coming Soon
-                    </p>
-                    <p className="mt-1 text-xs text-slate-400">
-                      This explainer will be available soon.
-                    </p>
                   </div>
-                </div>
-                <p className="rounded-md border border-slate-700/30 bg-slate-950/60 p-3 text-sm italic text-slate-300">
-                  {RATIO_META[openVideo].videoSummary}
-                </p>
-              </>
-            )}
-          </DialogContent>
-        </Dialog>
-
-        {/* Financial data dialog — upload financials or connect accounting software */}
-        <Dialog open={showFinData} onOpenChange={setShowFinData}>
-          <DialogContent className="max-h-[85vh] max-w-3xl overflow-y-auto border border-amber-900/15 bg-white text-slate-950 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-50">
-            <DialogHeader>
-              <div className="flex items-center gap-3">
-                <DialogTitle className="text-[15px] font-semibold uppercase tracking-[0.15em]">
-                  Financial Data
-                </DialogTitle>
-                {saveStatus === "saving" && (
-                  <span className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wider text-slate-400">
-                    <Loader2 className="h-3 w-3 animate-spin" /> Saving…
-                  </span>
-                )}
-                {saveStatus === "saved" && (
-                  <span className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
-                    <Check className="h-3 w-3" /> Saved
-                  </span>
                 )}
               </div>
-              <DialogDescription className="text-xs text-slate-600 dark:text-slate-400">
-                Bring in your figures — upload financial statements, or connect your accounting
-                software. {UPLOAD_QUALITY_DISCLAIMER}
-              </DialogDescription>
-            </DialogHeader>
-            <input
-              ref={uploadRef}
-              type="file"
-              accept=".pdf,.csv,.xlsx,.xls,.txt"
-              className="hidden"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) handleStatementUpload(f);
-              }}
-            />
-            <div className="grid gap-3 sm:grid-cols-2">
-              <button
-                disabled={uploading}
-                onClick={() => uploadRef.current?.click()}
-                className="flex flex-col items-start gap-1.5 rounded-lg border border-amber-700/30 bg-amber-50 p-4 text-left transition-colors hover:border-amber-700/60 hover:bg-amber-100 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-[#b7872a]/60 dark:hover:bg-slate-800"
-              >
-                <span className="flex items-center gap-2 text-sm font-semibold text-amber-900 dark:text-slate-100">
-                  {uploading ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Upload className="h-4 w-4" />
-                  )}
-                  {uploading ? "Reading…" : "Upload PDF financials"}
-                </span>
-                <span className="text-xs text-slate-600 dark:text-slate-400">
-                  PDF, CSV or Excel financial statements — figures are read automatically.
-                </span>
-              </button>
-              <button
-                onClick={() => {
-                  setShowFinData(false);
-                  setShowQboDialog(true);
-                }}
-                className="flex flex-col items-start gap-1.5 rounded-lg border border-amber-700/30 bg-amber-50 p-4 text-left transition-colors hover:border-amber-700/60 hover:bg-amber-100 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-[#b7872a]/60 dark:hover:bg-slate-800"
-              >
-                <span className="flex items-center gap-2 text-sm font-semibold text-amber-900 dark:text-slate-100">
-                  <Plug2 className="h-4 w-4" />
-                  Connect QuickBooks Online
-                </span>
-                <span className="text-xs text-slate-600 dark:text-slate-400">
-                  Sync live accounting data when QBO is configured for this workspace. Xero is not
-                  available yet.
-                </span>
-              </button>
-              <button
-                onClick={() => {
-                  setShowFinData(false);
-                  setShowBankDrafter(true);
-                }}
-                className="flex flex-col items-start gap-1.5 rounded-lg border border-amber-700/30 bg-amber-50 p-4 text-left transition-colors hover:border-amber-700/60 hover:bg-amber-100 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-[#b7872a]/60 dark:hover:bg-slate-800"
-              >
-                <span className="flex items-center gap-2 text-sm font-semibold text-amber-900 dark:text-slate-100">
-                  <Database className="h-4 w-4" />
-                  Draft financials from bank statements
-                </span>
-                <span className="text-xs text-slate-600 dark:text-slate-400">
-                  Upload statements and AI drafts a basic income statement for P&amp;L / ratios.
-                </span>
-              </button>
-              <button
-                onClick={async () => {
-                  setShowFinData(false);
-                  if (effectiveClientId) {
-                    const { data } = await supabase
-                      .from("clients")
-                      .select("cashflow")
-                      .eq("id", effectiveClientId)
-                      .maybeSingle();
-                    setExistingCashflowForBanks(
-                      (data?.cashflow as Record<string, unknown> | null) ?? null,
-                    );
-                  } else {
-                    setExistingCashflowForBanks(null);
-                  }
-                  setShowCashFromBanks(true);
-                }}
-                className="flex flex-col items-start gap-1.5 rounded-lg border border-amber-700/30 bg-amber-50 p-4 text-left transition-colors hover:border-amber-700/60 hover:bg-amber-100 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-[#b7872a]/60 dark:hover:bg-slate-800"
-              >
-                <span className="flex items-center gap-2 text-sm font-semibold text-amber-900 dark:text-slate-100">
-                  <Database className="h-4 w-4" />
-                  Build cash forecast from bank statements
-                </span>
-                <span className="text-xs text-slate-600 dark:text-slate-400">
-                  Claude groups repeating cash movements; classify cadence, then publish to Cash
-                  Forecast.
-                </span>
-              </button>
-            </div>
-            <div>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="px-2 text-xs text-slate-600 hover:text-slate-950 dark:text-slate-400 dark:hover:text-slate-100"
-                onClick={() => setShowInputs((s) => !s)}
-              >
-                {showInputs ? "▲ Hide manual entry" : "▼ Enter figures manually"}
-              </Button>
-              {showInputs && (
-                <div className="mt-3 grid gap-x-6 gap-y-2 sm:grid-cols-2">
-                  {(
-                    [
-                      { k: "revenue", l: "Revenue" },
-                      { k: "cogs", l: "COGS" },
-                      { k: "ebit", l: "EBIT" },
-                      { k: "ebt", l: "EBT" },
-                      { k: "netIncome", l: "Net Income" },
-                      { k: "ebitda", l: "EBITDA" },
-                      { k: "operatingCashflow", l: "Operating Cash Flow" },
-                      { k: "totalAssets", l: "Total Assets" },
-                      { k: "equity", l: "Equity" },
-                      { k: "receivables", l: "Receivables" },
-                      { k: "inventory", l: "Inventory" },
-                      { k: "payables", l: "Payables" },
-                      { k: "fixedCosts", l: "Fixed Costs" },
-                      { k: "variableCosts", l: "Variable Costs" },
-                      { k: "laborCost", l: "Labor Cost" },
-                      { k: "top5Revenue", l: "Top-5 Customer Rev." },
-                      { k: "employees", l: "Employees" },
-                      { k: "founderHours", l: "Founder Hours/yr" },
-                      { k: "priorRevenue", l: "Prior Period Revenue" },
-                      { k: "currentAssets", l: "Current Assets" },
-                      { k: "currentLiabilities", l: "Current Liabilities" },
-                      { k: "capex", l: "Capital Expenditure" },
-                      { k: "ppeGross", l: "PPE at Cost (Gross)" },
-                      { k: "accumulatedDepreciation", l: "Accumulated Depreciation" },
-                      { k: "priorPpeGross", l: "Prior Year PPE (Gross)" },
-                      { k: "priorAccumDep", l: "Prior Year Accum. Dep." },
-                    ] as Array<{ k: keyof Inputs; l: string }>
-                  ).map(({ k, l }) => (
-                    <div key={k} className="flex items-center gap-2 min-w-0">
-                      <Label className="w-36 shrink-0 truncate text-xs text-slate-700 dark:text-slate-400">
-                        {l}
-                      </Label>
-                      <Input
-                        className="h-7 min-w-0 border-amber-900/15 bg-amber-50/40 text-slate-950 text-xs dark:border-slate-700 dark:bg-slate-950/60 dark:text-slate-100"
-                        value={v[k]}
-                        onChange={(e) => set(k)(e.target.value)}
-                      />
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </DialogContent>
-        </Dialog>
+            </DialogContent>
+          </Dialog>
 
-        {/* Bank statement → draft financials (AI) */}
-        <BankStatementDrafter
-          open={showBankDrafter}
-          onClose={() => setShowBankDrafter(false)}
-          onApply={async ({ fields, annualised, cashDraft }) => {
-            setV((prev) => ({ ...prev, ...fields }) as Inputs);
-            setHasRealFinancials(true);
-            setShowBankDrafter(false);
-            setBankCashDraft(cashDraft ?? null);
-            toast.success(
-              annualised
-                ? "Draft figures applied (annualised) — saved automatically."
-                : "Draft figures applied for the statement period — saved automatically.",
-            );
+          {/* Bank statement → draft financials (AI) */}
+          <BankStatementDrafter
+            open={showBankDrafter}
+            onClose={() => setShowBankDrafter(false)}
+            onApply={async ({ fields, annualised, cashDraft }) => {
+              setV((prev) => ({ ...prev, ...fields }) as Inputs);
+              setHasRealFinancials(true);
+              setShowBankDrafter(false);
+              setBankCashDraft(cashDraft ?? null);
+              toast.success(
+                annualised
+                  ? "Draft figures applied (annualised) — saved automatically."
+                  : "Draft figures applied for the statement period — saved automatically.",
+              );
 
-            // Prefill budget from drafted figures when a client row exists.
-            if (effectiveClientId) {
-              try {
-                const { data: row } = await supabase
-                  .from("clients")
-                  .select("budget, financial_year_start_month, operating_profile")
-                  .eq("id", effectiveClientId)
-                  .maybeSingle();
-                const fyMonth =
-                  (row as { financial_year_start_month?: number | null } | null)
-                    ?.financial_year_start_month ?? 3;
-                const budgetRaw = (row as { budget?: BudgetDocument | null } | null)?.budget;
-                let doc =
-                  budgetRaw?.version === 1
-                    ? normalizeBudgetDocument(budgetRaw as BudgetDocument)
-                    : null;
-                if (!doc && operatingProfile) {
-                  const q = profileToBudgetQualification(operatingProfile);
-                  doc = createBudgetDocument({
-                    templateId: operatingProfile.templateId,
-                    qualification: q,
-                    fyStartMonth: fyMonth,
-                    fyStart: currentFyStart(fyMonth),
-                    market: resolveMarket(coerceMarketSelection(workspaceMarket)),
-                  });
-                }
-                if (doc) {
-                  const seeded = seedBudgetFromFinancials(doc, fields);
-                  const updatedAt = new Date().toISOString();
-                  await supabase
+              // Prefill budget from drafted figures when a client row exists.
+              if (effectiveClientId) {
+                try {
+                  const { data: row } = await supabase
                     .from("clients")
-                    .update({
-                      budget: { ...seeded.doc, updatedAt } as never,
-                      budget_updated_at: updatedAt,
-                    } as never)
-                    .eq("id", effectiveClientId);
-                  if (seeded.changes.length) {
-                    toast.message("Budget pre-filled from your bank draft", {
-                      description: seeded.changes[0],
+                    .select("budget, financial_year_start_month, operating_profile")
+                    .eq("id", effectiveClientId)
+                    .maybeSingle();
+                  const fyMonth =
+                    (row as { financial_year_start_month?: number | null } | null)
+                      ?.financial_year_start_month ?? 3;
+                  const budgetRaw = (row as { budget?: BudgetDocument | null } | null)?.budget;
+                  let doc =
+                    budgetRaw?.version === 1
+                      ? normalizeBudgetDocument(budgetRaw as BudgetDocument)
+                      : null;
+                  if (!doc && operatingProfile) {
+                    const q = profileToBudgetQualification(operatingProfile);
+                    doc = createBudgetDocument({
+                      templateId: operatingProfile.templateId,
+                      qualification: q,
+                      fyStartMonth: fyMonth,
+                      fyStart: currentFyStart(fyMonth),
+                      market: resolveMarket(coerceMarketSelection(workspaceMarket)),
                     });
                   }
+                  if (doc) {
+                    const seeded = seedBudgetFromFinancials(doc, fields);
+                    const updatedAt = new Date().toISOString();
+                    await supabase
+                      .from("clients")
+                      .update({
+                        budget: { ...seeded.doc, updatedAt } as never,
+                        budget_updated_at: updatedAt,
+                      } as never)
+                      .eq("id", effectiveClientId);
+                    if (seeded.changes.length) {
+                      toast.message("Budget pre-filled from your bank draft", {
+                        description: seeded.changes[0],
+                      });
+                    }
+                  }
+                } catch (e) {
+                  console.warn("budget seed after bank draft:", e);
                 }
-              } catch (e) {
-                console.warn("budget seed after bank draft:", e);
               }
-            }
 
-            // Same statement pack → cash forecast (no re-upload).
-            setTimeout(() => setShowCashFromBanks(true), 400);
-          }}
-        />
+              // Same statement pack → cash forecast (no re-upload).
+              setTimeout(() => setShowCashFromBanks(true), 400);
+            }}
+          />
 
-        {/* Bank statement → preliminary cash forecast (Phases 1–3) */}
-        <CashFromBanksDrafter
-          open={showCashFromBanks}
-          onClose={() => {
-            setShowCashFromBanks(false);
-            setBankCashDraft(null);
-          }}
-          initialDraft={bankCashDraft}
-          existingCashflow={existingCashflowForBanks as never}
-          onSaveDraft={async (draft) => {
-            if (!effectiveClientId) return;
-            await supabase
-              .from("clients")
-              .update({ cashflow_bank_draft: draft as never })
-              .eq("id", effectiveClientId)
-              .then(({ error }) => {
-                // Column may not exist until migration is applied — ignore quietly.
-                if (error && !/cashflow_bank_draft|42703/.test(error.message ?? "")) {
-                  console.warn("cashflow_bank_draft save:", error.message);
-                }
-              });
-          }}
-          onPublish={async (payload) => {
-            if (!effectiveClientId) {
-              toast.error("Save / select a client before publishing a cash forecast.");
-              return;
-            }
-            const forecastUpdatedAt = new Date().toISOString();
-            const runway = (await import("@/lib/cash-runway")).runwayWeeksFromCashflow(payload);
-            const { error } = await supabase
-              .from("clients")
-              .update({
-                cashflow: payload as never,
-                cashflow_bank_draft: payload as never,
-                last_forecast_at: forecastUpdatedAt,
-                ...(runway != null ? { cash_runway_weeks: runway } : {}),
-              })
-              .eq("id", effectiveClientId);
-            if (error) {
-              // Retry without cashflow_bank_draft if column not migrated yet
-              const retry = await supabase
+          {/* Bank statement → preliminary cash forecast (Phases 1–3) */}
+          <CashFromBanksDrafter
+            open={showCashFromBanks}
+            onClose={() => {
+              setShowCashFromBanks(false);
+              setBankCashDraft(null);
+            }}
+            initialDraft={bankCashDraft}
+            existingCashflow={existingCashflowForBanks as never}
+            onSaveDraft={async (draft) => {
+              if (!effectiveClientId) return;
+              await supabase
+                .from("clients")
+                .update({ cashflow_bank_draft: draft as never })
+                .eq("id", effectiveClientId)
+                .then(({ error }) => {
+                  // Column may not exist until migration is applied — ignore quietly.
+                  if (error && !/cashflow_bank_draft|42703/.test(error.message ?? "")) {
+                    console.warn("cashflow_bank_draft save:", error.message);
+                  }
+                });
+            }}
+            onPublish={async (payload) => {
+              if (!effectiveClientId) {
+                toast.error("Save / select a client before publishing a cash forecast.");
+                return;
+              }
+              const forecastUpdatedAt = new Date().toISOString();
+              const runway = (await import("@/lib/cash-runway")).runwayWeeksFromCashflow(payload);
+              const { error } = await supabase
                 .from("clients")
                 .update({
                   cashflow: payload as never,
+                  cashflow_bank_draft: payload as never,
                   last_forecast_at: forecastUpdatedAt,
                   ...(runway != null ? { cash_runway_weeks: runway } : {}),
                 })
                 .eq("id", effectiveClientId);
-              if (retry.error) throw new Error(retry.error.message);
-            }
-            setShowCashFromBanks(false);
-            setBankCashDraft(null);
-            setCashForecastReloadToken((n) => n + 1);
-            setActiveTab("cash");
-            toast.success(
-              "Cash forecast published — review classification on the Cash Forecast tab.",
-            );
-          }}
-        />
-
-        {/* PDF extraction review modal — user reviews/corrects before values are applied */}
-        {extractionForReview && (
-          <ExtractionReviewModal
-            result={extractionForReview}
-            open={reviewOpen}
-            onClose={() => {
-              setReviewOpen(false);
-              setExtractionForReview(null);
-            }}
-            onConfirm={(mapped) => {
-              const entries = Object.entries(mapped).filter(
-                ([k, val]) => val !== undefined && k in defaults,
-              );
-              // Merge CSV/Excel-only extras (variableCosts, top5Revenue, founderHours)
-              // that aren't surfaced in the review modal but were extracted from the file
-              const extras = pendingCsvExtras ?? {};
-              const allEntries = [
-                ...entries,
-                ...Object.entries(extras).filter(([k]) => k in defaults),
-              ];
-              if (allEntries.length > 0) {
-                setV((prev) => ({ ...prev, ...Object.fromEntries(allEntries) }) as Inputs);
-                setHasRealFinancials(true);
-                track("financials_uploaded", {
-                  surface: "owner_app",
-                  clientId: effectiveClientId,
-                  fields: allEntries.length,
-                });
-                toast.success(
-                  `${entries.length} field${entries.length === 1 ? "" : "s"} imported from your statement — figures saved automatically.`,
-                );
-              } else {
-                toast.warning("No matching fields found in the extraction result.");
+              if (error) {
+                // Retry without cashflow_bank_draft if column not migrated yet
+                const retry = await supabase
+                  .from("clients")
+                  .update({
+                    cashflow: payload as never,
+                    last_forecast_at: forecastUpdatedAt,
+                    ...(runway != null ? { cash_runway_weeks: runway } : {}),
+                  })
+                  .eq("id", effectiveClientId);
+                if (retry.error) throw new Error(retry.error.message);
               }
-              setPendingCsvExtras(null);
-              setReviewOpen(false);
-              setExtractionForReview(null);
+              setShowCashFromBanks(false);
+              setBankCashDraft(null);
+              setCashForecastReloadToken((n) => n + 1);
+              setActiveTab("cash");
+              toast.success(
+                "Cash forecast published — review classification on the Cash Forecast tab.",
+              );
             }}
           />
-        )}
 
-        {/* QuickBooks connect dialog */}
-        <Dialog open={showQboDialog} onOpenChange={setShowQboDialog}>
-          <DialogContent className="max-w-2xl border border-slate-800 bg-slate-950 text-slate-50">
-            <DialogHeader>
-              <DialogTitle className="text-[15px] font-semibold uppercase tracking-[0.15em] text-slate-100">
-                QuickBooks Integration
-              </DialogTitle>
-              <DialogDescription className="text-xs text-slate-400">
-                Connect your QuickBooks Online account to auto-fill financial inputs from live
-                accounting data.
-              </DialogDescription>
-            </DialogHeader>
-            <QboConnectCard
-              clientId={effectiveClientId}
-              onSyncComplete={(inputs) => {
-                setV((prev) => ({
-                  ...prev,
-                  ...Object.fromEntries(Object.entries(inputs).map(([k, val]) => [k, String(val)])),
-                }));
-                setHasRealFinancials(true);
-                setShowQboDialog(false);
+          {/* PDF extraction review modal — user reviews/corrects before values are applied */}
+          {extractionForReview && (
+            <ExtractionReviewModal
+              result={extractionForReview}
+              open={reviewOpen}
+              onClose={() => {
+                setReviewOpen(false);
+                setExtractionForReview(null);
+              }}
+              onConfirm={(mapped) => {
+                const entries = Object.entries(mapped).filter(
+                  ([k, val]) => val !== undefined && k in defaults,
+                );
+                // Merge CSV/Excel-only extras (variableCosts, top5Revenue, founderHours)
+                // that aren't surfaced in the review modal but were extracted from the file
+                const extras = pendingCsvExtras ?? {};
+                const allEntries = [
+                  ...entries,
+                  ...Object.entries(extras).filter(([k]) => k in defaults),
+                ];
+                if (allEntries.length > 0) {
+                  setV((prev) => ({ ...prev, ...Object.fromEntries(allEntries) }) as Inputs);
+                  setHasRealFinancials(true);
+                  track("financials_uploaded", {
+                    surface: "owner_app",
+                    clientId: effectiveClientId,
+                    fields: allEntries.length,
+                  });
+                  toast.success(
+                    `${entries.length} field${entries.length === 1 ? "" : "s"} imported from your statement — figures saved automatically.`,
+                  );
+                } else {
+                  toast.warning("No matching fields found in the extraction result.");
+                }
+                setPendingCsvExtras(null);
+                setReviewOpen(false);
+                setExtractionForReview(null);
               }}
             />
-          </DialogContent>
-        </Dialog>
+          )}
 
-        {/* SOP playbook — add steps to Action Plan (not legacy employee_tasks assign) */}
-        <Dialog open={openSop !== null} onOpenChange={(o) => !o && setOpenSop(null)}>
-          <DialogContent className="max-w-lg border-2 border-emerald-500/50 bg-slate-900 text-slate-50">
-            {openSop && (
-              <>
-                <DialogHeader>
-                  <DialogTitle className="flex items-center gap-3 text-xl">
-                    <span className="text-2xl">{RATIO_META[openSop].icon}</span>
-                    <span>Playbook · {RATIO_META[openSop].friendly}</span>
-                  </DialogTitle>
-                  <DialogDescription className="text-slate-400">
-                    Practical steps for this move. Add any step to your Action Plan — assign owners
-                    and due dates there.
-                  </DialogDescription>
-                </DialogHeader>
-                <ol className="space-y-2">
-                  {RATIO_META[openSop].sop.map((s, i) => (
-                    <li
-                      key={i}
-                      className="flex items-start gap-3 rounded-md border border-emerald-700/30 bg-slate-950/40 p-3"
-                    >
-                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-emerald-500/60 bg-emerald-500/10 font-mono text-xs font-bold text-emerald-300">
-                        {i + 1}
-                      </span>
-                      <span className="min-w-0 flex-1 text-sm text-slate-200">{s}</span>
-                      {effectiveClientId && userRole !== "client_member" && (
-                        <div onClick={(e) => e.stopPropagation()}>
-                          <AddToPlanButton
-                            clientId={effectiveClientId}
-                            moveKey={`${openSop}:sop:${i}`}
-                            title={s}
-                            outcomeWhy={`${RATIO_META[openSop].friendly} · playbook step ${i + 1}`}
-                            onAssign={(k) => {
-                              setOpenSop(null);
-                              setPlanFocusKey(k);
-                              setActiveTab("tasks");
-                            }}
-                          />
-                        </div>
-                      )}
-                    </li>
-                  ))}
-                </ol>
-                {effectiveClientId && userRole !== "client_member" && (
-                  <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#d4a550]/30 bg-[#d4a550]/10 px-3 py-2.5">
-                    <p className="text-[11px] text-slate-300">
-                      Prefer the whole move as one action?
-                    </p>
-                    <AddToPlanButton
-                      clientId={effectiveClientId}
-                      moveKey={openSop}
-                      title={RATIO_META[openSop].friendly}
-                      outcomeWhy={RATIO_META[openSop].hint}
-                      onAssign={(k) => {
-                        setOpenSop(null);
-                        setPlanFocusKey(k);
-                        setActiveTab("tasks");
-                      }}
-                    />
-                  </div>
-                )}
-                <p className="text-[11px] uppercase tracking-wider text-slate-500">
-                  Tip: add one step this week — owners and dates live on the Action Plan tab.
-                </p>
-              </>
-            )}
-          </DialogContent>
-        </Dialog>
-      </main>
-    </FinancialInputsContext.Provider>
+          {/* QuickBooks connect dialog */}
+          <Dialog open={showQboDialog} onOpenChange={setShowQboDialog}>
+            <DialogContent className="max-w-2xl border border-slate-800 bg-slate-950 text-slate-50">
+              <DialogHeader>
+                <DialogTitle className="text-[15px] font-semibold uppercase tracking-[0.15em] text-slate-100">
+                  QuickBooks Integration
+                </DialogTitle>
+                <DialogDescription className="text-xs text-slate-400">
+                  Connect your QuickBooks Online account to auto-fill financial inputs from live
+                  accounting data.
+                </DialogDescription>
+              </DialogHeader>
+              <QboConnectCard
+                clientId={effectiveClientId}
+                onSyncComplete={(inputs) => {
+                  setV((prev) => ({
+                    ...prev,
+                    ...Object.fromEntries(
+                      Object.entries(inputs).map(([k, val]) => [k, String(val)]),
+                    ),
+                  }));
+                  setHasRealFinancials(true);
+                  setShowQboDialog(false);
+                }}
+              />
+            </DialogContent>
+          </Dialog>
+
+          {/* SOP playbook — add steps to Action Plan (not legacy employee_tasks assign) */}
+          <Dialog open={openSop !== null} onOpenChange={(o) => !o && setOpenSop(null)}>
+            <DialogContent className="max-w-lg border-2 border-emerald-500/50 bg-slate-900 text-slate-50">
+              {openSop && (
+                <>
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center gap-3 text-xl">
+                      <span className="text-2xl">{RATIO_META[openSop].icon}</span>
+                      <span>Playbook · {RATIO_META[openSop].friendly}</span>
+                    </DialogTitle>
+                    <DialogDescription className="text-slate-400">
+                      Practical steps for this move. Add any step to your Action Plan — assign
+                      owners and due dates there.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <ol className="space-y-2">
+                    {RATIO_META[openSop].sop.map((s, i) => (
+                      <li
+                        key={i}
+                        className="flex items-start gap-3 rounded-md border border-emerald-700/30 bg-slate-950/40 p-3"
+                      >
+                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-emerald-500/60 bg-emerald-500/10 font-mono text-xs font-bold text-emerald-300">
+                          {i + 1}
+                        </span>
+                        <span className="min-w-0 flex-1 text-sm text-slate-200">{s}</span>
+                        {effectiveClientId && userRole !== "client_member" && (
+                          <div onClick={(e) => e.stopPropagation()}>
+                            <AddToPlanButton
+                              clientId={effectiveClientId}
+                              moveKey={`${openSop}:sop:${i}`}
+                              title={s}
+                              outcomeWhy={`${RATIO_META[openSop].friendly} · playbook step ${i + 1}`}
+                              onAssign={(k) => {
+                                setOpenSop(null);
+                                setPlanFocusKey(k);
+                                setActiveTab("tasks");
+                              }}
+                            />
+                          </div>
+                        )}
+                      </li>
+                    ))}
+                  </ol>
+                  {effectiveClientId && userRole !== "client_member" && (
+                    <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#d4a550]/30 bg-[#d4a550]/10 px-3 py-2.5">
+                      <p className="text-[11px] text-slate-300">
+                        Prefer the whole move as one action?
+                      </p>
+                      <AddToPlanButton
+                        clientId={effectiveClientId}
+                        moveKey={openSop}
+                        title={RATIO_META[openSop].friendly}
+                        outcomeWhy={RATIO_META[openSop].hint}
+                        onAssign={(k) => {
+                          setOpenSop(null);
+                          setPlanFocusKey(k);
+                          setActiveTab("tasks");
+                        }}
+                      />
+                    </div>
+                  )}
+                  <p className="text-[11px] uppercase tracking-wider text-slate-500">
+                    Tip: add one step this week — owners and dates live on the Action Plan tab.
+                  </p>
+                </>
+              )}
+            </DialogContent>
+          </Dialog>
+        </main>
+      </FinancialInputsContext.Provider>
     </MarketProvider>
   );
 }
@@ -4989,6 +5043,7 @@ function Ratio({
   clientId?: string | null;
   onGoToPlan?: (moveKey: string) => void;
 }) {
+  const { market } = useMarket();
   const meta = RATIO_META[rkey];
   const t = tierColor(health);
   const fullSeries = [...(series ?? []), value].filter((n) => isFinite(n));
@@ -5012,7 +5067,7 @@ function Ratio({
             clientId={clientId}
             moveKey={rkey}
             title={`Improve: ${meta.friendly}`}
-            outcomeWhy={`${meta.techName} — ${meta.hint}`}
+            outcomeWhy={`${localizeCopy(meta.techName, market)} — ${localizeCopy(meta.hint, market)}`}
             onAssign={onGoToPlan}
           />
         </div>
@@ -5024,14 +5079,14 @@ function Ratio({
             <span className="truncate">{meta.friendly}</span>
           </p>
           <p className="mt-0.5 text-[10px] uppercase tracking-wider text-slate-500">
-            {meta.techName}
+            {localizeCopy(meta.techName, market)}
           </p>
         </div>
         <p className={`shrink-0 font-mono text-lg font-bold tabular-nums ${t.text}`}>
-          {formatVal(value, format)}
+          {formatVal(value, format, market)}
         </p>
       </div>
-      <p className="mt-2 text-xs text-slate-400">{meta.hint}</p>
+      <p className="mt-2 text-xs text-slate-400">{localizeCopy(meta.hint, market)}</p>
       <div className="mt-3">
         <HealthBar health={health} />
       </div>
@@ -5059,8 +5114,9 @@ function Ratio({
           <div className="flex items-center justify-between gap-2">
             <span className="text-[10px] uppercase tracking-wider text-slate-500">vs industry</span>
             <span className="text-[10px] font-mono text-slate-400 tabular-nums">
-              25% {formatVal(benchmark.p25, format)} · 50% {formatVal(benchmark.p50, format)} · 75%{" "}
-              {formatVal(benchmark.p75, format)}
+              25% {formatVal(benchmark.p25, format, market)} · 50%{" "}
+              {formatVal(benchmark.p50, format, market)} · 75%{" "}
+              {formatVal(benchmark.p75, format, market)}
             </span>
           </div>
           <div className="mt-1">

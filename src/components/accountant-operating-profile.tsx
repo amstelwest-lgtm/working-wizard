@@ -5,6 +5,7 @@
 
 import type { ClientOperatingProfile } from "@/lib/client-profile";
 import { profileDisplayRows, profileIndustryLabel } from "@/lib/profile-signals";
+import { useMarketFormat } from "@/contexts/market";
 
 function RiskChip({
   tone,
@@ -59,6 +60,7 @@ export function AccountantOperatingProfile({
   /** Opens ProfileFunnel for the accountant to fill / retake. */
   onEdit?: () => void;
 }) {
+  const { date, market } = useMarketFormat();
   if (!profile) {
     return (
       <div className="card" style={{ marginTop: 12, padding: "14px 18px" }}>
@@ -88,17 +90,13 @@ export function AccountantOperatingProfile({
     );
   }
 
-  const rows = profileDisplayRows(profile);
+  const rows = profileDisplayRows(profile, market);
   const industry = profileIndustryLabel(profile, fallbackType ?? "SME");
   const goalRow = rows.find((r) => r.label === "Owner goal")?.value;
   const by =
-    profile.confirmedBy === "firm"
-      ? "Firm"
-      : profile.confirmedBy === "owner"
-        ? "Owner"
-        : null;
+    profile.confirmedBy === "firm" ? "Firm" : profile.confirmedBy === "owner" ? "Owner" : null;
   const when = profile.confirmedAt
-    ? new Date(profile.confirmedAt).toLocaleDateString("en-ZA", {
+    ? date(profile.confirmedAt, {
         day: "numeric",
         month: "short",
         year: "numeric",

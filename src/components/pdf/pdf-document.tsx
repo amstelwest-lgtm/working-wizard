@@ -1,8 +1,10 @@
 import { Document, Page, View } from "@react-pdf/renderer";
 import type { AccountantProfile } from "@/contexts/accountant-profile";
+import { ZA_MARKET, type ResolvedMarket } from "@/lib/market";
 import { ReportHeader } from "./report-header";
 import { ReportFooter } from "./report-footer";
 import { DemoWatermark } from "./watermark";
+import { PdfMarketContext } from "./pdf-market";
 
 export type SmeData = {
   name: string;
@@ -28,6 +30,8 @@ type Props = {
   isDemo?: boolean;
   /** Only pass a non-stale sign-off — the footer renders it unconditionally when present. */
   reviewSignoff?: ReportSignoffStamp | null;
+  /** Client (or firm) market — currency, locale, copy. Defaults to ZA. */
+  market?: ResolvedMarket;
   children: React.ReactNode;
 };
 
@@ -47,41 +51,43 @@ export function PDFDocument({
   accountantProfile,
   isDemo,
   reviewSignoff,
+  market,
   children,
 }: Props) {
+  const resolved = market ?? ZA_MARKET;
   return (
-    <Document
-      title={title}
-      subject={subject}
-      author={accountantProfile.firmName || "Milon"}
-      creator="Milon"
-      producer="Milon PDF Engine"
-    >
-      <Page
-        size="A4"
-        style={{
-          paddingBottom: 56,
-          backgroundColor: "#ffffff",
-        }}
+    <PdfMarketContext.Provider value={resolved}>
+      <Document
+        title={title}
+        subject={subject}
+        author={accountantProfile.firmName || "Milon"}
+        creator="Milon"
+        producer="Milon PDF Engine"
       >
-        {isDemo ? <DemoWatermark /> : null}
+        <Page
+          size="A4"
+          style={{
+            paddingBottom: 56,
+            backgroundColor: "#ffffff",
+          }}
+        >
+          {isDemo ? <DemoWatermark /> : null}
 
-        {/* Fixed header — renders at the top of every page */}
-        <ReportHeader
-          fixed
-          profile={accountantProfile}
-          smeName={smeData.name}
-          period={smeData.period}
-        />
+          {/* Fixed header — renders at the top of every page */}
+          <ReportHeader
+            fixed
+            profile={accountantProfile}
+            smeName={smeData.name}
+            period={smeData.period}
+          />
 
-        {/* Content area */}
-        <View style={{ paddingHorizontal: 40, paddingTop: 16 }}>
-          {children}
-        </View>
+          {/* Content area */}
+          <View style={{ paddingHorizontal: 40, paddingTop: 16 }}>{children}</View>
 
-        {/* Fixed footer — absolutely positioned at bottom of every page */}
-        <ReportFooter fixed profile={accountantProfile} reviewSignoff={reviewSignoff} />
-      </Page>
-    </Document>
+          {/* Fixed footer — absolutely positioned at bottom of every page */}
+          <ReportFooter fixed profile={accountantProfile} reviewSignoff={reviewSignoff} />
+        </Page>
+      </Document>
+    </PdfMarketContext.Provider>
   );
 }

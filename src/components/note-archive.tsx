@@ -1,5 +1,6 @@
 import { Archive, CheckCheck, Trash2, X } from "lucide-react";
 import { useNotes, type Note } from "@/contexts/notes";
+import { useMarketFormat } from "@/contexts/market";
 import {
   Sheet,
   SheetContent,
@@ -26,16 +27,8 @@ function tabLabel(tab: string) {
   return TAB_LABELS[tab] ?? tab;
 }
 
-function formatWhen(iso: string) {
-  return new Date(iso).toLocaleString("en-ZA", {
-    day: "numeric",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
 function ArchiveRow({ note }: { note: Note }) {
+  const { dateTime } = useMarketFormat();
   const { resolveNote, deleteNote } = useNotes();
 
   return (
@@ -45,7 +38,13 @@ function ArchiveRow({ note }: { note: Note }) {
           {tabLabel(note.tab)}
         </span>
         <span className="min-w-0 flex-1 truncate text-[11px] text-slate-500">
-          {note.author} · {formatWhen(note.timestamp)}
+          {note.author} ·{" "}
+          {dateTime(note.timestamp, {
+            day: "numeric",
+            month: "short",
+            hour: "2-digit",
+            minute: "2-digit",
+          })}
         </span>
         <button
           type="button"

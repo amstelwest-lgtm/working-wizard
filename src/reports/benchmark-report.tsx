@@ -16,7 +16,7 @@ import { BenchmarkBar } from "@/components/pdf/benchmark-bar";
 import { C, resolveTheme } from "@/components/pdf/theme";
 import { benchmarkNarrative } from "./narrative";
 import type { ClientOperatingProfile } from "@/lib/client-profile";
-
+import { ZA_MARKET, type ResolvedMarket } from "@/lib/market";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -45,6 +45,7 @@ export type BenchmarkReportPDFProps = {
   accountantProfile: AccountantProfile;
   isDemo?: boolean;
   reviewSignoff?: ReportSignoffStamp | null;
+  market?: ResolvedMarket;
 };
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -95,8 +96,19 @@ function normalise(row: BenchmarkRow): { pos: number; bandStart: number; bandEnd
 // ── Styles ─────────────────────────────────────────────────────────────────
 
 const S = StyleSheet.create({
-  headerRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 12, paddingVertical: 5 },
-  headerCell: { fontSize: 6, fontFamily: "Helvetica-Bold", color: C.faint, textTransform: "uppercase", letterSpacing: 0.4 },
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+  },
+  headerCell: {
+    fontSize: 6,
+    fontFamily: "Helvetica-Bold",
+    color: C.faint,
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+  },
   row: {
     flexDirection: "row",
     alignItems: "center",
@@ -109,9 +121,22 @@ const S = StyleSheet.create({
   val: { fontSize: 8, fontFamily: "Helvetica-Bold", color: C.ink, textAlign: "right" },
   bench: { fontSize: 7.5, fontFamily: "Helvetica", color: C.muted, textAlign: "right" },
   barCell: { width: 96, alignItems: "flex-end", paddingLeft: 6 },
-  posChip: { borderRadius: 3, paddingHorizontal: 4, paddingVertical: 2, alignItems: "center", width: 62, marginLeft: 8 },
+  posChip: {
+    borderRadius: 3,
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    alignItems: "center",
+    width: 62,
+    marginLeft: 8,
+  },
   posText: { fontSize: 4.8, fontFamily: "Helvetica-Bold", letterSpacing: 0.3 },
-  scaleNote: { fontSize: 6.5, fontFamily: "Helvetica", color: C.faint, marginTop: 10, lineHeight: 1.5 },
+  scaleNote: {
+    fontSize: 6.5,
+    fontFamily: "Helvetica",
+    color: C.faint,
+    marginTop: 10,
+    lineHeight: 1.5,
+  },
 });
 
 // ── Main component ─────────────────────────────────────────────────────────
@@ -125,6 +150,7 @@ export function BenchmarkReportPDF({
   isDemo,
   reviewSignoff,
   operatingProfile,
+  market,
 }: BenchmarkReportPDFProps) {
   const theme = resolveTheme(accountantProfile);
 
@@ -145,13 +171,17 @@ export function BenchmarkReportPDF({
     },
   ];
 
-  const narrative = benchmarkNarrative({
-    topQ,
-    above,
-    below,
-    total: benchmarkRows.length,
-    industryName,
-  }, operatingProfile);
+  const narrative = benchmarkNarrative(
+    {
+      topQ,
+      above,
+      below,
+      total: benchmarkRows.length,
+      industryName,
+    },
+    operatingProfile,
+    market ?? ZA_MARKET,
+  );
 
   const pillars = (["profit", "assets", "financing", "cash"] as const).filter((p) =>
     benchmarkRows.some((r) => r.pillar === p),
@@ -165,6 +195,7 @@ export function BenchmarkReportPDF({
       accountantProfile={accountantProfile}
       isDemo={isDemo}
       reviewSignoff={reviewSignoff}
+      market={market ?? ZA_MARKET}
     >
       <ReportTitle
         kicker={`Advisory Report 10 · ${industryName}`}
@@ -185,7 +216,9 @@ export function BenchmarkReportPDF({
               <Text style={[S.headerCell, { flex: 1, textAlign: "right" }]}>You</Text>
               <Text style={[S.headerCell, { flex: 1, textAlign: "right" }]}>Median</Text>
               <Text style={[S.headerCell, { flex: 1, textAlign: "right" }]}>Top 25%</Text>
-              <Text style={[S.headerCell, { width: 96, textAlign: "right", paddingLeft: 6 }]}>Position</Text>
+              <Text style={[S.headerCell, { width: 96, textAlign: "right", paddingLeft: 6 }]}>
+                Position
+              </Text>
               <View style={{ width: 70 }} />
             </View>
             {rows.map((row, i) => {
@@ -193,7 +226,10 @@ export function BenchmarkReportPDF({
               const meta = POS_META[pos];
               const n = normalise(row);
               return (
-                <View key={row.ratio_key} style={[S.row, { backgroundColor: i % 2 === 1 ? C.soft : C.white }]}>
+                <View
+                  key={row.ratio_key}
+                  style={[S.row, { backgroundColor: i % 2 === 1 ? C.soft : C.white }]}
+                >
                   <Text style={[S.name, { flex: 2 }]}>{row.ratio_name}</Text>
                   <Text style={[S.val, { flex: 1 }]}>{row.formatted_current}</Text>
                   <Text style={[S.bench, { flex: 1 }]}>{row.formatted_median}</Text>
@@ -204,7 +240,9 @@ export function BenchmarkReportPDF({
                       bandStart={n.bandStart}
                       bandEnd={n.bandEnd}
                       width={90}
-                      markerColor={pos === "below_median" ? C.red : pos === "top_quartile" ? C.green : C.blue}
+                      markerColor={
+                        pos === "below_median" ? C.red : pos === "top_quartile" ? C.green : C.blue
+                      }
                     />
                   </View>
                   <View style={[S.posChip, { backgroundColor: meta.bg }]}>
@@ -218,9 +256,9 @@ export function BenchmarkReportPDF({
       })}
 
       <Text style={S.scaleNote}>
-        Position bars are direction-corrected: further right is always better, regardless of
-        whether a higher or lower value is desirable for the ratio. The shaded band spans the
-        sector median to top quartile.
+        Position bars are direction-corrected: further right is always better, regardless of whether
+        a higher or lower value is desirable for the ratio. The shaded band spans the sector median
+        to top quartile.
       </Text>
     </PDFDocument>
   );
