@@ -1,7 +1,24 @@
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
-import type { AskAiContext, ProfileRow, RatioRow, ScoreRow } from "./types.ts";
+import type {
+  AskAiContext,
+  ProfileQuestionRow,
+  ProfileRow,
+  RatioRow,
+  ScoreRow,
+} from "./types.ts";
 import type { DisclosureTier } from "./types.ts";
 import { pillarsFor } from "./classifier.ts";
+import {
+  buildDeliverableFills,
+  extractWaterfallFigures,
+  profileQuestionsFromOperating,
+  rankNextSteps,
+  summarizeActionPlan,
+  summarizeCashForecast,
+  summarizeProductLines,
+  summarizeWaterfall,
+  type SavedCashflow,
+} from "./deliverable-summaries.ts";
 
 /**
  * Maps the application's stored business_type values to the benchmark category keys
@@ -120,19 +137,25 @@ export async function buildContext(
   tier: DisclosureTier,
   question: string,
 ): Promise<AskAiContext> {
-  // ── Profile ───────────────────────────────────────────────────────────────
+  // ── Profile + filled deliverable blobs (never dump raw statements) ────────
   let copyPack: "za" | "us" = "za";
   let profile: ProfileRow | null = null;
+  let profileQuestions: ProfileQuestionRow[] = [];
+  let financials: Record<string, unknown> | null = null;
+  let cashflow: SavedCashflow | null = null;
+  let storedRunway: number | null = null;
   if (tier !== "none") {
     let { data, error } = await supabase
       .from("clients")
-      .select("id, business_type, financials, operating_profile, market")
+      .select(
+        "id, business_type, financials, operating_profile, market, cashflow, cash_runway_weeks",
+      )
       .eq("id", clientId)
       .maybeSingle();
-    if (error && /column ["']?market["']?/i.test(error.message ?? "")) {
+    if (error && /column ["']?(market|cash_runway_weeks)["']?/i.test(error.message ?? "")) {
       const retry = await supabase
         .from("clients")
-        .select("id, business_type, financials, operating_profile")
+        .select("id, business_type, financials, operating_profile, cashflow")
         .eq("id", clientId)
         .maybeSingle();
       data = retry.data;
@@ -145,8 +168,13 @@ export async function buildContext(
     if (data) {
       copyPack = copyPackFromMarket((data as { market?: unknown }).market);
       const fin = (data.financials ?? {}) as Record<string, unknown>;
+      financials = fin && typeof fin === "object" && !Array.isArray(fin) ? fin : null;
+      cashflow = (data as { cashflow?: SavedCashflow | null }).cashflow ?? null;
+      const rawStored = (data as { cash_runway_weeks?: number | null }).cash_runway_weeks;
+      storedRunway = rawStored != null && Number.isFinite(Number(rawStored)) ? Number(rawStored) : null;
       const rawRevenue = fin["annual_revenue"] ?? fin["revenue"];
       const op = (data.operating_profile ?? null) as Record<string, unknown> | null;
+      profileQuestions = profileQuestionsFromOperating(op);
       profile = {
         client_id: data.id,
         entity_type: null,
@@ -164,6 +192,11 @@ export async function buildContext(
                 customerConcentration: String(op.customerConcentration ?? ""),
                 debtPosition: String(op.debtPosition ?? ""),
                 ownerGoal: String(op.ownerGoal ?? ""),
+                payMotion: String(op.payMotion ?? ""),
+                secondaryVolumeUnits: Array.isArray(op.secondaryVolumeUnits)
+                  ? op.secondaryVolumeUnits.map((u) => String(u))
+                  : [],
+                fyStartMonth: Number(op.fyStartMonth ?? 0) || undefined,
               }
             : null,
       };
@@ -197,7 +230,8 @@ export async function buildContext(
   // industry_benchmarks.metric_key uses camelCase (e.g. "grossMargin").
   // We translate via DISPLAY_TO_CAMEL before the benchmark join.
   let ratios: RatioRow[] = [];
-  if (tier === "focused" || tier === "full") {
+  let rankingRatios: RatioRow[] = [];
+  if (tier !== "none") {
     const { data: snap } = await supabase
       .from("client_financial_snapshots")
       .select("ratios")
@@ -209,33 +243,29 @@ export async function buildContext(
     if (snap?.ratios && typeof snap.ratios === "object" && !Array.isArray(snap.ratios)) {
       const rawRatios = snap.ratios as Record<string, unknown>;
 
-      // Determine the set of camelCase keys to include
+      // Focused questions still see one pillar in the ratio list; next-step
+      // ranking always uses the full filled set.
       let filterKeys: Set<string> | null = null;
       if (tier === "focused") {
         const matched = pillarsFor(question);
         filterKeys = new Set(matched.flatMap((p) => PILLAR_RATIO_KEYS[p] ?? []));
       }
 
-      // Map stored business_type (e.g. "service", "project") to the benchmark
-      // category key used in industry_benchmarks (e.g. "services", "professional").
       const rawBizType = profile?.business_type ?? "";
       const businessType = BUSINESS_TYPE_TO_BENCHMARK[rawBizType] ?? "other";
 
-      // Build list of (displayKey, camelKey, value) triples
       type Entry = { displayKey: string; camelKey: string; value: number };
       const entries: Entry[] = [];
 
       for (const [displayKey, rawVal] of Object.entries(rawRatios)) {
         const camelKey = DISPLAY_TO_CAMEL[displayKey];
-        if (!camelKey) continue; // unknown key — skip
-        if (MONETARY_DERIVED_KEYS.has(camelKey)) continue; // exposes currency amounts — excluded
-        if (!isFinite(Number(rawVal))) continue; // NaN / null — skip
-        if (filterKeys && !filterKeys.has(camelKey)) continue; // not in pillar
+        if (!camelKey) continue;
+        if (MONETARY_DERIVED_KEYS.has(camelKey)) continue;
+        if (!isFinite(Number(rawVal))) continue;
         entries.push({ displayKey, camelKey, value: Number(rawVal) });
       }
 
       if (entries.length > 0) {
-        // Fetch benchmarks keyed by camelCase key
         const camelKeys = entries.map((e) => e.camelKey);
         const { data: benchmarks } = await supabase
           .from("industry_benchmarks")
@@ -250,7 +280,7 @@ export async function buildContext(
 
         for (const { camelKey, value } of entries) {
           const b = benchMap.get(camelKey);
-          ratios.push({
+          const row: RatioRow = {
             key: camelKey,
             value,
             format: inferFormat(camelKey),
@@ -258,11 +288,86 @@ export async function buildContext(
             p50: b?.p50 ?? null,
             p75: b?.p75 ?? null,
             higher_is_better: b?.higher_is_better ?? null,
-          });
+          };
+          rankingRatios.push(row);
+          if (!filterKeys || filterKeys.has(camelKey)) ratios.push(row);
         }
       }
     }
   }
 
-  return { profile, scores, ratios, playbook: [], copyPack };
+  // ── Waterfall / product mix / cash (outputs only — no statement dump) ─────
+  const waterfall =
+    tier === "none" || !financials
+      ? null
+      : summarizeWaterfall(extractWaterfallFigures(financials));
+  const productLines =
+    tier === "none" || !financials ? [] : summarizeProductLines(financials.productMix);
+  const cashForecast =
+    tier === "none" ? null : summarizeCashForecast(cashflow, storedRunway);
+
+  // Rank next moves from the full ratio set (not the focused subset).
+  const nextSteps = tier === "none" ? [] : rankNextSteps(rankingRatios, 5);
+
+  // ── Action plan (planned + outstanding) ───────────────────────────────────
+  let actionPlan = null;
+  if (tier !== "none") {
+    const [planRes, itemRes] = await Promise.all([
+      supabase
+        .from("action_plans")
+        .select("id, outcome_goal")
+        .eq("client_id", clientId)
+        .eq("is_active", true)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      supabase
+        .from("action_items")
+        .select("title, status, due_date, progress_pct, seq")
+        .eq("client_id", clientId)
+        .order("seq", { ascending: true })
+        .limit(40),
+    ]);
+    actionPlan = summarizeActionPlan(planRes.data ?? null, itemRes.data ?? []);
+  }
+
+  // ── Filled / signed-off deliverables ──────────────────────────────────────
+  const signedScopes = new Set<string>();
+  if (tier !== "none") {
+    const { data: signoffs } = await supabase
+      .from("client_review_signoffs")
+      .select("scope")
+      .eq("client_id", clientId);
+    for (const row of signoffs ?? []) {
+      if (row?.scope) signedScopes.add(String(row.scope));
+    }
+  }
+  const deliverables =
+    tier === "none"
+      ? []
+      : buildDeliverableFills({
+          hasRatios: ratios.length > 0,
+          hasScore: scores?.overall_score != null,
+          hasWaterfall: waterfall?.hasData === true,
+          hasCash: cashForecast?.hasData === true,
+          hasProductLines: productLines.length > 0,
+          hasNextSteps: nextSteps.length > 0,
+          hasActionPlan: actionPlan != null && (actionPlan.open.length > 0 || actionPlan.doneCount > 0),
+          signedScopes,
+        });
+
+  return {
+    profile,
+    profileQuestions,
+    scores,
+    ratios,
+    playbook: [],
+    copyPack,
+    waterfall,
+    cashForecast,
+    productLines,
+    nextSteps,
+    actionPlan,
+    deliverables,
+  };
 }

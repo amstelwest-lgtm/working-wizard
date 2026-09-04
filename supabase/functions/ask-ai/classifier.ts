@@ -62,6 +62,13 @@ const FULL_CONTEXT_INTENTS: RegExp[] = [
   /\bhealthy\b/i,
   /should\s+i\s+worry/i,
   /\boverall\b/i,
+
+  // Deliverable-output questions (need the filled board, not one pillar)
+  /\bwaterfall\b/i,
+  /product\s+lines?\b/i,
+  /next\s+(move|step|action)s?\b/i,
+  /action\s+plan\b/i,
+  /\bforecast\b/i,
 ];
 
 const PILLAR_PATTERNS: Record<string, RegExp> = {

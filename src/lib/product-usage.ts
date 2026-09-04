@@ -46,6 +46,7 @@ export const FEATURE_CATALOG: FeatureDef[] = [
 
   { key: "firm.dashboard", label: "Firm dashboard", group: "firm" },
   { key: "firm.client_workspace", label: "Client workspace", group: "firm" },
+  { key: "firm.client_ask_ai", label: "Client Ask AI", group: "firm" },
   { key: "firm.client_health", label: "Client health & ratios", group: "firm" },
   { key: "firm.client_profit", label: "Client profitability", group: "firm" },
   { key: "firm.client_cash", label: "Client 13-week cash", group: "firm" },
@@ -78,6 +79,7 @@ const OWNER_TAB_FEATURES: Record<string, string> = {
 };
 
 const FIRM_TAB_FEATURES: Record<string, string> = {
+  ask: "firm.client_ask_ai",
   ratios: "firm.client_health",
   profit: "firm.client_profit",
   cash: "firm.client_cash",
