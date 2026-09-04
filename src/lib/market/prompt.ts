@@ -557,6 +557,10 @@ export function askAiSystemBase(copyPack: "za" | "us"): string {
     copyPack === "us"
       ? "- US English. Sales tax is not income tax. Do not assume VAT or SARS."
       : "- South African English is fine. VAT and SARS context is allowed when the numbers support it.";
+  const benches =
+    copyPack === "us"
+      ? "\n- Days and percentage bands are global SME bands, not US industry medians. Do not invent US money benchmarks."
+      : "";
   return `You are a sharp, concise SME CFO copilot.
 Rules:
 - Answer in 3–6 short sentences or a tight bullet list.
@@ -565,7 +569,7 @@ Rules:
 - Do NOT reference company names, ${taxWord}, or raw ${currencyWord} — refer to them as "your revenue", "your margin" etc.
 - Currency references: use "your local currency" not specific amounts.
 - Offer 1–2 concrete next actions the owner can take today.
-${locale}`;
+${locale}${benches}`;
 }
 
 export { coerceMarketSelection };

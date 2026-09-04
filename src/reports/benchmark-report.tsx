@@ -16,7 +16,7 @@ import { BenchmarkBar } from "@/components/pdf/benchmark-bar";
 import { C, resolveTheme } from "@/components/pdf/theme";
 import { benchmarkNarrative } from "./narrative";
 import type { ClientOperatingProfile } from "@/lib/client-profile";
-import { ZA_MARKET, type ResolvedMarket } from "@/lib/market";
+import { industryBenchmarkCaption, isUsCopy, ZA_MARKET, type ResolvedMarket } from "@/lib/market";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -200,7 +200,11 @@ export function BenchmarkReportPDF({
       <ReportTitle
         kicker={`Advisory Report 10 · ${industryName}`}
         title="Industry Benchmark"
-        subtitle="Every ratio positioned against the sector median and top quartile"
+        subtitle={
+          isUsCopy(market ?? ZA_MARKET)
+            ? industryBenchmarkCaption(market ?? ZA_MARKET)
+            : "Every ratio positioned against the sector median and top quartile"
+        }
         isDemo={isDemo}
       />
 
@@ -257,8 +261,8 @@ export function BenchmarkReportPDF({
 
       <Text style={S.scaleNote}>
         Position bars are direction-corrected: further right is always better, regardless of whether
-        a higher or lower value is desirable for the ratio. The shaded band spans the sector median
-        to top quartile.
+        a higher or lower value is desirable for the ratio. The shaded band spans the{" "}
+        {isUsCopy(market ?? ZA_MARKET) ? "global SME band" : "sector median"} to top quartile.
       </Text>
     </PDFDocument>
   );

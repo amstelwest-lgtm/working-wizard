@@ -868,7 +868,10 @@ function Dashboard() {
         c.cash_runway_weeks,
         c.cashflow as Parameters<typeof effectiveCashRunwayWeeks>[1],
       );
-      const health = healthFromFlatFinancials(c.financials, runwayWeeks);
+      const clientMarket = resolveMarket(
+        parseMarketSelection(c.market) ?? coerceMarketSelection(c.market),
+      );
+      const health = healthFromFlatFinancials(c.financials, runwayWeeks, clientMarket);
       const score = health.overall;
       const realHistory = historyMap[c.id] ?? [];
       const trendHistory =

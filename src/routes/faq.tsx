@@ -140,10 +140,15 @@ function FaqPage() {
       </Qa>
 
       <Qa q="I already have accounting software.">
-        <p>
+        <p className="mk-copy-za">
           Keep it. Milōn is not a ledger and does not want to be. It reads the output your books
-          already produce and turns it into a score, a forecast, and a ranked list of what to do —
-          which is the part accounting software has never really tried to do.
+          already produce — bank statements, Excel, or a PDF — and turns it into a score, a
+          forecast, and a ranked list of what to do. QuickBooks Online and Xero can follow.
+        </p>
+        <p className="mk-copy-us">
+          Keep it. Connect QuickBooks Online when you can; Excel, CSV, or a bank PDF also work. Xero
+          is also on the list, not the lead path. Milōn is not a ledger — it turns the output your
+          books already produce into a score, a forecast, and a ranked list of what to do.
         </p>
       </Qa>
 

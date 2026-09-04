@@ -7,8 +7,10 @@ import {
   formatMoneyCompact,
   formatMonthLabel,
   formatNumber,
+  readVisitorDraft,
   resolveMarket,
   t,
+  visitorCopyPack,
   type CopyKey,
   type MarketSelection,
   type MarketTaxOverrides,
@@ -59,6 +61,13 @@ export function useMarket(): MarketContextValue {
     };
   }
   return ctx;
+}
+
+/** Workspace copy pack when inside MarketProvider; visitor draft on marketing pages. */
+export function useResolvedCopyPack(): "za" | "us" {
+  const ctx = useContext(MarketContext);
+  if (ctx) return ctx.market.copyPack;
+  return visitorCopyPack(readVisitorDraft());
 }
 
 export function useMarketFormat() {

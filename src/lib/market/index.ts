@@ -1,3 +1,16 @@
+export {
+  canShowIndustryMedian,
+  industryBenchmarkCaption,
+  industryBenchmarkShortLabel,
+  isMoneyDenominatedBenchmark,
+  isUsBenchmarkMarket,
+  MONEY_BENCHMARK_METRIC_KEYS,
+  SALES_PER_EMPLOYEE_HEALTHY,
+  salesPerEmployeeBenchmarkLabel,
+  salesPerEmployeeHealthy,
+  scoreSalesPerEmployee,
+} from "./benchmarks";
+export type { BenchmarkMarket } from "./benchmarks";
 export { isMissingMarketSupport, withMarketRpcFallback } from "./compat";
 export type { CopyKey } from "./copy";
 export { localizeCopy, SALES_TAX_HONESTY, t } from "./copy";

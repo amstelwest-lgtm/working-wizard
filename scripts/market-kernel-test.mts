@@ -14,9 +14,14 @@ import {
   formatMoneyCompact,
   formatMoneyUnit,
   formatNumber,
+  canShowIndustryMedian,
+  industryBenchmarkCaption,
   LIST_PRICES,
   localizeCopy,
   localizePlaybookStep,
+  salesPerEmployeeBenchmarkLabel,
+  salesPerEmployeeHealthy,
+  scoreSalesPerEmployee,
   MarketSelectionError,
   newsSearchUrl,
   parseMarketSelection,
@@ -25,9 +30,11 @@ import {
   t,
   US_STATES,
   visitorCopyPack,
+  askAiSystemBase,
   ZA_MARKET,
   ZA_VAT_RATE,
 } from "../src/lib/market";
+import { scoreRatio } from "../src/lib/health-score";
 import { computeBudgetMonths } from "../src/lib/budget.compute";
 import { createBudgetDocument } from "../src/lib/budget.months";
 import type { BudgetQualification } from "../src/lib/budget.types";
@@ -255,5 +262,45 @@ assert(LIST_PRICES.us.firm150.startsWith("$"), "US firm price is dollars");
 assert(t("nameExample", tx) === "Jordan Hale", "US name example");
 assert(t("nameExample", ZA_MARKET) === "Thabo Nkosi", "ZA name example");
 assert(t("entityExample", tx) === "Acme LLC", "US entity example");
+assert(t("sharePrimary", tx) === "Email", "US share primary is email");
+assert(t("sharePrimary", ZA_MARKET) === "WhatsApp", "ZA share primary is WhatsApp");
+assert(t("phoneExample", tx) === "+1 512 555 0100", "US phone example");
+
+assert(salesPerEmployeeHealthy(ZA_MARKET) === 300_000, "ZA SPE healthy 300k");
+assert(salesPerEmployeeHealthy(tx) === 150_000, "US SPE healthy 150k");
+assert(Math.round(scoreSalesPerEmployee(300_000, ZA_MARKET)) === 100, "ZA SPE 300k → 100");
+assert(Math.round(scoreSalesPerEmployee(150_000, tx)) === 100, "US SPE 150k → 100");
+assert(Math.round(scoreSalesPerEmployee(75_000, tx)) === 50, "US SPE 75k → 50");
+assert(
+  Math.round(scoreRatio("Sales-per-Employee Ratio", 300_000)) === 100,
+  "scoreRatio default ZA",
+);
+assert(
+  Math.round(scoreRatio("Sales-per-Employee Ratio", 150_000, tx)) === 100,
+  "scoreRatio US 150k → 100",
+);
+assert(
+  salesPerEmployeeBenchmarkLabel(tx).includes("$"),
+  `US SPE label ${salesPerEmployeeBenchmarkLabel(tx)}`,
+);
+assert(
+  !canShowIndustryMedian(tx, { metricKey: "salesPerEmployee", format: "money" }),
+  "US hides money industry median",
+);
+assert(
+  canShowIndustryMedian(tx, { metricKey: "debtorDays", format: "days" }),
+  "US keeps days bands",
+);
+assert(
+  canShowIndustryMedian(ZA_MARKET, { metricKey: "salesPerEmployee", format: "money" }),
+  "ZA shows money industry median",
+);
+assert(/global SME/i.test(askAiSystemBase("us")), "US Ask AI names global SME bands");
+assert(!/global SME/i.test(askAiSystemBase("za")), "ZA Ask AI does not mention global SME bands");
+assert(/global SME/i.test(industryBenchmarkCaption(tx)), "US benchmark disclaimer");
+assert(
+  !/global SME/i.test(industryBenchmarkCaption(ZA_MARKET)),
+  "ZA caption is industry median, not global SME",
+);
 
 console.log("market kernel ok");

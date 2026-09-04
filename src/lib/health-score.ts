@@ -1,4 +1,8 @@
 import { computeRatios, scoreTier, type HealthTier, type RatioInputs } from "@/lib/ratios";
+import { salesPerEmployeeHealthy } from "@/lib/market/benchmarks";
+import type { ResolvedMarket } from "@/lib/market/types";
+
+export type ScoreMarket = Pick<ResolvedMarket, "country" | "copyPack">;
 
 /**
  * Single source of truth for overall health scoring.
@@ -77,12 +81,13 @@ export const RATIO_NAME_TO_KEY: Record<string, string> = {
 /** Build a camelCase healthMap from `computeRatios` output via shared `scoreRatio`. */
 export function healthMapFromRatios(
   ratios: Record<string, number>,
+  market?: ScoreMarket,
 ): Record<string, number> {
   const map: Record<string, number> = {};
   for (const [name, val] of Object.entries(ratios)) {
     if (!Number.isFinite(val)) continue;
     const key = RATIO_NAME_TO_KEY[name];
-    if (key) map[key] = Math.round(scoreRatio(name, val));
+    if (key) map[key] = Math.round(scoreRatio(name, val, market));
   }
   return map;
 }
@@ -98,12 +103,7 @@ export const PILLAR_RATIO_NAMES: Record<HealthPillarId, readonly string[]> = {
     "Gross Profit / Labor",
     "Top-5 Customer Share",
   ],
-  assets: [
-    "Asset Turnover",
-    "Return on Assets",
-    "Inventory Days",
-    "Sales-per-Employee Ratio",
-  ],
+  assets: ["Asset Turnover", "Return on Assets", "Inventory Days", "Sales-per-Employee Ratio"],
   financing: ["Equity Multiplier", "Interest Burden", "Tax Burden", "Return on Equity"],
   cash: ["Debtor Days", "Creditor Days", "Working Capital Days", "OCF / EBITDA"],
 };
@@ -159,7 +159,7 @@ export function flatToRatioInputs(financials: FlatFinancials): RatioInputs {
  * Per-ratio health score (0–100). Shared by client page, reports studio,
  * and overall aggregation.
  */
-export function scoreRatio(name: string, val: number): number {
+export function scoreRatio(name: string, val: number, market?: ScoreMarket): number {
   if (!Number.isFinite(val)) return 50;
 
   // Margins / returns — higher is better
@@ -170,7 +170,9 @@ export function scoreRatio(name: string, val: number): number {
   if (name === "Return on Equity") return clamp((val / 0.2) * 100);
   if (name === "Asset Turnover") return clamp((val / 1.5) * 100);
   if (name === "Gross Profit / Labor") return clamp((val / 0.6) * 100);
-  if (name === "Sales-per-Employee Ratio") return clamp((val / 300_000) * 100);
+  if (name === "Sales-per-Employee Ratio") {
+    return clamp((val / salesPerEmployeeHealthy(market)) * 100);
+  }
   if (name === "OCF / EBITDA") return clamp(val * 100);
   if (name === "Interest Burden") return clamp(val * 100);
   if (name === "Tax Burden") return clamp(val * 100);
@@ -197,7 +199,8 @@ export function scoreRatio(name: string, val: number): number {
 
   // Extra names used by report builders / camelCase aliases
   if (name === "Debt-to-Equity" || name === "Debt to Equity") return clamp(((2 - val) / 2) * 100);
-  if (name === "Debt-to-Assets" || name === "Debt to Assets") return clamp(((0.7 - val) / 0.7) * 100);
+  if (name === "Debt-to-Assets" || name === "Debt to Assets")
+    return clamp(((0.7 - val) / 0.7) * 100);
   if (name === "Current Ratio") return clamp((val / 2) * 100);
   if (name === "Revenue Growth") return clamp((val / 0.2) * 100);
 
@@ -234,7 +237,12 @@ export function pillarForRatioName(name: string): HealthPillarId {
   ) {
     return "profit";
   }
-  if (name.includes("Days") || name.includes("Capital") || name.includes("OCF") || name.includes("Cash")) {
+  if (
+    name.includes("Days") ||
+    name.includes("Capital") ||
+    name.includes("OCF") ||
+    name.includes("Cash")
+  ) {
     return "cash";
   }
   if (
@@ -268,6 +276,8 @@ export type ComputeOverallHealthInput = {
     pillar?: HealthPillarId;
   }>;
   cashRunwayWeeks?: number | null;
+  /** Sales-per-employee uses a market-specific healthy target. Defaults ZA. */
+  market?: ScoreMarket;
 };
 
 /**
@@ -292,7 +302,7 @@ export function computeOverallHealth(input: ComputeOverallHealthInput): OverallH
     for (const [name, val] of Object.entries(input.ratios)) {
       if (val == null || !Number.isFinite(val)) continue;
       const pillar = pillarForRatioName(name);
-      bucket[pillar].push(scoreRatio(name, val));
+      bucket[pillar].push(scoreRatio(name, val, input.market));
     }
   }
 
@@ -318,13 +328,12 @@ export function computeOverallHealth(input: ComputeOverallHealthInput): OverallH
   const overall = overallRaw == null ? null : Math.round(overallRaw);
   const status = scoreTier(overall);
   const hasCriticalPillar = scoredPillars.some((p) => p.status === "critical");
-  const displayStatus: HealthTier =
-    hasCriticalPillar && status === "healthy" ? "at_risk" : status;
+  const displayStatus: HealthTier = hasCriticalPillar && status === "healthy" ? "at_risk" : status;
 
   const weakestPillar =
     scoredPillars.length === 0
       ? null
-      : [...scoredPillars].sort((a, b) => a.score - b.score)[0] ?? null;
+      : ([...scoredPillars].sort((a, b) => a.score - b.score)[0] ?? null);
 
   return {
     overall,
@@ -341,11 +350,13 @@ export function computeOverallHealth(input: ComputeOverallHealthInput): OverallH
 export function scoreFromFlatFinancials(
   financials: FlatFinancials,
   cashRunwayWeeks?: number | null,
+  market?: ScoreMarket,
 ): number | null {
   if (!financials && cashRunwayWeeks == null) return null;
   return computeOverallHealth({
     ratios: financials ? computeRatios(flatToRatioInputs(financials)) : undefined,
     cashRunwayWeeks,
+    market,
   }).overall;
 }
 
@@ -353,10 +364,12 @@ export function scoreFromFlatFinancials(
 export function healthFromFlatFinancials(
   financials: FlatFinancials,
   cashRunwayWeeks?: number | null,
+  market?: ScoreMarket,
 ): OverallHealth {
   return computeOverallHealth({
     ratios: financials ? computeRatios(flatToRatioInputs(financials)) : undefined,
     cashRunwayWeeks,
+    market,
   });
 }
 
@@ -364,20 +377,24 @@ export function healthFromFlatFinancials(
 export function scoreFromRatioInputs(
   inputs: RatioInputs,
   cashRunwayWeeks?: number | null,
+  market?: ScoreMarket,
 ): number | null {
   return computeOverallHealth({
     ratios: computeRatios(inputs),
     cashRunwayWeeks,
+    market,
   }).overall;
 }
 
 export function healthFromRatioInputs(
   inputs: RatioInputs,
   cashRunwayWeeks?: number | null,
+  market?: ScoreMarket,
 ): OverallHealth {
   return computeOverallHealth({
     ratios: computeRatios(inputs),
     cashRunwayWeeks,
+    market,
   });
 }
 

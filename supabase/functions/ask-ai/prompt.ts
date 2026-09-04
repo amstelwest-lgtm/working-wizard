@@ -19,14 +19,17 @@ Rules:
 ${locale}`;
 }
 
-function formatRatio(r: {
-  key: string;
-  value: number | null;
-  format: string;
-  p25: number | null;
-  p50: number | null;
-  higher_is_better: boolean | null;
-}): string {
+function formatRatio(
+  r: {
+    key: string;
+    value: number | null;
+    format: string;
+    p25: number | null;
+    p50: number | null;
+    higher_is_better: boolean | null;
+  },
+  copyPack: "za" | "us" = "za",
+): string {
   if (r.value === null) return `${r.key}: n/a`;
 
   // computeRatios() stores pct values as fractions (e.g. 0.15 = 15%).
@@ -39,9 +42,11 @@ function formatRatio(r: {
         ? `${r.value.toFixed(0)} days`
         : r.value.toFixed(2);
 
+  const hideMoney = copyPack === "us" && r.format !== "pct" && r.format !== "days";
+  const bandLabel = copyPack === "us" ? "global SME band" : "industry median";
   const bench =
-    r.p50 !== null
-      ? ` (industry median: ${
+    r.p50 !== null && !hideMoney
+      ? ` (${bandLabel}: ${
           r.format === "pct"
             ? `${r.p50.toFixed(1)}%` // benchmark already in whole %
             : r.format === "days"
@@ -58,7 +63,12 @@ export function buildPrompt(
   tier: DisclosureTier,
 ): { system: string; user: string } {
   const lines: string[] = [];
-  const system = askAiSystemBase(ctx.copyPack ?? "za");
+  const copyPack = ctx.copyPack ?? "za";
+  let system = askAiSystemBase(copyPack);
+  if (copyPack === "us") {
+    system +=
+      "\n- Days and percentage bands are global SME bands, not US industry medians. Do not present them as US sector medians. Do not invent US money benchmarks.";
+  }
 
   if (tier === "none") {
     // No client data in prompt
@@ -110,7 +120,7 @@ export function buildPrompt(
   if (ctx.ratios.length > 0) {
     lines.push("\nKey ratios:");
     for (const r of ctx.ratios) {
-      lines.push(`  ${formatRatio(r)}`);
+      lines.push(`  ${formatRatio(r, copyPack)}`);
     }
   }
 

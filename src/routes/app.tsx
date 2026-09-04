@@ -26,10 +26,14 @@ import { formatVal, HealthBar, tierColor } from "@/components/owner-board-ui";
 import { MarketProvider, useMarket } from "@/contexts/market";
 import { MarketGate } from "@/components/market-gate";
 import {
+  canShowIndustryMedian,
   coerceMarketSelection,
   formatDate,
   formatNumber,
+  industryBenchmarkCaption,
+  industryBenchmarkShortLabel,
   isMissingMarketSupport,
+  isUsCopy,
   localizeCopy,
   marketToJson,
   parseMarketSelection,
@@ -2781,7 +2785,12 @@ function Index() {
       });
   }, [businessTypeId]);
 
-  const benchmarkFor = (k: RatioKey): Benchmark | null => benchmarks[k] ?? null;
+  const benchmarkFor = (k: RatioKey): Benchmark | null => {
+    const b = benchmarks[k] ?? null;
+    if (!b) return null;
+    if (!canShowIndustryMedian(boardMarket, { metricKey: k, unit: b.unit })) return null;
+    return b;
+  };
   const [btSaving, setBtSaving] = useState(false);
   const [btSaveError, setBtSaveError] = useState<string | null>(null);
   const [showQboDialog, setShowQboDialog] = useState(false);
@@ -2975,14 +2984,16 @@ function Index() {
 
   // Per-ratio scores — shared scoreRatio SSOT (same as accountant client / scorecard).
   // Owner-only extras use scoreRatio aliases; missing inputs stay NaN (never invent 50).
-  const ssotHealth = healthMapFromRatios(computedRatios as Record<string, number>);
+  const ssotHealth = healthMapFromRatios(computedRatios as Record<string, number>, boardMarket);
   const healthMap: Record<RatioKey, number> = {
     taxBurden:
       ssotHealth.taxBurden ??
-      (isFinite(taxBurden) ? Math.round(scoreRatio("Tax Burden", taxBurden)) : NaN),
+      (isFinite(taxBurden) ? Math.round(scoreRatio("Tax Burden", taxBurden, boardMarket)) : NaN),
     interestBurden:
       ssotHealth.interestBurden ??
-      (isFinite(interestBurden) ? Math.round(scoreRatio("Interest Burden", interestBurden)) : NaN),
+      (isFinite(interestBurden)
+        ? Math.round(scoreRatio("Interest Burden", interestBurden, boardMarket))
+        : NaN),
     operatingMargin: ssotHealth.operatingMargin ?? NaN,
     assetTurnover: ssotHealth.assetTurnover ?? NaN,
     equityMultiplier: ssotHealth.equityMultiplier ?? NaN,
@@ -3019,20 +3030,20 @@ function Index() {
       ? Math.round(clamp(((0.25 - workingCapitalFunding) / 0.25) * 100))
       : NaN,
     revenueGrowth: isFinite(revenueGrowth)
-      ? Math.round(scoreRatio("Revenue Growth", revenueGrowth))
+      ? Math.round(scoreRatio("Revenue Growth", revenueGrowth, boardMarket))
       : NaN,
     capexIntensity: isFinite(capexIntensity) ? Math.round(hRange(capexIntensity, 0.02, 0.1)) : NaN,
     assetReinvestmentRatio: isFinite(assetReinvestmentRatio)
       ? Math.round(hRange(assetReinvestmentRatio, 0.8, 1.5))
       : NaN,
     currentRatio: isFinite(currentRatio)
-      ? Math.round(scoreRatio("Current Ratio", currentRatio))
+      ? Math.round(scoreRatio("Current Ratio", currentRatio, boardMarket))
       : NaN,
     debtToEquity: isFinite(debtToEquity)
-      ? Math.round(scoreRatio("Debt-to-Equity", debtToEquity))
+      ? Math.round(scoreRatio("Debt-to-Equity", debtToEquity, boardMarket))
       : NaN,
     debtToAssets: isFinite(debtToAssets)
-      ? Math.round(scoreRatio("Debt-to-Assets", debtToAssets))
+      ? Math.round(scoreRatio("Debt-to-Assets", debtToAssets, boardMarket))
       : NaN,
   };
 
@@ -3042,7 +3053,7 @@ function Index() {
     clientMeta?.cash_runway_weeks,
     clientMeta?.cashflow ?? null,
   );
-  const overallHealth = healthFromRatioInputs(v, effectiveRunway);
+  const overallHealth = healthFromRatioInputs(v, effectiveRunway, boardMarket);
   const pillarById = Object.fromEntries(
     overallHealth.pillars.map((p) => [p.id, p.score ?? NaN]),
   ) as Record<"profit" | "assets" | "financing" | "cash", number>;
@@ -3308,7 +3319,11 @@ function Index() {
                     <button
                       onClick={() => setShowFinData(true)}
                       className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-[#b7872a]/50 bg-gradient-to-b from-[#d4a550]/20 to-[#b7872a]/10 px-2.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-[#8a6508] shadow-[0_1px_6px_rgba(212,165,80,0.16)] transition-colors hover:border-[#b7872a]/80 hover:from-[#d4a550]/30 hover:to-[#b7872a]/20 dark:text-[#e1b85e]"
-                      title="Upload financial statements or connect QuickBooks Online"
+                      title={
+                        isUsCopy(boardMarket)
+                          ? "Connect QuickBooks or upload statements"
+                          : "Upload financial statements or connect QuickBooks Online"
+                      }
                     >
                       <Upload className="h-3 w-3 shrink-0" />
                       <span className="hidden sm:inline">Upload</span>
@@ -3571,73 +3586,96 @@ function Index() {
                     Step 2 of 2 · Bring in your numbers
                   </p>
                   <DialogTitle className="text-xl text-slate-100 mt-1">
-                    Upload 3 months of bank statements
+                    {isUsCopy(boardMarket)
+                      ? "Connect QuickBooks or upload figures"
+                      : "Upload 3 months of bank statements"}
                   </DialogTitle>
                   <DialogDescription className="text-slate-400">
-                    Fastest path: drop the last ~3 months of statements (add every bank account). We
-                    draft your P&amp;L, pre-fill budget, build a cash forecast, and show movements
-                    in balances — from one upload.
+                    {isUsCopy(boardMarket)
+                      ? "Fastest US path: connect QuickBooks Online. Excel, CSV, or PDF financials also work — bank statements if that is what you have. Xero is also on the list, not the lead path."
+                      : "Fastest path: drop the last ~3 months of statements (add every bank account). We draft your P&L, pre-fill budget, build a cash forecast, and show movements in balances — from one upload."}
                   </DialogDescription>
                 </DialogHeader>
                 <div className="flex flex-col gap-3 pt-2">
-                  <button
-                    onClick={() => {
-                      setFirstRunStep(null);
-                      setShowBankDrafter(true);
-                    }}
-                    className="flex items-center gap-3 rounded-lg border border-[#d4a550]/40 bg-[#d4a550]/10 p-4 text-left hover:border-[#d4a550]/70 hover:bg-[#d4a550]/15 transition-all"
-                  >
-                    <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#d4a550]/20 text-[#d4a550]">
-                      <Upload className="h-4 w-4" />
-                    </span>
-                    <div>
-                      <p className="font-semibold text-slate-100 text-sm">
-                        Upload bank statements (recommended)
-                      </p>
-                      <p className="text-[11px] text-slate-400 mt-0.5">
-                        PDF or CSV · ~3 months · AI drafts your figures
-                      </p>
-                    </div>
-                  </button>
-                  <button
-                    onClick={() => {
-                      setFirstRunStep(null);
-                      setShowFinData(true);
-                      setTimeout(() => uploadRef.current?.click(), 150);
-                    }}
-                    className="flex items-center gap-3 rounded-lg border border-slate-700 bg-slate-900 p-4 text-left hover:border-[#d4a550]/50 hover:bg-slate-800 transition-all"
-                  >
-                    <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-700 text-slate-300">
-                      <Database className="h-4 w-4" />
-                    </span>
-                    <div>
-                      <p className="font-semibold text-slate-100 text-sm">
-                        Upload a financial statement instead
-                      </p>
-                      <p className="text-[11px] text-slate-400 mt-0.5">
-                        PDF, Excel or CSV management accounts
-                      </p>
-                    </div>
-                  </button>
-                  <button
-                    onClick={() => {
-                      setFirstRunStep(null);
-                      setShowQboDialog(true);
-                    }}
-                    className="flex items-center gap-3 rounded-lg border border-slate-700 bg-slate-900 p-4 text-left hover:border-[#d4a550]/50 hover:bg-slate-800 transition-all"
-                  >
-                    <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400">
-                      <Plug2 className="h-4 w-4" />
-                    </span>
-                    <div>
-                      <p className="font-semibold text-slate-100 text-sm">
-                        Connect QuickBooks Online
-                      </p>
-                      <p className="text-[11px] text-slate-400 mt-0.5">
-                        Sync live books when QBO is configured (Xero not available yet)
-                      </p>
-                    </div>
-                  </button>
+                  {(isUsCopy(boardMarket)
+                    ? (["qbo", "files", "bank"] as const)
+                    : (["bank", "files", "qbo"] as const)
+                  ).map((id) => {
+                    const hero =
+                      (isUsCopy(boardMarket) && id === "qbo") ||
+                      (!isUsCopy(boardMarket) && id === "bank");
+                    const onClick =
+                      id === "qbo"
+                        ? () => {
+                            setFirstRunStep(null);
+                            setShowQboDialog(true);
+                          }
+                        : id === "files"
+                          ? () => {
+                              setFirstRunStep(null);
+                              setShowFinData(true);
+                              setTimeout(() => uploadRef.current?.click(), 150);
+                            }
+                          : () => {
+                              setFirstRunStep(null);
+                              setShowBankDrafter(true);
+                            };
+                    const title =
+                      id === "qbo"
+                        ? isUsCopy(boardMarket)
+                          ? "Connect QuickBooks Online (recommended)"
+                          : "Connect QuickBooks Online"
+                        : id === "files"
+                          ? isUsCopy(boardMarket)
+                            ? "Upload Excel, CSV, or PDF financials"
+                            : "Upload a financial statement instead"
+                          : isUsCopy(boardMarket)
+                            ? "Upload bank statements"
+                            : "Upload bank statements (recommended)";
+                    const sub =
+                      id === "qbo"
+                        ? isUsCopy(boardMarket)
+                          ? "Sync live books when QBO is configured. Xero is also supported later."
+                          : "Sync live books when QBO is configured (Xero not available yet)"
+                        : id === "files"
+                          ? "PDF, Excel or CSV management accounts"
+                          : "PDF or CSV · ~3 months · AI drafts your figures";
+                    const icon =
+                      id === "qbo" ? (
+                        <Plug2 className="h-4 w-4" />
+                      ) : id === "files" ? (
+                        <Database className="h-4 w-4" />
+                      ) : (
+                        <Upload className="h-4 w-4" />
+                      );
+                    return (
+                      <button
+                        key={id}
+                        onClick={onClick}
+                        className={
+                          hero
+                            ? "flex items-center gap-3 rounded-lg border border-[#d4a550]/40 bg-[#d4a550]/10 p-4 text-left hover:border-[#d4a550]/70 hover:bg-[#d4a550]/15 transition-all"
+                            : "flex items-center gap-3 rounded-lg border border-slate-700 bg-slate-900 p-4 text-left hover:border-[#d4a550]/50 hover:bg-slate-800 transition-all"
+                        }
+                      >
+                        <span
+                          className={`flex h-9 w-9 items-center justify-center rounded-lg ${
+                            hero
+                              ? "bg-[#d4a550]/20 text-[#d4a550]"
+                              : id === "qbo"
+                                ? "bg-emerald-500/10 text-emerald-400"
+                                : "bg-slate-700 text-slate-300"
+                          }`}
+                        >
+                          {icon}
+                        </span>
+                        <div>
+                          <p className="font-semibold text-slate-100 text-sm">{title}</p>
+                          <p className="text-[11px] text-slate-400 mt-0.5">{sub}</p>
+                        </div>
+                      </button>
+                    );
+                  })}
                   <button
                     onClick={() => {
                       setFirstRunStep(null);
@@ -3900,6 +3938,11 @@ function Index() {
                           clientMeta?.financials_updated_at ?? null,
                         )}
                       />
+                      {isUsCopy(boardMarket) && (
+                        <p className="mb-3 text-[11px] leading-relaxed text-slate-500">
+                          {industryBenchmarkCaption(boardMarket)}
+                        </p>
+                      )}
                       {!hasRealFinancials && !actingClientId && (
                         <div className="mb-4 flex items-center gap-3 rounded-lg border border-amber-700/40 bg-amber-950/20 px-4 py-2.5 text-xs text-amber-300">
                           <span className="text-amber-400">⚠</span>
@@ -4113,7 +4156,7 @@ function Index() {
                                     Trend
                                   </th>
                                   <th className="w-20 px-4 py-2 text-center text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-500">
-                                    vs Industry
+                                    {industryBenchmarkShortLabel(boardMarket)}
                                   </th>
                                   <th className="w-24 px-4 py-2 text-right text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-500">
                                     Health
@@ -4225,7 +4268,7 @@ function Index() {
                                         {bm && isFinite(rawVal) ? (
                                           <div
                                             className="flex gap-[2px] justify-center"
-                                            title={`Industry benchmark: p25=${bm.p25} p50=${bm.p50} p75=${bm.p75}`}
+                                            title={`${industryBenchmarkShortLabel(boardMarket)}: p25=${bm.p25} p50=${bm.p50} p75=${bm.p75}`}
                                           >
                                             {qCols.map((c, qi) => (
                                               <div
@@ -4624,6 +4667,24 @@ function Index() {
                 }}
               />
               <div className="grid gap-3 sm:grid-cols-2">
+                {isUsCopy(boardMarket) && (
+                  <button
+                    onClick={() => {
+                      setShowFinData(false);
+                      setShowQboDialog(true);
+                    }}
+                    className="flex flex-col items-start gap-1.5 rounded-lg border border-[#d4a550]/50 bg-[#d4a550]/10 p-4 text-left transition-colors hover:border-[#d4a550]/80 hover:bg-[#d4a550]/15 dark:border-[#b7872a]/60 dark:bg-[#d4a550]/10 dark:hover:border-[#d4a550]/80"
+                  >
+                    <span className="flex items-center gap-2 text-sm font-semibold text-amber-900 dark:text-slate-100">
+                      <Plug2 className="h-4 w-4" />
+                      Connect QuickBooks Online
+                    </span>
+                    <span className="text-xs text-slate-600 dark:text-slate-400">
+                      Recommended for US books — sync live accounting data when QBO is configured.
+                      Xero is also on the list, not the lead path.
+                    </span>
+                  </button>
+                )}
                 <button
                   disabled={uploading}
                   onClick={() => uploadRef.current?.click()}
@@ -4641,22 +4702,24 @@ function Index() {
                     PDF, CSV or Excel financial statements — figures are read automatically.
                   </span>
                 </button>
-                <button
-                  onClick={() => {
-                    setShowFinData(false);
-                    setShowQboDialog(true);
-                  }}
-                  className="flex flex-col items-start gap-1.5 rounded-lg border border-amber-700/30 bg-amber-50 p-4 text-left transition-colors hover:border-amber-700/60 hover:bg-amber-100 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-[#b7872a]/60 dark:hover:bg-slate-800"
-                >
-                  <span className="flex items-center gap-2 text-sm font-semibold text-amber-900 dark:text-slate-100">
-                    <Plug2 className="h-4 w-4" />
-                    Connect QuickBooks Online
-                  </span>
-                  <span className="text-xs text-slate-600 dark:text-slate-400">
-                    Sync live accounting data when QBO is configured for this workspace. Xero is not
-                    available yet.
-                  </span>
-                </button>
+                {!isUsCopy(boardMarket) && (
+                  <button
+                    onClick={() => {
+                      setShowFinData(false);
+                      setShowQboDialog(true);
+                    }}
+                    className="flex flex-col items-start gap-1.5 rounded-lg border border-amber-700/30 bg-amber-50 p-4 text-left transition-colors hover:border-amber-700/60 hover:bg-amber-100 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-[#b7872a]/60 dark:hover:bg-slate-800"
+                  >
+                    <span className="flex items-center gap-2 text-sm font-semibold text-amber-900 dark:text-slate-100">
+                      <Plug2 className="h-4 w-4" />
+                      Connect QuickBooks Online
+                    </span>
+                    <span className="text-xs text-slate-600 dark:text-slate-400">
+                      Sync live accounting data when QBO is configured for this workspace. Xero is
+                      not available yet.
+                    </span>
+                  </button>
+                )}
                 <button
                   onClick={() => {
                     setShowFinData(false);
@@ -5118,21 +5181,25 @@ function Ratio({
           </span>
         )}
       </div>
-      {benchmark && isFinite(value) && (
-        <div className="mt-3 border-t border-slate-700/40 pt-2">
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-[10px] uppercase tracking-wider text-slate-500">vs industry</span>
-            <span className="text-[10px] font-mono text-slate-400 tabular-nums">
-              25% {formatVal(benchmark.p25, format, market)} · 50%{" "}
-              {formatVal(benchmark.p50, format, market)} · 75%{" "}
-              {formatVal(benchmark.p75, format, market)}
-            </span>
+      {benchmark &&
+        isFinite(value) &&
+        canShowIndustryMedian(market, { metricKey: rkey, format }) && (
+          <div className="mt-3 border-t border-slate-700/40 pt-2">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[10px] uppercase tracking-wider text-slate-500">
+                {industryBenchmarkShortLabel(market)}
+              </span>
+              <span className="text-[10px] font-mono text-slate-400 tabular-nums">
+                25% {formatVal(benchmark.p25, format, market)} · 50%{" "}
+                {formatVal(benchmark.p50, format, market)} · 75%{" "}
+                {formatVal(benchmark.p75, format, market)}
+              </span>
+            </div>
+            <div className="mt-1">
+              <BenchmarkBar value={value} benchmark={benchmark} width={260} />
+            </div>
           </div>
-          <div className="mt-1">
-            <BenchmarkBar value={value} benchmark={benchmark} width={260} />
-          </div>
-        </div>
-      )}
+        )}
       <p className="mt-2 text-[10px] font-bold uppercase tracking-wider text-sky-500/0 transition-colors group-hover:text-sky-500/80">
         ▸ Tap for 5 strategic moves
       </p>
