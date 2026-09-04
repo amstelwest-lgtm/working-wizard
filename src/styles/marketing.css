@@ -29,7 +29,14 @@
   min-height: 100vh;
   background: var(--bg);
   color: var(--ink);
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial,
+  font-family:
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    Roboto,
+    Helvetica,
+    Arial,
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -395,11 +402,7 @@ html.dark .mk .mk-list a {
   padding: 30px 26px;
   border: 1px solid var(--line);
   border-radius: 20px;
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--gold) 9%, var(--bg-2)),
-    var(--bg-2)
-  );
+  background: linear-gradient(180deg, color-mix(in srgb, var(--gold) 9%, var(--bg-2)), var(--bg-2));
   box-shadow: var(--card-shadow);
   text-align: center;
 }
@@ -587,4 +590,24 @@ html .mk .mk-foot a:hover {
     border-top: 1px solid var(--line);
     font-size: 8.5pt;
   }
+}
+
+.mk-copy-us {
+  display: none;
+}
+html[data-market="us"] .mk-copy-za {
+  display: none !important;
+}
+html[data-market="us"] .mk-copy-us {
+  display: revert !important;
+}
+.mk .mk-market-switch button {
+  background: none;
+  border: none;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }

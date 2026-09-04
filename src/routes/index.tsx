@@ -11,10 +11,16 @@ import { OPS_UNLOCK_KEY, unlockOwnerOps } from "@/lib/owner-ops.functions";
 import { registerLighthouseTrialVisit } from "@/lib/lighthouse.functions";
 import { AuthDivider, GoogleSignInButton } from "@/components/google-sign-in-button";
 import { MarketPicker } from "@/components/market-picker";
+import { MarketCopy } from "@/components/marketing-shell";
 import {
+  applyVisitorMarketToDocument,
   draftToSelection,
   isDraftComplete,
+  LIST_PRICES,
   readVisitorDraft,
+  t,
+  visitorCopyPack,
+  VISITOR_MARKET_BOOT_SCRIPT,
   withMarketRpcFallback,
   writeVisitorDraft,
   type DraftMarket,
@@ -39,6 +45,7 @@ export const Route = createFileRoute("/")({
       {
         children: `(function(){try{var d=document.documentElement;d.dataset.landing="1";var t="dark";try{var s=localStorage.getItem("milon.landing.theme");if(s==="light"||s==="dark")t=s;}catch(e){}d.dataset.theme=t;if(t==="light"){d.classList.remove("dark");d.style.backgroundColor="#f7f4ec";d.style.color="#1b1608";d.style.colorScheme="light";}else{d.classList.add("dark");d.style.backgroundColor="#050507";d.style.color="#f2ecdc";d.style.colorScheme="dark";}}catch(e){}})();`,
       },
+      { children: VISITOR_MARKET_BOOT_SCRIPT },
     ],
   }),
 });
@@ -182,7 +189,7 @@ function LandingPage() {
   useEffect(() => {
     writeVisitorDraft(draftMarket);
     (window as unknown as { __milonDraftMarket?: DraftMarket }).__milonDraftMarket = draftMarket;
-    document.body.classList.toggle("market-us", draftMarket.country === "US");
+    applyVisitorMarketToDocument(draftMarket);
   }, [draftMarket]);
 
   /* ── register form state ── */
@@ -196,6 +203,7 @@ function LandingPage() {
   const [regBusy, setRegBusy] = useState(false);
   const [regDone, setRegDone] = useState(false);
   const [draftMarket, setDraftMarket] = useState<DraftMarket>({ country: null, regionCode: null });
+  const copyMarket = { copyPack: visitorCopyPack(draftMarket) };
 
   /* ── redirect if already signed in ──
      Honour a pending Lighthouse unlock so the /app bounce cannot steal the
@@ -562,6 +570,19 @@ function LandingPage() {
       answers = {};
       document.body.className = "persona-" + r;
       if (draft.country === "US") document.body.classList.add("market-us");
+      if (draft.country === "US") {
+        REFLECT.owner["💧"][1] = REFLECT.owner["💧"][1].replace(
+          "SA businesses",
+          "small businesses",
+        );
+        REFLECT.owner["🐢"][1] = REFLECT.owner["🐢"][1].replace("in rand", "in dollars");
+      } else {
+        REFLECT.owner["💧"][1] = REFLECT.owner["💧"][1].replace(
+          "small businesses",
+          "SA businesses",
+        );
+        REFLECT.owner["🐢"][1] = REFLECT.owner["🐢"][1].replace("in dollars", "in rand");
+      }
       const ownerQuiz = QUIZ.owner as Array<{ key: string; q: string; opts: string[][] }>;
       const sizeQ = ownerQuiz.find((s) => s.key === "size");
       if (sizeQ) {
@@ -1787,7 +1808,9 @@ function LandingPage() {
             >
               <polyline points="20 6 9 17 4 12" />
             </svg>
-            <span>SAICA-referenced ratios</span>
+            <span>
+              <MarketCopy za="SAICA-referenced ratios" us="Industry-standard ratios" />
+            </span>
           </div>
           <div className="item">
             <svg
@@ -1806,7 +1829,9 @@ function LandingPage() {
               <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
               <path d="M16 3.13a4 4 0 0 1 0 7.75" />
             </svg>
-            <span>{draftMarket.country === "US" ? "Built for US SMBs" : "Built for SA SMEs"}</span>
+            <span>
+              <MarketCopy za="Built for SA SMEs" us="Built for US SMBs" />
+            </span>
           </div>
           <div className="item">
             <svg
@@ -1839,13 +1864,16 @@ function LandingPage() {
             </p>
           </div>
           <div className="reveal" style={{ maxWidth: 560, margin: "36px auto 0" }}>
-            <MarketPicker
-              value={draftMarket}
-              onChange={setDraftMarket}
-              variant="landing"
-            />
+            <MarketPicker value={draftMarket} onChange={setDraftMarket} variant="landing" />
             {!isDraftComplete(draftMarket) && (
-              <p style={{ marginTop: 14, fontSize: 13, color: "var(--ink-dim)", textAlign: "center" }}>
+              <p
+                style={{
+                  marginTop: 14,
+                  fontSize: 13,
+                  color: "var(--ink-dim)",
+                  textAlign: "center",
+                }}
+              >
                 Choose a region{draftMarket.country === "US" ? " and state" : ""} to continue.
               </p>
             )}
@@ -1954,7 +1982,8 @@ function LandingPage() {
               <div className="metaphor">The Orbit</div>
               <h3>Cash Flow</h3>
               <p>
-                Operating cash, 13-week forecast, debtor days, creditor days, and cash conversion
+                Operating cash, 13-week forecast,{" "}
+                <MarketCopy za="debtor days, creditor days" us="DSO, DPO" />, and cash conversion
                 cycle — the motion that keeps you from falling in.
               </p>
               <div className="score">
@@ -2016,8 +2045,12 @@ function LandingPage() {
           <span>Interest Cover</span>
           <span>Operating Cash Ratio</span>
           <span>13-Week Cash Forecast</span>
-          <span>Debtor Days</span>
-          <span>Creditor Days</span>
+          <span>
+            <MarketCopy za="Debtor Days" us="Days Sales Outstanding" />
+          </span>
+          <span>
+            <MarketCopy za="Creditor Days" us="Days Payable Outstanding" />
+          </span>
           <span>Inventory Turnover</span>
           <span>Cash Conversion Cycle</span>
           <span>Working Capital Ratio</span>
@@ -2027,10 +2060,14 @@ function LandingPage() {
           <span>Leverage Ratio</span>
           <span>Break-even Point</span>
           <span>Revenue per Employee</span>
-          <span>Labour Productivity</span>
+          <span>
+            <MarketCopy za="Labour Productivity" us="Labor Productivity" />
+          </span>
           <span>Cost Structure</span>
           <span>Revenue Growth</span>
-          <span>Profit per Rand Earned</span>
+          <span>
+            <MarketCopy za="Profit per Rand Earned" us="Profit per Dollar Earned" />
+          </span>
           <span>Cash Burn Rate</span>
           <span>Runway Weeks</span>
           <span>Net Working Capital</span>
@@ -2051,19 +2088,10 @@ function LandingPage() {
             </h2>
           </div>
           <p className="sub reveal" style={{ marginTop: 24 }}>
-            {draftMarket.country === "US" ? (
-              <>
-                US businesses operate with accountants they see once a quarter, software that
-                reports the past, and no model for what comes next. The result: smart owners, flying
-                blind. MILŌN is the instrument panel that was missing.
-              </>
-            ) : (
-              <>
-                South African SMEs operate with accountants they see once a quarter, software that
-                reports the past, and no model for what comes next. The result: smart owners, flying
-                blind. MILŌN is the instrument panel that was missing.
-              </>
-            )}
+            <MarketCopy
+              za="South African SMEs operate with accountants they see once a quarter, software that reports the past, and no model for what comes next. The result: smart owners, flying blind. MILŌN is the instrument panel that was missing."
+              us="US businesses operate with accountants they see once a quarter, software that reports the past, and no model for what comes next. The result: smart owners, flying blind. MILŌN is the instrument panel that was missing."
+            />
           </p>
           <div className="steps stagger" style={{ marginTop: 56 }}>
             <div className="step-card">
@@ -2079,7 +2107,10 @@ function LandingPage() {
               <span className="n">02</span>
               <h3>MILŌN scores your business</h3>
               <p>
-              mapped against {draftMarket.country === "US" ? "industry" : "120 SA industry"}{" "}
+                <MarketCopy
+                  za="31 ratios, 4 pillar scores, one overall health score — mapped against 120 SA industry benchmarks."
+                  us="31 ratios, 4 pillar scores, one overall health score — days and percentages, without treating South African medians as US ones."
+                />
               </p>
               <span className="time">Instantly</span>
             </div>
@@ -2266,7 +2297,11 @@ function LandingPage() {
                   <b>Industry news digest</b> — always have sector context ready
                 </li>
                 <li>
-                  <b>Recurring retainer model</b> — R1 200+ uplift per client per month
+                  <b>Recurring retainer model</b> —{" "}
+                  <MarketCopy
+                    za={`${LIST_PRICES.za.retainerUplift} uplift per client per month`}
+                    us={`${LIST_PRICES.us.retainerUplift} uplift per client per month`}
+                  />
                 </li>
               </ul>
             </div>
@@ -2308,11 +2343,19 @@ function LandingPage() {
             </p>
             <ul style={{ listStyle: "none", display: "flex", flexDirection: "column", gap: 10 }}>
               <li style={{ display: "flex", gap: 10, fontSize: 14, color: "var(--ink-dim)" }}>
-                <span style={{ color: "var(--gold)" }}>✦</span>Up to 150 clients — planned R4 500/mo
+                <span style={{ color: "var(--gold)" }}>✦</span>Up to 150 clients — planned{" "}
+                <MarketCopy
+                  za={`${LIST_PRICES.za.firm150}/mo`}
+                  us={`${LIST_PRICES.us.firm150}/mo`}
+                />{" "}
                 (not billed yet)
               </li>
               <li style={{ display: "flex", gap: 10, fontSize: 14, color: "var(--ink-dim)" }}>
-                <span style={{ color: "var(--gold)" }}>✦</span>Unlimited clients — planned R7 200/mo
+                <span style={{ color: "var(--gold)" }}>✦</span>Unlimited clients — planned{" "}
+                <MarketCopy
+                  za={`${LIST_PRICES.za.firmUnlimited}/mo`}
+                  us={`${LIST_PRICES.us.firmUnlimited}/mo`}
+                />{" "}
                 (not billed yet)
               </li>
               <li style={{ display: "flex", gap: 10, fontSize: 14, color: "var(--ink-dim)" }}>
@@ -2357,7 +2400,20 @@ function LandingPage() {
             <div className="price-card">
               <h3>Orbit</h3>
               <div className="amount">
-                R699<small>/mo</small>
+                <MarketCopy
+                  za={
+                    <>
+                      {LIST_PRICES.za.orbit}
+                      <small>/mo</small>
+                    </>
+                  }
+                  us={
+                    <>
+                      {LIST_PRICES.us.orbit}
+                      <small>/mo</small>
+                    </>
+                  }
+                />
               </div>
               <div className="per">Coming soon — not billed yet</div>
               <ul>
@@ -2382,7 +2438,20 @@ function LandingPage() {
             <div className="price-card">
               <h3>Constellation</h3>
               <div className="amount">
-                R1 299<small>/mo</small>
+                <MarketCopy
+                  za={
+                    <>
+                      {LIST_PRICES.za.constellation}
+                      <small>/mo</small>
+                    </>
+                  }
+                  us={
+                    <>
+                      {LIST_PRICES.us.constellation}
+                      <small>/mo</small>
+                    </>
+                  }
+                />
               </div>
               <div className="per">Coming soon — not billed yet</div>
               <ul>
@@ -2482,7 +2551,7 @@ function LandingPage() {
                       id="regNameField"
                       type="text"
                       required
-                      placeholder="Thabo Nkosi"
+                      placeholder={t("nameExample", copyMarket)}
                       value={regName}
                       onChange={(e) => setRegName(e.target.value)}
                     />
@@ -2492,7 +2561,7 @@ function LandingPage() {
                       id="regEmailField"
                       type="email"
                       required
-                      placeholder="thabo@mybusiness.co.za"
+                      placeholder={t("emailExample", copyMarket)}
                       value={regEmail}
                       onChange={(e) => setRegEmail(e.target.value)}
                     />
@@ -2532,32 +2601,31 @@ function LandingPage() {
                       disabled={regBusy}
                       style={{ width: "100%", justifyContent: "center", marginTop: 28 }}
                     >
-                          {regBusy ? "Joining workspace…" : "Accept invitation ✦"}
-                        </button>
-                        <p
-                          style={{
-                            textAlign: "center",
-                            fontSize: 11,
-                            color: "var(--ink-dim)",
-                            marginTop: 14,
-                            lineHeight: 1.5,
-                          }}
-                        >
-                          By joining you agree to the{" "}
-                          <a href="/terms" style={{ color: "inherit" }}>
-                            Terms
-                          </a>
-                          . AI is powered by Claude; financial information sent to it is
-                          anonymised.{" "}
-                          <a href="/privacy" style={{ color: "inherit" }}>
-                            Privacy
-                          </a>
-                          {" · "}
-                          <a href="/ai" style={{ color: "inherit" }}>
-                            AI notice
-                          </a>
-                        </p>
-                      </>
+                      {regBusy ? "Joining workspace…" : "Accept invitation ✦"}
+                    </button>
+                    <p
+                      style={{
+                        textAlign: "center",
+                        fontSize: 11,
+                        color: "var(--ink-dim)",
+                        marginTop: 14,
+                        lineHeight: 1.5,
+                      }}
+                    >
+                      By joining you agree to the{" "}
+                      <a href="/terms" style={{ color: "inherit" }}>
+                        Terms
+                      </a>
+                      . AI is powered by Claude; financial information sent to it is anonymised.{" "}
+                      <a href="/privacy" style={{ color: "inherit" }}>
+                        Privacy
+                      </a>
+                      {" · "}
+                      <a href="/ai" style={{ color: "inherit" }}>
+                        AI notice
+                      </a>
+                    </p>
+                  </>
                 ) : (
                   /* ── Standard signup form ── */
                   <>
@@ -2607,7 +2675,7 @@ function LandingPage() {
                           id="regNameField"
                           type="text"
                           required
-                          placeholder="Thabo Nkosi"
+                          placeholder={t("nameExample", copyMarket)}
                           value={regName}
                           onChange={(e) => setRegName(e.target.value)}
                         />
@@ -2617,7 +2685,7 @@ function LandingPage() {
                           id="regEmailField"
                           type="email"
                           required
-                          placeholder="thabo@mybusiness.co.za"
+                          placeholder={t("emailExample", copyMarket)}
                           value={regEmail}
                           onChange={(e) => setRegEmail(e.target.value)}
                         />
@@ -2651,7 +2719,7 @@ function LandingPage() {
                         <input
                           id="regBusinessField"
                           type="text"
-                          placeholder="Nkosi Engineering (Pty) Ltd"
+                          placeholder={t("entityExample", copyMarket)}
                           value={regBusiness}
                           onChange={(e) => setRegBusiness(e.target.value)}
                         />
@@ -2689,8 +2757,7 @@ function LandingPage() {
                           <a href="/terms" style={{ color: "inherit" }}>
                             Terms
                           </a>
-                          . AI is powered by Claude; financial information sent to it is
-                          anonymised.{" "}
+                          . AI is powered by Claude; financial information sent to it is anonymised.{" "}
                           <a href="/privacy" style={{ color: "inherit" }}>
                             Privacy
                           </a>
@@ -2717,9 +2784,7 @@ function LandingPage() {
             <span style={{ fontSize: 12, color: "var(--ink-dim)" }}>
               The financial health platform
               <br />
-              {draftMarket.country === "US"
-                ? "for US small businesses"
-                : "for South African SMEs"}
+              <MarketCopy za="for South African SMEs" us="for US small businesses" />
             </span>
           </div>
           <nav className="fnav" aria-label="Footer navigation">
@@ -2749,8 +2814,7 @@ function LandingPage() {
           </nav>
           <div className="copy">
             <span>
-              © {new Date().getFullYear()} Eish2oh (Pty) Ltd. Trading as MILŌN. All rights
-              reserved.
+              © {new Date().getFullYear()} Eish2oh (Pty) Ltd. Trading as MILŌN. All rights reserved.
             </span>
             <span>
               <a href="/privacy" style={{ color: "inherit" }}>
@@ -2765,7 +2829,10 @@ function LandingPage() {
                 AI notice
               </a>
               {" · "}
-              Built for South Africa · Powered by Claude AI
+              <MarketCopy
+                za="Built for South Africa · Powered by Claude AI"
+                us="Built for the United States · Powered by Claude AI"
+              />
             </span>
           </div>
         </div>

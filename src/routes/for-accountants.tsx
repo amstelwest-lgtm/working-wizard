@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { MarketingShell } from "@/components/marketing-shell";
+import { MarketCopy, MarketingShell } from "@/components/marketing-shell";
+import { LIST_PRICES, VISITOR_MARKET_BOOT_SCRIPT } from "@/lib/market";
 import marketingCss from "../styles/marketing.css?inline";
 
 export const Route = createFileRoute("/for-accountants")({
@@ -14,6 +15,7 @@ export const Route = createFileRoute("/for-accountants")({
       },
     ],
     styles: [{ children: marketingCss }],
+    scripts: [{ children: VISITOR_MARKET_BOOT_SCRIPT }],
   }),
 });
 
@@ -138,10 +140,17 @@ function ForAccountantsPage() {
       <h2>Pricing for firms</h2>
       <ul className="mk-list">
         <li>
-          <strong>Up to 150 clients</strong> — planned at R4 500 per month, not billed yet.
+          <strong>Up to 150 clients</strong> — planned at{" "}
+          <MarketCopy za={`${LIST_PRICES.za.firm150}`} us={`${LIST_PRICES.us.firm150}`} /> per
+          month, not billed yet.
         </li>
         <li>
-          <strong>Unlimited clients</strong> — planned at R7 200 per month, not billed yet.
+          <strong>Unlimited clients</strong> — planned at{" "}
+          <MarketCopy
+            za={`${LIST_PRICES.za.firmUnlimited}`}
+            us={`${LIST_PRICES.us.firmUnlimited}`}
+          />{" "}
+          per month, not billed yet.
         </li>
         <li>
           <strong>Early access is free</strong> while we build with our first practices, and

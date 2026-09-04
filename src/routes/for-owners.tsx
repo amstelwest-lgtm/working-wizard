@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { MarketingShell } from "@/components/marketing-shell";
+import { MarketCopy, MarketingShell } from "@/components/marketing-shell";
+import { VISITOR_MARKET_BOOT_SCRIPT } from "@/lib/market";
 import marketingCss from "../styles/marketing.css?inline";
 
 export const Route = createFileRoute("/for-owners")({
@@ -14,6 +15,7 @@ export const Route = createFileRoute("/for-owners")({
       },
     ],
     styles: [{ children: marketingCss }],
+    scripts: [{ children: VISITOR_MARKET_BOOT_SCRIPT }],
   }),
 });
 
@@ -30,8 +32,9 @@ function ForOwnersPage() {
       lead={
         <>
           Most owners find out how the business is really doing months after the fact, in a set of
-          annual financial statements written for SARS rather than for them. Milōn turns the same
-          figures into a score, a cash forecast, and a short list of what to do next.
+          annual financial statements written for <MarketCopy za="SARS" us="the IRS" /> rather than
+          for them. Milōn turns the same figures into a score, a cash forecast, and a short list of
+          what to do next.
         </>
       }
       ctaTitle={<>Start with your own figures</>}
@@ -51,7 +54,8 @@ function ForOwnersPage() {
         </li>
         <li>
           <strong>A 13-week cash forecast.</strong> The shortfall weeks show up while there is still
-          time to do something about them, rather than on the morning the debit order bounces.
+          time to do something about them, rather than on the morning the{" "}
+          <MarketCopy za="debit order" us="ACH" /> bounces.
         </li>
         <li>
           <strong>A ranked list of fixes.</strong> Over nine hundred moves in the playbook, filtered
@@ -116,8 +120,9 @@ function ForOwnersPage() {
         <div className="mk-card">
           <h3>Not accounting software</h3>
           <p>
-            It does not replace your books or file anything with SARS. It reads what your books
-            already say and tells you what it means.
+            It does not replace your books or file anything with{" "}
+            <MarketCopy za="SARS" us="the IRS" />. It reads what your books already say and tells
+            you what it means.
           </p>
         </div>
         <div className="mk-card">
