@@ -1,5 +1,6 @@
 /* ==========================================================================
-   Milōn public collateral pages (/for-owners, /for-accountants, /faq).
+   Milōn public collateral pages (/for-owners, /for-accountants, /faq,
+   /privacy, /terms, /ai).
 
    Self-contained so these pages never wait on the app stylesheet, and so
    Cmd-P produces a clean one-pager instead of a screenshot of a dark site.
@@ -206,6 +207,30 @@ html .mk .mk-lead {
   max-width: 62ch;
 }
 
+html .mk .mk-hero-plain {
+  padding: 48px 0 20px;
+}
+
+html .mk .mk-hero-plain::before {
+  display: none;
+}
+
+html .mk .mk-hero-plain h1 {
+  font-size: 22px;
+  font-weight: 550;
+  letter-spacing: 0;
+  line-height: 1.35;
+  margin: 0 0 10px;
+  text-wrap: pretty;
+}
+
+html .mk .mk-hero-plain .mk-lead {
+  font-size: 15.5px;
+  font-weight: 400;
+  line-height: 1.6;
+  max-width: 68ch;
+}
+
 html .mk strong {
   color: var(--ink) !important;
   font-weight: 680;
@@ -330,6 +355,38 @@ html .mk .mk-note {
   margin: 24px 0;
   font-size: 14.5px;
   color: var(--ink-soft) !important;
+}
+
+html .mk .mk-legal-updated {
+  margin: 0 0 8px;
+  font-size: 12.5px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-dim) !important;
+}
+
+html .mk .mk-legal-address {
+  margin: 8px 0 20px;
+  padding: 14px 16px;
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--ink) !important;
+}
+
+html .mk .mk-wrap p a,
+html .mk .mk-qa a,
+html .mk .mk-note a,
+html .mk .mk-list a {
+  color: var(--gold-deep);
+}
+
+html.dark .mk .mk-wrap p a,
+html.dark .mk .mk-qa a,
+html.dark .mk .mk-note a,
+html.dark .mk .mk-list a {
+  color: var(--gold);
 }
 
 /* ── CTA ────────────────────────────────────────────────────────────────── */

@@ -16,6 +16,8 @@ export function MarketingShell({
   ctaTitle,
   ctaBody,
   ctaLabel = "Start free ✦",
+  ctaHref = "/#register",
+  heroTone = "default",
 }: {
   eyebrow: string;
   title: ReactNode;
@@ -24,6 +26,9 @@ export function MarketingShell({
   ctaTitle: ReactNode;
   ctaBody: ReactNode;
   ctaLabel?: string;
+  ctaHref?: string;
+  /** Quiet heading for legal notices that should not read as marketing. */
+  heroTone?: "default" | "plain";
 }) {
   return (
     <div className="mk" data-milon-marketing>
@@ -47,7 +52,7 @@ export function MarketingShell({
       </header>
 
       <div className="mk-wrap">
-        <section className="mk-hero">
+        <section className={heroTone === "plain" ? "mk-hero mk-hero-plain" : "mk-hero"}>
           <span className="mk-eyebrow">{eyebrow}</span>
           <h1>{title}</h1>
           <p className="mk-lead">{lead}</p>
@@ -59,7 +64,7 @@ export function MarketingShell({
           <h2>{ctaTitle}</h2>
           <p>{ctaBody}</p>
           <div style={{ marginTop: 18 }}>
-            <a className="mk-btn" href="/#register">
+            <a className="mk-btn" href={ctaHref}>
               {ctaLabel}
             </a>
             <a className="mk-btn-ghost mk-print-hide" href="/">
@@ -71,8 +76,10 @@ export function MarketingShell({
         <footer className="mk-foot">
           <span>Milōn — financial health for South African businesses.</span>
           <a href="/">milon.co.za</a>
-          <a href="/faq">Questions and objections</a>
-          <a href="/faq">Privacy</a>
+          <a href="/faq">Questions</a>
+          <a href="/privacy">Privacy</a>
+          <a href="/terms">Terms</a>
+          <a href="/ai">AI notice</a>
           <span className="mk-print-hide">Print this page to save it as a PDF.</span>
         </footer>
       </div>
