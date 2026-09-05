@@ -28,6 +28,13 @@ function fmtDate(iso: string | null) {
   });
 }
 
+const codeStyle = {
+  fontSize: 11,
+  background: "#1e293b",
+  padding: "1px 5px",
+  borderRadius: 4,
+} as const;
+
 function fmtMoney(n: number) {
   if (!isFinite(n)) return "—";
   const abs = Math.abs(n);
@@ -162,10 +169,15 @@ export function QboConnectCard({ clientId, onSyncComplete }: Props) {
         >
           QuickBooks Online
         </p>
-        <p style={{ fontSize: 12, color: "#64748b" }}>
-          Set <code style={{ fontSize: 11, background: "#1e293b", padding: "1px 5px", borderRadius: 4 }}>QBO_CLIENT_ID</code>,{" "}
-          <code style={{ fontSize: 11, background: "#1e293b", padding: "1px 5px", borderRadius: 4 }}>QBO_CLIENT_SECRET</code>, and{" "}
-          <code style={{ fontSize: 11, background: "#1e293b", padding: "1px 5px", borderRadius: 4 }}>QBO_REDIRECT_URI</code> to enable sync.
+        <p style={{ fontSize: 12, color: "#94a3b8" }}>
+          QuickBooks sync isn&apos;t switched on for this workspace yet. You are not stuck: export a
+          P&amp;L and balance sheet from QuickBooks (Excel, CSV or PDF) and upload them — the board
+          fills in the same way.
+        </p>
+        <p style={{ fontSize: 11, color: "#64748b", marginTop: 6 }}>
+          Admins: set <code style={codeStyle}>QBO_CLIENT_ID</code>,{" "}
+          <code style={codeStyle}>QBO_CLIENT_SECRET</code> and{" "}
+          <code style={codeStyle}>QBO_REDIRECT_URI</code> to enable live sync.
         </p>
       </div>
     );

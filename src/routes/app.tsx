@@ -3578,7 +3578,9 @@ function Index() {
                 <ProfileFunnel
                   mode={firstRunStep === "pick-type" ? "first-run" : "retake"}
                   initial={operatingProfile}
-                  initialFyStartMonth={operatingProfile?.fyStartMonth ?? boardMarket.fyStartMonthDefault}
+                  initialFyStartMonth={
+                    operatingProfile?.fyStartMonth ?? boardMarket.fyStartMonthDefault
+                  }
                   onCancel={
                     firstRunStep === "pick-type" ? undefined : () => setShowOnboarding(false)
                   }
@@ -3638,7 +3640,7 @@ function Index() {
                   </DialogTitle>
                   <DialogDescription className="text-slate-400">
                     {isUsCopy(boardMarket)
-                      ? "Fastest US path: connect QuickBooks Online. Excel, CSV, or PDF financials also work — bank statements if that is what you have. Xero is also on the list, not the lead path."
+                      ? "Fastest US path: connect QuickBooks Online. Excel, CSV or PDF financials work just as well — or bank statements if that is what you have."
                       : "Fastest path: drop the last ~3 months of statements (add every bank account). We draft your P&L, pre-fill budget, build a cash forecast, and show movements in balances — from one upload."}
                   </DialogDescription>
                 </DialogHeader>
@@ -3681,8 +3683,8 @@ function Index() {
                     const sub =
                       id === "qbo"
                         ? isUsCopy(boardMarket)
-                          ? "Sync live books when QBO is configured. Xero is also supported later."
-                          : "Sync live books when QBO is configured (Xero not available yet)"
+                          ? "Live sync from your books (Xero coming later)"
+                          : "Live sync from your books (Xero not available yet)"
                         : id === "files"
                           ? "PDF, Excel or CSV management accounts"
                           : "PDF or CSV · ~3 months · AI drafts your figures";
@@ -3932,7 +3934,8 @@ function Index() {
                                   </div>
                                 ) : (
                                   <p className="max-w-sm text-center text-sm text-slate-500">
-                                    Financial data hasn't been added yet. The owner will set this up.
+                                    Financial data hasn't been added yet. The owner will set this
+                                    up.
                                   </p>
                                 )}
                               </div>

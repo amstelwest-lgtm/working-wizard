@@ -316,7 +316,11 @@ function AuthPage() {
                           required
                         />
                       </div>
-                      <MarketPicker value={draftMarket} onChange={setDraftMarket} audience="practice" />
+                      <MarketPicker
+                        value={draftMarket}
+                        onChange={setDraftMarket}
+                        audience="practice"
+                      />
                     </>
                   )}
                   <div>

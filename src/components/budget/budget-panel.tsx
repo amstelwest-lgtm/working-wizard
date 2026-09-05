@@ -96,12 +96,17 @@ export function BudgetPanel({
       setLoaded(true);
       return;
     }
+    // Ignore a stale response after cleanup: a superseded load resolving late
+    // (StrictMode double-mount, client switch) used to setDoc(null) over a
+    // budget just seeded from the profile — "Budget ready" toast, empty panel.
+    let cancelled = false;
     supabase
       .from("clients")
       .select("budget, budget_updated_at, financial_year_start_month, operating_profile")
       .eq("id", clientId)
       .maybeSingle()
       .then(({ data, error }) => {
+        if (cancelled) return;
         if (error) {
           console.warn("budget load:", error.message);
         }
@@ -122,6 +127,9 @@ export function BudgetPanel({
         }
         setLoaded(true);
       });
+    return () => {
+      cancelled = true;
+    };
   }, [clientId]);
 
   useEffect(() => {
