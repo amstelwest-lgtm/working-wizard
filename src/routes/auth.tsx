@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
+import { createFileRoute, Outlet, useNavigate, useRouterState, Link } from "@tanstack/react-router";
 import { PreLoginShareButton } from "@/components/share";
 import { useState, useEffect, useRef } from "react";
 import { useServerFn } from "@tanstack/react-start";
@@ -33,7 +33,7 @@ import {
 } from "@/lib/market";
 
 export const Route = createFileRoute("/auth")({
-  component: AuthPage,
+  component: AuthLayout,
   validateSearch: (search: Record<string, unknown>): { next?: string } => ({
     next: typeof search.next === "string" && search.next.startsWith("/") ? search.next : undefined,
   }),
@@ -41,6 +41,12 @@ export const Route = createFileRoute("/auth")({
     meta: [{ title: "Sign in — Milōn" }],
   }),
 });
+
+function AuthLayout() {
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  if (pathname !== "/auth") return <Outlet />;
+  return <AuthPage />;
+}
 
 function AuthPage() {
   const { user, loading } = useAuth();
@@ -76,12 +82,6 @@ function AuthPage() {
   const googleNext = isOpsNext(next) || next?.startsWith("/access/") ? next : undefined;
   const landedPathRef = useRef<string | null>(null);
   const landInflightRef = useRef<Promise<string> | null>(null);
-
-  // Stamp the accountant door as soon as this page is shown — before submit —
-  // so a dual-role session cannot be claimed by the founder landing redirect.
-  useEffect(() => {
-    setPortalIntent("accountant");
-  }, []);
 
   const landAfterAccountantAuth = async (userId: string) => {
     if (landedPathRef.current) return landedPathRef.current;
@@ -156,7 +156,7 @@ function AuthPage() {
           email,
           password,
           options: {
-            emailRedirectTo: `${window.location.origin}/dashboard`,
+            emailRedirectTo: `${window.location.origin}/confirm`,
             data: {
               full_name: fullName,
               firm_name: firmName.trim(),
@@ -168,9 +168,10 @@ function AuthPage() {
           },
         });
         if (error) throw error;
+        forcePortal("accountant");
         notifySignup("Accountant firm", email, fullName);
         if (!data.session) {
-          toast.success("Account created — check your email to confirm before signing in.");
+          toast.success("Account created — check your email and tap the Milōn confirmation link.");
           return;
         }
         if (data.user && firmName.trim()) {

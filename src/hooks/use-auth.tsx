@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
+import { isPracticeSignupMeta } from "@/lib/user-roles";
 
 type AuthCtx = {
   user: User | null;
@@ -26,8 +27,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(s);
       // After email-confirmation sign-in, create the firm from metadata if it doesn't exist yet.
       if (event === "SIGNED_IN" && s?.user) {
-        const firmName = s.user.user_metadata?.firm_name as string | undefined;
-        if (firmName) {
+        const meta = s.user.user_metadata as Record<string, unknown> | undefined;
+        const firmName = typeof meta?.firm_name === "string" ? meta.firm_name : undefined;
+        if (isPracticeSignupMeta(meta) && firmName) {
           const { count } = await supabase
             .from("firms")
             .select("id", { count: "exact", head: true })

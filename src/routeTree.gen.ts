@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as UnsubscribeRouteImport } from './routes/unsubscribe'
 import { Route as TermsRouteImport } from './routes/terms'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
+import { Route as ConfirmRouteImport } from './routes/confirm'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as ForOwnersRouteImport } from './routes/for-owners'
 import { Route as ForAccountantsRouteImport } from './routes/for-accountants'
@@ -59,6 +60,11 @@ const TermsRoute = TermsRouteImport.update({
 const ResetPasswordRoute = ResetPasswordRouteImport.update({
   id: '/reset-password',
   path: '/reset-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ConfirmRoute = ConfirmRouteImport.update({
+  id: '/confirm',
+  path: '/confirm',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PrivacyRoute = PrivacyRouteImport.update({
@@ -246,6 +252,7 @@ export interface FileRoutesByFullPath {
   '/for-owners': typeof ForOwnersRoute
   '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/confirm': typeof ConfirmRoute
   '/terms': typeof TermsRoute
   '/unsubscribe': typeof UnsubscribeRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
@@ -283,6 +290,7 @@ export interface FileRoutesByTo {
   '/for-owners': typeof ForOwnersRoute
   '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/confirm': typeof ConfirmRoute
   '/terms': typeof TermsRoute
   '/unsubscribe': typeof UnsubscribeRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
@@ -322,6 +330,7 @@ export interface FileRoutesById {
   '/for-owners': typeof ForOwnersRoute
   '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/confirm': typeof ConfirmRoute
   '/terms': typeof TermsRoute
   '/unsubscribe': typeof UnsubscribeRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
@@ -361,6 +370,7 @@ export interface FileRouteTypes {
     | '/for-owners'
     | '/privacy'
     | '/reset-password'
+    | '/confirm'
     | '/terms'
     | '/unsubscribe'
     | '/dashboard'
@@ -398,6 +408,7 @@ export interface FileRouteTypes {
     | '/for-owners'
     | '/privacy'
     | '/reset-password'
+    | '/confirm'
     | '/terms'
     | '/unsubscribe'
     | '/dashboard'
@@ -436,6 +447,7 @@ export interface FileRouteTypes {
     | '/for-owners'
     | '/privacy'
     | '/reset-password'
+    | '/confirm'
     | '/terms'
     | '/unsubscribe'
     | '/_authenticated/dashboard'
@@ -475,6 +487,7 @@ export interface RootRouteChildren {
   ForOwnersRoute: typeof ForOwnersRoute
   PrivacyRoute: typeof PrivacyRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
+  ConfirmRoute: typeof ConfirmRoute
   TermsRoute: typeof TermsRoute
   UnsubscribeRoute: typeof UnsubscribeRoute
   AccessTokenRoute: typeof AccessTokenRoute
@@ -514,6 +527,13 @@ declare module '@tanstack/react-router' {
       path: '/reset-password'
       fullPath: '/reset-password'
       preLoaderRoute: typeof ResetPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/confirm': {
+      id: '/confirm'
+      path: '/confirm'
+      fullPath: '/confirm'
+      preLoaderRoute: typeof ConfirmRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/privacy': {
@@ -799,6 +819,7 @@ const rootRouteChildren: RootRouteChildren = {
   ForOwnersRoute: ForOwnersRoute,
   PrivacyRoute: PrivacyRoute,
   ResetPasswordRoute: ResetPasswordRoute,
+  ConfirmRoute: ConfirmRoute,
   TermsRoute: TermsRoute,
   UnsubscribeRoute: UnsubscribeRoute,
   AccessTokenRoute: AccessTokenRoute,

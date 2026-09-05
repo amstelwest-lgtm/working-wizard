@@ -118,6 +118,19 @@ function LandingPage() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+    void import("@/lib/email-confirm").then(({ shouldForwardToConfirm, confirmUrlFromLocation }) => {
+      if (
+        shouldForwardToConfirm(window.location.pathname, window.location.search, window.location.hash)
+      ) {
+        window.location.replace(
+          confirmUrlFromLocation(window.location.origin, window.location.search, window.location.hash),
+        );
+      }
+    });
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
     const lh = new URLSearchParams(window.location.search).get("lh");
     if (!lh) return;
     setLhToken(lh);
@@ -944,7 +957,7 @@ function LandingPage() {
         email: regEmail,
         password: regPassword,
         options: {
-          emailRedirectTo: `${window.location.origin}/app`,
+          emailRedirectTo: `${window.location.origin}/confirm`,
           data: {
             full_name: regName.trim(),
             business_name: regBusiness.trim() || regName.trim(),
@@ -956,6 +969,8 @@ function LandingPage() {
         },
       });
       if (error) throw error;
+      const { forcePortal } = await import("@/lib/user-roles");
+      forcePortal("owner");
       notifySignup("Business owner", regEmail, regName.trim());
       if (lhToken) {
         void doTrialVisit({ data: { token: lhToken, signedUp: true } }).catch(() => {});
@@ -1044,8 +1059,10 @@ function LandingPage() {
             Check your email
           </h2>
           <p style={{ fontSize: 14, color: "#9b958a", lineHeight: 1.6 }}>
-            We sent a confirmation link to <span style={{ color: "#d4af37" }}>{regEmail}</span>.
-            Click it to activate your account.
+            We sent a confirmation email from Milōn to{" "}
+            <span style={{ color: "#d4af37" }}>{regEmail}</span>. Open it and tap{" "}
+            <span style={{ color: "#f2ecdc" }}>Confirm email and continue</span>. You’ll land on a
+            short welcome page, then your business board — not a generic verify screen.
           </p>
           <button
             onClick={() => setRegDone(false)}

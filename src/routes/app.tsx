@@ -1997,6 +1997,21 @@ function Index() {
   const navigate = useNavigate();
   const [workspaceMarket, setWorkspaceMarket] = useState<MarketSelection | null>(null);
 
+  // Old confirmation emails pointed here. Forward the auth tokens to the
+  // light confirm page so the 5k-line board is not the first paint.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    void import("@/lib/email-confirm").then(({ shouldForwardToConfirm, confirmUrlFromLocation }) => {
+      if (
+        shouldForwardToConfirm(window.location.pathname, window.location.search, window.location.hash)
+      ) {
+        window.location.replace(
+          confirmUrlFromLocation(window.location.origin, window.location.search, window.location.hash),
+        );
+      }
+    });
+  }, []);
+
   // Redirect unauthenticated users to the landing page. After invite accept,
   // React auth state can lag the real Supabase session — don't bounce yet.
   useEffect(() => {

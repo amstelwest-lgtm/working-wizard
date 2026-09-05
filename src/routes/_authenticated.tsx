@@ -22,6 +22,19 @@ function AuthGate() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+    void import("@/lib/email-confirm").then(({ shouldForwardToConfirm, confirmUrlFromLocation }) => {
+      if (
+        shouldForwardToConfirm(window.location.pathname, window.location.search, window.location.hash)
+      ) {
+        window.location.replace(
+          confirmUrlFromLocation(window.location.origin, window.location.search, window.location.hash),
+        );
+      }
+    });
+  }, []);
+
+  useEffect(() => {
     if (!loading && !user) navigate({ to: "/auth", search: {} });
   }, [user, loading, navigate]);
 

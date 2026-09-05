@@ -253,8 +253,11 @@ export function canEnterAccountantPortal(d: PortalRouteDecision): boolean {
   // Business-client only: never the practice portal.
   if (d.hasClientRole) return false;
 
+  // Unprovisioned: a one-shot accountant-door force, or a true practice
+  // signup. Leftover localStorage intent (e.g. visiting /auth) must not
+  // promote a fresh business-owner confirm into the practice portal.
   if (d.force === "accountant") return true;
-  if (d.intent === "accountant") return true;
+  if (d.intent === "accountant" && d.practiceSignup) return true;
   return false;
 }
 

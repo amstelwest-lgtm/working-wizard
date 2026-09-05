@@ -159,8 +159,20 @@ assert(isPracticeSignupMeta({ firm_name: "Acme & Partners" }) === true, "firm_na
 assert(decidePostLoginPath(noRolesFirm) === "/dashboard", "firm owner with no role rows → portal");
 assert(decideAccountantStay(noRolesFirm) === true, "firm owner stays");
 assert(
-  decideAccountantStay(d({ intent: "accountant" })) === true,
-  "accountant-door provisioning race stays on portal",
+  decideAccountantStay(d({ intent: "accountant" })) === false,
+  "leftover accountant intent without practice signup does not stay on portal",
+);
+assert(
+  decidePostLoginPath(d({ intent: "accountant" })) === "/app",
+  "fresh owner with leftover accountant intent → founder board",
+);
+assert(
+  decideAccountantStay(d({ intent: "accountant", practiceSignup: true })) === true,
+  "unprovisioned accountant signup + intent stays on portal",
+);
+assert(
+  decidePostLoginPath(d({ intent: "accountant", practiceSignup: true })) === "/dashboard",
+  "unprovisioned accountant signup + intent → portal",
 );
 
 assert(
@@ -257,5 +269,15 @@ assert(
   profileSrc.includes("roles.hasPracticeRole"),
   "profile provider still provisions firms for dual-role practice accounts",
 );
+assert(
+  !profileSrc.includes("!roles.hasClientRole"),
+  "profile provider must not mint a firm just because client role is missing yet",
+);
+
+const landingSrc = readFileSync(resolve("src/routes/index.tsx"), "utf8");
+assert(landingSrc.includes("/confirm"), "owner signup confirmation lands on /confirm");
+const confirmSrc = readFileSync(resolve("src/routes/confirm.tsx"), "utf8");
+assert(confirmSrc.includes("ensure_own_client"), "confirm page provisions the owner workspace");
+assert(confirmSrc.includes("forcePortal"), "confirm page stamps the door from signup metadata");
 
 console.log("portal-routing: all assertions passed");
