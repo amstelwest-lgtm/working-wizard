@@ -260,12 +260,19 @@ export function canEnterAccountantPortal(d: PortalRouteDecision): boolean {
 
 /**
  * Where a generic (landing) sign-in should land.
- * A one-shot `force` from a specific door wins — except business-client
- * accounts cannot enter the practice portal by using the accountant door.
+ * A one-shot `force` from a specific door wins — except:
+ * - business-client accounts cannot enter the practice portal via the accountant door
+ * - owner-door intent + a client/owner role beats leftover accountant force
+ *   (SME accounts are often auto-granted firm_admin, which would otherwise
+ *   send owner Google to /dashboard after a prior /auth visit)
  */
 export function decidePostLoginPath(d: PortalRouteDecision): "/dashboard" | "/app" {
   if (d.force === "owner") return "/app";
   if (!canEnterAccountantPortal(d)) return "/app";
+  // Owner-door Google (or any owner intent) with a client/owner role must land
+  // on /app even if leftover milon_force_portal=accountant remains from a prior
+  // /auth visit. Practice-only accounts still follow leftover accountant force.
+  if (d.intent === "owner" && d.hasClientRole) return "/app";
   if (d.force === "accountant") return "/dashboard";
   if (d.intent === "accountant") return "/dashboard";
 

@@ -167,6 +167,29 @@ assert(
   decidePostLoginPath({ ...dual, intent: "accountant", force: "owner" }) === "/app",
   "explicit founder-door force wins over leftover accountant intent",
 );
+
+// Owner-door Google must not land on /dashboard because of leftover /auth force
+// plus auto-granted firm_admin on SME (ensure_practice_firm) accounts.
+assert(
+  decidePostLoginPath({ ...leftoverFirmAdmin, intent: "owner" }) === "/app",
+  "leftover accountant force + owner intent + dual-role / leftover firm_admin → founder board",
+);
+assert(
+  decidePostLoginPath({ ...dual, force: "accountant", intent: "owner" }) === "/app",
+  "leftover accountant force + owner Google + dual-role → founder board",
+);
+assert(
+  decidePostLoginPath({ ...dualNoMeta, force: "accountant", intent: "owner" }) === "/app",
+  "leftover accountant force + owner intent + leftover firm_admin + client role → /app",
+);
+assert(
+  decidePostLoginPath({ ...practiceOnly, force: "accountant", intent: "owner" }) === "/dashboard",
+  "leftover accountant force + practice-only (no client role) → practice portal",
+);
+assert(
+  decidePostLoginPath({ ...dual, force: "accountant" }) === "/dashboard",
+  "accountant door still: dual-role + accountant force (no owner intent) → practice portal",
+);
 assert(
   decideAccountantStay({ ...clientOnly, hasFirm: false, intent: "accountant" }) === false,
   "SME invitee with leftover accountant intent leaves /dashboard",

@@ -112,7 +112,7 @@ function AuthCallbackPage() {
         path = "/ops";
         opsTab = "it";
       } else {
-        if (intent === "accountant") forcePortal("accountant");
+        forcePortal(intent);
         path = await resolvePostLoginPath(user.id);
         if (intent === "accountant" && path === "/app") {
           clearForcePortal();

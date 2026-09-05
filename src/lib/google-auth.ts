@@ -1,5 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
-import { setPortalIntent, type PortalIntent } from "@/lib/user-roles";
+import { getPortalIntent, setPortalIntent, type PortalIntent } from "@/lib/user-roles";
 
 export const GOOGLE_CALLBACK_PATH = "/auth/callback";
 export const GOOGLE_INTENT_KEY = "milon_google_auth_intent";
@@ -72,7 +72,7 @@ export function stashGoogleAuthIntent(intent: GoogleAuthIntent, next?: string): 
 }
 
 export function consumeGoogleAuthIntent(): { intent: GoogleAuthIntent; next?: string } {
-  let intent: GoogleAuthIntent = "owner";
+  let intent: GoogleAuthIntent | null = null;
   let next: string | undefined;
   try {
     const stored = sessionStorage.getItem(GOOGLE_INTENT_KEY);
@@ -84,6 +84,9 @@ export function consumeGoogleAuthIntent(): { intent: GoogleAuthIntent; next?: st
   } catch {
     /* ignore */
   }
+  // sessionStorage can be empty after a 127.0.0.1 ↔ localhost origin hop.
+  // Fall back to the persisted door from stashGoogleAuthIntent / /auth mount.
+  if (!intent) intent = getPortalIntent() ?? "owner";
   setPortalIntent(intent);
   return { intent, next };
 }
