@@ -2,6 +2,8 @@
  * Pure checks for Google OAuth helpers.
  * Run: pnpm exec vite-node --config scripts/vite-test.config.ts scripts/google-auth-test.mts
  */
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import {
   googleDisplayName,
   googleOAuthRedirectTo,
@@ -52,5 +54,22 @@ assert(
 );
 assert(humanizeOAuthError("access_denied") === "Google sign-in was cancelled.", "cancelled");
 assert(humanizeOAuthError("Nope") === "Nope", "passthrough");
+
+const googleSrc = readFileSync(resolve("src/lib/google-auth.ts"), "utf8");
+assert(
+  /function consumeGoogleAuthIntent[\s\S]*getPortalIntent\(\)/.test(googleSrc),
+  "consumeGoogleAuthIntent falls back to getPortalIntent when Google session intent is missing",
+);
+assert(
+  googleSrc.includes('getPortalIntent() ?? "owner"'),
+  "consumeGoogleAuthIntent defaults to owner only after portal-intent fallback",
+);
+
+const callbackSrc = readFileSync(resolve("src/routes/auth.callback.tsx"), "utf8");
+assert(callbackSrc.includes("forcePortal(intent)"), "callback pins the consumed door for owner and accountant");
+assert(
+  !callbackSrc.includes('if (intent === "accountant") forcePortal("accountant")'),
+  "callback must forcePortal for owner intent, not only accountant",
+);
 
 console.log("google-auth-test: ok");
