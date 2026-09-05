@@ -2564,7 +2564,7 @@ function ClientView() {
                 mode="retake"
                 initial={parseOperatingProfile(client.operating_profile)}
                 initialFyStartMonth={
-                  parseOperatingProfile(client.operating_profile)?.fyStartMonth ?? 3
+                  parseOperatingProfile(client.operating_profile)?.fyStartMonth ?? undefined
                 }
                 onCancel={() => setProfileOpen(false)}
                 onComplete={async (profile) => {

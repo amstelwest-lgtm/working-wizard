@@ -34,6 +34,7 @@ import {
   industryBenchmarkShortLabel,
   isMissingMarketSupport,
   isUsCopy,
+  currencySymbol,
   localizeCopy,
   marketToJson,
   parseMarketSelection,
@@ -167,6 +168,7 @@ const BudgetPanel = lazyPanel(
 const ActionPlanPanel = lazyPanel(() => import("@/components/action-plan"), "Action Plan");
 import { SplashScreen } from "@/components/splash-screen";
 import { WalkthroughWizard } from "@/components/walkthrough-wizard";
+import { NoFiguresBanner } from "@/components/no-figures-banner";
 import { seedBudgetFromFinancials } from "@/lib/budget.bridges";
 import { normalizeBudgetDocument } from "@/lib/budget.compute";
 import type { BudgetDocument } from "@/lib/budget.types";
@@ -2501,7 +2503,13 @@ function Index() {
     setShowOnboarding(true);
   }, []);
 
+  // Resolve the app role only after the client link settles. A freshly
+  // confirmed self-signup has no user_roles row until ensure_own_client runs
+  // in the client-link effect; resolving in parallel used to land on
+  // userRole=null, which silently skipped the profile funnel and started the
+  // feature tour on an empty board.
   useEffect(() => {
+    if (!clientLinkResolved) return;
     let cancelled = false;
     setRoleResolved(false);
     supabase.auth.getUser().then(async ({ data: { user: u } }) => {
@@ -2549,7 +2557,7 @@ function Index() {
     return () => {
       cancelled = true;
     };
-  }, [user?.id]);
+  }, [user?.id, clientLinkResolved, effectiveClientId]);
 
   useEffect(() => {
     if (user) {
@@ -3282,16 +3290,27 @@ function Index() {
           <SplashScreen />
           {!actingClientId && (
             <TabErrorBoundary label="Walkthrough">
+              {/* Empty board: a two-step nudge to the one action. The full board
+                  tour only runs once a real score exists, so nothing it points at
+                  ("one health score", Ask AI, seeded budget) is a promise. */}
               <WalkthroughWizard
-                variant="owner"
-                ready={ownerWalkthroughReady({
-                  firstRunStep,
-                  showOnboarding,
-                  showBankDrafter,
-                  showCashFromBanks,
-                  onboardingGateReady,
-                })}
+                key={hasRealFinancials ? "owner" : "owner-empty"}
+                variant={hasRealFinancials ? "owner" : "owner-empty"}
+                ready={
+                  ownerWalkthroughReady({
+                    firstRunStep,
+                    showOnboarding,
+                    showBankDrafter,
+                    showCashFromBanks,
+                    onboardingGateReady,
+                  }) &&
+                  !showFinData &&
+                  !reviewOpen &&
+                  !showQboDialog &&
+                  hydratedClientId === effectiveClientId
+                }
                 onTabChange={handleTourTabChange}
+                onFinish={hasRealFinancials ? undefined : () => setFirstRunStep("first-data")}
                 userRole={userRole ?? undefined}
               />
             </TabErrorBoundary>
@@ -3559,7 +3578,7 @@ function Index() {
                 <ProfileFunnel
                   mode={firstRunStep === "pick-type" ? "first-run" : "retake"}
                   initial={operatingProfile}
-                  initialFyStartMonth={operatingProfile?.fyStartMonth ?? 3}
+                  initialFyStartMonth={operatingProfile?.fyStartMonth ?? boardMarket.fyStartMonthDefault}
                   onCancel={
                     firstRunStep === "pick-type" ? undefined : () => setShowOnboarding(false)
                   }
@@ -3717,7 +3736,7 @@ function Index() {
                     onClick={() => setFirstRunStep(null)}
                     className="text-xs text-slate-600 hover:text-slate-400 pt-0.5 text-center"
                   >
-                    Skip for now — add figures when you are ready
+                    Skip for now — the board will point you back here
                   </button>
                 </div>
               </DialogContent>
@@ -3821,54 +3840,108 @@ function Index() {
                       {!hasRealFinancials && !actingClientId ? (
                         <div>
                           <div className="founder-overview-grid grid w-full items-start gap-4 lg:grid-cols-[minmax(0,1fr)_280px] xl:grid-cols-[minmax(0,1fr)_300px]">
-                            <div className="flex w-full flex-col items-center gap-5 rounded-xl border border-dashed border-slate-200 bg-white/60 px-4 py-10 dark:border-slate-700 dark:bg-slate-900/40">
-                              <div className="relative flex h-36 w-36 items-center justify-center">
-                                <div className="absolute inset-0 rounded-full border-2 border-dashed border-[#d4a550]/25" />
-                                <div className="absolute inset-5 rounded-full border border-[#d4a550]/15" />
-                                <div className="flex flex-col items-center gap-1">
-                                  <span className="text-3xl font-bold text-slate-400">—</span>
-                                  <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">
-                                    No score yet
-                                  </span>
+                            <div className="flex w-full flex-col gap-3">
+                              <div
+                                id="wizard-empty-score"
+                                className="flex w-full flex-col items-center gap-5 rounded-xl border border-dashed border-slate-200 bg-white/60 px-4 py-10 dark:border-slate-700 dark:bg-slate-900/40"
+                              >
+                                <div className="relative flex h-36 w-36 items-center justify-center">
+                                  <div className="absolute inset-0 rounded-full border-2 border-dashed border-[#d4a550]/25" />
+                                  <div className="absolute inset-5 rounded-full border border-[#d4a550]/15" />
+                                  <div className="flex flex-col items-center gap-1">
+                                    <span className="text-3xl font-bold text-slate-400">—</span>
+                                    <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">
+                                      No score yet
+                                    </span>
+                                  </div>
                                 </div>
-                              </div>
-                              <div className="max-w-sm text-center">
-                                <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100">
-                                  Add your financials to see your score
-                                </h3>
-                                <p className="mt-1.5 text-sm text-slate-500">
-                                  Upload a statement or enter figures manually. MILŌN calculates
-                                  your health score and highest-impact first move instantly.
-                                </p>
-                              </div>
-                              {userRole !== "client_member" ? (
-                                <div className="flex w-full max-w-sm flex-col gap-2.5 sm:flex-row">
-                                  <button
-                                    onClick={() => {
-                                      setShowFinData(true);
-                                      setTimeout(() => uploadRef.current?.click(), 150);
-                                    }}
-                                    className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-[#b7872a] px-4 py-2.5 text-sm font-semibold text-white transition-all hover:bg-[#d4a550]"
-                                  >
-                                    <Upload className="h-4 w-4" />
-                                    Upload statement
-                                  </button>
-                                  <button
-                                    onClick={() => {
-                                      setShowFinData(true);
-                                      setShowInputs(true);
-                                    }}
-                                    className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
-                                  >
-                                    <Database className="h-4 w-4" />
-                                    Enter manually
-                                  </button>
+                                <div className="max-w-sm text-center">
+                                  {userRole !== "client_member" && operatingProfile && (
+                                    <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#b8860b] dark:text-[#d4a550]">
+                                      Step 2 of 2 · Bring in your numbers
+                                    </p>
+                                  )}
+                                  <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100">
+                                    {userRole !== "client_member"
+                                      ? "One upload and your board comes alive"
+                                      : "Add your financials to see your score"}
+                                  </h3>
+                                  <p className="mt-1.5 text-sm text-slate-500">
+                                    {isUsCopy(boardMarket)
+                                      ? "Upload Excel, CSV or PDF financials (or connect QuickBooks). MILŌN scores your business and ranks your first move — no invented numbers until then."
+                                      : "Drop ~3 months of bank statements and MILŌN drafts your P&L, cash forecast and budget, then scores your business and ranks your first move — no invented numbers until then."}
+                                  </p>
                                 </div>
-                              ) : (
-                                <p className="max-w-sm text-center text-sm text-slate-500">
-                                  Financial data hasn't been added yet. The owner will set this up.
-                                </p>
-                              )}
+                                {userRole !== "client_member" ? (
+                                  <div className="flex w-full max-w-sm flex-col gap-2.5">
+                                    <button
+                                      id="wizard-first-figures"
+                                      onClick={() => {
+                                        if (isUsCopy(boardMarket)) {
+                                          setShowFinData(true);
+                                          setTimeout(() => uploadRef.current?.click(), 150);
+                                        } else {
+                                          setShowBankDrafter(true);
+                                        }
+                                      }}
+                                      className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#b7872a] px-4 py-2.5 text-sm font-semibold text-white transition-all hover:bg-[#d4a550]"
+                                    >
+                                      <Upload className="h-4 w-4" />
+                                      {isUsCopy(boardMarket)
+                                        ? "Upload Excel, CSV or PDF financials"
+                                        : "Upload bank statements"}
+                                    </button>
+                                    <div className="flex w-full flex-col gap-2.5 sm:flex-row">
+                                      {isUsCopy(boardMarket) ? (
+                                        <button
+                                          onClick={() => setShowQboDialog(true)}
+                                          className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
+                                        >
+                                          <Plug2 className="h-4 w-4" />
+                                          Connect QuickBooks
+                                        </button>
+                                      ) : (
+                                        <button
+                                          onClick={() => {
+                                            setShowFinData(true);
+                                            setTimeout(() => uploadRef.current?.click(), 150);
+                                          }}
+                                          className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
+                                        >
+                                          <Upload className="h-4 w-4" />
+                                          Upload a financial statement
+                                        </button>
+                                      )}
+                                      <button
+                                        onClick={() => {
+                                          setShowFinData(true);
+                                          setShowInputs(true);
+                                        }}
+                                        className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
+                                      >
+                                        <Database className="h-4 w-4" />
+                                        Enter manually
+                                      </button>
+                                    </div>
+                                    <button
+                                      onClick={() => setFirstRunStep("first-data")}
+                                      className="text-center text-xs text-slate-500 underline hover:text-slate-700 dark:hover:text-slate-300"
+                                    >
+                                      See all ways to add figures
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <p className="max-w-sm text-center text-sm text-slate-500">
+                                    Financial data hasn't been added yet. The owner will set this up.
+                                  </p>
+                                )}
+                              </div>
+                              {/* Same Ask AI mount as the scored board — the hook prints an
+                                  honest "unlocks after real figures" note until then. */}
+                              <div
+                                id="ask-ai-overview"
+                                className="min-h-[44px] w-full rounded-xl border border-[#b7872a]/25 bg-white dark:bg-[#0a1020]/80"
+                              />
                             </div>
                             <OverviewRail
                               healthBand={null}
@@ -4012,7 +4085,8 @@ function Index() {
                             <span className="text-amber-400">⚡</span>
                             Estimated break-even revenue:{" "}
                             <span className="font-mono font-semibold ml-1">
-                              R{breakevenRevenue.toFixed(0)}
+                              {currencySymbol(boardMarket)}
+                              {breakevenRevenue.toFixed(0)}
                             </span>
                           </div>
                         )}
@@ -4027,14 +4101,15 @@ function Index() {
                               <div>
                                 <span className="text-slate-500">Net PPE (current)</span>
                                 <div className="font-mono text-slate-200">
-                                  R{netPpe.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                                  {currencySymbol(boardMarket)}
+                                  {netPpe.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                                 </div>
                               </div>
                               {isFinite(priorNetPpe) && (
                                 <div>
                                   <span className="text-slate-500">Net PPE (prior)</span>
                                   <div className="font-mono text-slate-200">
-                                    R
+                                    {currencySymbol(boardMarket)}
                                     {priorNetPpe.toLocaleString(undefined, {
                                       maximumFractionDigits: 0,
                                     })}
@@ -4047,7 +4122,8 @@ function Index() {
                                   <div
                                     className={`font-mono font-semibold ${ppeMovement >= 0 ? "text-emerald-400" : "text-red-400"}`}
                                   >
-                                    {ppeMovement >= 0 ? "+" : ""}R
+                                    {ppeMovement >= 0 ? "+" : ""}
+                                    {currencySymbol(boardMarket)}
                                     {ppeMovement.toLocaleString(undefined, {
                                       maximumFractionDigits: 0,
                                     })}
@@ -4058,7 +4134,7 @@ function Index() {
                                 <div>
                                   <span className="text-slate-500">Implied CAPEX</span>
                                   <div className="font-mono text-slate-200">
-                                    R
+                                    {currencySymbol(boardMarket)}
                                     {impliedCapex.toLocaleString(undefined, {
                                       maximumFractionDigits: 0,
                                     })}
@@ -4346,6 +4422,13 @@ function Index() {
                       clientMeta?.financials_updated_at ?? null,
                     )}
                   />
+                  {!hasRealFinancials && !actingClientId && userRole !== "client_member" && (
+                    <NoFiguresBanner
+                      tabLabel="Profit"
+                      detail="The waterfall below is an empty frame until revenue and costs land."
+                      onAddFigures={() => setFirstRunStep("first-data")}
+                    />
+                  )}
                   {/* Ask AI first — same widget as Business Health, scoped to this client */}
                   <div
                     id="ask-ai-waterfall"
@@ -4388,6 +4471,13 @@ function Index() {
                   </span>
                   <span className="h-px flex-1 bg-gradient-to-r from-[#b7872a]/30 to-transparent" />
                 </div>
+                {!hasRealFinancials && !actingClientId && userRole !== "client_member" && (
+                  <NoFiguresBanner
+                    tabLabel="Next moves"
+                    detail="The list below is the generic playbook — it is ranked for your business only once your figures are in."
+                    onAddFigures={() => setFirstRunStep("first-data")}
+                  />
+                )}
                 <div id="wizard-moves-list">
                   <NextStepsPanel
                     steps={nextSteps}
@@ -4417,6 +4507,13 @@ function Index() {
                       clientMeta?.last_forecast_at ?? null,
                     )}
                   />
+                  {!hasRealFinancials && !actingClientId && userRole !== "client_member" && (
+                    <NoFiguresBanner
+                      tabLabel="Cash Forecast"
+                      detail="Zeros below are placeholders, not a forecast. Bank statements can draft the 13 weeks for you."
+                      onAddFigures={() => setFirstRunStep("first-data")}
+                    />
+                  )}
                   <TabErrorBoundary label="Cash Forecast">
                     <Suspense
                       fallback={

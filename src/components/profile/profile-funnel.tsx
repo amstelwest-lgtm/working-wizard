@@ -181,12 +181,13 @@ const GOAL: Array<{ id: OwnerGoal; label: string; examples: string }> = [
 
 export function ProfileFunnel({
   initial,
-  initialFyStartMonth = 3,
+  initialFyStartMonth,
   mode = "first-run",
   onComplete,
   onCancel,
 }: {
   initial?: ClientOperatingProfile | null;
+  /** Defaults to the workspace market's financial-year start (US → January, ZA → March). */
   initialFyStartMonth?: number;
   mode?: "first-run" | "retake";
   onComplete: (profile: ClientOperatingProfile) => void | Promise<void>;
@@ -194,6 +195,21 @@ export function ProfileFunnel({
 }) {
   const { market } = useMarket();
   const loc = (s: string) => localizeCopy(s, market);
+  const marketFyStart = market.fyStartMonthDefault;
+  const MONTH_NAMES = [
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+  ];
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
   const [payMotion, setPayMotion] = useState<BudgetPayMotion | null>(initial?.payMotion ?? null);
@@ -222,7 +238,9 @@ export function ProfileFunnel({
     initial?.debtPosition ?? null,
   );
   const [ownerGoal, setOwnerGoal] = useState<OwnerGoal | null>(initial?.ownerGoal ?? null);
-  const [fyStartMonth, setFyStartMonth] = useState(initial?.fyStartMonth ?? initialFyStartMonth);
+  const [fyStartMonth, setFyStartMonth] = useState(
+    initial?.fyStartMonth ?? initialFyStartMonth ?? marketFyStart,
+  );
 
   const volumeChoices = useMemo(
     () => (payMotion ? volumeOptionsForMotion(payMotion) : []),
@@ -323,13 +341,14 @@ export function ProfileFunnel({
     <div className="flex h-full min-h-0 flex-1 flex-col gap-3 overflow-hidden">
       <div className="shrink-0">
         <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#d4a550]">
-          {mode === "first-run" ? "Welcome to Milōn" : "Update business profile"} · question{" "}
-          {step + 1} of {TOTAL}
+          {mode === "first-run" ? "Step 1 of 2 · Business profile" : "Update business profile"} ·
+          question {step + 1} of {TOTAL}
         </p>
         <h2 className="mt-1 text-xl font-semibold text-slate-100 sm:text-2xl">{titles[step]}</h2>
         <p className="mt-1 text-sm text-slate-400">
-          Examples under each answer help you pick the closest fit — this tunes health scores, cash,
-          budget, benchmarks, and advice.
+          {mode === "first-run" && step === 0
+            ? "About two minutes — tap the closest fit and you move on. This tunes your health score, cash forecast, budget, benchmarks and advice. Next, you bring in your figures."
+            : "Examples under each answer help you pick the closest fit — this tunes health scores, cash, budget, benchmarks, and advice."}
         </p>
       </div>
 
@@ -535,27 +554,16 @@ export function ProfileFunnel({
                 value={fyStartMonth}
                 onChange={(e) => setFyStartMonth(Number(e.target.value))}
               >
-                {[
-                  "January",
-                  "February",
-                  "March",
-                  "April",
-                  "May",
-                  "June",
-                  "July",
-                  "August",
-                  "September",
-                  "October",
-                  "November",
-                  "December",
-                ].map((name, i) => (
+                {MONTH_NAMES.map((name, i) => (
                   <option key={name} value={i + 1}>
                     {name}
                   </option>
                 ))}
               </select>
               <p className="mt-1 text-[11px] text-slate-500">
-                Default March (common SA). Used by Budget and reporting periods.
+                Default {MONTH_NAMES[marketFyStart - 1]} (
+                {marketFyStart === 1 ? "common for US businesses" : "common in South Africa"}). Used
+                by Budget and reporting periods.
               </p>
             </div>
           </>

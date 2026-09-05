@@ -111,12 +111,19 @@ export function MarketPicker({
   onChange,
   variant = "app",
   disabled,
+  audience = "owner",
 }: {
   value: DraftMarket;
   onChange: (next: DraftMarket) => void;
   variant?: "app" | "landing";
   disabled?: boolean;
+  /** Owners see "change later in Settings"; practices see the per-client note. */
+  audience?: "owner" | "practice";
 }) {
+  const stateHelp =
+    audience === "practice"
+      ? "Required for sales tax. You can set a different state per client later."
+      : "Required for sales tax. You can change this later in Settings.";
   const setCountry = (country: MarketId) => {
     onChange({
       country,
@@ -154,9 +161,7 @@ export function MarketPicker({
               State
             </label>
             <LandingStateMenu value={value} onChange={onChange} disabled={disabled} />
-            <p className="milon-market-help">
-              Required for sales tax. You can set a different state per client later.
-            </p>
+            <p className="milon-market-help">{stateHelp}</p>
           </div>
         )}
       </div>
@@ -203,9 +208,7 @@ export function MarketPicker({
             disabled={disabled}
             className={`mt-1.5 w-full rounded-xl border px-3 py-2.5 text-sm ${idle}`}
           />
-          <p className={`mt-2 ${helpCls}`}>
-            Required for sales tax. You can set a different state per client later.
-          </p>
+          <p className={`mt-2 ${helpCls}`}>{stateHelp}</p>
         </div>
       )}
     </div>

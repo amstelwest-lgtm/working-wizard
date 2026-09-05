@@ -208,6 +208,37 @@ function LandingPage() {
   const [regPlan, setRegPlan] = useState("Spark — Free early access");
   const [regBusy, setRegBusy] = useState(false);
   const [regDone, setRegDone] = useState(false);
+  const [resendBusy, setResendBusy] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const [siUnconfirmed, setSiUnconfirmed] = useState(false);
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const id = setTimeout(() => setResendCooldown((s) => s - 1), 1000);
+    return () => clearTimeout(id);
+  }, [resendCooldown]);
+
+  const resendConfirmationTo = async (email: string) => {
+    const target = email.trim();
+    if (!target) return;
+    setResendBusy(true);
+    try {
+      const { error } = await supabase.auth.resend({
+        type: "signup",
+        email: target,
+        options: { emailRedirectTo: `${window.location.origin}/app` },
+      });
+      if (error) throw error;
+      toast.success(`Confirmation email sent to ${target}`);
+      setResendCooldown(60);
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Could not resend the email.");
+    } finally {
+      setResendBusy(false);
+    }
+  };
+
+  const handleResendConfirmation = () => void resendConfirmationTo(regEmail);
 
   /* ── redirect if already signed in ──
      Honour a pending Lighthouse unlock so the /app bounce cannot steal the
@@ -758,7 +789,21 @@ function LandingPage() {
         email: siEmail,
         password: siPassword,
       });
-      if (error) throw error;
+      if (error) {
+        if (/not confirmed/i.test(error.message)) {
+          setSiUnconfirmed(true);
+          throw new Error(
+            "Your email isn't confirmed yet. Open the link we sent you, or resend it below.",
+          );
+        }
+        if (/invalid login credentials/i.test(error.message)) {
+          throw new Error(
+            "Email or password didn't match. Check for typos, or use “Forgot password?”.",
+          );
+        }
+        throw error;
+      }
+      setSiUnconfirmed(false);
       const { waitForAuthSession, clearInviteQueryFromUrl } = await import("@/lib/invite-handoff");
       await waitForAuthSession();
       clearInviteQueryFromUrl();
@@ -956,6 +1001,16 @@ function LandingPage() {
         },
       });
       if (error) throw error;
+      // With email confirmation on, Supabase returns an obfuscated user with no
+      // identities for an address that already has an account. Send them to
+      // sign in instead of a "check your email" card for a mail that never comes.
+      if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+        toast.message("That email already has a Milōn account — sign in instead.");
+        setSiEmail(regEmail);
+        setSiError("");
+        setSigninOpen(true);
+        return;
+      }
       notifySignup("Business owner", regEmail, regName.trim());
       if (lhToken) {
         void doTrialVisit({ data: { token: lhToken, signedUp: true } }).catch(() => {});
@@ -1040,27 +1095,86 @@ function LandingPage() {
               <polyline points="22,6 12,13 2,6" />
             </svg>
           </div>
-          <h2 style={{ fontSize: 20, fontWeight: 700, color: "#f2ecdc", margin: "0 0 10px" }}>
-            Check your email
-          </h2>
-          <p style={{ fontSize: 14, color: "#9b958a", lineHeight: 1.6 }}>
-            We sent a confirmation link to <span style={{ color: "#d4af37" }}>{regEmail}</span>.
-            Click it to activate your account.
-          </p>
-          <button
-            onClick={() => setRegDone(false)}
+          <p
             style={{
-              marginTop: 26,
-              fontSize: 12,
-              color: "#9b958a",
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-              textDecoration: "underline",
+              fontSize: 10,
+              fontWeight: 700,
+              letterSpacing: "0.2em",
+              textTransform: "uppercase",
+              color: "#d4af37",
+              margin: "0 0 8px",
             }}
           >
-            ← Back
+            One step left
+          </p>
+          <h2 style={{ fontSize: 20, fontWeight: 700, color: "#f2ecdc", margin: "0 0 10px" }}>
+            Confirm your email
+          </h2>
+          <p style={{ fontSize: 14, color: "#9b958a", lineHeight: 1.6 }}>
+            We sent a link to <span style={{ color: "#d4af37" }}>{regEmail}</span>. Open it and your
+            board opens straight away — a 2-minute business profile, then your figures.
+          </p>
+          <p style={{ fontSize: 12, color: "#6f6a60", lineHeight: 1.6, marginTop: 10 }}>
+            Opened the link on your phone instead? Come back here and sign in.
+          </p>
+          <button
+            type="button"
+            className="btn btn-gold"
+            onClick={() => {
+              setRegDone(false);
+              setSiEmail(regEmail);
+              setSiError("");
+              setSigninOpen(true);
+            }}
+            style={{ width: "100%", justifyContent: "center", marginTop: 22 }}
+          >
+            I've confirmed — sign in ✦
           </button>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "center",
+              gap: 18,
+              marginTop: 18,
+              fontSize: 12,
+            }}
+          >
+            <button
+              type="button"
+              disabled={resendBusy || resendCooldown > 0}
+              onClick={handleResendConfirmation}
+              style={{
+                color: resendCooldown > 0 ? "#6f6a60" : "#d4af37",
+                background: "none",
+                border: "none",
+                cursor: resendCooldown > 0 ? "default" : "pointer",
+                textDecoration: "underline",
+                padding: 0,
+                fontFamily: "inherit",
+              }}
+            >
+              {resendBusy
+                ? "Sending…"
+                : resendCooldown > 0
+                  ? `Email sent · resend in ${resendCooldown}s`
+                  : "Didn't get it? Resend"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setRegDone(false)}
+              style={{
+                color: "#9b958a",
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                textDecoration: "underline",
+                padding: 0,
+                fontFamily: "inherit",
+              }}
+            >
+              Wrong email? Go back
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -1324,7 +1438,7 @@ function LandingPage() {
                     type="email"
                     required
                     autoFocus
-                    placeholder="you@business.co.za"
+                    placeholder={t("emailExample", copyMarket)}
                     value={fpEmail}
                     onChange={(e) => setFpEmail(e.target.value)}
                   />
@@ -1385,7 +1499,7 @@ function LandingPage() {
                       inputMode="email"
                       autoComplete="username"
                       required
-                      placeholder="you@business.co.za"
+                      placeholder={t("emailExample", copyMarket)}
                       value={siEmail}
                       onChange={(e) => setSiEmail(e.target.value)}
                     />
@@ -1425,6 +1539,30 @@ function LandingPage() {
                   </div>
                   {siError && (
                     <p style={{ fontSize: 13, color: "var(--risk)", margin: "8px 0" }}>{siError}</p>
+                  )}
+                  {siUnconfirmed && (
+                    <button
+                      type="button"
+                      disabled={resendBusy || resendCooldown > 0}
+                      onClick={() => void resendConfirmationTo(siEmail)}
+                      style={{
+                        display: "block",
+                        fontSize: 12,
+                        color: resendCooldown > 0 ? "var(--ink-dim)" : "var(--gold)",
+                        background: "none",
+                        border: "none",
+                        cursor: resendCooldown > 0 ? "default" : "pointer",
+                        padding: 0,
+                        textDecoration: "underline",
+                        fontFamily: "inherit",
+                      }}
+                    >
+                      {resendBusy
+                        ? "Sending…"
+                        : resendCooldown > 0
+                          ? `Email sent · resend in ${resendCooldown}s`
+                          : "Resend confirmation email"}
+                    </button>
                   )}
                   <button
                     type="submit"

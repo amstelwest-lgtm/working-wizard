@@ -192,9 +192,48 @@ assert(appSrc.includes("ClientOnly"), "founder board waits for the browser befor
 assert(appSrc.includes('<TabErrorBoundary label="Cash Forecast">'), "cash tab cannot white-screen /app");
 assert(appSrc.includes('<TabErrorBoundary label="Budget">'), "budget tab cannot white-screen /app");
 assert(appSrc.includes('lazyPanel(') && appSrc.includes("Cash Forecast"), "cash tab uses lazyPanel");
+// An owner always gets a tour on first login — on an empty board it is the
+// two-step "owner-empty" nudge; the full board tour waits for a real score so
+// it never points at an orb / Ask AI / seeded budget that is not there.
 assert(
-  !/WalkthroughWizard[\s\S]{0,400}hasRealFinancials/.test(appSrc),
-  "owner tour is no longer gated on uploaded financials",
+  /variant=\{hasRealFinancials \? "owner" : "owner-empty"\}/.test(appSrc),
+  "empty board gets the owner-empty tour; full tour waits for real figures",
+);
+assert(appSrc.includes('id="wizard-empty-score"'), "empty tour has its score target");
+assert(appSrc.includes('id="wizard-first-figures"'), "empty tour has its figures target");
+assert(
+  appSrc.includes('id="ask-ai-overview"') &&
+    appSrc.indexOf('id="ask-ai-overview"') < appSrc.indexOf("<SphereHero"),
+  "empty board mounts Ask AI so it says figures are missing instead of being absent",
+);
+
+// Role resolution must wait for the client link: a freshly confirmed owner has
+// no user_roles row until ensure_own_client runs, and userRole=null silently
+// skipped the profile funnel.
+{
+  const roleEffect = appSrc.indexOf("if (!clientLinkResolved) return;");
+  assert(roleEffect !== -1, "role effect waits for the client link");
+  assert(
+    appSrc.includes("[user?.id, clientLinkResolved, effectiveClientId]"),
+    "role effect re-resolves once the client exists",
+  );
+}
+
+const wizardSrc = readFileSync(resolve("src/components/walkthrough-wizard.tsx"), "utf8");
+assert(wizardSrc.includes('"owner-empty"'), "wizard knows the owner-empty variant");
+assert(wizardSrc.includes("OWNER_EMPTY_TOUR_KEY"), "owner-empty tour has its own storage key");
+
+// AccountantProfileProvider mounts for every session (root). It must never
+// mint a practice firm for an owner whose roles have not been written yet.
+const acctSrc = readFileSync(resolve("src/contexts/accountant-profile.tsx"), "utf8");
+assert(
+  acctSrc.includes('meta?.signup_type === "customer"') &&
+    acctSrc.includes("!customerSignup && (roles.hasPracticeRole || practiceSignup)"),
+  "ensure_practice_firm only runs on positive practice evidence",
+);
+assert(
+  !acctSrc.includes("!roles.hasClientRole ||"),
+  "'no roles yet' is not treated as an accountant",
 );
 
 console.log("invite-accept-onboarding-test: ok");

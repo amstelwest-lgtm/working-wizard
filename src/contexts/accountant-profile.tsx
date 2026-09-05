@@ -193,12 +193,14 @@ export function AccountantProfileProvider({
 
         if (all.length === 0) {
           const roles = summarizeRoles(await listAppRoles(user.id));
-          const practiceSignup = isPracticeSignupMeta(
-            user.user_metadata as Record<string, unknown> | undefined,
-          );
-          // Pure business-client logins must not be minted a practice firm.
-          // Dual-role (practice + client) already has an accountant profile.
-          if (!roles.hasClientRole || roles.hasPracticeRole || practiceSignup) {
+          const meta = user.user_metadata as Record<string, unknown> | undefined;
+          const practiceSignup = isPracticeSignupMeta(meta);
+          const customerSignup = meta?.signup_type === "customer";
+          // Only mint a practice firm on positive evidence of a practice account.
+          // A freshly confirmed owner reaches /app before ensure_own_client has
+          // written client_owner — "no roles yet" must not be read as "accountant",
+          // or the owner is promoted to firm_admin and lands on /dashboard next login.
+          if (!customerSignup && (roles.hasPracticeRole || practiceSignup)) {
             const firmName =
               cached.firmName ||
               (user.user_metadata?.firm_name as string | undefined) ||
