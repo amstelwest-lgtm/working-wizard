@@ -105,6 +105,7 @@ import { AdminDashboard } from "@/components/admin-dashboard";
 import { ProfileFunnel, type ProfileFunnelMode } from "@/components/profile/profile-funnel";
 import { ProfileCompletionNote } from "@/components/profile/profile-completion-note";
 import { SampleBoardBanner } from "@/components/sample-board-banner";
+import { VerifyEmailBanner } from "@/components/verify-email-banner";
 import { SAMPLE_BUSINESS_BLURB, sampleFinancialsFor } from "@/lib/sample-business";
 import {
   parseOperatingProfile,
@@ -3808,6 +3809,13 @@ function Index() {
                 </div>
               </DialogContent>
             </Dialog>
+
+            {!actingClientId && (
+              <VerifyEmailBanner
+                email={user.email}
+                pending={user.user_metadata?.email_verify_pending === true}
+              />
+            )}
 
             {sampleMode && (
               <SampleBoardBanner

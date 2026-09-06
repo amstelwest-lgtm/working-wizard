@@ -1016,6 +1016,12 @@ function LandingPage() {
         void doTrialVisit({ data: { token: lhToken, signedUp: true } }).catch(() => {});
       }
       if (data.session && data.user) {
+        // Auto-confirm is on: the owner goes straight to the board. Mark the
+        // address as not-yet-verified so /app can offer a soft "verify later"
+        // link instead of a hard stop at the inbox.
+        void supabase.auth
+          .updateUser({ data: { email_verify_pending: true } })
+          .catch(() => undefined);
         // Use ensure_own_client() RPC — direct INSERT via anon key is blocked by
         // a PostgREST WITH CHECK quirk in this project, so the SECURITY DEFINER
         // RPC is the reliable path for both auto-confirm and email-confirm signups.
