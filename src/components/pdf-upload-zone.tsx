@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { X, FileText, Loader2, Upload, Info, AlertCircle } from "lucide-react";
 import { useMarket } from "@/contexts/market";
 import { selectionPayload } from "@/lib/market";
-import { pdfTransport, transportPaths, unstage } from "@/lib/staged-upload.client";
+import { pdfTransport, transportPaths, unstage } from "@/lib/staged-upload-browser";
 
 type Stage = "idle" | "uploading" | "reading" | "extracting" | "verifying" | "done" | "error";
 

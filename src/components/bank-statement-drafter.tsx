@@ -36,7 +36,7 @@ import {
   type BankFilePayload,
   type BankFileSlot,
 } from "@/lib/bank-files";
-import { transportPaths, unstage } from "@/lib/staged-upload.client";
+import { transportPaths, unstage } from "@/lib/staged-upload-browser";
 import { useMarketFormat } from "@/contexts/market";
 import { selectionPayload } from "@/lib/market";
 import { PERIOD_MONTHS_KEY } from "@/lib/ratios";

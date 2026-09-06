@@ -28,7 +28,7 @@ import {
   isSpreadsheetFile,
   isTextFile,
 } from "@/lib/spreadsheet-text";
-import { pdfTransport, unstage, type PdfTransport } from "@/lib/staged-upload.client";
+import { pdfTransport, unstage, type PdfTransport } from "@/lib/staged-upload-browser";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 

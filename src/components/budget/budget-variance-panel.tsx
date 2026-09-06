@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/dialog";
 import type { BudgetDocument } from "@/lib/budget.types";
 import { preflightUploadFile } from "@/lib/upload-quality";
-import { pdfTransport, unstage, type PdfTransport } from "@/lib/staged-upload.client";
+import { pdfTransport, unstage, type PdfTransport } from "@/lib/staged-upload-browser";
 import { UploadQualityDisclaimer } from "@/components/upload-quality-disclaimer";
 import { fyMonths, formatMonthLabel } from "@/lib/budget.months";
 import { computeBudgetMonths, fmtBudgetMoney } from "@/lib/budget.compute";
