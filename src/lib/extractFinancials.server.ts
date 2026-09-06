@@ -14,6 +14,7 @@ import { isUsCopy, marketInputSchema, resolvePromptMarket } from "@/lib/market";
 import { assessPortalFigures, assertUsable } from "@/lib/upload-quality";
 import { INLINE_BASE64_MAX } from "@/lib/staged-upload";
 import { resolvePdfBase64 } from "@/lib/staged-upload.server";
+import { assertExtractionAllowed } from "@/lib/extraction-rate-limit.server";
 
 const EXTRACTION_PROMPT = `
 You are extracting figures from a South African financial statement PDF for an
@@ -171,6 +172,13 @@ export const extractFinancialsFromPDF = createServerFn({ method: "POST" })
     } else if (!text || text.trim().length < 40) {
       throw new Error("That file has no readable figures in it.");
     }
+
+    await assertExtractionAllowed(
+      context.supabase,
+      "statement-pdf",
+      1,
+      pdfBase64 ? Math.ceil((pdfBase64.length * 3) / 4) : (text?.length ?? 0),
+    );
 
     const raw = await callClaudeMessages({
       content: pdfBase64

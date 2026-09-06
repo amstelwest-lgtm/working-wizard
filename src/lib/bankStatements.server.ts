@@ -18,6 +18,7 @@ import { callClaudeMessages, parseClaudeJson, type ClaudeContentPart } from "@/l
 import { bankDraftPrompt, marketInputSchema, resolvePromptMarket } from "@/lib/market";
 import { INLINE_BASE64_MAX } from "@/lib/staged-upload";
 import { resolvePdfBase64 } from "@/lib/staged-upload.server";
+import { assertExtractionAllowed } from "@/lib/extraction-rate-limit.server";
 
 export interface BankDraftOpexLine {
   category: string;
@@ -129,6 +130,7 @@ export const draftFinancialsFromBankStatements = createServerFn({ method: "POST"
         `Statements are too large (${(totalBytes / 1024 / 1024).toFixed(1)} MB total). Max 40 MB — try fewer files.`,
       );
     }
+    await assertExtractionAllowed(context.supabase, "bank-pnl", data.files.length, totalBytes);
     content.push({ type: "text", text: prompt });
 
     const raw = await callClaudeMessages({

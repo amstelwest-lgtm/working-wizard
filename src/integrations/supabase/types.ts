@@ -1477,6 +1477,10 @@ export type Database = {
         Args: { p_name?: string | null; p_market?: Json | null }
         Returns: string
       }
+      extraction_record_request: {
+        Args: { p_kind: string; p_files?: number; p_bytes?: number; p_limit?: number }
+        Returns: boolean
+      }
       has_client_access: {
         Args: { _client_id: string; _user_id: string }
         Returns: boolean

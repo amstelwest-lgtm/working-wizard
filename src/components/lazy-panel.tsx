@@ -1,4 +1,5 @@
 import { Component, Fragment, lazy, type ComponentType, type ReactNode } from "react";
+import { reportClientError } from "@/lib/monitoring";
 
 const PANEL_ERROR_CLS =
   "rounded-xl border border-rose-500/40 bg-rose-50 p-6 text-sm text-rose-900 dark:border-rose-500/30 dark:bg-rose-950/40 dark:text-rose-100";
@@ -65,6 +66,7 @@ export class TabErrorBoundary extends Component<
 
   componentDidCatch(error: Error) {
     console.error(`[${this.props.label}] render failed`, error);
+    reportClientError(error, { source: `tab:${this.props.label}` });
   }
 
   render() {

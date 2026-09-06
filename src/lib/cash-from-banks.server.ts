@@ -10,6 +10,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { callClaudeMessages, parseClaudeJson, type ClaudeContentPart } from "@/lib/claude-messages";
 import { INLINE_BASE64_MAX } from "@/lib/staged-upload";
 import { resolvePdfBase64 } from "@/lib/staged-upload.server";
+import { assertExtractionAllowed } from "@/lib/extraction-rate-limit.server";
 import {
   cashExtractPrompt,
   marketInputSchema,
@@ -189,6 +190,7 @@ export const draftCashForecastFromBankStatements = createServerFn({ method: "POS
         `Statements are too large (${(totalBytes / 1024 / 1024).toFixed(1)} MB total). Max 40 MB.`,
       );
     }
+    await assertExtractionAllowed(context.supabase, "bank-cash", data.files.length, totalBytes);
     content.push({ type: "text", text: prompt });
 
     const rawText = await callClaudeMessages({
