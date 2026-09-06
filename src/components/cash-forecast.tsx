@@ -44,6 +44,7 @@ import { useAccountantProfile } from "@/contexts/accountant-profile";
 import { useAuth } from "@/hooks/use-auth";
 import { useServerFn } from "@tanstack/react-start";
 import { useMarketFormat } from "@/contexts/market";
+import { currencySymbol } from "@/lib/market";
 import { listClientReviewSignoffs } from "@/lib/review-signoffs.functions";
 import type { ClientReviewSignoff } from "@/lib/review-signoffs.functions";
 import {
@@ -277,6 +278,8 @@ function LineEditor({
   onRemove?: () => void;
   tone: "revenue" | "expense";
 }) {
+  const { market } = useMarketFormat();
+  const cur = currencySymbol(market);
   const accent =
     tone === "revenue" ? "border-l-[3px] border-l-[#4caf82]" : "border-l-[3px] border-l-[#e05c5c]";
   const showSplit = line.frequency === "split-weeks" || line.frequency === "split-months";
@@ -293,7 +296,7 @@ function LineEditor({
         />
       </div>
       <div className="md:col-span-2">
-        <Label className={LABEL_CLS}>Amount (R)</Label>
+        <Label className={LABEL_CLS}>Amount ({cur})</Label>
         <Input
           type="number"
           value={line.amount}
@@ -392,6 +395,7 @@ export function CashForecastPanel({
   const { profile, firmId } = useAccountantProfile();
   const { user } = useAuth();
   const { money: fmtR, moneyCompact: fmtCompact, date, market } = useMarketFormat();
+  const cur = currencySymbol(market);
   const fetchReviewSignoffs = useServerFn(listClientReviewSignoffs);
   const [exporting, setExporting] = useState(false);
   const [forecastSignoff, setForecastSignoff] = useState<ClientReviewSignoff | null>(null);
@@ -700,7 +704,6 @@ export function CashForecastPanel({
         revGrowthPct,
         capexAmount: parseFloat(capexAmount) || 0,
         capexWeek,
-        // eslint-disable-next-line react-hooks/exhaustive-deps
       }),
     [
       revenue,
@@ -731,7 +734,6 @@ export function CashForecastPanel({
         revGrowthPct: 0,
         capexAmount: 0,
         capexWeek: 1,
-        // eslint-disable-next-line react-hooks/exhaustive-deps
       }),
     [revenue, expenses, other, openingBalance],
   );
@@ -938,8 +940,18 @@ export function CashForecastPanel({
 
   const shortfall = lowestBal < 0;
   const forecastStale = computeIsStale(forecastSignoff, lastForecastAt);
+  // Nothing entered yet: no opening balance and every line at zero. A flat
+  // R0/$0 trajectory must not be badged "In the black".
+  const forecastEmpty =
+    loaded &&
+    (parseFloat(openingBalance) || 0) === 0 &&
+    [...revenue, ...expenses, ...other].every((l) => !(parseFloat(l.amount) || 0));
 
-  const heroBadge = (
+  const heroBadge = forecastEmpty ? (
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-400/50 bg-slate-500/10 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wide text-slate-600 dark:text-slate-300">
+      No forecast yet
+    </span>
+  ) : (
     <span
       className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wide ${
         shortfall
@@ -951,6 +963,23 @@ export function CashForecastPanel({
       {shortfall ? `Shortfall W${lowestWeek}` : "In the black"}
     </span>
   );
+
+  const emptyNotice = forecastEmpty ? (
+    <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#d4a550]/40 bg-[#d4a550]/10 px-4 py-3 text-sm text-slate-800 dark:text-slate-100">
+      <span>
+        Nothing is forecast yet — the figures below are placeholders at {cur}0. Upload bank
+        statements to build the 13 weeks from real movements, or set the opening balance and line
+        items in Forecast Setup.
+      </span>
+      <Button
+        size="sm"
+        className="h-8 gap-1.5 bg-[#d4a550] text-[#07090f] hover:bg-[#e2b964]"
+        onClick={() => setShowBankUpload(true)}
+      >
+        <Upload className="h-3 w-3" /> Upload bank statements
+      </Button>
+    </div>
+  ) : null;
 
   // ── Simplified mode: glanceable hero ─────────────────────────────────────
   if (simplified) {
@@ -993,6 +1022,7 @@ export function CashForecastPanel({
               />
             </div>
           )}
+          {emptyNotice}
           <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
             <Stat
               label="Closing · Week 13"
@@ -1086,6 +1116,7 @@ export function CashForecastPanel({
               />
             </div>
           )}
+          {emptyNotice}
           <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Stat
               label="Opening balance"
@@ -1268,7 +1299,7 @@ export function CashForecastPanel({
                   +
                 </Button>
               </div>
-              <Label className={`mt-2 block ${LABEL_CLS}`}>Avg monthly salary (R)</Label>
+              <Label className={`mt-2 block ${LABEL_CLS}`}>Avg monthly salary ({cur})</Label>
               <Input
                 type="number"
                 value={avgSalary}
@@ -1277,7 +1308,7 @@ export function CashForecastPanel({
               />
             </div>
             <div>
-              <Label className={LABEL_CLS}>Fixed cost Δ (monthly R, +/-)</Label>
+              <Label className={LABEL_CLS}>Fixed cost Δ (monthly {cur}, +/-)</Label>
               <Input
                 type="number"
                 value={fixedCostDelta}
@@ -1308,7 +1339,7 @@ export function CashForecastPanel({
               />
             </div>
             <div>
-              <Label className={LABEL_CLS}>One-off capex (R)</Label>
+              <Label className={LABEL_CLS}>One-off capex ({cur})</Label>
               <Input
                 type="number"
                 value={capexAmount}
@@ -1467,7 +1498,7 @@ export function CashForecastPanel({
             />
           </div>
           <div>
-            <Label className={LABEL_CLS}>Opening bank balance (R)</Label>
+            <Label className={LABEL_CLS}>Opening bank balance ({cur})</Label>
             <Input
               type="number"
               value={openingBalance}

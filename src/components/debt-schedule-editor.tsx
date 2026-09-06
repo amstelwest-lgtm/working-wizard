@@ -5,6 +5,7 @@
 import { useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { useMarketFormat } from "@/contexts/market";
+import { currencySymbol } from "@/lib/market";
 import {
   type DebtSchedule,
   type DebtFacility,
@@ -21,7 +22,8 @@ export function DebtScheduleEditor({
   onChange: (next: DebtSchedule) => void;
   disabled?: boolean;
 }) {
-  const { money } = useMarketFormat();
+  const { money, market } = useMarketFormat();
+  const cur = currencySymbol(market);
   const [open, setOpen] = useState(value.lines.length > 0);
 
   const patchLine = (id: string, patch: Partial<DebtFacility>) => {
@@ -105,7 +107,7 @@ export function DebtScheduleEditor({
                   />
                 </label>
                 <label style={{ fontSize: 11, color: "var(--ink-dim)" }}>
-                  Amount (R)
+                  Amount ({cur})
                   <input
                     disabled={disabled}
                     type="number"
@@ -206,7 +208,7 @@ export function DebtScheduleEditor({
             }}
           >
             <label style={{ fontSize: 11, color: "var(--ink-dim)" }}>
-              Drawings YTD (R)
+              Drawings YTD ({cur})
               <input
                 disabled={disabled}
                 type="number"
@@ -230,7 +232,7 @@ export function DebtScheduleEditor({
               />
             </label>
             <label style={{ fontSize: 11, color: "var(--ink-dim)" }}>
-              Prior equity (R)
+              Prior equity ({cur})
               <input
                 disabled={disabled}
                 type="number"
