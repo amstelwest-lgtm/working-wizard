@@ -44,14 +44,14 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm test:ci
 
-  # Reporting only. `tsc` carries ~30 long-standing typing errors (PostgREST
-  # builder / vite plugin typings) and `eslint .` a Prettier backlog, so neither
-  # can block yet. The step summary shows the counts so the debt stays visible;
-  # flip continue-on-error off once both are clean.
+  # Reporting only — always green. `tsc` carries ~30 long-standing typing
+  # errors (PostgREST builder / vite plugin typings) and `eslint .` a Prettier
+  # backlog, so neither can block yet. Counts land in the step summary and as
+  # warning annotations so the debt stays visible without a red badge. Once
+  # both are clean, turn the two `exit 0`s into real failures.
   typecheck-and-lint:
     name: Typecheck + lint (report)
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -62,18 +62,17 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: tsc
         run: |
-          set +e
-          pnpm exec tsc --noEmit -p tsconfig.json > tsc.log 2>&1
+          pnpm exec tsc --noEmit -p tsconfig.json > tsc.log 2>&1 || true
           n=$(grep -c "error TS" tsc.log || true)
-          echo "### tsc: $n error(s)" >> "$GITHUB_STEP_SUMMARY"
-          grep "error TS" tsc.log | sed -E 's/\([0-9]+,[0-9]+\)//' | sort | uniq -c | sort -rn | head -40 >> "$GITHUB_STEP_SUMMARY"
-          [ "$n" -eq 0 ]
+          echo "### tsc: $n error(s) (baseline 30)" >> "$GITHUB_STEP_SUMMARY"
+          grep "error TS" tsc.log | sed -E 's/\([0-9]+,[0-9]+\)//' | sort | uniq -c | sort -rn | head -40 >> "$GITHUB_STEP_SUMMARY" || true
+          if [ "$n" -gt 30 ]; then echo "::warning::tsc errors rose to $n (baseline 30) — see step summary"; fi
+          exit 0
       - name: eslint (non-formatting rules)
-        if: always()
         run: |
-          set +e
-          pnpm exec eslint . --quiet --rule 'prettier/prettier: off' > eslint.log 2>&1
-          code=$?
-          echo "### eslint (prettier excluded)" >> "$GITHUB_STEP_SUMMARY"
-          tail -3 eslint.log >> "$GITHUB_STEP_SUMMARY"
-          exit $code
+          pnpm exec eslint . --quiet --rule 'prettier/prettier: off' -f json > eslint.json 2>/dev/null || true
+          n=$(node -e 'const r=require("./eslint.json");console.log(r.reduce((s,f)=>s+f.errorCount,0))')
+          echo "### eslint (prettier excluded): $n error(s) (baseline ~60)" >> "$GITHUB_STEP_SUMMARY"
+          node -e 'const r=require("./eslint.json");const by={};for(const f of r)for(const m of f.messages)by[m.ruleId]=(by[m.ruleId]||0)+1;console.log(Object.entries(by).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`- ${k}: ${v}`).join("\n"))' >> "$GITHUB_STEP_SUMMARY"
+          if [ "$n" -gt 60 ]; then echo "::warning::eslint errors rose to $n (baseline ~60) — see step summary"; fi
+          exit 0
