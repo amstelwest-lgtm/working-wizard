@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
+import { setMonitoringUser } from "@/lib/monitoring";
 
 type AuthCtx = {
   user: User | null;
@@ -29,9 +30,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // /auth and AccountantProfileProvider.
     const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => {
       setSession(s);
+      setMonitoringUser(s?.user.id ?? null);
     });
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
+      setMonitoringUser(data.session?.user.id ?? null);
       setLoading(false);
     });
     return () => sub.subscription.unsubscribe();

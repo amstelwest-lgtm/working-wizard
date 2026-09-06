@@ -17,6 +17,7 @@ import { AnalyticsProvider } from "@/contexts/analytics";
 import { NotesProvider } from "@/contexts/notes";
 import { FloatingNoteButton } from "@/components/floating-note-button";
 import { NoteArchiveSheet } from "@/components/note-archive";
+import { reportClientError } from "@/lib/monitoring";
 
 import appCss from "../styles.css?url";
 import { SHARE_DESCRIPTION, SHARE_TITLE } from "@/lib/share-copy";
@@ -45,6 +46,7 @@ function NotFoundComponent() {
 
 function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   console.error(error);
+  reportClientError(error, { source: "root-boundary" });
   const router = useRouter();
 
   return (
