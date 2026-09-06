@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 
-export const Route = createFileRoute("/auth/verified")({
+export const Route = createFileRoute("/auth_/verified")({
   component: EmailVerifiedPage,
   head: () => ({
     meta: [{ title: "Email verified — Milōn" }],

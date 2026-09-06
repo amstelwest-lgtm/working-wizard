@@ -24,7 +24,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as TTokenRouteImport } from './routes/t.$token'
 import { Route as LhUnsubscribeRouteImport } from './routes/lh/unsubscribe'
 import { Route as EmailUnsubscribeRouteImport } from './routes/email/unsubscribe'
-import { Route as AuthVerifiedRouteImport } from './routes/auth.verified'
+import { Route as AuthVerifiedRouteImport } from './routes/auth_.verified'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as ApiTaskEngagedRouteImport } from './routes/api/task-engaged'
 import { Route as ApiMetricsDigestRouteImport } from './routes/api/metrics-digest'
@@ -122,9 +122,9 @@ const EmailUnsubscribeRoute = EmailUnsubscribeRouteImport.update({
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthVerifiedRoute = AuthVerifiedRouteImport.update({
-  id: '/verified',
-  path: '/verified',
-  getParentRoute: () => AuthRoute,
+  id: '/auth_/verified',
+  path: '/auth/verified',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const AuthCallbackRoute = AuthCallbackRouteImport.update({
   id: '/callback',
@@ -340,7 +340,7 @@ export interface FileRoutesById {
   '/api/metrics-digest': typeof ApiMetricsDigestRoute
   '/api/task-engaged': typeof ApiTaskEngagedRoute
   '/auth/callback': typeof AuthCallbackRoute
-  '/auth/verified': typeof AuthVerifiedRoute
+  '/auth_/verified': typeof AuthVerifiedRoute
   '/email/unsubscribe': typeof EmailUnsubscribeRoute
   '/lh/unsubscribe': typeof LhUnsubscribeRoute
   '/t/$token': typeof TTokenRoute
@@ -457,7 +457,7 @@ export interface FileRouteTypes {
     | '/api/metrics-digest'
     | '/api/task-engaged'
     | '/auth/callback'
-    | '/auth/verified'
+    | '/auth_/verified'
     | '/email/unsubscribe'
     | '/lh/unsubscribe'
     | '/t/$token'
@@ -494,6 +494,7 @@ export interface RootRouteChildren {
   ApiClientErrorRoute: typeof ApiClientErrorRoute
   ApiMetricsDigestRoute: typeof ApiMetricsDigestRoute
   ApiTaskEngagedRoute: typeof ApiTaskEngagedRoute
+  AuthVerifiedRoute: typeof AuthVerifiedRoute
   EmailUnsubscribeRoute: typeof EmailUnsubscribeRoute
   LhUnsubscribeRoute: typeof LhUnsubscribeRoute
   TTokenRoute: typeof TTokenRoute
@@ -612,12 +613,12 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof EmailUnsubscribeRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/auth/verified': {
-      id: '/auth/verified'
-      path: '/verified'
+    '/auth_/verified': {
+      id: '/auth_/verified'
+      path: '/auth/verified'
       fullPath: '/auth/verified'
       preLoaderRoute: typeof AuthVerifiedRouteImport
-      parentRoute: typeof AuthRoute
+      parentRoute: typeof rootRouteImport
     }
     '/auth/callback': {
       id: '/auth/callback'
@@ -799,12 +800,10 @@ const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(
 
 interface AuthRouteChildren {
   AuthCallbackRoute: typeof AuthCallbackRoute
-  AuthVerifiedRoute: typeof AuthVerifiedRoute
 }
 
 const AuthRouteChildren: AuthRouteChildren = {
   AuthCallbackRoute: AuthCallbackRoute,
-  AuthVerifiedRoute: AuthVerifiedRoute,
 }
 
 const AuthRouteWithChildren = AuthRoute._addFileChildren(AuthRouteChildren)
@@ -827,6 +826,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiClientErrorRoute: ApiClientErrorRoute,
   ApiMetricsDigestRoute: ApiMetricsDigestRoute,
   ApiTaskEngagedRoute: ApiTaskEngagedRoute,
+  AuthVerifiedRoute: AuthVerifiedRoute,
   EmailUnsubscribeRoute: EmailUnsubscribeRoute,
   LhUnsubscribeRoute: LhUnsubscribeRoute,
   TTokenRoute: TTokenRoute,
