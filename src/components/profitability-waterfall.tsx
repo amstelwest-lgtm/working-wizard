@@ -290,7 +290,10 @@ export function ProfitabilityWaterfall({
           )}
 
           {/* ── Waterfall chart ── */}
-          <div className="w-full overflow-x-auto pb-1">
+          <p className="mb-1 text-right text-[10px] text-slate-500 sm:hidden dark:text-slate-400">
+            Swipe to see the whole waterfall →
+          </p>
+          <div className="w-full overflow-x-auto pb-1 [mask-image:linear-gradient(90deg,#000_calc(100%-28px),transparent)] sm:[mask-image:none]">
             <div className="relative min-w-[560px]" style={{ height: CHART_H + 88 + LABEL_PAD }}>
               {/* horizontal grid lines */}
               {[0, 0.25, 0.5, 0.75, 1].map((p) => (

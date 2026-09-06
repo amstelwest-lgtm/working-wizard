@@ -1861,6 +1861,7 @@ function ClientView() {
                     }}
                   >
                     <SphereHero
+                      onDark
                       overallHealth={isFinite(avgHealth) ? avgHealth : NaN}
                       displayStatus={overallHealth.displayStatus}
                       pillars={spherePillars}

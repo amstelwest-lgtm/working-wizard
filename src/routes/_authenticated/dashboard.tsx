@@ -1279,7 +1279,6 @@ function Dashboard() {
         {/* ===== TOP BAR ===== */}
         <div className="topbar">
           <span className="brand">
-            <img src="/milon-wordmark.png" alt="Milōn" />
             <span className="gold-text">MILŌN</span>
           </span>
           <FirmSwitcher />
