@@ -1474,7 +1474,7 @@ export type Database = {
         Returns: Json
       }
       ensure_practice_firm: {
-        Args: { p_name?: string | null }
+        Args: { p_name?: string | null; p_market?: Json | null }
         Returns: string
       }
       has_client_access: {

@@ -21,43 +21,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Set up listener BEFORE getSession (per Supabase guidance)
-    const { data: sub } = supabase.auth.onAuthStateChange(async (event, s) => {
+    // Set up listener BEFORE getSession (per Supabase guidance).
+    // The callback must stay synchronous: awaiting another Supabase call in
+    // here deadlocks the auth lock (SIGNED_IN is emitted while initialize()
+    // holds it), which froze every accountant on "Loading…" after a reload.
+    // Practice firm provisioning lives in ensure_practice_firm, called from
+    // /auth and AccountantProfileProvider.
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => {
       setSession(s);
-      // After email-confirmation sign-in, create the firm from metadata if it doesn't exist yet.
-      if (event === "SIGNED_IN" && s?.user) {
-        const firmName = s.user.user_metadata?.firm_name as string | undefined;
-        if (firmName) {
-          const { count } = await supabase
-            .from("firms")
-            .select("id", { count: "exact", head: true })
-            .eq("owner_user_id", s.user.id);
-          if (count === 0) {
-            const { error: fErr } = await supabase
-              .from("firms")
-              .insert({ name: firmName, owner_user_id: s.user.id });
-            if (!fErr) {
-              const { data: created } = await supabase
-                .from("firms")
-                .select("id")
-                .eq("owner_user_id", s.user.id)
-                .order("created_at", { ascending: true })
-                .limit(1)
-                .maybeSingle();
-              if (created?.id) {
-                await supabase.from("firm_memberships").insert({
-                  firm_id: created.id,
-                  user_id: s.user.id,
-                  role: "owner",
-                });
-              }
-              await supabase
-                .from("user_roles")
-                .insert({ user_id: s.user.id, role: "firm_admin" });
-            }
-          }
-        }
-      }
     });
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
