@@ -14,6 +14,7 @@ import {
   Shield,
   Plug2,
   Database,
+  FlaskConical,
   ChevronDown,
   Check,
   Pencil,
@@ -103,6 +104,8 @@ import { NoteLayer } from "@/components/note-layer";
 import { AdminDashboard } from "@/components/admin-dashboard";
 import { ProfileFunnel, type ProfileFunnelMode } from "@/components/profile/profile-funnel";
 import { ProfileCompletionNote } from "@/components/profile/profile-completion-note";
+import { SampleBoardBanner } from "@/components/sample-board-banner";
+import { SAMPLE_BUSINESS_BLURB, sampleFinancialsFor } from "@/lib/sample-business";
 import {
   parseOperatingProfile,
   profileNeedsCompletion,
@@ -2837,6 +2840,50 @@ function Index() {
     markRealFinancials();
   };
 
+  // ── Sample business ─────────────────────────────────────────────────────
+  // Lets a first-time owner see a scored board before uploading anything.
+  // Sample figures live only in `v`; autosave stays gated on hasRealFinancials
+  // so nothing is written, and any route to real figures drops the sample first.
+  const [sampleMode, setSampleMode] = useState(false);
+  const showScoredBoard = hasRealFinancials || sampleMode;
+  const enterSampleMode = useCallback(() => {
+    setV({ ...defaults, ...sampleFinancialsFor(boardMarket.country) } as Inputs);
+    setSampleMode(true);
+    setFirstRunStep(null);
+    setActiveTab("today");
+    track("sample_board_opened", { surface: "owner_app", market: boardMarket.country });
+  }, [boardMarket.country, track]);
+  const exitSampleMode = useCallback(() => {
+    setSampleMode(false);
+    setV(defaults);
+  }, []);
+  useEffect(() => {
+    if (!sampleMode) return;
+    // Real figures arriving, or any figures-entry surface opening, ends the sample.
+    if (
+      hasRealFinancials ||
+      showFinData ||
+      showBankDrafter ||
+      showQboDialog ||
+      showCashFromBanks ||
+      reviewOpen
+    ) {
+      setSampleMode(false);
+      if (!hasRealFinancials) setV(defaults);
+    }
+  }, [
+    sampleMode,
+    hasRealFinancials,
+    showFinData,
+    showBankDrafter,
+    showQboDialog,
+    showCashFromBanks,
+    reviewOpen,
+  ]);
+  useEffect(() => {
+    setSampleMode(false);
+  }, [effectiveClientId]);
+
   const n = useMemo(() => {
     const num = (s: string) => (s === "" ? 0 : parseFloat(s) || 0);
     return {
@@ -3173,9 +3220,9 @@ function Index() {
     .sort((a, b) => b.score - a.score)
     .slice(0, 10);
 
-  const positionPercentile = computePositionPercentile(hasRealFinancials, avgHealth);
+  const positionPercentile = computePositionPercentile(showScoredBoard, avgHealth);
   const healthBand =
-    hasRealFinancials && Number.isFinite(avgHealth) ? computeHealthBand(avgHealth) : null;
+    showScoredBoard && Number.isFinite(avgHealth) ? computeHealthBand(avgHealth) : null;
   const weekChanges = computeWeekChanges({
     revenueGrowth,
     cashHealth: pillarHealths.cash,
@@ -3183,14 +3230,14 @@ function Index() {
     grossMarginRatio,
   });
   const cashTrajectory = computeCashTrajectory({
-    hasRealFinancials,
+    hasRealFinancials: showScoredBoard,
     revenue: n.revenue,
     operatingCashflow: n.operatingCashflow,
     currentAssets: n.currentAssets,
     currentLiabilities: n.currentLiabilities,
   });
   const overviewCaption = computeOverviewCaption({
-    hasRealFinancials,
+    hasRealFinancials: showScoredBoard,
     avgHealth,
     cashHealth: pillarHealths.cash,
   });
@@ -3302,8 +3349,8 @@ function Index() {
                   tour only runs once a real score exists, so nothing it points at
                   ("one health score", Ask AI, seeded budget) is a promise. */}
               <WalkthroughWizard
-                key={hasRealFinancials ? "owner" : "owner-empty"}
-                variant={hasRealFinancials ? "owner" : "owner-empty"}
+                key={showScoredBoard ? "owner" : "owner-empty"}
+                variant={showScoredBoard ? "owner" : "owner-empty"}
                 ready={
                   ownerWalkthroughReady({
                     firstRunStep,
@@ -3318,7 +3365,7 @@ function Index() {
                   hydratedClientId === effectiveClientId
                 }
                 onTabChange={handleTourTabChange}
-                onFinish={hasRealFinancials ? undefined : () => setFirstRunStep("first-data")}
+                onFinish={showScoredBoard ? undefined : () => setFirstRunStep("first-data")}
                 userRole={userRole ?? undefined}
               />
             </TabErrorBoundary>
@@ -3747,6 +3794,12 @@ function Index() {
                     Enter figures manually
                   </button>
                   <button
+                    onClick={enterSampleMode}
+                    className="text-xs text-sky-400 hover:text-sky-300 pt-0.5 text-center"
+                  >
+                    Not ready? See the board with a sample business first
+                  </button>
+                  <button
                     onClick={() => setFirstRunStep(null)}
                     className="text-xs text-slate-600 hover:text-slate-400 pt-0.5 text-center"
                   >
@@ -3755,6 +3808,17 @@ function Index() {
                 </div>
               </DialogContent>
             </Dialog>
+
+            {sampleMode && (
+              <SampleBoardBanner
+                blurb={SAMPLE_BUSINESS_BLURB}
+                onUseMyFigures={() => {
+                  exitSampleMode();
+                  setFirstRunStep("first-data");
+                }}
+                onExit={exitSampleMode}
+              />
+            )}
 
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
               <TabsList className="mb-2 flex h-auto w-full gap-0 overflow-x-auto rounded-none border-0 border-b border-[#b7872a]/20 bg-transparent p-0 [-ms-overflow-style:none] [scrollbar-width:none] sm:grid sm:grid-cols-6 [&::-webkit-scrollbar]:hidden">
@@ -3842,6 +3906,10 @@ function Index() {
                                 year: "numeric",
                               }).toUpperCase()}
                             </span>
+                          ) : sampleMode ? (
+                            <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-sky-500/40 bg-sky-500/10 px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[0.16em] text-sky-700 dark:text-sky-300">
+                              Sample · illustrative
+                            </span>
                           ) : (
                             <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:border-slate-700 dark:bg-slate-800/60">
                               No data yet
@@ -3851,7 +3919,7 @@ function Index() {
                       </div>
 
                       {/* No-data empty state — shown until owner uploads or enters real financials */}
-                      {!hasRealFinancials && !actingClientId ? (
+                      {!showScoredBoard && !actingClientId ? (
                         <div>
                           <div className="founder-overview-grid grid w-full items-start gap-4 lg:grid-cols-[minmax(0,1fr)_280px] xl:grid-cols-[minmax(0,1fr)_300px]">
                             <div className="flex w-full flex-col gap-3">
@@ -3959,6 +4027,14 @@ function Index() {
                                         See all ways to add figures
                                       </button>
                                     </div>
+                                    <button
+                                      id="wizard-sample-board"
+                                      onClick={enterSampleMode}
+                                      className="mt-1 inline-flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-sky-500/40 px-3 py-1.5 text-xs font-medium text-sky-700 transition-colors hover:bg-sky-500/10 dark:text-sky-300"
+                                    >
+                                      <FlaskConical className="h-3.5 w-3.5" />
+                                      Not ready? See the board with a sample business
+                                    </button>
                                   </div>
                                 ) : (
                                   <p className="max-w-sm text-center text-sm text-slate-500">
@@ -4081,7 +4157,7 @@ function Index() {
                           {industryBenchmarkCaption(boardMarket)}
                         </p>
                       )}
-                      {!hasRealFinancials && !actingClientId && (
+                      {!showScoredBoard && !actingClientId && (
                         <div className="mb-4 flex items-center gap-3 rounded-lg border border-amber-700/40 bg-amber-950/20 px-4 py-2.5 text-xs text-amber-300">
                           <span className="text-amber-400">⚠</span>
                           <span>
@@ -4460,7 +4536,7 @@ function Index() {
                       clientMeta?.financials_updated_at ?? null,
                     )}
                   />
-                  {!hasRealFinancials && !actingClientId && userRole !== "client_member" && (
+                  {!showScoredBoard && !actingClientId && userRole !== "client_member" && (
                     <NoFiguresBanner
                       tabLabel="Profit"
                       detail="The waterfall below is an empty frame until revenue and costs land."
@@ -4509,7 +4585,7 @@ function Index() {
                   </span>
                   <span className="h-px flex-1 bg-gradient-to-r from-[#b7872a]/30 to-transparent" />
                 </div>
-                {!hasRealFinancials && !actingClientId && userRole !== "client_member" && (
+                {!showScoredBoard && !actingClientId && userRole !== "client_member" && (
                   <NoFiguresBanner
                     tabLabel="Next moves"
                     detail="The list below is the generic playbook — it is ranked for your business only once your figures are in."
@@ -4545,7 +4621,7 @@ function Index() {
                       clientMeta?.last_forecast_at ?? null,
                     )}
                   />
-                  {!hasRealFinancials && !actingClientId && userRole !== "client_member" && (
+                  {!showScoredBoard && !actingClientId && userRole !== "client_member" && (
                     <NoFiguresBanner
                       tabLabel="Cash Forecast"
                       detail="Zeros below are placeholders, not a forecast. Bank statements can draft the 13 weeks for you."
