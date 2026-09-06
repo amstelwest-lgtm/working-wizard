@@ -503,13 +503,20 @@ function ClientView() {
   // the studio opens on Health & Ratios, where the orb reads "no data" and the
   // Financials grid / upload buttons sit. Decided once per client, after load,
   // and never over a ?tab= deep link.
+  // The tour variant is fixed at the same moment: flipping to the full tour
+  // the instant the first figure is typed would yank the user to Ask AI
+  // mid-entry. The full tour runs on the next visit once figures exist.
   const landingTabDecidedFor = useRef<string | null>(null);
+  const [tourVariant, setTourVariant] = useState<
+    "accountant-client" | "accountant-client-empty" | null
+  >(null);
   const decideLandingTab = useCallback(
     (scalars: Record<string, string>) => {
       if (landingTabDecidedFor.current === clientId) return;
       landingTabDecidedFor.current = clientId;
-      if (resolveAccountantTab(search.tab)) return;
       const figures = FIELD_LABELS.some(({ key }) => (scalars[key] ?? "").trim() !== "");
+      setTourVariant(figures ? "accountant-client" : "accountant-client-empty");
+      if (resolveAccountantTab(search.tab)) return;
       setActiveTab(figures ? "ask" : "ratios");
     },
     [clientId, search.tab],
@@ -1430,11 +1437,20 @@ function ClientView() {
               tour runs once a real score exists, so "Start with Ask AI" and
               the seeded budget are never promised over an empty book. */}
           <WalkthroughWizard
-            key={hasFigures ? "accountant-client" : "accountant-client-empty"}
-            variant={hasFigures ? "accountant-client" : "accountant-client-empty"}
-            ready={!loading && !!client && !firstDataOpen && !showBankDrafter && !uploadOpen}
+            key={tourVariant ?? "pending"}
+            variant={tourVariant ?? "accountant-client-empty"}
+            ready={
+              tourVariant !== null &&
+              !loading &&
+              !!client &&
+              !firstDataOpen &&
+              !showBankDrafter &&
+              !uploadOpen
+            }
             onTabChange={handleTourTabChange}
-            onFinish={hasFigures ? undefined : () => setFirstDataOpen(true)}
+            onFinish={
+              tourVariant === "accountant-client-empty" ? () => setFirstDataOpen(true) : undefined
+            }
           />
           {/* Ambient background */}
           <div id="atmos">
