@@ -65,6 +65,11 @@ export type SphereHeroProps = {
   caption?: string;
   /** Denser overview layout — smaller orb, tighter spacing */
   compact?: boolean;
+  /**
+   * The hero sits on an always-dark surface regardless of theme (the studio's
+   * orb card), so text under the orb must be light even in light mode.
+   */
+  onDark?: boolean;
 };
 
 // ── Tier helpers (aligned with scoreTier in @/lib/ratios: 65 / 40) ──────────
@@ -288,6 +293,7 @@ export function SphereHero({
   onTopPriority,
   caption,
   compact = false,
+  onDark = false,
 }: SphereHeroProps) {
   const [level, setLevel] = useState<Level>(1);
   const [activePillarId, setActivePillarId] = useState<SpherePillar["id"] | null>(null);
@@ -360,7 +366,12 @@ export function SphereHero({
               level === 1 ? "opacity-100" : "opacity-0"
             }`}
           >
-            <span className={`block text-slate-600 dark:text-slate-300 ${compact ? "text-[13px] leading-snug" : "text-sm"}`}>
+            <span
+              // styles.css forces every .text-slate-* near-black in light mode
+              // with !important, so on a dark card we must not carry that class.
+              className={`block ${onDark ? "" : "text-slate-600 dark:text-slate-300"} ${compact ? "text-[13px] leading-snug" : "text-sm"}`}
+              style={onDark ? { color: "#cbd5e1" } : undefined}
+            >
               {caption
                 ? caption
                 : overallTier === "healthy"
