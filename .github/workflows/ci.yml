@@ -1,0 +1,79 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Blocking: the exact production build. A .client/.server import-protection
+  # violation or a broken chunk shows up here, not on the Vercel deploy.
+  build:
+    name: Production build (Vercel target)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run build:vercel
+      - name: Client bundle must not contain the Node Sentry SDK
+        run: |
+          if grep -rl "@sentry/node\|@opentelemetry" dist/client >/dev/null 2>&1; then
+            echo "::error::Server-only monitoring code leaked into the client bundle"; exit 1
+          fi
+
+  # Blocking: every test:* script that runs without a database.
+  tests:
+    name: Unit and source tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test:ci
+
+  # Reporting only. `tsc` carries ~30 long-standing typing errors (PostgREST
+  # builder / vite plugin typings) and `eslint .` a Prettier backlog, so neither
+  # can block yet. The step summary shows the counts so the debt stays visible;
+  # flip continue-on-error off once both are clean.
+  typecheck-and-lint:
+    name: Typecheck + lint (report)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: tsc
+        run: |
+          set +e
+          pnpm exec tsc --noEmit -p tsconfig.json > tsc.log 2>&1
+          n=$(grep -c "error TS" tsc.log || true)
+          echo "### tsc: $n error(s)" >> "$GITHUB_STEP_SUMMARY"
+          grep "error TS" tsc.log | sed -E 's/\([0-9]+,[0-9]+\)//' | sort | uniq -c | sort -rn | head -40 >> "$GITHUB_STEP_SUMMARY"
+          [ "$n" -eq 0 ]
+      - name: eslint (non-formatting rules)
+        if: always()
+        run: |
+          set +e
+          pnpm exec eslint . --quiet --rule 'prettier/prettier: off' > eslint.log 2>&1
+          code=$?
+          echo "### eslint (prettier excluded)" >> "$GITHUB_STEP_SUMMARY"
+          tail -3 eslint.log >> "$GITHUB_STEP_SUMMARY"
+          exit $code
