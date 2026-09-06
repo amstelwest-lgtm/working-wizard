@@ -328,3 +328,12 @@
 .dark .ask-ai-md-table tbody tr:nth-child(even) { background: rgba(212, 165, 80, 0.05); }
 .dark .ask-ai-cancel { color: rgba(241, 230, 200, 0.4); }
 .dark .ask-ai-cancel:hover { color: rgba(241, 230, 200, 0.7); }
+
+/* Pre-figures note — one quiet line under the header, removed once figures land. */
+.ask-ai-note {
+  margin: -2px 0 8px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: #94a3b8;
+}
+.dark .ask-ai-note { color: #8b93a7; }

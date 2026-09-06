@@ -3967,8 +3967,8 @@ function Index() {
                                   </p>
                                 )}
                               </div>
-                              {/* Same Ask AI mount as the scored board — the hook prints an
-                                  honest "unlocks after real figures" note until then. */}
+                              {/* Same Ask AI mount as the scored board — before figures it
+                                  carries a small "more relevant once your figures are in" note. */}
                               <div
                                 id="ask-ai-overview"
                                 className="min-h-[44px] w-full rounded-xl border border-[#b7872a]/25 bg-white dark:bg-[#0a1020]/80"

@@ -19,11 +19,7 @@ export function useAskAiMount(deps: {
     let attempts = 0;
     const timers: number[] = [];
 
-    const markStatus = (
-      containers: HTMLElement[],
-      status: "pending" | "error",
-      message: string,
-    ) => {
+    const markStatus = (containers: HTMLElement[], status: "error", message: string) => {
       for (const el of containers) {
         el.dataset.askAiMounted = status;
         el.replaceChildren();
@@ -45,11 +41,14 @@ export function useAskAiMount(deps: {
         for (const el of allContainers) el.dataset.clientId = effectiveClientId;
       }
 
-      // Remount when figures arrive after a "pending" unlock message, or retry
-      // hard errors when financials / tab context changes.
+      // The widget mounts with or without figures — before them it carries a
+      // small "more relevant once your figures are in" note. Remount when the
+      // figures state flips so the note appears/disappears, and retry hard
+      // errors once financials exist.
+      const wantMode = hasRealFinancials ? "live" : "pre-figures";
       for (const el of allContainers) {
         const state = el.dataset.askAiMounted;
-        if (state === "pending" && hasRealFinancials) {
+        if (state === "1" && el.dataset.askAiMode !== wantMode) {
           delete el.dataset.askAiMounted;
         } else if (state === "error" && hasRealFinancials) {
           delete el.dataset.askAiMounted;
@@ -62,11 +61,6 @@ export function useAskAiMount(deps: {
           attempts += 1;
           timers.push(window.setTimeout(tryMount, 50 * attempts));
         }
-        return;
-      }
-
-      if (!hasRealFinancials) {
-        markStatus(containers, "pending", "Ask AI unlocks after you add real figures.");
         return;
       }
 
@@ -87,6 +81,7 @@ export function useAskAiMount(deps: {
             if (el.dataset.askAiMounted === "1") continue;
             if (effectiveClientId) el.dataset.clientId = effectiveClientId;
             el.dataset.askAiMounted = "1";
+            el.dataset.askAiMode = wantMode;
             el.replaceChildren();
             mod.mountAskAi(el, {
               endpoint: `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ask-ai`,
@@ -94,6 +89,9 @@ export function useAskAiMount(deps: {
                 const { data } = await supabase.auth.getSession();
                 return data.session?.access_token ?? null;
               },
+              note: hasRealFinancials
+                ? null
+                : "Answers get more relevant once your figures are in — for now Ask AI can explain how the board works and what to bring in first.",
             });
           }
         })
