@@ -1,5 +1,12 @@
 project_id = "jxclnsbsqpixxqlbcapl"
 
+# Owner sign-up goes straight to the board; the address is verified later via a
+# soft "Send verification link" banner on /app (magic link → /auth/verified).
+# Hosted projects: mirror this in Dashboard → Authentication → Sign In / Providers
+# → Email → "Confirm email" OFF, and add <site>/auth/verified to Redirect URLs.
+[auth.email]
+enable_confirmations = false
+
 # Public no-login task links — GET/POST are authorised by the token itself.
 [functions.task-link]
 verify_jwt = false

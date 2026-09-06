@@ -2,6 +2,8 @@
  * Shared helpers for encoding bank statement files for Claude server fns.
  */
 
+import { fileToText, isPdfFile, isSpreadsheetFile, isTextFile } from "@/lib/spreadsheet-text";
+
 export type BankFilePayload = {
   fileName: string;
   accountLabel?: string;
@@ -19,15 +21,24 @@ export const MAX_BANK_FILES = 12;
 export const MAX_BANK_FILE_BYTES = 10 * 1024 * 1024;
 export const MAX_BANK_TOTAL_BYTES = 40 * 1024 * 1024;
 
+/** Accept list for bank statement pickers: PDF plus any text/spreadsheet export. */
+export const BANK_FILE_ACCEPT = ".pdf,.csv,.tsv,.txt,.xlsx,.xls,.xlsm,.ods";
+
+/** Null when the file is usable; otherwise a user-facing reason. */
+export function rejectBankFile(file: Pick<File, "name" | "type">): string | null {
+  if (isPdfFile(file) || isTextFile(file) || isSpreadsheetFile(file)) return null;
+  return `"${file.name}" is not a PDF, CSV or spreadsheet (Excel / OpenDocument) file.`;
+}
+
 export async function encodeBankFileSlots(slots: BankFileSlot[]): Promise<BankFilePayload[]> {
   return Promise.all(
     slots.map(async ({ file, accountLabel }) => {
-      const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
-      if (ext === "csv" || ext === "txt") {
+      // Spreadsheet exports become CSV text per sheet — Claude reads text, not workbooks.
+      if (isTextFile(file) || isSpreadsheetFile(file)) {
         return {
           fileName: file.name,
           accountLabel: accountLabel.trim() || "Bank account",
-          text: await file.text(),
+          text: await fileToText(file),
         };
       }
       const base64 = await new Promise<string>((res, rej) => {

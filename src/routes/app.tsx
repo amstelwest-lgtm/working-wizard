@@ -14,6 +14,7 @@ import {
   Shield,
   Plug2,
   Database,
+  FlaskConical,
   ChevronDown,
   Check,
   Pencil,
@@ -34,6 +35,7 @@ import {
   industryBenchmarkShortLabel,
   isMissingMarketSupport,
   isUsCopy,
+  currencySymbol,
   localizeCopy,
   marketToJson,
   parseMarketSelection,
@@ -100,9 +102,14 @@ import { IndustryPulse, IndustryNewsBand } from "@/components/industry-pulse";
 import { OverviewRail } from "@/components/overview-rail";
 import { NoteLayer } from "@/components/note-layer";
 import { AdminDashboard } from "@/components/admin-dashboard";
-import { ProfileFunnel } from "@/components/profile/profile-funnel";
+import { ProfileFunnel, type ProfileFunnelMode } from "@/components/profile/profile-funnel";
+import { ProfileCompletionNote } from "@/components/profile/profile-completion-note";
+import { SampleBoardBanner } from "@/components/sample-board-banner";
+import { VerifyEmailBanner } from "@/components/verify-email-banner";
+import { SAMPLE_BUSINESS_BLURB, sampleFinancialsFor } from "@/lib/sample-business";
 import {
   parseOperatingProfile,
+  profileNeedsCompletion,
   profileShortLabel,
   stampProfileProvenance,
   profileToBudgetQualification,
@@ -167,10 +174,19 @@ const BudgetPanel = lazyPanel(
 const ActionPlanPanel = lazyPanel(() => import("@/components/action-plan"), "Action Plan");
 import { SplashScreen } from "@/components/splash-screen";
 import { WalkthroughWizard } from "@/components/walkthrough-wizard";
+import { NoFiguresBanner } from "@/components/no-figures-banner";
 import { seedBudgetFromFinancials } from "@/lib/budget.bridges";
 import { normalizeBudgetDocument } from "@/lib/budget.compute";
 import type { BudgetDocument } from "@/lib/budget.types";
-import { createBudgetDocument, currentFyStart } from "@/lib/budget.months";
+import { createBudgetDocument } from "@/lib/budget.months";
+import {
+  UPLOAD_ACCEPT,
+  UPLOAD_FORMATS_LABEL,
+  fileToText,
+  isPdfFile,
+  isSpreadsheetFile,
+  isTextFile,
+} from "@/lib/spreadsheet-text";
 import { QboConnectCard } from "@/components/qbo-connect";
 import { Button } from "@/components/ui/button";
 import { SphereHero } from "@/components/sphere-hero";
@@ -2063,22 +2079,11 @@ function Index() {
       }
       setUploading(true);
       try {
-        const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
         let payload: { fileName: string; mimeType?: string; text?: string; base64?: string };
 
-        if (ext === "csv" || file.type === "text/csv" || ext === "txt") {
-          payload = { fileName: file.name, text: await file.text() };
-        } else if (ext === "xlsx" || ext === "xls") {
-          const XLSX = await import("xlsx");
-          const buf = await file.arrayBuffer();
-          const wb = XLSX.read(buf, { type: "array" });
-          const parts: string[] = [];
-          for (const name of wb.SheetNames) {
-            parts.push(`--- Sheet: ${name} ---`);
-            parts.push(XLSX.utils.sheet_to_csv(wb.Sheets[name]));
-          }
-          payload = { fileName: file.name, text: parts.join("\n") };
-        } else if (ext === "pdf" || file.type === "application/pdf") {
+        if (isTextFile(file) || isSpreadsheetFile(file)) {
+          payload = { fileName: file.name, text: await fileToText(file) };
+        } else if (isPdfFile(file)) {
           const base64 = await new Promise<string>((res, rej) => {
             const reader = new FileReader();
             reader.onload = () => res((reader.result as string).split(",")[1]);
@@ -2097,7 +2102,7 @@ function Index() {
           setReviewOpen(true);
           return;
         } else {
-          toast.error("Unsupported file type. Use PDF, CSV, or Excel.");
+          toast.error("Unsupported file type. Use PDF, Excel, OpenDocument (.ods) or CSV.");
           return;
         }
 
@@ -2110,7 +2115,9 @@ function Index() {
         const extracted = (result as { financials?: Record<string, string> })?.financials ?? {};
         const filledKeys = Object.keys(extracted);
         if (filledKeys.length === 0) {
-          toast.warning("Couldn't extract figures from that file. Try a text-based PDF or CSV.");
+          toast.warning(
+            "Couldn't extract figures from that file. Try a text-based PDF, an Excel/ODS export, or CSV.",
+          );
         } else {
           // Capture fields not surfaced in MergedExtractionResult so they aren't lost
           const csvExtras: Partial<Inputs> = {};
@@ -2368,6 +2375,13 @@ function Index() {
   // white-screens /app after sign-in.
   const [businessTypeId, setBusinessTypeId] = useState<string | null>(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  // Which questions the (non-first-run) profile dialog asks: the six deferred
+  // ones after a four-question first run, or all ten on a retake.
+  const [profileDialogMode, setProfileDialogMode] = useState<"retake" | "complete">("retake");
+  const openProfileDialog = useCallback((mode: "retake" | "complete") => {
+    setProfileDialogMode(mode);
+    setShowOnboarding(true);
+  }, []);
   // firstRunStep: null = not first run (or done); 'pick-type' = must complete profile funnel; 'first-data' = nudge to upload data
   const [firstRunStep, setFirstRunStep] = useState<null | "pick-type" | "first-data">(null);
   const [operatingProfile, setOperatingProfile] = useState<ClientOperatingProfile | null>(null);
@@ -2498,10 +2512,16 @@ function Index() {
     if (typeof sessionStorage === "undefined") return;
     if (sessionStorage.getItem("milon_open_profile") !== "1") return;
     sessionStorage.removeItem("milon_open_profile");
-    setShowOnboarding(true);
-  }, []);
+    openProfileDialog("retake");
+  }, [openProfileDialog]);
 
+  // Resolve the app role only after the client link settles. A freshly
+  // confirmed self-signup has no user_roles row until ensure_own_client runs
+  // in the client-link effect; resolving in parallel used to land on
+  // userRole=null, which silently skipped the profile funnel and started the
+  // feature tour on an empty board.
   useEffect(() => {
+    if (!clientLinkResolved) return;
     let cancelled = false;
     setRoleResolved(false);
     supabase.auth.getUser().then(async ({ data: { user: u } }) => {
@@ -2549,7 +2569,7 @@ function Index() {
     return () => {
       cancelled = true;
     };
-  }, [user?.id]);
+  }, [user?.id, clientLinkResolved, effectiveClientId]);
 
   useEffect(() => {
     if (user) {
@@ -2820,6 +2840,50 @@ function Index() {
     setV((s) => ({ ...s, [k]: val }));
     markRealFinancials();
   };
+
+  // ── Sample business ─────────────────────────────────────────────────────
+  // Lets a first-time owner see a scored board before uploading anything.
+  // Sample figures live only in `v`; autosave stays gated on hasRealFinancials
+  // so nothing is written, and any route to real figures drops the sample first.
+  const [sampleMode, setSampleMode] = useState(false);
+  const showScoredBoard = hasRealFinancials || sampleMode;
+  const enterSampleMode = useCallback(() => {
+    setV({ ...defaults, ...sampleFinancialsFor(boardMarket.country) } as Inputs);
+    setSampleMode(true);
+    setFirstRunStep(null);
+    setActiveTab("today");
+    track("sample_board_opened", { surface: "owner_app", market: boardMarket.country });
+  }, [boardMarket.country, track]);
+  const exitSampleMode = useCallback(() => {
+    setSampleMode(false);
+    setV(defaults);
+  }, []);
+  useEffect(() => {
+    if (!sampleMode) return;
+    // Real figures arriving, or any figures-entry surface opening, ends the sample.
+    if (
+      hasRealFinancials ||
+      showFinData ||
+      showBankDrafter ||
+      showQboDialog ||
+      showCashFromBanks ||
+      reviewOpen
+    ) {
+      setSampleMode(false);
+      if (!hasRealFinancials) setV(defaults);
+    }
+  }, [
+    sampleMode,
+    hasRealFinancials,
+    showFinData,
+    showBankDrafter,
+    showQboDialog,
+    showCashFromBanks,
+    reviewOpen,
+  ]);
+  useEffect(() => {
+    setSampleMode(false);
+  }, [effectiveClientId]);
 
   const n = useMemo(() => {
     const num = (s: string) => (s === "" ? 0 : parseFloat(s) || 0);
@@ -3157,9 +3221,9 @@ function Index() {
     .sort((a, b) => b.score - a.score)
     .slice(0, 10);
 
-  const positionPercentile = computePositionPercentile(hasRealFinancials, avgHealth);
+  const positionPercentile = computePositionPercentile(showScoredBoard, avgHealth);
   const healthBand =
-    hasRealFinancials && Number.isFinite(avgHealth) ? computeHealthBand(avgHealth) : null;
+    showScoredBoard && Number.isFinite(avgHealth) ? computeHealthBand(avgHealth) : null;
   const weekChanges = computeWeekChanges({
     revenueGrowth,
     cashHealth: pillarHealths.cash,
@@ -3167,14 +3231,14 @@ function Index() {
     grossMarginRatio,
   });
   const cashTrajectory = computeCashTrajectory({
-    hasRealFinancials,
+    hasRealFinancials: showScoredBoard,
     revenue: n.revenue,
     operatingCashflow: n.operatingCashflow,
     currentAssets: n.currentAssets,
     currentLiabilities: n.currentLiabilities,
   });
   const overviewCaption = computeOverviewCaption({
-    hasRealFinancials,
+    hasRealFinancials: showScoredBoard,
     avgHealth,
     cashHealth: pillarHealths.cash,
   });
@@ -3182,6 +3246,7 @@ function Index() {
     topKey: nextSteps[0]?.key,
     revenue: n.revenue,
     receivables: n.receivables,
+    currency: currencySymbol(boardMarket),
   });
 
   // Auto-clear the globe highlight after 2s and scroll the row into view.
@@ -3282,16 +3347,27 @@ function Index() {
           <SplashScreen />
           {!actingClientId && (
             <TabErrorBoundary label="Walkthrough">
+              {/* Empty board: a two-step nudge to the one action. The full board
+                  tour only runs once a real score exists, so nothing it points at
+                  ("one health score", Ask AI, seeded budget) is a promise. */}
               <WalkthroughWizard
-                variant="owner"
-                ready={ownerWalkthroughReady({
-                  firstRunStep,
-                  showOnboarding,
-                  showBankDrafter,
-                  showCashFromBanks,
-                  onboardingGateReady,
-                })}
+                key={showScoredBoard ? "owner" : "owner-empty"}
+                variant={showScoredBoard ? "owner" : "owner-empty"}
+                ready={
+                  ownerWalkthroughReady({
+                    firstRunStep,
+                    showOnboarding,
+                    showBankDrafter,
+                    showCashFromBanks,
+                    onboardingGateReady,
+                  }) &&
+                  !showFinData &&
+                  !reviewOpen &&
+                  !showQboDialog &&
+                  hydratedClientId === effectiveClientId
+                }
                 onTabChange={handleTourTabChange}
+                onFinish={showScoredBoard ? undefined : () => setFirstRunStep("first-data")}
                 userRole={userRole ?? undefined}
               />
             </TabErrorBoundary>
@@ -3356,7 +3432,7 @@ function Index() {
                   <div className="hidden items-center gap-1 sm:flex">
                     {userRole !== "client_member" ? (
                       <button
-                        onClick={() => setShowOnboarding(true)}
+                        onClick={() => openProfileDialog("retake")}
                         className="inline-flex h-7 max-w-[11rem] items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50/80 px-2 text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-600 transition-colors hover:border-[#b7872a]/50 hover:bg-[#d4a550]/10 dark:border-slate-700/80 dark:bg-slate-900/70 dark:text-slate-300"
                         title={
                           operatingProfile
@@ -3477,7 +3553,7 @@ function Index() {
                       <div className="flex flex-col gap-1">
                         {userRole !== "client_member" && (
                           <button
-                            onClick={() => setShowOnboarding(true)}
+                            onClick={() => openProfileDialog("retake")}
                             className="flex items-center gap-2 rounded-md px-2 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
                           >
                             <Building2 className="h-3.5 w-3.5" /> Profile
@@ -3553,13 +3629,19 @@ function Index() {
                 <DialogHeader className="sr-only">
                   <DialogTitle>Business profile</DialogTitle>
                   <DialogDescription>
-                    Ten questions that tune Milōn to your business
+                    Quick questions that tune Milōn to your business
                   </DialogDescription>
                 </DialogHeader>
                 <ProfileFunnel
-                  mode={firstRunStep === "pick-type" ? "first-run" : "retake"}
+                  mode={
+                    (firstRunStep === "pick-type"
+                      ? "first-run"
+                      : profileDialogMode) satisfies ProfileFunnelMode
+                  }
                   initial={operatingProfile}
-                  initialFyStartMonth={operatingProfile?.fyStartMonth ?? 3}
+                  initialFyStartMonth={
+                    operatingProfile?.fyStartMonth ?? boardMarket.fyStartMonthDefault
+                  }
                   onCancel={
                     firstRunStep === "pick-type" ? undefined : () => setShowOnboarding(false)
                   }
@@ -3587,6 +3669,8 @@ function Index() {
                     setShowOnboarding(false);
                     if (firstRunStep === "pick-type") {
                       setFirstRunStep("first-data");
+                    } else if (profileDialogMode === "complete") {
+                      toast.success("Profile complete — score, budget and advice re-tuned");
                     } else {
                       toast.success("Business profile updated");
                     }
@@ -3614,22 +3698,22 @@ function Index() {
                   </p>
                   <DialogTitle className="text-xl text-slate-100 mt-1">
                     {isUsCopy(boardMarket)
-                      ? "Connect QuickBooks or upload figures"
+                      ? "Upload your financials"
                       : "Upload 3 months of bank statements"}
                   </DialogTitle>
                   <DialogDescription className="text-slate-400">
                     {isUsCopy(boardMarket)
-                      ? "Fastest US path: connect QuickBooks Online. Excel, CSV, or PDF financials also work — bank statements if that is what you have. Xero is also on the list, not the lead path."
+                      ? "Fastest US path: upload a P&L and balance sheet — Excel, OpenDocument, CSV or PDF, straight from QuickBooks or your accountant. Connect QuickBooks for live sync, or use bank statements if that is what you have."
                       : "Fastest path: drop the last ~3 months of statements (add every bank account). We draft your P&L, pre-fill budget, build a cash forecast, and show movements in balances — from one upload."}
                   </DialogDescription>
                 </DialogHeader>
                 <div className="flex flex-col gap-3 pt-2">
                   {(isUsCopy(boardMarket)
-                    ? (["qbo", "files", "bank"] as const)
+                    ? (["files", "qbo", "bank"] as const)
                     : (["bank", "files", "qbo"] as const)
                   ).map((id) => {
                     const hero =
-                      (isUsCopy(boardMarket) && id === "qbo") ||
+                      (isUsCopy(boardMarket) && id === "files") ||
                       (!isUsCopy(boardMarket) && id === "bank");
                     const onClick =
                       id === "qbo"
@@ -3649,24 +3733,22 @@ function Index() {
                             };
                     const title =
                       id === "qbo"
-                        ? isUsCopy(boardMarket)
-                          ? "Connect QuickBooks Online (recommended)"
-                          : "Connect QuickBooks Online"
+                        ? "Connect QuickBooks Online"
                         : id === "files"
                           ? isUsCopy(boardMarket)
-                            ? "Upload Excel, CSV, or PDF financials"
+                            ? "Upload Excel, ODS, CSV or PDF financials (recommended)"
                             : "Upload a financial statement instead"
                           : isUsCopy(boardMarket)
-                            ? "Upload bank statements"
+                            ? "Have bank statements instead? Upload those"
                             : "Upload bank statements (recommended)";
                     const sub =
                       id === "qbo"
                         ? isUsCopy(boardMarket)
-                          ? "Sync live books when QBO is configured. Xero is also supported later."
-                          : "Sync live books when QBO is configured (Xero not available yet)"
+                          ? "Live sync from your books (Xero coming later)"
+                          : "Live sync from your books (Xero not available yet)"
                         : id === "files"
-                          ? "PDF, Excel or CSV management accounts"
-                          : "PDF or CSV · ~3 months · AI drafts your figures";
+                          ? "P&L and balance sheet · Excel, OpenDocument, CSV or PDF · you confirm before saving"
+                          : "PDF, CSV or Excel exports · ~3 months · AI drafts your figures";
                     const icon =
                       id === "qbo" ? (
                         <Plug2 className="h-4 w-4" />
@@ -3714,14 +3796,38 @@ function Index() {
                     Enter figures manually
                   </button>
                   <button
+                    onClick={enterSampleMode}
+                    className="text-xs text-sky-400 hover:text-sky-300 pt-0.5 text-center"
+                  >
+                    Not ready? See the board with a sample business first
+                  </button>
+                  <button
                     onClick={() => setFirstRunStep(null)}
                     className="text-xs text-slate-600 hover:text-slate-400 pt-0.5 text-center"
                   >
-                    Skip for now — add figures when you are ready
+                    Skip for now — the board will point you back here
                   </button>
                 </div>
               </DialogContent>
             </Dialog>
+
+            {!actingClientId && (
+              <VerifyEmailBanner
+                email={user.email}
+                pending={user.user_metadata?.email_verify_pending === true}
+              />
+            )}
+
+            {sampleMode && (
+              <SampleBoardBanner
+                blurb={SAMPLE_BUSINESS_BLURB}
+                onUseMyFigures={() => {
+                  exitSampleMode();
+                  setFirstRunStep("first-data");
+                }}
+                onExit={exitSampleMode}
+              />
+            )}
 
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
               <TabsList className="mb-2 flex h-auto w-full gap-0 overflow-x-auto rounded-none border-0 border-b border-[#b7872a]/20 bg-transparent p-0 [-ms-overflow-style:none] [scrollbar-width:none] sm:grid sm:grid-cols-6 [&::-webkit-scrollbar]:hidden">
@@ -3809,6 +3915,10 @@ function Index() {
                                 year: "numeric",
                               }).toUpperCase()}
                             </span>
+                          ) : sampleMode ? (
+                            <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-sky-500/40 bg-sky-500/10 px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[0.16em] text-sky-700 dark:text-sky-300">
+                              Sample · illustrative
+                            </span>
                           ) : (
                             <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:border-slate-700 dark:bg-slate-800/60">
                               No data yet
@@ -3818,57 +3928,136 @@ function Index() {
                       </div>
 
                       {/* No-data empty state — shown until owner uploads or enters real financials */}
-                      {!hasRealFinancials && !actingClientId ? (
+                      {!showScoredBoard && !actingClientId ? (
                         <div>
                           <div className="founder-overview-grid grid w-full items-start gap-4 lg:grid-cols-[minmax(0,1fr)_280px] xl:grid-cols-[minmax(0,1fr)_300px]">
-                            <div className="flex w-full flex-col items-center gap-5 rounded-xl border border-dashed border-slate-200 bg-white/60 px-4 py-10 dark:border-slate-700 dark:bg-slate-900/40">
-                              <div className="relative flex h-36 w-36 items-center justify-center">
-                                <div className="absolute inset-0 rounded-full border-2 border-dashed border-[#d4a550]/25" />
-                                <div className="absolute inset-5 rounded-full border border-[#d4a550]/15" />
-                                <div className="flex flex-col items-center gap-1">
-                                  <span className="text-3xl font-bold text-slate-400">—</span>
-                                  <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">
-                                    No score yet
-                                  </span>
+                            <div className="flex w-full flex-col gap-3">
+                              {profileNeedsCompletion(operatingProfile) &&
+                                userRole !== "client_member" && (
+                                  <ProfileCompletionNote
+                                    onFinish={() => openProfileDialog("complete")}
+                                  />
+                                )}
+                              <div
+                                id="wizard-empty-score"
+                                className="flex w-full flex-col items-center gap-5 rounded-xl border border-dashed border-slate-200 bg-white/60 px-4 py-10 dark:border-slate-700 dark:bg-slate-900/40"
+                              >
+                                <div className="relative flex h-36 w-36 items-center justify-center">
+                                  <div className="absolute inset-0 rounded-full border-2 border-dashed border-[#d4a550]/25" />
+                                  <div className="absolute inset-5 rounded-full border border-[#d4a550]/15" />
+                                  <div className="flex flex-col items-center gap-1">
+                                    <span className="text-3xl font-bold text-slate-400">—</span>
+                                    <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">
+                                      No score yet
+                                    </span>
+                                  </div>
                                 </div>
-                              </div>
-                              <div className="max-w-sm text-center">
-                                <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100">
-                                  Add your financials to see your score
-                                </h3>
-                                <p className="mt-1.5 text-sm text-slate-500">
-                                  Upload a statement or enter figures manually. MILŌN calculates
-                                  your health score and highest-impact first move instantly.
-                                </p>
-                              </div>
-                              {userRole !== "client_member" ? (
-                                <div className="flex w-full max-w-sm flex-col gap-2.5 sm:flex-row">
-                                  <button
-                                    onClick={() => {
-                                      setShowFinData(true);
-                                      setTimeout(() => uploadRef.current?.click(), 150);
-                                    }}
-                                    className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-[#b7872a] px-4 py-2.5 text-sm font-semibold text-white transition-all hover:bg-[#d4a550]"
-                                  >
-                                    <Upload className="h-4 w-4" />
-                                    Upload statement
-                                  </button>
-                                  <button
-                                    onClick={() => {
-                                      setShowFinData(true);
-                                      setShowInputs(true);
-                                    }}
-                                    className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
-                                  >
-                                    <Database className="h-4 w-4" />
-                                    Enter manually
-                                  </button>
+                                <div className="max-w-sm text-center">
+                                  {userRole !== "client_member" && operatingProfile && (
+                                    <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#b8860b] dark:text-[#d4a550]">
+                                      Step 2 of 2 · Bring in your numbers
+                                    </p>
+                                  )}
+                                  <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100">
+                                    {userRole !== "client_member"
+                                      ? "One upload and your board comes alive"
+                                      : "Add your financials to see your score"}
+                                  </h3>
+                                  <p className="mt-1.5 text-sm text-slate-500">
+                                    {isUsCopy(boardMarket)
+                                      ? "Upload a P&L and balance sheet — Excel, OpenDocument, CSV or PDF — and MILŌN scores your business and ranks your first move. No invented numbers until then."
+                                      : "Drop ~3 months of bank statements and MILŌN drafts your P&L, cash forecast and budget, then scores your business and ranks your first move — no invented numbers until then."}
+                                  </p>
                                 </div>
-                              ) : (
-                                <p className="max-w-sm text-center text-sm text-slate-500">
-                                  Financial data hasn't been added yet. The owner will set this up.
-                                </p>
-                              )}
+                                {userRole !== "client_member" ? (
+                                  <div className="flex w-full max-w-sm flex-col gap-2.5">
+                                    <button
+                                      id="wizard-first-figures"
+                                      onClick={() => {
+                                        if (isUsCopy(boardMarket)) {
+                                          setShowFinData(true);
+                                          setTimeout(() => uploadRef.current?.click(), 150);
+                                        } else {
+                                          setShowBankDrafter(true);
+                                        }
+                                      }}
+                                      className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#b7872a] px-4 py-2.5 text-sm font-semibold text-white transition-all hover:bg-[#d4a550]"
+                                    >
+                                      <Upload className="h-4 w-4" />
+                                      {isUsCopy(boardMarket)
+                                        ? "Upload Excel, ODS, CSV or PDF financials"
+                                        : "Upload bank statements"}
+                                    </button>
+                                    <div className="flex w-full flex-col gap-2.5 sm:flex-row">
+                                      {isUsCopy(boardMarket) ? (
+                                        <button
+                                          onClick={() => setShowQboDialog(true)}
+                                          className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
+                                        >
+                                          <Plug2 className="h-4 w-4" />
+                                          Connect QuickBooks
+                                        </button>
+                                      ) : (
+                                        <button
+                                          onClick={() => {
+                                            setShowFinData(true);
+                                            setTimeout(() => uploadRef.current?.click(), 150);
+                                          }}
+                                          className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
+                                        >
+                                          <Upload className="h-4 w-4" />
+                                          Upload a financial statement
+                                        </button>
+                                      )}
+                                      <button
+                                        onClick={() => {
+                                          setShowFinData(true);
+                                          setShowInputs(true);
+                                        }}
+                                        className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
+                                      >
+                                        <Database className="h-4 w-4" />
+                                        Enter manually
+                                      </button>
+                                    </div>
+                                    <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs text-slate-500">
+                                      {isUsCopy(boardMarket) && (
+                                        <button
+                                          onClick={() => setShowBankDrafter(true)}
+                                          className="underline hover:text-slate-700 dark:hover:text-slate-300"
+                                        >
+                                          Have bank statements instead? Upload those
+                                        </button>
+                                      )}
+                                      <button
+                                        onClick={() => setFirstRunStep("first-data")}
+                                        className="underline hover:text-slate-700 dark:hover:text-slate-300"
+                                      >
+                                        See all ways to add figures
+                                      </button>
+                                    </div>
+                                    <button
+                                      id="wizard-sample-board"
+                                      onClick={enterSampleMode}
+                                      className="mt-1 inline-flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-sky-500/40 px-3 py-1.5 text-xs font-medium text-sky-700 transition-colors hover:bg-sky-500/10 dark:text-sky-300"
+                                    >
+                                      <FlaskConical className="h-3.5 w-3.5" />
+                                      Not ready? See the board with a sample business
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <p className="max-w-sm text-center text-sm text-slate-500">
+                                    Financial data hasn't been added yet. The owner will set this
+                                    up.
+                                  </p>
+                                )}
+                              </div>
+                              {/* Same Ask AI mount as the scored board — before figures it
+                                  carries a small "more relevant once your figures are in" note. */}
+                              <div
+                                id="ask-ai-overview"
+                                className="min-h-[44px] w-full rounded-xl border border-[#b7872a]/25 bg-white dark:bg-[#0a1020]/80"
+                              />
                             </div>
                             <OverviewRail
                               healthBand={null}
@@ -3890,6 +4079,13 @@ function Index() {
                           <div className="founder-overview-grid grid w-full items-start gap-4 lg:grid-cols-[minmax(0,1fr)_280px] xl:grid-cols-[minmax(0,1fr)_300px]">
                             {/* Main column */}
                             <section className="flex min-w-0 flex-col gap-3">
+                              {profileNeedsCompletion(operatingProfile) &&
+                                userRole !== "client_member" &&
+                                !actingClientId && (
+                                  <ProfileCompletionNote
+                                    onFinish={() => openProfileDialog("complete")}
+                                  />
+                                )}
                               <div className="relative rounded-xl border border-slate-200/90 bg-white px-3 py-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)] dark:border-white/10 dark:bg-[#0f172a]/40 dark:shadow-none sm:px-5">
                                 <div className="pointer-events-none absolute right-2 top-2 z-20 hidden sm:block sm:right-3 sm:top-3">
                                   <ReviewSignoffBadge
@@ -3970,7 +4166,7 @@ function Index() {
                           {industryBenchmarkCaption(boardMarket)}
                         </p>
                       )}
-                      {!hasRealFinancials && !actingClientId && (
+                      {!showScoredBoard && !actingClientId && (
                         <div className="mb-4 flex items-center gap-3 rounded-lg border border-amber-700/40 bg-amber-950/20 px-4 py-2.5 text-xs text-amber-300">
                           <span className="text-amber-400">⚠</span>
                           <span>
@@ -4012,7 +4208,8 @@ function Index() {
                             <span className="text-amber-400">⚡</span>
                             Estimated break-even revenue:{" "}
                             <span className="font-mono font-semibold ml-1">
-                              R{breakevenRevenue.toFixed(0)}
+                              {currencySymbol(boardMarket)}
+                              {breakevenRevenue.toFixed(0)}
                             </span>
                           </div>
                         )}
@@ -4027,14 +4224,15 @@ function Index() {
                               <div>
                                 <span className="text-slate-500">Net PPE (current)</span>
                                 <div className="font-mono text-slate-200">
-                                  R{netPpe.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                                  {currencySymbol(boardMarket)}
+                                  {netPpe.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                                 </div>
                               </div>
                               {isFinite(priorNetPpe) && (
                                 <div>
                                   <span className="text-slate-500">Net PPE (prior)</span>
                                   <div className="font-mono text-slate-200">
-                                    R
+                                    {currencySymbol(boardMarket)}
                                     {priorNetPpe.toLocaleString(undefined, {
                                       maximumFractionDigits: 0,
                                     })}
@@ -4047,7 +4245,8 @@ function Index() {
                                   <div
                                     className={`font-mono font-semibold ${ppeMovement >= 0 ? "text-emerald-400" : "text-red-400"}`}
                                   >
-                                    {ppeMovement >= 0 ? "+" : ""}R
+                                    {ppeMovement >= 0 ? "+" : ""}
+                                    {currencySymbol(boardMarket)}
                                     {ppeMovement.toLocaleString(undefined, {
                                       maximumFractionDigits: 0,
                                     })}
@@ -4058,7 +4257,7 @@ function Index() {
                                 <div>
                                   <span className="text-slate-500">Implied CAPEX</span>
                                   <div className="font-mono text-slate-200">
-                                    R
+                                    {currencySymbol(boardMarket)}
                                     {impliedCapex.toLocaleString(undefined, {
                                       maximumFractionDigits: 0,
                                     })}
@@ -4346,6 +4545,13 @@ function Index() {
                       clientMeta?.financials_updated_at ?? null,
                     )}
                   />
+                  {!showScoredBoard && !actingClientId && userRole !== "client_member" && (
+                    <NoFiguresBanner
+                      tabLabel="Profit"
+                      detail="The waterfall below is an empty frame until revenue and costs land."
+                      onAddFigures={() => setFirstRunStep("first-data")}
+                    />
+                  )}
                   {/* Ask AI first — same widget as Business Health, scoped to this client */}
                   <div
                     id="ask-ai-waterfall"
@@ -4388,6 +4594,13 @@ function Index() {
                   </span>
                   <span className="h-px flex-1 bg-gradient-to-r from-[#b7872a]/30 to-transparent" />
                 </div>
+                {!showScoredBoard && !actingClientId && userRole !== "client_member" && (
+                  <NoFiguresBanner
+                    tabLabel="Next moves"
+                    detail="The list below is the generic playbook — it is ranked for your business only once your figures are in."
+                    onAddFigures={() => setFirstRunStep("first-data")}
+                  />
+                )}
                 <div id="wizard-moves-list">
                   <NextStepsPanel
                     steps={nextSteps}
@@ -4417,6 +4630,13 @@ function Index() {
                       clientMeta?.last_forecast_at ?? null,
                     )}
                   />
+                  {!showScoredBoard && !actingClientId && userRole !== "client_member" && (
+                    <NoFiguresBanner
+                      tabLabel="Cash Forecast"
+                      detail="Zeros below are placeholders, not a forecast. Bank statements can draft the 13 weeks for you."
+                      onAddFigures={() => setFirstRunStep("first-data")}
+                    />
+                  )}
                   <TabErrorBoundary label="Cash Forecast">
                     <Suspense
                       fallback={
@@ -4471,7 +4691,10 @@ function Index() {
                           operatingProfile?.fyStartMonth ??
                           resolveMarket(coerceMarketSelection(workspaceMarket)).fyStartMonthDefault
                         }
-                        onRetakeProfile={() => setShowOnboarding(true)}
+                        onRetakeProfile={() => openProfileDialog("retake")}
+                        firstActualsMonth={
+                          hasRealFinancials ? (history[0]?.period_date?.slice(0, 7) ?? null) : null
+                        }
                         financials={{
                           revenue: v.revenue,
                           cogs: v.cogs,
@@ -4686,7 +4909,7 @@ function Index() {
               <input
                 ref={uploadRef}
                 type="file"
-                accept=".pdf,.csv,.xlsx,.xls,.txt"
+                accept={UPLOAD_ACCEPT}
                 className="hidden"
                 onChange={(e) => {
                   const f = e.target.files?.[0];
@@ -4694,28 +4917,10 @@ function Index() {
                 }}
               />
               <div className="grid gap-3 sm:grid-cols-2">
-                {isUsCopy(boardMarket) && (
-                  <button
-                    onClick={() => {
-                      setShowFinData(false);
-                      setShowQboDialog(true);
-                    }}
-                    className="flex flex-col items-start gap-1.5 rounded-lg border border-[#d4a550]/50 bg-[#d4a550]/10 p-4 text-left transition-colors hover:border-[#d4a550]/80 hover:bg-[#d4a550]/15 dark:border-[#b7872a]/60 dark:bg-[#d4a550]/10 dark:hover:border-[#d4a550]/80"
-                  >
-                    <span className="flex items-center gap-2 text-sm font-semibold text-amber-900 dark:text-slate-100">
-                      <Plug2 className="h-4 w-4" />
-                      Connect QuickBooks Online
-                    </span>
-                    <span className="text-xs text-slate-600 dark:text-slate-400">
-                      Recommended for US books — sync live accounting data when QBO is configured.
-                      Xero is also on the list, not the lead path.
-                    </span>
-                  </button>
-                )}
                 <button
                   disabled={uploading}
                   onClick={() => uploadRef.current?.click()}
-                  className="flex flex-col items-start gap-1.5 rounded-lg border border-amber-700/30 bg-amber-50 p-4 text-left transition-colors hover:border-amber-700/60 hover:bg-amber-100 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-[#b7872a]/60 dark:hover:bg-slate-800"
+                  className="flex flex-col items-start gap-1.5 rounded-lg border border-[#d4a550]/50 bg-[#d4a550]/10 p-4 text-left transition-colors hover:border-[#d4a550]/80 hover:bg-[#d4a550]/15 disabled:opacity-60 dark:border-[#b7872a]/60 dark:bg-[#d4a550]/10 dark:hover:border-[#d4a550]/80"
                 >
                   <span className="flex items-center gap-2 text-sm font-semibold text-amber-900 dark:text-slate-100">
                     {uploading ? (
@@ -4723,30 +4928,30 @@ function Index() {
                     ) : (
                       <Upload className="h-4 w-4" />
                     )}
-                    {uploading ? "Reading…" : "Upload PDF financials"}
+                    {uploading ? "Reading…" : "Upload financial statements"}
                   </span>
                   <span className="text-xs text-slate-600 dark:text-slate-400">
-                    PDF, CSV or Excel financial statements — figures are read automatically.
+                    {UPLOAD_FORMATS_LABEL} (.xlsx, .xls, .ods, .csv, .pdf) — figures are read
+                    automatically and you confirm them before anything is saved.
                   </span>
                 </button>
-                {!isUsCopy(boardMarket) && (
-                  <button
-                    onClick={() => {
-                      setShowFinData(false);
-                      setShowQboDialog(true);
-                    }}
-                    className="flex flex-col items-start gap-1.5 rounded-lg border border-amber-700/30 bg-amber-50 p-4 text-left transition-colors hover:border-amber-700/60 hover:bg-amber-100 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-[#b7872a]/60 dark:hover:bg-slate-800"
-                  >
-                    <span className="flex items-center gap-2 text-sm font-semibold text-amber-900 dark:text-slate-100">
-                      <Plug2 className="h-4 w-4" />
-                      Connect QuickBooks Online
-                    </span>
-                    <span className="text-xs text-slate-600 dark:text-slate-400">
-                      Sync live accounting data when QBO is configured for this workspace. Xero is
-                      not available yet.
-                    </span>
-                  </button>
-                )}
+                <button
+                  onClick={() => {
+                    setShowFinData(false);
+                    setShowQboDialog(true);
+                  }}
+                  className="flex flex-col items-start gap-1.5 rounded-lg border border-amber-700/30 bg-amber-50 p-4 text-left transition-colors hover:border-amber-700/60 hover:bg-amber-100 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-[#b7872a]/60 dark:hover:bg-slate-800"
+                >
+                  <span className="flex items-center gap-2 text-sm font-semibold text-amber-900 dark:text-slate-100">
+                    <Plug2 className="h-4 w-4" />
+                    Connect QuickBooks Online
+                  </span>
+                  <span className="text-xs text-slate-600 dark:text-slate-400">
+                    {isUsCopy(boardMarket)
+                      ? "Live sync from your books once QBO is switched on for this workspace. Until then, export a P&L and balance sheet and upload them above."
+                      : "Sync live accounting data when QBO is configured for this workspace. Xero is not available yet."}
+                  </span>
+                </button>
                 <button
                   onClick={() => {
                     setShowFinData(false);
@@ -4853,7 +5058,7 @@ function Index() {
           <BankStatementDrafter
             open={showBankDrafter}
             onClose={() => setShowBankDrafter(false)}
-            onApply={async ({ fields, annualised, cashDraft }) => {
+            onApply={async ({ fields, annualised, cashDraft, draft }) => {
               setV((prev) => ({ ...prev, ...fields }) as Inputs);
               setHasRealFinancials(true);
               setShowBankDrafter(false);
@@ -4882,11 +5087,13 @@ function Index() {
                       : null;
                   if (!doc && operatingProfile) {
                     const q = profileToBudgetQualification(operatingProfile);
+                    // Budget window opens at the first statement month — never
+                    // retrospectively before the figures we actually have.
                     doc = createBudgetDocument({
                       templateId: operatingProfile.templateId,
                       qualification: q,
                       fyStartMonth: fyMonth,
-                      fyStart: currentFyStart(fyMonth),
+                      firstActualsMonth: draft.period_start?.slice(0, 7) ?? null,
                       market: resolveMarket(coerceMarketSelection(workspaceMarket)),
                     });
                   }

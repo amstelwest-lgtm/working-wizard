@@ -438,7 +438,12 @@ function AddClientDialog({
             />
           </div>
           <div style={{ marginBottom: 24 }}>
-            <MarketPicker value={draftMarket} onChange={setDraftMarket} variant="app" />
+            <MarketPicker
+              value={draftMarket}
+              onChange={setDraftMarket}
+              variant="app"
+              audience="practice"
+            />
           </div>
           <div style={{ marginBottom: 24 }}>
             <label

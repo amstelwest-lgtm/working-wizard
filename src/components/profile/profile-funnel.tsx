@@ -1,6 +1,13 @@
 /**
  * Milōn intro profile funnel — 10 questions for maximum deliverable “wind”.
  * Replaces the old single business-type picker. Retakeable anytime.
+ *
+ * Modes:
+ *  - "first-run": the four core questions (how you make money, unit of sales,
+ *    how fast customers pay, what you're trying to achieve + FY). The other
+ *    six get inferred defaults and the board nudges the owner to finish.
+ *  - "complete": only the six deferred questions, prefilled from the profile.
+ *  - "retake": all ten.
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -22,6 +29,7 @@ import {
 } from "@/lib/budget.taxonomy";
 import {
   buildOperatingProfile,
+  inferDeferredProfileAnswers,
   type ClientOperatingProfile,
   type CustomerConcentration,
   type DebtPosition,
@@ -31,7 +39,12 @@ import {
 import { useMarket } from "@/contexts/market";
 import { localizeCopy } from "@/lib/market";
 
-const TOTAL = 10;
+/** Question ids (0–9) in the order each mode asks them. */
+const ALL_QUESTIONS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
+const CORE_QUESTIONS = [0, 1, 3, 9] as const;
+const DEFERRED_QUESTIONS = [2, 4, 5, 6, 7, 8] as const;
+
+export type ProfileFunnelMode = "first-run" | "retake" | "complete";
 
 const COST_SHAPE: Array<{ id: BudgetCostShape; label: string; examples: string }> = [
   {
@@ -181,19 +194,43 @@ const GOAL: Array<{ id: OwnerGoal; label: string; examples: string }> = [
 
 export function ProfileFunnel({
   initial,
-  initialFyStartMonth = 3,
+  initialFyStartMonth,
   mode = "first-run",
   onComplete,
   onCancel,
 }: {
   initial?: ClientOperatingProfile | null;
+  /** Defaults to the workspace market's financial-year start (US → January, ZA → March). */
   initialFyStartMonth?: number;
-  mode?: "first-run" | "retake";
+  mode?: ProfileFunnelMode;
   onComplete: (profile: ClientOperatingProfile) => void | Promise<void>;
   onCancel?: () => void;
 }) {
   const { market } = useMarket();
   const loc = (s: string) => localizeCopy(s, market);
+  const marketFyStart = market.fyStartMonthDefault;
+  // "complete" needs the core answers to exist; fall back to the full set if not.
+  const order: readonly number[] =
+    mode === "first-run"
+      ? CORE_QUESTIONS
+      : mode === "complete" && initial
+        ? DEFERRED_QUESTIONS
+        : ALL_QUESTIONS;
+  const TOTAL = order.length;
+  const MONTH_NAMES = [
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+  ];
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
   const [payMotion, setPayMotion] = useState<BudgetPayMotion | null>(initial?.payMotion ?? null);
@@ -222,7 +259,9 @@ export function ProfileFunnel({
     initial?.debtPosition ?? null,
   );
   const [ownerGoal, setOwnerGoal] = useState<OwnerGoal | null>(initial?.ownerGoal ?? null);
-  const [fyStartMonth, setFyStartMonth] = useState(initial?.fyStartMonth ?? initialFyStartMonth);
+  const [fyStartMonth, setFyStartMonth] = useState(
+    initial?.fyStartMonth ?? initialFyStartMonth ?? marketFyStart,
+  );
 
   const volumeChoices = useMemo(
     () => (payMotion ? volumeOptionsForMotion(payMotion) : []),
@@ -264,17 +303,23 @@ export function ProfileFunnel({
     "What are you actually trying to achieve?",
   ];
 
+  const q = order[step];
+  const isLast = step === TOTAL - 1;
+
   const finish = async () => {
+    if (!payMotion || !primary || debtorDays == null || !ownerGoal) {
+      toast.error("Pick an answer for each question before saving.");
+      return;
+    }
+    const coreOnly = mode === "first-run";
+    const inferred = inferDeferredProfileAnswers({
+      payMotion,
+      templateId: primary.templateId,
+      suggestSeasonality: primary.suggestSeasonality,
+    });
     if (
-      !payMotion ||
-      !primary ||
-      debtorDays == null ||
-      !costShape ||
-      !seasonality ||
-      !inventoryIntensity ||
-      !customerConcentration ||
-      !debtPosition ||
-      !ownerGoal
+      !coreOnly &&
+      (!costShape || !seasonality || !inventoryIntensity || !customerConcentration || !debtPosition)
     ) {
       toast.error("Pick an answer for each question before saving.");
       return;
@@ -283,15 +328,16 @@ export function ProfileFunnel({
       payMotion,
       volumeUnit: primary.id,
       templateId: primary.templateId,
-      secondaryVolumeUnits: secondary,
+      secondaryVolumeUnits: coreOnly ? inferred.secondaryVolumeUnits : secondary,
       debtorDaysDefault: debtorDays,
-      costShape,
-      seasonality,
-      inventoryIntensity,
-      customerConcentration,
-      debtPosition,
+      costShape: costShape ?? inferred.costShape,
+      seasonality: seasonality ?? inferred.seasonality,
+      inventoryIntensity: inventoryIntensity ?? inferred.inventoryIntensity,
+      customerConcentration: customerConcentration ?? inferred.customerConcentration,
+      debtPosition: debtPosition ?? inferred.debtPosition,
       ownerGoal,
       fyStartMonth,
+      depth: coreOnly ? "core" : "full",
     });
     setSaving(true);
     try {
@@ -314,6 +360,47 @@ export function ProfileFunnel({
   const goNext = () => setStep((s) => Math.min(TOTAL - 1, s + 1));
   const goBack = () => setStep((s) => Math.max(0, s - 1));
 
+  /** Whether the question currently on screen has an answer (enables Save on the last one). */
+  const answeredCurrent = (() => {
+    switch (q) {
+      case 0:
+        return !!payMotion;
+      case 1:
+        return !!primary;
+      case 2:
+        return true;
+      case 3:
+        return debtorDays != null;
+      case 4:
+        return !!costShape;
+      case 5:
+        return !!seasonality;
+      case 6:
+        return !!inventoryIntensity;
+      case 7:
+        return !!customerConcentration;
+      case 8:
+        return !!debtPosition;
+      case 9:
+        return !!ownerGoal;
+      default:
+        return false;
+    }
+  })();
+
+  const headerLabel =
+    mode === "first-run"
+      ? "Step 1 of 2 · Business profile"
+      : mode === "complete"
+        ? "Finish your business profile"
+        : "Update business profile";
+  const introCopy =
+    mode === "first-run" && step === 0
+      ? "Four quick questions — tap the closest fit and you move on. They tune your health score, cash forecast, budget and advice. Next, you bring in your figures."
+      : mode === "complete" && step === 0
+        ? "Six more taps. Each one sharpens your score, budget, benchmarks and advice — you can change any of them later."
+        : "Examples under each answer help you pick the closest fit — this tunes health scores, cash, budget, benchmarks, and advice.";
+
   const optionsRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     optionsRef.current?.scrollTo({ top: 0 });
@@ -323,21 +410,17 @@ export function ProfileFunnel({
     <div className="flex h-full min-h-0 flex-1 flex-col gap-3 overflow-hidden">
       <div className="shrink-0">
         <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#d4a550]">
-          {mode === "first-run" ? "Welcome to Milōn" : "Update business profile"} · question{" "}
-          {step + 1} of {TOTAL}
+          {headerLabel} · question {step + 1} of {TOTAL}
         </p>
-        <h2 className="mt-1 text-xl font-semibold text-slate-100 sm:text-2xl">{titles[step]}</h2>
-        <p className="mt-1 text-sm text-slate-400">
-          Examples under each answer help you pick the closest fit — this tunes health scores, cash,
-          budget, benchmarks, and advice.
-        </p>
+        <h2 className="mt-1 text-xl font-semibold text-slate-100 sm:text-2xl">{titles[q]}</h2>
+        <p className="mt-1 text-sm text-slate-400">{introCopy}</p>
       </div>
 
       <div
         ref={optionsRef}
         className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain pr-1 [-webkit-overflow-scrolling:touch]"
       >
-        {step === 0 &&
+        {q === 0 &&
           PAY_MOTION_OPTIONS.map((o) => (
             <button
               key={o.id}
@@ -356,7 +439,7 @@ export function ProfileFunnel({
             </button>
           ))}
 
-        {step === 1 &&
+        {q === 1 &&
           volumeChoices.map((o) => (
             <button
               key={`${o.templateId}:${o.id}`}
@@ -375,7 +458,7 @@ export function ProfileFunnel({
             </button>
           ))}
 
-        {step === 2 && primary && (
+        {q === 2 && primary && (
           <>
             <button
               type="button"
@@ -417,7 +500,7 @@ export function ProfileFunnel({
           </>
         )}
 
-        {step === 3 &&
+        {q === 3 &&
           PAY_TIMING.map((o) => (
             <button
               key={o.label}
@@ -433,7 +516,7 @@ export function ProfileFunnel({
             </button>
           ))}
 
-        {step === 4 &&
+        {q === 4 &&
           COST_SHAPE.map((o) => (
             <button
               key={o.id}
@@ -449,7 +532,7 @@ export function ProfileFunnel({
             </button>
           ))}
 
-        {step === 5 &&
+        {q === 5 &&
           SEASONALITY.map((o) => (
             <button
               key={o.id}
@@ -465,7 +548,7 @@ export function ProfileFunnel({
             </button>
           ))}
 
-        {step === 6 &&
+        {q === 6 &&
           INVENTORY.map((o) => (
             <button
               key={o.id}
@@ -481,7 +564,7 @@ export function ProfileFunnel({
             </button>
           ))}
 
-        {step === 7 &&
+        {q === 7 &&
           CONCENTRATION.map((o) => (
             <button
               key={o.id}
@@ -497,7 +580,7 @@ export function ProfileFunnel({
             </button>
           ))}
 
-        {step === 8 &&
+        {q === 8 &&
           DEBT.map((o) => (
             <button
               key={o.id}
@@ -513,7 +596,7 @@ export function ProfileFunnel({
             </button>
           ))}
 
-        {step === 9 && (
+        {q === 9 && (
           <>
             {GOAL.map((o) => (
               <button
@@ -535,27 +618,16 @@ export function ProfileFunnel({
                 value={fyStartMonth}
                 onChange={(e) => setFyStartMonth(Number(e.target.value))}
               >
-                {[
-                  "January",
-                  "February",
-                  "March",
-                  "April",
-                  "May",
-                  "June",
-                  "July",
-                  "August",
-                  "September",
-                  "October",
-                  "November",
-                  "December",
-                ].map((name, i) => (
+                {MONTH_NAMES.map((name, i) => (
                   <option key={name} value={i + 1}>
                     {name}
                   </option>
                 ))}
               </select>
               <p className="mt-1 text-[11px] text-slate-500">
-                Default March (common SA). Used by Budget and reporting periods.
+                Default {MONTH_NAMES[marketFyStart - 1]} (
+                {marketFyStart === 1 ? "common for US businesses" : "common in South Africa"}). Used
+                by Budget and reporting periods.
               </p>
             </div>
           </>
@@ -568,9 +640,9 @@ export function ProfileFunnel({
           <Button variant="ghost" size="sm" className="text-slate-300" onClick={goBack}>
             Back
           </Button>
-        ) : mode === "retake" && onCancel ? (
+        ) : mode !== "first-run" && onCancel ? (
           <Button variant="ghost" size="sm" className="text-slate-300" onClick={onCancel}>
-            Cancel
+            {mode === "complete" ? "Later" : "Cancel"}
           </Button>
         ) : (
           <span />
@@ -584,9 +656,9 @@ export function ProfileFunnel({
               />
             ))}
           </div>
-          {step === 9 && (
+          {isLast && (
             <Button
-              disabled={!ownerGoal || saving}
+              disabled={!answeredCurrent || saving}
               className="bg-[#d4a550] text-[#0a0e1a] hover:bg-[#c49a45]"
               onClick={finish}
             >
@@ -594,7 +666,9 @@ export function ProfileFunnel({
                 ? "Saving…"
                 : mode === "first-run"
                   ? "Save profile & continue"
-                  : "Update profile"}
+                  : mode === "complete"
+                    ? "Finish profile"
+                    : "Update profile"}
             </Button>
           )}
         </div>

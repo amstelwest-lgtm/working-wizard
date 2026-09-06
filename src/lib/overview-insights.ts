@@ -119,14 +119,17 @@ export function computeNextMoveImpactLabel(input: {
   topKey?: string;
   revenue: number;
   receivables: number;
+  /** Currency symbol for the board's market (defaults to ZA "R"). */
+  currency?: string;
 }): string | undefined {
   const { topKey, revenue, receivables } = input;
+  const cur = input.currency ?? "R";
   if (!topKey) return undefined;
 
   const fmtImpact = (amount: number) => {
-    if (amount >= 1_000_000) return `+R${(amount / 1_000_000).toFixed(1)}m`;
-    if (amount >= 1_000) return `+R${Math.round(amount / 1000)}k`;
-    return `+R${Math.round(amount)}`;
+    if (amount >= 1_000_000) return `+${cur}${(amount / 1_000_000).toFixed(1)}m`;
+    if (amount >= 1_000) return `+${cur}${Math.round(amount / 1000)}k`;
+    return `+${cur}${Math.round(amount)}`;
   };
 
   if (topKey === "debtorDays" && receivables >= 5_000) {

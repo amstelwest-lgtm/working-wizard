@@ -13,6 +13,14 @@ const DEFAULT_CHIPS = [
   "Where am I weakest vs industry?",
 ];
 
+// Before any figures exist, questions about "my numbers" have no numbers to
+// read — steer toward what Ask AI can genuinely answer right now.
+const NO_FIGURES_CHIPS = [
+  "How is the health score worked out?",
+  "What should I upload first, and why?",
+  "What do businesses like mine usually get wrong on cash?",
+];
+
 const ACCOUNTANT_CHIPS = [
   "What's the biggest risk for this client?",
   "Where is cash leaking this quarter?",
@@ -113,10 +121,14 @@ export function mountAskAi(container, options) {
     chips: chipOverride,
     placeholder: placeholderOverride,
     heading: headingOverride,
+    // Small line under the header, e.g. "answers get more relevant once your
+    // figures are in". Omit / null to hide.
+    note = null,
   } = options || {};
   const studio = variant === "studio";
   const accountant = audience === "accountant";
-  const suggestionChips = chipOverride || (accountant ? ACCOUNTANT_CHIPS : DEFAULT_CHIPS);
+  const suggestionChips =
+    chipOverride || (accountant ? ACCOUNTANT_CHIPS : note ? NO_FIGURES_CHIPS : DEFAULT_CHIPS);
   const heading =
     headingOverride ||
     (accountant ? "Ask about this business" : "Ask your numbers");
@@ -156,6 +168,13 @@ export function mountAskAi(container, options) {
       header.className = "ask-ai-header";
       header.innerHTML = `<span class="ask-ai-icon" style="width:14px;height:14px">${SPARKLES_SVG}</span> ${heading}`;
       panel.appendChild(header);
+
+      if (note) {
+        const noteEl = document.createElement("p");
+        noteEl.className = "ask-ai-note";
+        noteEl.textContent = note;
+        panel.appendChild(noteEl);
+      }
 
       // Build sendBtn first so textarea and chip handlers can update its disabled state.
       const sendBtn = document.createElement("button");

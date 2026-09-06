@@ -10,7 +10,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { BudgetActuals, BudgetDocument, BudgetScenarioId } from "@/lib/budget.types";
 import { BUDGET_TEMPLATES } from "@/lib/budget.templates";
-import { fyMonths, formatMonthLabel as formatMonthLabelMarket } from "@/lib/budget.months";
+import {
+  budgetWindowLabel,
+  fyMonths,
+  formatMonthLabel as formatMonthLabelMarket,
+} from "@/lib/budget.months";
 import { computeBudgetMonths, fmtBudgetMoney, lowestCashTrough } from "@/lib/budget.compute";
 import { useMarket } from "@/contexts/market";
 
@@ -145,7 +149,7 @@ export function BudgetSimpleView({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#b8860b]">
-            {tpl.label} · {monthLabel(doc.fyStart)} FY
+            {tpl.label} · {budgetWindowLabel(doc, market)}
           </p>
           <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Your budget</h2>
           <p className="text-xs text-slate-500">

@@ -2,12 +2,17 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   ACCOUNTANT_CLIENT_TOUR_KEY,
   ACCOUNTANT_DASH_TOUR_KEY,
+  OWNER_EMPTY_TOUR_KEY,
   OWNER_TOUR_KEY,
   markOnboardingDone,
   onboardingDone,
 } from "@/lib/onboarding";
 
-export type WalkthroughVariant = "owner" | "accountant-dashboard" | "accountant-client";
+export type WalkthroughVariant =
+  | "owner"
+  | "owner-empty"
+  | "accountant-dashboard"
+  | "accountant-client";
 
 type Step = {
   tab?: string;
@@ -29,6 +34,27 @@ const CARD_APPROX_H = 280;
 const SPOT_PAD = 10;
 const ORB_PAD = 4;
 const CARD_GAP = 20;
+
+/**
+ * Owner, no figures yet: two honest steps that point at the one thing to do.
+ * The full board tour (OWNER_STEPS) runs the first time a real score exists.
+ */
+const OWNER_EMPTY_STEPS: Step[] = [
+  {
+    tab: "today",
+    targetId: "wizard-empty-score",
+    section: "Business Health",
+    title: "Your score lands here",
+    body: "Nothing is invented on this board. Once your figures are in, Milōn scores profit, assets, financing and cash into one number and ranks your first move — and this tour continues on the real thing.",
+  },
+  {
+    tab: "today",
+    targetId: "wizard-first-figures",
+    section: "Figures",
+    title: "Step 2 of 2 · Bring in your numbers",
+    body: "This is the only thing to do right now. One upload is enough — bank statements, a financial statement, or typed figures — and Health, Profit, Cash, Budget and Next moves all fill in from it.",
+  },
+];
 
 /** Owner: profile+banks happen before this tour; walk the operating board once. */
 const OWNER_STEPS: Step[] = [
@@ -172,12 +198,14 @@ const ACCOUNTANT_CLIENT_STEPS: Step[] = [
 function stepsFor(variant: WalkthroughVariant): Step[] {
   if (variant === "accountant-dashboard") return ACCOUNTANT_DASH_STEPS;
   if (variant === "accountant-client") return ACCOUNTANT_CLIENT_STEPS;
+  if (variant === "owner-empty") return OWNER_EMPTY_STEPS;
   return OWNER_STEPS;
 }
 
 function storageKeyFor(variant: WalkthroughVariant): string {
   if (variant === "accountant-dashboard") return ACCOUNTANT_DASH_TOUR_KEY;
   if (variant === "accountant-client") return ACCOUNTANT_CLIENT_TOUR_KEY;
+  if (variant === "owner-empty") return OWNER_EMPTY_TOUR_KEY;
   return OWNER_TOUR_KEY;
 }
 
@@ -298,6 +326,7 @@ export function WalkthroughWizard({
   variant: variantProp,
   ready = true,
   onComplete,
+  onFinish,
 }: {
   onTabChange?: (tab: string) => void;
   userRole?: string | null;
@@ -305,7 +334,10 @@ export function WalkthroughWizard({
   variant?: WalkthroughVariant;
   /** When false, tour stays hidden (e.g. until profile + first data finish). */
   ready?: boolean;
+  /** Fires on both "Skip tour" and the final button. */
   onComplete?: () => void;
+  /** Fires only when the last step's primary button is pressed (not on skip). */
+  onFinish?: () => void;
 }) {
   const variant: WalkthroughVariant =
     variantProp ??
@@ -716,7 +748,14 @@ export function WalkthroughWizard({
                 </button>
               )}
               <button
-                onClick={() => (isLast ? dismiss() : setStep((x) => x + 1))}
+                onClick={() => {
+                  if (!isLast) {
+                    setStep((x) => x + 1);
+                    return;
+                  }
+                  dismiss();
+                  onFinish?.();
+                }}
                 style={{
                   fontSize: 13,
                   fontWeight: 700,
@@ -729,7 +768,11 @@ export function WalkthroughWizard({
                   fontFamily: "inherit",
                 }}
               >
-                {isLast ? "Done — let's go" : "Next"}
+                {isLast
+                  ? variant === "owner-empty"
+                    ? "Got it — add my figures"
+                    : "Done — let's go"
+                  : "Next"}
               </button>
             </div>
           </div>

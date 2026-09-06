@@ -8,7 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { BudgetWorkspace } from "@/components/budget/budget-workspace";
 import { BudgetAdvancedPanel } from "@/components/budget/budget-advanced";
 import type { BudgetActuals, BudgetDocument, UnmappedDriver } from "@/lib/budget.types";
-import { createBudgetDocument, currentFyStart } from "@/lib/budget.months";
+import { budgetWindowStart, createBudgetDocument } from "@/lib/budget.months";
 import { normalizeBudgetDocument } from "@/lib/budget.compute";
 import { applyTemplateChange } from "@/lib/budget.model-change";
 import { BUDGET_TEMPLATES } from "@/lib/budget.templates";
@@ -50,6 +50,7 @@ export function BudgetPanel({
   onRetakeProfile,
   canSign,
   hideReadOnlyStamp,
+  firstActualsMonth,
 }: {
   clientId?: string;
   clientName?: string;
@@ -66,6 +67,8 @@ export function BudgetPanel({
   canSign?: boolean;
   /** Owner board already stamps this deliverable in the tab header. */
   hideReadOnlyStamp?: boolean;
+  /** YYYY-MM of the earliest month with real figures; the budget window starts no earlier. */
+  firstActualsMonth?: string | null;
 }) {
   const { market } = useMarket();
   const fyDefault = fyStartMonthDefault ?? market.fyStartMonthDefault;
@@ -96,12 +99,17 @@ export function BudgetPanel({
       setLoaded(true);
       return;
     }
+    // Ignore a stale response after cleanup: a superseded load resolving late
+    // (StrictMode double-mount, client switch) used to setDoc(null) over a
+    // budget just seeded from the profile — "Budget ready" toast, empty panel.
+    let cancelled = false;
     supabase
       .from("clients")
       .select("budget, budget_updated_at, financial_year_start_month, operating_profile")
       .eq("id", clientId)
       .maybeSingle()
       .then(({ data, error }) => {
+        if (cancelled) return;
         if (error) {
           console.warn("budget load:", error.message);
         }
@@ -122,6 +130,9 @@ export function BudgetPanel({
         }
         setLoaded(true);
       });
+    return () => {
+      cancelled = true;
+    };
   }, [clientId]);
 
   useEffect(() => {
@@ -228,7 +239,7 @@ export function BudgetPanel({
       qualification: BudgetQualification;
       fyStartMonth: number;
     }) => {
-      const next = createBudgetDocument({ ...args, market });
+      const next = createBudgetDocument({ ...args, market, firstActualsMonth });
       if (args.qualification.inventoryProfile === "none") {
         next.showInventoryDays = false;
       } else if (args.qualification.inventoryProfile) {
@@ -239,7 +250,7 @@ export function BudgetPanel({
       setUnmapped(null);
       toast.success(`Budget ready · ${BUDGET_TEMPLATES[args.templateId].label}`);
     },
-    [market],
+    [market, firstActualsMonth],
   );
 
   // Seed budget from operating profile when none exists yet
@@ -278,7 +289,10 @@ export function BudgetPanel({
       const result = applyTemplateChange(doc, nextProfile.templateId, qualification);
       result.next.fyStartMonth = nextProfile.fyStartMonth;
       if (nextProfile.fyStartMonth !== doc.fyStartMonth) {
-        result.next.fyStart = currentFyStart(nextProfile.fyStartMonth);
+        result.next.fyStart = budgetWindowStart({
+          fyStartMonth: nextProfile.fyStartMonth,
+          firstActualsMonth,
+        });
       }
       result.next.showInventoryDays = nextProfile.inventoryIntensity !== "none";
       if (result.lowOverlap) {
@@ -292,7 +306,7 @@ export function BudgetPanel({
         `Budget model updated · ${result.mappedCount} drivers carried across (${result.overlapPct.toFixed(0)}% overlap)`,
       );
     },
-    [doc, fyDefault, startFresh],
+    [doc, fyDefault, startFresh, firstActualsMonth],
   );
 
   // When parent profile changes after a retake, remap budget
