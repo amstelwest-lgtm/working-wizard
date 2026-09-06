@@ -1,8 +1,5 @@
 import { ChevronRight, Sparkles } from "lucide-react";
-import {
-  PROFILE_CORE_QUESTION_COUNT,
-  PROFILE_QUESTION_COUNT,
-} from "@/lib/client-profile";
+import { PROFILE_CORE_QUESTION_COUNT, PROFILE_QUESTION_COUNT } from "@/lib/client-profile";
 
 /**
  * Sits beside the orb after a four-question first run. One line, one action:

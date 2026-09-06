@@ -101,9 +101,11 @@ import { IndustryPulse, IndustryNewsBand } from "@/components/industry-pulse";
 import { OverviewRail } from "@/components/overview-rail";
 import { NoteLayer } from "@/components/note-layer";
 import { AdminDashboard } from "@/components/admin-dashboard";
-import { ProfileFunnel } from "@/components/profile/profile-funnel";
+import { ProfileFunnel, type ProfileFunnelMode } from "@/components/profile/profile-funnel";
+import { ProfileCompletionNote } from "@/components/profile/profile-completion-note";
 import {
   parseOperatingProfile,
+  profileNeedsCompletion,
   profileShortLabel,
   stampProfileProvenance,
   profileToBudgetQualification,
@@ -2370,6 +2372,13 @@ function Index() {
   // white-screens /app after sign-in.
   const [businessTypeId, setBusinessTypeId] = useState<string | null>(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  // Which questions the (non-first-run) profile dialog asks: the six deferred
+  // ones after a four-question first run, or all ten on a retake.
+  const [profileDialogMode, setProfileDialogMode] = useState<"retake" | "complete">("retake");
+  const openProfileDialog = useCallback((mode: "retake" | "complete") => {
+    setProfileDialogMode(mode);
+    setShowOnboarding(true);
+  }, []);
   // firstRunStep: null = not first run (or done); 'pick-type' = must complete profile funnel; 'first-data' = nudge to upload data
   const [firstRunStep, setFirstRunStep] = useState<null | "pick-type" | "first-data">(null);
   const [operatingProfile, setOperatingProfile] = useState<ClientOperatingProfile | null>(null);
@@ -2500,8 +2509,8 @@ function Index() {
     if (typeof sessionStorage === "undefined") return;
     if (sessionStorage.getItem("milon_open_profile") !== "1") return;
     sessionStorage.removeItem("milon_open_profile");
-    setShowOnboarding(true);
-  }, []);
+    openProfileDialog("retake");
+  }, [openProfileDialog]);
 
   // Resolve the app role only after the client link settles. A freshly
   // confirmed self-signup has no user_roles row until ensure_own_client runs
@@ -3375,7 +3384,7 @@ function Index() {
                   <div className="hidden items-center gap-1 sm:flex">
                     {userRole !== "client_member" ? (
                       <button
-                        onClick={() => setShowOnboarding(true)}
+                        onClick={() => openProfileDialog("retake")}
                         className="inline-flex h-7 max-w-[11rem] items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50/80 px-2 text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-600 transition-colors hover:border-[#b7872a]/50 hover:bg-[#d4a550]/10 dark:border-slate-700/80 dark:bg-slate-900/70 dark:text-slate-300"
                         title={
                           operatingProfile
@@ -3496,7 +3505,7 @@ function Index() {
                       <div className="flex flex-col gap-1">
                         {userRole !== "client_member" && (
                           <button
-                            onClick={() => setShowOnboarding(true)}
+                            onClick={() => openProfileDialog("retake")}
                             className="flex items-center gap-2 rounded-md px-2 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
                           >
                             <Building2 className="h-3.5 w-3.5" /> Profile
@@ -3572,11 +3581,15 @@ function Index() {
                 <DialogHeader className="sr-only">
                   <DialogTitle>Business profile</DialogTitle>
                   <DialogDescription>
-                    Ten questions that tune Milōn to your business
+                    Quick questions that tune Milōn to your business
                   </DialogDescription>
                 </DialogHeader>
                 <ProfileFunnel
-                  mode={firstRunStep === "pick-type" ? "first-run" : "retake"}
+                  mode={
+                    (firstRunStep === "pick-type"
+                      ? "first-run"
+                      : profileDialogMode) satisfies ProfileFunnelMode
+                  }
                   initial={operatingProfile}
                   initialFyStartMonth={
                     operatingProfile?.fyStartMonth ?? boardMarket.fyStartMonthDefault
@@ -3608,6 +3621,8 @@ function Index() {
                     setShowOnboarding(false);
                     if (firstRunStep === "pick-type") {
                       setFirstRunStep("first-data");
+                    } else if (profileDialogMode === "complete") {
+                      toast.success("Profile complete — score, budget and advice re-tuned");
                     } else {
                       toast.success("Business profile updated");
                     }
@@ -3843,6 +3858,12 @@ function Index() {
                         <div>
                           <div className="founder-overview-grid grid w-full items-start gap-4 lg:grid-cols-[minmax(0,1fr)_280px] xl:grid-cols-[minmax(0,1fr)_300px]">
                             <div className="flex w-full flex-col gap-3">
+                              {profileNeedsCompletion(operatingProfile) &&
+                                userRole !== "client_member" && (
+                                  <ProfileCompletionNote
+                                    onFinish={() => openProfileDialog("complete")}
+                                  />
+                                )}
                               <div
                                 id="wizard-empty-score"
                                 className="flex w-full flex-col items-center gap-5 rounded-xl border border-dashed border-slate-200 bg-white/60 px-4 py-10 dark:border-slate-700 dark:bg-slate-900/40"
@@ -3966,6 +3987,13 @@ function Index() {
                           <div className="founder-overview-grid grid w-full items-start gap-4 lg:grid-cols-[minmax(0,1fr)_280px] xl:grid-cols-[minmax(0,1fr)_300px]">
                             {/* Main column */}
                             <section className="flex min-w-0 flex-col gap-3">
+                              {profileNeedsCompletion(operatingProfile) &&
+                                userRole !== "client_member" &&
+                                !actingClientId && (
+                                  <ProfileCompletionNote
+                                    onFinish={() => openProfileDialog("complete")}
+                                  />
+                                )}
                               <div className="relative rounded-xl border border-slate-200/90 bg-white px-3 py-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)] dark:border-white/10 dark:bg-[#0f172a]/40 dark:shadow-none sm:px-5">
                                 <div className="pointer-events-none absolute right-2 top-2 z-20 hidden sm:block sm:right-3 sm:top-3">
                                   <ReviewSignoffBadge
@@ -4571,7 +4599,7 @@ function Index() {
                           operatingProfile?.fyStartMonth ??
                           resolveMarket(coerceMarketSelection(workspaceMarket)).fyStartMonthDefault
                         }
-                        onRetakeProfile={() => setShowOnboarding(true)}
+                        onRetakeProfile={() => openProfileDialog("retake")}
                         financials={{
                           revenue: v.revenue,
                           cogs: v.cogs,
