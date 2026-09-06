@@ -1,51 +1,94 @@
-# First-pilot smoke checklist
+# Launch smoke checklist
 
-Run this before a live customer / accountant session. Aim: ~10–15 minutes.
+Run this on **production** after every deploy that touches auth, upload, or the board — and once
+on a phone. Aim: 15 minutes with a fresh owner email and a fresh practice email. If a step fails,
+note route, role, browser, and whether the migrations below were applied. Fix before demoing.
 
-## 0. Ops prerequisites (Theo)
-- [ ] Supabase migrations applied: `20260818120000_founder_pilot_roles_invites.sql`, `20260818130000_ensure_own_client_name_fallback.sql`
-- [ ] Vercel has `ANTHROPIC_API_KEY`
-- [ ] Supabase secrets has the **same** `ANTHROPIC_API_KEY` (Ask AI + PDF extract edge)
-- [ ] Resend: `RESEND_API_KEY` + `RESEND_FROM_EMAIL` (verified domain) + `SITE_URL`
-- [ ] Hard-refresh production after deploy
+## 0. One-time setup (Theo, dashboards)
 
-## 1. Accountant path
-- [ ] Sign in as accountant → `/dashboard` loads (greeting, KPI cards, scatter or empty state)
-- [ ] Add client (or open an existing practice client)
-- [ ] Click **Invite** on the client row → link copies (opaque token, not a raw UUID)
-- [ ] Open client workspace → page loads (no blank/hooks crash)
-- [ ] Optional: open a ratio playbook drawer — title/text readable
+**Supabase → SQL editor.** Apply, in order, anything not yet applied:
+- `20260905120000_ensure_own_client_roles_restore.sql`
+- `20260906090000_ensure_practice_firm_market_lock.sql` — one firm per practice, no firm for owners
+- `20260906120000_statement_uploads_bucket.sql` — private bucket for PDFs over 3 MB
+- `20260906130000_extraction_rate_limit.sql` — 20 document extractions / user / hour
 
-## 2. Founder invite claim
-- [ ] Open invite link in a private window → landing register shows invite form
-- [ ] Create account → lands on `/app`
-- [ ] Complete operating profile (10 questions) if prompted
+**Supabase → Authentication.**
+- Sign In / Providers → Email → **Confirm email OFF** (owners verify later via the banner)
+- SMTP Settings → **custom SMTP (Resend)**. The built-in sender is capped at a few emails an hour
+  and lands in spam; verification links die on this alone.
+- URL Configuration → Site URL = production domain; Redirect URLs include
+  `/auth/verified`, `/auth/callback`, `/app`, `/dashboard` (production + `http://localhost:5000`)
+- Email Templates → paste `supabase/templates/magic_link.html` (subject: *Verify your Milōn
+  email*), `recovery.html`, `confirmation.html`. The magic-link template is the one every new
+  owner sees.
 
-## 3. First data in
-Pick one path (prefer bank or PDF for the demo story):
-- [ ] Upload PDF financials **or** draft from bank statements **or** enter figures manually
-- [ ] Confirm figures → board leaves empty state (`hasRealFinancials`)
-- [ ] Health orb / score appears (not a fake peer %)
-- [ ] Overview rail shows health band + “From your figures” (not invented cash trajectory)
+**Supabase → Edge Functions → Secrets:** `ANTHROPIC_API_KEY` (Ask AI runs there).
 
-## 4. Core board loop
-- [ ] **Profit** tab — waterfall renders
-- [ ] **Cash** — open forecast; if bank→cash used, published weeks show
-- [ ] **Budget** — opens; seeds or empty plan is usable
-- [ ] **Next moves** — ranked list appears when ratios exist
-- [ ] Open a playbook / move → **Add to Action Plan**
-- [ ] **Action Plan** — item visible; assign / copy task link if testing assignees
-- [ ] **Ask AI** — visible after figures; answers a simple “what should I fix first?”
+**Vercel → Environment Variables (Production):** `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`,
+`SUPABASE_SERVICE_ROLE_KEY`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`,
+`ANTHROPIC_API_KEY`, `RESEND_API_KEY`, `RESEND_FROM_EMAIL` (verified domain), `SITE_URL`,
+`VITE_APP_URL`, `CRON_SECRET`, `SENTRY_DSN`, `VITE_SENTRY_DSN`. Redeploy after changes.
 
-## 5. Trust / firm side again
-- [ ] As accountant on the same client: sign-off financials (optional)
-- [ ] Reports studio opens for the client (optional PDF)
-- [ ] Dashboard **Needs attention** / table updates after score exists
+- [ ] Hard-refresh production after deploy; Sentry project shows the release receiving events
+      (trigger one: open `/nope` → the 404 page is fine; a thrown error in any tab should appear)
 
-## 6. Honesty / copy spot-checks
-- [ ] Landing does **not** claim Gemini; says Claude where AI is mentioned
-- [ ] Orbit/Constellation say not billed yet / waitlist
-- [ ] No “better than X% of peers” on the founder overview
+## 1. Owner — ZA, then repeat as US
+
+- [ ] Landing → pick market → **Business owner** → sign up → lands on `/app` immediately (no
+      "check your inbox" wall)
+- [ ] **4 profile questions** → board opens; a note beside the orb offers the remaining questions
+- [ ] Empty board says the one thing to do next (bring in figures), not a broken dashboard
+- [ ] **Load a demo business** → scored board appears; leaving demo returns to the empty board
+- [ ] Verify-email banner → *Send verification link* → email arrives from Milōn (branded, not
+      "Your Magic Link") → link lands on `/auth/verified` → banner gone
+- [ ] Upload figures — one of: PDF · Excel/ODS/CSV · bank statements (ZA leads with banks, US
+      with file upload). A **> 3 MB PDF** must work (goes via Storage, not the request body)
+- [ ] Review modal → confirm → orb shows a **real score**; caption reads from the figures
+- [ ] "Figures cover" shows the right number of months; DSO/DIO/DPO are days, not hundreds
+- [ ] **Profit** waterfall reconciles to the EBIT entered; currency symbol matches market
+- [ ] **Cash** — with nothing loaded says *No forecast yet*; after banks shows real weeks
+- [ ] **Budget** — seeds from the figures at the right scale (a quarter of actuals does not
+      seed a quarter-sized annual budget; EBITDA is not negative for a profitable business)
+- [ ] **Ask AI** — before figures: note says answers improve once figures are in; after figures:
+      answers "what should I fix first?" from the numbers
+- [ ] Tour on an empty board has two honest steps; the full tour appears once a score exists
+
+## 2. Practice (accountant)
+
+- [ ] Landing → **Accountant** → `/auth` → Create firm (pick market) → `/dashboard`
+- [ ] **Refresh `/dashboard`** — loads (this was the reload deadlock). Sign out, sign in — loads.
+- [ ] Only **one** firm exists for the user (Supabase → `firms` where `owner_user_id`)
+- [ ] First-client dialog leads with a **real client name**; sandbox is a small link
+- [ ] Add client → `?onboard=1` → upload the Windward P&L/BS PDF (or any real statement)
+- [ ] Empty studio opens on **Health & Ratios** with the *Bring in this client's figures* card;
+      Ask AI carries the "more relevant once figures are in" note; no deliverables bar
+- [ ] Review → confirm → studio now opens on **Ask AI**; deliverables bar appears
+- [ ] Health / Profit / Cash / Budget all read from the same figures; sales-per-employee is
+      money per head, not a percentage
+- [ ] 21st upload within an hour is refused with the friendly limit message (optional)
+
+## 3. Same client, both sides
+
+- [ ] From the studio: **Invite** the owner → open the link in a private window → owner signs up
+- [ ] Owner sees a **one-step** profile ("your score is waiting behind this"), not "Step 1 of 2
+      · bring in your numbers"
+- [ ] Owner orb score, caption, waterfall and cash **match** the studio for the same client
+
+## 4. Phone (390 px wide)
+
+- [ ] Landing, market picker, sign-up card, profile questions: no horizontal scroll, buttons
+      reachable
+- [ ] Board: orb visible above the fold; tabs scroll; upload button opens the file picker
+- [ ] Studio: Financials card and period selector usable
+
+## 5. Honesty spot-checks
+
+- [ ] Landing says **Claude** where AI is mentioned; no Gemini
+- [ ] Orbit / Constellation say not billed yet / waitlist
+- [ ] No "better than X% of peers" on the owner overview; nothing invented before figures exist
 
 ## If something fails
-Note: route, role (accountant/founder), browser, and whether migrations/secrets were applied. Prefer fixing before the live call rather than demoing around it.
+
+Route · role (owner / accountant) · browser · market · whether §0 was completed. Check Sentry
+first — server-function throws are reported with the function name. Fix before the live call
+rather than demoing around it.
