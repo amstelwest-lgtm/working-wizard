@@ -38,6 +38,7 @@ import {
 } from "@/lib/bank-files";
 import { useMarketFormat } from "@/contexts/market";
 import { selectionPayload } from "@/lib/market";
+import { PERIOD_MONTHS_KEY } from "@/lib/ratios";
 import { MovementsTrialBalancePanel } from "@/components/movements-trial-balance-panel";
 
 export interface BankDraftApplyPayload {
@@ -169,6 +170,16 @@ export function BankStatementDrafter({ open, onClose, onApply }: Props) {
         ebt: String(scale(ebt)),
         netIncome: String(scale(draft.net_profit)),
         fixedCosts: String(scale(draft.total_opex)),
+        // Tell the ratio engine what the applied figures cover so a 3-month
+        // pack that is not annualised here is still scored as a quarter.
+        [PERIOD_MONTHS_KEY]:
+          factor !== 1
+            ? "12"
+            : String(
+                draft.months_covered && draft.months_covered > 0
+                  ? Math.min(12, Math.max(1, Math.round(draft.months_covered)))
+                  : 12,
+              ),
       },
       annualised: factor !== 1,
       draft,
