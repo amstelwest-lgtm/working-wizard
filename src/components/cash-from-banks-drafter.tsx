@@ -25,7 +25,8 @@ import {
   type WorkspacePublishRequest,
 } from "@/components/cash-classification-workspace";
 import { MovementsTrialBalancePanel } from "@/components/movements-trial-balance-panel";
-import { MAX_BANK_FILES } from "@/lib/bank-files";
+import { BANK_FILE_ACCEPT, MAX_BANK_FILES, rejectBankFile } from "@/lib/bank-files";
+import { fileToText, isSpreadsheetFile, isTextFile } from "@/lib/spreadsheet-text";
 import { useMarket } from "@/contexts/market";
 import { selectionPayload } from "@/lib/market";
 
@@ -91,9 +92,9 @@ export function CashFromBanksDrafter({
     if (!list) return;
     const next = [...files];
     for (const f of Array.from(list)) {
-      const ext = f.name.split(".").pop()?.toLowerCase() ?? "";
-      if (!["pdf", "csv", "txt"].includes(ext)) {
-        toast.error(`"${f.name}" is not a PDF or CSV file.`);
+      const reject = rejectBankFile(f);
+      if (reject) {
+        toast.error(reject);
         continue;
       }
       if (f.size > 10 * 1024 * 1024) {
@@ -118,9 +119,8 @@ export function CashFromBanksDrafter({
     try {
       const payloadFiles = await Promise.all(
         files.map(async (f) => {
-          const ext = f.name.split(".").pop()?.toLowerCase() ?? "";
-          if (ext === "csv" || ext === "txt") {
-            return { fileName: f.name, text: await f.text() };
+          if (isTextFile(f) || isSpreadsheetFile(f)) {
+            return { fileName: f.name, text: await fileToText(f) };
           }
           const base64 = await new Promise<string>((res, rej) => {
             const reader = new FileReader();
@@ -212,14 +212,14 @@ export function CashFromBanksDrafter({
               }}
             >
               <Upload className="h-6 w-6 text-[#b8860b]" />
-              <p className="text-sm font-medium">Drop PDF / CSV bank statements</p>
+              <p className="text-sm font-medium">Drop PDF, CSV or Excel/ODS bank statements</p>
               <p className="text-[11px] text-slate-500">
                 Up to {MAX_BANK_FILES} files · multiple accounts · 40 MB total
               </p>
               <input
                 ref={inputRef}
                 type="file"
-                accept=".pdf,.csv,.txt"
+                accept={BANK_FILE_ACCEPT}
                 multiple
                 className="hidden"
                 onChange={(e) => {

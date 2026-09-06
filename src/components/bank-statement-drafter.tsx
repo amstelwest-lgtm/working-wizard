@@ -27,7 +27,9 @@ import {
 import { draftCashForecastFromBankStatements } from "@/lib/cash-from-banks.server";
 import type { CashFromBanksDraftResult } from "@/lib/cash-from-banks.types";
 import {
+  BANK_FILE_ACCEPT,
   encodeBankFileSlots,
+  rejectBankFile,
   MAX_BANK_FILES,
   MAX_BANK_FILE_BYTES,
   MAX_BANK_TOTAL_BYTES,
@@ -99,9 +101,9 @@ export function BankStatementDrafter({ open, onClose, onApply }: Props) {
     if (!list) return;
     const next = [...slots];
     for (const f of Array.from(list)) {
-      const ext = f.name.split(".").pop()?.toLowerCase() ?? "";
-      if (!["pdf", "csv", "txt"].includes(ext)) {
-        toast.error(`"${f.name}" is not a PDF or CSV file.`);
+      const reject = rejectBankFile(f);
+      if (reject) {
+        toast.error(reject);
         continue;
       }
       if (f.size > MAX_BANK_FILE_BYTES) {
@@ -220,7 +222,7 @@ export function BankStatementDrafter({ open, onClose, onApply }: Props) {
               ref={inputRef}
               type="file"
               multiple
-              accept=".pdf,.csv,.txt"
+              accept={BANK_FILE_ACCEPT}
               className="hidden"
               onChange={(e) => {
                 addFiles(e.target.files, accountLabels[0] || checking);
@@ -235,7 +237,7 @@ export function BankStatementDrafter({ open, onClose, onApply }: Props) {
               <Upload className="h-5 w-5 text-amber-800 dark:text-slate-300" />
               <span className="text-sm font-medium">Add bank statement files</span>
               <span className="text-xs text-slate-500 dark:text-slate-400">
-                PDF or CSV · up to {MAX_BANK_FILES} files · multiple accounts OK
+                PDF, CSV or Excel/ODS export · up to {MAX_BANK_FILES} files · multiple accounts OK
               </span>
             </button>
 

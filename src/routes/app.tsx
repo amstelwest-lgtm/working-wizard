@@ -175,6 +175,14 @@ import { seedBudgetFromFinancials } from "@/lib/budget.bridges";
 import { normalizeBudgetDocument } from "@/lib/budget.compute";
 import type { BudgetDocument } from "@/lib/budget.types";
 import { createBudgetDocument } from "@/lib/budget.months";
+import {
+  UPLOAD_ACCEPT,
+  UPLOAD_FORMATS_LABEL,
+  fileToText,
+  isPdfFile,
+  isSpreadsheetFile,
+  isTextFile,
+} from "@/lib/spreadsheet-text";
 import { QboConnectCard } from "@/components/qbo-connect";
 import { Button } from "@/components/ui/button";
 import { SphereHero } from "@/components/sphere-hero";
@@ -2067,22 +2075,11 @@ function Index() {
       }
       setUploading(true);
       try {
-        const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
         let payload: { fileName: string; mimeType?: string; text?: string; base64?: string };
 
-        if (ext === "csv" || file.type === "text/csv" || ext === "txt") {
-          payload = { fileName: file.name, text: await file.text() };
-        } else if (ext === "xlsx" || ext === "xls") {
-          const XLSX = await import("xlsx");
-          const buf = await file.arrayBuffer();
-          const wb = XLSX.read(buf, { type: "array" });
-          const parts: string[] = [];
-          for (const name of wb.SheetNames) {
-            parts.push(`--- Sheet: ${name} ---`);
-            parts.push(XLSX.utils.sheet_to_csv(wb.Sheets[name]));
-          }
-          payload = { fileName: file.name, text: parts.join("\n") };
-        } else if (ext === "pdf" || file.type === "application/pdf") {
+        if (isTextFile(file) || isSpreadsheetFile(file)) {
+          payload = { fileName: file.name, text: await fileToText(file) };
+        } else if (isPdfFile(file)) {
           const base64 = await new Promise<string>((res, rej) => {
             const reader = new FileReader();
             reader.onload = () => res((reader.result as string).split(",")[1]);
@@ -2101,7 +2098,7 @@ function Index() {
           setReviewOpen(true);
           return;
         } else {
-          toast.error("Unsupported file type. Use PDF, CSV, or Excel.");
+          toast.error("Unsupported file type. Use PDF, Excel, OpenDocument (.ods) or CSV.");
           return;
         }
 
@@ -2114,7 +2111,9 @@ function Index() {
         const extracted = (result as { financials?: Record<string, string> })?.financials ?? {};
         const filledKeys = Object.keys(extracted);
         if (filledKeys.length === 0) {
-          toast.warning("Couldn't extract figures from that file. Try a text-based PDF or CSV.");
+          toast.warning(
+            "Couldn't extract figures from that file. Try a text-based PDF, an Excel/ODS export, or CSV.",
+          );
         } else {
           // Capture fields not surfaced in MergedExtractionResult so they aren't lost
           const csvExtras: Partial<Inputs> = {};
@@ -3650,22 +3649,22 @@ function Index() {
                   </p>
                   <DialogTitle className="text-xl text-slate-100 mt-1">
                     {isUsCopy(boardMarket)
-                      ? "Connect QuickBooks or upload figures"
+                      ? "Upload your financials"
                       : "Upload 3 months of bank statements"}
                   </DialogTitle>
                   <DialogDescription className="text-slate-400">
                     {isUsCopy(boardMarket)
-                      ? "Fastest US path: connect QuickBooks Online. Excel, CSV or PDF financials work just as well — or bank statements if that is what you have."
+                      ? "Fastest US path: upload a P&L and balance sheet — Excel, OpenDocument, CSV or PDF, straight from QuickBooks or your accountant. Connect QuickBooks for live sync, or use bank statements if that is what you have."
                       : "Fastest path: drop the last ~3 months of statements (add every bank account). We draft your P&L, pre-fill budget, build a cash forecast, and show movements in balances — from one upload."}
                   </DialogDescription>
                 </DialogHeader>
                 <div className="flex flex-col gap-3 pt-2">
                   {(isUsCopy(boardMarket)
-                    ? (["qbo", "files", "bank"] as const)
+                    ? (["files", "qbo", "bank"] as const)
                     : (["bank", "files", "qbo"] as const)
                   ).map((id) => {
                     const hero =
-                      (isUsCopy(boardMarket) && id === "qbo") ||
+                      (isUsCopy(boardMarket) && id === "files") ||
                       (!isUsCopy(boardMarket) && id === "bank");
                     const onClick =
                       id === "qbo"
@@ -3685,15 +3684,13 @@ function Index() {
                             };
                     const title =
                       id === "qbo"
-                        ? isUsCopy(boardMarket)
-                          ? "Connect QuickBooks Online (recommended)"
-                          : "Connect QuickBooks Online"
+                        ? "Connect QuickBooks Online"
                         : id === "files"
                           ? isUsCopy(boardMarket)
-                            ? "Upload Excel, CSV, or PDF financials"
+                            ? "Upload Excel, ODS, CSV or PDF financials (recommended)"
                             : "Upload a financial statement instead"
                           : isUsCopy(boardMarket)
-                            ? "Upload bank statements"
+                            ? "Have bank statements instead? Upload those"
                             : "Upload bank statements (recommended)";
                     const sub =
                       id === "qbo"
@@ -3701,8 +3698,8 @@ function Index() {
                           ? "Live sync from your books (Xero coming later)"
                           : "Live sync from your books (Xero not available yet)"
                         : id === "files"
-                          ? "PDF, Excel or CSV management accounts"
-                          : "PDF or CSV · ~3 months · AI drafts your figures";
+                          ? "P&L and balance sheet · Excel, OpenDocument, CSV or PDF · you confirm before saving"
+                          : "PDF, CSV or Excel exports · ~3 months · AI drafts your figures";
                     const icon =
                       id === "qbo" ? (
                         <Plug2 className="h-4 w-4" />
@@ -3891,7 +3888,7 @@ function Index() {
                                   </h3>
                                   <p className="mt-1.5 text-sm text-slate-500">
                                     {isUsCopy(boardMarket)
-                                      ? "Upload Excel, CSV or PDF financials (or connect QuickBooks). MILŌN scores your business and ranks your first move — no invented numbers until then."
+                                      ? "Upload a P&L and balance sheet — Excel, OpenDocument, CSV or PDF — and MILŌN scores your business and ranks your first move. No invented numbers until then."
                                       : "Drop ~3 months of bank statements and MILŌN drafts your P&L, cash forecast and budget, then scores your business and ranks your first move — no invented numbers until then."}
                                   </p>
                                 </div>
@@ -3911,7 +3908,7 @@ function Index() {
                                     >
                                       <Upload className="h-4 w-4" />
                                       {isUsCopy(boardMarket)
-                                        ? "Upload Excel, CSV or PDF financials"
+                                        ? "Upload Excel, ODS, CSV or PDF financials"
                                         : "Upload bank statements"}
                                     </button>
                                     <div className="flex w-full flex-col gap-2.5 sm:flex-row">
@@ -3946,12 +3943,22 @@ function Index() {
                                         Enter manually
                                       </button>
                                     </div>
-                                    <button
-                                      onClick={() => setFirstRunStep("first-data")}
-                                      className="text-center text-xs text-slate-500 underline hover:text-slate-700 dark:hover:text-slate-300"
-                                    >
-                                      See all ways to add figures
-                                    </button>
+                                    <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs text-slate-500">
+                                      {isUsCopy(boardMarket) && (
+                                        <button
+                                          onClick={() => setShowBankDrafter(true)}
+                                          className="underline hover:text-slate-700 dark:hover:text-slate-300"
+                                        >
+                                          Have bank statements instead? Upload those
+                                        </button>
+                                      )}
+                                      <button
+                                        onClick={() => setFirstRunStep("first-data")}
+                                        className="underline hover:text-slate-700 dark:hover:text-slate-300"
+                                      >
+                                        See all ways to add figures
+                                      </button>
+                                    </div>
                                   </div>
                                 ) : (
                                   <p className="max-w-sm text-center text-sm text-slate-500">
@@ -4817,7 +4824,7 @@ function Index() {
               <input
                 ref={uploadRef}
                 type="file"
-                accept=".pdf,.csv,.xlsx,.xls,.txt"
+                accept={UPLOAD_ACCEPT}
                 className="hidden"
                 onChange={(e) => {
                   const f = e.target.files?.[0];
@@ -4825,28 +4832,10 @@ function Index() {
                 }}
               />
               <div className="grid gap-3 sm:grid-cols-2">
-                {isUsCopy(boardMarket) && (
-                  <button
-                    onClick={() => {
-                      setShowFinData(false);
-                      setShowQboDialog(true);
-                    }}
-                    className="flex flex-col items-start gap-1.5 rounded-lg border border-[#d4a550]/50 bg-[#d4a550]/10 p-4 text-left transition-colors hover:border-[#d4a550]/80 hover:bg-[#d4a550]/15 dark:border-[#b7872a]/60 dark:bg-[#d4a550]/10 dark:hover:border-[#d4a550]/80"
-                  >
-                    <span className="flex items-center gap-2 text-sm font-semibold text-amber-900 dark:text-slate-100">
-                      <Plug2 className="h-4 w-4" />
-                      Connect QuickBooks Online
-                    </span>
-                    <span className="text-xs text-slate-600 dark:text-slate-400">
-                      Recommended for US books — sync live accounting data when QBO is configured.
-                      Xero is also on the list, not the lead path.
-                    </span>
-                  </button>
-                )}
                 <button
                   disabled={uploading}
                   onClick={() => uploadRef.current?.click()}
-                  className="flex flex-col items-start gap-1.5 rounded-lg border border-amber-700/30 bg-amber-50 p-4 text-left transition-colors hover:border-amber-700/60 hover:bg-amber-100 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-[#b7872a]/60 dark:hover:bg-slate-800"
+                  className="flex flex-col items-start gap-1.5 rounded-lg border border-[#d4a550]/50 bg-[#d4a550]/10 p-4 text-left transition-colors hover:border-[#d4a550]/80 hover:bg-[#d4a550]/15 disabled:opacity-60 dark:border-[#b7872a]/60 dark:bg-[#d4a550]/10 dark:hover:border-[#d4a550]/80"
                 >
                   <span className="flex items-center gap-2 text-sm font-semibold text-amber-900 dark:text-slate-100">
                     {uploading ? (
@@ -4854,30 +4843,30 @@ function Index() {
                     ) : (
                       <Upload className="h-4 w-4" />
                     )}
-                    {uploading ? "Reading…" : "Upload PDF financials"}
+                    {uploading ? "Reading…" : "Upload financial statements"}
                   </span>
                   <span className="text-xs text-slate-600 dark:text-slate-400">
-                    PDF, CSV or Excel financial statements — figures are read automatically.
+                    {UPLOAD_FORMATS_LABEL} (.xlsx, .xls, .ods, .csv, .pdf) — figures are read
+                    automatically and you confirm them before anything is saved.
                   </span>
                 </button>
-                {!isUsCopy(boardMarket) && (
-                  <button
-                    onClick={() => {
-                      setShowFinData(false);
-                      setShowQboDialog(true);
-                    }}
-                    className="flex flex-col items-start gap-1.5 rounded-lg border border-amber-700/30 bg-amber-50 p-4 text-left transition-colors hover:border-amber-700/60 hover:bg-amber-100 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-[#b7872a]/60 dark:hover:bg-slate-800"
-                  >
-                    <span className="flex items-center gap-2 text-sm font-semibold text-amber-900 dark:text-slate-100">
-                      <Plug2 className="h-4 w-4" />
-                      Connect QuickBooks Online
-                    </span>
-                    <span className="text-xs text-slate-600 dark:text-slate-400">
-                      Sync live accounting data when QBO is configured for this workspace. Xero is
-                      not available yet.
-                    </span>
-                  </button>
-                )}
+                <button
+                  onClick={() => {
+                    setShowFinData(false);
+                    setShowQboDialog(true);
+                  }}
+                  className="flex flex-col items-start gap-1.5 rounded-lg border border-amber-700/30 bg-amber-50 p-4 text-left transition-colors hover:border-amber-700/60 hover:bg-amber-100 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-[#b7872a]/60 dark:hover:bg-slate-800"
+                >
+                  <span className="flex items-center gap-2 text-sm font-semibold text-amber-900 dark:text-slate-100">
+                    <Plug2 className="h-4 w-4" />
+                    Connect QuickBooks Online
+                  </span>
+                  <span className="text-xs text-slate-600 dark:text-slate-400">
+                    {isUsCopy(boardMarket)
+                      ? "Live sync from your books once QBO is switched on for this workspace. Until then, export a P&L and balance sheet and upload them above."
+                      : "Sync live accounting data when QBO is configured for this workspace. Xero is not available yet."}
+                  </span>
+                </button>
                 <button
                   onClick={() => {
                     setShowFinData(false);
