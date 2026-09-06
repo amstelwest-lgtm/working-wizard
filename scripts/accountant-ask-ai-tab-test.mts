@@ -18,12 +18,17 @@ const cssSrc = readFileSync(resolve("public/ask-ai.css"), "utf8");
 const tourSrc = readFileSync(resolve("src/components/walkthrough-wizard.tsx"), "utf8");
 const indexSrc = readFileSync(resolve("supabase/functions/ask-ai/index.ts"), "utf8");
 
-assert(clientSrc.includes('| "ask"'), "Ask AI is an accountant studio tab");
+assert(/type ActiveTab =[\s\S]{0,40}"ask"/.test(clientSrc), "Ask AI is an accountant studio tab");
 assert(
   /const ACCOUNTANT_TABS[\s\S]*?"ask"[\s\S]*?"ratios"/.test(clientSrc),
   "Ask AI is the first accountant tab",
 );
 assert(clientSrc.includes('useState<ActiveTab>("ask")'), "studio lands on Ask AI");
+assert(
+  clientSrc.includes('setActiveTab(figures ? "ask" : "ratios")'),
+  "before any figures the studio lands on Health & Ratios, where the inputs are",
+);
+assert(clientSrc.includes('id="first-figures-card"'), "empty studio shows the first-figures card");
 assert(clientSrc.includes('{ id: "ask", label: "Ask AI"'), "Ask AI appears in the tab strip");
 assert(clientSrc.includes('id="pane-ask"'), "Ask AI pane exists");
 assert(clientSrc.includes('id="ask-ai-accountant"'), "studio still mounts the same widget");

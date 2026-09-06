@@ -241,7 +241,7 @@ function resolveTarget(targetId: string): Element | null {
     .map((s) => s.trim())
     .filter(Boolean);
   for (const part of parts) {
-    const el = /^[.#\[]/.test(part) ? document.querySelector(part) : document.getElementById(part);
+    const el = /^[.#[]/.test(part) ? document.querySelector(part) : document.getElementById(part);
     if (el) return el;
   }
   return null;

@@ -11,7 +11,7 @@ import { annualiseFinancials } from "@/lib/ratios";
 
 function num(v: string | number | null | undefined): number {
   if (v == null || v === "") return 0;
-  const n = typeof v === "number" ? v : parseFloat(String(v).replace(/[^0-9.\-]/g, ""));
+  const n = typeof v === "number" ? v : parseFloat(String(v).replace(/[^0-9.-]/g, ""));
   return Number.isFinite(n) ? n : 0;
 }
 
