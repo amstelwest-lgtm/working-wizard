@@ -174,7 +174,7 @@ import { NoFiguresBanner } from "@/components/no-figures-banner";
 import { seedBudgetFromFinancials } from "@/lib/budget.bridges";
 import { normalizeBudgetDocument } from "@/lib/budget.compute";
 import type { BudgetDocument } from "@/lib/budget.types";
-import { createBudgetDocument, currentFyStart } from "@/lib/budget.months";
+import { createBudgetDocument } from "@/lib/budget.months";
 import { QboConnectCard } from "@/components/qbo-connect";
 import { Button } from "@/components/ui/button";
 import { SphereHero } from "@/components/sphere-hero";
@@ -4600,6 +4600,9 @@ function Index() {
                           resolveMarket(coerceMarketSelection(workspaceMarket)).fyStartMonthDefault
                         }
                         onRetakeProfile={() => openProfileDialog("retake")}
+                        firstActualsMonth={
+                          hasRealFinancials ? (history[0]?.period_date?.slice(0, 7) ?? null) : null
+                        }
                         financials={{
                           revenue: v.revenue,
                           cogs: v.cogs,
@@ -4981,7 +4984,7 @@ function Index() {
           <BankStatementDrafter
             open={showBankDrafter}
             onClose={() => setShowBankDrafter(false)}
-            onApply={async ({ fields, annualised, cashDraft }) => {
+            onApply={async ({ fields, annualised, cashDraft, draft }) => {
               setV((prev) => ({ ...prev, ...fields }) as Inputs);
               setHasRealFinancials(true);
               setShowBankDrafter(false);
@@ -5010,11 +5013,13 @@ function Index() {
                       : null;
                   if (!doc && operatingProfile) {
                     const q = profileToBudgetQualification(operatingProfile);
+                    // Budget window opens at the first statement month — never
+                    // retrospectively before the figures we actually have.
                     doc = createBudgetDocument({
                       templateId: operatingProfile.templateId,
                       qualification: q,
                       fyStartMonth: fyMonth,
-                      fyStart: currentFyStart(fyMonth),
+                      firstActualsMonth: draft.period_start?.slice(0, 7) ?? null,
                       market: resolveMarket(coerceMarketSelection(workspaceMarket)),
                     });
                   }
