@@ -7,10 +7,11 @@ import { fyMonths } from "@/lib/budget.months";
 import { computeBudgetMonths } from "@/lib/budget.compute";
 import { newId } from "@/lib/budget.templates";
 import type { CashForecastPublishPayload } from "@/lib/cash-from-banks.types";
+import { annualiseFinancials } from "@/lib/ratios";
 
 function num(v: string | number | null | undefined): number {
   if (v == null || v === "") return 0;
-  const n = typeof v === "number" ? v : parseFloat(String(v).replace(/[^0-9.\-]/g, ""));
+  const n = typeof v === "number" ? v : parseFloat(String(v).replace(/[^0-9.-]/g, ""));
   return Number.isFinite(n) ? n : 0;
 }
 
@@ -22,10 +23,12 @@ export type SeedFromFinancialsResult = {
 /** Apply period financials into budget assumptions (does not invent volume history). */
 export function seedBudgetFromFinancials(
   doc: BudgetDocument,
-  financials: Record<string, string | number | null | undefined>,
+  periodFinancials: Record<string, string | number | null | undefined>,
 ): SeedFromFinancialsResult {
   const changes: string[] = [];
   const months = fyMonths(doc.fyStart);
+  // A quarter of actuals must seed a full year, not a year at a quarter's pace.
+  const financials = annualiseFinancials(periodFinancials);
   const revenue = num(financials.revenue);
   const cogs = num(financials.cogs);
   const fixedCosts = num(financials.fixedCosts);
@@ -56,17 +59,24 @@ export function seedBudgetFromFinancials(
     next = {
       ...next,
       revenueLines: next.revenueLines.map((l, i) =>
-        i === 0
-          ? { ...l, name: l.name || "Primary revenue", months: monthsMap }
-          : l,
+        i === 0 ? { ...l, name: l.name || "Primary revenue", months: monthsMap } : l,
       ),
     };
     changes.push(`Primary revenue line seeded at ~${monthly}/month (volume 1 × price)`);
   }
 
   if (fixedCosts > 0 || laborCost > 0) {
-    const peopleMonthly = laborCost > 0 ? laborCost / 12 : fixedCosts * 0.55 / 12;
-    const otherMonthly = fixedCosts > 0 ? Math.max(0, fixedCosts / 12 - (laborCost > 0 ? 0 : peopleMonthly * 0.2)) : 0;
+    const peopleMonthly = laborCost > 0 ? laborCost / 12 : (fixedCosts * 0.55) / 12;
+    // Fixed costs on a P&L (total operating expenses, the bank drafter's
+    // total_opex) already include payroll: carve labour out rather than add
+    // it on top, which double-counted people and pushed EBITDA negative.
+    // Labour >= fixed costs means fixed was reported without it.
+    const nonPeopleFixed =
+      laborCost > 0 && laborCost < fixedCosts ? fixedCosts - laborCost : fixedCosts;
+    const otherMonthly =
+      fixedCosts > 0
+        ? Math.max(0, nonPeopleFixed / 12 - (laborCost > 0 ? 0 : peopleMonthly * 0.2))
+        : 0;
     next = {
       ...next,
       overheads: next.overheads.map((oh) => {
@@ -74,11 +84,11 @@ export function seedBudgetFromFinancials(
           oh.bucket === "people"
             ? Math.round(peopleMonthly * 100) / 100
             : oh.bucket === "ops"
-              ? Math.round((otherMonthly * 0.5) * 100) / 100
+              ? Math.round(otherMonthly * 0.5 * 100) / 100
               : oh.bucket === "premises"
-                ? Math.round((otherMonthly * 0.3) * 100) / 100
+                ? Math.round(otherMonthly * 0.3 * 100) / 100
                 : oh.bucket === "sales"
-                  ? Math.round((otherMonthly * 0.2) * 100) / 100
+                  ? Math.round(otherMonthly * 0.2 * 100) / 100
                   : 0;
         if (monthly <= 0) return oh;
         return {
@@ -122,9 +132,7 @@ function lineId(prefix: string): string {
  * Build a cash-forecast publish payload from the first ~13 weeks of the budget
  * (months 1–3 recurring monthly lines + WC-derived collection delay).
  */
-export function budgetToCashForecastPayload(
-  doc: BudgetDocument,
-): CashForecastPublishPayload {
+export function budgetToCashForecastPayload(doc: BudgetDocument): CashForecastPublishPayload {
   const months = fyMonths(doc.fyStart);
   const near = months.slice(0, 3);
   const rows = computeBudgetMonths(doc, doc.activeScenario);
@@ -165,7 +173,9 @@ export function budgetToCashForecastPayload(
     },
     ...doc.overheads
       .map((oh) => {
-        const amounts = near.map((mo) => (oh.months[mo] || 0) * doc.scenarios[doc.activeScenario].overheadFactor);
+        const amounts = near.map(
+          (mo) => (oh.months[mo] || 0) * doc.scenarios[doc.activeScenario].overheadFactor,
+        );
         const mean = amounts.length
           ? Math.round((amounts.reduce((a, b) => a + b, 0) / amounts.length) * 100) / 100
           : 0;
@@ -188,23 +198,29 @@ export function budgetToCashForecastPayload(
   return {
     startDate,
     openingBalance: String(doc.openingCash || 0),
-    revenue: revenue.length ? revenue : [{
-      id: lineId("rev"),
-      name: "Revenue (from budget)",
-      amount: String(avg((r) => r.revenue)),
-      frequency: "recurring-monthly",
-      startWeek: 1,
-      splitCount: 3,
-    }],
+    revenue: revenue.length
+      ? revenue
+      : [
+          {
+            id: lineId("rev"),
+            name: "Revenue (from budget)",
+            amount: String(avg((r) => r.revenue)),
+            frequency: "recurring-monthly",
+            startWeek: 1,
+            splitCount: 3,
+          },
+        ],
     expenses,
-    other: [{
-      id: lineId("oth"),
-      name: "Other",
-      amount: "0",
-      frequency: "recurring-monthly",
-      startWeek: 1,
-      splitCount: 3,
-    }],
+    other: [
+      {
+        id: lineId("oth"),
+        name: "Other",
+        amount: "0",
+        frequency: "recurring-monthly",
+        startWeek: 1,
+        splitCount: 3,
+      },
+    ],
     revAdj: 100,
     expAdj: 100,
     collectDelay,

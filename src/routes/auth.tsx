@@ -173,33 +173,15 @@ function AuthPage() {
           toast.success("Account created — check your email to confirm before signing in.");
           return;
         }
-        if (data.user && firmName.trim()) {
-          const payload = {
-            name: firmName.trim(),
-            owner_user_id: data.user.id,
-            ...(market ? { market: marketToJson(market) } : {}),
-          };
-          let { data: firm, error: firmErr } = await supabase
-            .from("firms")
-            .insert(payload)
-            .select("id")
-            .single();
-          if (firmErr && market && /market|42703/i.test(firmErr.message ?? "")) {
-            const retry = await supabase
-              .from("firms")
-              .insert({ name: firmName.trim(), owner_user_id: data.user.id })
-              .select("id")
-              .single();
-            firm = retry.data;
-            firmErr = retry.error;
-          }
+        if (data.user) {
+          // One provisioning path (firm + membership + firm_admin), serialised
+          // per user in the database so a concurrent profile hydrate cannot
+          // mint a second firm. Carries the market picked above.
+          const { error: firmErr } = await supabase.rpc("ensure_practice_firm", {
+            p_name: firmName.trim() || null,
+            p_market: market ? marketToJson(market) : null,
+          });
           if (firmErr) toast.error(firmErr.message);
-          if (firm) {
-            await supabase
-              .from("firm_memberships")
-              .insert({ firm_id: firm.id, user_id: data.user.id, role: "owner" });
-          }
-          await supabase.from("user_roles").insert({ user_id: data.user.id, role: "firm_admin" });
         }
         forcePortal("accountant");
         await ensurePractice().catch(() => undefined);

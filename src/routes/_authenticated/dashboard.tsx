@@ -262,6 +262,7 @@ function AddClientDialog({
   defaultName = "",
   heading = "Add a client",
   blurb,
+  sandboxName,
 }: {
   open: boolean;
   onClose: () => void;
@@ -277,6 +278,8 @@ function AddClientDialog({
   defaultName?: string;
   heading?: string;
   blurb?: string;
+  /** When set, offers a one-click sandbox name for practices without a client's statements to hand. */
+  sandboxName?: string;
 }) {
   const [newName, setNewName] = useState("");
   const [newType, setNewType] = useState("");
@@ -436,6 +439,26 @@ function AddClientDialog({
               }}
               placeholder="e.g. Karoo Traders"
             />
+            {sandboxName && newName.trim() !== sandboxName && (
+              <button
+                type="button"
+                onClick={() => setNewName(sandboxName)}
+                style={{
+                  marginTop: 8,
+                  background: "none",
+                  border: "none",
+                  padding: 0,
+                  cursor: "pointer",
+                  fontSize: 12,
+                  color: "var(--ink-dim)",
+                  textDecoration: "underline",
+                  textUnderlineOffset: 3,
+                  fontFamily: "inherit",
+                }}
+              >
+                No statements to hand? Use a sandbox client — “{sandboxName}”
+              </button>
+            )}
           </div>
           <div style={{ marginBottom: 24 }}>
             <MarketPicker
@@ -1630,17 +1653,18 @@ function Dashboard() {
             {clientRows.length === 0 ? (
               <>
                 <p className="sub" style={{ marginBottom: 8, fontSize: 15 }}>
-                  Start with one practice client
+                  Your book is empty — add the first client
                 </p>
                 <p
                   className="sub"
-                  style={{ marginBottom: 20, maxWidth: 420, marginInline: "auto" }}
+                  style={{ marginBottom: 20, maxWidth: 440, marginInline: "auto" }}
                 >
-                  Add a sandbox client, upload ~3 months of bank statements, and walk the full
-                  advisory board once — then onboard your paying clients the same way.
+                  One client, one upload (bank statements or a P&amp;L and balance sheet), and the
+                  full advisory board — Health, Profit, Cash, Budget, Reports — fills in. No
+                  statements to hand? Start with a sandbox client and learn the loop first.
                 </p>
                 <button className="btn gold" type="button" onClick={() => setFirstClientOpen(true)}>
-                  Create practice demo client
+                  Add your first client
                 </button>
               </>
             ) : (
@@ -1924,13 +1948,13 @@ function Dashboard() {
           }}
           firmId={firm?.id ?? firmId}
           brandLoading={brandLoading}
-          defaultName={firstClientOpen ? PRACTICE_TEST_CLIENT_NAME : ""}
-          heading={firstClientOpen ? "Your first practice client" : "Add a client"}
+          heading={firstClientOpen ? "Add your first client" : "Add a client"}
           blurb={
             firstClientOpen
-              ? "Use a sandbox client to learn the workflow — upload statements, check Business Health, then add real clients."
+              ? "Pick a client whose statements you have to hand — you'll see their scored board in one sitting: upload, review the figures, then Health, Profit, Cash and Ask AI fill in. Every client after this one follows the same loop."
               : undefined
           }
+          sandboxName={firstClientOpen ? PRACTICE_TEST_CLIENT_NAME : undefined}
         />
       )}
 

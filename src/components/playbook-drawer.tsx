@@ -132,7 +132,7 @@ export function PlaybookDrawer({
 
   useEffect(() => {
     if (!open || !ratioKey) {
-      setSteps([]);
+      setSteps((s) => (s.length ? [] : s));
       return;
     }
     setLoading(true);
@@ -152,7 +152,7 @@ export function PlaybookDrawer({
 
   useEffect(() => {
     if (!open || !signoffEnabled || !clientId || !ratioKey) {
-      setSignoffs({});
+      setSignoffs((s) => (Object.keys(s).length ? {} : s));
       return;
     }
     let cancelled = false;

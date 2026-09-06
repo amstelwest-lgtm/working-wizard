@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
+  ACCOUNTANT_CLIENT_EMPTY_TOUR_KEY,
   ACCOUNTANT_CLIENT_TOUR_KEY,
   ACCOUNTANT_DASH_TOUR_KEY,
   OWNER_EMPTY_TOUR_KEY,
@@ -12,7 +13,8 @@ export type WalkthroughVariant =
   | "owner"
   | "owner-empty"
   | "accountant-dashboard"
-  | "accountant-client";
+  | "accountant-client"
+  | "accountant-client-empty";
 
 type Step = {
   tab?: string;
@@ -136,20 +138,42 @@ const ACCOUNTANT_DASH_STEPS: Step[] = [
   },
 ];
 
+/**
+ * Accountant, client has no figures yet: two honest steps pointing at the one
+ * thing to do. The full studio tour (ACCOUNTANT_CLIENT_STEPS) runs the first
+ * time this client has a real score.
+ */
+const ACCOUNTANT_CLIENT_EMPTY_STEPS: Step[] = [
+  {
+    tab: "ratios",
+    targetId: ".health-orb",
+    section: "Business Health",
+    title: "This client's score lands here",
+    body: "Nothing is invented in the studio. Once figures are in, Milōn scores profit, assets, financing and cash into one number — the same orb the owner sees — and this tour continues on the real thing.",
+  },
+  {
+    tab: "ratios",
+    targetId: "first-figures-card",
+    section: "Figures",
+    title: "Step 2 of 2 · Bring in the figures",
+    body: "This is the only thing to do right now. One upload is enough — bank statements, a P&L and balance sheet (PDF, Excel or CSV), or typed figures — and Health, Profit, Cash, Budget, Reports and Ask AI all fill in from it.",
+  },
+];
+
 const ACCOUNTANT_CLIENT_STEPS: Step[] = [
   {
     tab: "ask",
     targetId: "ask-ai-accountant",
     section: "Ask AI",
     title: "Start with Ask AI",
-    body: "This tab is the first stop in studio. Ask against this client’s filled deliverables — ratios, waterfall, cash outlook, product lines, next moves, and the action plan — before a call.",
+    body: "Now that this client has figures, the studio opens here. Ask against the filled deliverables — ratios, waterfall, cash outlook, next moves and the action plan — before a call.",
   },
   {
     tab: "ratios",
     targetId: "finCollapse",
     section: "Figures",
-    title: "Get real numbers on the board",
-    body: "Open this panel to draft from bank statements or enter figures — health, cash and budget stay empty until something lands here.",
+    title: "Figures live here",
+    body: "Open this panel to correct a line, change the period the figures cover, draft again from bank statements, or upload a new statement. Everything downstream recalculates.",
   },
   {
     tab: "ratios",
@@ -198,6 +222,7 @@ const ACCOUNTANT_CLIENT_STEPS: Step[] = [
 function stepsFor(variant: WalkthroughVariant): Step[] {
   if (variant === "accountant-dashboard") return ACCOUNTANT_DASH_STEPS;
   if (variant === "accountant-client") return ACCOUNTANT_CLIENT_STEPS;
+  if (variant === "accountant-client-empty") return ACCOUNTANT_CLIENT_EMPTY_STEPS;
   if (variant === "owner-empty") return OWNER_EMPTY_STEPS;
   return OWNER_STEPS;
 }
@@ -205,16 +230,18 @@ function stepsFor(variant: WalkthroughVariant): Step[] {
 function storageKeyFor(variant: WalkthroughVariant): string {
   if (variant === "accountant-dashboard") return ACCOUNTANT_DASH_TOUR_KEY;
   if (variant === "accountant-client") return ACCOUNTANT_CLIENT_TOUR_KEY;
+  if (variant === "accountant-client-empty") return ACCOUNTANT_CLIENT_EMPTY_TOUR_KEY;
   if (variant === "owner-empty") return OWNER_EMPTY_TOUR_KEY;
   return OWNER_TOUR_KEY;
 }
 
 function resolveTarget(targetId: string): Element | null {
-  const parts = targetId.split(",").map((s) => s.trim()).filter(Boolean);
+  const parts = targetId
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
   for (const part of parts) {
-    const el = /^[.#\[]/.test(part)
-      ? document.querySelector(part)
-      : document.getElementById(part);
+    const el = /^[.#[]/.test(part) ? document.querySelector(part) : document.getElementById(part);
     if (el) return el;
   }
   return null;
@@ -232,7 +259,10 @@ function readRadius(el: Element, width: number, height: number, pad: number): nu
   }
   const px = parseFloat(raw) || 0;
   // Near-circular buttons (orb): keep a full circle spotlight
-  if (Math.abs(width - height) < 8 && (px >= Math.min(width, height) / 2 - 1 || el.classList.contains("rounded-full"))) {
+  if (
+    Math.abs(width - height) < 8 &&
+    (px >= Math.min(width, height) / 2 - 1 || el.classList.contains("rounded-full"))
+  ) {
     return Math.max(width, height) / 2 + pad;
   }
   return Math.min(24, px + 4) + pad * 0.35;
@@ -258,7 +288,7 @@ function measureSpot(el: Element): Spot {
   let spotLeft = left - pad;
 
   // Keep the hole compact so the tour card has room beside/below the feature
-  const maxH = Math.min(vh * 0.40, 360);
+  const maxH = Math.min(vh * 0.4, 360);
   if (height > maxH) {
     height = maxH;
     // Anchor to the visible top of the target — don't float the hole mid-page
@@ -275,15 +305,17 @@ function measureSpot(el: Element): Spot {
     left: spotLeft,
     width,
     height,
-    radius: readRadius(el, Math.min(r.width, width - pad * 2), Math.min(r.height, height - pad * 2), pad),
+    radius: readRadius(
+      el,
+      Math.min(r.width, width - pad * 2),
+      Math.min(r.height, height - pad * 2),
+      pad,
+    ),
   };
 }
 
 /** Place the tour card fully outside the spotlight (never overlapping it). */
-function cardLayoutForSpot(
-  spot: Spot | null,
-  cardH: number,
-): { top: number; maxHeight: number } {
+function cardLayoutForSpot(spot: Spot | null, cardH: number): { top: number; maxHeight: number } {
   const vh = window.innerHeight;
   const ideal = Math.min(Math.max(cardH, 160), Math.min(vh * 0.44, 360));
   if (!spot) {
@@ -341,9 +373,7 @@ export function WalkthroughWizard({
 }) {
   const variant: WalkthroughVariant =
     variantProp ??
-    (userRole === "accountant" || userRole === "firm_admin"
-      ? "accountant-dashboard"
-      : "owner");
+    (userRole === "accountant" || userRole === "firm_admin" ? "accountant-dashboard" : "owner");
 
   const STEPS = stepsFor(variant);
   const storageKey = storageKeyFor(variant);
@@ -531,9 +561,9 @@ export function WalkthroughWizard({
 
   const dismiss = () => {
     markOnboardingDone(storageKey);
-    document.querySelectorAll(".wizard-highlight").forEach((el) =>
-      el.classList.remove("wizard-highlight"),
-    );
+    document
+      .querySelectorAll(".wizard-highlight")
+      .forEach((el) => el.classList.remove("wizard-highlight"));
     activeElRef.current = null;
     setSpot(null);
     setVisible(false);
@@ -626,8 +656,7 @@ export function WalkthroughWizard({
             border: `1px solid rgba(${hexToRgb(sectionColor)}, 0.35)`,
             borderRadius: 16,
             padding: "20px 24px 24px",
-            boxShadow:
-              "0 32px 64px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.04)",
+            boxShadow: "0 32px 64px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.04)",
           }}
         >
           <div
@@ -771,7 +800,9 @@ export function WalkthroughWizard({
                 {isLast
                   ? variant === "owner-empty"
                     ? "Got it — add my figures"
-                    : "Done — let's go"
+                    : variant === "accountant-client-empty"
+                      ? "Got it — bring in the figures"
+                      : "Done — let's go"
                   : "Next"}
               </button>
             </div>

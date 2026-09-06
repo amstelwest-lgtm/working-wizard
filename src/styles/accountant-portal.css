@@ -242,8 +242,19 @@ html[data-theme="light"] .accountant-portal .doc{background:linear-gradient(170d
 .accountant-portal .action-bar .lbl{font-size:13px;color:var(--ink-dim);margin-right:auto}
 .accountant-portal .action-bar .lbl b{color:var(--ink)}
 
-/* collapsible */
-.accountant-portal .collapse{overflow:hidden}
+/* first-figures — empty-state card shown until the client has any number */
+.accountant-portal .first-figures{display:flex;align-items:center;gap:24px;padding:22px 26px;margin-bottom:22px;flex-wrap:wrap}
+.accountant-portal .first-figures .ff-copy{flex:1 1 320px;min-width:0}
+.accountant-portal .first-figures .ff-copy .kicker{margin:0 0 6px}
+.accountant-portal .first-figures h3{font-family:var(--serif);font-weight:400;font-size:22px;margin:0 0 6px;color:var(--ink)}
+.accountant-portal .first-figures .ff-copy p:not(.kicker){font-size:13.5px;line-height:1.55;color:var(--ink-dim);margin:0;max-width:60ch}
+.accountant-portal .first-figures .ff-actions{display:flex;flex-direction:column;gap:8px;flex:0 0 auto;min-width:220px}
+.accountant-portal .first-figures .ff-actions .btn{justify-content:center}
+@media (max-width:760px){.accountant-portal .first-figures .ff-actions{flex:1 1 100%;flex-direction:row;flex-wrap:wrap}}
+
+/* collapsible — `collapse` is also a Tailwind utility (visibility:collapse),
+   which was hiding the whole Financials card; pin visibility here. */
+.accountant-portal .collapse{overflow:hidden;visibility:visible}
 .accountant-portal .collapse .c-head{display:flex;align-items:center;gap:14px;padding:20px 26px;cursor:pointer;user-select:none}
 .accountant-portal .collapse .c-head h3{font-size:16px;flex:1}
 .accountant-portal .collapse .c-head .hint{font-size:12px;color:var(--ink-dim)}
@@ -252,6 +263,8 @@ html[data-theme="light"] .accountant-portal .doc{background:linear-gradient(170d
 .accountant-portal .collapse .c-body{max-height:0;transition:max-height .5s var(--ease);}
 .accountant-portal .collapse.open .c-body{max-height:2400px}
 .accountant-portal .c-inner{padding:4px 26px 26px}
+.accountant-portal .fin-period{display:inline-flex;align-items:center;gap:8px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-dim)}
+.accountant-portal .fin-period select{font:inherit;font-size:12px;letter-spacing:0;text-transform:none;color:var(--ink);background:transparent;border:1px solid var(--line);border-radius:8px;padding:5px 8px;cursor:pointer}
 .accountant-portal .autosave{font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--ok);border:1px solid rgba(92,207,138,.3);border-radius:99px;padding:3px 10px}
 .accountant-portal .fin-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px 18px}
 .accountant-portal .fin-grid label{display:block;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-dim);margin-bottom:6px}

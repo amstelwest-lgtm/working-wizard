@@ -1,4 +1,10 @@
-import { computeRatios, scoreTier, type HealthTier, type RatioInputs } from "@/lib/ratios";
+import {
+  computeRatios,
+  PERIOD_MONTHS_KEY,
+  scoreTier,
+  type HealthTier,
+  type RatioInputs,
+} from "@/lib/ratios";
 import { salesPerEmployeeHealthy } from "@/lib/market/benchmarks";
 import type { ResolvedMarket } from "@/lib/market/types";
 
@@ -163,6 +169,8 @@ export function flatToRatioInputs(financials: FlatFinancials): RatioInputs {
     if (v == null || v === "") continue;
     base[k] = String(v);
   }
+  const period = financials[PERIOD_MONTHS_KEY];
+  if (period != null && period !== "") base.periodMonths = String(period);
   return base;
 }
 

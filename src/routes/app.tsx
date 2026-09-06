@@ -71,7 +71,14 @@ import { KpiTrendline, pctDelta } from "@/components/kpi-trendline";
 import { BenchmarkBar } from "@/components/benchmark-bar";
 import { AddToPlanButton } from "@/components/add-to-plan-button";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { computeRatios, BUSINESS_TYPE_TO_BENCHMARK } from "@/lib/ratios";
+import {
+  annualiseFinancials,
+  computeRatios,
+  BUSINESS_TYPE_TO_BENCHMARK,
+  PERIOD_MONTH_OPTIONS,
+  PERIOD_MONTHS_KEY,
+  periodMonthsOf,
+} from "@/lib/ratios";
 import { healthFromRatioInputs, healthMapFromRatios, scoreRatio } from "@/lib/health-score";
 import { effectiveCashRunwayWeeks, type SavedCashflowLike } from "@/lib/cash-runway";
 import {
@@ -264,6 +271,8 @@ type Inputs = {
   accumulatedDepreciation: string;
   priorPpeGross: string;
   priorAccumDep: string;
+  /** Months the P&L figures cover (1–12); absent = 12. Not a figure, so not in defaults. */
+  periodMonths?: string;
 };
 
 // All fields start empty — no demo/placeholder data pre-filled.
@@ -2887,33 +2896,36 @@ function Index() {
 
   const n = useMemo(() => {
     const num = (s: string) => (s === "" ? 0 : parseFloat(s) || 0);
+    // Flow figures scaled to 12 months (same rule as computeRatios) so a
+    // quarter of actuals does not read as a small year.
+    const av = annualiseFinancials(v);
     return {
-      netIncome: num(v.netIncome),
-      ebt: num(v.ebt),
-      ebit: num(v.ebit),
-      revenue: num(v.revenue),
-      totalAssets: num(v.totalAssets),
-      equity: num(v.equity),
-      cogs: num(v.cogs),
-      receivables: num(v.receivables),
-      inventory: num(v.inventory),
-      payables: num(v.payables),
-      fixedCosts: num(v.fixedCosts),
-      variableCosts: num(v.variableCosts),
-      top5Revenue: num(v.top5Revenue),
-      laborCost: num(v.laborCost),
-      employees: num(v.employees),
-      operatingCashflow: num(v.operatingCashflow),
-      ebitda: num(v.ebitda),
-      founderHours: num(v.founderHours),
-      priorRevenue: num(v.priorRevenue),
-      currentAssets: num(v.currentAssets),
-      currentLiabilities: num(v.currentLiabilities),
-      capex: num(v.capex),
-      ppeGross: num(v.ppeGross),
-      accumulatedDepreciation: num(v.accumulatedDepreciation),
-      priorPpeGross: num(v.priorPpeGross),
-      priorAccumDep: num(v.priorAccumDep),
+      netIncome: num(av.netIncome),
+      ebt: num(av.ebt),
+      ebit: num(av.ebit),
+      revenue: num(av.revenue),
+      totalAssets: num(av.totalAssets),
+      equity: num(av.equity),
+      cogs: num(av.cogs),
+      receivables: num(av.receivables),
+      inventory: num(av.inventory),
+      payables: num(av.payables),
+      fixedCosts: num(av.fixedCosts),
+      variableCosts: num(av.variableCosts),
+      top5Revenue: num(av.top5Revenue),
+      laborCost: num(av.laborCost),
+      employees: num(av.employees),
+      operatingCashflow: num(av.operatingCashflow),
+      ebitda: num(av.ebitda),
+      founderHours: num(av.founderHours),
+      priorRevenue: num(av.priorRevenue),
+      currentAssets: num(av.currentAssets),
+      currentLiabilities: num(av.currentLiabilities),
+      capex: num(av.capex),
+      ppeGross: num(av.ppeGross),
+      accumulatedDepreciation: num(av.accumulatedDepreciation),
+      priorPpeGross: num(av.priorPpeGross),
+      priorAccumDep: num(av.priorAccumDep),
     };
   }, [v]);
 
@@ -3642,6 +3654,7 @@ function Index() {
                   initialFyStartMonth={
                     operatingProfile?.fyStartMonth ?? boardMarket.fyStartMonthDefault
                   }
+                  figuresReady={hasRealFinancials}
                   onCancel={
                     firstRunStep === "pick-type" ? undefined : () => setShowOnboarding(false)
                   }
@@ -3668,7 +3681,9 @@ function Index() {
                     }
                     setShowOnboarding(false);
                     if (firstRunStep === "pick-type") {
-                      setFirstRunStep("first-data");
+                      // Invited owner whose accountant already loaded figures:
+                      // nothing to bring in — land on the scored board.
+                      setFirstRunStep(hasRealFinancials ? null : "first-data");
                     } else if (profileDialogMode === "complete") {
                       toast.success("Profile complete — score, budget and advice re-tuned");
                     } else {
@@ -4706,6 +4721,8 @@ function Index() {
                           payables: v.payables,
                           inventory: v.inventory,
                           operatingCashflow: v.operatingCashflow,
+                          // Months the P&L covers — without it a quarter seeds as a year.
+                          [PERIOD_MONTHS_KEY]: v[PERIOD_MONTHS_KEY] ?? "",
                         }}
                         onPushedToCash={() => setCashForecastReloadToken((n) => n + 1)}
                       />
@@ -5007,6 +5024,28 @@ function Index() {
                 >
                   {showInputs ? "▲ Hide manual entry" : "▼ Enter figures manually"}
                 </Button>
+                {showInputs && (
+                  <div className="mt-3 flex items-center gap-2">
+                    <Label className="w-36 shrink-0 text-xs text-slate-700 dark:text-slate-400">
+                      Figures cover
+                    </Label>
+                    <select
+                      className="h-7 rounded-md border border-amber-900/15 bg-amber-50/40 px-2 text-xs text-slate-950 dark:border-slate-700 dark:bg-slate-950/60 dark:text-slate-100"
+                      value={String(periodMonthsOf(v))}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setV((s) => ({ ...s, [PERIOD_MONTHS_KEY]: val }));
+                      }}
+                      title="P&L figures are scaled to a 12-month equivalent for ratios and the health score. Balance-sheet figures are never scaled."
+                    >
+                      {PERIOD_MONTH_OPTIONS.map((o) => (
+                        <option key={o.months} value={String(o.months)}>
+                          {o.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
                 {showInputs && (
                   <div className="mt-3 grid gap-x-6 gap-y-2 sm:grid-cols-2">
                     {(

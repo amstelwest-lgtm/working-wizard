@@ -28,6 +28,13 @@ const ACCOUNTANT_CHIPS = [
   "Is the action plan aimed at the right lever?",
 ];
 
+// Studio before any figures exist — questions the widget can answer honestly.
+const ACCOUNTANT_NO_FIGURES_CHIPS = [
+  "What should I upload first for this client, and why?",
+  "How is the health score worked out?",
+  "What does a 3-month bank pack give me versus a P&L?",
+];
+
 // ── Minimal safe markdown → HTML renderer ───────────────────────────────
 // Escapes all HTML first, then converts the subset Claude actually emits:
 // headings, bold, italics, tables, bullet/numbered lists, paragraphs.
@@ -49,10 +56,16 @@ export function renderMarkdown(md) {
   let tableRows = null; // array of arrays
 
   const closeList = () => {
-    if (listType) { out.push(`</${listType}>`); listType = null; }
+    if (listType) {
+      out.push(`</${listType}>`);
+      listType = null;
+    }
   };
   const flushTable = () => {
-    if (!tableRows || tableRows.length === 0) { tableRows = null; return; }
+    if (!tableRows || tableRows.length === 0) {
+      tableRows = null;
+      return;
+    }
     const [head, ...body] = tableRows;
     let html = '<table class="ask-ai-md-table"><thead><tr>';
     html += head.map((c) => `<th>${inlineMd(c)}</th>`).join("");
@@ -71,7 +84,10 @@ export function renderMarkdown(md) {
 
     // Table row?
     if (/^\|.*\|$/.test(trimmed)) {
-      const cells = trimmed.slice(1, -1).split("|").map((c) => c.trim());
+      const cells = trimmed
+        .slice(1, -1)
+        .split("|")
+        .map((c) => c.trim());
       // Separator row (|---|---|) — skip
       if (cells.every((c) => /^:?-{2,}:?$/.test(c) || c === "")) continue;
       closeList();
@@ -81,7 +97,10 @@ export function renderMarkdown(md) {
     }
     flushTable();
 
-    if (trimmed === "") { closeList(); continue; }
+    if (trimmed === "") {
+      closeList();
+      continue;
+    }
 
     const h = trimmed.match(/^(#{1,4})\s+(.*)$/);
     if (h) {
@@ -93,13 +112,21 @@ export function renderMarkdown(md) {
 
     const ul = trimmed.match(/^[-•]\s+(.*)$/);
     if (ul) {
-      if (listType !== "ul") { closeList(); out.push("<ul>"); listType = "ul"; }
+      if (listType !== "ul") {
+        closeList();
+        out.push("<ul>");
+        listType = "ul";
+      }
       out.push(`<li>${inlineMd(ul[1])}</li>`);
       continue;
     }
     const ol = trimmed.match(/^\d+[.)]\s+(.*)$/);
     if (ol) {
-      if (listType !== "ol") { closeList(); out.push("<ol>"); listType = "ol"; }
+      if (listType !== "ol") {
+        closeList();
+        out.push("<ol>");
+        listType = "ol";
+      }
       out.push(`<li>${inlineMd(ol[1])}</li>`);
       continue;
     }
@@ -128,10 +155,15 @@ export function mountAskAi(container, options) {
   const studio = variant === "studio";
   const accountant = audience === "accountant";
   const suggestionChips =
-    chipOverride || (accountant ? ACCOUNTANT_CHIPS : note ? NO_FIGURES_CHIPS : DEFAULT_CHIPS);
-  const heading =
-    headingOverride ||
-    (accountant ? "Ask about this business" : "Ask your numbers");
+    chipOverride ||
+    (note
+      ? accountant
+        ? ACCOUNTANT_NO_FIGURES_CHIPS
+        : NO_FIGURES_CHIPS
+      : accountant
+        ? ACCOUNTANT_CHIPS
+        : DEFAULT_CHIPS);
+  const heading = headingOverride || (accountant ? "Ask about this business" : "Ask your numbers");
   const placeholder =
     placeholderOverride ||
     (accountant
@@ -157,7 +189,10 @@ export function mountAskAi(container, options) {
       trigger.className = "ask-ai-trigger";
       trigger.innerHTML = `<span class="ask-ai-icon">${SPARKLES_SVG}</span>
         <span>${accountant ? "Ask anything about this client…" : "Ask anything about your numbers…"}</span>`;
-      trigger.addEventListener("click", () => { open = true; render(); });
+      trigger.addEventListener("click", () => {
+        open = true;
+        render();
+      });
       widget.appendChild(trigger);
     } else {
       const panel = document.createElement("div");
@@ -228,7 +263,10 @@ export function mountAskAi(container, options) {
       cancelBtn.className = "ask-ai-cancel";
       cancelBtn.textContent = studio ? "Clear" : "Cancel";
       cancelBtn.addEventListener("click", () => {
-        question = ""; answer = ""; answerChips = []; errorMsg = "";
+        question = "";
+        answer = "";
+        answerChips = [];
+        errorMsg = "";
         if (!studio) open = false;
         render();
       });
@@ -327,7 +365,8 @@ export function mountAskAi(container, options) {
 
       const data = await res.json();
 
-      if (res.status === 429) throw new Error(data.error || "Rate limit reached — try again in a moment.");
+      if (res.status === 429)
+        throw new Error(data.error || "Rate limit reached — try again in a moment.");
       if (!res.ok) throw new Error(data.error || `Error ${res.status}`);
 
       answer = data.answer || "No answer returned.";

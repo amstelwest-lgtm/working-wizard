@@ -9,6 +9,7 @@ import { BudgetWorkspace } from "@/components/budget/budget-workspace";
 import { BudgetAdvancedPanel } from "@/components/budget/budget-advanced";
 import type { BudgetActuals, BudgetDocument, UnmappedDriver } from "@/lib/budget.types";
 import { budgetWindowStart, createBudgetDocument } from "@/lib/budget.months";
+import { seedBudgetFromFinancials } from "@/lib/budget.bridges";
 import { normalizeBudgetDocument } from "@/lib/budget.compute";
 import { applyTemplateChange } from "@/lib/budget.model-change";
 import { BUDGET_TEMPLATES } from "@/lib/budget.templates";
@@ -239,18 +240,27 @@ export function BudgetPanel({
       qualification: BudgetQualification;
       fyStartMonth: number;
     }) => {
-      const next = createBudgetDocument({ ...args, market, firstActualsMonth });
+      let next = createBudgetDocument({ ...args, market, firstActualsMonth });
       if (args.qualification.inventoryProfile === "none") {
         next.showInventoryDays = false;
       } else if (args.qualification.inventoryProfile) {
         next.showInventoryDays = true;
       }
+      // Figures already on the board (typed, uploaded, or entered by the
+      // accountant) seed the plan; a template at $0 revenue is not a budget.
+      const hasFigures = Boolean(
+        financials && (parseFloat(financials.revenue ?? "") || parseFloat(financials.cogs ?? "")),
+      );
+      const seeded = hasFigures ? seedBudgetFromFinancials(next, financials!) : null;
+      if (seeded) next = seeded.doc;
       skipAutosave.current = false;
       setDoc(next);
       setUnmapped(null);
-      toast.success(`Budget ready · ${BUDGET_TEMPLATES[args.templateId].label}`);
+      toast.success(`Budget ready · ${BUDGET_TEMPLATES[args.templateId].label}`, {
+        description: seeded?.changes[0],
+      });
     },
-    [market, firstActualsMonth],
+    [market, firstActualsMonth, financials],
   );
 
   // Seed budget from operating profile when none exists yet
