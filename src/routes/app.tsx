@@ -3246,6 +3246,7 @@ function Index() {
     topKey: nextSteps[0]?.key,
     revenue: n.revenue,
     receivables: n.receivables,
+    currency: currencySymbol(boardMarket),
   });
 
   // Auto-clear the globe highlight after 2s and scroll the row into view.
