@@ -16,6 +16,8 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { callClaudeMessages, parseClaudeJson, type ClaudeContentPart } from "@/lib/claude-messages";
 import { bankDraftPrompt, marketInputSchema, resolvePromptMarket } from "@/lib/market";
+import { INLINE_BASE64_MAX } from "@/lib/staged-upload";
+import { resolvePdfBase64 } from "@/lib/staged-upload.server";
 
 export interface BankDraftOpexLine {
   category: string;
@@ -77,29 +79,36 @@ export const draftFinancialsFromBankStatements = createServerFn({ method: "POST"
             z.object({
               fileName: z.string(),
               accountLabel: z.string().max(80).optional(),
-              // Exactly one of base64 (PDF) or text (CSV/TXT) must be provided.
-              // 14M base64 chars ≈ 10 MB per file; aggregate is checked below too.
-              base64: z.string().max(14_000_000).optional(),
+              // Exactly one of storagePath (staged PDF), base64 (small inline
+              // PDF) or text (CSV/TXT). Aggregate size is checked below.
+              storagePath: z.string().max(200).optional(),
+              base64: z.string().max(INLINE_BASE64_MAX).optional(),
               text: z.string().max(2_000_000).optional(),
             }),
           )
           .min(1)
           .max(12),
         market: marketInputSchema,
+        // The caller is also sending this pack to the cash drafter; leave the
+        // staged objects for it and let the browser clean up.
+        retainStaged: z.boolean().optional(),
       })
       .parse(input),
   )
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
     const prompt = bankDraftPrompt(resolvePromptMarket(data.market));
     let totalBytes = 0;
     const content: ClaudeContentPart[] = [];
     for (const f of data.files) {
       const label = f.accountLabel?.trim() || "Bank account";
-      if (f.base64) {
-        totalBytes += Math.ceil((f.base64.length * 3) / 4);
+      if (f.storagePath || f.base64) {
+        const base64 = await resolvePdfBase64(context.supabase.storage, context.userId, f, {
+          retain: data.retainStaged,
+        });
+        totalBytes += Math.ceil((base64.length * 3) / 4);
         content.push({
           type: "document",
-          source: { type: "base64", media_type: "application/pdf", data: f.base64 },
+          source: { type: "base64", media_type: "application/pdf", data: base64 },
         });
         content.push({
           type: "text",

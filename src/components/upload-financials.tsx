@@ -28,16 +28,9 @@ import {
   isSpreadsheetFile,
   isTextFile,
 } from "@/lib/spreadsheet-text";
+import { pdfTransport, unstage, type PdfTransport } from "@/lib/staged-upload.client";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
-
-async function fileToBase64(file: File): Promise<string> {
-  const buf = await file.arrayBuffer();
-  let binary = "";
-  const bytes = new Uint8Array(buf);
-  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-  return btoa(binary);
-}
 
 function fmt(v: Money, formatNumber: (n: number) => string) {
   if (v === null || v === undefined) return "—";
@@ -127,10 +120,14 @@ export function UploadFinancials({ onConfirm }: UploadFinancialsProps) {
       return;
     }
     setStatus("loading");
+    let staged: PdfTransport | null = null;
     try {
       const market = selectionPayload(selection);
-      const res = pdf
-        ? await extract({ data: { pdfBase64: await fileToBase64(file), market } })
+      if (pdf) staged = await pdfTransport(file);
+      const res = staged
+        ? await extract({
+            data: { storagePath: staged.storagePath, pdfBase64: staged.base64, market },
+          })
         : await extract({ data: { text: await fileToText(file), fileName: file.name, market } });
       setResult(res.data);
       setIssues(res.issues);
@@ -139,6 +136,10 @@ export function UploadFinancials({ onConfirm }: UploadFinancialsProps) {
     } catch (e) {
       toast.error((e as Error).message ?? "Extraction failed.");
       setStatus("idle");
+    } finally {
+      // The server deletes the staged object once it has read it; this only
+      // matters if the request never reached the server.
+      await unstage([staged?.storagePath]);
     }
   }
 

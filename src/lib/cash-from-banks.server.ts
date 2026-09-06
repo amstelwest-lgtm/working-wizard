@@ -8,6 +8,8 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { callClaudeMessages, parseClaudeJson, type ClaudeContentPart } from "@/lib/claude-messages";
+import { INLINE_BASE64_MAX } from "@/lib/staged-upload";
+import { resolvePdfBase64 } from "@/lib/staged-upload.server";
 import {
   cashExtractPrompt,
   marketInputSchema,
@@ -136,7 +138,8 @@ function normalizeExtract(
 const fileInputSchema = z.object({
   fileName: z.string(),
   accountLabel: z.string().max(80).optional(),
-  base64: z.string().max(14_000_000).optional(),
+  storagePath: z.string().max(200).optional(),
+  base64: z.string().max(INLINE_BASE64_MAX).optional(),
   text: z.string().max(2_000_000).optional(),
 });
 
@@ -147,21 +150,25 @@ export const draftCashForecastFromBankStatements = createServerFn({ method: "POS
       .object({
         files: z.array(fileInputSchema).min(1).max(MAX_BANK_FILES),
         market: marketInputSchema,
+        retainStaged: z.boolean().optional(),
       })
       .parse(input),
   )
-  .handler(async ({ data }): Promise<CashFromBanksDraftResult> => {
+  .handler(async ({ data, context }): Promise<CashFromBanksDraftResult> => {
     const market = resolvePromptMarket(data.market);
     const prompt = cashExtractPrompt(market);
     let totalBytes = 0;
     const content: ClaudeContentPart[] = [];
     for (const f of data.files) {
       const label = f.accountLabel?.trim() || "Bank account";
-      if (f.base64) {
-        totalBytes += Math.ceil((f.base64.length * 3) / 4);
+      if (f.storagePath || f.base64) {
+        const base64 = await resolvePdfBase64(context.supabase.storage, context.userId, f, {
+          retain: data.retainStaged,
+        });
+        totalBytes += Math.ceil((base64.length * 3) / 4);
         content.push({
           type: "document",
-          source: { type: "base64", media_type: "application/pdf", data: f.base64 },
+          source: { type: "base64", media_type: "application/pdf", data: base64 },
         });
         content.push({
           type: "text",

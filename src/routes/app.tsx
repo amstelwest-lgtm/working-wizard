@@ -194,6 +194,7 @@ import {
   isSpreadsheetFile,
   isTextFile,
 } from "@/lib/spreadsheet-text";
+import { pdfTransport, unstage, type PdfTransport } from "@/lib/staged-upload.client";
 import { QboConnectCard } from "@/components/qbo-connect";
 import { Button } from "@/components/ui/button";
 import { SphereHero } from "@/components/sphere-hero";
@@ -2087,21 +2088,17 @@ function Index() {
         return;
       }
       setUploading(true);
+      let staged: PdfTransport | null = null;
       try {
         let payload: { fileName: string; mimeType?: string; text?: string; base64?: string };
 
         if (isTextFile(file) || isSpreadsheetFile(file)) {
           payload = { fileName: file.name, text: await fileToText(file) };
         } else if (isPdfFile(file)) {
-          const base64 = await new Promise<string>((res, rej) => {
-            const reader = new FileReader();
-            reader.onload = () => res((reader.result as string).split(",")[1]);
-            reader.onerror = () => rej(new Error("Could not read file"));
-            reader.readAsDataURL(file);
-          });
+          staged = await pdfTransport(file);
           const extraction = (await doExtractPdf({
             data: {
-              files: [{ base64, fileName: file.name }],
+              files: [{ ...staged, fileName: file.name }],
               market: selectionPayload(coerceMarketSelection(workspaceMarket)),
             },
           })) as MergedExtractionResult;
@@ -2145,6 +2142,7 @@ function Index() {
       } finally {
         setUploading(false);
         if (uploadRef.current) uploadRef.current.value = "";
+        await unstage([staged?.storagePath]);
       }
     },
     [doExtract, doExtractPdf, workspaceMarket],

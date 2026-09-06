@@ -12,6 +12,8 @@ import { validateFigures, isClean } from "@/lib/validateFinancials";
 import { callClaudeMessages, parseClaudeJson } from "@/lib/claude-messages";
 import { isUsCopy, marketInputSchema, resolvePromptMarket } from "@/lib/market";
 import { assessPortalFigures, assertUsable } from "@/lib/upload-quality";
+import { INLINE_BASE64_MAX } from "@/lib/staged-upload";
+import { resolvePdfBase64 } from "@/lib/staged-upload.server";
 
 const EXTRACTION_PROMPT = `
 You are extracting figures from a South African financial statement PDF for an
@@ -118,27 +120,36 @@ Return ONLY valid JSON matching this shape (no markdown, no prose):
 const MAX_TEXT_CHARS = 1_500_000;
 
 /**
- * Accepts either a PDF (base64) or the text of a spreadsheet / CSV export.
- * Exactly one of `pdfBase64` / `text` must be present.
+ * Accepts a PDF — staged in Storage (`storagePath`) or, for small files,
+ * inline (`pdfBase64`) — or the text of a spreadsheet / CSV export.
+ * Exactly one of `storagePath` / `pdfBase64` / `text` must be present.
  */
 export const extractFinancialsFromPDF = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input) =>
     z
       .object({
-        pdfBase64: z.string().max(45_000_000).optional(),
+        storagePath: z.string().max(200).optional(),
+        pdfBase64: z.string().max(INLINE_BASE64_MAX).optional(),
         mimeType: z.string().optional(),
         text: z.string().max(MAX_TEXT_CHARS).optional(),
         fileName: z.string().max(300).optional(),
         market: marketInputSchema,
       })
-      .refine((v) => Boolean(v.pdfBase64) !== Boolean(v.text), {
-        message: "Send either pdfBase64 or text, not both.",
+      .refine((v) => [v.storagePath, v.pdfBase64, v.text].filter(Boolean).length === 1, {
+        message: "Send exactly one of storagePath, pdfBase64 or text.",
       })
       .parse(input),
   )
-  .handler(async ({ data }) => {
-    const { pdfBase64, mimeType = "application/pdf", text, fileName } = data;
+  .handler(async ({ data, context }) => {
+    const { mimeType = "application/pdf", text, fileName } = data;
+    const pdfBase64 =
+      data.storagePath || data.pdfBase64
+        ? await resolvePdfBase64(context.supabase.storage, context.userId, {
+            base64: data.pdfBase64,
+            storagePath: data.storagePath,
+          })
+        : undefined;
     const market = resolvePromptMarket(data.market);
     const region = isUsCopy(market) ? "United States" : "South African";
     const source = text

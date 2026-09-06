@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/dialog";
 import type { BudgetDocument } from "@/lib/budget.types";
 import { preflightUploadFile } from "@/lib/upload-quality";
+import { pdfTransport, unstage, type PdfTransport } from "@/lib/staged-upload.client";
 import { UploadQualityDisclaimer } from "@/components/upload-quality-disclaimer";
 import { fyMonths, formatMonthLabel } from "@/lib/budget.months";
 import { computeBudgetMonths, fmtBudgetMoney } from "@/lib/budget.compute";
@@ -161,16 +162,12 @@ export function BudgetVariancePanel({ clientId, doc }: { clientId?: string; doc:
       return;
     }
     setUploading(true);
+    let staged: PdfTransport | null = null;
     try {
-      const base64 = await new Promise<string>((res, rej) => {
-        const reader = new FileReader();
-        reader.onload = () => res((reader.result as string).split(",")[1] ?? "");
-        reader.onerror = () => rej(new Error("Could not read file"));
-        reader.readAsDataURL(file);
-      });
+      staged = await pdfTransport(file);
       const extraction = (await doExtractPdf({
         data: {
-          files: [{ base64, fileName: file.name }],
+          files: [{ ...staged, fileName: file.name }],
           market: selectionPayload(selection),
         },
       })) as MergedExtractionResult;
@@ -180,6 +177,7 @@ export function BudgetVariancePanel({ clientId, doc }: { clientId?: string; doc:
     } finally {
       setUploading(false);
       if (fileRef.current) fileRef.current.value = "";
+      await unstage([staged?.storagePath]);
     }
   };
 

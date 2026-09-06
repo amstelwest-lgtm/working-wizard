@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { X, FileText, Loader2, Upload, Info, AlertCircle } from "lucide-react";
 import { useMarket } from "@/contexts/market";
 import { selectionPayload } from "@/lib/market";
+import { pdfTransport, transportPaths, unstage } from "@/lib/staged-upload.client";
 
 type Stage = "idle" | "uploading" | "reading" | "extracting" | "verifying" | "done" | "error";
 
@@ -116,17 +117,10 @@ export function PDFUploadZone({ onComplete, onError }: Props) {
       files.reduce((acc, f) => acc + f.file.size, 0) > 5 * 1024 * 1024 ? 12_000 : 8_000,
     );
 
+    let filePayloads: Array<{ fileName: string; storagePath?: string; base64?: string }> = [];
     try {
-      const filePayloads = await Promise.all(
-        files.map(async (f) => {
-          const base64 = await new Promise<string>((res, rej) => {
-            const reader = new FileReader();
-            reader.onload = () => res((reader.result as string).split(",")[1]);
-            reader.onerror = rej;
-            reader.readAsDataURL(f.file);
-          });
-          return { base64, fileName: f.file.name };
-        }),
+      filePayloads = await Promise.all(
+        files.map(async (f) => ({ fileName: f.file.name, ...(await pdfTransport(f.file)) })),
       );
 
       const extraction = await doExtract({
@@ -147,6 +141,8 @@ export function PDFUploadZone({ onComplete, onError }: Props) {
       setStage("error");
       setErrorMsg(msg);
       onError?.(msg);
+    } finally {
+      await unstage(transportPaths(filePayloads));
     }
   };
 
