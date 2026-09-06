@@ -11,6 +11,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { callClaudeMessages, parseClaudeJson } from "@/lib/claude-messages";
 import { INLINE_BASE64_MAX } from "@/lib/staged-upload";
 import { resolvePdfBase64 } from "@/lib/staged-upload.server";
+import { assertExtractionAllowed } from "@/lib/extraction-rate-limit.server";
 import type {
   RawExtraction,
   MergedExtractionResult,
@@ -238,6 +239,13 @@ export const extractPDFsWithAI = createServerFn({ method: "POST" })
         throw new Error(`"${f.fileName}" exceeds 32 MB. Please compress or split the file.`);
       }
     }
+
+    await assertExtractionAllowed(
+      context.supabase,
+      "owner-pdf",
+      files.length,
+      files.reduce((n, f) => n + Math.ceil((f.base64.length * 3) / 4), 0),
+    );
 
     // Call Claude for each PDF in parallel
     const extractions = await Promise.all(
