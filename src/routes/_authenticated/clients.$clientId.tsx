@@ -28,7 +28,13 @@ import {
 } from "@/lib/market";
 import { PlaybookDrawer } from "@/components/playbook-drawer";
 import type { ExtractionResult } from "@/lib/financialSchema";
-import { computeRatios, scoreTier } from "@/lib/ratios";
+import {
+  computeRatios,
+  PERIOD_MONTH_OPTIONS,
+  PERIOD_MONTHS_KEY,
+  periodMonthsOf,
+  scoreTier,
+} from "@/lib/ratios";
 import type { RatioInputs, HealthTier } from "@/lib/ratios";
 import {
   scoreRatio,
@@ -493,6 +499,21 @@ function ClientView() {
     if (next) setActiveTab(next);
     if (search.note) requestOpenNote(search.note);
   }, [search.note, search.tab, requestOpenNote]);
+  // Landing tab: Ask AI once the client has figures to talk about; before that
+  // the studio opens on Health & Ratios, where the orb reads "no data" and the
+  // Financials grid / upload buttons sit. Decided once per client, after load,
+  // and never over a ?tab= deep link.
+  const landingTabDecidedFor = useRef<string | null>(null);
+  const decideLandingTab = useCallback(
+    (scalars: Record<string, string>) => {
+      if (landingTabDecidedFor.current === clientId) return;
+      landingTabDecidedFor.current = clientId;
+      if (resolveAccountantTab(search.tab)) return;
+      const figures = FIELD_LABELS.some(({ key }) => (scalars[key] ?? "").trim() !== "");
+      setActiveTab(figures ? "ask" : "ratios");
+    },
+    [clientId, search.tab],
+  );
   useEffect(() => {
     track("tab_viewed", {
       tab: activeTab,
@@ -581,7 +602,24 @@ function ClientView() {
     laborCost: financials["laborCost"] ?? "",
     employees: financials["employees"] ?? "",
     founderHours: financials["founderHours"] ?? "",
+    periodMonths: financials[PERIOD_MONTHS_KEY] ?? "",
   };
+  const periodMonths = periodMonthsOf(financials);
+  /** True once any P&L / balance-sheet figure exists — gates the empty-state card and Ask AI note. */
+  const hasFigures = useMemo(
+    () => FIELD_LABELS.some(({ key }) => (financials[key] ?? "").toString().trim() !== ""),
+    [financials],
+  );
+  const jumpToFinancials = useCallback(() => {
+    setActiveTab("ratios");
+    setFinOpen(true);
+    window.setTimeout(() => {
+      document
+        .getElementById("finCollapse")
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+      document.querySelector<HTMLInputElement>("#finCollapse .fin-grid input")?.focus();
+    }, 120);
+  }, []);
   const ratios = computeRatios(ratioInputs);
   const effectiveRunway = effectiveCashRunwayWeeks(
     client?.cash_runway_weeks,
@@ -677,7 +715,12 @@ function ClientView() {
     // Always refresh the client context — submit() reads dataset.clientId at
     // request time, so a stale value would send questions for the wrong client.
     el.dataset.clientId = clientId;
-    if (el.dataset.askAiMounted) return;
+    // Remount once figures land so the pre-figures note disappears (same
+    // pattern as the owner board's useAskAiMount).
+    const wantMode = hasFigures ? "live" : "pre-figures";
+    if (el.dataset.askAiMounted && el.dataset.askAiMode === wantMode) return;
+    el.innerHTML = "";
+    delete el.dataset.askAiMounted;
     // eslint-disable-next-line @typescript-eslint/ban-ts-comment
     // @ts-ignore — plain JS module without type declarations
     import("../../lib/ask-ai.js")
@@ -685,10 +728,14 @@ function ClientView() {
         if (cancelled || typeof mod.mountAskAi !== "function") return;
         el.dataset.clientId = clientId;
         el.dataset.askAiMounted = "1";
+        el.dataset.askAiMode = wantMode;
         mod.mountAskAi(el, {
           endpoint: `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ask-ai`,
           variant: "studio",
           audience: "accountant",
+          note: hasFigures
+            ? null
+            : "Answers get more relevant once this client's figures are in — upload a statement, draft from bank statements, or type them into Financials.",
           getToken: async () => {
             const { data } = await supabase.auth.getSession();
             return data.session?.access_token ?? null;
@@ -701,7 +748,7 @@ function ClientView() {
     return () => {
       cancelled = true;
     };
-  }, [client, clientId, activeTab]);
+  }, [client, clientId, activeTab, hasFigures]);
 
   // Autosave debounce ref
   const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -764,6 +811,7 @@ function ClientView() {
                 debtScheduleRef.current = ds;
                 weeklyInputsRef.current = weeks;
                 productMixRef.current = mix;
+                decideLandingTab(scalars);
               }
             } else if (error2) {
               toast.error(error2.message);
@@ -784,6 +832,7 @@ function ClientView() {
               debtScheduleRef.current = ds;
               weeklyInputsRef.current = weeks;
               productMixRef.current = mix;
+              decideLandingTab(scalars);
             }
           } else {
             toast.error(error.message);
@@ -805,11 +854,13 @@ function ClientView() {
           debtScheduleRef.current = ds;
           weeklyInputsRef.current = weeks;
           productMixRef.current = mix;
+          decideLandingTab(scalars);
         }
       } finally {
         setLoading(false);
       }
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId]);
 
   // Load financial snapshots for variance / prior period
@@ -1604,38 +1655,81 @@ function ClientView() {
               }}
             />
 
-            {/* ===== DELIVERABLES ACTION BAR ===== */}
-            <div className="card hero-card action-bar">
-              <span className="lbl">
-                <b>Deliverables</b> — export, send, or draft for this client
-              </span>
-              <button className="btn gold mini" onClick={handleGenerateReport}>
-                <svg viewBox="0 0 24 24">
-                  <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
-                  <path d="M14 3v6h6" />
-                </svg>
-                Generate report
-              </button>
-              <button className="btn ghost mini" onClick={handleExportPDF}>
-                <svg viewBox="0 0 24 24">
-                  <path d="M12 3v12M7 10l5 5 5-5M5 21h14" />
-                </svg>
-                Export PDF
-              </button>
-              <button className="btn ghost mini" onClick={handleEmailDraft}>
-                <svg viewBox="0 0 24 24">
-                  <rect x="3" y="5" width="18" height="14" rx="2" />
-                  <path d="M3 7l9 6 9-6" />
-                </svg>
-                Email draft
-              </button>
-              <button className="btn ghost mini" onClick={handleWhatsApp}>
-                <svg viewBox="0 0 24 24">
-                  <path d="M21 12a9 9 0 0 1-13.4 7.8L3 21l1.3-4.4A9 9 0 1 1 21 12z" />
-                </svg>
-                WhatsApp
-              </button>
-            </div>
+            {/* ===== FIRST FIGURES — shown on every tab until the client has numbers ===== */}
+            {!hasFigures && (
+              <div className="card hero-card first-figures" id="first-figures-card">
+                <div className="ff-copy">
+                  <p className="kicker">Step 1 · Bring in this client's figures</p>
+                  <h3>Nothing is scored yet</h3>
+                  <p>
+                    The health orb, profit waterfall, cash forecast and Ask AI all wait on the first
+                    numbers.{" "}
+                    {isUsCopy(clientMarket)
+                      ? "Fastest: a P&L and balance sheet as Excel, CSV or PDF. Bank statements also work."
+                      : "Fastest: about 3 months of bank statements for every account. A P&L and balance sheet also work."}
+                  </p>
+                </div>
+                <div className="ff-actions">
+                  {isUsCopy(clientMarket) ? (
+                    <>
+                      <button className="btn gold mini" onClick={() => setUploadOpen(true)}>
+                        Upload P&amp;L / balance sheet
+                      </button>
+                      <button className="btn ghost mini" onClick={() => setShowBankDrafter(true)}>
+                        Draft from bank statements
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button className="btn gold mini" onClick={() => setShowBankDrafter(true)}>
+                        Draft from bank statements
+                      </button>
+                      <button className="btn ghost mini" onClick={() => setUploadOpen(true)}>
+                        Upload P&amp;L / balance sheet
+                      </button>
+                    </>
+                  )}
+                  <button className="btn ghost mini" onClick={jumpToFinancials}>
+                    Type figures by hand
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* ===== DELIVERABLES ACTION BAR — nothing to export before figures ===== */}
+            {hasFigures && (
+              <div className="card hero-card action-bar">
+                <span className="lbl">
+                  <b>Deliverables</b> — export, send, or draft for this client
+                </span>
+                <button className="btn gold mini" onClick={handleGenerateReport}>
+                  <svg viewBox="0 0 24 24">
+                    <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
+                    <path d="M14 3v6h6" />
+                  </svg>
+                  Generate report
+                </button>
+                <button className="btn ghost mini" onClick={handleExportPDF}>
+                  <svg viewBox="0 0 24 24">
+                    <path d="M12 3v12M7 10l5 5 5-5M5 21h14" />
+                  </svg>
+                  Export PDF
+                </button>
+                <button className="btn ghost mini" onClick={handleEmailDraft}>
+                  <svg viewBox="0 0 24 24">
+                    <rect x="3" y="5" width="18" height="14" rx="2" />
+                    <path d="M3 7l9 6 9-6" />
+                  </svg>
+                  Email draft
+                </button>
+                <button className="btn ghost mini" onClick={handleWhatsApp}>
+                  <svg viewBox="0 0 24 24">
+                    <path d="M21 12a9 9 0 0 1-13.4 7.8L3 21l1.3-4.4A9 9 0 1 1 21 12z" />
+                  </svg>
+                  WhatsApp
+                </button>
+              </div>
+            )}
 
             {/* ===== TABS ===== */}
             <div className="tabs">
@@ -1828,10 +1922,29 @@ function ClientView() {
                       style={{
                         display: "flex",
                         gap: 10,
+                        alignItems: "center",
                         justifyContent: "flex-end",
+                        flexWrap: "wrap",
                         marginBottom: 16,
                       }}
                     >
+                      <label
+                        className="fin-period"
+                        title="P&L and cash-flow figures are scaled to a 12-month equivalent for ratios, the health score and the budget seed. Balance-sheet figures are never scaled."
+                      >
+                        <span>Figures cover</span>
+                        <select
+                          value={String(periodMonths)}
+                          onChange={(e) => handleFinancialChange(PERIOD_MONTHS_KEY, e.target.value)}
+                        >
+                          {PERIOD_MONTH_OPTIONS.map((o) => (
+                            <option key={o.months} value={String(o.months)}>
+                              {o.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <span style={{ flex: 1 }} />
                       <button className="btn ghost mini" onClick={handleSaveSnapshot}>
                         Save snapshot
                       </button>
