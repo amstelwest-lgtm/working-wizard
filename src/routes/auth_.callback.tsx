@@ -7,6 +7,7 @@ import {
   consumeGoogleAuthIntent,
   establishSessionFromOAuthCallback,
   googleDisplayName,
+  inferGoogleIntentFromRoles,
   isFreshAuthUser,
 } from "@/lib/google-auth";
 import { notifySignup } from "@/lib/signup-notify";
@@ -14,15 +15,17 @@ import { readVisitorMarket, withMarketRpcFallback } from "@/lib/market";
 import { OPS_UNLOCK_KEY } from "@/lib/owner-ops.functions";
 import { isOpsNext, lighthouseTabFromOpsNext } from "@/lib/client-note-link";
 import { accessTokenFromNext } from "@/lib/practice-access";
+import { listUserFirms } from "@/lib/firm-brand";
 import {
   clearForcePortal,
   forcePortal,
+  resolvePortalRoles,
   resolvePostLoginPath,
   setPortalIntent,
   shouldOpenItInbox,
 } from "@/lib/user-roles";
 
-export const Route = createFileRoute("/auth/callback")({
+export const Route = createFileRoute("/auth_/callback")({
   component: AuthCallbackPage,
   head: () => ({
     meta: [{ title: "Signing in — Milōn" }],
@@ -51,7 +54,17 @@ function AuthCallbackPage() {
         return;
       }
 
-      const { intent, next } = consumeGoogleAuthIntent();
+      const consumed = consumeGoogleAuthIntent();
+      const { next } = consumed;
+      let intent = consumed.intent;
+      if (!intent) {
+        // Nothing survived the round trip (origin hop). Decide from the account.
+        const portal = await resolvePortalRoles(user.id);
+        const firms =
+          portal.hasClientRole || portal.hasPracticeRole ? [] : await listUserFirms(user.id);
+        intent = inferGoogleIntentFromRoles({ ...portal, hasFirm: firms.length > 0 });
+        setPortalIntent(intent);
+      }
       const displayName = googleDisplayName(
         user.user_metadata as Record<string, unknown> | undefined,
         user.email,

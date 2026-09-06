@@ -25,7 +25,7 @@ import { Route as TTokenRouteImport } from './routes/t.$token'
 import { Route as LhUnsubscribeRouteImport } from './routes/lh/unsubscribe'
 import { Route as EmailUnsubscribeRouteImport } from './routes/email/unsubscribe'
 import { Route as AuthVerifiedRouteImport } from './routes/auth_.verified'
-import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
+import { Route as AuthCallbackRouteImport } from './routes/auth_.callback'
 import { Route as ApiTaskEngagedRouteImport } from './routes/api/task-engaged'
 import { Route as ApiMetricsDigestRouteImport } from './routes/api/metrics-digest'
 import { Route as ApiClientErrorRouteImport } from './routes/api/client-error'
@@ -127,9 +127,9 @@ const AuthVerifiedRoute = AuthVerifiedRouteImport.update({
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthCallbackRoute = AuthCallbackRouteImport.update({
-  id: '/callback',
-  path: '/callback',
-  getParentRoute: () => AuthRoute,
+  id: '/auth_/callback',
+  path: '/auth/callback',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const ApiTaskEngagedRoute = ApiTaskEngagedRouteImport.update({
   id: '/api/task-engaged',
@@ -246,7 +246,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/ai': typeof AiRoute
   '/app': typeof AppRoute
-  '/auth': typeof AuthRouteWithChildren
+  '/auth': typeof AuthRoute
   '/faq': typeof FaqRoute
   '/for-accountants': typeof ForAccountantsRoute
   '/for-owners': typeof ForOwnersRoute
@@ -284,7 +284,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/ai': typeof AiRoute
   '/app': typeof AppRoute
-  '/auth': typeof AuthRouteWithChildren
+  '/auth': typeof AuthRoute
   '/faq': typeof FaqRoute
   '/for-accountants': typeof ForAccountantsRoute
   '/for-owners': typeof ForOwnersRoute
@@ -324,7 +324,7 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteWithChildren
   '/ai': typeof AiRoute
   '/app': typeof AppRoute
-  '/auth': typeof AuthRouteWithChildren
+  '/auth': typeof AuthRoute
   '/faq': typeof FaqRoute
   '/for-accountants': typeof ForAccountantsRoute
   '/for-owners': typeof ForOwnersRoute
@@ -339,7 +339,7 @@ export interface FileRoutesById {
   '/api/client-error': typeof ApiClientErrorRoute
   '/api/metrics-digest': typeof ApiMetricsDigestRoute
   '/api/task-engaged': typeof ApiTaskEngagedRoute
-  '/auth/callback': typeof AuthCallbackRoute
+  '/auth_/callback': typeof AuthCallbackRoute
   '/auth_/verified': typeof AuthVerifiedRoute
   '/email/unsubscribe': typeof EmailUnsubscribeRoute
   '/lh/unsubscribe': typeof LhUnsubscribeRoute
@@ -456,7 +456,7 @@ export interface FileRouteTypes {
     | '/api/client-error'
     | '/api/metrics-digest'
     | '/api/task-engaged'
-    | '/auth/callback'
+    | '/auth_/callback'
     | '/auth_/verified'
     | '/email/unsubscribe'
     | '/lh/unsubscribe'
@@ -481,7 +481,7 @@ export interface RootRouteChildren {
   AuthenticatedRoute: typeof AuthenticatedRouteWithChildren
   AiRoute: typeof AiRoute
   AppRoute: typeof AppRoute
-  AuthRoute: typeof AuthRouteWithChildren
+  AuthRoute: typeof AuthRoute
   FaqRoute: typeof FaqRoute
   ForAccountantsRoute: typeof ForAccountantsRoute
   ForOwnersRoute: typeof ForOwnersRoute
@@ -494,6 +494,7 @@ export interface RootRouteChildren {
   ApiClientErrorRoute: typeof ApiClientErrorRoute
   ApiMetricsDigestRoute: typeof ApiMetricsDigestRoute
   ApiTaskEngagedRoute: typeof ApiTaskEngagedRoute
+  AuthCallbackRoute: typeof AuthCallbackRoute
   AuthVerifiedRoute: typeof AuthVerifiedRoute
   EmailUnsubscribeRoute: typeof EmailUnsubscribeRoute
   LhUnsubscribeRoute: typeof LhUnsubscribeRoute
@@ -620,12 +621,12 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthVerifiedRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/auth/callback': {
-      id: '/auth/callback'
-      path: '/callback'
+    '/auth_/callback': {
+      id: '/auth_/callback'
+      path: '/auth/callback'
       fullPath: '/auth/callback'
       preLoaderRoute: typeof AuthCallbackRouteImport
-      parentRoute: typeof AuthRoute
+      parentRoute: typeof rootRouteImport
     }
     '/api/task-engaged': {
       id: '/api/task-engaged'
@@ -798,22 +799,12 @@ const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(
   AuthenticatedRouteChildren,
 )
 
-interface AuthRouteChildren {
-  AuthCallbackRoute: typeof AuthCallbackRoute
-}
-
-const AuthRouteChildren: AuthRouteChildren = {
-  AuthCallbackRoute: AuthCallbackRoute,
-}
-
-const AuthRouteWithChildren = AuthRoute._addFileChildren(AuthRouteChildren)
-
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRoute: AuthenticatedRouteWithChildren,
   AiRoute: AiRoute,
   AppRoute: AppRoute,
-  AuthRoute: AuthRouteWithChildren,
+  AuthRoute: AuthRoute,
   FaqRoute: FaqRoute,
   ForAccountantsRoute: ForAccountantsRoute,
   ForOwnersRoute: ForOwnersRoute,
@@ -826,6 +817,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiClientErrorRoute: ApiClientErrorRoute,
   ApiMetricsDigestRoute: ApiMetricsDigestRoute,
   ApiTaskEngagedRoute: ApiTaskEngagedRoute,
+  AuthCallbackRoute: AuthCallbackRoute,
   AuthVerifiedRoute: AuthVerifiedRoute,
   EmailUnsubscribeRoute: EmailUnsubscribeRoute,
   LhUnsubscribeRoute: LhUnsubscribeRoute,
