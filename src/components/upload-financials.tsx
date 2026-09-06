@@ -1,11 +1,11 @@
 /**
- * UploadFinancials — Drop a financial-statement PDF → Claude extracts →
- * human reviews and corrects → confirm import.
+ * UploadFinancials — Drop a financial statement (PDF, Excel, OpenDocument or
+ * CSV) → Claude extracts → human reviews and corrects → confirm import.
  *
  * Styled with MILŌN's dark/gold design system (Tailwind).
  */
 
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, type DragEvent } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { Upload, Loader2, AlertTriangle, CheckCircle2, FileText, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
@@ -20,6 +20,14 @@ import { UPLOAD_QUALITY_DISCLAIMER, preflightUploadFile } from "@/lib/upload-qua
 import { UploadQualityDisclaimer } from "@/components/upload-quality-disclaimer";
 import { useMarketFormat } from "@/contexts/market";
 import { selectionPayload } from "@/lib/market";
+import {
+  UPLOAD_ACCEPT,
+  UPLOAD_FORMATS_LABEL,
+  fileToText,
+  isPdfFile,
+  isSpreadsheetFile,
+  isTextFile,
+} from "@/lib/spreadsheet-text";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -103,19 +111,27 @@ export function UploadFinancials({ onConfirm }: UploadFinancialsProps) {
   const extract = useServerFn(extractFinancialsFromPDF);
 
   async function handleFile(file: File) {
-    if (file.type !== "application/pdf") {
-      toast.error("Please upload a PDF file.");
+    const pdf = isPdfFile(file);
+    if (!pdf && !isSpreadsheetFile(file) && !isTextFile(file)) {
+      toast.error(`Please upload a ${UPLOAD_FORMATS_LABEL} file.`);
       return;
     }
-    const pre = preflightUploadFile(file);
-    if (pre) {
-      toast.error(pre);
+    if (pdf) {
+      const pre = preflightUploadFile(file);
+      if (pre) {
+        toast.error(pre);
+        return;
+      }
+    } else if (file.size === 0) {
+      toast.error("That file is empty. Please upload the actual statement.");
       return;
     }
     setStatus("loading");
     try {
-      const pdfBase64 = await fileToBase64(file);
-      const res = await extract({ data: { pdfBase64, market: selectionPayload(selection) } });
+      const market = selectionPayload(selection);
+      const res = pdf
+        ? await extract({ data: { pdfBase64: await fileToBase64(file), market } })
+        : await extract({ data: { text: await fileToText(file), fileName: file.name, market } });
       setResult(res.data);
       setIssues(res.issues);
       setAutoSafe(res.autoImportSafe);
@@ -150,12 +166,21 @@ export function UploadFinancials({ onConfirm }: UploadFinancialsProps) {
     result?.current_period.figures.balance_sheet.total_assets,
   ]);
 
+  function onDrop(e: DragEvent<HTMLButtonElement>) {
+    e.preventDefault();
+    if (status === "loading") return;
+    const f = e.dataTransfer.files?.[0];
+    if (f) void handleFile(f);
+  }
+
   // ── idle / loading ──────────────────────────────────────────────────────────
   if (status !== "review") {
     return (
       <div className="space-y-4">
         <button
           onClick={() => inputRef.current?.click()}
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={onDrop}
           disabled={status === "loading"}
           className={`w-full flex flex-col items-center gap-3 rounded-xl border-2 border-dashed px-6 py-12 transition-colors
             ${
@@ -176,9 +201,9 @@ export function UploadFinancials({ onConfirm }: UploadFinancialsProps) {
                 <Upload className="h-6 w-6 text-amber-500" />
               </div>
               <div className="text-center">
-                <p className="text-sm font-medium">Drop a financial statement PDF</p>
+                <p className="text-sm font-medium">Drop a financial statement</p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Income statement + balance sheet — up to 32 MB
+                  Income statement + balance sheet — {UPLOAD_FORMATS_LABEL}, up to 32 MB
                 </p>
                 <p className="text-[11px] text-muted-foreground/80 mt-2 max-w-sm mx-auto">
                   {UPLOAD_QUALITY_DISCLAIMER}
@@ -190,7 +215,7 @@ export function UploadFinancials({ onConfirm }: UploadFinancialsProps) {
         <input
           ref={inputRef}
           type="file"
-          accept="application/pdf"
+          accept={UPLOAD_ACCEPT}
           className="hidden"
           onChange={(e) => {
             const f = e.target.files?.[0];

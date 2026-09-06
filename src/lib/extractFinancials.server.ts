@@ -114,43 +114,69 @@ Return ONLY valid JSON matching this shape (no markdown, no prose):
 }
 `.trim();
 
+/** Plain-text statements (spreadsheet → CSV) are capped well below Claude's context. */
+const MAX_TEXT_CHARS = 1_500_000;
+
+/**
+ * Accepts either a PDF (base64) or the text of a spreadsheet / CSV export.
+ * Exactly one of `pdfBase64` / `text` must be present.
+ */
 export const extractFinancialsFromPDF = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input) =>
     z
       .object({
-        pdfBase64: z.string().max(45_000_000),
+        pdfBase64: z.string().max(45_000_000).optional(),
         mimeType: z.string().optional(),
+        text: z.string().max(MAX_TEXT_CHARS).optional(),
+        fileName: z.string().max(300).optional(),
         market: marketInputSchema,
+      })
+      .refine((v) => Boolean(v.pdfBase64) !== Boolean(v.text), {
+        message: "Send either pdfBase64 or text, not both.",
       })
       .parse(input),
   )
   .handler(async ({ data }) => {
-    const { pdfBase64, mimeType = "application/pdf" } = data;
+    const { pdfBase64, mimeType = "application/pdf", text, fileName } = data;
     const market = resolvePromptMarket(data.market);
-    const prompt = isUsCopy(market)
-      ? EXTRACTION_PROMPT.replace(
-          "South African financial statement PDF",
-          "United States financial statement PDF",
-        )
-      : EXTRACTION_PROMPT;
+    const region = isUsCopy(market) ? "United States" : "South African";
+    const source = text
+      ? "financial statement exported from a spreadsheet (CSV text, one block per sheet)"
+      : "financial statement PDF";
+    const prompt = EXTRACTION_PROMPT.replace(
+      "South African financial statement PDF",
+      `${region} ${source}`,
+    );
 
-    // Size check: base64 inflates ~33%, so actual bytes ≈ base64.length × 0.75
-    const approxBytes = Math.ceil((pdfBase64.length * 3) / 4);
-    if (approxBytes > 32 * 1024 * 1024) {
-      throw new Error(
-        `PDF is too large (${(approxBytes / 1024 / 1024).toFixed(1)} MB). Max 32 MB.`,
-      );
+    if (pdfBase64) {
+      // Size check: base64 inflates ~33%, so actual bytes ≈ base64.length × 0.75
+      const approxBytes = Math.ceil((pdfBase64.length * 3) / 4);
+      if (approxBytes > 32 * 1024 * 1024) {
+        throw new Error(
+          `PDF is too large (${(approxBytes / 1024 / 1024).toFixed(1)} MB). Max 32 MB.`,
+        );
+      }
+    } else if (!text || text.trim().length < 40) {
+      throw new Error("That file has no readable figures in it.");
     }
 
     const raw = await callClaudeMessages({
-      content: [
-        {
-          type: "document",
-          source: { type: "base64", media_type: mimeType, data: pdfBase64 },
-        },
-        { type: "text", text: prompt },
-      ],
+      content: pdfBase64
+        ? [
+            {
+              type: "document",
+              source: { type: "base64", media_type: mimeType, data: pdfBase64 },
+            },
+            { type: "text", text: prompt },
+          ]
+        : [
+            {
+              type: "text",
+              text: `<statement file="${(fileName ?? "statement").replace(/"/g, "'")}">\n${text}\n</statement>`,
+            },
+            { type: "text", text: prompt },
+          ],
       maxTokens: 8192,
       timeoutMs: 90_000,
     });
