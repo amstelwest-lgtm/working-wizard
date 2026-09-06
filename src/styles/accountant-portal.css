@@ -242,8 +242,9 @@ html[data-theme="light"] .accountant-portal .doc{background:linear-gradient(170d
 .accountant-portal .action-bar .lbl{font-size:13px;color:var(--ink-dim);margin-right:auto}
 .accountant-portal .action-bar .lbl b{color:var(--ink)}
 
-/* collapsible */
-.accountant-portal .collapse{overflow:hidden}
+/* collapsible — `collapse` is also a Tailwind utility (visibility:collapse),
+   which was hiding the whole Financials card; pin visibility here. */
+.accountant-portal .collapse{overflow:hidden;visibility:visible}
 .accountant-portal .collapse .c-head{display:flex;align-items:center;gap:14px;padding:20px 26px;cursor:pointer;user-select:none}
 .accountant-portal .collapse .c-head h3{font-size:16px;flex:1}
 .accountant-portal .collapse .c-head .hint{font-size:12px;color:var(--ink-dim)}
