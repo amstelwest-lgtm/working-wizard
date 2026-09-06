@@ -27,7 +27,7 @@ import {
 import { MovementsTrialBalancePanel } from "@/components/movements-trial-balance-panel";
 import { BANK_FILE_ACCEPT, MAX_BANK_FILES, rejectBankFile } from "@/lib/bank-files";
 import { fileToText, isSpreadsheetFile, isTextFile } from "@/lib/spreadsheet-text";
-import { pdfTransport, transportPaths, unstage } from "@/lib/staged-upload.client";
+import { pdfTransport, transportPaths, unstage } from "@/lib/staged-upload-browser";
 import { useMarket } from "@/contexts/market";
 import { selectionPayload } from "@/lib/market";
 

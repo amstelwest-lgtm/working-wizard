@@ -194,7 +194,7 @@ import {
   isSpreadsheetFile,
   isTextFile,
 } from "@/lib/spreadsheet-text";
-import { pdfTransport, unstage, type PdfTransport } from "@/lib/staged-upload.client";
+import { pdfTransport, unstage, type PdfTransport } from "@/lib/staged-upload-browser";
 import { QboConnectCard } from "@/components/qbo-connect";
 import { Button } from "@/components/ui/button";
 import { SphereHero } from "@/components/sphere-hero";

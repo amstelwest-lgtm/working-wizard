@@ -3,7 +3,7 @@
  */
 
 import { fileToText, isPdfFile, isSpreadsheetFile, isTextFile } from "@/lib/spreadsheet-text";
-import { pdfTransport } from "@/lib/staged-upload.client";
+import { pdfTransport } from "@/lib/staged-upload-browser";
 
 export type BankFilePayload = {
   fileName: string;

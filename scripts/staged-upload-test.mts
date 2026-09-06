@@ -13,7 +13,7 @@ import {
   inlineAllowed,
   stagedObjectPath,
 } from "../src/lib/staged-upload";
-import { pdfTransport, stagePdf, unstage } from "../src/lib/staged-upload.client";
+import { pdfTransport, stagePdf, unstage } from "../src/lib/staged-upload-browser";
 import { readStagedPdf, resolvePdfBase64 } from "../src/lib/staged-upload.server";
 
 function assert(cond: unknown, msg: string) {

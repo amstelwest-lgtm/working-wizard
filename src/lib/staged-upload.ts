@@ -4,7 +4,7 @@
  * Large PDFs never travel through the app server as request bodies (Vercel
  * caps those at 4.5 MB). The browser stages the file in a private Storage
  * bucket and hands the server an object path; the server reads it back under
- * the caller's RLS and deletes it. See staged-upload.client.ts and
+ * the caller's RLS and deletes it. See staged-upload-browser.ts and
  * staged-upload.server.ts for the two ends.
  */
 
