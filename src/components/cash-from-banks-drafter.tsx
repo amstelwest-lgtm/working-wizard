@@ -27,6 +27,7 @@ import {
 import { MovementsTrialBalancePanel } from "@/components/movements-trial-balance-panel";
 import { BANK_FILE_ACCEPT, MAX_BANK_FILES, rejectBankFile } from "@/lib/bank-files";
 import { fileToText, isSpreadsheetFile, isTextFile } from "@/lib/spreadsheet-text";
+import { pdfTransport, transportPaths, unstage } from "@/lib/staged-upload.client";
 import { useMarket } from "@/contexts/market";
 import { selectionPayload } from "@/lib/market";
 
@@ -116,19 +117,19 @@ export function CashFromBanksDrafter({
 
   const runDraft = async () => {
     setWorking(true);
+    let payloadFiles: Array<{
+      fileName: string;
+      text?: string;
+      storagePath?: string;
+      base64?: string;
+    }> = [];
     try {
-      const payloadFiles = await Promise.all(
+      payloadFiles = await Promise.all(
         files.map(async (f) => {
           if (isTextFile(f) || isSpreadsheetFile(f)) {
             return { fileName: f.name, text: await fileToText(f) };
           }
-          const base64 = await new Promise<string>((res, rej) => {
-            const reader = new FileReader();
-            reader.onload = () => res((reader.result as string).split(",")[1] ?? "");
-            reader.onerror = () => rej(new Error(`Could not read ${f.name}`));
-            reader.readAsDataURL(f);
-          });
-          return { fileName: f.name, base64 };
+          return { fileName: f.name, ...(await pdfTransport(f)) };
         }),
       );
       const draft = await doDraft({
@@ -143,6 +144,7 @@ export function CashFromBanksDrafter({
       toast.error(`Cash draft failed: ${(e as Error).message}`);
     } finally {
       setWorking(false);
+      await unstage(transportPaths(payloadFiles));
     }
   };
 

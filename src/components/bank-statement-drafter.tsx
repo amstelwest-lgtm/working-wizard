@@ -36,6 +36,7 @@ import {
   type BankFilePayload,
   type BankFileSlot,
 } from "@/lib/bank-files";
+import { transportPaths, unstage } from "@/lib/staged-upload.client";
 import { useMarketFormat } from "@/contexts/market";
 import { selectionPayload } from "@/lib/market";
 import { PERIOD_MONTHS_KEY } from "@/lib/ratios";
@@ -128,16 +129,19 @@ export function BankStatementDrafter({ open, onClose, onApply }: Props) {
   const runDraft = async () => {
     if (slots.length === 0) return;
     setDrafting(true);
-    setDraftProgress("Encoding statements…");
+    setDraftProgress("Uploading statements…");
+    let payloadFiles: BankFilePayload[] = [];
     try {
-      const payloadFiles = await encodeBankFileSlots(slots);
+      payloadFiles = await encodeBankFileSlots(slots);
       setEncodedFiles(payloadFiles);
       setDraftProgress("Drafting P&L and cash movements from the same pack…");
 
+      // Both drafters read the same staged pack, so neither may delete it;
+      // the finally below does, once both have settled.
       const market = selectionPayload(selection);
       const [pnlResult, cashResult] = await Promise.all([
-        doDraftPnL({ data: { files: payloadFiles, market } }),
-        doDraftCash({ data: { files: payloadFiles, market } }),
+        doDraftPnL({ data: { files: payloadFiles, market, retainStaged: true } }),
+        doDraftCash({ data: { files: payloadFiles, market, retainStaged: true } }),
       ]);
 
       setDraft(pnlResult.draft);
@@ -151,6 +155,7 @@ export function BankStatementDrafter({ open, onClose, onApply }: Props) {
     } finally {
       setDrafting(false);
       setDraftProgress("");
+      await unstage(transportPaths(payloadFiles));
     }
   };
 

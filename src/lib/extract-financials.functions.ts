@@ -9,6 +9,8 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { callClaudeMessages, parseClaudeJson } from "@/lib/claude-messages";
+import { INLINE_BASE64_MAX } from "@/lib/staged-upload";
+import { resolvePdfBase64 } from "@/lib/staged-upload.server";
 import type {
   RawExtraction,
   MergedExtractionResult,
@@ -201,10 +203,16 @@ function normaliseExtraction<T extends Pick<RawExtraction, "current_period" | "d
 
 // ─── Server function: AI PDF extraction ───────────────────────────────────────
 
-const PDFFileSchema = z.object({
-  base64: z.string().max(45_000_000),
-  fileName: z.string().max(255),
-});
+// Exactly one of storagePath (staged PDF) or base64 (small inline PDF).
+const PDFFileSchema = z
+  .object({
+    storagePath: z.string().max(200).optional(),
+    base64: z.string().max(INLINE_BASE64_MAX).optional(),
+    fileName: z.string().max(255),
+  })
+  .refine((f) => Boolean(f.storagePath) !== Boolean(f.base64), {
+    message: "Send either storagePath or base64 for each file.",
+  });
 
 export const extractPDFsWithAI = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -216,9 +224,15 @@ export const extractPDFsWithAI = createServerFn({ method: "POST" })
       })
       .parse(input),
   )
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
     const prompt = financialExtractionPrompt(resolvePromptMarket(data.market));
-    for (const f of data.files) {
+    const files = await Promise.all(
+      data.files.map(async (f) => ({
+        fileName: f.fileName,
+        base64: await resolvePdfBase64(context.supabase.storage, context.userId, f),
+      })),
+    );
+    for (const f of files) {
       const sizeBytes = Math.ceil((f.base64.length * 3) / 4);
       if (sizeBytes > 32 * 1024 * 1024) {
         throw new Error(`"${f.fileName}" exceeds 32 MB. Please compress or split the file.`);
@@ -227,7 +241,7 @@ export const extractPDFsWithAI = createServerFn({ method: "POST" })
 
     // Call Claude for each PDF in parallel
     const extractions = await Promise.all(
-      data.files.map(async (f) => ({
+      files.map(async (f) => ({
         raw: await callClaudePDF(f.base64, f.fileName, prompt),
         fileName: f.fileName,
       })),
@@ -379,7 +393,7 @@ async function aiExtractText(
       const val = parsed[k];
       if (typeof val === "number" && isFinite(val)) out[k] = String(Math.round(val * 100) / 100);
       else if (typeof val === "string" && val.trim()) {
-        const n = parseFloat(val.replace(/[^0-9.\-]/g, ""));
+        const n = parseFloat(val.replace(/[^0-9.-]/g, ""));
         if (isFinite(n)) out[k] = String(n);
       }
     }

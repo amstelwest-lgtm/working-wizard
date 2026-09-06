@@ -3,10 +3,14 @@
  */
 
 import { fileToText, isPdfFile, isSpreadsheetFile, isTextFile } from "@/lib/spreadsheet-text";
+import { pdfTransport } from "@/lib/staged-upload.client";
 
 export type BankFilePayload = {
   fileName: string;
   accountLabel?: string;
+  /** PDF staged in Storage — the normal path; the server reads and deletes it. */
+  storagePath?: string;
+  /** Small PDF sent inline, only when staging was unavailable. */
   base64?: string;
   text?: string;
 };
@@ -41,16 +45,11 @@ export async function encodeBankFileSlots(slots: BankFileSlot[]): Promise<BankFi
           text: await fileToText(file),
         };
       }
-      const base64 = await new Promise<string>((res, rej) => {
-        const reader = new FileReader();
-        reader.onload = () => res(((reader.result as string).split(",")[1] ?? "") as string);
-        reader.onerror = () => rej(new Error(`Could not read ${file.name}`));
-        reader.readAsDataURL(file);
-      });
+      const transport = await pdfTransport(file);
       return {
         fileName: file.name,
         accountLabel: accountLabel.trim() || "Bank account",
-        base64,
+        ...transport,
       };
     }),
   );
@@ -59,6 +58,7 @@ export async function encodeBankFileSlots(slots: BankFileSlot[]): Promise<BankFi
 export const bankFilesZodShape = {
   fileName: true,
   accountLabel: true,
+  storagePath: true,
   base64: true,
   text: true,
 } as const;
