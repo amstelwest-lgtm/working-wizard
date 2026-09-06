@@ -1426,10 +1426,15 @@ function ClientView() {
     >
       <FinancialInputsContext.Provider value={financialInputsCtxValue}>
         <div className="accountant-portal">
+          {/* Two honest steps while the client has no figures; the full studio
+              tour runs once a real score exists, so "Start with Ask AI" and
+              the seeded budget are never promised over an empty book. */}
           <WalkthroughWizard
-            variant="accountant-client"
+            key={hasFigures ? "accountant-client" : "accountant-client-empty"}
+            variant={hasFigures ? "accountant-client" : "accountant-client-empty"}
             ready={!loading && !!client && !firstDataOpen && !showBankDrafter && !uploadOpen}
             onTabChange={handleTourTabChange}
+            onFinish={hasFigures ? undefined : () => setFirstDataOpen(true)}
           />
           {/* Ambient background */}
           <div id="atmos">
@@ -2094,7 +2099,7 @@ function ClientView() {
               <span className="eyebrow">Profitability Waterfall</span>
               <p className="sub" style={{ marginBottom: 24 }}>
                 How revenue converts to profit — step by step. Enter figures below or upload a
-                statement PDF.
+                statement (PDF, Excel or CSV).
               </p>
 
               <div
@@ -2180,7 +2185,7 @@ function ClientView() {
                           <svg viewBox="0 0 24 24">
                             <path d="M12 15V3M7 8l5-5 5 5M5 21h14" />
                           </svg>
-                          Upload PDF statement
+                          Upload statement
                         </button>
                       </div>
                     </div>
@@ -2484,9 +2489,10 @@ function ClientView() {
                     marginBottom: 20,
                   }}
                 >
-                  Claude reads the PDF and extracts the income statement and balance sheet. Review
-                  every figure before confirming. The quality of the financial information we
-                  produce depends on the accuracy of the information you upload.
+                  Claude reads the statement — PDF, Excel, OpenDocument or CSV — and extracts the
+                  income statement and balance sheet. Review every figure before confirming. The
+                  quality of the financial information we produce depends on the accuracy of the
+                  information you upload.
                 </p>
                 <UploadFinancials onConfirm={handleConfirmFinancials} />
               </div>
@@ -2498,17 +2504,17 @@ function ClientView() {
             <DialogContent className="border border-slate-800 bg-slate-950 text-slate-50 max-w-md">
               <DialogHeader>
                 <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#d4a550]">
-                  Practice client · Step 1
+                  {client?.name ?? "First client"} · Step 1 of 2
                 </p>
                 <DialogTitle className="text-xl text-slate-100 mt-1">
                   {isUsCopy(clientMarket)
-                    ? "Upload Excel, CSV, or PDF — or bank statements"
+                    ? "Upload a P&L and balance sheet"
                     : "Upload 3 months of bank statements"}
                 </DialogTitle>
                 <DialogDescription className="text-slate-400">
                   {isUsCopy(clientMarket)
-                    ? "Fastest US path for this client: Excel, CSV, or a PDF pack. Bank statements also work. Connect QuickBooks from the financials panel when QBO is configured. Xero is also on the list, not the lead path."
-                    : "Fastest path for this client: drop ~3 months of statements (every bank account). One pack drafts P&L, seeds budget, builds cash forecast, and shows movements in balances — then tour the workspace."}
+                    ? "Fastest path for this client: the latest P&L and balance sheet as Excel, CSV or PDF — Claude reads them, you review every figure, then Health, Profit, Cash, Budget and Ask AI fill in. About 3 months of bank statements work too."
+                    : "Fastest path for this client: about 3 months of statements for every bank account. One pack drafts the P&L, seeds the budget, builds the cash forecast and shows movements in balances — then Health, Profit, Cash and Ask AI fill in."}
                 </DialogDescription>
               </DialogHeader>
               <div className="flex flex-col gap-3 pt-2">
@@ -2523,7 +2529,7 @@ function ClientView() {
                       className="btn gold"
                       style={{ width: "100%", justifyContent: "center" }}
                     >
-                      Upload Excel, CSV, or PDF
+                      Upload P&amp;L / balance sheet (Excel, CSV or PDF)
                     </button>
                     <button
                       type="button"
@@ -2559,17 +2565,28 @@ function ClientView() {
                       className="btn ghost"
                       style={{ width: "100%", justifyContent: "center" }}
                     >
-                      Upload a financial statement instead
+                      Upload a P&amp;L / balance sheet instead (PDF, Excel or CSV)
                     </button>
                   </>
                 )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFirstDataOpen(false);
+                    jumpToFinancials();
+                  }}
+                  className="btn ghost"
+                  style={{ width: "100%", justifyContent: "center" }}
+                >
+                  Type the figures by hand
+                </button>
                 <button
                   type="button"
                   onClick={() => setFirstDataOpen(false)}
                   className="text-xs text-slate-500 hover:text-slate-400 pt-1 text-center"
                   style={{ background: "none", border: "none", cursor: "pointer" }}
                 >
-                  Skip for now — tour the empty board
+                  Skip for now — look around first
                 </button>
               </div>
             </DialogContent>
