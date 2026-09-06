@@ -3654,6 +3654,7 @@ function Index() {
                   initialFyStartMonth={
                     operatingProfile?.fyStartMonth ?? boardMarket.fyStartMonthDefault
                   }
+                  figuresReady={hasRealFinancials}
                   onCancel={
                     firstRunStep === "pick-type" ? undefined : () => setShowOnboarding(false)
                   }
@@ -3680,7 +3681,9 @@ function Index() {
                     }
                     setShowOnboarding(false);
                     if (firstRunStep === "pick-type") {
-                      setFirstRunStep("first-data");
+                      // Invited owner whose accountant already loaded figures:
+                      // nothing to bring in — land on the scored board.
+                      setFirstRunStep(hasRealFinancials ? null : "first-data");
                     } else if (profileDialogMode === "complete") {
                       toast.success("Profile complete — score, budget and advice re-tuned");
                     } else {

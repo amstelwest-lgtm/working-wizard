@@ -196,6 +196,7 @@ export function ProfileFunnel({
   initial,
   initialFyStartMonth,
   mode = "first-run",
+  figuresReady = false,
   onComplete,
   onCancel,
 }: {
@@ -203,6 +204,8 @@ export function ProfileFunnel({
   /** Defaults to the workspace market's financial-year start (US → January, ZA → March). */
   initialFyStartMonth?: number;
   mode?: ProfileFunnelMode;
+  /** Invited owner whose accountant already loaded figures: the score is behind this, not an upload. */
+  figuresReady?: boolean;
   onComplete: (profile: ClientOperatingProfile) => void | Promise<void>;
   onCancel?: () => void;
 }) {
@@ -390,13 +393,17 @@ export function ProfileFunnel({
 
   const headerLabel =
     mode === "first-run"
-      ? "Step 1 of 2 · Business profile"
+      ? figuresReady
+        ? "One step · Business profile"
+        : "Step 1 of 2 · Business profile"
       : mode === "complete"
         ? "Finish your business profile"
         : "Update business profile";
   const introCopy =
     mode === "first-run" && step === 0
-      ? "Four quick questions — tap the closest fit and you move on. They tune your health score, cash forecast, budget and advice. Next, you bring in your figures."
+      ? figuresReady
+        ? "Four quick questions — tap the closest fit and you move on. Your accountant has already loaded your figures, so your health score is waiting right behind this."
+        : "Four quick questions — tap the closest fit and you move on. They tune your health score, cash forecast, budget and advice. Next, you bring in your figures."
       : mode === "complete" && step === 0
         ? "Six more taps. Each one sharpens your score, budget, benchmarks and advice — you can change any of them later."
         : "Examples under each answer help you pick the closest fit — this tunes health scores, cash, budget, benchmarks, and advice.";
