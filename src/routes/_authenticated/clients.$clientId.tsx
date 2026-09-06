@@ -27,6 +27,7 @@ import {
   resolveMarket,
 } from "@/lib/market";
 import { PlaybookDrawer } from "@/components/playbook-drawer";
+import { computeOverviewCaption } from "@/lib/overview-insights";
 import type { ExtractionResult } from "@/lib/financialSchema";
 import {
   computeRatios,
@@ -1863,6 +1864,11 @@ function ClientView() {
                       overallHealth={isFinite(avgHealth) ? avgHealth : NaN}
                       displayStatus={overallHealth.displayStatus}
                       pillars={spherePillars}
+                      caption={computeOverviewCaption({
+                        hasRealFinancials: hasFigures,
+                        avgHealth,
+                        cashHealth: pillarHealths.cash ?? NaN,
+                      })}
                       topPriority={(() => {
                         const worst = Object.entries(pillarHealths)
                           .filter(([, h]) => isFinite(h))
