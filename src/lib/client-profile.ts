@@ -64,6 +64,12 @@ export type ClientOperatingProfile = {
   fyStartMonth: number;
   /** Derived legacy id for MODEL_TUNING / benchmarks */
   businessTypeId: string;
+  /**
+   * "core" — only the four first-run questions were answered; the other six
+   * carry sensible defaults and the board nudges the owner to finish.
+   * Absent / "full" — every question answered (older profiles, retakes).
+   */
+  depth?: "core" | "full";
   confirmedAt: string;
   /** Who last confirmed the profile — owner app or firm/accountant. */
   confirmedBy?: "owner" | "firm";
@@ -174,14 +180,84 @@ export function buildOperatingProfile(input: {
   debtPosition: DebtPosition;
   ownerGoal: OwnerGoal;
   fyStartMonth: number;
+  depth?: "core" | "full";
 }): ClientOperatingProfile {
   const businessTypeId = deriveBusinessTypeId(input);
   return {
     version: 1,
     ...input,
+    depth: input.depth ?? "full",
     primaryPressure: GOAL_TO_PRESSURE[input.ownerGoal],
     businessTypeId,
     confirmedAt: new Date().toISOString(),
+  };
+}
+
+/** Total questions in the funnel and how many the first run asks up front. */
+export const PROFILE_QUESTION_COUNT = 10;
+export const PROFILE_CORE_QUESTION_COUNT = 4;
+
+/** True when the owner answered only the core four and the rest are defaults. */
+export function profileNeedsCompletion(
+  profile: ClientOperatingProfile | null | undefined,
+): profile is ClientOperatingProfile {
+  return profile?.depth === "core";
+}
+
+/**
+ * Defaults for the six deferred questions, inferred from how the business
+ * makes money. Deliberately middle-of-the-road so nothing in the score, cash
+ * forecast or advice leans hard on an answer the owner never gave.
+ */
+export function inferDeferredProfileAnswers(input: {
+  payMotion: BudgetPayMotion;
+  templateId: BudgetTemplateId;
+  suggestSeasonality?: boolean;
+}): {
+  secondaryVolumeUnits: BudgetVolumeUnit[];
+  costShape: BudgetCostShape;
+  seasonality: BudgetSeasonality;
+  inventoryIntensity: InventoryIntensity;
+  customerConcentration: CustomerConcentration;
+  debtPosition: DebtPosition;
+} {
+  const { payMotion, templateId } = input;
+  const payrollHeavy: BudgetTemplateId[] = [
+    "services_hours",
+    "professional_wip",
+    "security_posts",
+    "facilities_sites",
+    "day_labour",
+    "healthcare_visits",
+    "field_jobs",
+  ];
+  const stockHeavy: BudgetTemplateId[] = [
+    "retail_units",
+    "wholesale_units",
+    "manufacturing_units",
+    "fuel_forecourt",
+    "agri_seasonal",
+    "trade_shipment",
+  ];
+  const costShape: BudgetCostShape = payrollHeavy.includes(templateId)
+    ? "payroll_heavy"
+    : payMotion === "goods" || payMotion === "take_rate"
+      ? "variable"
+      : payMotion === "recurring_rights" || templateId === "property_rent"
+        ? "fixed"
+        : "balanced";
+  const inventoryIntensity: InventoryIntensity = stockHeavy.includes(templateId)
+    ? "heavy"
+    : payMotion === "goods" || templateId === "hospitality_covers"
+      ? "light"
+      : "none";
+  return {
+    secondaryVolumeUnits: [],
+    costShape,
+    seasonality: input.suggestSeasonality ? "mild" : "flat",
+    inventoryIntensity,
+    customerConcentration: "moderate",
+    debtPosition: "light",
   };
 }
 
