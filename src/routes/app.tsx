@@ -4719,6 +4719,8 @@ function Index() {
                           payables: v.payables,
                           inventory: v.inventory,
                           operatingCashflow: v.operatingCashflow,
+                          // Months the P&L covers — without it a quarter seeds as a year.
+                          [PERIOD_MONTHS_KEY]: v[PERIOD_MONTHS_KEY] ?? "",
                         }}
                         onPushedToCash={() => setCashForecastReloadToken((n) => n + 1)}
                       />

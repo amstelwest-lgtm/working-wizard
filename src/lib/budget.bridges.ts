@@ -67,8 +67,16 @@ export function seedBudgetFromFinancials(
 
   if (fixedCosts > 0 || laborCost > 0) {
     const peopleMonthly = laborCost > 0 ? laborCost / 12 : (fixedCosts * 0.55) / 12;
+    // Fixed costs on a P&L (total operating expenses, the bank drafter's
+    // total_opex) already include payroll: carve labour out rather than add
+    // it on top, which double-counted people and pushed EBITDA negative.
+    // Labour >= fixed costs means fixed was reported without it.
+    const nonPeopleFixed =
+      laborCost > 0 && laborCost < fixedCosts ? fixedCosts - laborCost : fixedCosts;
     const otherMonthly =
-      fixedCosts > 0 ? Math.max(0, fixedCosts / 12 - (laborCost > 0 ? 0 : peopleMonthly * 0.2)) : 0;
+      fixedCosts > 0
+        ? Math.max(0, nonPeopleFixed / 12 - (laborCost > 0 ? 0 : peopleMonthly * 0.2))
+        : 0;
     next = {
       ...next,
       overheads: next.overheads.map((oh) => {
