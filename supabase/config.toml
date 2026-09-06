@@ -7,6 +7,21 @@ project_id = "jxclnsbsqpixxqlbcapl"
 [auth.email]
 enable_confirmations = false
 
+# Branded auth emails. Hosted projects do not read these from the repo: paste
+# each file into Dashboard → Authentication → Email Templates. The verify
+# banner sends a magic link, so that template is the one every new owner sees.
+[auth.email.template.magic_link]
+subject = "Verify your Milōn email"
+content_path = "./supabase/templates/magic_link.html"
+
+[auth.email.template.recovery]
+subject = "Reset your Milōn password"
+content_path = "./supabase/templates/recovery.html"
+
+[auth.email.template.confirmation]
+subject = "Confirm your Milōn account"
+content_path = "./supabase/templates/confirmation.html"
+
 # Public no-login task links — GET/POST are authorised by the token itself.
 [functions.task-link]
 verify_jwt = false
