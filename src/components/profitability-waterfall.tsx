@@ -7,6 +7,7 @@ import { resolveWaterfallFigures, type WaterfallFallback } from "@/lib/weekly-in
 import { useAccountantProfile } from "@/contexts/accountant-profile";
 import { useAuth } from "@/hooks/use-auth";
 import { useMarketFormat } from "@/contexts/market";
+import { currencySymbol } from "@/lib/market";
 import {
   hashFigures,
   latestSnapshotId,
@@ -236,7 +237,7 @@ export function ProfitabilityWaterfall({
               Profitability Waterfall
             </CardTitle>
             <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">
-              How R1 of revenue becomes profit
+              How {currencySymbol(market)}1 of revenue becomes profit
               {hasWeekly ? " · aggregated weekly data" : " · period inputs"}
             </p>
           </div>

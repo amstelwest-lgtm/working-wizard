@@ -1020,7 +1020,7 @@ export function CashForecastPanel({
               label="Cash runway"
               value={runwayWeeks >= WEEKS ? `${WEEKS}+ wk` : `${runwayWeeks} wk`}
               tone={runwayWeeks < 8 ? "bad" : runwayWeeks < 13 ? "neutral" : "good"}
-              sub={`Above R${(CASH_RUNWAY_THRESHOLD_RAND / 1000).toFixed(0)}k floor`}
+              sub={`Above ${fmtCompact(CASH_RUNWAY_THRESHOLD_RAND)} floor`}
             />
             <Stat
               label="Net cash · next 4 weeks"

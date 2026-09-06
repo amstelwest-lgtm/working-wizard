@@ -103,16 +103,18 @@ function fieldNum(fields: Record<string, unknown>, key: string): number {
 }
 
 /** Period P&L → waterfall fallback. Same residual rules on owner and accountant. */
-export function derivePeriodWaterfallFallback(
-  fields: Record<string, unknown>,
-): WaterfallFallback {
+export function derivePeriodWaterfallFallback(fields: Record<string, unknown>): WaterfallFallback {
   const revenue = fieldNum(fields, "revenue");
   const cogs = fieldNum(fields, "cogs");
   const gross = revenue - cogs;
-  const fixedCosts = fieldPresent(fields, "fixedCosts")
-    ? fieldNum(fields, "fixedCosts")
-    : fieldPresent(fields, "ebit")
-      ? gross - fieldNum(fields, "ebit")
+  // The operating-expense step must reconcile to the EBIT the user typed:
+  // fixedCosts alone omits variable overheads and depreciation, which showed
+  // an operating profit above the client's own P&L. Fall back to fixedCosts
+  // only when EBIT is not provided.
+  const fixedCosts = fieldPresent(fields, "ebit")
+    ? gross - fieldNum(fields, "ebit")
+    : fieldPresent(fields, "fixedCosts")
+      ? fieldNum(fields, "fixedCosts")
       : 0;
   const interest =
     fieldPresent(fields, "ebit") && fieldPresent(fields, "ebt")

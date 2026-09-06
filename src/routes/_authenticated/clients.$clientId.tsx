@@ -20,6 +20,7 @@ import { MarketProvider } from "@/contexts/market";
 import {
   coerceMarketSelection,
   formatDate,
+  formatMoneyCompact,
   isUsCopy,
   localizeCopy,
   parseMarketSelection,
@@ -249,11 +250,19 @@ function bandColor(band: "ok" | "warn" | "risk"): string {
 }
 
 /** Format a raw ratio value to display string */
-function formatRatioValue(name: string, val: number): string {
+function formatRatioValue(
+  name: string,
+  val: number,
+  market?: Parameters<typeof formatMoneyCompact>[1],
+): string {
   if (!Number.isFinite(val)) return "—";
   // Days-based ratios
   if (name.includes("Days") || name.includes("days")) {
     return `${Math.round(val)}d`;
+  }
+  // Revenue per head is money, not a percentage (87 200 / 6 read as 1 453 333%).
+  if (name === "Sales-per-Employee Ratio") {
+    return `${formatMoneyCompact(val, market)} / head`;
   }
   // Multiplier ratios
   if (
@@ -378,15 +387,7 @@ type Client = {
   market?: unknown;
 };
 
-type ActiveTab =
-  | "ask"
-  | "ratios"
-  | "profit"
-  | "cash"
-  | "budget"
-  | "reports"
-  | "plan"
-  | "advisory";
+type ActiveTab = "ask" | "ratios" | "profit" | "cash" | "budget" | "reports" | "plan" | "advisory";
 
 const ACCOUNTANT_TABS: ActiveTab[] = [
   "ask",
@@ -1146,7 +1147,7 @@ function ClientView() {
             current_value: val as number,
             health_score: score,
             health_tier: tier,
-            formatted_value: formatRatioValue(name, val as number),
+            formatted_value: formatRatioValue(name, val as number, clientMarket),
           };
         });
 
@@ -1928,7 +1929,7 @@ function ClientView() {
                       const tier = scoreTier(score);
                       const band = tierToBand(tier);
                       const color = bandColor(band);
-                      const formattedVal = formatRatioValue(name, val as number);
+                      const formattedVal = formatRatioValue(name, val as number, clientMarket);
                       const cat =
                         name.includes("Margin") ||
                         name.includes("Income") ||
