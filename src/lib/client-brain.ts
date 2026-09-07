@@ -1,6 +1,6 @@
 /**
  * Client Brain — typed rows + small parsers for the Summary tab.
- * Structure only: no Claude propose / AI generation.
+ * Propose-from-brain writes proposed_next_steps and draft GAP/competitor stubs.
  */
 
 import type { Json } from "@/integrations/supabase/types";
@@ -115,6 +115,8 @@ export type BrainCompetitor = {
   name: string;
   notes?: string;
   threat?: string;
+  /** Claude stubs are always draft. Sign-off is accountant-only. */
+  status?: GapReportStatus;
 };
 
 export type BusinessMap = {
@@ -237,10 +239,12 @@ export function parseCompetitors(raw: unknown): BrainCompetitor[] {
     const row = item as Record<string, unknown>;
     const name = asTrimmed(row.name);
     if (!name) continue;
+    const status = row.status === "signed_off" || row.status === "draft" ? row.status : undefined;
     out.push({
       name,
       notes: asTrimmed(row.notes),
       threat: asTrimmed(row.threat),
+      status,
     });
   }
   return out;

@@ -29,3 +29,7 @@ verify_jwt = false
 # Admin endpoint — requires a logged-in app user (JWT verified).
 [functions.task-admin]
 verify_jwt = true
+
+# Client Brain propose — accountant JWT; writes proposed_next_steps + draft stubs.
+[functions.brain-propose]
+verify_jwt = true

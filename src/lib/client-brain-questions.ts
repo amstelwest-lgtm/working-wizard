@@ -1,6 +1,6 @@
 /**
  * Catalog + derived outstanding questions for the Client Brain Summary tab.
- * Structure only — does not write rows or call Claude.
+ * Slow drip stamps last_asked_at on one owner|both item per call.
  */
 
 import type { ClientOperatingProfile } from "@/lib/client-profile";
@@ -324,4 +324,72 @@ export function mergeOutstandingQuestions(
     });
   }
   return [...byKey.values()];
+}
+
+export const DRIP_COOLDOWN_DAYS = 14;
+
+export type DripCandidate = {
+  key: string;
+  prompt: string;
+  audience: "owner" | "accountant" | "both";
+  lastAskedAt: string | null;
+  storedId?: string;
+};
+
+export function isWithinDripCooldown(
+  lastAskedAt: string | null,
+  now: Date,
+  days = DRIP_COOLDOWN_DAYS,
+): boolean {
+  if (!lastAskedAt) return false;
+  const t = Date.parse(lastAskedAt);
+  if (!Number.isFinite(t)) return false;
+  return now.getTime() - t < days * 86_400_000;
+}
+
+/** Unanswered owner|both questions, with last_asked_at from stored rows when present. */
+export function buildOwnerDripCandidates(
+  derived: QuestionState[],
+  stored: ClientBrainQuestion[],
+): DripCandidate[] {
+  const storedByKey = new Map(stored.map((row) => [row.question_key, row]));
+  return mergeOutstandingQuestions(derived, stored)
+    .filter((q) => q.audience === "owner" || q.audience === "both")
+    .map((q) => {
+      const row = storedByKey.get(q.key);
+      return {
+        key: q.key,
+        prompt: q.prompt,
+        audience: q.audience,
+        lastAskedAt: row?.last_asked_at ?? null,
+        storedId: row?.id,
+      };
+    });
+}
+
+/** The currently asked drip — unanswered, asked within the cooldown window. */
+export function activeOwnerDrip(
+  candidates: DripCandidate[],
+  now: Date,
+  days = DRIP_COOLDOWN_DAYS,
+): DripCandidate | null {
+  const active = candidates.filter((c) => isWithinDripCooldown(c.lastAskedAt, now, days));
+  if (!active.length) return null;
+  active.sort((a, b) => Date.parse(b.lastAskedAt ?? "") - Date.parse(a.lastAskedAt ?? ""));
+  return active[0] ?? null;
+}
+
+/**
+ * Pick at most one new drip. If one is already active, return null (surface that one).
+ * Prefers never-asked keys; skips keys asked within the cooldown.
+ */
+export function pickNextOwnerDrip(
+  candidates: DripCandidate[],
+  now: Date,
+  days = DRIP_COOLDOWN_DAYS,
+): DripCandidate | null {
+  if (activeOwnerDrip(candidates, now, days)) return null;
+  const eligible = candidates.filter((c) => !isWithinDripCooldown(c.lastAskedAt, now, days));
+  const neverAsked = eligible.filter((c) => !c.lastAskedAt);
+  return (neverAsked[0] ?? eligible[0]) ?? null;
 }
