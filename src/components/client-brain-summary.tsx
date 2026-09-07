@@ -1,11 +1,12 @@
 /**
- * Client Brain Summary tab — read-mostly system-of-record panel.
- * Structure only: no Claude propose / AI generation.
+ * Client Brain Summary tab — system-of-record panel.
+ * Propose from brain drafts next steps + GAP/competitor stubs for sign-off.
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import type { Json } from "@/integrations/supabase/types";
 import { useAuth } from "@/hooks/use-auth";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
 import { useMarketFormat } from "@/contexts/market";
@@ -13,6 +14,13 @@ import { parseOperatingProfile, profileNeedsCompletion } from "@/lib/client-prof
 import { profileIndustryLabel } from "@/lib/profile-signals";
 import { coerceMarketSelection, usState } from "@/lib/market";
 import { useFinancialInputs } from "@/contexts/financial-inputs";
+import { invokeBrainPropose } from "@/lib/brain-propose-client";
+import {
+  asBrainSummaryObject,
+  markCompetitorSignedOff,
+  markGapItemSignedOff,
+} from "@/lib/client-brain-propose";
+import { useBrainDrip } from "@/hooks/use-brain-drip";
 import {
   BUSINESS_MAP_FIELDS,
   artifactKindLabel,
@@ -134,6 +142,7 @@ export function ClientBrainSummary({
   );
 
   const [loading, setLoading] = useState(true);
+  const [queueReady, setQueueReady] = useState(false);
   const [brainSummary, setBrainSummary] = useState<unknown>(null);
   const [brainSummaryUpdatedAt, setBrainSummaryUpdatedAt] = useState<string | null>(null);
   const [budget, setBudget] = useState<unknown>(null);
@@ -149,6 +158,7 @@ export function ClientBrainSummary({
   const [editTitle, setEditTitle] = useState("");
   const [editRationale, setEditRationale] = useState("");
   const [saving, setSaving] = useState(false);
+  const [proposing, setProposing] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -223,6 +233,7 @@ export function ClientBrainSummary({
       isMissingBrainRelation(qRes.error) ? [] : ((qRes.data ?? []) as ClientBrainQuestion[]),
     );
     setLoading(false);
+    setQueueReady(true);
   }, [clientId]);
 
   useEffect(() => {
@@ -244,6 +255,15 @@ export function ClientBrainSummary({
     [...profileQuestions, ...productQuestions],
     storedQuestions,
   );
+  const drip = useBrainDrip({
+    clientId,
+    derived: [...profileQuestions, ...productQuestions],
+    stored: storedQuestions,
+    enabled: queueReady,
+    onStamped: () => {
+      void load();
+    },
+  });
   const latestSnapshot = snapshots[0] ?? null;
   const uploadSnaps = snapshots.filter((s) => s.source === "upload").slice(0, 3);
   const budgetDoc = budget && typeof budget === "object" ? (budget as Record<string, unknown>) : null;
@@ -326,6 +346,69 @@ export function ClientBrainSummary({
     }
   };
 
+  const proposeFromBrain = async () => {
+    setProposing(true);
+    try {
+      const result = await invokeBrainPropose(
+        clientId,
+        outstanding.map((q) => ({ key: q.key, prompt: q.prompt, audience: q.audience })),
+      );
+      const bits: string[] = [];
+      if (result.stepsInserted) bits.push(`${result.stepsInserted} next step${result.stepsInserted === 1 ? "" : "s"}`);
+      if (result.gapDrafts) bits.push(`${result.gapDrafts} GAP draft${result.gapDrafts === 1 ? "" : "s"}`);
+      if (result.competitorDrafts) bits.push(`${result.competitorDrafts} competitor stub${result.competitorDrafts === 1 ? "" : "s"}`);
+      if (result.drip) bits.push("one outstanding question");
+      if (result.skippedReason === "ai_not_configured") {
+        toast.message("AI is not configured. Queued one outstanding question if any.");
+      } else if (bits.length) {
+        toast.success(`Proposed ${bits.join(", ")}.`);
+      } else {
+        toast.message("Nothing new to propose — open steps already cover this, or context is empty.");
+      }
+      await load();
+    } catch (e) {
+      toast.error((e as Error).message || "Could not propose from brain");
+    } finally {
+      setProposing(false);
+    }
+  };
+
+  const saveBrainSummaryBlob = async (blob: Record<string, unknown>) => {
+    const { error } = await supabase
+      .from("clients")
+      .update({
+        brain_summary: blob as Json,
+        brain_summary_updated_at: new Date().toISOString(),
+      })
+      .eq("id", clientId);
+    if (error) throw error;
+    await load();
+  };
+
+  const signOffGap = async (key: string) => {
+    const items = markGapItemSignedOff(gapReport?.items ?? [], key);
+    const blob = asBrainSummaryObject(brainSummary);
+    blob.gap_report = { items, updated_at: new Date().toISOString() };
+    try {
+      await saveBrainSummaryBlob(blob);
+      toast.success("GAP item signed off");
+    } catch (e) {
+      toast.error((e as Error).message || "Could not sign off GAP item");
+    }
+  };
+
+  const signOffCompetitor = async (name: string) => {
+    const items = markCompetitorSignedOff(competitors, name);
+    const blob = asBrainSummaryObject(brainSummary);
+    blob.competitors = items;
+    try {
+      await saveBrainSummaryBlob(blob);
+      toast.success("Competitor signed off");
+    } catch (e) {
+      toast.error((e as Error).message || "Could not sign off competitor");
+    }
+  };
+
   const toggleAssumption = async (draft: DeliverableDraft, itemId: string) => {
     const items = parseAssumptionChecklist(draft.assumption_checklist).map((item) =>
       item.id === itemId ? { ...item, checked: !item.checked } : item,
@@ -354,8 +437,19 @@ export function ClientBrainSummary({
           Summary · {clientName}
         </h2>
         <p className="sub">
-          System of record for this client. Structure only — no AI propose in this slice.
+          System of record. Propose from brain drafts next steps for Approve / Edit / Reject.
+          GAP and competitor stubs stay drafts until you sign them off.
         </p>
+        <div style={{ marginTop: 12 }}>
+          <button
+            type="button"
+            className="btn gold mini"
+            onClick={() => void proposeFromBrain()}
+            disabled={proposing || loading}
+          >
+            {proposing ? "Proposing…" : "Propose from brain"}
+          </button>
+        </div>
       </div>
 
       {loading ? (
@@ -458,7 +552,7 @@ export function ClientBrainSummary({
               </div>
             ) : (
               <p className="sub" style={{ marginTop: 14 }}>
-                No saved brain summary yet. Generation is out of scope for this slice.
+                No saved brain summary yet. Propose from brain can draft one from what is on file.
               </p>
             )}
           </section>
@@ -513,8 +607,8 @@ export function ClientBrainSummary({
                     <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
                       <strong>{item.title}</strong>
                       <span style={{ fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--gold)" }}>
-                        {item.status === "signed_off" ? "Signed off" : item.status === "draft" ? "Draft" : ""}
-                        {item.severity ? `${item.status ? " · " : ""}${item.severity}` : ""}
+                        {item.status === "signed_off" ? "Signed off" : "Draft"}
+                        {item.severity ? ` · ${item.severity}` : ""}
                       </span>
                     </div>
                     {item.detail && (
@@ -522,12 +616,22 @@ export function ClientBrainSummary({
                         {item.detail}
                       </p>
                     )}
+                    {item.status !== "signed_off" && (
+                      <button
+                        type="button"
+                        className="btn ghost mini"
+                        style={{ marginTop: 8 }}
+                        onClick={() => void signOffGap(item.key)}
+                      >
+                        Sign off
+                      </button>
+                    )}
                   </li>
                 ))}
               </ul>
             ) : (
               <p className="sub" style={{ margin: 0 }}>
-                No GAP items yet. Auto-fill is out of scope for this slice.
+                No GAP items yet. Propose from brain may add drafts — never auto-truth.
               </p>
             )}
             {gapReport?.updated_at && (
@@ -544,9 +648,14 @@ export function ClientBrainSummary({
               <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 10 }}>
                 {competitors.map((c) => (
                   <li key={c.name} style={{ borderBottom: "1px solid var(--line-soft)", paddingBottom: 10 }}>
-                    <strong>{c.name}</strong>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+                      <strong>{c.name}</strong>
+                      <span style={{ fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--gold)" }}>
+                        {c.status === "signed_off" ? "Signed off" : "Draft"}
+                      </span>
+                    </div>
                     {c.threat && (
-                      <span style={{ marginLeft: 8, fontSize: 12, color: "var(--ink-dim)" }}>
+                      <span style={{ fontSize: 12, color: "var(--ink-dim)" }}>
                         Threat: {c.threat}
                       </span>
                     )}
@@ -555,12 +664,22 @@ export function ClientBrainSummary({
                         {c.notes}
                       </p>
                     )}
+                    {c.status !== "signed_off" && (
+                      <button
+                        type="button"
+                        className="btn ghost mini"
+                        style={{ marginTop: 8 }}
+                        onClick={() => void signOffCompetitor(c.name)}
+                      >
+                        Sign off
+                      </button>
+                    )}
                   </li>
                 ))}
               </ul>
             ) : (
               <p className="sub" style={{ margin: 0 }}>
-                No competitors recorded.
+                No competitors recorded. Propose from brain may add draft stubs only.
               </p>
             )}
           </section>
@@ -747,7 +866,7 @@ export function ClientBrainSummary({
             <span className="eyebrow">Proposed next steps</span>
             {steps.length === 0 ? (
               <p className="sub" style={{ margin: 0 }}>
-                Queue is empty. Approve / edit / reject will land here once proposals exist.
+                Queue is empty. Use Propose from brain, then Approve / Edit / Reject.
               </p>
             ) : (
               <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 14 }}>
@@ -871,8 +990,27 @@ export function ClientBrainSummary({
           <section className="card pad">
             <span className="eyebrow">Outstanding questions</span>
             <p className="sub" style={{ margin: "0 0 12px" }}>
-              Shared with the owner. Prompt loop is a later slice — this is the queue only.
+              Shared with the owner. One question is dripped at a time — no spam.
             </p>
+            {drip && (
+              <div
+                style={{
+                  border: "1px solid var(--gold)",
+                  borderRadius: 14,
+                  padding: 14,
+                  marginBottom: 14,
+                  background: "color-mix(in srgb, var(--gold) 8%, transparent)",
+                }}
+              >
+                <div style={{ fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--gold)" }}>
+                  Asking now
+                </div>
+                <div style={{ fontSize: 14.5, marginTop: 4 }}>{drip.prompt}</div>
+                <div className="sub" style={{ fontSize: 12, margin: "4px 0 0" }}>
+                  {drip.key}
+                </div>
+              </div>
+            )}
             {outstanding.length === 0 ? (
               <p className="sub" style={{ margin: 0 }}>
                 No outstanding questions.
@@ -897,7 +1035,16 @@ export function ClientBrainSummary({
                         {q.audience !== "both" ? ` · ${q.audience}` : ""}
                       </div>
                     </div>
-                    <StatusDot answered={false} />
+                    <span
+                      style={{
+                        fontSize: 10,
+                        letterSpacing: "0.12em",
+                        textTransform: "uppercase",
+                        color: drip?.key === q.key ? "var(--gold)" : "var(--ink-faint)",
+                      }}
+                    >
+                      {drip?.key === q.key ? "Asking" : "Empty"}
+                    </span>
                   </li>
                 ))}
               </ul>

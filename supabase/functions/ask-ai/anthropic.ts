@@ -17,6 +17,7 @@ export interface ClaudeResponse {
 export async function callClaude(
   system: string,
   user: string,
+  opts?: { maxTokens?: number; temperature?: number },
 ): Promise<ClaudeResponse> {
   const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
   if (!apiKey) {
@@ -37,8 +38,8 @@ export async function callClaude(
       model: MODEL,
       system,
       messages: [{ role: "user", content: user }],
-      temperature: 0.3,
-      max_tokens: 512,
+      temperature: opts?.temperature ?? 0.3,
+      max_tokens: opts?.maxTokens ?? 512,
     }),
   });
 

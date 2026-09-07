@@ -1,5 +1,5 @@
 /**
- * Client Brain Summary slice — schema + tab wiring, no AI propose.
+ * Client Brain Summary slice — propose from brain, draft GAP/competitors, slow drip.
  * Run: pnpm test:client-brain
  */
 import { readFileSync } from "node:fs";
@@ -19,7 +19,17 @@ import {
   mergeOutstandingQuestions,
   operatingProfileQuestionStates,
   productLineQuestionStates,
+  activeOwnerDrip,
+  pickNextOwnerDrip,
+  buildOwnerDripCandidates,
+  DRIP_COOLDOWN_DAYS,
 } from "../src/lib/client-brain-questions";
+import {
+  applyDraftBrainPatches,
+  filterNewProposedSteps,
+  parseClaudeProposePayload,
+  titlesSimilar,
+} from "../src/lib/client-brain-propose";
 import { emptyProductMix } from "../src/lib/product-mix";
 import { emptyWeeklyInputs } from "../src/lib/weekly-inputs";
 import type { ClientOperatingProfile } from "../src/lib/client-profile";
@@ -81,9 +91,15 @@ assert(clientSrc.includes('{ id: "summary", label: "Summary" }'), "Summary tab i
 assert(clientSrc.includes('id="pane-summary"'), "Summary pane exists");
 assert(clientSrc.includes("ClientBrainSummary"), "panel is mounted");
 assert(clientSrc.includes('from "@/components/client-brain-summary"'), "panel imported");
-assert(!clientSrc.includes("proposeBrain"), "no AI propose hook in portal");
-assert(!panelSrc.includes("anthropic"), "panel does not call Claude");
-assert(!panelSrc.includes("ask-ai"), "panel does not generate via Ask AI");
+assert(!clientSrc.includes("proposeBrain"), "propose is not wired in the fat portal");
+assert(!clientSrc.includes("brain-propose"), "propose fetch lives in the Summary panel");
+assert(!clientSrc.includes("Propose from brain"), "Propose trigger is on the Summary panel");
+assert(!panelSrc.includes("anthropic"), "panel does not call Claude directly");
+assert(!panelSrc.includes("ask-ai"), "panel does not generate via Ask AI chat");
+assert(panelSrc.includes("Propose from brain"), "Propose from brain trigger");
+assert(panelSrc.includes("invokeBrainPropose"), "panel invokes brain-propose");
+assert(panelSrc.includes("Asking now"), "drip highlight on outstanding queue");
+assert(panelSrc.includes("Sign off"), "GAP/competitor drafts can be signed off");
 assert(panelSrc.includes("Mini GAP report"), "GAP section");
 assert(panelSrc.includes("Competitors"), "competitors section");
 assert(panelSrc.includes("10 initial questions"), "10-Q status");
@@ -159,5 +175,116 @@ assert(
   mergeOutstandingQuestions([...coreQs, ...mixQs], []).some((q) => q.key === "operating_profile.costShape"),
   "outstanding includes unanswered deferred 10-Q",
 );
+
+assert(titlesSimilar("Call the bank this week", "Call the bank"), "similar titles skip duplicates");
+assert(!titlesSimilar("Renegotiate suppliers", "Call the bank"), "unrelated titles are not similar");
+assert(
+  filterNewProposedSteps(
+    [{ title: "Call the bank", rationale: null, assumptions: [] }],
+    [{ title: "Call the bank this week", status: "proposed" }],
+  ).length === 0,
+  "skip insert when a similar open proposed step exists",
+);
+assert(
+  filterNewProposedSteps(
+    [{ title: "Tighten debtor follow-up", rationale: "Days are high", assumptions: [] }],
+    [{ title: "Call the bank", status: "proposed" }],
+  ).length === 1,
+  "distinct titles still insert",
+);
+assert(
+  filterNewProposedSteps(
+    [
+      { title: "A", rationale: null, assumptions: [] },
+      { title: "B", rationale: null, assumptions: [] },
+    ],
+    [
+      { title: "1", status: "proposed" },
+      { title: "2", status: "proposed" },
+      { title: "3", status: "proposed" },
+      { title: "4", status: "proposed" },
+      { title: "5", status: "proposed" },
+    ],
+  ).length === 0,
+  "do not flood when five open proposed steps exist",
+);
+
+const sneaky = parseClaudeProposePayload(
+  '```json\n{"next_steps":[{"title":"Collect faster"}],"gap_items":[{"title":"Cash gap","status":"signed_off"}],"competitors":[{"name":"Rival","status":"signed_off"}]}\n```',
+);
+assert(sneaky.next_steps[0].title === "Collect faster", "parse fenced JSON");
+assert(sneaky.gap_items[0].status === undefined, "strip model signed_off from GAP");
+assert(sneaky.competitors[0].status === undefined, "strip model signed_off from competitors");
+
+const patched = applyDraftBrainPatches(
+  { gap_report: { items: [{ key: "cash-gap", title: "Cash gap", status: "signed_off" }] } },
+  {
+    gap_items: [
+      { title: "Cash gap", status: "draft" },
+      { key: "margin", title: "Margin squeeze", detail: "Gross margin slipped" },
+    ],
+    competitors: [{ name: "Rival Co", notes: "Price" }],
+  },
+  "2026-09-07T00:00:00.000Z",
+);
+assert(patched.gapAdded === 1, "only the new GAP item is added");
+const gapItems = (patched.blob.gap_report as { items: Array<{ key: string; status?: string }> }).items;
+assert(
+  gapItems.find((i) => i.key === "cash-gap")?.status === "signed_off",
+  "never overwrite a signed-off GAP item",
+);
+assert(
+  gapItems.find((i) => i.key === "margin")?.status === "draft",
+  "Claude GAP stubs are draft",
+);
+assert(
+  (patched.blob.competitors as Array<{ status?: string }>)[0].status === "draft",
+  "Claude competitor stubs are draft",
+);
+
+const now = new Date("2026-09-07T12:00:00.000Z");
+const dripCandidates = buildOwnerDripCandidates(
+  [{ key: "operating_profile.costShape", prompt: "Cost base?", audience: "both", answered: false, answer: null, source: "operating_profile" }],
+  [
+    {
+      id: "q1",
+      client_id: "c1",
+      question_key: "operating_profile.costShape",
+      prompt_text: "Cost base?",
+      status: "unanswered",
+      audience: "both",
+      answer_text: null,
+      answer_json: null,
+      last_asked_at: "2026-09-01T12:00:00.000Z",
+      answered_at: null,
+      answered_by: null,
+      created_at: "2026-08-01T00:00:00.000Z",
+      updated_at: "2026-09-01T12:00:00.000Z",
+    },
+  ],
+);
+assert(activeOwnerDrip(dripCandidates, now, DRIP_COOLDOWN_DAYS)?.key === "operating_profile.costShape", "recent ask is the active drip");
+assert(pickNextOwnerDrip(dripCandidates, now, DRIP_COOLDOWN_DAYS) === null, "do not pick a second drip while one is active");
+const cooled = buildOwnerDripCandidates(
+  [{ key: "operating_profile.costShape", prompt: "Cost base?", audience: "both", answered: false, answer: null, source: "operating_profile" }],
+  [],
+);
+assert(pickNextOwnerDrip(cooled, now)?.key === "operating_profile.costShape", "never-asked key can drip once");
+
+const fnSrc = readFileSync(resolve("supabase/functions/brain-propose/index.ts"), "utf8");
+const logicSrc = readFileSync(resolve("supabase/functions/brain-propose/logic.ts"), "utf8");
+const appSrc = readFileSync(resolve("src/routes/app.tsx"), "utf8");
+assert(fnSrc.includes('from "../ask-ai/anthropic.ts"'), "reuses ask-ai Claude wrapper");
+assert(fnSrc.includes("ask_ai_record_request"), "reuses ask-ai rate limit");
+assert(fnSrc.includes("has_client_access"), "same access check as ask-ai");
+assert(fnSrc.includes('status: "proposed"'), "inserts proposed_next_steps as proposed");
+assert(fnSrc.includes("last_asked_at"), "drip stamps last_asked_at");
+assert(logicSrc.includes('status: "draft"'), "GAP/competitor merges force draft");
+assert(!fnSrc.includes('status: "signed_off"'), "edge function never writes signed_off");
+assert(!fnSrc.toLowerCase().includes("stripe"), "no Stripe");
+assert(!panelSrc.toLowerCase().includes("stripe"), "panel has no Stripe");
+assert(!clientSrc.toLowerCase().includes("stripe"), "portal has no Stripe");
+assert(appSrc.includes("OwnerBrainDrip"), "owner-facing drip shell");
+assert(appSrc.includes('id="ask-ai-overview"'), "owner Ask AI mount unchanged");
 
 console.log("client-brain-summary-test: all assertions passed");
