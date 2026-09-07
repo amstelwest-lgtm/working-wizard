@@ -49,7 +49,8 @@
     "test:google-auth": "vite-node --config scripts/vite-test.config.ts scripts/google-auth-test.mts",
     "test:legal-notices": "vite-node --config scripts/vite-test.config.ts scripts/legal-notices-test.mts",
     "test:market": "vite-node --config scripts/vite-test.config.ts scripts/market-kernel-test.mts",
-    "test:client-brain": "vite-node --config scripts/vite-test.config.ts scripts/client-brain-summary-test.mts"
+    "test:client-brain": "vite-node --config scripts/vite-test.config.ts scripts/client-brain-summary-test.mts",
+    "test:milon-bot": "vite-node --config scripts/vite-test.config.ts scripts/milon-bot-test.mts"
   },
   "dependencies": {
     "@cloudflare/vite-plugin": "^1.25.5",

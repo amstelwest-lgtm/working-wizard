@@ -428,6 +428,47 @@ export type Database = {
         }
         Relationships: []
       }
+      bot_tool_calls: {
+        Row: {
+          args_hash: string | null
+          args_summary: string | null
+          client_id: string
+          created_at: string
+          id: string
+          result_status: string
+          tool: string
+          user_id: string
+        }
+        Insert: {
+          args_hash?: string | null
+          args_summary?: string | null
+          client_id: string
+          created_at?: string
+          id?: string
+          result_status?: string
+          tool: string
+          user_id: string
+        }
+        Update: {
+          args_hash?: string | null
+          args_summary?: string | null
+          client_id?: string
+          created_at?: string
+          id?: string
+          result_status?: string
+          tool?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bot_tool_calls_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       advisory_deliveries: {
         Row: {
           id: string

@@ -112,6 +112,7 @@ import { AdminDashboard } from "@/components/admin-dashboard";
 import { ProfileFunnel, type ProfileFunnelMode } from "@/components/profile/profile-funnel";
 import { ProfileCompletionNote } from "@/components/profile/profile-completion-note";
 import { OwnerBrainDrip } from "@/components/owner-brain-drip";
+import { MilonBotPanel } from "@/components/milon-bot-panel";
 import { SampleBoardBanner } from "@/components/sample-board-banner";
 import { VerifyEmailBanner } from "@/components/verify-email-banner";
 import { SAMPLE_BUSINESS_BLURB, sampleFinancialsFor } from "@/lib/sample-business";
@@ -3984,6 +3985,11 @@ function Index() {
                                 productMix={productMix}
                                 weeklyInputs={weeklyInputs}
                               />
+                              <MilonBotPanel
+                                clientId={effectiveClientId}
+                                audience="owner"
+                                surface="board"
+                              />
                               <div
                                 id="wizard-empty-score"
                                 className="flex w-full flex-col items-center gap-5 rounded-xl border border-dashed border-slate-200 bg-white/60 px-4 py-10 dark:border-slate-700 dark:bg-slate-900/40"
@@ -4137,6 +4143,11 @@ function Index() {
                                 operatingProfile={operatingProfile}
                                 productMix={productMix}
                                 weeklyInputs={weeklyInputs}
+                              />
+                              <MilonBotPanel
+                                clientId={effectiveClientId}
+                                audience="owner"
+                                surface="board"
                               />
                               <div className="relative rounded-xl border border-slate-200/90 bg-white px-3 py-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)] dark:border-white/10 dark:bg-[#0f172a]/40 dark:shadow-none sm:px-5">
                                 <div className="pointer-events-none absolute right-2 top-2 z-20 hidden sm:block sm:right-3 sm:top-3">
