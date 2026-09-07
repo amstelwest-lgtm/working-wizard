@@ -1,5 +1,5 @@
 /**
- * Client Brain Summary slice — propose from brain, draft GAP/competitors, slow drip.
+ * Client Brain Summary slice — propose, deliverable drafts + sign-off, slow drip.
  * Run: pnpm test:client-brain
  */
 import { readFileSync } from "node:fs";
@@ -30,6 +30,19 @@ import {
   parseClaudeProposePayload,
   titlesSimilar,
 } from "../src/lib/client-brain-propose";
+import {
+  assumptionsFromUnknown,
+  bodiesSimilar,
+  bodyWithAssumptionFooter,
+  canDiscard,
+  canMarkReady,
+  canSend,
+  composeDraftBody,
+  filterNewDeliverableDraft,
+  kindToDelivery,
+  parseClaudeDeliverablePayload,
+  parseDraftSubjectBody,
+} from "../src/lib/client-brain-deliverable";
 import { emptyProductMix } from "../src/lib/product-mix";
 import { emptyWeeklyInputs } from "../src/lib/weekly-inputs";
 import type { ClientOperatingProfile } from "../src/lib/client-profile";
@@ -94,10 +107,15 @@ assert(clientSrc.includes('from "@/components/client-brain-summary"'), "panel im
 assert(!clientSrc.includes("proposeBrain"), "propose is not wired in the fat portal");
 assert(!clientSrc.includes("brain-propose"), "propose fetch lives in the Summary panel");
 assert(!clientSrc.includes("Propose from brain"), "Propose trigger is on the Summary panel");
+assert(!clientSrc.includes("Draft advisory from brain"), "Draft advisory trigger is on the Summary panel");
+assert(!clientSrc.includes("brain-deliverable-draft"), "deliverable draft fetch lives in Summary");
 assert(!panelSrc.includes("anthropic"), "panel does not call Claude directly");
 assert(!panelSrc.includes("ask-ai"), "panel does not generate via Ask AI chat");
 assert(panelSrc.includes("Propose from brain"), "Propose from brain trigger");
+assert(panelSrc.includes("Draft advisory from brain"), "Draft advisory from brain trigger");
 assert(panelSrc.includes("invokeBrainPropose"), "panel invokes brain-propose");
+assert(panelSrc.includes("invokeBrainDeliverableDraft"), "panel invokes brain-deliverable-draft");
+assert(panelSrc.includes("ClientBrainDrafts"), "drafts panel is extracted");
 assert(panelSrc.includes("Asking now"), "drip highlight on outstanding queue");
 assert(panelSrc.includes("Sign off"), "GAP/competitor drafts can be signed off");
 assert(panelSrc.includes("Mini GAP report"), "GAP section");
@@ -271,6 +289,61 @@ const cooled = buildOwnerDripCandidates(
 );
 assert(pickNextOwnerDrip(cooled, now)?.key === "operating_profile.costShape", "never-asked key can drip once");
 
+const sneakyDraft = parseClaudeDeliverablePayload(
+  '```json\n{"kind":"client_email","subject":"Cash this month","body":"Collect faster.","assumptions":["Debtor days stay high"],"status":"sent"}\n```',
+);
+assert(sneakyDraft?.kind === "client_email", "parse fenced deliverable JSON");
+assert(sneakyDraft?.subject === "Cash this month", "keep subject");
+assert(sneakyDraft?.body === "Collect faster.", "keep body");
+assert(sneakyDraft?.assumptions.length === 1 && sneakyDraft.assumptions[0].checked === false, "assumptions start unchecked");
+assert(parseClaudeDeliverablePayload('{"kind":"advisory","assumptions":["invented"]}') === null, "empty body is not a draft");
+assert(assumptionsFromUnknown([]).length === 0, "missing assumptions stay empty");
+assert(assumptionsFromUnknown(null).length === 0, "null assumptions stay empty");
+assert(composeDraftBody("Hi", "Body").startsWith("SUBJECT: Hi"), "compose subject prefix");
+assert(parseDraftSubjectBody("SUBJECT: Hi\n\nBody").subject === "Hi", "split subject from body");
+assert(kindToDelivery("meeting_agenda") === "meeting_agenda", "agenda maps to delivery kind");
+assert(kindToDelivery("client_email") === "advisory_draft", "email maps to advisory_draft");
+assert(canMarkReady("draft") && !canMarkReady("ready"), "mark ready only from draft");
+assert(canSend("ready") && !canSend("draft") && !canSend("sent"), "send only from ready");
+assert(canDiscard("draft") && canDiscard("ready") && !canDiscard("sent"), "cannot discard after send");
+assert(bodiesSimilar("Collect the debtors this week", "Collect the debtors"), "similar bodies skip duplicates");
+assert(
+  filterNewDeliverableDraft(
+    { kind: "advisory", subject: null, body: "Collect faster this week", assumptions: [] },
+    [{ kind: "advisory", body: "SUBJECT: x\n\nCollect faster", status: "draft" }],
+  ) === null,
+  "skip insert when a similar open draft exists",
+);
+assert(
+  filterNewDeliverableDraft(
+    { kind: "advisory", subject: null, body: "Renegotiate suppliers", assumptions: [] },
+    [{ kind: "advisory", body: "Collect faster", status: "draft" }],
+  )?.body === "Renegotiate suppliers",
+  "distinct draft bodies still insert",
+);
+assert(
+  filterNewDeliverableDraft(
+    { kind: "advisory", subject: null, body: "A new pack", assumptions: [] },
+    [
+      { kind: "advisory", body: "one", status: "draft" },
+      { kind: "advisory", body: "two", status: "ready" },
+      { kind: "advisory", body: "three", status: "draft" },
+    ],
+  ) === null,
+  "do not flood when three open drafts exist",
+);
+assert(
+  filterNewDeliverableDraft(
+    { kind: "advisory", subject: null, body: "A new pack", assumptions: [] },
+    [{ kind: "advisory", body: "old", status: "sent" }],
+  )?.body === "A new pack",
+  "sent drafts do not block a new pack",
+);
+assert(
+  bodyWithAssumptionFooter("Hello", [{ id: "a-0", text: "Cash is tight", checked: true }]).includes("[x] Cash is tight"),
+  "ledger footer includes ticked assumptions",
+);
+
 const fnSrc = readFileSync(resolve("supabase/functions/brain-propose/index.ts"), "utf8");
 const logicSrc = readFileSync(resolve("supabase/functions/brain-propose/logic.ts"), "utf8");
 const appSrc = readFileSync(resolve("src/routes/app.tsx"), "utf8");
@@ -286,5 +359,28 @@ assert(!panelSrc.toLowerCase().includes("stripe"), "panel has no Stripe");
 assert(!clientSrc.toLowerCase().includes("stripe"), "portal has no Stripe");
 assert(appSrc.includes("OwnerBrainDrip"), "owner-facing drip shell");
 assert(appSrc.includes('id="ask-ai-overview"'), "owner Ask AI mount unchanged");
+
+const draftFnSrc = readFileSync(resolve("supabase/functions/brain-deliverable-draft/index.ts"), "utf8");
+const draftLogicSrc = readFileSync(resolve("supabase/functions/brain-deliverable-draft/logic.ts"), "utf8");
+const draftPanelSrc = readFileSync(resolve("src/components/client-brain-drafts.tsx"), "utf8");
+const configSrc = readFileSync(resolve("supabase/config.toml"), "utf8");
+assert(draftFnSrc.includes('from "../ask-ai/anthropic.ts"'), "deliverable fn reuses ask-ai Claude wrapper");
+assert(draftFnSrc.includes("ask_ai_record_request"), "deliverable fn reuses ask-ai rate limit");
+assert(draftFnSrc.includes("has_client_access"), "deliverable fn uses same access check");
+assert(draftFnSrc.includes('status: "draft"'), "inserts deliverable_drafts as draft");
+assert(draftFnSrc.includes("assumption_checklist"), "writes explicit assumptions list");
+assert(!draftFnSrc.includes('status: "sent"'), "edge function never writes sent");
+assert(!draftFnSrc.includes('status: "ready"'), "edge function never writes ready");
+assert(!draftFnSrc.toLowerCase().includes("stripe"), "deliverable fn has no Stripe");
+assert(draftLogicSrc.includes("similar"), "idempotent similar-open skip");
+assert(configSrc.includes("[functions.brain-deliverable-draft]"), "function is registered");
+assert(draftPanelSrc.includes("Mark ready"), "accountant can mark ready");
+assert(draftPanelSrc.includes("Discard"), "accountant can discard");
+assert(draftPanelSrc.includes("Sign off and log"), "accountant can promote to deliveries");
+assert(draftPanelSrc.includes("recordDelivery"), "reuses advisory ledger");
+assert(draftPanelSrc.includes('status: "sent"'), "send sets status sent");
+assert(draftPanelSrc.includes("advisory_delivery_id"), "send links advisory_delivery_id");
+assert(!draftPanelSrc.includes("clients.$clientId"), "does not rewrite the fat portal");
+assert(!appSrc.toLowerCase().includes("deliverable_drafts"), "owner app is not a drafts workspace");
 
 console.log("client-brain-summary-test: all assertions passed");
