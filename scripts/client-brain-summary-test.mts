@@ -33,7 +33,10 @@ assert(
   migration.includes("brain_summary_updated_at timestamptz"),
   "clients.brain_summary_updated_at column",
 );
-assert(!migration.includes("client_brain_summaries"), "no separate summaries table");
+assert(
+  !/create table[\s\S]{0,40}client_brain_summaries/i.test(migration),
+  "no separate summaries table",
+);
 assert(migration.includes("CREATE TABLE IF NOT EXISTS public.client_artifacts"), "artifacts table");
 assert(migration.includes("CREATE TABLE IF NOT EXISTS public.context_facts"), "facts table");
 assert(

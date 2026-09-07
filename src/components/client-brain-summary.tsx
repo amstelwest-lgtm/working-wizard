@@ -9,8 +9,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
 import { useMarket, useMarketFormat } from "@/contexts/market";
-import { parseOperatingProfile } from "@/lib/client-profile";
-import { profileDisplayRows, profileIndustryLabel, profileNeedsCompletion } from "@/lib/profile-signals";
+import { parseOperatingProfile, profileNeedsCompletion } from "@/lib/client-profile";
+import { profileDisplayRows, profileIndustryLabel } from "@/lib/profile-signals";
 import { coerceMarketSelection, usState } from "@/lib/market";
 import {
   artifactKindLabel,
