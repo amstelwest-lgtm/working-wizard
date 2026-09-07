@@ -8,26 +8,38 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
-import { useMarket, useMarketFormat } from "@/contexts/market";
+import { useMarketFormat } from "@/contexts/market";
 import { parseOperatingProfile, profileNeedsCompletion } from "@/lib/client-profile";
-import { profileDisplayRows, profileIndustryLabel } from "@/lib/profile-signals";
+import { profileIndustryLabel } from "@/lib/profile-signals";
 import { coerceMarketSelection, usState } from "@/lib/market";
+import { useFinancialInputs } from "@/contexts/financial-inputs";
 import {
+  BUSINESS_MAP_FIELDS,
   artifactKindLabel,
   buildNextStepEditDiff,
   draftStatusLabel,
   factSourceLabel,
   isMissingBrainRelation,
+  mergeBusinessMapFromFacts,
   nextStepStatusLabel,
   parseAssumptionChecklist,
   parseBrainSummary,
+  parseBusinessMap,
+  parseCompetitors,
+  parseGapReport,
   serializeAssumptionChecklist,
   type ClientArtifact,
+  type ClientBrainQuestion,
   type ContextFact,
   type DeliverableDraft,
   type NextStepStatus,
   type ProposedNextStep,
 } from "@/lib/client-brain";
+import {
+  mergeOutstandingQuestions,
+  operatingProfileQuestionStates,
+  productLineQuestionStates,
+} from "@/lib/client-brain-questions";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -42,7 +54,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 
-export type BrainSummaryTab = "budget" | "ratios" | "advisory";
+export type BrainSummaryTab = "budget" | "ratios" | "advisory" | "profit";
 
 type SnapshotLite = {
   id: string;
@@ -71,6 +83,21 @@ function formatWhen(iso: string | null | undefined, fmt: (d: Date | string) => s
   return fmt(iso);
 }
 
+function StatusDot({ answered }: { answered: boolean }) {
+  return (
+    <span
+      style={{
+        fontSize: 10,
+        letterSpacing: "0.12em",
+        textTransform: "uppercase",
+        color: answered ? "var(--ok)" : "var(--ink-faint)",
+      }}
+    >
+      {answered ? "Answered" : "Empty"}
+    </span>
+  );
+}
+
 export function ClientBrainSummary({
   clientId,
   clientName,
@@ -90,16 +117,20 @@ export function ClientBrainSummary({
 }) {
   const { user } = useAuth();
   const { profile } = useAccountantProfile();
-  const { market } = useMarket();
   const { dateTime } = useMarketFormat();
+  const { productMix, weeklyInputs } = useFinancialInputs();
 
   const parsedProfile = useMemo(
     () => parseOperatingProfile(operatingProfile),
     [operatingProfile],
   );
-  const profileRows = useMemo(
-    () => (parsedProfile ? profileDisplayRows(parsedProfile, market).slice(0, 8) : []),
-    [parsedProfile, market],
+  const profileQuestions = useMemo(
+    () => operatingProfileQuestionStates(parsedProfile),
+    [parsedProfile],
+  );
+  const productQuestions = useMemo(
+    () => productLineQuestionStates(productMix, weeklyInputs),
+    [productMix, weeklyInputs],
   );
 
   const [loading, setLoading] = useState(true);
@@ -112,6 +143,7 @@ export function ClientBrainSummary({
   const [facts, setFacts] = useState<ContextFact[]>([]);
   const [steps, setSteps] = useState<ProposedNextStep[]>([]);
   const [drafts, setDrafts] = useState<DeliverableDraft[]>([]);
+  const [storedQuestions, setStoredQuestions] = useState<ClientBrainQuestion[]>([]);
   const [dialog, setDialog] = useState<StepDialog>(null);
   const [note, setNote] = useState("");
   const [editTitle, setEditTitle] = useState("");
@@ -120,7 +152,7 @@ export function ClientBrainSummary({
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [clientRes, snapRes, artRes, factRes, stepRes, draftRes] = await Promise.all([
+    const [clientRes, snapRes, artRes, factRes, stepRes, draftRes, qRes] = await Promise.all([
       supabase
         .from("clients")
         .select("brain_summary, brain_summary_updated_at, budget, budget_updated_at")
@@ -157,6 +189,12 @@ export function ClientBrainSummary({
         .eq("client_id", clientId)
         .order("updated_at", { ascending: false })
         .limit(20),
+      supabase
+        .from("client_brain_questions")
+        .select("*")
+        .eq("client_id", clientId)
+        .order("created_at", { ascending: false })
+        .limit(80),
     ]);
 
     if (clientRes.error && !isMissingBrainRelation(clientRes.error)) {
@@ -181,6 +219,9 @@ export function ClientBrainSummary({
     setFacts(isMissingBrainRelation(factRes.error) ? [] : ((factRes.data ?? []) as ContextFact[]));
     setSteps(isMissingBrainRelation(stepRes.error) ? [] : ((stepRes.data ?? []) as ProposedNextStep[]));
     setDrafts(isMissingBrainRelation(draftRes.error) ? [] : ((draftRes.data ?? []) as DeliverableDraft[]));
+    setStoredQuestions(
+      isMissingBrainRelation(qRes.error) ? [] : ((qRes.data ?? []) as ClientBrainQuestion[]),
+    );
     setLoading(false);
   }, [clientId]);
 
@@ -189,6 +230,20 @@ export function ClientBrainSummary({
   }, [load]);
 
   const summary = parseBrainSummary(brainSummary);
+  const gapReport = parseGapReport(brainSummary);
+  const competitors = parseCompetitors(brainSummary);
+  const businessMap = (() => {
+    const merged = mergeBusinessMapFromFacts(parseBusinessMap(brainSummary), facts);
+    if (!merged.seasonality && parsedProfile && parsedProfile.depth !== "core") {
+      const season = profileQuestions.find((q) => q.key === "operating_profile.seasonality");
+      if (season?.answered && season.answer) merged.seasonality = season.answer;
+    }
+    return merged;
+  })();
+  const outstanding = mergeOutstandingQuestions(
+    [...profileQuestions, ...productQuestions],
+    storedQuestions,
+  );
   const latestSnapshot = snapshots[0] ?? null;
   const uploadSnaps = snapshots.filter((s) => s.source === "upload").slice(0, 3);
   const budgetDoc = budget && typeof budget === "object" ? (budget as Record<string, unknown>) : null;
@@ -331,35 +386,50 @@ export function ClientBrainSummary({
                 <span style={{ color: "var(--warn)", fontSize: 12 }}>Core profile only</span>
               )}
             </div>
-            {profileRows.length > 0 ? (
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
-                  gap: 10,
-                }}
-              >
-                {profileRows.map((row) => (
-                  <div key={row.label}>
-                    <div
-                      style={{
-                        fontSize: 10,
-                        letterSpacing: "0.14em",
-                        textTransform: "uppercase",
-                        color: "var(--ink-faint)",
-                      }}
-                    >
-                      {row.label}
-                    </div>
-                    <div style={{ fontSize: 13.5 }}>{row.value}</div>
+            <div
+              style={{
+                fontSize: 12,
+                letterSpacing: "0.1em",
+                textTransform: "uppercase",
+                color: "var(--ink-faint)",
+                marginBottom: 8,
+              }}
+            >
+              10 initial questions
+              {parsedProfile?.depth === "core"
+                ? " · core 4 of 10"
+                : parsedProfile
+                  ? " · full"
+                  : ""}
+            </div>
+            <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 8 }}>
+              {profileQuestions.map((q) => (
+                <li
+                  key={q.key}
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr auto",
+                    gap: 10,
+                    borderBottom: "1px solid var(--line-soft)",
+                    paddingBottom: 8,
+                  }}
+                >
+                  <div>
+                    <div style={{ fontSize: 13.5 }}>{q.prompt}</div>
+                    {q.answered && q.answer ? (
+                      <div className="sub" style={{ fontSize: 12.5, margin: "2px 0 0" }}>
+                        {q.answer}
+                      </div>
+                    ) : (
+                      <div className="sub" style={{ fontSize: 12.5, margin: "2px 0 0" }}>
+                        Empty
+                      </div>
+                    )}
                   </div>
-                ))}
-              </div>
-            ) : (
-              <p className="sub" style={{ margin: 0 }}>
-                No operating profile yet. Run the 10-question funnel from Health &amp; Ratios.
-              </p>
-            )}
+                  <StatusDot answered={q.answered} />
+                </li>
+              ))}
+            </ul>
             {summary ? (
               <div
                 style={{
@@ -393,7 +463,139 @@ export function ClientBrainSummary({
             )}
           </section>
 
-          {/* 2. Artifacts rail */}
+          {/* Product line questions */}
+          <section className="card pad">
+            <span className="eyebrow">Product line questions</span>
+            <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 8 }}>
+              {productQuestions.map((q) => (
+                <li
+                  key={q.key}
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr auto",
+                    gap: 10,
+                    borderBottom: "1px solid var(--line-soft)",
+                    paddingBottom: 8,
+                  }}
+                >
+                  <div>
+                    <div style={{ fontSize: 13.5 }}>{q.prompt}</div>
+                    {q.answered && q.answer ? (
+                      <div className="sub" style={{ fontSize: 12.5, margin: "2px 0 0" }}>
+                        {q.answer}
+                      </div>
+                    ) : (
+                      <div className="sub" style={{ fontSize: 12.5, margin: "2px 0 0" }}>
+                        Empty
+                      </div>
+                    )}
+                  </div>
+                  <StatusDot answered={q.answered} />
+                </li>
+              ))}
+            </ul>
+            {onOpenTab && (
+              <div style={{ marginTop: 12 }}>
+                <button type="button" className="btn ghost mini" onClick={() => onOpenTab("profit")}>
+                  Open Profit
+                </button>
+              </div>
+            )}
+          </section>
+
+          {/* Mini GAP report */}
+          <section className="card pad">
+            <span className="eyebrow">Mini GAP report</span>
+            {gapReport?.items.length ? (
+              <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 10 }}>
+                {gapReport.items.map((item) => (
+                  <li key={item.key} style={{ borderBottom: "1px solid var(--line-soft)", paddingBottom: 10 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+                      <strong>{item.title}</strong>
+                      <span style={{ fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--gold)" }}>
+                        {item.status === "signed_off" ? "Signed off" : item.status === "draft" ? "Draft" : ""}
+                        {item.severity ? `${item.status ? " · " : ""}${item.severity}` : ""}
+                      </span>
+                    </div>
+                    {item.detail && (
+                      <p className="sub" style={{ margin: "4px 0 0" }}>
+                        {item.detail}
+                      </p>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="sub" style={{ margin: 0 }}>
+                No GAP items yet. Auto-fill is out of scope for this slice.
+              </p>
+            )}
+            {gapReport?.updated_at && (
+              <div style={{ fontSize: 12, color: "var(--ink-faint)", marginTop: 8 }}>
+                Updated {formatWhen(gapReport.updated_at, dateTime)}
+              </div>
+            )}
+          </section>
+
+          {/* Competitors */}
+          <section className="card pad">
+            <span className="eyebrow">Competitors</span>
+            {competitors.length > 0 ? (
+              <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 10 }}>
+                {competitors.map((c) => (
+                  <li key={c.name} style={{ borderBottom: "1px solid var(--line-soft)", paddingBottom: 10 }}>
+                    <strong>{c.name}</strong>
+                    {c.threat && (
+                      <span style={{ marginLeft: 8, fontSize: 12, color: "var(--ink-dim)" }}>
+                        Threat: {c.threat}
+                      </span>
+                    )}
+                    {c.notes && (
+                      <p className="sub" style={{ margin: "4px 0 0" }}>
+                        {c.notes}
+                      </p>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="sub" style={{ margin: 0 }}>
+                No competitors recorded.
+              </p>
+            )}
+          </section>
+
+          {/* Business-map extras */}
+          <section className="card pad">
+            <span className="eyebrow">Business map</span>
+            <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 8 }}>
+              {BUSINESS_MAP_FIELDS.map((field) => {
+                const value = businessMap[field.key];
+                return (
+                  <li
+                    key={field.key}
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr auto",
+                      gap: 10,
+                      borderBottom: "1px solid var(--line-soft)",
+                      paddingBottom: 8,
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontSize: 13.5 }}>{field.label}</div>
+                      <div className="sub" style={{ fontSize: 12.5, margin: "2px 0 0" }}>
+                        {value || "Empty"}
+                      </div>
+                    </div>
+                    <StatusDot answered={!!value} />
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+
+          {/* Artifacts rail */}
           <section className="card pad">
             <span className="eyebrow">Artifacts</span>
             <div
@@ -661,6 +863,43 @@ export function ClientBrainSummary({
                     </li>
                   );
                 })}
+              </ul>
+            )}
+          </section>
+
+          {/* Outstanding questions — shared owner + accountant queue */}
+          <section className="card pad">
+            <span className="eyebrow">Outstanding questions</span>
+            <p className="sub" style={{ margin: "0 0 12px" }}>
+              Shared with the owner. Prompt loop is a later slice — this is the queue only.
+            </p>
+            {outstanding.length === 0 ? (
+              <p className="sub" style={{ margin: 0 }}>
+                No outstanding questions.
+              </p>
+            ) : (
+              <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 8 }}>
+                {outstanding.map((q) => (
+                  <li
+                    key={q.key}
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr auto",
+                      gap: 10,
+                      borderBottom: "1px solid var(--line-soft)",
+                      paddingBottom: 8,
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontSize: 13.5 }}>{q.prompt}</div>
+                      <div className="sub" style={{ fontSize: 12, margin: "2px 0 0" }}>
+                        {q.key}
+                        {q.audience !== "both" ? ` · ${q.audience}` : ""}
+                      </div>
+                    </div>
+                    <StatusDot answered={false} />
+                  </li>
+                ))}
               </ul>
             )}
           </section>

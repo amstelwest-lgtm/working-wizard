@@ -914,6 +914,62 @@ export type Database = {
           },
         ]
       }
+      client_brain_questions: {
+        Row: {
+          id: string
+          client_id: string
+          question_key: string
+          prompt_text: string | null
+          status: string
+          audience: string
+          answer_text: string | null
+          answer_json: Json | null
+          last_asked_at: string | null
+          answered_at: string | null
+          answered_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          client_id: string
+          question_key: string
+          prompt_text?: string | null
+          status?: string
+          audience?: string
+          answer_text?: string | null
+          answer_json?: Json | null
+          last_asked_at?: string | null
+          answered_at?: string | null
+          answered_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          client_id?: string
+          question_key?: string
+          prompt_text?: string | null
+          status?: string
+          audience?: string
+          answer_text?: string | null
+          answer_json?: Json | null
+          last_asked_at?: string | null
+          answered_at?: string | null
+          answered_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_brain_questions_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       clients: {
         Row: {
           business_type: string | null

@@ -96,6 +96,64 @@ export type BrainSummaryBlob = {
   bullets?: string[];
 };
 
+export type GapReportStatus = "draft" | "signed_off";
+
+export type GapReportItem = {
+  key: string;
+  title: string;
+  detail?: string;
+  severity?: string;
+  status?: GapReportStatus;
+};
+
+export type GapReport = {
+  items: GapReportItem[];
+  updated_at?: string;
+};
+
+export type BrainCompetitor = {
+  name: string;
+  notes?: string;
+  threat?: string;
+};
+
+export type BusinessMap = {
+  customers_channels?: string;
+  pricing_model?: string;
+  team_size?: string;
+  key_systems?: string;
+  regulatory?: string;
+  seasonality?: string;
+};
+
+export const BUSINESS_MAP_FIELDS = [
+  { key: "customers_channels", label: "Customers / channels" },
+  { key: "pricing_model", label: "Pricing model" },
+  { key: "team_size", label: "Team size" },
+  { key: "key_systems", label: "Key systems" },
+  { key: "regulatory", label: "Regulatory" },
+  { key: "seasonality", label: "Seasonality" },
+] as const;
+
+export type BrainQuestionStatus = "unanswered" | "answered" | "skipped";
+export type BrainQuestionAudience = "owner" | "accountant" | "both";
+
+export type ClientBrainQuestion = {
+  id: string;
+  client_id: string;
+  question_key: string;
+  prompt_text: string | null;
+  status: BrainQuestionStatus;
+  audience: BrainQuestionAudience;
+  answer_text: string | null;
+  answer_json: Json | null;
+  last_asked_at: string | null;
+  answered_at: string | null;
+  answered_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type AssumptionItem = {
   id: string;
   text: string;
@@ -134,6 +192,101 @@ export function parseBrainSummary(raw: unknown): BrainSummaryBlob | null {
     : undefined;
   if (!headline && !body && !bullets?.length) return null;
   return { headline, body, bullets };
+}
+
+function asTrimmed(raw: unknown): string | undefined {
+  return typeof raw === "string" && raw.trim() ? raw.trim() : undefined;
+}
+
+export function parseGapReport(raw: unknown): GapReport | null {
+  if (!raw || typeof raw !== "object") return null;
+  const o = raw as Record<string, unknown>;
+  const src = o.gap_report && typeof o.gap_report === "object" ? (o.gap_report as Record<string, unknown>) : o;
+  const list = Array.isArray(src.items) ? src.items : Array.isArray(o.items) ? o.items : null;
+  if (!list) return null;
+  const items: GapReportItem[] = [];
+  for (const item of list) {
+    if (!item || typeof item !== "object") continue;
+    const row = item as Record<string, unknown>;
+    const title = asTrimmed(row.title);
+    if (!title) continue;
+    const status = row.status === "signed_off" || row.status === "draft" ? row.status : undefined;
+    items.push({
+      key: asTrimmed(row.key) ?? `gap-${items.length}`,
+      title,
+      detail: asTrimmed(row.detail),
+      severity: asTrimmed(row.severity),
+      status,
+    });
+  }
+  if (!items.length) return null;
+  return { items, updated_at: asTrimmed(src.updated_at) };
+}
+
+export function parseCompetitors(raw: unknown): BrainCompetitor[] {
+  if (!raw || typeof raw !== "object") return [];
+  const o = raw as Record<string, unknown>;
+  const list = Array.isArray(o.competitors) ? o.competitors : [];
+  const out: BrainCompetitor[] = [];
+  for (const item of list) {
+    if (typeof item === "string" && item.trim()) {
+      out.push({ name: item.trim() });
+      continue;
+    }
+    if (!item || typeof item !== "object") continue;
+    const row = item as Record<string, unknown>;
+    const name = asTrimmed(row.name);
+    if (!name) continue;
+    out.push({
+      name,
+      notes: asTrimmed(row.notes),
+      threat: asTrimmed(row.threat),
+    });
+  }
+  return out;
+}
+
+export function parseBusinessMap(raw: unknown): BusinessMap {
+  if (!raw || typeof raw !== "object") return {};
+  const o = raw as Record<string, unknown>;
+  const src =
+    o.business_map && typeof o.business_map === "object" && !Array.isArray(o.business_map)
+      ? (o.business_map as Record<string, unknown>)
+      : o;
+  const map: BusinessMap = {};
+  for (const { key } of BUSINESS_MAP_FIELDS) {
+    const value = asTrimmed(src[key]);
+    if (value) map[key] = value;
+  }
+  return map;
+}
+
+const FACT_CATEGORY_TO_MAP: Record<string, keyof BusinessMap> = {
+  customers: "customers_channels",
+  channels: "customers_channels",
+  customers_channels: "customers_channels",
+  pricing: "pricing_model",
+  pricing_model: "pricing_model",
+  team: "team_size",
+  team_size: "team_size",
+  systems: "key_systems",
+  key_systems: "key_systems",
+  regulatory: "regulatory",
+  regulation: "regulatory",
+  seasonality: "seasonality",
+};
+
+/** Fill empty business-map slots from context_facts categories. Never invents text. */
+export function mergeBusinessMapFromFacts(map: BusinessMap, facts: ContextFact[]): BusinessMap {
+  const next = { ...map };
+  for (const fact of facts) {
+    const cat = (fact.category ?? "").trim().toLowerCase().replace(/\s+/g, "_");
+    const key = FACT_CATEGORY_TO_MAP[cat];
+    if (!key || next[key]) continue;
+    const text = fact.fact_text.trim();
+    if (text) next[key] = text;
+  }
+  return next;
 }
 
 export function parseAssumptionChecklist(raw: unknown): AssumptionItem[] {

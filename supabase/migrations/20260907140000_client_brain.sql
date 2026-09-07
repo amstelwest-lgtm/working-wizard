@@ -8,7 +8,7 @@ ALTER TABLE public.clients
   ADD COLUMN IF NOT EXISTS brain_summary_updated_at timestamptz;
 
 COMMENT ON COLUMN public.clients.brain_summary IS
-  'Read-mostly client-brain summary blob {headline, body, bullets}. Written by a later propose step — not this migration.';
+  'Client-brain blob: {headline, body, bullets, gap_report, competitors, business_map}. Written by a later propose step — not this migration.';
 COMMENT ON COLUMN public.clients.brain_summary_updated_at IS
   'Last time clients.brain_summary was saved.';
 
@@ -225,3 +225,59 @@ DROP POLICY IF EXISTS "drafts delete by access" ON public.deliverable_drafts;
 CREATE POLICY "drafts delete by access"
   ON public.deliverable_drafts FOR DELETE TO authenticated
   USING (public.has_client_access(auth.uid(), client_id));
+
+-- ── client_brain_questions (shared owner + accountant queue) ──────────────────
+-- Schema only. No Claude prompt loop in this migration.
+
+CREATE TABLE IF NOT EXISTS public.client_brain_questions (
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  client_id     uuid NOT NULL REFERENCES public.clients(id) ON DELETE CASCADE,
+  question_key  text NOT NULL,
+  prompt_text   text,
+  status        text NOT NULL DEFAULT 'unanswered'
+                  CHECK (status IN ('unanswered', 'answered', 'skipped')),
+  audience      text NOT NULL DEFAULT 'both'
+                  CHECK (audience IN ('owner', 'accountant', 'both')),
+  answer_text   text,
+  answer_json   jsonb,
+  last_asked_at timestamptz,
+  answered_at   timestamptz,
+  answered_by   uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+  created_at    timestamptz NOT NULL DEFAULT now(),
+  updated_at    timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (client_id, question_key)
+);
+
+CREATE INDEX IF NOT EXISTS client_brain_questions_client_idx
+  ON public.client_brain_questions (client_id, status, created_at DESC);
+
+DROP TRIGGER IF EXISTS client_brain_questions_touch_updated_at ON public.client_brain_questions;
+CREATE TRIGGER client_brain_questions_touch_updated_at
+  BEFORE UPDATE ON public.client_brain_questions
+  FOR EACH ROW EXECUTE FUNCTION public.touch_row_updated_at();
+
+ALTER TABLE public.client_brain_questions ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "brain questions read by access" ON public.client_brain_questions;
+CREATE POLICY "brain questions read by access"
+  ON public.client_brain_questions FOR SELECT TO authenticated
+  USING (public.has_client_access(auth.uid(), client_id));
+
+DROP POLICY IF EXISTS "brain questions insert by access" ON public.client_brain_questions;
+CREATE POLICY "brain questions insert by access"
+  ON public.client_brain_questions FOR INSERT TO authenticated
+  WITH CHECK (public.has_client_access(auth.uid(), client_id));
+
+DROP POLICY IF EXISTS "brain questions update by access" ON public.client_brain_questions;
+CREATE POLICY "brain questions update by access"
+  ON public.client_brain_questions FOR UPDATE TO authenticated
+  USING (public.has_client_access(auth.uid(), client_id))
+  WITH CHECK (public.has_client_access(auth.uid(), client_id));
+
+DROP POLICY IF EXISTS "brain questions delete by access" ON public.client_brain_questions;
+CREATE POLICY "brain questions delete by access"
+  ON public.client_brain_questions FOR DELETE TO authenticated
+  USING (public.has_client_access(auth.uid(), client_id));
+
+COMMENT ON TABLE public.client_brain_questions IS
+  'Shared outstanding-question queue for owner and accountant. Claude prompt loop is a later PR.';
