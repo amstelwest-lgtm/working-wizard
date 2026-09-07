@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
 import { notifySignup } from "@/lib/signup-notify";
-import { adminSignUp } from "@/lib/auth.functions";
+import { adminSignUp, acceptOwnerInvite } from "@/lib/auth.functions";
 import { previewOwnerInvite } from "@/lib/invite-tokens.functions";
 import { OPS_UNLOCK_KEY, unlockOwnerOps } from "@/lib/owner-ops.functions";
 import { registerLighthouseTrialVisit } from "@/lib/lighthouse.functions";
@@ -28,6 +28,7 @@ import {
 // Inline so landing paint doesn't wait on a second stylesheet round-trip
 // (external app CSS can still load; these rules win for landing selectors).
 import landingCss from "../styles/landing.css?inline";
+import { pendingInviteTokenFromSearch } from "@/lib/invite-handoff";
 import { SHARE_DESCRIPTION, SHARE_TITLE } from "@/lib/share-copy";
 
 export const Route = createFileRoute("/")({
@@ -55,11 +56,7 @@ const LANDING_THEME_KEY = "milon.landing.theme";
 /** Invite claim links: `/?invite=<token>&mode=signup`. */
 function pendingInviteTokenFromUrl(): string | null {
   if (typeof window === "undefined") return null;
-  const params = new URLSearchParams(window.location.search);
-  const inv = params.get("invite");
-  const mode = params.get("mode");
-  if (inv && mode === "signup") return inv;
-  return null;
+  return pendingInviteTokenFromSearch(window.location.search);
 }
 
 function applyLandingTheme(theme: "light" | "dark") {
@@ -102,6 +99,7 @@ function LandingPage() {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const doAdminSignUp = useServerFn(adminSignUp);
+  const doAcceptOwnerInvite = useServerFn(acceptOwnerInvite);
   const doPreviewInvite = useServerFn(previewOwnerInvite);
   const doUnlockOps = useServerFn(unlockOwnerOps);
   const doTrialVisit = useServerFn(registerLighthouseTrialVisit);
@@ -155,6 +153,11 @@ function LandingPage() {
       if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
     }, 400);
   }, [doPreviewInvite]);
+
+  useEffect(() => {
+    if (!inviteClientId || !user?.email) return;
+    setRegEmail((prev) => prev || user.email || "");
+  }, [inviteClientId, user?.email]);
 
   /* ── sign-in modal state ── */
   const [signinOpen, setSigninOpen] = useState(false);
@@ -804,10 +807,13 @@ function LandingPage() {
         throw error;
       }
       setSiUnconfirmed(false);
-      const { waitForAuthSession, clearInviteQueryFromUrl } = await import("@/lib/invite-handoff");
+      const {
+        waitForAuthSession,
+        stashInviteHandoff,
+        clearInviteQueryFromUrl,
+      } = await import("@/lib/invite-handoff");
       await waitForAuthSession();
-      clearInviteQueryFromUrl();
-      setInviteClientId(null);
+      const pendingInvite = inviteClientId || pendingInviteTokenFromUrl();
       setSigninOpen(false);
       let goOps = false;
       try {
@@ -819,22 +825,48 @@ function LandingPage() {
       // after a successful Lighthouse unlock.
       if (goOps) {
         void navigate({ to: "/ops", replace: true });
-      } else {
-        const { data: auth } = await supabase.auth.getUser();
-        const uid = auth.user?.id;
-        if (uid) {
-          try {
-            const { resolvePostLoginPath, forcePortal } = await import("@/lib/user-roles");
-            forcePortal("owner");
-            const path = await resolvePostLoginPath(uid);
-            void navigate({ to: path, replace: true });
-          } catch (err) {
-            console.warn("[landing] post-login path failed:", err);
-            void navigate({ to: "/app", replace: true });
-          }
-        } else {
+        return;
+      }
+      if (pendingInvite) {
+        const { forcePortal } = await import("@/lib/user-roles");
+        forcePortal("owner");
+        if (inviteNeedsCode && !regClientCode.trim()) {
+          toast.message("Signed in. Enter the client code from your invite email, then accept.");
+          document.getElementById("register")?.scrollIntoView({ behavior: "smooth", block: "start" });
+          return;
+        }
+        try {
+          const accepted = (await doAcceptOwnerInvite({
+            data: {
+              inviteClientId: pendingInvite,
+              inviteClientCode: regClientCode.trim() || null,
+            },
+          })) as { clientId?: string } | undefined;
+          stashInviteHandoff(accepted?.clientId ?? null);
+          clearInviteQueryFromUrl();
+          setInviteClientId(null);
+          toast.success("Welcome — opening your workspace.");
+          await navigate({ to: "/app", replace: true });
+        } catch (err) {
+          toast.error(err instanceof Error ? err.message : "Could not accept the invite.");
+          document.getElementById("register")?.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+        return;
+      }
+      const { data: auth } = await supabase.auth.getUser();
+      const uid = auth.user?.id;
+      if (uid) {
+        try {
+          const { resolvePostLoginPath, forcePortal } = await import("@/lib/user-roles");
+          forcePortal("owner");
+          const path = await resolvePostLoginPath(uid);
+          void navigate({ to: path, replace: true });
+        } catch (err) {
+          console.warn("[landing] post-login path failed:", err);
           void navigate({ to: "/app", replace: true });
         }
+      } else {
+        void navigate({ to: "/app", replace: true });
       }
     } catch (err: unknown) {
       setSiError(err instanceof Error ? err.message : "Sign in failed");
@@ -902,13 +934,15 @@ function LandingPage() {
   /* ── register handler ── */
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!regPassword || regPassword.length < 6) {
-      toast.error("Password must be at least 6 characters.");
-      return;
-    }
 
-    // ── Invite flow: use adminSignUp so the server writes the correct role ──
+    // ── Invite flow: create a user, or attach an existing signed-in account ──
     if (inviteClientId) {
+      const sameAccount =
+        Boolean(user) && user?.email?.toLowerCase() === regEmail.trim().toLowerCase();
+      if (!sameAccount && (!regPassword || regPassword.length < 6)) {
+        toast.error("Password must be at least 6 characters.");
+        return;
+      }
       if (inviteNeedsCode && !regClientCode.trim()) {
         toast.error("Enter the client code from your invite email (MLN-XXXXXX).");
         return;
@@ -931,8 +965,8 @@ function LandingPage() {
         }
 
         let clientId: string | null = null;
-        const sameAccount =
-          user?.email?.toLowerCase() === regEmail.trim().toLowerCase() && Boolean(user);
+        let needsExistingAccept = sameAccount;
+
         if (!sameAccount) {
           try {
             const created = (await doAdminSignUp({
@@ -949,16 +983,36 @@ function LandingPage() {
           } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : String(err);
             if (!isEmailAlreadyRegistered(msg)) throw err;
-            // Account already exists from a previous attempt — sign in below.
+            needsExistingAccept = true;
           }
         }
 
-        const { error: siErr } = await supabase.auth.signInWithPassword({
-          email: regEmail,
-          password: regPassword,
-        });
-        if (siErr) throw siErr;
-        await waitForAuthSession();
+        if (!sameAccount) {
+          const { error: siErr } = await supabase.auth.signInWithPassword({
+            email: regEmail,
+            password: regPassword,
+          });
+          if (siErr) {
+            if (needsExistingAccept && /invalid login credentials/i.test(siErr.message)) {
+              throw new Error(
+                "This email already has a Milōn account. Sign in with your existing password to accept the invite.",
+              );
+            }
+            throw siErr;
+          }
+          await waitForAuthSession();
+        }
+
+        if (needsExistingAccept) {
+          const accepted = (await doAcceptOwnerInvite({
+            data: {
+              inviteClientId,
+              inviteClientCode: regClientCode.trim() || null,
+            },
+          })) as { clientId?: string } | undefined;
+          clientId = accepted?.clientId ?? clientId;
+        }
+
         stashInviteHandoff(clientId);
         clearInviteQueryFromUrl();
         setInviteClientId(null);
@@ -969,6 +1023,11 @@ function LandingPage() {
       } finally {
         setRegBusy(false);
       }
+      return;
+    }
+
+    if (!regPassword || regPassword.length < 6) {
+      toast.error("Password must be at least 6 characters.");
       return;
     }
 
@@ -1494,6 +1553,16 @@ function LandingPage() {
                   intent="owner"
                   tone="landing"
                   disabled={siBusy}
+                  ownerInvite={
+                    inviteClientId
+                      ? { token: inviteClientId, clientCode: regClientCode.trim() || null }
+                      : undefined
+                  }
+                  next={
+                    inviteClientId
+                      ? `/?invite=${encodeURIComponent(inviteClientId)}&mode=signup`
+                      : undefined
+                  }
                   onError={(msg) => setSiError(msg)}
                 />
                 <AuthDivider />
@@ -2663,7 +2732,7 @@ function LandingPage() {
                       }}
                     >
                       You've been invited to your business workspace on MILŌN. Create your account
-                      to take ownership and see your numbers.
+                      or sign in to take ownership and see your numbers.
                       {inviteBusiness ? ` This link is for ${inviteBusiness}.` : ""}
                       {inviteNeedsCode
                         ? " You'll need the client code from the email (MLN-XXXXXX)."
@@ -2700,11 +2769,45 @@ function LandingPage() {
                       </p>
                     )}
 
+                    {inviteNeedsCode && (
+                      <>
+                        <label htmlFor="regClientCodeField">Client code</label>
+                        <input
+                          id="regClientCodeField"
+                          type="text"
+                          required
+                          autoCapitalize="characters"
+                          placeholder="MLN-XXXXXX"
+                          value={regClientCode}
+                          onChange={(e) => setRegClientCode(e.target.value.toUpperCase())}
+                        />
+                        <p style={{ fontSize: 12, color: "var(--ink-dim)", marginTop: 6 }}>
+                          It&apos;s in the invite email, next to the claim link.
+                        </p>
+                      </>
+                    )}
+
+                    <div style={{ margin: "18px 0 8px" }}>
+                      <GoogleSignInButton
+                        intent="owner"
+                        tone="landing"
+                        label="Continue with Google"
+                        disabled={regBusy || (inviteNeedsCode && !regClientCode.trim())}
+                        ownerInvite={{
+                          token: inviteClientId,
+                          clientCode: regClientCode.trim() || null,
+                        }}
+                        next={`/?invite=${encodeURIComponent(inviteClientId)}&mode=signup`}
+                        onError={(msg) => toast.error(msg)}
+                      />
+                    </div>
+                    <AuthDivider />
+
                     <label htmlFor="regNameField">Full name</label>
                     <input
                       id="regNameField"
                       type="text"
-                      required
+                      required={!user}
                       placeholder={t("nameExample", copyMarket)}
                       value={regName}
                       onChange={(e) => setRegName(e.target.value)}
@@ -2724,36 +2827,18 @@ function LandingPage() {
                     <input
                       id="regPasswordField"
                       type="password"
-                      required
+                      required={!user}
                       placeholder="At least 6 characters"
-                      minLength={6}
+                      minLength={user ? undefined : 6}
                       value={regPassword}
                       onChange={(e) => setRegPassword(e.target.value)}
                     />
-
-                    {inviteNeedsCode && (
-                      <>
-                        <label htmlFor="regClientCodeField">Client code</label>
-                        <input
-                          id="regClientCodeField"
-                          type="text"
-                          required
-                          autoCapitalize="characters"
-                          placeholder="MLN-XXXXXX"
-                          value={regClientCode}
-                          onChange={(e) => setRegClientCode(e.target.value.toUpperCase())}
-                        />
-                        <p style={{ fontSize: 12, color: "var(--ink-dim)", marginTop: 6 }}>
-                          It&apos;s in the invite email, next to the claim link.
-                        </p>
-                      </>
-                    )}
 
                     <button
                       type="submit"
                       className="btn btn-gold"
                       disabled={regBusy}
-                      style={{ width: "100%", justifyContent: "center", marginTop: 28 }}
+                      style={{ width: "100%", justifyContent: "center", marginTop: 16 }}
                     >
                       {regBusy ? "Joining workspace…" : "Accept invitation ✦"}
                     </button>

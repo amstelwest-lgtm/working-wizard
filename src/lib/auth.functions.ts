@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { signUpInvitedMember } from "@/lib/invite-member.server";
+import { acceptOwnerInviteForUser, signUpInvitedMember } from "@/lib/invite-member.server";
 import { US_STATE_CODES } from "@/lib/market/types";
 import { assertMarketSelection, isMissingMarketSupport, marketToJson } from "@/lib/market";
 
@@ -140,6 +140,29 @@ export const adminSignUp = createServerFn({ method: "POST" })
     }
 
     return { userId, email: authData.user.email ?? data.email };
+  });
+
+/**
+ * Redeem an owner invite for the signed-in user (existing password or Google
+ * accounts). Token claim + ownership handoff / membership live in
+ * acceptOwnerInviteForUser — same rules as signUpInvitedMember.
+ */
+export const acceptOwnerInvite = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) =>
+    z
+      .object({
+        inviteClientId: z.string().min(8).max(80),
+        inviteClientCode: z.string().trim().max(32).optional().nullable(),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    return acceptOwnerInviteForUser({
+      userId: context.userId,
+      inviteClientId: data.inviteClientId,
+      inviteClientCode: data.inviteClientCode,
+    });
   });
 
 /**

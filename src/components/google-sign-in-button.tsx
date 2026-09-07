@@ -27,6 +27,7 @@ function GoogleMark() {
 type Props = {
   intent: GoogleAuthIntent;
   next?: string;
+  ownerInvite?: { token: string; clientCode?: string | null };
   label?: string;
   /** Landing modal uses gold-ghost chrome; portal uses the shadcn outline button. */
   tone?: "landing" | "portal";
@@ -37,6 +38,7 @@ type Props = {
 export function GoogleSignInButton({
   intent,
   next,
+  ownerInvite,
   label = "Sign in with Google",
   tone = "portal",
   disabled,
@@ -47,7 +49,7 @@ export function GoogleSignInButton({
   const onClick = async () => {
     setBusy(true);
     try {
-      const { error } = await startGoogleSignIn({ intent, next });
+      const { error } = await startGoogleSignIn({ intent, next, ownerInvite });
       if (error) onError?.(error);
     } catch (err) {
       onError?.(err instanceof Error ? err.message : "Google sign-in failed");

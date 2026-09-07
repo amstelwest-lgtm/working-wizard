@@ -6,12 +6,158 @@ import { supabase } from "@/integrations/supabase/client";
 
 export const PENDING_INVITE_CLIENT_KEY = "pending_invite_client_id";
 export const INVITE_ACCEPT_HANDOFF_KEY = "milon_invite_accept_handoff";
+/** Survives the Google OAuth round trip (sessionStorage + apex cookie). */
+export const PENDING_OWNER_INVITE_KEY = "milon_pending_owner_invite";
+export const PENDING_OWNER_INVITE_COOKIE = "milon_owner_invite";
+const OWNER_INVITE_COOKIE_MAX_AGE_S = 15 * 60;
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export function isClientUuid(value: string | null | undefined): boolean {
   return Boolean(value && UUID_RE.test(value.trim()));
+}
+
+export type PendingOwnerInvite = {
+  token: string;
+  clientCode: string | null;
+};
+
+/** Invite claim links: `/?invite=<token>&mode=signup`. */
+export function pendingInviteTokenFromSearch(search: string): string | null {
+  const raw = search.startsWith("?") ? search.slice(1) : search;
+  const params = new URLSearchParams(raw);
+  const inv = params.get("invite")?.trim() ?? "";
+  if (inv && params.get("mode") === "signup") return inv;
+  return null;
+}
+
+export function ownerInviteLandingPath(token: string): string {
+  return `/?invite=${encodeURIComponent(token)}&mode=signup`;
+}
+
+/** Read `/?invite=&mode=signup` out of a Google `next` path. */
+export function ownerInviteTokenFromNext(next: string | undefined): string | null {
+  if (!next || !next.startsWith("/")) return null;
+  const q = next.indexOf("?");
+  if (q === -1) return null;
+  return pendingInviteTokenFromSearch(next.slice(q));
+}
+
+export function encodePendingOwnerInvite(value: PendingOwnerInvite): string {
+  const code = value.clientCode?.trim() ?? "";
+  return code ? `${value.token}|${code}` : value.token;
+}
+
+export function decodePendingOwnerInvite(raw: string | null | undefined): PendingOwnerInvite | null {
+  const s = (raw ?? "").trim();
+  if (!s) return null;
+  const bar = s.indexOf("|");
+  if (bar === -1) return { token: s, clientCode: null };
+  const token = s.slice(0, bar).trim();
+  const clientCode = s.slice(bar + 1).trim();
+  if (!token) return null;
+  return { token, clientCode: clientCode || null };
+}
+
+function inviteCookieDomain(hostname: string): string | undefined {
+  const h = hostname.trim().toLowerCase();
+  if (!h || h === "localhost" || /^[\d.]+$/.test(h) || /^\[?[0-9a-f:]+\]?$/.test(h)) {
+    return undefined;
+  }
+  if (!h.includes(".")) return undefined;
+  return h.replace(/^www\./, "");
+}
+
+export function pendingOwnerInviteCookieString(
+  value: PendingOwnerInvite | null,
+  hostname: string,
+  secure: boolean,
+): string {
+  const domain = inviteCookieDomain(hostname);
+  const parts = [
+    `${PENDING_OWNER_INVITE_COOKIE}=${value ? encodeURIComponent(encodePendingOwnerInvite(value)) : ""}`,
+    "Path=/",
+    `Max-Age=${value ? OWNER_INVITE_COOKIE_MAX_AGE_S : 0}`,
+    "SameSite=Lax",
+  ];
+  if (domain) parts.push(`Domain=${domain}`);
+  if (secure) parts.push("Secure");
+  return parts.join("; ");
+}
+
+export function readPendingOwnerInviteCookie(cookieHeader: string): PendingOwnerInvite | null {
+  for (const part of cookieHeader.split(";")) {
+    const [k, ...rest] = part.trim().split("=");
+    if (k !== PENDING_OWNER_INVITE_COOKIE) continue;
+    return decodePendingOwnerInvite(decodeURIComponent(rest.join("=").trim()));
+  }
+  return null;
+}
+
+export function stashPendingOwnerInvite(token: string, clientCode?: string | null): void {
+  const value: PendingOwnerInvite = { token: token.trim(), clientCode: clientCode?.trim() || null };
+  if (!value.token) return;
+  if (typeof window === "undefined") return;
+  try {
+    sessionStorage.setItem(PENDING_OWNER_INVITE_KEY, encodePendingOwnerInvite(value));
+  } catch {
+    /* private mode / SSR */
+  }
+  try {
+    document.cookie = pendingOwnerInviteCookieString(
+      value,
+      window.location.hostname,
+      window.location.protocol === "https:",
+    );
+  } catch {
+    /* cookies disabled */
+  }
+}
+
+export function peekPendingOwnerInvite(): PendingOwnerInvite | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const stored = decodePendingOwnerInvite(sessionStorage.getItem(PENDING_OWNER_INVITE_KEY));
+    if (stored) return stored;
+  } catch {
+    /* ignore */
+  }
+  try {
+    return readPendingOwnerInviteCookie(document.cookie);
+  } catch {
+    return null;
+  }
+}
+
+export function consumePendingOwnerInvite(): PendingOwnerInvite | null {
+  const value = peekPendingOwnerInvite();
+  if (typeof window !== "undefined") {
+    try {
+      sessionStorage.removeItem(PENDING_OWNER_INVITE_KEY);
+    } catch {
+      /* ignore */
+    }
+    try {
+      document.cookie = pendingOwnerInviteCookieString(
+        null,
+        window.location.hostname,
+        window.location.protocol === "https:",
+      );
+    } catch {
+      /* ignore */
+    }
+  }
+  return value;
+}
+
+/** Prefer the just-redeemed workspace over any older client the user already owns. */
+export function preferPendingInviteClient(opts: {
+  pendingClientId: string | null | undefined;
+  linkedClientId: string | null | undefined;
+}): string | null {
+  if (isClientUuid(opts.pendingClientId)) return opts.pendingClientId!.trim();
+  return opts.linkedClientId?.trim() || null;
 }
 
 export function isEmailAlreadyRegistered(message: string): boolean {

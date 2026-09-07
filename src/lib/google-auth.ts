@@ -182,8 +182,16 @@ export function inferGoogleIntentFromRoles(d: {
 export async function startGoogleSignIn(opts: {
   intent: GoogleAuthIntent;
   next?: string;
+  /** Owner-invite in flight — survive the OAuth hop and redeem after Google. */
+  ownerInvite?: { token: string; clientCode?: string | null };
 }): Promise<{ error?: string }> {
-  stashGoogleAuthIntent(opts.intent, opts.next);
+  let next = opts.next;
+  if (opts.ownerInvite?.token) {
+    const { stashPendingOwnerInvite, ownerInviteLandingPath } = await import("@/lib/invite-handoff");
+    stashPendingOwnerInvite(opts.ownerInvite.token, opts.ownerInvite.clientCode);
+    if (!next) next = ownerInviteLandingPath(opts.ownerInvite.token);
+  }
+  stashGoogleAuthIntent(opts.intent, next);
   const { error } = await supabase.auth.signInWithOAuth({
     provider: "google",
     options: {

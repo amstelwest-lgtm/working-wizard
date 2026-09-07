@@ -9,6 +9,10 @@
  *      invitee to client_owner so Action Plan / owner UI gates work.
  *   B) True client owner inviting staff → membership only as client_member;
  *      ownership stays put.
+ *
+ * New accounts go through signUpInvitedMember (createUser + attach).
+ * Existing accounts (already signed in, password sign-in, or Google) go through
+ * acceptOwnerInviteForUser so the token is claimed without createUser.
  */
 
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
@@ -30,6 +34,14 @@ export type InviteMemberInput = {
   inviteClientCode?: string | null;
 };
 
+export type AcceptOwnerInviteInput = {
+  userId: string;
+  email?: string | null;
+  /** Opaque invite token or legacy client UUID. */
+  inviteClientId: string;
+  inviteClientCode?: string | null;
+};
+
 export type InviteMemberResult = {
   userId: string;
   email: string;
@@ -37,6 +49,20 @@ export type InviteMemberResult = {
   clientId: string;
   /** True when invitee became clients.owner_user_id (firm handoff). */
   transferredOwnership: boolean;
+};
+
+type InviteClientRow = {
+  id: string;
+  owner_user_id: string;
+  firm_id: string | null;
+  client_code?: string | null;
+};
+
+type PreparedInvite = {
+  tokenId: string | null;
+  client: InviteClientRow;
+  shouldTransfer: boolean;
+  role: "client_owner" | "client_member";
 };
 
 /** Current owner is a firm / practice placeholder for this client (not the real business owner). */
@@ -88,27 +114,7 @@ async function isPracticePlaceholderOwner(
   return Boolean(anyMembership?.user_id);
 }
 
-/**
- * Sign up via invite link.
- *
- * Steps:
- *   1. Create the auth user with email_confirm:true so no email link is needed.
- *   2. Decide ownership handoff vs staff membership (see module doc).
- *   3. Upsert client_memberships + user_roles accordingly.
- *   4. When handing off, UPDATE clients.owner_user_id via service role
- *      (trigger allows auth.uid() IS NULL); leave firm_id unchanged.
- */
-export async function signUpInvitedMember(input: InviteMemberInput): Promise<InviteMemberResult> {
-  const resolved = await resolveInviteToClientId(input.inviteClientId);
-  const clientId = resolved.clientId;
-
-  let client: {
-    id: string;
-    owner_user_id: string;
-    firm_id: string | null;
-    client_code?: string | null;
-  } | null = null;
-
+async function loadInviteClient(clientId: string): Promise<InviteClientRow> {
   const first = await supabaseAdmin
     .from("clients")
     .select("id, owner_user_id, firm_id, client_code")
@@ -121,29 +127,156 @@ export async function signUpInvitedMember(input: InviteMemberInput): Promise<Inv
       .eq("id", clientId)
       .maybeSingle();
     if (retry.error) throw new Error(`Failed to load invite client: ${retry.error.message}`);
-    client = retry.data ? { ...retry.data, client_code: null } : null;
-  } else if (first.error) {
-    throw new Error(`Failed to load invite client: ${first.error.message}`);
-  } else {
-    client = first.data;
+    if (!retry.data) throw new Error("Invite link is invalid — client not found.");
+    return { ...retry.data, client_code: null };
   }
-  if (!client) throw new Error("Invite link is invalid — client not found.");
+  if (first.error) throw new Error(`Failed to load invite client: ${first.error.message}`);
+  if (!first.data) throw new Error("Invite link is invalid — client not found.");
+  return first.data;
+}
 
+function assertClientCode(client: InviteClientRow, inviteClientCode?: string | null) {
   const storedCode = client.client_code ?? null;
-  if (storedCode) {
-    if (!input.inviteClientCode?.trim()) {
-      throw new Error("Enter the client code from your accountant (MLN-XXXXXX).");
-    }
-    if (!clientCodesMatch(storedCode, input.inviteClientCode)) {
-      throw new Error("That client code does not match this invite. Check the email and try again.");
-    }
+  if (!storedCode) return;
+  if (!inviteClientCode?.trim()) {
+    throw new Error("Enter the client code from your accountant (MLN-XXXXXX).");
   }
+  if (!clientCodesMatch(storedCode, inviteClientCode)) {
+    throw new Error("That client code does not match this invite. Check the email and try again.");
+  }
+}
 
+async function prepareInvite(
+  inviteClientId: string,
+  inviteClientCode?: string | null,
+): Promise<PreparedInvite> {
+  const resolved = await resolveInviteToClientId(inviteClientId);
+  const client = await loadInviteClient(resolved.clientId);
+  assertClientCode(client, inviteClientCode);
   const shouldTransfer = await isPracticePlaceholderOwner(client.owner_user_id, client.firm_id);
   const role = shouldTransfer ? "client_owner" : "client_member";
+  return { tokenId: resolved.tokenId, client, shouldTransfer, role };
+}
+
+async function rollbackOwnership(clientId: string, previousOwnerId: string) {
+  await supabaseAdmin.from("clients").update({ owner_user_id: previousOwnerId }).eq("id", clientId);
+}
+
+async function stampInviteMetadata(
+  userId: string,
+  clientId: string,
+  shouldTransfer: boolean,
+  extra: Record<string, unknown> = {},
+) {
+  try {
+    const { data } = await supabaseAdmin.auth.admin.getUserById(userId);
+    const prev = (data.user?.user_metadata ?? {}) as Record<string, unknown>;
+    await supabaseAdmin.auth.admin.updateUserById(userId, {
+      user_metadata: {
+        ...prev,
+        ...extra,
+        signup_type: typeof prev.signup_type === "string" ? prev.signup_type : "customer",
+        invite_client_id: clientId,
+        invite_outcome: shouldTransfer ? "owner_handoff" : "staff_member",
+      },
+    });
+  } catch {
+    /* metadata stamp is best-effort */
+  }
+}
+
+async function ensureInviteRole(userId: string, role: "client_owner" | "client_member") {
+  const { data: existingRoles } = await supabaseAdmin
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", userId);
+  const have = new Set((existingRoles ?? []).map((r: { role: string }) => r.role));
+  if (have.has(role)) return;
+  const { error } = await supabaseAdmin.from("user_roles").insert({ user_id: userId, role });
+  if (error) throw new Error(`user_roles insert failed: ${error.message}`);
+}
+
+async function applyPreparedInvite(opts: {
+  prepared: PreparedInvite;
+  userId: string;
+  email: string;
+  replaceRoles: boolean;
+  deleteUserOnFailure: boolean;
+  alreadyClaimed: boolean;
+}): Promise<InviteMemberResult> {
+  const { prepared, userId, email, replaceRoles, deleteUserOnFailure, alreadyClaimed } = opts;
+  const { client, shouldTransfer, role, tokenId } = prepared;
+  const clientId = client.id;
+  const previousOwnerId = client.owner_user_id;
+
+  if (!alreadyClaimed) {
+    await claimInviteToken(tokenId);
+  }
+
+  const fail = async (message: string) => {
+    if (shouldTransfer) await rollbackOwnership(clientId, previousOwnerId);
+    await releaseInviteToken(tokenId);
+    if (deleteUserOnFailure) await supabaseAdmin.auth.admin.deleteUser(userId);
+    throw new Error(message);
+  };
+
+  if (shouldTransfer) {
+    const { error: ownErr } = await supabaseAdmin
+      .from("clients")
+      .update({ owner_user_id: userId })
+      .eq("id", clientId);
+    if (ownErr) await fail(`Ownership handoff failed: ${ownErr.message}`);
+  }
+
+  const { error: memErr } = await supabaseAdmin
+    .from("client_memberships")
+    .upsert({ client_id: clientId, user_id: userId, role }, { onConflict: "client_id,user_id" });
+  if (memErr) await fail(`client_memberships upsert failed: ${memErr.message}`);
+
+  if (replaceRoles) {
+    await supabaseAdmin.from("user_roles").delete().eq("user_id", userId);
+    const { error: roleErr } = await supabaseAdmin.from("user_roles").insert({ user_id: userId, role });
+    if (roleErr) await fail(`user_roles insert failed: ${roleErr.message}`);
+  } else {
+    try {
+      await ensureInviteRole(userId, role);
+    } catch (err) {
+      await fail(err instanceof Error ? err.message : "user_roles insert failed");
+    }
+  }
+
+  await stampInviteMetadata(userId, clientId, shouldTransfer);
+  await attachInviteRedeemer(tokenId, userId);
+
+  return {
+    userId,
+    email,
+    clientId,
+    transferredOwnership: shouldTransfer,
+  };
+}
+
+/**
+ * Sign up via invite link (new auth user).
+ *
+ * Steps:
+ *   1. Create the auth user with email_confirm:true so no email link is needed.
+ *   2. Decide ownership handoff vs staff membership (see module doc).
+ *   3. Upsert client_memberships + user_roles accordingly.
+ *   4. When handing off, UPDATE clients.owner_user_id via service role
+ *      (trigger allows auth.uid() IS NULL); leave firm_id unchanged.
+ *
+ * If the email is already registered, this throws (token is released). The
+ * client must authenticate as that user and call acceptOwnerInviteForUser —
+ * attaching before password verification would let a leaked invite bind any
+ * existing account.
+ */
+export async function signUpInvitedMember(input: InviteMemberInput): Promise<InviteMemberResult> {
+  const prepared = await prepareInvite(input.inviteClientId, input.inviteClientCode);
+  const clientId = prepared.client.id;
 
   // Claim before createUser so concurrent signups can't both succeed.
-  await claimInviteToken(resolved.tokenId);
+  await claimInviteToken(prepared.tokenId);
 
   const { data: authData, error } = await supabaseAdmin.auth.admin.createUser({
     email: input.email,
@@ -153,70 +286,49 @@ export async function signUpInvitedMember(input: InviteMemberInput): Promise<Inv
       full_name: input.fullName?.trim() ?? "",
       signup_type: "customer",
       invite_client_id: clientId,
-      invite_outcome: shouldTransfer ? "owner_handoff" : "staff_member",
+      invite_outcome: prepared.shouldTransfer ? "owner_handoff" : "staff_member",
     },
   });
 
   if (error) {
-    await releaseInviteToken(resolved.tokenId);
+    await releaseInviteToken(prepared.tokenId);
     throw new Error(error.message);
   }
   if (!authData.user) {
-    await releaseInviteToken(resolved.tokenId);
+    await releaseInviteToken(prepared.tokenId);
     throw new Error("User creation failed");
   }
 
-  const userId = authData.user.id;
-
-  if (shouldTransfer) {
-    const { error: ownErr } = await supabaseAdmin
-      .from("clients")
-      .update({ owner_user_id: userId })
-      .eq("id", clientId);
-    if (ownErr) {
-      await releaseInviteToken(resolved.tokenId);
-      await supabaseAdmin.auth.admin.deleteUser(userId);
-      throw new Error(`Ownership handoff failed: ${ownErr.message}`);
-    }
-  }
-
-  const { error: memErr } = await supabaseAdmin
-    .from("client_memberships")
-    .upsert({ client_id: clientId, user_id: userId, role }, { onConflict: "client_id,user_id" });
-  if (memErr) {
-    if (shouldTransfer) {
-      await supabaseAdmin
-        .from("clients")
-        .update({ owner_user_id: client.owner_user_id })
-        .eq("id", clientId);
-    }
-    await releaseInviteToken(resolved.tokenId);
-    await supabaseAdmin.auth.admin.deleteUser(userId);
-    throw new Error(`client_memberships upsert failed: ${memErr.message}`);
-  }
-
-  await supabaseAdmin.from("user_roles").delete().eq("user_id", userId);
-  const { error: roleErr } = await supabaseAdmin
-    .from("user_roles")
-    .insert({ user_id: userId, role });
-  if (roleErr) {
-    if (shouldTransfer) {
-      await supabaseAdmin
-        .from("clients")
-        .update({ owner_user_id: client.owner_user_id })
-        .eq("id", clientId);
-    }
-    await releaseInviteToken(resolved.tokenId);
-    await supabaseAdmin.auth.admin.deleteUser(userId);
-    throw new Error(`user_roles insert failed: ${roleErr.message}`);
-  }
-
-  await attachInviteRedeemer(resolved.tokenId, userId);
-
-  return {
-    userId,
+  return applyPreparedInvite({
+    prepared,
+    userId: authData.user.id,
     email: authData.user.email ?? input.email,
-    clientId,
-    transferredOwnership: shouldTransfer,
-  };
+    replaceRoles: true,
+    deleteUserOnFailure: true,
+    alreadyClaimed: true,
+  });
+}
+
+/**
+ * Attach an already-authenticated user to the invited client.
+ * Used when the invitee already has a Milōn login (or just signed in / Google).
+ * Never creates or deletes auth users.
+ */
+export async function acceptOwnerInviteForUser(
+  input: AcceptOwnerInviteInput,
+): Promise<InviteMemberResult> {
+  const prepared = await prepareInvite(input.inviteClientId, input.inviteClientCode);
+  let email = input.email?.trim() ?? "";
+  if (!email) {
+    const { data } = await supabaseAdmin.auth.admin.getUserById(input.userId);
+    email = data.user?.email ?? "";
+  }
+  return applyPreparedInvite({
+    prepared,
+    userId: input.userId,
+    email,
+    replaceRoles: false,
+    deleteUserOnFailure: false,
+    alreadyClaimed: false,
+  });
 }

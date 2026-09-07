@@ -2205,6 +2205,13 @@ function Index() {
           return;
         }
 
+        const pendingInvite =
+          typeof localStorage !== "undefined"
+            ? localStorage.getItem(PENDING_INVITE_CLIENT_KEY)
+            : null;
+        const metaInvite = (u.user.user_metadata?.invite_client_id as string | null) ?? null;
+        const inviteClientId = [pendingInvite, metaInvite].find((v) => isClientUuid(v)) ?? null;
+
         const findLinkedClient = async () => {
           const { data: own } = await supabase
             .from("clients")
@@ -2222,6 +2229,41 @@ function Index() {
           return mem?.client_id ?? null;
         };
 
+        const openInvitedClient = async (clientId: string) => {
+          const { data: claimed } = await supabase
+            .from("clients")
+            .select("id")
+            .eq("id", clientId)
+            .eq("owner_user_id", u.user.id)
+            .maybeSingle();
+          if (claimed?.id) return claimed.id;
+          const { data: existingMem } = await supabase
+            .from("client_memberships")
+            .select("client_id, role")
+            .eq("client_id", clientId)
+            .eq("user_id", u.user.id)
+            .maybeSingle();
+          return existingMem?.client_id ?? null;
+        };
+
+        // Just-accepted invite: prefer that workspace over any older client
+        // this email already owns (existing-account redeem).
+        if (inviteClientId) {
+          for (let i = 0; i < 5; i++) {
+            const invited = await openInvitedClient(inviteClientId);
+            if (invited) {
+              try {
+                localStorage.removeItem(PENDING_INVITE_CLIENT_KEY);
+              } catch {
+                /* ignore */
+              }
+              if (!cancelled) setEffectiveClientId(invited);
+              return;
+            }
+            if (i < 4) await new Promise((r) => setTimeout(r, 250));
+          }
+        }
+
         // Invite accept can land before RLS sees the new owner row — retry briefly.
         for (let i = 0; i < 5; i++) {
           const linked = await findLinkedClient();
@@ -2238,25 +2280,7 @@ function Index() {
         }
 
         // 3. Process a pending invite stored after accept (UUID only — never the opaque token).
-        const pendingInvite =
-          typeof localStorage !== "undefined"
-            ? localStorage.getItem(PENDING_INVITE_CLIENT_KEY)
-            : null;
-        const metaInvite = (u.user.user_metadata?.invite_client_id as string | null) ?? null;
-        const inviteClientId = [pendingInvite, metaInvite].find((v) => isClientUuid(v)) ?? null;
         if (inviteClientId) {
-          // Prefer ownership (G25 handoff already set owner_user_id server-side).
-          const { data: claimed } = await supabase
-            .from("clients")
-            .select("id")
-            .eq("id", inviteClientId)
-            .eq("owner_user_id", u.user.id)
-            .maybeSingle();
-          if (claimed?.id) {
-            localStorage.removeItem(PENDING_INVITE_CLIENT_KEY);
-            if (!cancelled) setEffectiveClientId(claimed.id);
-            return;
-          }
           // Staff invite / legacy path — membership only. Never upsert client_member
           // over an existing client_owner membership row.
           const { data: existingMem } = await supabase
