@@ -103,6 +103,7 @@ import {
 import { PeriodVarianceStrip } from "@/components/period-variance-strip";
 import { buildVarianceChips, resolvePriorSnapshot, type SnapshotRow } from "@/lib/prior-period";
 import { AdvisorySentHistory } from "@/components/advisory-sent-history";
+import { ClientBrainSummary } from "@/components/client-brain-summary";
 import {
   hashFigures,
   latestSnapshotId,
@@ -394,9 +395,10 @@ type Client = {
   market?: unknown;
 };
 
-type ActiveTab = "ask" | "ratios" | "profit" | "cash" | "budget" | "reports" | "plan" | "advisory";
+type ActiveTab = "ask" | "ratios" | "profit" | "cash" | "budget" | "reports" | "plan" | "advisory" | "summary";
 
 const ACCOUNTANT_TABS: ActiveTab[] = [
+  "summary",
   "ask",
   "ratios",
   "profit",
@@ -1757,6 +1759,7 @@ function ClientView() {
             <div className="tabs">
               {(
                 [
+                  { id: "summary", label: "Summary" },
                   { id: "ask", label: "Ask AI", star: true },
                   { id: "ratios", label: "Health & Ratios" },
                   { id: "profit", label: "Profitability" },
@@ -1782,7 +1785,7 @@ function ClientView() {
             {/* Simplified / Complex — Health, Budget, Action Plan (not Ask AI) */}
             <div
               style={{
-                display: activeTab === "ask" ? "none" : "flex",
+                display: activeTab === "ask" || activeTab === "summary" ? "none" : "flex",
                 justifyContent: "center",
                 margin: "8px 0 20px",
               }}
@@ -1830,6 +1833,21 @@ function ClientView() {
                   </button>
                 ))}
               </div>
+            </div>
+
+            {/* ===== SUMMARY TAB ===== */}
+            <div className={`tabpane${activeTab === "summary" ? " on" : ""}`} id="pane-summary">
+              {activeTab === "summary" && (
+                <ClientBrainSummary
+                  clientId={client.id}
+                  clientName={client.name}
+                  operatingProfile={client.operating_profile}
+                  market={client.market}
+                  businessType={client.business_type}
+                  onOpenUpload={() => setUploadOpen(true)}
+                  onOpenTab={(tab) => setActiveTab(tab)}
+                />
+              )}
             </div>
 
             {/* ===== ASK AI TAB ===== */}
