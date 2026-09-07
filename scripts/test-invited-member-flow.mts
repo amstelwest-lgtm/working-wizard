@@ -12,6 +12,8 @@
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { shouldShowOwnerProfileFunnel } from "../src/lib/first-run";
+import { acceptOwnerInviteForUser, signUpInvitedMember } from "../src/lib/invite-member.server";
+import { isEmailAlreadyRegistered, pendingInviteTokenFromSearch } from "../src/lib/invite-handoff";
 
 const SUPABASE_URL = process.env.SUPABASE_URL!;
 const ANON_KEY = process.env.SUPABASE_PUBLISHABLE_KEY!;
@@ -53,33 +55,25 @@ function section(t: string) {
 function testInviteUrlParsing() {
   section("Invite URL param parsing (pure function — mirrors index.tsx useEffect)");
 
-  function parseInviteParams(search: string): string | null {
-    const params = new URLSearchParams(search);
-    const inv = params.get("invite");
-    const mode = params.get("mode");
-    if (inv && mode === "signup") return inv;
-    return null;
-  }
-
   const clientId = "550e8400-e29b-41d4-a716-446655440000";
 
-  parseInviteParams(`?invite=${clientId}&mode=signup`) === clientId
+  pendingInviteTokenFromSearch(`?invite=${clientId}&mode=signup`) === clientId
     ? pass("?invite=<id>&mode=signup → inviteClientId extracted ✓")
     : fail("Failed to extract inviteClientId from invite URL");
 
-  parseInviteParams(`?invite=${clientId}`) === null
+  pendingInviteTokenFromSearch(`?invite=${clientId}`) === null
     ? pass("?invite=<id> without mode=signup → null ✓")
     : fail("Missing mode=signup should not be treated as invite");
 
-  parseInviteParams("?mode=signup") === null
+  pendingInviteTokenFromSearch("?mode=signup") === null
     ? pass("?mode=signup without invite= → null ✓")
     : fail("Missing invite= should not be treated as invite");
 
-  parseInviteParams("") === null
+  pendingInviteTokenFromSearch("") === null
     ? pass("Empty search string → null ✓")
     : fail("Empty params should return null");
 
-  parseInviteParams(`?invite=${clientId}&mode=login`) === null
+  pendingInviteTokenFromSearch(`?invite=${clientId}&mode=login`) === null
     ? pass("mode=login (not signup) → null ✓")
     : fail("mode=login should not trigger invite flow");
 }
@@ -449,6 +443,195 @@ async function testStaffInviteNoHandoff(admin: SupabaseClient) {
   pass("Staff invite fixtures cleaned up");
 }
 
+/** C) Existing Milōn login redeeming a firm owner invite (the live bug). */
+async function testExistingAccountOwnerInvite(admin: SupabaseClient) {
+  const ts = Date.now() + 2;
+  const accountantEmail = `acct-exist-${ts}@example.com`;
+  const ownerEmail = `existing-${ts}@example.com`;
+  const password = "Test1234!";
+  let accountantId = "";
+  let existingId = "";
+  let ownClientId = "";
+  let invitedClientId = "";
+  let firmId = "";
+  const inviteToken = `existinvite${ts}`;
+
+  section("C1 · Existing owner already has a personal workspace");
+  const { data: existingU, error: existingErr } = await admin.auth.admin.createUser({
+    email: ownerEmail,
+    password,
+    email_confirm: true,
+    user_metadata: { full_name: "Existing Owner", signup_type: "customer" },
+  });
+  if (existingErr || !existingU.user) {
+    fail("Create existing owner", existingErr?.message);
+    return;
+  }
+  existingId = existingU.user.id;
+  const { data: ownClient, error: ownErr } = await admin
+    .from("clients")
+    .insert({ name: "Personal Co", owner_user_id: existingId, business_type: "service" })
+    .select("id")
+    .single();
+  if (ownErr || !ownClient) {
+    fail("Insert personal client", ownErr?.message);
+    await cleanupUsers(admin, [existingId], [], []);
+    return;
+  }
+  ownClientId = ownClient.id;
+  await admin.from("user_roles").insert({ user_id: existingId, role: "client_owner" });
+  pass(`Existing owner ${existingId} already owns ${ownClientId}`);
+
+  section("C2 · Firm mints an owner invite for a different client");
+  const { data: acctU, error: acctErr } = await admin.auth.admin.createUser({
+    email: accountantEmail,
+    password,
+    email_confirm: true,
+    user_metadata: { full_name: "Firm Acct", signup_type: "accountant" },
+  });
+  if (acctErr || !acctU.user) {
+    fail("Create accountant", acctErr?.message);
+    await cleanupUsers(admin, [existingId], [ownClientId], []);
+    return;
+  }
+  accountantId = acctU.user.id;
+  const { data: firmRow, error: firmErr } = await admin
+    .from("firms")
+    .insert({ name: `Firm exist ${ts}`, owner_user_id: accountantId })
+    .select("id")
+    .single();
+  if (firmErr || !firmRow) {
+    fail("Insert firm", firmErr?.message);
+    await cleanupUsers(admin, [existingId, accountantId], [ownClientId], []);
+    return;
+  }
+  firmId = firmRow.id;
+  await admin.from("firm_memberships").insert({ firm_id: firmId, user_id: accountantId, role: "owner" });
+  await admin.from("user_roles").insert({ user_id: accountantId, role: "firm_admin" });
+  const { data: invited, error: invClientErr } = await admin
+    .from("clients")
+    .insert({
+      name: "Invited Biz",
+      owner_user_id: accountantId,
+      firm_id: firmId,
+      business_type: "service",
+    })
+    .select("id")
+    .single();
+  if (invClientErr || !invited) {
+    fail("Insert invited client", invClientErr?.message);
+    await cleanupUsers(admin, [existingId, accountantId], [ownClientId], [firmId]);
+    return;
+  }
+  invitedClientId = invited.id;
+  const { error: tokErr } = await admin.from("invite_tokens").insert({
+    token: inviteToken,
+    client_id: invitedClientId,
+    created_by: accountantId,
+    purpose: "owner_handoff",
+  });
+  const useToken = !tokErr;
+  const inviteRef = useToken ? inviteToken : invitedClientId;
+  useToken
+    ? pass(`Opaque invite token minted (${inviteToken})`)
+    : pass(`invite_tokens unavailable — using legacy client UUID (${tokErr?.message ?? "no row"})`);
+
+  section("C3 · createUser path throws for the existing email; token stays unclaimed");
+  try {
+    await signUpInvitedMember({
+      email: ownerEmail,
+      password,
+      fullName: "Existing Owner",
+      inviteClientId: inviteRef,
+    });
+    fail("signUpInvitedMember should not succeed for an email that already exists");
+  } catch (e) {
+    const msg = (e as Error).message;
+    isEmailAlreadyRegistered(msg)
+      ? pass(`createUser rejected existing email (${msg})`)
+      : fail("expected already-registered error", msg);
+  }
+  if (useToken) {
+    const { data: tok } = await admin
+      .from("invite_tokens")
+      .select("redeemed_at, redeemed_by")
+      .eq("token", inviteToken)
+      .maybeSingle();
+    !tok?.redeemed_at
+      ? pass("token released after failed createUser ✓")
+      : fail("token was left claimed after createUser failure", JSON.stringify(tok));
+  }
+
+  section("C4 · acceptOwnerInviteForUser attaches the existing account");
+  try {
+    const result = await acceptOwnerInviteForUser({
+      userId: existingId,
+      email: ownerEmail,
+      inviteClientId: inviteRef,
+    });
+    result.transferredOwnership
+      ? pass("Ownership transferred to the existing user ✓")
+      : fail("Expected transferredOwnership=true for firm-created client");
+    result.clientId === invitedClientId
+      ? pass("result.clientId is the invited workspace")
+      : fail("accepted the wrong client", result.clientId);
+    result.userId === existingId
+      ? pass("did not mint a second auth user")
+      : fail("userId changed", result.userId);
+  } catch (e) {
+    fail("acceptOwnerInviteForUser() threw", (e as Error).message);
+    await cleanupUsers(admin, [existingId, accountantId], [ownClientId, invitedClientId], [firmId]);
+    return;
+  }
+
+  const { data: afterInvited } = await admin
+    .from("clients")
+    .select("owner_user_id, firm_id")
+    .eq("id", invitedClientId)
+    .maybeSingle();
+  afterInvited?.owner_user_id === existingId
+    ? pass("invited client owner_user_id = existing user ✓")
+    : fail("ownership not transferred", JSON.stringify(afterInvited));
+  afterInvited?.firm_id === firmId
+    ? pass("invited client firm_id preserved ✓")
+    : fail("firm_id was cleared", JSON.stringify(afterInvited));
+
+  const { data: afterOwn } = await admin
+    .from("clients")
+    .select("owner_user_id")
+    .eq("id", ownClientId)
+    .maybeSingle();
+  afterOwn?.owner_user_id === existingId
+    ? pass("personal workspace still belongs to the existing user ✓")
+    : fail("personal client ownership was stolen", JSON.stringify(afterOwn));
+
+  const { data: mem } = await admin
+    .from("client_memberships")
+    .select("role")
+    .eq("user_id", existingId)
+    .eq("client_id", invitedClientId)
+    .maybeSingle();
+  mem?.role === "client_owner"
+    ? pass("client_memberships.role = client_owner on invited client ✓")
+    : fail("membership missing", JSON.stringify(mem));
+
+  if (useToken) {
+    const { data: tok } = await admin
+      .from("invite_tokens")
+      .select("redeemed_at, redeemed_by")
+      .eq("token", inviteToken)
+      .maybeSingle();
+    tok?.redeemed_by === existingId && tok?.redeemed_at
+      ? pass("invite token claimed by the existing user ✓")
+      : fail("token not claimed", JSON.stringify(tok));
+    await admin.from("invite_tokens").delete().eq("token", inviteToken);
+  }
+
+  section("C · Cleanup");
+  await cleanupUsers(admin, [existingId, accountantId], [ownClientId, invitedClientId], [firmId]);
+  pass("Existing-account invite fixtures cleaned up");
+}
+
 async function main() {
   console.log("══════════════════════════════════════════════════════════════");
   console.log("  Invite flows: ownership handoff (G25) + staff member        ");
@@ -473,6 +656,7 @@ async function main() {
 
   await testFirmOwnershipHandoff(admin);
   await testStaffInviteNoHandoff(admin);
+  await testExistingAccountOwnerInvite(admin);
 
   console.log(`\n══════════════════════════════════════════════════════════════`);
   console.log(`  Results: ${passed} passed, ${failed} failed`);

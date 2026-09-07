@@ -114,6 +114,10 @@ assert(
   !/function consumeGoogleAuthIntent[\s\S]*getPortalIntent\(\)/.test(googleSrc),
   "consumeGoogleAuthIntent must not fall back to the persisted portal intent (stale accountant door hijacked owner Google sign-ins)",
 );
+assert(
+  googleSrc.includes("ownerInvite"),
+  "startGoogleSignIn stashes an in-flight owner invite across the OAuth hop",
+);
 
 // /auth (AuthPage) has no <Outlet />, so any route filed under auth.*.tsx never
 // renders — AuthPage runs instead, stamps the accountant door and sends
@@ -141,6 +145,19 @@ assert(
 assert(
   !callbackSrc.includes('if (intent === "accountant") forcePortal("accountant")'),
   "callback must forcePortal for owner intent, not only accountant",
+);
+assert(
+  callbackSrc.includes("consumePendingOwnerInvite"),
+  "Google callback redeems a stashed owner invite instead of abandoning it",
+);
+assert(
+  callbackSrc.includes("doAcceptOwnerInvite"),
+  "Google callback attaches the signed-in user to the invited client",
+);
+assert(
+  callbackSrc.indexOf("pendingInvite?.token") < callbackSrc.indexOf("ensure_own_client") &&
+    callbackSrc.includes("pendingInvite?.token"),
+  "invite redeem runs before ensure_own_client so an existing workspace is not minted first",
 );
 
 console.log("google-auth-test: ok");

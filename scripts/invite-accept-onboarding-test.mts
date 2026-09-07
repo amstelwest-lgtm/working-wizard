@@ -12,6 +12,14 @@ import {
 import {
   isClientUuid,
   isEmailAlreadyRegistered,
+  pendingInviteTokenFromSearch,
+  ownerInviteLandingPath,
+  ownerInviteTokenFromNext,
+  encodePendingOwnerInvite,
+  decodePendingOwnerInvite,
+  pendingOwnerInviteCookieString,
+  readPendingOwnerInviteCookie,
+  preferPendingInviteClient,
 } from "../src/lib/invite-handoff";
 
 function assert(cond: boolean, msg: string) {
@@ -24,6 +32,48 @@ assert(!isClientUuid("pending_invite_client_id"), "junk rejected");
 assert(isEmailAlreadyRegistered("User already registered"), "already registered");
 assert(isEmailAlreadyRegistered("A user with this email address has already been registered"), "gotrue copy");
 assert(!isEmailAlreadyRegistered("Invalid login credentials"), "wrong password is not already-registered");
+
+assert(
+  pendingInviteTokenFromSearch("?invite=tok123456&mode=signup") === "tok123456",
+  "invite+signup extracts token",
+);
+assert(pendingInviteTokenFromSearch("?invite=tok123456") === null, "invite without mode is not pending");
+assert(pendingInviteTokenFromSearch("?mode=signup") === null, "mode without invite is not pending");
+assert(
+  ownerInviteLandingPath("abc+def") === "/?invite=abc%2Bdef&mode=signup",
+  "landing path encodes the token",
+);
+assert(
+  ownerInviteTokenFromNext("/?invite=tok123456&mode=signup") === "tok123456",
+  "Google next preserves invite token",
+);
+assert(ownerInviteTokenFromNext("/app") === null, "non-invite next has no token");
+assert(encodePendingOwnerInvite({ token: "tok", clientCode: "MLN-AB12" }) === "tok|MLN-AB12", "encode with code");
+assert(encodePendingOwnerInvite({ token: "tok", clientCode: null }) === "tok", "encode token only");
+assert(decodePendingOwnerInvite("tok|MLN-AB12")?.clientCode === "MLN-AB12", "decode code");
+assert(decodePendingOwnerInvite("tok")?.token === "tok", "decode token only");
+{
+  const cookie = pendingOwnerInviteCookieString(
+    { token: "tok123", clientCode: "MLN-1" },
+    "www.milonfinance.com",
+    true,
+  );
+  assert(cookie.includes("milon_owner_invite="), "invite cookie name");
+  assert(cookie.includes("Domain=milonfinance.com"), "invite cookie spans www/apex");
+  assert(readPendingOwnerInviteCookie(cookie)?.token === "tok123", "reads invite cookie");
+}
+assert(
+  preferPendingInviteClient({
+    pendingClientId: "3d5a1c2e-7b44-4f1a-9c8d-1a2b3c4d5e6f",
+    linkedClientId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+  }) === "3d5a1c2e-7b44-4f1a-9c8d-1a2b3c4d5e6f",
+  "existing account opens the invited client, not an older workspace",
+);
+assert(
+  preferPendingInviteClient({ pendingClientId: "opaque-token", linkedClientId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee" }) ===
+    "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+  "opaque pending token does not override linked client",
+);
 
 assert(
   shouldShowOwnerProfileFunnel({
@@ -152,14 +202,38 @@ assert(
   "returning owner sees the board only after financials hydrate",
 );
 
+const memberSrc = readFileSync(resolve("src/lib/invite-member.server.ts"), "utf8");
+assert(
+  memberSrc.includes("export async function acceptOwnerInviteForUser"),
+  "existing accounts redeem through acceptOwnerInviteForUser",
+);
+assert(
+  memberSrc.includes("deleteUserOnFailure: false"),
+  "existing-account redeem must not delete the auth user on failure",
+);
+assert(
+  memberSrc.includes("replaceRoles: false"),
+  "existing-account redeem must not wipe unrelated user_roles",
+);
+
 const indexSrc = readFileSync(resolve("src/routes/index.tsx"), "utf8");
-assert(indexSrc.includes("waitForAuthSession"), "invite accept waits for the auth session");
 assert(indexSrc.includes("clearInviteQueryFromUrl"), "invite accept strips the invite URL");
 assert(indexSrc.includes("stashInviteHandoff"), "invite accept stashes the client UUID");
 assert(indexSrc.includes("to: \"/app\", replace: true") || indexSrc.includes("to: '/app', replace: true"), "invite accept replace-navigates to /app");
 assert(indexSrc.includes("[landing] post-login path failed"), "sign-in still navigates if post-login path throws");
 assert(indexSrc.includes("[landing] post-login redirect failed"), "already-signed-in redirect cannot crash the landing page");
 assert(indexSrc.includes("Opening your workspace"), "signed-in landing does not flash hero copy while redirecting");
+assert(indexSrc.includes("doAcceptOwnerInvite"), "existing accounts redeem via acceptOwnerInvite");
+assert(indexSrc.includes("needsExistingAccept"), "already-registered emails attach after sign-in, not only createUser");
+assert(indexSrc.includes("pendingInvite"), "landing Sign in keeps a pending owner invite");
+assert(
+  indexSrc.includes("ownerInvite=") && indexSrc.includes("Continue with Google"),
+  "invite form and Sign in Google preserve the owner invite",
+);
+assert(
+  !/clearInviteQueryFromUrl\(\);\s*setInviteClientId\(null\);\s*setSigninOpen\(false\)/.test(indexSrc),
+  "Sign in must not strip the invite token before redeeming",
+);
 
 const handoffSrc = readFileSync(resolve("src/lib/invite-handoff.ts"), "utf8");
 assert(handoffSrc.includes("let subscription"), "waitForAuthSession does not TDZ on the auth subscription");
@@ -168,6 +242,7 @@ assert(!handoffSrc.includes("sub.subscription.unsubscribe()"), "old sync-unsubsc
 
 const appSrc = readFileSync(resolve("src/routes/app.tsx"), "utf8");
 assert(appSrc.includes("hasInviteHandoffFlag"), "founder board does not bounce a just-accepted invite");
+assert(appSrc.includes("openInvitedClient"), "founder board prefers the invited workspace for existing accounts");
 assert(appSrc.includes("shouldShowOwnerProfileFunnel"), "founder board uses shared funnel gate");
 assert(appSrc.includes("ownerWalkthroughReady({"), "tour ready helper is wired");
 assert(appSrc.includes("ownerBoardReady({"), "founder board holds the spinner until profile/client data is ready");

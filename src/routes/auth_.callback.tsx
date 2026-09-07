@@ -2,7 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
-import { ensurePracticePortalAccess } from "@/lib/auth.functions";
+import { acceptOwnerInvite, ensurePracticePortalAccess } from "@/lib/auth.functions";
 import {
   consumeGoogleAuthIntent,
   establishSessionFromOAuthCallback,
@@ -11,6 +11,13 @@ import {
   isFreshAuthUser,
 } from "@/lib/google-auth";
 import { notifySignup } from "@/lib/signup-notify";
+import {
+  consumePendingOwnerInvite,
+  ownerInviteLandingPath,
+  ownerInviteTokenFromNext,
+  stashInviteHandoff,
+  stashPendingOwnerInvite,
+} from "@/lib/invite-handoff";
 import { readVisitorMarket, withMarketRpcFallback } from "@/lib/market";
 import { OPS_UNLOCK_KEY } from "@/lib/owner-ops.functions";
 import { isOpsNext, lighthouseTabFromOpsNext } from "@/lib/client-note-link";
@@ -35,7 +42,9 @@ export const Route = createFileRoute("/auth_/callback")({
 function AuthCallbackPage() {
   const navigate = useNavigate();
   const ensurePractice = useServerFn(ensurePracticePortalAccess);
+  const doAcceptOwnerInvite = useServerFn(acceptOwnerInvite);
   const [error, setError] = useState("");
+  const [inviteContinue, setInviteContinue] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -56,6 +65,9 @@ function AuthCallbackPage() {
 
       const consumed = consumeGoogleAuthIntent();
       const { next } = consumed;
+      const nextInviteToken = ownerInviteTokenFromNext(next);
+      const pendingInvite = consumePendingOwnerInvite() ??
+        (nextInviteToken ? { token: nextInviteToken, clientCode: null } : null);
       let intent = consumed.intent;
       if (!intent) {
         // Nothing survived the round trip (origin hop). Decide from the account.
@@ -69,6 +81,41 @@ function AuthCallbackPage() {
         user.user_metadata as Record<string, unknown> | undefined,
         user.email,
       );
+
+      if (pendingInvite?.token) {
+        forcePortal("owner");
+        try {
+          await supabase.auth.updateUser({
+            data: {
+              signup_type: (user.user_metadata?.signup_type as string | undefined) ?? "customer",
+              full_name:
+                (user.user_metadata?.full_name as string | undefined) ||
+                (user.user_metadata?.name as string | undefined) ||
+                displayName,
+            },
+          });
+        } catch {
+          /* metadata stamp is best-effort */
+        }
+        try {
+          const accepted = (await doAcceptOwnerInvite({
+            data: {
+              inviteClientId: pendingInvite.token,
+              inviteClientCode: pendingInvite.clientCode,
+            },
+          })) as { clientId?: string } | undefined;
+          stashInviteHandoff(accepted?.clientId ?? null);
+          if (!cancelled) void navigate({ to: "/app", replace: true });
+        } catch (err) {
+          stashPendingOwnerInvite(pendingInvite.token, pendingInvite.clientCode);
+          const msg = err instanceof Error ? err.message : "Could not accept the invite.";
+          if (!cancelled) {
+            setError(msg);
+            setInviteContinue(ownerInviteLandingPath(pendingInvite.token));
+          }
+        }
+        return;
+      }
 
       if (intent === "owner") {
         try {
@@ -143,7 +190,7 @@ function AuthCallbackPage() {
     return () => {
       cancelled = true;
     };
-  }, [ensurePractice, navigate]);
+  }, [doAcceptOwnerInvite, ensurePractice, navigate]);
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4 gap-4">
@@ -156,9 +203,15 @@ function AuthCallbackPage() {
             <Link to="/" className="text-primary underline">
               Back home
             </Link>
-            <Link to="/auth" search={{}} className="text-primary underline">
-              Accountant portal
-            </Link>
+            {inviteContinue ? (
+              <a href={inviteContinue} className="text-primary underline">
+                Continue invite
+              </a>
+            ) : (
+              <Link to="/auth" search={{}} className="text-primary underline">
+                Accountant portal
+              </Link>
+            )}
           </div>
         </div>
       ) : (
