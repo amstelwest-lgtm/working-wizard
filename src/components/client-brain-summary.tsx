@@ -1,6 +1,6 @@
 /**
  * Client Brain Summary tab — system-of-record panel.
- * Propose from brain drafts next steps + GAP/competitor stubs for sign-off.
+ * Propose from brain drafts next steps; Draft advisory from brain writes a sign-off pack.
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -15,6 +15,8 @@ import { profileIndustryLabel } from "@/lib/profile-signals";
 import { coerceMarketSelection, usState } from "@/lib/market";
 import { useFinancialInputs } from "@/contexts/financial-inputs";
 import { invokeBrainPropose } from "@/lib/brain-propose-client";
+import { invokeBrainDeliverableDraft } from "@/lib/brain-deliverable-client";
+import { ClientBrainDrafts } from "@/components/client-brain-drafts";
 import {
   asBrainSummaryObject,
   markCompetitorSignedOff,
@@ -25,17 +27,14 @@ import {
   BUSINESS_MAP_FIELDS,
   artifactKindLabel,
   buildNextStepEditDiff,
-  draftStatusLabel,
   factSourceLabel,
   isMissingBrainRelation,
   mergeBusinessMapFromFacts,
   nextStepStatusLabel,
-  parseAssumptionChecklist,
   parseBrainSummary,
   parseBusinessMap,
   parseCompetitors,
   parseGapReport,
-  serializeAssumptionChecklist,
   type ClientArtifact,
   type ClientBrainQuestion,
   type ContextFact,
@@ -49,7 +48,6 @@ import {
   productLineQuestionStates,
 } from "@/lib/client-brain-questions";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -159,6 +157,7 @@ export function ClientBrainSummary({
   const [editRationale, setEditRationale] = useState("");
   const [saving, setSaving] = useState(false);
   const [proposing, setProposing] = useState(false);
+  const [drafting, setDrafting] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -409,24 +408,27 @@ export function ClientBrainSummary({
     }
   };
 
-  const toggleAssumption = async (draft: DeliverableDraft, itemId: string) => {
-    const items = parseAssumptionChecklist(draft.assumption_checklist).map((item) =>
-      item.id === itemId ? { ...item, checked: !item.checked } : item,
-    );
-    const { error } = await supabase
-      .from("deliverable_drafts")
-      .update({ assumption_checklist: serializeAssumptionChecklist(items) })
-      .eq("id", draft.id)
-      .eq("client_id", clientId);
-    if (error) {
-      toast.error(error.message);
-      return;
+  const draftAdvisoryFromBrain = async () => {
+    setDrafting(true);
+    try {
+      const result = await invokeBrainDeliverableDraft(clientId);
+      if (result.skippedReason === "ai_not_configured") {
+        toast.message("AI is not configured. No draft was created.");
+      } else if (result.draftInserted) {
+        toast.success("Advisory draft saved — not sent.");
+      } else if (result.skippedReason === "similar_open") {
+        toast.message("An open draft already covers this — no duplicate created.");
+      } else if (result.skippedReason === "empty_context" || result.skippedReason === "empty_draft") {
+                        toast.message("Nothing to draft from what's on file — assumptions stay empty.");
+      } else {
+        toast.message("No new draft created.");
+      }
+      await load();
+    } catch (e) {
+      toast.error((e as Error).message || "Could not draft advisory from brain");
+    } finally {
+      setDrafting(false);
     }
-    setDrafts((prev) =>
-      prev.map((d) =>
-        d.id === draft.id ? { ...d, assumption_checklist: serializeAssumptionChecklist(items) } : d,
-      ),
-    );
   };
 
   return (
@@ -438,16 +440,24 @@ export function ClientBrainSummary({
         </h2>
         <p className="sub">
           System of record. Propose from brain drafts next steps for Approve / Edit / Reject.
-          GAP and competitor stubs stay drafts until you sign them off.
+          Draft advisory from brain writes a pack with an assumptions list — never auto-sent.
         </p>
-        <div style={{ marginTop: 12 }}>
+        <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
           <button
             type="button"
             className="btn gold mini"
             onClick={() => void proposeFromBrain()}
-            disabled={proposing || loading}
+            disabled={proposing || drafting || loading}
           >
             {proposing ? "Proposing…" : "Propose from brain"}
+          </button>
+          <button
+            type="button"
+            className="btn ghost mini"
+            onClick={() => void draftAdvisoryFromBrain()}
+            disabled={proposing || drafting || loading}
+          >
+            {drafting ? "Drafting…" : "Draft advisory from brain"}
           </button>
         </div>
       </div>
@@ -916,75 +926,12 @@ export function ClientBrainSummary({
             )}
           </section>
 
-          {/* 5. Deliverable drafts */}
-          <section className="card pad">
-            <span className="eyebrow">Deliverable drafts</span>
-            {drafts.length === 0 ? (
-              <p className="sub" style={{ margin: 0 }}>
-                No deliverable drafts yet.
-                {onOpenTab ? (
-                  <>
-                    {" "}
-                    <button
-                      type="button"
-                      className="btn ghost mini"
-                      style={{ marginLeft: 8 }}
-                      onClick={() => onOpenTab("advisory")}
-                    >
-                      Open Advisory
-                    </button>
-                  </>
-                ) : null}
-              </p>
-            ) : (
-              <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 14 }}>
-                {drafts.map((draft) => {
-                  const items = parseAssumptionChecklist(draft.assumption_checklist);
-                  return (
-                    <li
-                      key={draft.id}
-                      style={{ border: "1px solid var(--line-soft)", borderRadius: 14, padding: 14 }}
-                    >
-                      <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
-                        <strong>{draft.kind?.replace(/_/g, " ") || "Draft"}</strong>
-                        <span style={{ fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--gold)" }}>
-                          {draftStatusLabel(draft.status)}
-                        </span>
-                      </div>
-                      {draft.body && (
-                        <p className="sub" style={{ margin: "8px 0 0", whiteSpace: "pre-wrap" }}>
-                          {draft.body.length > 420 ? `${draft.body.slice(0, 420)}…` : draft.body}
-                        </p>
-                      )}
-                      {items.length === 0 ? (
-                        <p className="sub" style={{ margin: "10px 0 0", fontSize: 12.5 }}>
-                          No assumption checklist on this draft.
-                        </p>
-                      ) : (
-                        <ul style={{ listStyle: "none", margin: "12px 0 0", padding: 0, display: "grid", gap: 8 }}>
-                          {items.map((item) => (
-                            <li key={item.id} style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
-                              <Checkbox
-                                id={`${draft.id}-${item.id}`}
-                                checked={item.checked}
-                                onCheckedChange={() => void toggleAssumption(draft, item.id)}
-                              />
-                              <label
-                                htmlFor={`${draft.id}-${item.id}`}
-                                style={{ fontSize: 13.5, cursor: "pointer" }}
-                              >
-                                {item.text}
-                              </label>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </section>
+          <ClientBrainDrafts
+            clientId={clientId}
+            drafts={drafts}
+            onReload={load}
+            onOpenAdvisory={onOpenTab ? () => onOpenTab("advisory") : undefined}
+          />
 
           {/* Outstanding questions — shared owner + accountant queue */}
           <section className="card pad">

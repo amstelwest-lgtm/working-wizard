@@ -33,3 +33,7 @@ verify_jwt = true
 # Client Brain propose — accountant JWT; writes proposed_next_steps + draft stubs.
 [functions.brain-propose]
 verify_jwt = true
+
+# Client Brain deliverable draft — accountant JWT; writes deliverable_drafts as draft only.
+[functions.brain-deliverable-draft]
+verify_jwt = true
