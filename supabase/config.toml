@@ -37,3 +37,7 @@ verify_jwt = true
 # Client Brain deliverable draft — accountant JWT; writes deliverable_drafts as draft only.
 [functions.brain-deliverable-draft]
 verify_jwt = true
+
+# In-app Milōn bot — JWT; worker bee on the current client brain. Same Anthropic secret as ask-ai.
+[functions.milon-bot]
+verify_jwt = true
