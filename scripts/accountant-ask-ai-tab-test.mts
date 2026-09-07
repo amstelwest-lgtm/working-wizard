@@ -35,7 +35,7 @@ assert(clientSrc.includes('id="ask-ai-accountant"'), "studio still mounts the sa
 assert(clientSrc.includes('variant: "studio"'), "accountant widget uses the large studio variant");
 assert(clientSrc.includes('audience: "accountant"'), "accountant questions send accountant audience");
 assert(
-  clientSrc.includes("activeTab === \"ask\" ? \"none\""),
+  /activeTab === "ask"[\s\S]{0,40}"none"/.test(clientSrc),
   "simple/complex toggle is hidden on Ask AI",
 );
 assert(

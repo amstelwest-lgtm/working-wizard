@@ -867,6 +867,53 @@ export type Database = {
           },
         ]
       }
+      client_artifacts: {
+        Row: {
+          id: string
+          client_id: string
+          kind: string
+          ref_table: string | null
+          ref_id: string | null
+          storage_path: string | null
+          period_label: string | null
+          meta: Json
+          created_by: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          client_id: string
+          kind: string
+          ref_table?: string | null
+          ref_id?: string | null
+          storage_path?: string | null
+          period_label?: string | null
+          meta?: Json
+          created_by?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          client_id?: string
+          kind?: string
+          ref_table?: string | null
+          ref_id?: string | null
+          storage_path?: string | null
+          period_label?: string | null
+          meta?: Json
+          created_by?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_artifacts_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       clients: {
         Row: {
           business_type: string | null
@@ -876,6 +923,8 @@ export type Database = {
           budget: Json | null
           budget_updated_at: string | null
           operating_profile: Json | null
+          brain_summary: Json | null
+          brain_summary_updated_at: string | null
           financial_year_start_month: number | null
           contact_email: string | null
           contact_phone: string | null
@@ -901,6 +950,8 @@ export type Database = {
           budget?: Json | null
           budget_updated_at?: string | null
           operating_profile?: Json | null
+          brain_summary?: Json | null
+          brain_summary_updated_at?: string | null
           financial_year_start_month?: number | null
           contact_email?: string | null
           contact_phone?: string | null
@@ -926,6 +977,8 @@ export type Database = {
           budget?: Json | null
           budget_updated_at?: string | null
           operating_profile?: Json | null
+          brain_summary?: Json | null
+          brain_summary_updated_at?: string | null
           financial_year_start_month?: number | null
           contact_email?: string | null
           contact_phone?: string | null
@@ -949,6 +1002,189 @@ export type Database = {
             columns: ["firm_id"]
             isOneToOne: false
             referencedRelation: "firms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      context_facts: {
+        Row: {
+          id: string
+          client_id: string
+          fact_text: string
+          category: string | null
+          source: string | null
+          source_ref: string | null
+          confidence: number | null
+          superseded_by: string | null
+          created_by: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          client_id: string
+          fact_text: string
+          category?: string | null
+          source?: string | null
+          source_ref?: string | null
+          confidence?: number | null
+          superseded_by?: string | null
+          created_by?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          client_id?: string
+          fact_text?: string
+          category?: string | null
+          source?: string | null
+          source_ref?: string | null
+          confidence?: number | null
+          superseded_by?: string | null
+          created_by?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "context_facts_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "context_facts_superseded_by_fkey"
+            columns: ["superseded_by"]
+            isOneToOne: false
+            referencedRelation: "context_facts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      proposed_next_steps: {
+        Row: {
+          id: string
+          client_id: string
+          title: string
+          rationale: string | null
+          assumptions: Json
+          status: string
+          edit_diff: Json | null
+          linked_action_item_id: string | null
+          signed_off_by_id: string | null
+          signed_off_by_name: string | null
+          signed_off_by_title: string | null
+          firm_name: string | null
+          signed_off_at: string | null
+          note: string | null
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          client_id: string
+          title: string
+          rationale?: string | null
+          assumptions?: Json
+          status?: string
+          edit_diff?: Json | null
+          linked_action_item_id?: string | null
+          signed_off_by_id?: string | null
+          signed_off_by_name?: string | null
+          signed_off_by_title?: string | null
+          firm_name?: string | null
+          signed_off_at?: string | null
+          note?: string | null
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          client_id?: string
+          title?: string
+          rationale?: string | null
+          assumptions?: Json
+          status?: string
+          edit_diff?: Json | null
+          linked_action_item_id?: string | null
+          signed_off_by_id?: string | null
+          signed_off_by_name?: string | null
+          signed_off_by_title?: string | null
+          firm_name?: string | null
+          signed_off_at?: string | null
+          note?: string | null
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "proposed_next_steps_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proposed_next_steps_linked_action_item_id_fkey"
+            columns: ["linked_action_item_id"]
+            isOneToOne: false
+            referencedRelation: "action_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      deliverable_drafts: {
+        Row: {
+          id: string
+          client_id: string
+          kind: string | null
+          body: string | null
+          assumption_checklist: Json
+          status: string
+          advisory_delivery_id: string | null
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          client_id: string
+          kind?: string | null
+          body?: string | null
+          assumption_checklist?: Json
+          status?: string
+          advisory_delivery_id?: string | null
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          client_id?: string
+          kind?: string | null
+          body?: string | null
+          assumption_checklist?: Json
+          status?: string
+          advisory_delivery_id?: string | null
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "deliverable_drafts_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "deliverable_drafts_advisory_delivery_id_fkey"
+            columns: ["advisory_delivery_id"]
+            isOneToOne: false
+            referencedRelation: "advisory_deliveries"
             referencedColumns: ["id"]
           },
         ]
