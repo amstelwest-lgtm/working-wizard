@@ -48,6 +48,7 @@
     "test:staged-upload": "vite-node --config scripts/vite-test.config.ts scripts/staged-upload-test.mts",
     "test:ci": "node scripts/run-ci-tests.mjs",
     "test:google-auth": "vite-node --config scripts/vite-test.config.ts scripts/google-auth-test.mts",
+    "test:tab-auth": "vite-node --config scripts/vite-test.config.ts scripts/tab-auth-test.mts",
     "test:legal-notices": "vite-node --config scripts/vite-test.config.ts scripts/legal-notices-test.mts",
     "test:market": "vite-node --config scripts/vite-test.config.ts scripts/market-kernel-test.mts",
     "test:client-brain": "vite-node --config scripts/vite-test.config.ts scripts/client-brain-summary-test.mts",

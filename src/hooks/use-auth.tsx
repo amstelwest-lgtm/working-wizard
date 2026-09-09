@@ -49,7 +49,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         signOut: async () => {
           const { clearPortalRouting } = await import("@/lib/user-roles");
           clearPortalRouting();
-          await supabase.auth.signOut();
+          // Local only: a global revoke would kill this email's other tabs.
+          await supabase.auth.signOut({ scope: "local" });
         },
       }}
     >

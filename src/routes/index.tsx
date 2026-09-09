@@ -964,7 +964,7 @@ function LandingPage() {
         // A leftover accountant session on this browser must not keep the
         // invitee in the wrong portal after they accept as the owner.
         if (user && user.email?.toLowerCase() !== regEmail.trim().toLowerCase()) {
-          await supabase.auth.signOut();
+          await supabase.auth.signOut({ scope: "local" });
         }
 
         let clientId: string | null = null;
