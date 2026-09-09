@@ -28,7 +28,7 @@ import {
 // Inline so landing paint doesn't wait on a second stylesheet round-trip
 // (external app CSS can still load; these rules win for landing selectors).
 import landingCss from "../styles/landing.css?inline";
-import { pendingInviteTokenFromSearch } from "@/lib/invite-handoff";
+import { peekPendingOwnerInvite, pendingInviteTokenFromSearch } from "@/lib/invite-handoff";
 import { SHARE_DESCRIPTION, SHARE_TITLE } from "@/lib/share-copy";
 
 export const Route = createFileRoute("/")({
@@ -126,9 +126,11 @@ function LandingPage() {
   }, [doTrialVisit]);
 
   useEffect(() => {
-    const inv = pendingInviteTokenFromUrl();
+    const stored = peekPendingOwnerInvite();
+    const inv = pendingInviteTokenFromUrl() ?? stored?.token ?? null;
     if (!inv) return;
     setInviteClientId(inv);
+    if (stored?.clientCode) setRegClientCode((prev) => prev || stored.clientCode || "");
     // Show the code field immediately so a slow preview cannot let them submit
     // without it. Hide only after preview confirms this client has no code.
     setInviteNeedsCode(true);
@@ -261,10 +263,11 @@ function LandingPage() {
         if (!cancelled) navigate({ to: "/ops" });
         return;
       }
-      // Invite accept stays on the landing form. Read the URL here (not
-      // inviteClientId state) so a leftover accountant session cannot race
-      // the invite effect and dump the user onto /dashboard before the form paints.
-      if (pendingInviteTokenFromUrl() || inviteClientId) return;
+      // Invite accept stays on the landing form. Read the URL / Google stash
+      // here (not only inviteClientId state) so a leftover accountant session
+      // cannot race the invite effect and dump the user onto /dashboard — and
+      // so a Google return to `/` still keeps the owner-seat invite.
+      if (pendingInviteTokenFromUrl() || inviteClientId || peekPendingOwnerInvite()) return;
       try {
         const { resolvePostLoginPath } = await import("@/lib/user-roles");
         const path = await resolvePostLoginPath(user.id);
@@ -1247,7 +1250,13 @@ function LandingPage() {
 
   /* Signed-in visitors bounce to /app or /dashboard. Don't flash the landing
      hero while that lookup runs. Invite accept stays on this page. */
-  if (user && !loading && !inviteClientId && !pendingInviteTokenFromUrl()) {
+  if (
+    user &&
+    !loading &&
+    !inviteClientId &&
+    !pendingInviteTokenFromUrl() &&
+    !peekPendingOwnerInvite()
+  ) {
     return (
       <div
         data-milon-landing=""

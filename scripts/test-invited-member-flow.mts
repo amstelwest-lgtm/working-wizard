@@ -632,6 +632,134 @@ async function testExistingAccountOwnerInvite(admin: SupabaseClient) {
   pass("Existing-account invite fixtures cleaned up");
 }
 
+/**
+ * D) Google matches the existing accountant identity on the same email.
+ * Redeeming the firm owner invite must add client_owner without wiping
+ * firm_admin, and a second redeem (callback remount) must be idempotent.
+ */
+async function testAccountantSelfRedeemOwnerInvite(admin: SupabaseClient) {
+  const ts = Date.now();
+  const accountantEmail = `acct-self-${ts}@example.com`;
+  const password = "Test1234!";
+  const inviteToken = `self-inv-${ts}`;
+  let accountantId = "";
+  let clientId = "";
+  let firmId = "";
+
+  section("D1 · Accountant creates a firm client (placeholder owner)");
+  const { data: acctU, error: acctErr } = await admin.auth.admin.createUser({
+    email: accountantEmail,
+    password,
+    email_confirm: true,
+    user_metadata: { full_name: "Self Accountant", signup_type: "accountant" },
+  });
+  if (acctErr || !acctU.user) {
+    fail("Create accountant", acctErr?.message);
+    return;
+  }
+  accountantId = acctU.user.id;
+  const { data: firmRow, error: firmErr } = await admin
+    .from("firms")
+    .insert({ name: `Self Firm ${ts}`, owner_user_id: accountantId })
+    .select("id")
+    .single();
+  if (firmErr || !firmRow) {
+    fail("Insert firm", firmErr?.message);
+    await cleanupUsers(admin, [accountantId], [], []);
+    return;
+  }
+  firmId = firmRow.id;
+  await admin.from("firm_memberships").insert({ firm_id: firmId, user_id: accountantId, role: "owner" });
+  await admin.from("user_roles").insert({ user_id: accountantId, role: "firm_admin" });
+  const { data: clientRow, error: clientErr } = await admin
+    .from("clients")
+    .insert({
+      name: "Self Biz",
+      owner_user_id: accountantId,
+      firm_id: firmId,
+      business_type: "service",
+    })
+    .select("id")
+    .single();
+  if (clientErr || !clientRow) {
+    fail("Insert client", clientErr?.message);
+    await cleanupUsers(admin, [accountantId], [], [firmId]);
+    return;
+  }
+  clientId = clientRow.id;
+  const { error: tokErr } = await admin.from("invite_tokens").insert({
+    token: inviteToken,
+    client_id: clientId,
+    created_by: accountantId,
+    purpose: "owner_handoff",
+  });
+  const useToken = !tokErr;
+  const inviteRef = useToken ? inviteToken : clientId;
+  pass(`Accountant ${accountantEmail} owns placeholder client ${clientId}`);
+
+  section("D2 · Same user redeems the owner invite (Google identity match)");
+  try {
+    const result = await acceptOwnerInviteForUser({
+      userId: accountantId,
+      email: accountantEmail,
+      inviteClientId: inviteRef,
+    });
+    result.transferredOwnership
+      ? pass("Handoff treats the accountant as practice placeholder ✓")
+      : fail("Expected transferredOwnership=true when the invitee is the placeholder owner");
+    result.clientId === clientId
+      ? pass("result.clientId is the invited business")
+      : fail("wrong client", result.clientId);
+    result.userId === accountantId
+      ? pass("did not mint a second auth user for the same email")
+      : fail("userId changed", result.userId);
+  } catch (e) {
+    fail("acceptOwnerInviteForUser() threw for accountant self-redeem", (e as Error).message);
+    await cleanupUsers(admin, [accountantId], [clientId], [firmId]);
+    return;
+  }
+
+  const { data: after } = await admin
+    .from("clients")
+    .select("owner_user_id, firm_id")
+    .eq("id", clientId)
+    .maybeSingle();
+  after?.owner_user_id === accountantId
+    ? pass("business owner_user_id is the same email (owner seat) ✓")
+    : fail("ownership lost", JSON.stringify(after));
+  after?.firm_id === firmId
+    ? pass("firm_id kept — accountant seat stays attached ✓")
+    : fail("firm_id cleared", JSON.stringify(after));
+
+  const { data: roles } = await admin.from("user_roles").select("role").eq("user_id", accountantId);
+  const roleList = (roles ?? []).map((r: { role: string }) => r.role);
+  roleList.includes("firm_admin")
+    ? pass("accountant / firm_admin seat kept ✓")
+    : fail("practice role was dropped", JSON.stringify(roleList));
+  roleList.includes("client_owner")
+    ? pass("client_owner business seat added ✓")
+    : fail("owner role missing", JSON.stringify(roleList));
+
+  section("D3 · Second redeem is idempotent (Google callback remount)");
+  try {
+    const again = await acceptOwnerInviteForUser({
+      userId: accountantId,
+      email: accountantEmail,
+      inviteClientId: inviteRef,
+    });
+    again.clientId === clientId
+      ? pass("retry returns the same invited client ✓")
+      : fail("retry attached the wrong client", again.clientId);
+  } catch (e) {
+    fail("second redeem must not throw already-used for the same Google user", (e as Error).message);
+  }
+
+  if (useToken) await admin.from("invite_tokens").delete().eq("token", inviteToken);
+  section("D · Cleanup");
+  await cleanupUsers(admin, [accountantId], [clientId], [firmId]);
+  pass("Accountant self-redeem fixtures cleaned up");
+}
+
 async function main() {
   console.log("══════════════════════════════════════════════════════════════");
   console.log("  Invite flows: ownership handoff (G25) + staff member        ");
@@ -657,6 +785,7 @@ async function main() {
   await testFirmOwnershipHandoff(admin);
   await testStaffInviteNoHandoff(admin);
   await testExistingAccountOwnerInvite(admin);
+  await testAccountantSelfRedeemOwnerInvite(admin);
 
   console.log(`\n══════════════════════════════════════════════════════════════`);
   console.log(`  Results: ${passed} passed, ${failed} failed`);

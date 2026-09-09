@@ -7,8 +7,18 @@ export const GOOGLE_NEXT_KEY = "milon_google_auth_next";
 
 export type GoogleAuthIntent = PortalIntent;
 
-export function googleOAuthRedirectTo(origin: string): string {
-  return `${origin.replace(/\/$/, "")}${GOOGLE_CALLBACK_PATH}`;
+export function googleOAuthRedirectTo(
+  origin: string,
+  ownerInvite?: { token: string; clientCode?: string | null },
+): string {
+  const base = `${origin.replace(/\/$/, "")}${GOOGLE_CALLBACK_PATH}`;
+  const token = ownerInvite?.token?.trim();
+  if (!token) return base;
+  const q = new URLSearchParams();
+  q.set("invite", token);
+  const cc = ownerInvite?.clientCode?.trim();
+  if (cc) q.set("cc", cc);
+  return `${base}?${q.toString()}`;
 }
 
 export function googleDisplayName(
@@ -195,7 +205,7 @@ export async function startGoogleSignIn(opts: {
   const { error } = await supabase.auth.signInWithOAuth({
     provider: "google",
     options: {
-      redirectTo: googleOAuthRedirectTo(window.location.origin),
+      redirectTo: googleOAuthRedirectTo(window.location.origin, opts.ownerInvite),
       queryParams: {
         access_type: "offline",
         prompt: "select_account",

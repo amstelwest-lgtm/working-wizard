@@ -297,13 +297,34 @@ export function decideAccountantStay(d: PortalRouteDecision): boolean {
  * Send a just-signed-in accountant-door user from /app back to /dashboard.
  * Direct later visits to /app (no force flag) still work for dual-role users.
  * Business-client credentials never bounce into the practice portal.
+ * Owner-door / invite redeem must stay on /app even when the same email still
+ * only has a practice role (client_owner row may land a beat later).
  */
 export function decideOwnerAppBounce(d: PortalRouteDecision & { actingAsClient: boolean }): boolean {
   if (d.actingAsClient) return false;
+  if (d.force === "owner") return false;
   if (!canEnterAccountantPortal(d)) return false;
   if (d.force === "accountant") return true;
   if (d.hasPracticeRole && !d.hasClientRole) return true;
   return false;
+}
+
+/**
+ * Role the founder board should act as. Dual-role emails (practice + client)
+ * have primaryRole=firm_admin — that must not win on the owner door, or an
+ * accountant redeeming a client invite is treated as the practice profile.
+ */
+export function ownerBoardRole(opts: {
+  roles: AppRole[];
+  force: PortalIntent | null;
+  intent: PortalIntent | null;
+}): AppRole | null {
+  const ownerDoor = opts.force === "owner" || opts.intent === "owner";
+  if (ownerDoor) {
+    if (opts.roles.includes("client_owner")) return "client_owner";
+    if (opts.roles.includes("client_member")) return "client_member";
+  }
+  return summarizeRoles(opts.roles).primaryRole;
 }
 
 /**
