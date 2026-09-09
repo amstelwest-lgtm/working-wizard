@@ -14,6 +14,7 @@ import {
   isSmeOnly,
   canEnterAccountantPortal,
   isPracticeSignupMeta,
+  ownerBoardRole,
   type PortalRouteDecision,
 } from "../src/lib/user-roles";
 
@@ -118,6 +119,34 @@ assert(decideAccountantStay(practiceOnly) === true, "practice-only stays");
 assert(
   decideOwnerAppBounce({ ...practiceOnly, actingAsClient: false }) === true,
   "practice-only is bounced off /app",
+);
+assert(
+  decideOwnerAppBounce({ ...practiceOnly, force: "owner", actingAsClient: false }) === false,
+  "owner-door / invite redeem stays on /app even before client_owner is visible",
+);
+assert(
+  ownerBoardRole({
+    roles: ["firm_admin", "client_owner"],
+    force: "owner",
+    intent: "owner",
+  }) === "client_owner",
+  "same email: owner door uses the business seat, not firm_admin",
+);
+assert(
+  ownerBoardRole({
+    roles: ["firm_admin", "client_owner"],
+    force: "accountant",
+    intent: "accountant",
+  }) === "firm_admin",
+  "same email: accountant door still uses the practice seat",
+);
+assert(
+  ownerBoardRole({
+    roles: ["firm_admin"],
+    force: "owner",
+    intent: "owner",
+  }) === "firm_admin",
+  "owner door without a client role still reports the practice role",
 );
 
 assert(decidePostLoginPath(clientOnly) === "/app", "client-only → founder board");
@@ -245,6 +274,8 @@ assert(
 
 const appSrc = readFileSync(resolve("src/routes/app.tsx"), "utf8");
 assert(appSrc.includes("openOwnerSettings"), "/app stamps owner settings return");
+assert(appSrc.includes("ownerBoardRole"), "/app dual-role owner door is the business seat");
+assert(appSrc.includes("hasInviteHandoffFlag"), "/app does not bounce a just-redeemed invite");
 const settingsSrc = readFileSync(resolve("src/routes/_authenticated/settings.index.tsx"), "utf8");
 assert(settingsSrc.includes("decideSettingsView"), "settings uses door-aware view, not primaryRole");
 assert(settingsSrc.includes("settingsBackPath"), "settings Back follows the door");

@@ -63,6 +63,7 @@ type PreparedInvite = {
   client: InviteClientRow;
   shouldTransfer: boolean;
   role: "client_owner" | "client_member";
+  alreadyRedeemedByCaller: boolean;
 };
 
 /** Current owner is a firm / practice placeholder for this client (not the real business owner). */
@@ -149,13 +150,20 @@ function assertClientCode(client: InviteClientRow, inviteClientCode?: string | n
 async function prepareInvite(
   inviteClientId: string,
   inviteClientCode?: string | null,
+  redeemedByUserId?: string,
 ): Promise<PreparedInvite> {
-  const resolved = await resolveInviteToClientId(inviteClientId);
+  const resolved = await resolveInviteToClientId(inviteClientId, { redeemedByUserId });
   const client = await loadInviteClient(resolved.clientId);
   assertClientCode(client, inviteClientCode);
   const shouldTransfer = await isPracticePlaceholderOwner(client.owner_user_id, client.firm_id);
   const role = shouldTransfer ? "client_owner" : "client_member";
-  return { tokenId: resolved.tokenId, client, shouldTransfer, role };
+  return {
+    tokenId: resolved.tokenId,
+    client,
+    shouldTransfer,
+    role,
+    alreadyRedeemedByCaller: Boolean(resolved.alreadyRedeemedByCaller),
+  };
 }
 
 async function rollbackOwnership(clientId: string, previousOwnerId: string) {
@@ -209,7 +217,7 @@ async function applyPreparedInvite(opts: {
   const clientId = client.id;
   const previousOwnerId = client.owner_user_id;
 
-  if (!alreadyClaimed) {
+  if (!alreadyClaimed && !prepared.alreadyRedeemedByCaller) {
     await claimInviteToken(tokenId);
   }
 
@@ -317,7 +325,11 @@ export async function signUpInvitedMember(input: InviteMemberInput): Promise<Inv
 export async function acceptOwnerInviteForUser(
   input: AcceptOwnerInviteInput,
 ): Promise<InviteMemberResult> {
-  const prepared = await prepareInvite(input.inviteClientId, input.inviteClientCode);
+  const prepared = await prepareInvite(
+    input.inviteClientId,
+    input.inviteClientCode,
+    input.userId,
+  );
   let email = input.email?.trim() ?? "";
   if (!email) {
     const { data } = await supabaseAdmin.auth.admin.getUserById(input.userId);
@@ -329,6 +341,6 @@ export async function acceptOwnerInviteForUser(
     email,
     replaceRoles: false,
     deleteUserOnFailure: false,
-    alreadyClaimed: false,
+    alreadyClaimed: prepared.alreadyRedeemedByCaller,
   });
 }

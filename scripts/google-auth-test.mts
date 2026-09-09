@@ -28,6 +28,18 @@ assert(
   googleOAuthRedirectTo("http://localhost:5000") === "http://localhost:5000/auth/callback",
   "redirect local",
 );
+assert(
+  googleOAuthRedirectTo("https://milonfinance.com", {
+    token: "tok123",
+    clientCode: "MLN-AB12",
+  }) === "https://milonfinance.com/auth/callback?invite=tok123&cc=MLN-AB12",
+  "redirectTo carries invite + client code (never `code`, which is PKCE)",
+);
+assert(
+  googleOAuthRedirectTo("https://milonfinance.com", { token: "tok123" }) ===
+    "https://milonfinance.com/auth/callback?invite=tok123",
+  "redirectTo carries invite without a client code",
+);
 
 assert(
   googleDisplayName({ full_name: "Thabo Nkosi" }, "thabo@x.co") === "Thabo Nkosi",
@@ -118,6 +130,10 @@ assert(
   googleSrc.includes("ownerInvite"),
   "startGoogleSignIn stashes an in-flight owner invite across the OAuth hop",
 );
+assert(
+  googleSrc.includes("googleOAuthRedirectTo(window.location.origin, opts.ownerInvite)"),
+  "Google OAuth redirectTo carries the invite so an origin hop cannot drop it",
+);
 
 // /auth (AuthPage) has no <Outlet />, so any route filed under auth.*.tsx never
 // renders — AuthPage runs instead, stamps the accountant door and sends
@@ -151,6 +167,10 @@ assert(
   "Google callback redeems a stashed owner invite instead of abandoning it",
 );
 assert(
+  callbackSrc.includes("peekPendingOwnerInvite") && callbackSrc.includes("resolvePendingOwnerInvite"),
+  "callback reads invite from OAuth URL + storage before consuming, so a remount cannot drop it",
+);
+assert(
   callbackSrc.includes("doAcceptOwnerInvite"),
   "Google callback attaches the signed-in user to the invited client",
 );
@@ -158,6 +178,10 @@ assert(
   callbackSrc.indexOf("pendingInvite?.token") < callbackSrc.indexOf("ensure_own_client") &&
     callbackSrc.includes("pendingInvite?.token"),
   "invite redeem runs before ensure_own_client so an existing workspace is not minted first",
+);
+assert(
+  callbackSrc.includes("!intent && !pendingInvite?.token"),
+  "existing accountant Google identity must not be inferred while an owner invite is in flight",
 );
 
 console.log("google-auth-test: ok");

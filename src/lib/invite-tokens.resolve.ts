@@ -11,6 +11,7 @@ type InviteTokenRow = {
   client_id: string;
   expires_at: string | null;
   redeemed_at: string | null;
+  redeemed_by?: string | null;
 };
 
 const inviteTokens = () => supabaseAdmin.from("invite_tokens");
@@ -56,17 +57,22 @@ export function clientCodesMatch(a: string | null | undefined, b: string | null 
 }
 
 /** Resolve an invite token (or legacy client UUID) to a client id. */
-export async function resolveInviteToClientId(invite: string): Promise<{
+export async function resolveInviteToClientId(
+  invite: string,
+  opts?: { redeemedByUserId?: string },
+): Promise<{
   clientId: string;
   tokenId: string | null;
   /** True when the invite was a raw client UUID (deprecated path). */
   legacy?: boolean;
+  /** Caller already claimed this token (Google callback remount / retry). */
+  alreadyRedeemedByCaller?: boolean;
 }> {
   const trimmed = invite.trim();
   if (!trimmed) throw new Error("Invite link is invalid.");
 
   const { data, error } = await inviteTokens()
-    .select("id, client_id, expires_at, redeemed_at")
+    .select("id, client_id, expires_at, redeemed_at, redeemed_by")
     .eq("token", trimmed)
     .maybeSingle();
 
@@ -83,7 +89,16 @@ export async function resolveInviteToClientId(invite: string): Promise<{
 
   if (data) {
     const row = data as InviteTokenRow;
-    if (row.redeemed_at) throw new Error("This invite has already been used.");
+    if (row.redeemed_at) {
+      if (opts?.redeemedByUserId && row.redeemed_by === opts.redeemedByUserId) {
+        return {
+          clientId: row.client_id,
+          tokenId: row.id,
+          alreadyRedeemedByCaller: true,
+        };
+      }
+      throw new Error("This invite has already been used.");
+    }
     if (row.expires_at && new Date(row.expires_at).getTime() < Date.now()) {
       throw new Error("This invite has expired. Ask your accountant for a new link.");
     }

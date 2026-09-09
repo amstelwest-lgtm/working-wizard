@@ -15,6 +15,8 @@ import {
   pendingInviteTokenFromSearch,
   ownerInviteLandingPath,
   ownerInviteTokenFromNext,
+  ownerInviteFromCallbackSearch,
+  resolvePendingOwnerInvite,
   encodePendingOwnerInvite,
   decodePendingOwnerInvite,
   pendingOwnerInviteCookieString,
@@ -48,6 +50,38 @@ assert(
   "Google next preserves invite token",
 );
 assert(ownerInviteTokenFromNext("/app") === null, "non-invite next has no token");
+assert(
+  ownerInviteFromCallbackSearch("?invite=tok123&cc=MLN-AB12&code=pkce")?.token === "tok123" &&
+    ownerInviteFromCallbackSearch("?invite=tok123&cc=MLN-AB12&code=pkce")?.clientCode === "MLN-AB12",
+  "callback search keeps invite next to the PKCE code",
+);
+assert(
+  ownerInviteFromCallbackSearch("?code=pkce") === null,
+  "PKCE-only callback has no owner invite",
+);
+assert(
+  resolvePendingOwnerInvite({
+    callbackSearch: "?code=pkce",
+    next: "/app",
+    stored: { token: "tok123", clientCode: "MLN-1" },
+  })?.token === "tok123",
+  "storage invite survives when URL has only PKCE",
+);
+assert(
+  resolvePendingOwnerInvite({
+    callbackSearch: "?invite=tok123&code=pkce",
+    stored: { token: "tok123", clientCode: "MLN-1" },
+  })?.clientCode === "MLN-1",
+  "URL token merges client code from storage",
+);
+assert(
+  resolvePendingOwnerInvite({
+    callbackSearch: "?code=pkce",
+    next: "/?invite=fromnext&mode=signup",
+    stored: null,
+  })?.token === "fromnext",
+  "Google next path is the last-resort invite source",
+);
 assert(encodePendingOwnerInvite({ token: "tok", clientCode: "MLN-AB12" }) === "tok|MLN-AB12", "encode with code");
 assert(encodePendingOwnerInvite({ token: "tok", clientCode: null }) === "tok", "encode token only");
 assert(decodePendingOwnerInvite("tok|MLN-AB12")?.clientCode === "MLN-AB12", "decode code");
@@ -215,6 +249,10 @@ assert(
   memberSrc.includes("replaceRoles: false"),
   "existing-account redeem must not wipe unrelated user_roles",
 );
+assert(
+  memberSrc.includes("alreadyRedeemedByCaller"),
+  "same Google user can retry an invite they already claimed (callback remount)",
+);
 
 const indexSrc = readFileSync(resolve("src/routes/index.tsx"), "utf8");
 assert(indexSrc.includes("clearInviteQueryFromUrl"), "invite accept strips the invite URL");
@@ -234,6 +272,10 @@ assert(
   !/clearInviteQueryFromUrl\(\);\s*setInviteClientId\(null\);\s*setSigninOpen\(false\)/.test(indexSrc),
   "Sign in must not strip the invite token before redeeming",
 );
+assert(
+  indexSrc.includes("peekPendingOwnerInvite"),
+  "landing keeps a Google-stashed owner invite (do not dump the accountant session to /dashboard)",
+);
 
 const handoffSrc = readFileSync(resolve("src/lib/invite-handoff.ts"), "utf8");
 assert(handoffSrc.includes("let subscription"), "waitForAuthSession does not TDZ on the auth subscription");
@@ -242,6 +284,7 @@ assert(!handoffSrc.includes("sub.subscription.unsubscribe()"), "old sync-unsubsc
 
 const appSrc = readFileSync(resolve("src/routes/app.tsx"), "utf8");
 assert(appSrc.includes("hasInviteHandoffFlag"), "founder board does not bounce a just-accepted invite");
+assert(appSrc.includes("ownerBoardRole"), "founder board uses the owner seat on the owner door, not firm_admin");
 assert(appSrc.includes("openInvitedClient"), "founder board prefers the invited workspace for existing accounts");
 assert(appSrc.includes("shouldShowOwnerProfileFunnel"), "founder board uses shared funnel gate");
 assert(appSrc.includes("ownerWalkthroughReady({"), "tour ready helper is wired");

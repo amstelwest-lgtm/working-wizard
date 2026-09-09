@@ -2164,6 +2164,7 @@ function Index() {
         ? sessionStorage.getItem("acting_as_client_id")
         : null);
     if (acting) return;
+    if (hasInviteHandoffFlag()) return;
     let cancelled = false;
     void (async () => {
       const { shouldBounceFromOwnerApp, clearForcePortal, shouldOpenItInbox } =
@@ -2560,11 +2561,17 @@ function Index() {
     supabase.auth.getUser().then(async ({ data: { user: u } }) => {
       try {
         if (!u) return;
-        const { resolvePortalRoles } = await import("@/lib/user-roles");
+        const { resolvePortalRoles, ownerBoardRole, peekForcePortal, getPortalIntent } =
+          await import("@/lib/user-roles");
         const portal = await resolvePortalRoles(u.id);
         if (cancelled) return;
-        if (portal.primaryRole) {
-          setUserRole(portal.primaryRole);
+        const boardRole = ownerBoardRole({
+          roles: portal.roles,
+          force: peekForcePortal(),
+          intent: getPortalIntent(),
+        });
+        if (boardRole) {
+          setUserRole(boardRole);
           return;
         }
 

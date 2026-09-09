@@ -44,6 +44,42 @@ export function ownerInviteTokenFromNext(next: string | undefined): string | nul
   return pendingInviteTokenFromSearch(next.slice(q));
 }
 
+/**
+ * Invite carried on `/auth/callback?invite=&cc=` (OAuth redirectTo).
+ * `cc` is the client code — never `code`, which is the PKCE query param.
+ */
+export function ownerInviteFromCallbackSearch(search: string): PendingOwnerInvite | null {
+  const raw = search.startsWith("?") ? search.slice(1) : search;
+  if (!raw) return null;
+  const params = new URLSearchParams(raw);
+  const token = params.get("invite")?.trim() ?? "";
+  if (!token) return null;
+  const clientCode = params.get("cc")?.trim() || null;
+  return { token, clientCode };
+}
+
+/**
+ * Google round-trip: URL (redirectTo) wins, then storage/cookie, then `next`.
+ * Merge a missing client code from storage so an origin hop that kept the
+ * token but dropped `cc` still redeems.
+ */
+export function resolvePendingOwnerInvite(opts: {
+  callbackSearch?: string;
+  next?: string;
+  stored?: PendingOwnerInvite | null;
+}): PendingOwnerInvite | null {
+  const fromUrl = opts.callbackSearch ? ownerInviteFromCallbackSearch(opts.callbackSearch) : null;
+  const stored = opts.stored?.token ? opts.stored : null;
+  const fromNext = ownerInviteTokenFromNext(opts.next);
+  const token = fromUrl?.token || stored?.token || fromNext;
+  if (!token) return null;
+  const clientCode =
+    fromUrl?.clientCode ||
+    (stored && stored.token === token ? stored.clientCode : null) ||
+    null;
+  return { token, clientCode };
+}
+
 export function encodePendingOwnerInvite(value: PendingOwnerInvite): string {
   const code = value.clientCode?.trim() ?? "";
   return code ? `${value.token}|${code}` : value.token;

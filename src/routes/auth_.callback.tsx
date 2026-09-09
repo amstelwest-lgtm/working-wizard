@@ -14,7 +14,8 @@ import { notifySignup } from "@/lib/signup-notify";
 import {
   consumePendingOwnerInvite,
   ownerInviteLandingPath,
-  ownerInviteTokenFromNext,
+  peekPendingOwnerInvite,
+  resolvePendingOwnerInvite,
   stashInviteHandoff,
   stashPendingOwnerInvite,
 } from "@/lib/invite-handoff";
@@ -65,11 +66,15 @@ function AuthCallbackPage() {
 
       const consumed = consumeGoogleAuthIntent();
       const { next } = consumed;
-      const nextInviteToken = ownerInviteTokenFromNext(next);
-      const pendingInvite = consumePendingOwnerInvite() ??
-        (nextInviteToken ? { token: nextInviteToken, clientCode: null } : null);
+      // URL (OAuth redirectTo) survives origin hops and storage loss. Do not
+      // consume the cookie until redeem succeeds — a remount must not drop it.
+      const pendingInvite = resolvePendingOwnerInvite({
+        callbackSearch: window.location.search,
+        next,
+        stored: peekPendingOwnerInvite(),
+      });
       let intent = consumed.intent;
-      if (!intent) {
+      if (!intent && !pendingInvite?.token) {
         // Nothing survived the round trip (origin hop). Decide from the account.
         const portal = await resolvePortalRoles(user.id);
         const firms =
@@ -82,6 +87,9 @@ function AuthCallbackPage() {
         user.email,
       );
 
+      // Owner invite always wins over the existing Google identity. Matching
+      // amstel.west@gmail.com to the accountant login must still open the
+      // invited business seat (dual-role), not the practice console.
       if (pendingInvite?.token) {
         forcePortal("owner");
         try {
@@ -104,6 +112,7 @@ function AuthCallbackPage() {
               inviteClientCode: pendingInvite.clientCode,
             },
           })) as { clientId?: string } | undefined;
+          consumePendingOwnerInvite();
           stashInviteHandoff(accepted?.clientId ?? null);
           if (!cancelled) void navigate({ to: "/app", replace: true });
         } catch (err) {
