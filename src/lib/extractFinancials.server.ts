@@ -33,8 +33,9 @@ accounting platform. Follow these rules exactly:
    lines roll into one schema field, sum only the lines that clearly belong
    there; otherwise put the remainder in the relevant "other" field.
 6. Capture the comparative (prior year) column too when it is present.
-7. If anything is ambiguous or you had to make a judgement call, say so briefly
-   in extraction_notes so a human can check it.
+7. If anything is ambiguous or you had to make a judgement call, put it in
+   extraction_notes as short bullets (not a paragraph). Never invent figures.
+   Do not name any vendor or model.
 
 Return ONLY valid JSON matching this shape (no markdown, no prose):
 {
@@ -180,31 +181,44 @@ export const extractFinancialsFromPDF = createServerFn({ method: "POST" })
       pdfBase64 ? Math.ceil((pdfBase64.length * 3) / 4) : (text?.length ?? 0),
     );
 
-    const raw = await callClaudeMessages({
-      content: pdfBase64
-        ? [
-            {
-              type: "document",
-              source: { type: "base64", media_type: mimeType, data: pdfBase64 },
-            },
-            { type: "text", text: prompt },
-          ]
-        : [
-            {
-              type: "text",
-              text: `<statement file="${(fileName ?? "statement").replace(/"/g, "'")}">\n${text}\n</statement>`,
-            },
-            { type: "text", text: prompt },
-          ],
-      maxTokens: 8192,
-      timeoutMs: 90_000,
-    });
+    let raw: string;
+    try {
+      raw = await callClaudeMessages({
+        content: pdfBase64
+          ? [
+              {
+                type: "document",
+                source: { type: "base64", media_type: mimeType, data: pdfBase64 },
+              },
+              { type: "text", text: prompt },
+            ]
+          : [
+              {
+                type: "text",
+                text: `<statement file="${(fileName ?? "statement").replace(/"/g, "'")}">\n${text}\n</statement>`,
+              },
+              { type: "text", text: prompt },
+            ],
+        maxTokens: 8192,
+        timeoutMs: 90_000,
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "";
+      if (/claude|anthropic/i.test(msg)) {
+        throw new Error(
+          "Could not read that statement. Please try again or upload a clearer file.",
+        );
+      }
+      throw err;
+    }
 
     let extracted: ExtractionResult;
     try {
       extracted = parseClaudeJson<ExtractionResult>(raw);
-    } catch (err) {
-      throw new Error("Failed to parse Claude response as JSON: " + (err as Error).message);
+    } catch {
+      throw new Error(
+        "Could not read that statement. Please try a clearer file or another format.",
+      );
     }
 
     const issues = validateFigures(extracted.current_period.figures);
