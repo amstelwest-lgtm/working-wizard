@@ -1,6 +1,6 @@
 /**
  * UploadFinancials — Drop a financial statement (PDF, Excel, OpenDocument or
- * CSV) → Claude extracts → human reviews and corrects → confirm import.
+ * CSV) → extract figures → human reviews and corrects → confirm import.
  *
  * Styled with MILŌN's dark/gold design system (Tailwind).
  */
@@ -29,6 +29,7 @@ import {
   isTextFile,
 } from "@/lib/spreadsheet-text";
 import { pdfTransport, unstage, type PdfTransport } from "@/lib/staged-upload-browser";
+import { statementNoteSections } from "@/lib/statement-notes";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -57,6 +58,32 @@ function Row({
         onChange={(e) => onChange(e.target.value === "" ? null : Number(e.target.value))}
         className="w-44 h-7 text-right text-sm bg-black/30 border-white/10 font-mono"
       />
+    </div>
+  );
+}
+
+function StatementNotes({
+  result,
+  formatNumber,
+}: {
+  result: ExtractionResult;
+  formatNumber: (n: number) => string;
+}) {
+  const notes = statementNoteSections(result, formatNumber);
+  if (!notes.length) return null;
+  return (
+    <div className="rounded-md bg-amber-950/30 border border-amber-700/30 px-3 py-2 text-xs text-amber-300">
+      <p className="font-semibold">Statement notes</p>
+      {notes.map((section) => (
+        <div key={section.title} className="mt-2">
+          <p className="font-medium text-amber-200/90">{section.title}</p>
+          <ul className="mt-0.5 space-y-0.5 list-disc pl-4">
+            {section.items.map((item, i) => (
+              <li key={`${section.title}-${i}`}>{item}</li>
+            ))}
+          </ul>
+        </div>
+      ))}
     </div>
   );
 }
@@ -95,7 +122,7 @@ export type UploadFinancialsProps = {
 export function UploadFinancials({ onConfirm }: UploadFinancialsProps) {
   const { number, selection } = useMarketFormat();
   const inputRef = useRef<HTMLInputElement>(null);
-  const [status, setStatus] = useState<"idle" | "loading" | "review">("idle");
+  const [status, setStatus] = useState<"idle" | "uploading" | "reading" | "review">("idle");
   const [result, setResult] = useState<ExtractionResult | null>(null);
   const [issues, setIssues] = useState<ValidationIssue[]>([]);
   const [autoSafe, setAutoSafe] = useState(false);
@@ -119,16 +146,22 @@ export function UploadFinancials({ onConfirm }: UploadFinancialsProps) {
       toast.error("That file is empty. Please upload the actual statement.");
       return;
     }
-    setStatus("loading");
+    setStatus("uploading");
     let staged: PdfTransport | null = null;
     try {
       const market = selectionPayload(selection);
-      if (pdf) staged = await pdfTransport(file);
-      const res = staged
-        ? await extract({
-            data: { storagePath: staged.storagePath, pdfBase64: staged.base64, market },
-          })
-        : await extract({ data: { text: await fileToText(file), fileName: file.name, market } });
+      let res;
+      if (pdf) {
+        staged = await pdfTransport(file);
+        setStatus("reading");
+        res = await extract({
+          data: { storagePath: staged.storagePath, pdfBase64: staged.base64, market },
+        });
+      } else {
+        const text = await fileToText(file);
+        setStatus("reading");
+        res = await extract({ data: { text, fileName: file.name, market } });
+      }
       setResult(res.data);
       setIssues(res.issues);
       setAutoSafe(res.autoImportSafe);
@@ -169,7 +202,7 @@ export function UploadFinancials({ onConfirm }: UploadFinancialsProps) {
 
   function onDrop(e: DragEvent<HTMLButtonElement>) {
     e.preventDefault();
-    if (status === "loading") return;
+    if (status === "uploading" || status === "reading") return;
     const f = e.dataTransfer.files?.[0];
     if (f) void handleFile(f);
   }
@@ -182,18 +215,20 @@ export function UploadFinancials({ onConfirm }: UploadFinancialsProps) {
           onClick={() => inputRef.current?.click()}
           onDragOver={(e) => e.preventDefault()}
           onDrop={onDrop}
-          disabled={status === "loading"}
+          disabled={status === "uploading" || status === "reading"}
           className={`w-full flex flex-col items-center gap-3 rounded-xl border-2 border-dashed px-6 py-12 transition-colors
             ${
-              status === "loading"
+              status === "uploading" || status === "reading"
                 ? "border-amber-500/30 cursor-default"
                 : "border-white/10 hover:border-amber-500/50 cursor-pointer"
             }`}
         >
-          {status === "loading" ? (
+          {status === "uploading" || status === "reading" ? (
             <>
               <Loader2 className="h-8 w-8 text-amber-500 animate-spin" />
-              <p className="text-sm text-muted-foreground">Sending to Claude…</p>
+              <p className="text-sm text-muted-foreground">
+                {status === "uploading" ? "Uploading" : "Reading the statement"}
+              </p>
               <p className="text-xs text-muted-foreground/60">This takes 10–30 seconds</p>
             </>
           ) : (
@@ -295,12 +330,7 @@ export function UploadFinancials({ onConfirm }: UploadFinancialsProps) {
         </div>
       )}
 
-      {/* Extraction note */}
-      {result.extraction_notes && (
-        <div className="rounded-md bg-amber-950/30 border border-amber-700/30 px-3 py-2 text-xs text-amber-300">
-          <span className="font-semibold">Note from Claude:</span> {result.extraction_notes}
-        </div>
-      )}
+      <StatementNotes result={result} formatNumber={number} />
 
       {/* Editable figures */}
       <div className="grid md:grid-cols-2 gap-6">

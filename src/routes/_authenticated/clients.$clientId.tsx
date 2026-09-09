@@ -2530,7 +2530,7 @@ function ClientView() {
                     marginBottom: 20,
                   }}
                 >
-                  Claude reads the statement — PDF, Excel, OpenDocument or CSV — and extracts the
+                  Upload a statement — PDF, Excel, OpenDocument or CSV. Figures are read from the
                   income statement and balance sheet. Review every figure before confirming. The
                   quality of the financial information we produce depends on the accuracy of the
                   information you upload.
@@ -2554,7 +2554,7 @@ function ClientView() {
                 </DialogTitle>
                 <DialogDescription className="text-slate-400">
                   {isUsCopy(clientMarket)
-                    ? "Fastest path for this client: the latest P&L and balance sheet as Excel, CSV or PDF — Claude reads them, you review every figure, then Health, Profit, Cash, Budget and Ask AI fill in. About 3 months of bank statements work too."
+                    ? "Fastest path for this client: the latest P&L and balance sheet as Excel, CSV or PDF — figures are read from the file, you review every figure, then Health, Profit, Cash, Budget and Ask AI fill in. About 3 months of bank statements work too."
                     : "Fastest path for this client: about 3 months of statements for every bank account. One pack drafts the P&L, seeds the budget, builds the cash forecast and shows movements in balances — then Health, Profit, Cash and Ask AI fill in."}
                 </DialogDescription>
               </DialogHeader>
