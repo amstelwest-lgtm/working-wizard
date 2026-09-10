@@ -56,6 +56,10 @@ const migration = readFileSync(
   resolve("supabase/migrations/20260907140000_client_brain.sql"),
   "utf8",
 );
+const brainSummaryRls = readFileSync(
+  resolve("supabase/migrations/20260910180000_clients_brain_summary_access.sql"),
+  "utf8",
+);
 const typesSrc = readFileSync(resolve("src/integrations/supabase/types.ts"), "utf8");
 const clientSrc = readFileSync(
   resolve("src/routes/_authenticated/clients.$clientId.tsx"),
@@ -90,6 +94,18 @@ assert(migration.includes("CHECK (status IN ('unanswered', 'answered', 'skipped'
 assert(migration.includes("CHECK (audience IN ('owner', 'accountant', 'both'))"), "question audience");
 assert(migration.includes("ENABLE ROW LEVEL SECURITY"), "RLS enabled");
 assert(migration.includes("has_client_access"), "client-scoped RLS");
+assert(
+  brainSummaryRls.includes('"clients update brain summary by access"'),
+  "brain_summary narrow UPDATE policy",
+);
+assert(
+  brainSummaryRls.includes("has_client_access(auth.uid(), id)"),
+  "brain_summary policy uses has_client_access",
+);
+assert(
+  brainSummaryRls.includes("limited to brain_summary"),
+  "non-writer trigger guards non-brain columns",
+);
 assert(migration.includes("CHECK (status IN ('proposed', 'approved', 'edited', 'rejected'))"), "step statuses");
 assert(migration.includes("CHECK (status IN ('draft', 'ready', 'sent', 'discarded'))"), "draft statuses");
 
@@ -119,6 +135,10 @@ assert(panelSrc.includes("invokeBrainDeliverableDraft"), "panel invokes brain-de
 assert(panelSrc.includes("ClientBrainDrafts"), "drafts panel is extracted");
 assert(panelSrc.includes("Asking now"), "drip highlight on outstanding queue");
 assert(panelSrc.includes("Sign off"), "GAP/competitor drafts can be signed off");
+assert(
+  panelSrc.includes('.select("id")') && panelSrc.includes("Could not save brain summary"),
+  "0-row brain_summary update surfaces as failure",
+);
 assert(panelSrc.includes("Mini GAP report"), "GAP section");
 assert(panelSrc.includes("Competitors"), "competitors section");
 assert(panelSrc.includes("10 initial questions"), "10-Q status");
@@ -370,6 +390,8 @@ const appSrc = readFileSync(resolve("src/routes/app.tsx"), "utf8");
 assert(fnSrc.includes('from "../ask-ai/anthropic.ts"'), "reuses ask-ai Claude wrapper");
 assert(fnSrc.includes("ask_ai_record_request"), "reuses ask-ai rate limit");
 assert(fnSrc.includes("has_client_access"), "same access check as ask-ai");
+assert(fnSrc.includes('.select("id")'), "brain_summary update checks row count");
+assert(fnSrc.includes("Could not save brain summary"), "0-row brain_summary update returns 403");
 assert(fnSrc.includes('status: "proposed"'), "inserts proposed_next_steps as proposed");
 assert(fnSrc.includes("last_asked_at"), "drip stamps last_asked_at");
 assert(logicSrc.includes('status: "draft"'), "GAP/competitor merges force draft");
