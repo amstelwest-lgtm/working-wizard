@@ -1974,7 +1974,7 @@ function Dashboard() {
           heading={firstClientOpen ? "Add your first client" : "Add a client"}
           blurb={
             firstClientOpen
-              ? "Pick a client whose statements you have to hand — you'll see their scored board in one sitting: upload, review the figures, then Health, Profit, Cash and Ask AI fill in. Every client after this one follows the same loop."
+              ? "Pick a client whose statements you have to hand — you'll see their scored board in one sitting: upload, review the figures, then Health, Profit, Cash and Milōn Bot fill in. Every client after this one follows the same loop."
               : undefined
           }
           sandboxName={firstClientOpen ? PRACTICE_TEST_CLIENT_NAME : undefined}

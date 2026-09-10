@@ -71,9 +71,9 @@ const OWNER_STEPS: Step[] = [
   {
     tab: "today",
     targetId: "ask-ai-overview",
-    section: "Ask AI",
+    section: "Milōn Bot",
     title: "Ask in plain English",
-    body: "Sitting under the score is Ask AI. Try “why is cash tight?” or “what should I fix first?” — answers stay grounded in your uploaded figures.",
+    body: "Sitting under the score is Milōn Bot, powered by Claude. Try “why is cash tight?” or “what’s still outstanding?” — answers stay grounded in what’s on file. It won’t invent figures or send email.",
   },
   {
     tab: "waterfall",
@@ -157,7 +157,7 @@ const ACCOUNTANT_CLIENT_EMPTY_STEPS: Step[] = [
     targetId: "first-figures-card",
     section: "Figures",
     title: "Step 2 of 2 · Bring in the figures",
-    body: "This is the only thing to do right now. One upload is enough — bank statements, a P&L and balance sheet (PDF, Excel or CSV), or typed figures — and Health, Profit, Cash, Budget, Reports and Ask AI all fill in from it.",
+    body: "This is the only thing to do right now. One upload is enough — bank statements, a P&L and balance sheet (PDF, Excel or CSV), or typed figures — and Health, Profit, Cash, Budget, Reports and Milōn Bot all fill in from it.",
   },
 ];
 
@@ -165,9 +165,9 @@ const ACCOUNTANT_CLIENT_STEPS: Step[] = [
   {
     tab: "ask",
     targetId: "ask-ai-accountant",
-    section: "Ask AI",
-    title: "Start with Ask AI",
-    body: "Now that this client has figures, the studio opens here. Ask against the filled deliverables — ratios, waterfall, cash outlook, next moves and the action plan — before a call.",
+    section: "Milōn Bot",
+    title: "Start with Milōn Bot",
+    body: "Now that this client has figures, the studio opens here. Ask against the filled deliverables — ratios, waterfall, cash outlook, next moves, the action plan — or what’s outstanding on the brain. It can draft next steps or an advisory pack for you to review. It won’t invent figures or send email.",
   },
   {
     tab: "ratios",
@@ -584,6 +584,7 @@ export function WalkthroughWizard({
 
   const SECTION_COLORS: Record<string, string> = {
     "Business Health": "#c9962b",
+    "Milōn Bot": "#8b5cf6",
     "Ask AI": "#8b5cf6",
     Profit: "#2563eb",
     "Cash Forecast": "#0ea5e9",

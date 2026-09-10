@@ -46,7 +46,7 @@ export const FEATURE_CATALOG: FeatureDef[] = [
 
   { key: "firm.dashboard", label: "Firm dashboard", group: "firm" },
   { key: "firm.client_workspace", label: "Client workspace", group: "firm" },
-  { key: "firm.client_ask_ai", label: "Client Ask AI", group: "firm" },
+  { key: "firm.client_ask_ai", label: "Client Milōn Bot", group: "firm" },
   { key: "firm.client_health", label: "Client health & ratios", group: "firm" },
   { key: "firm.client_profit", label: "Client profitability", group: "firm" },
   { key: "firm.client_cash", label: "Client 13-week cash", group: "firm" },

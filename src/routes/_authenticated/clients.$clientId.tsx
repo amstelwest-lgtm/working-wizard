@@ -724,7 +724,7 @@ function ClientView() {
 
   const waterfallFallback = derivePeriodWaterfallFallback(financials);
 
-  // ── Ask AI widget mount (same widget the owner app uses) ────────────────
+  // ── Milōn Bot widget mount (same widget the owner app uses) ─────────────
   useEffect(() => {
     if (!client) return;
     let cancelled = false;
@@ -747,8 +747,10 @@ function ClientView() {
         el.dataset.clientId = clientId;
         el.dataset.askAiMounted = "1";
         el.dataset.askAiMode = wantMode;
+        const base = import.meta.env.VITE_SUPABASE_URL;
         mod.mountAskAi(el, {
-          endpoint: `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ask-ai`,
+          endpoint: `${base}/functions/v1/ask-ai`,
+          botEndpoint: `${base}/functions/v1/milon-bot`,
           variant: "studio",
           audience: "accountant",
           note: hasFigures
@@ -1436,7 +1438,7 @@ function ClientView() {
       <FinancialInputsContext.Provider value={financialInputsCtxValue}>
         <div className="accountant-portal milon-page-enter">
           {/* Two honest steps while the client has no figures; the full studio
-              tour runs once a real score exists, so "Start with Ask AI" and
+              tour runs once a real score exists, so "Start with Milōn Bot" and
               the seeded budget are never promised over an empty book. */}
           <WalkthroughWizard
             key={tourVariant ?? "pending"}
@@ -1678,7 +1680,7 @@ function ClientView() {
                   <p className="kicker">Step 1 · Bring in this client's figures</p>
                   <h3>Nothing is scored yet</h3>
                   <p>
-                    The health orb, profit waterfall, cash forecast and Ask AI all wait on the first
+                    The health orb, profit waterfall, cash forecast and Milōn Bot all wait on the first
                     numbers.{" "}
                     {isUsCopy(clientMarket)
                       ? "Fastest: a P&L and balance sheet as Excel, CSV or PDF. Bank statements also work."
@@ -1752,7 +1754,7 @@ function ClientView() {
               {(
                 [
                   { id: "summary", label: "Summary" },
-                  { id: "ask", label: "Ask AI", star: true },
+                  { id: "ask", label: "Milōn Bot", star: true },
                   { id: "ratios", label: "Health & Ratios" },
                   { id: "profit", label: "Profitability" },
                   { id: "cash", label: "13-Week Cash Forecast", star: true },
@@ -1842,14 +1844,9 @@ function ClientView() {
               )}
             </div>
 
-            {/* ===== ASK AI TAB ===== */}
+            {/* ===== MILŌN BOT TAB ===== */}
             <div className={`tabpane${activeTab === "ask" ? " on" : ""}`} id="pane-ask">
-              <SectionCard
-                className="card hero-card ask-ai-studio-shell"
-                eyebrow="Ask AI · this client"
-                title={`Ask about ${client.name}`}
-                description="Same rules as the owner copilot: answers come from filled profile questions, ratios, the profitability waterfall, cash-forecast outlook, product lines, next moves, and planned or outstanding action-plan tasks — not the raw statements."
-              >
+              <SectionCard className="card hero-card ask-ai-studio-shell">
                 <div id="ask-ai-accountant" />
               </SectionCard>
             </div>
@@ -2544,8 +2541,8 @@ function ClientView() {
                 </DialogTitle>
                 <DialogDescription className="text-slate-400">
                   {isUsCopy(clientMarket)
-                    ? "Fastest path for this client: the latest P&L and balance sheet as Excel, CSV or PDF — figures are read from the file, you review every figure, then Health, Profit, Cash, Budget and Ask AI fill in. About 3 months of bank statements work too."
-                    : "Fastest path for this client: about 3 months of statements for every bank account. One pack drafts the P&L, seeds the budget, builds the cash forecast and shows movements in balances — then Health, Profit, Cash and Ask AI fill in."}
+                    ? "Fastest path for this client: the latest P&L and balance sheet as Excel, CSV or PDF — figures are read from the file, you review every figure, then Health, Profit, Cash, Budget and Milōn Bot fill in. About 3 months of bank statements work too."
+                    : "Fastest path for this client: about 3 months of statements for every bank account. One pack drafts the P&L, seeds the budget, builds the cash forecast and shows movements in balances — then Health, Profit, Cash and Milōn Bot fill in."}
                 </DialogDescription>
               </DialogHeader>
               <div className="flex flex-col gap-3 pt-2">

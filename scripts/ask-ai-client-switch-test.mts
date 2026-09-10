@@ -389,6 +389,49 @@ await test("Scenario 3: studio accountant variant starts open and sends audience
   assert(calls[0].body.audience === "accountant", "studio POST marks accountant audience");
 });
 
+await test("Scenario 4a: numbers questions still POST to ask-ai", async () => {
+  const { mockFetch, calls } = makeMockFetch();
+  (globalThis as Record<string, unknown>).fetch = mockFetch;
+
+  const container = makeContainer("route-client");
+  mountAskAi(container, {
+    endpoint: "https://example.com/functions/v1/ask-ai",
+    botEndpoint: "https://example.com/functions/v1/milon-bot",
+    getToken: async () => "test-token",
+  });
+
+  openWidget(container);
+  fillAndSend(container, "Am I healthy overall, or should I worry?");
+  await new Promise((r) => setTimeout(r, 0));
+
+  assert(calls.length === 1, `expected 1 fetch call, got ${calls.length}`);
+  assert(String(calls[0].url).includes("/ask-ai"), `numbers Q&A should hit ask-ai, got ${calls[0].url}`);
+  assert(calls[0].body.question === "Am I healthy overall, or should I worry?", "ask-ai still uses question");
+});
+
+await test("Scenario 4b: brain-tool chips POST to milon-bot with message + history", async () => {
+  const { mockFetch, calls } = makeMockFetch();
+  (globalThis as Record<string, unknown>).fetch = mockFetch;
+
+  const container = makeContainer("route-client");
+  mountAskAi(container, {
+    endpoint: "https://example.com/functions/v1/ask-ai",
+    botEndpoint: "https://example.com/functions/v1/milon-bot",
+    audience: "accountant",
+    variant: "studio",
+    getToken: async () => "test-token",
+  });
+
+  fillAndSend(container, "Draft an advisory pack from the brain — don't send it.");
+  await new Promise((r) => setTimeout(r, 0));
+
+  assert(calls.length === 1, `expected 1 fetch call, got ${calls.length}`);
+  assert(String(calls[0].url).includes("/milon-bot"), `brain tools should hit milon-bot, got ${calls[0].url}`);
+  assert(calls[0].body.message === "Draft an advisory pack from the brain — don't send it.", "bot uses message");
+  assert(calls[0].body.audience === "accountant", "bot POST keeps accountant audience");
+  assert(Array.isArray(calls[0].body.history), "bot POST includes history");
+});
+
 // ── Summary ───────────────────────────────────────────────────────────────────
 
 console.log(`\n─────────────────────────────────────`);

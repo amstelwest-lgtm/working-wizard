@@ -1,7 +1,7 @@
 /**
- * In-app Milōn bot — worker bee on Client Brain.
+ * In-app Milōn Bot — Client Brain tools behind the unified chat surface.
  * Reuses ask-ai auth, CORS, rate-limit RPC. Calls existing brain-propose /
- * brain-deliverable-draft. Does not rewrite Ask AI, Lighthouse, or extract.
+ * brain-deliverable-draft. Does not rewrite ask-ai numbers Q&A, Lighthouse, or extract.
  */
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sanitize } from "../ask-ai/sanitizer.ts";
@@ -332,7 +332,7 @@ Deno.serve(async (req: Request) => {
 
   if (!Deno.env.get("ANTHROPIC_API_KEY")) {
     return respond({
-      answer: "AI is not configured (ANTHROPIC_API_KEY). The bot cannot run until that secret is set — same as Ask AI.",
+      answer: "AI is not configured (ANTHROPIC_API_KEY). Milōn Bot cannot run until that secret is set.",
       tools: [],
       skippedReason: "ai_not_configured",
     });

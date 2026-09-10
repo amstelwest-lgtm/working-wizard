@@ -340,7 +340,7 @@ export function artifactKindLabel(kind: ArtifactKind | string): string {
 }
 
 export function factSourceLabel(source: FactSource | string | null): string {
-  if (source === "ask_ai") return "Ask AI";
+  if (source === "ask_ai") return "Milōn Bot";
   if (source === "note") return "Note";
   if (source === "profile") return "Profile";
   if (source === "manual") return "Manual";

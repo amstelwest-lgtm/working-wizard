@@ -1,39 +1,40 @@
 /**
- * ask-ai.js — self-contained vanilla JS chat widget
+ * Milōn Bot widget — Ask AI conversational chrome, one branded surface.
+ * Numbers Q&A → ask-ai. Brain tools (invite / blockers / propose / draft) → milon-bot.
  * Mount with: mountAskAi(element, { endpoint, getToken })
  */
+
+import {
+  MILON_BOT_ACCOUNTANT_CHIPS,
+  MILON_BOT_BLURB_ACCOUNTANT,
+  MILON_BOT_BLURB_OWNER,
+  MILON_BOT_OWNER_CHIPS,
+  MILON_BOT_SUBTITLE,
+  MILON_BOT_TITLE,
+  deriveMilonBotEndpoint,
+  routeMilonIntent,
+} from "./milon-bot-copy.ts";
+
+export { routeMilonIntent, MILON_BOT_TITLE, MILON_BOT_SUBTITLE, MILON_BOT_ACCOUNTANT_CHIPS, MILON_BOT_OWNER_CHIPS };
 
 const SPARKLES_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/></svg>`;
 
 const SEND_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>`;
 
-const DEFAULT_CHIPS = [
-  "Can I afford a new hire this quarter?",
-  "What's my biggest cash leak?",
-  "Where am I weakest vs industry?",
-];
+const TOOL_LABELS = {
+  get_invite_status: "Invite status",
+  list_blockers: "Blockers",
+  propose_next_steps: "Propose",
+  draft_deliverable: "Draft",
+  answer_from_brain: "Brain",
+};
 
-// Before any figures exist, questions about "my numbers" have no numbers to
-// read — steer toward what Ask AI can genuinely answer right now.
-const NO_FIGURES_CHIPS = [
-  "How is the health score worked out?",
-  "What should I upload first, and why?",
-  "What do businesses like mine usually get wrong on cash?",
-];
-
-const ACCOUNTANT_CHIPS = [
-  "What's the biggest risk for this client?",
-  "Where is cash leaking this quarter?",
-  "Which ratio should I raise in the next meeting?",
-  "Is the action plan aimed at the right lever?",
-];
-
-// Studio before any figures exist — questions the widget can answer honestly.
-const ACCOUNTANT_NO_FIGURES_CHIPS = [
-  "What should I upload first for this client, and why?",
-  "How is the health score worked out?",
-  "What does a 3-month bank pack give me versus a P&L?",
-];
+function toolHint(name, status) {
+  const base = TOOL_LABELS[name] ?? name;
+  if (status === "empty") return `${base} · empty`;
+  if (status === "error") return `${base} · failed`;
+  return base;
+}
 
 // ── Minimal safe markdown → HTML renderer ───────────────────────────────
 // Escapes all HTML first, then converts the subset Claude actually emits:
@@ -142,40 +143,48 @@ export function renderMarkdown(md) {
 export function mountAskAi(container, options) {
   const {
     endpoint,
+    botEndpoint: botEndpointOverride,
     getToken,
     variant = "compact",
     audience = "owner",
     chips: chipOverride,
     placeholder: placeholderOverride,
     heading: headingOverride,
+    subtitle: subtitleOverride,
+    blurb: blurbOverride,
+    hideBrand = false,
     // Small line under the header, e.g. "answers get more relevant once your
     // figures are in". Omit / null to hide.
     note = null,
   } = options || {};
   const studio = variant === "studio";
   const accountant = audience === "accountant";
+  const botEndpoint = botEndpointOverride || deriveMilonBotEndpoint(endpoint);
   const suggestionChips =
-    chipOverride ||
-    (note
+    chipOverride || (accountant ? MILON_BOT_ACCOUNTANT_CHIPS : MILON_BOT_OWNER_CHIPS);
+  const heading = headingOverride || MILON_BOT_TITLE;
+  const subtitle = subtitleOverride === undefined ? MILON_BOT_SUBTITLE : subtitleOverride;
+  const blurb =
+    blurbOverride === undefined
       ? accountant
-        ? ACCOUNTANT_NO_FIGURES_CHIPS
-        : NO_FIGURES_CHIPS
-      : accountant
-        ? ACCOUNTANT_CHIPS
-        : DEFAULT_CHIPS);
-  const heading = headingOverride || (accountant ? "Ask about this business" : "Ask your numbers");
+        ? MILON_BOT_BLURB_ACCOUNTANT
+        : MILON_BOT_BLURB_OWNER
+      : blurbOverride;
   const placeholder =
     placeholderOverride ||
     (accountant
-      ? "e.g. What's the first move for this client this month? Where is cash leaking?"
-      : "e.g. Can I afford to hire a junior next month? What's killing my margin?");
+      ? "e.g. What's still outstanding — or where's the drag vs peers?"
+      : "e.g. Am I healthy, or what's still outstanding?");
 
   let open = studio;
   let loading = false;
+  let pendingIntent = null;
   let question = "";
   let answer = "";
   let answerChips = [];
+  let toolHints = [];
   let errorMsg = "";
+  let history = [];
 
   function render() {
     container.innerHTML = "";
@@ -188,7 +197,7 @@ export function mountAskAi(container, options) {
       trigger.type = "button";
       trigger.className = "ask-ai-trigger";
       trigger.innerHTML = `<span class="ask-ai-icon">${SPARKLES_SVG}</span>
-        <span>${accountant ? "Ask anything about this client…" : "Ask anything about your numbers…"}</span>`;
+        <span>${accountant ? "Ask Milōn Bot about this client…" : "Ask Milōn Bot…"}</span>`;
       trigger.addEventListener("click", () => {
         open = true;
         render();
@@ -198,11 +207,27 @@ export function mountAskAi(container, options) {
       const panel = document.createElement("div");
       panel.className = "ask-ai-panel";
 
-      // Header
-      const header = document.createElement("div");
-      header.className = "ask-ai-header";
-      header.innerHTML = `<span class="ask-ai-icon" style="width:14px;height:14px">${SPARKLES_SVG}</span> ${heading}`;
-      panel.appendChild(header);
+      if (!hideBrand) {
+        const brand = document.createElement("div");
+        brand.className = "ask-ai-brand";
+        const header = document.createElement("div");
+        header.className = "ask-ai-header";
+        header.innerHTML = `<span class="ask-ai-icon" style="width:14px;height:14px">${SPARKLES_SVG}</span> <span class="ask-ai-title">${heading}</span>`;
+        brand.appendChild(header);
+        if (subtitle) {
+          const sub = document.createElement("p");
+          sub.className = "ask-ai-subtitle";
+          sub.textContent = subtitle;
+          brand.appendChild(sub);
+        }
+        if (blurb) {
+          const blurbEl = document.createElement("p");
+          blurbEl.className = "ask-ai-blurb";
+          blurbEl.textContent = blurb;
+          brand.appendChild(blurbEl);
+        }
+        panel.appendChild(brand);
+      }
 
       if (note) {
         const noteEl = document.createElement("p");
@@ -266,6 +291,9 @@ export function mountAskAi(container, options) {
         question = "";
         answer = "";
         answerChips = [];
+        toolHints = [];
+        pendingIntent = null;
+        history = [];
         errorMsg = "";
         if (!studio) open = false;
         render();
@@ -277,7 +305,8 @@ export function mountAskAi(container, options) {
       if (loading) {
         const thinking = document.createElement("div");
         thinking.className = "ask-ai-thinking";
-        thinking.textContent = "Analysing your numbers…";
+        thinking.textContent =
+          pendingIntent === "milon-bot" ? "Checking what's on file…" : "Analysing your numbers…";
         panel.appendChild(thinking);
       }
 
@@ -295,6 +324,13 @@ export function mountAskAi(container, options) {
         answerEl.className = "ask-ai-answer";
         answerEl.innerHTML = renderMarkdown(answer);
 
+        if (toolHints.length > 0) {
+          const hint = document.createElement("p");
+          hint.className = "ask-ai-tools";
+          hint.textContent = toolHints.join(" · ");
+          answerEl.appendChild(hint);
+        }
+
         if (answerChips.length > 0) {
           const chipRow = document.createElement("div");
           chipRow.className = "ask-ai-answer-chips";
@@ -307,6 +343,7 @@ export function mountAskAi(container, options) {
               question = c;
               answer = "";
               answerChips = [];
+              toolHints = [];
               errorMsg = "";
               render();
               // auto-submit
@@ -332,9 +369,11 @@ export function mountAskAi(container, options) {
   async function submit() {
     const q = question.trim();
     if (!q || loading) return;
+    pendingIntent = routeMilonIntent(q);
     loading = true;
     answer = "";
     answerChips = [];
+    toolHints = [];
     errorMsg = "";
     render();
 
@@ -350,17 +389,28 @@ export function mountAskAi(container, options) {
 
       if (!clientId) throw new Error("No client context found.");
 
-      const res = await fetch(endpoint, {
+      const useBot = pendingIntent === "milon-bot" && botEndpoint;
+      const url = useBot ? botEndpoint : endpoint;
+      const res = await fetch(url, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          clientId,
-          question: q,
-          ...(accountant ? { audience: "accountant" } : {}),
-        }),
+        body: JSON.stringify(
+          useBot
+            ? {
+                clientId,
+                message: q,
+                history: history.slice(-8),
+                audience: accountant ? "accountant" : "owner",
+              }
+            : {
+                clientId,
+                question: q,
+                ...(accountant ? { audience: "accountant" } : {}),
+              },
+        ),
       });
 
       const data = await res.json();
@@ -371,10 +421,16 @@ export function mountAskAi(container, options) {
 
       answer = data.answer || "No answer returned.";
       answerChips = data.chips || [];
+      toolHints = Array.isArray(data.tools)
+        ? data.tools.map((t) => toolHint(t.name, t.status))
+        : [];
+      history = [...history, { role: "user", content: q }, { role: "assistant", content: answer }];
+      if (history.length > 16) history = history.slice(-16);
     } catch (e) {
       errorMsg = e.message || "Something went wrong.";
     } finally {
       loading = false;
+      pendingIntent = null;
       render();
     }
   }

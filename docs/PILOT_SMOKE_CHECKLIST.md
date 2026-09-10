@@ -52,8 +52,8 @@ note route, role, browser, and whether the migrations below were applied. Fix be
 - [ ] **Cash** — with nothing loaded says *No forecast yet*; after banks shows real weeks
 - [ ] **Budget** — seeds from the figures at the right scale (a quarter of actuals does not
       seed a quarter-sized annual budget; EBITDA is not negative for a profitable business)
-- [ ] **Ask AI** — before figures: note says answers improve once figures are in; after figures:
-      answers "what should I fix first?" from the numbers
+- [ ] **Milōn Bot** — before figures: note says answers improve once figures are in; after figures:
+      answers "what should I fix first?" from the numbers; brain chips (invite / propose / draft) still work
 - [ ] Tour on an empty board has two honest steps; the full tour appears once a score exists
 
 ## 2. Practice (accountant)
@@ -64,8 +64,8 @@ note route, role, browser, and whether the migrations below were applied. Fix be
 - [ ] First-client dialog leads with a **real client name**; sandbox is a small link
 - [ ] Add client → `?onboard=1` → upload the Windward P&L/BS PDF (or any real statement)
 - [ ] Empty studio opens on **Health & Ratios** with the *Bring in this client's figures* card;
-      Ask AI carries the "more relevant once figures are in" note; no deliverables bar
-- [ ] Review → confirm → studio now opens on **Ask AI**; deliverables bar appears
+      Milōn Bot carries the "more relevant once figures are in" note; no deliverables bar
+- [ ] Review → confirm → studio now opens on **Milōn Bot**; deliverables bar appears
 - [ ] Health / Profit / Cash / Budget all read from the same figures; sales-per-employee is
       money per head, not a percentage
 - [ ] 21st upload within an hour is refused with the friendly limit message (optional)

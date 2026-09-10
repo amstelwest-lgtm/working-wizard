@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
 /**
- * Mount the vanilla Ask AI widget into any #ask-ai-* containers present.
+ * Mount the unified Milōn Bot widget into any #ask-ai-* containers present.
  * Retries briefly because Radix tab content / financials hydration can paint
  * the mount node one frame after the dependent state flips.
  */
@@ -73,7 +73,7 @@ export function useAskAiMount(deps: {
             markStatus(
               containers,
               "error",
-              "Ask AI is unavailable right now. Refresh and try again.",
+              "Milōn Bot is unavailable right now. Refresh and try again.",
             );
             return;
           }
@@ -83,15 +83,17 @@ export function useAskAiMount(deps: {
             el.dataset.askAiMounted = "1";
             el.dataset.askAiMode = wantMode;
             el.replaceChildren();
+            const base = import.meta.env.VITE_SUPABASE_URL;
             mod.mountAskAi(el, {
-              endpoint: `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ask-ai`,
+              endpoint: `${base}/functions/v1/ask-ai`,
+              botEndpoint: `${base}/functions/v1/milon-bot`,
               getToken: async () => {
                 const { data } = await supabase.auth.getSession();
                 return data.session?.access_token ?? null;
               },
               note: hasRealFinancials
                 ? null
-                : "Answers get more relevant once your figures are in — for now Ask AI can explain how the board works and what to bring in first.",
+                : "Answers get more relevant once your figures are in — for now Milōn Bot can explain how the board works, what's outstanding, and what to bring in first.",
             });
           }
         })
@@ -100,7 +102,7 @@ export function useAskAiMount(deps: {
           markStatus(
             containers,
             "error",
-            "Ask AI could not load. If this keeps happening, Ask AI may not be deployed yet.",
+            "Milōn Bot could not load. If this keeps happening, the chat function may not be deployed yet.",
           );
         });
     };
