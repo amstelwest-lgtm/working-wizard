@@ -908,7 +908,7 @@ function SettingsForm({
           />
           <input
             className={`${inputCls} sm:col-span-2`}
-            placeholder="Reply-to — your real inbox, e.g. amstel.west@gmail.com"
+            placeholder="Reply-to — team@milonfinance.com"
             value={replyTo}
             onChange={(e) => setReplyTo(e.target.value)}
           />

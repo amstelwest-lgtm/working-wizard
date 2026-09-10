@@ -37,6 +37,7 @@
     "test:practice-access": "vite-node --config scripts/vite-test.config.ts scripts/practice-access-test.mts",
     "test:lighthouse-access": "vite-node --config scripts/vite-test.config.ts scripts/lighthouse-access-test.mts",
     "test:lighthouse-send-allowlist": "vite-node --config scripts/vite-test.config.ts scripts/lighthouse-send-allowlist-test.mts",
+    "test:lighthouse-accountant-v2": "vite-node --config scripts/vite-test.config.ts scripts/lighthouse-accountant-v2-test.mts",
     "test:orb-contrast": "vite-node --config scripts/vite-test.config.ts scripts/orb-contrast-test.mts",
     "test:review-signoff": "vite-node --config scripts/vite-test.config.ts scripts/review-signoff-test.mts",
     "test:client-invite-email": "vite-node --config scripts/vite-test.config.ts scripts/client-invite-email-test.mts",

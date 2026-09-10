@@ -28,6 +28,8 @@ import {
   lighthouseSendAllowlist,
   lighthouseSendAllowlistEnforced,
 } from "@/lib/lighthouse-send-allowlist";
+import { LIGHTHOUSE_REPLY_TO, resolveLighthouseReplyTo } from "@/lib/lighthouse-reply-to";
+import { replyInterestCtaBrief, watchVideoCtaBrief } from "@/lib/lighthouse-draft-cta";
 
 const MIGRATION = "20260820100000_milon_lighthouse.sql";
 const ENGAGEMENT_MIGRATION = "20260822210000_lighthouse_engagement.sql";
@@ -157,7 +159,7 @@ export type LighthouseSettings = {
   autoSend: boolean;
   /** Postal or physical address shown in the cold-email footer. */
   senderAddress: string;
-  /** Mailbox replies actually land in; falls back to the from address. */
+  /** Mailbox replies land in. Empty or *@milon.co.za resolves to team@milonfinance.com. */
   replyTo: string;
 };
 
@@ -199,7 +201,7 @@ const DEFAULT_SETTINGS: LighthouseSettings = {
   sendWindow: "Tue-Thu 07:00-09:00 SAST",
   autoSend: false,
   senderAddress: "",
-  replyTo: "",
+  replyTo: LIGHTHOUSE_REPLY_TO,
 };
 
 function siteUrl(): string {
@@ -321,16 +323,15 @@ function absoluteUrl(url: string): string {
 type AssetLike = { key: string; title: string; url: string };
 
 /**
- * Walk a preference list of asset keys and return the first that is genuinely
- * ready — status flipped and a URL filled in. Anything still a placeholder is
- * skipped, which is what keeps drafts from linking to work that does not exist.
+ * Return every genuinely ready asset in key order — status flipped and a URL
+ * filled in. Placeholders are skipped so drafts never link to missing work.
  */
-async function firstReadyAsset(
+async function readyAssetsByKeys(
   admin: ReturnType<typeof adminLoose>,
   keys: Array<string | null>,
-): Promise<AssetLike | null> {
+): Promise<AssetLike[]> {
   const wanted = keys.filter((k): k is string => Boolean(k));
-  if (!wanted.length) return null;
+  if (!wanted.length) return [];
 
   const { data } = await admin
     .from("lighthouse_assets")
@@ -338,14 +339,24 @@ async function firstReadyAsset(
     .in("key", wanted);
   const rows = (data ?? []) as Array<Record<string, unknown>>;
 
+  const ready: AssetLike[] = [];
   for (const key of wanted) {
     const row = rows.find((r) => String(r.key) === key);
     const url = String(row?.url ?? "").trim();
     if (row && row.status === "ready" && url) {
-      return { key, title: String(row.title ?? key), url: absoluteUrl(url) };
+      ready.push({ key, title: String(row.title ?? key), url: absoluteUrl(url) });
     }
   }
-  return null;
+  return ready;
+}
+
+/** First ready asset from a preference list (booking, FAQ, single-link CTAs). */
+async function firstReadyAsset(
+  admin: ReturnType<typeof adminLoose>,
+  keys: Array<string | null>,
+): Promise<AssetLike | null> {
+  const ready = await readyAssetsByKeys(admin, keys);
+  return ready[0] ?? null;
 }
 
 /**
@@ -585,7 +596,7 @@ export const getLighthouse = createServerFn({ method: "GET" })
         sendWindow: String(raw.send_window ?? settings.sendWindow),
         autoSend: Boolean(raw.auto_send ?? false),
         senderAddress: String(raw.sender_address ?? ""),
-        replyTo: String(raw.reply_to ?? ""),
+        replyTo: resolveLighthouseReplyTo(String(raw.reply_to ?? "")),
       };
     }
 
@@ -749,17 +760,24 @@ export const importLighthouseLeads = createServerFn({ method: "POST" })
     return { imported: rows.length };
   });
 
-const SYSTEM_RULES = `You write cold outreach for Milōn, a South African financial-health platform for SMEs and their accountants.
+const SYSTEM_RULES = `You write as Theo, founder of MILŌN — a South African financial-health platform for SMEs and their accountants. Be direct. No fluff.
 
 Non-negotiable rules:
-- Truth only. Never invent client names, results, percentages, awards, or peer benchmarks.
+- Truth only. Never invent client names, results, percentages, awards, peer benchmarks, or case studies.
 - If you have no proof point, use a hypothesis framed as a question instead of a fake stat.
 - Plain text, no HTML, no markdown, no emoji, no exclamation marks.
+- Prefer under 120 words. Respect the hard word limit for this step when it is tighter.
 - South African English and context (SARS, VAT, load-shedding, ZAR) when relevant.
 - One clear ask per email. No stacked CTAs.
 - Never say "just following up" or "circling back" with nothing new.
 - Sound like one founder writing to one person, not a marketing department.
 - Subject lines: lowercase or sentence case, under 6 words, no clickbait, no "Re:" fakery.
+- From and reply-to are team@milonfinance.com. Do not invent other mailboxes.
+- Day 0: no URLs at all.
+- Day 3: must include BOTH https://youtu.be/J4vJki7HcIs and https://youtu.be/k3aRM4toTvU. No trial link.
+- Day 7: no fake cases. Do not invent before/after stories or named clients.
+- Day 12: only the firm-signup / free-trial link. No other URLs.
+- Day 18: breakup. Stop the sequence. Invite them to reply "later" if they want one link.
 - The sales motion is email correspondence, not calendar booking. Do not propose a call, a meeting, a Zoom, or a booking link unless a booking URL is explicitly provided in this prompt. Prefer they reply in writing or start the free trial.`;
 
 export const draftLighthouseTouch = createServerFn({ method: "POST" })
@@ -800,10 +818,10 @@ export const draftLighthouseTouch = createServerFn({ method: "POST" })
     const step = steps.find((s) => s.step === data.stepNo);
     if (!step) throw new Error(`Step ${data.stepNo} is not defined for ${seqKey}`);
 
-    // Primary asset first, then the fallback slot. Only when neither is ready
-    // does the copy degrade to describing the point without a link.
-    const readyAsset = await firstReadyAsset(admin, [step.asset, step.asset_fallback ?? null]);
-    const assetUrl = readyAsset?.url ?? null;
+    // Primary + fallback when both are ready (Day 3 gifts both teasers).
+    // Only when neither is ready does the copy degrade to no link.
+    const readyAssets = await readyAssetsByKeys(admin, [step.asset, step.asset_fallback ?? null]);
+    const assetUrl = readyAssets[0]?.url ?? null;
 
     const { data: setRow } = await admin
       .from("milon_ops_settings")
@@ -837,11 +855,9 @@ export const draftLighthouseTouch = createServerFn({ method: "POST" })
       step.cta === "start_trial"
         ? `Ask them to start the free ${trialDays}-day trial using exactly this link: ${trialLink ?? "(link pending)"}`
         : step.cta === "reply_interest"
-          ? "Ask for a one-word reply only. Do not include any link."
+          ? replyInterestCtaBrief({ day: step.day, trialLink })
           : step.cta === "watch_60s" || step.cta === "watch_walkthrough"
-            ? assetUrl
-              ? `Point to exactly this link and nothing else: ${assetUrl}`
-              : "The video is not produced yet, so describe the insight in one sentence instead of linking to anything."
+            ? watchVideoCtaBrief(readyAssets.map((a) => a.url))
             : step.cta === "read_case"
               ? assetUrl
                 ? `Point to exactly this link and nothing else: ${assetUrl}`
@@ -1000,7 +1016,7 @@ export const sendLighthouseTouch = createServerFn({ method: "POST" })
     const sendSettings = (sendSetRow as { value?: Record<string, unknown> } | null)?.value ?? {};
     const senderName = String(sendSettings.sender_name ?? DEFAULT_SETTINGS.senderName);
     const senderAddress = String(sendSettings.sender_address ?? "");
-    const replyTo = String(sendSettings.reply_to ?? "").trim();
+    const replyTo = resolveLighthouseReplyTo(String(sendSettings.reply_to ?? ""));
     const dailyCap = Number(sendSettings.daily_send_cap ?? DEFAULT_SETTINGS.dailySendCap);
 
     // Enforce the daily send cap — previously this setting was decorative.
@@ -1052,7 +1068,7 @@ export const sendLighthouseTouch = createServerFn({ method: "POST" })
       body: JSON.stringify({
         from: `${senderName} <${fromAddr}>`,
         to: [to],
-        ...(replyTo ? { reply_to: replyTo } : {}),
+        reply_to: replyTo,
         subject: data.subject,
         text: bodyWithFooter,
         tags: [
@@ -1232,7 +1248,7 @@ export const upsertLighthouseSettings = createServerFn({ method: "POST" })
     if (data.sendWindow !== undefined) next.send_window = data.sendWindow;
     if (data.autoSend !== undefined) next.auto_send = data.autoSend;
     if (data.senderAddress !== undefined) next.sender_address = data.senderAddress;
-    if (data.replyTo !== undefined) next.reply_to = data.replyTo.trim().toLowerCase();
+    if (data.replyTo !== undefined) next.reply_to = resolveLighthouseReplyTo(data.replyTo);
 
     const { error } = await admin.from("milon_ops_settings").upsert({
       key: "lighthouse",
