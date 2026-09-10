@@ -5,7 +5,9 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
+  isInvitedOwnerWithFigures,
   ownerBoardReady,
+  ownerHasPreloadedFigures,
   ownerWalkthroughReady,
   shouldShowOwnerProfileFunnel,
 } from "../src/lib/first-run";
@@ -132,6 +134,56 @@ assert(
     userRole: "client_owner",
   }),
   "full operating profile skips funnel",
+);
+assert(
+  !shouldShowOwnerProfileFunnel({
+    hasOperatingProfile: false,
+    actingClientId: null,
+    userRole: "client_owner",
+    isInvitedOwnerWithFigures: true,
+  }),
+  "invited owner with preloaded figures skips the profile funnel",
+);
+assert(
+  shouldShowOwnerProfileFunnel({
+    hasOperatingProfile: false,
+    actingClientId: null,
+    userRole: "client_owner",
+    isInvitedOwnerWithFigures: false,
+  }),
+  "invited owner without figures still sees the profile funnel",
+);
+assert(
+  ownerHasPreloadedFigures({ hasRealFinancials: true, financialsUpdatedAt: null }),
+  "hydrated financial blob counts as preloaded figures",
+);
+assert(
+  ownerHasPreloadedFigures({ hasRealFinancials: false, financialsUpdatedAt: "2026-01-01T00:00:00Z" }),
+  "financials_updated_at counts as preloaded figures before hydration",
+);
+assert(
+  isInvitedOwnerWithFigures({
+    isInvitedOwner: true,
+    hasRealFinancials: true,
+    financialsUpdatedAt: null,
+  }),
+  "invited owner + figures skips setup chrome",
+);
+assert(
+  !isInvitedOwnerWithFigures({
+    isInvitedOwner: true,
+    hasRealFinancials: false,
+    financialsUpdatedAt: null,
+  }),
+  "invited owner without figures keeps the upload path",
+);
+assert(
+  !isInvitedOwnerWithFigures({
+    isInvitedOwner: false,
+    hasRealFinancials: true,
+    financialsUpdatedAt: "2026-01-01T00:00:00Z",
+  }),
+  "self-signup owner with figures still gets first-run chrome",
 );
 
 assert(
@@ -288,6 +340,10 @@ assert(appSrc.includes("ownerBoardRole"), "founder board uses the owner seat on 
 assert(appSrc.includes("openInvitedClient"), "founder board prefers the invited workspace for existing accounts");
 assert(appSrc.includes("shouldShowOwnerProfileFunnel"), "founder board uses shared funnel gate");
 assert(appSrc.includes("ownerWalkthroughReady({"), "tour ready helper is wired");
+assert(appSrc.includes("skipInvitedSetupChrome"), "invited owner with figures skips the board tour");
+assert(appSrc.includes("isInvitedOwnerWithFigures"), "invited owner + figures gate is wired");
+assert(appSrc.includes("markOnboardingDone(OWNER_TOUR_KEY)"), "invited owner with figures marks the tour done");
+assert(appSrc.includes("setInvitedOwnerEntry(true)"), "client link stamps invited-owner entry");
 assert(appSrc.includes("ownerBoardReady({"), "founder board holds the spinner until profile/client data is ready");
 assert(appSrc.includes("onboardingGateReady"), "tour waits until client meta has loaded");
 assert(appSrc.includes("const [v, setV] = useState<Inputs>(defaults)"), "financials state is declared");
@@ -298,11 +354,16 @@ assert(
 );
 {
   const firstRunDecl = appSrc.indexOf("const [firstRunStep, setFirstRunStep]");
-  const firstRunDeps = appSrc.indexOf("actingClientId, firstRunStep, roleResolved]");
+  const metaEffectStart = appSrc.indexOf("if (!roleResolved) return;");
+  const metaEffectEnd = appSrc.indexOf("// Returning invite accept:", metaEffectStart);
+  const metaEffectBlock =
+    metaEffectStart !== -1 && metaEffectEnd !== -1
+      ? appSrc.slice(metaEffectStart, metaEffectEnd)
+      : "";
   assert(firstRunDecl !== -1, "firstRunStep state is declared");
-  assert(firstRunDeps !== -1, "client-meta effect still lists firstRunStep");
+  assert(metaEffectBlock.includes("firstRunStep"), "client-meta effect still lists firstRunStep");
   assert(
-    firstRunDecl < firstRunDeps,
+    firstRunDecl < metaEffectStart,
     "firstRunStep must be initialized before the client-meta effect reads it",
   );
 }

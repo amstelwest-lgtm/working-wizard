@@ -126,10 +126,12 @@ import {
 } from "@/lib/client-profile";
 import { profileIndustryLabel, profilePriorityWeight } from "@/lib/profile-signals";
 import {
+  isInvitedOwnerWithFigures,
   ownerBoardReady,
   ownerWalkthroughReady,
   shouldShowOwnerProfileFunnel,
 } from "@/lib/first-run";
+import { markOnboardingDone, OWNER_TOUR_KEY } from "@/lib/onboarding";
 import {
   consumeInviteHandoffFlag,
   hasInviteHandoffFlag,
@@ -2192,6 +2194,10 @@ function Index() {
 
   const [effectiveClientId, setEffectiveClientId] = useState<string | null>(null);
   const [clientLinkResolved, setClientLinkResolved] = useState(false);
+  /** Fresh invite accept or metadata-stamped invited workspace — not self-signup. */
+  const [invitedOwnerEntry, setInvitedOwnerEntry] = useState(() =>
+    typeof window !== "undefined" ? hasInviteHandoffFlag() : false,
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -2260,7 +2266,10 @@ function Index() {
               } catch {
                 /* ignore */
               }
-              if (!cancelled) setEffectiveClientId(invited);
+              if (!cancelled) {
+                setInvitedOwnerEntry(true);
+                setEffectiveClientId(invited);
+              }
               return;
             }
             if (i < 4) await new Promise((r) => setTimeout(r, 250));
@@ -2301,7 +2310,10 @@ function Index() {
               );
           }
           localStorage.removeItem(PENDING_INVITE_CLIENT_KEY);
-          if (!cancelled) setEffectiveClientId(inviteClientId);
+          if (!cancelled) {
+            setInvitedOwnerEntry(true);
+            setEffectiveClientId(inviteClientId);
+          }
           return;
         }
 
@@ -2519,6 +2531,11 @@ function Index() {
             hasOperatingProfile: false,
             actingClientId,
             userRole,
+            isInvitedOwnerWithFigures: isInvitedOwnerWithFigures({
+              isInvitedOwner: invitedOwnerEntry,
+              hasRealFinancials,
+              financialsUpdatedAt: data?.financials_updated_at,
+            }),
           }) &&
           firstRunStep === null
         ) {
@@ -2539,7 +2556,26 @@ function Index() {
     return () => {
       cancelled = true;
     };
-  }, [effectiveClientId, userRole, actingClientId, firstRunStep, roleResolved]);
+  }, [
+    effectiveClientId,
+    userRole,
+    actingClientId,
+    firstRunStep,
+    roleResolved,
+    invitedOwnerEntry,
+    hasRealFinancials,
+  ]);
+
+  // Returning invite accept: user_metadata still points at the invited workspace.
+  useEffect(() => {
+    if (!effectiveClientId || invitedOwnerEntry) return;
+    void supabase.auth.getUser().then(({ data: { user: u } }) => {
+      const metaInvite = (u?.user_metadata?.invite_client_id as string | null) ?? null;
+      if (isClientUuid(metaInvite) && metaInvite === effectiveClientId) {
+        setInvitedOwnerEntry(true);
+      }
+    });
+  }, [effectiveClientId, invitedOwnerEntry]);
 
   // Settings → Business profile deep-link
   useEffect(() => {
@@ -2887,6 +2923,25 @@ function Index() {
   // so nothing is written, and any route to real figures drops the sample first.
   const [sampleMode, setSampleMode] = useState(false);
   const showScoredBoard = hasRealFinancials || sampleMode;
+  const skipInvitedSetupChrome = useMemo(
+    () =>
+      isInvitedOwnerWithFigures({
+        isInvitedOwner: invitedOwnerEntry,
+        hasRealFinancials,
+        financialsUpdatedAt: clientMeta?.financials_updated_at,
+      }),
+    [invitedOwnerEntry, hasRealFinancials, clientMeta?.financials_updated_at],
+  );
+  useEffect(() => {
+    if (!skipInvitedSetupChrome) return;
+    markOnboardingDone(OWNER_TOUR_KEY);
+    if (firstRunStep === "pick-type") {
+      setFirstRunStep(null);
+      setShowOnboarding(false);
+    } else if (firstRunStep === "first-data") {
+      setFirstRunStep(null);
+    }
+  }, [skipInvitedSetupChrome, firstRunStep]);
   const enterSampleMode = useCallback(() => {
     setV({ ...defaults, ...sampleFinancialsFor(boardMarket.country) } as Inputs);
     setSampleMode(true);
@@ -3404,6 +3459,7 @@ function Index() {
                     showCashFromBanks,
                     onboardingGateReady,
                   }) &&
+                  !skipInvitedSetupChrome &&
                   !showFinData &&
                   !reviewOpen &&
                   !showQboDialog &&
