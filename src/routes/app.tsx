@@ -48,6 +48,7 @@ import {
 } from "@/lib/market";
 import { openOwnerSettings } from "@/lib/user-roles";
 import { HeaderShareButton } from "@/components/share";
+import { InviteAccountantCard } from "@/components/invite-accountant-card";
 import { extractFinancials, extractPDFsWithAI } from "@/lib/extract-financials.functions";
 import { extractionToInputs, ExtractionReviewModal } from "@/components/extraction-review-modal";
 import { BankStatementDrafter } from "@/components/bank-statement-drafter";
@@ -3986,6 +3987,12 @@ function Index() {
                 onExit={exitSampleMode}
               />
             )}
+
+            {userRole === "client_owner" && !actingClientId && effectiveClientId ? (
+              <div className="mb-3">
+                <InviteAccountantCard clientId={effectiveClientId} tone="board" />
+              </div>
+            ) : null}
 
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
               <TabsList className="mb-2 flex h-auto w-full gap-0 overflow-x-auto rounded-none border-0 border-b border-[#b7872a]/20 bg-transparent p-0 [-ms-overflow-style:none] [scrollbar-width:none] sm:grid sm:grid-cols-6 [&::-webkit-scrollbar]:hidden">

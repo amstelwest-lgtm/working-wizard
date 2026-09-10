@@ -47,6 +47,7 @@ import {
   type SettingsView,
 } from "@/lib/user-roles";
 import { PageHeader, SectionCard } from "@/components/primitives";
+import { InviteAccountantCard } from "@/components/invite-accountant-card";
 
 export const Route = createFileRoute("/_authenticated/settings/")({
   component: SettingsPage,
@@ -109,15 +110,15 @@ function SettingsPage() {
     if (!isPractice) {
       void supabase
         .from("clients")
-        .select("id, market")
+        .select("id, market, firm_id")
         .eq("owner_user_id", user.id)
-        .is("firm_id", null)
-        .limit(1)
-        .maybeSingle()
+        .order("created_at", { ascending: true })
+        .limit(10)
         .then(({ data }) => {
-          const row = data as { id?: string; market?: unknown } | null;
-          setOwnerClientId(row?.id ?? null);
-          setMarketBlob(row?.market ?? null);
+          const rows = (data ?? []) as Array<{ id?: string; market?: unknown; firm_id?: string | null }>;
+          const preferred = rows.find((r) => !r.firm_id) ?? rows[0] ?? null;
+          setOwnerClientId(preferred?.id ?? null);
+          setMarketBlob(preferred?.market ?? null);
         });
     }
   }, [user, isPractice, firmId]);
@@ -228,6 +229,12 @@ function SettingsPage() {
             </div>
           </div>
         </SectionCard>
+
+        {!isPractice && ownerClientId ? (
+          <div className="mb-6">
+            <InviteAccountantCard clientId={ownerClientId} tone="settings" />
+          </div>
+        ) : null}
 
         <MarketSettingsCard
           kind={isPractice ? "firm" : "client"}
