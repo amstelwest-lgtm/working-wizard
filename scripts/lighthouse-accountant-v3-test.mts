@@ -71,7 +71,10 @@ assert(!ownerDay0.toLowerCase().includes("capacity"), "owner day0 is not account
 
 const day17 = replyInterestCtaBrief({ day: 17, persona: "accountant" });
 assert(!day17.includes("http"), "day17 no URL");
-assert(!day17.toLowerCase().includes("pdf"), "day17 brief forbids PDF");
+assert(
+  day17.toLowerCase().includes("do not include any url or pdf"),
+  "day17 brief forbids URL and PDF",
+);
 assert(day17.toLowerCase().includes("unusual"), "day17 unusual-question bait");
 
 const pager = accountantOnePagerUrl("https://app.example");
