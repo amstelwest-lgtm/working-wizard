@@ -601,11 +601,13 @@ function LandingPage() {
       answers: Record<string, { em: string; label: string }> = {};
 
     function startQuiz(r: string) {
-      const draft = (window as unknown as { __milonDraftMarket?: DraftMarket }).__milonDraftMarket;
-      if (!draft?.country || (draft.country === "US" && !draft.regionCode)) {
-        document.getElementById("market")?.scrollIntoView({ behavior: "smooth", block: "start" });
-        return;
-      }
+      const raw = (window as unknown as { __milonDraftMarket?: DraftMarket }).__milonDraftMarket;
+      const draft =
+        raw?.country === "US" && raw.regionCode
+          ? raw
+          : raw?.country === "ZA"
+            ? raw
+            : { country: "ZA" as const, regionCode: null };
       qRole = r;
       step = 0;
       answers = {};
@@ -1042,7 +1044,7 @@ function LandingPage() {
     const market = draftToSelection(draftMarket);
     if (!market) {
       toast.error("Pick South Africa or the United States (and a state) first.");
-      document.getElementById("market")?.scrollIntoView({ behavior: "smooth" });
+      document.getElementById("register")?.scrollIntoView({ behavior: "smooth" });
       return;
     }
     setRegBusy(true);
@@ -2080,103 +2082,6 @@ function LandingPage() {
         </div>
       </div>
 
-      {/* ══════════════════════════ MARKET ══════════════════════════ */}
-      <section id="market">
-        <div className="wrap">
-          <div className="section-head center reveal">
-            <span className="eyebrow">First, where you operate</span>
-            <h2>South Africa or the United States?</h2>
-            <p className="sub">
-              One product. Currency, dates, and tax follow this choice. The US needs a state so
-              sales tax is not guessed.
-            </p>
-          </div>
-          <div className="reveal" style={{ maxWidth: 560, margin: "36px auto 0" }}>
-            <MarketPicker value={draftMarket} onChange={setDraftMarket} variant="landing" />
-            {!isDraftComplete(draftMarket) && (
-              <p
-                style={{
-                  marginTop: 14,
-                  fontSize: 13,
-                  color: "var(--ink-dim)",
-                  textAlign: "center",
-                }}
-              >
-                Choose a region{draftMarket.country === "US" ? " and state" : ""} to continue.
-              </p>
-            )}
-          </div>
-        </div>
-      </section>
-
-      {/* ══════════════════════════ PERSONA ══════════════════════════ */}
-      <section id="persona">
-        <div className="wrap">
-          <div className="section-head center reveal">
-            <span className="eyebrow">Start here</span>
-            <h2>Who are you in this story?</h2>
-            <p className="sub">
-              MILŌN serves two constellations, and connects them. Choose yours and we'll show you
-              exactly what you're about to gain.
-            </p>
-          </div>
-          <div className="persona-grid stagger">
-            <div
-              className={`persona-card${isDraftComplete(draftMarket) ? "" : " is-locked"}`}
-              onClick={() => (window as any).__mq_start?.("owner")}
-            >
-              <div className="icon">
-                <svg viewBox="0 0 24 24">
-                  <rect x="3" y="3" width="7" height="7" />
-                  <rect x="14" y="3" width="7" height="7" />
-                  <rect x="14" y="14" width="7" height="7" />
-                  <rect x="3" y="14" width="7" height="7" />
-                </svg>
-              </div>
-              <h3>Business Owner</h3>
-              <p>
-                You built something real. Now you want to know if the numbers are lying to you — and
-                what to do about it, without waiting for your accountant's next call.
-              </p>
-              <div className="go">
-                Take the 90-second diagnostic <i>→</i>
-              </div>
-            </div>
-            <div
-              className={`persona-card${isDraftComplete(draftMarket) ? "" : " is-locked"}`}
-              onClick={() => (window as any).__mq_start?.("accountant")}
-            >
-              <div className="icon">
-                <svg viewBox="0 0 24 24">
-                  <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
-                </svg>
-              </div>
-              <h3>Accountant / Advisory Firm</h3>
-              <p>
-                Your compliance work is flawless. Now clients want to actually understand their
-                numbers between year-ends — and they'll pay monthly for it.
-              </p>
-              <div className="go">
-                See the advisory revenue model <i>→</i>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ══════════════════════════ QUIZ ══════════════════════════ */}
-      <section id="quiz">
-        <div className="wrap">
-          <div className="quiz-shell">
-            <div className="quiz-progress">
-              <i id="qbar" />
-            </div>
-            <div id="qsteps" />
-            <div className="quiz-reward" id="qreward" />
-          </div>
-        </div>
-      </section>
-
       {/* ══════════════════════════ METHOD ══════════════════════════ */}
       <section id="method">
         <div className="wrap">
@@ -2703,6 +2608,68 @@ function LandingPage() {
                 Join waitlist
               </button>
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ══════════════════════════ PERSONA ══════════════════════════ */}
+      <section id="persona">
+        <div className="wrap">
+          <div className="section-head center reveal">
+            <span className="eyebrow">Start here</span>
+            <h2>Who are you in this story?</h2>
+            <p className="sub">
+              MILŌN serves two constellations, and connects them. Choose yours and we'll show you
+              exactly what you're about to gain.
+            </p>
+          </div>
+          <div className="persona-grid stagger">
+            <div className="persona-card" onClick={() => (window as any).__mq_start?.("owner")}>
+              <div className="icon">
+                <svg viewBox="0 0 24 24">
+                  <rect x="3" y="3" width="7" height="7" />
+                  <rect x="14" y="3" width="7" height="7" />
+                  <rect x="14" y="14" width="7" height="7" />
+                  <rect x="3" y="14" width="7" height="7" />
+                </svg>
+              </div>
+              <h3>Business Owner</h3>
+              <p>
+                You built something real. Now you want to know if the numbers are lying to you — and
+                what to do about it, without waiting for your accountant's next call.
+              </p>
+              <div className="go">
+                Take the 90-second diagnostic <i>→</i>
+              </div>
+            </div>
+            <div className="persona-card" onClick={() => (window as any).__mq_start?.("accountant")}>
+              <div className="icon">
+                <svg viewBox="0 0 24 24">
+                  <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+                </svg>
+              </div>
+              <h3>Accountant / Advisory Firm</h3>
+              <p>
+                Your compliance work is flawless. Now clients want to actually understand their
+                numbers between year-ends — and they'll pay monthly for it.
+              </p>
+              <div className="go">
+                See the advisory revenue model <i>→</i>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ══════════════════════════ QUIZ ══════════════════════════ */}
+      <section id="quiz">
+        <div className="wrap">
+          <div className="quiz-shell">
+            <div className="quiz-progress">
+              <i id="qbar" />
+            </div>
+            <div id="qsteps" />
+            <div className="quiz-reward" id="qreward" />
           </div>
         </div>
       </section>
