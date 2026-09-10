@@ -17,7 +17,6 @@ import { useFinancialInputs } from "@/contexts/financial-inputs";
 import { invokeBrainPropose } from "@/lib/brain-propose-client";
 import { invokeBrainDeliverableDraft } from "@/lib/brain-deliverable-client";
 import { ClientBrainDrafts } from "@/components/client-brain-drafts";
-import { MilonBotPanel } from "@/components/milon-bot-panel";
 import { PanelSkeleton } from "@/components/primitives";
 import {
   asBrainSummaryObject,
@@ -459,8 +458,6 @@ export function ClientBrainSummary({
           </button>
         </div>
       </div>
-
-      <MilonBotPanel clientId={clientId} audience="accountant" surface="portal" />
 
       {loading ? (
         <PanelSkeleton rows={6} className="card pad bg-[var(--card)]" />

@@ -18,6 +18,14 @@ import {
   summarizeToolArgs,
   toolResultStatus,
 } from "../supabase/functions/milon-bot/logic.ts";
+import {
+  MILON_BOT_ACCOUNTANT_CHIPS,
+  MILON_BOT_OWNER_CHIPS,
+  MILON_BOT_SUBTITLE,
+  MILON_BOT_TITLE,
+  deriveMilonBotEndpoint,
+  routeMilonIntent,
+} from "../src/lib/milon-bot-copy.ts";
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
@@ -31,7 +39,6 @@ const fnSrc = readFileSync(resolve("supabase/functions/milon-bot/index.ts"), "ut
 const claudeSrc = readFileSync(resolve("supabase/functions/milon-bot/claude.ts"), "utf8");
 const configSrc = readFileSync(resolve("supabase/config.toml"), "utf8");
 const typesSrc = readFileSync(resolve("src/integrations/supabase/types.ts"), "utf8");
-const panelSrc = readFileSync(resolve("src/components/milon-bot-panel.tsx"), "utf8");
 const clientSrc = readFileSync(resolve("src/lib/milon-bot-client.ts"), "utf8");
 const summarySrc = readFileSync(resolve("src/components/client-brain-summary.tsx"), "utf8");
 const appSrc = readFileSync(resolve("src/routes/app.tsx"), "utf8");
@@ -39,6 +46,8 @@ const studioSrc = readFileSync(
   resolve("src/routes/_authenticated/clients.$clientId.tsx"),
   "utf8",
 );
+const widgetSrc = readFileSync(resolve("src/lib/ask-ai.js"), "utf8");
+const copySrc = readFileSync(resolve("src/lib/milon-bot-copy.ts"), "utf8");
 const askAiSrc = readFileSync(resolve("supabase/functions/ask-ai/anthropic.ts"), "utf8");
 const extractSrc = readFileSync(resolve("supabase/functions/extract-financials/index.ts"), "utf8");
 
@@ -87,7 +96,9 @@ assert(BOT_TOOLS.includes("answer_from_brain"), "brain answer tool");
 assert(isBotToolName("list_blockers") && !isBotToolName("send_email"), "tool allowlist");
 assert(BOT_SYSTEM.includes("Never invent"), "system forbids invention");
 assert(BOT_SYSTEM.includes("not Lighthouse"), "not Lighthouse");
-assert(BOT_SYSTEM.includes("not Ask AI"), "does not replace Ask AI");
+assert(!BOT_SYSTEM.includes("You are not Ask AI"), "unified product — not a separate Ask AI");
+assert(!BOT_SYSTEM.includes("point them to Ask AI"), "does not send users to a separate Ask AI");
+assert(BOT_SYSTEM.includes("Do not send the user to a separate product"), "stays on one surface");
 
 assert(summarizeToolArgs("answer_from_brain", { topic: "cash" }) === "answer_from_brain:cash", "args summary");
 assert(summarizeToolArgs("list_blockers", {}) === "list_blockers", "empty args summary");
@@ -159,17 +170,43 @@ assert(
   "filled brain is not empty",
 );
 
-assert(panelSrc.includes("invokeMilonBot"), "panel calls milon-bot");
-assert(panelSrc.includes('id="milon-bot-summary"') || summarySrc.includes("MilonBotPanel"), "summary mounts bot");
-assert(summarySrc.includes("MilonBotPanel"), "summary imports bot panel");
-assert(!summarySrc.includes("ask-ai"), "summary still does not generate via Ask AI chat");
-assert(appSrc.includes("MilonBotPanel"), "owner board mounts bot");
-assert(appSrc.includes('id="ask-ai-overview"'), "owner Ask AI mount unchanged");
+assert(!summarySrc.includes("MilonBotPanel"), "summary no longer mounts a second bot");
+assert(!summarySrc.includes("ask-ai"), "summary still does not generate via ask-ai chat");
+assert(!appSrc.includes("MilonBotPanel"), "owner board no longer mounts a second bot");
+assert(appSrc.includes('id="ask-ai-overview"'), "owner board keeps the unified widget mount");
 assert(appSrc.includes("OwnerBrainDrip"), "owner drip unchanged");
-assert(studioSrc.includes('id="ask-ai-accountant"'), "Ask AI studio mount unchanged");
-assert(studioSrc.includes('{ id: "ask", label: "Ask AI"'), "Ask AI tab remains");
+assert(studioSrc.includes('id="ask-ai-accountant"'), "studio still mounts the widget");
+assert(studioSrc.includes('{ id: "ask", label: "Milōn Bot"'), "studio tab is labeled Milōn Bot");
+assert(studioSrc.includes("functions/v1/milon-bot"), "studio widget can call milon-bot");
 assert(clientSrc.includes("/functions/v1/milon-bot"), "client posts to milon-bot");
-assert(!panelSrc.toLowerCase().includes("stripe"), "panel has no Stripe");
 assert(!appSrc.toLowerCase().includes("agent api"), "no public Agent API");
+
+assert(widgetSrc.includes("routeMilonIntent"), "widget routes by intent");
+assert(widgetSrc.includes("botEndpoint"), "widget accepts milon-bot endpoint");
+assert(copySrc.includes(MILON_BOT_TITLE), "shared title copy");
+assert(copySrc.includes(MILON_BOT_SUBTITLE), "powered by Claude subtitle");
+assert(MILON_BOT_ACCOUNTANT_CHIPS.length === 5, "accountant example chips");
+assert(MILON_BOT_OWNER_CHIPS.length === 5, "owner example chips");
+assert(routeMilonIntent("What's the biggest drag on this client's score vs peers?") === "ask-ai", "score chip → ask-ai");
+assert(routeMilonIntent("Am I healthy overall, or should I worry?") === "ask-ai", "health chip → ask-ai");
+assert(routeMilonIntent("Can I afford a hire based on what's on the board?") === "ask-ai", "hire chip → ask-ai");
+assert(
+  routeMilonIntent("What's still outstanding on the brain, and is the invite redeemed?") === "milon-bot",
+  "invite/outstanding chip → milon-bot",
+);
+assert(routeMilonIntent("Propose next steps from what's on file.") === "milon-bot", "propose chip → milon-bot");
+assert(
+  routeMilonIntent("Draft an advisory pack from the brain — don't send it.") === "milon-bot",
+  "draft chip → milon-bot",
+);
+assert(
+  routeMilonIntent("What's still outstanding that my accountant needs from me?") === "milon-bot",
+  "owner outstanding chip → milon-bot",
+);
+assert(
+  deriveMilonBotEndpoint("https://x.supabase.co/functions/v1/ask-ai") ===
+    "https://x.supabase.co/functions/v1/milon-bot",
+  "derive milon-bot URL from ask-ai",
+);
 
 console.log("milon-bot-test: all assertions passed");

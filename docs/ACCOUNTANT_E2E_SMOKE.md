@@ -40,7 +40,7 @@ Route: `/clients/<clientId>` → **Summary** (Client Brain)
 - [ ] **Propose from brain** (or equivalent CTA) runs without error when figures exist.
 - [ ] At least one **proposed next step** appears with status *Proposed*.
 - [ ] Approve / Edit / Reject on a proposed step updates status (not stuck loading).
-- [ ] Milōn bot panel answers **Invite status?** from live data (no invented token).
+- [ ] **Milōn Bot** tab answers invite / outstanding questions from live data (no invented token).
 
 ## 3. Propose → deliverable draft
 

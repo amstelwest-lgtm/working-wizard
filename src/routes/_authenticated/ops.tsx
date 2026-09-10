@@ -68,7 +68,7 @@ function isOpsItPane(raw: string | undefined): raw is (typeof OPS_IT_PANES)[numb
 const FLAG_LABELS: Record<string, string> = {
   maintenance_mode: "Maintenance mode (soft gate)",
   signup_open: "Public signup open",
-  ask_ai_enabled: "Ask AI enabled",
+  ask_ai_enabled: "Milōn Bot enabled",
   qbo_enabled: "QuickBooks Online",
   landing_waitlist_orbit: "Orbit waitlist (landing)",
   show_pricing: "Show pricing on landing",

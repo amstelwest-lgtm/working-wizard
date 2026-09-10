@@ -114,7 +114,6 @@ import { ProfileFunnel, type ProfileFunnelMode } from "@/components/profile/prof
 import { ProfileCompletionNote } from "@/components/profile/profile-completion-note";
 import { OwnerBrainDrip } from "@/components/owner-brain-drip";
 import { OwnerBrainFirstInsight } from "@/components/owner-brain-first-insight";
-import { MilonBotPanel } from "@/components/milon-bot-panel";
 import { SampleBoardBanner } from "@/components/sample-board-banner";
 import { VerifyEmailBanner } from "@/components/verify-email-banner";
 import { SAMPLE_BUSINESS_BLURB, sampleFinancialsFor } from "@/lib/sample-business";
@@ -3501,7 +3500,7 @@ function Index() {
             <TabErrorBoundary label="Walkthrough">
               {/* Empty board: a two-step nudge to the one action. The full board
                   tour only runs once a real score exists, so nothing it points at
-                  ("one health score", Ask AI, seeded budget) is a promise. */}
+                  ("one health score", Milōn Bot, seeded budget) is a promise. */}
               <WalkthroughWizard
                 key={showScoredBoard ? "owner" : "owner-empty"}
                 variant={showScoredBoard ? "owner" : "owner-empty"}
@@ -4100,11 +4099,6 @@ function Index() {
                                 productMix={productMix}
                                 weeklyInputs={weeklyInputs}
                               />
-                              <MilonBotPanel
-                                clientId={effectiveClientId}
-                                audience="owner"
-                                surface="board"
-                              />
                               <EmptyState
                                 id="wizard-empty-score"
                                 dashed
@@ -4223,7 +4217,7 @@ function Index() {
                                 )
                                 }
                               />
-                              {/* Same Ask AI mount as the scored board — before figures it
+                              {/* Same Milōn Bot mount as the scored board — before figures it
                                   carries a small "more relevant once your figures are in" note. */}
                               <div
                                 id="ask-ai-overview"
@@ -4266,11 +4260,6 @@ function Index() {
                               <OwnerBrainFirstInsight
                                 clientId={effectiveClientId}
                                 reloadToken={brainInsightReloadToken}
-                              />
-                              <MilonBotPanel
-                                clientId={effectiveClientId}
-                                audience="owner"
-                                surface="board"
                               />
                               <div className="relative rounded-xl border border-slate-200/90 bg-white px-3 py-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)] dark:border-white/10 dark:bg-[#0f172a]/40 dark:shadow-none sm:px-5">
                                 <div className="pointer-events-none absolute right-2 top-2 z-20 hidden sm:block sm:right-3 sm:top-3">
@@ -4738,7 +4727,7 @@ function Index() {
                       onAddFigures={() => setFirstRunStep("first-data")}
                     />
                   )}
-                  {/* Ask AI first — same widget as Business Health, scoped to this client */}
+                  {/* Milōn Bot first — same widget as Business Health, scoped to this client */}
                   <div
                     id="ask-ai-waterfall"
                     className="mb-4 w-full rounded-xl border border-[#b7872a]/30 bg-white dark:bg-[#0a1020]/80"
