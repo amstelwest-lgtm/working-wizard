@@ -1,5 +1,5 @@
 /**
- * Budget year overview — FY revenue bars + EBIT line above the budget grid.
+ * Budget year overview — FY revenue bars + subtle trend line above the budget grid.
  * Data: computeBudgetMonths(doc, activeScenario) — same engine as the P&L table.
  */
 
@@ -9,7 +9,6 @@ import {
   CartesianGrid,
   ComposedChart,
   Line,
-  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -22,13 +21,13 @@ import { useMarketFormat } from "@/contexts/market";
 
 const GOLD = "#d4a550";
 const GOLD_DARK = "#b8860b";
-const EMERALD = "#10b981";
+const TREND = "rgba(184, 134, 11, 0.75)";
 
 type ChartRow = {
   month: string;
   label: string;
   revenue: number;
-  ebit: number;
+  trend: number;
 };
 
 function shortMonth(ym: string, market: ReturnType<typeof useMarketFormat>["market"]) {
@@ -36,6 +35,17 @@ function shortMonth(ym: string, market: ReturnType<typeof useMarketFormat>["mark
   return new Date(Date.UTC(y, m - 1, 1)).toLocaleString(market.locale, {
     month: "short",
     timeZone: "UTC",
+  });
+}
+
+/** Centered 3-month rolling average — cheap trend overlay for the combo chart. */
+function rollingTrend(values: number[], window = 3): number[] {
+  const half = Math.floor(window / 2);
+  return values.map((_, i) => {
+    const start = Math.max(0, i - half);
+    const end = Math.min(values.length, i + half + 1);
+    const slice = values.slice(start, end);
+    return slice.reduce((a, b) => a + b, 0) / slice.length;
   });
 }
 
@@ -49,16 +59,16 @@ export function BudgetYearOverviewChart({ doc }: { doc: BudgetDocument }) {
     [doc],
   );
 
-  const chartData = useMemo<ChartRow[]>(
-    () =>
-      results.map((r) => ({
-        month: r.month,
-        label: shortMonth(r.month, market),
-        revenue: r.revenue,
-        ebit: r.ebit,
-      })),
-    [results, market],
-  );
+  const chartData = useMemo<ChartRow[]>(() => {
+    const revenues = results.map((r) => r.revenue);
+    const trends = rollingTrend(revenues);
+    return results.map((r, i) => ({
+      month: r.month,
+      label: shortMonth(r.month, market),
+      revenue: r.revenue,
+      trend: trends[i],
+    }));
+  }, [results, market]);
 
   const fyTotals = useMemo(() => {
     const revenue = results.reduce((s, r) => s + r.revenue, 0);
@@ -89,7 +99,7 @@ export function BudgetYearOverviewChart({ doc }: { doc: BudgetDocument }) {
             {fyCaption}
           </h3>
           <p className="mt-0.5 text-xs text-slate-500">
-            Monthly revenue and EBIT · {scenarioLabel} scenario
+            Monthly revenue with trend · {scenarioLabel} scenario
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -151,23 +161,12 @@ export function BudgetYearOverviewChart({ doc }: { doc: BudgetDocument }) {
               interval="preserveStartEnd"
             />
             <YAxis
-              yAxisId="left"
               stroke="#94a3b8"
               fontSize={10}
               tickLine={false}
               axisLine={false}
               tickFormatter={(v) => moneyCompact(v)}
               width={52}
-            />
-            <YAxis
-              yAxisId="right"
-              orientation="right"
-              stroke="#94a3b8"
-              fontSize={10}
-              tickLine={false}
-              axisLine={false}
-              tickFormatter={(v) => moneyCompact(v)}
-              width={48}
             />
             <Tooltip
               contentStyle={{
@@ -180,16 +179,14 @@ export function BudgetYearOverviewChart({ doc }: { doc: BudgetDocument }) {
               labelStyle={{ color: GOLD, fontWeight: 700 }}
               formatter={(value: number, name: string) => [
                 money(value),
-                name === "revenue" ? "Revenue" : "EBIT",
+                name === "revenue" ? "Revenue" : "Trend (3-mo avg)",
               ]}
               labelFormatter={(_, payload) => {
                 const row = payload?.[0]?.payload as ChartRow | undefined;
                 return row ? monthLabel(row.month) : "";
               }}
             />
-            <ReferenceLine y={0} yAxisId="right" stroke="rgba(148,163,184,0.5)" strokeDasharray="3 3" />
             <Bar
-              yAxisId="left"
               dataKey="revenue"
               name="revenue"
               fill="url(#budgetRevFill)"
@@ -199,14 +196,14 @@ export function BudgetYearOverviewChart({ doc }: { doc: BudgetDocument }) {
               animationDuration={700}
             />
             <Line
-              yAxisId="right"
               type="monotone"
-              dataKey="ebit"
-              name="ebit"
-              stroke={EMERALD}
-              strokeWidth={2}
-              dot={{ r: 3, fill: EMERALD, stroke: "#fff", strokeWidth: 1 }}
-              activeDot={{ r: 5, fill: EMERALD, stroke: "#fff", strokeWidth: 1.5 }}
+              dataKey="trend"
+              name="trend"
+              stroke={TREND}
+              strokeWidth={1.75}
+              strokeDasharray="6 4"
+              dot={false}
+              activeDot={{ r: 3, fill: GOLD_DARK, stroke: "#fff", strokeWidth: 1 }}
               isAnimationActive={!isEmpty}
               animationDuration={700}
             />
@@ -228,8 +225,11 @@ export function BudgetYearOverviewChart({ doc }: { doc: BudgetDocument }) {
           Revenue
         </span>
         <span className="inline-flex items-center gap-1.5">
-          <span className="inline-block h-0.5 w-4 rounded bg-emerald-500" />
-          EBIT
+          <span
+            className="inline-block h-0.5 w-4 rounded"
+            style={{ background: TREND, borderTop: "1px dashed rgba(184,134,11,0.5)" }}
+          />
+          Trend
         </span>
       </div>
     </section>
