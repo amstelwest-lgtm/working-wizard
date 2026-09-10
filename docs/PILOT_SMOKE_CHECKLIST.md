@@ -14,18 +14,21 @@ note route, role, browser, and whether the migrations below were applied. Fix be
 
 **Supabase → Authentication.**
 - Sign In / Providers → Email → **Confirm email OFF** (owners verify later via the banner)
+- Sign In / Providers → **Google** — credentials live in dashboard only (not `supabase/config.toml`)
 - SMTP Settings → **custom SMTP (Resend)**. The built-in sender is capped at a few emails an hour
   and lands in spam; verification links die on this alone.
 - URL Configuration → Site URL = production domain; Redirect URLs include
   `/auth/verified`, `/auth/callback`, `/app`, `/dashboard` (production + `http://localhost:5000`)
+- Custom auth domain (`auth.milonfinance.com`, Google consent screen): see [`docs/AUTH_CUSTOM_DOMAIN.md`](./AUTH_CUSTOM_DOMAIN.md)
 - Email Templates → paste `supabase/templates/magic_link.html` (subject: *Verify your Milōn
   email*), `recovery.html`, `confirmation.html`. The magic-link template is the one every new
   owner sees.
 
 **Supabase → Edge Functions → Secrets:** `ANTHROPIC_API_KEY` (Ask AI runs there).
 
-**Vercel → Environment Variables (Production):** `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`,
-`SUPABASE_SERVICE_ROLE_KEY`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`,
+**Vercel → Environment Variables (Production):** `SUPABASE_URL` (build → client via `vite.config.ts`),
+`SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `VITE_SUPABASE_URL` (match `SUPABASE_URL`),
+`VITE_SUPABASE_PUBLISHABLE_KEY`,
 `ANTHROPIC_API_KEY`, `RESEND_API_KEY`, `RESEND_FROM_EMAIL` (verified domain), `SITE_URL`,
 `VITE_APP_URL`, `CRON_SECRET`, `SENTRY_DSN`, `VITE_SENTRY_DSN`. Redeploy after changes.
 

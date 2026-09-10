@@ -26,6 +26,17 @@ The frontend **cannot** rename this. Google displays the **OAuth redirect / call
 
 No app code changes are required. Env vars flip only after the custom hostname is **Active** (see [Eng after Active](#eng-after-active)).
 
+### Repo wiring (unchanged by this runbook)
+
+| What | Path / note |
+|------|-------------|
+| Client Supabase URL at build | [`vite.config.ts`](../vite.config.ts) — `define` maps `process.env.SUPABASE_URL` → `import.meta.env.VITE_SUPABASE_URL` |
+| Supabase client | [`src/integrations/supabase/client.ts`](../src/integrations/supabase/client.ts) — reads `VITE_SUPABASE_URL` (client) or `SUPABASE_URL` (SSR fallback) |
+| Google OAuth start | [`src/lib/google-auth.ts`](../src/lib/google-auth.ts) — `startGoogleSignIn()` → `signInWithOAuth({ redirectTo: …/auth/callback })` on **`milonfinance.com`**; **no change** for custom auth domain |
+| Google provider credentials | **Supabase Dashboard** → Authentication → Providers → Google — **not** [`supabase/config.toml`](../supabase/config.toml) (repo file covers email templates only) |
+
+Google’s consent screen shows the **Supabase Auth host** (`auth.milonfinance.com` after cutover), not the app’s `redirectTo`. The app callback stays `https://milonfinance.com/auth/callback`.
+
 ---
 
 ## Custom auth hostname
@@ -48,6 +59,7 @@ Complete in order. **Do not** update Vercel env vars here — that is [Eng after
 - Supabase Dashboard → **Project Settings → General → Custom Domains** (or follow [custom domains guide](https://supabase.com/docs/guides/platform/custom-domains)).
 - Enable the **Custom Domains** paid add-on if not already on the project.
 - Register **`auth.milonfinance.com`**.
+- Google provider is already configured in **Dashboard → Authentication → Providers → Google** (not in repo `supabase/config.toml`).
 
 ### 2. DNS CNAME → wait until Active
 
@@ -105,20 +117,21 @@ Once **`auth.milonfinance.com`** is **Active** in Supabase, update **Vercel** (P
 
 | Variable | Where used |
 |----------|------------|
-| `VITE_SUPABASE_URL` | Browser bundle — Supabase client, edge function calls from the client (`import.meta.env`) |
-| `VITE_SUPABASE_PUBLISHABLE_KEY` | Browser anon key (unchanged when only the URL host changes) |
-| `SUPABASE_URL` | SSR / server functions / auth middleware (`process.env`) |
-| `SUPABASE_PUBLISHABLE_KEY` | Server-side anon key |
+| `SUPABASE_URL` | **Primary.** Build env → client bundle via [`vite.config.ts`](../vite.config.ts) `define` (`SUPABASE_URL` → `VITE_SUPABASE_URL`); SSR / server functions via `process.env` |
+| `VITE_SUPABASE_URL` | Optional explicit client copy; also used by direct `import.meta.env` reads. Set to match `SUPABASE_URL` to avoid drift |
+| `SUPABASE_PUBLISHABLE_KEY` / `VITE_SUPABASE_PUBLISHABLE_KEY` | Anon key — unchanged when only the URL host changes |
+| Supabase client consumer | [`src/integrations/supabase/client.ts`](../src/integrations/supabase/client.ts) |
 
-At **build** time, `vite.config.ts` also maps `SUPABASE_URL` → `VITE_SUPABASE_URL` when the `VITE_*` copy is unset — set **both** URL vars to the custom host in Vercel to avoid drift (see [`.agents/memory/supabase-project-drift.md`](../.agents/memory/supabase-project-drift.md)).
-
-**Set both URL vars to:**
+Set **both** URL vars in Vercel to the same value (see [`.agents/memory/supabase-project-drift.md`](../.agents/memory/supabase-project-drift.md)):
 
 ```
-https://auth.milonfinance.com
+SUPABASE_URL=https://auth.milonfinance.com
+VITE_SUPABASE_URL=https://auth.milonfinance.com
 ```
 
-**Redeploy** after changing build-time vars (`VITE_*` are inlined at build).
+**Redeploy** after changing build env — `vite.config.ts` inlines the URL into the client bundle at build time.
+
+**No change** to OAuth app callback: [`src/lib/google-auth.ts`](../src/lib/google-auth.ts) keeps `redirectTo` at `https://milonfinance.com/auth/callback`.
 
 Supabase **Edge Functions** receive `SUPABASE_URL` from the Supabase runtime automatically; no separate secret for the public URL. Client-side calls use the Vercel-injected `VITE_SUPABASE_URL`.
 
