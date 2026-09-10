@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { PreLoginShareButton } from "@/components/share";
 import { useState, useEffect, useRef } from "react";
 import { useServerFn } from "@tanstack/react-start";
@@ -257,9 +257,7 @@ function AuthPage() {
       <AuthEntryTitle>Your firm workspace</AuthEntryTitle>
       <AuthEntryLead>
         For accounting firms and advisory practices.{" "}
-        <Link to="/" className="text-[#d4a550] underline underline-offset-4 hover:text-[#fdee79]">
-          Back home
-        </Link>
+        <AuthEntryLink to="/">Back home</AuthEntryLink>
       </AuthEntryLead>
 
       <AuthEntryCard className="mt-6">
@@ -340,15 +338,15 @@ function AuthPage() {
               {mode === "signup" && (
                 <AuthEntryFootnote>
                   By creating a firm account you agree to the{" "}
-                  <a href="/terms" className="text-[#d4a550] underline">
+                  <a href="/terms" className="auth-entry__link">
                     Terms
                   </a>
                   . AI is powered by Claude; financial information sent to it is anonymised.{" "}
-                  <a href="/privacy" className="text-[#d4a550] underline">
+                  <a href="/privacy" className="auth-entry__link">
                     Privacy
                   </a>
                   {" · "}
-                  <a href="/ai" className="text-[#d4a550] underline">
+                  <a href="/ai" className="auth-entry__link">
                     AI notice
                   </a>
                 </AuthEntryFootnote>
@@ -358,7 +356,7 @@ function AuthPage() {
         )}
       </AuthEntryCard>
 
-      <p className="mt-6 text-center text-sm text-[#8a938c]">
+      <p className="auth-entry__muted mt-6 text-center text-sm">
         Business owner? <AuthEntryLink to="/">Sign in at milon.co.za →</AuthEntryLink>
       </p>
       <div className="mt-4 flex justify-center">

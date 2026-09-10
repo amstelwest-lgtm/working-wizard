@@ -356,10 +356,13 @@ html.dark .accountant-portal #wizard-action-plan{
 .accountant-portal .dash-asof svg{width:14px;height:14px;stroke:var(--gold);stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round}
 @media(max-width:720px){.accountant-portal .dash-hero{flex-direction:column;align-items:flex-start}}
 
-/* metric card sparkline */
-.accountant-portal .stat .stat-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px}
-.accountant-portal .stat .stat-spark{width:72px;height:22px;flex-shrink:0}
-.accountant-portal .stat .stat-spark path{fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+/* metric card sparkline — legacy .stat + MetricTile (.milon-metric-tile__foot) */
+.accountant-portal .stat .stat-foot,
+.accountant-portal .milon-metric-tile__foot{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px}
+.accountant-portal .stat .stat-spark,
+.accountant-portal .milon-metric-tile__foot .stat-spark{width:72px;height:22px;flex-shrink:0}
+.accountant-portal .stat .stat-spark path,
+.accountant-portal .milon-metric-tile__foot .stat-spark path{fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .accountant-portal .stat .d b{font-weight:700}
 
 /* ===== portfolio triage grid ===== */
