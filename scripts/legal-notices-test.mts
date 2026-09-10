@@ -77,7 +77,7 @@ assert(landing.includes('href="/ai"'), "landing footer links to AI notice");
 assert(!landing.includes('href="/faq">Privacy'), "landing no longer labels FAQ as Privacy");
 assert(landing.includes("Eish2oh (Pty) Ltd"), "landing copyright uses the registered company");
 assert(landing.includes("LIST_PRICES"), "landing prices come from the marketing pack");
-assert(landing.includes("MarketCopy"), "landing dual-copy for US visitors");
+assert(landing.includes("RegionCopy"), "landing uses RegionCopy for single-region copy");
 const draftDecl = landing.indexOf("const [draftMarket, setDraftMarket]");
 const draftDeps = landing.indexOf("}, [draftMarket");
 assert(draftDecl !== -1 && draftDeps !== -1, "landing has draftMarket state + persist effect");

@@ -11,7 +11,7 @@ import { OPS_UNLOCK_KEY, unlockOwnerOps } from "@/lib/owner-ops.functions";
 import { registerLighthouseTrialVisit } from "@/lib/lighthouse.functions";
 import { AuthDivider, GoogleSignInButton } from "@/components/google-sign-in-button";
 import { MarketPicker } from "@/components/market-picker";
-import { MarketCopy } from "@/components/marketing-shell";
+import { RegionCopy } from "@/components/marketing-shell";
 import {
   applyVisitorMarketToDocument,
   draftToSelection,
@@ -194,11 +194,12 @@ function LandingPage() {
   // reads draftMarket on every render. A later const is a TDZ crash
   // (ReferenceError: Cannot access 'draftMarket' before initialization)
   // and white-screens the landing page.
-  const [draftMarket, setDraftMarket] = useState<DraftMarket>({ country: null, regionCode: null });
+  const [draftMarket, setDraftMarket] = useState<DraftMarket>(() =>
+    typeof window !== "undefined" ? readVisitorDraft() : { country: null, regionCode: null },
+  );
   const copyMarket = { copyPack: visitorCopyPack(draftMarket) };
   useEffect(() => {
     setMounted(true);
-    setDraftMarket(readVisitorDraft());
   }, []);
 
   useEffect(() => {
@@ -348,7 +349,7 @@ function LandingPage() {
     );
     document.querySelectorAll(".reveal,.stagger").forEach((el) => io.observe(el));
 
-    /* count-up */
+    /* count-up — hero finals are in the DOM from first paint; below-fold may animate */
     function fmt(n: number, f?: string) {
       return f === "space" ? String(n).replace(/\B(?=(\d{3})+(?!\d))/g, "\u202f") : String(n);
     }
@@ -375,34 +376,21 @@ function LandingPage() {
         }),
       { threshold: 0.6 },
     );
-    document.querySelectorAll(".count").forEach((el) => cio.observe(el));
+    document.querySelectorAll(".count").forEach((el) => {
+      const node = el as HTMLElement;
+      if (node.closest("#hero")) return;
+      cio.observe(node);
+    });
 
-    /* dashboard animation */
+    /* dashboard mock — in hero; paint final gauge + pillar bars immediately */
     const dash = document.getElementById("dash");
     if (dash) {
-      const dio = new IntersectionObserver(
-        (es) =>
-          es.forEach((e) => {
-            if (!e.isIntersecting) return;
-            dio.unobserve(dash);
-            dash.classList.add("in");
-            const g = document.getElementById("gaugeFill");
-            if (g)
-              requestAnimationFrame(() => {
-                g.style.strokeDashoffset = String(402 * (1 - 0.78));
-              });
-            dash.querySelectorAll(".pill-row .bar i").forEach((b: any, i) => {
-              setTimeout(
-                () => {
-                  b.style.width = b.dataset.w;
-                },
-                200 + i * 140,
-              );
-            });
-          }),
-        { threshold: 0.35 },
-      );
-      dio.observe(dash);
+      dash.classList.add("in");
+      const g = document.getElementById("gaugeFill");
+      if (g) g.style.strokeDashoffset = String(402 * (1 - 0.78));
+      dash.querySelectorAll(".pill-row .bar i").forEach((b: any) => {
+        b.style.width = b.dataset.w;
+      });
     }
 
     /* pillar bars */
@@ -615,8 +603,9 @@ function LandingPage() {
       qRole = r;
       step = 0;
       answers = {};
-      document.body.className = "persona-" + r;
-      if (draft.country === "US") document.body.classList.add("market-us");
+      document.body.classList.remove("persona-owner", "persona-accountant");
+      document.body.classList.add("persona-" + r);
+      document.body.classList.toggle("market-us", draft.country === "US");
       if (draft.country === "US") {
         REFLECT.owner["💧"][1] = REFLECT.owner["💧"][1].replace(
           "SA businesses",
@@ -1891,38 +1880,24 @@ function LandingPage() {
             </div>
             <div className="hero-stats h-anim d5">
               <div>
-                <b>
-                  <span className="count" data-to="1">
-                    0
-                  </span>
-                </b>
+                <b>1</b>
                 <span>Score that tells the truth</span>
               </div>
               <div>
-                <b>
-                  <span className="count" data-to="13">
-                    0
-                  </span>
-                  &nbsp;wks
-                </b>
+                <b>13&nbsp;wks</b>
                 <span>You see cash trouble coming</span>
               </div>
               <div>
-                <b>
-                  <span className="count" data-to="930">
-                    0
-                  </span>
-                  +
-                </b>
+                <b>930+</b>
                 <span>Proven fixes, ranked for you</span>
               </div>
               <div>
                 <b>
-                  R
-                  <span className="count" data-to="1200" data-fmt="space">
-                    0
-                  </span>
-                  +
+                  <RegionCopy
+                    pack={copyMarket.copyPack}
+                    za={LIST_PRICES.za.retainerUplift}
+                    us={LIST_PRICES.us.retainerUplift}
+                  />
                 </b>
                 <span>Advisory uplift per client /mo</span>
               </div>
@@ -1968,14 +1943,12 @@ function LandingPage() {
                       fill="none"
                       strokeWidth="9"
                       strokeDasharray="402"
-                      strokeDashoffset="402"
+                      strokeDashoffset={402 * (1 - 0.78)}
                     />
                   </svg>
                   <div className="val">
                     <div>
-                      <b className="count" data-to="78">
-                        0
-                      </b>
+                      <b>78</b>
                       <span>Health score</span>
                     </div>
                   </div>
@@ -1984,28 +1957,28 @@ function LandingPage() {
                   <div className="pill-row">
                     <span className="nm">Financing</span>
                     <span className="bar">
-                      <i data-w="82%" />
+                      <i data-w="82%" style={{ width: "82%" }} />
                     </span>
                     <b className="num">82</b>
                   </div>
                   <div className="pill-row">
                     <span className="nm">Assets</span>
                     <span className="bar">
-                      <i data-w="74%" />
+                      <i data-w="74%" style={{ width: "74%" }} />
                     </span>
                     <b className="num">74</b>
                   </div>
                   <div className="pill-row">
                     <span className="nm">Profit</span>
                     <span className="bar">
-                      <i data-w="81%" />
+                      <i data-w="81%" style={{ width: "81%" }} />
                     </span>
                     <b className="num">81</b>
                   </div>
                   <div className="pill-row warn">
                     <span className="nm">Cash</span>
                     <span className="bar">
-                      <i data-w="61%" />
+                      <i data-w="61%" style={{ width: "61%" }} />
                     </span>
                     <b className="num">61</b>
                   </div>
@@ -2014,7 +1987,9 @@ function LandingPage() {
               <div className="dash-chart">
                 <div className="lbl">
                   <b>13-week cash forecast</b>
-                  <span>R thousands</span>
+                  <span>
+                    <RegionCopy pack={copyMarket.copyPack} za="R thousands" us="$ thousands" />
+                  </span>
                 </div>
                 <svg
                   className="cash-svg"
@@ -2053,8 +2028,21 @@ function LandingPage() {
             <div className="float-card fc-1">
               <span className="tag">Accountant note</span>
               <p>
-                Debtor days crept up to <b>52</b>. Chase your top 3 invoices this week — that's{" "}
-                <b>R184k</b> unlocked.
+                <RegionCopy
+                  pack={copyMarket.copyPack}
+                  za={
+                    <>
+                      Debtor days crept up to <b>52</b>. Chase your top 3 invoices this week —
+                      that's <b>R184k</b> unlocked.
+                    </>
+                  }
+                  us={
+                    <>
+                      DSO crept up to <b>52</b>. Chase your top 3 invoices this week — that's{" "}
+                      <b>$10k</b> unlocked.
+                    </>
+                  }
+                />
               </p>
             </div>
             <div className="float-card fc-2">
@@ -2116,7 +2104,7 @@ function LandingPage() {
               <polyline points="20 6 9 17 4 12" />
             </svg>
             <span>
-              <MarketCopy za="SAICA-referenced ratios" us="Industry-standard ratios" />
+              <RegionCopy pack={copyMarket.copyPack} za="SAICA-referenced ratios" us="Industry-standard ratios" />
             </span>
           </div>
           <div className="item">
@@ -2137,7 +2125,7 @@ function LandingPage() {
               <path d="M16 3.13a4 4 0 0 1 0 7.75" />
             </svg>
             <span>
-              <MarketCopy za="Built for SA SMEs" us="Built for US SMBs" />
+              <RegionCopy pack={copyMarket.copyPack} za="Built for SA SMEs" us="Built for US SMBs" />
             </span>
           </div>
           <div className="item">
@@ -2193,7 +2181,7 @@ function LandingPage() {
               <h3>Cash Flow</h3>
               <p>
                 Operating cash, 13-week forecast,{" "}
-                <MarketCopy za="debtor days, creditor days" us="DSO, DPO" />, and cash conversion
+                <RegionCopy pack={copyMarket.copyPack} za="debtor days, creditor days" us="DSO, DPO" />, and cash conversion
                 cycle — the motion that keeps you from falling in.
               </p>
               <div className="score">
@@ -2256,10 +2244,10 @@ function LandingPage() {
           <span>Operating Cash Ratio</span>
           <span>13-Week Cash Forecast</span>
           <span>
-            <MarketCopy za="Debtor Days" us="Days Sales Outstanding" />
+            <RegionCopy pack={copyMarket.copyPack} za="Debtor Days" us="Days Sales Outstanding" />
           </span>
           <span>
-            <MarketCopy za="Creditor Days" us="Days Payable Outstanding" />
+            <RegionCopy pack={copyMarket.copyPack} za="Creditor Days" us="Days Payable Outstanding" />
           </span>
           <span>Inventory Turnover</span>
           <span>Cash Conversion Cycle</span>
@@ -2271,12 +2259,12 @@ function LandingPage() {
           <span>Break-even Point</span>
           <span>Revenue per Employee</span>
           <span>
-            <MarketCopy za="Labour Productivity" us="Labor Productivity" />
+            <RegionCopy pack={copyMarket.copyPack} za="Labour Productivity" us="Labor Productivity" />
           </span>
           <span>Cost Structure</span>
           <span>Revenue Growth</span>
           <span>
-            <MarketCopy za="Profit per Rand Earned" us="Profit per Dollar Earned" />
+            <RegionCopy pack={copyMarket.copyPack} za="Profit per Rand Earned" us="Profit per Dollar Earned" />
           </span>
           <span>Cash Burn Rate</span>
           <span>Runway Weeks</span>
@@ -2298,7 +2286,7 @@ function LandingPage() {
             </h2>
           </div>
           <p className="sub reveal" style={{ marginTop: 24 }}>
-            <MarketCopy
+            <RegionCopy pack={copyMarket.copyPack}
               za="South African SMEs operate with accountants they see once a quarter, software that reports the past, and no model for what comes next. The result: smart owners, flying blind. MILŌN is the instrument panel that was missing."
               us="US businesses operate with accountants they see once a quarter, software that reports the past, and no model for what comes next. The result: smart owners, flying blind. MILŌN is the instrument panel that was missing."
             />
@@ -2307,10 +2295,10 @@ function LandingPage() {
             <div className="step-card">
               <span className="n">01</span>
               <h3>
-                <MarketCopy za="You upload your financials" us="Connect QuickBooks or upload" />
+                <RegionCopy pack={copyMarket.copyPack} za="You upload your financials" us="Connect QuickBooks or upload" />
               </h3>
               <p>
-                <MarketCopy
+                <RegionCopy pack={copyMarket.copyPack}
                   za="Your accountant uploads your income statement, balance sheet, and cash flow — or you do. One PDF, extracted by AI in seconds."
                   us="Connect QuickBooks Online, or upload Excel, CSV, or a bank PDF. One file is enough to start. Xero is also on the list — we do not lead with it."
                 />
@@ -2321,7 +2309,7 @@ function LandingPage() {
               <span className="n">02</span>
               <h3>MILŌN scores your business</h3>
               <p>
-                <MarketCopy
+                <RegionCopy pack={copyMarket.copyPack}
                   za="31 ratios, 4 pillar scores, one overall health score — mapped against 120 SA industry benchmarks."
                   us="31 ratios, 4 pillar scores, one overall health score — days and percentages, without treating South African medians as US ones."
                 />
@@ -2512,7 +2500,7 @@ function LandingPage() {
                 </li>
                 <li>
                   <b>Recurring retainer model</b> —{" "}
-                  <MarketCopy
+                  <RegionCopy pack={copyMarket.copyPack}
                     za={`${LIST_PRICES.za.retainerUplift} uplift per client per month`}
                     us={`${LIST_PRICES.us.retainerUplift} uplift per client per month`}
                   />
@@ -2558,7 +2546,7 @@ function LandingPage() {
             <ul style={{ listStyle: "none", display: "flex", flexDirection: "column", gap: 10 }}>
               <li style={{ display: "flex", gap: 10, fontSize: 14, color: "var(--ink-dim)" }}>
                 <span style={{ color: "var(--gold)" }}>✦</span>Up to 150 clients — planned{" "}
-                <MarketCopy
+                <RegionCopy pack={copyMarket.copyPack}
                   za={`${LIST_PRICES.za.firm150}/mo`}
                   us={`${LIST_PRICES.us.firm150}/mo`}
                 />{" "}
@@ -2566,7 +2554,7 @@ function LandingPage() {
               </li>
               <li style={{ display: "flex", gap: 10, fontSize: 14, color: "var(--ink-dim)" }}>
                 <span style={{ color: "var(--gold)" }}>✦</span>Unlimited clients — planned{" "}
-                <MarketCopy
+                <RegionCopy pack={copyMarket.copyPack}
                   za={`${LIST_PRICES.za.firmUnlimited}/mo`}
                   us={`${LIST_PRICES.us.firmUnlimited}/mo`}
                 />{" "}
@@ -2614,7 +2602,7 @@ function LandingPage() {
             <div className="price-card">
               <h3>Orbit</h3>
               <div className="amount">
-                <MarketCopy
+                <RegionCopy pack={copyMarket.copyPack}
                   za={
                     <>
                       {LIST_PRICES.za.orbit}
@@ -2652,7 +2640,7 @@ function LandingPage() {
             <div className="price-card">
               <h3>Constellation</h3>
               <div className="amount">
-                <MarketCopy
+                <RegionCopy pack={copyMarket.copyPack}
                   za={
                     <>
                       {LIST_PRICES.za.constellation}
@@ -3062,7 +3050,7 @@ function LandingPage() {
             <span style={{ fontSize: 12, color: "var(--ink-dim)" }}>
               The financial health platform
               <br />
-              <MarketCopy za="for South African SMEs" us="for US small businesses" />
+              <RegionCopy pack={copyMarket.copyPack} za="for South African SMEs" us="for US small businesses" />
             </span>
           </div>
           <nav className="fnav" aria-label="Footer navigation">
@@ -3107,7 +3095,7 @@ function LandingPage() {
                 AI notice
               </a>
               {" · "}
-              <MarketCopy
+              <RegionCopy pack={copyMarket.copyPack}
                 za="Built for South Africa · Powered by Claude AI"
                 us="Built for the United States · Powered by Claude AI"
               />
