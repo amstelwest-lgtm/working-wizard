@@ -95,6 +95,7 @@ During dry-run, **every other address fails closed** at send time.
 | Opt-out | **Code + DB** | Per-lead `optout_token`; RFC 8058 headers at send; routes `/unsubscribe`, `/lh/unsubscribe` |
 | `asset_fallback` | **Code + DB** | Drafter uses `[asset, asset_fallback]` via `firstReadyAsset()` — only `status=ready` assets link |
 | Assets default | **Manual — Theo** | Migration seeds URLs as `in_progress`; flip to **ready** in `/ops` → Assets after reading copy |
+| One-pager PDFs | **Ready** | `/lighthouse/milon-one-pager-accountants.pdf` and `/lighthouse/milon-one-pager-owners.pdf` (static assets; `lighthouse_assets` marked `ready` via migration) |
 | Owner gate | **Env** | `MILON_OWNER_EMAILS` + passphrase; not auth/#140 |
 | Daily cap | **Settings** | Default 25/day SAST in Lighthouse Settings — fine for dry-run |
 | Auto-send | **Off by default** | `auto_send: false` in settings seed; sends are click-only |
