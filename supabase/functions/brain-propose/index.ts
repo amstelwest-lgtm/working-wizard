@@ -314,16 +314,22 @@ Deno.serve(async (req: Request) => {
   const nowIso = new Date().toISOString();
   const patched = applyDraftBrainPatches(brainSummary, payload, nowIso);
   if (patched.gapAdded > 0 || patched.competitorAdded > 0) {
-    const { error: sumErr } = await userClient
+    const { data: sumRow, error: sumErr } = await userClient
       .from("clients")
       .update({
         brain_summary: patched.blob,
         brain_summary_updated_at: nowIso,
       })
-      .eq("id", clientId);
+      .eq("id", clientId)
+      .select("id")
+      .maybeSingle();
     if (sumErr) {
       console.error("brain_summary update:", sumErr.message);
       return respond({ error: sumErr.message }, 500);
+    }
+    if (!sumRow) {
+      console.error("brain_summary update: 0 rows (RLS or missing client)");
+      return respond({ error: "Could not save brain summary" }, 403);
     }
   }
 

@@ -374,14 +374,17 @@ export function ClientBrainSummary({
   };
 
   const saveBrainSummaryBlob = async (blob: Record<string, unknown>) => {
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from("clients")
       .update({
         brain_summary: blob as Json,
         brain_summary_updated_at: new Date().toISOString(),
       })
-      .eq("id", clientId);
+      .eq("id", clientId)
+      .select("id")
+      .maybeSingle();
     if (error) throw error;
+    if (!data) throw new Error("Could not save brain summary — access denied or client missing");
     await load();
   };
 
