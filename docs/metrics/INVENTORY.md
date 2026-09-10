@@ -251,6 +251,18 @@ Ten report keys: `scorecard`, `intervention`, `forecast`, `cycle`, `waterfall`, 
 
 Owner `/app` does not use Reports Studio the same way; some PDFs can be triggered from cash / waterfall components (`reportKey: forecast` / `waterfall`).
 
+### 4.4b Client Brain funnel (accountant path)
+
+Minimal stall instrumentation for Client Brain → propose → sign-off. Four points:
+
+| Funnel step | `event_key` | Source | Insertion point | Verify |
+|---|---|---|---|---|
+| Accept (owner invite) | `owner.invite.redeemed` | db trigger | `invite_tokens.redeemed_at` set (`20260902121000_analytics_events_triggers.sql`) | `SELECT * FROM analytics.events WHERE event_key = 'owner.invite.redeemed' ORDER BY occurred_at DESC LIMIT 5;` |
+| Accept (firm seat) | `seat.accepted` | db trigger | `firm_staff_invites.accepted_at` set (same migration) | `SELECT * FROM analytics.events WHERE event_key = 'seat.accepted' ORDER BY occurred_at DESC LIMIT 5;` |
+| Brain quality proxy | `brain.proposed` | db trigger | `proposed_next_steps` INSERT after brain-propose (`20260910140000_analytics_client_brain_funnel.sql`) | One row per inserted next step; properties `{ has_rationale, assumption_count }`. Proxy = brain had enough context to draft a step (upstream: `snapshot.created` for period figures). |
+| Propose yes | `brain.step.approved` | db trigger | `proposed_next_steps` status `proposed` → `approved` or `edited` | `SELECT * FROM analytics.events WHERE event_key = 'brain.step.approved' ORDER BY occurred_at DESC LIMIT 5;` |
+| Sign-off | `report.sent` | db trigger | `advisory_deliveries` INSERT from Client Brain “Sign off and log” (`recordDelivery` in `client-brain-drafts.tsx`) | `channel=copy`, `kind` from draft; same event as Reports studio sends. |
+
 ### 4.5 Accountability loop (highest priority)
 
 This is the claimed moat. Assignees never log in.
