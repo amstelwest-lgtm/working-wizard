@@ -67,6 +67,14 @@ const STEP_HINT: Record<number, string> = {
   5: "Day 18 · breakup — shortest email, highest reply rate",
 };
 
+const ACCOUNTANT_STEP_HINT: Record<number, string> = {
+  1: "Day 0 · capacity ceiling, soft ask, no link",
+  2: "Day 4 · both teaser videos, no trial",
+  3: "Day 9 · trial link + practice one-pager",
+  4: "Day 17 · unusual question, no URL or PDF",
+  5: "Day 28 · capacity close — trial, both videos, one-pager",
+};
+
 export const LIGHTHOUSE_TABS = ["pipeline", "playbook", "assets", "settings"] as const;
 
 export type LighthouseTab = (typeof LIGHTHOUSE_TABS)[number];
@@ -908,7 +916,7 @@ function SettingsForm({
           />
           <input
             className={`${inputCls} sm:col-span-2`}
-            placeholder="Reply-to — your real inbox, e.g. amstel.west@gmail.com"
+            placeholder="Reply-to — team@milonfinance.com"
             value={replyTo}
             onChange={(e) => setReplyTo(e.target.value)}
           />
@@ -1257,7 +1265,8 @@ function LeadDrawer({
             })}
         </div>
         <p className="mb-3 text-[11px] text-[var(--ops-ink-dim)]">
-          {STEP_HINT[activeStep] ?? "Reply — answer what they asked, one ask at most"}
+          {(lead.persona === "accountant" ? ACCOUNTANT_STEP_HINT : STEP_HINT)[activeStep] ??
+            "Reply — answer what they asked, one ask at most"}
         </p>
 
         <div className="space-y-2">
