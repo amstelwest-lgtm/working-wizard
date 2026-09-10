@@ -44,6 +44,7 @@ function ForAccountantsPage() {
         </>
       }
       ctaLabel="Set up your firm account ✦"
+      ctaHref="/auth"
     >
       <h2>What changes in the practice</h2>
       <ul className="mk-list">

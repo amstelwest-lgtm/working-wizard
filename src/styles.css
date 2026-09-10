@@ -621,3 +621,38 @@ html:not(.dark) .health-orb .text-rose-400 { color: #9b2424 !important; }
   height: 1px;
   background: var(--border);
 }
+
+/* Google sign-in — branded auth entry shell (/auth, callback, verify) */
+.milon-google-btn-entry {
+  display: inline-flex;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  height: 2.75rem;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: #fff;
+  color: #1f1f1f;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+.milon-google-btn-entry:hover {
+  transform: translateY(-1px);
+  border-color: rgba(255, 255, 255, 0.2);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+}
+.milon-google-btn-entry:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+.auth-entry .milon-auth-divider {
+  color: #8a938c;
+}
+.auth-entry .milon-auth-divider::before,
+.auth-entry .milon-auth-divider::after {
+  background: rgba(255, 255, 255, 0.1);
+}

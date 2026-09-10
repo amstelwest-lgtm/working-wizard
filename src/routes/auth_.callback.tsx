@@ -13,6 +13,7 @@ import {
 import { notifySignup } from "@/lib/signup-notify";
 import {
   consumePendingOwnerInvite,
+  ownerInviteFromCallbackSearch,
   ownerInviteLandingPath,
   peekPendingOwnerInvite,
   resolvePendingOwnerInvite,
@@ -33,6 +34,12 @@ import {
   shouldOpenItInbox,
 } from "@/lib/user-roles";
 import {
+  AuthEntryCard,
+  AuthEntryEyebrow,
+  AuthEntryShell,
+  AuthEntryTitle,
+} from "@/components/auth-entry-shell";
+import {
   OwnerInviteCard,
   OwnerInviteEyebrow,
   OwnerInviteShell,
@@ -45,6 +52,13 @@ export const Route = createFileRoute("/auth_/callback")({
   }),
 });
 
+function detectInviteFlow(): boolean {
+  if (typeof window === "undefined") return false;
+  if (ownerInviteFromCallbackSearch(window.location.search)) return true;
+  if (peekPendingOwnerInvite()?.token) return true;
+  return false;
+}
+
 function AuthCallbackPage() {
   const navigate = useNavigate();
   const ensurePractice = useServerFn(ensurePracticePortalAccess);
@@ -52,6 +66,7 @@ function AuthCallbackPage() {
   const [error, setError] = useState("");
   const [inviteContinue, setInviteContinue] = useState<string | null>(null);
   const [working, setWorking] = useState(true);
+  const [isInviteFlow, setIsInviteFlow] = useState(detectInviteFlow);
 
   useEffect(() => {
     const el = document.documentElement;
@@ -90,6 +105,7 @@ function AuthCallbackPage() {
         next,
         stored: peekPendingOwnerInvite(),
       });
+      if (pendingInvite?.token) setIsInviteFlow(true);
       let intent = consumed.intent;
       if (!intent && !pendingInvite?.token) {
         // Nothing survived the round trip (origin hop). Decide from the account.
@@ -219,51 +235,75 @@ function AuthCallbackPage() {
     };
   }, [doAcceptOwnerInvite, ensurePractice, navigate]);
 
+  const useInviteShell = isInviteFlow || Boolean(inviteContinue);
+
   if (error) {
+    if (useInviteShell) {
+      return (
+        <OwnerInviteShell>
+          <OwnerInviteEyebrow>{inviteContinue ? "Invitation" : "Sign in"}</OwnerInviteEyebrow>
+          <h1 className="mt-2 text-[22px] font-semibold tracking-tight text-[#e8ede9]">
+            {inviteContinue ? "Could not accept invitation" : "Could not sign in with Google"}
+          </h1>
+          <OwnerInviteCard className="mt-6 text-center">
+            <p className="text-sm leading-relaxed text-[#8a938c]">{error}</p>
+            <div className="mt-6 flex flex-col gap-3">
+              {inviteContinue ? (
+                <a
+                  href={inviteContinue}
+                  className="inline-flex h-11 w-full items-center justify-center rounded-xl bg-gradient-to-r from-[#ac8400] via-[#d4af37] to-[#fdee79] px-5 text-xs font-bold uppercase tracking-[0.14em] text-[#1b1300]"
+                >
+                  Continue invitation
+                </a>
+              ) : (
+                <Link
+                  to="/"
+                  className="inline-flex h-11 w-full items-center justify-center rounded-xl bg-gradient-to-r from-[#ac8400] via-[#d4af37] to-[#fdee79] px-5 text-xs font-bold uppercase tracking-[0.14em] text-[#1b1300]"
+                >
+                  Back home
+                </Link>
+              )}
+            </div>
+          </OwnerInviteCard>
+        </OwnerInviteShell>
+      );
+    }
+
     return (
-      <OwnerInviteShell>
-        <OwnerInviteEyebrow>{inviteContinue ? "Invitation" : "Sign in"}</OwnerInviteEyebrow>
-        <h1 className="mt-2 text-[22px] font-semibold tracking-tight text-[#e8ede9]">
-          {inviteContinue ? "Could not accept invitation" : "Could not sign in with Google"}
-        </h1>
-        <OwnerInviteCard className="mt-6 text-center">
+      <AuthEntryShell>
+        <AuthEntryEyebrow>Sign in</AuthEntryEyebrow>
+        <AuthEntryTitle>Could not sign in with Google</AuthEntryTitle>
+        <AuthEntryCard className="mt-6 text-center">
           <p className="text-sm leading-relaxed text-[#8a938c]">{error}</p>
           <div className="mt-6 flex flex-col gap-3">
-            {inviteContinue ? (
-              <a
-                href={inviteContinue}
-                className="inline-flex h-11 w-full items-center justify-center rounded-xl bg-gradient-to-r from-[#ac8400] via-[#d4af37] to-[#fdee79] px-5 text-xs font-bold uppercase tracking-[0.14em] text-[#1b1300]"
-              >
-                Continue invitation
-              </a>
-            ) : (
-              <Link
-                to="/"
-                className="inline-flex h-11 w-full items-center justify-center rounded-xl bg-gradient-to-r from-[#ac8400] via-[#d4af37] to-[#fdee79] px-5 text-xs font-bold uppercase tracking-[0.14em] text-[#1b1300]"
-              >
-                Back home
-              </Link>
-            )}
-            {!inviteContinue ? (
-              <Link
-                to="/auth"
-                search={{}}
-                className="inline-flex h-11 w-full items-center justify-center rounded-xl border border-white/15 px-5 text-xs font-bold uppercase tracking-[0.14em] text-[#c9d0cb]"
-              >
-                Accountant portal
-              </Link>
-            ) : null}
+            <Link
+              to="/"
+              className="inline-flex h-11 w-full items-center justify-center rounded-xl bg-gradient-to-r from-[#ac8400] via-[#d4af37] to-[#fdee79] px-5 text-xs font-bold uppercase tracking-[0.14em] text-[#1b1300]"
+            >
+              Back home
+            </Link>
+            <Link
+              to="/auth"
+              search={{}}
+              className="inline-flex h-11 w-full items-center justify-center rounded-xl border border-white/15 px-5 text-xs font-bold uppercase tracking-[0.14em] text-[#c9d0cb] hover:border-white/25 hover:text-[#e8ede9]"
+            >
+              Accountant portal
+            </Link>
           </div>
-        </OwnerInviteCard>
+        </AuthEntryCard>
+      </AuthEntryShell>
+    );
+  }
+
+  if (useInviteShell) {
+    return (
+      <OwnerInviteShell loading={working} loadingMessage="Completing sign-in…">
+        {!working ? (
+          <p className="text-center text-sm text-[#8a938c]">Redirecting to your workspace…</p>
+        ) : null}
       </OwnerInviteShell>
     );
   }
 
-  return (
-    <OwnerInviteShell loading={working} loadingMessage="Completing sign-in…">
-      {!working ? (
-        <p className="text-center text-sm text-[#8a938c]">Redirecting to your workspace…</p>
-      ) : null}
-    </OwnerInviteShell>
-  );
+  return <AuthEntryShell loading loadingMessage="Signing you in with Google…" />;
 }
