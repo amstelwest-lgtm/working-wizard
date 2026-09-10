@@ -23,6 +23,11 @@ import {
 } from "@/lib/owner-ops.guard";
 import { callClaudeMessages } from "@/lib/claude-messages";
 import { applyLighthouseOptOut } from "@/lib/lighthouse-optout.server";
+import {
+  assertLighthouseSendRecipientAllowed,
+  lighthouseSendAllowlist,
+  lighthouseSendAllowlistEnforced,
+} from "@/lib/lighthouse-send-allowlist";
 
 const MIGRATION = "20260820100000_milon_lighthouse.sql";
 const ENGAGEMENT_MIGRATION = "20260822210000_lighthouse_engagement.sql";
@@ -177,6 +182,8 @@ export type LighthouseDashboard = {
     aiConfigured: boolean;
     emailConfigured: boolean;
     siteUrl: string;
+    sendAllowlistEnforced: boolean;
+    sendAllowlist: string[];
   };
   /** Sends already counted toward today's daily_send_cap (SAST calendar day). */
   sentToday: number;
@@ -409,10 +416,13 @@ export const getLighthouse = createServerFn({ method: "GET" })
     await assertOpsConsoleAccess(context as AuthCtx);
     const admin = adminLoose();
 
+    const sendAllowlist = lighthouseSendAllowlist();
     const capability = {
       aiConfigured: Boolean(process.env.ANTHROPIC_API_KEY),
       emailConfigured: Boolean(process.env.RESEND_API_KEY),
       siteUrl: siteUrl(),
+      sendAllowlistEnforced: lighthouseSendAllowlistEnforced(),
+      sendAllowlist: sendAllowlist ?? [],
     };
 
     const { data: leadRows, error: leadErr } = await admin
@@ -947,6 +957,7 @@ export const sendLighthouseTouch = createServerFn({ method: "POST" })
     const to = (lead?.email as string | null) ?? "";
     if (!to || !to.includes("@")) throw new Error("Lead has no email address.");
     if (lead?.do_not_contact) throw new Error("Lead is marked do-not-contact.");
+    assertLighthouseSendRecipientAllowed(to);
 
     // Fail closed against the platform-wide suppression list: someone who
     // unsubscribed from any Milōn email must not receive cold outreach either.
