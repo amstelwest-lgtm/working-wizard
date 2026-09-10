@@ -30,6 +30,9 @@ import {
 import landingCss from "../styles/landing.css?inline";
 import { peekPendingOwnerInvite, pendingInviteTokenFromSearch } from "@/lib/invite-handoff";
 import { SHARE_DESCRIPTION, SHARE_TITLE } from "@/lib/share-copy";
+import { OwnerInviteShell } from "@/components/owner-invite-shell";
+import { OwnerInviteSignupPanel } from "@/components/owner-invite-signup-panel";
+import { OwnerInviteSigninOverlay } from "@/components/owner-invite-signin-overlay";
 
 export const Route = createFileRoute("/")({
   component: LandingPage,
@@ -109,6 +112,8 @@ function LandingPage() {
   const [inviteIsLegacyUuid, setInviteIsLegacyUuid] = useState(false);
   const [inviteBusiness, setInviteBusiness] = useState<string | null>(null);
   const [inviteNeedsCode, setInviteNeedsCode] = useState(false);
+  const [invitePreviewLoading, setInvitePreviewLoading] = useState(false);
+  const [invitePreviewError, setInvitePreviewError] = useState<string | null>(null);
   const [regClientCode, setRegClientCode] = useState("");
 
   /* ── Lighthouse trial link (?lh=<token>) — attribute the signup back to the lead ── */
@@ -130,6 +135,8 @@ function LandingPage() {
     const inv = pendingInviteTokenFromUrl() ?? stored?.token ?? null;
     if (!inv) return;
     setInviteClientId(inv);
+    setInvitePreviewLoading(true);
+    setInvitePreviewError(null);
     if (stored?.clientCode) setRegClientCode((prev) => prev || stored.clientCode || "");
     // Show the code field immediately so a slow preview cannot let them submit
     // without it. Hide only after preview confirms this client has no code.
@@ -138,9 +145,6 @@ function LandingPage() {
     const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
     if (uuidRe.test(inv.trim())) {
       setInviteIsLegacyUuid(true);
-      toast.message(
-        "This invite link is an older format. Ask your accountant for a fresh link when you can.",
-      );
     }
     void doPreviewInvite({ data: { token: inv } })
       .then((preview) => {
@@ -148,12 +152,12 @@ function LandingPage() {
         setInviteNeedsCode(Boolean(preview.clientCode));
       })
       .catch((err: unknown) => {
-        toast.error(err instanceof Error ? err.message : "This invite link is invalid.");
+        const msg = err instanceof Error ? err.message : "This invite link is invalid.";
+        setInvitePreviewError(msg);
+      })
+      .finally(() => {
+        setInvitePreviewLoading(false);
       });
-    setTimeout(() => {
-      const el = document.getElementById("register");
-      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 400);
   }, [doPreviewInvite]);
 
   useEffect(() => {
@@ -1113,6 +1117,20 @@ function LandingPage() {
     }
   };
 
+  const activeInviteToken =
+    inviteClientId ?? pendingInviteTokenFromUrl() ?? peekPendingOwnerInvite()?.token ?? null;
+  const isOwnerInviteFlow = Boolean(activeInviteToken);
+
+  useEffect(() => {
+    if (!isOwnerInviteFlow) return;
+    const el = document.documentElement;
+    const hadDark = el.classList.contains("dark");
+    el.classList.add("dark");
+    return () => {
+      if (!hadDark) el.classList.remove("dark");
+    };
+  }, [isOwnerInviteFlow]);
+
   /* ── email confirmation screen ── */
   if (regDone) {
     return (
@@ -1247,6 +1265,65 @@ function LandingPage() {
           </div>
         </div>
       </div>
+    );
+  }
+
+  /* Owner invite: dedicated firm-grade accept surface — no marketing landing chrome.
+     Gate on mounted to avoid SSR/client DOM mismatch (invite params are client-only). */
+  if (mounted && isOwnerInviteFlow && !regDone) {
+    return (
+      <>
+        <OwnerInviteShell
+          businessName={inviteBusiness}
+          loading={invitePreviewLoading && !invitePreviewError}
+          loadingMessage="Verifying invitation…"
+        >
+          {!invitePreviewLoading || invitePreviewError ? (
+            <OwnerInviteSignupPanel
+              inviteToken={activeInviteToken!}
+              businessName={inviteBusiness}
+              inviteNeedsCode={inviteNeedsCode}
+              inviteIsLegacyUuid={inviteIsLegacyUuid}
+              regClientCode={regClientCode}
+              onRegClientCodeChange={setRegClientCode}
+              regName={regName}
+              onRegNameChange={setRegName}
+              regEmail={regEmail}
+              onRegEmailChange={setRegEmail}
+              regPassword={regPassword}
+              onRegPasswordChange={setRegPassword}
+              regBusy={regBusy}
+              signedInEmail={user?.email}
+              copyMarket={copyMarket}
+              onSubmit={handleRegister}
+              onSignInClick={() => {
+                setSiError("");
+                setSigninOpen(true);
+              }}
+              onGoogleError={(msg) => toast.error(msg)}
+              previewError={invitePreviewError}
+            />
+          ) : null}
+        </OwnerInviteShell>
+        <OwnerInviteSigninOverlay
+          open={signinOpen}
+          onClose={() => {
+            setSigninOpen(false);
+            setSiError("");
+          }}
+          inviteToken={activeInviteToken!}
+          regClientCode={regClientCode}
+          siEmail={siEmail}
+          onSiEmailChange={setSiEmail}
+          siPassword={siPassword}
+          onSiPasswordChange={setSiPassword}
+          siBusy={siBusy}
+          siError={siError}
+          onSubmit={handleSignIn}
+          onGoogleError={(msg) => setSiError(msg)}
+          copyMarket={copyMarket}
+        />
+      </>
     );
   }
 

@@ -90,49 +90,82 @@ function AccessApprovePage() {
     }
   };
 
+  const title =
+    status === "loading"
+      ? "Verifying access"
+      : status === "done"
+        ? "Complete"
+        : purpose === "firm_invite"
+          ? "Practice invitation"
+          : "Client access";
+
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[#0a0c0b] px-5 text-[#e8ede9]">
-      <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#10130f] p-8 text-center">
-        <p className="text-sm font-black tracking-[0.35em] text-[#d4a550]">MILŌN</p>
-        <h1 className="mt-4 text-xl font-semibold tracking-tight">
-          {status === "loading" ? "Working…" : status === "done" ? "Done" : "Access"}
-        </h1>
-        <p className={`mt-3 text-sm leading-relaxed ${status === "error" ? "text-rose-300" : "text-[#8a938c]"}`}>
-          {message}
+    <main className="flex min-h-screen flex-col bg-[#0a0c0b] px-5 pb-10 pt-8 text-[#e8ede9]">
+      <div className="mx-auto w-full max-w-md flex-1">
+        <header className="mb-8">
+          <span className="text-sm font-black tracking-[0.35em] text-[#d4a550]">MILŌN</span>
+        </header>
+        <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-[#8a938c]">
+          {purpose === "firm_invite" ? "Firm access" : "Client file"}
         </p>
-        {detail ? <p className="mt-2 text-xs text-[#c5b48a]">{detail}</p> : null}
-        {status === "ready" && needsSignIn ? (
-          <Link
-            to="/auth"
-            search={{ next: `/access/${token}` }}
-            className="mt-6 inline-flex h-11 items-center justify-center rounded-xl bg-gradient-to-r from-[#ac8400] via-[#d4af37] to-[#fdee79] px-6 text-xs font-bold uppercase tracking-wider text-[#1b1300]"
-          >
-            Sign in to accept
-          </Link>
-        ) : null}
-        {status === "ready" && !needsSignIn ? (
-          <div className="mt-6 flex flex-wrap justify-center gap-3">
-            <button
-              type="button"
-              onClick={() => void act("approve")}
-              className="inline-flex h-11 items-center justify-center rounded-xl bg-gradient-to-r from-[#ac8400] via-[#d4af37] to-[#fdee79] px-5 text-xs font-bold uppercase tracking-wider text-[#1b1300]"
-            >
-              {purpose === "firm_invite" ? "Accept" : "Approve"}
-            </button>
-            <button
-              type="button"
-              onClick={() => void act("decline")}
-              className="inline-flex h-11 items-center justify-center rounded-xl border border-white/15 px-5 text-xs font-bold uppercase tracking-wider text-[#c9d0cb]"
-            >
-              Decline
-            </button>
-          </div>
-        ) : null}
-        {status === "done" ? (
-          <Link to="/" className="mt-6 inline-block text-xs text-[#d4a550] underline">
-            Back to Milōn
-          </Link>
-        ) : null}
+        <h1 className="mt-2 text-[22px] font-semibold tracking-tight">{title}</h1>
+        <div className="mt-6 rounded-2xl border border-white/10 bg-[#10130f] p-7 text-center shadow-[0_24px_70px_rgba(0,0,0,0.45)]">
+          {status === "loading" ? (
+            <div className="flex flex-col items-center gap-4 py-6">
+              <div
+                className="h-6 w-6 animate-spin rounded-full border-2 border-[#d4a550]/25 border-t-[#d4a550]"
+                aria-hidden
+              />
+              <p className="text-sm text-[#8a938c]">{message}</p>
+            </div>
+          ) : (
+            <>
+              <p
+                className={`text-sm leading-relaxed ${status === "error" ? "text-rose-300" : "text-[#8a938c]"}`}
+              >
+                {message}
+              </p>
+              {detail ? (
+                <p className="mt-3 text-xs leading-relaxed text-[#c5b48a]">{detail}</p>
+              ) : null}
+              {status === "ready" && needsSignIn ? (
+                <Link
+                  to="/auth"
+                  search={{ next: `/access/${token}` }}
+                  className="mt-6 inline-flex h-11 w-full items-center justify-center rounded-xl bg-gradient-to-r from-[#ac8400] via-[#d4af37] to-[#fdee79] px-6 text-xs font-bold uppercase tracking-[0.14em] text-[#1b1300]"
+                >
+                  Sign in to accept
+                </Link>
+              ) : null}
+              {status === "ready" && !needsSignIn ? (
+                <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
+                  <button
+                    type="button"
+                    onClick={() => void act("approve")}
+                    className="inline-flex h-11 flex-1 items-center justify-center rounded-xl bg-gradient-to-r from-[#ac8400] via-[#d4af37] to-[#fdee79] px-5 text-xs font-bold uppercase tracking-[0.14em] text-[#1b1300] sm:max-w-[160px]"
+                  >
+                    {purpose === "firm_invite" ? "Accept" : "Approve"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void act("decline")}
+                    className="inline-flex h-11 flex-1 items-center justify-center rounded-xl border border-white/15 px-5 text-xs font-bold uppercase tracking-[0.14em] text-[#c9d0cb] sm:max-w-[160px]"
+                  >
+                    Decline
+                  </button>
+                </div>
+              ) : null}
+              {status === "done" ? (
+                <Link
+                  to="/"
+                  className="mt-6 inline-block text-xs font-medium text-[#d4a550] underline underline-offset-2"
+                >
+                  Back to Milōn
+                </Link>
+              ) : null}
+            </>
+          )}
+        </div>
       </div>
     </main>
   );
