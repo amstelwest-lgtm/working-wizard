@@ -2,6 +2,13 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  AuthEntryCard,
+  AuthEntryEyebrow,
+  AuthEntryLead,
+  AuthEntryShell,
+  AuthEntryTitle,
+} from "@/components/auth-entry-shell";
 
 export const Route = createFileRoute("/auth_/verified")({
   component: EmailVerifiedPage,
@@ -49,30 +56,40 @@ function EmailVerifiedPage() {
     };
   }, [navigate]);
 
-  return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4 gap-4">
-      <img src="/milon-wordmark.png" alt="Milōn" className="h-8 w-auto" />
-      {state === "expired" ? (
-        <div className="w-full max-w-md rounded-xl border border-border bg-card p-6 text-center space-y-3">
-          <h1 className="text-lg font-semibold">That link has expired</h1>
-          <p className="text-sm text-muted-foreground">
-            Verification links work once and for a short while. Sign in and use “Send verification
-            link” on your board to get a fresh one.
-          </p>
-          <div className="flex flex-wrap justify-center gap-3 pt-2 text-sm">
-            <Link to="/" className="text-primary underline">
+  if (state === "expired") {
+    return (
+      <AuthEntryShell>
+        <AuthEntryEyebrow>Verification</AuthEntryEyebrow>
+        <AuthEntryTitle>That link has expired</AuthEntryTitle>
+        <AuthEntryLead>
+          Verification links work once and for a short while. Sign in and use “Send verification
+          link” on your board to get a fresh one.
+        </AuthEntryLead>
+        <AuthEntryCard className="mt-6 text-center">
+          <div className="flex flex-col gap-3">
+            <Link
+              to="/"
+              className="inline-flex h-11 w-full items-center justify-center rounded-xl bg-gradient-to-r from-[#ac8400] via-[#d4af37] to-[#fdee79] px-5 text-xs font-bold uppercase tracking-[0.14em] text-[#1b1300]"
+            >
               Back home
             </Link>
-            <Link to="/app" className="text-primary underline">
+            <Link
+              to="/app"
+              className="inline-flex h-11 w-full items-center justify-center rounded-xl border border-white/15 px-5 text-xs font-bold uppercase tracking-[0.14em] text-[#c9d0cb] hover:border-white/25 hover:text-[#e8ede9]"
+            >
               Open my board
             </Link>
           </div>
-        </div>
-      ) : (
-        <p className="text-sm text-muted-foreground">
-          {state === "done" ? "Verified — opening your board…" : "Verifying your email…"}
-        </p>
-      )}
-    </div>
+        </AuthEntryCard>
+      </AuthEntryShell>
+    );
+  }
+
+  return (
+    <AuthEntryShell loading={state === "working"} loadingMessage="Verifying your email…">
+      {state === "done" ? (
+        <p className="text-center text-sm text-[#8a938c]">Verified — opening your board…</p>
+      ) : null}
+    </AuthEntryShell>
   );
 }

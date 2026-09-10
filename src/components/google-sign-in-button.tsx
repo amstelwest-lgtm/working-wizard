@@ -29,8 +29,8 @@ type Props = {
   next?: string;
   ownerInvite?: { token: string; clientCode?: string | null };
   label?: string;
-  /** Landing modal uses gold-ghost chrome; portal uses the shadcn outline button. */
-  tone?: "landing" | "portal";
+  /** Landing modal uses gold-ghost chrome; entry matches dark auth shell; portal uses shadcn outline. */
+  tone?: "landing" | "entry" | "portal";
   disabled?: boolean;
   onError?: (message: string) => void;
 };
@@ -63,6 +63,20 @@ export function GoogleSignInButton({
       <button
         type="button"
         className="btn btn-google"
+        disabled={disabled || busy}
+        onClick={() => void onClick()}
+      >
+        <GoogleMark />
+        {busy ? "Redirecting…" : label}
+      </button>
+    );
+  }
+
+  if (tone === "entry") {
+    return (
+      <button
+        type="button"
+        className="milon-google-btn-entry"
         disabled={disabled || busy}
         onClick={() => void onClick()}
       >

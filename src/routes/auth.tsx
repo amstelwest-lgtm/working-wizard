@@ -4,11 +4,6 @@ import { useState, useEffect, useRef } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { notifySignup } from "@/lib/signup-notify";
 import { ensurePracticePortalAccess } from "@/lib/auth.functions";
@@ -23,6 +18,19 @@ import { isOpsNext, lighthouseTabFromOpsNext } from "@/lib/client-note-link";
 import { accessTokenFromNext } from "@/lib/practice-access";
 import { AuthDivider, GoogleSignInButton } from "@/components/google-sign-in-button";
 import { MarketPicker } from "@/components/market-picker";
+import {
+  AuthEntryCard,
+  AuthEntryEyebrow,
+  AuthEntryFieldLabel,
+  AuthEntryFootnote,
+  AuthEntryInput,
+  AuthEntryLead,
+  AuthEntryLink,
+  AuthEntryPrimaryButton,
+  AuthEntryShell,
+  AuthEntryTabs,
+  AuthEntryTitle,
+} from "@/components/auth-entry-shell";
 import {
   draftToSelection,
   isDraftComplete,
@@ -244,124 +252,118 @@ function AuthPage() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4 gap-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="items-center text-center">
-          <img src="/milon-wordmark.png" alt="Milōn" className="mb-2 h-8 w-auto" />
-          <CardTitle className="text-lg">Accountant Portal</CardTitle>
-          <CardDescription>
-            For accounting firms and advisory practices only.{" "}
-            <Link to="/" className="underline text-primary">
-              Back home
-            </Link>
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Tabs value={mode} onValueChange={(v) => setMode(v as typeof mode)}>
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="signin">Sign in</TabsTrigger>
-              <TabsTrigger value="signup">Create firm</TabsTrigger>
-            </TabsList>
-            {mounted && (
-              <>
-                {mode === "signin" && (
-                  <div className="mt-4">
-                    <GoogleSignInButton
-                      intent="accountant"
-                      next={googleNext ?? afterAuthPath}
-                      disabled={busy}
-                      onError={(msg) => toast.error(msg)}
-                    />
-                    <AuthDivider />
-                  </div>
-                )}
-                <form
-                  onSubmit={handle}
-                  className={mode === "signin" ? "space-y-3" : "space-y-3 mt-4"}
-                >
-                  {mode === "signup" && (
-                    <>
-                      <div>
-                        <Label>Your name</Label>
-                        <Input
-                          value={fullName}
-                          onChange={(e) => setFullName(e.target.value)}
-                          required
-                        />
-                      </div>
-                      <div>
-                        <Label>Firm name</Label>
-                        <Input
-                          value={firmName}
-                          onChange={(e) => setFirmName(e.target.value)}
-                          placeholder="Acme & Partners"
-                          required
-                        />
-                      </div>
-                      <MarketPicker
-                        value={draftMarket}
-                        onChange={setDraftMarket}
-                        audience="practice"
-                      />
-                    </>
-                  )}
-                  <div>
-                    <Label>Email</Label>
-                    <Input
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      required
-                    />
-                  </div>
-                  <div>
-                    <Label>Password</Label>
-                    <Input
-                      type="password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      minLength={8}
-                      required
-                    />
-                  </div>
-                  <Button
-                    type="submit"
-                    className="w-full"
-                    disabled={busy || (mode === "signup" && !isDraftComplete(draftMarket))}
-                  >
-                    {busy ? "Please wait…" : mode === "signin" ? "Sign in" : "Create firm account"}
-                  </Button>
-                  {mode === "signup" && (
-                    <p className="pt-1 text-center text-[11px] leading-relaxed text-muted-foreground">
-                      By creating a firm account you agree to the{" "}
-                      <a href="/terms" className="underline">
-                        Terms
-                      </a>
-                      . AI is powered by Claude; financial information sent to it is anonymised.{" "}
-                      <a href="/privacy" className="underline">
-                        Privacy
-                      </a>
-                      {" · "}
-                      <a href="/ai" className="underline">
-                        AI notice
-                      </a>
-                    </p>
-                  )}
-                </form>
-              </>
-            )}
-            <TabsContent value="signin" />
-            <TabsContent value="signup" />
-          </Tabs>
-        </CardContent>
-      </Card>
-      <p className="text-center text-sm text-muted-foreground">
-        Business owner?{" "}
-        <Link to="/" className="font-medium text-primary underline">
-          Sign in at milon.co.za →
+    <AuthEntryShell badge="Accountant portal">
+      <AuthEntryEyebrow>Practice sign-in</AuthEntryEyebrow>
+      <AuthEntryTitle>Your firm workspace</AuthEntryTitle>
+      <AuthEntryLead>
+        For accounting firms and advisory practices.{" "}
+        <Link to="/" className="text-[#d4a550] underline underline-offset-4 hover:text-[#fdee79]">
+          Back home
         </Link>
+      </AuthEntryLead>
+
+      <AuthEntryCard className="mt-6">
+        <AuthEntryTabs
+          value={mode}
+          onChange={(v) => setMode(v as typeof mode)}
+          options={[
+            { value: "signin", label: "Sign in" },
+            { value: "signup", label: "Create firm" },
+          ]}
+        />
+
+        {mounted && (
+          <>
+            {mode === "signin" && (
+              <div>
+                <GoogleSignInButton
+                  intent="accountant"
+                  next={googleNext ?? afterAuthPath}
+                  tone="entry"
+                  disabled={busy}
+                  onError={(msg) => toast.error(msg)}
+                />
+                <AuthDivider />
+              </div>
+            )}
+            <form onSubmit={handle} className={mode === "signin" ? "" : "mt-4"}>
+              {mode === "signup" && (
+                <>
+                  <AuthEntryFieldLabel htmlFor="auth-full-name">Your name</AuthEntryFieldLabel>
+                  <AuthEntryInput
+                    id="auth-full-name"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    required
+                  />
+                  <AuthEntryFieldLabel htmlFor="auth-firm-name">Firm name</AuthEntryFieldLabel>
+                  <AuthEntryInput
+                    id="auth-firm-name"
+                    value={firmName}
+                    onChange={(e) => setFirmName(e.target.value)}
+                    placeholder="Acme & Partners"
+                    required
+                  />
+                  <div className="mt-4">
+                    <MarketPicker
+                      value={draftMarket}
+                      onChange={setDraftMarket}
+                      audience="practice"
+                    />
+                  </div>
+                </>
+              )}
+              <AuthEntryFieldLabel htmlFor="auth-email">Email</AuthEntryFieldLabel>
+              <AuthEntryInput
+                id="auth-email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
+              <AuthEntryFieldLabel htmlFor="auth-password">Password</AuthEntryFieldLabel>
+              <AuthEntryInput
+                id="auth-password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                minLength={8}
+                required
+              />
+              <AuthEntryPrimaryButton
+                type="submit"
+                className="mt-6"
+                disabled={busy || (mode === "signup" && !isDraftComplete(draftMarket))}
+              >
+                {busy ? "Please wait…" : mode === "signin" ? "Sign in" : "Create firm account"}
+              </AuthEntryPrimaryButton>
+              {mode === "signup" && (
+                <AuthEntryFootnote>
+                  By creating a firm account you agree to the{" "}
+                  <a href="/terms" className="text-[#d4a550] underline">
+                    Terms
+                  </a>
+                  . AI is powered by Claude; financial information sent to it is anonymised.{" "}
+                  <a href="/privacy" className="text-[#d4a550] underline">
+                    Privacy
+                  </a>
+                  {" · "}
+                  <a href="/ai" className="text-[#d4a550] underline">
+                    AI notice
+                  </a>
+                </AuthEntryFootnote>
+              )}
+            </form>
+          </>
+        )}
+      </AuthEntryCard>
+
+      <p className="mt-6 text-center text-sm text-[#8a938c]">
+        Business owner? <AuthEntryLink to="/">Sign in at milon.co.za →</AuthEntryLink>
       </p>
-      <PreLoginShareButton />
-    </div>
+      <div className="mt-4 flex justify-center">
+        <PreLoginShareButton />
+      </div>
+    </AuthEntryShell>
   );
 }
