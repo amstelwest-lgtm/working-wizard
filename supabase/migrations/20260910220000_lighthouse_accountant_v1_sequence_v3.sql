@@ -16,6 +16,7 @@ SET steps = '[
 WHERE key = 'accountant_v1';
 
 -- Lock lighthouse.reply_to when missing or still on hello@milon.co.za.
+-- Later remapped to hello@milonfinance.com (see 20260910230000).
 INSERT INTO public.milon_ops_settings (key, value)
 VALUES ('lighthouse', '{"reply_to":"team@milonfinance.com"}'::jsonb)
 ON CONFLICT (key) DO UPDATE

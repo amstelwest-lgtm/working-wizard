@@ -21,15 +21,15 @@ function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
 }
 
-assert(LIGHTHOUSE_REPLY_TO === "team@milonfinance.com", "locked mailbox");
+assert(LIGHTHOUSE_REPLY_TO === "hello@milonfinance.com", "locked mailbox");
 assert(LIGHTHOUSE_TEAM_VOICE === "The Milōn Team", "team voice label");
-assert(resolveLighthouseReplyTo("") === LIGHTHOUSE_REPLY_TO, "empty → team");
-assert(resolveLighthouseReplyTo("   ") === LIGHTHOUSE_REPLY_TO, "whitespace → team");
-assert(resolveLighthouseReplyTo(null) === LIGHTHOUSE_REPLY_TO, "null → team");
-assert(resolveLighthouseReplyTo(undefined) === LIGHTHOUSE_REPLY_TO, "undefined → team");
+assert(resolveLighthouseReplyTo("") === LIGHTHOUSE_REPLY_TO, "empty → hello@");
+assert(resolveLighthouseReplyTo("   ") === LIGHTHOUSE_REPLY_TO, "whitespace → hello@");
+assert(resolveLighthouseReplyTo(null) === LIGHTHOUSE_REPLY_TO, "null → hello@");
+assert(resolveLighthouseReplyTo(undefined) === LIGHTHOUSE_REPLY_TO, "undefined → hello@");
 assert(
   resolveLighthouseReplyTo("hello@milon.co.za") === LIGHTHOUSE_REPLY_TO,
-  "hello@milon.co.za → team",
+  "hello@milon.co.za → hello@",
 );
 assert(
   resolveLighthouseReplyTo("HELLO@MILON.CO.ZA") === LIGHTHOUSE_REPLY_TO,
@@ -37,10 +37,18 @@ assert(
 );
 assert(
   resolveLighthouseReplyTo("ops@milon.co.za") === LIGHTHOUSE_REPLY_TO,
-  "any @milon.co.za → team",
+  "any @milon.co.za → hello@",
 );
 assert(
   resolveLighthouseReplyTo("team@milonfinance.com") === LIGHTHOUSE_REPLY_TO,
+  "team@ reply-to remaps to hello@",
+);
+assert(
+  resolveLighthouseReplyTo("TEAM@MILONFINANCE.COM") === LIGHTHOUSE_REPLY_TO,
+  "team@ case-insensitive",
+);
+assert(
+  resolveLighthouseReplyTo("hello@milonfinance.com") === LIGHTHOUSE_REPLY_TO,
   "already locked stays",
 );
 assert(
@@ -145,6 +153,8 @@ assert(fns.includes("Day 17: unusual-question bait"), "SYSTEM_RULES day17");
 assert(fns.includes("Day 28: capacity close"), "SYSTEM_RULES day28");
 assert(fns.includes("Prefer under 120 words"), "SYSTEM_RULES length");
 assert(fns.includes("from: `${senderName} <${fromAddr}>`"), "From stays RESEND_FROM_EMAIL");
+assert(fns.includes("Reply-to is hello@milonfinance.com"), "SYSTEM_RULES reply-to is hello@");
+assert(!fns.includes("From and reply-to are team@milonfinance.com"), "SYSTEM_RULES no longer conflates From/reply-to");
 assert(fns.includes("reply_to: replyTo"), "Resend payload always sets reply_to");
 assert(
   !/reply_to:\s*["']hello@milon\.co\.za["']/.test(fns),
@@ -179,12 +189,23 @@ assert(migration.includes("teaser_owner"), "day4 fallback teaser");
 assert(migration.includes(ACCOUNTANT_TEASER_PRACTICE), "practice YT in goals");
 assert(migration.includes(ACCOUNTANT_TEASER_OWNER), "owner YT in goals");
 assert(migration.includes("one_pager_accountant"), "day9/28 one-pager asset");
-assert(migration.includes("hello@milon.co.za"), "reply_to lock targets hello@");
-assert(migration.includes("team@milonfinance.com"), "reply_to lock writes team@");
+assert(migration.includes("hello@milon.co.za"), "v3 reply_to lock targets hello@milon.co.za");
+assert(migration.includes("team@milonfinance.com"), "v3 reply_to lock historically wrote team@");
 assert(migration.includes("ON CONFLICT"), "settings upsert is idempotent");
+
+const replyToMigration = readFileSync(
+  resolve("supabase/migrations/20260910230000_lighthouse_reply_to_hello.sql"),
+  "utf8",
+);
+assert(replyToMigration.includes("hello@milonfinance.com"), "reply_to remaps to hello@");
+assert(replyToMigration.includes("team@milonfinance.com"), "reply_to remaps team@");
+assert(replyToMigration.includes("milon.co.za"), "reply_to remaps *@milon.co.za");
+assert(replyToMigration.includes("ON CONFLICT"), "hello@ reply_to upsert is idempotent");
+assert(!/jsonb_set\([^)]*from/i.test(replyToMigration), "reply_to migration does not rewrite From");
 
 const panel = readFileSync(resolve("src/components/lighthouse-panel.tsx"), "utf8");
 assert(panel.includes("Day 4 · both teaser videos"), "ops drawer shows accountant v3 day 4");
 assert(panel.includes("Day 28 · capacity close"), "ops drawer shows accountant v3 day 28");
+assert(panel.includes("Reply-to — hello@milonfinance.com"), "ops drawer placeholder is hello@");
 
 console.log("lighthouse-accountant-v3-test: ok");
