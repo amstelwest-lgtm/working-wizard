@@ -192,7 +192,7 @@ export function OverviewRail({
             <button
               type="button"
               onClick={onOpenCash}
-              className="rounded-full border border-slate-200 p-1 text-slate-500 transition hover:border-[#d4a550]/40 hover:text-[#d4a550] dark:border-white/10 dark:text-slate-400"
+              className="rounded-full border border-slate-200 p-1 text-slate-500 transition hover:border-[var(--brand-gold-ui)]/40 hover:text-[var(--brand-gold-ui)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-focus-ring)] dark:border-white/10 dark:text-slate-400"
               aria-label="Open cash forecast"
             >
               <ArrowRight className="h-3.5 w-3.5" />

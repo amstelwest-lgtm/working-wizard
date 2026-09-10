@@ -23,7 +23,7 @@ export function OwnerInviteShell({
     <main className="flex min-h-screen flex-col bg-[#0a0c0b] text-[#e8ede9]">
       <div className="mx-auto flex w-full max-w-md flex-1 flex-col px-5 pb-10 pt-8">
         <header className="mb-8 flex items-center justify-between gap-4">
-          <span className="text-sm font-black tracking-[0.35em] text-[#d4a550]">MILŌN</span>
+          <span className="text-sm font-black tracking-[0.35em] text-[var(--brand-gold-ui)]">MILŌN</span>
           {businessName ? (
             <span
               className="max-w-[55%] truncate rounded-full border border-white/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#8a938c]"
@@ -37,7 +37,7 @@ export function OwnerInviteShell({
         {loading ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-4 py-16">
             <div
-              className="h-6 w-6 animate-spin rounded-full border-2 border-[#d4a550]/25 border-t-[#d4a550]"
+              className="h-6 w-6 animate-spin rounded-full border-2 border-[var(--brand-gold-ui)]/25 border-t-[var(--brand-gold-ui)]"
               aria-hidden
             />
             <p className="text-sm text-[#8a938c]">{loadingMessage}</p>
@@ -94,7 +94,7 @@ export function OwnerInviteInput(props: React.InputHTMLAttributes<HTMLInputEleme
   return (
     <input
       {...props}
-      className={`mt-2 w-full rounded-xl border border-white/10 bg-[#0a0c0b] px-4 py-3 text-sm text-[#e8ede9] placeholder:text-[#8a938c]/55 focus:border-[#d4a550]/50 focus:outline-none focus:ring-2 focus:ring-[#d4a550]/15 ${props.className ?? ""}`}
+      className={`mt-2 w-full rounded-xl border border-white/10 bg-[#0a0c0b] px-4 py-3 text-sm text-[#e8ede9] placeholder:text-[#8a938c]/55 focus:border-[var(--brand-gold-ui)]/50 focus:outline-none focus:ring-2 focus:ring-[var(--brand-focus-ring)] ${props.className ?? ""}`}
     />
   );
 }

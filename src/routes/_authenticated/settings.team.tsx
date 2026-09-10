@@ -2,7 +2,8 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { ArrowLeft, Loader2, Shield, Trash2, UserPlus } from "lucide-react";
+import { Loader2, Shield, Trash2, UserPlus } from "lucide-react";
+import { BackLink } from "@/components/back-link";
 import { useAuth } from "@/hooks/use-auth";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
@@ -83,14 +84,9 @@ function TeamAccessPage() {
       <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
         <div className="mb-8 flex items-center justify-between gap-3">
           <div>
-            <button
-              type="button"
-              onClick={() => navigate({ to: "/settings" })}
-              className="mb-3 inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-[#d4a550]"
-            >
-              <ArrowLeft className="h-3.5 w-3.5" />
-              Settings
-            </button>
+            <BackLink onClick={() => navigate({ to: "/settings" })} className="mb-3">
+              Back to settings
+            </BackLink>
             <h1 className="text-2xl font-semibold tracking-tight">Team & access</h1>
             <p className="mt-1 text-sm text-slate-400">
               Allocate practice roles and grant each person access to specific clients. Maximum{" "}
@@ -429,9 +425,7 @@ function TeamAccessPage() {
           </>
         ) : null}
 
-        <Link to="/dashboard" className="text-xs text-slate-500 hover:text-[#d4a550]">
-          Back to firm dashboard
-        </Link>
+        <BackLink to="/dashboard">Back to firm dashboard</BackLink>
       </div>
     </div>
   );

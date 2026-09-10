@@ -1,4 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { BackLink } from "@/components/back-link";
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -131,7 +132,9 @@ function ResetPasswordPage() {
         )}
 
         <p style={{ marginTop:24, fontSize:12, color:"#9b958a", textAlign:"center" }}>
-          <a href="/" style={{ color:"#d4af37", textDecoration:"none" }}>← Back to MILŌN</a>
+          <BackLink href="/" variant="inline" className="mt-0 !text-[var(--brand-gold)] !no-underline">
+            Back to Milōn
+          </BackLink>
         </p>
       </div>
     </div>

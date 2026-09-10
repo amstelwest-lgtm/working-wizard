@@ -7,7 +7,8 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { ArrowLeft, Loader2, RefreshCw, Send } from "lucide-react";
+import { Loader2, RefreshCw, Send } from "lucide-react";
+import { BackLink } from "@/components/back-link";
 import { useAuth } from "@/hooks/use-auth";
 import {
   createExperiment,
@@ -149,9 +150,9 @@ function FounderMetricsPage() {
           (<code>analytics_founder_bundle</code>). The tables are in the <code>analytics</code> schema,
           which the API cannot read directly.
         </p>
-        <Link to="/ops" className="mt-4 inline-block text-xs uppercase tracking-wider text-[var(--ops-amber)]">
+        <BackLink to="/ops" className="mt-4">
           Back to Lighthouse
-        </Link>
+        </BackLink>
       </div>
     );
   }
@@ -169,12 +170,12 @@ function FounderMetricsPage() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <ThemeToggle />
-            <Link
+            <BackLink
               to="/ops"
-              className="inline-flex h-9 items-center gap-1.5 rounded-full border border-[var(--ops-line-strong)] px-3 text-xs font-semibold uppercase tracking-wider text-[var(--ops-ink-soft)]"
+              className="h-9 rounded-full border border-[var(--ops-line-strong)] px-3 uppercase tracking-wider text-[var(--ops-ink-soft)]"
             >
-              <ArrowLeft className="h-3.5 w-3.5" /> Lighthouse
-            </Link>
+              Back to Lighthouse
+            </BackLink>
             <button
               type="button"
               className="inline-flex h-9 items-center gap-1.5 rounded-full border border-[var(--ops-line-strong)] px-3 text-xs font-semibold uppercase tracking-wider text-[var(--ops-ink-soft)]"

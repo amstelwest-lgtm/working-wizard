@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { US_STATES, type DraftMarket, type MarketId, type UsStateCode } from "@/lib/market";
 
 const CARD =
-  "rounded-xl border px-4 py-3 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#d4a550]";
+  "rounded-xl border px-4 py-3 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-focus-ring)]";
 
 function LandingStateMenu({
   value,
@@ -169,7 +169,7 @@ export function MarketPicker({
   }
 
   const idle = "border-slate-700 bg-slate-950/50 text-slate-200";
-  const on = "border-[#d4a550] bg-[#d4a550]/10 text-slate-50";
+  const on = "border-[var(--brand-gold-ui)] bg-[var(--brand-gold-ui)]/10 text-slate-50";
   const labelCls = "text-[10px] uppercase tracking-[0.14em] text-slate-500";
   const helpCls = "text-xs text-slate-500";
 

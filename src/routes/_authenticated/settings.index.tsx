@@ -4,7 +4,6 @@ import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import {
   Users,
-  ArrowLeft,
   Building2,
   LogOut,
   Palette,
@@ -17,6 +16,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { deleteOwnAccount } from "@/lib/account.functions";
 import { resetOnboardingTours } from "@/lib/onboarding";
+import { BackLink } from "@/components/back-link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -147,18 +147,16 @@ function SettingsPage() {
       <div className="mx-auto max-w-2xl px-4 py-8 sm:px-6">
         <div className="mb-8 flex items-center justify-between gap-3">
           <div>
-            <button
-              type="button"
+            <BackLink
               onClick={() => {
                 if (backTo === "/app") setPortalIntent("owner");
                 else setPortalIntent("accountant");
                 navigate({ to: backTo });
               }}
-              className="mb-3 inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-[#d4a550]"
+              className="mb-3"
             >
-              <ArrowLeft className="h-3.5 w-3.5" />
               {backTo === "/app" ? "Back to board" : "Back to practice"}
-            </button>
+            </BackLink>
             <h1 className="text-2xl font-semibold tracking-tight text-slate-50">
               Settings
             </h1>

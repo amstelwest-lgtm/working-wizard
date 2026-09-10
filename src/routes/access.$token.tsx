@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { BackLink } from "@/components/back-link";
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
@@ -103,7 +104,7 @@ function AccessApprovePage() {
     <main className="flex min-h-screen flex-col bg-[#0a0c0b] px-5 pb-10 pt-8 text-[#e8ede9]">
       <div className="mx-auto w-full max-w-md flex-1">
         <header className="mb-8">
-          <span className="text-sm font-black tracking-[0.35em] text-[#d4a550]">MILŌN</span>
+          <span className="text-sm font-black tracking-[0.35em] text-[var(--brand-gold-ui)]">MILŌN</span>
         </header>
         <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-[#8a938c]">
           {purpose === "firm_invite" ? "Firm access" : "Client file"}
@@ -113,7 +114,7 @@ function AccessApprovePage() {
           {status === "loading" ? (
             <div className="flex flex-col items-center gap-4 py-6">
               <div
-                className="h-6 w-6 animate-spin rounded-full border-2 border-[#d4a550]/25 border-t-[#d4a550]"
+                className="h-6 w-6 animate-spin rounded-full border-2 border-[var(--brand-gold-ui)]/25 border-t-[var(--brand-gold-ui)]"
                 aria-hidden
               />
               <p className="text-sm text-[#8a938c]">{message}</p>
@@ -156,12 +157,9 @@ function AccessApprovePage() {
                 </div>
               ) : null}
               {status === "done" ? (
-                <Link
-                  to="/"
-                  className="mt-6 inline-block text-xs font-medium text-[#d4a550] underline underline-offset-2"
-                >
+                <BackLink to="/" variant="inline" className="mt-6">
                   Back to Milōn
-                </Link>
+                </BackLink>
               ) : null}
             </>
           )}

@@ -1,7 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
-import { ArrowLeft, Save } from "lucide-react";
+import { Save } from "lucide-react";
+import { BackLink } from "@/components/back-link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -173,13 +174,9 @@ function BrandSettingsPage() {
       <div className="mx-auto max-w-5xl space-y-8">
         {/* Back nav */}
         <div className="flex items-center gap-3">
-          <Link
-            to="/settings"
-            className="flex items-center gap-1.5 text-sm text-slate-400 hover:text-slate-200 transition-colors"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Back to Settings
-          </Link>
+          <BackLink to="/settings" variant="subtle">
+            Back to settings
+          </BackLink>
         </div>
 
         {/* Page header */}

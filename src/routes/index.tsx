@@ -1558,7 +1558,7 @@ function LandingPage() {
                     textDecoration: "underline",
                   }}
                 >
-                  ← Back to sign in
+                  Back to sign in
                 </button>
               </div>
             ) : /* ── forgot-password: email entry ── */
@@ -1619,7 +1619,7 @@ function LandingPage() {
                       padding: 0,
                     }}
                   >
-                    ← Back to sign in
+                    Back to sign in
                   </button>
                 </p>
               </form>

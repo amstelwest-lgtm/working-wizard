@@ -18,8 +18,8 @@ import {
   Settings,
   Zap,
   ExternalLink,
-  ArrowLeft,
 } from "lucide-react";
+import { BackLink } from "@/components/back-link";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -3504,13 +3504,9 @@ export function ReportsStudio({
         {/* Back nav — standalone studio only */}
         {!embedded && (
           <div className="mb-7 flex items-center justify-between">
-            <Link
-              to="/dashboard"
-              className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              Back to Dashboard
-            </Link>
+            <BackLink to="/dashboard" variant="subtle">
+              Back to dashboard
+            </BackLink>
             <ThemeToggle />
           </div>
         )}
