@@ -501,7 +501,7 @@ Rules:
 - Metric values must be readable words or simple numbers (e.g. "↓ Slower", "↑ Rising", "→ Steady")
 - items[] must read like industry news / sector briefings, not tips
 - Forbidden in items: imperative advice ("Ask for…", "Send…", "Cut…", "Turn on…", "Review…", "Offer…")
-- Each item MUST include a url: prefer a real https article on Business Day, Moneyweb, News24 Business, Engineering News, SARB, or SARS. If no specific article is known, use the relevant section homepage (e.g. https://www.businesslive.co.za/bd/economy/). Never invent fake article paths.
+- Each item MUST include a url: use a real https article URL on Business Day, Moneyweb, News24 Business, Engineering News, SARB, or SARS. Never use publisher homepages or section index pages. Never invent fake article paths. If you do not know a specific article URL, set url to null.
 - Focus on SA realities: payment delays, rand, fuel, power cuts, SARS/tax, demand, labour, costs
 - Specific to ${industry}
 - Prefer plausible current sector developments over fake newspaper mastheads or invented company names
@@ -543,7 +543,7 @@ Rules:
 - Metric values must be readable words or simple numbers (e.g. "↓ Slower", "↑ Rising", "→ Steady")
 - items[] must read like industry news / sector briefings, not tips
 - Forbidden in items: imperative advice ("Ask for…", "Send…", "Cut…", "Turn on…", "Review…", "Offer…")
-- Each item MUST include a url: prefer a real https article on Reuters, WSJ, Bloomberg, Fed, or IRS. If no specific article is known, use a section homepage (e.g. https://www.reuters.com/business/). Never invent fake article paths.
+- Each item MUST include a url: use a real https article URL on Reuters, WSJ, Bloomberg, Fed, or IRS. Never use publisher homepages or section index pages. Never invent fake article paths. If you do not know a specific article URL, set url to null.
 - Focus on US realities: payment delays, inflation, labor, rates, IRS/tax, demand, costs. Do not mention rand, load-shedding, SARS, or South Africa.
 - Specific to ${industry}
 - Prefer plausible current sector developments over fake newspaper mastheads or invented company names
