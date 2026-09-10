@@ -908,7 +908,7 @@ export const draftLighthouseTouch = createServerFn({ method: "POST" })
                 : "There is no published case study yet, so use an honest first-pilot framing without linking."
               : "Close with a simple, low-pressure question.";
 
-    const prompt = `${systemRulesFor(seqKey)}`
+    const prompt = `${systemRulesFor(seqKey)}
 
 PROSPECT
 Name: ${lead.name ?? "unknown"}
