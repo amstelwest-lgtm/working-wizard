@@ -43,6 +43,7 @@ import {
   parseClaudeDeliverablePayload,
   parseDraftSubjectBody,
 } from "../src/lib/client-brain-deliverable";
+import { assertBrainDeliverableResponse } from "../src/lib/brain-deliverable-client";
 import { emptyProductMix } from "../src/lib/product-mix";
 import { emptyWeeklyInputs } from "../src/lib/weekly-inputs";
 import type { ClientOperatingProfile } from "../src/lib/client-profile";
@@ -126,6 +127,25 @@ assert(panelSrc.includes("Business map"), "business-map stubs");
 assert(panelSrc.includes("Outstanding questions"), "shared questions queue");
 assert(!panelSrc.includes("Acme Corp"), "no fake competitor filler");
 assert(!panelSrc.includes("example.com"), "no fake placeholder URLs");
+
+let stubErr: Error | null = null;
+try {
+  assertBrainDeliverableResponse({ smoke: "smoke-bdd" });
+} catch (e) {
+  stubErr = e as Error;
+}
+assert(Boolean(stubErr?.message.includes("smoke stub")), "smoke-bdd stub is rejected");
+
+let emptyErr: Error | null = null;
+try {
+  assertBrainDeliverableResponse({});
+} catch (e) {
+  emptyErr = e as Error;
+}
+assert(Boolean(emptyErr?.message.includes("unexpected response")), "empty 200 body is rejected");
+
+assertBrainDeliverableResponse({ draftInserted: false, skippedReason: "ai_not_configured" });
+assertBrainDeliverableResponse({ draftInserted: true });
 
 assert(parseBrainSummary(null) === null, "empty summary");
 assert(parseBrainSummary("  hello  ")?.body === "hello", "string summary");
