@@ -7,7 +7,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { BackLink } from "@/components/back-link";
-import { EmptyState, PageHeader, StatusPill } from "@/components/primitives";
+import { EmptyState, OwnerBootSkeleton, PageHeader, StatusPill } from "@/components/primitives";
 import {
   Upload,
   Loader2,
@@ -232,11 +232,7 @@ import {
 import { SHARE_DESCRIPTION, SHARE_TITLE } from "@/lib/share-copy";
 
 function AppBootSpinner() {
-  return (
-    <div className="min-h-screen bg-[#07090f] grid place-items-center">
-      <div className="h-6 w-6 animate-spin rounded-full border-2 border-[#c9962b]/30 border-t-[#c9962b]" />
-    </div>
-  );
+  return <OwnerBootSkeleton />;
 }
 
 export const Route = createFileRoute("/app")({
@@ -3478,7 +3474,7 @@ function Index() {
   return (
     <MarketProvider selection={workspaceMarket}>
       <FinancialInputsContext.Provider value={financialInputsCtxValue}>
-        <main className="min-h-screen overflow-x-hidden bg-slate-950 text-slate-100">
+        <main className="milon-page-enter min-h-screen overflow-x-hidden bg-slate-950 text-slate-100">
           {marketNeedsGate && effectiveClientId && (
             <MarketGate
               onSave={async (draft) => {

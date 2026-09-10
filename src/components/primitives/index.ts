@@ -9,3 +9,11 @@ export {
   type StatusPillProps,
   type StatusPillVariant,
 } from "./status-pill";
+export {
+  SkeletonBlock,
+  SkeletonTile,
+  DashboardSkeleton,
+  ClientWorkspaceSkeleton,
+  OwnerBootSkeleton,
+  PanelSkeleton,
+} from "./skeleton-blocks";

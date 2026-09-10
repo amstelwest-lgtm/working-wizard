@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { usePrefersReducedMotion } from "@/hooks/use-prefers-reduced-motion";
 import { ArrowLeft, ChevronRight, TrendingUp, Layers, Shield, Droplet, type LucideIcon } from "lucide-react";
 
 /**
@@ -298,23 +299,27 @@ export function SphereHero({
   const [level, setLevel] = useState<Level>(1);
   const [activePillarId, setActivePillarId] = useState<SpherePillar["id"] | null>(null);
   const liveRef = useRef<HTMLDivElement>(null);
+  const reduceMotion = usePrefersReducedMotion();
+  const morphMs = reduceMotion ? 0 : 500;
 
   const activePillar = pillars.find((p) => p.id === activePillarId) ?? null;
   const orbSize = useCompactOrbSize(compact);
 
   const go = useCallback((next: Level, pillarId?: SpherePillar["id"]) => {
-    playKlink();
+    if (!reduceMotion) playKlink();
     if (pillarId !== undefined) setActivePillarId(pillarId);
     setLevel(next);
-  }, []);
+  }, [reduceMotion]);
 
   const overallTier = tierFromDisplayStatus(displayStatus, overallHealth);
   const overallGlow = overallTier === "healthy" || overallTier === "watch" ? GOLD : TIER_GLOW[overallTier];
 
   return (
-    <div className={`relative flex w-full flex-col items-center ${compact ? "px-0 pb-0 pt-0" : "px-4 pb-6 pt-2"}`}>
+    <div
+      className={`sphere-reduced-motion relative flex w-full flex-col items-center ${compact ? "px-0 pb-0 pt-0" : "px-4 pb-6 pt-2"}`}
+    >
       {/* ambient motes */}
-      {!compact && (
+      {!compact && !reduceMotion && (
         <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
           {[12, 28, 55, 71, 88].map((left, i) => (
             <span
@@ -327,7 +332,9 @@ export function SphereHero({
       )}
 
       {/* back control (levels 2 & 3) */}
-      <div className={`mb-2 flex w-full items-center transition-opacity duration-300 ${level > 1 ? "opacity-100" : "pointer-events-none h-0 opacity-0"}`}>
+      <div
+        className={`mb-2 flex w-full items-center ${reduceMotion ? "" : "transition-opacity duration-300"} ${level > 1 ? "opacity-100" : "pointer-events-none h-0 opacity-0"}`}
+      >
         <button
           type="button"
           onClick={() => go(level === 3 ? 2 : 1)}
@@ -342,11 +349,12 @@ export function SphereHero({
       {level < 3 && (
         <>
           <div
-            className="transition-all duration-500 ease-out"
+            className={reduceMotion ? "" : "transition-all duration-500 ease-out"}
             style={{
               transform: level === 2 ? "scale(0.52)" : "scale(1)",
               marginBottom: level === 2 ? -56 : 0,
               marginTop: level === 2 ? -28 : 0,
+              transitionDuration: reduceMotion ? "0ms" : undefined,
             }}
           >
             <Sphere
@@ -362,7 +370,7 @@ export function SphereHero({
           </div>
 
           <p
-            className={`${compact ? "mt-2.5" : "mt-4"} max-w-md text-center transition-opacity duration-300 ${
+            className={`${compact ? "mt-2.5" : "mt-4"} max-w-md text-center ${reduceMotion ? "" : "transition-opacity duration-300"} ${
               level === 1 ? "opacity-100" : "opacity-0"
             }`}
           >
@@ -442,8 +450,8 @@ export function SphereHero({
               return (
                 <div
                   key={p.id}
-                  className="animate-in fade-in zoom-in-75 flex flex-col items-center rounded-2xl border border-amber-900/15 bg-white/80 p-4 shadow-[0_12px_30px_rgba(121,91,27,0.08)] duration-500 dark:border-slate-800/80 dark:bg-slate-950/40 dark:shadow-none"
-                  style={{ animationDelay: `${i * 70}ms`, animationFillMode: "both" }}
+                  className={`flex flex-col items-center rounded-2xl border border-amber-900/15 bg-white/80 p-4 shadow-[0_12px_30px_rgba(121,91,27,0.08)] dark:border-slate-800/80 dark:bg-slate-950/40 dark:shadow-none${reduceMotion ? "" : " animate-in fade-in zoom-in-75 duration-500"}`}
+                  style={reduceMotion ? undefined : { animationDelay: `${i * morphMs / 7}ms`, animationFillMode: "both" }}
                 >
                   <Sphere
                     score={p.health}

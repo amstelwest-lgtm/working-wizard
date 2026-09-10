@@ -2,6 +2,7 @@
 @source "../src";
 @import "tw-animate-css";
 @import "./styles/primitives.css";
+@import "./styles/motion.css";
 
 /*
  * Phase 2 lite — Milōn shared design tokens
@@ -635,7 +636,7 @@ html:not(.dark) .health-orb .text-rose-400 { color: #9b2424 !important; }
   font-size: 0.875rem;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease;
+  transition: background var(--brand-duration-fast) var(--brand-ease), border-color var(--brand-duration-fast) var(--brand-ease);
 }
 .milon-google-btn:hover { background: #f7f7f7; }
 .milon-google-btn:disabled { opacity: 0.6; cursor: not-allowed; }
@@ -672,7 +673,7 @@ html:not(.dark) .health-orb .text-rose-400 { color: #9b2424 !important; }
   font-size: 0.875rem;
   font-weight: 600;
   cursor: pointer;
-  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+  transition: transform var(--brand-duration-fast) var(--brand-ease), box-shadow var(--brand-duration-fast) var(--brand-ease), border-color var(--brand-duration-fast) var(--brand-ease);
 }
 .milon-google-btn-entry:hover {
   transform: translateY(-1px);

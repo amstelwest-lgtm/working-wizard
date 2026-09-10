@@ -18,6 +18,7 @@ import { invokeBrainPropose } from "@/lib/brain-propose-client";
 import { invokeBrainDeliverableDraft } from "@/lib/brain-deliverable-client";
 import { ClientBrainDrafts } from "@/components/client-brain-drafts";
 import { MilonBotPanel } from "@/components/milon-bot-panel";
+import { PanelSkeleton } from "@/components/primitives";
 import {
   asBrainSummaryObject,
   markCompetitorSignedOff,
@@ -462,9 +463,7 @@ export function ClientBrainSummary({
       <MilonBotPanel clientId={clientId} audience="accountant" surface="portal" />
 
       {loading ? (
-        <div className="card pad" style={{ color: "var(--ink-dim)" }}>
-          Loading summary…
-        </div>
+        <PanelSkeleton rows={6} className="card pad bg-[var(--card)]" />
       ) : (
         <div className="brain-stack">
           {/* 1. Profile strip */}
