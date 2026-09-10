@@ -62,6 +62,14 @@ import {
   markOnboardingDone,
   onboardingDone,
 } from "@/lib/onboarding";
+import {
+  EmptyState,
+  LoadingState,
+  MetricTile,
+  PageHeader,
+  StatusPill,
+  statusPillFromHealth,
+} from "@/components/primitives";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   component: Dashboard,
@@ -1253,11 +1261,8 @@ function Dashboard() {
   // ── Render ────────────────────────────────────────────────────────────────
   if (!portalReady) {
     return (
-      <div
-        className="accountant-portal"
-        style={{ display: "grid", placeItems: "center", minHeight: "100vh" }}
-      >
-        <span style={{ color: "var(--ink-dim)" }}>Loading…</span>
+      <div className="accountant-portal">
+        <LoadingState fullscreen message="Loading…" />
       </div>
     );
   }
@@ -1378,54 +1383,65 @@ function Dashboard() {
         </div>
 
         {/* ===== GREETING ===== */}
-        <div className="dash-hero">
-          <div>
-            <h1>{greeting}</h1>
-            <p className="dash-summary">{summaryLine}</p>
-          </div>
-          <div className="dash-asof">
-            <svg viewBox="0 0 24 24">
-              <rect x="3" y="4" width="18" height="18" rx="2" />
-              <path d="M16 2v4M8 2v4M3 10h18" />
-            </svg>
-            Data as of {asOf}
-          </div>
-        </div>
+        <PageHeader
+          className="dash-hero"
+          title={greeting}
+          subtitle={summaryLine}
+          meta={
+            <div className="dash-asof">
+              <svg viewBox="0 0 24 24">
+                <rect x="3" y="4" width="18" height="18" rx="2" />
+                <path d="M16 2v4M8 2v4M3 10h18" />
+              </svg>
+              Data as of {asOf}
+            </div>
+          }
+        />
 
         {/* ===== STATS STRIP ===== */}
         <div className="stats-strip" id="wizard-practice-board">
-          <div className="stat">
-            <div className="k">
+          <MetricTile
+            label="Clients"
+            icon={
               <svg viewBox="0 0 24 24">
                 <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
               </svg>
-              Clients
-            </div>
-            <div className="v">{loading ? "—" : clientRows.length}</div>
-            <div className="stat-foot">
-              <div className={`d ${addedThisMonth > 0 ? "up" : ""}`}>
+            }
+            value={loading ? "—" : clientRows.length}
+            footnote={
+              <div className={addedThisMonth > 0 ? "up" : undefined}>
                 {addedThisMonth > 0 ? `+${addedThisMonth} this month` : "Active on platform"}
               </div>
-              {sparkPts.length > 1 && (
+            }
+            sparkline={
+              sparkPts.length > 1 ? (
                 <SparkSvg points={sparkPts} className="stat-spark" width={72} height={22} />
-              )}
-            </div>
-          </div>
+              ) : undefined
+            }
+          />
 
-          <div className="stat">
-            <div className="k">
+          <MetricTile
+            label="Avg health"
+            icon={
               <svg viewBox="0 0 24 24">
                 <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
               </svg>
-              Avg health
-            </div>
-            <div className="v">
-              {loading || avgHealth == null ? "—" : avgHealth}
-              {avgHealth != null && <small>/100</small>}
-            </div>
-            <div className="stat-foot">
+            }
+            value={
+              <>
+                {loading || avgHealth == null ? "—" : avgHealth}
+                {avgHealth != null && <small>/100</small>}
+              </>
+            }
+            footnote={
               <div
-                className={`d ${healthDelta != null && healthDelta > 0 ? "up" : healthDelta != null && healthDelta < 0 ? "warn" : ""}`}
+                className={
+                  healthDelta != null && healthDelta > 0
+                    ? "up"
+                    : healthDelta != null && healthDelta < 0
+                      ? "warn"
+                      : undefined
+                }
               >
                 {healthDelta == null
                   ? scoredRows.length
@@ -1433,54 +1449,54 @@ function Dashboard() {
                     : "No scored clients yet"
                   : `${healthDelta > 0 ? "↑" : healthDelta < 0 ? "↓" : "→"} ${Math.abs(healthDelta)} pts vs last month`}
               </div>
-              {sparkPts.length > 1 && (
+            }
+            sparkline={
+              sparkPts.length > 1 ? (
                 <SparkSvg points={sparkPts} className="stat-spark" width={72} height={22} />
-              )}
-            </div>
-          </div>
+              ) : undefined
+            }
+          />
 
-          <div className="stat">
-            <div className="k">
+          <MetricTile
+            label="Need attention"
+            icon={
               <svg viewBox="0 0 24 24">
                 <path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0zM12 9v4M12 17h.01" />
               </svg>
-              Need attention
-            </div>
-            <div className="v" style={{ color: atRiskCount ? "var(--risk)" : "var(--ok)" }}>
-              {loading ? "—" : atRiskCount}
-            </div>
-            <div className="d warn">
-              {atRiskCount === 0
-                ? "All clear"
-                : `${criticalCount} critical · ${Math.max(0, atRiskCount - criticalCount)} declining`}
-            </div>
-          </div>
+            }
+            value={loading ? "—" : atRiskCount}
+            valueClassName={atRiskCount ? "text-[var(--risk)]" : "text-[var(--ok)]"}
+            footnote={
+              <div className="warn">
+                {atRiskCount === 0
+                  ? "All clear"
+                  : `${criticalCount} critical · ${Math.max(0, atRiskCount - criticalCount)} declining`}
+              </div>
+            }
+          />
 
-          <button
-            type="button"
-            className="stat stat-btn"
+          <MetricTile
+            label="Open actions"
+            icon={
+              <svg viewBox="0 0 24 24">
+                <path d="M9 11l3 3L22 4" />
+                <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+              </svg>
+            }
+            value={loading ? "—" : openActionsTotal}
+            footnote={
+              actionsDueThisWeek > 0
+                ? `${actionsDueThisWeek} overdue — follow up`
+                : openActionsTotal > 0
+                  ? "Across action plans — follow up"
+                  : "No open actions"
+            }
             onClick={() =>
               document
                 .getElementById("follow-up")
                 ?.scrollIntoView({ behavior: "smooth", block: "start" })
             }
-          >
-            <div className="k">
-              <svg viewBox="0 0 24 24">
-                <path d="M9 11l3 3L22 4" />
-                <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
-              </svg>
-              Open actions
-            </div>
-            <div className="v">{loading ? "—" : openActionsTotal}</div>
-            <div className="d">
-              {actionsDueThisWeek > 0
-                ? `${actionsDueThisWeek} overdue — follow up`
-                : openActionsTotal > 0
-                  ? "Across action plans — follow up"
-                  : "No open actions"}
-            </div>
-          </button>
+          />
         </div>
 
         {/* ===== PORTFOLIO HEALTH + ATTENTION ===== */}
@@ -1504,9 +1520,10 @@ function Dashboard() {
               </button>
             </div>
             {attentionItems.length === 0 ? (
-              <div className="attn-empty">
-                {loading ? "Loading…" : "No clients need urgent attention — nice work."}
-              </div>
+              <EmptyState
+                className="attn-empty !py-8"
+                title={loading ? "Loading…" : "No clients need urgent attention — nice work."}
+              />
             ) : (
               <div className="attn-list">
                 {attentionItems.map((item) => (
@@ -1644,32 +1661,21 @@ function Dashboard() {
         </div>
 
         {loading ? (
-          <p className="sub" style={{ textAlign: "center", padding: "40px 0" }}>
-            Loading clients…
-          </p>
+          <LoadingState message="Loading clients…" className="!py-10" />
         ) : filteredRows.length === 0 ? (
-          <div style={{ textAlign: "center", padding: "48px 16px" }}>
-            {clientRows.length === 0 ? (
-              <>
-                <p className="sub" style={{ marginBottom: 8, fontSize: 15 }}>
-                  Your book is empty — add the first client
-                </p>
-                <p
-                  className="sub"
-                  style={{ marginBottom: 20, maxWidth: 440, marginInline: "auto" }}
-                >
-                  One client, one upload (bank statements or a P&amp;L and balance sheet), and the
-                  full advisory board — Health, Profit, Cash, Budget, Reports — fills in. No
-                  statements to hand? Start with a sandbox client and learn the loop first.
-                </p>
+          clientRows.length === 0 ? (
+            <EmptyState
+              title="Your book is empty — add the first client"
+              description="One client, one upload (bank statements or a P&L and balance sheet), and the full advisory board — Health, Profit, Cash, Budget, Reports — fills in. No statements to hand? Start with a sandbox client and learn the loop first."
+              action={
                 <button className="btn gold" type="button" onClick={() => setFirstClientOpen(true)}>
                   Add your first client
                 </button>
-              </>
-            ) : (
-              <p className="sub">No clients match your search.</p>
-            )}
-          </div>
+              }
+            />
+          ) : (
+            <EmptyState title="No clients match your search." className="!py-10" />
+          )
         ) : (
           <div className="ctable-scroll">
             <table className="ctable">
@@ -1787,10 +1793,9 @@ function Dashboard() {
                       </td>
                       <td className="num hide-sm">{opMarginStr(c)}</td>
                       <td>
-                        <span className={`chip ${chip.cls}`}>
-                          <i />
+                        <StatusPill variant={statusPillFromHealth(c.health.displayStatus)}>
                           {chip.label}
-                        </span>
+                        </StatusPill>
                         {qbo && (
                           <span
                             title={`QuickBooks${qbo.companyName ? ` — ${qbo.companyName}` : ""}`}

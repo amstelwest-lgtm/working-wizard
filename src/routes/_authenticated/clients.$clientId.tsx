@@ -114,6 +114,13 @@ import {
 } from "@/lib/advisory-deliveries";
 import { upsertCurrentPeriodSnapshot } from "@/lib/financial-snapshots";
 import { stampFromSignoff } from "@/lib/review-signoff-stamp";
+import {
+  EmptyState,
+  LoadingState,
+  SectionCard,
+  StatusPill,
+  statusPillFromHealth,
+} from "@/components/primitives";
 
 const ActionPlanPanel = lazyPanel(() => import("@/components/action-plan"), "Action Plan");
 const ReportsStudioPanel = lazyPanel(
@@ -1400,29 +1407,24 @@ function ClientView() {
 
   if (loading) {
     return (
-      <div
-        className="accountant-portal"
-        style={{ display: "grid", placeItems: "center", minHeight: "100vh" }}
-      >
-        <span style={{ color: "var(--ink-dim)" }}>Loading…</span>
+      <div className="accountant-portal">
+        <LoadingState fullscreen message="Loading client…" />
       </div>
     );
   }
 
   if (!client) {
     return (
-      <div
-        className="accountant-portal"
-        style={{ display: "grid", placeItems: "center", minHeight: "100vh" }}
-      >
-        <div style={{ textAlign: "center" }}>
-          <p style={{ color: "var(--ink-dim)", marginBottom: 16 }}>
-            Client not found or you don't have access.
-          </p>
-          <BackLink variant="portal" onClick={() => navigate({ to: "/dashboard" })}>
-            Back to dashboard
-          </BackLink>
-        </div>
+      <div className="accountant-portal">
+        <EmptyState
+          className="min-h-screen"
+          title="Client not found or you don't have access."
+          action={
+            <BackLink variant="portal" onClick={() => navigate({ to: "/dashboard" })}>
+              Back to dashboard
+            </BackLink>
+          }
+        />
       </div>
     );
   }
@@ -1583,19 +1585,12 @@ function ClientView() {
                       alignItems: "center",
                     }}
                   >
-                    <span
-                      className={`chip ${
-                        overallHealth.displayStatus === "healthy"
-                          ? "ok"
-                          : overallHealth.displayStatus === "at_risk"
-                            ? "warn"
-                            : "risk"
-                      }`}
-                      style={{ fontSize: 11 }}
+                    <StatusPill
+                      variant={statusPillFromHealth(overallHealth.displayStatus)}
+                      className="!text-[11px]"
                     >
-                      <i />
                       {overallHealth.displayLabel}
-                    </span>
+                    </StatusPill>
                     {overallHealth.pillars
                       .filter((p) => p.score != null)
                       .map((p) => (
@@ -1853,16 +1848,14 @@ function ClientView() {
 
             {/* ===== ASK AI TAB ===== */}
             <div className={`tabpane${activeTab === "ask" ? " on" : ""}`} id="pane-ask">
-              <div className="card hero-card pad ask-ai-studio-shell">
-                <p className="ask-ai-studio-kicker">Ask AI · this client</p>
-                <h2 className="ask-ai-studio-title">Ask about {client.name}</h2>
-                <p className="ask-ai-studio-lede">
-                  Same rules as the owner copilot: answers come from filled profile questions,
-                  ratios, the profitability waterfall, cash-forecast outlook, product lines, next
-                  moves, and planned or outstanding action-plan tasks — not the raw statements.
-                </p>
+              <SectionCard
+                className="card hero-card ask-ai-studio-shell"
+                eyebrow="Ask AI · this client"
+                title={`Ask about ${client.name}`}
+                description="Same rules as the owner copilot: answers come from filled profile questions, ratios, the profitability waterfall, cash-forecast outlook, product lines, next moves, and planned or outstanding action-plan tasks — not the raw statements."
+              >
                 <div id="ask-ai-accountant" />
-              </div>
+              </SectionCard>
             </div>
 
             {/* ===== RATIOS TAB ===== */}
