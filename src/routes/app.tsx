@@ -7,6 +7,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { BackLink } from "@/components/back-link";
+import { EmptyState, PageHeader, StatusPill } from "@/components/primitives";
 import {
   Upload,
   Loader2,
@@ -4044,50 +4045,45 @@ function Index() {
                   {viewMode === "simplified" ? (
                     <div className="pb-6">
                       {/* Page header — aligned with rail top */}
-                      <div className="mb-3 flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <h2 className="text-lg font-semibold tracking-tight text-slate-900 dark:text-white">
-                              Business Health
-                            </h2>
+                      <PageHeader
+                        compact
+                        className="mb-3 !items-start dark:[&_.milon-page-header__title]:text-white [&_.milon-page-header__title]:text-slate-900 [&_.milon-page-header__subtitle]:text-slate-500 dark:[&_.milon-page-header__subtitle]:text-slate-400"
+                        title="Business Health"
+                        subtitle="Your financial pulse at a glance."
+                        meta={
+                          <div className="flex shrink-0 flex-col items-end gap-2 sm:flex-row sm:items-start">
+                            <div className="sm:hidden">
+                              <ReviewSignoffBadge
+                                signoff={financialsSignoff}
+                                scope="financials"
+                                isStale={computeIsStale(
+                                  financialsSignoff,
+                                  clientMeta?.financials_updated_at ?? null,
+                                )}
+                                placement="corner"
+                              />
+                            </div>
+                            {hasRealFinancials ? (
+                              <StatusPill variant="live" pulse className="!text-[9px] !tracking-[0.16em]">
+                                Live ·{" "}
+                                {formatDate(new Date(), boardMarket, {
+                                  day: "2-digit",
+                                  month: "short",
+                                  year: "numeric",
+                                }).toUpperCase()}
+                              </StatusPill>
+                            ) : sampleMode ? (
+                              <StatusPill variant="sample" className="!text-[9px] !tracking-[0.16em]">
+                                Sample · illustrative
+                              </StatusPill>
+                            ) : (
+                              <StatusPill variant="neutral" className="!text-[9px] !tracking-[0.16em]">
+                                No data yet
+                              </StatusPill>
+                            )}
                           </div>
-                          <p className="mt-0.5 text-[13px] text-slate-500 dark:text-slate-400">
-                            Your financial pulse at a glance.
-                          </p>
-                        </div>
-                        <div className="flex shrink-0 flex-col items-end gap-2 sm:flex-row sm:items-start">
-                          <div className="sm:hidden">
-                            <ReviewSignoffBadge
-                              signoff={financialsSignoff}
-                              scope="financials"
-                              isStale={computeIsStale(
-                                financialsSignoff,
-                                clientMeta?.financials_updated_at ?? null,
-                              )}
-                              placement="corner"
-                            />
-                          </div>
-                          {hasRealFinancials ? (
-                            <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[0.16em] text-emerald-700 dark:text-emerald-400">
-                              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
-                              Live ·{" "}
-                              {formatDate(new Date(), boardMarket, {
-                                day: "2-digit",
-                                month: "short",
-                                year: "numeric",
-                              }).toUpperCase()}
-                            </span>
-                          ) : sampleMode ? (
-                            <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-sky-500/40 bg-sky-500/10 px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[0.16em] text-sky-700 dark:text-sky-300">
-                              Sample · illustrative
-                            </span>
-                          ) : (
-                            <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:border-slate-700 dark:bg-slate-800/60">
-                              No data yet
-                            </span>
-                          )}
-                        </div>
-                      </div>
+                        }
+                      />
 
                       {/* No-data empty state — shown until owner uploads or enters real financials */}
                       {!showScoredBoard && !actingClientId ? (
@@ -4111,38 +4107,41 @@ function Index() {
                                 audience="owner"
                                 surface="board"
                               />
-                              <div
+                              <EmptyState
                                 id="wizard-empty-score"
-                                className="flex w-full flex-col items-center gap-5 rounded-xl border border-dashed border-slate-200 bg-white/60 px-4 py-10 dark:border-slate-700 dark:bg-slate-900/40"
-                              >
-                                <div className="relative flex h-36 w-36 items-center justify-center">
-                                  <div className="absolute inset-0 rounded-full border-2 border-dashed border-[#d4a550]/25" />
-                                  <div className="absolute inset-5 rounded-full border border-[#d4a550]/15" />
-                                  <div className="flex flex-col items-center gap-1">
-                                    <span className="text-3xl font-bold text-slate-400">—</span>
-                                    <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">
-                                      No score yet
-                                    </span>
+                                dashed
+                                className="w-full !gap-5 !px-4 !py-10 dark:[&_.milon-empty-state__title]:text-slate-100 [&_.milon-empty-state__title]:text-slate-800 [&_.milon-empty-state__desc]:text-slate-500"
+                                icon={
+                                  <div className="relative flex h-36 w-36 items-center justify-center">
+                                    <div className="absolute inset-0 rounded-full border-2 border-dashed border-[#d4a550]/25" />
+                                    <div className="absolute inset-5 rounded-full border border-[#d4a550]/15" />
+                                    <div className="flex flex-col items-center gap-1">
+                                      <span className="text-3xl font-bold text-slate-400">—</span>
+                                      <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">
+                                        No score yet
+                                      </span>
+                                    </div>
                                   </div>
-                                </div>
-                                <div className="max-w-sm text-center">
-                                  {userRole !== "client_member" && operatingProfile && (
-                                    <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#b8860b] dark:text-[#d4a550]">
-                                      Step 2 of 2 · Bring in your numbers
-                                    </p>
-                                  )}
-                                  <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100">
+                                }
+                                title={
+                                  <>
+                                    {userRole !== "client_member" && operatingProfile && (
+                                      <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.2em] text-[#b8860b] dark:text-[#d4a550]">
+                                        Step 2 of 2 · Bring in your numbers
+                                      </span>
+                                    )}
                                     {userRole !== "client_member"
                                       ? "One upload and your board comes alive"
                                       : "Add your financials to see your score"}
-                                  </h3>
-                                  <p className="mt-1.5 text-sm text-slate-500">
-                                    {isUsCopy(boardMarket)
-                                      ? "Upload a P&L and balance sheet — Excel, OpenDocument, CSV or PDF — and MILŌN scores your business and ranks your first move. No invented numbers until then."
-                                      : "Drop ~3 months of bank statements and MILŌN drafts your P&L, cash forecast and budget, then scores your business and ranks your first move — no invented numbers until then."}
-                                  </p>
-                                </div>
-                                {userRole !== "client_member" ? (
+                                  </>
+                                }
+                                description={
+                                  isUsCopy(boardMarket)
+                                    ? "Upload a P&L and balance sheet — Excel, OpenDocument, CSV or PDF — and MILŌN scores your business and ranks your first move. No invented numbers until then."
+                                    : "Drop ~3 months of bank statements and MILŌN drafts your P&L, cash forecast and budget, then scores your business and ranks your first move — no invented numbers until then."
+                                }
+                                action={
+                                  userRole !== "client_member" ? (
                                   <div className="flex w-full max-w-sm flex-col gap-2.5">
                                     <button
                                       id="wizard-first-figures"
@@ -4223,8 +4222,9 @@ function Index() {
                                     Financial data hasn't been added yet. The owner will set this
                                     up.
                                   </p>
-                                )}
-                              </div>
+                                )
+                                }
+                              />
                               {/* Same Ask AI mount as the scored board — before figures it
                                   carries a small "more relevant once your figures are in" note. */}
                               <div

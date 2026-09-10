@@ -46,6 +46,7 @@ import {
   settingsBackPath,
   type SettingsView,
 } from "@/lib/user-roles";
+import { PageHeader, SectionCard } from "@/components/primitives";
 
 export const Route = createFileRoute("/_authenticated/settings/")({
   component: SettingsPage,
@@ -145,38 +146,38 @@ function SettingsPage() {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
       <div className="mx-auto max-w-2xl px-4 py-8 sm:px-6">
-        <div className="mb-8 flex items-center justify-between gap-3">
-          <div>
-            <BackLink
-              onClick={() => {
-                if (backTo === "/app") setPortalIntent("owner");
-                else setPortalIntent("accountant");
-                navigate({ to: backTo });
-              }}
-              className="mb-3"
-            >
-              {backTo === "/app" ? "Back to board" : "Back to practice"}
-            </BackLink>
-            <h1 className="text-2xl font-semibold tracking-tight text-slate-50">
-              Settings
-            </h1>
-            <p className="mt-1 text-sm text-slate-400">
-              {isPractice
-                ? "Profile, practice preferences, and account controls"
-                : "Profile, workspace, and account controls"}
-            </p>
-          </div>
-          <ThemeToggle />
-        </div>
+        <BackLink
+          onClick={() => {
+            if (backTo === "/app") setPortalIntent("owner");
+            else setPortalIntent("accountant");
+            navigate({ to: backTo });
+          }}
+          className="mb-3"
+        >
+          {backTo === "/app" ? "Back to board" : "Back to practice"}
+        </BackLink>
+        <PageHeader
+          compact
+          className="mb-8 !items-start [&_.milon-page-header__title]:text-slate-50 [&_.milon-page-header__subtitle]:text-slate-400"
+          title="Settings"
+          subtitle={
+            isPractice
+              ? "Profile, practice preferences, and account controls"
+              : "Profile, workspace, and account controls"
+          }
+          meta={<ThemeToggle />}
+        />
 
         {/* ── Profile ─────────────────────────────────────────────────────── */}
-        <section className="mb-6 rounded-2xl border border-slate-800 bg-slate-900/60 p-5 sm:p-6">
-          <div className="mb-4 flex items-center gap-2">
-            <User className="h-4 w-4 text-[#d4a550]" />
-            <h2 className="text-sm font-semibold uppercase tracking-[0.14em] text-[#d4a550]">
+        <SectionCard
+          className="mb-6 !rounded-2xl !border-slate-800 !bg-slate-900/60"
+          eyebrow={
+            <span className="inline-flex items-center gap-2">
+              <User className="h-4 w-4 text-[var(--brand-gold-ui,#d4a550)]" />
               Profile
-            </h2>
-          </div>
+            </span>
+          }
+        >
 
           <div className="space-y-4">
             <div>
@@ -226,7 +227,7 @@ function SettingsPage() {
               </Button>
             </div>
           </div>
-        </section>
+        </SectionCard>
 
         <MarketSettingsCard
           kind={isPractice ? "firm" : "client"}
@@ -235,10 +236,10 @@ function SettingsPage() {
         />
 
         {!isPractice && hasPractice && (
-          <section className="mb-6 rounded-2xl border border-slate-800 bg-slate-900/60 p-5 sm:p-6">
-            <p className="text-xs text-slate-500">
-              This login also has a practice portal. Opening it leaves the business board.
-            </p>
+          <SectionCard
+            className="mb-6 !rounded-2xl !border-slate-800 !bg-slate-900/60"
+            description="This login also has a practice portal. Opening it leaves the business board."
+          >
             <button
               type="button"
               className="mt-3 flex w-full items-center gap-2 rounded-xl border border-slate-700 bg-slate-950/50 px-4 py-3 text-left text-sm text-slate-200 transition hover:border-[#d4a550]/50 hover:bg-[#d4a550]/10"
@@ -251,18 +252,20 @@ function SettingsPage() {
               <Building2 className="h-4 w-4 text-[#d4a550]" />
               Open practice portal
             </button>
-          </section>
+          </SectionCard>
         )}
 
         {/* ── Practice (accountants) ──────────────────────────────────────── */}
         {isPractice && (
-          <section className="mb-6 rounded-2xl border border-slate-800 bg-slate-900/60 p-5 sm:p-6">
-            <div className="mb-4 flex items-center gap-2">
-              <Palette className="h-4 w-4 text-[#d4a550]" />
-              <h2 className="text-sm font-semibold uppercase tracking-[0.14em] text-[#d4a550]">
+          <SectionCard
+            className="mb-6 !rounded-2xl !border-slate-800 !bg-slate-900/60"
+            eyebrow={
+              <span className="inline-flex items-center gap-2">
+                <Palette className="h-4 w-4 text-[var(--brand-gold-ui,#d4a550)]" />
                 Practice
-              </h2>
-            </div>
+              </span>
+            }
+          >
             <div className="space-y-2">
               <Link
                 to="/settings/team"
@@ -286,21 +289,20 @@ function SettingsPage() {
                 Firm dashboard & clients
               </Link>
             </div>
-          </section>
+          </SectionCard>
         )}
 
         {/* ── Preferences ─────────────────────────────────────────────────── */}
-        <section className="mb-6 rounded-2xl border border-slate-800 bg-slate-900/60 p-5 sm:p-6">
-          <div className="mb-4 flex items-center gap-2">
-            <RotateCcw className="h-4 w-4 text-[#d4a550]" />
-            <h2 className="text-sm font-semibold uppercase tracking-[0.14em] text-[#d4a550]">
+        <SectionCard
+          className="mb-6 !rounded-2xl !border-slate-800 !bg-slate-900/60"
+          eyebrow={
+            <span className="inline-flex items-center gap-2">
+              <RotateCcw className="h-4 w-4 text-[var(--brand-gold-ui,#d4a550)]" />
               Preferences
-            </h2>
-          </div>
-          <p className="mb-3 text-xs text-slate-500">
-            Theme lives in the header on every page. Use this to replay the guided tour on
-            this device.
-          </p>
+            </span>
+          }
+          description="Theme lives in the header on every page. Use this to replay the guided tour on this device."
+        >
           <Button
             type="button"
             variant="outline"
@@ -310,19 +312,19 @@ function SettingsPage() {
             <RotateCcw className="mr-2 h-4 w-4 text-[#d4a550]" />
             Restart guided onboarding tour
           </Button>
-        </section>
+        </SectionCard>
 
         {/* ── Legal ───────────────────────────────────────────────────────── */}
-        <section className="mb-6 rounded-2xl border border-slate-800 bg-slate-900/60 p-5 sm:p-6">
-          <div className="mb-4 flex items-center gap-2">
-            <Scale className="h-4 w-4 text-[#d4a550]" />
-            <h2 className="text-sm font-semibold uppercase tracking-[0.14em] text-[#d4a550]">
+        <SectionCard
+          className="mb-6 !rounded-2xl !border-slate-800 !bg-slate-900/60"
+          eyebrow={
+            <span className="inline-flex items-center gap-2">
+              <Scale className="h-4 w-4 text-[var(--brand-gold-ui,#d4a550)]" />
               Legal
-            </h2>
-          </div>
-          <p className="mb-3 text-xs text-slate-500">
-            AI is powered by Claude. Financial information sent to the model is anonymised.
-          </p>
+            </span>
+          }
+          description="AI is powered by Claude. Financial information sent to the model is anonymised."
+        >
           <div className="flex flex-col gap-2">
             <a
               href="/privacy"
@@ -343,10 +345,10 @@ function SettingsPage() {
               AI notice
             </a>
           </div>
-        </section>
+        </SectionCard>
 
         {/* ── Session ─────────────────────────────────────────────────────── */}
-        <section className="mb-6 rounded-2xl border border-slate-800 bg-slate-900/60 p-5 sm:p-6">
+        <SectionCard className="mb-6 !rounded-2xl !border-slate-800 !bg-slate-900/60">
           <Button
             type="button"
             variant="outline"
@@ -356,7 +358,7 @@ function SettingsPage() {
             <LogOut className="mr-2 h-4 w-4" />
             Sign out
           </Button>
-        </section>
+        </SectionCard>
       </div>
 
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>

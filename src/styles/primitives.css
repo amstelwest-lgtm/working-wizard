@@ -1,0 +1,406 @@
+/*
+ * Shared UI primitives (UX PR2) — compose with --brand-* / --milon-* from PR1.
+ * Accountant portal fallbacks use local --gold / --ink when scoped under .accountant-portal.
+ */
+
+.milon-page-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--milon-space-5, 1.5rem);
+  margin-bottom: var(--milon-space-4, 1rem);
+}
+
+.milon-page-header__main {
+  min-width: 0;
+}
+
+.milon-page-header__eyebrow {
+  display: block;
+  margin-bottom: var(--milon-space-2, 0.5rem);
+  font-size: var(--milon-text-xs, 0.6875rem);
+  font-weight: 700;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--brand-gold, var(--gold, var(--milon-gold)));
+}
+
+.milon-page-header__title {
+  margin: 0 0 var(--milon-space-2, 0.5rem);
+  font-size: clamp(1.375rem, 3.2vw, 2.25rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  color: var(--brand-ink, var(--ink, var(--milon-ink)));
+}
+
+.milon-page-header__subtitle {
+  margin: 0;
+  max-width: 54ch;
+  font-size: var(--milon-text-base, 0.875rem);
+  line-height: 1.55;
+  color: var(--brand-ink-muted, var(--ink-dim, var(--milon-ink-muted)));
+}
+
+.milon-page-header__meta {
+  flex-shrink: 0;
+}
+
+.milon-page-header--compact .milon-page-header__title {
+  font-size: var(--milon-text-lg, 1.375rem);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.milon-page-header--compact .milon-page-header__subtitle {
+  font-size: var(--milon-text-sm, 0.8125rem);
+}
+
+@media (max-width: 720px) {
+  .milon-page-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+.milon-section-card {
+  position: relative;
+  border: 1px solid var(--brand-border, var(--line, var(--milon-border)));
+  border-radius: 20px;
+  background: var(--brand-surface, var(--card, var(--milon-surface)));
+  backdrop-filter: blur(8px);
+  transition:
+    border-color 0.3s,
+    transform 0.3s cubic-bezier(0.22, 0.9, 0.24, 1),
+    box-shadow 0.3s;
+}
+
+.milon-section-card--pad {
+  padding: var(--milon-space-5, 1.5rem) var(--milon-space-6, 2rem);
+}
+
+.milon-section-card:hover {
+  border-color: color-mix(in srgb, var(--brand-gold, var(--gold, var(--milon-gold))) 32%, transparent);
+}
+
+.milon-section-card__head {
+  margin-bottom: var(--milon-space-4, 1rem);
+}
+
+.milon-section-card__eyebrow {
+  display: block;
+  margin-bottom: var(--milon-space-2, 0.5rem);
+  font-size: var(--milon-text-xs, 0.6875rem);
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--brand-gold-ui, var(--brand-gold, var(--gold, var(--milon-gold))));
+}
+
+.milon-section-card__title {
+  margin: 0;
+  font-size: var(--milon-text-md, 1rem);
+  font-weight: 600;
+  color: var(--brand-ink, var(--ink, var(--milon-ink)));
+}
+
+.milon-section-card__desc {
+  margin: var(--milon-space-1, 0.25rem) 0 0;
+  font-size: var(--milon-text-sm, 0.8125rem);
+  color: var(--brand-ink-muted, var(--ink-dim, var(--milon-ink-muted)));
+}
+
+.milon-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--milon-space-4, 1rem);
+  padding: var(--milon-space-6, 2rem) var(--milon-space-4, 1rem);
+  text-align: center;
+}
+
+.milon-empty-state--dashed {
+  border: 1px dashed var(--brand-border, var(--line, var(--milon-border)));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--brand-bg-elevated, var(--bg-2, var(--milon-bg-elevated))) 60%, transparent);
+}
+
+.milon-empty-state__icon {
+  display: grid;
+  place-items: center;
+  color: var(--brand-ink-faint, var(--ink-faint, var(--milon-ink-faint)));
+}
+
+.milon-empty-state__title {
+  margin: 0;
+  font-size: var(--milon-text-md, 1rem);
+  font-weight: 600;
+  color: var(--brand-ink, var(--ink, var(--milon-ink)));
+}
+
+.milon-empty-state__desc {
+  margin: 0;
+  max-width: 36ch;
+  font-size: var(--milon-text-sm, 0.8125rem);
+  line-height: 1.55;
+  color: var(--brand-ink-muted, var(--ink-dim, var(--milon-ink-muted)));
+}
+
+.milon-empty-state__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--milon-space-2, 0.5rem);
+  margin-top: var(--milon-space-2, 0.5rem);
+}
+
+.milon-loading-state {
+  display: grid;
+  place-items: center;
+  gap: var(--milon-space-3, 0.75rem);
+  padding: var(--milon-space-6, 2rem);
+  color: var(--brand-ink-muted, var(--ink-dim, var(--milon-ink-muted)));
+  font-size: var(--milon-text-sm, 0.8125rem);
+}
+
+.milon-loading-state--fullscreen {
+  min-height: 100vh;
+}
+
+.milon-loading-state__spinner {
+  width: 1.25rem;
+  height: 1.25rem;
+  border: 2px solid color-mix(in srgb, var(--brand-gold-ui, var(--brand-gold, var(--gold))) 25%, transparent);
+  border-top-color: var(--brand-gold-ui, var(--brand-gold, var(--gold, var(--milon-gold))));
+  border-radius: 50%;
+  animation: milon-spin 0.75s linear infinite;
+}
+
+@keyframes milon-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.milon-metric-tile {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--brand-border-soft, var(--line-soft, var(--milon-border-soft)));
+  border-radius: 18px;
+  padding: var(--milon-space-4, 1rem) var(--milon-space-5, 1.5rem);
+  background: var(--brand-surface, var(--card, var(--milon-surface)));
+  text-align: left;
+  font-family: inherit;
+  color: inherit;
+}
+
+.milon-metric-tile--interactive {
+  cursor: pointer;
+  transition:
+    border-color 0.25s,
+    transform 0.25s cubic-bezier(0.22, 0.9, 0.24, 1);
+}
+
+.milon-metric-tile--interactive:hover {
+  border-color: color-mix(in srgb, var(--brand-gold, var(--gold, var(--milon-gold))) 35%, transparent);
+  transform: translateY(-1px);
+}
+
+.milon-metric-tile__label {
+  display: flex;
+  align-items: center;
+  gap: var(--milon-space-2, 0.5rem);
+  margin-bottom: var(--milon-space-2, 0.5rem);
+  font-size: var(--milon-text-xs, 0.6875rem);
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--brand-ink-faint, var(--ink-faint, var(--milon-ink-faint)));
+}
+
+.milon-metric-tile__label svg {
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.milon-metric-tile__value {
+  font-size: clamp(1.75rem, 3vw, 2.125rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  color: var(--brand-ink, var(--ink, var(--milon-ink)));
+}
+
+.milon-metric-tile__value small {
+  font-size: 0.55em;
+  font-weight: 600;
+  color: var(--brand-ink-muted, var(--ink-dim, var(--milon-ink-muted)));
+}
+
+.milon-metric-tile__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--milon-space-2, 0.5rem);
+  margin-top: var(--milon-space-2, 0.5rem);
+  font-size: var(--milon-text-xs, 0.6875rem);
+  color: var(--brand-ink-muted, var(--ink-dim, var(--milon-ink-muted)));
+}
+
+.milon-metric-tile__foot .up {
+  color: var(--brand-ok, var(--ok, var(--milon-ok)));
+}
+
+.milon-metric-tile__foot .warn {
+  color: var(--brand-warn, var(--warn, var(--milon-warn)));
+}
+
+.milon-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  border-radius: 999px;
+  padding: 0.25rem 0.625rem;
+  font-size: var(--milon-text-xs, 0.6875rem);
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.milon-status-pill i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+
+.milon-status-pill--pulse i {
+  animation: milon-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes milon-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.milon-status-pill--ok {
+  border: 1px solid color-mix(in srgb, var(--brand-ok, var(--ok, var(--milon-ok))) 35%, transparent);
+  background: color-mix(in srgb, var(--brand-ok, var(--ok, var(--milon-ok))) 12%, transparent);
+  color: var(--brand-ok, var(--ok, var(--milon-ok)));
+}
+
+.milon-status-pill--warn {
+  border: 1px solid color-mix(in srgb, var(--brand-warn, var(--warn, var(--milon-warn))) 35%, transparent);
+  background: color-mix(in srgb, var(--brand-warn, var(--warn, var(--milon-warn))) 12%, transparent);
+  color: var(--brand-warn, var(--warn, var(--milon-warn)));
+}
+
+.milon-status-pill--risk {
+  border: 1px solid color-mix(in srgb, var(--brand-risk, var(--risk, var(--milon-risk))) 35%, transparent);
+  background: color-mix(in srgb, var(--brand-risk, var(--risk, var(--milon-risk))) 12%, transparent);
+  color: var(--brand-risk, var(--risk, var(--milon-risk)));
+}
+
+.milon-status-pill--neutral {
+  border: 1px solid var(--brand-border, var(--line, var(--milon-border)));
+  background: color-mix(in srgb, var(--brand-bg-elevated, var(--bg-2, var(--milon-bg-elevated))) 70%, transparent);
+  color: var(--brand-ink-muted, var(--ink-dim, var(--milon-ink-muted)));
+}
+
+.milon-status-pill--live {
+  border: 1px solid color-mix(in srgb, var(--brand-ok, var(--ok, var(--milon-ok))) 30%, transparent);
+  background: color-mix(in srgb, var(--brand-ok, var(--ok, var(--milon-ok))) 10%, transparent);
+  color: var(--brand-ok, var(--ok, var(--milon-ok)));
+}
+
+.milon-status-pill--sample {
+  border: 1px solid color-mix(in srgb, #38bdf8 40%, transparent);
+  background: color-mix(in srgb, #38bdf8 10%, transparent);
+  color: #0284c7;
+}
+
+html.dark .milon-status-pill--sample,
+.dark .milon-status-pill--sample {
+  color: #7dd3fc;
+}
+
+.accountant-portal .milon-metric-tile {
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 20px 22px;
+  background: var(--card);
+  transition:
+    transform 0.3s cubic-bezier(0.22, 0.9, 0.24, 1),
+    border-color 0.3s;
+}
+
+.accountant-portal .milon-metric-tile--interactive:hover {
+  transform: translateY(-3px);
+  border-color: var(--gold);
+}
+
+.accountant-portal .milon-metric-tile__label {
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  color: var(--ink-dim);
+  margin-bottom: 8px;
+}
+
+.accountant-portal .milon-metric-tile__label svg {
+  stroke: var(--gold);
+}
+
+.accountant-portal .milon-metric-tile__value {
+  font-size: 30px;
+  font-variant-numeric: tabular-nums;
+}
+
+.accountant-portal .milon-metric-tile__foot {
+  margin-top: 10px;
+  font-size: 11.5px;
+}
+
+.accountant-portal .stat-spark {
+  width: 72px;
+  height: 22px;
+  flex-shrink: 0;
+}
+
+.accountant-portal .stat-spark path {
+  fill: none;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.accountant-portal .dash-asof {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--ink-dim);
+  white-space: nowrap;
+}
+
+.accountant-portal .dash-asof svg {
+  width: 15px;
+  height: 15px;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
