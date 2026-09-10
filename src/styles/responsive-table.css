@@ -1,0 +1,203 @@
+/*
+ * UX PR5 — shared scrollable / card-responsive tables.
+ * Compose with ScrollableTable; sticky first column + edge fade on horizontal scroll.
+ */
+
+.milon-scroll-table {
+  width: 100%;
+}
+
+.milon-scroll-table__hint {
+  margin: 0 0 0.5rem;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--brand-ink-muted, var(--milon-ink-muted, #9b958a));
+}
+
+@media (min-width: 641px) {
+  .milon-scroll-table__hint {
+    display: none;
+  }
+}
+
+.milon-scroll-table__viewport {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+
+.milon-scroll-table--fade .milon-scroll-table__viewport {
+  mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 32px), transparent);
+  -webkit-mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 32px), transparent);
+}
+
+/* Sticky label column while scrolling wide grids */
+.milon-scroll-table:not(.milon-scroll-table--cards) .milon-data-table th:first-child,
+.milon-scroll-table:not(.milon-scroll-table--cards) .milon-data-table td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background-clip: padding-box;
+}
+
+.milon-scroll-table:not(.milon-scroll-table--cards) .milon-data-table thead th:first-child {
+  z-index: 3;
+}
+
+.milon-scroll-table:not(.milon-scroll-table--cards) .milon-data-table td:first-child::after,
+.milon-scroll-table:not(.milon-scroll-table--cards) .milon-data-table th:first-child::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: -10px;
+  bottom: 0;
+  width: 10px;
+  pointer-events: none;
+  background: linear-gradient(90deg, rgba(0, 0, 0, 0.06), transparent);
+}
+
+.dark .milon-scroll-table:not(.milon-scroll-table--cards) .milon-data-table td:first-child::after,
+.dark .milon-scroll-table:not(.milon-scroll-table--cards) .milon-data-table th:first-child::after {
+  background: linear-gradient(90deg, rgba(0, 0, 0, 0.28), transparent);
+}
+
+/* Card rows — dense tables at phone widths */
+@media (max-width: 640px) {
+  .milon-scroll-table--cards .milon-scroll-table__viewport {
+    overflow-x: visible;
+    mask-image: none;
+    -webkit-mask-image: none;
+  }
+
+  .milon-scroll-table--cards .milon-scroll-table__hint {
+    display: none;
+  }
+
+  .milon-scroll-table--cards .milon-data-table {
+    min-width: 0 !important;
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0 10px;
+  }
+
+  .milon-scroll-table--cards .milon-data-table thead {
+    display: none;
+  }
+
+  .milon-scroll-table--cards .milon-data-table tbody tr {
+    display: block;
+    border: 1px solid var(--brand-border, var(--milon-border, rgba(212, 175, 55, 0.16)));
+    border-radius: 14px;
+    background: var(--brand-surface, var(--milon-surface, rgba(255, 255, 255, 0.024)));
+    overflow: hidden;
+  }
+
+  .milon-scroll-table--cards .milon-data-table tbody td {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.65rem 0.875rem !important;
+    border: none !important;
+    border-radius: 0 !important;
+    text-align: right;
+  }
+
+  .milon-scroll-table--cards .milon-data-table tbody td + td {
+    border-top: 1px solid var(--brand-border-soft, var(--milon-border-soft, rgba(212, 175, 55, 0.08))) !important;
+  }
+
+  .milon-scroll-table--cards .milon-data-table tbody td::before {
+    content: attr(data-label);
+    flex: 1;
+    min-width: 0;
+    text-align: left;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--brand-ink-muted, var(--milon-ink-muted, #9b958a));
+  }
+
+  .milon-scroll-table--cards .milon-data-table tbody td[data-label=""]::before,
+  .milon-scroll-table--cards .milon-data-table tbody td:not([data-label])::before {
+    display: none;
+  }
+
+  /* Primary cell — card title (no duplicate label) */
+  .milon-scroll-table--cards .milon-data-table tbody td:first-child {
+    flex-direction: column;
+    align-items: flex-start;
+    text-align: left;
+    background: color-mix(in srgb, var(--brand-gold, var(--milon-gold, #d4af37)) 7%, transparent) !important;
+  }
+
+  .milon-scroll-table--cards .milon-data-table tbody td:first-child::before {
+    display: none;
+  }
+
+  /* Accountant client table card styling */
+  .accountant-portal .milon-scroll-table--cards .ctable tbody tr {
+    cursor: pointer;
+  }
+
+  .accountant-portal .milon-scroll-table--cards .ctable tbody td {
+    background: transparent !important;
+    border-left: none !important;
+    border-right: none !important;
+  }
+
+  .accountant-portal .milon-scroll-table--cards .ctable tbody td:first-child {
+    border-radius: 0 !important;
+  }
+
+  /* Show columns hidden on tablet when collapsed to phone cards */
+  .accountant-portal .milon-scroll-table--cards .hide-sm {
+    display: flex !important;
+  }
+}
+
+/* Owner app bar — 375px header polish (no landing changes) */
+@media (max-width: 480px) {
+  .founder-app-bar {
+    overflow: visible;
+  }
+
+  .founder-app-bar__brand-text {
+    display: none;
+  }
+
+  .founder-app-bar__actions {
+    gap: 0.25rem;
+  }
+
+  .founder-app-bar__actions .founder-app-bar__upload-label {
+    display: none;
+  }
+}
+
+@media (max-width: 375px) {
+  .founder-app-bar {
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+  }
+
+  .founder-app-bar__logo {
+    height: 14px;
+  }
+
+  .founder-app-bar__actions button,
+  .founder-app-bar__actions .founder-app-bar__theme {
+    height: 1.625rem;
+    min-width: 1.625rem;
+    padding-left: 0.375rem;
+    padding-right: 0.375rem;
+  }
+
+  .founder-app-bar__more {
+    flex-shrink: 0;
+  }
+}

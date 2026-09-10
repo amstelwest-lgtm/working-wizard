@@ -3547,7 +3547,7 @@ function Index() {
           )}
           <div id="board-pack" className="founder-shell mx-auto py-5 lg:py-7">
             {/* App bar — compact single row */}
-            <header className="relative mb-3 overflow-hidden rounded-xl border border-slate-200/80 bg-white/90 px-2.5 py-1.5 shadow-[0_8px_24px_rgba(15,23,42,0.05)] backdrop-blur-xl dark:border-slate-800/90 dark:bg-[#0d1420]/90 dark:shadow-[0_10px_28px_rgba(0,0,0,0.2)] sm:px-3">
+            <header className="founder-app-bar relative mb-3 overflow-visible rounded-xl border border-slate-200/80 bg-white/90 px-2.5 py-1.5 shadow-[0_8px_24px_rgba(15,23,42,0.05)] backdrop-blur-xl dark:border-slate-800/90 dark:bg-[#0d1420]/90 dark:shadow-[0_10px_28px_rgba(0,0,0,0.2)] sm:px-3">
               <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#d4a550]/80 to-transparent" />
               <div className="flex items-center justify-between gap-2">
                 <div className="flex min-w-0 items-center gap-2">
@@ -3557,14 +3557,14 @@ function Index() {
                   <img
                     src="/milon-wordmark.png"
                     alt="Milōn"
-                    className="h-4 w-auto shrink-0 dark:brightness-110 sm:h-[18px]"
+                    className="founder-app-bar__logo h-4 w-auto shrink-0 dark:brightness-110 sm:h-[18px]"
                     style={{ filter: "brightness(0.85) saturate(1.2)" }}
                   />
-                  <div className="hidden min-w-0 truncate text-[9px] font-medium uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500 md:block">
+                  <div className="founder-app-bar__brand-text hidden min-w-0 truncate text-[9px] font-medium uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500 md:block">
                     {actingClientName ?? "Operating finance"}
                   </div>
                 </div>
-                <div className="flex shrink-0 items-center gap-1 print:hidden">
+                <div className="founder-app-bar__actions flex shrink-0 items-center gap-1 print:hidden">
                   {/* Keep primary actions visible on phones; park the rest in More */}
                   {userRole !== "client_member" && (
                     <button
@@ -3577,10 +3577,10 @@ function Index() {
                       }
                     >
                       <Upload className="h-3 w-3 shrink-0" />
-                      <span className="hidden sm:inline">Upload</span>
+                      <span className="founder-app-bar__upload-label hidden sm:inline">Upload</span>
                     </button>
                   )}
-                  <ThemeToggle className="h-7 rounded-lg border-slate-200 px-2 py-0 text-[9px] font-semibold uppercase tracking-[0.14em] dark:border-slate-700/80" />
+                  <ThemeToggle className="founder-app-bar__theme h-7 rounded-lg border-slate-200 px-2 py-0 text-[9px] font-semibold uppercase tracking-[0.14em] dark:border-slate-700/80" />
                   <HeaderShareButton />
 
                   <div className="hidden items-center gap-1 sm:flex">
@@ -3693,7 +3693,7 @@ function Index() {
                   <Popover>
                     <PopoverTrigger asChild>
                       <button
-                        className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200 bg-slate-50/80 text-slate-600 transition-colors hover:border-[#b7872a]/50 hover:bg-[#d4a550]/10 dark:border-slate-700/80 dark:bg-slate-900/70 dark:text-slate-300 sm:hidden"
+                        className="founder-app-bar__more inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-slate-50/80 text-slate-600 transition-colors hover:border-[#b7872a]/50 hover:bg-[#d4a550]/10 dark:border-slate-700/80 dark:bg-slate-900/70 dark:text-slate-300 sm:hidden"
                         title="More"
                         aria-label="More actions"
                       >
@@ -3701,8 +3701,10 @@ function Index() {
                       </button>
                     </PopoverTrigger>
                     <PopoverContent
-                      className="w-56 border border-slate-200 bg-white p-2 shadow-xl dark:border-slate-700 dark:bg-slate-900"
+                      className="z-50 w-56 border border-slate-200 bg-white p-2 shadow-xl dark:border-slate-700 dark:bg-slate-900"
                       align="end"
+                      side="bottom"
+                      collisionPadding={12}
                     >
                       <div className="flex flex-col gap-1">
                         {userRole !== "client_member" && (

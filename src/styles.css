@@ -2,6 +2,7 @@
 @source "../src";
 @import "tw-animate-css";
 @import "./styles/primitives.css";
+@import "./styles/responsive-table.css";
 @import "./styles/motion.css";
 
 /*

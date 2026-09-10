@@ -21,6 +21,7 @@ import type { BudgetDocument } from "@/lib/budget.types";
 import { preflightUploadFile } from "@/lib/upload-quality";
 import { pdfTransport, unstage, type PdfTransport } from "@/lib/staged-upload-browser";
 import { UploadQualityDisclaimer } from "@/components/upload-quality-disclaimer";
+import { ScrollableTable } from "@/components/primitives/scrollable-table";
 import { fyMonths, formatMonthLabel } from "@/lib/budget.months";
 import { computeBudgetMonths, fmtBudgetMoney } from "@/lib/budget.compute";
 import { useMarket } from "@/contexts/market";
@@ -332,8 +333,8 @@ export function BudgetVariancePanel({ clientId, doc }: { clientId?: string; doc:
           >
             {report.headline}
           </p>
-          <div className="overflow-x-auto rounded-lg border border-slate-100 dark:border-slate-800">
-            <table className="w-full min-w-[520px] text-xs">
+          <ScrollableTable cardRows className="rounded-lg border border-slate-100 dark:border-slate-800">
+            <table className="milon-data-table w-full min-w-[520px] text-xs">
               <thead>
                 <tr className="border-b border-slate-100 text-left text-[10px] uppercase tracking-wider text-slate-400 dark:border-slate-800">
                   <th className="px-3 py-2">Line</th>
@@ -349,9 +350,14 @@ export function BudgetVariancePanel({ clientId, doc }: { clientId?: string; doc:
                     <td className="px-3 py-1.5 font-medium text-slate-700 dark:text-slate-200">
                       {l.label}
                     </td>
-                    <td className="px-2 py-1.5 text-right tabular-nums">{money(l.budget)}</td>
-                    <td className="px-2 py-1.5 text-right tabular-nums">{money(l.actual)}</td>
+                    <td data-label="Budget" className="px-2 py-1.5 text-right tabular-nums">
+                      {money(l.budget)}
+                    </td>
+                    <td data-label="Actual" className="px-2 py-1.5 text-right tabular-nums">
+                      {money(l.actual)}
+                    </td>
                     <td
+                      data-label="Δ"
                       className={`px-2 py-1.5 text-right tabular-nums ${
                         l.signal === "adverse"
                           ? "text-red-600 dark:text-red-400"
@@ -362,14 +368,14 @@ export function BudgetVariancePanel({ clientId, doc }: { clientId?: string; doc:
                     >
                       {money(l.delta)}
                     </td>
-                    <td className="px-2 py-1.5 text-right tabular-nums text-slate-500">
+                    <td data-label="Δ%" className="px-2 py-1.5 text-right tabular-nums text-slate-500">
                       {formatVariancePct(l.deltaPct)}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </div>
+          </ScrollableTable>
           {focusActual && (
             <div className="flex justify-end">
               <Button

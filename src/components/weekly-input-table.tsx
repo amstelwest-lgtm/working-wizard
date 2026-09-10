@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { useFinancialInputs, type WeeklyRow } from "@/contexts/financial-inputs";
 import { useMarketFormat } from "@/contexts/market";
 import { currencySymbol } from "@/lib/market";
+import { ScrollableTable } from "@/components/primitives/scrollable-table";
 
 function getISOWeekKey(date = new Date()): string {
   const d = new Date(date);
@@ -70,42 +71,44 @@ export function WeeklyInputTable({ role = "owner" }: { role?: "owner" | "account
       </CardHeader>
 
       {open && (
-        <CardContent className="pt-4 pb-3 overflow-x-auto">
-          <table className="w-full min-w-[520px] border-collapse text-xs">
-            <thead>
-              <tr className="border-b border-slate-700/50">
-                <th className="py-2 pr-4 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-500 min-w-[148px]">
-                  Field
-                </th>
-                {weeks.map((w) => (
-                  <th
-                    key={w}
-                    className={`px-2 py-2 text-right text-[10px] font-semibold uppercase tracking-wider ${
-                      w === currentWeek ? "text-[#d4a550]" : "text-slate-500"
-                    }`}
-                  >
-                    {w}
-                    {w === currentWeek && <span className="ml-1 text-[#d4a550]">★</span>}
+        <CardContent className="pt-4 pb-3">
+          <ScrollableTable cardRows hint={false}>
+            <table className="milon-data-table w-full min-w-[520px] border-collapse text-xs">
+              <thead>
+                <tr className="border-b border-slate-700/50">
+                  <th className="min-w-[148px] py-2 pr-4 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                    Field
                   </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {fields.map((field) => (
-                <tr key={field.key} className="border-b border-slate-800/50 last:border-0">
-                  <td className="py-2.5 pr-4">
-                    <div className="font-semibold text-slate-200">{field.label}</div>
-                    <div className="mt-0.5 text-[10px] text-slate-500">{field.hint}</div>
-                  </td>
-                  {weeks.map((w) => {
-                    const raw = weeklyInputs.weeks[w]?.[field.key] ?? 0;
-                    return (
-                      <td
-                        key={w}
-                        className={`px-2 py-2 text-right ${
-                          w === currentWeek ? "rounded bg-[#d4a550]/5" : ""
-                        }`}
-                      >
+                  {weeks.map((w) => (
+                    <th
+                      key={w}
+                      className={`px-2 py-2 text-right text-[10px] font-semibold uppercase tracking-wider ${
+                        w === currentWeek ? "text-[#d4a550]" : "text-slate-500"
+                      }`}
+                    >
+                      {w}
+                      {w === currentWeek && <span className="ml-1 text-[#d4a550]">★</span>}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {fields.map((field) => (
+                  <tr key={field.key} className="border-b border-slate-800/50 last:border-0">
+                    <td className="py-2.5 pr-4">
+                      <div className="font-semibold text-slate-200">{field.label}</div>
+                      <div className="mt-0.5 text-[10px] text-slate-500">{field.hint}</div>
+                    </td>
+                    {weeks.map((w) => {
+                      const raw = weeklyInputs.weeks[w]?.[field.key] ?? 0;
+                      return (
+                        <td
+                          key={w}
+                          data-label={w}
+                          className={`px-2 py-2 text-right ${
+                            w === currentWeek ? "rounded bg-[#d4a550]/5" : ""
+                          }`}
+                        >
                         <div className="relative inline-flex items-center">
                           <span className="pointer-events-none absolute left-2 text-[10px] text-slate-500">
                             {cur}
@@ -124,9 +127,10 @@ export function WeeklyInputTable({ role = "owner" }: { role?: "owner" | "account
                     );
                   })}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+                ))}
+              </tbody>
+            </table>
+          </ScrollableTable>
         </CardContent>
       )}
     </Card>

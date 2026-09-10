@@ -22,6 +22,7 @@ import { keepUnmappedAsExtraLine, reassignUnmappedDriver } from "@/lib/budget.mo
 import { BudgetSimpleView } from "@/components/budget/budget-simple-view";
 import { BudgetVariancePanel } from "@/components/budget/budget-variance-panel";
 import { BudgetYearOverviewChart } from "@/components/budget/budget-year-overview-chart";
+import { ScrollableTable } from "@/components/primitives/scrollable-table";
 
 const SCENARIOS: BudgetScenarioId[] = ["base", "upside", "downside"];
 
@@ -546,9 +547,9 @@ function BudgetComplexWorkspace({
           )}
         </div>
         {doc.revenueLines.map((line) => (
-          <div
+          <ScrollableTable
             key={line.id}
-            className="overflow-x-auto rounded-xl border border-slate-200/80 bg-white/70 dark:border-slate-800 dark:bg-slate-950/40"
+            className="rounded-xl border border-slate-200/80 bg-white/70 dark:border-slate-800 dark:bg-slate-950/40"
           >
             <div className="flex items-center justify-between gap-2 border-b border-slate-100 px-3 py-2 dark:border-slate-800">
               <Input
@@ -583,7 +584,7 @@ function BudgetComplexWorkspace({
                 </button>
               )}
             </div>
-            <table className="w-full min-w-[640px] text-xs">
+            <table className="milon-data-table w-full min-w-[640px] text-xs">
               <thead>
                 <tr className="text-left text-[10px] uppercase tracking-wider text-slate-400">
                   <th className="px-3 py-2">Driver</th>
@@ -659,7 +660,7 @@ function BudgetComplexWorkspace({
                 </tr>
               </tbody>
             </table>
-          </div>
+          </ScrollableTable>
         ))}
       </section>
 
@@ -668,8 +669,8 @@ function BudgetComplexWorkspace({
         <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
           Fixed overheads
         </h3>
-        <div className="overflow-x-auto rounded-xl border border-slate-200/80 dark:border-slate-800">
-          <table className="w-full min-w-[640px] text-xs">
+        <ScrollableTable className="rounded-xl border border-slate-200/80 dark:border-slate-800">
+          <table className="milon-data-table w-full min-w-[640px] text-xs">
             <thead>
               <tr className="border-b border-slate-100 text-left text-[10px] uppercase tracking-wider text-slate-400 dark:border-slate-800">
                 <th className="px-3 py-2">Bucket</th>
@@ -731,7 +732,7 @@ function BudgetComplexWorkspace({
               </tr>
             </tfoot>
           </table>
-        </div>
+        </ScrollableTable>
       </section>
 
       {/* Capex — available for every model; collapsed by default */}
@@ -1089,8 +1090,8 @@ function BudgetComplexWorkspace({
           </div>
         )}
 
-        <div className="overflow-x-auto rounded-xl border border-slate-200/80 dark:border-slate-800">
-          <table className="w-full min-w-[880px] text-xs">
+        <ScrollableTable cardRows className="rounded-xl border border-slate-200/80 dark:border-slate-800">
+          <table className="milon-data-table w-full min-w-[880px] text-xs">
             <thead>
               <tr className="border-b border-slate-100 text-left text-[10px] uppercase tracking-wider text-slate-400 dark:border-slate-800">
                 <th className="px-3 py-2">Month</th>
@@ -1114,19 +1115,35 @@ function BudgetComplexWorkspace({
                   }`}
                 >
                   <td className="px-3 py-1.5 font-medium">{monthLabel(r.month)}</td>
-                  <td className="px-2 py-1.5 text-right tabular-nums">{money(r.revenue)}</td>
-                  <td className="px-2 py-1.5 text-right tabular-nums">{money(r.cogs)}</td>
-                  <td className="px-2 py-1.5 text-right tabular-nums">{r.gpPct.toFixed(1)}%</td>
-                  <td className="px-2 py-1.5 text-right tabular-nums">{money(r.overheads)}</td>
-                  <td className="px-2 py-1.5 text-right tabular-nums">{money(r.depreciation)}</td>
-                  <td className="px-2 py-1.5 text-right tabular-nums">{money(r.ebit)}</td>
-                  <td className="px-2 py-1.5 text-right tabular-nums">{money(r.vatNet)}</td>
+                  <td data-label="Revenue" className="px-2 py-1.5 text-right tabular-nums">
+                    {money(r.revenue)}
+                  </td>
+                  <td data-label="COGS" className="px-2 py-1.5 text-right tabular-nums">
+                    {money(r.cogs)}
+                  </td>
+                  <td data-label="GP%" className="px-2 py-1.5 text-right tabular-nums">
+                    {r.gpPct.toFixed(1)}%
+                  </td>
+                  <td data-label="Overheads" className="px-2 py-1.5 text-right tabular-nums">
+                    {money(r.overheads)}
+                  </td>
+                  <td data-label="Deprec." className="px-2 py-1.5 text-right tabular-nums">
+                    {money(r.depreciation)}
+                  </td>
+                  <td data-label="EBIT" className="px-2 py-1.5 text-right tabular-nums">
+                    {money(r.ebit)}
+                  </td>
+                  <td data-label={taxCol} className="px-2 py-1.5 text-right tabular-nums">
+                    {money(r.vatNet)}
+                  </td>
                   <td
+                    data-label="Net cash"
                     className={`px-2 py-1.5 text-right tabular-nums ${r.netCash < 0 ? "text-red-600" : ""}`}
                   >
                     {money(r.netCash)}
                   </td>
                   <td
+                    data-label="Closing cash"
                     className={`px-2 py-1.5 text-right tabular-nums ${r.closingCash < 0 ? "text-red-600" : ""}`}
                   >
                     {money(r.closingCash)}
@@ -1163,7 +1180,7 @@ function BudgetComplexWorkspace({
               </tr>
             </tfoot>
           </table>
-        </div>
+        </ScrollableTable>
         {role === "accountant" && (
           <p className="text-[11px] text-slate-500">
             Accountant view: full FY grid in complex mode. Challenge driver assumptions against

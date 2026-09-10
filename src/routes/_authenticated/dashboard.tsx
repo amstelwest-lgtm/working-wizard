@@ -67,6 +67,7 @@ import {
   EmptyState,
   MetricTile,
   PageHeader,
+  ScrollableTable,
   SkeletonBlock,
   SkeletonTile,
   StatusPill,
@@ -1691,8 +1692,8 @@ function Dashboard() {
             <EmptyState title="No clients match your search." className="!py-10" />
           )
         ) : (
-          <div className="ctable-scroll">
-            <table className="ctable">
+          <ScrollableTable cardRows className="ctable-scroll">
+            <table className="ctable milon-data-table">
               <thead>
                 <tr>
                   <th>Client</th>
@@ -1745,7 +1746,7 @@ function Dashboard() {
                           )}
                         </div>
                       </td>
-                      <td>
+                      <td data-label="Health">
                         <div className="cell-health">
                           <span className="ring">
                             <RingSvg score={score} status={c.health.displayStatus} />
@@ -1753,7 +1754,7 @@ function Dashboard() {
                           </span>
                         </div>
                       </td>
-                      <td className="hide-sm">
+                      <td className="hide-sm" data-label="Trend">
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                           <SparkSvg trend={c.trend} />
                           <span
@@ -1772,21 +1773,23 @@ function Dashboard() {
                           </span>
                         </div>
                       </td>
-                      <td className="hide-sm">
+                      <td className="hide-sm" data-label="Priority">
                         <span className={`prio ${c.priority}`}>
                           <i />
                           {c.priorityLabel}
                         </span>
                       </td>
-                      <td className="num">{runwayStr(c)}</td>
-                      <td className="num hide-sm">
+                      <td className="num" data-label="Runway">
+                        {runwayStr(c)}
+                      </td>
+                      <td className="num hide-sm" data-label="Queries">
                         {c.openQueries > 0 ? (
                           <span title="Unresolved notes on this client">{c.openQueries}</span>
                         ) : (
                           "—"
                         )}
                       </td>
-                      <td className="num hide-sm">
+                      <td className="num hide-sm" data-label="Actions">
                         {c.openActions > 0 ? (
                           <button
                             type="button"
@@ -1805,8 +1808,10 @@ function Dashboard() {
                           "—"
                         )}
                       </td>
-                      <td className="num hide-sm">{opMarginStr(c)}</td>
-                      <td>
+                      <td className="num hide-sm" data-label="Op. profit">
+                        {opMarginStr(c)}
+                      </td>
+                      <td data-label="Status">
                         <StatusPill variant={statusPillFromHealth(c.health.displayStatus)}>
                           {chip.label}
                         </StatusPill>
@@ -1828,7 +1833,7 @@ function Dashboard() {
                           </span>
                         )}
                       </td>
-                      <td>
+                      <td data-label="">
                         <div className="row-actions" onClick={(e) => e.stopPropagation()}>
                           {/* Reports */}
                           <button
@@ -1885,7 +1890,7 @@ function Dashboard() {
                 })}
               </tbody>
             </table>
-          </div>
+          </ScrollableTable>
         )}
 
         {/* ===== PLAYBOOK LIBRARY ===== */}

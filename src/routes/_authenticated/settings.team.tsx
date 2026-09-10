@@ -4,6 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { Loader2, Shield, Trash2, UserPlus } from "lucide-react";
 import { BackLink } from "@/components/back-link";
+import { ScrollableTable } from "@/components/primitives/scrollable-table";
 import { useAuth } from "@/hooks/use-auth";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
@@ -369,8 +370,8 @@ function TeamAccessPage() {
                 </div>
               ) : null}
 
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[640px] text-left text-sm">
+              <ScrollableTable cardRows>
+                <table className="milon-data-table w-full min-w-[640px] text-left text-sm">
                   <thead className="text-[10px] uppercase tracking-[0.14em] text-slate-500">
                     <tr>
                       <th className="pb-2 pr-3 font-semibold">Client</th>
@@ -388,17 +389,19 @@ function TeamAccessPage() {
                       return rows.map(({ c: client, m, a }) => (
                         <tr key={`${client.id}-${m.userId}`} className="border-t border-slate-800">
                           <td className="py-2 pr-3">{client.name}</td>
-                          <td className="py-2 pr-3 text-slate-300">{m.name}</td>
-                          <td className="py-2 pr-3 text-slate-400">
+                          <td data-label="Person" className="py-2 pr-3 text-slate-300">
+                            {m.name}
+                          </td>
+                          <td data-label="Class" className="py-2 pr-3 text-slate-400">
                             {a ? CLASSIFICATION_LABELS[a.classification] : "—"}
                           </td>
-                          <td className="py-2 pr-3 text-xs text-slate-400">
+                          <td data-label="Status" className="py-2 pr-3 text-xs text-slate-400">
                             {a?.status}
                             {a?.status === "pending"
                               ? ` · acct ${a.accountantApproved ? "yes" : "no"} · owner ${a.ownerApproved ? "yes" : "no"}`
                               : ""}
                           </td>
-                          <td className="py-2 text-right">
+                          <td data-label="" className="py-2 text-right">
                             {board.canManage && a && (a.status === "active" || a.status === "pending") ? (
                               <button
                                 type="button"
@@ -420,7 +423,7 @@ function TeamAccessPage() {
                     })}
                   </tbody>
                 </table>
-              </div>
+              </ScrollableTable>
             </section>
           </>
         ) : null}
