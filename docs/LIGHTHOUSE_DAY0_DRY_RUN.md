@@ -99,7 +99,7 @@ During dry-run, **every other address fails closed** at send time.
 | `accountant_v1` sequence | **DB seed** | Applied via migration; 5 steps with `asset_fallback` on steps 2–3 |
 | Opt-out | **Code + DB** | Per-lead `optout_token`; RFC 8058 headers at send; routes `/unsubscribe`, `/lh/unsubscribe` |
 | `asset_fallback` | **Code + DB** | Drafter uses `[asset, asset_fallback]` via `firstReadyAsset()` — only `status=ready` assets link |
-| Teaser videos | **Ready** | `teaser_owner` → `https://youtu.be/k3aRM4toTvU`; `teaser_accountant` → `https://youtu.be/J4vJki7HcIs`. Day 3 drafts gift **both** links (persona-first order). Day 0 has no video. |
+| Teaser videos | **Ready** | `teaser_owner` → `https://youtu.be/k3aRM4toTvU`; `teaser_accountant` → `https://youtu.be/J4vJki7HcIs`. Both wired on `accountant_v1` and `owner_v1` step 2; sequence goal says gift **both** on Day 3. Day 0 has no video. |
 | Assets default | **Manual — Theo** | Non-teaser slots (case study, 3-min demo) may still be `in_progress`; flip to **ready** in `/ops` → Assets after reading copy |
 | One-pager PDFs | **Ready** | `/lighthouse/milon-one-pager-accountants.pdf` and `/lighthouse/milon-one-pager-owners.pdf` — each includes both teaser URLs in the video strip |
 | Owner gate | **Env** | `MILON_OWNER_EMAILS` + passphrase; not auth/#140 |

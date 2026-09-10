@@ -40,7 +40,7 @@ ON CONFLICT (key) DO UPDATE SET
   used_in = EXCLUDED.used_in,
   updated_at = now();
 
--- Day-3 touch: persona-primary teaser + the other as fallback (drafter gifts both when ready).
+-- Day-3 touch: persona-primary teaser + cross-persona fallback; step goal instructs both links.
 UPDATE public.lighthouse_sequences
 SET steps = '[
   {"step":1,"day":0,"angle":"observation","goal":"Open with one specific, true observation about their business and a single soft CTA.","max_words":90,"cta":"reply_interest","asset":null,"asset_fallback":null},

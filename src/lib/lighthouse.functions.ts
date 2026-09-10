@@ -348,31 +348,6 @@ async function firstReadyAsset(
   return null;
 }
 
-/** Return every ready asset from `keys`, preserving caller order and skipping dupes. */
-async function readyAssets(
-  admin: ReturnType<typeof adminLoose>,
-  keys: Array<string | null>,
-): Promise<AssetLike[]> {
-  const wanted = [...new Set(keys.filter((k): k is string => Boolean(k)))];
-  if (!wanted.length) return [];
-
-  const { data } = await admin
-    .from("lighthouse_assets")
-    .select("key, title, url, status")
-    .in("key", wanted);
-  const rows = (data ?? []) as Array<Record<string, unknown>>;
-
-  const out: AssetLike[] = [];
-  for (const key of wanted) {
-    const row = rows.find((r) => String(r.key) === key);
-    const url = String(row?.url ?? "").trim();
-    if (row && row.status === "ready" && url) {
-      out.push({ key, title: String(row.title ?? key), url: absoluteUrl(url) });
-    }
-  }
-  return out;
-}
-
 /**
  * Optional calendar URL. Used only when a reply is drafted with the "book"
  * intent. Cold outreach never mentions it — the default sales motion is email.
@@ -858,29 +833,15 @@ export const draftLighthouseTouch = createServerFn({ method: "POST" })
         ? "The recipient runs or works in an accounting/advisory practice in South Africa. Their pain is advisory work that does not scale across a client book, and clients who only hear from them at year-end."
         : "The recipient owns a South African small or medium business. Their pain is not knowing their real cash runway or which lever to pull next, and only seeing numbers months late.";
 
-    const teaserOrder =
-      persona === "accountant"
-        ? ["teaser_accountant", "teaser_owner"]
-        : ["teaser_owner", "teaser_accountant"];
-    const readyTeasers = await readyAssets(admin, [
-      step.asset,
-      step.asset_fallback ?? null,
-      ...teaserOrder,
-    ]);
-    const watchCtaBrief =
-      readyTeasers.length >= 2
-        ? `Gift both 60-second Milōn teasers — lead with the ${persona}-facing one, then the other. Put each link on its own line:\n${readyTeasers.map((t) => `- ${t.title}: ${t.url}`).join("\n")}`
-        : readyTeasers.length === 1
-          ? `Point to exactly this link and nothing else: ${readyTeasers[0].url}`
-          : "The videos are not produced yet, so describe the insight in one sentence instead of linking to anything.";
-
     const ctaBrief =
       step.cta === "start_trial"
         ? `Ask them to start the free ${trialDays}-day trial using exactly this link: ${trialLink ?? "(link pending)"}`
         : step.cta === "reply_interest"
           ? "Ask for a one-word reply only. Do not include any link."
           : step.cta === "watch_60s" || step.cta === "watch_walkthrough"
-            ? watchCtaBrief
+            ? assetUrl
+              ? `Point to exactly this link and nothing else: ${assetUrl}`
+              : "The video is not produced yet, so describe the insight in one sentence instead of linking to anything."
             : step.cta === "read_case"
               ? assetUrl
                 ? `Point to exactly this link and nothing else: ${assetUrl}`
