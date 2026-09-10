@@ -70,9 +70,9 @@
   background: var(--brand-surface, var(--card, var(--milon-surface)));
   backdrop-filter: blur(8px);
   transition:
-    border-color 0.3s,
-    transform 0.3s cubic-bezier(0.22, 0.9, 0.24, 1),
-    box-shadow 0.3s;
+    border-color var(--brand-duration-slow),
+    transform var(--brand-duration-slow) var(--brand-ease),
+    box-shadow var(--brand-duration-slow);
 }
 
 .milon-section-card--pad {
@@ -173,7 +173,7 @@
   border: 2px solid color-mix(in srgb, var(--brand-gold-ui, var(--brand-gold, var(--gold))) 25%, transparent);
   border-top-color: var(--brand-gold-ui, var(--brand-gold, var(--gold, var(--milon-gold))));
   border-radius: 50%;
-  animation: milon-spin 0.75s linear infinite;
+  animation: milon-spin var(--brand-duration-slow) linear infinite;
 }
 
 @keyframes milon-spin {
@@ -197,8 +197,8 @@
 .milon-metric-tile--interactive {
   cursor: pointer;
   transition:
-    border-color 0.25s,
-    transform 0.25s cubic-bezier(0.22, 0.9, 0.24, 1);
+    border-color var(--brand-duration),
+    transform var(--brand-duration) var(--brand-ease);
 }
 
 .milon-metric-tile--interactive:hover {
@@ -343,8 +343,8 @@ html.dark .milon-status-pill--sample,
   padding: 20px 22px;
   background: var(--card);
   transition:
-    transform 0.3s cubic-bezier(0.22, 0.9, 0.24, 1),
-    border-color 0.3s;
+    transform var(--brand-duration-slow) var(--brand-ease),
+    border-color var(--brand-duration-slow);
 }
 
 .accountant-portal .milon-metric-tile--interactive:hover {

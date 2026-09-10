@@ -11,6 +11,7 @@
  * today — is the signature element and appears on every progress bar.
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { PanelSkeleton } from "@/components/primitives";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -852,11 +853,7 @@ export default function ActionPlanPanel({
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center gap-2 p-6 text-sm text-slate-500 dark:text-slate-400">
-        <Loader2 className="h-4 w-4 animate-spin" /> Loading action plan…
-      </div>
-    );
+    return <PanelSkeleton rows={5} className="mx-0 bg-transparent" />;
   }
   if (!plan) {
     if (!isOwner) {

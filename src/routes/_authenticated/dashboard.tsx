@@ -63,10 +63,12 @@ import {
   onboardingDone,
 } from "@/lib/onboarding";
 import {
+  DashboardSkeleton,
   EmptyState,
-  LoadingState,
   MetricTile,
   PageHeader,
+  SkeletonBlock,
+  SkeletonTile,
   StatusPill,
   statusPillFromHealth,
 } from "@/components/primitives";
@@ -1262,13 +1264,15 @@ function Dashboard() {
   if (!portalReady) {
     return (
       <div className="accountant-portal">
-        <LoadingState fullscreen message="Loading…" />
+        <div className="shell milon-page-enter">
+          <DashboardSkeleton className="min-h-screen py-8" />
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="accountant-portal">
+    <div className="accountant-portal milon-page-enter">
       <WalkthroughWizard
         variant="accountant-dashboard"
         ready={!loading && !brandLoading && !firstClientOpen && clientRows.length > 0}
@@ -1400,6 +1404,14 @@ function Dashboard() {
 
         {/* ===== STATS STRIP ===== */}
         <div className="stats-strip" id="wizard-practice-board">
+          {loading ? (
+            <>
+              {Array.from({ length: 4 }).map((_, i) => (
+                <SkeletonTile key={i} className="min-h-[108px]" />
+              ))}
+            </>
+          ) : (
+            <>
           <MetricTile
             label="Clients"
             icon={
@@ -1407,7 +1419,7 @@ function Dashboard() {
                 <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
               </svg>
             }
-            value={loading ? "—" : clientRows.length}
+            value={clientRows.length}
             footnote={
               <div className={addedThisMonth > 0 ? "up" : undefined}>
                 {addedThisMonth > 0 ? `+${addedThisMonth} this month` : "Active on platform"}
@@ -1429,7 +1441,7 @@ function Dashboard() {
             }
             value={
               <>
-                {loading || avgHealth == null ? "—" : avgHealth}
+                {avgHealth == null ? "—" : avgHealth}
                 {avgHealth != null && <small>/100</small>}
               </>
             }
@@ -1464,7 +1476,7 @@ function Dashboard() {
                 <path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0zM12 9v4M12 17h.01" />
               </svg>
             }
-            value={loading ? "—" : atRiskCount}
+            value={atRiskCount}
             valueClassName={atRiskCount ? "text-[var(--risk)]" : "text-[var(--ok)]"}
             footnote={
               <div className="warn">
@@ -1483,7 +1495,7 @@ function Dashboard() {
                 <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
               </svg>
             }
-            value={loading ? "—" : openActionsTotal}
+            value={openActionsTotal}
             footnote={
               actionsDueThisWeek > 0
                 ? `${actionsDueThisWeek} overdue — follow up`
@@ -1497,6 +1509,8 @@ function Dashboard() {
                 ?.scrollIntoView({ behavior: "smooth", block: "start" })
             }
           />
+            </>
+          )}
         </div>
 
         {/* ===== PORTFOLIO HEALTH + ATTENTION ===== */}
@@ -1661,7 +1675,7 @@ function Dashboard() {
         </div>
 
         {loading ? (
-          <LoadingState message="Loading clients…" className="!py-10" />
+          <SkeletonBlock className="h-72 w-full rounded-[20px]" aria-label="Loading clients" />
         ) : filteredRows.length === 0 ? (
           clientRows.length === 0 ? (
             <EmptyState

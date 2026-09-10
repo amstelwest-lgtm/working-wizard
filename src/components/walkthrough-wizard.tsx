@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { usePrefersReducedMotion } from "@/hooks/use-prefers-reduced-motion";
 import {
   ACCOUNTANT_CLIENT_EMPTY_TOUR_KEY,
   ACCOUNTANT_CLIENT_TOUR_KEY,
@@ -340,7 +341,7 @@ function cardLayoutForSpot(spot: Spot | null, cardH: number): { top: number; max
   return { top, maxHeight };
 }
 
-function scrollTargetAwayFromCard(el: Element, cardH: number) {
+function scrollTargetAwayFromCard(el: Element, cardH: number, reduceMotion = false) {
   const r = el.getBoundingClientRect();
   const vh = window.innerHeight;
   const room = Math.min(Math.max(cardH, 200) + CARD_GAP + 16, vh * 0.46);
@@ -348,7 +349,7 @@ function scrollTargetAwayFromCard(el: Element, cardH: number) {
   const desiredTop = Math.max(56, Math.min(vh * 0.14, vh - room - Math.min(r.height, vh * 0.4)));
   const delta = r.top - desiredTop;
   if (Math.abs(delta) > 20) {
-    window.scrollBy({ top: delta, behavior: "smooth" });
+    window.scrollBy({ top: delta, behavior: reduceMotion ? "auto" : "smooth" });
   }
 }
 
@@ -377,6 +378,10 @@ export function WalkthroughWizard({
 
   const STEPS = stepsFor(variant);
   const storageKey = storageKeyFor(variant);
+  const reduceMotion = usePrefersReducedMotion();
+  const motionTransition = reduceMotion
+    ? "none"
+    : "top var(--brand-duration) var(--brand-ease), left var(--brand-duration) var(--brand-ease), width var(--brand-duration) var(--brand-ease), height var(--brand-duration) var(--brand-ease), border-radius var(--brand-duration) var(--brand-ease)";
 
   const [visible, setVisible] = useState(false);
   const [step, setStep] = useState(0);
@@ -484,7 +489,7 @@ export function WalkthroughWizard({
       prevTargetRef.current = s.targetId;
 
       const cardH = cardRef.current?.offsetHeight || CARD_APPROX_H;
-      scrollTargetAwayFromCard(el, cardH);
+      scrollTargetAwayFromCard(el, cardH, reduceMotion);
 
       const paint = () => {
         if (cancelled || activeElRef.current !== el) return;
@@ -628,8 +633,7 @@ export function WalkthroughWizard({
             outlineOffset: 2,
             zIndex: 8001,
             pointerEvents: "none",
-            transition:
-              "top 220ms ease, left 220ms ease, width 220ms ease, height 220ms ease, border-radius 220ms ease",
+            transition: motionTransition,
           }}
         />
       )}
@@ -647,7 +651,9 @@ export function WalkthroughWizard({
           pointerEvents: "all",
           maxHeight: cardMaxH,
           overflowY: "auto",
-          transition: "top 220ms ease, max-height 220ms ease",
+          transition: reduceMotion
+            ? "none"
+            : "top var(--brand-duration) var(--brand-ease), max-height var(--brand-duration) var(--brand-ease)",
         }}
       >
         <div
@@ -704,7 +710,7 @@ export function WalkthroughWizard({
                   borderRadius: 2,
                   background: i <= step ? sectionColor : "#1e293b",
                   opacity: i < step ? 0.45 : 1,
-                  transition: "background 250ms",
+                  transition: reduceMotion ? "none" : "background var(--brand-duration) var(--brand-ease)",
                 }}
               />
             ))}

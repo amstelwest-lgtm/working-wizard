@@ -116,7 +116,7 @@ import { upsertCurrentPeriodSnapshot } from "@/lib/financial-snapshots";
 import { stampFromSignoff } from "@/lib/review-signoff-stamp";
 import {
   EmptyState,
-  LoadingState,
+  ClientWorkspaceSkeleton,
   SectionCard,
   StatusPill,
   statusPillFromHealth,
@@ -1406,11 +1406,7 @@ function ClientView() {
   // ── Loading / error states ────────────────────────────────────────────────
 
   if (loading) {
-    return (
-      <div className="accountant-portal">
-        <LoadingState fullscreen message="Loading client…" />
-      </div>
-    );
+    return <ClientWorkspaceSkeleton className="min-h-screen" />;
   }
 
   if (!client) {
@@ -1438,7 +1434,7 @@ function ClientView() {
       selection={parseMarketSelection(client.market) ?? coerceMarketSelection(client.market)}
     >
       <FinancialInputsContext.Provider value={financialInputsCtxValue}>
-        <div className="accountant-portal">
+        <div className="accountant-portal milon-page-enter">
           {/* Two honest steps while the client has no figures; the full studio
               tour runs once a real score exists, so "Start with Ask AI" and
               the seeded budget are never promised over an empty book. */}

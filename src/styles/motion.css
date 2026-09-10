@@ -1,0 +1,110 @@
+/*
+ * UX PR4 — shared motion tokens, skeleton shimmer, page enter, reduced motion.
+ * Uses --brand-* tokens only; landing.css stays frozen.
+ */
+
+:root {
+  --brand-duration-fast: 150ms;
+  --brand-duration: 250ms;
+  --brand-duration-slow: 400ms;
+  --brand-ease: cubic-bezier(0.22, 0.9, 0.24, 1);
+}
+
+/* ── Skeleton shimmer ───────────────────────────────────────────────────── */
+
+.milon-skeleton {
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--brand-border, var(--milon-border)) 55%, transparent);
+  position: relative;
+  overflow: hidden;
+}
+
+.milon-skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in srgb, var(--brand-surface, var(--milon-surface)) 90%, white 10%) 45%,
+    transparent 100%
+  );
+  transform: translateX(-100%);
+  animation: milon-skeleton-shimmer var(--brand-duration-slow) var(--brand-ease) infinite;
+}
+
+@keyframes milon-skeleton-shimmer {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+.milon-skeleton--circle {
+  border-radius: 50%;
+}
+
+.milon-skeleton--tile {
+  border-radius: 18px;
+  min-height: 96px;
+}
+
+.milon-skeleton-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--milon-space-3, 0.75rem);
+}
+
+.milon-skeleton-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--milon-space-3, 0.75rem);
+}
+
+/* ── Page enter fade ────────────────────────────────────────────────────── */
+
+.milon-page-enter {
+  animation: milon-page-enter var(--brand-duration-slow) var(--brand-ease) both;
+}
+
+@keyframes milon-page-enter {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* ── Portal reduced motion (walkthrough + sphere surfaces) ────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  .milon-page-enter {
+    animation: none;
+  }
+
+  .milon-skeleton::after {
+    animation: none;
+    opacity: 0.35;
+  }
+
+  .wizard-highlight:not(.health-orb) {
+    animation: none !important;
+  }
+
+  .wizard-spotlight,
+  .wizard-spotlight + div[style*="transition"] {
+    transition: none !important;
+  }
+
+  .sphere-orb,
+  .health-orb,
+  .sphere-reduced-motion * {
+    transition-duration: 0.01ms !important;
+    animation: none !important;
+  }
+
+  .sphere-reduced-motion .group-hover\:left-full {
+    opacity: 0 !important;
+  }
+}
