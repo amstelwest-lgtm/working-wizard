@@ -43,6 +43,7 @@ import {
   parseClaudeDeliverablePayload,
   parseDraftSubjectBody,
 } from "../src/lib/client-brain-deliverable";
+import { assertBrainDeliverableResponse } from "../src/lib/brain-deliverable-client";
 import { emptyProductMix } from "../src/lib/product-mix";
 import { emptyWeeklyInputs } from "../src/lib/weekly-inputs";
 import type { ClientOperatingProfile } from "../src/lib/client-profile";
@@ -126,6 +127,25 @@ assert(panelSrc.includes("Business map"), "business-map stubs");
 assert(panelSrc.includes("Outstanding questions"), "shared questions queue");
 assert(!panelSrc.includes("Acme Corp"), "no fake competitor filler");
 assert(!panelSrc.includes("example.com"), "no fake placeholder URLs");
+
+let stubErr: Error | null = null;
+try {
+  assertBrainDeliverableResponse({ smoke: "smoke-bdd" });
+} catch (e) {
+  stubErr = e as Error;
+}
+assert(Boolean(stubErr?.message.includes("smoke stub")), "smoke-bdd stub is rejected");
+
+let emptyErr: Error | null = null;
+try {
+  assertBrainDeliverableResponse({});
+} catch (e) {
+  emptyErr = e as Error;
+}
+assert(Boolean(emptyErr?.message.includes("unexpected response")), "empty 200 body is rejected");
+
+assertBrainDeliverableResponse({ draftInserted: false, skippedReason: "ai_not_configured" });
+assertBrainDeliverableResponse({ draftInserted: true });
 
 assert(parseBrainSummary(null) === null, "empty summary");
 assert(parseBrainSummary("  hello  ")?.body === "hello", "string summary");
@@ -361,18 +381,20 @@ assert(appSrc.includes("OwnerBrainDrip"), "owner-facing drip shell");
 assert(appSrc.includes('id="ask-ai-overview"'), "owner Ask AI mount unchanged");
 
 const draftFnSrc = readFileSync(resolve("supabase/functions/brain-deliverable-draft/index.ts"), "utf8");
-const draftLogicSrc = readFileSync(resolve("supabase/functions/brain-deliverable-draft/logic.ts"), "utf8");
 const draftPanelSrc = readFileSync(resolve("src/components/client-brain-drafts.tsx"), "utf8");
 const configSrc = readFileSync(resolve("supabase/config.toml"), "utf8");
-assert(draftFnSrc.includes('from "../ask-ai/anthropic.ts"'), "deliverable fn reuses ask-ai Claude wrapper");
+assert(draftFnSrc.includes("@supabase/supabase-js@2.49.1"), "deliverable fn pins createClient for deploy");
+assert(draftFnSrc.includes("callClaude"), "deliverable fn inlines Claude draft");
 assert(draftFnSrc.includes("ask_ai_record_request"), "deliverable fn reuses ask-ai rate limit");
 assert(draftFnSrc.includes("has_client_access"), "deliverable fn uses same access check");
 assert(draftFnSrc.includes('status: "draft"'), "inserts deliverable_drafts as draft");
+assert(draftFnSrc.includes("draftInserted"), "returns draftInserted contract");
 assert(draftFnSrc.includes("assumption_checklist"), "writes explicit assumptions list");
 assert(!draftFnSrc.includes('status: "sent"'), "edge function never writes sent");
 assert(!draftFnSrc.includes('status: "ready"'), "edge function never writes ready");
 assert(!draftFnSrc.toLowerCase().includes("stripe"), "deliverable fn has no Stripe");
-assert(draftLogicSrc.includes("similar"), "idempotent similar-open skip");
+assert(draftFnSrc.includes("bodiesSimilar"), "idempotent similar-open skip inlined");
+assert(!draftFnSrc.includes('from "./logic.ts"'), "deploy bundle is self-contained");
 assert(configSrc.includes("[functions.brain-deliverable-draft]"), "function is registered");
 assert(draftPanelSrc.includes("Mark ready"), "accountant can mark ready");
 assert(draftPanelSrc.includes("Discard"), "accountant can discard");

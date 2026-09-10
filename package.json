@@ -36,6 +36,7 @@
     "test:lighthouse-it": "vite-node --config scripts/vite-test.config.ts scripts/lighthouse-it-test.mts",
     "test:practice-access": "vite-node --config scripts/vite-test.config.ts scripts/practice-access-test.mts",
     "test:lighthouse-access": "vite-node --config scripts/vite-test.config.ts scripts/lighthouse-access-test.mts",
+    "test:lighthouse-send-allowlist": "vite-node --config scripts/vite-test.config.ts scripts/lighthouse-send-allowlist-test.mts",
     "test:orb-contrast": "vite-node --config scripts/vite-test.config.ts scripts/orb-contrast-test.mts",
     "test:review-signoff": "vite-node --config scripts/vite-test.config.ts scripts/review-signoff-test.mts",
     "test:client-invite-email": "vite-node --config scripts/vite-test.config.ts scripts/client-invite-email-test.mts",
@@ -48,11 +49,12 @@
     "test:staged-upload": "vite-node --config scripts/vite-test.config.ts scripts/staged-upload-test.mts",
     "test:ci": "node scripts/run-ci-tests.mjs",
     "test:google-auth": "vite-node --config scripts/vite-test.config.ts scripts/google-auth-test.mts",
-    "test:tab-auth": "vite-node --config scripts/vite-test.config.ts scripts/tab-auth-test.mts",
+    "test:auth-reliability": "vite-node --config scripts/vite-test.config.ts scripts/auth-reliability-test.mts",
     "test:legal-notices": "vite-node --config scripts/vite-test.config.ts scripts/legal-notices-test.mts",
     "test:market": "vite-node --config scripts/vite-test.config.ts scripts/market-kernel-test.mts",
     "test:client-brain": "vite-node --config scripts/vite-test.config.ts scripts/client-brain-summary-test.mts",
-    "test:milon-bot": "vite-node --config scripts/vite-test.config.ts scripts/milon-bot-test.mts"
+    "test:milon-bot": "vite-node --config scripts/vite-test.config.ts scripts/milon-bot-test.mts",
+    "test:edge-no-smoke-stubs": "vite-node --config scripts/vite-test.config.ts scripts/edge-no-smoke-stubs-test.mts"
   },
   "dependencies": {
     "@cloudflare/vite-plugin": "^1.25.5",

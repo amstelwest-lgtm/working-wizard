@@ -19,6 +19,7 @@ import {
   Users,
   Wallet,
   Activity,
+  Target,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import {
@@ -38,6 +39,7 @@ import { LighthousePanel, parseLighthouseTab } from "@/components/lighthouse-pan
 import { LighthouseItPanel } from "@/components/lighthouse-it";
 import { LighthouseAccessPanel } from "@/components/lighthouse-access";
 import { LighthouseUsagePanel } from "@/components/lighthouse-usage";
+import { FunnelHealthPanel } from "@/components/funnel-health-panel";
 import { LIGHTHOUSE_IT_INBOX_PATH } from "@/lib/client-note-link";
 import "@/styles/ops-console.css";
 
@@ -587,6 +589,13 @@ function OwnerOpsPage() {
                 {dash.migrationHint}
               </div>
             )}
+
+            <section className="mb-8">
+              <h2 className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-[var(--ops-ink-dim)]">
+                <Target className="h-3.5 w-3.5 text-[var(--ops-amber)]" /> Funnel health
+              </h2>
+              <FunnelHealthPanel />
+            </section>
 
             <section className="mb-8">
               <h2 className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-[var(--ops-ink-dim)]">

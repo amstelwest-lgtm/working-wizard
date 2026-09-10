@@ -16,7 +16,9 @@ import {
   moneyZar,
   opsPassphrase,
   type AuthCtx,
+  type LooseAdmin,
 } from "@/lib/owner-ops.guard";
+import { lighthouseSendAllowlistEnforced } from "@/lib/lighthouse-send-allowlist";
 
 export { OPS_UNLOCK_KEY } from "@/lib/owner-ops.guard";
 
@@ -79,6 +81,108 @@ export const getOwnerOpsEnvStatus = createServerFn({ method: "GET" })
       resend: Boolean(process.env.RESEND_API_KEY),
       resendWebhook: Boolean(process.env.RESEND_WEBHOOK_SECRET),
       siteUrl: Boolean(process.env.SITE_URL || process.env.VITE_APP_URL),
+    };
+  });
+
+const FUNNEL_EVENT_KEYS = [
+  "owner.invite.redeemed",
+  "seat.accepted",
+  "brain.proposed",
+  "brain.step.approved",
+  "report.sent",
+] as const;
+
+export type FunnelEventKey = (typeof FUNNEL_EVENT_KEYS)[number];
+
+export type FunnelHealthReport = {
+  windowDays: number;
+  counts: Record<FunnelEventKey, number>;
+  preflight: {
+    lighthouseDryRunOrAllowlist: boolean;
+    resendApiKey: boolean;
+    resendFromEmail: boolean;
+    resendWebhookSecret: boolean;
+    siteUrl: boolean;
+  };
+  migrationHint: string | null;
+};
+
+type AnalyticsRpcAdmin = LooseAdmin & {
+  rpc: (
+    fn: string,
+    args?: Record<string, unknown>,
+  ) => Promise<{ data: unknown; error: { message: string } | null }>;
+};
+
+function funnelCountsRpcMissing(message: string): boolean {
+  return (
+    missingRelation(message) ||
+    /invalid schema/i.test(message) ||
+    /42883|does not exist/i.test(message) ||
+    /analytics_client_brain_funnel_counts/i.test(message)
+  );
+}
+
+const FUNNEL_COUNTS_HINT =
+  "Paste `supabase/migrations/20260910160000_analytics_client_brain_funnel_counts.sql` in the Supabase SQL editor to enable funnel counts.";
+
+function emptyFunnelCounts(): Record<FunnelEventKey, number> {
+  return {
+    "owner.invite.redeemed": 0,
+    "seat.accepted": 0,
+    "brain.proposed": 0,
+    "brain.step.approved": 0,
+    "report.sent": 0,
+  };
+}
+
+/** Owner-only: design-partner funnel counts + Lighthouse dry-run preflight (presence only). */
+export const getFunnelHealth = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }): Promise<FunnelHealthReport> => {
+    await assertPlatformOwner(context as AuthCtx);
+
+    const preflight = {
+      lighthouseDryRunOrAllowlist: lighthouseSendAllowlistEnforced(),
+      resendApiKey: Boolean(process.env.RESEND_API_KEY?.trim()),
+      resendFromEmail: Boolean(process.env.RESEND_FROM_EMAIL?.trim()),
+      resendWebhookSecret: Boolean(process.env.RESEND_WEBHOOK_SECRET?.trim()),
+      siteUrl: Boolean(process.env.SITE_URL?.trim() || process.env.VITE_APP_URL?.trim()),
+    };
+
+    const admin = adminLoose() as AnalyticsRpcAdmin;
+    const { data, error } = await admin.rpc("analytics_client_brain_funnel_counts", {
+      p_days: 7,
+    });
+
+    if (error) {
+      if (funnelCountsRpcMissing(error.message)) {
+        return {
+          windowDays: 7,
+          counts: emptyFunnelCounts(),
+          preflight,
+          migrationHint: FUNNEL_COUNTS_HINT,
+        };
+      }
+      throw new Error(error.message);
+    }
+
+    const bag = data && typeof data === "object" && !Array.isArray(data) ? (data as Record<string, unknown>) : {};
+    const rawCounts =
+      bag.counts && typeof bag.counts === "object" && !Array.isArray(bag.counts)
+        ? (bag.counts as Record<string, unknown>)
+        : {};
+    const counts = emptyFunnelCounts();
+    for (const key of FUNNEL_EVENT_KEYS) {
+      const n = Number(rawCounts[key] ?? 0);
+      counts[key] = Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0;
+    }
+
+    return {
+      windowDays: Number(bag.window_days ?? 7) || 7,
+      counts,
+      preflight,
+      migrationHint: null,
     };
   });
 

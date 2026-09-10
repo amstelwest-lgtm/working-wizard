@@ -90,4 +90,26 @@ const ingest = readFileSync(resolve("src/lib/product-usage.functions.ts"), "utf8
 assert(ingest.includes("analytics_track"), "dual-run writes analytics_track");
 assert(ingest.includes("mapUsageEventToSpine"), "uses the mapping helper");
 
+const brainFunnel = readFileSync(
+  resolve("supabase/migrations/20260910140000_analytics_client_brain_funnel.sql"),
+  "utf8",
+);
+assert(brainFunnel.includes("'brain.proposed'"), "brain quality proxy event");
+assert(brainFunnel.includes("'brain.step.approved'"), "propose-yes event");
+assert(brainFunnel.includes("proposed_next_steps"), "trigger on proposed_next_steps");
+assert(!isClientWritableEventKey("brain.proposed"), "brain.proposed is server-only");
+assert(!isClientWritableEventKey("brain.step.approved"), "brain.step.approved is server-only");
+
+const funnelCounts = readFileSync(
+  resolve("supabase/migrations/20260910160000_analytics_client_brain_funnel_counts.sql"),
+  "utf8",
+);
+assert(funnelCounts.includes("analytics_client_brain_funnel_counts"), "funnel counts RPC exists");
+assert(funnelCounts.includes("'owner.invite.redeemed'"), "funnel counts include invite redeemed");
+assert(funnelCounts.includes("'report.sent'"), "funnel counts include report.sent");
+
+const funnelHealthPanel = readFileSync(resolve("src/components/funnel-health-panel.tsx"), "utf8");
+assert(funnelHealthPanel.includes("getFunnelHealth"), "funnel health panel uses server fn");
+assert(funnelHealthPanel.includes("Presence only"), "preflight never exposes values");
+
 console.log("analytics-events-test: ok");
