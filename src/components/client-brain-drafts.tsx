@@ -197,7 +197,7 @@ export function ClientBrainDrafts({
           ) : null}
         </p>
       ) : (
-        <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 14 }}>
+        <ul className="brain-list gap-lg">
           {drafts.map((draft) => {
             const items = parseAssumptionChecklist(draft.assumption_checklist);
             const parsed = parseDraftSubjectBody(draft.body);
@@ -205,22 +205,10 @@ export function ClientBrainDrafts({
             const long = body.length > 420 && !expanded[draft.id];
             const editable = canEditAssumptions(draft.status);
             return (
-              <li
-                key={draft.id}
-                style={{ border: "1px solid var(--line-soft)", borderRadius: 14, padding: 14 }}
-              >
-                <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+              <li key={draft.id} className="card-inner">
+                <div className="brain-item-head">
                   <strong>{draftKindLabel(draft.kind)}</strong>
-                  <span
-                    style={{
-                      fontSize: 11,
-                      letterSpacing: "0.12em",
-                      textTransform: "uppercase",
-                      color: "var(--gold)",
-                    }}
-                  >
-                    {draftStatusLabel(draft.status)}
-                  </span>
+                  <span className="status-tag gold">{draftStatusLabel(draft.status)}</span>
                 </div>
                 {parsed.subject && (
                   <div style={{ fontSize: 13.5, marginTop: 6, fontWeight: 600 }}>{parsed.subject}</div>
@@ -304,7 +292,7 @@ export function ClientBrainDrafts({
                   </p>
                 )}
                 {(canMarkReady(draft.status) || canSend(draft.status) || canDiscard(draft.status)) && (
-                  <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+                  <div className="brain-actions">
                     {canMarkReady(draft.status) && (
                       <button
                         type="button"
