@@ -62,6 +62,26 @@ function normalizeUrl(raw: unknown): string | null {
   }
 }
 
+/** Section/homepage dumps — not specific articles. Falls back to headline search. */
+const GENERIC_NEWS_URL = [
+  /businesslive\.co\.za\/bd\/economy\/?$/i,
+  /businesslive\.co\.za\/bd\/companies\/[^/?#]+\/?$/i,
+  /moneyweb\.co\.za\/?$/i,
+  /news24\.com\/business\/?$/i,
+  /resbank\.co\.za\/?$/i,
+  /engineeringnews\.co\.za\/?$/i,
+  /freightnews\.co\.za\/?$/i,
+  /tourismupdate\.co\.za\/?$/i,
+  /reuters\.com\/business\/?$/i,
+];
+
+function sanitizeNewsUrl(raw: unknown): string | null {
+  const url = normalizeUrl(raw);
+  if (!url) return null;
+  if (GENERIC_NEWS_URL.some((pattern) => pattern.test(url))) return null;
+  return url;
+}
+
 /** Prefer a real URL; otherwise a Google News search for the headline. */
 export function resolveNewsUrl(
   item: Pick<NewsItem, "headline" | "url">,
@@ -85,7 +105,7 @@ function normalizeItems(raw: unknown): NewsItem[] {
         summary: summary.slice(0, 280),
         tag: String(o.tag ?? "Watch this").slice(0, 40),
         tagColor: normalizeTagColor(o.tagColor),
-        url: normalizeUrl(o.url),
+        url: sanitizeNewsUrl(o.url),
       } satisfies NewsItem;
     })
     .filter((x): x is NewsItem => Boolean(x))
@@ -122,7 +142,6 @@ function adaptPulseForMarket(
   market: ResolvedMarket,
 ): IndustryPulsePayload {
   if (market.copyPack !== "us") return payload;
-  const usHome = "https://www.reuters.com/business/";
   return {
     ...payload,
     headline: localizeCopy(payload.headline, market),
@@ -140,8 +159,10 @@ function adaptPulseForMarket(
         item.tag === "Rand" || item.tag === "Power" || item.tag === "Labour" ? "Costs" : item.tag,
       url:
         item.url &&
-        /businesslive\.co\.za|moneyweb\.co\.za|news24\.com|resbank\.co\.za/i.test(item.url)
-          ? usHome
+        /businesslive\.co\.za|moneyweb\.co\.za|news24\.com|resbank\.co\.za|engineeringnews\.co\.za|freightnews\.co\.za|tourismupdate\.co\.za/i.test(
+          item.url,
+        )
+          ? null
           : item.url,
     })),
   };
@@ -180,28 +201,28 @@ export function fallbackIndustryPulse(
       ],
       items: [
         {
-          headline: "Rand weakness lifts import and shipping costs for SA retailers",
+          headline: "Weaker rand still pushes up producer and import costs",
           summary:
-            "Weaker currency and higher courier rates are squeezing shelf margins on imported goods.",
+            "BusinessLive reports rand weakness feeds through to factory-gate prices, raising shelf costs on imported stock.",
           tag: "Costs",
           tagColor: "red",
-          url: "https://www.businesslive.co.za/bd/economy/",
+          url: "https://www.businesslive.co.za/bd/economy/2018-10-25-struggling-rand-means-producer-inflation-could-well-spike/",
         },
         {
-          headline: "Card fees and backup-power bills keep rising for stores",
+          headline: "Small retailers face rising backup-power and equipment costs",
           summary:
-            "Payment charges and generator/inverter spend are showing up as a bigger share of monthly costs.",
+            "Moneyweb profiles salons and food shops spending tens of thousands on inverters and generators to stay open.",
           tag: "Costs",
           tagColor: "amber",
-          url: "https://www.moneyweb.co.za/",
+          url: "https://www.moneyweb.co.za/news/south-africa/load-shedding-is-not-normal/",
         },
         {
-          headline: "Shoppers reward same-day and next-day fulfilment",
+          headline: "Last-mile delivery costs run far above global averages",
           summary:
-            "Retail surveys show faster delivery is winning repeat purchases even when prices are similar.",
+            "News24 reports crime, fuel and poor roads push SA courier costs 50–100% above global norms.",
           tag: "Demand",
           tagColor: "green",
-          url: "https://www.news24.com/business",
+          url: "https://www.news24.com/citypress/news/crime-makes-delivery-of-online-purchases-more-expensive-20241103",
         },
       ],
       source: "fallback",
@@ -220,28 +241,28 @@ export function fallbackIndustryPulse(
       ],
       items: [
         {
-          headline: "Contractors report longer payment holds on completed work",
+          headline: "Government late payments top R12.4bn, Business Partners warns",
           summary:
-            "Retention and late certificates are stretching cash cycles across residential and commercial jobs.",
+            "Engineering News cites Treasury data showing 95,000+ invoices over 30 days unpaid, threatening contractor cash flow.",
           tag: "Payments",
           tagColor: "red",
-          url: "https://www.engineeringnews.co.za/",
+          url: "https://www.engineeringnews.co.za/article/late-payment-crisis-detrimental-to-smes-business-partners-says-2026-03-11",
         },
         {
-          headline: "Steel and cement prices remain volatile month to month",
+          headline: "Producer inflation quickens as fuel and steel inputs rise",
           summary:
-            "Builders say quote validity windows are shortening as material input costs keep swinging.",
+            "BusinessLive notes March PPI hit 6.2% as Brent oil and a weaker rand lifted construction input costs.",
           tag: "Costs",
           tagColor: "amber",
-          url: "https://www.businesslive.co.za/bd/companies/industrials/",
+          url: "https://www.businesslive.co.za/bd/economy/2019-04-25-producer-inflation-climbs-above-6-in-march/",
         },
         {
-          headline: "Private tender volumes soften while public works stay patchy",
+          headline: "Construction leaders warn stalled public spend is starving pipeline",
           summary:
-            "New private project starts are quieter; public pipelines remain uneven by province and sector.",
+            "Engineering News veterans say under-spent infrastructure budgets and procurement delays leave fewer new jobs.",
           tag: "Demand",
           tagColor: "blue",
-          url: "https://www.news24.com/business",
+          url: "https://www.engineeringnews.co.za/article/the-south-african-construction-industry-didnt-collapse-it-was-allowed-to-fail-2026-02-23",
         },
       ],
       source: "fallback",
@@ -255,28 +276,28 @@ export function fallbackIndustryPulse(
       ],
       items: [
         {
-          headline: "Midweek covers soften while weekend bookings hold",
+          headline: "Restaurants struggle to pass rising food and energy costs",
           summary:
-            "Restaurants and venues report a sharper split between busy weekends and quieter weekdays.",
+            "News24 reports menu prices are highly visible, so operators absorb inflation on food, wages and logistics.",
           tag: "Demand",
           tagColor: "amber",
-          url: "https://www.tourismupdate.co.za/",
+          url: "https://www.news24.com/brandstory/partner-content/the-new-economics-of-eating-out-20260623-0854",
         },
         {
-          headline: "Food inflation and backup power lift break-even covers",
+          headline: "Small food businesses say rent hikes are blocking expansion",
           summary:
-            "Higher ingredient prices plus generator costs mean more seats must sell before a shift turns a profit.",
+            "News24 vendors report Cape Town monthly rents of R40k–R70k make scaling sit-down restaurants unaffordable.",
           tag: "Costs",
           tagColor: "red",
-          url: "https://www.businesslive.co.za/bd/economy/",
+          url: "https://www.news24.com/southafrica/news/rising-cape-town-rentals-creating-a-pressure-cooker-for-small-food-businesses-vendors-say-20260821-1067",
         },
         {
-          headline: "Events and functions still book earlier with deposits",
+          headline: "Restaurant groups warn tax and supplier hikes threaten viability",
           summary:
-            "Operators say larger bookings are more reliable when deposits are taken at confirmation.",
+            "Moneyweb quotes hospitality leaders saying beer makes up to 70% of beverage sales and rising excise hurts margins.",
           tag: "Payments",
           tagColor: "green",
-          url: "https://www.news24.com/business",
+          url: "https://www.moneyweb.co.za/in-depth/south-african-breweries/balancing-the-tax-bottle-rethinking-sas-beer-taxation/",
         },
       ],
       source: "fallback",
@@ -290,28 +311,28 @@ export function fallbackIndustryPulse(
       ],
       items: [
         {
-          headline: "Factories report cash tied up in slow-moving stock",
+          headline: "Energy tariffs now the main cost risk for SA manufacturers",
           summary:
-            "Inventory days are stretching as buyers order smaller batches and delay restocks.",
+            "Moneyweb reports executives say escalating electricity prices threaten local plants' global competitiveness.",
           tag: "Cash",
           tagColor: "amber",
-          url: "https://www.engineeringnews.co.za/",
+          url: "https://www.moneyweb.co.za/news/economy/is-sa-pricing-itself-out-of-global-manufacturing-markets-because-of-energy-costs/",
         },
         {
-          headline: "Load-shedding still raises unit cost on local production runs",
+          headline: "Load-shedding disruptions still lift unit costs at SA factories",
           summary:
-            "Interrupted shifts and backup-power spend continue to push cost per unit higher for many plants.",
+            "Moneyweb notes plants using heavy machinery face long outages that cut output and raise cost per unit.",
           tag: "Costs",
           tagColor: "red",
-          url: "https://www.businesslive.co.za/bd/economy/",
+          url: "https://www.moneyweb.co.za/in-depth/nedbank-manufacturing/how-sa-manufacturers-are-handling-the-load-shedding-disruptions/",
         },
         {
-          headline: "Export orders soften as global buyers delay shipments",
+          headline: "Four in 10 small manufacturers doubt 12-month survival",
           summary:
-            "Manufacturers say overseas demand is patchy, with longer gaps between confirmed orders.",
+            "Moneyweb cites an Absa-backed survey flagging liquidity gaps, late payments and patchy demand as top pressures.",
           tag: "Demand",
           tagColor: "blue",
-          url: "https://www.moneyweb.co.za/",
+          url: "https://www.moneyweb.co.za/news/south-africa/four-in-10-south-africa-small-firms-to-last-a-year-survey-finds/",
         },
       ],
       source: "fallback",
@@ -325,28 +346,28 @@ export function fallbackIndustryPulse(
       ],
       items: [
         {
-          headline: "Diesel prices keep freight margins under pressure",
+          headline: "Fuel price swings still dominate haulage contract margins",
           summary:
-            "Fuel remains the swing cost on thin haulage contracts, especially on longer corridors.",
+            "News24 tracks wholesale diesel near R18–20/litre in 2024, keeping fuel the swing cost on thin freight deals.",
           tag: "Costs",
           tagColor: "red",
-          url: "https://www.freightnews.co.za/",
+          url: "https://www.news24.com/business/economy/confirmed-large-petrol-diesel-cuts-on-wednesday-20240930",
         },
         {
-          headline: "Shippers take longer to settle freight invoices",
+          headline: "Carriers wait 60 days while freight costs hit in real time",
           summary:
-            "Carriers report slower payment from mid-size accounts as clients stretch working capital.",
+            "Moneyweb lenders say logistics SMEs fund customer orders upfront while invoice payments arrive weeks later.",
           tag: "Payments",
           tagColor: "amber",
-          url: "https://www.businesslive.co.za/bd/economy/",
+          url: "https://www.moneyweb.co.za/in-depth/merchant-west/the-challenges-for-smes-seeking-working-capital/",
         },
         {
-          headline: "Backhaul demand stays uneven across main SA routes",
+          headline: "Security and empty return trips inflate last-mile delivery costs",
           summary:
-            "Empty return trips remain common where inbound and outbound volumes don’t match.",
+            "News24 reports hijacking risk and route rework push SA courier costs well above global averages.",
           tag: "Demand",
           tagColor: "blue",
-          url: "https://www.moneyweb.co.za/",
+          url: "https://www.news24.com/citypress/news/crime-makes-delivery-of-online-purchases-more-expensive-20241103",
         },
       ],
       source: "fallback",
@@ -365,28 +386,28 @@ export function fallbackIndustryPulse(
       ],
       items: [
         {
-          headline: "SA buyers stretch software renewal and upgrade cycles",
+          headline: "SaaS CFOs stretch renewals when cash-flow visibility is weak",
           summary:
-            "Procurement teams are delaying non-critical SaaS renewals and asking for longer proof periods.",
+            "Moneyweb notes cloud accounting vendors see buyers delaying non-critical renewals and proof periods.",
           tag: "Demand",
           tagColor: "amber",
-          url: "https://www.businesslive.co.za/bd/companies/telecoms-and-technology/",
+          url: "https://www.moneyweb.co.za/in-depth/sage/cash-flow-visibility-rather-than-cash-flow-is-the-key-to-business-success/",
         },
         {
-          headline: "Dollar-priced cloud costs squeeze local software margins",
+          headline: "Weaker rand lifts dollar-denominated cloud and licence costs",
           summary:
-            "Hosting and tooling billed in USD continue to rise relative to rand subscription revenue.",
+            "BusinessLive explains imported inputs priced in USD keep rising in rand terms, squeezing local software margins.",
           tag: "Costs",
           tagColor: "red",
-          url: "https://www.moneyweb.co.za/",
+          url: "https://www.businesslive.co.za/bd/national/health/2017-04-12-weak-rand-expected-to-push-up-prices-of-medicine/",
         },
         {
-          headline: "Starter packages and annual prepay still close faster",
+          headline: "Subscription cloud models replace heavy upfront licence spend",
           summary:
-            "Vendors report simpler entry plans and prepaid annual deals converting better than large custom quotes.",
+            "Moneyweb says pay-as-you-go SaaS lets smaller firms scale capacity without large hardware capex.",
           tag: "Sales",
           tagColor: "green",
-          url: "https://www.news24.com/business",
+          url: "https://www.moneyweb.co.za/news/tech/cloud-solutions-increase-business-efficiencies-in-the-new-normal/",
         },
       ],
       source: "fallback",
@@ -410,28 +431,28 @@ export function fallbackIndustryPulse(
       ],
       items: [
         {
-          headline: "Professional-services invoices settle more slowly across SA",
+          headline: "Government late payments top R12.4bn, Business Partners warns",
           summary:
-            "Agencies and consultancies report longer average days-to-pay as clients stretch supplier terms.",
+            "Engineering News cites Treasury data showing 95,000+ invoices over 30 days unpaid, hitting agency cash flow.",
           tag: "Payments",
           tagColor: "red",
-          url: "https://www.businesslive.co.za/bd/economy/",
+          url: "https://www.engineeringnews.co.za/article/late-payment-crisis-detrimental-to-smes-business-partners-says-2026-03-11",
         },
         {
-          headline: "Clients push back on fees while still expanding project scope",
+          headline: "Four in 10 small service firms doubt 12-month survival",
           summary:
-            "Firms say briefs grow mid-engagement even as rate increases meet tougher resistance.",
+            "Moneyweb cites an Absa-backed survey where cost and liquidity pressures top the list for professional SMEs.",
           tag: "Fees",
           tagColor: "amber",
-          url: "https://www.moneyweb.co.za/",
+          url: "https://www.moneyweb.co.za/news/south-africa/four-in-10-south-africa-small-firms-to-last-a-year-survey-finds/",
         },
         {
-          headline: "Specialist and outcome-based offers hold price better",
+          headline: "Small Business Institute calls for action on late payments",
           summary:
-            "Niche packages with clear deliverables are outperforming open-ended generalist retainers on fee defence.",
+            "Moneyweb reports the SBI wants faster dispute resolution as 90-day terms leave owners funding client work.",
           tag: "Demand",
           tagColor: "green",
-          url: "https://www.news24.com/business",
+          url: "https://www.moneyweb.co.za/moneyweb-radio/safm-market-update/call-for-action-on-late-payments-by-the-state/",
         },
       ],
       source: "fallback",
@@ -445,28 +466,28 @@ export function fallbackIndustryPulse(
       ],
       items: [
         {
-          headline: "SA SMEs report customers taking longer to pay",
+          headline: "Four in 10 SA small firms doubt they can last a year",
           summary:
-            "Late settlement remains a top cash-flow complaint for smaller firms across most sectors.",
+            "Moneyweb reports an Absa-backed survey where late client payments and liquidity gaps remain the top constraint.",
           tag: "Payments",
           tagColor: "red",
-          url: "https://www.businesslive.co.za/bd/economy/",
+          url: "https://www.moneyweb.co.za/news/south-africa/four-in-10-south-africa-small-firms-to-last-a-year-survey-finds/",
         },
         {
-          headline: "Borrowing costs stay elevated for small firms",
+          headline: "SMEs face a R550bn working-capital funding gap",
           summary:
-            "Bank funding remains expensive, so many owners lean harder on customer collections than new debt.",
+            "Moneyweb lenders say many viable smaller firms still cannot qualify for bank finance and rely on invoice discounting.",
           tag: "Finance",
           tagColor: "amber",
-          url: "https://www.resbank.co.za/",
+          url: "https://www.moneyweb.co.za/in-depth/merchant-west/the-challenges-for-smes-seeking-working-capital/",
         },
         {
-          headline: "Demand holds, but margins stay under cost pressure",
+          headline: "Energy tariffs now the main cost risk for SA businesses",
           summary:
-            "Sales volumes are steadier than profits as fuel, power, and input costs keep eating margin.",
+            "Moneyweb reports rising electricity prices are eroding margins even where sales volumes hold steady.",
           tag: "Costs",
           tagColor: "blue",
-          url: "https://www.moneyweb.co.za/",
+          url: "https://www.moneyweb.co.za/news/economy/is-sa-pricing-itself-out-of-global-manufacturing-markets-because-of-energy-costs/",
         },
       ],
       source: "fallback",

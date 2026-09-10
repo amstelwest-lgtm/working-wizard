@@ -44,6 +44,18 @@ for (const industry of sectors) {
     );
     const href = resolveNewsUrl(item);
     assert(href.startsWith("http"), `${industry}: bad news url`);
+    if (item.url) {
+      assert(
+        !/\/(economy|business)\/?$/.test(item.url) &&
+          !/moneyweb\.co\.za\/?$/.test(item.url) &&
+          !/resbank\.co\.za\/?$/.test(item.url) &&
+          !/engineeringnews\.co\.za\/?$/.test(item.url) &&
+          !/reuters\.com\/business\/?$/.test(item.url),
+        `${industry}: generic homepage url (${item.url})`,
+      );
+      const path = new URL(item.url).pathname.replace(/\/+$/, "");
+      assert(path.split("/").filter(Boolean).length >= 2, `${industry}: url looks like a homepage (${item.url})`);
+    }
   }
 }
 
