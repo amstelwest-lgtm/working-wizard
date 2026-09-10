@@ -21,6 +21,7 @@ import {
   Target,
 } from "lucide-react";
 import { BackLink } from "@/components/back-link";
+import { ScrollableTable } from "@/components/primitives/scrollable-table";
 import { useAuth } from "@/hooks/use-auth";
 import {
   OPS_UNLOCK_KEY,
@@ -746,8 +747,11 @@ function OwnerOpsPage() {
                 />
               </form>
 
-              <div className="mt-4 overflow-x-auto rounded-2xl border border-[var(--ops-line)]">
-                <table className="w-full min-w-[560px] text-left text-sm">
+              <ScrollableTable
+                cardRows
+                className="mt-4 rounded-2xl border border-[var(--ops-line)]"
+              >
+                <table className="milon-data-table w-full min-w-[560px] text-left text-sm">
                   <thead className="bg-[var(--ops-card)] text-[10px] uppercase tracking-[0.16em] text-[var(--ops-ink-dim)]">
                     <tr>
                       <th className="px-3 py-2">Date</th>
@@ -774,22 +778,27 @@ function OwnerOpsPage() {
                           <td className="px-3 py-2 tabular-nums text-[var(--ops-ink-soft)]">
                             {p.paidAt}
                           </td>
-                          <td className="px-3 py-2 font-semibold text-[var(--ops-amber)]">
+                          <td
+                            data-label="Amount"
+                            className="px-3 py-2 font-semibold text-[var(--ops-amber)]"
+                          >
                             {p.amountLabel}
                           </td>
-                          <td className="px-3 py-2 text-[var(--ops-ink-soft)]">
+                          <td data-label="Payer" className="px-3 py-2 text-[var(--ops-ink-soft)]">
                             {p.payerLabel ?? "—"}
                           </td>
-                          <td className="px-3 py-2 text-[var(--ops-ink-dim)]">
+                          <td data-label="Plan" className="px-3 py-2 text-[var(--ops-ink-dim)]">
                             {p.planCode ?? "—"}
                           </td>
-                          <td className="px-3 py-2 text-[var(--ops-ink-dim)]">{p.status}</td>
+                          <td data-label="Status" className="px-3 py-2 text-[var(--ops-ink-dim)]">
+                            {p.status}
+                          </td>
                         </tr>
                       ))
                     )}
                   </tbody>
                 </table>
-              </div>
+              </ScrollableTable>
             </section>
 
             <section className="mb-10 rounded-2xl border border-[var(--ops-line)] bg-[var(--ops-card)] p-5">

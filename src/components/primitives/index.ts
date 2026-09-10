@@ -1,3 +1,4 @@
+export { ScrollableTable, type ScrollableTableProps } from "./scrollable-table";
 export { PageHeader, type PageHeaderProps } from "./page-header";
 export { SectionCard, type SectionCardProps } from "./section-card";
 export { EmptyState, type EmptyStateProps } from "./empty-state";

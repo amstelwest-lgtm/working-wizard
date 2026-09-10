@@ -513,6 +513,27 @@ html.dark .accountant-portal #wizard-action-plan{
 @media(max-width:480px){
   .accountant-portal .debt-line{grid-template-columns:1fr}
   .accountant-portal .hide-xs{display:none}
+  .accountant-portal .topbar{
+    display:grid;
+    grid-template-columns:minmax(0,1fr) auto;
+    grid-template-areas:"brand menu""firm menu""actions actions";
+    align-items:center;
+    gap:6px 10px;
+  }
+  .accountant-portal .topbar .brand{grid-area:brand;min-width:0}
+  .accountant-portal .topbar .firm-chip,.accountant-portal .topbar .firm-switcher{
+    grid-area:firm;max-width:100%;min-width:0;justify-self:start
+  }
+  .accountant-portal .topbar-menu-btn{grid-area:menu;margin-left:0;align-self:center}
+  .accountant-portal .topbar-actions{grid-area:actions;width:100%}
+}
+
+@media(max-width:375px){
+  .accountant-portal .topbar .brand{font-size:12px;letter-spacing:.18em}
+  .accountant-portal .topbar .firm-chip,.accountant-portal .topbar .firm-switcher{
+    font-size:10px;padding:3px 8px
+  }
+  .accountant-portal .topbar-menu-btn{width:36px;height:36px}
 }
 
 @media (prefers-reduced-motion:reduce){.accountant-portal *{transition-duration:.01ms!important;animation-duration:.01ms!important}}

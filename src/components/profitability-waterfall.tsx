@@ -16,6 +16,7 @@ import {
   warnIfPdfArchiveFailed,
 } from "@/lib/advisory-deliveries";
 import type { ReportSignoffStamp } from "@/components/pdf/pdf-document";
+import { ScrollableTable } from "@/components/primitives/scrollable-table";
 
 export type { WaterfallFallback };
 
@@ -290,10 +291,7 @@ export function ProfitabilityWaterfall({
           )}
 
           {/* ── Waterfall chart ── */}
-          <p className="mb-1 text-right text-[10px] text-slate-500 sm:hidden dark:text-slate-400">
-            Swipe to see the whole waterfall →
-          </p>
-          <div className="w-full overflow-x-auto pb-1 [mask-image:linear-gradient(90deg,#000_calc(100%-28px),transparent)] sm:[mask-image:none]">
+          <ScrollableTable hint="Swipe to see the whole waterfall →" className="pb-1">
             <div className="relative min-w-[560px]" style={{ height: CHART_H + 88 + LABEL_PAD }}>
               {/* horizontal grid lines */}
               {[0, 0.25, 0.5, 0.75, 1].map((p) => (
@@ -421,7 +419,7 @@ export function ProfitabilityWaterfall({
                 })}
               </div>
             </div>
-          </div>
+          </ScrollableTable>
 
           {/* legend */}
           <div className="mt-4 flex flex-wrap items-center justify-center gap-x-5 gap-y-1.5 border-t border-amber-900/10 pt-3 dark:border-slate-800">

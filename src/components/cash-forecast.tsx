@@ -53,6 +53,7 @@ import {
   computeIsStale,
 } from "@/components/review-signoff";
 import { CashFromBanksDrafter } from "@/components/cash-from-banks-drafter";
+import { ScrollableTable } from "@/components/primitives/scrollable-table";
 import type {
   CashForecastPublishPayload,
   CashFromBanksDraftResult,
@@ -1367,11 +1368,8 @@ export function CashForecastPanel({
         title="Weekly Detail"
         subtitle="Full line-by-line forecast · red = shortfall, act early"
       >
-        <div className="overflow-x-auto">
-          <p className="mb-2 text-[10px] font-medium uppercase tracking-wider text-slate-400 sm:hidden">
-            Swipe sideways to see weeks →
-          </p>
-          <table className="w-full min-w-[900px] text-xs">
+        <ScrollableTable hint="Swipe sideways to see weeks →">
+          <table className="milon-data-table w-full min-w-[900px] text-xs">
             <thead>
               <tr className="border-b border-amber-900/15 text-slate-500 dark:border-slate-700 dark:text-slate-400">
                 <th className="sticky left-0 bg-[#fdfaf3] px-2 py-2 text-left dark:bg-[#101827]">
@@ -1464,7 +1462,7 @@ export function CashForecastPanel({
               </tr>
             </tbody>
           </table>
-        </div>
+        </ScrollableTable>
       </SectionCard>
 
       {/* Setup + inputs */}
