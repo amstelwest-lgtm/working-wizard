@@ -6,8 +6,8 @@ import { useServerFn } from "@tanstack/react-start";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { BackLink } from "@/components/back-link";
 import {
-  ArrowLeft,
   Upload,
   Loader2,
   Building2,
@@ -3539,12 +3539,12 @@ function Index() {
                     (audited — changes save to this client)
                   </span>
                 </div>
-                <button
+                <BackLink
                   onClick={exitImpersonation}
-                  className="inline-flex items-center gap-1 rounded-md border border-amber-400/40 bg-amber-500/20 px-2 py-1 text-amber-50 hover:bg-amber-500/30"
+                  className="rounded-md border border-amber-400/40 bg-amber-500/20 px-2 py-1 text-amber-50 hover:bg-amber-500/30 hover:text-amber-50"
                 >
-                  <ArrowLeft className="h-3 w-3" /> Exit to firm dashboard
-                </button>
+                  Back to firm dashboard
+                </BackLink>
               </div>
             </div>
           )}

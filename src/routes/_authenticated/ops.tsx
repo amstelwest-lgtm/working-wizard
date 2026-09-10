@@ -8,7 +8,6 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import {
-  ArrowLeft,
   FlaskConical,
   Loader2,
   Lock,
@@ -21,6 +20,7 @@ import {
   Activity,
   Target,
 } from "lucide-react";
+import { BackLink } from "@/components/back-link";
 import { useAuth } from "@/hooks/use-auth";
 import {
   OPS_UNLOCK_KEY,
@@ -275,18 +275,18 @@ function OwnerOpsPage() {
             open the Milōn IT section.
           </p>
           <div className="mt-5 flex flex-wrap gap-2">
-            <Link
+            <BackLink
               to="/dashboard"
-              className="inline-flex items-center gap-2 rounded-full border border-[var(--ops-line)] px-4 py-2 text-xs font-semibold uppercase tracking-wider text-[var(--ops-ink-dim)] hover:text-[var(--ops-ink-soft)]"
+              className="rounded-full border border-[var(--ops-line)] px-4 py-2 uppercase tracking-wider text-[var(--ops-ink-dim)] hover:text-[var(--ops-ink-soft)]"
             >
-              <ArrowLeft className="h-3.5 w-3.5" /> Firm dashboard
-            </Link>
-            <Link
+              Back to firm dashboard
+            </BackLink>
+            <BackLink
               to="/app"
-              className="inline-flex items-center gap-2 rounded-full border border-[var(--ops-line)] px-4 py-2 text-xs font-semibold uppercase tracking-wider text-[var(--ops-ink-dim)] hover:text-[var(--ops-ink-soft)]"
+              className="rounded-full border border-[var(--ops-line)] px-4 py-2 uppercase tracking-wider text-[var(--ops-ink-dim)] hover:text-[var(--ops-ink-soft)]"
             >
-              Business board
-            </Link>
+              Back to board
+            </BackLink>
           </div>
         </div>
       </div>
@@ -336,12 +336,12 @@ function OwnerOpsPage() {
             </button>
           </form>
           <div className="mt-5 flex flex-wrap gap-2">
-            <Link
+            <BackLink
               to="/app"
-              className="inline-flex items-center gap-2 rounded-full border border-[var(--ops-line)] px-4 py-2 text-xs font-semibold uppercase tracking-wider text-[var(--ops-ink-dim)] hover:text-[var(--ops-ink-soft)]"
+              className="rounded-full border border-[var(--ops-line)] px-4 py-2 uppercase tracking-wider text-[var(--ops-ink-dim)] hover:text-[var(--ops-ink-soft)]"
             >
-              <ArrowLeft className="h-3.5 w-3.5" /> Back to app
-            </Link>
+              Back to app
+            </BackLink>
           </div>
         </div>
       </div>

@@ -14,6 +14,7 @@
  *         --milon-gold, --milon-gold-deep, --milon-gold-bright,
  *         --milon-border, --milon-border-soft, --milon-glass, --milon-surface,
  *         --milon-risk, --milon-warn, --milon-ok
+ * Brand:  --brand-* aliases (PR1) — same computed values, no palette shift
  * Type:   --milon-text-xs … --milon-text-xl  (6 steps)
  * Space:  --milon-space-1 (4px) … --milon-space-8 (64px)
  *
@@ -60,6 +61,31 @@
   --milon-space-6: 2rem;      /* 32px */
   --milon-space-7: 3rem;      /* 48px */
   --milon-space-8: 4rem;      /* 64px */
+
+  /*
+   * Brand aliases (PR1) — semantic names for gradual migration.
+   * Map to --milon-* / landing values exactly; no perceived color change.
+   */
+  --brand-bg: var(--milon-bg);
+  --brand-bg-elevated: var(--milon-bg-elevated);
+  --brand-bg-surface: var(--milon-bg-surface);
+  --brand-ink: var(--milon-ink);
+  --brand-ink-muted: var(--milon-ink-muted);
+  --brand-ink-faint: var(--milon-ink-faint);
+  --brand-gold: var(--milon-gold);
+  --brand-gold-deep: var(--milon-gold-deep);
+  --brand-gold-bright: var(--milon-gold-bright);
+  --brand-border: var(--milon-border);
+  --brand-border-soft: var(--milon-border-soft);
+  --brand-glass: var(--milon-glass);
+  --brand-surface: var(--milon-surface);
+  --brand-risk: var(--milon-risk);
+  --brand-warn: var(--milon-warn);
+  --brand-ok: var(--milon-ok);
+  /* Owner-app UI gold — preserved exact hex (header, CTAs); not landing --gold */
+  --brand-gold-ui: #d4a550;
+  --brand-gold-accent: #c9962b;
+  --brand-focus-ring: color-mix(in srgb, var(--brand-gold-ui) 40%, transparent);
 }
 
 /* Light brand surface — opt-in via data-theme (landing, accountant-portal) */
@@ -170,6 +196,14 @@ html, body { font-family: var(--font-sans); font-feature-settings: "tnum", "ss01
   --spacing-milon-6: var(--milon-space-6);
   --spacing-milon-7: var(--milon-space-7);
   --spacing-milon-8: var(--milon-space-8);
+
+  /* Brand aliases → Tailwind utilities (PR1) */
+  --color-brand-bg: var(--brand-bg);
+  --color-brand-gold: var(--brand-gold);
+  --color-brand-gold-ui: var(--brand-gold-ui);
+  --color-brand-gold-accent: var(--brand-gold-accent);
+  --color-brand-ink: var(--brand-ink);
+  --color-brand-ink-muted: var(--brand-ink-muted);
 }
 
 :root {
@@ -336,7 +370,7 @@ html:not(.dark) [data-state="active"].data-\[state\=active\]\:text-slate-950 {
  * modern blue, modern green, and modern red across the dashboard.
  * ===================================================================== */
 :root {
-  --accent-gold: #c9962b;
+  --accent-gold: var(--brand-gold-accent);
   --accent-blue: #2563eb;
   --accent-green: #10b981;
   --accent-red: #ef4444;

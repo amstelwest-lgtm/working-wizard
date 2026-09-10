@@ -60,9 +60,9 @@ export function PDFDocument({
       <Document
         title={title}
         subject={subject}
-        author={accountantProfile.firmName || "Milon"}
-        creator="Milon"
-        producer="Milon PDF Engine"
+        author={accountantProfile.firmName || "Milōn"}
+        creator="Milōn"
+        producer="Milōn PDF Engine"
       >
         <Page
           size="A4"

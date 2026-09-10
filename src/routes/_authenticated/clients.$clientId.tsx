@@ -1,4 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { BackLink } from "@/components/back-link";
 import { openPracticeSettings } from "@/lib/user-roles";
 import { useEffect, useRef, useState, useCallback, useMemo, Suspense } from "react";
 import { lazyPanel, TabErrorBoundary } from "@/components/lazy-panel";
@@ -1418,9 +1419,9 @@ function ClientView() {
           <p style={{ color: "var(--ink-dim)", marginBottom: 16 }}>
             Client not found or you don't have access.
           </p>
-          <button className="btn ghost" onClick={() => navigate({ to: "/dashboard" })}>
+          <BackLink variant="portal" onClick={() => navigate({ to: "/dashboard" })}>
             Back to dashboard
-          </button>
+          </BackLink>
         </div>
       </div>
     );
