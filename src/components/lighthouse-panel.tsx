@@ -218,7 +218,9 @@ export function LighthousePanel({ initialTab }: { initialTab?: LighthouseTab }) 
       </div>
 
       {/* Capability warnings — honest about what is wired */}
-      {(!dash.capability.aiConfigured || !dash.capability.emailConfigured) && (
+      {(!dash.capability.aiConfigured ||
+        !dash.capability.emailConfigured ||
+        dash.capability.sendAllowlistEnforced) && (
         <div className="mb-4 flex flex-wrap gap-2 text-[11px]">
           {!dash.capability.aiConfigured && (
             <span className="rounded-full border border-[var(--ops-amber-border)] px-3 py-1 text-[var(--ops-amber)]">
@@ -228,6 +230,12 @@ export function LighthousePanel({ initialTab }: { initialTab?: LighthouseTab }) 
           {!dash.capability.emailConfigured && (
             <span className="rounded-full border border-[var(--ops-amber-border)] px-3 py-1 text-[var(--ops-amber)]">
               RESEND_API_KEY missing — sending is off, drafts still save
+            </span>
+          )}
+          {dash.capability.sendAllowlistEnforced && (
+            <span className="rounded-full border border-[var(--ops-amber-border)] px-3 py-1 text-[var(--ops-amber)]">
+              Dry-run allowlist on — Send now only hits {dash.capability.sendAllowlist.length}{" "}
+              test inbox{dash.capability.sendAllowlist.length === 1 ? "" : "es"}
             </span>
           )}
         </div>
