@@ -88,7 +88,8 @@ export function MilonBotPanel({
         e.preventDefault();
         void send(input);
       }}
-      style={{ display: "flex", gap: 8, marginTop: 10 }}
+      className={surface === "portal" ? "brain-form" : undefined}
+      style={surface === "board" ? { display: "flex", gap: 8, marginTop: 10 } : undefined}
     >
       <input
         value={input}
@@ -96,20 +97,10 @@ export function MilonBotPanel({
         disabled={busy}
         placeholder="Ask the worker bee…"
         aria-label="Message the Milōn bot"
-        className={surface === "board" ? "min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-900" : undefined}
-        style={
-          surface === "portal"
-            ? {
-                flex: 1,
-                minWidth: 0,
-                border: "1px solid var(--line)",
-                background: "var(--bg-2)",
-                color: "var(--ink)",
-                borderRadius: 8,
-                padding: "7px 10px",
-                fontSize: 13,
-              }
-            : undefined
+        className={
+          surface === "board"
+            ? "min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-900"
+            : "brain-input"
         }
       />
       <button
@@ -128,14 +119,7 @@ export function MilonBotPanel({
         Worker bee on this client. Ask AI stays for numbers questions. Empty stays empty.
       </p>
       {lines.length > 0 && (
-        <div
-          className={surface === "board" ? "mt-2 max-h-52 space-y-2 overflow-y-auto text-sm" : undefined}
-          style={
-            surface === "portal"
-              ? { marginTop: 10, maxHeight: 220, overflowY: "auto", display: "grid", gap: 8 }
-              : undefined
-          }
-        >
+        <div className={surface === "board" ? "mt-2 max-h-52 space-y-2 overflow-y-auto text-sm" : "brain-chat"}>
           {lines.map((line, i) => (
             <p
               key={`${line.role}-${i}`}
@@ -144,12 +128,7 @@ export function MilonBotPanel({
                   ? line.role === "user"
                     ? "text-slate-800 dark:text-slate-100"
                     : "text-slate-600 dark:text-slate-300"
-                  : undefined
-              }
-              style={
-                surface === "portal"
-                  ? { margin: 0, color: line.role === "user" ? "var(--ink)" : "var(--ink-dim)", fontSize: 13 }
-                  : undefined
+                  : `brain-chat-line${line.role === "user" ? " user" : ""}`
               }
             >
               <span style={{ fontWeight: 600 }}>{line.role === "user" ? "You · " : "Milōn · "}</span>
@@ -159,19 +138,19 @@ export function MilonBotPanel({
         </div>
       )}
       {toolHints.length > 0 && (
-        <p
-          className={surface === "board" ? "mt-1.5 text-[10px] uppercase tracking-[0.14em] text-[#b8860b]" : undefined}
-          style={surface === "portal" ? { marginTop: 8, fontSize: 10, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--gold)" } : undefined}
-        >
+        <p className={surface === "board" ? "mt-1.5 text-[10px] uppercase tracking-[0.14em] text-[#b8860b]" : "brain-hint"}>
           {toolHints.join(" · ")}
         </p>
       )}
       {error && (
-        <p className={surface === "board" ? "mt-1.5 text-xs text-red-600" : undefined} style={surface === "portal" ? { marginTop: 8, color: "var(--bad)", fontSize: 12 } : undefined}>
+        <p
+          className={surface === "board" ? "mt-1.5 text-xs text-red-600" : "brain-meta"}
+          style={surface === "portal" ? { color: "var(--risk)" } : undefined}
+        >
           {error}
         </p>
       )}
-      <div className={surface === "board" ? "mt-2 flex flex-wrap gap-1.5" : undefined} style={surface === "portal" ? { marginTop: 10, display: "flex", flexWrap: "wrap", gap: 6 } : undefined}>
+      <div className={surface === "board" ? "mt-2 flex flex-wrap gap-1.5" : "brain-chips"}>
         {chips.map((chip) => (
           <button
             key={chip}
@@ -215,7 +194,7 @@ export function MilonBotPanel({
   }
 
   return (
-    <div id="milon-bot-summary" className="card pad" style={{ marginBottom: 18 }}>
+    <div id="milon-bot-summary" className="card pad brain-hero">
       <span className="eyebrow">Milōn bot</span>
       <h3 className="h-sec" style={{ marginBottom: 4, fontSize: 18 }}>
         Worker bee · this client

@@ -92,14 +92,7 @@ function formatWhen(iso: string | null | undefined, fmt: (d: Date | string) => s
 
 function StatusDot({ answered }: { answered: boolean }) {
   return (
-    <span
-      style={{
-        fontSize: 10,
-        letterSpacing: "0.12em",
-        textTransform: "uppercase",
-        color: answered ? "var(--ok)" : "var(--ink-faint)",
-      }}
-    >
+    <span className={`status-tag ${answered ? "ok" : "faint"}`}>
       {answered ? "Answered" : "Empty"}
     </span>
   );
@@ -437,7 +430,7 @@ export function ClientBrainSummary({
 
   return (
     <div>
-      <div className="card hero-card pad" style={{ marginBottom: 20 }}>
+      <div className="card hero-card pad brain-hero">
         <span className="eyebrow">Client brain</span>
         <h2 className="h-sec" style={{ marginBottom: 6 }}>
           Summary · {clientName}
@@ -446,7 +439,7 @@ export function ClientBrainSummary({
           System of record. Propose from brain drafts next steps for Approve / Edit / Reject.
           Draft advisory from brain writes a pack with an assumptions list — never auto-sent.
         </p>
-        <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <div className="brain-actions">
           <button
             type="button"
             className="btn gold mini"
@@ -473,81 +466,40 @@ export function ClientBrainSummary({
           Loading summary…
         </div>
       ) : (
-        <div style={{ display: "grid", gap: 18 }}>
+        <div className="brain-stack">
           {/* 1. Profile strip */}
           <section className="card pad">
             <span className="eyebrow">Profile</span>
-            <div
-              style={{
-                display: "flex",
-                flexWrap: "wrap",
-                gap: 10,
-                marginBottom: 14,
-                alignItems: "baseline",
-              }}
-            >
-              <strong style={{ fontSize: 16 }}>
+            <div className="brain-profile">
+              <strong className="brain-profile-name">
                 {profileIndustryLabel(parsedProfile, businessType || "Profile not set")}
               </strong>
-              <span style={{ color: "var(--ink-dim)", fontSize: 13 }}>
-                {marketStripLabel(marketRaw)}
-              </span>
+              <span className="brain-profile-meta">{marketStripLabel(marketRaw)}</span>
               {profileNeedsCompletion(parsedProfile) && (
-                <span style={{ color: "var(--warn)", fontSize: 12 }}>Core profile only</span>
+                <span className="brain-profile-warn">Core profile only</span>
               )}
             </div>
-            <div
-              style={{
-                fontSize: 12,
-                letterSpacing: "0.1em",
-                textTransform: "uppercase",
-                color: "var(--ink-faint)",
-                marginBottom: 8,
-              }}
-            >
+            <span className="section-kicker">
               10 initial questions
               {parsedProfile?.depth === "core"
                 ? " · core 4 of 10"
                 : parsedProfile
                   ? " · full"
                   : ""}
-            </div>
-            <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 8 }}>
+            </span>
+            <ul className="brain-list">
               {profileQuestions.map((q) => (
-                <li
-                  key={q.key}
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "1fr auto",
-                    gap: 10,
-                    borderBottom: "1px solid var(--line-soft)",
-                    paddingBottom: 8,
-                  }}
-                >
+                <li key={q.key} className="brain-row">
                   <div>
-                    <div style={{ fontSize: 13.5 }}>{q.prompt}</div>
-                    {q.answered && q.answer ? (
-                      <div className="sub" style={{ fontSize: 12.5, margin: "2px 0 0" }}>
-                        {q.answer}
-                      </div>
-                    ) : (
-                      <div className="sub" style={{ fontSize: 12.5, margin: "2px 0 0" }}>
-                        Empty
-                      </div>
-                    )}
+                    <div className="brain-row-title">{q.prompt}</div>
+                    <div className="brain-row-meta">{q.answered && q.answer ? q.answer : "Empty"}</div>
                   </div>
                   <StatusDot answered={q.answered} />
                 </li>
               ))}
             </ul>
             {summary ? (
-              <div
-                style={{
-                  marginTop: 16,
-                  paddingTop: 14,
-                  borderTop: "1px solid var(--line-soft)",
-                }}
-              >
+              <div className="brain-divider">
                 <span className="eyebrow">Brain summary</span>
                 {summary.headline && (
                   <div style={{ fontWeight: 700, marginBottom: 6 }}>{summary.headline}</div>
@@ -561,7 +513,7 @@ export function ClientBrainSummary({
                   </ul>
                 )}
                 {brainSummaryUpdatedAt && (
-                  <div style={{ fontSize: 12, color: "var(--ink-faint)", marginTop: 8 }}>
+                  <div className="brain-meta">
                     Updated {formatWhen(brainSummaryUpdatedAt, dateTime)}
                   </div>
                 )}
@@ -576,36 +528,19 @@ export function ClientBrainSummary({
           {/* Product line questions */}
           <section className="card pad">
             <span className="eyebrow">Product line questions</span>
-            <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 8 }}>
+            <ul className="brain-list">
               {productQuestions.map((q) => (
-                <li
-                  key={q.key}
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "1fr auto",
-                    gap: 10,
-                    borderBottom: "1px solid var(--line-soft)",
-                    paddingBottom: 8,
-                  }}
-                >
+                <li key={q.key} className="brain-row">
                   <div>
-                    <div style={{ fontSize: 13.5 }}>{q.prompt}</div>
-                    {q.answered && q.answer ? (
-                      <div className="sub" style={{ fontSize: 12.5, margin: "2px 0 0" }}>
-                        {q.answer}
-                      </div>
-                    ) : (
-                      <div className="sub" style={{ fontSize: 12.5, margin: "2px 0 0" }}>
-                        Empty
-                      </div>
-                    )}
+                    <div className="brain-row-title">{q.prompt}</div>
+                    <div className="brain-row-meta">{q.answered && q.answer ? q.answer : "Empty"}</div>
                   </div>
                   <StatusDot answered={q.answered} />
                 </li>
               ))}
             </ul>
             {onOpenTab && (
-              <div style={{ marginTop: 12 }}>
+              <div className="brain-actions">
                 <button type="button" className="btn ghost mini" onClick={() => onOpenTab("profit")}>
                   Open Profit
                 </button>
@@ -617,12 +552,12 @@ export function ClientBrainSummary({
           <section className="card pad">
             <span className="eyebrow">Mini GAP report</span>
             {gapReport?.items.length ? (
-              <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 10 }}>
+              <ul className="brain-list gap-md">
                 {gapReport.items.map((item) => (
-                  <li key={item.key} style={{ borderBottom: "1px solid var(--line-soft)", paddingBottom: 10 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+                  <li key={item.key} className="brain-row-block">
+                    <div className="brain-item-head">
                       <strong>{item.title}</strong>
-                      <span style={{ fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--gold)" }}>
+                      <span className="status-tag gold">
                         {item.status === "signed_off" ? "Signed off" : "Draft"}
                         {item.severity ? ` · ${item.severity}` : ""}
                       </span>
@@ -651,9 +586,7 @@ export function ClientBrainSummary({
               </p>
             )}
             {gapReport?.updated_at && (
-              <div style={{ fontSize: 12, color: "var(--ink-faint)", marginTop: 8 }}>
-                Updated {formatWhen(gapReport.updated_at, dateTime)}
-              </div>
+              <div className="brain-meta">Updated {formatWhen(gapReport.updated_at, dateTime)}</div>
             )}
           </section>
 
@@ -661,19 +594,17 @@ export function ClientBrainSummary({
           <section className="card pad">
             <span className="eyebrow">Competitors</span>
             {competitors.length > 0 ? (
-              <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 10 }}>
+              <ul className="brain-list gap-md">
                 {competitors.map((c) => (
-                  <li key={c.name} style={{ borderBottom: "1px solid var(--line-soft)", paddingBottom: 10 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+                  <li key={c.name} className="brain-row-block">
+                    <div className="brain-item-head">
                       <strong>{c.name}</strong>
-                      <span style={{ fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--gold)" }}>
+                      <span className="status-tag gold">
                         {c.status === "signed_off" ? "Signed off" : "Draft"}
                       </span>
                     </div>
                     {c.threat && (
-                      <span style={{ fontSize: 12, color: "var(--ink-dim)" }}>
-                        Threat: {c.threat}
-                      </span>
+                      <span className="brain-row-meta">Threat: {c.threat}</span>
                     )}
                     {c.notes && (
                       <p className="sub" style={{ margin: "4px 0 0" }}>
@@ -703,25 +634,14 @@ export function ClientBrainSummary({
           {/* Business-map extras */}
           <section className="card pad">
             <span className="eyebrow">Business map</span>
-            <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 8 }}>
+            <ul className="brain-list">
               {BUSINESS_MAP_FIELDS.map((field) => {
                 const value = businessMap[field.key];
                 return (
-                  <li
-                    key={field.key}
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "1fr auto",
-                      gap: 10,
-                      borderBottom: "1px solid var(--line-soft)",
-                      paddingBottom: 8,
-                    }}
-                  >
+                  <li key={field.key} className="brain-row">
                     <div>
-                      <div style={{ fontSize: 13.5 }}>{field.label}</div>
-                      <div className="sub" style={{ fontSize: 12.5, margin: "2px 0 0" }}>
-                        {value || "Empty"}
-                      </div>
+                      <div className="brain-row-title">{field.label}</div>
+                      <div className="brain-row-meta">{value || "Empty"}</div>
                     </div>
                     <StatusDot answered={!!value} />
                   </li>
@@ -733,21 +653,13 @@ export function ClientBrainSummary({
           {/* Artifacts rail */}
           <section className="card pad">
             <span className="eyebrow">Artifacts</span>
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
-                gap: 12,
-              }}
-            >
-              <div style={{ border: "1px solid var(--line-soft)", borderRadius: 14, padding: 14 }}>
-                <div style={{ fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--gold)" }}>
-                  Latest snapshot
-                </div>
+            <div className="card-inner-grid">
+              <div className="card-inner">
+                <div className="mini-kicker">Latest snapshot</div>
                 {latestSnapshot ? (
                   <>
                     <div style={{ fontWeight: 600, marginTop: 6 }}>{latestSnapshot.period_label}</div>
-                    <div className="sub" style={{ fontSize: 12.5 }}>
+                    <div className="brain-row-meta">
                       {latestSnapshot.source} · {formatWhen(latestSnapshot.created_at, dateTime)}
                     </div>
                   </>
@@ -756,7 +668,7 @@ export function ClientBrainSummary({
                     No financial snapshot yet.
                   </p>
                 )}
-                <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <div className="brain-actions" style={{ marginTop: 10 }}>
                   {onOpenUpload && (
                     <button type="button" className="btn ghost mini" onClick={onOpenUpload}>
                       Upload / extract
@@ -770,16 +682,14 @@ export function ClientBrainSummary({
                 </div>
               </div>
 
-              <div style={{ border: "1px solid var(--line-soft)", borderRadius: 14, padding: 14 }}>
-                <div style={{ fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--gold)" }}>
-                  Budget
-                </div>
+              <div className="card-inner">
+                <div className="mini-kicker">Budget</div>
                 {budgetDoc ? (
                   <>
                     <div style={{ fontWeight: 600, marginTop: 6 }}>
                       {budgetFy ? `FY ${budgetFy}` : "Budget on file"}
                     </div>
-                    <div className="sub" style={{ fontSize: 12.5 }}>
+                    <div className="brain-row-meta">
                       {budgetLines} revenue line{budgetLines === 1 ? "" : "s"}
                       {budgetUpdatedAt ? ` · ${formatWhen(budgetUpdatedAt, dateTime)}` : ""}
                     </div>
@@ -790,7 +700,7 @@ export function ClientBrainSummary({
                   </p>
                 )}
                 {onOpenTab && (
-                  <div style={{ marginTop: 10 }}>
+                  <div className="brain-actions" style={{ marginTop: 10 }}>
                     <button type="button" className="btn ghost mini" onClick={() => onOpenTab("budget")}>
                       Open Budget
                     </button>
@@ -798,10 +708,8 @@ export function ClientBrainSummary({
                 )}
               </div>
 
-              <div style={{ border: "1px solid var(--line-soft)", borderRadius: 14, padding: 14 }}>
-                <div style={{ fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--gold)" }}>
-                  Recent uploads
-                </div>
+              <div className="card-inner">
+                <div className="mini-kicker">Recent uploads</div>
                 {uploadSnaps.length > 0 ? (
                   <ul style={{ margin: "8px 0 0", paddingLeft: 18, fontSize: 13.5 }}>
                     {uploadSnaps.map((s) => (
@@ -818,33 +726,25 @@ export function ClientBrainSummary({
               </div>
             </div>
 
-            <div style={{ marginTop: 16 }}>
-              <div style={{ fontSize: 12, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--ink-faint)" }}>
-                Artifact ledger
-              </div>
+            <div className="brain-divider">
+              <span className="section-kicker">Artifact ledger</span>
               {artifacts.length === 0 ? (
                 <p className="sub" style={{ margin: "8px 0 0" }}>
                   No rows in client_artifacts yet.
                 </p>
               ) : (
-                <ul style={{ listStyle: "none", margin: "10px 0 0", padding: 0, display: "grid", gap: 8 }}>
+                <ul className="brain-list" style={{ marginTop: 10 }}>
                   {artifacts.map((a) => (
                     <li
                       key={a.id}
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        gap: 12,
-                        fontSize: 13.5,
-                        borderBottom: "1px solid var(--line-soft)",
-                        paddingBottom: 8,
-                      }}
+                      className="brain-row-block"
+                      style={{ display: "flex", justifyContent: "space-between", gap: 12, fontSize: 13.5 }}
                     >
                       <span>
                         {artifactKindLabel(a.kind)}
                         {a.period_label ? ` · ${a.period_label}` : ""}
                       </span>
-                      <span style={{ color: "var(--ink-faint)", fontSize: 12 }}>
+                      <span className="brain-meta" style={{ marginTop: 0 }}>
                         {formatWhen(a.created_at, dateTime)}
                       </span>
                     </li>
@@ -862,11 +762,11 @@ export function ClientBrainSummary({
                 No context facts captured yet.
               </p>
             ) : (
-              <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 10 }}>
+              <ul className="brain-list gap-md">
                 {facts.map((f) => (
-                  <li key={f.id} style={{ borderBottom: "1px solid var(--line-soft)", paddingBottom: 10 }}>
-                    <div>{f.fact_text}</div>
-                    <div style={{ fontSize: 12, color: "var(--ink-faint)", marginTop: 4 }}>
+                  <li key={f.id} className="brain-row-block">
+                    <div className="brain-row-title">{f.fact_text}</div>
+                    <div className="brain-meta">
                       {factSourceLabel(f.source)}
                       {f.category ? ` · ${f.category}` : ""}
                       {f.confidence != null ? ` · ${Math.round(Number(f.confidence) * 100)}%` : ""}
@@ -885,21 +785,12 @@ export function ClientBrainSummary({
                 Queue is empty. Use Propose from brain, then Approve / Edit / Reject.
               </p>
             ) : (
-              <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 14 }}>
+              <ul className="brain-list gap-lg">
                 {steps.map((step) => (
-                  <li
-                    key={step.id}
-                    style={{
-                      border: "1px solid var(--line-soft)",
-                      borderRadius: 14,
-                      padding: 14,
-                    }}
-                  >
-                    <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+                  <li key={step.id} className="card-inner">
+                    <div className="brain-item-head">
                       <strong>{step.title}</strong>
-                      <span style={{ fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--gold)" }}>
-                        {nextStepStatusLabel(step.status)}
-                      </span>
+                      <span className="status-tag gold">{nextStepStatusLabel(step.status)}</span>
                     </div>
                     {step.rationale && (
                       <p className="sub" style={{ margin: "6px 0 0" }}>
@@ -907,14 +798,14 @@ export function ClientBrainSummary({
                       </p>
                     )}
                     {step.signed_off_by_name && step.signed_off_at && (
-                      <div style={{ fontSize: 12, color: "var(--ink-dim)", marginTop: 8 }}>
+                      <div className="brain-row-meta" style={{ marginTop: 8 }}>
                         {nextStepStatusLabel(step.status)} by {step.signed_off_by_name}
                         {step.firm_name ? ` · ${step.firm_name}` : ""} · {formatWhen(step.signed_off_at, dateTime)}
                         {step.note ? ` — “${step.note}”` : ""}
                       </div>
                     )}
                     {step.status === "proposed" && (
-                      <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+                      <div className="brain-actions">
                         <button type="button" className="btn gold mini" onClick={() => openStepDialog("approve", step)}>
                           Approve
                         </button>
@@ -946,22 +837,10 @@ export function ClientBrainSummary({
               Shared with the owner. One question is dripped at a time — no spam.
             </p>
             {drip && (
-              <div
-                style={{
-                  border: "1px solid var(--gold)",
-                  borderRadius: 14,
-                  padding: 14,
-                  marginBottom: 14,
-                  background: "color-mix(in srgb, var(--gold) 8%, transparent)",
-                }}
-              >
-                <div style={{ fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--gold)" }}>
-                  Asking now
-                </div>
-                <div style={{ fontSize: 14.5, marginTop: 4 }}>{drip.prompt}</div>
-                <div className="sub" style={{ fontSize: 12, margin: "4px 0 0" }}>
-                  {drip.key}
-                </div>
+              <div className="brain-highlight">
+                <div className="mini-kicker">Asking now</div>
+                <div className="prompt">{drip.prompt}</div>
+                <div className="brain-row-meta">{drip.key}</div>
               </div>
             )}
             {outstanding.length === 0 ? (
@@ -969,33 +848,17 @@ export function ClientBrainSummary({
                 No outstanding questions.
               </p>
             ) : (
-              <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 8 }}>
+              <ul className="brain-list">
                 {outstanding.map((q) => (
-                  <li
-                    key={q.key}
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "1fr auto",
-                      gap: 10,
-                      borderBottom: "1px solid var(--line-soft)",
-                      paddingBottom: 8,
-                    }}
-                  >
+                  <li key={q.key} className="brain-row">
                     <div>
-                      <div style={{ fontSize: 13.5 }}>{q.prompt}</div>
-                      <div className="sub" style={{ fontSize: 12, margin: "2px 0 0" }}>
+                      <div className="brain-row-title">{q.prompt}</div>
+                      <div className="brain-row-meta">
                         {q.key}
                         {q.audience !== "both" ? ` · ${q.audience}` : ""}
                       </div>
                     </div>
-                    <span
-                      style={{
-                        fontSize: 10,
-                        letterSpacing: "0.12em",
-                        textTransform: "uppercase",
-                        color: drip?.key === q.key ? "var(--gold)" : "var(--ink-faint)",
-                      }}
-                    >
+                    <span className={`status-tag ${drip?.key === q.key ? "gold" : "faint"}`}>
                       {drip?.key === q.key ? "Asking" : "Empty"}
                     </span>
                   </li>
