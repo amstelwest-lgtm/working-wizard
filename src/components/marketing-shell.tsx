@@ -12,6 +12,7 @@ import {
   readVisitorDraft,
   writeVisitorDraft,
   type DraftMarket,
+  type VisitorCopyPack,
 } from "@/lib/market";
 
 export function MarketCopy({ za, us }: { za: ReactNode; us: ReactNode }) {
@@ -21,6 +22,19 @@ export function MarketCopy({ za, us }: { za: ReactNode; us: ReactNode }) {
       <span className="mk-copy-us">{us}</span>
     </>
   );
+}
+
+/** Landing / stateful surfaces — only the active region's copy is rendered. */
+export function RegionCopy({
+  pack,
+  za,
+  us,
+}: {
+  pack: VisitorCopyPack;
+  za: ReactNode;
+  us: ReactNode;
+}) {
+  return <>{pack === "us" ? us : za}</>;
 }
 
 function applyPack(country: DraftMarket["country"]) {
