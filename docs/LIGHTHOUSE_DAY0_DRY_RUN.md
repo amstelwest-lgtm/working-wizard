@@ -66,6 +66,8 @@ During dry-run, **every other address fails closed** at send time.
    - `20260820140000_lighthouse_optout_and_assets.sql` — opt-out tokens, `asset_fallback`, `accountant_v1`
    - `20260822100000_lighthouse_send_guards.sql` — idempotency / provider message id
    - `20260822210000_lighthouse_engagement.sql` — click / inbound tracking
+   - `20260910190000_lighthouse_one_pager_assets_ready.sql` — one-pager PDF asset URLs
+   - `20260910200000_lighthouse_teaser_videos.sql` — locked `teaser_owner` / `teaser_accountant` YouTube links
 
 ## Manual dry-run steps (Growth / Theo)
 
@@ -78,8 +80,11 @@ During dry-run, **every other address fails closed** at send time.
 4. Click the lead → **Draft with Claude** (step 1) → review subject/body.
 5. **Send now** → confirm toast *Sent*; check the inbox (and spam).
 6. Repeat for a second persona / step if you want to exercise `asset_fallback`.
-7. Click opt-out link in a test email → lead should flip **Do not contact**; a second send must fail.
-8. Reply to a test send → webhook `email.received` should surface in the lead drawer (needs webhook).
+7. **Day 3 (step 2) only** — draft/send a touch and confirm the body gifts **both** teaser links
+   (owner: `https://youtu.be/k3aRM4toTvU`, practice: `https://youtu.be/J4vJki7HcIs`). **Day 0 (step 1)
+   must still have no video link.**
+8. Click opt-out link in a test email → lead should flip **Do not contact**; a second send must fail.
+9. Reply to a test send → webhook `email.received` should surface in the lead drawer (needs webhook).
 
 **Do not** import a CSV of firm emails during dry-run. **Do not** remove `LIGHTHOUSE_DRY_RUN` until GO.
 
@@ -94,8 +99,9 @@ During dry-run, **every other address fails closed** at send time.
 | `accountant_v1` sequence | **DB seed** | Applied via migration; 5 steps with `asset_fallback` on steps 2–3 |
 | Opt-out | **Code + DB** | Per-lead `optout_token`; RFC 8058 headers at send; routes `/unsubscribe`, `/lh/unsubscribe` |
 | `asset_fallback` | **Code + DB** | Drafter uses `[asset, asset_fallback]` via `firstReadyAsset()` — only `status=ready` assets link |
-| Assets default | **Manual — Theo** | Migration seeds URLs as `in_progress`; flip to **ready** in `/ops` → Assets after reading copy |
-| One-pager PDFs | **Ready** | `/lighthouse/milon-one-pager-accountants.pdf` and `/lighthouse/milon-one-pager-owners.pdf` (static assets; `lighthouse_assets` marked `ready` via migration) |
+| Teaser videos | **Ready** | `teaser_owner` → `https://youtu.be/k3aRM4toTvU`; `teaser_accountant` → `https://youtu.be/J4vJki7HcIs`. Both wired on `accountant_v1` and `owner_v1` step 2; sequence goal says gift **both** on Day 3. Day 0 has no video. |
+| Assets default | **Manual — Theo** | Non-teaser slots (case study, 3-min demo) may still be `in_progress`; flip to **ready** in `/ops` → Assets after reading copy |
+| One-pager PDFs | **Ready** | `/lighthouse/milon-one-pager-accountants.pdf` and `/lighthouse/milon-one-pager-owners.pdf` — each includes both teaser URLs in the video strip |
 | Owner gate | **Env** | `MILON_OWNER_EMAILS` + passphrase; not auth/#140 |
 | Daily cap | **Settings** | Default 25/day SAST in Lighthouse Settings — fine for dry-run |
 | Auto-send | **Off by default** | `auto_send: false` in settings seed; sends are click-only |
