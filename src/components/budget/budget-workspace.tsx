@@ -21,6 +21,7 @@ import { SALES_TAX_HONESTY, formatPercentRate, resolveMarket, t } from "@/lib/ma
 import { keepUnmappedAsExtraLine, reassignUnmappedDriver } from "@/lib/budget.model-change";
 import { BudgetSimpleView } from "@/components/budget/budget-simple-view";
 import { BudgetVariancePanel } from "@/components/budget/budget-variance-panel";
+import { BudgetYearOverviewChart } from "@/components/budget/budget-year-overview-chart";
 
 const SCENARIOS: BudgetScenarioId[] = ["base", "upside", "downside"];
 
@@ -56,6 +57,7 @@ export function BudgetWorkspace({
             onClear={onClearUnmapped}
           />
         )}
+        <BudgetYearOverviewChart doc={doc} />
         {/* Plan first — variance is a monthly check, not the hero */}
         <BudgetSimpleView
           doc={doc}
@@ -276,6 +278,8 @@ function BudgetComplexWorkspace({
           onClear={onClearUnmapped}
         />
       )}
+
+      <BudgetYearOverviewChart doc={doc} />
 
       <BudgetVariancePanel clientId={clientId} doc={doc} />
 
