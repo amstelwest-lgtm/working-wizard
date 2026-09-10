@@ -2,10 +2,80 @@
 @source "../src";
 @import "tw-animate-css";
 
+/*
+ * Phase 2 lite — Milōn shared design tokens
+ *
+ * Brand-aligned CSS variables for app-wide use. Scoped surfaces (landing,
+ * accountant-portal, marketing `.mk`) keep local overrides until migrated.
+ *
+ * Fonts:  --font-sans, --font-display
+ * Colors: --milon-bg, --milon-bg-elevated, --milon-bg-surface,
+ *         --milon-ink, --milon-ink-muted, --milon-ink-faint,
+ *         --milon-gold, --milon-gold-deep, --milon-gold-bright,
+ *         --milon-border, --milon-border-soft, --milon-glass, --milon-surface,
+ *         --milon-risk, --milon-warn, --milon-ok
+ * Type:   --milon-text-xs … --milon-text-xl  (6 steps)
+ * Space:  --milon-space-1 (4px) … --milon-space-8 (64px)
+ *
+ * Tailwind utilities (via @theme inline): bg-milon-bg, text-milon-gold,
+ * p-milon-4, text-milon-sm, font-milon-display, etc.
+ */
 :root {
+  /* Typography — matches dashboard (Inter) + editorial headings (Instrument Serif) */
   --font-display: "Instrument Serif", "Fraunces", Georgia, serif;
   --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  /* Surfaces & ink — dark brand default (#d4af37 gold on near-black) */
+  --milon-bg: #050507;
+  --milon-bg-elevated: #0a0a10;
+  --milon-bg-surface: #0f0f18;
+  --milon-ink: #f2ecdc;
+  --milon-ink-muted: #9b958a;
+  --milon-ink-faint: #6b665c;
+  --milon-gold: #d4af37;
+  --milon-gold-deep: #ac8400;
+  --milon-gold-bright: #fdee79;
+  --milon-border: rgba(212, 175, 55, 0.16);
+  --milon-border-soft: rgba(212, 175, 55, 0.08);
+  --milon-glass: rgba(13, 13, 20, 0.72);
+  --milon-surface: rgba(255, 255, 255, 0.024);
+  --milon-risk: #e25c5c;
+  --milon-warn: #e8b34b;
+  --milon-ok: #5ccf8a;
+
+  /* Type scale — 6 sizes mapped to existing portal/dashboard rhythm */
+  --milon-text-xs: 0.6875rem;   /* 11px — kickers, eyebrows */
+  --milon-text-sm: 0.8125rem;   /* 13px — secondary UI, meta */
+  --milon-text-base: 0.875rem;  /* 14px — default body (portal) */
+  --milon-text-md: 1rem;          /* 16px — emphasis, labels */
+  --milon-text-lg: 1.375rem;    /* 22px — section headings */
+  --milon-text-xl: 1.75rem;     /* 28px — hero / page titles */
+
+  /* Spacing scale — 4px base */
+  --milon-space-1: 0.25rem;   /* 4px */
+  --milon-space-2: 0.5rem;    /* 8px */
+  --milon-space-3: 0.75rem;   /* 12px */
+  --milon-space-4: 1rem;      /* 16px */
+  --milon-space-5: 1.5rem;    /* 24px */
+  --milon-space-6: 2rem;      /* 32px */
+  --milon-space-7: 3rem;      /* 48px */
+  --milon-space-8: 4rem;      /* 64px */
 }
+
+/* Light brand surface — opt-in via data-theme (landing, accountant-portal) */
+html[data-theme="light"] {
+  --milon-bg: #f6f3ea;
+  --milon-bg-elevated: #ffffff;
+  --milon-bg-surface: #efeadb;
+  --milon-ink: #1b1608;
+  --milon-ink-muted: #6b6354;
+  --milon-ink-faint: #98917f;
+  --milon-border: rgba(140, 110, 10, 0.22);
+  --milon-border-soft: rgba(140, 110, 10, 0.1);
+  --milon-glass: rgba(255, 255, 255, 0.86);
+  --milon-surface: rgba(52, 40, 0, 0.035);
+}
+
 html, body { font-family: var(--font-sans); font-feature-settings: "tnum", "ss01"; }
 
 
@@ -66,6 +136,40 @@ html, body { font-family: var(--font-sans); font-feature-settings: "tnum", "ss01
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+
+  /* Milōn tokens → Tailwind utilities (Phase 2 lite) */
+  --font-milon-display: var(--font-display);
+  --font-milon-sans: var(--font-sans);
+  --color-milon-bg: var(--milon-bg);
+  --color-milon-bg-elevated: var(--milon-bg-elevated);
+  --color-milon-bg-surface: var(--milon-bg-surface);
+  --color-milon-ink: var(--milon-ink);
+  --color-milon-ink-muted: var(--milon-ink-muted);
+  --color-milon-ink-faint: var(--milon-ink-faint);
+  --color-milon-gold: var(--milon-gold);
+  --color-milon-gold-deep: var(--milon-gold-deep);
+  --color-milon-gold-bright: var(--milon-gold-bright);
+  --color-milon-border: var(--milon-border);
+  --color-milon-border-soft: var(--milon-border-soft);
+  --color-milon-glass: var(--milon-glass);
+  --color-milon-surface: var(--milon-surface);
+  --color-milon-risk: var(--milon-risk);
+  --color-milon-warn: var(--milon-warn);
+  --color-milon-ok: var(--milon-ok);
+  --text-milon-xs: var(--milon-text-xs);
+  --text-milon-sm: var(--milon-text-sm);
+  --text-milon-base: var(--milon-text-base);
+  --text-milon-md: var(--milon-text-md);
+  --text-milon-lg: var(--milon-text-lg);
+  --text-milon-xl: var(--milon-text-xl);
+  --spacing-milon-1: var(--milon-space-1);
+  --spacing-milon-2: var(--milon-space-2);
+  --spacing-milon-3: var(--milon-space-3);
+  --spacing-milon-4: var(--milon-space-4);
+  --spacing-milon-5: var(--milon-space-5);
+  --spacing-milon-6: var(--milon-space-6);
+  --spacing-milon-7: var(--milon-space-7);
+  --spacing-milon-8: var(--milon-space-8);
 }
 
 :root {
