@@ -15,6 +15,11 @@ Automated coverage today is static only (`pnpm test:client-brain`, `pnpm test:re
       financial context.
 - [ ] Supabase migration `20260907140000_client_brain.sql` applied.
 - [ ] Edge functions deployed: `brain-propose`, `brain-deliverable-draft` (Anthropic secret set).
+- [ ] **Never leave smoke stubs as the sole live version** of an edge function. After any smoke
+      deploy, immediately replace with the full function (or delete the stub). Confirm with
+      `get_edge_function` that live source contains real handlers (e.g. `deliverable_drafts`
+      insert / `Deno.serve` async), not `{ok:true,fn:"smoke-…"}` placeholders. *(Prod:
+      `brain-deliverable-draft` left as smoke-bdd stub broke Draft advisory until redeploy.)*
 
 ## 1. Invite owner
 
