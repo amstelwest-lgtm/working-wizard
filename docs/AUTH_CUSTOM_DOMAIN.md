@@ -2,6 +2,9 @@
 
 Runbook for replacing the default `*.supabase.co` hostname on Google’s “Continue to …” consent screen with a Milōn-owned auth subdomain.
 
+**Custom auth hostname:** `auth.milonfinance.com` (default for all steps below).  
+**Optional later override:** `auth.milon.co.za` — only if Milōn switches regional branding; repeat DNS, Google redirect URIs, and env cutover for the new host.
+
 **Official references**
 
 - [Supabase custom domains](https://supabase.com/docs/guides/platform/custom-domains)
@@ -21,36 +24,36 @@ The frontend **cannot** rename this. Google displays the **OAuth redirect / call
 1. A **Supabase custom Auth domain** (paid add-on on Pro+), and  
 2. Matching updates in **Google Cloud** (OAuth client redirect URIs + Auth Platform branding).
 
-No app code changes are required beyond pointing env vars at the new host after the domain is **Active**.
+No app code changes are required. Env vars flip only after the custom hostname is **Active** (see [Eng after Active](#eng-after-active)).
 
 ---
 
-## Prefer hostname
+## Custom auth hostname
 
-| Choice | Host |
-|--------|------|
-| **Preferred** | `auth.milonfinance.com` |
-| **Alternate** | `auth.milon.co.za` |
+| Host | Use |
+|------|-----|
+| **`auth.milonfinance.com`** | Default — use for Supabase, DNS, Google, and env cutover |
+| `auth.milon.co.za` | Optional later override only; not in scope for initial rollout |
 
-Founder picks one before DNS / Supabase setup. Use `auth.example.com` pattern per [Supabase Google auth guidance](https://supabase.com/docs/guides/auth/social-login/auth-google).
+Follow the `auth.example.com` pattern per [Supabase Google auth guidance](https://supabase.com/docs/guides/auth/social-login/auth-google).
 
 ---
 
 ## Theo-only checklist
 
-Complete in order. Do not flip production env vars until Supabase reports the custom hostname **Active**.
+Complete in order. **Do not** update Vercel env vars here — that is [Eng after Active](#eng-after-active) only.
 
 ### 1. Supabase Custom Domains (Pro+ add-on)
 
 - Supabase Dashboard → **Project Settings → General → Custom Domains** (or follow [custom domains guide](https://supabase.com/docs/guides/platform/custom-domains)).
 - Enable the **Custom Domains** paid add-on if not already on the project.
-- Register the chosen hostname (e.g. `auth.milonfinance.com`).
+- Register **`auth.milonfinance.com`**.
 
 ### 2. DNS CNAME → wait until Active
 
-- Add the **CNAME** (and any verification records) exactly as Supabase instructs for the project.
+- Add the **CNAME** (and any verification records) for **`auth.milonfinance.com`** exactly as Supabase instructs.
 - Wait until status is **Active** in the dashboard / `supabase domains get`.
-- Do not proceed to Google or Vercel cutover while pending.
+- Do not proceed to Google redirect updates or eng env cutover while pending.
 
 ### 3. Google Cloud OAuth client — redirect URIs
 
@@ -59,18 +62,11 @@ In [Google Cloud Console](https://console.cloud.google.com/) → **APIs & Servic
 **Authorized redirect URIs** — keep **both** during cutover:
 
 ```
-https://<custom-host>/auth/v1/callback
-https://jxclnsbsqpixxqlbcapl.supabase.co/auth/v1/callback
-```
-
-Example with preferred host:
-
-```
 https://auth.milonfinance.com/auth/v1/callback
 https://jxclnsbsqpixxqlbcapl.supabase.co/auth/v1/callback
 ```
 
-Supabase documents this dual-URI pattern in [Prepare to activate your domain](https://supabase.com/docs/guides/platform/custom-domains). Remove the `*.supabase.co` callback only after env cutover is stable.
+Supabase documents this dual-URI pattern in [Prepare to activate your domain](https://supabase.com/docs/guides/platform/custom-domains). Remove the `*.supabase.co` callback only after eng env cutover is stable.
 
 ### 4. Google Auth Platform branding
 
@@ -89,7 +85,7 @@ Submit **Verify branding** if prompted. Verification is **not** instant — plan
 
 Supabase Dashboard → **Authentication → URL Configuration**:
 
-- **Site URL:** `https://milonfinance.com` (or primary app origin).
+- **Site URL:** `https://milonfinance.com`
 - **Redirect URLs** (allowlist) — include production app paths, e.g.:
   - `https://milonfinance.com/auth/callback`
   - `https://milonfinance.com/auth/verified`
@@ -103,7 +99,7 @@ Align with existing launch checklist in [`docs/PILOT_SMOKE_CHECKLIST.md`](./PILO
 
 ## Eng after Active
 
-Once Supabase custom hostname is **Active**, update **Vercel** (Production + Preview if applicable). **Do not commit secrets** — dashboard / env only.
+Once **`auth.milonfinance.com`** is **Active** in Supabase, update **Vercel** (Production + Preview if applicable). **Do not commit secrets** — dashboard / env only.
 
 ### Env vars this repo uses
 
@@ -114,15 +110,13 @@ Once Supabase custom hostname is **Active**, update **Vercel** (Production + Pre
 | `SUPABASE_URL` | SSR / server functions / auth middleware (`process.env`) |
 | `SUPABASE_PUBLISHABLE_KEY` | Server-side anon key |
 
-At **build** time, `vite.config.ts` also maps `SUPABASE_URL` → `VITE_SUPABASE_URL` when the `VITE_*` copy is unset — set **both** to the custom host in Vercel to avoid drift (see [`.agents/memory/supabase-project-drift.md`](../.agents/memory/supabase-project-drift.md)).
+At **build** time, `vite.config.ts` also maps `SUPABASE_URL` → `VITE_SUPABASE_URL` when the `VITE_*` copy is unset — set **both** URL vars to the custom host in Vercel to avoid drift (see [`.agents/memory/supabase-project-drift.md`](../.agents/memory/supabase-project-drift.md)).
 
 **Set both URL vars to:**
 
 ```
-https://<custom-host>
+https://auth.milonfinance.com
 ```
-
-Example: `https://auth.milonfinance.com`
 
 **Redeploy** after changing build-time vars (`VITE_*` are inlined at build).
 
@@ -140,7 +134,7 @@ If Google OAuth fails after deploy, temporarily revert `VITE_SUPABASE_URL` and `
 
 ### Smoke after cutover
 
-- Owner Google sign-in on production — consent should show **`auth.milonfinance.com`** (or chosen host), not `*.supabase.co`.
+- Owner Google sign-in on production — consent should show **`auth.milonfinance.com`**, not `*.supabase.co`.
 - Magic link / email auth still delivers (SMTP unchanged).
 - Re-run auth items in [`docs/PILOT_SMOKE_CHECKLIST.md`](./PILOT_SMOKE_CHECKLIST.md).
 
@@ -151,4 +145,5 @@ If Google OAuth fails after deploy, temporarily revert `VITE_SUPABASE_URL` and `
 - Application code or auth flow behavior changes  
 - Committed credentials or `.env` updates in git  
 - Calculator / magic-link architecture changes  
-- Removing the legacy `*.supabase.co` Google redirect URI before cutover is proven stable
+- Removing the legacy `*.supabase.co` Google redirect URI before cutover is proven stable  
+- Initial setup of `auth.milon.co.za` (optional later override only)
