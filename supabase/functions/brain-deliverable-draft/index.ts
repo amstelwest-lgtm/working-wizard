@@ -1,18 +1,203 @@
 /**
- * Client Brain deliverable draft — Claude drafts an advisory pack with an
- * explicit assumptions list into deliverable_drafts.
+ * Client Brain deliverable draft — self-contained deploy bundle.
  *
- * Reuses ask-ai auth, CORS, rate-limit RPC, and callClaude.
- * Writes status=draft only. Never ready / sent / discarded.
+ * Deploy this single file via Supabase CLI or MCP deploy_edge_function (index.ts).
+ * Do not replace with smoke stubs — see pnpm test:edge-no-smoke-stubs.
+ *
+ * Claude drafts an advisory pack with an explicit assumptions list into
+ * deliverable_drafts. Writes status=draft only. Never ready / sent / discarded.
  */
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { callClaude } from "../ask-ai/anthropic.ts";
-import {
-  DRAFT_RATE_LIMIT,
-  composeDraftBody,
-  filterNewDeliverableDraft,
-  parseClaudeDeliverablePayload,
-} from "./logic.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+
+// --- logic (sync with src/lib/client-brain-deliverable.ts) ---
+
+const MAX_OPEN_DRAFTS = 3;
+const DRAFT_RATE_LIMIT = 8;
+const OPEN_DRAFT_STATUSES = new Set(["draft", "ready"]);
+const DRAFT_KINDS = ["advisory", "client_email", "meeting_agenda", "exec_summary"] as const;
+type DeliverableKind = (typeof DRAFT_KINDS)[number];
+
+type AssumptionItem = { id: string; text: string; checked: boolean };
+
+type ClaudeDeliverablePayload = {
+  kind: DeliverableKind;
+  subject: string | null;
+  body: string;
+  assumptions: AssumptionItem[];
+};
+
+function asTrimmed(raw: unknown): string | undefined {
+  return typeof raw === "string" && raw.trim() ? raw.trim() : undefined;
+}
+
+function normalizeDraftKind(raw: unknown): DeliverableKind {
+  const k = asTrimmed(raw)?.toLowerCase().replace(/[\s-]+/g, "_");
+  if (k === "client_email" || k === "email") return "client_email";
+  if (k === "meeting_agenda" || k === "agenda") return "meeting_agenda";
+  if (k === "exec_summary" || k === "summary") return "exec_summary";
+  return "advisory";
+}
+
+function extractJsonText(raw: string): string {
+  return raw.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "").trim();
+}
+
+function assumptionsFromUnknown(raw: unknown): AssumptionItem[] {
+  if (!Array.isArray(raw)) return [];
+  const out: AssumptionItem[] = [];
+  raw.forEach((item, i) => {
+    let text = "";
+    if (typeof item === "string") text = item.trim();
+    else if (item && typeof item === "object") {
+      const o = item as Record<string, unknown>;
+      text = asTrimmed(o.text) ?? asTrimmed(o.label) ?? "";
+    }
+    if (!text) return;
+    out.push({ id: `a-${out.length || i}`, text, checked: false });
+  });
+  return out;
+}
+
+function composeDraftBody(subject: string | null, body: string): string {
+  const text = body.trim();
+  const sub = subject?.trim();
+  if (sub && !/^\s*SUBJECT:/i.test(text)) return `SUBJECT: ${sub}\n\n${text}`;
+  return text;
+}
+
+function parseDraftSubjectBody(raw: string | null | undefined): { subject: string | null; body: string } {
+  const text = (raw ?? "").trim();
+  const m = text.match(/^\s*SUBJECT:\s*(.+)\s*\n+([\s\S]*)$/i);
+  if (m) return { subject: m[1].trim() || null, body: m[2].trim() };
+  return { subject: null, body: text };
+}
+
+function parseClaudeDeliverablePayload(raw: string): ClaudeDeliverablePayload | null {
+  const jsonText = extractJsonText(raw);
+  if (!jsonText) return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(jsonText);
+  } catch {
+    const match = jsonText.match(/\{[\s\S]*\}/);
+    if (!match) return null;
+    try {
+      parsed = JSON.parse(match[0]);
+    } catch {
+      return null;
+    }
+  }
+  if (!parsed || typeof parsed !== "object") return null;
+  const o = parsed as Record<string, unknown>;
+  const body = asTrimmed(o.body) ?? asTrimmed(o.text);
+  if (!body) return null;
+  return {
+    kind: normalizeDraftKind(o.kind),
+    subject: asTrimmed(o.subject) ?? null,
+    body,
+    assumptions: assumptionsFromUnknown(o.assumptions ?? o.assumption_checklist),
+  };
+}
+
+function normalizeDraftBody(body: string): string {
+  return body.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+function bodiesSimilar(a: string, b: string): boolean {
+  const na = normalizeDraftBody(a);
+  const nb = normalizeDraftBody(b);
+  if (!na || !nb) return false;
+  if (na === nb) return true;
+  if (na.includes(nb) || nb.includes(na)) return true;
+  const ta = new Set(na.split(" ").filter((w) => w.length > 2));
+  const tb = new Set(nb.split(" ").filter((w) => w.length > 2));
+  if (!ta.size || !tb.size) return false;
+  let overlap = 0;
+  for (const w of ta) if (tb.has(w)) overlap += 1;
+  return overlap / Math.min(ta.size, tb.size) >= 0.8;
+}
+
+function filterNewDeliverableDraft(
+  incoming: ClaudeDeliverablePayload | null,
+  existing: Array<{ kind: string | null; body: string | null; status: string }>,
+  opts?: { maxOpen?: number },
+): ClaudeDeliverablePayload | null {
+  if (!incoming) return null;
+  const body = incoming.body.trim();
+  if (!body) return null;
+  const maxOpen = opts?.maxOpen ?? MAX_OPEN_DRAFTS;
+  const open = existing.filter((d) => OPEN_DRAFT_STATUSES.has(d.status));
+  if (open.length >= maxOpen) return null;
+  const kind = incoming.kind;
+  if (
+    open.some(
+      (d) =>
+        normalizeDraftKind(d.kind) === kind &&
+        bodiesSimilar(parseDraftSubjectBody(d.body).body || d.body || "", body),
+    )
+  ) {
+    return null;
+  }
+  return { kind, subject: incoming.subject, body, assumptions: incoming.assumptions };
+}
+
+// --- Claude API ---
+
+const CLAUDE_MODEL = Deno.env.get("CLAUDE_MODEL") || "claude-sonnet-4-6";
+const ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages";
+
+async function callClaude(
+  system: string,
+  user: string,
+  opts?: { maxTokens?: number; temperature?: number },
+): Promise<{ text: string; inputTokens: number; outputTokens: number; latencyMs: number }> {
+  const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
+  if (!apiKey) {
+    throw new Error(
+      "AI is not configured (ANTHROPIC_API_KEY missing). Please contact your administrator.",
+    );
+  }
+
+  const t0 = Date.now();
+  const res = await fetch(ANTHROPIC_API_URL, {
+    method: "POST",
+    headers: {
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: CLAUDE_MODEL,
+      system,
+      messages: [{ role: "user", content: user }],
+      temperature: opts?.temperature ?? 0.3,
+      max_tokens: opts?.maxTokens ?? 512,
+    }),
+  });
+
+  if (res.status === 429) throw new Error("Rate limit reached — try again in a moment.");
+  if (!res.ok) {
+    const errBody = await res.text().catch(() => "");
+    throw new Error(`Claude error (${res.status}): ${errBody.slice(0, 200)}`);
+  }
+
+  const json = await res.json();
+  const text = (json?.content ?? [])
+    .filter((b: { type?: string }) => b?.type === "text")
+    .map((b: { text?: string }) => b.text ?? "")
+    .join("")
+    .trim();
+  const usage = json?.usage ?? {};
+
+  return {
+    text,
+    inputTokens: usage.input_tokens ?? 0,
+    outputTokens: usage.output_tokens ?? 0,
+    latencyMs: Date.now() - t0,
+  };
+}
+
+// --- handler ---
 
 function buildCorsHeaders(requestOrigin: string | null): Record<string, string> {
   const allowed = Deno.env.get("ALLOWED_ORIGINS");

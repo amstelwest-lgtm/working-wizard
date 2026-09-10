@@ -53,7 +53,8 @@
     "test:legal-notices": "vite-node --config scripts/vite-test.config.ts scripts/legal-notices-test.mts",
     "test:market": "vite-node --config scripts/vite-test.config.ts scripts/market-kernel-test.mts",
     "test:client-brain": "vite-node --config scripts/vite-test.config.ts scripts/client-brain-summary-test.mts",
-    "test:milon-bot": "vite-node --config scripts/vite-test.config.ts scripts/milon-bot-test.mts"
+    "test:milon-bot": "vite-node --config scripts/vite-test.config.ts scripts/milon-bot-test.mts",
+    "test:edge-no-smoke-stubs": "vite-node --config scripts/vite-test.config.ts scripts/edge-no-smoke-stubs-test.mts"
   },
   "dependencies": {
     "@cloudflare/vite-plugin": "^1.25.5",
