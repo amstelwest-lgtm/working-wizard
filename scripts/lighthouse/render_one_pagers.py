@@ -5,6 +5,8 @@ from fpdf import FPDF
 ASSETS = Path(__file__).resolve().parent
 FONTS = ASSETS / "fonts"
 REPO_ROOT = ASSETS.parent.parent
+TEASER_OWNER = "https://youtu.be/k3aRM4toTvU"
+TEASER_ACCOUNTANT = "https://youtu.be/J4vJki7HcIs"
 NAVY = (15, 32, 64)
 NAVY_MID = (30, 55, 95)
 ACCENT = (20, 80, 140)
@@ -48,6 +50,28 @@ class OnePager(FPDF):
         self.set_line_width(0.2)
         self.line(14, y, 196, y)
         return y + 3
+    def video_strip(self, y: float, lead_label: str, lead_url: str, second_label: str, second_url: str) -> float:
+        y = self.section_label(y, "60-second overviews")
+        self.set_fill_color(*LIGHT_BG)
+        self.set_draw_color(*LINE)
+        self.rect(14, y, 182, 18, "DF")
+        self.set_xy(16, y + 2)
+        self.set_font("DejaVu", "B", 8)
+        self.set_text_color(*NAVY)
+        self.cell(178, 4, lead_label)
+        self.set_xy(16, y + 6.5)
+        self.set_font("DejaVu", "", 7.5)
+        self.set_text_color(*ACCENT)
+        self.cell(178, 3.5, lead_url)
+        self.set_xy(16, y + 11)
+        self.set_font("DejaVu", "B", 8)
+        self.set_text_color(*NAVY)
+        self.cell(178, 4, second_label)
+        self.set_xy(16, y + 15)
+        self.set_font("DejaVu", "", 7.5)
+        self.set_text_color(*ACCENT)
+        self.cell(178, 3.5, second_url)
+        return y + 22
 def render_accountant(path: Path):
     pdf = OnePager()
     pdf.add_page()
@@ -134,7 +158,15 @@ def render_accountant(path: Path):
     pdf.set_font("DejaVu", "", 7.5)
     pdf.set_text_color(*MUTED)
     pdf.multi_cell(182, 3.8, "Accountant plans planned: up to 150 clients / unlimited \u00b7 white-label included \u00b7 early access / Spark free for pilots")
-    y = pdf.get_y() + 5
+    y = pdf.get_y() + 4
+    y = pdf.hrule(y)
+    y = pdf.video_strip(
+        y,
+        "Practice overview (60s)",
+        TEASER_ACCOUNTANT,
+        "Owner overview (60s)",
+        TEASER_OWNER,
+    )
     pdf.set_fill_color(*NAVY)
     pdf.rect(14, y, 182, 16, "F")
     pdf.set_xy(14, y + 3)
@@ -238,7 +270,15 @@ def render_owner(path: Path):
     pdf.set_font("DejaVu", "", 8)
     pdf.set_text_color(*MUTED)
     pdf.multi_cell(182, 4, "Encrypted  \u00b7  Built for SA & US  \u00b7  Free Spark / first health score")
-    y = pdf.get_y() + 5
+    y = pdf.get_y() + 4
+    y = pdf.hrule(y)
+    y = pdf.video_strip(
+        y,
+        "Owner overview (60s)",
+        TEASER_OWNER,
+        "Practice overview (60s)",
+        TEASER_ACCOUNTANT,
+    )
     pdf.set_fill_color(*NAVY)
     pdf.rect(14, y, 182, 18, "F")
     pdf.set_xy(14, y + 3)
