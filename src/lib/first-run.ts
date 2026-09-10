@@ -95,3 +95,51 @@ export function ownerWalkthroughReady(opts: {
     !opts.showCashFromBanks
   );
 }
+
+/** Per-client flag: self-signup owner finished the first real-figures upload path. */
+export const OWNER_FIRST_UPLOAD_HANDLED_PREFIX = "milon_owner_first_upload_v1:";
+
+export function ownerFirstUploadHandledKey(clientId: string): string {
+  return `${OWNER_FIRST_UPLOAD_HANDLED_PREFIX}${clientId}`;
+}
+
+export function hasOwnerFirstUploadHandled(clientId: string | null | undefined): boolean {
+  if (!clientId || typeof localStorage === "undefined") return false;
+  return Boolean(localStorage.getItem(ownerFirstUploadHandledKey(clientId)));
+}
+
+export function markOwnerFirstUploadHandled(clientId: string): void {
+  if (typeof localStorage === "undefined") return;
+  try {
+    localStorage.setItem(ownerFirstUploadHandledKey(clientId), "1");
+  } catch {
+    /* ignore quota / private mode */
+  }
+}
+
+/**
+ * Self-signup owner after first real figures upload — skip the seven-step board
+ * tour (same end state as invited-with-figures #150, different trigger).
+ */
+export function shouldSkipOwnerTourAfterFirstUpload(opts: {
+  isInvitedOwner: boolean;
+  isInvitedOwnerWithFigures: boolean;
+  firstUploadHandled: boolean;
+}): boolean {
+  if (opts.isInvitedOwnerWithFigures) return false;
+  if (opts.isInvitedOwner) return false;
+  return opts.firstUploadHandled;
+}
+
+/** Invoke brain.propose once when self-signup owner lands first real figures via upload. */
+export function shouldAutoProposeAfterFirstUpload(opts: {
+  isInvitedOwner: boolean;
+  firstUploadHandled: boolean;
+  clientId: string | null;
+  actingAsClient: boolean;
+}): boolean {
+  if (!opts.clientId || opts.actingAsClient) return false;
+  if (opts.isInvitedOwner) return false;
+  if (opts.firstUploadHandled) return false;
+  return true;
+}

@@ -112,6 +112,7 @@ import { AdminDashboard } from "@/components/admin-dashboard";
 import { ProfileFunnel, type ProfileFunnelMode } from "@/components/profile/profile-funnel";
 import { ProfileCompletionNote } from "@/components/profile/profile-completion-note";
 import { OwnerBrainDrip } from "@/components/owner-brain-drip";
+import { OwnerBrainFirstInsight } from "@/components/owner-brain-first-insight";
 import { MilonBotPanel } from "@/components/milon-bot-panel";
 import { SampleBoardBanner } from "@/components/sample-board-banner";
 import { VerifyEmailBanner } from "@/components/verify-email-banner";
@@ -126,12 +127,17 @@ import {
 } from "@/lib/client-profile";
 import { profileIndustryLabel, profilePriorityWeight } from "@/lib/profile-signals";
 import {
+  hasOwnerFirstUploadHandled,
   isInvitedOwnerWithFigures,
+  markOwnerFirstUploadHandled,
   ownerBoardReady,
   ownerWalkthroughReady,
+  shouldAutoProposeAfterFirstUpload,
   shouldShowOwnerProfileFunnel,
+  shouldSkipOwnerTourAfterFirstUpload,
 } from "@/lib/first-run";
 import { markOnboardingDone, OWNER_TOUR_KEY } from "@/lib/onboarding";
+import { invokeBrainPropose } from "@/lib/brain-propose-client";
 import {
   consumeInviteHandoffFlag,
   hasInviteHandoffFlag,
@@ -2932,6 +2938,47 @@ function Index() {
       }),
     [invitedOwnerEntry, hasRealFinancials, clientMeta?.financials_updated_at],
   );
+  const [ownerFirstUploadHandled, setOwnerFirstUploadHandled] = useState(false);
+  const [brainInsightReloadToken, setBrainInsightReloadToken] = useState(0);
+  useEffect(() => {
+    if (!effectiveClientId) {
+      setOwnerFirstUploadHandled(false);
+      return;
+    }
+    setOwnerFirstUploadHandled(hasOwnerFirstUploadHandled(effectiveClientId));
+  }, [effectiveClientId]);
+  const skipPostUploadOwnerTour = useMemo(
+    () =>
+      shouldSkipOwnerTourAfterFirstUpload({
+        isInvitedOwner: invitedOwnerEntry,
+        isInvitedOwnerWithFigures: skipInvitedSetupChrome,
+        firstUploadHandled: ownerFirstUploadHandled,
+      }),
+    [invitedOwnerEntry, skipInvitedSetupChrome, ownerFirstUploadHandled],
+  );
+  const handleOwnerFirstRealFinancialsUpload = useCallback(async () => {
+    if (
+      !shouldAutoProposeAfterFirstUpload({
+        isInvitedOwner: invitedOwnerEntry,
+        firstUploadHandled: ownerFirstUploadHandled,
+        clientId: effectiveClientId,
+        actingAsClient: Boolean(actingClientId),
+      })
+    ) {
+      return;
+    }
+    if (!effectiveClientId) return;
+    markOnboardingDone(OWNER_TOUR_KEY);
+    markOwnerFirstUploadHandled(effectiveClientId);
+    setOwnerFirstUploadHandled(true);
+    try {
+      await invokeBrainPropose(effectiveClientId);
+    } catch (e) {
+      console.warn("[owner first upload] brain propose failed:", e);
+    } finally {
+      setBrainInsightReloadToken((n) => n + 1);
+    }
+  }, [actingClientId, effectiveClientId, invitedOwnerEntry, ownerFirstUploadHandled]);
   useEffect(() => {
     if (!skipInvitedSetupChrome) return;
     markOnboardingDone(OWNER_TOUR_KEY);
@@ -2942,6 +2989,16 @@ function Index() {
       setFirstRunStep(null);
     }
   }, [skipInvitedSetupChrome, firstRunStep]);
+  useEffect(() => {
+    if (!skipPostUploadOwnerTour) return;
+    markOnboardingDone(OWNER_TOUR_KEY);
+    if (firstRunStep === "pick-type") {
+      setFirstRunStep(null);
+      setShowOnboarding(false);
+    } else if (firstRunStep === "first-data") {
+      setFirstRunStep(null);
+    }
+  }, [skipPostUploadOwnerTour, firstRunStep]);
   const enterSampleMode = useCallback(() => {
     setV({ ...defaults, ...sampleFinancialsFor(boardMarket.country) } as Inputs);
     setSampleMode(true);
@@ -3460,6 +3517,7 @@ function Index() {
                     onboardingGateReady,
                   }) &&
                   !skipInvitedSetupChrome &&
+                  !skipPostUploadOwnerTour &&
                   !showFinData &&
                   !reviewOpen &&
                   !showQboDialog &&
@@ -4206,6 +4264,10 @@ function Index() {
                                 operatingProfile={operatingProfile}
                                 productMix={productMix}
                                 weeklyInputs={weeklyInputs}
+                              />
+                              <OwnerBrainFirstInsight
+                                clientId={effectiveClientId}
+                                reloadToken={brainInsightReloadToken}
                               />
                               <MilonBotPanel
                                 clientId={effectiveClientId}
@@ -5211,6 +5273,7 @@ function Index() {
             onApply={async ({ fields, annualised, cashDraft, draft }) => {
               setV((prev) => ({ ...prev, ...fields }) as Inputs);
               setHasRealFinancials(true);
+              void handleOwnerFirstRealFinancialsUpload();
               setShowBankDrafter(false);
               setBankCashDraft(cashDraft ?? null);
               toast.success(
@@ -5356,6 +5419,7 @@ function Index() {
                 if (allEntries.length > 0) {
                   setV((prev) => ({ ...prev, ...Object.fromEntries(allEntries) }) as Inputs);
                   setHasRealFinancials(true);
+                  void handleOwnerFirstRealFinancialsUpload();
                   track("financials_uploaded", {
                     surface: "owner_app",
                     clientId: effectiveClientId,
@@ -5396,6 +5460,7 @@ function Index() {
                     ),
                   }));
                   setHasRealFinancials(true);
+                  void handleOwnerFirstRealFinancialsUpload();
                   setShowQboDialog(false);
                 }}
               />

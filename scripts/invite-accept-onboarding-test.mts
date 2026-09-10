@@ -5,11 +5,16 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
+  hasOwnerFirstUploadHandled,
   isInvitedOwnerWithFigures,
+  markOwnerFirstUploadHandled,
   ownerBoardReady,
+  ownerFirstUploadHandledKey,
   ownerHasPreloadedFigures,
   ownerWalkthroughReady,
+  shouldAutoProposeAfterFirstUpload,
   shouldShowOwnerProfileFunnel,
+  shouldSkipOwnerTourAfterFirstUpload,
 } from "../src/lib/first-run";
 import {
   isClientUuid,
@@ -187,6 +192,80 @@ assert(
 );
 
 assert(
+  shouldSkipOwnerTourAfterFirstUpload({
+    isInvitedOwner: false,
+    isInvitedOwnerWithFigures: false,
+    firstUploadHandled: true,
+  }),
+  "self-signup owner skips the seven-step tour after first upload is handled",
+);
+assert(
+  !shouldSkipOwnerTourAfterFirstUpload({
+    isInvitedOwner: false,
+    isInvitedOwnerWithFigures: false,
+    firstUploadHandled: false,
+  }),
+  "self-signup owner keeps the tour until first upload is handled",
+);
+assert(
+  !shouldSkipOwnerTourAfterFirstUpload({
+    isInvitedOwner: true,
+    isInvitedOwnerWithFigures: false,
+    firstUploadHandled: true,
+  }),
+  "invited owner without figures is out of scope for upload tour skip",
+);
+assert(
+  shouldAutoProposeAfterFirstUpload({
+    isInvitedOwner: false,
+    firstUploadHandled: false,
+    clientId: "3d5a1c2e-7b44-4f1a-9c8d-1a2b3c4d5e6f",
+    actingAsClient: false,
+  }),
+  "self-signup owner auto-proposes once on first upload",
+);
+assert(
+  !shouldAutoProposeAfterFirstUpload({
+    isInvitedOwner: false,
+    firstUploadHandled: true,
+    clientId: "3d5a1c2e-7b44-4f1a-9c8d-1a2b3c4d5e6f",
+    actingAsClient: false,
+  }),
+  "auto-propose guard blocks repeat calls",
+);
+assert(
+  !shouldAutoProposeAfterFirstUpload({
+    isInvitedOwner: true,
+    firstUploadHandled: false,
+    clientId: "3d5a1c2e-7b44-4f1a-9c8d-1a2b3c4d5e6f",
+    actingAsClient: false,
+  }),
+  "invited owner upload path does not auto-propose in this PR",
+);
+{
+  const clientId = "3d5a1c2e-7b44-4f1a-9c8d-1a2b3c4d5e6f";
+  const key = ownerFirstUploadHandledKey(clientId);
+  assert(key.includes(clientId), "first-upload storage key is per client");
+  const store = new Map<string, string>();
+  const ls = {
+    getItem: (k: string) => store.get(k) ?? null,
+    setItem: (k: string, v: string) => {
+      store.set(k, v);
+    },
+  } as Storage;
+  const prev = globalThis.localStorage;
+  Object.defineProperty(globalThis, "localStorage", { value: ls, configurable: true });
+  try {
+    assert(!hasOwnerFirstUploadHandled(clientId), "fresh client has no first-upload flag");
+    markOwnerFirstUploadHandled(clientId);
+    assert(hasOwnerFirstUploadHandled(clientId), "markOwnerFirstUploadHandled persists");
+    assert(store.get(key) === "1", "first-upload flag value");
+  } finally {
+    Object.defineProperty(globalThis, "localStorage", { value: prev, configurable: true });
+  }
+}
+
+assert(
   !ownerWalkthroughReady({
     firstRunStep: null,
     showOnboarding: false,
@@ -341,6 +420,11 @@ assert(appSrc.includes("openInvitedClient"), "founder board prefers the invited 
 assert(appSrc.includes("shouldShowOwnerProfileFunnel"), "founder board uses shared funnel gate");
 assert(appSrc.includes("ownerWalkthroughReady({"), "tour ready helper is wired");
 assert(appSrc.includes("skipInvitedSetupChrome"), "invited owner with figures skips the board tour");
+assert(appSrc.includes("skipPostUploadOwnerTour"), "self-signup owner skips tour after first upload");
+assert(appSrc.includes("handleOwnerFirstRealFinancialsUpload"), "first upload handler is wired");
+assert(appSrc.includes("invokeBrainPropose"), "owner first upload reuses brain-propose");
+assert(appSrc.includes("OwnerBrainFirstInsight"), "scored board surfaces proposed next steps");
+assert(appSrc.includes("markOwnerFirstUploadHandled"), "first upload persists a per-client guard");
 assert(appSrc.includes("isInvitedOwnerWithFigures"), "invited owner + figures gate is wired");
 assert(appSrc.includes("markOnboardingDone(OWNER_TOUR_KEY)"), "invited owner with figures marks the tour done");
 assert(appSrc.includes("setInvitedOwnerEntry(true)"), "client link stamps invited-owner entry");
