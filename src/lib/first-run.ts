@@ -5,16 +5,41 @@
 
 export type FirstRunStep = "pick-type" | "first-data" | null;
 
+/** Accountant-preloaded figures (hydrated blob or `financials_updated_at` on meta). */
+export function ownerHasPreloadedFigures(opts: {
+  hasRealFinancials: boolean;
+  financialsUpdatedAt: string | null | undefined;
+}): boolean {
+  return opts.hasRealFinancials || Boolean(opts.financialsUpdatedAt);
+}
+
+/**
+ * Invited owner whose practice already loaded figures — skip profile funnel,
+ * bring-in-numbers, and the seven-step board tour; land on the scored Health tab.
+ */
+export function isInvitedOwnerWithFigures(opts: {
+  isInvitedOwner: boolean;
+  hasRealFinancials: boolean;
+  financialsUpdatedAt: string | null | undefined;
+}): boolean {
+  return opts.isInvitedOwner && ownerHasPreloadedFigures(opts);
+}
+
 /**
  * Open the 10-question profile when the owner has no operating profile yet.
  * A firm-picked `business_type` alone must not skip this — that left invited
  * SMEs on a blank board with no questions and no tour.
+ *
+ * Invited owners with preloaded figures skip the funnel; ProfileCompletionNote
+ * still nudges the six deferred questions later.
  */
 export function shouldShowOwnerProfileFunnel(opts: {
   hasOperatingProfile: boolean;
   actingClientId: string | null;
   userRole: string | null;
+  isInvitedOwnerWithFigures?: boolean;
 }): boolean {
+  if (opts.isInvitedOwnerWithFigures) return false;
   if (opts.hasOperatingProfile) return false;
   if (opts.actingClientId) return false;
   if (opts.userRole === null) return false;
