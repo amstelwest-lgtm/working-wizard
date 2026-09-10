@@ -1435,6 +1435,7 @@ export type Database = {
           client_id: string
           created_by: string
           purpose: string
+          invited_email: string | null
           expires_at: string
           redeemed_at: string | null
           redeemed_by: string | null
@@ -1446,6 +1447,7 @@ export type Database = {
           client_id: string
           created_by: string
           purpose?: string
+          invited_email?: string | null
           expires_at?: string
           redeemed_at?: string | null
           redeemed_by?: string | null
@@ -1457,6 +1459,7 @@ export type Database = {
           client_id?: string
           created_by?: string
           purpose?: string
+          invited_email?: string | null
           expires_at?: string
           redeemed_at?: string | null
           redeemed_by?: string | null
@@ -1795,6 +1798,10 @@ export type Database = {
       }
       mint_owner_invite: {
         Args: { p_client_id: string }
+        Returns: string
+      }
+      mint_accountant_invite: {
+        Args: { p_client_id: string; p_email: string }
         Returns: string
       }
       create_firm_client: {

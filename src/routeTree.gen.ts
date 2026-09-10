@@ -31,6 +31,7 @@ import { Route as ApiMetricsDigestRouteImport } from './routes/api/metrics-diges
 import { Route as ApiClientErrorRouteImport } from './routes/api/client-error'
 import { Route as AckTokenRouteImport } from './routes/ack.$token'
 import { Route as AccessTokenRouteImport } from './routes/access.$token'
+import { Route as JoinTokenRouteImport } from './routes/join.$token'
 import { Route as AuthenticatedOpsRouteImport } from './routes/_authenticated/ops'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedSettingsIndexRouteImport } from './routes/_authenticated/settings.index'
@@ -156,6 +157,11 @@ const AccessTokenRoute = AccessTokenRouteImport.update({
   path: '/access/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
+const JoinTokenRoute = JoinTokenRouteImport.update({
+  id: '/join/$token',
+  path: '/join/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthenticatedOpsRoute = AuthenticatedOpsRouteImport.update({
   id: '/ops',
   path: '/ops',
@@ -257,6 +263,7 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/ops': typeof AuthenticatedOpsRoute
   '/access/$token': typeof AccessTokenRoute
+  '/join/$token': typeof JoinTokenRoute
   '/ack/$token': typeof AckTokenRoute
   '/api/client-error': typeof ApiClientErrorRoute
   '/api/metrics-digest': typeof ApiMetricsDigestRoute
@@ -295,6 +302,7 @@ export interface FileRoutesByTo {
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/ops': typeof AuthenticatedOpsRoute
   '/access/$token': typeof AccessTokenRoute
+  '/join/$token': typeof JoinTokenRoute
   '/ack/$token': typeof AckTokenRoute
   '/api/client-error': typeof ApiClientErrorRoute
   '/api/metrics-digest': typeof ApiMetricsDigestRoute
@@ -335,6 +343,7 @@ export interface FileRoutesById {
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/ops': typeof AuthenticatedOpsRoute
   '/access/$token': typeof AccessTokenRoute
+  '/join/$token': typeof JoinTokenRoute
   '/ack/$token': typeof AckTokenRoute
   '/api/client-error': typeof ApiClientErrorRoute
   '/api/metrics-digest': typeof ApiMetricsDigestRoute
@@ -375,6 +384,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/ops'
     | '/access/$token'
+    | '/join/$token'
     | '/ack/$token'
     | '/api/client-error'
     | '/api/metrics-digest'
@@ -413,6 +423,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/ops'
     | '/access/$token'
+    | '/join/$token'
     | '/ack/$token'
     | '/api/client-error'
     | '/api/metrics-digest'
@@ -452,6 +463,7 @@ export interface FileRouteTypes {
     | '/_authenticated/dashboard'
     | '/_authenticated/ops'
     | '/access/$token'
+    | '/join/$token'
     | '/ack/$token'
     | '/api/client-error'
     | '/api/metrics-digest'
@@ -490,6 +502,7 @@ export interface RootRouteChildren {
   TermsRoute: typeof TermsRoute
   UnsubscribeRoute: typeof UnsubscribeRoute
   AccessTokenRoute: typeof AccessTokenRoute
+  JoinTokenRoute: typeof JoinTokenRoute
   AckTokenRoute: typeof AckTokenRoute
   ApiClientErrorRoute: typeof ApiClientErrorRoute
   ApiMetricsDigestRoute: typeof ApiMetricsDigestRoute
@@ -663,6 +676,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AccessTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/join/$token': {
+      id: '/join/$token'
+      path: '/join/$token'
+      fullPath: '/join/$token'
+      preLoaderRoute: typeof JoinTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_authenticated/ops': {
       id: '/_authenticated/ops'
       path: '/ops'
@@ -813,6 +833,7 @@ const rootRouteChildren: RootRouteChildren = {
   TermsRoute: TermsRoute,
   UnsubscribeRoute: UnsubscribeRoute,
   AccessTokenRoute: AccessTokenRoute,
+  JoinTokenRoute: JoinTokenRoute,
   AckTokenRoute: AckTokenRoute,
   ApiClientErrorRoute: ApiClientErrorRoute,
   ApiMetricsDigestRoute: ApiMetricsDigestRoute,

@@ -41,6 +41,7 @@
     "test:orb-contrast": "vite-node --config scripts/vite-test.config.ts scripts/orb-contrast-test.mts",
     "test:review-signoff": "vite-node --config scripts/vite-test.config.ts scripts/review-signoff-test.mts",
     "test:client-invite-email": "vite-node --config scripts/vite-test.config.ts scripts/client-invite-email-test.mts",
+    "test:accountant-invite": "vite-node --config scripts/vite-test.config.ts scripts/accountant-invite-test.mts",
     "test:product-usage": "vite-node --config scripts/vite-test.config.ts scripts/product-usage-test.mts",
     "test:analytics-events": "vite-node --config scripts/vite-test.config.ts scripts/analytics-events-test.mts",
     "test:analytics-metrics": "vite-node --config scripts/vite-test.config.ts scripts/analytics-metrics-test.mts",

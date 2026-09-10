@@ -12,6 +12,8 @@ type InviteTokenRow = {
   expires_at: string | null;
   redeemed_at: string | null;
   redeemed_by?: string | null;
+  purpose?: string | null;
+  invited_email?: string | null;
 };
 
 const inviteTokens = () => supabaseAdmin.from("invite_tokens");
@@ -67,14 +69,24 @@ export async function resolveInviteToClientId(
   legacy?: boolean;
   /** Caller already claimed this token (Google callback remount / retry). */
   alreadyRedeemedByCaller?: boolean;
+  purpose?: string | null;
+  invitedEmail?: string | null;
 }> {
   const trimmed = invite.trim();
   if (!trimmed) throw new Error("Invite link is invalid.");
 
-  const { data, error } = await inviteTokens()
-    .select("id, client_id, expires_at, redeemed_at, redeemed_by")
+  let { data, error } = await inviteTokens()
+    .select("id, client_id, expires_at, redeemed_at, redeemed_by, purpose, invited_email")
     .eq("token", trimmed)
     .maybeSingle();
+  if (error && (error.message ?? "").includes("invited_email")) {
+    const retry = await inviteTokens()
+      .select("id, client_id, expires_at, redeemed_at, redeemed_by, purpose")
+      .eq("token", trimmed)
+      .maybeSingle();
+    data = retry.data as typeof data;
+    error = retry.error;
+  }
 
   if (error) {
     if (isMissingRelation(error)) {
@@ -95,6 +107,8 @@ export async function resolveInviteToClientId(
           clientId: row.client_id,
           tokenId: row.id,
           alreadyRedeemedByCaller: true,
+          purpose: row.purpose ?? null,
+          invitedEmail: row.invited_email ?? null,
         };
       }
       throw new Error("This invite has already been used.");
@@ -102,7 +116,12 @@ export async function resolveInviteToClientId(
     if (row.expires_at && new Date(row.expires_at).getTime() < Date.now()) {
       throw new Error("This invite has expired. Ask your accountant for a new link.");
     }
-    return { clientId: row.client_id, tokenId: row.id };
+    return {
+      clientId: row.client_id,
+      tokenId: row.id,
+      purpose: row.purpose ?? null,
+      invitedEmail: row.invited_email ?? null,
+    };
   }
 
   // Token table exists but no row — try legacy UUID clipboard links.

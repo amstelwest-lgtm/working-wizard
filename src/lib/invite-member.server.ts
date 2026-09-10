@@ -16,6 +16,7 @@
  */
 
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { assertOwnerHandoffPurpose } from "@/lib/accountant-invite";
 import {
   attachInviteRedeemer,
   claimInviteToken,
@@ -153,6 +154,7 @@ async function prepareInvite(
   redeemedByUserId?: string,
 ): Promise<PreparedInvite> {
   const resolved = await resolveInviteToClientId(inviteClientId, { redeemedByUserId });
+  assertOwnerHandoffPurpose(resolved.purpose);
   const client = await loadInviteClient(resolved.clientId);
   assertClientCode(client, inviteClientCode);
   const shouldTransfer = await isPracticePlaceholderOwner(client.owner_user_id, client.firm_id);

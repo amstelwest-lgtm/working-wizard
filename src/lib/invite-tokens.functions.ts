@@ -77,7 +77,9 @@ export const previewOwnerInvite = createServerFn({ method: "POST" })
   .inputValidator((input) => z.object({ token: z.string().trim().min(8).max(80) }).parse(input))
   .handler(async ({ data }) => {
     const { resolveInviteToClientId } = await import("@/lib/invite-tokens.resolve");
+    const { assertOwnerHandoffPurpose } = await import("@/lib/accountant-invite");
     const resolved = await resolveInviteToClientId(data.token);
+    assertOwnerHandoffPurpose(resolved.purpose);
     const first = await supabaseAdmin
       .from("clients")
       .select("name, client_code")
