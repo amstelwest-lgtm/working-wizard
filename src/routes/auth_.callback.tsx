@@ -32,6 +32,11 @@ import {
   setPortalIntent,
   shouldOpenItInbox,
 } from "@/lib/user-roles";
+import {
+  OwnerInviteCard,
+  OwnerInviteEyebrow,
+  OwnerInviteShell,
+} from "@/components/owner-invite-shell";
 
 export const Route = createFileRoute("/auth_/callback")({
   component: AuthCallbackPage,
@@ -46,6 +51,16 @@ function AuthCallbackPage() {
   const doAcceptOwnerInvite = useServerFn(acceptOwnerInvite);
   const [error, setError] = useState("");
   const [inviteContinue, setInviteContinue] = useState<string | null>(null);
+  const [working, setWorking] = useState(true);
+
+  useEffect(() => {
+    const el = document.documentElement;
+    const hadDark = el.classList.contains("dark");
+    el.classList.add("dark");
+    return () => {
+      if (!hadDark) el.classList.remove("dark");
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -53,6 +68,7 @@ function AuthCallbackPage() {
       const established = await establishSessionFromOAuthCallback();
       if (cancelled) return;
       if (established.error) {
+        setWorking(false);
         setError(established.error);
         return;
       }
@@ -60,6 +76,7 @@ function AuthCallbackPage() {
       const { data } = await supabase.auth.getUser();
       const user = data.user;
       if (!user) {
+        setWorking(false);
         setError("Google sign-in did not complete. Please try again.");
         return;
       }
@@ -119,6 +136,7 @@ function AuthCallbackPage() {
           stashPendingOwnerInvite(pendingInvite.token, pendingInvite.clientCode);
           const msg = err instanceof Error ? err.message : "Could not accept the invite.";
           if (!cancelled) {
+            setWorking(false);
             setError(msg);
             setInviteContinue(ownerInviteLandingPath(pendingInvite.token));
           }
@@ -201,31 +219,51 @@ function AuthCallbackPage() {
     };
   }, [doAcceptOwnerInvite, ensurePractice, navigate]);
 
-  return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4 gap-4">
-      <img src="/milon-wordmark.png" alt="Milōn" className="h-8 w-auto" />
-      {error ? (
-        <div className="w-full max-w-md rounded-xl border border-border bg-card p-6 text-center space-y-3">
-          <h1 className="text-lg font-semibold">Could not sign in with Google</h1>
-          <p className="text-sm text-muted-foreground">{error}</p>
-          <div className="flex flex-wrap justify-center gap-3 pt-2 text-sm">
-            <Link to="/" className="text-primary underline">
-              Back home
-            </Link>
+  if (error) {
+    return (
+      <OwnerInviteShell>
+        <OwnerInviteEyebrow>{inviteContinue ? "Invitation" : "Sign in"}</OwnerInviteEyebrow>
+        <h1 className="mt-2 text-[22px] font-semibold tracking-tight text-[#e8ede9]">
+          {inviteContinue ? "Could not accept invitation" : "Could not sign in with Google"}
+        </h1>
+        <OwnerInviteCard className="mt-6 text-center">
+          <p className="text-sm leading-relaxed text-[#8a938c]">{error}</p>
+          <div className="mt-6 flex flex-col gap-3">
             {inviteContinue ? (
-              <a href={inviteContinue} className="text-primary underline">
-                Continue invite
+              <a
+                href={inviteContinue}
+                className="inline-flex h-11 w-full items-center justify-center rounded-xl bg-gradient-to-r from-[#ac8400] via-[#d4af37] to-[#fdee79] px-5 text-xs font-bold uppercase tracking-[0.14em] text-[#1b1300]"
+              >
+                Continue invitation
               </a>
             ) : (
-              <Link to="/auth" search={{}} className="text-primary underline">
-                Accountant portal
+              <Link
+                to="/"
+                className="inline-flex h-11 w-full items-center justify-center rounded-xl bg-gradient-to-r from-[#ac8400] via-[#d4af37] to-[#fdee79] px-5 text-xs font-bold uppercase tracking-[0.14em] text-[#1b1300]"
+              >
+                Back home
               </Link>
             )}
+            {!inviteContinue ? (
+              <Link
+                to="/auth"
+                search={{}}
+                className="inline-flex h-11 w-full items-center justify-center rounded-xl border border-white/15 px-5 text-xs font-bold uppercase tracking-[0.14em] text-[#c9d0cb]"
+              >
+                Accountant portal
+              </Link>
+            ) : null}
           </div>
-        </div>
-      ) : (
-        <p className="text-sm text-muted-foreground">Signing you in with Google…</p>
-      )}
-    </div>
+        </OwnerInviteCard>
+      </OwnerInviteShell>
+    );
+  }
+
+  return (
+    <OwnerInviteShell loading={working} loadingMessage="Completing sign-in…">
+      {!working ? (
+        <p className="text-center text-sm text-[#8a938c]">Redirecting to your workspace…</p>
+      ) : null}
+    </OwnerInviteShell>
   );
 }
