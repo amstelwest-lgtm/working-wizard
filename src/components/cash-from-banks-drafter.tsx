@@ -30,6 +30,10 @@ import { fileToText, isSpreadsheetFile, isTextFile } from "@/lib/spreadsheet-tex
 import { pdfTransport, transportPaths, unstage } from "@/lib/staged-upload-browser";
 import { useMarket } from "@/contexts/market";
 import { selectionPayload } from "@/lib/market";
+import { UploadVisibilityChoice } from "@/components/upload-visibility-choice";
+import type { UploadDocumentsTarget } from "@/components/bank-statement-drafter";
+import { archiveUploads, describeArchiveFailures } from "@/lib/client-documents-browser";
+import { DEFAULT_UPLOAD_VISIBILITY, type UploadVisibility } from "@/lib/client-documents";
 
 interface Props {
   open: boolean;
@@ -44,6 +48,8 @@ interface Props {
    * When set, skip the upload step and open the classification workspace.
    */
   initialDraft?: CashFromBanksDraftResult | null;
+  /** Owner side only: archive the statements with an explicit visibility. */
+  documents?: UploadDocumentsTarget | null;
 }
 
 export function CashFromBanksDrafter({
@@ -53,6 +59,7 @@ export function CashFromBanksDrafter({
   onPublish,
   onSaveDraft,
   initialDraft = null,
+  documents = null,
 }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [files, setFiles] = useState<File[]>([]);
@@ -64,6 +71,16 @@ export function CashFromBanksDrafter({
   const [openingBalance, setOpeningBalance] = useState("0");
   const doDraft = useServerFn(draftCashForecastFromBankStatements);
   const { selection } = useMarket();
+  const [visibility, setVisibility] = useState<UploadVisibility>(
+    documents?.defaultVisibility ?? DEFAULT_UPLOAD_VISIBILITY,
+  );
+  useEffect(() => {
+    if (open) setVisibility(documents?.defaultVisibility ?? DEFAULT_UPLOAD_VISIBILITY);
+  }, [open, documents?.defaultVisibility]);
+  const chooseVisibility = (next: UploadVisibility) => {
+    setVisibility(next);
+    documents?.onVisibilityChange?.(next);
+  };
 
   const hydrate = (draft: CashFromBanksDraftResult) => {
     setResult(draft);
@@ -132,14 +149,26 @@ export function CashFromBanksDrafter({
           return { fileName: f.name, ...(await pdfTransport(f)) };
         }),
       );
+      // Leave the staged PDFs in place so they can be copied into the
+      // owner's documents below; the finally block removes them either way.
       const draft = await doDraft({
-        data: { files: payloadFiles, market: selectionPayload(selection) },
+        data: { files: payloadFiles, market: selectionPayload(selection), retainStaged: true },
       });
       setResult(draft);
       setLines(draft.lines);
       setStartDate(draft.startDate);
       setOpeningBalance(String(draft.openingBalance));
       await onSaveDraft?.(draft);
+      if (documents) {
+        const archived = await archiveUploads({
+          clientId: documents.clientId,
+          visibility,
+          source: "cash_pack",
+          items: files.map((f, i) => ({ file: f, storagePath: payloadFiles[i]?.storagePath })),
+        });
+        const problem = describeArchiveFailures(archived);
+        if (problem) toast.warning(problem);
+      }
     } catch (e) {
       toast.error(`Cash draft failed: ${(e as Error).message}`);
     } finally {
@@ -251,6 +280,15 @@ export function CashFromBanksDrafter({
                   </li>
                 ))}
               </ul>
+            )}
+
+            {documents && (
+              <UploadVisibilityChoice
+                value={visibility}
+                onChange={chooseVisibility}
+                name="cash-pack-visibility"
+                disabled={working}
+              />
             )}
 
             <Button

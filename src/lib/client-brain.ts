@@ -40,6 +40,8 @@ export type ClientArtifact = {
   storage_path: string | null;
   period_label: string | null;
   meta: Json;
+  /** 'private' (owner side only) or 'shared' (anyone with client access). */
+  visibility?: "private" | "shared" | string;
   created_by: string | null;
   created_at: string;
 };

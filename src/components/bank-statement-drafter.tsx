@@ -43,6 +43,21 @@ import { PERIOD_MONTHS_KEY } from "@/lib/ratios";
 import { MovementsTrialBalancePanel } from "@/components/movements-trial-balance-panel";
 import { AutoPopulateOptions } from "@/components/auto-populate-options";
 import { defaultAutoPopulatePrefs, type AutoPopulatePrefs } from "@/lib/auto-populate";
+import { UploadVisibilityChoice } from "@/components/upload-visibility-choice";
+import { archiveUploads, describeArchiveFailures } from "@/lib/client-documents-browser";
+import { DEFAULT_UPLOAD_VISIBILITY, type UploadVisibility } from "@/lib/client-documents";
+
+/**
+ * Owner side only: keep the statement pack in the client's documents with an
+ * explicit visibility. Accountant callers leave this undefined — nothing is
+ * archived and the dialog behaves as before.
+ */
+export interface UploadDocumentsTarget {
+  clientId: string;
+  /** Starting choice; the dialog still shows it before anything is read. */
+  defaultVisibility?: UploadVisibility;
+  onVisibilityChange?: (next: UploadVisibility) => void;
+}
 
 export interface BankDraftApplyPayload {
   /** String figures keyed by the app's Inputs keys (revenue, cogs, ebit, ebt, netIncome, fixedCosts). */
@@ -68,6 +83,7 @@ interface Props {
   onApply: (payload: BankDraftApplyPayload) => void;
   /** Loaded per client before the dialog opens; undefined while loading → treated as first upload. */
   autoPopulate?: AutoPopulateDialogState | null;
+  documents?: UploadDocumentsTarget | null;
 }
 
 function fmt(n: number, currency: string | null, money: (n: number) => string): string {
@@ -83,7 +99,7 @@ function fmt(n: number, currency: string | null, money: (n: number) => string): 
   return money(n);
 }
 
-export function BankStatementDrafter({ open, onClose, onApply, autoPopulate }: Props) {
+export function BankStatementDrafter({ open, onClose, onApply, autoPopulate, documents }: Props) {
   const { money, t, selection } = useMarketFormat();
   const checking = t("checking");
   const inputRef = useRef<HTMLInputElement>(null);
@@ -101,6 +117,16 @@ export function BankStatementDrafter({ open, onClose, onApply, autoPopulate }: P
     if (open) setAutoPrefs(autoPopulate?.prefs ?? defaultAutoPopulatePrefs());
   }, [open, autoPopulate?.prefs]);
   const firstUpload = autoPopulate?.firstUpload ?? true;
+  const [visibility, setVisibility] = useState<UploadVisibility>(
+    documents?.defaultVisibility ?? DEFAULT_UPLOAD_VISIBILITY,
+  );
+  useEffect(() => {
+    if (open) setVisibility(documents?.defaultVisibility ?? DEFAULT_UPLOAD_VISIBILITY);
+  }, [open, documents?.defaultVisibility]);
+  const chooseVisibility = (next: UploadVisibility) => {
+    setVisibility(next);
+    documents?.onVisibilityChange?.(next);
+  };
   const doDraftPnL = useServerFn(draftFinancialsFromBankStatements);
   const doDraftCash = useServerFn(draftCashForecastFromBankStatements);
 
@@ -167,6 +193,24 @@ export function BankStatementDrafter({ open, onClose, onApply, autoPopulate }: P
         ...pnlResult.warnings,
         ...(cashResult.warnings ?? []).filter((w) => !pnlResult.warnings.includes(w)),
       ]);
+
+      // Owner side: keep the pack with the visibility chosen above. The staged
+      // PDFs are still in place (retainStaged), so this is a copy, not a re-upload.
+      if (documents) {
+        setDraftProgress("Saving statements to your documents…");
+        const archived = await archiveUploads({
+          clientId: documents.clientId,
+          visibility,
+          source: "bank_pack",
+          items: slots.map((s, i) => ({
+            file: s.file,
+            storagePath: payloadFiles[i]?.storagePath,
+            accountLabel: s.accountLabel,
+          })),
+        });
+        const problem = describeArchiveFailures(archived);
+        if (problem) toast.warning(problem);
+      }
     } catch (e) {
       toast.error(`Drafting failed: ${(e as Error).message}`);
     } finally {
@@ -319,6 +363,15 @@ export function BankStatementDrafter({ open, onClose, onApply, autoPopulate }: P
                   Add another account / statement
                 </button>
               </div>
+            )}
+
+            {documents && (
+              <UploadVisibilityChoice
+                value={visibility}
+                onChange={chooseVisibility}
+                name="bank-pack-visibility"
+                disabled={drafting}
+              />
             )}
 
             <Button onClick={runDraft} disabled={slots.length === 0 || drafting} className="w-full">

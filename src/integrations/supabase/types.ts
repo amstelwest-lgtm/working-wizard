@@ -918,6 +918,7 @@ export type Database = {
           storage_path: string | null
           period_label: string | null
           meta: Json
+          visibility: string
           created_by: string | null
           created_at: string
         }
@@ -930,6 +931,7 @@ export type Database = {
           storage_path?: string | null
           period_label?: string | null
           meta?: Json
+          visibility?: string
           created_by?: string | null
           created_at?: string
         }
@@ -942,6 +944,7 @@ export type Database = {
           storage_path?: string | null
           period_label?: string | null
           meta?: Json
+          visibility?: string
           created_by?: string | null
           created_at?: string
         }

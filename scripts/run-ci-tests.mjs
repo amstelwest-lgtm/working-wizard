@@ -5,7 +5,12 @@ import { readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 
 // These talk to Supabase and need SUPABASE_URL + keys; run them by hand.
-const NEEDS_DB = new Set(["test:onboarding", "test:invited-member", "test:ci"]);
+const NEEDS_DB = new Set([
+  "test:onboarding",
+  "test:invited-member",
+  "test:upload-visibility-rls",
+  "test:ci",
+]);
 
 const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
 const scripts = Object.keys(pkg.scripts)

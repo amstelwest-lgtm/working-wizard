@@ -207,6 +207,10 @@ import {
   isTextFile,
 } from "@/lib/spreadsheet-text";
 import { pdfTransport, unstage, type PdfTransport } from "@/lib/staged-upload-browser";
+import { UploadVisibilityChoice } from "@/components/upload-visibility-choice";
+import { OwnerUploadsPanel } from "@/components/owner-uploads-panel";
+import { archiveUploads, describeArchiveFailures } from "@/lib/client-documents-browser";
+import { DEFAULT_UPLOAD_VISIBILITY, type UploadVisibility } from "@/lib/client-documents";
 import { QboConnectCard } from "@/components/qbo-connect";
 import { Button } from "@/components/ui/button";
 import { SphereHero } from "@/components/sphere-hero";
@@ -2087,6 +2091,30 @@ function Index() {
   const [weeklyInputs, setWeeklyInputs] = useState<WeeklyInputs>({ weeks: {} });
   const [productMix, setProductMix] = useState<ProductMix>(emptyProductMix);
   const [showFinData, setShowFinData] = useState(false);
+  // Per-upload visibility the owner picks in the Financial Data dialog. Every
+  // owner upload path (statement, bank pack, cash pack) starts from it, and
+  // the drafters keep it in sync when the owner changes it inside them.
+  const [uploadVisibility, setUploadVisibility] =
+    useState<UploadVisibility>(DEFAULT_UPLOAD_VISIBILITY);
+  // Read at upload time by handleStatementUpload; kept in a ref so the
+  // callback never captures a stale client or choice.
+  const archiveTargetRef = useRef<{ clientId: string | null; visibility: UploadVisibility }>({
+    clientId: null,
+    visibility: DEFAULT_UPLOAD_VISIBILITY,
+  });
+
+  const archiveStatementUpload = useCallback(async (file: File, storagePath?: string) => {
+    const { clientId, visibility } = archiveTargetRef.current;
+    if (!clientId) return;
+    const archived = await archiveUploads({
+      clientId,
+      visibility,
+      source: "financial_statement",
+      items: [{ file, storagePath }],
+    });
+    const problem = describeArchiveFailures(archived);
+    if (problem) toast.warning(problem);
+  }, []);
 
   const handleStatementUpload = useCallback(
     async (file: File) => {
@@ -2108,8 +2136,10 @@ function Index() {
             data: {
               files: [{ ...staged, fileName: file.name }],
               market: selectionPayload(coerceMarketSelection(workspaceMarket)),
+              retainStaged: true,
             },
           })) as MergedExtractionResult;
+          await archiveStatementUpload(file, staged.storagePath);
           // Open review modal — user confirms before values are applied
           setExtractionForReview(extraction);
           setShowFinData(false);
@@ -2139,6 +2169,7 @@ function Index() {
           if (extracted.top5Revenue) csvExtras.top5Revenue = extracted.top5Revenue;
           if (extracted.founderHours) csvExtras.founderHours = extracted.founderHours;
           if (Object.keys(csvExtras).length) setPendingCsvExtras(csvExtras);
+          await archiveStatementUpload(file);
           // Open review modal so owner can verify values before they are applied
           const reviewResult = flatExtractionToMergedResult(extracted, file.name);
           setExtractionForReview(reviewResult);
@@ -2153,7 +2184,7 @@ function Index() {
         await unstage([staged?.storagePath]);
       }
     },
-    [doExtract, doExtractPdf, workspaceMarket],
+    [doExtract, doExtractPdf, workspaceMarket, archiveStatementUpload],
   );
 
   const [actingClientId, setActingClientId] = useState<string | null>(null);
@@ -2197,6 +2228,7 @@ function Index() {
   >([]);
 
   const [effectiveClientId, setEffectiveClientId] = useState<string | null>(null);
+  archiveTargetRef.current = { clientId: effectiveClientId, visibility: uploadVisibility };
   const [clientLinkResolved, setClientLinkResolved] = useState(false);
   /** Fresh invite accept or metadata-stamped invited workspace — not self-signup. */
   const [invitedOwnerEntry, setInvitedOwnerEntry] = useState(() =>
@@ -5155,6 +5187,14 @@ function Index() {
                   if (f) handleStatementUpload(f);
                 }}
               />
+              {effectiveClientId && (
+                <UploadVisibilityChoice
+                  value={uploadVisibility}
+                  onChange={setUploadVisibility}
+                  name="financial-data-visibility"
+                  disabled={uploading}
+                />
+              )}
               <div className="grid gap-3 sm:grid-cols-2">
                 <button
                   disabled={uploading}
@@ -5235,6 +5275,9 @@ function Index() {
                   </span>
                 </button>
               </div>
+              {effectiveClientId && (
+                <OwnerUploadsPanel clientId={effectiveClientId} refreshKey={showFinData} />
+              )}
               <div>
                 <Button
                   size="sm"
@@ -5320,6 +5363,15 @@ function Index() {
             open={showBankDrafter}
             onClose={() => setShowBankDrafter(false)}
             autoPopulate={autoPopulateState ? { ...autoPopulateState, role: "owner" } : null}
+            documents={
+              effectiveClientId
+                ? {
+                    clientId: effectiveClientId,
+                    defaultVisibility: uploadVisibility,
+                    onVisibilityChange: setUploadVisibility,
+                  }
+                : null
+            }
             onApply={async ({ fields, annualised, cashDraft, draft, autoPopulate }) => {
               setV((prev) => ({ ...prev, ...fields }) as Inputs);
               setHasRealFinancials(true);
@@ -5365,6 +5417,15 @@ function Index() {
             }}
             initialDraft={bankCashDraft}
             existingCashflow={existingCashflowForBanks as never}
+            documents={
+              effectiveClientId
+                ? {
+                    clientId: effectiveClientId,
+                    defaultVisibility: uploadVisibility,
+                    onVisibilityChange: setUploadVisibility,
+                  }
+                : null
+            }
             onSaveDraft={async (draft) => {
               if (!effectiveClientId) return;
               await supabase

@@ -17,6 +17,7 @@ import { useFinancialInputs } from "@/contexts/financial-inputs";
 import { invokeBrainPropose } from "@/lib/brain-propose-client";
 import { invokeBrainDeliverableDraft } from "@/lib/brain-deliverable-client";
 import { ClientBrainDrafts } from "@/components/client-brain-drafts";
+import { SharedDocumentsList } from "@/components/shared-documents-list";
 import { PanelSkeleton } from "@/components/primitives";
 import {
   asBrainSummaryObject,
@@ -259,6 +260,10 @@ export function ClientBrainSummary({
   });
   const latestSnapshot = snapshots[0] ?? null;
   const uploadSnaps = snapshots.filter((s) => s.source === "upload").slice(0, 3);
+  // Files the owner chose to share. RLS already hides private ones; this
+  // list only ever contains what the caller may open.
+  const sharedDocs = artifacts.filter((a) => a.kind === "upload" && a.storage_path);
+  const ledgerArtifacts = artifacts.filter((a) => !(a.kind === "upload" && a.storage_path));
   const budgetDoc = budget && typeof budget === "object" ? (budget as Record<string, unknown>) : null;
   const budgetFy = typeof budgetDoc?.fyStart === "string" ? budgetDoc.fyStart : null;
   const budgetLines = Array.isArray(budgetDoc?.revenueLines) ? budgetDoc.revenueLines.length : 0;
@@ -723,14 +728,19 @@ export function ClientBrainSummary({
             </div>
 
             <div className="brain-divider">
+              <span className="section-kicker">Shared documents</span>
+              <SharedDocumentsList docs={sharedDocs} />
+            </div>
+
+            <div className="brain-divider">
               <span className="section-kicker">Artifact ledger</span>
-              {artifacts.length === 0 ? (
+              {ledgerArtifacts.length === 0 ? (
                 <p className="sub" style={{ margin: "8px 0 0" }}>
                   No rows in client_artifacts yet.
                 </p>
               ) : (
                 <ul className="brain-list" style={{ marginTop: 10 }}>
-                  {artifacts.map((a) => (
+                  {ledgerArtifacts.map((a) => (
                     <li
                       key={a.id}
                       className="brain-row-block"
