@@ -34,6 +34,16 @@ export function stripeConfigured(): boolean {
   );
 }
 
+export function stripePublishableConfigured(): boolean {
+  return Boolean(
+    (
+      process.env.STRIPE_PUBLISHABLE_KEY ||
+      process.env.VITE_STRIPE_PUBLISHABLE_KEY ||
+      ""
+    ).trim(),
+  );
+}
+
 let client: Stripe | undefined;
 
 /** Shared Stripe client for server-side API calls. */

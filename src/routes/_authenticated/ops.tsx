@@ -35,6 +35,7 @@ import {
   type OpsAccess,
   type OpsDashboard,
 } from "@/lib/owner-ops.functions";
+import { createOwnerStripeCheckout } from "@/lib/stripe-checkout.functions";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { LighthousePanel, parseLighthouseTab } from "@/components/lighthouse-panel";
 import { LighthouseItPanel } from "@/components/lighthouse-it";
@@ -83,6 +84,7 @@ function OwnerOpsPage() {
   const saveFlags = useServerFn(upsertOpsFeatureFlags);
   const saveNotes = useServerFn(upsertOpsPilotNotes);
   const createPayment = useServerFn(addOpsPayment);
+  const startStripeCheckout = useServerFn(createOwnerStripeCheckout);
   const [unlocked, setUnlocked] = useState(false);
   const [access, setAccess] = useState<OpsAccess | null>(null);
   const [accessChecked, setAccessChecked] = useState(false);
@@ -107,6 +109,8 @@ function OwnerOpsPage() {
     resend: boolean;
     resendWebhook: boolean;
     siteUrl: boolean;
+    stripeSecret: boolean;
+    stripePublishable: boolean;
   } | null>(null);
 
   const [payAmount, setPayAmount] = useState("");
@@ -116,6 +120,7 @@ function OwnerOpsPage() {
   const [payStatus, setPayStatus] = useState<"received" | "pending" | "refunded">("received");
   const [payNote, setPayNote] = useState("");
   const [payBusy, setPayBusy] = useState(false);
+  const [checkoutBusy, setCheckoutBusy] = useState(false);
 
   useEffect(() => {
     try {
@@ -427,6 +432,30 @@ function OwnerOpsPage() {
                     {envDiag.siteUrl ? "yes" : "no"}
                   </span>
                 </li>
+                <li>
+                  STRIPE_SECRET:{" "}
+                  <span
+                    className={
+                      envDiag.stripeSecret
+                        ? "text-[var(--ops-ok-ink)]"
+                        : "text-[var(--ops-amber)]"
+                    }
+                  >
+                    {envDiag.stripeSecret ? "yes" : "no"}
+                  </span>
+                </li>
+                <li>
+                  STRIPE_PUBLISHABLE:{" "}
+                  <span
+                    className={
+                      envDiag.stripePublishable
+                        ? "text-[var(--ops-ok-ink)]"
+                        : "text-[var(--ops-amber)]"
+                    }
+                  >
+                    {envDiag.stripePublishable ? "yes" : "no"}
+                  </span>
+                </li>
               </ul>
               <p className="mt-2 text-[11px] text-[var(--ops-ink-dim)]">{envDiag.hint}</p>
             </div>
@@ -652,9 +681,38 @@ function OwnerOpsPage() {
                 <Stat label="YTD received" value={dash.revenue.receivedYtdLabel} />
               </div>
               <p className="mt-2 text-[11px] text-[var(--ops-ink-dim)]">
-                All-time received: {dash.revenue.allTimeReceivedLabel}. Billing isn’t live yet — log
-                cash here manually until Stripe/PayFast lands.
+                All-time received: {dash.revenue.allTimeReceivedLabel}. Public billing is still
+                waitlist. Stripe secret:{" "}
+                {dash.stripe.secretPresent ? "present on this deploy" : "missing"}. Publishable:{" "}
+                {dash.stripe.publishablePresent ? "present" : "missing"}. Log cash here until
+                customer Checkout is switched on.
               </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={checkoutBusy || !dash.stripe.secretPresent}
+                  onClick={async () => {
+                    setCheckoutBusy(true);
+                    try {
+                      const { url } = await startStripeCheckout({
+                        data: { plan: "orbit", market: "za" },
+                      });
+                      window.location.href = url;
+                    } catch (ex) {
+                      toast.error(
+                        ex instanceof Error ? ex.message : "Could not start Stripe Checkout",
+                      );
+                      setCheckoutBusy(false);
+                    }
+                  }}
+                  className="inline-flex h-9 items-center rounded-full border border-amber-500/40 px-4 text-xs font-semibold uppercase tracking-wider text-[var(--ops-amber)] hover:bg-amber-500/10 disabled:opacity-50"
+                >
+                  {checkoutBusy ? (
+                    <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                  ) : null}
+                  Test Orbit checkout (ZAR)
+                </button>
+              </div>
 
               <form
                 className="mt-4 grid gap-2 rounded-2xl border border-[var(--ops-line)] bg-[var(--ops-card)] p-4 sm:grid-cols-6"
