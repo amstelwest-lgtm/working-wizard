@@ -43,6 +43,11 @@ export default defineConfig({
       "import.meta.env.VITE_SUPABASE_PROJECT_ID": JSON.stringify(
         process.env.VITE_SUPABASE_PROJECT_ID ?? ""
       ),
+      "import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY": JSON.stringify(
+        process.env.STRIPE_PUBLISHABLE_KEY ??
+          process.env.VITE_STRIPE_PUBLISHABLE_KEY ??
+          ""
+      ),
     },
   },
 });
