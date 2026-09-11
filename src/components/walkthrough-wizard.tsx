@@ -213,7 +213,7 @@ const ACCOUNTANT_CLIENT_STEPS: Step[] = [
     targetId: "pane-reports",
     section: "Reports",
     title: "Deliver branded advice",
-    body: "Same Reports Studio as the rest of the practice. Sign off Health, Profit, Cash or Budget first — each stamp carries into the board-ready PDF you generate here.",
+    body: "This is the same Reports Studio as the rest of the practice. Sign off Health, Profit, Cash or Budget first — each stamp carries into the board-ready PDF you generate here.",
   },
   {
     tab: "plan",
