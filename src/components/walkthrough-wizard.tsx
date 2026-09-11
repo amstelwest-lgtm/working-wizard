@@ -55,18 +55,22 @@ const OWNER_EMPTY_STEPS: Step[] = [
     targetId: "wizard-first-figures",
     section: "Figures",
     title: "Step 2 of 2 · Bring in your numbers",
-    body: "This is the only thing to do right now. One upload is enough — bank statements, a financial statement, or typed figures — and Health, Profit, Cash, Budget and Next moves all fill in from it.",
+    body: "This is the only thing to do right now. One upload — bank statements or a financial statement — and Milōn drafts your Profit waterfall, 13-week Cash forecast and Budget from it, then queues each for your accountant to review and sign off. Nothing is final until they do.",
   },
 ];
 
-/** Owner: profile+banks happen before this tour; walk the operating board once. */
+/**
+ * Owner: profile + first upload happen before this tour; walk the operating
+ * board once. The first upload has already drafted Profit, Cash and Budget
+ * (#175), so those steps say so — and that each waits for accountant sign-off.
+ */
 const OWNER_STEPS: Step[] = [
   {
     tab: "today",
     targetId: ".health-orb",
     section: "Business Health",
     title: "Start here — one health score",
-    body: "This orb is your weekly pulse: profit, assets, financing and cash rolled into one number. Tap it anytime to drill into the four pillars.",
+    body: "This orb is your weekly pulse: profit, assets, financing and cash rolled into one number. Tap it anytime to drill into the four pillars. When your accountant signs off, their signature appears beside it.",
   },
   {
     tab: "today",
@@ -79,22 +83,22 @@ const OWNER_STEPS: Step[] = [
     tab: "waterfall",
     targetId: "wizard-profit-walk",
     section: "Profit",
-    title: "Follow the money down the waterfall",
-    body: "Profit shows how revenue becomes net profit, step by step. Use it when a margin looks wrong or you need to explain the story to someone else.",
+    title: "Your profit story, drafted from the upload",
+    body: "Milōn built this waterfall — revenue to net profit, step by step — from the figures you just uploaded. It is a draft until your accountant reviews and signs it off; their stamp lands top-right when they do.",
   },
   {
     tab: "cash",
     targetId: "wizard-cash-outlook, wizard-cash-table, wizard-cash-panel",
     section: "Cash Forecast",
-    title: "Look 13 weeks ahead on cash",
-    body: "Cash Outlook shows closing balances and flags shortfall weeks early. Keep this current — bank statements can draft it for you.",
+    title: "13 weeks of cash, already forecast",
+    body: "Closing balances and shortfall weeks, drafted from the same upload — no second step. Your accountant reviews and signs off before you lean on it. Each new statement refreshes the forecast and asks them to look again.",
   },
   {
     tab: "budget",
     targetId: "wizard-budget-plan, wizard-budget-panel",
     section: "Budget",
-    title: "Your year plan, already seeded",
-    body: "This is the living budget — months of revenue, costs and cash from your profile and figures. Further down you can upload a monthly P&L for Budget vs Actuals.",
+    title: "Your year plan, already built",
+    body: "Months of revenue, costs and cash, seeded from your profile and upload. Like Profit and Cash, it waits for your accountant's sign-off. Further down, a monthly P&L turns it into Budget vs Actuals.",
   },
   {
     tab: "next",
@@ -129,13 +133,13 @@ const ACCOUNTANT_DASH_STEPS: Step[] = [
     targetId: "wizard-dash-reports",
     section: "Reports",
     title: "Reports you can charge for",
-    body: "Reports studio is where branded PDFs live. Generate them from inside a client workspace after the numbers are solid.",
+    body: "Reports studio is where branded PDFs live. Generate them from inside a client workspace once you have reviewed and signed off the figures behind them.",
   },
   {
     targetId: "wizard-add-client",
     section: "Grow the book",
     title: "Add the next client the same way",
-    body: "Use Add client, upload ~3 months of banks, then walk Health → Cash → Budget → Reports → Action Plan once. That loop is the practice.",
+    body: "Use Add client and upload ~3 months of banks. Milōn drafts Profit, Cash and Budget from that one upload; you review, sign off and deliver. That loop is the practice.",
   },
 ];
 
@@ -157,7 +161,7 @@ const ACCOUNTANT_CLIENT_EMPTY_STEPS: Step[] = [
     targetId: "first-figures-card",
     section: "Figures",
     title: "Step 2 of 2 · Bring in the figures",
-    body: "This is the only thing to do right now. One upload is enough — bank statements, a P&L and balance sheet (PDF, Excel or CSV), or typed figures — and Health, Profit, Cash, Budget, Reports and Milōn Bot all fill in from it.",
+    body: "This is the only thing to do right now. One upload — bank statements or a P&L and balance sheet (PDF, Excel or CSV) — and Milōn drafts Profit, Cash Forecast and Budget from it. Each tab then waits for your review and sign-off before anything is branded or delivered.",
   },
 ];
 
@@ -167,49 +171,49 @@ const ACCOUNTANT_CLIENT_STEPS: Step[] = [
     targetId: "ask-ai-accountant",
     section: "Milōn Bot",
     title: "Start with Milōn Bot",
-    body: "Now that this client has figures, the studio opens here. Ask against the filled deliverables — ratios, waterfall, cash outlook, next moves, the action plan — or what’s outstanding on the brain. It can draft next steps or an advisory pack for you to review. It won’t invent figures or send email.",
+    body: "Now that this client has figures, the studio opens here. Ask against the drafted deliverables — ratios, waterfall, cash outlook, next moves, the action plan — or what’s outstanding on the brain. It can draft next steps or an advisory pack for you to review. It won’t invent figures or send email.",
   },
   {
     tab: "ratios",
     targetId: "finCollapse",
     section: "Figures",
     title: "Figures live here",
-    body: "Open this panel to correct a line, change the period the figures cover, draft again from bank statements, or upload a new statement. Everything downstream recalculates.",
+    body: "Open this panel to correct a line, change the period, or upload a new statement. Every upload can refresh Profit, Cash and Budget — and anything you had signed off flips to Needs re-review until you look again.",
   },
   {
     tab: "ratios",
     targetId: ".health-orb",
     section: "Business Health",
     title: "Read the score with the owner",
-    body: "Same orb the SME sees. Drill the pillars so you can explain what’s driving the number before you prescribe fixes.",
+    body: "Same orb the SME sees. Drill the pillars so you can explain what’s driving the number, then sign off Health here — your signature appears beside the orb on their board.",
   },
   {
     tab: "profit",
     targetId: "wizard-profit-walk",
     section: "Profit",
-    title: "Walk profit together",
-    body: "The waterfall is the profit story — revenue to net. Use it when margins slip or the owner asks where the money went.",
+    title: "Profit is drafted — review it",
+    body: "Milōn built this waterfall from the first upload. Check the lines, then sign off profitability with the gold button. Until you do, the owner sees a draft with no stamp.",
   },
   {
     tab: "cash",
     targetId: "wizard-cash-outlook, wizard-cash-table, wizard-cash-panel",
     section: "Cash Forecast",
-    title: "Cash is your signature view",
-    body: "Thirteen weeks of closing balances and crunch weeks. Align the owner on collections or spend timing before a shortfall hits.",
+    title: "13 weeks, forecast for you",
+    body: "Closing balances and crunch weeks, drafted from the same upload. Review the assumptions, sign off, and align the owner on collections or spend timing before a shortfall hits.",
   },
   {
     tab: "budget",
     targetId: "wizard-budget-plan, wizard-budget-panel",
     section: "Budget",
-    title: "Annual plan, then monthly truth",
-    body: "The seeded budget is the plan. Budget vs Actuals underneath is where monthly management accounts land.",
+    title: "Annual plan, seeded — needs your sign-off",
+    body: "The budget was built from profile and figures at upload. Sign it off once it reads true; Budget vs Actuals underneath is where monthly management accounts land.",
   },
   {
     tab: "reports",
     targetId: "pane-reports",
     section: "Reports",
     title: "Deliver branded advice",
-    body: "This is the same Reports Studio as the rest of the practice — preview or generate a board-ready PDF from this client’s figures.",
+    body: "Same Reports Studio as the rest of the practice. Sign off Health, Profit, Cash or Budget first — each stamp carries into the board-ready PDF you generate here.",
   },
   {
     tab: "plan",

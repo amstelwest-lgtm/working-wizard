@@ -2,16 +2,17 @@
  * Onboarding storage keys + helpers.
  * Keep keys versioned so we can re-show improved tours once.
  *
- * v9 — full tour copy + tighter spotlights for the real product flow.
+ * v10 — first upload auto-builds Profit, Cash and Budget; tours now explain
+ * that those deliverables wait for accountant sign-off (#175).
  */
 
-export const OWNER_TOUR_KEY = "milon_walkthrough_v9";
+export const OWNER_TOUR_KEY = "milon_walkthrough_v10";
 /** Two-step orientation shown on an owner board that has no figures yet. */
-export const OWNER_EMPTY_TOUR_KEY = "milon_walkthrough_empty_v1";
-export const ACCOUNTANT_DASH_TOUR_KEY = "milon_accountant_dash_tour_v7";
-export const ACCOUNTANT_CLIENT_TOUR_KEY = "milon_accountant_client_tour_v8";
+export const OWNER_EMPTY_TOUR_KEY = "milon_walkthrough_empty_v2";
+export const ACCOUNTANT_DASH_TOUR_KEY = "milon_accountant_dash_tour_v8";
+export const ACCOUNTANT_CLIENT_TOUR_KEY = "milon_accountant_client_tour_v9";
 /** Two-step orientation shown in a client studio that has no figures yet. */
-export const ACCOUNTANT_CLIENT_EMPTY_TOUR_KEY = "milon_accountant_client_tour_empty_v1";
+export const ACCOUNTANT_CLIENT_EMPTY_TOUR_KEY = "milon_accountant_client_tour_empty_v2";
 export const ACCOUNTANT_FIRST_CLIENT_KEY = "milon_accountant_first_client_done_v2";
 
 export function onboardingDone(key: string): boolean {
