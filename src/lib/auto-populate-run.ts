@@ -64,7 +64,8 @@ export type RunAutoPopulateInput = {
   cashDraft?: CashFromBanksDraftResult | null;
   /** Checkbox state from the dialog (ignored on first upload — everything runs). */
   chosen: AutoPopulatePrefs;
-  firstUpload: boolean;
+  /** Undefined (dialog state not loaded yet) → decided from the row's freshness stamps. */
+  firstUpload?: boolean;
   firstActualsMonth?: string | null;
   /** Workspace market when the client row has none (owner board). */
   fallbackMarket?: unknown;
@@ -83,7 +84,7 @@ export async function runAutoPopulate(input: RunAutoPopulateInput): Promise<RunA
   const { data, error } = await supabase
     .from("clients")
     .select(
-      "budget, cashflow, operating_profile, financial_year_start_month, market, auto_update_prefs",
+      "budget, cashflow, operating_profile, financial_year_start_month, market, auto_update_prefs, financials_updated_at, last_forecast_at, budget_updated_at",
     )
     .eq("id", input.clientId)
     .maybeSingle();
@@ -94,6 +95,9 @@ export async function runAutoPopulate(input: RunAutoPopulateInput): Promise<RunA
     financial_year_start_month?: number | null;
     market?: unknown;
     auto_update_prefs?: unknown;
+    financials_updated_at?: string | null;
+    last_forecast_at?: string | null;
+    budget_updated_at?: string | null;
   } | null;
   let prefsColumn = true;
   if (error) {
@@ -101,14 +105,17 @@ export async function runAutoPopulate(input: RunAutoPopulateInput): Promise<RunA
     prefsColumn = false;
     const retry = await supabase
       .from("clients")
-      .select("budget, cashflow, operating_profile, financial_year_start_month, market")
+      .select(
+        "budget, cashflow, operating_profile, financial_year_start_month, market, financials_updated_at, last_forecast_at, budget_updated_at",
+      )
       .eq("id", input.clientId)
       .maybeSingle();
     if (retry.error) throw new Error(retry.error.message);
     row = retry.data as typeof row;
   }
 
-  const plan = resolveAutoPopulatePlan({ firstUpload: input.firstUpload, prefs: input.chosen });
+  const firstUpload = input.firstUpload ?? isFirstUpload(row);
+  const plan = resolveAutoPopulatePlan({ firstUpload, prefs: input.chosen });
   const marketRaw = row?.market ?? input.fallbackMarket ?? null;
   const ctx: AutoPopulateContext = {
     fields: input.fields,
@@ -151,5 +158,5 @@ export async function runAutoPopulate(input: RunAutoPopulateInput): Promise<RunA
     }
   }
 
-  return { ...writes, firstUpload: input.firstUpload, cashflow, runwayWeeks };
+  return { ...writes, firstUpload, cashflow, runwayWeeks };
 }
