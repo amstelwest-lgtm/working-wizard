@@ -20,6 +20,9 @@ import {
   Info,
 } from "lucide-react";
 import { UploadQualityDisclaimer } from "@/components/upload-quality-disclaimer";
+import { AutoPopulateOptions } from "@/components/auto-populate-options";
+import type { AutoPopulateDialogState } from "@/components/bank-statement-drafter";
+import { defaultAutoPopulatePrefs, type AutoPopulatePrefs } from "@/lib/auto-populate";
 import { useMarketFormat } from "@/contexts/market";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -49,7 +52,9 @@ interface Props {
   result: MergedExtractionResult;
   open: boolean;
   onClose: () => void;
-  onConfirm: (inputs: MappedInputs) => void;
+  onConfirm: (inputs: MappedInputs, autoPopulate: AutoPopulatePrefs) => void;
+  /** Per-client auto-populate state; undefined while loading → first upload. */
+  autoPopulate?: AutoPopulateDialogState | null;
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
@@ -213,13 +218,17 @@ function Section({
 
 // ─── Main modal ────────────────────────────────────────────────────────────────
 
-export function ExtractionReviewModal({ result, open, onClose, onConfirm }: Props) {
+export function ExtractionReviewModal({ result, open, onClose, onConfirm, autoPopulate }: Props) {
   const { money, t } = useMarketFormat();
   const [editingPath, setEditingPath] = useState<string | null>(null);
   const [editValues, setEditValues] = useState<Record<string, string>>({});
   const [conflicts, setConflicts] = useState<MergeConflict[]>(result.conflicts ?? []);
   const [conflictSelections, setConflictSelections] = useState<Record<string, "1" | "2">>({});
   const [acceptedQuality, setAcceptedQuality] = useState(false);
+  const [autoPrefs, setAutoPrefs] = useState<AutoPopulatePrefs>(defaultAutoPopulatePrefs());
+  useEffect(() => {
+    if (open) setAutoPrefs(autoPopulate?.prefs ?? defaultAutoPopulatePrefs());
+  }, [open, autoPopulate?.prefs]);
 
   useEffect(() => {
     if (open) setAcceptedQuality(false);
@@ -318,7 +327,7 @@ export function ExtractionReviewModal({ result, open, onClose, onConfirm }: Prop
       },
     });
 
-    onConfirm(mapped);
+    onConfirm(mapped, autoPrefs);
     onClose();
   };
 
@@ -657,6 +666,12 @@ export function ExtractionReviewModal({ result, open, onClose, onConfirm }: Prop
           )}
 
           {/* ── Footer actions ── */}
+          <AutoPopulateOptions
+            firstUpload={autoPopulate?.firstUpload ?? true}
+            value={autoPrefs}
+            onChange={setAutoPrefs}
+            role={autoPopulate?.role ?? "owner"}
+          />
           <UploadQualityDisclaimer
             accepted={acceptedQuality}
             onChange={setAcceptedQuality}

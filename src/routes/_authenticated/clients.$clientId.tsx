@@ -13,10 +13,12 @@ import type { ExistingCashflow } from "@/lib/cash-from-banks.publish";
 import { UploadFinancials } from "@/components/upload-financials";
 import { BankStatementDrafter } from "@/components/bank-statement-drafter";
 import { WalkthroughWizard } from "@/components/walkthrough-wizard";
-import { seedBudgetFromFinancials } from "@/lib/budget.bridges";
-import { normalizeBudgetDocument } from "@/lib/budget.compute";
-import type { BudgetDocument } from "@/lib/budget.types";
-import { createBudgetDocument, currentFyStart } from "@/lib/budget.months";
+import {
+  loadAutoPopulateState,
+  runAutoPopulate,
+  type AutoPopulateState,
+} from "@/lib/auto-populate-run";
+import { summariseAutoPopulate, type AutoPopulatePrefs } from "@/lib/auto-populate";
 import { MarketProvider } from "@/contexts/market";
 import {
   coerceMarketSelection,
@@ -75,7 +77,6 @@ import { ReviewSignoffButton, computeIsStale } from "@/components/review-signoff
 import {
   parseOperatingProfile,
   stampProfileProvenance,
-  profileToBudgetQualification,
   type ClientOperatingProfile,
 } from "@/lib/client-profile";
 import { profileIndustryLabel } from "@/lib/profile-signals";
@@ -403,7 +404,16 @@ type Client = {
   market?: unknown;
 };
 
-type ActiveTab = "ask" | "ratios" | "profit" | "cash" | "budget" | "reports" | "plan" | "advisory" | "summary";
+type ActiveTab =
+  | "ask"
+  | "ratios"
+  | "profit"
+  | "cash"
+  | "budget"
+  | "reports"
+  | "plan"
+  | "advisory"
+  | "summary";
 
 const ACCOUNTANT_TABS: ActiveTab[] = [
   "summary",
@@ -550,6 +560,50 @@ function ClientView() {
   const [bankCashDraft, setBankCashDraft] = useState<
     import("@/lib/cash-from-banks.types").CashFromBanksDraftResult | null
   >(null);
+  const [budgetReloadToken, setBudgetReloadToken] = useState(0);
+  const [autoPopulateState, setAutoPopulateState] = useState<AutoPopulateState | null>(null);
+  const refreshAutoPopulateState = useCallback(async () => {
+    try {
+      setAutoPopulateState(await loadAutoPopulateState(clientId));
+    } catch (e) {
+      console.warn("auto-populate state:", e);
+    }
+  }, [clientId]);
+  useEffect(() => {
+    void refreshAutoPopulateState();
+  }, [refreshAutoPopulateState]);
+  const applyAutoPopulateResult = useCallback(
+    (r: Awaited<ReturnType<typeof runAutoPopulate>>) => {
+      const now = new Date().toISOString();
+      setClient((c) =>
+        c
+          ? {
+              ...c,
+              ...(r.applied.includes("profitability") ? { financials_updated_at: now } : {}),
+              ...(r.applied.includes("cash_forecast")
+                ? {
+                    last_forecast_at: now,
+                    cashflow: (r.cashflow as never) ?? c.cashflow,
+                    ...(r.runwayWeeks != null ? { cash_runway_weeks: r.runwayWeeks } : {}),
+                  }
+                : {}),
+            }
+          : c,
+      );
+      if (r.applied.includes("cash_forecast")) setCashForecastReloadToken((n) => n + 1);
+      if (r.applied.includes("budget")) setBudgetReloadToken((n) => n + 1);
+      track("upload_auto_populated", {
+        surface: "accountant_portal",
+        clientId,
+        firmId,
+        firstUpload: r.firstUpload,
+        applied: r.applied.join(","),
+      });
+      toast.success(summariseAutoPopulate(r, r.firstUpload), { duration: 7000 });
+      void refreshAutoPopulateState();
+    },
+    [clientId, firmId, refreshAutoPopulateState, track],
+  );
 
   // Financials state (flat key-value for the fin-grid)
   const [financials, setFinancials] = useState<Record<string, string>>({});
@@ -1120,7 +1174,7 @@ function ClientView() {
   // ── Upload confirm ────────────────────────────────────────────────────────
 
   const handleConfirmFinancials = useCallback(
-    async (result: ExtractionResult) => {
+    async (result: ExtractionResult, autoPopulate?: AutoPopulatePrefs) => {
       const inputs = extractionToRatioInputs(result);
       const ratiosOut = computeRatios(inputs);
       const rawDate = result.current_period.period_end;
@@ -1185,8 +1239,36 @@ function ClientView() {
         firmId,
       });
       setUploadOpen(false);
+
+      if (autoPopulate) {
+        try {
+          const r = await runAutoPopulate({
+            clientId,
+            fields: nextScalars,
+            chosen: autoPopulate,
+            firstUpload: autoPopulateState?.firstUpload,
+            firstActualsMonth: periodDate.slice(0, 7),
+            fallbackMarket: client?.market ?? null,
+            surface: "accountant_portal",
+            source: "financial_statement",
+          });
+          applyAutoPopulateResult(r);
+        } catch (e) {
+          console.warn("auto-populate after statement upload:", e);
+          toast.error(`Figures saved, but drafting deliverables failed: ${(e as Error).message}`);
+        }
+      }
     },
-    [clientId, effectiveRunway, mergeCurrentBlob, firmId, track],
+    [
+      clientId,
+      effectiveRunway,
+      mergeCurrentBlob,
+      firmId,
+      track,
+      autoPopulateState?.firstUpload,
+      client?.market,
+      applyAutoPopulateResult,
+    ],
   );
 
   // ── Deliverables bar actions ──────────────────────────────────────────────
@@ -2327,6 +2409,7 @@ function ClientView() {
                     clientName={client.name}
                     simplified={viewMode === "simplified"}
                     role="accountant"
+                    reloadToken={budgetReloadToken}
                     canSign
                     businessTypeId={client.business_type}
                     operatingProfile={parseOperatingProfile(client.operating_profile)}
@@ -2522,7 +2605,12 @@ function ClientView() {
                   quality of the financial information we produce depends on the accuracy of the
                   information you upload.
                 </p>
-                <UploadFinancials onConfirm={handleConfirmFinancials} />
+                <UploadFinancials
+                  onConfirm={handleConfirmFinancials}
+                  autoPopulate={
+                    autoPopulateState ? { ...autoPopulateState, role: "accountant" } : null
+                  }
+                />
               </div>
             </div>
           )}
@@ -2623,7 +2711,8 @@ function ClientView() {
           <BankStatementDrafter
             open={showBankDrafter}
             onClose={() => setShowBankDrafter(false)}
-            onApply={async ({ fields, annualised, cashDraft }) => {
+            autoPopulate={autoPopulateState ? { ...autoPopulateState, role: "accountant" } : null}
+            onApply={async ({ fields, annualised, cashDraft, draft, autoPopulate }) => {
               const asStrings = Object.fromEntries(
                 Object.entries(fields).map(([k, v]) => [k, v != null ? String(v) : ""]),
               );
@@ -2633,7 +2722,6 @@ function ClientView() {
                 return next;
               });
               setShowBankDrafter(false);
-              setBankCashDraft(cashDraft ?? null);
 
               const financialsUpdatedAt = new Date().toISOString();
               const merged = mergeCurrentBlob(financialsRef.current);
@@ -2659,57 +2747,28 @@ function ClientView() {
                   : "Draft figures applied for the statement period — saved.",
               );
 
+              // Same pack drafts cash forecast + budget (first upload: always;
+              // later: per the checkboxes). No second dialog, no re-upload.
               try {
-                const { data: row } = await supabase
-                  .from("clients")
-                  .select("budget, financial_year_start_month, operating_profile")
-                  .eq("id", clientId)
-                  .maybeSingle();
-                const fyMonth =
-                  (row as { financial_year_start_month?: number | null } | null)
-                    ?.financial_year_start_month ?? 3;
-                const profile = parseOperatingProfile(
-                  (row as { operating_profile?: unknown } | null)?.operating_profile,
-                );
-                const budgetRaw = (row as { budget?: BudgetDocument | null } | null)?.budget;
-                let doc =
-                  budgetRaw?.version === 1
-                    ? normalizeBudgetDocument(budgetRaw as BudgetDocument)
-                    : null;
-                if (!doc && profile) {
-                  doc = createBudgetDocument({
-                    templateId: profile.templateId,
-                    qualification: profileToBudgetQualification(profile),
-                    fyStartMonth: fyMonth,
-                    fyStart: currentFyStart(fyMonth),
-                    market: resolveMarket(coerceMarketSelection(client.market)),
-                  });
-                }
-                if (doc) {
-                  const seeded = seedBudgetFromFinancials(doc, fields);
-                  const updatedAt = new Date().toISOString();
-                  await supabase
-                    .from("clients")
-                    .update({
-                      budget: { ...seeded.doc, updatedAt } as never,
-                      budget_updated_at: updatedAt,
-                    } as never)
-                    .eq("id", clientId);
-                  if (seeded.changes.length) {
-                    toast.message("Budget pre-filled from bank draft", {
-                      description: seeded.changes[0],
-                    });
-                  }
-                }
+                const r = await runAutoPopulate({
+                  clientId,
+                  fields,
+                  cashDraft: cashDraft ?? null,
+                  chosen: autoPopulate,
+                  firstUpload: autoPopulateState?.firstUpload,
+                  firstActualsMonth: draft.period_start?.slice(0, 7) ?? null,
+                  fallbackMarket: client?.market ?? null,
+                  surface: "accountant_portal",
+                  source: "bank_pack",
+                });
+                applyAutoPopulateResult(r);
+                if (r.applied.includes("cash_forecast")) setActiveTab("cash");
               } catch (e) {
-                console.warn("budget seed after bank draft:", e);
+                console.warn("auto-populate after bank draft:", e);
+                toast.error(
+                  `Figures saved, but drafting deliverables failed: ${(e as Error).message}`,
+                );
               }
-
-              // Same statement pack → cash forecast (no re-upload).
-              setTimeout(() => {
-                setActiveTab("cash");
-                setCashBankUploadToken((n) => n + 1);
-              }, 400);
             }}
           />
 

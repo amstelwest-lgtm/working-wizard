@@ -52,6 +52,7 @@ export function BudgetPanel({
   canSign,
   hideReadOnlyStamp,
   firstActualsMonth,
+  reloadToken,
 }: {
   clientId?: string;
   clientName?: string;
@@ -70,6 +71,8 @@ export function BudgetPanel({
   hideReadOnlyStamp?: boolean;
   /** YYYY-MM of the earliest month with real figures; the budget window starts no earlier. */
   firstActualsMonth?: string | null;
+  /** Bump to re-read clients.budget after an external write (auto-populate). */
+  reloadToken?: number;
 }) {
   const { market } = useMarket();
   const fyDefault = fyStartMonthDefault ?? market.fyStartMonthDefault;
@@ -134,7 +137,7 @@ export function BudgetPanel({
     return () => {
       cancelled = true;
     };
-  }, [clientId]);
+  }, [clientId, reloadToken]);
 
   useEffect(() => {
     if (!clientId) return;

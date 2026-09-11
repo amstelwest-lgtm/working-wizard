@@ -18,6 +18,9 @@ import type { ExtractionResult, Money } from "@/lib/financialSchema";
 import type { ValidationIssue } from "@/lib/validateFinancials";
 import { UPLOAD_QUALITY_DISCLAIMER, preflightUploadFile } from "@/lib/upload-quality";
 import { UploadQualityDisclaimer } from "@/components/upload-quality-disclaimer";
+import { AutoPopulateOptions } from "@/components/auto-populate-options";
+import type { AutoPopulateDialogState } from "@/components/bank-statement-drafter";
+import { defaultAutoPopulatePrefs, type AutoPopulatePrefs } from "@/lib/auto-populate";
 import { useMarketFormat } from "@/contexts/market";
 import { selectionPayload } from "@/lib/market";
 import {
@@ -116,10 +119,12 @@ function IssueList({ issues }: { issues: ValidationIssue[] }) {
 // ─── main component ───────────────────────────────────────────────────────────
 
 export type UploadFinancialsProps = {
-  onConfirm?: (result: ExtractionResult) => void;
+  onConfirm?: (result: ExtractionResult, autoPopulate: AutoPopulatePrefs) => void;
+  /** Per-client auto-populate state; undefined → first upload. */
+  autoPopulate?: AutoPopulateDialogState | null;
 };
 
-export function UploadFinancials({ onConfirm }: UploadFinancialsProps) {
+export function UploadFinancials({ onConfirm, autoPopulate }: UploadFinancialsProps) {
   const { number, selection } = useMarketFormat();
   const inputRef = useRef<HTMLInputElement>(null);
   const [status, setStatus] = useState<"idle" | "uploading" | "reading" | "review">("idle");
@@ -127,6 +132,9 @@ export function UploadFinancials({ onConfirm }: UploadFinancialsProps) {
   const [issues, setIssues] = useState<ValidationIssue[]>([]);
   const [autoSafe, setAutoSafe] = useState(false);
   const [acceptedQuality, setAcceptedQuality] = useState(false);
+  const [autoPrefs, setAutoPrefs] = useState<AutoPopulatePrefs>(
+    autoPopulate?.prefs ?? defaultAutoPopulatePrefs(),
+  );
 
   const extract = useServerFn(extractFinancialsFromPDF);
 
@@ -572,11 +580,17 @@ export function UploadFinancials({ onConfirm }: UploadFinancialsProps) {
       )}
 
       {/* Actions */}
+      <AutoPopulateOptions
+        firstUpload={autoPopulate?.firstUpload ?? true}
+        value={autoPrefs}
+        onChange={setAutoPrefs}
+        role={autoPopulate?.role ?? "accountant"}
+      />
       <UploadQualityDisclaimer accepted={acceptedQuality} onChange={setAcceptedQuality} />
       <div className="flex items-center gap-3 pt-2">
         <Button
           onClick={() => {
-            onConfirm?.(result);
+            onConfirm?.(result, autoPrefs);
             toast.success("Financials imported successfully.");
           }}
           disabled={!acceptedQuality}
