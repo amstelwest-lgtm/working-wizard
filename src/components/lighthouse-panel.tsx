@@ -17,6 +17,7 @@ import {
   CalendarClock,
   Check,
   Copy,
+  FileText,
   FileVideo,
   Loader2,
   Mail,
@@ -45,6 +46,13 @@ import {
   type LighthouseLead,
   type LighthouseStage,
 } from "@/lib/lighthouse.functions";
+import {
+  ACCOUNTANT_ONESHOT_GOLDEN,
+  ACCOUNTANT_ONESHOT_SEQUENCE_KEY,
+  ACCOUNTANT_V1_GOLDEN,
+  ACCOUNTANT_V1_SEQUENCE_KEY,
+  sequenceUsesGoldenDefault,
+} from "@/lib/lighthouse-accountant-golden";
 
 const inputCls = "ops-input";
 
@@ -75,7 +83,8 @@ const ACCOUNTANT_STEP_HINT: Record<number, string> = {
   5: "Day 28 · capacity close — trial, both videos, one-pager",
 };
 
-export const LIGHTHOUSE_TABS = ["pipeline", "playbook", "assets", "settings"] as const;
+const ACCOUNTANT_ONESHOT_HINT =
+  "One-shot · advisory banger — videos + both one-pagers, then a call. Both PDFs attach on send.";
 
 export type LighthouseTab = (typeof LIGHTHOUSE_TABS)[number];
 
@@ -232,7 +241,7 @@ export function LighthousePanel({ initialTab }: { initialTab?: LighthouseTab }) 
         <div className="mb-4 flex flex-wrap gap-2 text-[11px]">
           {!dash.capability.aiConfigured && (
             <span className="rounded-full border border-[var(--ops-amber-border)] px-3 py-1 text-[var(--ops-amber)]">
-              ANTHROPIC_API_KEY missing — AI drafting is off
+              ANTHROPIC_API_KEY missing — Claude rewrite / owner drafts are off
             </span>
           )}
           {!dash.capability.emailConfigured && (
@@ -394,7 +403,17 @@ export function LighthousePanel({ initialTab }: { initialTab?: LighthouseTab }) 
           lead={openLead}
           dash={dash}
           onClose={() => setOpenLeadId(null)}
-          onDraft={async (stepNo) => draftTouch({ data: { leadId: openLead.id, stepNo } })}
+          onDraft={async (stepNo, opts) =>
+            draftTouch({
+              data: {
+                leadId: openLead.id,
+                stepNo,
+                mode: opts?.mode ?? "default",
+                currentSubject: opts?.currentSubject,
+                currentBody: opts?.currentBody,
+              },
+            })
+          }
           onDraftReply={async (theirMessage, intent) =>
             draftReply({ data: { leadId: openLead.id, theirMessage, intent } })
           }
@@ -404,6 +423,10 @@ export function LighthousePanel({ initialTab }: { initialTab?: LighthouseTab }) 
           }}
           onStage={async (stage) => {
             await saveLead({ data: { id: openLead.id, stage } });
+            await refresh();
+          }}
+          onSequence={async (sequenceKey) => {
+            await saveLead({ data: { id: openLead.id, sequenceKey } });
             await refresh();
           }}
           onOptOut={async () => {
@@ -482,12 +505,17 @@ function PipelineBoard({
                   </div>
                   <div className="truncate text-[11px] text-[var(--ops-ink-dim)]">
                     {l.company || "—"} · {l.persona === "accountant" ? "practice" : "owner"}
+                    {l.sequenceKey === ACCOUNTANT_ONESHOT_SEQUENCE_KEY ? " · one-shot" : ""}
                   </div>
                   {l.signal && (
                     <div className="mt-1 line-clamp-2 text-[11px] text-[var(--ops-ink-dim)]">{l.signal}</div>
                   )}
                   <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-[var(--ops-ink-faint)]">
-                    <span>step {l.sequenceStep}/5</span>
+                    <span>
+                      {l.sequenceKey === ACCOUNTANT_ONESHOT_SEQUENCE_KEY
+                        ? "one-shot"
+                        : `step ${l.sequenceStep}/5`}
+                    </span>
                     {l.lastInboundAt ? (
                       <span className="text-[var(--ops-ok-ink)]">· inbox</span>
                     ) : l.lastClickedAt ? (
@@ -526,6 +554,7 @@ function AddLeadForm({
     roleTitle?: string;
     city?: string;
     persona: "owner" | "accountant";
+    sequenceKey?: "owner_v1" | "accountant_v1" | "accountant_oneshot_v1";
     signal?: string;
   }) => Promise<void>;
 }) {
@@ -535,6 +564,9 @@ function AddLeadForm({
   const [roleTitle, setRoleTitle] = useState("");
   const [city, setCity] = useState("");
   const [persona, setPersona] = useState<"owner" | "accountant">("owner");
+  const [sequenceKey, setSequenceKey] = useState<"accountant_v1" | "accountant_oneshot_v1">(
+    "accountant_v1",
+  );
   const [signal, setSignal] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -545,7 +577,16 @@ function AddLeadForm({
         e.preventDefault();
         setBusy(true);
         try {
-          await onSave({ name, email, company, roleTitle, city, persona, signal });
+          await onSave({
+            name,
+            email,
+            company,
+            roleTitle,
+            city,
+            persona,
+            sequenceKey: persona === "accountant" ? sequenceKey : "owner_v1",
+            signal,
+          });
         } catch (ex) {
           toast.error(ex instanceof Error ? ex.message : "Could not save");
         } finally {
@@ -586,11 +627,27 @@ function AddLeadForm({
       <select
         className={inputCls}
         value={persona}
-        onChange={(e) => setPersona(e.target.value as "owner" | "accountant")}
+        onChange={(e) => {
+          const next = e.target.value as "owner" | "accountant";
+          setPersona(next);
+          if (next === "owner") setSequenceKey("accountant_v1");
+        }}
       >
         <option value="owner">Business owner</option>
         <option value="accountant">Accountant / practice</option>
       </select>
+      {persona === "accountant" && (
+        <select
+          className={inputCls}
+          value={sequenceKey}
+          onChange={(e) =>
+            setSequenceKey(e.target.value as "accountant_v1" | "accountant_oneshot_v1")
+          }
+        >
+          <option value={ACCOUNTANT_V1_SEQUENCE_KEY}>5-step drip</option>
+          <option value={ACCOUNTANT_ONESHOT_SEQUENCE_KEY}>One-shot banger</option>
+        </select>
+      )}
       <input
         className={`${inputCls} sm:col-span-3`}
         placeholder="Signal — the specific true reason you are reaching out (drives every email)"
@@ -628,16 +685,14 @@ function Playbook({ dash }: { dash: LighthouseDashboard }) {
       <div className="rounded-2xl border border-[var(--ops-line)] bg-[var(--ops-card)] p-4 text-sm text-[var(--ops-ink-soft)]">
         <p className="font-semibold text-[var(--ops-ink)]">How the funnel is built</p>
         <p className="mt-1.5 text-[var(--ops-ink-dim)]">
-          Five touches over roughly eighteen days with widening gaps. Each touch carries one
-          distinct angle, stays short and plain-text, and never repeats a previous opening. Only
-          touches four and five ask for the signup; the earlier ones earn the right to ask. The
-          breakup email is deliberately the shortest — it consistently draws the highest reply rate.
+          Accountant drip loads Theo’s approved v3 emails as the golden default — Claude only
+          rewrites on request. Accountant one-shot is a separate banger (call after they look).
+          Owner sequences still draft with Claude.
         </p>
         <p className="mt-1.5 text-[var(--ops-ink-dim)]">
-          Every sequence ends at the same destination: the tracked free-trial link, which lands the
-          prospect on the Milōn signup form with attribution back to their lead record. There is no
-          meeting step in the emails. If someone writes back, you answer in the same thread — or
-          they start the trial themselves.
+          Every drip sequence ends at the tracked free-trial link. The accountant one-shot is
+          different: it asks for a look at the videos and one-pagers, then a call. If someone
+          writes back, you answer in the same thread.
         </p>
       </div>
 
@@ -647,7 +702,9 @@ function Playbook({ dash }: { dash: LighthouseDashboard }) {
         </div>
       )}
 
-      {dash.sequences.map((seq) => (
+      {dash.sequences
+        .filter((seq) => seq.key !== ACCOUNTANT_ONESHOT_SEQUENCE_KEY)
+        .map((seq) => (
         <div key={seq.key} className="rounded-2xl border border-[var(--ops-line)] bg-[var(--ops-card)] p-4">
           <div className="mb-3 flex items-center gap-2">
             <Target className="h-4 w-4 text-[var(--ops-amber)]" />
@@ -659,6 +716,9 @@ function Playbook({ dash }: { dash: LighthouseDashboard }) {
           <ol className="space-y-2">
             {seq.steps.map((s) => {
               const asset = dash.assets.find((a) => a.key === s.asset);
+              const golden = seq.key === "accountant_v1"
+                ? ACCOUNTANT_V1_GOLDEN.find((g) => g.step === s.step)
+                : undefined;
               return (
                 <li
                   key={s.step}
@@ -676,6 +736,11 @@ function Playbook({ dash }: { dash: LighthouseDashboard }) {
                     <div className="text-sm font-semibold capitalize text-[var(--ops-ink)]">
                       {s.angle.replaceAll("_", " ")}
                     </div>
+                    {golden && (
+                      <p className="mt-0.5 text-[12.5px] font-medium text-[var(--ops-ink-soft)]">
+                        Golden: {golden.subject}
+                      </p>
+                    )}
                     <p className="mt-0.5 text-[12.5px] text-[var(--ops-ink-dim)]">{s.goal}</p>
                     <div className="mt-1.5 flex flex-wrap gap-1.5 text-[10px]">
                       <span className="rounded-full border border-[var(--ops-line)] px-2 py-0.5 text-[var(--ops-ink-dim)]">
@@ -703,6 +768,28 @@ function Playbook({ dash }: { dash: LighthouseDashboard }) {
           </ol>
         </div>
       ))}
+
+      <div className="rounded-2xl border border-[var(--ops-line)] bg-[var(--ops-card)] p-4">
+        <div className="mb-2 flex items-center gap-2">
+          <Target className="h-4 w-4 text-[var(--ops-amber)]" />
+          <h3 className="text-sm font-bold text-[var(--ops-ink)]">
+            Accountant one-shot / single banger
+          </h3>
+          <span className="rounded-full border border-[var(--ops-line)] px-2 py-0.5 text-[10px] uppercase tracking-wider text-[var(--ops-ink-dim)]">
+            {ACCOUNTANT_ONESHOT_SEQUENCE_KEY}
+          </span>
+        </div>
+        <p className="text-[12.5px] font-medium text-[var(--ops-ink-soft)]">
+          Golden: {ACCOUNTANT_ONESHOT_GOLDEN.subject}
+        </p>
+        <p className="mt-1.5 text-[12.5px] text-[var(--ops-ink-dim)]">
+          Separate from the 5-step drip. Loads this golden copy with the first name filled. Claude
+          is Rewrite only. Mentions a follow-up call on purpose. Both one-pagers attach on send.
+        </p>
+        <pre className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap rounded-xl border border-[var(--ops-line)] bg-[var(--ops-bg)] px-3 py-2 font-mono text-[11px] leading-relaxed text-[var(--ops-ink-soft)]">
+          {ACCOUNTANT_ONESHOT_GOLDEN.body}
+        </pre>
+      </div>
     </div>
   );
 }
@@ -1018,24 +1105,35 @@ function LeadDrawer({
   onDraftReply,
   onSend,
   onStage,
+  onSequence,
   onOptOut,
   onRefresh,
 }: {
   lead: LighthouseLead;
   dash: LighthouseDashboard;
   onClose: () => void;
-  onDraft: (stepNo: number) => Promise<{ subject: string; body: string; touchId: string }>;
+  onDraft: (
+    stepNo: number,
+    opts?: {
+      mode?: "default" | "rewrite";
+      currentSubject?: string;
+      currentBody?: string;
+    },
+  ) => Promise<{ subject: string; body: string; touchId: string }>;
   onDraftReply: (
     theirMessage: string,
     intent: "answer" | "email" | "book" | "trial",
   ) => Promise<{ subject: string; body: string; touchId: string; stepNo: number }>;
   onSend: (touchId: string, subject: string, body: string) => Promise<void>;
   onStage: (stage: LighthouseStage) => Promise<void>;
+  onSequence: (sequenceKey: "accountant_v1" | "accountant_oneshot_v1") => Promise<void>;
   onOptOut: () => Promise<void>;
   onRefresh: () => Promise<void>;
 }) {
   const seq = dash.sequences.find((s) => s.key === lead.sequenceKey);
-  const stepCount = seq?.steps.length || 5;
+  const isOneshot = lead.sequenceKey === ACCOUNTANT_ONESHOT_SEQUENCE_KEY;
+  const stepCount = isOneshot ? 1 : seq?.steps.length || 5;
+  const usesGolden = sequenceUsesGoldenDefault(lead.sequenceKey);
   const [activeStep, setActiveStep] = useState(Math.min(lead.sequenceStep + 1, stepCount));
   const existing = lead.touches.find((t) => t.stepNo === activeStep) ?? null;
 
@@ -1043,6 +1141,7 @@ function LeadDrawer({
   const [body, setBody] = useState(existing?.body ?? "");
   const [touchId, setTouchId] = useState(existing?.id ?? "");
   const [drafting, setDrafting] = useState(false);
+  const [rewriting, setRewriting] = useState(false);
   const [sending, setSending] = useState(false);
   const [replyOpen, setReplyOpen] = useState(false);
   const [theirMessage, setTheirMessage] = useState("");
@@ -1079,12 +1178,36 @@ function LeadDrawer({
             </h2>
             <p className="text-sm text-[var(--ops-ink-dim)]">
               {lead.company || "—"} · {lead.persona === "accountant" ? "practice" : "owner"}
+              {isOneshot ? " · one-shot" : ""}
               {lead.city ? ` · ${lead.city}` : ""}
             </p>
             {lead.signal && (
               <p className="mt-1.5 rounded-lg border border-[var(--ops-line)] bg-[var(--ops-card)] px-3 py-2 text-[12.5px] text-[var(--ops-ink-soft)]">
                 Signal: {lead.signal}
               </p>
+            )}
+            {lead.persona === "accountant" && (
+              <select
+                className={`${inputCls} mt-2 max-w-[280px]`}
+                value={
+                  lead.sequenceKey === ACCOUNTANT_ONESHOT_SEQUENCE_KEY
+                    ? ACCOUNTANT_ONESHOT_SEQUENCE_KEY
+                    : ACCOUNTANT_V1_SEQUENCE_KEY
+                }
+                onChange={async (e) => {
+                  const next = e.target.value as "accountant_v1" | "accountant_oneshot_v1";
+                  await onSequence(next);
+                  setActiveStep(1);
+                  toast.success(
+                    next === ACCOUNTANT_ONESHOT_SEQUENCE_KEY
+                      ? "Switched to one-shot banger"
+                      : "Switched to 5-step drip",
+                  );
+                }}
+              >
+                <option value={ACCOUNTANT_V1_SEQUENCE_KEY}>5-step drip</option>
+                <option value={ACCOUNTANT_ONESHOT_SEQUENCE_KEY}>One-shot banger</option>
+              </select>
             )}
           </div>
           <button
@@ -1265,8 +1388,10 @@ function LeadDrawer({
             })}
         </div>
         <p className="mb-3 text-[11px] text-[var(--ops-ink-dim)]">
-          {(lead.persona === "accountant" ? ACCOUNTANT_STEP_HINT : STEP_HINT)[activeStep] ??
-            "Reply — answer what they asked, one ask at most"}
+          {isOneshot
+            ? ACCOUNTANT_ONESHOT_HINT
+            : ((lead.persona === "accountant" ? ACCOUNTANT_STEP_HINT : STEP_HINT)[activeStep] ??
+              "Reply — answer what they asked, one ask at most")}
         </p>
 
         <div className="space-y-2">
@@ -1278,39 +1403,106 @@ function LeadDrawer({
           />
           <textarea
             className={`${inputCls} min-h-[260px] resize-y py-2 font-mono text-[12.5px] leading-relaxed`}
-            placeholder="Draft with AI, then edit before sending. Nothing sends without your click."
+            placeholder={
+              usesGolden
+                ? "Load the golden copy for this step, then send. Rewrite with Claude only if you need a variation."
+                : "Draft with AI, then edit before sending. Nothing sends without your click."
+            }
             value={body}
             onChange={(e) => setBody(e.target.value)}
           />
         </div>
 
         <div className="mt-3 flex flex-wrap gap-2">
-          <button
-            disabled={drafting || !dash.capability.aiConfigured || lead.doNotContact}
-            onClick={async () => {
-              setDrafting(true);
-              try {
-                const r = await onDraft(activeStep);
-                setSubject(r.subject);
-                setBody(r.body);
-                setTouchId(r.touchId);
-                toast.success("Draft ready — read it before sending");
-                await onRefresh();
-              } catch (e) {
-                toast.error(e instanceof Error ? e.message : "Draft failed");
-              } finally {
-                setDrafting(false);
-              }
-            }}
-            className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-[var(--ops-amber-border)] px-4 text-xs font-bold uppercase tracking-wider text-[var(--ops-amber)] hover:bg-[var(--ops-amber-soft)] disabled:opacity-50"
-          >
-            {drafting ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <Sparkles className="h-3.5 w-3.5" />
-            )}
-            Draft with Claude
-          </button>
+          {usesGolden ? (
+            <>
+              <button
+                disabled={drafting || rewriting || lead.doNotContact}
+                onClick={async () => {
+                  setDrafting(true);
+                  try {
+                    const r = await onDraft(activeStep, { mode: "default" });
+                    setSubject(r.subject);
+                    setBody(r.body);
+                    setTouchId(r.touchId);
+                    toast.success("Golden copy loaded — read it before sending");
+                    await onRefresh();
+                  } catch (e) {
+                    toast.error(e instanceof Error ? e.message : "Draft failed");
+                  } finally {
+                    setDrafting(false);
+                  }
+                }}
+                className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-[var(--ops-amber-border)] px-4 text-xs font-bold uppercase tracking-wider text-[var(--ops-amber)] hover:bg-[var(--ops-amber-soft)] disabled:opacity-50"
+              >
+                {drafting ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <FileText className="h-3.5 w-3.5" />
+                )}
+                Load golden
+              </button>
+              <button
+                disabled={
+                  rewriting || drafting || !dash.capability.aiConfigured || lead.doNotContact
+                }
+                onClick={async () => {
+                  setRewriting(true);
+                  try {
+                    const r = await onDraft(activeStep, {
+                      mode: "rewrite",
+                      currentSubject: subject,
+                      currentBody: body,
+                    });
+                    setSubject(r.subject);
+                    setBody(r.body);
+                    setTouchId(r.touchId);
+                    toast.success("Rewrite ready — read it before sending");
+                    await onRefresh();
+                  } catch (e) {
+                    toast.error(e instanceof Error ? e.message : "Rewrite failed");
+                  } finally {
+                    setRewriting(false);
+                  }
+                }}
+                className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-[var(--ops-line-strong)] px-4 text-xs font-bold uppercase tracking-wider text-[var(--ops-ink-soft)] hover:border-[var(--ops-amber-border)] disabled:opacity-50"
+              >
+                {rewriting ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Sparkles className="h-3.5 w-3.5" />
+                )}
+                Rewrite
+              </button>
+            </>
+          ) : (
+            <button
+              disabled={drafting || !dash.capability.aiConfigured || lead.doNotContact}
+              onClick={async () => {
+                setDrafting(true);
+                try {
+                  const r = await onDraft(activeStep, { mode: "default" });
+                  setSubject(r.subject);
+                  setBody(r.body);
+                  setTouchId(r.touchId);
+                  toast.success("Draft ready — read it before sending");
+                  await onRefresh();
+                } catch (e) {
+                  toast.error(e instanceof Error ? e.message : "Draft failed");
+                } finally {
+                  setDrafting(false);
+                }
+              }}
+              className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-[var(--ops-amber-border)] px-4 text-xs font-bold uppercase tracking-wider text-[var(--ops-amber)] hover:bg-[var(--ops-amber-soft)] disabled:opacity-50"
+            >
+              {drafting ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Sparkles className="h-3.5 w-3.5" />
+              )}
+              Draft with Claude
+            </button>
+          )}
           <button
             disabled={sending || !touchId || !subject || !body || lead.doNotContact}
             onClick={async () => {

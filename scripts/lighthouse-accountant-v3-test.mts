@@ -161,7 +161,8 @@ assert(
   "send path never hardcodes hello@milon.co.za as reply_to",
 );
 assert(fns.includes("OWNER_SYSTEM_RULES"), "owner drafts keep a separate rule block");
-assert(fns.includes("seqKey === \"accountant_v1\" ? SYSTEM_RULES"), "accountant rules are scoped");
+assert(fns.includes("ACCOUNTANT_V1_SEQUENCE_KEY ? SYSTEM_RULES"), "accountant drip rules are scoped");
+assert(fns.includes("ONESHOT_SYSTEM_RULES"), "oneshot rewrite has its own rule block");
 
 const sendSlice = fns.slice(fns.indexOf("export const sendLighthouseTouch"));
 const resendBody = sendSlice.slice(0, sendSlice.indexOf("export const upsertLighthouseAsset"));
@@ -207,5 +208,7 @@ const panel = readFileSync(resolve("src/components/lighthouse-panel.tsx"), "utf8
 assert(panel.includes("Day 4 · both teaser videos"), "ops drawer shows accountant v3 day 4");
 assert(panel.includes("Day 28 · capacity close"), "ops drawer shows accountant v3 day 28");
 assert(panel.includes("Reply-to — hello@milonfinance.com"), "ops drawer placeholder is hello@");
+assert(panel.includes("Load golden"), "accountant primary action is Load golden");
+assert(panel.includes("Rewrite"), "accountant Claude path is Rewrite");
 
 console.log("lighthouse-accountant-v3-test: ok");

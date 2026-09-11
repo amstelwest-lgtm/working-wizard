@@ -1,6 +1,6 @@
 # Lighthouse Day-0 dry-run readiness
 
-Use this before the first real cold sends from **Milōn Forge → Lighthouse — sales → Draft → Send now**
+Use this before the first real cold sends from **Milōn Forge → Lighthouse — sales → Load golden → Send now**
 (`/ops`). Goal: prove the full path on **four test inboxes only**. Do not email firms. Do not remove
 the recipient gate until Growth/Theo explicitly flip production send GO.
 
@@ -59,7 +59,7 @@ During dry-run, **every other address fails closed** at send time.
    (default includes `amstel.west@gmail.com`). `/ops` also needs the landing passphrase
    (`MILON_OPS_PASSPHRASE` — change from default in production).
 
-7. **Anthropic** — `ANTHROPIC_API_KEY` for *Draft with Claude*.
+7. **Anthropic** — `ANTHROPIC_API_KEY` for accountant **Rewrite** and owner **Draft with Claude**. Accountant **Load golden** does not need it.
 
 8. **Supabase migrations** (SQL editor, if not applied):
    - `20260820100000_milon_lighthouse.sql` — core Lighthouse tables + sequences
@@ -77,7 +77,8 @@ During dry-run, **every other address fails closed** at send time.
    - Persona **accountant** → sequence `accountant_v1`; persona **owner** → `owner_v1`
    - Email = one of the four test inboxes only
    - Stage **sourced** or **researched**, **Do not contact** off
-4. Click the lead → **Draft with Claude** (step 1) → review subject/body.
+4. Click the lead → **Load golden** (accountant drip or one-shot) or **Draft with Claude** (owner) → review subject/body.
+   Accountant **one-shot banger** is a separate sequence (not the 5-step drip). Pick it when adding the lead.
 5. **Send now** → confirm toast *Sent*; check the inbox (and spam).
 6. Repeat for a second persona / step if you want to exercise `asset_fallback`.
 7. **Day 3 (step 2) only** — draft/send a touch and confirm the body gifts **both** teaser links
