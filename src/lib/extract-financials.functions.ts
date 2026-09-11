@@ -222,6 +222,9 @@ export const extractPDFsWithAI = createServerFn({ method: "POST" })
       .object({
         files: z.array(PDFFileSchema).min(1).max(3),
         market: marketInputSchema,
+        // The browser still needs the staged object (to archive it into the
+        // owner's documents) and removes it itself afterwards.
+        retainStaged: z.boolean().optional(),
       })
       .parse(input),
   )
@@ -230,7 +233,9 @@ export const extractPDFsWithAI = createServerFn({ method: "POST" })
     const files = await Promise.all(
       data.files.map(async (f) => ({
         fileName: f.fileName,
-        base64: await resolvePdfBase64(context.supabase.storage, context.userId, f),
+        base64: await resolvePdfBase64(context.supabase.storage, context.userId, f, {
+          retain: data.retainStaged,
+        }),
       })),
     );
     for (const f of files) {
