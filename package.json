@@ -21,6 +21,8 @@
     "test:ask-ai-context": "vite-node --config scripts/vite-test.config.ts scripts/ask-ai-context-test.mts",
     "test:accountant-ask-ai-tab": "vite-node --config scripts/vite-test.config.ts scripts/accountant-ask-ai-tab-test.mts",
     "test:onboarding": "vite-node --config scripts/vite-test.config.ts scripts/test-onboarding-rls.mts",
+    "test:upload-visibility": "vite-node --config scripts/vite-test.config.ts scripts/upload-visibility-test.mts",
+    "test:upload-visibility-rls": "vite-node --config scripts/vite-test.config.ts scripts/test-upload-visibility-rls.mts",
     "test:invited-member": "vite-node --config scripts/vite-test.config.ts scripts/test-invited-member-flow.mts",
     "test:invite-onboarding": "vite-node --config scripts/vite-test.config.ts scripts/invite-accept-onboarding-test.mts",
     "test:industry-pulse": "vite-node --config scripts/vite-test.config.ts scripts/industry-pulse-fallback-test.mts",
