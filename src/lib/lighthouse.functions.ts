@@ -36,6 +36,7 @@ import {
   startTrialCtaBrief,
   watchVideoCtaBrief,
 } from "@/lib/lighthouse-draft-cta";
+import { lighthouseResendIdempotencyKey } from "@/lib/lighthouse-resend-idempotency.server";
 
 const MIGRATION = "20260820100000_milon_lighthouse.sql";
 const ENGAGEMENT_MIGRATION = "20260822210000_lighthouse_engagement.sql";
@@ -1120,32 +1121,35 @@ export const sendLighthouseTouch = createServerFn({ method: "POST" })
         : null;
     const attachments = lighthouseOnePagerAttachments(onePagerForAttach?.url ?? null);
 
+    const resendPayload = {
+      from: `${senderName} <${fromAddr}>`,
+      to: [to],
+      reply_to: replyTo,
+      subject: data.subject,
+      text: bodyWithFooter,
+      ...(attachments.length ? { attachments } : {}),
+      tags: [
+        { name: "source", value: "lighthouse" },
+        { name: "touch_id", value: data.touchId },
+      ],
+      headers: {
+        // RFC 8058 one-click: mail clients show a native Unsubscribe control
+        // and POST to the https target. Gmail and Yahoo bulk-sender rules
+        // both expect this on anything that is not strictly transactional.
+        "List-Unsubscribe": `<${oneClickOptOutFor(optOutToken)}>, <mailto:${fromAddr}?subject=unsubscribe>`,
+        "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+      },
+    };
+    const resendBody = JSON.stringify(resendPayload);
+
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
-        "Idempotency-Key": `lighthouse-${data.touchId}`,
+        "Idempotency-Key": lighthouseResendIdempotencyKey(data.touchId, resendBody),
       },
-      body: JSON.stringify({
-        from: `${senderName} <${fromAddr}>`,
-        to: [to],
-        reply_to: replyTo,
-        subject: data.subject,
-        text: bodyWithFooter,
-        ...(attachments.length ? { attachments } : {}),
-        tags: [
-          { name: "source", value: "lighthouse" },
-          { name: "touch_id", value: data.touchId },
-        ],
-        headers: {
-          // RFC 8058 one-click: mail clients show a native Unsubscribe control
-          // and POST to the https target. Gmail and Yahoo bulk-sender rules
-          // both expect this on anything that is not strictly transactional.
-          "List-Unsubscribe": `<${oneClickOptOutFor(optOutToken)}>, <mailto:${fromAddr}?subject=unsubscribe>`,
-          "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
-        },
-      }),
+      body: resendBody,
     });
 
     if (!res.ok) {
