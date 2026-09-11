@@ -9,7 +9,7 @@
  * Anything written here bumps the deliverable's freshness stamp so an existing
  * accountant sign-off flips to "Needs re-review" (see computeIsStale).
  *
- * Pure module — no I/O. Persistence lives in auto-populate.client.ts.
+ * Pure module — no I/O. Persistence lives in auto-populate-run.ts.
  */
 
 import type { BudgetDocument } from "@/lib/budget.types";

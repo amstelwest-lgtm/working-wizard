@@ -16,7 +16,7 @@ import {
   loadAutoPopulateState,
   runAutoPopulate,
   type AutoPopulateState,
-} from "@/lib/auto-populate.client";
+} from "@/lib/auto-populate-run";
 import { summariseAutoPopulate, type AutoPopulatePrefs } from "@/lib/auto-populate";
 import { MarketProvider } from "@/contexts/market";
 import {

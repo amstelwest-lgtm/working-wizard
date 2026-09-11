@@ -195,7 +195,7 @@ import {
   loadAutoPopulateState,
   runAutoPopulate,
   type AutoPopulateState,
-} from "@/lib/auto-populate.client";
+} from "@/lib/auto-populate-run";
 import { summariseAutoPopulate } from "@/lib/auto-populate";
 import {
   UPLOAD_ACCEPT,

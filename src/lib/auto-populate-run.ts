@@ -1,5 +1,5 @@
 /**
- * Browser-side runner for auto-populate: read the client row, build the
+ * Browser-side runner for auto-populate (Supabase client, called from the portals): read the client row, build the
  * deliverable writes, persist, remember the checkbox choice.
  */
 

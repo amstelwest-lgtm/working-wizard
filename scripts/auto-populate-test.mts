@@ -222,7 +222,7 @@ assert(options.includes("sign-off again"), "options warn about re-sign");
 const migration = read("supabase/migrations/20260911090000_clients_auto_update_prefs.sql");
 assert(/ADD COLUMN IF NOT EXISTS auto_update_prefs JSONB/.test(migration), "migration adds prefs column");
 assert(read("src/integrations/supabase/types.ts").includes("auto_update_prefs: Json | null"), "types include column");
-const runner = read("src/lib/auto-populate.client.ts");
+const runner = read("src/lib/auto-populate-run.ts");
 assert(/auto_update_prefs\|42703/.test(runner), "runner tolerates un-migrated column");
 
 console.log("auto-populate: all assertions passed");
