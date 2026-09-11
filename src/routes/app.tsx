@@ -133,8 +133,8 @@ import {
   ownerBoardReady,
   ownerWalkthroughReady,
   shouldAutoProposeAfterFirstUpload,
+  shouldClearFirstRunAfterFirstUpload,
   shouldShowOwnerProfileFunnel,
-  shouldSkipOwnerTourAfterFirstUpload,
 } from "@/lib/first-run";
 import { markOnboardingDone, OWNER_TOUR_KEY } from "@/lib/onboarding";
 import { invokeBrainPropose } from "@/lib/brain-propose-client";
@@ -2995,9 +2995,13 @@ function Index() {
     }
     setOwnerFirstUploadHandled(hasOwnerFirstUploadHandled(effectiveClientId));
   }, [effectiveClientId]);
-  const skipPostUploadOwnerTour = useMemo(
+  // After the first upload the board is scored and Profit / Cash / Budget are
+  // auto-drafted (#175). Clear the bring-in-your-numbers chrome, but leave
+  // OWNER_TOUR_KEY untouched so the scored tour runs and explains that those
+  // deliverables await accountant sign-off.
+  const clearFirstRunAfterUpload = useMemo(
     () =>
-      shouldSkipOwnerTourAfterFirstUpload({
+      shouldClearFirstRunAfterFirstUpload({
         isInvitedOwner: invitedOwnerEntry,
         isInvitedOwnerWithFigures: skipInvitedSetupChrome,
         firstUploadHandled: ownerFirstUploadHandled,
@@ -3016,7 +3020,6 @@ function Index() {
       return;
     }
     if (!effectiveClientId) return;
-    markOnboardingDone(OWNER_TOUR_KEY);
     markOwnerFirstUploadHandled(effectiveClientId);
     setOwnerFirstUploadHandled(true);
     try {
@@ -3038,15 +3041,14 @@ function Index() {
     }
   }, [skipInvitedSetupChrome, firstRunStep]);
   useEffect(() => {
-    if (!skipPostUploadOwnerTour) return;
-    markOnboardingDone(OWNER_TOUR_KEY);
+    if (!clearFirstRunAfterUpload) return;
     if (firstRunStep === "pick-type") {
       setFirstRunStep(null);
       setShowOnboarding(false);
     } else if (firstRunStep === "first-data") {
       setFirstRunStep(null);
     }
-  }, [skipPostUploadOwnerTour, firstRunStep]);
+  }, [clearFirstRunAfterUpload, firstRunStep]);
   const enterSampleMode = useCallback(() => {
     setV({ ...defaults, ...sampleFinancialsFor(boardMarket.country) } as Inputs);
     setSampleMode(true);
@@ -3552,7 +3554,9 @@ function Index() {
             <TabErrorBoundary label="Walkthrough">
               {/* Empty board: a two-step nudge to the one action. The full board
                   tour only runs once a real score exists, so nothing it points at
-                  ("one health score", Milōn Bot, seeded budget) is a promise. */}
+                  ("one health score", Milōn Bot, seeded budget) is a promise.
+                  A self-signup first upload flips this to the scored tour — it is
+                  not skipped (#175: auto-built deliverables await sign-off). */}
               <WalkthroughWizard
                 key={showScoredBoard ? "owner" : "owner-empty"}
                 variant={showScoredBoard ? "owner" : "owner-empty"}
@@ -3565,7 +3569,6 @@ function Index() {
                     onboardingGateReady,
                   }) &&
                   !skipInvitedSetupChrome &&
-                  !skipPostUploadOwnerTour &&
                   !showFinData &&
                   !reviewOpen &&
                   !showQboDialog &&

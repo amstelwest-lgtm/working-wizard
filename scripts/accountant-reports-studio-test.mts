@@ -34,6 +34,15 @@ assert(dashSrc.includes('search: { tab: "reports" }'), "dashboard report icon op
 assert(dashSrc.includes('to: "/reports"'), "dashboard Reports studio still opens standalone studio");
 
 const walkSrc = readFileSync(resolve("src/components/walkthrough-wizard.tsx"), "utf8");
-assert(walkSrc.includes("same Reports Studio"), "walkthrough describes the studio on the Reports tab");
+{
+  const start = walkSrc.indexOf("const ACCOUNTANT_CLIENT_STEPS: Step[] = [");
+  const tour = walkSrc.slice(start, walkSrc.indexOf("];", start));
+  const i = tour.indexOf('tab: "reports"');
+  const reportsStep = tour.slice(i, tour.indexOf("},", i));
+  assert(i !== -1, "accountant client tour has a Reports tab step");
+  assert(reportsStep.includes('targetId: "pane-reports"'), "Reports step points at the Reports Studio pane");
+  assert(reportsStep.includes("same Reports Studio"), "walkthrough describes the studio on the Reports tab");
+  assert(/sign off/i.test(reportsStep), "Reports step says deliverables are signed off before delivery (#175)");
+}
 
 console.log("accountant-reports-studio-test: ok");

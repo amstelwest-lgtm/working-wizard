@@ -13,8 +13,8 @@ import {
   ownerHasPreloadedFigures,
   ownerWalkthroughReady,
   shouldAutoProposeAfterFirstUpload,
+  shouldClearFirstRunAfterFirstUpload,
   shouldShowOwnerProfileFunnel,
-  shouldSkipOwnerTourAfterFirstUpload,
 } from "../src/lib/first-run";
 import {
   isClientUuid,
@@ -191,29 +191,32 @@ assert(
   "self-signup owner with figures still gets first-run chrome",
 );
 
+// #175: first upload auto-drafts Profit / Cash / Budget. It clears the
+// bring-in-your-numbers chrome but must NOT suppress the scored board tour —
+// that tour is where the owner learns the deliverables await accountant sign-off.
 assert(
-  shouldSkipOwnerTourAfterFirstUpload({
+  shouldClearFirstRunAfterFirstUpload({
     isInvitedOwner: false,
     isInvitedOwnerWithFigures: false,
     firstUploadHandled: true,
   }),
-  "self-signup owner skips the seven-step tour after first upload is handled",
+  "self-signup owner clears first-run chrome after first upload is handled",
 );
 assert(
-  !shouldSkipOwnerTourAfterFirstUpload({
+  !shouldClearFirstRunAfterFirstUpload({
     isInvitedOwner: false,
     isInvitedOwnerWithFigures: false,
     firstUploadHandled: false,
   }),
-  "self-signup owner keeps the tour until first upload is handled",
+  "self-signup owner keeps first-run chrome until first upload is handled",
 );
 assert(
-  !shouldSkipOwnerTourAfterFirstUpload({
+  !shouldClearFirstRunAfterFirstUpload({
     isInvitedOwner: true,
     isInvitedOwnerWithFigures: false,
     firstUploadHandled: true,
   }),
-  "invited owner without figures is out of scope for upload tour skip",
+  "invited owner without figures is out of scope for the upload gate",
 );
 assert(
   shouldAutoProposeAfterFirstUpload({
@@ -420,7 +423,21 @@ assert(appSrc.includes("openInvitedClient"), "founder board prefers the invited 
 assert(appSrc.includes("shouldShowOwnerProfileFunnel"), "founder board uses shared funnel gate");
 assert(appSrc.includes("ownerWalkthroughReady({"), "tour ready helper is wired");
 assert(appSrc.includes("skipInvitedSetupChrome"), "invited owner with figures skips the board tour");
-assert(appSrc.includes("skipPostUploadOwnerTour"), "self-signup owner skips tour after first upload");
+assert(appSrc.includes("clearFirstRunAfterUpload"), "first upload clears the bring-in-your-numbers chrome");
+assert(!appSrc.includes("skipPostUploadOwnerTour"), "first upload no longer suppresses the scored board tour (#175)");
+{
+  // Only the invited-with-figures path (#150) may pre-mark the owner tour done.
+  const tourDoneCount = appSrc.split("markOnboardingDone(OWNER_TOUR_KEY)").length - 1;
+  assert(tourDoneCount === 1, `owner tour is pre-marked done exactly once (invited+figures), got ${tourDoneCount}`);
+  const uploadHandler = appSrc.slice(
+    appSrc.indexOf("const handleOwnerFirstRealFinancialsUpload"),
+    appSrc.indexOf("useEffect(() => {", appSrc.indexOf("const handleOwnerFirstRealFinancialsUpload")),
+  );
+  assert(
+    !uploadHandler.includes("markOnboardingDone(OWNER_TOUR_KEY)"),
+    "first upload handler leaves the scored tour to run",
+  );
+}
 assert(appSrc.includes("handleOwnerFirstRealFinancialsUpload"), "first upload handler is wired");
 assert(appSrc.includes("invokeBrainPropose"), "owner first upload reuses brain-propose");
 assert(appSrc.includes("OwnerBrainFirstInsight"), "scored board surfaces proposed next steps");
@@ -490,6 +507,48 @@ assert(
 const wizardSrc = readFileSync(resolve("src/components/walkthrough-wizard.tsx"), "utf8");
 assert(wizardSrc.includes('"owner-empty"'), "wizard knows the owner-empty variant");
 assert(wizardSrc.includes("OWNER_EMPTY_TOUR_KEY"), "owner-empty tour has its own storage key");
+
+// #175 narrative: one upload drafts Profit / Cash / Budget, then each waits for
+// accountant sign-off — said on the owner board and in the accountant studio.
+{
+  const stepsBlock = (name: string) => {
+    const start = wizardSrc.indexOf(`const ${name}: Step[] = [`);
+    const end = wizardSrc.indexOf("];", start);
+    assert(start !== -1 && end !== -1, `${name} is defined`);
+    return wizardSrc.slice(start, end);
+  };
+  const ownerEmpty = stepsBlock("OWNER_EMPTY_STEPS");
+  assert(/drafts your Profit/.test(ownerEmpty), "owner-empty says one upload drafts the deliverables");
+  assert(/sign off/i.test(ownerEmpty), "owner-empty says drafts queue for accountant sign-off");
+
+  const owner = stepsBlock("OWNER_STEPS");
+  for (const section of ["Profit", "Cash Forecast", "Budget"]) {
+    const i = owner.indexOf(`section: "${section}"`);
+    const step = owner.slice(i, owner.indexOf("},", i));
+    assert(i !== -1, `owner tour has a ${section} step`);
+    assert(/accountant/.test(step) && /sign/.test(step), `owner ${section} step mentions accountant sign-off`);
+  }
+
+  const acctEmpty = stepsBlock("ACCOUNTANT_CLIENT_EMPTY_STEPS");
+  assert(/drafts Profit, Cash Forecast and Budget/.test(acctEmpty), "accountant-empty says one upload drafts the deliverables");
+  assert(/sign-off/.test(acctEmpty), "accountant-empty says tabs wait for sign-off");
+
+  const acct = stepsBlock("ACCOUNTANT_CLIENT_STEPS");
+  for (const section of ["Profit", "Cash Forecast", "Budget", "Reports"]) {
+    const i = acct.indexOf(`section: "${section}"`);
+    const step = acct.slice(i, acct.indexOf("},", i));
+    assert(i !== -1, `accountant tour has a ${section} step`);
+    assert(/sign/i.test(step), `accountant ${section} step asks for review / sign-off`);
+  }
+  assert(/Needs re-review/.test(acct), "accountant tour explains re-review after later uploads");
+}
+
+const onboardingSrc = readFileSync(resolve("src/lib/onboarding.ts"), "utf8");
+assert(onboardingSrc.includes('"milon_walkthrough_v10"'), "owner tour key bumped for #175 copy");
+assert(onboardingSrc.includes('"milon_walkthrough_empty_v2"'), "owner-empty tour key bumped");
+assert(onboardingSrc.includes('"milon_accountant_client_tour_v9"'), "accountant client tour key bumped");
+assert(onboardingSrc.includes('"milon_accountant_client_tour_empty_v2"'), "accountant client-empty tour key bumped");
+assert(onboardingSrc.includes('"milon_accountant_dash_tour_v8"'), "accountant dashboard tour key bumped");
 
 // AccountantProfileProvider mounts for every session (root). It must never
 // mint a practice firm for an owner whose roles have not been written yet.
