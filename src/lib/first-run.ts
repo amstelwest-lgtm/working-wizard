@@ -118,10 +118,13 @@ export function markOwnerFirstUploadHandled(clientId: string): void {
 }
 
 /**
- * Self-signup owner after first real figures upload — skip the seven-step board
- * tour (same end state as invited-with-figures #150, different trigger).
+ * Self-signup owner after first real figures upload — the upload auto-drafts
+ * Profit, Cash and Budget (#175), so the scored board tour must run next to
+ * explain those deliverables and that they await accountant sign-off. This
+ * only clears the first-run "bring in your numbers" chrome; it never marks
+ * OWNER_TOUR_KEY done (invited-with-figures #150 remains the one skip path).
  */
-export function shouldSkipOwnerTourAfterFirstUpload(opts: {
+export function shouldClearFirstRunAfterFirstUpload(opts: {
   isInvitedOwner: boolean;
   isInvitedOwnerWithFigures: boolean;
   firstUploadHandled: boolean;
