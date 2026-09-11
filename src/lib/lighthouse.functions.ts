@@ -3,11 +3,12 @@
  *
  * Funnel: sourced → researched → contacted → replied → conversation (email) →
  * trial → activated → won. The `meeting` stage is an email thread, not a
- * booked call. Every touch is AI-drafted, owner-approved, then sent via
- * Resend. The last CTA in every sequence is the tracked free-trial link, so
- * the funnel always terminates at a Milōn signup. Calendar booking is
- * optional and off by default — the sales motion is email correspondence so
- * it can run around a day job.
+ * booked call. accountant_v1 loads Theo’s golden v3 copy by default; Claude
+ * is an explicit rewrite. owner_v1 stays Claude-first. Owner-approved, then
+ * sent via Resend. The last CTA in every sequence is the tracked free-trial
+ * link, so the funnel always terminates at a Milōn signup. Calendar booking
+ * is optional and off by default — the sales motion is email correspondence
+ * so it can run around a day job.
  */
 
 import { createServerFn } from "@tanstack/react-start";
@@ -29,6 +30,16 @@ import {
   lighthouseSendAllowlistEnforced,
 } from "@/lib/lighthouse-send-allowlist";
 import { LIGHTHOUSE_REPLY_TO, resolveLighthouseReplyTo } from "@/lib/lighthouse-reply-to";
+import {
+  ACCOUNTANT_ONESHOT_SEQUENCE,
+  ACCOUNTANT_ONESHOT_SEQUENCE_KEY,
+  ACCOUNTANT_ONESHOT_STEP,
+  ACCOUNTANT_V1_SEQUENCE_KEY,
+  fillAccountantSequenceGolden,
+  lighthouseOneshotAttachments,
+  resolveLighthouseDraftEngine,
+  sequenceUsesGoldenDefault,
+} from "@/lib/lighthouse-accountant-golden";
 import {
   LIGHTHOUSE_TEAM_VOICE,
   lighthouseOnePagerAttachments,
@@ -566,6 +577,15 @@ export const getLighthouse = createServerFn({ method: "GET" })
     } else if (!migrationHint) {
       migrationHint = migrationHintFor(MIGRATION);
     }
+    if (!sequences.some((s) => s.key === ACCOUNTANT_ONESHOT_SEQUENCE_KEY)) {
+      sequences.push({
+        key: ACCOUNTANT_ONESHOT_SEQUENCE.key,
+        name: ACCOUNTANT_ONESHOT_SEQUENCE.name,
+        persona: ACCOUNTANT_ONESHOT_SEQUENCE.persona,
+        steps: [{ ...ACCOUNTANT_ONESHOT_STEP }],
+        active: ACCOUNTANT_ONESHOT_SEQUENCE.active,
+      });
+    }
 
     let assets: LighthouseAsset[] = [];
     const { data: assetRows } = await admin
@@ -666,6 +686,7 @@ export const upsertLighthouseLead = createServerFn({ method: "POST" })
         roleTitle: z.string().max(200).optional(),
         city: z.string().max(120).optional(),
         persona: z.enum(["owner", "accountant"]).optional(),
+        sequenceKey: z.enum(["owner_v1", "accountant_v1", "accountant_oneshot_v1"]).optional(),
         stage: z.enum(LIGHTHOUSE_STAGES).optional(),
         signal: z.string().max(1000).optional(),
         notes: z.string().max(4000).optional(),
@@ -692,7 +713,9 @@ export const upsertLighthouseLead = createServerFn({ method: "POST" })
     }
     if (data.persona) {
       patch.persona = data.persona;
-      patch.sequence_key = data.persona === "accountant" ? "accountant_v1" : "owner_v1";
+      patch.sequence_key = defaultSequenceKey(data.persona, data.sequenceKey);
+    } else if (data.sequenceKey) {
+      patch.sequence_key = data.sequenceKey;
     }
     if (data.stage) {
       patch.stage = data.stage;
@@ -749,7 +772,7 @@ export const importLighthouseLeads = createServerFn({ method: "POST" })
           company: company?.trim() || null,
           signal: signal?.trim() || null,
           persona: data.persona,
-          sequence_key: data.persona === "accountant" ? "accountant_v1" : "owner_v1",
+          sequence_key: defaultSequenceKey(data.persona),
           stage: "sourced",
           source: "lighthouse_import",
           trial_token: randomToken(),
@@ -800,14 +823,46 @@ Non-negotiable rules:
 - Subject lines: lowercase or sentence case, under 6 words, no clickbait, no "Re:" fakery.
 - The sales motion is email correspondence, not calendar booking. Do not propose a call, a meeting, a Zoom, or a booking link unless a booking URL is explicitly provided in this prompt. Prefer they reply in writing or start the free trial.`;
 
+const ONESHOT_SYSTEM_RULES = `You write as The Milōn Team — a South African financial-health platform for SMEs and their accountants. Be direct. No fluff. Never write in founder first-person as Theo.
+
+Non-negotiable rules:
+- This is a one-shot email, not the 5-step drip. Stay close to the current draft.
+- Truth only. Never invent client names, results, percentages, awards, peer benchmarks, or case studies.
+- Plain text, no HTML, no markdown, no emoji, no exclamation marks.
+- Length may stay long — do not cut this down to a drip-style 120-word note.
+- Keep BOTH YouTube URLs exactly: https://youtu.be/J4vJki7HcIs and https://youtu.be/k3aRM4toTvU.
+- Keep BOTH one-pager URLs exactly: https://www.milonfinance.com/lighthouse/milon-one-pager-accountants.pdf and https://www.milonfinance.com/lighthouse/milon-one-pager-owners.pdf.
+- KEEP the line that we will call shortly after they have looked through the videos and one-pagers. Do not strip the call, and do not replace it with a trial-only ask.
+- Sign off as The Milōn Team.
+- From is team@milonfinance.com. Reply-to is hello@milonfinance.com. Do not invent other mailboxes.`;
+
 function systemRulesFor(seqKey: string): string {
-  return seqKey === "accountant_v1" ? SYSTEM_RULES : OWNER_SYSTEM_RULES;
+  if (seqKey === ACCOUNTANT_ONESHOT_SEQUENCE_KEY) return ONESHOT_SYSTEM_RULES;
+  return seqKey === ACCOUNTANT_V1_SEQUENCE_KEY ? SYSTEM_RULES : OWNER_SYSTEM_RULES;
 }
 
 function signOffLine(seqKey: string, senderName: string, senderTitle: string): string {
-  return seqKey === "accountant_v1"
+  return seqKey === ACCOUNTANT_V1_SEQUENCE_KEY || seqKey === ACCOUNTANT_ONESHOT_SEQUENCE_KEY
     ? `SIGN OFF as ${LIGHTHOUSE_TEAM_VOICE}.`
     : `SIGN OFF as ${senderName}, ${senderTitle}.`;
+}
+
+function noCallInstruction(seqKey: string): string {
+  if (seqKey === ACCOUNTANT_ONESHOT_SEQUENCE_KEY) {
+    return "Keep the mention that we will call shortly after they look through the videos and one-pagers. Do not strip the call.";
+  }
+  return "Do not offer a call, a meeting, or a calendar link in this email.";
+}
+
+function defaultSequenceKey(
+  persona: "owner" | "accountant" | string,
+  sequenceKey?: string | null,
+): string {
+  if (sequenceKey === ACCOUNTANT_ONESHOT_SEQUENCE_KEY && persona === "accountant") {
+    return ACCOUNTANT_ONESHOT_SEQUENCE_KEY;
+  }
+  if (persona === "accountant") return ACCOUNTANT_V1_SEQUENCE_KEY;
+  return "owner_v1";
 }
 
 export const draftLighthouseTouch = createServerFn({ method: "POST" })
@@ -817,6 +872,10 @@ export const draftLighthouseTouch = createServerFn({ method: "POST" })
       .object({
         leadId: z.string().uuid(),
         stepNo: z.number().int().min(1).max(8),
+        /** default = golden for accountant_v1; rewrite = Claude. owner_v1 ignores golden. */
+        mode: z.enum(["default", "rewrite"]).optional().default("default"),
+        currentSubject: z.string().max(300).optional(),
+        currentBody: z.string().max(20000).optional(),
       })
       .parse(input),
   )
@@ -845,22 +904,12 @@ export const draftLighthouseTouch = createServerFn({ method: "POST" })
     const steps = Array.isArray((seqRow as { steps?: unknown } | null)?.steps)
       ? (seqRow as { steps: LighthouseStep[] }).steps
       : [];
-    const step = steps.find((s) => s.step === data.stepNo);
+    const step =
+      steps.find((s) => s.step === data.stepNo) ??
+      (seqKey === ACCOUNTANT_ONESHOT_SEQUENCE_KEY && data.stepNo === 1
+        ? { ...ACCOUNTANT_ONESHOT_STEP }
+        : undefined);
     if (!step) throw new Error(`Step ${data.stepNo} is not defined for ${seqKey}`);
-
-    // Primary + fallback when both are ready (Day 3/4 gifts both teasers).
-    // Only when neither is ready does the copy degrade to no link.
-    const readyAssets = await readyAssetsByKeys(admin, [step.asset, step.asset_fallback ?? null]);
-    const assetUrl = readyAssets[0]?.url ?? null;
-    const teaserAssets =
-      step.day === 28
-        ? await readyAssetsByKeys(admin, ["teaser_accountant", "teaser_owner"])
-        : [];
-    const onePagerUrl =
-      readyAssets.find((a) => a.key === "one_pager_accountant")?.url ??
-      (step.day === 9 || step.day === 28
-        ? (await firstReadyAsset(admin, ["one_pager_accountant"]))?.url ?? null
-        : null);
 
     const { data: setRow } = await admin
       .from("milon_ops_settings")
@@ -873,45 +922,111 @@ export const draftLighthouseTouch = createServerFn({ method: "POST" })
     const trialDays = Number(settingsRaw.trial_days ?? DEFAULT_SETTINGS.trialDays);
 
     const trialLink = trialLinkFor((lead.trial_token as string | null) ?? null);
+    const mode = data.mode ?? "default";
+    const engine = resolveLighthouseDraftEngine(seqKey, mode);
 
-    // Previous touches so the model does not repeat an angle already used.
-    const { data: priorRows } = await admin
-      .from("lighthouse_touches")
-      .select("step_no, angle, subject, body")
-      .eq("lead_id", data.leadId);
-    const prior = ((priorRows ?? []) as Array<Record<string, unknown>>)
-      .filter((p) => Number(p.step_no) < data.stepNo)
-      .map((p) => `Step ${p.step_no} (${p.angle}): ${p.subject}\n${p.body}`)
-      .join("\n\n---\n\n");
+    let subject: string;
+    let body: string;
 
-    const persona = String(lead.persona ?? "owner");
-    const personaBrief =
-      persona === "accountant"
-        ? "The recipient runs or works in an accounting/advisory practice in South Africa. Their pain is advisory work that does not scale across a client book, and clients who only hear from them at year-end."
-        : "The recipient owns a South African small or medium business. Their pain is not knowing their real cash runway or which lever to pull next, and only seeing numbers months late.";
+    if (engine === "golden") {
+      // Primary accountant_v1 path: fill Theo’s v3 copy. Does not call Claude.
+      const filled = fillAccountantSequenceGolden({
+        sequenceKey: seqKey,
+        stepNo: data.stepNo,
+        name: (lead.name as string | null) ?? null,
+        firm: (lead.company as string | null) ?? null,
+        trialLink,
+      });
+      subject = filled.subject;
+      body = filled.body;
+    } else {
+      // Primary + fallback when both are ready (Day 3/4 gifts both teasers).
+      // Only when neither is ready does the copy degrade to no link.
+      const readyAssets = await readyAssetsByKeys(admin, [step.asset, step.asset_fallback ?? null]);
+      const assetUrl = readyAssets[0]?.url ?? null;
+      const teaserAssets =
+        step.day === 28
+          ? await readyAssetsByKeys(admin, ["teaser_accountant", "teaser_owner"])
+          : [];
+      const onePagerUrl =
+        readyAssets.find((a) => a.key === "one_pager_accountant")?.url ??
+        (step.day === 9 || step.day === 28
+          ? (await firstReadyAsset(admin, ["one_pager_accountant"]))?.url ?? null
+          : null);
 
-    const ctaBrief =
-      step.cta === "start_trial"
-        ? startTrialCtaBrief({
-            day: step.day,
-            trialDays,
-            trialLink,
-            onePagerUrl,
-            teaserUrls: teaserAssets.map((a) => a.url),
-          })
-        : step.cta === "reply_interest"
-          ? replyInterestCtaBrief({ day: step.day, persona })
-          : step.cta === "watch_60s" || step.cta === "watch_walkthrough"
-            ? watchVideoCtaBrief(readyAssets.map((a) => a.url))
-            : step.cta === "read_case"
-              ? assetUrl
-                ? `Point to exactly this link and nothing else: ${assetUrl}`
-                : "There is no published case study yet, so use an honest first-pilot framing without linking."
-              : "Close with a simple, low-pressure question.";
+      // Previous touches so the model does not repeat an angle already used.
+      const { data: priorRows } = await admin
+        .from("lighthouse_touches")
+        .select("step_no, angle, subject, body")
+        .eq("lead_id", data.leadId);
+      const priorTouches = (priorRows ?? []) as Array<Record<string, unknown>>;
+      const prior = priorTouches
+        .filter((p) => Number(p.step_no) < data.stepNo)
+        .map((p) => `Step ${p.step_no} (${p.angle}): ${p.subject}\n${p.body}`)
+        .join("\n\n---\n\n");
 
-    const prompt = `${systemRulesFor(seqKey)}
+      let sourceSubject = String(data.currentSubject ?? "").trim();
+      let sourceBody = String(data.currentBody ?? "").trim();
+      if (mode === "rewrite" && (!sourceSubject || !sourceBody)) {
+        const existingDraft = priorTouches.find((p) => Number(p.step_no) === data.stepNo);
+        sourceSubject = sourceSubject || String(existingDraft?.subject ?? "").trim();
+        sourceBody = sourceBody || String(existingDraft?.body ?? "").trim();
+      }
+      if (mode === "rewrite" && (!sourceSubject || !sourceBody) && sequenceUsesGoldenDefault(seqKey)) {
+        const filled = fillAccountantSequenceGolden({
+          sequenceKey: seqKey,
+          stepNo: data.stepNo,
+          name: (lead.name as string | null) ?? null,
+          firm: (lead.company as string | null) ?? null,
+          trialLink,
+        });
+        sourceSubject = sourceSubject || filled.subject;
+        sourceBody = sourceBody || filled.body;
+      }
 
-PROSPECT
+      const persona = String(lead.persona ?? "owner");
+      const personaBrief =
+        persona === "accountant"
+          ? "The recipient runs or works in an accounting/advisory practice in South Africa. Their pain is advisory work that does not scale across a client book, and clients who only hear from them at year-end."
+          : "The recipient owns a South African small or medium business. Their pain is not knowing their real cash runway or which lever to pull next, and only seeing numbers months late.";
+
+      const ctaBrief =
+        step.cta === "start_trial"
+          ? startTrialCtaBrief({
+              day: step.day,
+              trialDays,
+              trialLink,
+              onePagerUrl,
+              teaserUrls: teaserAssets.map((a) => a.url),
+            })
+          : step.cta === "reply_interest"
+            ? replyInterestCtaBrief({ day: step.day, persona })
+            : step.cta === "watch_60s" || step.cta === "watch_walkthrough"
+              ? watchVideoCtaBrief(readyAssets.map((a) => a.url))
+              : step.cta === "read_case"
+                ? assetUrl
+                  ? `Point to exactly this link and nothing else: ${assetUrl}`
+                  : "There is no published case study yet, so use an honest first-pilot framing without linking."
+                : step.cta === "call_followup"
+                  ? "Keep the follow-up call after they look through the videos and one-pagers. Do not replace it with a trial-only ask."
+                  : "Close with a simple, low-pressure question.";
+
+      const rewriteBlock =
+        mode === "rewrite" && sourceSubject && sourceBody
+          ? `REWRITE TASK
+Rewrite the current draft. Stay close to its structure and claims. Apply the system rules and this step's goal. Do not invent a new angle.
+
+CURRENT DRAFT
+Subject: ${sourceSubject}
+
+${sourceBody}
+
+`
+          : "";
+
+      const prompt = `${systemRulesFor(seqKey)}
+
+${rewriteBlock}PROSPECT
 Name: ${lead.name ?? "unknown"}
 Company: ${lead.company ?? "unknown"}
 Role: ${lead.role_title ?? "unknown"}
@@ -932,19 +1047,21 @@ Call to action: ${ctaBrief}
 ${prior ? `ALREADY SENT TO THIS PERSON (do not repeat these angles or openings):\n\n${prior}` : "This is the first message to this person."}
 
 ${signOffLine(seqKey, senderName, senderTitle)}
-Do not offer a call, a meeting, or a calendar link in this email.
+${noCallInstruction(seqKey)}
 
 Return ONLY JSON: {"subject": "...", "body": "..."}
 The body must be plain text with line breaks, already signed off, ready to send.`;
 
-    const raw = await callClaudeMessages({
-      content: [{ type: "text", text: prompt }],
-      maxTokens: 1200,
-    });
+      const raw = await callClaudeMessages({
+        content: [{ type: "text", text: prompt }],
+        maxTokens: seqKey === ACCOUNTANT_ONESHOT_SEQUENCE_KEY ? 2500 : 1200,
+      });
 
-    const draft = parseDraftJson(raw);
-    if (!draft) throw new Error("Claude returned an unusable draft — try again.");
-    const { subject, body } = draft;
+      const draft = parseDraftJson(raw);
+      if (!draft) throw new Error("Claude returned an unusable draft — try again.");
+      subject = draft.subject;
+      body = draft.body;
+    }
 
     const scheduledFor = addDays(new Date(), 0);
 
@@ -1119,7 +1236,10 @@ export const sendLighthouseTouch = createServerFn({ method: "POST" })
       thisStep && (thisStep.day === 9 || thisStep.day === 28)
         ? await firstReadyAsset(admin, [thisStep.asset, "one_pager_accountant"])
         : null;
-    const attachments = lighthouseOnePagerAttachments(onePagerForAttach?.url ?? null);
+    const attachments =
+      seqKey === ACCOUNTANT_ONESHOT_SEQUENCE_KEY
+        ? lighthouseOneshotAttachments()
+        : lighthouseOnePagerAttachments(onePagerForAttach?.url ?? null);
 
     const resendPayload = {
       from: `${senderName} <${fromAddr}>`,
