@@ -5,7 +5,7 @@
  * Same files feed every board — no second bank upload for cash.
  */
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { Loader2, Upload, FileText, X, Sparkles, AlertTriangle, Plus } from "lucide-react";
 import { toast } from "sonner";
@@ -41,6 +41,8 @@ import { useMarketFormat } from "@/contexts/market";
 import { selectionPayload } from "@/lib/market";
 import { PERIOD_MONTHS_KEY } from "@/lib/ratios";
 import { MovementsTrialBalancePanel } from "@/components/movements-trial-balance-panel";
+import { AutoPopulateOptions } from "@/components/auto-populate-options";
+import { defaultAutoPopulatePrefs, type AutoPopulatePrefs } from "@/lib/auto-populate";
 
 export interface BankDraftApplyPayload {
   /** String figures keyed by the app's Inputs keys (revenue, cogs, ebit, ebt, netIncome, fixedCosts). */
@@ -50,12 +52,22 @@ export interface BankDraftApplyPayload {
   /** Cash draft from the SAME statement pack — skip re-upload. */
   cashDraft?: CashFromBanksDraftResult | null;
   payloadFiles?: BankFilePayload[];
+  /** Which deliverables this pack should refresh (first upload → all). */
+  autoPopulate: AutoPopulatePrefs;
+}
+
+export interface AutoPopulateDialogState {
+  firstUpload: boolean;
+  prefs: AutoPopulatePrefs;
+  role?: "owner" | "accountant";
 }
 
 interface Props {
   open: boolean;
   onClose: () => void;
   onApply: (payload: BankDraftApplyPayload) => void;
+  /** Loaded per client before the dialog opens; undefined while loading → treated as first upload. */
+  autoPopulate?: AutoPopulateDialogState | null;
 }
 
 function fmt(n: number, currency: string | null, money: (n: number) => string): string {
@@ -71,7 +83,7 @@ function fmt(n: number, currency: string | null, money: (n: number) => string): 
   return money(n);
 }
 
-export function BankStatementDrafter({ open, onClose, onApply }: Props) {
+export function BankStatementDrafter({ open, onClose, onApply, autoPopulate }: Props) {
   const { money, t, selection } = useMarketFormat();
   const checking = t("checking");
   const inputRef = useRef<HTMLInputElement>(null);
@@ -84,6 +96,11 @@ export function BankStatementDrafter({ open, onClose, onApply }: Props) {
   const [warnings, setWarnings] = useState<string[]>([]);
   const [annualise, setAnnualise] = useState(false);
   const [ackWarnings, setAckWarnings] = useState(false);
+  const [autoPrefs, setAutoPrefs] = useState<AutoPopulatePrefs>(defaultAutoPopulatePrefs());
+  useEffect(() => {
+    if (open) setAutoPrefs(autoPopulate?.prefs ?? defaultAutoPopulatePrefs());
+  }, [open, autoPopulate?.prefs]);
+  const firstUpload = autoPopulate?.firstUpload ?? true;
   const doDraftPnL = useServerFn(draftFinancialsFromBankStatements);
   const doDraftCash = useServerFn(draftCashForecastFromBankStatements);
 
@@ -190,6 +207,7 @@ export function BankStatementDrafter({ open, onClose, onApply }: Props) {
       draft,
       cashDraft,
       payloadFiles: encodedFiles,
+      autoPopulate: autoPrefs,
     });
     reset();
   };
@@ -424,10 +442,17 @@ export function BankStatementDrafter({ open, onClose, onApply }: Props) {
               </div>
             )}
 
+            <AutoPopulateOptions
+              firstUpload={firstUpload}
+              value={autoPrefs}
+              onChange={setAutoPrefs}
+              role={autoPopulate?.role ?? "owner"}
+            />
+
             <p className="text-[11px] text-slate-500 dark:text-slate-400">
               The quality of the financial information we produce depends on the accuracy of the
-              information you upload. Next step uses these same statements for the 13-week cash
-              forecast — you will not be asked to upload again.
+              information you upload. The same statements build the 13-week cash forecast — you will
+              not be asked to upload again.
             </p>
 
             <div className="flex gap-2">
@@ -449,7 +474,7 @@ export function BankStatementDrafter({ open, onClose, onApply }: Props) {
                 onClick={apply}
                 disabled={warnings.length > 0 && !ackWarnings}
               >
-                Apply &amp; continue to cash forecast
+                {firstUpload ? "Apply & draft the board" : "Apply & update"}
               </Button>
             </div>
           </>

@@ -122,7 +122,6 @@ import {
   profileNeedsCompletion,
   profileShortLabel,
   stampProfileProvenance,
-  profileToBudgetQualification,
   type ClientOperatingProfile,
 } from "@/lib/client-profile";
 import { profileIndustryLabel, profilePriorityWeight } from "@/lib/profile-signals";
@@ -192,10 +191,12 @@ const ActionPlanPanel = lazyPanel(() => import("@/components/action-plan"), "Act
 import { SplashScreen } from "@/components/splash-screen";
 import { WalkthroughWizard } from "@/components/walkthrough-wizard";
 import { NoFiguresBanner } from "@/components/no-figures-banner";
-import { seedBudgetFromFinancials } from "@/lib/budget.bridges";
-import { normalizeBudgetDocument } from "@/lib/budget.compute";
-import type { BudgetDocument } from "@/lib/budget.types";
-import { createBudgetDocument } from "@/lib/budget.months";
+import {
+  loadAutoPopulateState,
+  runAutoPopulate,
+  type AutoPopulateState,
+} from "@/lib/auto-populate.client";
+import { summariseAutoPopulate } from "@/lib/auto-populate";
 import {
   UPLOAD_ACCEPT,
   UPLOAD_FORMATS_LABEL,
@@ -2903,6 +2904,56 @@ function Index() {
     import("@/lib/cash-from-banks.types").CashFromBanksDraftResult | null
   >(null);
   const [cashForecastReloadToken, setCashForecastReloadToken] = useState(0);
+  const [budgetReloadToken, setBudgetReloadToken] = useState(0);
+  // First-upload vs remembered checkboxes for the upload dialogs; reloaded
+  // after every upload so the second one shows checkboxes, not the notice.
+  const [autoPopulateState, setAutoPopulateState] = useState<AutoPopulateState | null>(null);
+  const refreshAutoPopulateState = useCallback(async () => {
+    if (!effectiveClientId) {
+      setAutoPopulateState(null);
+      return;
+    }
+    try {
+      setAutoPopulateState(await loadAutoPopulateState(effectiveClientId));
+    } catch (e) {
+      console.warn("auto-populate state:", e);
+    }
+  }, [effectiveClientId]);
+  useEffect(() => {
+    void refreshAutoPopulateState();
+  }, [refreshAutoPopulateState]);
+  const applyAutoPopulateResult = useCallback(
+    (r: Awaited<ReturnType<typeof runAutoPopulate>>) => {
+      const now = new Date().toISOString();
+      setClientMeta((m) =>
+        m
+          ? {
+              ...m,
+              ...(r.applied.includes("profitability") ? { financials_updated_at: now } : {}),
+              ...(r.applied.includes("cash_forecast")
+                ? {
+                    last_forecast_at: now,
+                    cashflow: (r.cashflow as never) ?? m.cashflow,
+                    ...(r.runwayWeeks != null ? { cash_runway_weeks: r.runwayWeeks } : {}),
+                  }
+                : {}),
+              ...(r.applied.includes("budget") ? { budget_updated_at: now } : {}),
+            }
+          : m,
+      );
+      if (r.applied.includes("cash_forecast")) setCashForecastReloadToken((n) => n + 1);
+      if (r.applied.includes("budget")) setBudgetReloadToken((n) => n + 1);
+      track("upload_auto_populated", {
+        surface: "owner_app",
+        clientId: effectiveClientId,
+        firstUpload: r.firstUpload,
+        applied: r.applied.join(","),
+      });
+      toast.success(summariseAutoPopulate(r, r.firstUpload), { duration: 7000 });
+      void refreshAutoPopulateState();
+    },
+    [effectiveClientId, refreshAutoPopulateState, track],
+  );
   const [existingCashflowForBanks, setExistingCashflowForBanks] = useState<Record<
     string,
     unknown
@@ -4896,6 +4947,7 @@ function Index() {
                           [PERIOD_MONTHS_KEY]: v[PERIOD_MONTHS_KEY] ?? "",
                         }}
                         onPushedToCash={() => setCashForecastReloadToken((n) => n + 1)}
+                        reloadToken={budgetReloadToken}
                       />
                     </Suspense>
                   </TabErrorBoundary>
@@ -5270,69 +5322,40 @@ function Index() {
           <BankStatementDrafter
             open={showBankDrafter}
             onClose={() => setShowBankDrafter(false)}
-            onApply={async ({ fields, annualised, cashDraft, draft }) => {
+            autoPopulate={autoPopulateState ? { ...autoPopulateState, role: "owner" } : null}
+            onApply={async ({ fields, annualised, cashDraft, draft, autoPopulate }) => {
               setV((prev) => ({ ...prev, ...fields }) as Inputs);
               setHasRealFinancials(true);
               void handleOwnerFirstRealFinancialsUpload();
               setShowBankDrafter(false);
-              setBankCashDraft(cashDraft ?? null);
               toast.success(
                 annualised
                   ? "Draft figures applied (annualised) — saved automatically."
                   : "Draft figures applied for the statement period — saved automatically.",
               );
 
-              // Prefill budget from drafted figures when a client row exists.
-              if (effectiveClientId) {
-                try {
-                  const { data: row } = await supabase
-                    .from("clients")
-                    .select("budget, financial_year_start_month, operating_profile")
-                    .eq("id", effectiveClientId)
-                    .maybeSingle();
-                  const fyMonth =
-                    (row as { financial_year_start_month?: number | null } | null)
-                      ?.financial_year_start_month ?? 3;
-                  const budgetRaw = (row as { budget?: BudgetDocument | null } | null)?.budget;
-                  let doc =
-                    budgetRaw?.version === 1
-                      ? normalizeBudgetDocument(budgetRaw as BudgetDocument)
-                      : null;
-                  if (!doc && operatingProfile) {
-                    const q = profileToBudgetQualification(operatingProfile);
-                    // Budget window opens at the first statement month — never
-                    // retrospectively before the figures we actually have.
-                    doc = createBudgetDocument({
-                      templateId: operatingProfile.templateId,
-                      qualification: q,
-                      fyStartMonth: fyMonth,
-                      firstActualsMonth: draft.period_start?.slice(0, 7) ?? null,
-                      market: resolveMarket(coerceMarketSelection(workspaceMarket)),
-                    });
-                  }
-                  if (doc) {
-                    const seeded = seedBudgetFromFinancials(doc, fields);
-                    const updatedAt = new Date().toISOString();
-                    await supabase
-                      .from("clients")
-                      .update({
-                        budget: { ...seeded.doc, updatedAt } as never,
-                        budget_updated_at: updatedAt,
-                      } as never)
-                      .eq("id", effectiveClientId);
-                    if (seeded.changes.length) {
-                      toast.message("Budget pre-filled from your bank draft", {
-                        description: seeded.changes[0],
-                      });
-                    }
-                  }
-                } catch (e) {
-                  console.warn("budget seed after bank draft:", e);
-                }
+              if (!effectiveClientId) return;
+              // Same pack drafts cash forecast + budget (first upload: always;
+              // later: per the checkboxes). No second dialog, no re-upload.
+              try {
+                const result = await runAutoPopulate({
+                  clientId: effectiveClientId,
+                  fields,
+                  cashDraft: cashDraft ?? null,
+                  chosen: autoPopulate,
+                  firstUpload: autoPopulateState?.firstUpload ?? true,
+                  firstActualsMonth: draft.period_start?.slice(0, 7) ?? null,
+                  fallbackMarket: workspaceMarket,
+                  surface: "owner_app",
+                  source: "bank_pack",
+                });
+                applyAutoPopulateResult(result);
+              } catch (e) {
+                console.warn("auto-populate after bank draft:", e);
+                toast.error(
+                  `Figures saved, but drafting the board failed: ${(e as Error).message}`,
+                );
               }
-
-              // Same statement pack → cash forecast (no re-upload).
-              setTimeout(() => setShowCashFromBanks(true), 400);
             }}
           />
 
@@ -5405,7 +5428,8 @@ function Index() {
                 setReviewOpen(false);
                 setExtractionForReview(null);
               }}
-              onConfirm={(mapped) => {
+              autoPopulate={autoPopulateState ? { ...autoPopulateState, role: "owner" } : null}
+              onConfirm={(mapped, autoPopulate) => {
                 const entries = Object.entries(mapped).filter(
                   ([k, val]) => val !== undefined && k in defaults,
                 );
@@ -5428,6 +5452,28 @@ function Index() {
                   toast.success(
                     `${entries.length} field${entries.length === 1 ? "" : "s"} imported from your statement — figures saved automatically.`,
                   );
+                  if (effectiveClientId) {
+                    const fields = Object.fromEntries(allEntries) as Record<string, string>;
+                    const periodEnd =
+                      extractionForReview?.document_metadata?.period_end_date ?? null;
+                    void runAutoPopulate({
+                      clientId: effectiveClientId,
+                      fields,
+                      chosen: autoPopulate,
+                      firstUpload: autoPopulateState?.firstUpload ?? true,
+                      firstActualsMonth: periodEnd ? periodEnd.slice(0, 7) : null,
+                      fallbackMarket: workspaceMarket,
+                      surface: "owner_app",
+                      source: "financial_statement",
+                    })
+                      .then(applyAutoPopulateResult)
+                      .catch((e) => {
+                        console.warn("auto-populate after statement upload:", e);
+                        toast.error(
+                          `Figures saved, but drafting the board failed: ${(e as Error).message}`,
+                        );
+                      });
+                  }
                 } else {
                   toast.warning("No matching fields found in the extraction result.");
                 }

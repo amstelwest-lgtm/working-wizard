@@ -1019,6 +1019,7 @@ export type Database = {
           cashflow_bank_draft: Json | null
           budget: Json | null
           budget_updated_at: string | null
+          auto_update_prefs: Json | null
           operating_profile: Json | null
           brain_summary: Json | null
           brain_summary_updated_at: string | null
@@ -1046,6 +1047,7 @@ export type Database = {
           cashflow_bank_draft?: Json | null
           budget?: Json | null
           budget_updated_at?: string | null
+          auto_update_prefs?: Json | null
           operating_profile?: Json | null
           brain_summary?: Json | null
           brain_summary_updated_at?: string | null
@@ -1073,6 +1075,7 @@ export type Database = {
           cashflow_bank_draft?: Json | null
           budget?: Json | null
           budget_updated_at?: string | null
+          auto_update_prefs?: Json | null
           operating_profile?: Json | null
           brain_summary?: Json | null
           brain_summary_updated_at?: string | null
