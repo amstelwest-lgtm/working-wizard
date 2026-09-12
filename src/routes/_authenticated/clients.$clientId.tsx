@@ -51,8 +51,13 @@ import {
   healthFromRatioInputs,
   healthMapFromRatios,
   pillarForRatioName,
+  PILLAR_RATIO_NAMES,
+  PILLAR_LABELS,
+  type HealthPillarId,
   type OverallHealth,
 } from "@/lib/health-score";
+import { playbookKeyForRatioName } from "@/lib/playbook-key";
+import { ratioActualLine } from "@/lib/ratio-actuals";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
 import { FirmSwitcher } from "@/components/firm-switcher";
 import "@/styles/accountant-portal.css";
@@ -61,7 +66,6 @@ import { SphereHero } from "@/components/sphere-hero";
 import { buildSpherePillars } from "@/components/sphere-hero-adapter";
 import { SimplifiedRatios } from "@/components/simplified-ratios";
 import { ProfitabilityWaterfall } from "@/components/profitability-waterfall";
-import { WeeklyInputTable } from "@/components/weekly-input-table";
 import { ProductMixPanel } from "@/components/product-mix-panel";
 import {
   FinancialInputsContext,
@@ -585,7 +589,7 @@ function ClientView() {
       path: `/clients/${clientId}`,
     });
   }, [activeTab, clientId, firmId, track]);
-  const [finOpen, setFinOpen] = useState(true); // collapsible open by default
+  const [finOpen, setFinOpen] = useState(false);
   const [profitFinOpen, setProfitFinOpen] = useState(true);
   const [autosaveStatus, setAutosaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [viewMode, setViewMode] = useState<"simplified" | "complex">("simplified");
@@ -680,6 +684,9 @@ function ClientView() {
 
   // Playbook drawer
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerFormula, setDrawerFormula] = useState<string | null>(null);
+  const [drawerActual, setDrawerActual] = useState<string | null>(null);
+  const [drawerFallbackSteps, setDrawerFallbackSteps] = useState<string[]>([]);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [drawerRatioKey, setDrawerRatioKey] = useState<string | null>(null);
   const [drawerRatioName, setDrawerRatioName] = useState<string>("");
@@ -1335,7 +1342,7 @@ function ClientView() {
           const score = Math.round(scoreRatio(name, val as number, clientMarket));
           const tier = scoreTier(score);
           return {
-            ratio_key: name.toLowerCase().replace(/[^a-z0-9]/g, "_"),
+            ratio_key: playbookKeyForRatioName(name),
             ratio_name: name,
             pillar: pillarForRatioName(name),
             current_value: val as number,
@@ -1506,10 +1513,19 @@ function ClientView() {
   const openDrawer = useCallback(
     (ratioName: string, score: number) => {
       const tier = scoreTier(score);
-      const key = ratioName.toLowerCase().replace(/[^a-z0-9]/g, "_");
+      const key = playbookKeyForRatioName(ratioName);
+      const actual = ratioActualLine(ratioName, ratioInputs, (n) =>
+        formatMoneyCompact(n, clientMarket),
+      );
       setDrawerRatioKey(key);
       setDrawerRatioName(ratioName);
       setDrawerTier(tier);
+      setDrawerFormula(actual.formula);
+      setDrawerActual(
+        actual.calculation ??
+          (actual.missing.length ? `Need: ${actual.missing.join(", ")}` : null),
+      );
+      setDrawerFallbackSteps(actual.steps);
       setDrawerOpen(true);
       track("playbook_opened", {
         surface: "accountant_portal",
@@ -1518,7 +1534,7 @@ function ClientView() {
         ratioName,
       });
     },
-    [clientId, firmId, track],
+    [clientId, clientMarket, firmId, ratioInputs, track],
   );
 
   // ── Report navigation ─────────────────────────────────────────────────────
@@ -1966,6 +1982,7 @@ function ClientView() {
                   businessType={client.business_type}
                   onOpenUpload={() => setUploadOpen(true)}
                   onOpenTab={(tab) => setActiveTab(tab)}
+                  onAnswerProfile={() => setProfileOpen(true)}
                 />
               )}
             </div>
@@ -2193,73 +2210,113 @@ function ClientView() {
                 <div style={{ marginTop: 26 }}>
                   <span className="eyebrow">Ratios — accountant summary</span>
                   <p className="sub">
-                    Tap any ratio for its definition and the ten-step repair playbook.
+                    All {Object.keys(ratios).length} computed ratios from the period figures. Tap a
+                    row for the formula, the actuals that feed it, and the repair playbook.
+                    Current ratio and debt-to-equity need current assets / liabilities — those
+                    fields are not collected yet.
                   </p>
-                  <div className="ratio-rows">
-                    {Object.entries(ratios).map(([name, val]) => {
-                      const score = Math.round(ratioHealthScore(name, val as number, clientMarket));
-                      const tier = scoreTier(score);
-                      const band = tierToBand(tier);
-                      const color = bandColor(band);
-                      const formattedVal = formatRatioValue(name, val as number, clientMarket);
-                      const cat =
-                        name.includes("Margin") ||
-                        name.includes("Income") ||
-                        name.includes("Return")
-                          ? "Profitability"
-                          : name.includes("Days") ||
-                              name.includes("Capital") ||
-                              name.includes("OCF")
-                            ? "Cash & Working Capital"
-                            : name.includes("Equity") ||
-                                name.includes("Debt") ||
-                                name.includes("Asset") ||
-                                name.includes("Burden")
-                              ? "Leverage & Assets"
-                              : "Other";
-
-                      return (
-                        <button
-                          key={name}
-                          className="ratio-row"
-                          onClick={() => openDrawer(name, score)}
-                        >
-                          <span>
-                            <span className="rn">{name}</span>
-                            <br />
-                            <span className="rc">{cat}</span>
-                          </span>
-                          <span className="rv" style={{ color }}>
-                            {formattedVal}
-                          </span>
-                          <span className="bar">
-                            <i style={{ width: `${score}%`, background: color }} />
-                          </span>
-                          <span className={`chip ${band}`}>
-                            <i />
-                            {bandLabel(band)}
-                          </span>
-                          <span className="arr">→</span>
-                        </button>
-                      );
-                    })}
-                  </div>
+                  {(Object.keys(PILLAR_RATIO_NAMES) as HealthPillarId[]).map((pillarId) => {
+                    const names = PILLAR_RATIO_NAMES[pillarId];
+                    return (
+                      <div key={pillarId} className="ratio-group">
+                        <span className="eyebrow">{PILLAR_LABELS[pillarId]}</span>
+                        <div className="ratio-rows">
+                          {names.map((name) => {
+                            const val = (ratios as Record<string, number>)[name];
+                            const score = Math.round(
+                              ratioHealthScore(name, val as number, clientMarket),
+                            );
+                            const tier = scoreTier(score);
+                            const band = tierToBand(tier);
+                            const color = bandColor(band);
+                            const formattedVal = formatRatioValue(
+                              name,
+                              val as number,
+                              clientMarket,
+                            );
+                            const actual = ratioActualLine(name, ratioInputs, (n) =>
+                              formatMoneyCompact(n, clientMarket),
+                            );
+                            return (
+                              <button
+                                key={name}
+                                className="ratio-row"
+                                onClick={() => openDrawer(name, score)}
+                              >
+                                <span>
+                                  <span className="rn">{name}</span>
+                                  <span className="ra">{actual.formula}</span>
+                                  <span className="ra-calc">
+                                    {actual.calculation ??
+                                      (actual.missing.length
+                                        ? `Need: ${actual.missing.join(", ")}`
+                                        : "—")}
+                                  </span>
+                                </span>
+                                <span className="rv" style={{ color }}>
+                                  {formattedVal}
+                                </span>
+                                <span className="bar">
+                                  <i
+                                    style={{
+                                      width: `${Number.isFinite(score) ? score : 0}%`,
+                                      background: color,
+                                    }}
+                                  />
+                                </span>
+                                <span className={`chip ${band}`}>
+                                  <i />
+                                  {Number.isFinite(val as number) ? bandLabel(band) : "No data"}
+                                </span>
+                                <span className="arr">→</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
 
             {/* ===== PROFIT TAB ===== */}
             <div className={`tabpane${activeTab === "profit" ? " on" : ""}`} id="pane-profit">
+              <span className="eyebrow">Product lines</span>
+              <p className="sub" style={{ marginBottom: 16 }}>
+                Answer these questions to build revenue and net profit per product line — so you
+                can see which lines actually make the money.
+              </p>
+              <div className="dark" style={{ colorScheme: "dark", marginBottom: 28 }}>
+                <ProductMixPanel
+                  totalRevenue={resolveWaterfallFigures(weeklyInputs, waterfallFallback).revenue}
+                  incentive="Answer these to build revenue and net profit per product line."
+                />
+              </div>
+
               <span className="eyebrow">Profitability Waterfall</span>
               <p className="sub" style={{ marginBottom: 24 }}>
-                How revenue converts to profit — step by step. Enter figures below or upload a
-                statement (PDF, Excel or CSV).
+                How revenue converts to profit — step by step. Period figures below (or an upload)
+                feed this view.
               </p>
+
+              {/* Wrap in a Tailwind dark context so the component's dark: variants fire */}
+              <div className="dark" id="wizard-profit-walk" style={{ colorScheme: "dark" }}>
+                <ProfitabilityWaterfall
+                  fallback={waterfallFallback}
+                  clientName={client?.name}
+                  clientId={client?.id}
+                  reviewSignoff={stampFromSignoff(
+                    profitabilitySignoff,
+                    computeIsStale(profitabilitySignoff, client?.financials_updated_at ?? null),
+                  )}
+                />
+              </div>
 
               <div
                 className={`card collapse${profitFinOpen ? " open" : ""}`}
                 id="profitFinCollapse"
-                style={{ marginBottom: 20 }}
+                style={{ marginTop: 20, marginBottom: 20 }}
               >
                 <div
                   className="c-head"
@@ -2282,7 +2339,7 @@ function ClientView() {
                     )}
                   </h3>
                   <span className="hint">
-                    Edit period P&amp;L or weekly inputs — the waterfall matches the owner board
+                    Period P&amp;L that feeds the waterfall — same figures as Health &amp; Ratios
                   </span>
                   <span className="chev">
                     <svg
@@ -2313,8 +2370,8 @@ function ClientView() {
                       <p
                         style={{ margin: 0, fontSize: 12, color: "var(--ink-dim)", maxWidth: 420 }}
                       >
-                        Same period figures as Health &amp; Ratios, plus the same weekly inputs the
-                        owner enters on Profit. Weeks feed the waterfall when present.
+                        Edit the period figures here. The waterfall updates from this P&amp;L —
+                        weekly owner inputs stay on the owner board.
                       </p>
                       <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                         <button
@@ -2358,28 +2415,6 @@ function ClientView() {
                       ))}
                     </div>
                   </div>
-                </div>
-              </div>
-
-              {/* Wrap in a Tailwind dark context so the component's dark: variants fire */}
-              <div className="dark" id="wizard-profit-walk" style={{ colorScheme: "dark" }}>
-                <ProfitabilityWaterfall
-                  fallback={waterfallFallback}
-                  clientName={client?.name}
-                  clientId={client?.id}
-                  reviewSignoff={stampFromSignoff(
-                    profitabilitySignoff,
-                    computeIsStale(profitabilitySignoff, client?.financials_updated_at ?? null),
-                  )}
-                />
-                <div style={{ marginTop: 16 }}>
-                  <ProductMixPanel
-                    totalRevenue={resolveWaterfallFigures(weeklyInputs, waterfallFallback).revenue}
-                  />
-                </div>
-                {/* Same weekly grid as the owner Profit tab — weeks feed this waterfall. */}
-                <div style={{ marginTop: 16 }}>
-                  <WeeklyInputTable role="accountant" />
                 </div>
               </div>
               <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 16 }}>
@@ -2576,6 +2611,9 @@ function ClientView() {
             clientId={client.id}
             clientName={client.name}
             isAccountant={true}
+            formula={drawerFormula}
+            actualLine={drawerActual}
+            fallbackSteps={drawerFallbackSteps}
           />
 
           {/* Contextual notes — shared with owner app, persisted per client */}
@@ -2766,6 +2804,11 @@ function ClientView() {
                 return;
               }
               setClient((c) => (c ? { ...c, financials_updated_at: financialsUpdatedAt } : c));
+              void upsertCurrentPeriodSnapshot({
+                clientId,
+                financials: merged,
+                source: "upload",
+              });
               await recordScoreHistory(
                 clientId,
                 scoreFromRatioInputs({ ...ratioInputs, ...fields } as RatioInputs, effectiveRunway),

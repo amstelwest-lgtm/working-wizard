@@ -19,6 +19,11 @@ import {
   summarizeWaterfall,
   type SavedCashflow,
 } from "./deliverable-summaries.ts";
+import {
+  DISPLAY_TO_CAMEL,
+  pillarBreakdownFromRatios,
+  resolveRatioRecord,
+} from "./derive-ratios.ts";
 
 /**
  * Maps the application's stored business_type values to the benchmark category keys
@@ -43,35 +48,6 @@ const BUSINESS_TYPE_TO_BENCHMARK: Record<string, string> = {
   healthcare: "professional",
   construction: "construction",
   hybrid: "other",
-};
-
-/**
- * Maps the display-name keys stored by computeRatios() in client_financial_snapshots.ratios
- * to the camelCase keys used in industry_benchmarks.metric_key.
- *
- * computeRatios() returns keys like "Gross Margin"; benchmarks use "grossMargin".
- * This mapping is the single source of truth for that translation inside the edge function.
- */
-const DISPLAY_TO_CAMEL: Record<string, string> = {
-  "Net Margin": "netMargin",
-  "Operating Margin": "operatingMargin",
-  "Gross Margin": "grossMargin",
-  "Return on Equity": "roe",
-  "Return on Assets": "roa",
-  "Asset Turnover": "assetTurnover",
-  "Equity Multiplier": "equityMultiplier",
-  "Interest Burden": "interestBurden",
-  "Tax Burden": "taxBurden",
-  "Debtor Days": "debtorDays",
-  "Inventory Days": "inventoryDays",
-  "Creditor Days": "creditorDays",
-  "Working Capital Days": "workingCapitalDays",
-  "Fixed Cost Ratio": "fixedCostRatio",
-  "Degree of Operating Leverage": "dol",
-  "Top-5 Customer Share": "customerConcentration",
-  "Gross Profit / Labor": "gpToLabor",
-  "Sales-per-Employee Ratio": "salesPerEmployee",
-  "OCF / EBITDA": "ocfToEbitda",
 };
 
 /** Infer display format from the canonical camelCase key. */
@@ -240,9 +216,13 @@ export async function buildContext(
       .limit(1)
       .maybeSingle();
 
-    if (snap?.ratios && typeof snap.ratios === "object" && !Array.isArray(snap.ratios)) {
-      const rawRatios = snap.ratios as Record<string, unknown>;
+    const snapRatios =
+      snap?.ratios && typeof snap.ratios === "object" && !Array.isArray(snap.ratios)
+        ? (snap.ratios as Record<string, unknown>)
+        : null;
+    const rawRatios = resolveRatioRecord(snapRatios, financials);
 
+    if (Object.keys(rawRatios).length > 0) {
       // Focused questions still see one pillar in the ratio list; next-step
       // ranking always uses the full filled set.
       let filterKeys: Set<string> | null = null;
@@ -264,6 +244,9 @@ export async function buildContext(
         if (!isFinite(Number(rawVal))) continue;
         entries.push({ displayKey, camelKey, value: Number(rawVal) });
       }
+
+      if (!scores) scores = { overall_score: null };
+      scores.pillars = pillarBreakdownFromRatios(rawRatios);
 
       if (entries.length > 0) {
         const camelKeys = entries.map((e) => e.camelKey);

@@ -38,8 +38,16 @@ export interface ProfileQuestionRow {
   value: string;
 }
 
+export interface ScorePillarRow {
+  id: string;
+  label: string;
+  score: number | null;
+}
+
 export interface ScoreRow {
   overall_score: number | null;
+  /** Category scores that feed the overall number (liquidity, profit, etc.). */
+  pillars?: ScorePillarRow[];
 }
 
 export interface PlaybookRow {

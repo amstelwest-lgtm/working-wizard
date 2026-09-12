@@ -99,6 +99,19 @@ function StatusDot({ answered }: { answered: boolean }) {
   );
 }
 
+type FillDialog =
+  | { kind: "stored"; key: string; prompt: string; audience: "owner" | "accountant" | "both" }
+  | { kind: "map"; key: string; label: string }
+  | null;
+
+function AnswerButton({ onClick, label = "Answer" }: { onClick: () => void; label?: string }) {
+  return (
+    <button type="button" className="btn gold mini" onClick={onClick}>
+      {label}
+    </button>
+  );
+}
+
 export function ClientBrainSummary({
   clientId,
   clientName,
@@ -107,6 +120,7 @@ export function ClientBrainSummary({
   businessType,
   onOpenUpload,
   onOpenTab,
+  onAnswerProfile,
 }: {
   clientId: string;
   clientName: string;
@@ -115,6 +129,7 @@ export function ClientBrainSummary({
   businessType?: string | null;
   onOpenUpload?: () => void;
   onOpenTab?: (tab: BrainSummaryTab) => void;
+  onAnswerProfile?: () => void;
 }) {
   const { user } = useAuth();
   const { profile } = useAccountantProfile();
@@ -153,6 +168,9 @@ export function ClientBrainSummary({
   const [saving, setSaving] = useState(false);
   const [proposing, setProposing] = useState(false);
   const [drafting, setDrafting] = useState(false);
+  const [fillDialog, setFillDialog] = useState<FillDialog>(null);
+  const [fillText, setFillText] = useState("");
+  const [fillSaving, setFillSaving] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -410,6 +428,77 @@ export function ClientBrainSummary({
     }
   };
 
+  const closeFill = () => {
+    setFillDialog(null);
+    setFillText("");
+  };
+
+  const openFill = (next: FillDialog) => {
+    setFillDialog(next);
+    setFillText("");
+  };
+
+  const routeQuestionAnswer = (q: { key: string; prompt: string; audience: "owner" | "accountant" | "both"; source: string }) => {
+    if (q.source === "operating_profile" || q.key.startsWith("operating_profile.")) {
+      if (onAnswerProfile) {
+        onAnswerProfile();
+        return;
+      }
+    }
+    if (q.source === "product_mix" || q.source === "weekly_inputs" || q.key.startsWith("product_mix.")) {
+      onOpenTab?.("profit");
+      return;
+    }
+    openFill({
+      kind: "stored",
+      key: q.key,
+      prompt: q.prompt,
+      audience: q.audience,
+    });
+  };
+
+  const saveFill = async () => {
+    if (!fillDialog) return;
+    const text = fillText.trim();
+    if (!text) {
+      toast.error("Add an answer first");
+      return;
+    }
+    setFillSaving(true);
+    try {
+      if (fillDialog.kind === "map") {
+        const blob = asBrainSummaryObject(brainSummary);
+        const current = parseBusinessMap(brainSummary);
+        blob.business_map = { ...current, [fillDialog.key]: text };
+        await saveBrainSummaryBlob(blob);
+        toast.success("Business map updated");
+      } else {
+        const now = new Date().toISOString();
+        const { error } = await supabase.from("client_brain_questions").upsert(
+          {
+            client_id: clientId,
+            question_key: fillDialog.key,
+            prompt_text: fillDialog.prompt,
+            audience: fillDialog.audience,
+            status: "answered",
+            answer_text: text,
+            answered_at: now,
+            answered_by: user?.id ?? null,
+          },
+          { onConflict: "client_id,question_key" },
+        );
+        if (error) throw error;
+        toast.success("Answer saved");
+        await load();
+      }
+      closeFill();
+    } catch (e) {
+      toast.error((e as Error).message || "Could not save answer");
+    } finally {
+      setFillSaving(false);
+    }
+  };
+
   const draftAdvisoryFromBrain = async () => {
     setDrafting(true);
     try {
@@ -495,7 +584,12 @@ export function ClientBrainSummary({
                     <div className="brain-row-title">{q.prompt}</div>
                     <div className="brain-row-meta">{q.answered && q.answer ? q.answer : "Empty"}</div>
                   </div>
-                  <StatusDot answered={q.answered} />
+                  <div className="brain-row-actions">
+                    {!q.answered && onAnswerProfile && (
+                      <AnswerButton onClick={() => onAnswerProfile()} />
+                    )}
+                    <StatusDot answered={q.answered} />
+                  </div>
                 </li>
               ))}
             </ul>
@@ -536,7 +630,12 @@ export function ClientBrainSummary({
                     <div className="brain-row-title">{q.prompt}</div>
                     <div className="brain-row-meta">{q.answered && q.answer ? q.answer : "Empty"}</div>
                   </div>
-                  <StatusDot answered={q.answered} />
+                  <div className="brain-row-actions">
+                    {!q.answered && onOpenTab && (
+                      <AnswerButton onClick={() => onOpenTab("profit")} />
+                    )}
+                    <StatusDot answered={q.answered} />
+                  </div>
                 </li>
               ))}
             </ul>
@@ -644,7 +743,18 @@ export function ClientBrainSummary({
                       <div className="brain-row-title">{field.label}</div>
                       <div className="brain-row-meta">{value || "Empty"}</div>
                     </div>
-                    <StatusDot answered={!!value} />
+                    <div className="brain-row-actions">
+                      {!value && (
+                        <AnswerButton
+                          onClick={() =>
+                            field.key === "seasonality" && onAnswerProfile
+                              ? onAnswerProfile()
+                              : openFill({ kind: "map", key: field.key, label: field.label })
+                          }
+                        />
+                      )}
+                      <StatusDot answered={!!value} />
+                    </div>
                   </li>
                 );
               })}
@@ -864,9 +974,12 @@ export function ClientBrainSummary({
                         {q.audience !== "both" ? ` · ${q.audience}` : ""}
                       </div>
                     </div>
-                    <span className={`status-tag ${drip?.key === q.key ? "gold" : "faint"}`}>
-                      {drip?.key === q.key ? "Asking" : "Empty"}
-                    </span>
+                    <div className="brain-row-actions">
+                      <AnswerButton onClick={() => routeQuestionAnswer(q)} />
+                      <span className={`status-tag ${drip?.key === q.key ? "gold" : "faint"}`}>
+                        {drip?.key === q.key ? "Asking" : "Empty"}
+                      </span>
+                    </div>
                   </li>
                 ))}
               </ul>
@@ -874,6 +987,40 @@ export function ClientBrainSummary({
           </section>
         </div>
       )}
+
+      <Dialog open={fillDialog != null} onOpenChange={(open) => !open && closeFill()}>
+        <DialogContent className="border-[#d4a550]/25 bg-[#0d1117] text-slate-100">
+          <DialogHeader>
+            <DialogTitle>
+              {fillDialog?.kind === "map" ? fillDialog.label : "Answer this question"}
+            </DialogTitle>
+            <DialogDescription className="text-slate-400">
+              {fillDialog?.kind === "stored"
+                ? fillDialog.prompt
+                : "Short note that becomes part of the client brain — not sent to the owner."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-1.5">
+            <Label htmlFor="brain-fill-answer">Answer</Label>
+            <Textarea
+              id="brain-fill-answer"
+              value={fillText}
+              onChange={(e) => setFillText(e.target.value)}
+              className="bg-[#0a0e1a] border-slate-700"
+              rows={4}
+              placeholder="Type the answer…"
+            />
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={closeFill} disabled={fillSaving}>
+              Cancel
+            </Button>
+            <Button type="button" onClick={() => void saveFill()} disabled={fillSaving}>
+              {fillSaving ? "Saving…" : "Save answer"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={dialog != null} onOpenChange={(open) => !open && closeDialog()}>
         <DialogContent className="border-[#d4a550]/25 bg-[#0d1117] text-slate-100">

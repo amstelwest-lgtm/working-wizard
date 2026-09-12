@@ -405,7 +405,7 @@ export function SphereHero({
               <button
                 key={p.id}
                 type="button"
-                onClick={() => go(2)}
+                onClick={() => go(3, p.id)}
                 className={`flex flex-col items-center rounded-xl border border-slate-200/90 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition hover:border-[#d4a550]/55 hover:shadow-[0_4px_14px_rgba(184,134,11,0.12)] dark:border-white/10 dark:bg-[#0f172a]/60 dark:shadow-none dark:hover:bg-[#d4a550]/8 ${
                   compact ? "gap-0.5 px-1 py-2" : "gap-1 px-1 py-3"
                 }`}
@@ -497,6 +497,12 @@ export function SphereHero({
           </p>
 
           <div className="w-full max-w-md space-y-2">
+            {activePillar.drivers.length === 0 && (
+              <p className="rounded-xl border border-slate-800 bg-slate-950/50 p-3 text-sm text-slate-400">
+                No driver ratios on file for this pillar yet. Add the period figures to see what
+                makes up this score.
+              </p>
+            )}
             {activePillar.drivers.map((d, i) => {
               const t = tierOf(d.health);
               const pct = isFinite(d.health) ? Math.max(2, Math.min(100, d.health)) : 0;

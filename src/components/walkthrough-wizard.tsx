@@ -311,8 +311,8 @@ function measureSpot(el: Element): Spot {
   let spotTop = top - pad;
   let spotLeft = left - pad;
 
-  // Keep the hole compact so the tour card has room beside/below the feature
-  const maxH = Math.min(vh * 0.4, 360);
+  // Keep the hole compact so the tour card has room to show the full body
+  const maxH = Math.min(vh * 0.28, 240);
   if (height > maxH) {
     height = maxH;
     // Anchor to the visible top of the target — don't float the hole mid-page
@@ -341,7 +341,7 @@ function measureSpot(el: Element): Spot {
 /** Place the tour card fully outside the spotlight (never overlapping it). */
 function cardLayoutForSpot(spot: Spot | null, cardH: number): { top: number; maxHeight: number } {
   const vh = window.innerHeight;
-  const ideal = Math.min(Math.max(cardH, 160), Math.min(vh * 0.44, 360));
+  const ideal = Math.min(Math.max(cardH, 220), Math.min(vh * 0.68, 560));
   if (!spot) {
     return { top: Math.max(12, vh - ideal - 28), maxHeight: ideal };
   }
@@ -350,16 +350,17 @@ function cardLayoutForSpot(spot: Spot | null, cardH: number): { top: number; max
   const spaceBelow = Math.max(0, vh - belowTop - 12);
   const spaceAbove = Math.max(0, spot.top - CARD_GAP - 12);
   const targetInUpperHalf = spot.top + spot.height / 2 < vh * 0.5;
+  const floor = 200;
 
   // Prefer below when the feature sits in the upper half (normal flow)
-  if (targetInUpperHalf && spaceBelow >= 120) {
-    return { top: belowTop, maxHeight: Math.min(ideal, Math.max(140, spaceBelow)) };
+  if (targetInUpperHalf && spaceBelow >= 160) {
+    return { top: belowTop, maxHeight: Math.min(ideal, Math.max(floor, spaceBelow)) };
   }
-  if (spaceBelow >= Math.min(ideal, 180) || spaceBelow >= spaceAbove) {
-    return { top: belowTop, maxHeight: Math.min(ideal, Math.max(140, spaceBelow)) };
+  if (spaceBelow >= Math.min(ideal, 220) || spaceBelow >= spaceAbove) {
+    return { top: belowTop, maxHeight: Math.min(ideal, Math.max(floor, spaceBelow)) };
   }
 
-  const maxHeight = Math.min(ideal, Math.max(140, spaceAbove));
+  const maxHeight = Math.min(ideal, Math.max(floor, spaceAbove));
   const top = Math.max(12, spot.top - CARD_GAP - maxHeight);
   return { top, maxHeight };
 }
@@ -367,7 +368,7 @@ function cardLayoutForSpot(spot: Spot | null, cardH: number): { top: number; max
 function scrollTargetAwayFromCard(el: Element, cardH: number, reduceMotion = false) {
   const r = el.getBoundingClientRect();
   const vh = window.innerHeight;
-  const room = Math.min(Math.max(cardH, 200) + CARD_GAP + 16, vh * 0.46);
+  const room = Math.min(Math.max(cardH, 240) + CARD_GAP + 16, vh * 0.62);
   // Park the feature in the upper band so the card can sit cleanly underneath
   const desiredTop = Math.max(56, Math.min(vh * 0.14, vh - room - Math.min(r.height, vh * 0.4)));
   const delta = r.top - desiredTop;
@@ -671,7 +672,7 @@ export function WalkthroughWizard({
           top: cardTop,
           bottom: "auto",
           zIndex: 8002,
-          width: "min(460px, calc(100vw - 32px))",
+          width: "min(560px, calc(100vw - 24px))",
           pointerEvents: "all",
           maxHeight: cardMaxH,
           overflowY: "auto",

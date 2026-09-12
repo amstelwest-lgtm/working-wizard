@@ -145,6 +145,9 @@ assert(panelSrc.includes("10 initial questions"), "10-Q status");
 assert(panelSrc.includes("Product line questions"), "product-line section");
 assert(panelSrc.includes("Business map"), "business-map stubs");
 assert(panelSrc.includes("Outstanding questions"), "shared questions queue");
+assert(panelSrc.includes("onAnswerProfile"), "empty profile questions can open the funnel");
+assert(panelSrc.includes("Answer"), "empty questions expose an Answer control");
+assert(panelSrc.includes("brain-fill-answer"), "stored / map questions can be filled in-place");
 assert(!panelSrc.includes("Acme Corp"), "no fake competitor filler");
 assert(!panelSrc.includes("example.com"), "no fake placeholder URLs");
 

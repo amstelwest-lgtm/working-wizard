@@ -81,7 +81,29 @@ assert(ownerSrc.includes("overlayWeeklyInputs"), "owner persists weeks without w
 assert(ownerSrc.includes("derivePeriodWaterfallFallback(v)"), "owner waterfall uses shared period fallback");
 
 const accountantSrc = readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8");
-assert(accountantSrc.includes("<WeeklyInputTable role=\"accountant\""), "accountant Profit tab has weekly inputs");
+assert(
+  !accountantSrc.includes("<WeeklyInputTable"),
+  "accountant Profit tab keeps period profitability inputs only — weekly stays on the owner board",
+);
+assert(accountantSrc.includes("Profitability inputs"), "accountant Profit tab keeps profitability-input style");
+{
+  const profitStart = accountantSrc.indexOf('id="pane-profit"');
+  const profitEnd = accountantSrc.indexOf('id="pane-cash"');
+  const profitPane = accountantSrc.slice(profitStart, profitEnd);
+  assert(profitStart !== -1 && profitEnd > profitStart, "profit pane exists");
+  assert(
+    profitPane.indexOf("Product lines") < profitPane.indexOf("Profitability Waterfall"),
+    "product-line questions sit above the waterfall",
+  );
+  assert(
+    profitPane.indexOf('id="wizard-profit-walk"') < profitPane.indexOf('id="profitFinCollapse"'),
+    "profitability inputs sit below the waterfall",
+  );
+  assert(
+    /build revenue and net profit per product line/i.test(profitPane),
+    "product-line incentive copy is on the Profit tab",
+  );
+}
 assert(accountantSrc.includes("FinancialInputsContext.Provider"), "accountant portal provides weekly context for waterfall");
 assert(accountantSrc.includes("weeklyInputs: weeks"), "accountant load splits weeklyInputs from the blob");
 assert(

@@ -151,11 +151,27 @@ export function buildPrompt(
     lines.push(`Overall health score: ${ctx.scores.overall_score.toFixed(0)}/100`);
   }
 
+  const pillars = ctx.scores?.pillars?.filter((p) => p.score != null) ?? [];
+  if (pillars.length > 0) {
+    lines.push("Score breakdown by category (these feed the overall score):");
+    for (const p of pillars) {
+      lines.push(`  ${p.label}: ${p.score}/100`);
+    }
+    const weakest = [...pillars].sort((a, b) => (a.score ?? 100) - (b.score ?? 100))[0];
+    if (weakest) {
+      lines.push(`  Weakest category vs this client's own mix: ${weakest.label}`);
+    }
+  }
+
   if (ctx.ratios.length > 0) {
-    lines.push("\nKey ratios:");
+    lines.push("\nKey ratios vs peer / industry bands (p25 / p50 when known):");
     for (const r of ctx.ratios) {
       lines.push(`  ${formatRatio(r, copyPack)}`);
     }
+  } else if (tier === "full" || tier === "focused") {
+    lines.push(
+      "\nKey ratios: not yet on file. Ask for the missing period figures rather than inventing a drag.",
+    );
   }
 
   if (ctx.waterfall?.hasData) {
