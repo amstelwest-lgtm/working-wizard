@@ -100,4 +100,20 @@ assert(summary.includes("kind: \"map\""), "business-map blanks are fillable");
 const builder = readFileSync(resolve("supabase/functions/ask-ai/context-builder.ts"), "utf8");
 assert(builder.includes("resolveRatioRecord"), "Ask AI derives ratios when the snapshot is empty");
 
+assert(
+  /activeTab === "cash"/.test(studio) &&
+    /activeTab === "ask" \|\| activeTab === "summary" \|\| activeTab === "cash"/.test(studio),
+  "simple/complex toggle is hidden on the cash tab",
+);
+assert(
+  !/id="wizard-profit-walk"[\s\S]{0,80}className="dark"/.test(studio),
+  "waterfall is not forced onto a dark island (text vanished on the cream card)",
+);
+
+const cashSrc = readFileSync(resolve("src/components/cash-forecast.tsx"), "utf8");
+assert(cashSrc.includes('title="Detailed cashflow forecast"'), "weekly grid is renamed");
+assert(!cashSrc.includes('title="Weekly Detail"'), "old Weekly Detail title is gone");
+assert(cashSrc.includes("onDoubleClick"), "figures are double-click editable");
+assert(cashSrc.includes("ForecastAmountCell"), "symbol stays; only the number edits");
+
 console.log("accountant-studio-clarity-test: all assertions passed");

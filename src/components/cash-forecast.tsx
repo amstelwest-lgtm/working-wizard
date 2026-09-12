@@ -71,6 +71,12 @@ import {
   warnIfPdfArchiveFailed,
 } from "@/lib/advisory-deliveries";
 import { stampFromSignoff } from "@/lib/review-signoff-stamp";
+import {
+  applyWeekOverrides,
+  parseEditableAmount,
+  setWeekOverride,
+  type WeekOverrides,
+} from "@/lib/cash-week-overrides";
 // @react-pdf/renderer + the branded report are dynamically imported inside
 // exportPDF to avoid blocking initial hydration.
 
@@ -88,6 +94,8 @@ type LineItem = {
   frequency: Frequency;
   startWeek: number;
   splitCount: number;
+  /** Absolute per-week amounts from the detailed grid. Formula still fills the rest. */
+  weekOverrides?: WeekOverrides;
 };
 
 const WEEKS = 13;
@@ -234,6 +242,77 @@ function SectionCard({
       </CardHeader>
       {open && <CardContent className="pt-5">{children}</CardContent>}
     </Card>
+  );
+}
+
+function ForecastAmountCell({
+  symbol,
+  value,
+  display,
+  onCommit,
+}: {
+  symbol: string;
+  value: number;
+  display: string;
+  onCommit: (next: number | null) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (editing) inputRef.current?.select();
+  }, [editing]);
+
+  const begin = () => {
+    setDraft(value ? String(value) : "");
+    setEditing(true);
+  };
+
+  const commit = () => {
+    setEditing(false);
+    onCommit(parseEditableAmount(draft));
+  };
+
+  if (editing) {
+    return (
+      <span className="inline-flex items-baseline justify-end gap-0.5">
+        <span className="text-[inherit] opacity-80">{symbol}</span>
+        <input
+          ref={inputRef}
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              commit();
+            }
+            if (e.key === "Escape") {
+              e.preventDefault();
+              setEditing(false);
+            }
+          }}
+          inputMode="decimal"
+          aria-label="Edit amount"
+          className="w-[4.75rem] border-0 border-b border-[#d4a550] bg-transparent p-0 text-right text-xs font-inherit tabular-nums text-inherit outline-none"
+        />
+      </span>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      title="Double-click to edit"
+      onDoubleClick={(e) => {
+        e.preventDefault();
+        begin();
+      }}
+      className="milon-forecast-amount w-full cursor-text border-0 bg-transparent p-0 text-right text-inherit decoration-[#d4a550]/70 decoration-dotted underline-offset-2 hover:underline"
+    >
+      {display}
+    </button>
   );
 }
 
@@ -652,16 +731,35 @@ export function CashForecastPanel({
     };
     const growthMul = (i: number) => Math.pow(1 + opts.revGrowthPct / 100, i);
     const revRows = revenue.map((l) => ({
+      id: l.id,
+      bucket: "revenue" as const,
       name: l.name,
-      vals: shiftVals(distribute(l).map((v) => v * opts.rMul)).map((v, i) => v * growthMul(i)),
+      vals: applyWeekOverrides(
+        shiftVals(distribute(l).map((v) => v * opts.rMul)).map((v, i) => v * growthMul(i)),
+        l.weekOverrides,
+      ),
     }));
-    const expRows = [...expenses, ...other].map((l) => ({
+    const mapExp = (l: LineItem, bucket: "expenses" | "other") => ({
+      id: l.id,
+      bucket,
       name: l.name,
-      vals: distribute(l).map((v) => v * opts.eMul),
-    }));
+      vals: applyWeekOverrides(
+        distribute(l).map((v) => v * opts.eMul),
+        l.weekOverrides,
+      ),
+    });
+    const expRows = [
+      ...expenses.map((l) => mapExp(l, "expenses")),
+      ...other.map((l) => mapExp(l, "other")),
+    ];
     const headcountWeekly = (opts.headcountDelta * opts.avgSalary) / 4.33;
     const fixedWeekly = opts.fixedCostDelta / 4.33;
-    const scenarioRows: { name: string; vals: number[] }[] = [];
+    const scenarioRows: Array<{
+      id?: string;
+      bucket?: "expenses" | "other";
+      name: string;
+      vals: number[];
+    }> = [];
     if (headcountWeekly !== 0) {
       scenarioRows.push({
         name: `Headcount Δ (${opts.headcountDelta > 0 ? "+" : ""}${opts.headcountDelta})`,
@@ -722,6 +820,21 @@ export function CashForecastPanel({
       capexWeek,
     ],
   );
+
+  const commitWeekOverride = (
+    bucket: "revenue" | "expenses" | "other",
+    id: string,
+    weekIndex: number,
+    value: number | null,
+  ) => {
+    const patch = (list: LineItem[]) =>
+      list.map((l) =>
+        l.id === id ? { ...l, weekOverrides: setWeekOverride(l.weekOverrides, weekIndex, value) } : l,
+      );
+    if (bucket === "revenue") setRevenue(patch);
+    else if (bucket === "expenses") setExpenses(patch);
+    else setOther(patch);
+  };
 
   const baseCalc = useMemo(
     () =>
@@ -1365,8 +1478,8 @@ export function CashForecastPanel({
       <SectionCard
         id="wizard-cash-table"
         icon={Table2}
-        title="Weekly Detail"
-        subtitle="Full line-by-line forecast · red = shortfall, act early"
+        title="Detailed cashflow forecast"
+        subtitle="Double-click a figure to edit · red = shortfall, act early"
       >
         <ScrollableTable hint="Swipe sideways to see weeks →">
           <table className="milon-data-table w-full min-w-[900px] text-xs">
@@ -1396,7 +1509,12 @@ export function CashForecastPanel({
                   </td>
                   {r.vals.map((v, j) => (
                     <td key={j} className="px-2 py-1 text-right">
-                      {v ? fmtR(v) : "—"}
+                      <ForecastAmountCell
+                        symbol={cur}
+                        value={v}
+                        display={v ? fmtR(v) : "—"}
+                        onCommit={(next) => commitWeekOverride("revenue", r.id, j, next)}
+                      />
                     </td>
                   ))}
                 </tr>
@@ -1421,7 +1539,18 @@ export function CashForecastPanel({
                   </td>
                   {r.vals.map((v, j) => (
                     <td key={j} className="px-2 py-1 text-right">
-                      {v ? `(${fmtR(v)})` : "—"}
+                      {"id" in r && r.id ? (
+                        <ForecastAmountCell
+                          symbol={cur}
+                          value={v}
+                          display={v ? `(${fmtR(v)})` : "—"}
+                          onCommit={(next) => commitWeekOverride(r.bucket, r.id, j, next)}
+                        />
+                      ) : v ? (
+                        `(${fmtR(v)})`
+                      ) : (
+                        "—"
+                      )}
                     </td>
                   ))}
                 </tr>
