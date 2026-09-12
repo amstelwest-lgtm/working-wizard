@@ -18,6 +18,7 @@ import {
   scopesResetByPlan,
   summariseAutoPopulate,
 } from "../src/lib/auto-populate";
+import { isOptionalClientColumnError } from "../src/lib/auto-populate-run";
 import { computeIsStale } from "../src/components/review-signoff";
 import type { ClientReviewSignoff } from "../src/lib/review-signoffs.functions";
 import type { CashFromBanksDraftResult } from "../src/lib/cash-from-banks.types";
@@ -214,6 +215,12 @@ assert(!owner.includes("setShowCashFromBanks(true), 400"), "owner: no second cas
 assert(owner.includes("reloadToken={budgetReloadToken}"), "owner budget tab reloads");
 const acct = read("src/routes/_authenticated/clients.$clientId.tsx");
 assert((acct.match(/runAutoPopulate\(/g) ?? []).length >= 2, "accountant: bank + statement paths run auto-populate");
+assert(acct.includes("shouldReopenFirstDataAfterEmptyTour(hasFigures)"), "empty tour does not reopen upload after figures");
+assert(acct.includes("startStudioTourAfterFigures"), "figures promote the full studio tour");
+assert(acct.includes("FirstDataChoice"), "first-data dialog uses labelled choices");
+const dash = read("src/routes/_authenticated/dashboard.tsx");
+assert(dash.includes("accountant-dashboard-empty"), "empty book gets a practice-board tour");
+assert(dash.includes('onFinish={clientRows.length === 0 ? () => setFirstClientOpen(true) : undefined}'), "empty tour opens add-client");
 assert(acct.includes('role: "accountant"'), "accountant copy");
 assert(acct.includes("reloadToken={budgetReloadToken}"), "accountant budget tab reloads");
 const options = read("src/components/auto-populate-options.tsx");
@@ -223,6 +230,14 @@ const migration = read("supabase/migrations/20260911090000_clients_auto_update_p
 assert(/ADD COLUMN IF NOT EXISTS auto_update_prefs JSONB/.test(migration), "migration adds prefs column");
 assert(read("src/integrations/supabase/types.ts").includes("auto_update_prefs: Json | null"), "types include column");
 const runner = read("src/lib/auto-populate-run.ts");
-assert(/auto_update_prefs\|42703/.test(runner), "runner tolerates un-migrated column");
+assert(/cashflow_bank_draft/.test(runner), "runner treats cashflow_bank_draft as optional");
+assert(/schema cache/.test(runner), "runner retries PostgREST schema-cache misses");
+assert(
+  isOptionalClientColumnError(
+    "Could not find the 'cashflow_bank_draft' column of 'clients' in the schema cache",
+  ),
+  "schema-cache miss on cashflow_bank_draft is optional",
+);
+assert(!isOptionalClientColumnError("permission denied for table clients"), "other errors still fail");
 
 console.log("auto-populate: all assertions passed");

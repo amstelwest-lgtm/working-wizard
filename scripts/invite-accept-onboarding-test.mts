@@ -30,6 +30,7 @@ import {
   readPendingOwnerInviteCookie,
   preferPendingInviteClient,
 } from "../src/lib/invite-handoff";
+import { shouldReopenFirstDataAfterEmptyTour } from "../src/lib/onboarding";
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
@@ -507,6 +508,11 @@ assert(
 const wizardSrc = readFileSync(resolve("src/components/walkthrough-wizard.tsx"), "utf8");
 assert(wizardSrc.includes('"owner-empty"'), "wizard knows the owner-empty variant");
 assert(wizardSrc.includes("OWNER_EMPTY_TOUR_KEY"), "owner-empty tour has its own storage key");
+assert(shouldReopenFirstDataAfterEmptyTour(false), "empty-studio tour still offers upload when no figures");
+assert(!shouldReopenFirstDataAfterEmptyTour(true), "empty-studio tour does not re-prompt after figures");
+assert(wizardSrc.includes('"accountant-dashboard-empty"'), "wizard knows the empty practice-board variant");
+assert(wizardSrc.includes("ACCOUNTANT_DASH_EMPTY_TOUR_KEY"), "empty practice tour has its own storage key");
+assert(wizardSrc.includes("Got it — add my first client"), "empty practice tour CTA adds a client");
 
 // #175 narrative: one upload drafts Profit / Cash / Budget, then each waits for
 // accountant sign-off — said on the owner board and in the accountant studio.
@@ -549,6 +555,11 @@ assert(onboardingSrc.includes('"milon_walkthrough_empty_v2"'), "owner-empty tour
 assert(onboardingSrc.includes('"milon_accountant_client_tour_v9"'), "accountant client tour key bumped");
 assert(onboardingSrc.includes('"milon_accountant_client_tour_empty_v2"'), "accountant client-empty tour key bumped");
 assert(onboardingSrc.includes('"milon_accountant_dash_tour_v8"'), "accountant dashboard tour key bumped");
+assert(onboardingSrc.includes('"milon_accountant_dash_empty_v1"'), "empty practice tour key exists");
+assert(
+  onboardingSrc.includes("shouldReopenFirstDataAfterEmptyTour"),
+  "empty-studio tour does not reopen upload after figures land",
+);
 
 // AccountantProfileProvider mounts for every session (root). It must never
 // mint a practice firm for an owner whose roles have not been written yet.

@@ -392,8 +392,8 @@ export function BankStatementDrafter({ open, onClose, onApply, autoPopulate, doc
 
         {draft && rows && (
           <>
-            <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-amber-900/10 bg-amber-50/40 px-3 py-2 text-xs dark:border-slate-800 dark:bg-slate-900">
-              <span className="text-slate-600 dark:text-slate-400">
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-amber-800/25 bg-amber-100 px-3 py-2 text-xs dark:border-slate-600 dark:bg-slate-800">
+              <span className="text-slate-800 dark:text-slate-200">
                 Period:{" "}
                 <strong className="text-slate-900 dark:text-slate-100">
                   {draft.period_start ?? "?"} → {draft.period_end ?? "?"}
@@ -410,7 +410,7 @@ export function BankStatementDrafter({ open, onClose, onApply, autoPopulate, doc
               <span className="flex items-center gap-2">
                 <Label
                   htmlFor="annualise-toggle"
-                  className="text-xs text-slate-600 dark:text-slate-400"
+                  className="text-xs font-semibold text-slate-800 dark:text-slate-100"
                 >
                   Annualised view (×{(12 / (draft.months_covered || 12)).toFixed(1)})
                 </Label>
@@ -419,6 +419,7 @@ export function BankStatementDrafter({ open, onClose, onApply, autoPopulate, doc
                   checked={annualise}
                   onCheckedChange={setAnnualise}
                   disabled={!draft.months_covered || draft.months_covered <= 0}
+                  className="border border-slate-500 data-[state=unchecked]:bg-slate-500 data-[state=checked]:bg-[#b8860b] [&>span]:bg-white [&>span]:shadow-md"
                 />
               </span>
             </div>

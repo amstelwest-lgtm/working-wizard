@@ -25,7 +25,13 @@ export type AutoPopulateState = {
   prefs: AutoPopulatePrefs;
 };
 
-const MISSING_COLUMN = /auto_update_prefs|42703/;
+/** Optional columns that may be missing from PostgREST's schema cache. */
+export const OPTIONAL_CLIENT_COLUMN_ERROR =
+  /auto_update_prefs|cashflow_bank_draft|42703|schema cache/;
+
+export function isOptionalClientColumnError(message: string | null | undefined): boolean {
+  return OPTIONAL_CLIENT_COLUMN_ERROR.test(message ?? "");
+}
 
 /** What the upload dialogs need before the user clicks Apply. */
 export async function loadAutoPopulateState(clientId: string): Promise<AutoPopulateState> {
@@ -34,7 +40,7 @@ export async function loadAutoPopulateState(clientId: string): Promise<AutoPopul
     .select("financials_updated_at, last_forecast_at, budget_updated_at, auto_update_prefs")
     .eq("id", clientId)
     .maybeSingle();
-  if (error && MISSING_COLUMN.test(error.message ?? "")) {
+  if (error && isOptionalClientColumnError(error.message)) {
     const retry = await supabase
       .from("clients")
       .select("financials_updated_at, last_forecast_at, budget_updated_at")
@@ -101,7 +107,7 @@ export async function runAutoPopulate(input: RunAutoPopulateInput): Promise<RunA
   } | null;
   let prefsColumn = true;
   if (error) {
-    if (!MISSING_COLUMN.test(error.message ?? "")) throw new Error(error.message);
+    if (!isOptionalClientColumnError(error.message)) throw new Error(error.message);
     prefsColumn = false;
     const retry = await supabase
       .from("clients")
@@ -146,8 +152,8 @@ export async function runAutoPopulate(input: RunAutoPopulateInput): Promise<RunA
       .update(update as never)
       .eq("id", input.clientId);
     if (upErr) {
-      if (!MISSING_COLUMN.test(upErr.message ?? "")) throw new Error(upErr.message);
-      // Column not migrated yet — write the deliverables anyway.
+      if (!isOptionalClientColumnError(upErr.message)) throw new Error(upErr.message);
+      // Optional column not in schema cache — write the deliverables anyway.
       delete update.auto_update_prefs;
       delete update.cashflow_bank_draft;
       const retry = await supabase

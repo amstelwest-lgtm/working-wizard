@@ -3,6 +3,7 @@ import { usePrefersReducedMotion } from "@/hooks/use-prefers-reduced-motion";
 import {
   ACCOUNTANT_CLIENT_EMPTY_TOUR_KEY,
   ACCOUNTANT_CLIENT_TOUR_KEY,
+  ACCOUNTANT_DASH_EMPTY_TOUR_KEY,
   ACCOUNTANT_DASH_TOUR_KEY,
   OWNER_EMPTY_TOUR_KEY,
   OWNER_TOUR_KEY,
@@ -14,6 +15,7 @@ export type WalkthroughVariant =
   | "owner"
   | "owner-empty"
   | "accountant-dashboard"
+  | "accountant-dashboard-empty"
   | "accountant-client"
   | "accountant-client-empty";
 
@@ -113,6 +115,21 @@ const OWNER_STEPS: Step[] = [
     section: "Action Plan",
     title: "Turn moves into owned work",
     body: "Set the quarter outcome up top, then add actions underneath — assign people, track progress, and keep one shared plan with your accountant. You’re set — explore any tab anytime.",
+  },
+];
+
+const ACCOUNTANT_DASH_EMPTY_STEPS: Step[] = [
+  {
+    targetId: "wizard-practice-board",
+    section: "Practice",
+    title: "This is your practice board",
+    body: "Every client you add lands here — health, runway and who needs attention. The book is empty until you add the first one. Same loop after that: add a client, upload their figures, review what Milōn drafts, sign off, deliver.",
+  },
+  {
+    targetId: "wizard-add-client",
+    section: "First client",
+    title: "Step 2 of 2 · Add your first client",
+    body: "Start with a real client whose statements you have to hand, or a sandbox client to learn the loop. After you add them, Milōn will ask for about 3 months of bank statements or a P&L and balance sheet — one upload drafts Profit, Cash and Budget for you to sign off.",
   },
 ];
 
@@ -226,6 +243,7 @@ const ACCOUNTANT_CLIENT_STEPS: Step[] = [
 
 function stepsFor(variant: WalkthroughVariant): Step[] {
   if (variant === "accountant-dashboard") return ACCOUNTANT_DASH_STEPS;
+  if (variant === "accountant-dashboard-empty") return ACCOUNTANT_DASH_EMPTY_STEPS;
   if (variant === "accountant-client") return ACCOUNTANT_CLIENT_STEPS;
   if (variant === "accountant-client-empty") return ACCOUNTANT_CLIENT_EMPTY_STEPS;
   if (variant === "owner-empty") return OWNER_EMPTY_STEPS;
@@ -234,6 +252,7 @@ function stepsFor(variant: WalkthroughVariant): Step[] {
 
 function storageKeyFor(variant: WalkthroughVariant): string {
   if (variant === "accountant-dashboard") return ACCOUNTANT_DASH_TOUR_KEY;
+  if (variant === "accountant-dashboard-empty") return ACCOUNTANT_DASH_EMPTY_TOUR_KEY;
   if (variant === "accountant-client") return ACCOUNTANT_CLIENT_TOUR_KEY;
   if (variant === "accountant-client-empty") return ACCOUNTANT_CLIENT_EMPTY_TOUR_KEY;
   if (variant === "owner-empty") return OWNER_EMPTY_TOUR_KEY;
@@ -811,9 +830,11 @@ export function WalkthroughWizard({
                 {isLast
                   ? variant === "owner-empty"
                     ? "Got it — add my figures"
-                    : variant === "accountant-client-empty"
-                      ? "Got it — bring in the figures"
-                      : "Done — let's go"
+                    : variant === "accountant-dashboard-empty"
+                      ? "Got it — add my first client"
+                      : variant === "accountant-client-empty"
+                        ? "Got it — bring in the figures"
+                        : "Done — let's go"
                   : "Next"}
               </button>
             </div>

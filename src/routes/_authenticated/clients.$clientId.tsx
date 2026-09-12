@@ -14,6 +14,11 @@ import { UploadFinancials } from "@/components/upload-financials";
 import { BankStatementDrafter } from "@/components/bank-statement-drafter";
 import { WalkthroughWizard } from "@/components/walkthrough-wizard";
 import {
+  ACCOUNTANT_CLIENT_EMPTY_TOUR_KEY,
+  markOnboardingDone,
+  shouldReopenFirstDataAfterEmptyTour,
+} from "@/lib/onboarding";
+import {
   loadAutoPopulateState,
   runAutoPopulate,
   type AutoPopulateState,
@@ -428,6 +433,35 @@ const ACCOUNTANT_TABS: ActiveTab[] = [
 ];
 
 /** Old Staff tasks deep-links land on Action Plan. */
+function FirstDataChoice({
+  primary,
+  label,
+  hint,
+  onClick,
+}: {
+  primary?: boolean;
+  label: string;
+  hint: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={
+        primary
+          ? "w-full rounded-xl bg-[#d4a550] px-4 py-3 text-left text-[#1b1300] shadow-[0_8px_24px_rgba(212,165,80,0.28)] hover:bg-[#e0b85c]"
+          : "w-full rounded-xl border border-slate-500 bg-slate-800 px-4 py-3 text-left text-slate-100 hover:border-[#d4a550] hover:text-[#f3e3b3]"
+      }
+    >
+      <span className="block text-sm font-semibold leading-snug">{label}</span>
+      <span className={`mt-0.5 block text-xs ${primary ? "text-[#3d2e00]" : "text-slate-300"}`}>
+        {hint}
+      </span>
+    </button>
+  );
+}
+
 function resolveAccountantTab(tab: string | undefined): ActiveTab | null {
   if (!tab) return null;
   if (tab === "tasks") return "plan";
@@ -682,6 +716,11 @@ function ClientView() {
     () => FIELD_LABELS.some(({ key }) => (financials[key] ?? "").toString().trim() !== ""),
     [financials],
   );
+  const startStudioTourAfterFigures = useCallback(() => {
+    markOnboardingDone(ACCOUNTANT_CLIENT_EMPTY_TOUR_KEY);
+    setFirstDataOpen(false);
+    setTourVariant("accountant-client");
+  }, []);
   const jumpToFinancials = useCallback(() => {
     setActiveTab("ratios");
     setFinOpen(true);
@@ -1233,6 +1272,7 @@ function ClientView() {
       setFinancials(nextScalars);
       setClient((c) => (c ? { ...c, financials_updated_at: financialsUpdatedAt } : c));
       toast.success(`Financials saved for ${periodLabel}`);
+      startStudioTourAfterFigures();
       track("financials_uploaded", {
         surface: "accountant_portal",
         clientId,
@@ -1268,6 +1308,7 @@ function ClientView() {
       autoPopulateState?.firstUpload,
       client?.market,
       applyAutoPopulateResult,
+      startStudioTourAfterFigures,
     ],
   );
 
@@ -1535,7 +1576,10 @@ function ClientView() {
             }
             onTabChange={handleTourTabChange}
             onFinish={
-              tourVariant === "accountant-client-empty" ? () => setFirstDataOpen(true) : undefined
+              tourVariant === "accountant-client-empty" &&
+              shouldReopenFirstDataAfterEmptyTour(hasFigures)
+                ? () => setFirstDataOpen(true)
+                : undefined
             }
           />
           {/* Ambient background */}
@@ -2617,89 +2661,74 @@ function ClientView() {
 
           {/* First-client: bank statements nudge */}
           <Dialog open={firstDataOpen} onOpenChange={setFirstDataOpen}>
-            <DialogContent className="border border-slate-800 bg-slate-950 text-slate-50 max-w-md">
+            <DialogContent className="max-w-md border border-slate-700 bg-slate-950 text-slate-50">
               <DialogHeader>
                 <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#d4a550]">
                   {client?.name ?? "First client"} · Step 1 of 2
                 </p>
-                <DialogTitle className="text-xl text-slate-100 mt-1">
-                  {isUsCopy(clientMarket)
-                    ? "Upload a P&L and balance sheet"
-                    : "Upload 3 months of bank statements"}
+                <DialogTitle className="mt-1 text-xl text-slate-100">
+                  Bring in this client's figures
                 </DialogTitle>
-                <DialogDescription className="text-slate-400">
+                <DialogDescription className="text-slate-300">
                   {isUsCopy(clientMarket)
-                    ? "Fastest path for this client: the latest P&L and balance sheet as Excel, CSV or PDF — figures are read from the file, you review every figure, then Health, Profit, Cash, Budget and Milōn Bot fill in. About 3 months of bank statements work too."
-                    : "Fastest path for this client: about 3 months of statements for every bank account. One pack drafts the P&L, seeds the budget, builds the cash forecast and shows movements in balances — then Health, Profit, Cash and Milōn Bot fill in."}
+                    ? "Pick one path. Fastest: the latest P&L and balance sheet as Excel, CSV or PDF. About 3 months of bank statements work too. One pack drafts Health, Profit, Cash and Budget for you to review."
+                    : "Pick one path. Fastest: about 3 months of bank statements for every account. A P&L and balance sheet also work. One pack drafts Health, Profit, Cash and Budget for you to review."}
                 </DialogDescription>
               </DialogHeader>
-              <div className="flex flex-col gap-3 pt-2">
+              <div className="flex flex-col gap-2.5 pt-2">
                 {isUsCopy(clientMarket) ? (
                   <>
-                    <button
-                      type="button"
+                    <FirstDataChoice
+                      primary
+                      label="Upload a P&L and balance sheet"
+                      hint="Excel, CSV or PDF — review every figure before it saves"
                       onClick={() => {
                         setFirstDataOpen(false);
                         setUploadOpen(true);
                       }}
-                      className="btn gold"
-                      style={{ width: "100%", justifyContent: "center" }}
-                    >
-                      Upload P&amp;L / balance sheet (Excel, CSV or PDF)
-                    </button>
-                    <button
-                      type="button"
+                    />
+                    <FirstDataChoice
+                      label="Upload bank statements instead"
+                      hint="About 3 months for each account"
                       onClick={() => {
                         setFirstDataOpen(false);
                         setShowBankDrafter(true);
                       }}
-                      className="btn ghost"
-                      style={{ width: "100%", justifyContent: "center" }}
-                    >
-                      Upload bank statements
-                    </button>
+                    />
                   </>
                 ) : (
                   <>
-                    <button
-                      type="button"
+                    <FirstDataChoice
+                      primary
+                      label="Upload bank statements"
+                      hint="About 3 months of PDFs for each account"
                       onClick={() => {
                         setFirstDataOpen(false);
                         setShowBankDrafter(true);
                       }}
-                      className="btn gold"
-                      style={{ width: "100%", justifyContent: "center" }}
-                    >
-                      Upload bank statements
-                    </button>
-                    <button
-                      type="button"
+                    />
+                    <FirstDataChoice
+                      label="Upload a P&L and balance sheet instead"
+                      hint="Excel, CSV or PDF"
                       onClick={() => {
                         setFirstDataOpen(false);
                         setUploadOpen(true);
                       }}
-                      className="btn ghost"
-                      style={{ width: "100%", justifyContent: "center" }}
-                    >
-                      Upload a P&amp;L / balance sheet instead (PDF, Excel or CSV)
-                    </button>
+                    />
                   </>
                 )}
-                <button
-                  type="button"
+                <FirstDataChoice
+                  label="Type the figures by hand"
+                  hint="Fill the financials grid yourself"
                   onClick={() => {
                     setFirstDataOpen(false);
                     jumpToFinancials();
                   }}
-                  className="btn ghost"
-                  style={{ width: "100%", justifyContent: "center" }}
-                >
-                  Type the figures by hand
-                </button>
+                />
                 <button
                   type="button"
                   onClick={() => setFirstDataOpen(false)}
-                  className="text-xs text-slate-500 hover:text-slate-400 pt-1 text-center"
+                  className="pt-1 text-center text-xs text-slate-400 underline-offset-2 hover:text-slate-200 hover:underline"
                   style={{ background: "none", border: "none", cursor: "pointer" }}
                 >
                   Skip for now — look around first
@@ -2746,6 +2775,7 @@ function ClientView() {
                   ? "Draft figures applied (annualised) — saved."
                   : "Draft figures applied for the statement period — saved.",
               );
+              startStudioTourAfterFigures();
 
               // Same pack drafts cash forecast + budget (first upload: always;
               // later: per the checkboxes). No second dialog, no re-upload.

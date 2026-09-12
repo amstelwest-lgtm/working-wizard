@@ -57,10 +57,10 @@ import {
   type DraftMarket,
 } from "@/lib/market";
 import {
+  ACCOUNTANT_DASH_EMPTY_TOUR_KEY,
   ACCOUNTANT_FIRST_CLIENT_KEY,
   PRACTICE_TEST_CLIENT_NAME,
   markOnboardingDone,
-  onboardingDone,
 } from "@/lib/onboarding";
 import {
   DashboardSkeleton,
@@ -1093,10 +1093,7 @@ function Dashboard() {
     if (!portalReady || loading || brandLoading) return;
     if (clientRows.length > 0) {
       markOnboardingDone(ACCOUNTANT_FIRST_CLIENT_KEY);
-      return;
-    }
-    if (!onboardingDone(ACCOUNTANT_FIRST_CLIENT_KEY) && !brandLoading) {
-      setFirstClientOpen(true);
+      markOnboardingDone(ACCOUNTANT_DASH_EMPTY_TOUR_KEY);
     }
   }, [portalReady, loading, brandLoading, clientRows.length, firm?.id, firmId]);
 
@@ -1275,8 +1272,9 @@ function Dashboard() {
   return (
     <div className="accountant-portal milon-page-enter">
       <WalkthroughWizard
-        variant="accountant-dashboard"
-        ready={!loading && !brandLoading && !firstClientOpen && clientRows.length > 0}
+        variant={clientRows.length > 0 ? "accountant-dashboard" : "accountant-dashboard-empty"}
+        ready={!loading && !brandLoading && !firstClientOpen && !addOpen}
+        onFinish={clientRows.length === 0 ? () => setFirstClientOpen(true) : undefined}
       />
       {/* Ambient background */}
       <div id="atmos">
