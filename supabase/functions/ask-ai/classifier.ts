@@ -32,6 +32,10 @@ const DEFINITIONAL = [
 const FULL_CONTEXT_INTENTS: RegExp[] = [
   // Industry / benchmarking
   /vs\.?\s+industry/i,
+  /vs\.?\s+peers?/i,
+  /score\s+vs/i,
+  /performance\s+vs/i,
+  /\bpeers?\b/,
   /compared?\s+to\s+(industry|sector|benchmark|peers)/i,
   /industry\s+(average|median|benchmark|standard)/i,
   /\bbenchmark/i,

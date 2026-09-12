@@ -7,6 +7,11 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { classify } from "../supabase/functions/ask-ai/classifier.ts";
 import {
+  computeRatiosFromFinancials,
+  pillarBreakdownFromRatios,
+  resolveRatioRecord,
+} from "../supabase/functions/ask-ai/derive-ratios.ts";
+import {
   buildDeliverableFills,
   extractWaterfallFigures,
   profileQuestionsFromOperating,
@@ -38,8 +43,12 @@ assert(builderSrc.includes("summarizeWaterfall"), "builds waterfall output");
 assert(builderSrc.includes("summarizeCashForecast"), "builds cash outlook");
 assert(builderSrc.includes("summarizeProductLines"), "builds product lines");
 assert(builderSrc.includes("rankNextSteps"), "builds next moves");
+assert(builderSrc.includes("resolveRatioRecord"), "falls back to live financials when snapshot empty");
+assert(builderSrc.includes("pillarBreakdownFromRatios"), "builds category scores for Claude");
 assert(!builderSrc.includes("JSON.stringify(financials)"), "does not dump raw financials JSON");
 assert(promptSrc.includes("Profitability waterfall"), "prompt has waterfall section");
+assert(promptSrc.includes("Score breakdown by category"), "prompt includes pillar scores");
+assert(promptSrc.includes("vs peer"), "prompt labels peer bands");
 assert(promptSrc.includes("Cash forecast outlook"), "prompt has cash outlook");
 assert(promptSrc.includes("Product lines"), "prompt has product lines");
 assert(promptSrc.includes("Top recommended next moves"), "prompt has next moves");
@@ -144,10 +153,36 @@ const fills = buildDeliverableFills({
 assert(fills.find((d) => d.scope === "health")?.signedOff === true, "health signed via financials");
 assert(fills.find((d) => d.scope === "cash")?.filled === true, "cash marked filled");
 
+const derived = computeRatiosFromFinancials({
+  revenue: 800_000,
+  cogs: 400_000,
+  netIncome: 120_000,
+  ebit: 160_000,
+  ebt: 140_000,
+  totalAssets: 500_000,
+  equity: 250_000,
+  receivables: 80_000,
+  inventory: 40_000,
+  payables: 30_000,
+});
+assert(Math.abs(derived["Net Margin"] - 0.15) < 1e-9, "derive net margin from live financials");
+assert(Math.abs(derived["Gross Margin"] - 0.5) < 1e-9, "derive gross margin");
+assert(
+  Object.keys(resolveRatioRecord(null, { revenue: 800_000, netIncome: 120_000 })).includes("Net Margin"),
+  "empty snapshot still yields ratios from financials",
+);
+assert(
+  Object.keys(resolveRatioRecord({ "Net Margin": 0.2 }, { revenue: 1, netIncome: 1 }))[0] === "Net Margin",
+  "snapshot wins when present",
+);
+const pillars = pillarBreakdownFromRatios(derived);
+assert(pillars.some((p) => p.id === "profit" && p.score != null), "profit pillar scored");
+assert(pillars.some((p) => p.id === "cash" && p.score != null), "cash pillar scored");
+
 const ctx: AskAiContext = {
   profile: { client_id: "c1", entity_type: null, business_type: "retail", annual_revenue: 2_400_000, operating: null },
   profileQuestions: questions,
-  scores: { overall_score: 61 },
+  scores: { overall_score: 86, pillars },
   ratios,
   playbook: [],
   copyPack: "za",
@@ -162,6 +197,8 @@ const ctx: AskAiContext = {
 const { system, user } = buildPrompt("What should I focus on this month?", ctx, "full");
 assert(user.includes("Company profile answers"), "prompt includes profile");
 assert(user.includes("Key ratios"), "prompt includes ratios");
+assert(user.includes("Score breakdown by category"), "prompt includes category scores");
+assert(user.includes("Profitability:"), "prompt names profitability pillar");
 assert(user.includes("Profitability waterfall"), "prompt includes waterfall");
 assert(user.includes("Cash forecast outlook"), "prompt includes cash");
 assert(user.includes("Product lines"), "prompt includes products");
@@ -177,6 +214,11 @@ assert(classify("What is a gross margin?") === "none", "definitional stays none"
 assert(classify("What should I focus on?") === "full", "priority stays full");
 assert(classify("How is my waterfall looking?") === "full", "waterfall question is full");
 assert(classify("What's on the action plan?") === "full", "action plan question is full");
+assert(
+  classify("What's the biggest drag on this client's score vs peers?") === "full",
+  "peer-drag chip is full context",
+);
+assert(classify("How is performance vs peers?") === "full", "performance vs peers is full");
 
 const nonePrompt = buildPrompt("What is a ratio?", ctx, "none");
 assert(!nonePrompt.user.includes("BUSINESS CONTEXT"), "definitional questions get no client dump");

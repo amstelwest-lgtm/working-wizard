@@ -111,6 +111,10 @@ interface PlaybookDrawerProps {
   clientId?: string | null;
   clientName?: string;
   isAccountant?: boolean;
+  /** Formula + mini actuals so the drawer is useful even without a JSON pack. */
+  formula?: string | null;
+  actualLine?: string | null;
+  fallbackSteps?: string[];
 }
 
 export function PlaybookDrawer({
@@ -122,6 +126,9 @@ export function PlaybookDrawer({
   clientId = null,
   clientName,
   isAccountant = false,
+  formula = null,
+  actualLine = null,
+  fallbackSteps = [],
 }: PlaybookDrawerProps) {
   const [steps, setSteps] = useState<PlaybookStep[]>([]);
   const [loading, setLoading] = useState(false);
@@ -211,7 +218,9 @@ export function PlaybookDrawer({
                 ? `${steps.length} action steps — ordered by priority and timeframe`
                 : loading
                   ? "Loading playbook…"
-                  : "No playbook available for this ratio yet."}
+                  : fallbackSteps.length > 0
+                    ? "Working notes for this ratio — a full playbook pack is not published yet."
+                    : "No playbook available for this ratio yet."}
             </p>
             {signoffEnabled && steps.length > 0 && (
               <p className="flex-shrink-0 text-[11px] font-normal text-slate-400">
@@ -223,6 +232,18 @@ export function PlaybookDrawer({
 
         {/* Body */}
         <div className="flex-1 space-y-7 overflow-y-auto px-6 py-5">
+          {(formula || actualLine) && (
+            <div className="rounded-lg border border-slate-700 bg-slate-900/70 p-4">
+              {formula && (
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                  {formula}
+                </p>
+              )}
+              {actualLine && (
+                <p className="mt-1.5 font-mono text-sm text-slate-100">{actualLine}</p>
+              )}
+            </div>
+          )}
           {loading && (
             <div className="flex items-center justify-center py-16 text-slate-400">
               <Loader2 className="mr-2 h-5 w-5 animate-spin" />
@@ -230,7 +251,29 @@ export function PlaybookDrawer({
             </div>
           )}
 
-          {!loading && steps.length === 0 && (
+          {!loading && steps.length === 0 && fallbackSteps.length > 0 && (
+            <div>
+              <div className="mb-3 flex items-center gap-2">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                  What to check
+                </span>
+                <div className="flex-1 border-t border-slate-700" />
+              </div>
+              <ol className="space-y-2">
+                {fallbackSteps.map((step, i) => (
+                  <li
+                    key={step}
+                    className={`rounded-lg border border-slate-700 border-l-2 ${tier.border} bg-slate-900/80 p-3 text-sm leading-relaxed text-slate-200`}
+                  >
+                    <span className="mr-2 font-semibold text-slate-400">{i + 1}.</span>
+                    {step}
+                  </li>
+                ))}
+              </ol>
+            </div>
+          )}
+
+          {!loading && steps.length === 0 && fallbackSteps.length === 0 && (
             <div className="flex flex-col items-center justify-center gap-3 py-16 text-center text-slate-400">
               <AlertTriangle className="h-8 w-8 text-slate-500" />
               <p className="text-sm text-slate-300">

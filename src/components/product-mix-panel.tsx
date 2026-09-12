@@ -540,10 +540,17 @@ function MixBars({ mix }: { mix: ProductMix }) {
   );
 }
 
-export function ProductMixPanel({ totalRevenue = 0 }: { totalRevenue?: number }) {
+export function ProductMixPanel({
+  totalRevenue = 0,
+  incentive,
+}: {
+  totalRevenue?: number;
+  /** Shown under the title so accountants know why the five questions matter. */
+  incentive?: string;
+}) {
   const { productMix, saveProductMix } = useFinancialInputs();
   const { t } = useMarketFormat();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(() => Boolean(incentive));
   const [funnelOpen, setFunnelOpen] = useState(false);
   const answered = hasProductMixAnswer(productMix);
   const summary = useMemo(() => productMixSummary(productMix), [productMix]);
@@ -558,7 +565,9 @@ export function ProductMixPanel({ totalRevenue = 0 }: { totalRevenue?: number })
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
               <CardTitle className="text-sm font-semibold text-slate-100">Product lines</CardTitle>
-              <CardDescription className="mt-0.5 text-xs text-slate-400">{summary}</CardDescription>
+              <CardDescription className="mt-0.5 text-xs text-slate-400">
+                {incentive ?? summary}
+              </CardDescription>
             </div>
             <div className="flex shrink-0 items-center gap-1">
               {!answered ? (
@@ -596,8 +605,8 @@ export function ProductMixPanel({ totalRevenue = 0 }: { totalRevenue?: number })
             {!answered && (
               <div className="flex flex-col items-start gap-2">
                 <p className="text-xs text-slate-400">
-                  Optional. Of the stated total revenue, how much is from each line — then sales
-                  share vs GP share. Does not change the waterfall.
+                  {incentive ??
+                    "Optional. Of the stated total revenue, how much is from each line — then sales share vs GP share. Does not change the waterfall."}
                 </p>
                 <Button
                   size="sm"

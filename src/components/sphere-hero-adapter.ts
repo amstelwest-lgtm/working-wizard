@@ -14,10 +14,18 @@ import type { SpherePillar } from "@/components/sphere-hero";
 // used by pillarHealths in app.tsx so the sphere score and its drivers agree.
 // Adjust here (not in the component) if you re-balance a pillar.
 export const PILLAR_DRIVER_KEYS: Record<SpherePillar["id"], string[]> = {
-  profit: ["grossMargin", "operatingMargin", "netMargin", "revenueGrowth", "directCostsRatio", "fixedCostRatio"],
-  assets: ["assetTurnover", "roa", "inventoryDays", "fixedCapitalUtilization", "workingCapitalUtilization", "salesPerEmployee"],
-  financing: ["fundingStructure", "debtToEquity", "debtToAssets", "equityMultiplier", "interestBurden"],
-  cash: ["debtorDays", "creditorDays", "currentRatio", "workingCapitalFunding", "ocfToEbitda"],
+  profit: [
+    "grossMargin",
+    "operatingMargin",
+    "netMargin",
+    "fixedCostRatio",
+    "dol",
+    "gpToLabor",
+    "customerConcentration",
+  ],
+  assets: ["assetTurnover", "roa", "inventoryDays", "salesPerEmployee"],
+  financing: ["equityMultiplier", "interestBurden", "taxBurden", "roe"],
+  cash: ["debtorDays", "creditorDays", "workingCapitalDays", "ocfToEbitda"],
 };
 
 const PILLAR_LABEL: Record<SpherePillar["id"], string> = {
@@ -59,14 +67,12 @@ export type BuildSphereArgs = {
 export function buildSpherePillars(args: BuildSphereArgs): SpherePillar[] {
   const { pillarHealths, pillarDeltas, healthMap, ratioMeta } = args;
   return (Object.keys(PILLAR_DRIVER_KEYS) as SpherePillar["id"][]).map((id) => {
-    const drivers = PILLAR_DRIVER_KEYS[id]
-      .filter((k) => k in healthMap)
-      .map((k) => ({
-        key: k,
-        label: ratioMeta[k]?.friendly ?? ratioMeta[k]?.techName ?? k,
-        description: ratioMeta[k]?.techName,
-        health: healthMap[k],
-      }));
+    const drivers = PILLAR_DRIVER_KEYS[id].map((k) => ({
+      key: k,
+      label: ratioMeta[k]?.friendly ?? ratioMeta[k]?.techName ?? k,
+      description: ratioMeta[k]?.techName,
+      health: k in healthMap && Number.isFinite(healthMap[k]) ? healthMap[k] : Number.NaN,
+    }));
     // Drivers with no score still render as "—" so the owner sees what's missing.
     // Pillar health itself comes from computeOverallHealth (finite scores only).
     const health = pillarHealths[id];
