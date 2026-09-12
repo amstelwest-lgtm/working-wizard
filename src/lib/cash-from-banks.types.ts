@@ -92,6 +92,7 @@ export type CashForecastPublishPayload = {
     frequency: ForecastFrequency;
     startWeek: number;
     splitCount: number;
+    weekOverrides?: Record<string, number>;
   }>;
   expenses: Array<{
     id: string;
@@ -100,6 +101,7 @@ export type CashForecastPublishPayload = {
     frequency: ForecastFrequency;
     startWeek: number;
     splitCount: number;
+    weekOverrides?: Record<string, number>;
   }>;
   other: Array<{
     id: string;
@@ -108,6 +110,7 @@ export type CashForecastPublishPayload = {
     frequency: ForecastFrequency;
     startWeek: number;
     splitCount: number;
+    weekOverrides?: Record<string, number>;
   }>;
   /** Keep scenario knobs neutral on first publish */
   revAdj: number;

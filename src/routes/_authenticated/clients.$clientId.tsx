@@ -1918,10 +1918,13 @@ function ClientView() {
               ))}
             </div>
 
-            {/* Simplified / Complex — Health, Budget, Action Plan (not Ask AI) */}
+            {/* Simplified / Complex — Health, Budget, Action Plan (not Ask AI, Summary, or Cash) */}
             <div
               style={{
-                display: activeTab === "ask" || activeTab === "summary" ? "none" : "flex",
+                display:
+                  activeTab === "ask" || activeTab === "summary" || activeTab === "cash"
+                    ? "none"
+                    : "flex",
                 justifyContent: "center",
                 margin: "8px 0 20px",
               }}
@@ -2301,7 +2304,7 @@ function ClientView() {
               </p>
 
               {/* Wrap in a Tailwind dark context so the component's dark: variants fire */}
-              <div className="dark" id="wizard-profit-walk" style={{ colorScheme: "dark" }}>
+              <div id="wizard-profit-walk">
                 <ProfitabilityWaterfall
                   fallback={waterfallFallback}
                   clientName={client?.name}

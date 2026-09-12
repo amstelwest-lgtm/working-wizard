@@ -62,6 +62,7 @@
     "test:client-brain": "vite-node --config scripts/vite-test.config.ts scripts/client-brain-summary-test.mts",
     "test:milon-bot": "vite-node --config scripts/vite-test.config.ts scripts/milon-bot-test.mts",
     "test:accountant-studio-clarity": "vite-node --config scripts/vite-test.config.ts scripts/accountant-studio-clarity-test.mts",
+    "test:cash-forecast-detail": "vite-node --config scripts/vite-test.config.ts scripts/cash-forecast-detail-test.mts",
     "test:edge-no-smoke-stubs": "vite-node --config scripts/vite-test.config.ts scripts/edge-no-smoke-stubs-test.mts"
   },
   "dependencies": {
