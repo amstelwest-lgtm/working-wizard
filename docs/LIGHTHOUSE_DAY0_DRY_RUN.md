@@ -1,7 +1,7 @@
 # Lighthouse Day-0 dry-run readiness
 
 Use this before the first real cold sends from **Milōn Forge → Lighthouse — sales → Load golden → Send now**
-(`/ops`). Goal: prove the full path on **four test inboxes only**. Do not email firms. Do not remove
+(`/ops`). Goal: prove the full path on **five test inboxes only**. Do not email firms. Do not remove
 the recipient gate until Growth/Theo explicitly flip production send GO.
 
 ## Test inboxes (only valid recipients during dry-run)
@@ -10,7 +10,8 @@ the recipient gate until Growth/Theo explicitly flip production send GO.
 |-------|------|
 | `amstel.west@gmail.com` | Founder / default owner gate |
 | `team@milon.co.za` | Milōn ZA ops |
-| `team@milonfinance.com` | Milōn finance domain |
+| `team@milonfinance.com` | Leftover finance-domain test inbox (not the Lighthouse mailbox) |
+| `team@trymilon.com` | Lighthouse mailbox — reply-to lock |
 | `theoamstel123@gmail.com` | Secondary founder test |
 
 During dry-run, **every other address fails closed** at send time.
@@ -21,7 +22,7 @@ During dry-run, **every other address fails closed** at send time.
   Resend. When `LIGHTHOUSE_DRY_RUN=true` or `LIGHTHOUSE_SEND_ALLOWLIST` is set, only allowlisted
   addresses receive mail.
 - **Console banner** — `/ops` Lighthouse sales shows *Dry-run allowlist on* when the gate is active.
-- **Default dry-run list** — `LIGHTHOUSE_DRY_RUN=true` without an explicit list uses the four inboxes
+- **Default dry-run list** — `LIGHTHOUSE_DRY_RUN=true` without an explicit list uses the five inboxes
   above (`src/lib/lighthouse-send-allowlist.ts`).
 
 ## THEO MUST CLICK (Vercel Production)
@@ -32,15 +33,18 @@ During dry-run, **every other address fails closed** at send time.
    ```
    Or an explicit override:
    ```
-   LIGHTHOUSE_SEND_ALLOWLIST=amstel.west@gmail.com,team@milon.co.za,team@milonfinance.com,theoamstel123@gmail.com
+   LIGHTHOUSE_SEND_ALLOWLIST=amstel.west@gmail.com,team@milon.co.za,team@milonfinance.com,team@trymilon.com,theoamstel123@gmail.com
    ```
    Redeploy after setting. Confirm the amber banner on `/ops` → Lighthouse — sales.
 
 2. **Resend API key** — `RESEND_API_KEY=re_...` in Vercel Production. Without it, drafts save as
    `approved` but nothing sends (implicit guard only — still set the key for dry-run).
 
-3. **From domain** — `RESEND_FROM_EMAIL=Milōn <noreply@milonfinance.com>` (or verified domain in
-   Resend). Domain must show **Verified** in Resend → Domains. SPF/DKIM/DMARC green.
+3. **From domain** — Lighthouse reply-to is locked to `team@trymilon.com`. Set
+   `RESEND_FROM_EMAIL=Milōn <team@trymilon.com>` after `trymilon.com` shows **Verified** in
+   Resend → Domains (SPF/DKIM/DMARC green). Until then, From can stay on the already-verified
+   `milonfinance.com` sender; replies still land on `team@trymilon.com`. Product / auth URLs stay
+   on `milonfinance.com`.
 
 4. **SITE_URL** — `SITE_URL=https://www.milonfinance.com` (or canonical production URL). Drives:
    - Trial links (`/?lh=<token>#register`)
@@ -68,6 +72,7 @@ During dry-run, **every other address fails closed** at send time.
    - `20260822210000_lighthouse_engagement.sql` — click / inbound tracking
    - `20260910190000_lighthouse_one_pager_assets_ready.sql` — one-pager PDF asset URLs
    - `20260910200000_lighthouse_teaser_videos.sql` — locked `teaser_owner` / `teaser_accountant` YouTube links
+   - `20260912170000_lighthouse_reply_to_trymilon.sql` — reply-to lock → `team@trymilon.com`
 
 ## Manual dry-run steps (Growth / Theo)
 
@@ -75,7 +80,7 @@ During dry-run, **every other address fails closed** at send time.
 2. Open **Lighthouse — sales** → **Pipeline**.
 3. For each test inbox, **Add lead** (or edit existing):
    - Persona **accountant** → sequence `accountant_v1`; persona **owner** → `owner_v1`
-   - Email = one of the four test inboxes only
+   - Email = one of the five test inboxes only
    - Stage **sourced** or **researched**, **Do not contact** off
 4. Click the lead → **Load golden** (accountant drip or one-shot) or **Draft with Claude** (owner) → review subject/body.
    Accountant **one-shot banger** is a separate sequence (not the 5-step drip). Pick it when adding the lead.

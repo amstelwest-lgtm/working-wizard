@@ -177,7 +177,7 @@ export type LighthouseSettings = {
   autoSend: boolean;
   /** Postal or physical address shown in the cold-email footer. */
   senderAddress: string;
-  /** Mailbox replies land in. Empty, *@milon.co.za, or team@milonfinance.com resolves to hello@milonfinance.com. */
+  /** Mailbox replies land in. Empty, *@milon.co.za, or *@milonfinance.com resolves to team@trymilon.com. */
   replyTo: string;
 };
 
@@ -802,7 +802,7 @@ Non-negotiable rules:
 - Never say "just following up" or "circling back" with nothing new.
 - Sound like a small specialist team writing to one person, not a marketing department.
 - Subject lines: lowercase or sentence case, under 6 words, no clickbait, no "Re:" fakery.
-- From is team@milonfinance.com. Reply-to is hello@milonfinance.com. Do not invent other mailboxes.
+- From and reply-to are team@trymilon.com. Do not invent other mailboxes.
 - Day 0: capacity-ceiling observation and a soft ask. No URLs at all.
 - Day 4: must include BOTH https://youtu.be/J4vJki7HcIs and https://youtu.be/k3aRM4toTvU. No trial link.
 - Day 9: only CTA is the free-trial link. Must include the practice one-pager URL when provided. No other CTAs.
@@ -834,7 +834,7 @@ Non-negotiable rules:
 - Keep BOTH one-pager URLs exactly: https://www.milonfinance.com/lighthouse/milon-one-pager-accountants.pdf and https://www.milonfinance.com/lighthouse/milon-one-pager-owners.pdf.
 - KEEP the line that we will call shortly after they have looked through the videos and one-pagers. Do not strip the call, and do not replace it with a trial-only ask.
 - Sign off as The Milōn Team.
-- From is team@milonfinance.com. Reply-to is hello@milonfinance.com. Do not invent other mailboxes.`;
+- From and reply-to are team@trymilon.com. Do not invent other mailboxes.`;
 
 function systemRulesFor(seqKey: string): string {
   if (seqKey === ACCOUNTANT_ONESHOT_SEQUENCE_KEY) return ONESHOT_SYSTEM_RULES;

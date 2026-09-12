@@ -10,6 +10,7 @@ export const LIGHTHOUSE_DEFAULT_DRY_RUN_INBOXES = [
   "amstel.west@gmail.com",
   "team@milon.co.za",
   "team@milonfinance.com",
+  "team@trymilon.com",
   "theoamstel123@gmail.com",
 ] as const;
 

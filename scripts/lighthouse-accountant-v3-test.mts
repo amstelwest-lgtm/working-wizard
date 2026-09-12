@@ -21,15 +21,15 @@ function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
 }
 
-assert(LIGHTHOUSE_REPLY_TO === "hello@milonfinance.com", "locked mailbox");
+assert(LIGHTHOUSE_REPLY_TO === "team@trymilon.com", "locked mailbox");
 assert(LIGHTHOUSE_TEAM_VOICE === "The Milōn Team", "team voice label");
-assert(resolveLighthouseReplyTo("") === LIGHTHOUSE_REPLY_TO, "empty → hello@");
-assert(resolveLighthouseReplyTo("   ") === LIGHTHOUSE_REPLY_TO, "whitespace → hello@");
-assert(resolveLighthouseReplyTo(null) === LIGHTHOUSE_REPLY_TO, "null → hello@");
-assert(resolveLighthouseReplyTo(undefined) === LIGHTHOUSE_REPLY_TO, "undefined → hello@");
+assert(resolveLighthouseReplyTo("") === LIGHTHOUSE_REPLY_TO, "empty → team@trymilon.com");
+assert(resolveLighthouseReplyTo("   ") === LIGHTHOUSE_REPLY_TO, "whitespace → team@trymilon.com");
+assert(resolveLighthouseReplyTo(null) === LIGHTHOUSE_REPLY_TO, "null → team@trymilon.com");
+assert(resolveLighthouseReplyTo(undefined) === LIGHTHOUSE_REPLY_TO, "undefined → team@trymilon.com");
 assert(
   resolveLighthouseReplyTo("hello@milon.co.za") === LIGHTHOUSE_REPLY_TO,
-  "hello@milon.co.za → hello@",
+  "hello@milon.co.za → team@trymilon.com",
 );
 assert(
   resolveLighthouseReplyTo("HELLO@MILON.CO.ZA") === LIGHTHOUSE_REPLY_TO,
@@ -37,23 +37,31 @@ assert(
 );
 assert(
   resolveLighthouseReplyTo("ops@milon.co.za") === LIGHTHOUSE_REPLY_TO,
-  "any @milon.co.za → hello@",
+  "any @milon.co.za → team@trymilon.com",
 );
 assert(
   resolveLighthouseReplyTo("team@milonfinance.com") === LIGHTHOUSE_REPLY_TO,
-  "team@ reply-to remaps to hello@",
+  "team@ finance remaps to team@trymilon.com",
 );
 assert(
   resolveLighthouseReplyTo("TEAM@MILONFINANCE.COM") === LIGHTHOUSE_REPLY_TO,
-  "team@ case-insensitive",
+  "team@ finance case-insensitive",
 );
 assert(
   resolveLighthouseReplyTo("hello@milonfinance.com") === LIGHTHOUSE_REPLY_TO,
+  "hello@ finance remaps to team@trymilon.com",
+);
+assert(
+  resolveLighthouseReplyTo("ops@milonfinance.com") === LIGHTHOUSE_REPLY_TO,
+  "any @milonfinance.com remaps",
+);
+assert(
+  resolveLighthouseReplyTo("team@trymilon.com") === LIGHTHOUSE_REPLY_TO,
   "already locked stays",
 );
 assert(
   resolveLighthouseReplyTo("  amstel.west@gmail.com  ") === "amstel.west@gmail.com",
-  "non-ZA mailbox kept",
+  "non-retired mailbox kept",
 );
 
 const both = watchVideoCtaBrief([ACCOUNTANT_TEASER_PRACTICE, ACCOUNTANT_TEASER_OWNER]);
@@ -153,8 +161,9 @@ assert(fns.includes("Day 17: unusual-question bait"), "SYSTEM_RULES day17");
 assert(fns.includes("Day 28: capacity close"), "SYSTEM_RULES day28");
 assert(fns.includes("Prefer under 120 words"), "SYSTEM_RULES length");
 assert(fns.includes("from: `${senderName} <${fromAddr}>`"), "From stays RESEND_FROM_EMAIL");
-assert(fns.includes("Reply-to is hello@milonfinance.com"), "SYSTEM_RULES reply-to is hello@");
-assert(!fns.includes("From and reply-to are team@milonfinance.com"), "SYSTEM_RULES no longer conflates From/reply-to");
+assert(fns.includes("From and reply-to are team@trymilon.com"), "SYSTEM_RULES mailbox is team@trymilon.com");
+assert(!fns.includes("Reply-to is hello@milonfinance.com"), "SYSTEM_RULES no longer uses hello@milonfinance.com");
+assert(!fns.includes("From and reply-to are team@milonfinance.com"), "SYSTEM_RULES no longer uses team@milonfinance.com");
 assert(fns.includes("reply_to: replyTo"), "Resend payload always sets reply_to");
 assert(
   !/reply_to:\s*["']hello@milon\.co\.za["']/.test(fns),
@@ -198,16 +207,26 @@ const replyToMigration = readFileSync(
   resolve("supabase/migrations/20260910230000_lighthouse_reply_to_hello.sql"),
   "utf8",
 );
-assert(replyToMigration.includes("hello@milonfinance.com"), "reply_to remaps to hello@");
-assert(replyToMigration.includes("team@milonfinance.com"), "reply_to remaps team@");
-assert(replyToMigration.includes("milon.co.za"), "reply_to remaps *@milon.co.za");
+assert(replyToMigration.includes("hello@milonfinance.com"), "historical reply_to remaps to hello@");
+assert(replyToMigration.includes("team@milonfinance.com"), "historical reply_to remaps team@");
+assert(replyToMigration.includes("milon.co.za"), "historical reply_to remaps *@milon.co.za");
 assert(replyToMigration.includes("ON CONFLICT"), "hello@ reply_to upsert is idempotent");
 assert(!/jsonb_set\([^)]*from/i.test(replyToMigration), "reply_to migration does not rewrite From");
+
+const trymilonMigration = readFileSync(
+  resolve("supabase/migrations/20260912170000_lighthouse_reply_to_trymilon.sql"),
+  "utf8",
+);
+assert(trymilonMigration.includes("team@trymilon.com"), "trymilon migration writes team@trymilon.com");
+assert(trymilonMigration.includes("milon.co.za"), "trymilon migration remaps *@milon.co.za");
+assert(trymilonMigration.includes("milonfinance.com"), "trymilon migration remaps *@milonfinance.com");
+assert(trymilonMigration.includes("ON CONFLICT"), "trymilon reply_to upsert is idempotent");
+assert(!/jsonb_set\([^)]*from/i.test(trymilonMigration), "trymilon migration does not rewrite From");
 
 const panel = readFileSync(resolve("src/components/lighthouse-panel.tsx"), "utf8");
 assert(panel.includes("Day 4 · both teaser videos"), "ops drawer shows accountant v3 day 4");
 assert(panel.includes("Day 28 · capacity close"), "ops drawer shows accountant v3 day 28");
-assert(panel.includes("Reply-to — hello@milonfinance.com"), "ops drawer placeholder is hello@");
+assert(panel.includes("Reply-to — team@trymilon.com"), "ops drawer placeholder is team@trymilon.com");
 assert(panel.includes("Load golden"), "accountant primary action is Load golden");
 assert(panel.includes("Rewrite"), "accountant Claude path is Rewrite");
 

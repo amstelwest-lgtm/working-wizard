@@ -34,7 +34,7 @@ try {
 
   process.env.LIGHTHOUSE_DRY_RUN = "true";
   const dryList = lighthouseSendAllowlist();
-  assert(dryList !== null && dryList.length === 4, "dry-run → four defaults");
+  assert(dryList !== null && dryList.length === 5, "dry-run → five defaults");
   assert(
     dryList!.every((e) =>
       (LIGHTHOUSE_DEFAULT_DRY_RUN_INBOXES as readonly string[]).includes(e),
@@ -44,6 +44,7 @@ try {
   assert(lighthouseSendAllowlistEnforced(), "dry-run → enforced");
   assertLighthouseSendRecipientAllowed("amstel.west@gmail.com");
   assertLighthouseSendRecipientAllowed("  TEAM@milon.co.za  ");
+  assertLighthouseSendRecipientAllowed("team@trymilon.com");
   let blocked = false;
   try {
     assertLighthouseSendRecipientAllowed("partner@accountingfirm.co.za");

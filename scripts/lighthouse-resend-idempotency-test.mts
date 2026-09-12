@@ -17,7 +17,7 @@ function payload(overrides: { subject?: string; text?: string } = {}): string {
   return JSON.stringify({
     from: "The Milōn Team <noreply@milon.co.za>",
     to: ["theoamstel123@gmail.com"],
-    reply_to: "hello@milonfinance.com",
+    reply_to: "team@trymilon.com",
     subject: overrides.subject ?? "Day 0 note",
     text: overrides.text ?? "First draft body",
     tags: [
