@@ -48,6 +48,7 @@ import {
 } from "@/lib/user-roles";
 import { PageHeader, SectionCard } from "@/components/primitives";
 import { InviteAccountantCard } from "@/components/invite-accountant-card";
+import { pickOwnedSettingsClient, readStoredOwnerClientId } from "@/lib/owner-workspaces";
 
 export const Route = createFileRoute("/_authenticated/settings/")({
   component: SettingsPage,
@@ -116,7 +117,7 @@ function SettingsPage() {
         .limit(10)
         .then(({ data }) => {
           const rows = (data ?? []) as Array<{ id?: string; market?: unknown; firm_id?: string | null }>;
-          const preferred = rows.find((r) => !r.firm_id) ?? rows[0] ?? null;
+          const preferred = pickOwnedSettingsClient(rows, readStoredOwnerClientId(user.id));
           setOwnerClientId(preferred?.id ?? null);
           setMarketBlob(preferred?.market ?? null);
         });
