@@ -31,6 +31,7 @@ import {
   canShowIndustryMedian,
   coerceMarketSelection,
   formatDate,
+  formatMoneyCompact,
   formatNumber,
   industryBenchmarkCaption,
   industryBenchmarkShortLabel,
@@ -91,6 +92,7 @@ import {
   periodMonthsOf,
 } from "@/lib/ratios";
 import { healthFromRatioInputs, healthMapFromRatios, scoreRatio } from "@/lib/health-score";
+import { ratioActualLine } from "@/lib/ratio-actuals";
 import { effectiveCashRunwayWeeks, type SavedCashflowLike } from "@/lib/cash-runway";
 import {
   FinancialInputsContext,
@@ -4804,6 +4806,12 @@ function Index() {
                                       : health >= 40
                                         ? "text-amber-500/70"
                                         : "text-rose-500/70";
+                                  const actual = ratioActualLine(k, v, (amt) =>
+                                    formatMoneyCompact(amt, boardMarket),
+                                  );
+                                  const actualLine =
+                                    actual.calculation ??
+                                    (actual.missing.length ? `Need: ${actual.missing.join(", ")}` : null);
                                   return (
                                     <tr
                                       key={k}
@@ -4818,6 +4826,11 @@ function Index() {
                                         <div className="mt-0.5 font-mono text-[10px] text-slate-600 dark:text-slate-500">
                                           {localizeCopy(meta.techName, boardMarket)}
                                         </div>
+                                        {actualLine ? (
+                                          <div className="mt-0.5 font-mono text-[10px] font-semibold tabular-nums leading-snug text-slate-700 dark:text-slate-300">
+                                            {actualLine}
+                                          </div>
+                                        ) : null}
                                         <div
                                           className={`text-xs font-semibold tabular-nums mt-0.5 ${hCls}`}
                                         >
@@ -5156,6 +5169,19 @@ function Index() {
                       {localizeCopy(RATIO_META[openRatio].formula, boardMarket)}
                     </DialogDescription>
                   </DialogHeader>
+                  {(() => {
+                    const actual = ratioActualLine(openRatio, v, (amt) =>
+                      formatMoneyCompact(amt, boardMarket),
+                    );
+                    const line =
+                      actual.calculation ??
+                      (actual.missing.length ? `Need: ${actual.missing.join(", ")}` : null);
+                    return line ? (
+                      <p className="rounded-md border border-slate-700/50 bg-slate-950/50 px-3 py-2 font-mono text-[11px] font-semibold tabular-nums leading-snug text-slate-200">
+                        {line}
+                      </p>
+                    ) : null;
+                  })()}
                   <div className="rounded-lg border border-slate-700/40 bg-slate-950/60 p-4">
                     <div className="flex items-center justify-between">
                       <span className="text-xs uppercase tracking-wider text-slate-400">
