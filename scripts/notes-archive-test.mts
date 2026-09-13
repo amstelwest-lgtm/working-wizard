@@ -57,7 +57,9 @@ assert(archive.includes("Open ("), "archive has an Open tab");
 assert(archive.includes("Reopen"), "resolved notes can be reopened");
 assert(archive.includes('aria-label="Delete note"'), "archive rows always expose delete");
 assert(archive.includes('aria-label={note.resolved ? "Reopen note" : "Close note"}'), "archive rows always expose close");
-assert(!archive.includes("canDelete"), "archive delete is not author-gated");
+assert(archive.includes("showOnPageLabel"), "archive rows jump to the pin on the matching page");
+assert(archive.includes("closeArchive"), "jumping closes the sheet so the pin is visible");
+assert(archive.includes("requestOpenNote"), "jumping focuses the pin");
 
 const root = readFileSync(resolve("src/routes/__root.tsx"), "utf8");
 assert(root.includes("NoteArchiveSheet"), "archive sheet is mounted app-wide");

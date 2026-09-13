@@ -56,7 +56,7 @@ assert(clientSrc.includes('lazyPanel(() => import("@/components/action-plan")'),
 assert(clientSrc.includes('<TabErrorBoundary label="Action Plan">'), "client board wraps Action Plan");
 assert(!clientSrc.includes('label: "Staff tasks"'), "accountant portal no longer has a Staff tasks tab");
 assert(!clientSrc.includes("TasksPanel"), "accountant portal no longer mounts the staff tasks panel");
-assert(clientSrc.includes('if (tab === "tasks") return "plan"'), "old staff-tasks links open Action Plan");
+assert(clientSrc.includes("accountantWorkspaceTab"), "owner and staff-tasks tab IDs open the matching studio tab");
 assert(
   !clientSrc.includes('["today", "cash", "budget", "next"].includes(activeTab)'),
   "accountant portal view-mode toggle is not gated by owner-board tabs",

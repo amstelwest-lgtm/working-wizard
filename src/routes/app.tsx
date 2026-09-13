@@ -5177,6 +5177,7 @@ function Index() {
           <NoteLayer
             clientId={effectiveClientId}
             tab={activeTab}
+            workspace="owner"
             clientName={actingClientName ?? undefined}
             authorName={
               (user?.user_metadata as { full_name?: string; name?: string } | null)?.full_name ??
@@ -5184,6 +5185,7 @@ function Index() {
               user?.email ??
               "User"
             }
+            onNeedTab={(next) => setActiveTab(next)}
           />
 
           {/* Admin Dashboard Dialog — firm_admin only */}

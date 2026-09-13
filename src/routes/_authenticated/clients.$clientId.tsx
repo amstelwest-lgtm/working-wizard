@@ -91,6 +91,7 @@ import {
 import { profileIndustryLabel } from "@/lib/profile-signals";
 import { NoteLayer } from "@/components/note-layer";
 import { useNotes } from "@/contexts/notes";
+import { accountantWorkspaceTab } from "@/lib/notes-tabs";
 import { useTrack } from "@/hooks/use-track";
 import { QboConnectCard } from "@/components/qbo-connect";
 import { effectiveCashRunwayWeeks, runwayWeeksFromCashflow } from "@/lib/cash-runway";
@@ -473,7 +474,8 @@ function FirstDataChoice({
 
 function resolveAccountantTab(tab: string | undefined): ActiveTab | null {
   if (!tab) return null;
-  if (tab === "tasks") return "plan";
+  const mapped = accountantWorkspaceTab(tab);
+  if (mapped && ACCOUNTANT_TABS.includes(mapped as ActiveTab)) return mapped as ActiveTab;
   return ACCOUNTANT_TABS.includes(tab as ActiveTab) ? (tab as ActiveTab) : null;
 }
 
@@ -2656,6 +2658,7 @@ function ClientView() {
             <NoteLayer
               clientId={client.id}
               tab={activeTab}
+              workspace="accountant"
               clientName={client.name}
               authorName={
                 (user?.user_metadata as { full_name?: string; name?: string } | null)?.full_name ??
