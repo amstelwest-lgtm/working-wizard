@@ -878,8 +878,8 @@ function ClientView() {
     },
     [clientId, draftWorkflow],
   );
-  // Instant fallback so the briefing is never empty; Claude upgrades it when
-  // the cached or newly drafted line arrives. Hash-stable clients hit cache.
+  // Instant fallback so the briefing is never empty; the drafted line
+  // upgrades it when the cached or newly generated text arrives.
   useEffect(() => {
     if (!client || loading || !hasFigures) return;
     setWorkflow((prev) => {

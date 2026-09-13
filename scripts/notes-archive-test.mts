@@ -64,7 +64,7 @@ assert(root.includes("NoteArchiveSheet"), "archive sheet is mounted app-wide");
 
 const client = readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8");
 assert(client.includes("openArchive"), "Open queries opens the notes archive");
-assert(client.includes("meta-notes"), "Open queries is a clickable control");
+assert(client.includes("onOpenQueries={() => openArchive"), "Open queries is a clickable control");
 
 const fab = readFileSync(resolve("src/components/floating-note-button.tsx"), "utf8");
 assert(fab.includes("Open notes archive"), "pin button cluster includes the archive");
