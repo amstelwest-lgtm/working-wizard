@@ -15,7 +15,7 @@ export function ownerHasPreloadedFigures(opts: {
 
 /**
  * Invited owner whose practice already loaded figures — skip profile funnel,
- * bring-in-numbers, and the seven-step board tour; land on the scored Health tab.
+ * bring-in-numbers, and the board tour; land on the scored Health tab.
  */
 export function isInvitedOwnerWithFigures(opts: {
   isInvitedOwner: boolean;

@@ -8,7 +8,7 @@ export function FloatingNoteButton() {
   const resolvedCount = notes.filter((n) => n.resolved).length;
 
   return (
-    <div className="fixed bottom-20 right-4 z-50 flex flex-col items-end gap-2">
+    <div id="wizard-notes-pin" className="fixed bottom-20 right-4 z-50 flex flex-col items-end gap-2">
       {surface?.clientId && notes.length > 0 && (
         <button
           type="button"
