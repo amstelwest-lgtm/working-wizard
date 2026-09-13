@@ -3,7 +3,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState, type Ref } from "react";
-import { Info } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { isMissingBrainRelation, type ClientBrainQuestion } from "@/lib/client-brain";
@@ -57,8 +57,7 @@ function MoneyInput({
       value={value}
       placeholder={placeholder}
       onChange={(e) => onChange(e.target.value)}
-      onClick={(e) => e.stopPropagation()}
-      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-800 outline-none ring-[#d4a550]/40 focus:border-[#d4a550] focus:ring-2 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+      className="w-full rounded-lg border border-amber-900/15 bg-white/80 px-3 py-1.5 text-sm text-slate-800 outline-none ring-[#d4a550]/40 focus:border-[#d4a550] focus:ring-2 dark:border-white/10 dark:bg-slate-950/60 dark:text-slate-100"
     />
   );
 }
@@ -99,6 +98,7 @@ export function OwnerBrainDrip({
   const [weeklyCos, setWeeklyCos] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
   const firstFieldRef = useRef<HTMLInputElement | HTMLTextAreaElement | HTMLButtonElement | null>(
     null,
   );
@@ -185,12 +185,19 @@ export function OwnerBrainDrip({
     setWeeklyRev(week?.revenue ? String(week.revenue) : "");
     setWeeklyCos(week?.costOfSales ? String(week.costOfSales) : "");
     setError(null);
+    setOpen(false);
     // Reset only when the dripped question changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [drip?.key]);
 
-  const focusFirst = useCallback(() => {
-    firstFieldRef.current?.focus();
+  useEffect(() => {
+    if (!open) return;
+    const id = window.requestAnimationFrame(() => firstFieldRef.current?.focus());
+    return () => window.cancelAnimationFrame(id);
+  }, [open, drip?.key]);
+
+  const toggleOpen = useCallback(() => {
+    setOpen((prev) => !prev);
   }, []);
 
   const markStoredAnswered = useCallback(
@@ -309,25 +316,27 @@ export function OwnerBrainDrip({
   if (!drip) return null;
 
   return (
-    <div
-      id="owner-brain-drip"
-      role="group"
-      tabIndex={0}
-      onClick={focusFirst}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" && (e.target as HTMLElement).id === "owner-brain-drip") {
-          focusFirst();
-        }
-      }}
-      className="flex cursor-pointer flex-col gap-2.5 rounded-xl border border-[#d4a550]/30 bg-[#d4a550]/[0.06] px-3.5 py-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-[#d4a550]/50"
-    >
-      <div className="flex flex-col gap-2.5 sm:flex-row sm:items-start">
-        <div className="min-w-0 flex-1 space-y-2">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#b8860b] dark:text-[#d4a550]">
-            One question
-          </p>
-          <p className="font-medium text-slate-800 dark:text-slate-100">{fluentPrompt}</p>
+    <div id="owner-brain-drip" className="owner-brain-drip">
+      <button
+        type="button"
+        className="owner-brain-drip__hit"
+        aria-expanded={open}
+        aria-controls="owner-brain-drip-panel"
+        onClick={toggleOpen}
+      >
+        <span className="owner-brain-drip__copy">
+          <span className="owner-brain-drip__kicker">One question</span>
+          <span className="owner-brain-drip__q">{fluentPrompt}</span>
+          <span className="owner-brain-drip__note">{DRIP_ANSWER_HELP}</span>
+        </span>
+        <ChevronDown
+          className={`owner-brain-drip__chevron h-4 w-4 ${open ? "is-open" : ""}`}
+          aria-hidden
+        />
+      </button>
 
+      {open ? (
+        <div id="owner-brain-drip-panel" className="owner-brain-drip__panel space-y-2">
           {isProfile || isOptIn ? (
             <div className="flex flex-col gap-1.5">
               {(isOptIn ? OPT_IN_CHOICES : profileChoices).map((opt, i) => (
@@ -336,10 +345,7 @@ export function OwnerBrainDrip({
                   type="button"
                   ref={i === 0 ? (el) => { firstFieldRef.current = el; } : undefined}
                   className={choiceClass(choice === opt.id)}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setChoice(opt.id);
-                  }}
+                  onClick={() => setChoice(opt.id)}
                 >
                   {opt.label}
                 </button>
@@ -354,8 +360,7 @@ export function OwnerBrainDrip({
               rows={3}
               placeholder="e.g. Retail shop&#10;Wholesale deliveries"
               onChange={(e) => setText(e.target.value)}
-              onClick={(e) => e.stopPropagation()}
-              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none ring-[#d4a550]/40 focus:border-[#d4a550] focus:ring-2 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+              className="w-full rounded-lg border border-amber-900/15 bg-white/80 px-3 py-2 text-sm text-slate-800 outline-none ring-[#d4a550]/40 focus:border-[#d4a550] focus:ring-2 dark:border-white/10 dark:bg-slate-950/60 dark:text-slate-100"
             />
           ) : null}
 
@@ -363,7 +368,9 @@ export function OwnerBrainDrip({
             <div className="space-y-1.5">
               {named.map((line, i) => (
                 <label key={line.id} className="block">
-                  <span className="mb-0.5 block text-[11px] text-slate-500">{line.name}</span>
+                  <span className="mb-0.5 block text-[11px] text-amber-950/55 dark:text-amber-100/50">
+                    {line.name}
+                  </span>
                   <MoneyInput
                     inputRef={i === 0 ? firstFieldRef : undefined}
                     value={lineValues[line.id] ?? ""}
@@ -380,7 +387,9 @@ export function OwnerBrainDrip({
           {isWeekly ? (
             <div className="grid grid-cols-2 gap-2">
               <label className="block">
-                <span className="mb-0.5 block text-[11px] text-slate-500">This week’s revenue</span>
+                <span className="mb-0.5 block text-[11px] text-amber-950/55 dark:text-amber-100/50">
+                  This week’s revenue
+                </span>
                 <MoneyInput
                   inputRef={firstFieldRef}
                   value={weeklyRev}
@@ -389,7 +398,9 @@ export function OwnerBrainDrip({
                 />
               </label>
               <label className="block">
-                <span className="mb-0.5 block text-[11px] text-slate-500">Cost of sales</span>
+                <span className="mb-0.5 block text-[11px] text-amber-950/55 dark:text-amber-100/50">
+                  Cost of sales
+                </span>
                 <MoneyInput value={weeklyCos} onChange={setWeeklyCos} placeholder="0" />
               </label>
             </div>
@@ -402,40 +413,24 @@ export function OwnerBrainDrip({
               rows={3}
               placeholder="Type your answer"
               onChange={(e) => setText(e.target.value)}
-              onClick={(e) => e.stopPropagation()}
-              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none ring-[#d4a550]/40 focus:border-[#d4a550] focus:ring-2 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+              className="w-full rounded-lg border border-amber-900/15 bg-white/80 px-3 py-2 text-sm text-slate-800 outline-none ring-[#d4a550]/40 focus:border-[#d4a550] focus:ring-2 dark:border-white/10 dark:bg-slate-950/60 dark:text-slate-100"
             />
           ) : null}
 
-          {isHistory && onAddPastPeriod ? (
-            <div onClick={(e) => e.stopPropagation()}>
-              <AddPastPeriodLink onOpen={onAddPastPeriod} />
-            </div>
-          ) : null}
+          {isHistory && onAddPastPeriod ? <AddPastPeriodLink onOpen={onAddPastPeriod} /> : null}
 
           {error ? <p className="text-xs text-red-600 dark:text-red-400">{error}</p> : null}
 
           <button
             type="button"
             disabled={saving}
-            onClick={(e) => {
-              e.stopPropagation();
-              void submit();
-            }}
-            className="inline-flex items-center justify-center rounded-lg bg-[#b7872a] px-3.5 py-1.5 text-sm font-semibold text-white transition hover:bg-[#d4a550] disabled:opacity-60"
+            onClick={() => void submit()}
+            className="owner-brain-drip__answer"
           >
             {saving ? "Saving…" : "Answer question"}
           </button>
         </div>
-
-        <aside
-          className="flex shrink-0 items-start gap-1.5 rounded-lg border border-[#d4a550]/25 bg-[#d4a550]/10 px-2.5 py-2 text-[11px] leading-relaxed text-slate-600 sm:max-w-[13.5rem] dark:text-slate-300"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#b8860b] dark:text-[#d4a550]" aria-hidden />
-          <span>{DRIP_ANSWER_HELP}</span>
-        </aside>
-      </div>
+      ) : null}
     </div>
   );
 }

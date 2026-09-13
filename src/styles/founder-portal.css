@@ -279,3 +279,142 @@
     gap: 1.5rem;
   }
 }
+
+/* Compact Health-tab drip — brushed gold plate, expands on click. */
+.owner-brain-drip {
+  position: relative;
+  overflow: hidden;
+  border-radius: 14px;
+  border: 1px solid rgba(183, 135, 42, 0.42);
+  background:
+    radial-gradient(120% 160% at 100% -10%, rgba(241, 210, 139, 0.42), transparent 46%),
+    linear-gradient(180deg, #fffef8 0%, #f7ecd2 52%, #efe0b6 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.88),
+    inset 0 -1px 0 rgba(140, 98, 18, 0.14),
+    0 8px 22px rgba(109, 79, 22, 0.1);
+}
+
+.owner-brain-drip::before {
+  content: "";
+  pointer-events: none;
+  position: absolute;
+  inset: 0 0 auto;
+  height: 2px;
+  background: linear-gradient(90deg, #b7872a, #f1d28b 46%, transparent);
+}
+
+.dark .owner-brain-drip {
+  border-color: rgba(212, 165, 80, 0.36);
+  background:
+    radial-gradient(120% 160% at 100% -10%, rgba(212, 165, 80, 0.22), transparent 46%),
+    linear-gradient(180deg, #1c1910 0%, #141820 58%, #0d121c 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 236, 180, 0.16),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.35),
+    0 10px 26px rgba(0, 0, 0, 0.32);
+}
+
+.owner-brain-drip__hit {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 12px 10px;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  color: inherit;
+}
+
+.owner-brain-drip__hit:focus-visible {
+  outline: 2px solid rgba(183, 135, 42, 0.55);
+  outline-offset: -2px;
+}
+
+.owner-brain-drip__copy {
+  min-width: 0;
+  flex: 1;
+}
+
+.owner-brain-drip__kicker {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: #9a7014;
+}
+
+.dark .owner-brain-drip__kicker {
+  color: #e1b85e;
+}
+
+.owner-brain-drip__q {
+  display: block;
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: #3f2d0a;
+}
+
+.dark .owner-brain-drip__q {
+  color: #f4e7c2;
+}
+
+.owner-brain-drip__note {
+  display: block;
+  margin-top: 3px;
+  font-size: 10.5px;
+  line-height: 1.4;
+  color: rgba(88, 64, 18, 0.72);
+}
+
+.dark .owner-brain-drip__note {
+  color: rgba(232, 214, 164, 0.68);
+}
+
+.owner-brain-drip__chevron {
+  flex-shrink: 0;
+  margin-top: 10px;
+  color: #b7872a;
+  transition: transform 0.2s ease;
+}
+
+.owner-brain-drip__chevron.is-open {
+  transform: rotate(180deg);
+}
+
+.dark .owner-brain-drip__chevron {
+  color: #e1b85e;
+}
+
+.owner-brain-drip__panel {
+  padding: 0 12px 12px;
+}
+
+.owner-brain-drip__answer {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 10px;
+  padding: 7px 14px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #1b1300;
+  background: linear-gradient(180deg, #f3d98a 0%, #d4a550 46%, #b7872a 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.45),
+    0 4px 14px rgba(183, 135, 42, 0.28);
+}
+
+.owner-brain-drip__answer:hover:not(:disabled) {
+  filter: brightness(1.05);
+}
+
+.owner-brain-drip__answer:disabled {
+  opacity: 0.55;
+}
