@@ -10,14 +10,13 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import {
   accountantInviteLandingPath,
   assertAccountantLinkPurpose,
+  claimsDisplayName,
+  claimsEmailOf,
   templateAccountantInviteDraft,
 } from "@/lib/accountant-invite";
-import {
-  acceptAccountantInviteForUser,
-  signUpInvitedAccountant,
-} from "@/lib/accountant-invite.server";
 import { invitePasteText, inviteSiteUrl, sendInviteViaResend } from "@/lib/client-invite-email";
 import { resolveInviteToClientId } from "@/lib/invite-tokens.resolve";
+import { withDeadline } from "@/lib/with-deadline";
 
 const emailSchema = z.string().trim().email().max(200);
 
@@ -28,12 +27,24 @@ type AuthedRpc = {
   ) => Promise<{ data: unknown; error: { message: string; code?: string } | null }>;
 };
 
-function claimsEmailOf(claims: unknown): string | null {
-  if (claims && typeof claims === "object" && "email" in claims) {
-    const email = (claims as { email?: unknown }).email;
-    return typeof email === "string" && email.includes("@") ? email : null;
+const MINT_DEADLINE_MS = 8_000;
+const PROFILE_DEADLINE_MS = 2_500;
+
+async function ownerDisplayName(ownerUserId: string, claims: unknown): Promise<string> {
+  try {
+    const { data } = await withDeadline(
+      supabaseAdmin.from("profiles").select("full_name, email").eq("id", ownerUserId).maybeSingle(),
+      PROFILE_DEADLINE_MS,
+      "Looking up your profile",
+    );
+    const name = String((data as { full_name?: string | null } | null)?.full_name ?? "").trim();
+    const email = String((data as { email?: string | null } | null)?.email ?? "").trim();
+    if (name) return name;
+    if (email) return email;
+  } catch {
+    /* JWT claims are enough for the greeting */
   }
-  return null;
+  return claimsDisplayName(claims);
 }
 
 export async function mintAccountantInviteToken(opts: {
@@ -114,12 +125,16 @@ export const inviteAccountant = createServerFn({ method: "POST" })
     z.object({ clientId: z.string().uuid(), toEmail: emailSchema }).parse(input),
   )
   .handler(async ({ data, context }): Promise<AccountantInviteMintResult> => {
-    const token = await mintAccountantInviteToken({
-      clientId: data.clientId,
-      userId: context.userId,
-      email: data.toEmail,
-      supabase: context.supabase as unknown as AuthedRpc,
-    });
+    const token = await withDeadline(
+      mintAccountantInviteToken({
+        clientId: data.clientId,
+        userId: context.userId,
+        email: data.toEmail,
+        supabase: context.supabase as unknown as AuthedRpc,
+      }),
+      MINT_DEADLINE_MS,
+      "Creating the invite",
+    );
     const url = `${inviteSiteUrl()}${accountantInviteLandingPath(token)}`;
 
     const { data: client, error } = await supabaseAdmin
@@ -130,15 +145,7 @@ export const inviteAccountant = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     if (!client) throw new Error("Client not found");
 
-    let ownerName = "";
-    try {
-      const { data: owner } = await supabaseAdmin.auth.admin.getUserById(client.owner_user_id);
-      ownerName =
-        (owner.user?.user_metadata?.full_name as string | undefined)?.trim() ||
-        (owner.user?.email ?? "").trim();
-    } catch {
-      ownerName = claimsEmailOf(context.claims) ?? "";
-    }
+    const ownerName = await ownerDisplayName(client.owner_user_id, context.claims);
 
     const draft = templateAccountantInviteDraft({
       clientName: client.name,
@@ -147,13 +154,21 @@ export const inviteAccountant = createServerFn({ method: "POST" })
     });
 
     const toEmail = data.toEmail.trim().toLowerCase();
-    const sent = await sendInviteViaResend({
-      to: toEmail,
-      subject: draft.subject,
-      body: draft.body,
-      replyTo: claimsEmailOf(context.claims),
-      idempotencyKey: `accountant-invite-${client.id}-${token.slice(0, 16)}`,
-    });
+    let sent: Awaited<ReturnType<typeof sendInviteViaResend>>;
+    try {
+      sent = await sendInviteViaResend({
+        to: toEmail,
+        subject: draft.subject,
+        body: draft.body,
+        replyTo: claimsEmailOf(context.claims),
+        idempotencyKey: `accountant-invite-${client.id}-${token.slice(0, 16)}`,
+      });
+    } catch (err) {
+      sent = {
+        ok: false,
+        error: err instanceof Error ? err.message : "Email send failed",
+      };
+    }
 
     return {
       token,
@@ -247,6 +262,7 @@ export const acceptAccountantInvite = createServerFn({ method: "POST" })
       .parse(input),
   )
   .handler(async ({ data, context }) => {
+    const { acceptAccountantInviteForUser } = await import("@/lib/accountant-invite.server");
     return acceptAccountantInviteForUser({
       userId: context.userId,
       token: data.token,
@@ -267,6 +283,7 @@ export const signUpAccountantInvite = createServerFn({ method: "POST" })
       .parse(input),
   )
   .handler(async ({ data }) => {
+    const { signUpInvitedAccountant } = await import("@/lib/accountant-invite.server");
     return signUpInvitedAccountant({
       email: data.email,
       password: data.password,

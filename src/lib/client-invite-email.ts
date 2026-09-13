@@ -107,6 +107,9 @@ export function inviteEmailHtml(body: string): string {
   </body></html>`;
 }
 
+/** Keep below typical Cloudflare/Vercel 504 windows so a hung send cannot take the page with it. */
+export const RESEND_SEND_TIMEOUT_MS = 7_000;
+
 export async function sendInviteViaResend(opts: {
   to: string;
   subject: string;
@@ -121,26 +124,36 @@ export async function sendInviteViaResend(opts: {
     : fromRaw.trim();
   if (!apiKey) return { ok: false, error: "RESEND_API_KEY not configured" };
 
-  const res = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-      "Idempotency-Key": opts.idempotencyKey.slice(0, 256),
-    },
-    body: JSON.stringify({
-      from: `MILŌN <${fromAddr}>`,
-      to: [opts.to],
-      ...(opts.replyTo ? { reply_to: opts.replyTo } : {}),
-      subject: opts.subject,
-      html: inviteEmailHtml(opts.body),
-      text: opts.body,
-    }),
-  });
+  try {
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        "Idempotency-Key": opts.idempotencyKey.slice(0, 256),
+      },
+      body: JSON.stringify({
+        from: `MILŌN <${fromAddr}>`,
+        to: [opts.to],
+        ...(opts.replyTo ? { reply_to: opts.replyTo } : {}),
+        subject: opts.subject,
+        html: inviteEmailHtml(opts.body),
+        text: opts.body,
+      }),
+      signal: AbortSignal.timeout(RESEND_SEND_TIMEOUT_MS),
+    });
 
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    return { ok: false, error: `Resend ${res.status}: ${body.slice(0, 200)}` };
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      return { ok: false, error: `Resend ${res.status}: ${body.slice(0, 200)}` };
+    }
+    return { ok: true };
+  } catch (err) {
+    const name = err instanceof Error ? err.name : "";
+    if (name === "TimeoutError" || name === "AbortError") {
+      return { ok: false, error: "Email send timed out" };
+    }
+    const msg = err instanceof Error ? err.message : String(err);
+    return { ok: false, error: msg.slice(0, 200) || "Email send failed" };
   }
-  return { ok: true };
 }

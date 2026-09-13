@@ -12,10 +12,12 @@ import {
   accountantJoinTokenFromNext,
   assertAccountantLinkPurpose,
   assertOwnerHandoffPurpose,
+  claimsDisplayName,
   defaultPracticeName,
   planAccountantLink,
   templateAccountantInviteDraft,
 } from "../src/lib/accountant-invite";
+import { withDeadline } from "../src/lib/with-deadline";
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
@@ -128,5 +130,28 @@ assert(joinPage.includes("accountantJoin"), "join Google hop carries the invite 
 
 const card = readFileSync(resolve("src/components/invite-accountant-card.tsx"), "utf8");
 assert(card.includes("inviteAccountant"), "owner UI calls mint/send");
+
+const mintFn = readFileSync(resolve("src/lib/accountant-invite.functions.ts"), "utf8");
+assert(!mintFn.includes("getUserById"), "mint path must not call Auth Admin (it hangs past the gateway)");
+assert(mintFn.includes("withDeadline"), "mint is bounded so a hung RPC cannot 504");
+assert(mintFn.includes("ownerDisplayName"), "owner name comes from profiles / JWT, not Auth Admin");
+
+assert(claimsDisplayName({ email: "ana@firm.test" }) === "ana@firm.test", "claims fallback to email");
+assert(
+  claimsDisplayName({ user_metadata: { full_name: "Ana Owner" }, email: "ana@firm.test" }) ===
+    "Ana Owner",
+  "claims prefer full_name",
+);
+assert(claimsDisplayName(null) === "", "empty claims are blank");
+
+const raced = await withDeadline(Promise.resolve("ok"), 50, "probe");
+assert(raced === "ok", "withDeadline resolves the inner value");
+try {
+  await withDeadline(new Promise<string>(() => {}), 20, "probe");
+  throw new Error("withDeadline should reject when the inner promise never settles");
+} catch (err) {
+  const text = err instanceof Error ? err.message : String(err);
+  if (!text.includes("probe timed out")) throw err;
+}
 
 console.log("accountant-invite-test: ok");

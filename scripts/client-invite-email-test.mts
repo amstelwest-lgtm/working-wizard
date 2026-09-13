@@ -2,7 +2,13 @@
  * Owner-invite paste text + template fallback.
  * Run: pnpm exec vite-node --config scripts/vite-test.config.ts scripts/client-invite-email-test.mts
  */
-import { invitePasteText, templateInviteDraft } from "../src/lib/client-invite-email";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import {
+  invitePasteText,
+  RESEND_SEND_TIMEOUT_MS,
+  templateInviteDraft,
+} from "../src/lib/client-invite-email";
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
@@ -28,5 +34,10 @@ assert(draft.body.includes("West & Co"), "signed with firm");
 const paste = invitePasteText(draft.subject, draft.body);
 assert(paste.startsWith("Subject: "), "paste starts with Subject");
 assert(paste.includes(url), "paste still has URL");
+
+assert(RESEND_SEND_TIMEOUT_MS <= 8_000, "Resend abort stays inside the gateway window");
+const sendSrc = readFileSync(resolve("src/lib/client-invite-email.ts"), "utf8");
+assert(sendSrc.includes("AbortSignal.timeout"), "Resend fetch is abortable");
+assert(sendSrc.includes("TimeoutError") && sendSrc.includes("AbortError"), "timeout is returned, not thrown");
 
 console.log("client-invite-email-test: ok");
