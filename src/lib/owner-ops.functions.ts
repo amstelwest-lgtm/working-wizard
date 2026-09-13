@@ -19,6 +19,7 @@ import {
   type LooseAdmin,
 } from "@/lib/owner-ops.guard";
 import { lighthouseSendAllowlistEnforced } from "@/lib/lighthouse-send-allowlist";
+import { stripeConfigured, stripePublishableConfigured } from "@/lib/stripe.server";
 
 export { OPS_UNLOCK_KEY } from "@/lib/owner-ops.guard";
 
@@ -81,6 +82,8 @@ export const getOwnerOpsEnvStatus = createServerFn({ method: "GET" })
       resend: Boolean(process.env.RESEND_API_KEY),
       resendWebhook: Boolean(process.env.RESEND_WEBHOOK_SECRET),
       siteUrl: Boolean(process.env.SITE_URL || process.env.VITE_APP_URL),
+      stripeSecret: stripeConfigured(),
+      stripePublishable: stripePublishableConfigured(),
     };
   });
 
@@ -242,6 +245,10 @@ export type OpsDashboard = {
     title: string;
     blurb: string;
     phases: { id: string; label: string; status: "planned" | "next" | "live" }[];
+  };
+  stripe: {
+    secretPresent: boolean;
+    publishablePresent: boolean;
   };
   migrationHint: string | null;
 };
@@ -421,6 +428,10 @@ export const getOwnerOpsDashboard = createServerFn({ method: "GET" })
           { id: "scoring", label: "Fit scoring (accountant vs owner)", status: "planned" },
           { id: "inbox", label: "Reply assist (email correspondence)", status: "planned" },
         ],
+      },
+      stripe: {
+        secretPresent: stripeConfigured(),
+        publishablePresent: stripePublishableConfigured(),
       },
       migrationHint,
     };

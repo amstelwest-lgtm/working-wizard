@@ -23,7 +23,10 @@ import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as TTokenRouteImport } from './routes/t.$token'
 import { Route as LhUnsubscribeRouteImport } from './routes/lh/unsubscribe'
+import { Route as JoinTokenRouteImport } from './routes/join.$token'
 import { Route as EmailUnsubscribeRouteImport } from './routes/email/unsubscribe'
+import { Route as BillingSuccessRouteImport } from './routes/billing.success'
+import { Route as BillingCancelRouteImport } from './routes/billing.cancel'
 import { Route as AuthVerifiedRouteImport } from './routes/auth_.verified'
 import { Route as AuthCallbackRouteImport } from './routes/auth_.callback'
 import { Route as ApiTaskEngagedRouteImport } from './routes/api/task-engaged'
@@ -31,7 +34,6 @@ import { Route as ApiMetricsDigestRouteImport } from './routes/api/metrics-diges
 import { Route as ApiClientErrorRouteImport } from './routes/api/client-error'
 import { Route as AckTokenRouteImport } from './routes/ack.$token'
 import { Route as AccessTokenRouteImport } from './routes/access.$token'
-import { Route as JoinTokenRouteImport } from './routes/join.$token'
 import { Route as AuthenticatedOpsRouteImport } from './routes/_authenticated/ops'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedSettingsIndexRouteImport } from './routes/_authenticated/settings.index'
@@ -117,9 +119,24 @@ const LhUnsubscribeRoute = LhUnsubscribeRouteImport.update({
   path: '/lh/unsubscribe',
   getParentRoute: () => rootRouteImport,
 } as any)
+const JoinTokenRoute = JoinTokenRouteImport.update({
+  id: '/join/$token',
+  path: '/join/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const EmailUnsubscribeRoute = EmailUnsubscribeRouteImport.update({
   id: '/email/unsubscribe',
   path: '/email/unsubscribe',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BillingSuccessRoute = BillingSuccessRouteImport.update({
+  id: '/billing/success',
+  path: '/billing/success',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BillingCancelRoute = BillingCancelRouteImport.update({
+  id: '/billing/cancel',
+  path: '/billing/cancel',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthVerifiedRoute = AuthVerifiedRouteImport.update({
@@ -155,11 +172,6 @@ const AckTokenRoute = AckTokenRouteImport.update({
 const AccessTokenRoute = AccessTokenRouteImport.update({
   id: '/access/$token',
   path: '/access/$token',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const JoinTokenRoute = JoinTokenRouteImport.update({
-  id: '/join/$token',
-  path: '/join/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedOpsRoute = AuthenticatedOpsRouteImport.update({
@@ -263,14 +275,16 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/ops': typeof AuthenticatedOpsRoute
   '/access/$token': typeof AccessTokenRoute
-  '/join/$token': typeof JoinTokenRoute
   '/ack/$token': typeof AckTokenRoute
   '/api/client-error': typeof ApiClientErrorRoute
   '/api/metrics-digest': typeof ApiMetricsDigestRoute
   '/api/task-engaged': typeof ApiTaskEngagedRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/auth/verified': typeof AuthVerifiedRoute
+  '/billing/cancel': typeof BillingCancelRoute
+  '/billing/success': typeof BillingSuccessRoute
   '/email/unsubscribe': typeof EmailUnsubscribeRoute
+  '/join/$token': typeof JoinTokenRoute
   '/lh/unsubscribe': typeof LhUnsubscribeRoute
   '/t/$token': typeof TTokenRoute
   '/clients/$clientId': typeof AuthenticatedClientsClientIdRoute
@@ -302,14 +316,16 @@ export interface FileRoutesByTo {
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/ops': typeof AuthenticatedOpsRoute
   '/access/$token': typeof AccessTokenRoute
-  '/join/$token': typeof JoinTokenRoute
   '/ack/$token': typeof AckTokenRoute
   '/api/client-error': typeof ApiClientErrorRoute
   '/api/metrics-digest': typeof ApiMetricsDigestRoute
   '/api/task-engaged': typeof ApiTaskEngagedRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/auth/verified': typeof AuthVerifiedRoute
+  '/billing/cancel': typeof BillingCancelRoute
+  '/billing/success': typeof BillingSuccessRoute
   '/email/unsubscribe': typeof EmailUnsubscribeRoute
+  '/join/$token': typeof JoinTokenRoute
   '/lh/unsubscribe': typeof LhUnsubscribeRoute
   '/t/$token': typeof TTokenRoute
   '/clients/$clientId': typeof AuthenticatedClientsClientIdRoute
@@ -343,14 +359,16 @@ export interface FileRoutesById {
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/ops': typeof AuthenticatedOpsRoute
   '/access/$token': typeof AccessTokenRoute
-  '/join/$token': typeof JoinTokenRoute
   '/ack/$token': typeof AckTokenRoute
   '/api/client-error': typeof ApiClientErrorRoute
   '/api/metrics-digest': typeof ApiMetricsDigestRoute
   '/api/task-engaged': typeof ApiTaskEngagedRoute
   '/auth_/callback': typeof AuthCallbackRoute
   '/auth_/verified': typeof AuthVerifiedRoute
+  '/billing/cancel': typeof BillingCancelRoute
+  '/billing/success': typeof BillingSuccessRoute
   '/email/unsubscribe': typeof EmailUnsubscribeRoute
+  '/join/$token': typeof JoinTokenRoute
   '/lh/unsubscribe': typeof LhUnsubscribeRoute
   '/t/$token': typeof TTokenRoute
   '/_authenticated/clients/$clientId': typeof AuthenticatedClientsClientIdRoute
@@ -384,14 +402,16 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/ops'
     | '/access/$token'
-    | '/join/$token'
     | '/ack/$token'
     | '/api/client-error'
     | '/api/metrics-digest'
     | '/api/task-engaged'
     | '/auth/callback'
     | '/auth/verified'
+    | '/billing/cancel'
+    | '/billing/success'
     | '/email/unsubscribe'
+    | '/join/$token'
     | '/lh/unsubscribe'
     | '/t/$token'
     | '/clients/$clientId'
@@ -423,14 +443,16 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/ops'
     | '/access/$token'
-    | '/join/$token'
     | '/ack/$token'
     | '/api/client-error'
     | '/api/metrics-digest'
     | '/api/task-engaged'
     | '/auth/callback'
     | '/auth/verified'
+    | '/billing/cancel'
+    | '/billing/success'
     | '/email/unsubscribe'
+    | '/join/$token'
     | '/lh/unsubscribe'
     | '/t/$token'
     | '/clients/$clientId'
@@ -463,14 +485,16 @@ export interface FileRouteTypes {
     | '/_authenticated/dashboard'
     | '/_authenticated/ops'
     | '/access/$token'
-    | '/join/$token'
     | '/ack/$token'
     | '/api/client-error'
     | '/api/metrics-digest'
     | '/api/task-engaged'
     | '/auth_/callback'
     | '/auth_/verified'
+    | '/billing/cancel'
+    | '/billing/success'
     | '/email/unsubscribe'
+    | '/join/$token'
     | '/lh/unsubscribe'
     | '/t/$token'
     | '/_authenticated/clients/$clientId'
@@ -502,14 +526,16 @@ export interface RootRouteChildren {
   TermsRoute: typeof TermsRoute
   UnsubscribeRoute: typeof UnsubscribeRoute
   AccessTokenRoute: typeof AccessTokenRoute
-  JoinTokenRoute: typeof JoinTokenRoute
   AckTokenRoute: typeof AckTokenRoute
   ApiClientErrorRoute: typeof ApiClientErrorRoute
   ApiMetricsDigestRoute: typeof ApiMetricsDigestRoute
   ApiTaskEngagedRoute: typeof ApiTaskEngagedRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
   AuthVerifiedRoute: typeof AuthVerifiedRoute
+  BillingCancelRoute: typeof BillingCancelRoute
+  BillingSuccessRoute: typeof BillingSuccessRoute
   EmailUnsubscribeRoute: typeof EmailUnsubscribeRoute
+  JoinTokenRoute: typeof JoinTokenRoute
   LhUnsubscribeRoute: typeof LhUnsubscribeRoute
   TTokenRoute: typeof TTokenRoute
   ApiQboCallbackRoute: typeof ApiQboCallbackRoute
@@ -620,11 +646,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LhUnsubscribeRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/join/$token': {
+      id: '/join/$token'
+      path: '/join/$token'
+      fullPath: '/join/$token'
+      preLoaderRoute: typeof JoinTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/email/unsubscribe': {
       id: '/email/unsubscribe'
       path: '/email/unsubscribe'
       fullPath: '/email/unsubscribe'
       preLoaderRoute: typeof EmailUnsubscribeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/billing/success': {
+      id: '/billing/success'
+      path: '/billing/success'
+      fullPath: '/billing/success'
+      preLoaderRoute: typeof BillingSuccessRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/billing/cancel': {
+      id: '/billing/cancel'
+      path: '/billing/cancel'
+      fullPath: '/billing/cancel'
+      preLoaderRoute: typeof BillingCancelRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth_/verified': {
@@ -674,13 +721,6 @@ declare module '@tanstack/react-router' {
       path: '/access/$token'
       fullPath: '/access/$token'
       preLoaderRoute: typeof AccessTokenRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/join/$token': {
-      id: '/join/$token'
-      path: '/join/$token'
-      fullPath: '/join/$token'
-      preLoaderRoute: typeof JoinTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated/ops': {
@@ -833,14 +873,16 @@ const rootRouteChildren: RootRouteChildren = {
   TermsRoute: TermsRoute,
   UnsubscribeRoute: UnsubscribeRoute,
   AccessTokenRoute: AccessTokenRoute,
-  JoinTokenRoute: JoinTokenRoute,
   AckTokenRoute: AckTokenRoute,
   ApiClientErrorRoute: ApiClientErrorRoute,
   ApiMetricsDigestRoute: ApiMetricsDigestRoute,
   ApiTaskEngagedRoute: ApiTaskEngagedRoute,
   AuthCallbackRoute: AuthCallbackRoute,
   AuthVerifiedRoute: AuthVerifiedRoute,
+  BillingCancelRoute: BillingCancelRoute,
+  BillingSuccessRoute: BillingSuccessRoute,
   EmailUnsubscribeRoute: EmailUnsubscribeRoute,
+  JoinTokenRoute: JoinTokenRoute,
   LhUnsubscribeRoute: LhUnsubscribeRoute,
   TTokenRoute: TTokenRoute,
   ApiQboCallbackRoute: ApiQboCallbackRoute,

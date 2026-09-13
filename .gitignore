@@ -34,6 +34,9 @@ dist-ssr
 # Vercel
 .vercel
 
+# Stripe Projects CLI vault (credentials; never commit)
+.projects/
+
 # Accidentally committed large temp files
 ziQy6NpE
 ziXdDCjj
