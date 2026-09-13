@@ -446,6 +446,11 @@ assert(appSrc.includes("markOwnerFirstUploadHandled"), "first upload persists a 
 assert(appSrc.includes("isInvitedOwnerWithFigures"), "invited owner + figures gate is wired");
 assert(appSrc.includes("markOnboardingDone(OWNER_TOUR_KEY)"), "invited owner with figures marks the tour done");
 assert(appSrc.includes("setInvitedOwnerEntry(true)"), "client link stamps invited-owner entry");
+assert(appSrc.includes("OwnerBusinessSwitcher"), "multi-business owners can switch workspaces");
+assert(
+  appSrc.includes("the older") || appSrc.includes("older client"),
+  "invite accept keeps the previous business on the list",
+);
 assert(appSrc.includes("ownerBoardReady({"), "founder board holds the spinner until profile/client data is ready");
 assert(appSrc.includes("onboardingGateReady"), "tour waits until client meta has loaded");
 assert(appSrc.includes("const [v, setV] = useState<Inputs>(defaults)"), "financials state is declared");
@@ -500,7 +505,7 @@ assert(
   const roleEffect = appSrc.indexOf("if (!clientLinkResolved) return;");
   assert(roleEffect !== -1, "role effect waits for the client link");
   assert(
-    appSrc.includes("[user?.id, clientLinkResolved, effectiveClientId]"),
+    appSrc.includes("[user?.id, clientLinkResolved, effectiveClientId, ownerWorkspaces, actingClientId]"),
     "role effect re-resolves once the client exists",
   );
 }

@@ -17,6 +17,7 @@ import {
 import { isOpsNext, lighthouseTabFromOpsNext } from "@/lib/client-note-link";
 import { accessTokenFromNext } from "@/lib/practice-access";
 import { AuthDivider, GoogleSignInButton } from "@/components/google-sign-in-button";
+import { stashAccountantGoogleSignup } from "@/lib/google-auth";
 import { MarketPicker } from "@/components/market-picker";
 import {
   AuthEntryCard,
@@ -308,6 +309,32 @@ function AuthPage() {
                       onChange={setDraftMarket}
                       audience="practice"
                     />
+                  </div>
+                  <div className="mt-5">
+                    <GoogleSignInButton
+                      intent="accountant"
+                      next={googleNext ?? afterAuthPath}
+                      tone="entry"
+                      label="Continue with Google"
+                      disabled={busy}
+                      onBeforeStart={() => {
+                        const market = draftToSelection(draftMarket);
+                        if (!market) {
+                          toast.error("Pick South Africa or the United States (and a state) first.");
+                          return false;
+                        }
+                        writeVisitorDraft(draftMarket);
+                        stashAccountantGoogleSignup({
+                          firmName: firmName.trim(),
+                          fullName: fullName.trim() || undefined,
+                          marketCountry: market.country,
+                          marketRegion: market.regionCode,
+                        });
+                        return true;
+                      }}
+                      onError={(msg) => toast.error(msg)}
+                    />
+                    <AuthDivider />
                   </div>
                 </>
               )}

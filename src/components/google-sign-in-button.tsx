@@ -28,10 +28,13 @@ type Props = {
   intent: GoogleAuthIntent;
   next?: string;
   ownerInvite?: { token: string; clientCode?: string | null };
+  accountantJoin?: { token: string };
   label?: string;
   /** Landing modal uses gold-ghost chrome; entry matches dark auth shell; portal uses shadcn outline. */
   tone?: "landing" | "entry" | "portal";
   disabled?: boolean;
+  /** Return false to abort (e.g. market not picked on Create firm). */
+  onBeforeStart?: () => boolean | Promise<boolean>;
   onError?: (message: string) => void;
 };
 
@@ -39,9 +42,11 @@ export function GoogleSignInButton({
   intent,
   next,
   ownerInvite,
+  accountantJoin,
   label = "Sign in with Google",
   tone = "portal",
   disabled,
+  onBeforeStart,
   onError,
 }: Props) {
   const [busy, setBusy] = useState(false);
@@ -49,7 +54,8 @@ export function GoogleSignInButton({
   const onClick = async () => {
     setBusy(true);
     try {
-      const { error } = await startGoogleSignIn({ intent, next, ownerInvite });
+      if (onBeforeStart && (await onBeforeStart()) === false) return;
+      const { error } = await startGoogleSignIn({ intent, next, ownerInvite, accountantJoin });
       if (error) onError?.(error);
     } catch (err) {
       onError?.(err instanceof Error ? err.message : "Google sign-in failed");

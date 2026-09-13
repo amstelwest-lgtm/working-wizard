@@ -7,18 +7,75 @@ export const GOOGLE_NEXT_KEY = "milon_google_auth_next";
 
 export type GoogleAuthIntent = PortalIntent;
 
-export function googleOAuthRedirectTo(
-  origin: string,
-  ownerInvite?: { token: string; clientCode?: string | null },
-): string {
+export const GOOGLE_ACCOUNTANT_SIGNUP_KEY = "milon_google_accountant_signup";
+
+export type AccountantGoogleSignupDraft = {
+  firmName: string;
+  fullName?: string;
+  marketCountry?: "ZA" | "US";
+  marketRegion?: string | null;
+};
+
+export type GoogleOAuthHop = {
+  /** Owner-invite token (never `code` — that is PKCE). */
+  token?: string;
+  clientCode?: string | null;
+  /** Owner→accountant join token. Distinct from `invite`. */
+  join?: string;
+};
+
+export function googleOAuthRedirectTo(origin: string, hop?: GoogleOAuthHop): string {
   const base = `${origin.replace(/\/$/, "")}${GOOGLE_CALLBACK_PATH}`;
-  const token = ownerInvite?.token?.trim();
-  if (!token) return base;
   const q = new URLSearchParams();
-  q.set("invite", token);
-  const cc = ownerInvite?.clientCode?.trim();
-  if (cc) q.set("cc", cc);
-  return `${base}?${q.toString()}`;
+  const token = hop?.token?.trim();
+  if (token) {
+    q.set("invite", token);
+    const cc = hop?.clientCode?.trim();
+    if (cc) q.set("cc", cc);
+  }
+  const join = hop?.join?.trim();
+  if (join) q.set("join", join);
+  const qs = q.toString();
+  return qs ? `${base}?${qs}` : base;
+}
+
+export function parseAccountantGoogleSignup(raw: string | null | undefined): AccountantGoogleSignupDraft | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as AccountantGoogleSignupDraft;
+    if (!parsed || typeof parsed !== "object") return null;
+    const firmName = typeof parsed.firmName === "string" ? parsed.firmName.trim() : "";
+    const fullName = typeof parsed.fullName === "string" ? parsed.fullName.trim() : "";
+    const marketCountry =
+      parsed.marketCountry === "ZA" || parsed.marketCountry === "US" ? parsed.marketCountry : undefined;
+    const marketRegion =
+      typeof parsed.marketRegion === "string" ? parsed.marketRegion : (parsed.marketRegion ?? null);
+    return {
+      firmName,
+      ...(fullName ? { fullName } : {}),
+      ...(marketCountry ? { marketCountry, marketRegion: marketRegion ?? null } : {}),
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function stashAccountantGoogleSignup(draft: AccountantGoogleSignupDraft): void {
+  try {
+    sessionStorage.setItem(GOOGLE_ACCOUNTANT_SIGNUP_KEY, JSON.stringify(draft));
+  } catch {
+    /* private mode / SSR */
+  }
+}
+
+export function consumeAccountantGoogleSignup(): AccountantGoogleSignupDraft | null {
+  try {
+    const raw = sessionStorage.getItem(GOOGLE_ACCOUNTANT_SIGNUP_KEY);
+    sessionStorage.removeItem(GOOGLE_ACCOUNTANT_SIGNUP_KEY);
+    return parseAccountantGoogleSignup(raw);
+  } catch {
+    return null;
+  }
 }
 
 export function googleDisplayName(
@@ -194,18 +251,27 @@ export async function startGoogleSignIn(opts: {
   next?: string;
   /** Owner-invite in flight — survive the OAuth hop and redeem after Google. */
   ownerInvite?: { token: string; clientCode?: string | null };
+  /** Owner→accountant invite — return to /join/:token after Google. */
+  accountantJoin?: { token: string };
 }): Promise<{ error?: string }> {
   let next = opts.next;
+  const hop: GoogleOAuthHop = {};
   if (opts.ownerInvite?.token) {
     const { stashPendingOwnerInvite, ownerInviteLandingPath } = await import("@/lib/invite-handoff");
     stashPendingOwnerInvite(opts.ownerInvite.token, opts.ownerInvite.clientCode);
     if (!next) next = ownerInviteLandingPath(opts.ownerInvite.token);
+    hop.token = opts.ownerInvite.token;
+    hop.clientCode = opts.ownerInvite.clientCode;
+  } else if (opts.accountantJoin?.token) {
+    const { accountantInviteLandingPath } = await import("@/lib/accountant-invite");
+    hop.join = opts.accountantJoin.token.trim();
+    if (!next) next = accountantInviteLandingPath(hop.join);
   }
   stashGoogleAuthIntent(opts.intent, next);
   const { error } = await supabase.auth.signInWithOAuth({
     provider: "google",
     options: {
-      redirectTo: googleOAuthRedirectTo(window.location.origin, opts.ownerInvite),
+      redirectTo: googleOAuthRedirectTo(window.location.origin, hop),
       queryParams: {
         access_type: "offline",
         prompt: "select_account",

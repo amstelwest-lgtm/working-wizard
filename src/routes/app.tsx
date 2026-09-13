@@ -49,6 +49,15 @@ import {
 import { openOwnerSettings } from "@/lib/user-roles";
 import { HeaderShareButton } from "@/components/share";
 import { InviteAccountantCard } from "@/components/invite-accountant-card";
+import { OwnerBusinessSwitcher } from "@/components/owner-business-switcher";
+import {
+  boardRoleForWorkspace,
+  mergeOwnerWorkspaces,
+  pickActiveOwnerWorkspace,
+  readStoredOwnerClientId,
+  writeStoredOwnerClientId,
+  type OwnerWorkspace,
+} from "@/lib/owner-workspaces";
 import { extractFinancials, extractPDFsWithAI } from "@/lib/extract-financials.functions";
 import { extractionToInputs, ExtractionReviewModal } from "@/components/extraction-review-modal";
 import { BankStatementDrafter } from "@/components/bank-statement-drafter";
@@ -2228,6 +2237,7 @@ function Index() {
   >([]);
 
   const [effectiveClientId, setEffectiveClientId] = useState<string | null>(null);
+  const [ownerWorkspaces, setOwnerWorkspaces] = useState<OwnerWorkspace[]>([]);
   archiveTargetRef.current = { clientId: effectiveClientId, visibility: uploadVisibility };
   const [clientLinkResolved, setClientLinkResolved] = useState(false);
   /** Fresh invite accept or metadata-stamped invited workspace — not self-signup. */
@@ -2241,12 +2251,18 @@ function Index() {
     (async () => {
       try {
         if (actingClientId) {
-          if (!cancelled) setEffectiveClientId(actingClientId);
+          if (!cancelled) {
+            setOwnerWorkspaces([]);
+            setEffectiveClientId(actingClientId);
+          }
           return;
         }
         const { data: u } = await supabase.auth.getUser();
         if (!u.user) {
-          if (!cancelled) setEffectiveClientId(null);
+          if (!cancelled) {
+            setOwnerWorkspaces([]);
+            setEffectiveClientId(null);
+          }
           return;
         }
 
@@ -2257,21 +2273,40 @@ function Index() {
         const metaInvite = (u.user.user_metadata?.invite_client_id as string | null) ?? null;
         const inviteClientId = [pendingInvite, metaInvite].find((v) => isClientUuid(v)) ?? null;
 
-        const findLinkedClient = async () => {
-          const { data: own } = await supabase
+        const listWorkspaces = async (): Promise<OwnerWorkspace[]> => {
+          const { data: owned } = await supabase
             .from("clients")
-            .select("id")
-            .eq("owner_user_id", u.user.id)
-            .limit(1)
-            .maybeSingle();
-          if (own?.id) return own.id;
-          const { data: mem } = await supabase
+            .select("id, name")
+            .eq("owner_user_id", u.user.id);
+          const { data: mems } = await supabase
             .from("client_memberships")
-            .select("client_id")
-            .eq("user_id", u.user.id)
-            .limit(1)
-            .maybeSingle();
-          return mem?.client_id ?? null;
+            .select("client_id, role")
+            .eq("user_id", u.user.id);
+          const ownedRows = (owned ?? []).map((c) => ({ id: c.id as string, name: c.name as string | null }));
+          const ownedIds = new Set(ownedRows.map((c) => c.id));
+          const extraIds = [
+            ...new Set(
+              (mems ?? [])
+                .map((m) => m.client_id as string)
+                .filter((id) => id && !ownedIds.has(id)),
+            ),
+          ];
+          const extraNames = new Map<string, string | null>();
+          if (extraIds.length) {
+            const { data: extra } = await supabase.from("clients").select("id, name").in("id", extraIds);
+            for (const row of extra ?? []) extraNames.set(row.id as string, row.name as string | null);
+          }
+          return mergeOwnerWorkspaces(
+            ownedRows,
+            (mems ?? []).map((m) => ({
+              client_id: m.client_id as string,
+              role: m.role as string | null,
+              name:
+                ownedRows.find((o) => o.id === m.client_id)?.name ??
+                extraNames.get(m.client_id as string) ??
+                null,
+            })),
+          );
         };
 
         const openInvitedClient = async (clientId: string) => {
@@ -2291,8 +2326,23 @@ function Index() {
           return existingMem?.client_id ?? null;
         };
 
+        const storedClientId = readStoredOwnerClientId(u.user.id);
+        const applyWorkspaces = (workspaces: OwnerWorkspace[], preferInvite?: string | null) => {
+          const active = pickActiveOwnerWorkspace({
+            workspaces,
+            inviteClientId: preferInvite ?? inviteClientId,
+            storedClientId,
+          });
+          if (active) writeStoredOwnerClientId(u.user.id, active);
+          if (!cancelled) {
+            setOwnerWorkspaces(workspaces);
+            setEffectiveClientId(active);
+          }
+        };
+
         // Just-accepted invite: prefer that workspace over any older client
-        // this email already owns (existing-account redeem).
+        // this email already owns (existing-account redeem). The older
+        // business stays on the list so they can switch back.
         if (inviteClientId) {
           for (let i = 0; i < 5; i++) {
             const invited = await openInvitedClient(inviteClientId);
@@ -2302,10 +2352,9 @@ function Index() {
               } catch {
                 /* ignore */
               }
-              if (!cancelled) {
-                setInvitedOwnerEntry(true);
-                setEffectiveClientId(invited);
-              }
+              const workspaces = await listWorkspaces();
+              if (!cancelled) setInvitedOwnerEntry(true);
+              applyWorkspaces(workspaces, invited);
               return;
             }
             if (i < 4) await new Promise((r) => setTimeout(r, 250));
@@ -2314,14 +2363,14 @@ function Index() {
 
         // Invite accept can land before RLS sees the new owner row — retry briefly.
         for (let i = 0; i < 5; i++) {
-          const linked = await findLinkedClient();
-          if (linked) {
+          const workspaces = await listWorkspaces();
+          if (workspaces.length) {
             try {
               localStorage.removeItem(PENDING_INVITE_CLIENT_KEY);
             } catch {
               /* ignore */
             }
-            if (!cancelled) setEffectiveClientId(linked);
+            applyWorkspaces(workspaces);
             return;
           }
           if (i < 4) await new Promise((r) => setTimeout(r, 250));
@@ -2346,10 +2395,13 @@ function Index() {
               );
           }
           localStorage.removeItem(PENDING_INVITE_CLIENT_KEY);
-          if (!cancelled) {
-            setInvitedOwnerEntry(true);
-            setEffectiveClientId(inviteClientId);
-          }
+          const workspaces = await listWorkspaces();
+          if (!cancelled) setInvitedOwnerEntry(true);
+          applyWorkspaces(workspaces.length ? workspaces : [{
+            clientId: inviteClientId,
+            name: "Invited business",
+            role: "member",
+          }], inviteClientId);
           return;
         }
 
@@ -2362,6 +2414,7 @@ function Index() {
         if (pendingInvite && !isClientUuid(pendingInvite)) {
           if (!cancelled) {
             toast.error("We couldn't open the invited workspace yet. Refresh to try again.");
+            setOwnerWorkspaces([]);
             setEffectiveClientId(null);
           }
           return;
@@ -2409,12 +2462,23 @@ function Index() {
                 { duration: 10000 },
               );
             }
+            if (clientId) {
+              writeStoredOwnerClientId(u.user.id, clientId);
+              setOwnerWorkspaces([
+                { clientId, name: clientName, role: "owner" },
+              ]);
+            } else {
+              setOwnerWorkspaces([]);
+            }
             setEffectiveClientId(clientId ?? null);
           }
           return;
         }
 
-        if (!cancelled) setEffectiveClientId(null);
+        if (!cancelled) {
+          setOwnerWorkspaces([]);
+          setEffectiveClientId(null);
+        }
       } finally {
         if (!cancelled) setClientLinkResolved(true);
       }
@@ -2621,6 +2685,16 @@ function Index() {
     openProfileDialog("retake");
   }, [openProfileDialog]);
 
+  const switchOwnerWorkspace = useCallback(
+    (clientId: string) => {
+      if (!user?.id || !clientId || clientId === effectiveClientId) return;
+      writeStoredOwnerClientId(user.id, clientId);
+      setHydratedClientId(null);
+      setEffectiveClientId(clientId);
+    },
+    [user?.id, effectiveClientId],
+  );
+
   // Resolve the app role only after the client link settles. A freshly
   // confirmed self-signup has no user_roles row until ensure_own_client runs
   // in the client-link effect; resolving in parallel used to land on
@@ -2633,6 +2707,11 @@ function Index() {
     supabase.auth.getUser().then(async ({ data: { user: u } }) => {
       try {
         if (!u) return;
+        const activeWs = ownerWorkspaces.find((w) => w.clientId === effectiveClientId);
+        if (!actingClientId && activeWs) {
+          setUserRole(boardRoleForWorkspace(activeWs.role));
+          return;
+        }
         const { resolvePortalRoles, ownerBoardRole, peekForcePortal, getPortalIntent } =
           await import("@/lib/user-roles");
         const portal = await resolvePortalRoles(u.id);
@@ -2681,7 +2760,7 @@ function Index() {
     return () => {
       cancelled = true;
     };
-  }, [user?.id, clientLinkResolved, effectiveClientId]);
+  }, [user?.id, clientLinkResolved, effectiveClientId, ownerWorkspaces, actingClientId]);
 
   useEffect(() => {
     if (user) {
@@ -3647,8 +3726,18 @@ function Index() {
                     style={{ filter: "brightness(0.85) saturate(1.2)" }}
                   />
                   <div className="founder-app-bar__brand-text hidden min-w-0 truncate text-[9px] font-medium uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500 md:block">
-                    {actingClientName ?? "Operating finance"}
+                    {actingClientName ??
+                      ownerWorkspaces.find((w) => w.clientId === effectiveClientId)?.name ??
+                      "Operating finance"}
                   </div>
+                  {!actingClientId ? (
+                    <OwnerBusinessSwitcher
+                      workspaces={ownerWorkspaces}
+                      activeClientId={effectiveClientId}
+                      onSelect={switchOwnerWorkspace}
+                      loading={!clientLinkResolved}
+                    />
+                  ) : null}
                 </div>
                 <div className="founder-app-bar__actions flex shrink-0 items-center gap-1 print:hidden">
                   {/* Keep primary actions visible on phones; park the rest in More */}

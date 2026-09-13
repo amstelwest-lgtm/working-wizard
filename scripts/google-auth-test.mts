@@ -12,6 +12,7 @@ import {
   intentCookieDomain,
   intentCookieString,
   isFreshAuthUser,
+  parseAccountantGoogleSignup,
   parseOAuthCallbackParams,
   readIntentCookie,
 } from "../src/lib/google-auth";
@@ -39,6 +40,11 @@ assert(
   googleOAuthRedirectTo("https://milonfinance.com", { token: "tok123" }) ===
     "https://milonfinance.com/auth/callback?invite=tok123",
   "redirectTo carries invite without a client code",
+);
+assert(
+  googleOAuthRedirectTo("https://milonfinance.com", { join: "joinTok" }) ===
+    "https://milonfinance.com/auth/callback?join=joinTok",
+  "redirectTo carries accountant join (never `invite`, which is owner-handoff)",
 );
 
 assert(
@@ -121,6 +127,18 @@ assert(
   "brand-new account → owner",
 );
 
+assert(parseAccountantGoogleSignup(null) === null, "empty accountant signup draft");
+assert(
+  parseAccountantGoogleSignup(JSON.stringify({ firmName: " West & Co ", fullName: "Ana", marketCountry: "ZA" }))
+    ?.firmName === "West & Co",
+  "accountant Google signup draft keeps firm name",
+);
+assert(
+  parseAccountantGoogleSignup(JSON.stringify({ firmName: "West", marketCountry: "bogus" }))?.marketCountry ===
+    undefined,
+  "rejects junk market on accountant Google signup draft",
+);
+
 const googleSrc = readFileSync(resolve("src/lib/google-auth.ts"), "utf8");
 assert(
   !/function consumeGoogleAuthIntent[\s\S]*getPortalIntent\(\)/.test(googleSrc),
@@ -131,8 +149,8 @@ assert(
   "startGoogleSignIn stashes an in-flight owner invite across the OAuth hop",
 );
 assert(
-  googleSrc.includes("googleOAuthRedirectTo(window.location.origin, opts.ownerInvite)"),
-  "Google OAuth redirectTo carries the invite so an origin hop cannot drop it",
+  googleSrc.includes("googleOAuthRedirectTo(window.location.origin, hop)"),
+  "Google OAuth redirectTo carries the invite or accountant join so an origin hop cannot drop it",
 );
 
 // /auth (AuthPage) has no <Outlet />, so any route filed under auth.*.tsx never
@@ -182,6 +200,34 @@ assert(
 assert(
   callbackSrc.includes("!intent && !pendingInvite?.token"),
   "existing accountant Google identity must not be inferred while an owner invite is in flight",
+);
+assert(
+  googleSrc.includes("accountantJoin"),
+  "startGoogleSignIn can return an accountant to /join after Google",
+);
+assert(
+  callbackSrc.includes("signup_type: \"accountant\"") || callbackSrc.includes('signup_type: "accountant"'),
+  "Google Create-firm stamps accountant metadata so /app does not mint an owner client",
+);
+assert(
+  callbackSrc.includes("ensure_practice_firm"),
+  "Google accountant signup provisions a practice firm",
+);
+assert(
+  callbackSrc.includes("accountantJoinFromCallbackSearch") && callbackSrc.includes('to: "/join/$token"'),
+  "Google callback returns accountant invites to /join/:token",
+);
+assert(
+  callbackSrc.indexOf("joinToken") < callbackSrc.indexOf("goOps"),
+  "accountant join hop runs before generic /app or /dashboard landing",
+);
+
+const authPage = readFileSync(resolve("src/routes/auth.tsx"), "utf8");
+assert(authPage.includes("Continue with Google"), "Create firm offers Google sign-up");
+assert(authPage.includes("stashAccountantGoogleSignup"), "Create firm Google carries firm name + market");
+assert(
+  (authPage.match(/GoogleSignInButton/g) ?? []).length >= 2,
+  "Create firm and Sign in both have a Google button",
 );
 
 console.log("google-auth-test: ok");

@@ -17,9 +17,25 @@ export function accountantInviteLandingPath(token: string): string {
 }
 
 export function accountantInviteTokenFromPath(pathname: string): string | null {
-  const m = pathname.match(/^\/join\/([^/]+)$/);
+  const pathOnly = pathname.split("?")[0] ?? pathname;
+  const m = pathOnly.match(/^\/join\/([^/]+)$/);
   const token = m?.[1] ? decodeURIComponent(m[1]).trim() : "";
   return token || null;
+}
+
+/** Accountant join carried on `/auth/callback?join=` (OAuth redirectTo). */
+export function accountantJoinFromCallbackSearch(search: string): string | null {
+  const raw = search.startsWith("?") ? search.slice(1) : search;
+  if (!raw) return null;
+  const token = new URLSearchParams(raw).get("join")?.trim() ?? "";
+  return token || null;
+}
+
+/** Google `next` that points at `/join/:token`. */
+export function accountantJoinTokenFromNext(next: string | undefined): string | null {
+  if (!next || !next.startsWith("/")) return null;
+  const path = next.split("?")[0] ?? next;
+  return accountantInviteTokenFromPath(path);
 }
 
 export function defaultPracticeName(email: string, override?: string | null): string {

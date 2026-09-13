@@ -4,12 +4,18 @@ import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { acceptOwnerInvite, ensurePracticePortalAccess } from "@/lib/auth.functions";
 import {
+  consumeAccountantGoogleSignup,
   consumeGoogleAuthIntent,
   establishSessionFromOAuthCallback,
   googleDisplayName,
   inferGoogleIntentFromRoles,
   isFreshAuthUser,
 } from "@/lib/google-auth";
+import {
+  accountantInviteTokenFromPath,
+  accountantJoinFromCallbackSearch,
+  accountantJoinTokenFromNext,
+} from "@/lib/accountant-invite";
 import { notifySignup } from "@/lib/signup-notify";
 import {
   consumePendingOwnerInvite,
@@ -20,7 +26,7 @@ import {
   stashInviteHandoff,
   stashPendingOwnerInvite,
 } from "@/lib/invite-handoff";
-import { readVisitorMarket, withMarketRpcFallback } from "@/lib/market";
+import { marketToJson, parseMarketSelection, readVisitorMarket, withMarketRpcFallback } from "@/lib/market";
 import { OPS_UNLOCK_KEY } from "@/lib/owner-ops.functions";
 import { isOpsNext, lighthouseTabFromOpsNext } from "@/lib/client-note-link";
 import { accessTokenFromNext } from "@/lib/practice-access";
@@ -187,10 +193,73 @@ function AuthCallbackPage() {
           notifySignup("Business owner (Google)", user.email ?? "", displayName);
         }
       } else {
+        const draft = consumeAccountantGoogleSignup();
+        const provisionPractice = isFreshAuthUser(user.created_at) || Boolean(draft);
+        const firmName =
+          draft?.firmName ||
+          (typeof user.user_metadata?.firm_name === "string"
+            ? user.user_metadata.firm_name.trim()
+            : "") ||
+          displayName;
+        const fullName =
+          draft?.fullName ||
+          (typeof user.user_metadata?.full_name === "string"
+            ? user.user_metadata.full_name
+            : "") ||
+          (typeof user.user_metadata?.name === "string" ? user.user_metadata.name : "") ||
+          displayName;
+        const market =
+          (draft?.marketCountry
+            ? parseMarketSelection({
+                country: draft.marketCountry,
+                regionCode: draft.marketRegion ?? null,
+              })
+            : null) ?? readVisitorMarket();
+        if (provisionPractice) {
+          try {
+            await supabase.auth.updateUser({
+              data: {
+                signup_type: "accountant",
+                firm_name: firmName,
+                full_name: fullName,
+                ...(market
+                  ? { market_country: market.country, market_region: market.regionCode }
+                  : {}),
+              },
+            });
+          } catch {
+            /* metadata stamp is best-effort */
+          }
+          const { error: firmErr } = await withMarketRpcFallback(
+            () =>
+              supabase.rpc("ensure_practice_firm", {
+                p_name: firmName,
+                p_market: market ? marketToJson(market) : null,
+              }),
+            () => supabase.rpc("ensure_practice_firm", { p_name: firmName }),
+          );
+          if (firmErr) console.error("[google] ensure_practice_firm failed:", firmErr.message);
+        }
         await ensurePractice().catch(() => undefined);
         if (isFreshAuthUser(user.created_at)) {
           notifySignup("Accountant firm (Google)", user.email ?? "", displayName);
         }
+      }
+
+      const joinToken =
+        accountantJoinFromCallbackSearch(window.location.search) ||
+        accountantJoinTokenFromNext(next) ||
+        accountantInviteTokenFromPath(next ?? "");
+      if (joinToken) {
+        forcePortal("accountant");
+        if (!cancelled) {
+          void navigate({
+            to: "/join/$token",
+            params: { token: joinToken },
+            replace: true,
+          });
+        }
+        return;
       }
 
       let goOps = false;
