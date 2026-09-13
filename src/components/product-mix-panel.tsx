@@ -614,7 +614,7 @@ export function ProductMixPanel({
             </p>
           </>
         )}
-      </CollapsibleGoldCard>
+        </CollapsibleGoldCard>
       </div>
 
       <ProductMixFunnel
