@@ -403,7 +403,9 @@ html.dark .accountant-portal #wizard-action-plan{
 .accountant-portal #wizard-budget-plan,
 .accountant-portal #wizard-budget-month-engine,
 .accountant-portal #wizard-budget-year-chart,
-.accountant-portal #wizard-budget-variance{
+.accountant-portal #wizard-budget-variance,
+.accountant-portal #wizard-budget-cash-timing,
+.accountant-portal #wizard-budget-advanced{
   --foreground:#1b1608;
   --card-foreground:#1b1608;
   color:#1b1608;
@@ -421,7 +423,9 @@ html.dark .accountant-portal #wizard-budget-panel,
 html.dark .accountant-portal #wizard-budget-plan,
 html.dark .accountant-portal #wizard-budget-month-engine,
 html.dark .accountant-portal #wizard-budget-year-chart,
-html.dark .accountant-portal #wizard-budget-variance{
+html.dark .accountant-portal #wizard-budget-variance,
+html.dark .accountant-portal #wizard-budget-cash-timing,
+html.dark .accountant-portal #wizard-budget-advanced{
   --foreground:#f1f5f9;
   --card-foreground:#f1f5f9;
   color:#f1f5f9;
@@ -456,6 +460,13 @@ html[data-theme="light"] .accountant-portal .budget-month-engine{
 }
 .accountant-portal .budget-driver-input:focus{
   outline:none;
+}
+.accountant-portal .collapsible-gold-card{
+  background:
+    radial-gradient(circle at 90% 0%,color-mix(in srgb,var(--gold) 16%,transparent),transparent 34%),
+    linear-gradient(135deg,var(--bg-2),color-mix(in srgb,var(--gold) 6%,var(--bg-2)));
+  border-color:var(--line);
+  box-shadow:0 20px 60px rgba(0,0,0,.12),var(--shadow-gold);
 }
 
 .accountant-portal .footer-note{margin-top:60px;text-align:center;font-size:12px;color:var(--ink-faint)}

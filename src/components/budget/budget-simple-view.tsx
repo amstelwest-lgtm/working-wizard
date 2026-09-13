@@ -4,10 +4,11 @@
  */
 
 import { useMemo, useState, type ReactNode } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { CollapsibleGoldCard } from "@/components/primitives/collapsible-gold-card";
 import type { BudgetActuals, BudgetDocument, BudgetScenarioId } from "@/lib/budget.types";
 import { BUDGET_TEMPLATES } from "@/lib/budget.templates";
 import {
@@ -70,7 +71,6 @@ export function BudgetSimpleView({
     return months.includes(cur) ? cur : months[0];
   });
   const [sameEveryMonth, setSameEveryMonth] = useState(false);
-  const [showMore, setShowMore] = useState(false);
 
   const results = useMemo(() => computeBudgetMonths(doc, doc.activeScenario), [doc]);
   const focus = results.find((r) => r.month === focusMonth) ?? results[0];
@@ -479,86 +479,104 @@ export function BudgetSimpleView({
         </div>
       )}
 
-      <div>
-        <button
-          type="button"
-          className="text-xs font-semibold text-[#b8860b] hover:underline"
-          onClick={() => setShowMore((v) => !v)}
-        >
-          {showMore ? "Hide more detail" : "More detail"}
-        </button>
-        {showMore && (
-          <div className="mt-3 grid gap-3 rounded-xl border border-slate-200 p-4 dark:border-slate-800 sm:grid-cols-3">
-            <div>
-              <Label className="text-[10px] uppercase tracking-wider text-slate-500">
-                Opening cash
-              </Label>
-              <Input
-                type="number"
-                className="mt-1 h-8"
-                value={doc.openingCash ?? 0}
-                onChange={(e) =>
-                  onChange({
-                    ...doc,
-                    openingCash: parseFloat(e.target.value) || 0,
-                    updatedAt: new Date().toISOString(),
-                  })
-                }
-              />
-            </div>
-            <div>
-              <Label className="text-[10px] uppercase tracking-wider text-slate-500">
-                Debtor days
-              </Label>
-              <Input
-                type="number"
-                className="mt-1 h-8"
-                value={doc.wc.debtorDays}
-                onChange={(e) =>
-                  onChange({
-                    ...doc,
-                    wc: { ...doc.wc, debtorDays: parseFloat(e.target.value) || 0 },
-                    updatedAt: new Date().toISOString(),
-                  })
-                }
-              />
-            </div>
-            <div>
-              <Label className="text-[10px] uppercase tracking-wider text-slate-500">
-                Creditor days
-              </Label>
-              <Input
-                type="number"
-                className="mt-1 h-8"
-                value={doc.wc.creditorDays}
-                onChange={(e) =>
-                  onChange({
-                    ...doc,
-                    wc: { ...doc.wc, creditorDays: parseFloat(e.target.value) || 0 },
-                    updatedAt: new Date().toISOString(),
-                  })
-                }
-              />
-            </div>
-            {onChangeModel && (
-              <div className="sm:col-span-3">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="text-xs"
-                  onClick={onChangeModel}
-                >
-                  Change business model
-                </Button>
-                <p className="mt-1 text-[11px] text-slate-500">
-                  Switch to Complex for full grids, capex, sensitivity, and multi-line revenue.
-                </p>
-              </div>
-            )}
+      <CollapsibleGoldCard
+        id="wizard-budget-cash-timing"
+        icon={Wallet}
+        title="Cash timing"
+        subtitle={
+          role === "accountant"
+            ? "How this profit turns into cash in the bank. Closed until you need it — the month engine above already builds the P&L."
+            : "Opening bank balance and how quickly money is collected and paid. Open if month-end cash looks off."
+        }
+        defaultOpen={false}
+      >
+        <div className="grid gap-4 sm:grid-cols-3">
+          <div>
+            <Label className="text-[10px] uppercase tracking-wider text-slate-500">
+              Opening cash
+            </Label>
+            <Input
+              type="number"
+              className="mt-1 h-9"
+              value={doc.openingCash ?? 0}
+              onChange={(e) =>
+                onChange({
+                  ...doc,
+                  openingCash: parseFloat(e.target.value) || 0,
+                  updatedAt: new Date().toISOString(),
+                })
+              }
+            />
+            <p className="mt-1.5 text-[11px] leading-snug text-slate-500">
+              {role === "accountant"
+                ? "Cash in the bank on day one of this financial year. Month-end cash stacks on this number, so closing cash is only as true as this start."
+                : "The bank balance at the start of the year. Everything below is added to or taken from this."}
+            </p>
+          </div>
+          <div>
+            <Label className="text-[10px] uppercase tracking-wider text-slate-500">
+              Debtor days
+            </Label>
+            <Input
+              type="number"
+              className="mt-1 h-9"
+              value={doc.wc.debtorDays}
+              onChange={(e) =>
+                onChange({
+                  ...doc,
+                  wc: { ...doc.wc, debtorDays: parseFloat(e.target.value) || 0 },
+                  updatedAt: new Date().toISOString(),
+                })
+              }
+            />
+            <p className="mt-1.5 text-[11px] leading-snug text-slate-500">
+              {role === "accountant"
+                ? "How many days customers typically take to pay. Longer days delay cash even when the month’s profit looks fine — this is what creates a cash trough."
+                : "How long customers take to pay you. Longer = cash arrives later than the sale."}
+            </p>
+          </div>
+          <div>
+            <Label className="text-[10px] uppercase tracking-wider text-slate-500">
+              Creditor days
+            </Label>
+            <Input
+              type="number"
+              className="mt-1 h-9"
+              value={doc.wc.creditorDays}
+              onChange={(e) =>
+                onChange({
+                  ...doc,
+                  wc: { ...doc.wc, creditorDays: parseFloat(e.target.value) || 0 },
+                  updatedAt: new Date().toISOString(),
+                })
+              }
+            />
+            <p className="mt-1.5 text-[11px] leading-snug text-slate-500">
+              {role === "accountant"
+                ? "How many days this business typically takes to pay suppliers. Longer days hold cash in; shorter days pull it out sooner."
+                : "How long you take to pay suppliers. Longer = cash stays in the business a bit longer."}
+            </p>
+          </div>
+        </div>
+        {onChangeModel && (
+          <div className="mt-5 border-t border-amber-900/10 pt-4 dark:border-slate-800">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="text-xs"
+              onClick={onChangeModel}
+            >
+              Change business model
+            </Button>
+            <p className="mt-1.5 max-w-xl text-[11px] leading-snug text-slate-500">
+              {role === "accountant"
+                ? "Only if volume × price is the wrong shape for this client — multiple products, capex, or a full grid. Leave it if the month engine already fits."
+                : "Switch to Complex for full grids, capex, and more than one product line."}
+            </p>
           </div>
         )}
-      </div>
+      </CollapsibleGoldCard>
     </div>
   );
 }
