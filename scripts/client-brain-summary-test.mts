@@ -512,8 +512,12 @@ assert(appSrc.includes("onSaveProfile={saveDripProfile}"), "Health drip can save
 assert(!appSrc.includes("OwnerBrainFirstInsight"), "Health tab does not mount Client Brain insight");
 assert(appSrc.includes('id="ask-ai-overview"'), "owner Ask AI mount unchanged");
 const dripSrc = readFileSync(resolve("src/components/owner-brain-drip.tsx"), "utf8");
+const dripCss = readFileSync(resolve("src/styles/primitives.css"), "utf8");
 assert(dripSrc.includes("Answer question"), "owner drip has an Answer question button");
 assert(dripSrc.includes("DRIP_ANSWER_HELP"), "owner drip explains why answering helps");
+assert(dripSrc.includes('aria-expanded={open}'), "drip bar expands on click");
+assert(dripSrc.includes("const [open, setOpen] = useState(false)"), "drip starts collapsed");
+assert(dripCss.includes(".milon-metal-bar"), "drip uses the brushed-gold Health bar");
 assert(DRIP_ANSWER_HELP.toLowerCase().includes("accurate"), "help copy mentions more accurate recommendations");
 
 const draftFnSrc = readFileSync(resolve("supabase/functions/brain-deliverable-draft/index.ts"), "utf8");

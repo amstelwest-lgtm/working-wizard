@@ -130,6 +130,9 @@ assert(joinPage.includes("accountantJoin"), "join Google hop carries the invite 
 
 const card = readFileSync(resolve("src/components/invite-accountant-card.tsx"), "utf8");
 assert(card.includes("inviteAccountant"), "owner UI calls mint/send");
+assert(card.includes("milon-metal-bar"), "invite uses the gold metal bar");
+assert(card.includes("const [open, setOpen] = useState(false)"), "invite starts collapsed");
+assert(card.includes('aria-expanded={open}'), "invite expands on click");
 
 const mintFn = readFileSync(resolve("src/lib/accountant-invite.functions.ts"), "utf8");
 assert(!mintFn.includes("getUserById"), "mint path must not call Auth Admin (it hangs past the gateway)");

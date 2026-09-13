@@ -1,9 +1,8 @@
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { Loader2, Mail, Copy, Check } from "lucide-react";
+import { ChevronDown, Loader2, Mail, Copy, Check } from "lucide-react";
 import { toast } from "sonner";
 import { accountantInviteStatus, inviteAccountant } from "@/lib/accountant-invite.functions";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
@@ -17,6 +16,7 @@ export function InviteAccountantCard({ clientId, tone = "board" }: Props) {
   const loadStatus = useServerFn(accountantInviteStatus);
   const sendInvite = useServerFn(inviteAccountant);
   const [loading, setLoading] = useState(Boolean(clientId));
+  const [open, setOpen] = useState(false);
   const [firmLinked, setFirmLinked] = useState(false);
   const [firmName, setFirmName] = useState<string | null>(null);
   const [pendingEmail, setPendingEmail] = useState<string | null>(null);
@@ -56,16 +56,11 @@ export function InviteAccountantCard({ clientId, tone = "board" }: Props) {
 
   if (!clientId) return null;
 
-  const dark = tone === "settings";
-  const box = dark
-    ? "milon-section-card milon-section-card--pad"
-    : "rounded-xl border border-slate-200/80 bg-white/90 p-4 shadow-[0_8px_24px_rgba(15,23,42,0.05)] dark:border-slate-800/90 dark:bg-[#0d1420]/90";
-  const title = dark
-    ? "milon-section-card__eyebrow"
-    : "text-sm font-semibold text-slate-800 dark:text-slate-100";
-  const copy = dark
-    ? "text-xs leading-relaxed text-[var(--ink-dim)]"
-    : "text-xs leading-relaxed text-slate-500 dark:text-slate-400";
+  const note = firmLinked
+    ? `Linked to ${firmName || "a practice"}. They can open this workspace from the practice portal.`
+    : pendingEmail
+      ? `They get a practice seat on this business — not a second owner login. Last invite: ${pendingEmail}.`
+      : "They get a practice seat on this business — not a second owner login.";
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -114,70 +109,85 @@ export function InviteAccountantCard({ clientId, tone = "board" }: Props) {
   };
 
   return (
-    <section className={box}>
-      <h2 className={title}>Invite your accountant</h2>
-      {loading ? (
-        <p className={`mt-2 flex items-center gap-2 ${copy}`}>
-          <Loader2 className="h-3.5 w-3.5 animate-spin" /> Checking workspace…
-        </p>
-      ) : firmLinked ? (
-        <p className={`mt-2 ${copy}`}>
-          Linked to {firmName || "a practice"}. They can open this workspace from the practice
-          portal.
-        </p>
-      ) : (
-        <>
-          <p className={`mt-2 ${copy}`}>
-            They get a practice seat on this business — not a second owner login.
-            {pendingEmail ? ` Last invite: ${pendingEmail}.` : ""}
-          </p>
-          <form onSubmit={handleSend} className="mt-3 space-y-2">
-            <Label htmlFor="accountant-invite-email" className={copy}>
-              Accountant email
-            </Label>
-            <Input
-              id="accountant-invite-email"
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="accountant@practice.com"
-              className={
-                dark
-                  ? undefined
-                  : "border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-950"
-              }
-            />
-            <div className="flex flex-wrap gap-2">
-              <Button
-                type="submit"
-                disabled={busy}
-                className={
-                  dark ? "settings-gold" : "bg-[#d4a550] text-[#0a0e1a] hover:bg-[#c4963e]"
-                }
-              >
-                {busy ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Sending…
-                  </>
-                ) : (
-                  <>
-                    <Mail className="mr-2 h-4 w-4" /> Send invite
-                  </>
-                )}
-              </Button>
-              {url ? (
-                <Button type="button" variant="outline" onClick={() => void handleCopy()}>
-                  {copied ? <Check className="mr-2 h-4 w-4" /> : <Copy className="mr-2 h-4 w-4" />}
-                  Copy link
-                </Button>
-              ) : null}
-            </div>
-          </form>
-          {url ? <p className={`mt-2 break-all ${copy}`}>{url}</p> : null}
-          {error ? <p className="mt-2 text-xs text-rose-400">{error}</p> : null}
-        </>
-      )}
+    <section id="invite-accountant" className="milon-metal-bar" data-tone={tone}>
+      <button
+        type="button"
+        className="milon-metal-bar__hit"
+        aria-expanded={open}
+        aria-controls="invite-accountant-panel"
+        onClick={() => setOpen((prev) => !prev)}
+      >
+        <span className="milon-metal-bar__copy">
+          <span className="milon-metal-bar__kicker">Your practice</span>
+          <span className="milon-metal-bar__q">Invite your accountant</span>
+          <span className="milon-metal-bar__note">{note}</span>
+        </span>
+        <ChevronDown
+          className={`milon-metal-bar__chevron h-4 w-4 ${open ? "is-open" : ""}`}
+          aria-hidden
+        />
+      </button>
+
+      {open ? (
+        <div id="invite-accountant-panel" className="milon-metal-bar__panel">
+          {loading ? (
+            <p className="milon-metal-bar__note flex items-center gap-2">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" /> Checking workspace…
+            </p>
+          ) : firmLinked ? (
+            <p className="milon-metal-bar__note">{note}</p>
+          ) : (
+            <>
+              <form onSubmit={handleSend} className="space-y-2">
+                <Label
+                  htmlFor="accountant-invite-email"
+                  className="text-[11px] text-amber-950/60 dark:text-amber-100/50"
+                >
+                  Accountant email
+                </Label>
+                <Input
+                  id="accountant-invite-email"
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="accountant@practice.com"
+                  className="border-amber-900/15 bg-white/80 dark:border-white/10 dark:bg-slate-950/60"
+                />
+                <div className="flex flex-wrap gap-2">
+                  <button type="submit" disabled={busy} className="milon-metal-bar__answer">
+                    {busy ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Sending…
+                      </>
+                    ) : (
+                      <>
+                        <Mail className="mr-2 h-4 w-4" /> Send invite
+                      </>
+                    )}
+                  </button>
+                  {url ? (
+                    <button
+                      type="button"
+                      onClick={() => void handleCopy()}
+                      className="inline-flex items-center rounded-lg border border-amber-900/20 bg-white/50 px-3 py-1.5 text-xs font-semibold text-amber-950/80 dark:border-white/10 dark:bg-slate-950/40 dark:text-amber-100/70"
+                    >
+                      {copied ? (
+                        <Check className="mr-2 h-4 w-4" />
+                      ) : (
+                        <Copy className="mr-2 h-4 w-4" />
+                      )}
+                      Copy link
+                    </button>
+                  ) : null}
+                </div>
+              </form>
+              {url ? <p className="mt-2 break-all text-[11px] text-amber-950/55 dark:text-amber-100/50">{url}</p> : null}
+              {error ? <p className="mt-2 text-xs text-rose-500">{error}</p> : null}
+            </>
+          )}
+        </div>
+      ) : null}
     </section>
   );
 }
