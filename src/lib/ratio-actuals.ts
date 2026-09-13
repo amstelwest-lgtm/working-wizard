@@ -349,7 +349,11 @@ export const RATIO_EXPLAIN: Record<string, Omit<RatioExplain, "name" | "key" | "
 
 /** Owner-board camelCase keys + techName variants → RATIO_EXPLAIN names. */
 const RATIO_ACTUAL_ALIASES: Record<string, string> = {
-  ...Object.fromEntries(Object.entries(RATIO_NAME_TO_KEY).map(([name, key]) => [key, name])),
+  ...Object.fromEntries(
+    Object.entries(RATIO_NAME_TO_KEY)
+      .filter(([name]) => Boolean(RATIO_EXPLAIN[name]))
+      .map(([name, key]) => [key, name]),
+  ),
   "Fixed Costs / Revenue": "Fixed Cost Ratio",
   "Gross Profit / Labor Cost": "Gross Profit / Labor",
   "Sales-per-Employee Ratio (SER)": "Sales-per-Employee Ratio",

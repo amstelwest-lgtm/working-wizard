@@ -235,5 +235,7 @@ assert(
   founder.calculation?.includes("2000"),
   `founder hours mini actual, got ${founder.calculation}`,
 );
+const gm = ratioActualLine("grossMargin", inputs, (n) => `R${n.toLocaleString("en-ZA")}`);
+assert(gm.calculation?.includes("50.0%"), `grossMargin key mini actual, got ${gm.calculation}`);
 
 console.log("accountant-studio-clarity-test: all assertions passed");
