@@ -2365,11 +2365,8 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
     },
     movement: async (s, p) => {
       const { RatioMovementPDF } = await import("@/reports/ratio-movement");
-      if (cd && cd.movement.length === 0) {
-        throw new Error(
-          "No period history yet — save at least one snapshot before the movement report.",
-        );
-      }
+      // A live client with figures but no history still gets a report: the PDF
+      // renders its own "first period on record" state instead of erroring.
       const isDemo = !cd;
       return renderToBlob(RatioMovementPDF, {
         smeData: makeSmeWithNote(s, isDemo),

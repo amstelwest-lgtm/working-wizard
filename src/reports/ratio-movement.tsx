@@ -153,6 +153,9 @@ export function RatioMovementPDF({
   };
 
   const withVerdicts = ratios.map((r) => ({ row: r, verdict: classify(r) }));
+  const hasHistory = ratios.some(
+    (r) => r.three_months != null || r.six_months != null || r.twelve_months != null,
+  );
   const counts = {
     improving: withVerdicts.filter((x) => x.verdict === "improving").length,
     decliningAll: withVerdicts.filter((x) => x.verdict === "declining_all").length,
@@ -201,7 +204,13 @@ export function RatioMovementPDF({
 
       <ExecSummary
         figures={figures}
-        narrative={movementNarrative(counts, operatingProfile, market ?? ZA_MARKET)}
+        narrative={movementNarrative(
+          // First period on record: no comparison columns yet, so say so rather
+          // than reporting "0 of N improving".
+          hasHistory ? counts : { ...counts, total: 0 },
+          operatingProfile,
+          market ?? ZA_MARKET,
+        )}
       />
 
       {pillars.map((pillar) => {
