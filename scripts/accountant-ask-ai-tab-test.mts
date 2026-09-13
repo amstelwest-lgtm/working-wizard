@@ -37,7 +37,7 @@ assert(clientSrc.includes('variant: "studio"'), "accountant widget uses the larg
 assert(clientSrc.includes('audience: "accountant"'), "accountant questions send accountant audience");
 assert(clientSrc.includes("functions/v1/milon-bot"), "studio widget can call brain tools");
 assert(
-  /activeTab === "ask"[\s\S]{0,220}"none"/.test(clientSrc),
+  /activeTab === "ask"[\s\S]{0,280}"none"/.test(clientSrc),
   "simple/complex toggle is hidden on Milōn Bot",
 );
 assert(
