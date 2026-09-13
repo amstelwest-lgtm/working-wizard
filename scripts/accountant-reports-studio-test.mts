@@ -19,6 +19,11 @@ assert(clientSrc.includes("embedded"), "client workspace embeds studio chrome");
 assert(!clientSrc.includes("REPORT_TEMPLATES"), "old report gallery catalogue is gone");
 assert(!clientSrc.includes("rep-grid"), "old report gallery markup is gone");
 assert(clientSrc.includes('setActiveTab("reports")'), "Generate report stays on the client Reports tab");
+assert(
+  /activeTab === "reports"[\s\S]{0,80}"none"/.test(clientSrc) ||
+    /activeTab === "cash" \|\|[\s\S]{0,80}activeTab === "reports"/.test(clientSrc),
+  "simple/complex toggle is hidden on Reports — the studio does not change",
+);
 
 const studioSrc = readFileSync(resolve("src/routes/_authenticated/reports.index.tsx"), "utf8");
 assert(studioSrc.includes("export function ReportsStudio"), "studio is a reusable panel");

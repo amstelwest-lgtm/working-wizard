@@ -49,6 +49,10 @@ assert(
   "simple/complex toggle is also hidden on Action Plan",
 );
 assert(
+  clientSrc.includes('activeTab === "reports"'),
+  "simple/complex toggle is also hidden on Reports",
+);
+assert(
   !/id="pane-ratios"[\s\S]{0,400}id="ask-ai-accountant"/.test(clientSrc),
   "Milōn Bot no longer lives as a cramped card on Health",
 );
