@@ -1796,6 +1796,7 @@ function ClientView() {
                 setStudioDeepLink({ report: "movement", action: "preview" });
                 setActiveTab("reports");
               }}
+              onOpenReports={() => setActiveTab("reports")}
               hasFigures={hasFigures}
             />
 
