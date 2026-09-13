@@ -48,6 +48,7 @@ import {
 } from "@/lib/user-roles";
 import { PageHeader, SectionCard } from "@/components/primitives";
 import { InviteAccountantCard } from "@/components/invite-accountant-card";
+import { OwnerPracticeAccessCard } from "@/components/owner-practice-access";
 import { pickOwnedSettingsClient, readStoredOwnerClientId } from "@/lib/owner-workspaces";
 
 export const Route = createFileRoute("/_authenticated/settings/")({
@@ -236,6 +237,8 @@ function SettingsPage() {
             <InviteAccountantCard clientId={ownerClientId} tone="settings" />
           </div>
         ) : null}
+
+        {!isPractice ? <OwnerPracticeAccessCard /> : null}
 
         <MarketSettingsCard
           kind={isPractice ? "firm" : "client"}

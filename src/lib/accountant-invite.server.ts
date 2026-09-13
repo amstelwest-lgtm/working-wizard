@@ -302,7 +302,7 @@ async function applyAccountantInvite(opts: {
     if (!client.firm_id) {
       const { error: linkErr } = await supabaseAdmin
         .from("clients")
-        .update({ firm_id: firmId })
+        .update({ firm_id: firmId, firm_connected_at: new Date().toISOString() })
         .eq("id", client.id)
         .is("firm_id", null);
       if (linkErr) throw new Error(`Could not link workspace: ${linkErr.message}`);

@@ -30,6 +30,10 @@ export type AuthCtx = {
 /** Untyped view of the service-role client — ops tables are not in Database types. */
 export type LooseAdmin = {
   from: (table: string) => any;
+  rpc: (
+    fn: string,
+    args?: Record<string, unknown>,
+  ) => Promise<{ data: unknown; error: { message: string } | null }>;
   auth: {
     admin: {
       getUserById: (id: string) => Promise<{ data: { user: { email?: string } | null } }>;
