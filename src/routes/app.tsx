@@ -83,6 +83,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { KpiTrendline, pctDelta } from "@/components/kpi-trendline";
 import { BenchmarkBar } from "@/components/benchmark-bar";
 import { AddToPlanButton } from "@/components/add-to-plan-button";
+import { OwnerRatioBriefing } from "@/components/owner-ratio-briefing";
 import { ThemeToggle } from "@/components/theme-toggle";
 import {
   annualiseFinancials,
@@ -2987,7 +2988,6 @@ function Index() {
   };
 
   const [openRatio, setOpenRatio] = useState<RatioKey | null>(null);
-  const [openVideo, setOpenVideo] = useState<RatioKey | null>(null);
   const [openSop, setOpenSop] = useState<RatioKey | null>(null);
   const [doneSteps, setDoneSteps] = useState<Set<RatioKey>>(new Set());
   const toggleDone = (k: RatioKey) =>
@@ -4547,6 +4547,9 @@ function Index() {
                                         }
                                   }
                                   onTopPriority={() => setActiveTab("next")}
+                                  onDriverClick={(key) => {
+                                    if (key in RATIO_META) setOpenRatio(key as RatioKey);
+                                  }}
                                 />
                               </div>
 
@@ -5233,118 +5236,27 @@ function Index() {
             </DialogContent>
           </Dialog>
 
-          <Dialog open={openRatio !== null} onOpenChange={(o) => !o && setOpenRatio(null)}>
-            <DialogContent className="max-w-lg border-2 border-sky-500/50 bg-slate-900 text-slate-50">
-              {openRatio && (
-                <>
-                  <DialogHeader>
-                    <DialogTitle className="flex items-center gap-3 text-2xl">
-                      <span className="text-3xl">{RATIO_META[openRatio].icon}</span>
-                      <span>{RATIO_META[openRatio].friendly}</span>
-                    </DialogTitle>
-                    <DialogDescription className="text-slate-400">
-                      {RATIO_META[openRatio].techName} ·{" "}
-                      {localizeCopy(RATIO_META[openRatio].formula, boardMarket)}
-                    </DialogDescription>
-                  </DialogHeader>
-                  {(() => {
-                    const actual = ratioActualLine(openRatio, v, (amt) =>
-                      formatMoneyCompact(amt, boardMarket),
-                    );
-                    const line =
-                      actual.calculation ??
-                      (actual.missing.length ? `Need: ${actual.missing.join(", ")}` : null);
-                    return line ? (
-                      <p className="rounded-md border border-slate-700/50 bg-slate-950/50 px-3 py-2 font-mono text-[11px] font-semibold tabular-nums leading-snug text-slate-200">
-                        {line}
-                      </p>
-                    ) : null;
-                  })()}
-                  <div className="rounded-lg border border-slate-700/40 bg-slate-950/60 p-4">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs uppercase tracking-wider text-slate-400">
-                        Current
-                      </span>
-                      <span className="font-mono text-2xl font-bold text-slate-100">
-                        {formatVal(
-                          valueMap[openRatio].value,
-                          valueMap[openRatio].format,
-                          boardMarket,
-                        )}
-                      </span>
-                    </div>
-                    <div className="mt-3">
-                      <HealthBar health={healthMap[openRatio]} />
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => {
-                      const k = openRatio;
-                      setOpenRatio(null);
-                      setOpenVideo(k);
-                    }}
-                    className="flex w-full items-center justify-center gap-2 rounded-md border-2 border-sky-500/60 bg-gradient-to-r from-sky-600/20 to-sky-500/20 px-4 py-2.5 text-sm font-bold uppercase tracking-wider text-slate-200 transition-all hover:from-sky-600/40 hover:to-sky-500/40 hover:text-slate-50"
-                  >
-                    ▶ Explanation Video (5 min)
-                  </button>
-                  <div>
-                    <p className="mb-3 text-xs font-bold uppercase tracking-[0.2em] text-sky-400">
-                      Strategic Moves to Improve
-                    </p>
-                    <ol className="space-y-2">
-                      {RATIO_META[openRatio].steps.map((step, i) => (
-                        <li
-                          key={i}
-                          className="group flex items-start gap-3 rounded-md border border-slate-700/30 bg-slate-950/40 p-3 transition-all hover:border-sky-500/60 hover:bg-slate-900/30"
-                        >
-                          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-sky-500/60 bg-sky-500/10 font-mono text-xs font-bold text-sky-300">
-                            {i + 1}
-                          </span>
-                          <span className="text-sm text-slate-200">{step}</span>
-                        </li>
-                      ))}
-                    </ol>
-                  </div>
-                </>
-              )}
-            </DialogContent>
-          </Dialog>
-
-          {/* Explanation video dialog (placeholder until real videos shipped) */}
-          <Dialog open={openVideo !== null} onOpenChange={(o) => !o && setOpenVideo(null)}>
-            <DialogContent className="max-w-2xl border-2 border-sky-500/50 bg-slate-900 text-slate-50">
-              {openVideo && (
-                <>
-                  <DialogHeader>
-                    <DialogTitle className="flex items-center gap-3 text-xl">
-                      <span className="text-2xl">{RATIO_META[openVideo].icon}</span>
-                      <span>{RATIO_META[openVideo].friendly} — Explanation Video</span>
-                    </DialogTitle>
-                    <DialogDescription className="text-slate-400">
-                      {RATIO_META[openVideo].techName} · ~5 min
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="relative flex aspect-video items-center justify-center overflow-hidden rounded-lg border-2 border-slate-700/40 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
-                    <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,hsl(210_90%_55%/0.08),transparent_70%)]" />
-                    <div className="relative text-center">
-                      <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full border-2 border-sky-500/60 bg-sky-500/10 text-3xl text-sky-300 shadow-[0_0_30px_-5px_rgb(245,158,11,0.5)]">
-                        ▶
-                      </div>
-                      <p className="mt-4 text-sm font-bold uppercase tracking-widest text-sky-300">
-                        Video Coming Soon
-                      </p>
-                      <p className="mt-1 text-xs text-slate-400">
-                        This explainer will be available soon.
-                      </p>
-                    </div>
-                  </div>
-                  <p className="rounded-md border border-slate-700/30 bg-slate-950/60 p-3 text-sm italic text-slate-300">
-                    {RATIO_META[openVideo].videoSummary}
-                  </p>
-                </>
-              )}
-            </DialogContent>
-          </Dialog>
+          <OwnerRatioBriefing
+            ratioKey={openRatio}
+            meta={openRatio ? RATIO_META[openRatio] : null}
+            open={openRatio !== null}
+            onClose={() => setOpenRatio(null)}
+            market={boardMarket}
+            figures={n}
+            inputs={v}
+            value={openRatio ? valueMap[openRatio].value : Number.NaN}
+            format={openRatio ? valueMap[openRatio].format : "x"}
+            health={openRatio ? healthMap[openRatio] : Number.NaN}
+            p50={openRatio ? (benchmarkFor(openRatio)?.p50 ?? null) : null}
+            higherIsBetter={openRatio ? (benchmarkFor(openRatio)?.higher_is_better ?? true) : true}
+            clientId={effectiveClientId}
+            canAddToPlan={userRole !== "client_member"}
+            onGoToPlan={(k) => {
+              setPlanFocusKey(k);
+              setActiveTab("tasks");
+            }}
+            onSeeTab={(tab) => setActiveTab(tab)}
+          />
 
           {/* Financial data dialog — upload financials or connect accounting software */}
           <Dialog open={showFinData} onOpenChange={setShowFinData}>
