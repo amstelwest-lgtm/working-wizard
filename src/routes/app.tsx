@@ -3764,9 +3764,6 @@ function Index() {
               <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#d4a550]/80 to-transparent" />
               <div className="flex items-center justify-between gap-2">
                 <div className="flex min-w-0 items-center gap-2">
-                  <div className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-[#d4a550]/30 bg-[#d4a550]/10">
-                    <Database className="h-3.5 w-3.5 text-[#a8791a] dark:text-[#d4a550]" />
-                  </div>
                   <img
                     src="/milon-wordmark.png"
                     alt="Milōn"
@@ -3810,48 +3807,37 @@ function Index() {
                     {userRole !== "client_member" ? (
                       <button
                         onClick={() => openProfileDialog("retake")}
-                        className="inline-flex h-7 max-w-[11rem] items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50/80 px-2 text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-600 transition-colors hover:border-[#b7872a]/50 hover:bg-[#d4a550]/10 dark:border-slate-700/80 dark:bg-slate-900/70 dark:text-slate-300"
+                        className="inline-flex h-7 max-w-[14rem] items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50/80 px-2.5 text-[11px] font-semibold text-slate-700 transition-colors hover:border-[#b7872a]/50 hover:bg-[#d4a550]/10 dark:border-slate-700/80 dark:bg-slate-900/70 dark:text-slate-200"
                         title={
                           operatingProfile
-                            ? `Profile: ${profileShortLabel(operatingProfile)} — click to retake`
+                            ? `${profileShortLabel(operatingProfile)} — update your business profile`
                             : "Set up your business profile"
                         }
                       >
                         <Building2 className="h-3 w-3 shrink-0" />
-                        {operatingProfile || businessType ? (
-                          <>
-                            <span className="truncate">
-                              {profileShortLabel(operatingProfile) !== "Set up profile"
-                                ? profileShortLabel(operatingProfile)
-                                : businessType?.label}
-                            </span>
-                            <Pencil className="h-2.5 w-2.5 shrink-0 opacity-40" />
-                          </>
-                        ) : (
-                          <span className="text-[#8a6508] dark:text-[#d4a550]">Profile</span>
-                        )}
+                        <span className="truncate">Business profile</span>
+                        <Pencil className="h-2.5 w-2.5 shrink-0 opacity-40" />
                       </button>
                     ) : operatingProfile || businessType ? (
                       <div
-                        className="inline-flex h-7 max-w-[11rem] items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50/80 px-2 text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-600 dark:border-slate-700/80 dark:bg-slate-900/70 dark:text-slate-300"
-                        title={`Profile: ${profileShortLabel(operatingProfile) || businessType?.label}`}
+                        className="inline-flex h-7 max-w-[14rem] items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50/80 px-2.5 text-[11px] font-semibold text-slate-700 dark:border-slate-700/80 dark:bg-slate-900/70 dark:text-slate-200"
+                        title={profileShortLabel(operatingProfile) || businessType?.label}
                       >
                         <Building2 className="h-3 w-3 shrink-0" />
-                        <span className="truncate">
-                          {profileShortLabel(operatingProfile) !== "Set up profile"
-                            ? profileShortLabel(operatingProfile)
-                            : businessType?.label}
-                        </span>
+                        <span className="truncate">Business profile</span>
                       </div>
                     ) : null}
                     <Popover>
                       <PopoverTrigger asChild>
                         <button
-                          className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50/80 px-2 text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-600 transition-colors hover:border-[#b7872a]/50 hover:bg-[#d4a550]/10 dark:border-slate-700/80 dark:bg-slate-900/70 dark:text-slate-300"
-                          title="Risk Profile"
+                          className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50/80 px-2.5 text-[11px] font-semibold text-slate-700 transition-colors hover:border-[#b7872a]/50 hover:bg-[#d4a550]/10 dark:border-slate-700/80 dark:bg-slate-900/70 dark:text-slate-200"
+                          title={`Risk profile — currently ${RISK_TUNING[risk].label}`}
                         >
                           <Shield className="h-3 w-3 shrink-0" />
-                          <span className="capitalize">{risk}</span>
+                          <span>Risk profile</span>
+                          <span className="hidden font-medium text-slate-500 dark:text-slate-400 lg:inline">
+                            · {RISK_TUNING[risk].label}
+                          </span>
                           <ChevronDown className="h-3 w-3 opacity-50" />
                         </button>
                       </PopoverTrigger>
@@ -3935,11 +3921,11 @@ function Index() {
                             onClick={() => openProfileDialog("retake")}
                             className="flex items-center gap-2 rounded-md px-2 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
                           >
-                            <Building2 className="h-3.5 w-3.5" /> Profile
+                            <Building2 className="h-3.5 w-3.5" /> Business profile
                           </button>
                         )}
                         <div className="px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                          Risk · {risk}
+                          Risk profile · {RISK_TUNING[risk].label}
                         </div>
                         {(["conservative", "balanced", "aggressive"] as RiskProfile[]).map((r) => (
                           <button
