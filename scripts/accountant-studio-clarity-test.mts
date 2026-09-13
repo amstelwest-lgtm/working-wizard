@@ -102,8 +102,8 @@ assert(builder.includes("resolveRatioRecord"), "Ask AI derives ratios when the s
 
 assert(
   /activeTab === "cash"/.test(studio) &&
-    /activeTab === "ask" \|\| activeTab === "summary" \|\| activeTab === "cash"/.test(studio),
-  "simple/complex toggle is hidden on the cash tab",
+    /activeTab === "ask"[\s\S]{0,180}activeTab === "plan"/.test(studio),
+  "simple/complex toggle is hidden on Cash and Action Plan",
 );
 assert(
   !/id="wizard-profit-walk"[\s\S]{0,80}className="dark"/.test(studio),
