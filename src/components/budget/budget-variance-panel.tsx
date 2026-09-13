@@ -5,7 +5,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { FileUp, Loader2, Trash2 } from "lucide-react";
+import { FileUp, Loader2, Scale, Trash2 } from "lucide-react";
+import { CollapsibleGoldCard } from "@/components/primitives/collapsible-gold-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -50,7 +51,15 @@ function priorCalendarMonth(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
-export function BudgetVariancePanel({ clientId, doc }: { clientId?: string; doc: BudgetDocument }) {
+export function BudgetVariancePanel({
+  clientId,
+  doc,
+  role = "owner",
+}: {
+  clientId?: string;
+  doc: BudgetDocument;
+  role?: "owner" | "accountant";
+}) {
   const { market, selection } = useMarket();
   const money = (n: number) => fmtBudgetMoney(n, market);
   const months = useMemo(() => fyMonths(doc.fyStart), [doc.fyStart]);
@@ -232,27 +241,86 @@ export function BudgetVariancePanel({ clientId, doc }: { clientId?: string; doc:
 
   if (!clientId) {
     return (
-      <div className="rounded-xl border border-dashed border-slate-200 p-4 text-sm text-slate-500 dark:border-slate-800">
-        Link a client to upload monthly actuals and run budget variance.
-      </div>
+      <CollapsibleGoldCard
+        id="wizard-budget-variance"
+        icon={Scale}
+        title="Budget vs actuals"
+        subtitle={
+          role === "accountant"
+            ? "The monthly scorecard against the plan above. Save this client first, then upload each month’s management accounts when they exist."
+            : "Compare the plan to what actually happened each month. Save this business first to upload a P&L."
+        }
+        defaultOpen={false}
+      >
+        <p className="text-sm leading-relaxed text-slate-600 dark:text-slate-300">
+          Link or save a client to upload monthly actuals. Until then there is nothing to compare —
+          this section stays empty on purpose.
+        </p>
+      </CollapsibleGoldCard>
     );
   }
 
+  const imported = rows.length;
+  const accountantEmpty =
+    "The monthly scorecard against the plan above. Closed until you have a month’s management accounts to upload — until then there is nothing to compare, and that is expected.";
+  const accountantLoaded = `${imported} month${imported === 1 ? "" : "s"} of management accounts on file. Open to see where the plan is off.`;
+
   return (
-    <div
+    <CollapsibleGoldCard
       id="wizard-budget-variance"
-      className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-[#0b1220]/60"
+      icon={Scale}
+      title="Budget vs actuals"
+      subtitle={
+        role === "accountant"
+          ? imported
+            ? accountantLoaded
+            : accountantEmpty
+          : imported
+            ? `${imported} month${imported === 1 ? "" : "s"} compared to the plan. Open to see the gap.`
+            : "Upload a month’s P&L when you have it — this is how the plan is checked, not how it is built."
+      }
+      defaultOpen={false}
+      headerRight={
+        <span className="hidden rounded-full border border-amber-900/15 bg-white/60 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500 sm:inline dark:border-slate-700 dark:bg-slate-900/60">
+          {imported ? `${imported} imported` : "No actuals yet"}
+        </span>
+      }
     >
+      <div className="space-y-4">
+        {role === "accountant" && (
+          <div className="rounded-xl border border-amber-900/15 bg-white/55 px-4 py-3 text-sm leading-relaxed text-slate-700 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-200">
+            <p>
+              <strong className="font-semibold text-slate-900 dark:text-slate-50">
+                What you do here:
+              </strong>{" "}
+              after the year plan is set, upload each month’s management-accounts PDF (the P&amp;L).
+              We extract revenue, cost of goods and overheads; you confirm the figures.
+            </p>
+            <p className="mt-2">
+              <strong className="font-semibold text-slate-900 dark:text-slate-50">
+                What you get:
+              </strong>{" "}
+              a variance table — where the plan is off, by how much, and whether that is good or bad
+              — so you can challenge the owner or revise the budget. This is not the annual
+              financials upload, and it is not “seed from financials”. Those set the starting plan.
+              This is the month-by-month check once the year is running.
+            </p>
+          </div>
+        )}
+        {role === "owner" && !focusActual && (
+          <p className="text-sm leading-relaxed text-slate-600 dark:text-slate-300">
+            This is the scorecard for the plan above. Upload a month’s P&amp;L PDF when you have it.
+            Until a file is in, there is nothing to compare — that is normal.
+          </p>
+        )}
+
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-            Budget vs actuals
-          </h3>
-          <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
             {market.copyPack === "us"
-              ? "Month-true variance. Upload a PDF P&L now — QuickBooks later. Xero is also on the list."
-              : "Month-true variance. Upload a PDF P&L now — QuickBooks / Xero later."}
-          </p>
+              ? "Upload a PDF P&L — QuickBooks later. Xero is also on the list."
+              : "Upload a PDF P&L — QuickBooks / Xero later."}
+          </h3>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <input
@@ -268,10 +336,9 @@ export function BudgetVariancePanel({ clientId, doc }: { clientId?: string; doc:
           <Button
             type="button"
             size="sm"
-            variant="outline"
             disabled={uploading || migrationRequired}
             onClick={() => fileRef.current?.click()}
-            className="gap-1.5"
+            className="gap-1.5 border-[#d4a550]/40 bg-[#d4a550] text-xs text-[#0a0e1a] hover:bg-[#c49a45]"
           >
             {uploading ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -316,9 +383,23 @@ export function BudgetVariancePanel({ clientId, doc }: { clientId?: string; doc:
       </div>
 
       {!focusActual && (
-        <div className="rounded-lg border border-dashed border-slate-200 px-3 py-4 text-center text-xs text-slate-500 dark:border-slate-700">
-          No actuals for <strong>{formatMonthLabel(focusMonth, market)}</strong> yet. Upload that
-          month’s management accounts PDF to generate variance.
+        <div className="rounded-lg border border-dashed border-amber-900/20 bg-white/40 px-3 py-4 text-sm leading-relaxed text-slate-600 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-300">
+          {role === "accountant" ? (
+            <>
+              No management accounts for{" "}
+              <strong className="text-slate-900 dark:text-slate-100">
+                {formatMonthLabel(focusMonth, market)}
+              </strong>{" "}
+              yet. That is normal until the month has been closed. When the PDF is ready, upload it
+              here — the outcome is a line-by-line gap vs the budget you just built, not a second
+              place to type the year plan.
+            </>
+          ) : (
+            <>
+              No actuals for <strong>{formatMonthLabel(focusMonth, market)}</strong> yet. Upload that
+              month’s management accounts PDF to generate variance.
+            </>
+          )}
         </div>
       )}
 
@@ -476,6 +557,7 @@ export function BudgetVariancePanel({ clientId, doc }: { clientId?: string; doc:
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+      </div>
+    </CollapsibleGoldCard>
   );
 }

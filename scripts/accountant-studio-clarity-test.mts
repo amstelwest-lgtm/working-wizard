@@ -129,11 +129,86 @@ assert(
   budgetSimple.includes("text-[#0f172a]"),
   "budget revenue/totals use ink that survives light-mode cream cards",
 );
+assert(budgetSimple.includes('id="wizard-budget-month-engine"'), "month fill-in is a named engine, not a bland table");
+assert(
+  budgetSimple.includes("How {monthLabel(focusMonth)} is built"),
+  "month engine names the month it is building",
+);
+assert(budgetSimple.includes("Volume × price"), "month engine explains volume × price becomes revenue");
+assert(budgetSimple.includes("symbol=\"×\""), "volume and price are shown as a times equation");
+assert(!budgetSimple.includes("What you’re selling"), "old bland selling label is gone");
+assert(!budgetSimple.includes("More detail"), "plain More detail link is gone");
+assert(budgetSimple.includes('id="wizard-budget-cash-timing"'), "cash timing is a hideable gold card");
+assert(budgetSimple.includes("defaultOpen={false}"), "cash timing starts collapsed");
+assert(
+  budgetSimple.includes("Cash in the bank on day one of this financial year"),
+  "opening cash explains why the accountant fills it",
+);
+assert(
+  budgetSimple.includes("How many days customers typically take to pay"),
+  "debtor days explains why it exists",
+);
+assert(
+  budgetSimple.includes("How many days this business typically takes to pay suppliers"),
+  "creditor days explains why it exists",
+);
+
+const budgetVariance = readFileSync(
+  resolve("src/components/budget/budget-variance-panel.tsx"),
+  "utf8",
+);
+assert(budgetVariance.includes("CollapsibleGoldCard"), "vs actuals uses the cash-forecast hideable card");
+assert(budgetVariance.includes("defaultOpen={false}"), "vs actuals starts collapsed");
+assert(budgetVariance.includes("What you do here:"), "vs actuals tells the accountant the job");
+assert(budgetVariance.includes("What you get:"), "vs actuals names the outcome");
+assert(
+  budgetVariance.includes("until then there is nothing to compare, and that is expected"),
+  "empty actuals state is explained, not a dead widget",
+);
+assert(
+  budgetVariance.includes("This is not the annual"),
+  "vs actuals is distinguished from the annual pack / seed",
+);
+
+const budgetAdvanced = readFileSync(resolve("src/components/budget/budget-advanced.tsx"), "utf8");
+assert(budgetAdvanced.includes("CollapsibleGoldCard"), "advanced uses the cash-forecast hideable card");
+assert(budgetAdvanced.includes("defaultOpen={false}"), "advanced starts collapsed");
+assert(
+  !budgetAdvanced.includes("useState(role === \"accountant\")"),
+  "advanced no longer auto-opens for accountants",
+);
+assert(!budgetAdvanced.includes("Participative notes"), "jargon title is gone");
+assert(
+  budgetAdvanced.includes("Working papers on this budget"),
+  "notes explain they are file notes, not a message to the owner",
+);
+assert(
+  budgetAdvanced.includes("How should COGS be calculated?"),
+  "COGS mode is explained as how leftover is computed",
+);
+assert(
+  budgetAdvanced.includes("It is not monthly actuals"),
+  "seed from financials is distinguished from month PDFs",
+);
+
+const goldCard = readFileSync(
+  resolve("src/components/primitives/collapsible-gold-card.tsx"),
+  "utf8",
+);
+assert(goldCard.includes("defaultOpen = false"), "shared hideable card is closed unless opened");
+
+const workspaceSrc = readFileSync(resolve("src/components/budget/budget-workspace.tsx"), "utf8");
+assert(workspaceSrc.includes("role={role}"), "simple budget gets accountant vs owner copy");
+assert(
+  workspaceSrc.includes("<BudgetVariancePanel clientId={clientId} doc={doc} role={role} />"),
+  "vs actuals gets accountant copy",
+);
 
 const cashSrc = readFileSync(resolve("src/components/cash-forecast.tsx"), "utf8");
 assert(cashSrc.includes('title="Detailed cashflow forecast"'), "weekly grid is renamed");
 assert(!cashSrc.includes('title="Weekly Detail"'), "old Weekly Detail title is gone");
 assert(cashSrc.includes("onDoubleClick"), "figures are double-click editable");
 assert(cashSrc.includes("ForecastAmountCell"), "symbol stays; only the number edits");
+assert(cashSrc.includes("CollapsibleGoldCard"), "13-week forecast uses the same hideable card");
 
 console.log("accountant-studio-clarity-test: all assertions passed");

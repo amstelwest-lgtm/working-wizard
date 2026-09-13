@@ -3,12 +3,13 @@
  */
 
 import { useEffect, useState } from "react";
-import { ChevronDown, ChevronUp, Sparkles, ArrowRightLeft, MessageSquarePlus } from "lucide-react";
+import { Sparkles, ArrowRightLeft, MessageSquarePlus, Gauge } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { CollapsibleGoldCard } from "@/components/primitives/collapsible-gold-card";
 import { supabase } from "@/integrations/supabase/client";
 import { BUSINESS_TYPE_TO_BENCHMARK } from "@/lib/ratios";
 import { industryBenchmarkCaption, isUsCopy } from "@/lib/market";
@@ -43,7 +44,6 @@ export function BudgetAdvancedPanel({
   onPushedToCash?: () => void;
 }) {
   const { market } = useMarket();
-  const [open, setOpen] = useState(role === "accountant");
   const [bench, setBench] = useState<BenchmarkHint | null>(null);
   const [noteText, setNoteText] = useState("");
   const [noteKind, setNoteKind] = useState<"note" | "challenge">("note");
@@ -132,74 +132,31 @@ export function BudgetAdvancedPanel({
   };
 
   return (
-    <section className="rounded-xl border border-slate-200/80 dark:border-slate-800">
-      <button
-        type="button"
-        className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left"
-        onClick={() => setOpen((v) => !v)}
-      >
+    <CollapsibleGoldCard
+      id="wizard-budget-advanced"
+      icon={Gauge}
+      title={role === "accountant" ? "Industry check, notes & connections" : "Checks, notes & connections"}
+      subtitle={
+        role === "accountant"
+          ? "Optional. Open to pressure-test the plan vs the industry, leave a working note on this file, copy last year’s pack into the budget, or send near-term numbers to the 13-week cash forecast."
+          : "Optional tools — usually filled with your accountant. Closed until you need them."
+      }
+      defaultOpen={false}
+    >
+      <div className="space-y-6">
         <div>
-          <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-            Advanced · benchmarks, notes & bridges
-          </div>
-          <div className="text-[11px] text-slate-500">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#b8860b]">
+            Industry check
+          </p>
+          <h3 className="mt-0.5 text-sm font-semibold text-slate-900 dark:text-slate-100">
+            Is this plan realistic for the sector?
+          </h3>
+          <p className="mt-1 max-w-2xl text-[12px] leading-relaxed text-slate-500">
             {role === "accountant"
-              ? "Pressure-test assumptions, log challenges, seed from financials, push to cash forecast."
-              : "Optional tools — usually filled with your accountant."}
-          </div>
-        </div>
-        {open ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-      </button>
-
-      {open && (
-        <div className="space-y-5 border-t border-slate-100 px-4 py-4 dark:border-slate-800">
-          {/* COGS mode */}
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div>
-              <Label className="text-[10px] uppercase tracking-wider text-slate-500">
-                COGS mode
-              </Label>
-              <select
-                className="mt-1 h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-sm dark:border-slate-700 dark:bg-slate-950"
-                value={doc.cogsMode}
-                onChange={(e) =>
-                  onChange({
-                    ...doc,
-                    cogsMode: e.target.value as BudgetDocument["cogsMode"],
-                    updatedAt: new Date().toISOString(),
-                  })
-                }
-              >
-                <option value="gp_pct">Target gross profit %</option>
-                <option value="per_unit">Cost per unit × volume</option>
-              </select>
-            </div>
-            {doc.cogsMode === "per_unit" && doc.revenueLines[0] && (
-              <div>
-                <Label className="text-[10px] uppercase tracking-wider text-slate-500">
-                  Cost / unit ({doc.revenueLines[0].name})
-                </Label>
-                <Input
-                  type="number"
-                  className="mt-1 h-9"
-                  value={doc.cogsPerUnit[doc.revenueLines[0].id] ?? 0}
-                  onChange={(e) =>
-                    onChange({
-                      ...doc,
-                      cogsPerUnit: {
-                        ...doc.cogsPerUnit,
-                        [doc.revenueLines[0].id]: parseFloat(e.target.value) || 0,
-                      },
-                      updatedAt: new Date().toISOString(),
-                    })
-                  }
-                />
-              </div>
-            )}
-          </div>
-
-          {/* Benchmarks */}
-          <div className="rounded-lg border border-[#d4a550]/30 bg-[#d4a550]/5 p-3 text-xs">
+              ? "Compares this budget’s gross margin and debtor days to the sector median. Use it to challenge an optimistic GP% or slow collections — not as a second place to type the month."
+              : "Shows how your margin and customer payment days sit against a typical business in this sector."}
+          </p>
+          <div className="mt-3 rounded-lg border border-[#d4a550]/30 bg-[#d4a550]/5 p-3 text-xs">
             <div className="font-semibold text-[#b8860b]">
               {isUsCopy(market) ? "Global SME bands" : "Industry benchmarks"}{" "}
               {bench ? `(${bench.sector})` : ""}
@@ -246,9 +203,78 @@ export function BudgetAdvancedPanel({
               </p>
             )}
           </div>
+        </div>
 
-          {/* Bridges */}
-          <div className="flex flex-wrap gap-2">
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#b8860b]">
+            Cost of goods
+          </p>
+          <h3 className="mt-0.5 text-sm font-semibold text-slate-900 dark:text-slate-100">
+            How should COGS be calculated?
+          </h3>
+          <p className="mt-1 max-w-2xl text-[12px] leading-relaxed text-slate-500">
+            {role === "accountant"
+              ? "The month engine above uses a target gross-profit %. Keep that unless this client prices from a known unit cost — then switch to cost-per-unit and we multiply by volume instead."
+              : "Most businesses set a target margin. Switch to cost per unit only if you know exactly what each sale costs to make."}
+          </p>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <div>
+              <Label className="text-[10px] uppercase tracking-wider text-slate-500">
+                COGS mode
+              </Label>
+              <select
+                className="mt-1 h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-sm dark:border-slate-700 dark:bg-slate-950"
+                value={doc.cogsMode}
+                onChange={(e) =>
+                  onChange({
+                    ...doc,
+                    cogsMode: e.target.value as BudgetDocument["cogsMode"],
+                    updatedAt: new Date().toISOString(),
+                  })
+                }
+              >
+                <option value="gp_pct">Target gross profit % — we back into COGS</option>
+                <option value="per_unit">Cost per unit × volume</option>
+              </select>
+            </div>
+            {doc.cogsMode === "per_unit" && doc.revenueLines[0] && (
+              <div>
+                <Label className="text-[10px] uppercase tracking-wider text-slate-500">
+                  Cost / unit ({doc.revenueLines[0].name})
+                </Label>
+                <Input
+                  type="number"
+                  className="mt-1 h-9"
+                  value={doc.cogsPerUnit[doc.revenueLines[0].id] ?? 0}
+                  onChange={(e) =>
+                    onChange({
+                      ...doc,
+                      cogsPerUnit: {
+                        ...doc.cogsPerUnit,
+                        [doc.revenueLines[0].id]: parseFloat(e.target.value) || 0,
+                      },
+                      updatedAt: new Date().toISOString(),
+                    })
+                  }
+                />
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#b8860b]">
+            Connections
+          </p>
+          <h3 className="mt-0.5 text-sm font-semibold text-slate-900 dark:text-slate-100">
+            Pull from last year’s pack, or send to the 13-week cash forecast
+          </h3>
+          <p className="mt-1 max-w-2xl text-[12px] leading-relaxed text-slate-500">
+            {role === "accountant"
+              ? "“Seed from financials” copies the annual pack already on Financials into this budget as a starting point — do it once when the plan is empty. It is not monthly actuals. Monthly P&Ls belong in Budget vs actuals. “Push to cash forecast” writes months 1–3 averages into the 13-week view (replace)."
+              : "Seed fills this budget from last year’s figures. Push sends the next few months into the 13-week cash forecast."}
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
             <Button
               type="button"
               size="sm"
@@ -270,83 +296,92 @@ export function BudgetAdvancedPanel({
               {pushing ? "Pushing…" : "Push to cash forecast"}
             </Button>
           </div>
-          <p className="text-[11px] text-slate-500">
-            Seed fills GP%, monthly revenue equiv., overheads and WC days from period financials.
-            Push writes months 1–3 averages into the 13-week cash forecast (replace).
-          </p>
-
-          {/* Notes / challenges */}
-          <div className="space-y-2">
-            <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-              Participative notes
-            </div>
-            <div className="grid gap-2 sm:grid-cols-4">
-              <Input
-                value={noteBy}
-                onChange={(e) => setNoteBy(e.target.value)}
-                placeholder="Your name"
-                className="h-9 sm:col-span-1"
-              />
-              <select
-                className="h-9 rounded-md border border-slate-200 bg-white px-2 text-sm dark:border-slate-700 dark:bg-slate-950"
-                value={noteKind}
-                onChange={(e) => setNoteKind(e.target.value as "note" | "challenge")}
-              >
-                <option value="note">Note</option>
-                <option value="challenge">Challenge</option>
-              </select>
-              <div className="sm:col-span-2">
-                <Textarea
-                  value={noteText}
-                  onChange={(e) => setNoteText(e.target.value)}
-                  placeholder="e.g. Owner wants 45% GP — industry median is 32%"
-                  rows={2}
-                  className="min-h-[36px] resize-none text-sm"
-                />
-              </div>
-            </div>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              className="gap-1.5 text-xs"
-              onClick={addNote}
-            >
-              <MessageSquarePlus className="h-3.5 w-3.5" />
-              Add to log
-            </Button>
-            <ul className="space-y-2">
-              {[...(doc.notes ?? [])].reverse().map((n) => (
-                <li
-                  key={n.id}
-                  className={`rounded-lg border px-3 py-2 text-xs ${
-                    n.kind === "challenge"
-                      ? "border-amber-500/40 bg-amber-500/10"
-                      : "border-slate-200 dark:border-slate-800"
-                  }`}
-                >
-                  <div className="flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-wider text-slate-500">
-                    <span>{n.kind}</span>
-                    <span>·</span>
-                    <span>{n.by}</span>
-                    <span>·</span>
-                    <span>
-                      {new Date(n.at).toLocaleString("en-GB", {
-                        dateStyle: "medium",
-                        timeStyle: "short",
-                      })}
-                    </span>
-                  </div>
-                  <div className="mt-1 text-slate-800 dark:text-slate-100">{n.text}</div>
-                </li>
-              ))}
-              {!(doc.notes ?? []).length && (
-                <li className="text-[11px] text-slate-500">No notes yet.</li>
-              )}
-            </ul>
-          </div>
         </div>
-      )}
-    </section>
+
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#b8860b]">
+            File notes
+          </p>
+          <h3 className="mt-0.5 text-sm font-semibold text-slate-900 dark:text-slate-100">
+            Working papers on this budget
+          </h3>
+          <p className="mt-1 max-w-2xl text-[12px] leading-relaxed text-slate-500">
+            {role === "accountant"
+              ? "These stay on this client’s budget file. They are not emailed to the owner. Use a note to record why a number was set. Use a challenge when you do not yet believe a figure — so the next person on this file can see the disagreement."
+              : "Notes live on this budget so you and your accountant remember why a number was set. They are not sent as a message."}
+          </p>
+          <div className="mt-3 grid gap-2 sm:grid-cols-4">
+            <Input
+              value={noteBy}
+              onChange={(e) => setNoteBy(e.target.value)}
+              placeholder="Your name"
+              className="h-9 sm:col-span-1"
+            />
+            <select
+              className="h-9 rounded-md border border-slate-200 bg-white px-2 text-sm dark:border-slate-700 dark:bg-slate-950"
+              value={noteKind}
+              onChange={(e) => setNoteKind(e.target.value as "note" | "challenge")}
+            >
+              <option value="note">Note — why this number</option>
+              <option value="challenge">Challenge — I don’t buy this yet</option>
+            </select>
+            <div className="sm:col-span-2">
+              <Textarea
+                value={noteText}
+                onChange={(e) => setNoteText(e.target.value)}
+                placeholder={
+                  role === "accountant"
+                    ? "e.g. Owner wants 45% GP — sector median is 32%. Holding as a challenge until mix is evidenced."
+                    : "e.g. New contract starts in June — volume steps up then."
+                }
+                rows={2}
+                className="min-h-[36px] resize-none text-sm"
+              />
+            </div>
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="mt-2 gap-1.5 text-xs"
+            onClick={addNote}
+          >
+            <MessageSquarePlus className="h-3.5 w-3.5" />
+            Add to this file
+          </Button>
+          <ul className="mt-3 space-y-2">
+            {[...(doc.notes ?? [])].reverse().map((n) => (
+              <li
+                key={n.id}
+                className={`rounded-lg border px-3 py-2 text-xs ${
+                  n.kind === "challenge"
+                    ? "border-amber-500/40 bg-amber-500/10"
+                    : "border-slate-200 dark:border-slate-800"
+                }`}
+              >
+                <div className="flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-wider text-slate-500">
+                  <span>{n.kind}</span>
+                  <span>·</span>
+                  <span>{n.by}</span>
+                  <span>·</span>
+                  <span>
+                    {new Date(n.at).toLocaleString("en-GB", {
+                      dateStyle: "medium",
+                      timeStyle: "short",
+                    })}
+                  </span>
+                </div>
+                <div className="mt-1 text-slate-800 dark:text-slate-100">{n.text}</div>
+              </li>
+            ))}
+            {!(doc.notes ?? []).length && (
+              <li className="text-[11px] text-slate-500">
+                No notes on this file yet. Empty is fine — add one only when a number needs a reason.
+              </li>
+            )}
+          </ul>
+        </div>
+      </div>
+    </CollapsibleGoldCard>
   );
 }

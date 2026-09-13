@@ -220,10 +220,10 @@ const ACCOUNTANT_CLIENT_STEPS: Step[] = [
   },
   {
     tab: "budget",
-    targetId: "wizard-budget-plan, wizard-budget-panel",
+    targetId: "wizard-budget-month-engine, wizard-budget-plan, wizard-budget-panel",
     section: "Budget",
     title: "Annual plan, seeded — needs your sign-off",
-    body: "The budget was built from profile and figures at upload. Sign it off once it reads true; Budget vs Actuals underneath is where monthly management accounts land.",
+    body: "The budget was built from profile and figures at upload. Sign it off once it reads true. Cash timing, Budget vs actuals, and industry checks sit underneath — closed until you open them.",
   },
   {
     tab: "reports",

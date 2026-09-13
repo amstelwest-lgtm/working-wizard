@@ -65,8 +65,9 @@ export function BudgetWorkspace({
           onChange={onChange}
           actuals={actuals}
           onChangeModel={onChangeModel}
+          role={role}
         />
-        <BudgetVariancePanel clientId={clientId} doc={doc} />
+        <BudgetVariancePanel clientId={clientId} doc={doc} role={role} />
       </div>
     );
   }
@@ -282,7 +283,7 @@ function BudgetComplexWorkspace({
 
       <BudgetYearOverviewChart doc={doc} />
 
-      <BudgetVariancePanel clientId={clientId} doc={doc} />
+      <BudgetVariancePanel clientId={clientId} doc={doc} role={role} />
 
       {/* Assumptions */}
       <section className="grid gap-3 rounded-xl border border-slate-200/80 bg-white/70 p-4 dark:border-slate-800 dark:bg-slate-950/50 sm:grid-cols-3 lg:grid-cols-6">
