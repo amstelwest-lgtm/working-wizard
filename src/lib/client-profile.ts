@@ -70,6 +70,11 @@ export type ClientOperatingProfile = {
    * Absent / "full" — every question answered (older profiles, retakes).
    */
   depth?: "core" | "full";
+  /**
+   * Deferred profile keys the owner confirmed in the Health drip (or similar).
+   * Inferred first-run defaults do not count until a key is listed here.
+   */
+  confirmedExtraKeys?: string[];
   confirmedAt: string;
   /** Who last confirmed the profile — owner app or firm/accountant. */
   confirmedBy?: "owner" | "firm";

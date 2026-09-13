@@ -1,23 +1,67 @@
 /**
- * Light owner-facing prompt shell for the slow-drip outstanding question.
- * Not an Ask AI / Claude chat rewrite.
+ * Clickable, fillable owner prompt for the slow-drip outstanding question.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type Ref } from "react";
+import { Info } from "lucide-react";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { isMissingBrainRelation, type ClientBrainQuestion } from "@/lib/client-brain";
 import {
+  asFluentCustomerQuestion,
+  catalogPromptForKey,
+  DRIP_ANSWER_HELP,
   operatingProfileQuestionStates,
   productLineQuestionStates,
 } from "@/lib/client-brain-questions";
 import { historyCoverageQuestionStates } from "@/lib/history-coverage";
 import { useBrainDrip } from "@/hooks/use-brain-drip";
-import type { ClientOperatingProfile } from "@/lib/client-profile";
+import { stampProfileProvenance, type ClientOperatingProfile } from "@/lib/client-profile";
 import type { ProductMix } from "@/lib/product-mix";
-import { emptyProductMix } from "@/lib/product-mix";
+import { emptyProductMix, namedProductLines } from "@/lib/product-mix";
 import type { WeeklyInputs } from "@/lib/weekly-inputs";
-import { emptyWeeklyInputs } from "@/lib/weekly-inputs";
+import { emptyWeeklyInputs, getISOWeekKey } from "@/lib/weekly-inputs";
 import { AddPastPeriodLink } from "@/components/add-past-period-link";
+import {
+  OPT_IN_CHOICES,
+  applyOperatingProfileDripAnswer,
+  applyProductMixDripAnswer,
+  applyWeeklyDripAnswer,
+  parseLineNames,
+  profileDripChoices,
+} from "@/lib/owner-drip-answer";
+
+function choiceClass(on: boolean) {
+  return on
+    ? "rounded-lg border-2 border-[#d4a550] bg-[#d4a550]/20 px-2.5 py-1.5 text-left text-xs font-medium text-slate-800 dark:text-slate-100"
+    : "rounded-lg border border-slate-200 bg-white/70 px-2.5 py-1.5 text-left text-xs text-slate-600 transition hover:border-[#d4a550]/60 hover:bg-[#d4a550]/10 dark:border-slate-700 dark:bg-slate-950/40 dark:text-slate-300";
+}
+
+function MoneyInput({
+  value,
+  onChange,
+  placeholder,
+  inputRef,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  inputRef?: Ref<HTMLInputElement>;
+}) {
+  return (
+    <input
+      ref={inputRef}
+      type="number"
+      min={0}
+      step="0.01"
+      value={value}
+      placeholder={placeholder}
+      onChange={(e) => onChange(e.target.value)}
+      onClick={(e) => e.stopPropagation()}
+      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-800 outline-none ring-[#d4a550]/40 focus:border-[#d4a550] focus:ring-2 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+    />
+  );
+}
 
 export function OwnerBrainDrip({
   clientId,
@@ -27,6 +71,10 @@ export function OwnerBrainDrip({
   snapshotCount = 0,
   hasLiveFigures = false,
   onAddPastPeriod,
+  onSaveProfile,
+  onSaveProductMix,
+  onSaveWeekly,
+  enabled = true,
 }: {
   clientId: string | null;
   operatingProfile?: ClientOperatingProfile | null;
@@ -35,9 +83,25 @@ export function OwnerBrainDrip({
   snapshotCount?: number;
   hasLiveFigures?: boolean;
   onAddPastPeriod?: () => void;
+  onSaveProfile?: (profile: ClientOperatingProfile) => Promise<void> | void;
+  onSaveProductMix?: (mix: ProductMix) => void;
+  onSaveWeekly?: (weekly: WeeklyInputs) => void;
+  enabled?: boolean;
 }) {
   const [stored, setStored] = useState<ClientBrainQuestion[]>([]);
   const [ready, setReady] = useState(false);
+  const [advanceToken, setAdvanceToken] = useState(0);
+  const [justAnsweredKey, setJustAnsweredKey] = useState<string | null>(null);
+  const [choice, setChoice] = useState("");
+  const [text, setText] = useState("");
+  const [lineValues, setLineValues] = useState<Record<string, string>>({});
+  const [weeklyRev, setWeeklyRev] = useState("");
+  const [weeklyCos, setWeeklyCos] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const firstFieldRef = useRef<HTMLInputElement | HTMLTextAreaElement | HTMLButtonElement | null>(
+    null,
+  );
 
   const load = useCallback(async () => {
     if (!clientId) {
@@ -45,13 +109,13 @@ export function OwnerBrainDrip({
       setReady(false);
       return;
     }
-    const { data, error } = await supabase
+    const { data, error: loadError } = await supabase
       .from("client_brain_questions")
       .select("*")
       .eq("client_id", clientId)
       .order("created_at", { ascending: false })
       .limit(80);
-    setStored(isMissingBrainRelation(error) ? [] : ((data ?? []) as ClientBrainQuestion[]));
+    setStored(isMissingBrainRelation(loadError) ? [] : ((data ?? []) as ClientBrainQuestion[]));
     setReady(true);
   }, [clientId]);
 
@@ -59,43 +123,319 @@ export function OwnerBrainDrip({
     void load();
   }, [load]);
 
-  const derived = useMemo(
-    () => [
-      ...operatingProfileQuestionStates(operatingProfile ?? null),
-      ...productLineQuestionStates(productMix ?? emptyProductMix(), weeklyInputs ?? emptyWeeklyInputs()),
+  const mix = productMix ?? emptyProductMix();
+  const weekly = weeklyInputs ?? emptyWeeklyInputs();
+
+  const derived = useMemo(() => {
+    const all = [
+      ...(operatingProfile ? operatingProfileQuestionStates(operatingProfile) : []),
+      ...productLineQuestionStates(mix, weekly),
       ...historyCoverageQuestionStates({
         snapshotCount,
         hasLiveFigures,
         deferForCoreProfile: operatingProfile?.depth === "core",
       }),
-    ],
-    [operatingProfile, productMix, weeklyInputs, snapshotCount, hasLiveFigures],
-  );
+    ];
+    if (!justAnsweredKey) return all;
+    return all.map((q) => (q.key === justAnsweredKey ? { ...q, answered: true } : q));
+  }, [operatingProfile, mix, weekly, snapshotCount, hasLiveFigures, justAnsweredKey]);
 
   const drip = useBrainDrip({
     clientId,
     derived,
     stored,
-    enabled: Boolean(clientId) && ready,
+    enabled: Boolean(clientId) && ready && enabled,
+    advanceToken,
     onStamped: () => {
       void load();
     },
   });
+
+  const fluentPrompt = drip
+    ? asFluentCustomerQuestion(catalogPromptForKey(drip.key) ?? drip.prompt)
+    : "";
+  const named = namedProductLines(mix);
+  const profileChoices = drip ? profileDripChoices(drip.key, operatingProfile ?? null) : [];
+  const isHistory = Boolean(drip?.key.startsWith("history."));
+  const isProfile = Boolean(drip?.key.startsWith("operating_profile."));
+  const isOptIn = drip?.key === "product_mix.opt_in";
+  const isNames = drip?.key === "product_mix.lines";
+  const isLineMoney =
+    drip?.key === "product_mix.prices" ||
+    drip?.key === "product_mix.costs" ||
+    drip?.key === "product_mix.revenue";
+  const isWeekly = drip?.key === "weekly_inputs.weeks";
+  const isStored = Boolean(drip && !isHistory && !isProfile && !isOptIn && !isNames && !isLineMoney && !isWeekly);
+
+  useEffect(() => {
+    setChoice("");
+    setText(isNames ? named.map((l) => l.name).join("\n") : "");
+    const seed: Record<string, string> = {};
+    if (drip?.key === "product_mix.prices") {
+      for (const line of named) seed[line.id] = line.sellPrice != null ? String(line.sellPrice) : "";
+    } else if (drip?.key === "product_mix.costs") {
+      for (const line of named) seed[line.id] = line.unitCost != null ? String(line.unitCost) : "";
+    } else if (drip?.key === "product_mix.revenue") {
+      for (const line of named) {
+        seed[line.id] = line.revenueAmount != null ? String(line.revenueAmount) : "";
+      }
+    }
+    setLineValues(seed);
+    const week = weekly.weeks[getISOWeekKey()];
+    setWeeklyRev(week?.revenue ? String(week.revenue) : "");
+    setWeeklyCos(week?.costOfSales ? String(week.costOfSales) : "");
+    setError(null);
+    // Reset only when the dripped question changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [drip?.key]);
+
+  const focusFirst = useCallback(() => {
+    firstFieldRef.current?.focus();
+  }, []);
+
+  const markStoredAnswered = useCallback(
+    async (key: string, prompt: string, audience: "owner" | "accountant" | "both", answer: string) => {
+      if (!clientId) return;
+      const now = new Date().toISOString();
+      const { data: auth } = await supabase.auth.getUser();
+      const { error: saveError } = await supabase.from("client_brain_questions").upsert(
+        {
+          client_id: clientId,
+          question_key: key,
+          prompt_text: prompt,
+          audience,
+          status: "answered",
+          answer_text: answer,
+          answered_at: now,
+          answered_by: auth.user?.id ?? null,
+        },
+        { onConflict: "client_id,question_key" },
+      );
+      if (saveError && !isMissingBrainRelation(saveError)) throw saveError;
+    },
+    [clientId],
+  );
+
+  const submit = useCallback(async () => {
+    if (!drip) return;
+    if (isHistory) {
+      onAddPastPeriod?.();
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      if (isProfile) {
+        if (!operatingProfile) throw new Error("Finish the first profile questions first.");
+        if (!choice) throw new Error("Pick an answer, then tap Answer question.");
+        if (!onSaveProfile) throw new Error("Could not save this answer just now.");
+        const next = stampProfileProvenance(
+          applyOperatingProfileDripAnswer(operatingProfile, drip.key, choice),
+          "owner",
+        );
+        await onSaveProfile(next);
+        const label = profileChoices.find((c) => c.id === choice)?.label ?? choice;
+        await markStoredAnswered(drip.key, fluentPrompt, drip.audience, label);
+      } else if (isOptIn || isNames || isLineMoney) {
+        if (!onSaveProductMix) throw new Error("Could not save this answer just now.");
+        const next = applyProductMixDripAnswer(mix, drip.key, {
+          choice,
+          names: parseLineNames(text),
+          lineValues,
+        });
+        onSaveProductMix(next);
+        await markStoredAnswered(
+          drip.key,
+          fluentPrompt,
+          drip.audience,
+          isNames ? parseLineNames(text).join(", ") : choice || "Saved",
+        );
+      } else if (isWeekly) {
+        if (!onSaveWeekly) throw new Error("Could not save this answer just now.");
+        const next = applyWeeklyDripAnswer(
+          weekly,
+          Number(weeklyRev),
+          Number(weeklyCos),
+        );
+        onSaveWeekly(next);
+        await markStoredAnswered(
+          drip.key,
+          fluentPrompt,
+          drip.audience,
+          `Revenue ${weeklyRev} · cost of sales ${weeklyCos}`,
+        );
+      } else {
+        const answer = text.trim();
+        if (!answer) throw new Error("Type a short answer, then tap Answer question.");
+        await markStoredAnswered(drip.key, fluentPrompt, drip.audience, answer);
+      }
+      toast.success("Saved — recommendations will get sharper");
+      setJustAnsweredKey(drip.key);
+      await load();
+      setAdvanceToken((n) => n + 1);
+    } catch (e) {
+      const message = (e as Error).message || "Could not save that answer.";
+      setError(message);
+      toast.error(message);
+    } finally {
+      setSaving(false);
+    }
+  }, [
+    choice,
+    drip,
+    fluentPrompt,
+    isHistory,
+    isLineMoney,
+    isNames,
+    isOptIn,
+    isProfile,
+    isWeekly,
+    lineValues,
+    load,
+    markStoredAnswered,
+    mix,
+    onAddPastPeriod,
+    onSaveProductMix,
+    onSaveProfile,
+    onSaveWeekly,
+    operatingProfile,
+    profileChoices,
+    text,
+    weekly,
+    weeklyCos,
+    weeklyRev,
+  ]);
 
   if (!drip) return null;
 
   return (
     <div
       id="owner-brain-drip"
-      className="flex flex-col gap-1.5 rounded-xl border border-[#d4a550]/30 bg-[#d4a550]/[0.06] px-3.5 py-2.5 text-sm"
+      role="group"
+      tabIndex={0}
+      onClick={focusFirst}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" && (e.target as HTMLElement).id === "owner-brain-drip") {
+          focusFirst();
+        }
+      }}
+      className="flex cursor-pointer flex-col gap-2.5 rounded-xl border border-[#d4a550]/30 bg-[#d4a550]/[0.06] px-3.5 py-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-[#d4a550]/50"
     >
-      <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#b8860b] dark:text-[#d4a550]">
-        One question
-      </p>
-      <p className="text-slate-700 dark:text-slate-200">{drip.prompt}</p>
-      {drip.key.startsWith("history.") && onAddPastPeriod ? (
-        <AddPastPeriodLink onOpen={onAddPastPeriod} />
-      ) : null}
+      <div className="flex flex-col gap-2.5 sm:flex-row sm:items-start">
+        <div className="min-w-0 flex-1 space-y-2">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#b8860b] dark:text-[#d4a550]">
+            One question
+          </p>
+          <p className="font-medium text-slate-800 dark:text-slate-100">{fluentPrompt}</p>
+
+          {isProfile || isOptIn ? (
+            <div className="flex flex-col gap-1.5">
+              {(isOptIn ? OPT_IN_CHOICES : profileChoices).map((opt, i) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  ref={i === 0 ? (el) => { firstFieldRef.current = el; } : undefined}
+                  className={choiceClass(choice === opt.id)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setChoice(opt.id);
+                  }}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          ) : null}
+
+          {isNames ? (
+            <textarea
+              ref={(el) => { firstFieldRef.current = el; }}
+              value={text}
+              rows={3}
+              placeholder="e.g. Retail shop&#10;Wholesale deliveries"
+              onChange={(e) => setText(e.target.value)}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none ring-[#d4a550]/40 focus:border-[#d4a550] focus:ring-2 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+            />
+          ) : null}
+
+          {isLineMoney ? (
+            <div className="space-y-1.5">
+              {named.map((line, i) => (
+                <label key={line.id} className="block">
+                  <span className="mb-0.5 block text-[11px] text-slate-500">{line.name}</span>
+                  <MoneyInput
+                    inputRef={i === 0 ? firstFieldRef : undefined}
+                    value={lineValues[line.id] ?? ""}
+                    onChange={(v) => setLineValues((prev) => ({ ...prev, [line.id]: v }))}
+                    placeholder={
+                      drip.key === "product_mix.revenue" ? "Revenue from this line" : "Amount"
+                    }
+                  />
+                </label>
+              ))}
+            </div>
+          ) : null}
+
+          {isWeekly ? (
+            <div className="grid grid-cols-2 gap-2">
+              <label className="block">
+                <span className="mb-0.5 block text-[11px] text-slate-500">This week’s revenue</span>
+                <MoneyInput
+                  inputRef={firstFieldRef}
+                  value={weeklyRev}
+                  onChange={setWeeklyRev}
+                  placeholder="0"
+                />
+              </label>
+              <label className="block">
+                <span className="mb-0.5 block text-[11px] text-slate-500">Cost of sales</span>
+                <MoneyInput value={weeklyCos} onChange={setWeeklyCos} placeholder="0" />
+              </label>
+            </div>
+          ) : null}
+
+          {isStored ? (
+            <textarea
+              ref={(el) => { firstFieldRef.current = el; }}
+              value={text}
+              rows={3}
+              placeholder="Type your answer"
+              onChange={(e) => setText(e.target.value)}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none ring-[#d4a550]/40 focus:border-[#d4a550] focus:ring-2 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+            />
+          ) : null}
+
+          {isHistory && onAddPastPeriod ? (
+            <div onClick={(e) => e.stopPropagation()}>
+              <AddPastPeriodLink onOpen={onAddPastPeriod} />
+            </div>
+          ) : null}
+
+          {error ? <p className="text-xs text-red-600 dark:text-red-400">{error}</p> : null}
+
+          <button
+            type="button"
+            disabled={saving}
+            onClick={(e) => {
+              e.stopPropagation();
+              void submit();
+            }}
+            className="inline-flex items-center justify-center rounded-lg bg-[#b7872a] px-3.5 py-1.5 text-sm font-semibold text-white transition hover:bg-[#d4a550] disabled:opacity-60"
+          >
+            {saving ? "Saving…" : "Answer question"}
+          </button>
+        </div>
+
+        <aside
+          className="flex shrink-0 items-start gap-1.5 rounded-lg border border-[#d4a550]/25 bg-[#d4a550]/10 px-2.5 py-2 text-[11px] leading-relaxed text-slate-600 sm:max-w-[13.5rem] dark:text-slate-300"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#b8860b] dark:text-[#d4a550]" aria-hidden />
+          <span>{DRIP_ANSWER_HELP}</span>
+        </aside>
+      </div>
     </div>
   );
 }

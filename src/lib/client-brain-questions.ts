@@ -94,12 +94,21 @@ const MONTHS = [
 ];
 
 /** Core four asked on first run. Deferred six are unanswered when depth === "core". */
-const CORE_PROFILE_KEYS = new Set([
+export const CORE_PROFILE_KEYS = new Set([
   "operating_profile.payMotion",
   "operating_profile.volumeUnit",
   "operating_profile.debtorDaysDefault",
   "operating_profile.ownerGoal",
 ]);
+
+/** Deferred keys that stay unanswered on a core profile until the owner confirms them. */
+export const DEFERRED_PROFILE_CONFIRM_KEYS = [
+  "operating_profile.costShape",
+  "operating_profile.seasonality",
+  "operating_profile.inventoryIntensity",
+  "operating_profile.customerConcentration",
+  "operating_profile.debtPosition",
+] as const;
 
 export const OPERATING_PROFILE_PROMPTS: Array<{
   key: string;
@@ -107,44 +116,111 @@ export const OPERATING_PROFILE_PROMPTS: Array<{
   core: boolean;
 }> = [
   { key: "operating_profile.payMotion", prompt: "How do you mostly make money?", core: true },
-  { key: "operating_profile.volumeUnit", prompt: "What counts as one unit of sales?", core: true },
+  { key: "operating_profile.volumeUnit", prompt: "What counts as one unit of sales for you?", core: true },
   {
     key: "operating_profile.secondaryVolumeUnits",
-    prompt: "Any important second revenue stream?",
+    prompt: "Do you have an important second revenue stream?",
     core: false,
   },
   {
     key: "operating_profile.debtorDaysDefault",
-    prompt: "How quickly do customers typically pay?",
+    prompt: "How quickly do customers typically pay you?",
     core: true,
   },
-  { key: "operating_profile.costShape", prompt: "What does your cost base look like?", core: false },
-  { key: "operating_profile.seasonality", prompt: "How seasonal is demand?", core: false },
+  {
+    key: "operating_profile.costShape",
+    prompt: "What does your cost base look like most months?",
+    core: false,
+  },
+  {
+    key: "operating_profile.seasonality",
+    prompt: "How seasonal is demand through the year?",
+    core: false,
+  },
   {
     key: "operating_profile.inventoryIntensity",
-    prompt: "How important is stock / inventory?",
+    prompt: "How important is stock or inventory in your business?",
     core: false,
   },
   {
     key: "operating_profile.customerConcentration",
-    prompt: "How concentrated is your revenue?",
+    prompt: "How concentrated is your revenue across customers?",
     core: false,
   },
   {
     key: "operating_profile.debtPosition",
-    prompt: "Where do you stand on debt and funding?",
+    prompt: "Where do you stand on debt and funding right now?",
     core: false,
   },
   {
     key: "operating_profile.ownerGoal",
-    prompt: "What are you actually trying to achieve?",
+    prompt: "What are you actually trying to achieve this year?",
     core: true,
   },
 ];
 
+export const PRODUCT_MIX_PROMPTS: Record<string, string> = {
+  "product_mix.opt_in": "Do you sell more than one product or service that matters?",
+  "product_mix.lines": "What are the product or service lines that matter most?",
+  "product_mix.prices": "What is your selling price per unit for each line?",
+  "product_mix.costs": "What is the direct cost per unit for each line?",
+  "product_mix.revenue": "Of your total revenue, how much comes from each line?",
+  "weekly_inputs.weeks": "What were this week’s revenue and cost of sales?",
+};
+
+export const HISTORY_DRIP_PROMPT =
+  "Do you have figures from a prior year or another period we can add?";
+
+export const DRIP_ANSWER_HELP =
+  "Each question you answer gives a clearer picture of the business — and more accurate recommendations.";
+
+const QUESTION_STARTER =
+  /^(how|what|when|where|why|who|do|does|did|is|are|can|could|would|will|have|has|got|any)\b/i;
+
+const KNOWN_LABEL_QUESTIONS: Record<string, string> = {
+  "unit price": PRODUCT_MIX_PROMPTS["product_mix.prices"]!,
+  "selling price per unit": PRODUCT_MIX_PROMPTS["product_mix.prices"]!,
+  "direct cost per unit": PRODUCT_MIX_PROMPTS["product_mix.costs"]!,
+  "name the lines that matter": PRODUCT_MIX_PROMPTS["product_mix.lines"]!,
+  "of total revenue, how much is from each line": PRODUCT_MIX_PROMPTS["product_mix.revenue"]!,
+  "weekly p&l figures on the profit tab": PRODUCT_MIX_PROMPTS["weekly_inputs.weeks"]!,
+  "cost base?": OPERATING_PROFILE_PROMPTS.find((q) => q.key === "operating_profile.costShape")!.prompt,
+  "got a prior year or another period’s figures? one extra pack and the trend lines start working.":
+    HISTORY_DRIP_PROMPT,
+};
+
+/** Turn a catalog label or stored prompt into a fluent question to the owner. */
+export function asFluentCustomerQuestion(raw: string): string {
+  const text = raw.replace(/\s+/g, " ").trim();
+  if (!text) return "Could you tell us a bit more about this?";
+  const mapped = KNOWN_LABEL_QUESTIONS[text.toLowerCase()];
+  if (mapped) return mapped;
+  const catalog = OPERATING_PROFILE_PROMPTS.find((q) => q.key === text)?.prompt
+    ?? PRODUCT_MIX_PROMPTS[text]
+    ?? (text === "history.prior_period" ? HISTORY_DRIP_PROMPT : null);
+  if (catalog) return catalog;
+  const trimmed = text.replace(/[.!]+$/, "");
+  if (trimmed.endsWith("?")) {
+    return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
+  }
+  if (QUESTION_STARTER.test(trimmed)) {
+    return `${trimmed.charAt(0).toUpperCase()}${trimmed.slice(1)}?`;
+  }
+  const noun = trimmed.charAt(0).toLowerCase() + trimmed.slice(1);
+  return `What is your ${noun}?`;
+}
+
+export function catalogPromptForKey(key: string): string | null {
+  const profile = OPERATING_PROFILE_PROMPTS.find((q) => q.key === key);
+  if (profile) return profile.prompt;
+  return PRODUCT_MIX_PROMPTS[key] ?? (key === "history.prior_period" ? HISTORY_DRIP_PROMPT : null);
+}
+
 function profileFieldAnswered(profile: ClientOperatingProfile | null, key: string): boolean {
   if (!profile) return false;
-  if (profile.depth === "core" && !CORE_PROFILE_KEYS.has(key)) return false;
+  if (profile.depth === "core" && !CORE_PROFILE_KEYS.has(key)) {
+    return (profile.confirmedExtraKeys ?? []).includes(key);
+  }
   if (key === "operating_profile.payMotion") return !!profile.payMotion;
   if (key === "operating_profile.volumeUnit") return !!profile.volumeUnit;
   if (key === "operating_profile.secondaryVolumeUnits") return true;
@@ -234,7 +310,7 @@ export function productLineQuestionStates(
   return [
     {
       key: "product_mix.opt_in",
-      prompt: "Do you sell more than one product or service that matters?",
+      prompt: PRODUCT_MIX_PROMPTS["product_mix.opt_in"]!,
       audience: "both",
       answered: confirmed,
       answer: optInAnswer,
@@ -242,7 +318,7 @@ export function productLineQuestionStates(
     },
     {
       key: "product_mix.lines",
-      prompt: "Name the lines that matter",
+      prompt: PRODUCT_MIX_PROMPTS["product_mix.lines"]!,
       audience: "both",
       answered: declined || namesOk,
       answer: declined ? "Skipped — one main line" : namesOk ? named.map((l) => l.name).join(", ") : null,
@@ -250,7 +326,7 @@ export function productLineQuestionStates(
     },
     {
       key: "product_mix.prices",
-      prompt: "Selling price per unit",
+      prompt: PRODUCT_MIX_PROMPTS["product_mix.prices"]!,
       audience: "both",
       answered: declined || pricesOk,
       answer: declined
@@ -265,7 +341,7 @@ export function productLineQuestionStates(
     },
     {
       key: "product_mix.costs",
-      prompt: "Direct cost per unit",
+      prompt: PRODUCT_MIX_PROMPTS["product_mix.costs"]!,
       audience: "both",
       answered: declined || costsOk,
       answer: declined
@@ -280,7 +356,7 @@ export function productLineQuestionStates(
     },
     {
       key: "product_mix.revenue",
-      prompt: "Of total revenue, how much is from each line",
+      prompt: PRODUCT_MIX_PROMPTS["product_mix.revenue"]!,
       audience: "both",
       answered: declined || revenueOk,
       answer: declined
@@ -295,7 +371,7 @@ export function productLineQuestionStates(
     },
     {
       key: "weekly_inputs.weeks",
-      prompt: "Weekly P&L figures on the Profit tab",
+      prompt: PRODUCT_MIX_PROMPTS["weekly_inputs.weeks"]!,
       audience: "both",
       answered: weeklyOk,
       answer: weeklyOk ? `${weekCount} week${weekCount === 1 ? "" : "s"} with figures` : null,
@@ -310,13 +386,16 @@ export function mergeOutstandingQuestions(
 ): QuestionState[] {
   const byKey = new Map<string, QuestionState>();
   for (const q of derived) {
-    if (!q.answered) byKey.set(q.key, q);
+    if (!q.answered) {
+      byKey.set(q.key, { ...q, prompt: asFluentCustomerQuestion(q.prompt) });
+    }
   }
   for (const row of stored) {
     if (row.status !== "unanswered") continue;
+    const catalog = catalogPromptForKey(row.question_key);
     byKey.set(row.question_key, {
       key: row.question_key,
-      prompt: row.prompt_text?.trim() || row.question_key,
+      prompt: asFluentCustomerQuestion(catalog ?? (row.prompt_text?.trim() || row.question_key)),
       audience: row.audience,
       answered: false,
       answer: null,

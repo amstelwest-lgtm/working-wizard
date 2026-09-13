@@ -22,8 +22,16 @@ import {
   activeOwnerDrip,
   pickNextOwnerDrip,
   buildOwnerDripCandidates,
+  asFluentCustomerQuestion,
+  PRODUCT_MIX_PROMPTS,
+  DRIP_ANSWER_HELP,
   DRIP_COOLDOWN_DAYS,
 } from "../src/lib/client-brain-questions";
+import {
+  applyOperatingProfileDripAnswer,
+  applyProductMixDripAnswer,
+  applyWeeklyDripAnswer,
+} from "../src/lib/owner-drip-answer";
 import {
   applyDraftBrainPatches,
   filterNewProposedSteps,
@@ -250,9 +258,89 @@ assert(fullQs.every((q) => q.answered), "full profile answers all ten");
 const mixQs = productLineQuestionStates(emptyProductMix(), emptyWeeklyInputs());
 assert(mixQs.every((q) => !q.answered), "empty mix/weekly stay empty");
 assert(
+  mixQs.every((q) => q.prompt.trim().endsWith("?")),
+  "product-mix / weekly drip prompts are questions",
+);
+assert(
+  PRODUCT_MIX_PROMPTS["product_mix.prices"] === "What is your selling price per unit for each line?",
+  "unit price reads as a fluent customer question",
+);
+assert(
+  asFluentCustomerQuestion("unit price") === "What is your selling price per unit for each line?",
+  "legacy unit-price label becomes a fluent question",
+);
+assert(
+  asFluentCustomerQuestion("Selling price per unit") ===
+    "What is your selling price per unit for each line?",
+  "legacy selling-price label becomes a fluent question",
+);
+assert(
+  asFluentCustomerQuestion("How seasonal is demand") === "How seasonal is demand?",
+  "question stems get a question mark",
+);
+assert(
+  mergeOutstandingQuestions(
+    [],
+    [
+      {
+        id: "q1",
+        client_id: "c1",
+        question_key: "custom.staff",
+        prompt_text: "headcount",
+        audience: "owner",
+        status: "unanswered",
+        answer_text: null,
+        answer_json: null,
+        last_asked_at: null,
+        answered_at: null,
+        answered_by: null,
+        created_at: "2026-01-01T00:00:00.000Z",
+        updated_at: "2026-01-01T00:00:00.000Z",
+      },
+    ],
+  )[0]?.prompt === "What is your headcount?",
+  "stored noun-phrase prompts become fluent questions",
+);
+assert(
   mergeOutstandingQuestions([...coreQs, ...mixQs], []).some((q) => q.key === "operating_profile.costShape"),
   "outstanding includes unanswered deferred 10-Q",
 );
+assert(
+  mergeOutstandingQuestions([...coreQs, ...mixQs], []).every((q) => q.prompt.trim().endsWith("?")),
+  "every outstanding question is phrased as a question",
+);
+
+const confirmedSeason = operatingProfileQuestionStates({
+  ...coreProfile,
+  confirmedExtraKeys: ["operating_profile.seasonality"],
+});
+assert(
+  confirmedSeason.find((q) => q.key === "operating_profile.seasonality")?.answered === true,
+  "drip-confirmed deferred keys count as answered on a core profile",
+);
+assert(
+  confirmedSeason.find((q) => q.key === "operating_profile.costShape")?.answered === false,
+  "other deferred keys stay unanswered until confirmed",
+);
+
+const afterCost = applyOperatingProfileDripAnswer(coreProfile, "operating_profile.costShape", "payroll_heavy");
+assert(afterCost.costShape === "payroll_heavy", "drip writes cost shape");
+assert(afterCost.confirmedExtraKeys?.includes("operating_profile.costShape"), "drip stamps confirmed extra key");
+assert(afterCost.depth === "core", "one deferred answer does not complete the profile");
+
+const namedMix = applyProductMixDripAnswer(emptyProductMix(), "product_mix.opt_in", { choice: "yes" });
+assert(namedMix.active && namedMix.confirmedAt, "opt-in confirms mix");
+const withNames = applyProductMixDripAnswer(namedMix, "product_mix.lines", {
+  names: ["Retail", "Wholesale"],
+});
+assert(withNames.lines.length === 2, "names create two lines");
+const withPrices = applyProductMixDripAnswer(withNames, "product_mix.prices", {
+  lineValues: { [withNames.lines[0]!.id]: "120", [withNames.lines[1]!.id]: "80" },
+});
+assert(withPrices.lines[0]?.sellPrice === 120, "drip stores selling price");
+
+const week = applyWeeklyDripAnswer(emptyWeeklyInputs(), 10000, 4000, "2026-W37");
+assert(week.weeks["2026-W37"]?.revenue === 10000, "weekly drip writes this week");
 
 assert(titlesSimilar("Call the bank this week", "Call the bank"), "similar titles skip duplicates");
 assert(!titlesSimilar("Renegotiate suppliers", "Call the bank"), "unrelated titles are not similar");
@@ -420,7 +508,13 @@ assert(!fnSrc.toLowerCase().includes("stripe"), "no Stripe");
 assert(!panelSrc.toLowerCase().includes("stripe"), "panel has no Stripe");
 assert(!clientSrc.toLowerCase().includes("stripe"), "portal has no Stripe");
 assert(appSrc.includes("OwnerBrainDrip"), "owner-facing drip shell");
+assert(appSrc.includes("onSaveProfile={saveDripProfile}"), "Health drip can save a profile answer");
+assert(!appSrc.includes("OwnerBrainFirstInsight"), "Health tab does not mount Client Brain insight");
 assert(appSrc.includes('id="ask-ai-overview"'), "owner Ask AI mount unchanged");
+const dripSrc = readFileSync(resolve("src/components/owner-brain-drip.tsx"), "utf8");
+assert(dripSrc.includes("Answer question"), "owner drip has an Answer question button");
+assert(dripSrc.includes("DRIP_ANSWER_HELP"), "owner drip explains why answering helps");
+assert(DRIP_ANSWER_HELP.toLowerCase().includes("accurate"), "help copy mentions more accurate recommendations");
 
 const draftFnSrc = readFileSync(resolve("supabase/functions/brain-deliverable-draft/index.ts"), "utf8");
 const draftPanelSrc = readFileSync(resolve("src/components/client-brain-drafts.tsx"), "utf8");

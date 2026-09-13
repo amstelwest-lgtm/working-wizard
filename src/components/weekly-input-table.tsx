@@ -4,16 +4,7 @@ import { useMarketFormat } from "@/contexts/market";
 import { currencySymbol } from "@/lib/market";
 import { ScrollableTable } from "@/components/primitives/scrollable-table";
 import { CollapsibleGoldCard } from "@/components/primitives/collapsible-gold-card";
-
-function getISOWeekKey(date = new Date()): string {
-  const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
-  d.setDate(d.getDate() + 3 - ((d.getDay() + 6) % 7));
-  const jan4 = new Date(d.getFullYear(), 0, 4);
-  const week =
-    1 + Math.round(((d.getTime() - jan4.getTime()) / 86400000 - 3 + ((jan4.getDay() + 6) % 7)) / 7);
-  return `${d.getFullYear()}-W${String(week).padStart(2, "0")}`;
-}
+import { getISOWeekKey } from "@/lib/weekly-inputs";
 
 function getRecentWeeks(n = 4): string[] {
   const weeks: string[] = [];

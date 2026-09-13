@@ -62,6 +62,11 @@ assert(drip.length === 0, "drip waits until core profile is done");
 const ready = historyCoverageQuestionStates({ snapshotCount: 1, hasLiveFigures: true });
 assert(ready[0]?.key === "history.prior_period", "history drip key");
 assert(!ready[0]?.answered, "unanswered until 2 periods");
+assert(ready[0]?.prompt.endsWith("?"), "history drip is a fluent question");
+assert(
+  ready[0]?.prompt.startsWith("Do you have figures"),
+  "history drip asks the owner for another period",
+);
 
 assert(PAST_PERIOD_UPLOAD_LEAD.includes("Whatever you already have"), "wide invite");
 assert(PAST_PERIOD_UPLOAD_ACCEPTS.length >= 4, "several acceptable packs");
