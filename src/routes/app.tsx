@@ -179,7 +179,7 @@ const RATIO_KEY_TO_SNAPSHOT: Record<string, string> = {
   salesPerEmployee: "Sales-per-Employee Ratio",
   ocfToEbitda: "OCF / EBITDA",
   revenuePerFounderHour: "Revenue per Founder Hour",
-  grossMargin: "Gross Profit Margin",
+  grossMargin: "Gross Margin",
   directCostsRatio: "Direct Cost Ratio",
   fundingStructure: "Equity Solvency",
   workingCapitalUtilization: "WC Efficiency",
@@ -235,7 +235,15 @@ import {
   OwnerTabSignoffRow,
   computeIsStale,
 } from "@/components/review-signoff";
-import { upsertCurrentPeriodSnapshot } from "@/lib/financial-snapshots";
+import {
+  currentPeriodDate,
+  currentPeriodLabel,
+  upsertCurrentPeriodSnapshot,
+  upsertPeriodSnapshot,
+} from "@/lib/financial-snapshots";
+import { buildRatioSeries, needsPastPeriodPrompt } from "@/lib/history-coverage";
+import { AddPastPeriodLink } from "@/components/add-past-period-link";
+import { PastPeriodUploadDialog } from "@/components/past-period-upload";
 import { stampFromSignoff } from "@/lib/review-signoff-stamp";
 import { useAskAiMount } from "@/hooks/use-ask-ai-mount";
 import {
@@ -2089,6 +2097,9 @@ function Index() {
     null,
   );
   const [reviewOpen, setReviewOpen] = useState(false);
+  const [pastPeriodOpen, setPastPeriodOpen] = useState(false);
+  const [historyUpload, setHistoryUpload] = useState(false);
+  const [replaceLiveOnHistory, setReplaceLiveOnHistory] = useState(false);
   // Extra CSV/Excel-only fields not carried through MergedExtractionResult (applied alongside modal confirm)
   const [pendingCsvExtras, setPendingCsvExtras] = useState<Partial<Inputs> | null>(null);
   const [showInputs, setShowInputs] = useState(false);
@@ -2501,7 +2512,7 @@ function Index() {
       .select("period_label, period_date, ratios")
       .eq("client_id", effectiveClientId)
       .order("period_date", { ascending: true })
-      .limit(6)
+      .limit(24)
       .then(({ data }) => {
         if (data) setHistory(data as never);
       });
@@ -2783,10 +2794,10 @@ function Index() {
     }
   }, [activeTab, effectiveClientId, track, user]);
 
-  const seriesFor = (k: RatioKey): number[] => {
+  const seriesFor = (k: RatioKey, live?: number): number[] => {
     const snapKey = RATIO_KEY_TO_SNAPSHOT[k];
     if (!snapKey) return [];
-    return history.map((h) => Number(h.ratios?.[snapKey] ?? NaN)).filter((n) => isFinite(n));
+    return buildRatioSeries(history, snapKey, live);
   };
 
   useEffect(() => {
@@ -2915,21 +2926,18 @@ function Index() {
           source: "autosave",
         }).then(({ id }) => {
           if (id) {
+            const periodLabel = currentPeriodLabel();
+            const periodDate = currentPeriodDate();
+            const ratios = computeRatios(blob as never);
             setHistory((h) => {
-              // Soft-refresh history list if this period was missing.
-              const periodLabel = new Date().toLocaleString("en-US", {
-                month: "short",
-                year: "numeric",
-              });
-              if (h.some((s) => s.period_label === periodLabel)) return h;
-              return [
-                ...h,
-                {
-                  period_label: periodLabel,
-                  period_date: new Date().toISOString().slice(0, 10),
-                  ratios: {},
-                },
-              ].slice(-6);
+              const next = { period_label: periodLabel, period_date: periodDate, ratios };
+              const idx = h.findIndex((s) => s.period_label === periodLabel || s.period_date === periodDate);
+              if (idx >= 0) {
+                const copy = h.slice();
+                copy[idx] = { ...copy[idx], ...next };
+                return copy;
+              }
+              return [...h, next].slice(-24);
             });
           }
         });
@@ -4290,6 +4298,11 @@ function Index() {
                                 operatingProfile={operatingProfile}
                                 productMix={productMix}
                                 weeklyInputs={weeklyInputs}
+                                snapshotCount={history.length}
+                                hasLiveFigures={hasRealFinancials}
+                                onAddPastPeriod={
+                                  firstRunStep === null ? () => setPastPeriodOpen(true) : undefined
+                                }
                               />
                               <EmptyState
                                 id="wizard-empty-score"
@@ -4448,7 +4461,22 @@ function Index() {
                                 operatingProfile={operatingProfile}
                                 productMix={productMix}
                                 weeklyInputs={weeklyInputs}
+                                snapshotCount={history.length}
+                                hasLiveFigures={hasRealFinancials}
+                                onAddPastPeriod={
+                                  firstRunStep === null ? () => setPastPeriodOpen(true) : undefined
+                                }
                               />
+                              {needsPastPeriodPrompt({
+                                hasLiveFigures: hasRealFinancials,
+                                firstRunBusy: firstRunStep !== null,
+                                snapshots: history,
+                              }) && userRole !== "client_member" ? (
+                                <p className="text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">
+                                  Trend lines and comparison figures need another period.{" "}
+                                  <AddPastPeriodLink onOpen={() => setPastPeriodOpen(true)} />
+                                </p>
+                              ) : null}
                               <OwnerBrainFirstInsight
                                 clientId={effectiveClientId}
                                 reloadToken={brainInsightReloadToken}
@@ -4778,7 +4806,7 @@ function Index() {
                                   const rawVal = valueMap[k].value;
                                   const fmt = valueMap[k].format;
                                   const health = healthMap[k];
-                                  const series = seriesFor(k);
+                                  const series = seriesFor(k, rawVal);
                                   const delta = pctDelta(series);
                                   const bm = benchmarkFor(k);
                                   const quintile = isFinite(health)
@@ -4864,6 +4892,15 @@ function Index() {
                                               </span>
                                             )}
                                           </div>
+                                        ) : needsPastPeriodPrompt({
+                                            hasLiveFigures: hasRealFinancials,
+                                            firstRunBusy: firstRunStep !== null,
+                                            snapshots: history,
+                                          }) && userRole !== "client_member" ? (
+                                          <AddPastPeriodLink
+                                            onOpen={() => setPastPeriodOpen(true)}
+                                            label="Add period"
+                                          />
                                         ) : (
                                           <span className="text-[11px] text-slate-700">—</span>
                                         )}
@@ -5600,6 +5637,21 @@ function Index() {
             }}
           />
 
+          <PastPeriodUploadDialog
+            open={pastPeriodOpen}
+            onOpenChange={setPastPeriodOpen}
+            onFiles={(files, opts) => {
+              const file = files[0];
+              if (!file) return;
+              setHistoryUpload(true);
+              setReplaceLiveOnHistory(opts.replaceLive);
+              if (files.length > 1) {
+                toast.message("Using the first file — add other periods one at a time.");
+              }
+              void handleStatementUpload(file);
+            }}
+          />
+
           {/* PDF extraction review modal — user reviews/corrects before values are applied */}
           {extractionForReview && (
             <ExtractionReviewModal
@@ -5608,6 +5660,8 @@ function Index() {
               onClose={() => {
                 setReviewOpen(false);
                 setExtractionForReview(null);
+                setHistoryUpload(false);
+                setReplaceLiveOnHistory(false);
               }}
               autoPopulate={autoPopulateState ? { ...autoPopulateState, role: "owner" } : null}
               onConfirm={(mapped, autoPopulate) => {
@@ -5621,6 +5675,42 @@ function Index() {
                   ...entries,
                   ...Object.entries(extras).filter(([k]) => k in defaults),
                 ];
+                if (historyUpload && effectiveClientId && allEntries.length > 0 && !replaceLiveOnHistory) {
+                  const fields = Object.fromEntries(allEntries) as Record<string, string>;
+                  const periodEnd =
+                    extractionForReview?.document_metadata?.period_end_date ?? null;
+                  void upsertPeriodSnapshot({
+                    clientId: effectiveClientId,
+                    financials: fields,
+                    periodDate: periodEnd,
+                    source: "upload",
+                  }).then((saved) => {
+                    if (saved.error) {
+                      toast.error(`Could not save the past period: ${saved.error}`);
+                      return;
+                    }
+                    toast.success(
+                      `Saved ${saved.periodLabel} as history — the live board is unchanged.`,
+                    );
+                    void supabase
+                      .from("client_financial_snapshots")
+                      .select("period_label, period_date, ratios")
+                      .eq("client_id", effectiveClientId)
+                      .order("period_date", { ascending: true })
+                      .limit(24)
+                      .then(({ data }) => {
+                        if (data) setHistory(data as never);
+                      });
+                  });
+                  setHistoryUpload(false);
+                  setReplaceLiveOnHistory(false);
+                  setPendingCsvExtras(null);
+                  setReviewOpen(false);
+                  setExtractionForReview(null);
+                  return;
+                }
+                setHistoryUpload(false);
+                setReplaceLiveOnHistory(false);
                 if (allEntries.length > 0) {
                   setV((prev) => ({ ...prev, ...Object.fromEntries(allEntries) }) as Inputs);
                   setHasRealFinancials(true);

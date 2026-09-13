@@ -1,5 +1,6 @@
 import { Sparkline } from "@/components/sparkline";
 import { scoreTier } from "@/lib/ratios";
+import { AddPastPeriodLink } from "@/components/add-past-period-link";
 
 interface SectionCard {
   id: string;
@@ -10,6 +11,7 @@ interface SectionCard {
 
 interface SimplifiedRatiosProps {
   sections: SectionCard[];
+  onAddPastPeriod?: () => void;
 }
 
 function statusLabel(health: number): string {
@@ -36,7 +38,7 @@ function trendDir(series: number[]): "up" | "down" | "flat" {
   return "flat";
 }
 
-export function SimplifiedRatios({ sections }: SimplifiedRatiosProps) {
+export function SimplifiedRatios({ sections, onAddPastPeriod }: SimplifiedRatiosProps) {
   return (
     <div className="grid grid-cols-2 gap-3 p-1">
       {sections.map((card) => {
@@ -64,8 +66,12 @@ export function SimplifiedRatios({ sections }: SimplifiedRatiosProps) {
             {card.series.length >= 2 ? (
               <Sparkline data={card.series} trend={trend} width={110} height={36} />
             ) : (
-              <div className="mt-1.5 h-9 text-[10px] text-slate-600 flex items-center">
-                trend builds with snapshots
+              <div className="mt-1.5 flex h-9 items-center text-[10px] text-slate-500">
+                {onAddPastPeriod ? (
+                  <AddPastPeriodLink onOpen={onAddPastPeriod} className="text-[10px] font-medium text-[#d4a550] underline decoration-[#d4a550]/40 underline-offset-2" />
+                ) : (
+                  "trend builds with snapshots"
+                )}
               </div>
             )}
           </div>

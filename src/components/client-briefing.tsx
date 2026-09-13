@@ -19,6 +19,7 @@ import { profileDisplayRows } from "@/lib/profile-signals";
 import { healthHeadline, type SnapshotMetric } from "@/lib/client-briefing";
 import type { BriefingWorkflow } from "@/lib/client-briefing.functions";
 import { useMarketFormat } from "@/contexts/market";
+import { AddPastPeriodLink } from "@/components/add-past-period-link";
 
 export type ClientBriefingProps = {
   clientName: string;
@@ -44,6 +45,7 @@ export type ClientBriefingProps = {
   movementReportAvailable: boolean;
   onOpenMovementReport?: () => void;
   onOpenReports?: () => void;
+  onAddPastPeriod?: () => void;
   hasFigures: boolean;
 };
 
@@ -147,8 +149,9 @@ export function ClientBriefing(p: ClientBriefingProps) {
               </span>
             ) : null}
             {p.hasFigures && !p.movementReportAvailable ? (
-              <span className="briefing-muted" title="Save a second period snapshot to compare">
-                Movement report needs a prior period
+              <span className="briefing-muted">
+                Movement needs another period.{" "}
+                {p.onAddPastPeriod ? <AddPastPeriodLink onOpen={p.onAddPastPeriod} /> : null}
               </span>
             ) : null}
           </div>
