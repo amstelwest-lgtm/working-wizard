@@ -10,23 +10,31 @@ import {
   operatingProfileQuestionStates,
   productLineQuestionStates,
 } from "@/lib/client-brain-questions";
+import { historyCoverageQuestionStates } from "@/lib/history-coverage";
 import { useBrainDrip } from "@/hooks/use-brain-drip";
 import type { ClientOperatingProfile } from "@/lib/client-profile";
 import type { ProductMix } from "@/lib/product-mix";
 import { emptyProductMix } from "@/lib/product-mix";
 import type { WeeklyInputs } from "@/lib/weekly-inputs";
 import { emptyWeeklyInputs } from "@/lib/weekly-inputs";
+import { AddPastPeriodLink } from "@/components/add-past-period-link";
 
 export function OwnerBrainDrip({
   clientId,
   operatingProfile,
   productMix,
   weeklyInputs,
+  snapshotCount = 0,
+  hasLiveFigures = false,
+  onAddPastPeriod,
 }: {
   clientId: string | null;
   operatingProfile?: ClientOperatingProfile | null;
   productMix?: ProductMix;
   weeklyInputs?: WeeklyInputs;
+  snapshotCount?: number;
+  hasLiveFigures?: boolean;
+  onAddPastPeriod?: () => void;
 }) {
   const [stored, setStored] = useState<ClientBrainQuestion[]>([]);
   const [ready, setReady] = useState(false);
@@ -55,8 +63,13 @@ export function OwnerBrainDrip({
     () => [
       ...operatingProfileQuestionStates(operatingProfile ?? null),
       ...productLineQuestionStates(productMix ?? emptyProductMix(), weeklyInputs ?? emptyWeeklyInputs()),
+      ...historyCoverageQuestionStates({
+        snapshotCount,
+        hasLiveFigures,
+        deferForCoreProfile: operatingProfile?.depth === "core",
+      }),
     ],
-    [operatingProfile, productMix, weeklyInputs],
+    [operatingProfile, productMix, weeklyInputs, snapshotCount, hasLiveFigures],
   );
 
   const drip = useBrainDrip({
@@ -80,6 +93,9 @@ export function OwnerBrainDrip({
         One question
       </p>
       <p className="text-slate-700 dark:text-slate-200">{drip.prompt}</p>
+      {drip.key.startsWith("history.") && onAddPastPeriod ? (
+        <AddPastPeriodLink onOpen={onAddPastPeriod} />
+      ) : null}
     </div>
   );
 }

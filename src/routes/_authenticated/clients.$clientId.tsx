@@ -131,6 +131,9 @@ import {
   warnIfPdfArchiveFailed,
 } from "@/lib/advisory-deliveries";
 import { upsertCurrentPeriodSnapshot } from "@/lib/financial-snapshots";
+import { needsPastPeriodPrompt } from "@/lib/history-coverage";
+import { AddPastPeriodLink } from "@/components/add-past-period-link";
+import { PastPeriodUploadDialog } from "@/components/past-period-upload";
 import { stampFromSignoff } from "@/lib/review-signoff-stamp";
 import { EmptyState, ClientWorkspaceSkeleton, SectionCard } from "@/components/primitives";
 
@@ -660,6 +663,11 @@ function ClientView() {
   productMixRef.current = productMix;
   const [profileOpen, setProfileOpen] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [pastPeriodOpen, setPastPeriodOpen] = useState(false);
+  const historyOnlyUploadRef = useRef(false);
+  useEffect(() => {
+    if (!uploadOpen) historyOnlyUploadRef.current = false;
+  }, [uploadOpen]);
   const [showBankDrafter, setShowBankDrafter] = useState(false);
   const [firstDataOpen, setFirstDataOpen] = useState(false);
   const [snapshots, setSnapshots] = useState<SnapshotRow[]>([]);
@@ -1333,6 +1341,28 @@ function ClientView() {
         return;
       }
 
+      if (historyOnlyUploadRef.current) {
+        historyOnlyUploadRef.current = false;
+        toast.success(`Saved ${periodLabel} as history — live figures unchanged.`);
+        setUploadOpen(false);
+        const { data } = await supabase
+          .from("client_financial_snapshots")
+          .select("id, period_label, period_date, financials, ratios")
+          .eq("client_id", clientId)
+          .order("period_date", { ascending: false })
+          .limit(24);
+        setSnapshots(
+          (data ?? []).map((s) => ({
+            id: s.id as string,
+            period_label: s.period_label as string,
+            period_date: s.period_date as string,
+            financials: (s.financials as Record<string, unknown>) ?? null,
+            ratios: (s.ratios as Record<string, number>) ?? null,
+          })),
+        );
+        return;
+      }
+
       const financialsUpdatedAt = new Date().toISOString();
       const nextScalars = {
         ...financialsRef.current,
@@ -1791,11 +1821,12 @@ function ClientView() {
               }
               onOpenQueries={() => openArchive(openQueriesCount > 0 ? "open" : "resolved")}
               reportsIssued={reportsIssued}
-              movementReportAvailable
+              movementReportAvailable={Boolean(priorSnapshot)}
               onOpenMovementReport={() => {
                 setStudioDeepLink({ report: "movement", action: "preview" });
                 setActiveTab("reports");
               }}
+              onAddPastPeriod={() => setPastPeriodOpen(true)}
               onOpenReports={() => setActiveTab("reports")}
               hasFigures={hasFigures}
             />
@@ -1840,6 +1871,14 @@ function ClientView() {
                 </div>
               </div>
             )}
+
+            {hasFigures &&
+            needsPastPeriodPrompt({ hasLiveFigures: hasFigures, snapshots }) ? (
+              <p className="text-[12px] leading-relaxed text-[color:var(--ink-dim)]">
+                Trend lines and movement need another period.{" "}
+                <AddPastPeriodLink onOpen={() => setPastPeriodOpen(true)} />
+              </p>
+            ) : null}
 
             {/* ===== DELIVERABLES ACTION BAR — nothing to export before figures ===== */}
             {hasFigures && (
@@ -2035,7 +2074,10 @@ function ClientView() {
                   </div>
                   {/* Pillar summary cards */}
                   <div style={{ background: "#0a0e1a", borderRadius: 20, padding: 16 }}>
-                    <SimplifiedRatios sections={simplifiedSections} />
+                    <SimplifiedRatios
+                      sections={simplifiedSections}
+                      onAddPastPeriod={() => setPastPeriodOpen(true)}
+                    />
                   </div>
                 </div>
               )}
@@ -2681,7 +2723,9 @@ function ClientView() {
                   information you upload.
                 </p>
                 <UploadFinancials
-                  onConfirm={handleConfirmFinancials}
+                  onConfirm={(result, prefs) => {
+                    void handleConfirmFinancials(result, prefs);
+                  }}
                   autoPopulate={
                     autoPopulateState ? { ...autoPopulateState, role: "accountant" } : null
                   }
@@ -2689,6 +2733,15 @@ function ClientView() {
               </div>
             </div>
           )}
+
+          <PastPeriodUploadDialog
+            open={pastPeriodOpen}
+            onOpenChange={setPastPeriodOpen}
+            onContinue={(opts) => {
+              historyOnlyUploadRef.current = !opts.replaceLive;
+              setUploadOpen(true);
+            }}
+          />
 
           {/* First-client: bank statements nudge */}
           <Dialog open={firstDataOpen} onOpenChange={setFirstDataOpen}>
