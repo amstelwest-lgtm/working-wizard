@@ -1,5 +1,6 @@
 import { ArrowUpRight, BookOpen, Check, Layers3, Target } from "lucide-react";
 import { AddToPlanButton } from "@/components/add-to-plan-button";
+import type { FrozenScoreProjection } from "@/lib/score-projection";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { tierColor } from "@/components/owner-board-ui";
 
@@ -63,6 +64,7 @@ function NextStepRow<K extends string>({
   clientName?: string;
   isOwner?: boolean;
   onGoToPlan?: (moveKey: string) => void;
+  projection?: FrozenScoreProjection | null;
 }) {
   const t = tierColor(step.health);
   const cynefinColor: Record<NextStep["cynefin"], string> = {
@@ -164,6 +166,8 @@ function NextStepRow<K extends string>({
               moveKey={step.key}
               title={step.title}
               outcomeWhy={step.impactLine || `Improves ${step.ratioName}.`}
+              projection={projection}
+              openOnAdd
               onAssign={(k) => onGoToPlan?.(k)}
             />
           )}
@@ -183,6 +187,7 @@ export function NextStepsPanel<K extends string>({
   clientName,
   isOwner = true,
   onGoToPlan,
+  projections,
 }: {
   steps: NextStep<K>[];
   simplified: boolean;
@@ -193,6 +198,7 @@ export function NextStepsPanel<K extends string>({
   clientName?: string;
   isOwner?: boolean;
   onGoToPlan?: (moveKey: string) => void;
+  projections?: Partial<Record<K, FrozenScoreProjection>>;
 }) {
   const completed = steps.filter((s) => done.has(s.key)).length;
   const open = steps.length - completed;
@@ -261,6 +267,7 @@ export function NextStepsPanel<K extends string>({
               clientName={clientName}
               isOwner={isOwner}
               onGoToPlan={onGoToPlan}
+              projection={projections?.[s.key]}
             />
           ))}
         </CardContent>

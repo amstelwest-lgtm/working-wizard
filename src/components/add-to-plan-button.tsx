@@ -2,6 +2,8 @@ import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { ArrowRight, ListPlus, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { encodeOutcomeWhy } from "@/lib/action-projection";
+import { driverKeyFromMoveKey, type FrozenScoreProjection } from "@/lib/score-projection";
 
 function defaultPeriodLabel() {
   const now = new Date();
@@ -19,6 +21,12 @@ interface Props {
   moveKey: string;
   title: string;
   outcomeWhy?: string;
+  /** Frozen score-loop projection. Encoded into outcome_why; never summed. */
+  projection?: FrozenScoreProjection | null;
+  /** Ratio / lever key. Defaults to the segment before the first ":". */
+  driverKey?: string;
+  /** Jump to the Action Plan as soon as the item lands. */
+  openOnAdd?: boolean;
   /** Called when the user taps "Assign" after the item exists — should switch to the Action Plan tab focused on this move. */
   onAssign: (moveKey: string) => void;
 }
@@ -28,8 +36,25 @@ interface Props {
  * (deduped by source_move_key), then offers "Open plan" to hand off into the
  * Action Plan tab for owner/date assignment (not the legacy employee_tasks flow).
  */
-export function AddToPlanButton({ clientId, moveKey, title, outcomeWhy, onAssign }: Props) {
+export function AddToPlanButton({
+  clientId,
+  moveKey,
+  title,
+  outcomeWhy,
+  projection,
+  driverKey,
+  openOnAdd = false,
+  onAssign,
+}: Props) {
   const [state, setState] = useState<"idle" | "adding" | "added">("idle");
+  const lever = driverKey ?? driverKeyFromMoveKey(moveKey);
+
+  const finish = (already: boolean) => {
+    setState("added");
+    if (already) toast.info("Already in your Action Plan");
+    else toast.success("Added to Action Plan");
+    if (openOnAdd) onAssign(moveKey);
+  };
 
   const add = async (e: React.MouseEvent) => {
     e.preventDefault();
@@ -64,8 +89,7 @@ export function AddToPlanButton({ clientId, moveKey, title, outcomeWhy, onAssign
         .eq("plan_id", planId).eq("source_move_key", moveKey).limit(1);
       if (eErr) throw eErr;
       if (existing && existing.length > 0) {
-        toast.info("Already in your Action Plan");
-        setState("added");
+        finish(true);
         return;
       }
 
@@ -79,16 +103,15 @@ export function AddToPlanButton({ clientId, moveKey, title, outcomeWhy, onAssign
         client_id: clientId,
         seq,
         title,
-        outcome_why: outcomeWhy ?? null,
+        outcome_why: encodeOutcomeWhy(outcomeWhy ?? null, projection),
         source: "strategic_move",
         source_move_key: moveKey,
-        driver_key: moveKey,
+        driver_key: lever,
       });
       if (iErr) throw iErr;
-      toast.success("Added to Action Plan");
-      setState("added");
-    } catch (err: any) {
-      toast.error(err.message ?? "Couldn't add to Action Plan");
+      finish(false);
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Couldn't add to Action Plan");
       setState("idle");
     }
   };

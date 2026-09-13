@@ -68,6 +68,7 @@
     "test:milon-bot": "vite-node --config scripts/vite-test.config.ts scripts/milon-bot-test.mts",
     "test:accountant-studio-clarity": "vite-node --config scripts/vite-test.config.ts scripts/accountant-studio-clarity-test.mts",
     "test:owner-tour": "vite-node --config scripts/vite-test.config.ts scripts/owner-tour-sale-test.mts",
+    "test:score-projection": "vite-node --config scripts/vite-test.config.ts scripts/score-projection-test.mts",
     "test:cash-forecast-detail": "vite-node --config scripts/vite-test.config.ts scripts/cash-forecast-detail-test.mts",
     "test:edge-no-smoke-stubs": "vite-node --config scripts/vite-test.config.ts scripts/edge-no-smoke-stubs-test.mts",
     "test:stripe-plans": "vite-node --config scripts/vite-test.config.ts scripts/stripe-plans-test.mts"

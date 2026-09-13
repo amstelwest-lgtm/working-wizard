@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { usePrefersReducedMotion } from "@/hooks/use-prefers-reduced-motion";
 import { ArrowLeft, ChevronRight, TrendingUp, Layers, Shield, Droplet, type LucideIcon } from "lucide-react";
 
@@ -43,6 +43,12 @@ export type SpherePillar = {
   drivers: SphereDriver[];
 };
 
+export type SphereNextAction = {
+  title: string;
+  /** Optional per-action control (Add to plan). */
+  control?: ReactNode;
+};
+
 export type SphereHeroProps = {
   overallHealth: number;
   /**
@@ -56,9 +62,12 @@ export type SphereHeroProps = {
     title: string;
     description: string;
     /** Optional action bullets shown under the next-move headline */
-    actions?: string[];
+    actions?: Array<string | SphereNextAction>;
     /** e.g. "+R42k additional cash in next 90 days" */
     impactLabel?: string;
+    /** Gap state — this lever is already on the Action Plan. */
+    inFlight?: boolean;
+    inFlightHint?: string;
   };
   /** Called when the user taps the Top Priority arrow, if provided. */
   onTopPriority?: () => void;
@@ -558,17 +567,30 @@ export function SphereHero({
             {topPriority.description}
           </p>
           {topPriority.actions && topPriority.actions.length > 0 && (
-            <ul className="mt-2.5 space-y-1">
-              {topPriority.actions.slice(0, compact ? 3 : 5).map((a) => (
-                <li key={a} className="flex items-start gap-2 text-[12px] text-slate-700 dark:text-slate-300">
-                  <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[#d4a550]/20 text-[10px] font-bold text-[#b8860b] dark:text-[#d4a550]">
-                    ✓
-                  </span>
-                  <span className="min-w-0 flex-1">{a}</span>
-                </li>
-              ))}
+            <ul className="mt-2.5 space-y-1.5">
+              {topPriority.actions.slice(0, compact ? 3 : 5).map((raw, i) => {
+                const a = typeof raw === "string" ? { title: raw } : raw;
+                return (
+                  <li
+                    key={`${a.title}-${i}`}
+                    className="flex items-start gap-2 text-[12px] text-slate-700 dark:text-slate-300"
+                  >
+                    <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[#d4a550]/20 text-[10px] font-bold text-[#b8860b] dark:text-[#d4a550]">
+                      {i + 1}
+                    </span>
+                    <span className="min-w-0 flex-1">{a.title}</span>
+                    {a.control ? <span className="shrink-0">{a.control}</span> : null}
+                  </li>
+                );
+              })}
             </ul>
           )}
+          {topPriority.inFlight ? (
+            <p className="mt-2.5 rounded-md border border-[#d4a550]/25 bg-[#d4a550]/8 px-2.5 py-2 text-[11px] leading-relaxed text-slate-600 dark:text-slate-300">
+              {topPriority.inFlightHint ??
+                "On the plan. The score stays put until new figures land — ticking a box does not move it."}
+            </p>
+          ) : null}
           <div className="mt-3 flex items-center justify-between gap-3 border-t border-[#d4a550]/20 pt-2.5">
             <div className="min-w-0">
               <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-slate-500">
@@ -581,6 +603,9 @@ export function SphereHero({
               ) : (
                 <p className="mt-0.5 text-xs text-slate-500">Open Next Moves for the full playbook</p>
               )}
+              <p className="mt-0.5 text-[10px] text-slate-500">
+                Standing estimate for this lever — it does not grow as you add tasks.
+              </p>
             </div>
             <button
               type="button"

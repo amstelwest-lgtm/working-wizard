@@ -19,6 +19,8 @@ import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { sendTransactionalEmail } from "@/lib/email/send";
 import { useMarketFormat } from "@/contexts/market";
+import { decodeFrozenProjection, displayOutcomeWhy } from "@/lib/action-projection";
+import { projectionWeSaid } from "@/lib/score-projection";
 import {
   AlertTriangle,
   CalendarDays,
@@ -643,7 +645,7 @@ export default function ActionPlanPanel({
         templateData: {
           employeeName: owner.name.split(" ")[0],
           taskTitle: it.title,
-          outcomeWhy: it.outcome_why ?? undefined,
+          outcomeWhy: displayOutcomeWhy(it.outcome_why) || undefined,
           dueDate: it.due_date
             ? date(it.due_date + "T00:00:00", { day: "numeric", month: "long", year: "numeric" })
             : undefined,
@@ -1580,7 +1582,9 @@ function ItemRow({
               <Sparkles className="h-2.5 w-2.5" /> From strategic moves
             </span>
           )}
-          {item.outcome_why && <span className="truncate">{item.outcome_why}</span>}
+          {item.outcome_why && (
+            <span className="truncate">{displayOutcomeWhy(item.outcome_why)}</span>
+          )}
         </div>
       </div>
 
@@ -2288,8 +2292,16 @@ function ItemDrawer({
               {item.title}
             </h3>
             {item.outcome_why && (
-              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{item.outcome_why}</p>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                {displayOutcomeWhy(item.outcome_why)}
+              </p>
             )}
+            {decodeFrozenProjection(item.outcome_why) ? (
+              <p className="mt-2 text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">
+                {projectionWeSaid(decodeFrozenProjection(item.outcome_why)!)} The score will not
+                move because this box is ticked.
+              </p>
+            ) : null}
           </div>
           <button onClick={onClose} aria-label="Close">
             <X className="h-4 w-4 text-slate-400" />

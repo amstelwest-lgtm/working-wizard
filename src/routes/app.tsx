@@ -83,6 +83,9 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { KpiTrendline, pctDelta } from "@/components/kpi-trendline";
 import { BenchmarkBar } from "@/components/benchmark-bar";
 import { AddToPlanButton } from "@/components/add-to-plan-button";
+import { ScoreLoopCard } from "@/components/score-loop-card";
+import { buildScoreLoopCompare, useScoreLoop } from "@/hooks/use-score-loop";
+import { buildScoreProjection } from "@/lib/score-projection";
 import { ThemeToggle } from "@/components/theme-toggle";
 import {
   annualiseFinancials,
@@ -2529,6 +2532,8 @@ function Index() {
       });
   }, [effectiveClientId]);
 
+  const scoreLoop = useScoreLoop(effectiveClientId);
+
   const [clientMeta, setClientMeta] = useState<{
     business_type: string | null;
     cash_runway_weeks: number | null;
@@ -3591,6 +3596,35 @@ function Index() {
     currency: currencySymbol(boardMarket),
   });
 
+  const liveRatios = computeRatios(v);
+  const moveProjections = Object.fromEntries(
+    nextSteps.slice(0, 3).map((s) => [
+      s.key,
+      buildScoreProjection({
+        driverKey: s.key,
+        inputs: v,
+        market: boardMarket,
+        cashRunwayWeeks: effectiveRunway,
+        impactLabel: s.key === nextSteps[0]?.key ? nextMoveImpactLabel ?? null : null,
+        financialsUpdatedAt: clientMeta?.financials_updated_at ?? null,
+      }),
+    ]),
+  ) as Partial<Record<(typeof nextSteps)[number]["key"], ReturnType<typeof buildScoreProjection>>>;
+  const topMoveKey = nextSteps[0]?.key;
+  const topProjection = topMoveKey ? moveProjections[topMoveKey] : null;
+  const topOnPlan = Boolean(topMoveKey && scoreLoop.plannedDriverKeys.has(topMoveKey));
+  const scoreLoopView =
+    topMoveKey && showScoredBoard
+      ? buildScoreLoopCompare({
+          items: scoreLoop.items,
+          driverKey: topMoveKey,
+          currentRatios: liveRatios,
+          currentOverall: overallHealth.overall,
+          currentPillars: overallHealth.pillars,
+          currentFinancialsUpdatedAt: clientMeta?.financials_updated_at ?? null,
+        })
+      : null;
+
   // Auto-clear the globe highlight after 2s and scroll the row into view.
   // Small delay lets the tab re-render before we query the DOM.
   useEffect(() => {
@@ -4537,8 +4571,30 @@ function Index() {
                                             nextSteps[0].key === "debtorDays"
                                               ? "Cash conversion is your biggest constraint."
                                               : `Your ${nextSteps[0].ratioName} is your highest-impact lever right now.`,
-                                          actions: nextSteps[0].actions,
+                                          actions: nextSteps[0].actions.map((title, i) => ({
+                                            title,
+                                            control:
+                                              effectiveClientId && userRole !== "client_member" ? (
+                                                <AddToPlanButton
+                                                  clientId={effectiveClientId}
+                                                  moveKey={`${nextSteps[0].key}:action:${i}`}
+                                                  title={title}
+                                                  outcomeWhy={nextSteps[0].impactLine}
+                                                  projection={topProjection}
+                                                  openOnAdd
+                                                  onAssign={(k) => {
+                                                    void scoreLoop.reload();
+                                                    setPlanFocusKey(k);
+                                                    setActiveTab("tasks");
+                                                  }}
+                                                />
+                                              ) : undefined,
+                                          })),
                                           impactLabel: nextMoveImpactLabel,
+                                          inFlight: topOnPlan,
+                                          inFlightHint: topOnPlan
+                                            ? "On the plan. The score stays put until new figures land — ticking a box does not move it."
+                                            : undefined,
                                         }
                                       : {
                                           title: "Upload your financial data",
@@ -4549,6 +4605,12 @@ function Index() {
                                   onTopPriority={() => setActiveTab("next")}
                                 />
                               </div>
+                              {scoreLoopView ? (
+                                <ScoreLoopCard
+                                  projection={scoreLoopView.projection}
+                                  compare={scoreLoopView.compare}
+                                />
+                              ) : null}
 
                               <div
                                 id="ask-ai-overview"
@@ -5058,9 +5120,11 @@ function Index() {
                     clientName={actingClientName ?? undefined}
                     isOwner={userRole !== "client_member"}
                     onGoToPlan={(k) => {
+                      void scoreLoop.reload();
                       setPlanFocusKey(k);
                       setActiveTab("tasks");
                     }}
+                    projections={moveProjections}
                   />
                 </div>
               </TabsContent>
