@@ -37,6 +37,11 @@ const FIELD_LABEL: Record<string, string> = {
   top5Revenue: "Top-5 customer revenue",
   laborCost: "Labor cost",
   employees: "Employees",
+  founderHours: "Founder hours",
+  priorRevenue: "Prior revenue",
+  currentAssets: "Current assets",
+  currentLiabilities: "Current liabilities",
+  capex: "Capex",
 };
 
 export const RATIO_EXPLAIN: Record<string, Omit<RatioExplain, "name" | "key" | "pillar">> = {
@@ -268,7 +273,108 @@ export const RATIO_EXPLAIN: Record<string, Omit<RatioExplain, "name" | "key" | "
       "Fix working-capital days before paying a dividend from 'profit'.",
     ],
   },
+  "Revenue / Founder Hours": {
+    formula: "Revenue ÷ Founder operational hours",
+    hint: "Revenue produced per hour the founder works.",
+    needed: ["revenue", "founderHours"],
+    steps: [],
+  },
+  "COGS Ratio": {
+    formula: "COGS ÷ Revenue",
+    hint: "What fraction of every sale is consumed by direct costs.",
+    needed: ["cogs", "revenue"],
+    steps: [],
+  },
+  "Equity Ratio": {
+    formula: "Equity ÷ Total assets",
+    hint: "How much of the business is funded by owners vs creditors.",
+    needed: ["equity", "totalAssets"],
+    steps: [],
+  },
+  "Working Capital Turnover": {
+    formula: "Revenue ÷ Net working capital",
+    hint: "Sales generated per rand of working capital.",
+    needed: ["revenue", "receivables", "inventory", "payables"],
+    steps: [],
+  },
+  "Fixed Asset Turnover": {
+    formula: "Revenue ÷ Fixed assets",
+    hint: "How efficiently long-term assets generate revenue.",
+    needed: ["revenue", "totalAssets", "receivables", "inventory"],
+    steps: [],
+  },
+  "WC-to-Revenue": {
+    formula: "(Debtors + Inventory − Creditors) ÷ Revenue",
+    hint: "Working capital tied up per rand of revenue.",
+    needed: ["receivables", "inventory", "payables", "revenue"],
+    steps: [],
+  },
+  "Revenue Growth Rate": {
+    formula: "(Revenue − Prior revenue) ÷ Prior revenue",
+    hint: "Change in sales versus the prior period.",
+    needed: ["revenue", "priorRevenue"],
+    steps: [],
+  },
+  "Capex Intensity": {
+    formula: "Capital expenditure ÷ Revenue",
+    hint: "How much of revenue is ploughed back into assets.",
+    needed: ["capex", "revenue"],
+    steps: [],
+  },
+  "Asset Reinvestment Ratio": {
+    formula: "Capex ÷ Depreciation",
+    hint: "Below 1× you are consuming assets; above 1× you are expanding them.",
+    needed: ["capex", "ebitda", "ebit"],
+    steps: [],
+  },
+  "Current Ratio": {
+    formula: "Current assets ÷ Current liabilities",
+    hint: "How easily short-term obligations can be covered.",
+    needed: ["currentAssets", "currentLiabilities"],
+    steps: [],
+  },
+  "Debt-to-Equity": {
+    formula: "Total debt ÷ Equity",
+    hint: "How much of the book is funded by creditors versus owners.",
+    needed: ["totalAssets", "equity"],
+    steps: [],
+  },
+  "Debt-to-Assets": {
+    formula: "Total debt ÷ Total assets",
+    hint: "Share of the asset base funded by debt.",
+    needed: ["totalAssets", "equity"],
+    steps: [],
+  },
 };
+
+/** Owner-board camelCase keys + techName variants → RATIO_EXPLAIN names. */
+const RATIO_ACTUAL_ALIASES: Record<string, string> = {
+  ...Object.fromEntries(Object.entries(RATIO_NAME_TO_KEY).map(([name, key]) => [key, name])),
+  "Fixed Costs / Revenue": "Fixed Cost Ratio",
+  "Gross Profit / Labor Cost": "Gross Profit / Labor",
+  "Sales-per-Employee Ratio (SER)": "Sales-per-Employee Ratio",
+  "Operating Cash Flow / EBITDA": "OCF / EBITDA",
+  revenuePerFounderHour: "Revenue / Founder Hours",
+  "Revenue / Founder Hours": "Revenue / Founder Hours",
+  directCostsRatio: "COGS Ratio",
+  fundingStructure: "Equity Ratio",
+  workingCapitalUtilization: "Working Capital Turnover",
+  fixedCapitalUtilization: "Fixed Asset Turnover",
+  workingCapitalFunding: "WC-to-Revenue",
+  revenueGrowth: "Revenue Growth Rate",
+  capexIntensity: "Capex Intensity",
+  assetReinvestmentRatio: "Asset Reinvestment Ratio",
+  currentRatio: "Current Ratio",
+  debtToEquity: "Debt-to-Equity",
+  debtToAssets: "Debt-to-Assets",
+};
+
+function canonicalRatioName(name: string): string {
+  if (RATIO_EXPLAIN[name]) return name;
+  const aliased = RATIO_ACTUAL_ALIASES[name];
+  if (aliased && RATIO_EXPLAIN[aliased]) return aliased;
+  return name;
+}
 
 function parseField(raw: string | undefined): number {
   if (raw == null || raw === "") return NaN;
@@ -305,18 +411,21 @@ function explainFor(name: string): RatioExplain {
     formula: pack?.formula ?? name,
     hint: pack?.hint ?? "Derived from the period figures on file.",
     needed: pack?.needed ?? [],
-    steps: pack?.steps ?? [
-      "Open the figures and confirm the inputs that feed this ratio.",
-      "Compare the result with the last signed-off snapshot.",
-      "Name the one input that would change the story most.",
-      "Agree an owner action with a date.",
-      "Re-score after the next upload.",
-    ],
+    steps: pack?.steps?.length
+      ? pack.steps
+      : [
+          "Open the figures and confirm the inputs that feed this ratio.",
+          "Compare the result with the last signed-off snapshot.",
+          "Name the one input that would change the story most.",
+          "Agree an owner action with a date.",
+          "Re-score after the next upload.",
+        ],
   };
 }
 
 /**
- * Formula + mini actual calculation for one `computeRatios()` name.
+ * Formula + mini actual calculation for one `computeRatios()` name,
+ * owner-board camelCase key, or techName variant.
  * Uses the same annualisation as the live ratio so the line matches the score.
  */
 export function ratioActualLine(
@@ -324,6 +433,7 @@ export function ratioActualLine(
   inputs: RatioInputs,
   formatMoney: (n: number) => string,
 ): RatioActualLine {
+  name = canonicalRatioName(name);
   const explained = explainFor(name);
   const n = Object.fromEntries(
     Object.entries(annualiseFinancials(inputs)).map(([k, val]) => [k, parseField(String(val ?? ""))]),
@@ -391,6 +501,46 @@ export function ratioActualLine(
     calculation = `${fmt(r)} / ${n.employees} people = ${fmt(r / n.employees)} / head`;
   } else if (name === "OCF / EBITDA" && missing.length === 0) {
     calculation = `${fmt(n.operatingCashflow)} / ${fmt(n.ebitda)} = ${times(n.operatingCashflow / n.ebitda)}`;
+  } else if (name === "Revenue / Founder Hours" && missing.length === 0) {
+    calculation = `${fmt(r)} / ${n.founderHours} h = ${fmt(r / n.founderHours)} / hour`;
+  } else if (name === "COGS Ratio" && missing.length === 0) {
+    calculation = `${fmt(cogs)} / ${fmt(r)} = ${pct(cogs / r)}`;
+  } else if (name === "Equity Ratio" && missing.length === 0) {
+    calculation = `${fmt(equity)} / ${fmt(assets)} = ${pct(equity / assets)}`;
+  } else if (name === "Working Capital Turnover" && missing.length === 0) {
+    const wc = rec + inv - pay;
+    calculation = `${fmt(r)} / ${fmt(wc)} = ${times(r / Math.max(wc, 1))}`;
+  } else if (name === "Fixed Asset Turnover" && missing.length === 0) {
+    const fixed = assets - rec - inv;
+    calculation = `${fmt(r)} / ${fmt(fixed)} = ${times(r / Math.max(fixed, 1))}`;
+  } else if (name === "WC-to-Revenue" && missing.length === 0) {
+    const wc = rec + inv - pay;
+    calculation = `(${fmt(rec)} + ${fmt(inv)} − ${fmt(pay)}) / ${fmt(r)} = ${pct(wc / r)}`;
+  } else if (name === "Revenue Growth Rate" && missing.length === 0) {
+    const prior = n.priorRevenue;
+    calculation =
+      prior > 0
+        ? `(${fmt(r)} − ${fmt(prior)}) / ${fmt(prior)} = ${pct((r - prior) / prior)}`
+        : "n/m — prior revenue is missing";
+  } else if (name === "Capex Intensity" && missing.length === 0) {
+    calculation = `${fmt(n.capex)} / ${fmt(r)} = ${pct(n.capex / r)}`;
+  } else if (name === "Asset Reinvestment Ratio" && missing.length === 0) {
+    const da = n.ebitda - ebit;
+    calculation =
+      da > 0
+        ? `${fmt(n.capex)} / ${fmt(da)} = ${times(n.capex / da)}`
+        : "n/m — depreciation is not positive";
+  } else if (name === "Current Ratio" && missing.length === 0) {
+    calculation =
+      n.currentLiabilities > 0
+        ? `${fmt(n.currentAssets)} / ${fmt(n.currentLiabilities)} = ${times(n.currentAssets / n.currentLiabilities)}`
+        : "n/m — current liabilities are not positive";
+  } else if (name === "Debt-to-Equity" && missing.length === 0) {
+    const debt = Math.max(0, assets - equity);
+    calculation = `${fmt(debt)} / ${fmt(equity)} = ${times(debt / equity)}`;
+  } else if (name === "Debt-to-Assets" && missing.length === 0) {
+    const debt = Math.max(0, assets - equity);
+    calculation = `${fmt(debt)} / ${fmt(assets)} = ${pct(debt / assets)}`;
   } else if (missing.length) {
     calculation = null;
   }

@@ -212,4 +212,28 @@ assert(cashSrc.includes("onDoubleClick"), "figures are double-click editable");
 assert(cashSrc.includes("ForecastAmountCell"), "symbol stays; only the number edits");
 assert(cashSrc.includes("CollapsibleGoldCard"), "13-week forecast uses the same hideable card");
 
+const ownerApp = readFileSync(resolve("src/routes/app.tsx"), "utf8");
+assert(ownerApp.includes("ratioActualLine"), "owner complex Health rows show mini actuals");
+assert(
+  ownerApp.includes("actual.calculation"),
+  "owner complex Health rows use the accountant mini-formula figures",
+);
+
+const op = ratioActualLine("Operating Margin", inputs, (n) => `R${n.toLocaleString("en-ZA")}`);
+assert(op.calculation?.includes("20.0%"), `operating margin mini actual, got ${op.calculation}`);
+const byKey = ratioActualLine("operatingMargin", inputs, (n) => `R${n.toLocaleString("en-ZA")}`);
+assert(
+  byKey.calculation === op.calculation,
+  `camelCase key maps to Operating Margin actuals, got ${byKey.calculation}`,
+);
+const founder = ratioActualLine(
+  "revenuePerFounderHour",
+  inputs,
+  (n) => `R${n.toLocaleString("en-ZA")}`,
+);
+assert(
+  founder.calculation?.includes("2000"),
+  `founder hours mini actual, got ${founder.calculation}`,
+);
+
 console.log("accountant-studio-clarity-test: all assertions passed");
