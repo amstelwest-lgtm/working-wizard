@@ -236,7 +236,7 @@ function TeamAccessPage() {
                   <div>
                     <Label className="text-xs text-slate-400">Name</Label>
                     <Input
-                      className="mt-1 border-slate-700 bg-slate-950 text-slate-100"
+                      className="mt-1 border-slate-700 bg-[var(--bg)] text-slate-100"
                       value={invName}
                       onChange={(e) => setInvName(e.target.value)}
                       placeholder="Thandi Mokoena"
@@ -245,7 +245,7 @@ function TeamAccessPage() {
                   <div>
                     <Label className="text-xs text-slate-400">Email</Label>
                     <Input
-                      className="mt-1 border-slate-700 bg-slate-950 text-slate-100"
+                      className="mt-1 border-slate-700 bg-[var(--bg)] text-slate-100"
                       type="email"
                       value={invEmail}
                       onChange={(e) => setInvEmail(e.target.value)}
@@ -255,7 +255,7 @@ function TeamAccessPage() {
                   <div>
                     <Label className="text-xs text-slate-400">Firm permissions</Label>
                     <select
-                      className="mt-1 h-10 w-full rounded-md border border-slate-700 bg-slate-950 px-3 text-sm"
+                      className="mt-1 h-10 w-full rounded-md border border-slate-700 bg-[var(--bg)] px-3 text-sm"
                       value={invRole}
                       onChange={(e) => setInvRole(e.target.value as "admin" | "member")}
                     >
@@ -268,7 +268,7 @@ function TeamAccessPage() {
                   <div>
                     <Label className="text-xs text-slate-400">Professional level</Label>
                     <ClassificationSelect
-                      className="mt-1 h-10 w-full rounded-md border border-slate-700 bg-slate-950 px-3 text-sm"
+                      className="mt-1 h-10 w-full rounded-md border border-slate-700 bg-[var(--bg)] px-3 text-sm"
                       value={invClass}
                       onChange={setInvClass}
                       actorIsPartner={actorIsPartner}
@@ -276,7 +276,7 @@ function TeamAccessPage() {
                     <p className="mt-1 text-[11px] text-slate-500">{CLASSIFICATION_HELP}</p>
                   </div>
                   <Button
-                    className="sm:col-span-2 bg-[#d4a550] text-slate-950 hover:bg-[#e0b45e]"
+                    className="settings-gold sm:col-span-2 bg-[#d4a550] text-slate-950 hover:bg-[#e0b45e]"
                     disabled={saving || !invEmail.trim()}
                     onClick={() => {
                       setSaving(true);
@@ -327,7 +327,7 @@ function TeamAccessPage() {
                       {board.canManage && !m.isFirmOwner ? (
                         <>
                           <select
-                            className="h-9 rounded-md border border-slate-700 bg-slate-950 px-2 text-xs"
+                            className="h-9 rounded-md border border-slate-700 bg-[var(--bg)] px-2 text-xs"
                             value={m.membershipRole === "owner" ? "admin" : m.membershipRole}
                             title="Firm permissions"
                             onChange={(e) =>
@@ -347,7 +347,7 @@ function TeamAccessPage() {
                             <option value="admin">Firm admin</option>
                           </select>
                           <ClassificationSelect
-                            className="h-9 rounded-md border border-slate-700 bg-slate-950 px-2 text-xs"
+                            className="h-9 rounded-md border border-slate-700 bg-[var(--bg)] px-2 text-xs"
                             value={m.classification}
                             actorIsPartner={actorIsPartner}
                             onChange={(classification) =>
@@ -402,7 +402,7 @@ function TeamAccessPage() {
               {board.canManage ? (
                 <div className="mb-5 space-y-3">
                   <select
-                    className="h-10 w-full rounded-md border border-slate-700 bg-slate-950 px-3 text-sm"
+                    className="h-10 w-full rounded-md border border-slate-700 bg-[var(--bg)] px-3 text-sm"
                     value={grantUser}
                     onChange={(e) => setGrantUser(e.target.value)}
                   >
@@ -418,7 +418,7 @@ function TeamAccessPage() {
                     <>
                       <div className="flex flex-wrap items-center gap-2">
                         <Input
-                          className="h-9 min-w-[180px] flex-1 border-slate-700 bg-slate-950 text-slate-100"
+                          className="h-9 min-w-[180px] flex-1 border-slate-700 bg-[var(--bg)] text-slate-100"
                           value={clientSearch}
                           onChange={(e) => setClientSearch(e.target.value)}
                           placeholder="Search clients"
@@ -460,7 +460,7 @@ function TeamAccessPage() {
                               </span>
                               {checked ? (
                                 <ClassificationSelect
-                                  className="h-8 max-w-[140px] rounded-md border border-slate-700 bg-slate-950 px-2 text-xs"
+                                  className="h-8 max-w-[140px] rounded-md border border-slate-700 bg-[var(--bg)] px-2 text-xs"
                                   value={
                                     allowed.includes(draftGrants[c.id])
                                       ? draftGrants[c.id]

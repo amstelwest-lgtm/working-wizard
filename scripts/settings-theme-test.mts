@@ -49,7 +49,7 @@ assert(index.includes("settings-row"), "nav rows use the new row language");
 
 const team = read("src/routes/_authenticated/settings.team.tsx");
 assert(team.includes("Team & access"), "team page title");
-assert(team.includes("Request access"), "per-client grant UI");
+assert(team.includes("Save assignments"), "per-client grant UI");
 assert(team.includes("Invite team member"), "firm invite UI");
 assert(team.includes("settings-gold"), "invite CTA is gold");
 
