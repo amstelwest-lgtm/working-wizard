@@ -2,16 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import {
-  Users,
-  Building2,
-  LogOut,
-  Palette,
-  RotateCcw,
-  Scale,
-  Trash2,
-  User,
-} from "lucide-react";
+import { Users, Building2, LogOut, Palette, RotateCcw, Scale, Trash2, User } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { deleteOwnAccount } from "@/lib/account.functions";
@@ -19,7 +10,6 @@ import { resetOnboardingTours } from "@/lib/onboarding";
 import { BackLink } from "@/components/back-link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -50,6 +40,7 @@ import { PageHeader, SectionCard } from "@/components/primitives";
 import { InviteAccountantCard } from "@/components/invite-accountant-card";
 import { OwnerPracticeAccessCard } from "@/components/owner-practice-access";
 import { pickOwnedSettingsClient, readStoredOwnerClientId } from "@/lib/owner-workspaces";
+import { SettingsShell } from "@/components/settings-shell";
 
 export const Route = createFileRoute("/_authenticated/settings/")({
   component: SettingsPage,
@@ -117,7 +108,11 @@ function SettingsPage() {
         .order("created_at", { ascending: true })
         .limit(10)
         .then(({ data }) => {
-          const rows = (data ?? []) as Array<{ id?: string; market?: unknown; firm_id?: string | null }>;
+          const rows = (data ?? []) as Array<{
+            id?: string;
+            market?: unknown;
+            firm_id?: string | null;
+          }>;
           const preferred = pickOwnedSettingsClient(rows, readStoredOwnerClientId(user.id));
           setOwnerClientId(preferred?.id ?? null);
           setMarketBlob(preferred?.market ?? null);
@@ -147,240 +142,212 @@ function SettingsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100">
-      <div className="mx-auto max-w-2xl px-4 py-8 sm:px-6">
-        <BackLink
-          onClick={() => {
-            if (backTo === "/app") setPortalIntent("owner");
-            else setPortalIntent("accountant");
-            navigate({ to: backTo });
-          }}
-          className="mb-3"
-        >
-          {backTo === "/app" ? "Back to board" : "Back to practice"}
-        </BackLink>
-        <PageHeader
-          compact
-          className="mb-8 !items-start [&_.milon-page-header__title]:text-slate-50 [&_.milon-page-header__subtitle]:text-slate-400"
-          title="Settings"
-          subtitle={
-            isPractice
-              ? "Profile, practice preferences, and account controls"
-              : "Profile, workspace, and account controls"
-          }
-          meta={<ThemeToggle />}
-        />
+    <SettingsShell>
+      <BackLink
+        onClick={() => {
+          if (backTo === "/app") setPortalIntent("owner");
+          else setPortalIntent("accountant");
+          navigate({ to: backTo });
+        }}
+        className="mb-3"
+      >
+        {backTo === "/app" ? "Back to board" : "Back to practice"}
+      </BackLink>
+      <PageHeader
+        compact
+        className="mb-8"
+        eyebrow="Account"
+        title="Settings"
+        subtitle={
+          isPractice
+            ? "Profile, practice preferences, and account controls"
+            : "Profile, workspace, and account controls"
+        }
+        meta={<ThemeToggle />}
+      />
 
-        {/* ── Profile ─────────────────────────────────────────────────────── */}
-        <SectionCard
-          className="mb-6 !rounded-2xl !border-slate-800 !bg-slate-900/60"
-          eyebrow={
-            <span className="inline-flex items-center gap-2">
-              <User className="h-4 w-4 text-[var(--brand-gold-ui,#d4a550)]" />
-              Profile
-            </span>
-          }
-        >
-
-          <div className="space-y-4">
-            <div>
-              <Label className="text-xs text-slate-400">Signed in as</Label>
-              <p className="mt-1 text-sm text-slate-100">{user?.email ?? "—"}</p>
-            </div>
-
-            {!isPractice && (
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full justify-start border-slate-700 bg-slate-950/50 text-slate-200 hover:border-[#d4a550]/50 hover:bg-[#d4a550]/10"
-                onClick={() => {
-                  sessionStorage.setItem("milon_open_profile", "1");
-                  navigate({ to: "/app" });
-                }}
-              >
-                <Building2 className="mr-2 h-4 w-4 text-[#d4a550]" />
-                Business profile (10 questions)
-              </Button>
-            )}
-
-            {isPractice && (
-              <p className="text-xs text-slate-500">
-                Client business profiles are edited inside each client workspace.
-              </p>
-            )}
-
-            <div className="rounded-xl border border-rose-900/50 bg-rose-950/20 p-4">
-              <p className="text-sm font-semibold text-rose-300">Delete account</p>
-              <p className="mt-1 text-xs leading-relaxed text-rose-200/70">
-                {isPractice
-                  ? "Permanently deletes your practice login, firms you own, and practice clients you created. This cannot be undone."
-                  : "Permanently deletes your login and this business’s client data on Milōn (figures, budget, forecasts, action plan). This cannot be undone."}
-              </p>
-              <Button
-                type="button"
-                variant="destructive"
-                className="mt-3"
-                onClick={() => {
-                  setConfirmText("");
-                  setConfirmOpen(true);
-                }}
-              >
-                <Trash2 className="mr-2 h-4 w-4" />
-                Delete my account
-              </Button>
-            </div>
+      <SectionCard
+        className="mb-6"
+        eyebrow={
+          <span className="inline-flex items-center gap-2">
+            <User className="h-4 w-4" />
+            Profile
+          </span>
+        }
+      >
+        <div className="space-y-4">
+          <div>
+            <span className="settings-label">Signed in as</span>
+            <p className="settings-value">{user?.email ?? "—"}</p>
           </div>
-        </SectionCard>
 
-        {!isPractice && ownerClientId ? (
-          <div className="mb-6">
-            <InviteAccountantCard clientId={ownerClientId} tone="settings" />
-          </div>
-        ) : null}
-
-        {!isPractice ? <OwnerPracticeAccessCard /> : null}
-
-        <MarketSettingsCard
-          kind={isPractice ? "firm" : "client"}
-          recordId={isPractice ? firmId : ownerClientId}
-          initial={marketBlob}
-        />
-
-        {!isPractice && hasPractice && (
-          <SectionCard
-            className="mb-6 !rounded-2xl !border-slate-800 !bg-slate-900/60"
-            description="This login also has a practice portal. Opening it leaves the business board."
-          >
+          {!isPractice && (
             <button
               type="button"
-              className="mt-3 flex w-full items-center gap-2 rounded-xl border border-slate-700 bg-slate-950/50 px-4 py-3 text-left text-sm text-slate-200 transition hover:border-[#d4a550]/50 hover:bg-[#d4a550]/10"
+              className="settings-row"
               onClick={() => {
-                setSettingsReturn("/dashboard");
-                setPortalIntent("accountant");
-                navigate({ to: "/dashboard" });
+                sessionStorage.setItem("milon_open_profile", "1");
+                navigate({ to: "/app" });
               }}
             >
-              <Building2 className="h-4 w-4 text-[#d4a550]" />
-              Open practice portal
+              <Building2 className="h-4 w-4" />
+              Business profile (10 questions)
             </button>
-          </SectionCard>
-        )}
+          )}
 
-        {/* ── Practice (accountants) ──────────────────────────────────────── */}
-        {isPractice && (
-          <SectionCard
-            className="mb-6 !rounded-2xl !border-slate-800 !bg-slate-900/60"
-            eyebrow={
-              <span className="inline-flex items-center gap-2">
-                <Palette className="h-4 w-4 text-[var(--brand-gold-ui,#d4a550)]" />
-                Practice
-              </span>
-            }
-          >
-            <div className="space-y-2">
-              <Link
-                to="/settings/team"
-                className="flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-950/50 px-4 py-3 text-sm text-slate-200 transition hover:border-[#d4a550]/50 hover:bg-[#d4a550]/10"
-              >
-                <Users className="h-4 w-4 text-[#d4a550]" />
-                Team & client access
-              </Link>
-              <Link
-                to="/settings/brand"
-                className="flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-950/50 px-4 py-3 text-sm text-slate-200 transition hover:border-[#d4a550]/50 hover:bg-[#d4a550]/10"
-              >
-                <Palette className="h-4 w-4 text-[#d4a550]" />
-                Brand & logo (white-label reports)
-              </Link>
-              <Link
-                to="/dashboard"
-                className="flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-950/50 px-4 py-3 text-sm text-slate-200 transition hover:border-[#d4a550]/50 hover:bg-[#d4a550]/10"
-              >
-                <Building2 className="h-4 w-4 text-[#d4a550]" />
-                Firm dashboard & clients
-              </Link>
-            </div>
-          </SectionCard>
-        )}
+          {isPractice && (
+            <p className="text-xs text-[var(--ink-dim)]">
+              Client business profiles are edited inside each client workspace.
+            </p>
+          )}
 
-        {/* ── Preferences ─────────────────────────────────────────────────── */}
+          <div className="settings-danger">
+            <p className="settings-danger-title">Delete account</p>
+            <p>
+              {isPractice
+                ? "Permanently deletes your practice login, firms you own, and practice clients you created. This cannot be undone."
+                : "Permanently deletes your login and this business’s client data on Milōn (figures, budget, forecasts, action plan). This cannot be undone."}
+            </p>
+            <Button
+              type="button"
+              variant="destructive"
+              className="mt-3"
+              onClick={() => {
+                setConfirmText("");
+                setConfirmOpen(true);
+              }}
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Delete my account
+            </Button>
+          </div>
+        </div>
+      </SectionCard>
+
+      {!isPractice && ownerClientId ? (
+        <div className="mb-6">
+          <InviteAccountantCard clientId={ownerClientId} tone="settings" />
+        </div>
+      ) : null}
+
+      {!isPractice ? <OwnerPracticeAccessCard /> : null}
+
+      <MarketSettingsCard
+        kind={isPractice ? "firm" : "client"}
+        recordId={isPractice ? firmId : ownerClientId}
+        initial={marketBlob}
+      />
+
+      {!isPractice && hasPractice && (
         <SectionCard
-          className="mb-6 !rounded-2xl !border-slate-800 !bg-slate-900/60"
-          eyebrow={
-            <span className="inline-flex items-center gap-2">
-              <RotateCcw className="h-4 w-4 text-[var(--brand-gold-ui,#d4a550)]" />
-              Preferences
-            </span>
-          }
-          description="Theme lives in the header on every page. Use this to replay the guided tour on this device."
+          className="mb-6"
+          description="This login also has a practice portal. Opening it leaves the business board."
         >
-          <Button
+          <button
             type="button"
-            variant="outline"
-            className="w-full justify-start border-slate-700 bg-slate-950/50 text-slate-200 hover:border-[#d4a550]/50 hover:bg-[#d4a550]/10"
-            onClick={handleRestartTour}
+            className="settings-row mt-1"
+            onClick={() => {
+              setSettingsReturn("/dashboard");
+              setPortalIntent("accountant");
+              navigate({ to: "/dashboard" });
+            }}
           >
-            <RotateCcw className="mr-2 h-4 w-4 text-[#d4a550]" />
-            Restart guided onboarding tour
-          </Button>
+            <Building2 className="h-4 w-4" />
+            Open practice portal
+          </button>
         </SectionCard>
+      )}
 
-        {/* ── Legal ───────────────────────────────────────────────────────── */}
+      {isPractice && (
         <SectionCard
-          className="mb-6 !rounded-2xl !border-slate-800 !bg-slate-900/60"
+          className="mb-6"
           eyebrow={
             <span className="inline-flex items-center gap-2">
-              <Scale className="h-4 w-4 text-[var(--brand-gold-ui,#d4a550)]" />
-              Legal
+              <Palette className="h-4 w-4" />
+              Practice
             </span>
           }
-          description="AI is powered by Claude. Financial information sent to the model is anonymised."
         >
-          <div className="flex flex-col gap-2">
-            <a
-              href="/privacy"
-              className="flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-950/50 px-4 py-3 text-sm text-slate-200 transition hover:border-[#d4a550]/50 hover:bg-[#d4a550]/10"
-            >
-              Privacy
-            </a>
-            <a
-              href="/terms"
-              className="flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-950/50 px-4 py-3 text-sm text-slate-200 transition hover:border-[#d4a550]/50 hover:bg-[#d4a550]/10"
-            >
-              Terms of use
-            </a>
-            <a
-              href="/ai"
-              className="flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-950/50 px-4 py-3 text-sm text-slate-200 transition hover:border-[#d4a550]/50 hover:bg-[#d4a550]/10"
-            >
-              AI notice
-            </a>
+          <div className="space-y-2">
+            <Link to="/settings/team" className="settings-row">
+              <Users className="h-4 w-4" />
+              Team & client access
+            </Link>
+            <Link to="/settings/brand" className="settings-row">
+              <Palette className="h-4 w-4" />
+              Brand & logo (white-label reports)
+            </Link>
+            <Link to="/dashboard" className="settings-row">
+              <Building2 className="h-4 w-4" />
+              Firm dashboard & clients
+            </Link>
           </div>
         </SectionCard>
+      )}
 
-        {/* ── Session ─────────────────────────────────────────────────────── */}
-        <SectionCard className="mb-6 !rounded-2xl !border-slate-800 !bg-slate-900/60">
-          <Button
-            type="button"
-            variant="outline"
-            className="w-full justify-start border-slate-700 bg-slate-950/50 text-slate-200"
-            onClick={() => signOut().then(() => { window.location.href = "/"; })}
-          >
-            <LogOut className="mr-2 h-4 w-4" />
-            Sign out
-          </Button>
-        </SectionCard>
-      </div>
+      <SectionCard
+        className="mb-6"
+        eyebrow={
+          <span className="inline-flex items-center gap-2">
+            <RotateCcw className="h-4 w-4" />
+            Preferences
+          </span>
+        }
+        description="Theme lives in the header on every page. Use this to replay the guided tour on this device."
+      >
+        <button type="button" className="settings-row" onClick={handleRestartTour}>
+          <RotateCcw className="h-4 w-4" />
+          Restart guided onboarding tour
+        </button>
+      </SectionCard>
+
+      <SectionCard
+        className="mb-6"
+        eyebrow={
+          <span className="inline-flex items-center gap-2">
+            <Scale className="h-4 w-4" />
+            Legal
+          </span>
+        }
+        description="AI is powered by Claude. Financial information sent to the model is anonymised."
+      >
+        <div className="flex flex-col gap-2">
+          <a href="/privacy" className="settings-row">
+            Privacy
+          </a>
+          <a href="/terms" className="settings-row">
+            Terms of use
+          </a>
+          <a href="/ai" className="settings-row">
+            AI notice
+          </a>
+        </div>
+      </SectionCard>
+
+      <SectionCard className="mb-6">
+        <button
+          type="button"
+          className="settings-row"
+          onClick={() =>
+            signOut().then(() => {
+              window.location.href = "/";
+            })
+          }
+        >
+          <LogOut className="h-4 w-4" />
+          Sign out
+        </button>
+      </SectionCard>
 
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-        <AlertDialogContent className="border-slate-800 bg-slate-950 text-slate-50">
+        <AlertDialogContent className="border-[var(--line)] bg-[var(--bg-2)] text-[var(--ink)]">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-rose-300">
+            <AlertDialogTitle className="text-[var(--risk)]">
               Delete account permanently?
             </AlertDialogTitle>
-            <AlertDialogDescription className="text-slate-400">
-              Type <span className="font-semibold text-slate-200">DELETE</span> to confirm.
-              All owned data will be removed and you will be signed out.
+            <AlertDialogDescription className="text-[var(--ink-dim)]">
+              Type <span className="font-semibold text-[var(--ink)]">DELETE</span> to confirm. All
+              owned data will be removed and you will be signed out.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="py-2">
@@ -388,27 +355,24 @@ function SettingsPage() {
               value={confirmText}
               onChange={(e) => setConfirmText(e.target.value)}
               placeholder="DELETE"
-              className="border-slate-700 bg-slate-900 text-slate-100"
               autoComplete="off"
             />
           </div>
           <AlertDialogFooter>
-            <AlertDialogCancel className="border-slate-700 bg-slate-900 text-slate-200">
-              Cancel
-            </AlertDialogCancel>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               disabled={confirmText.trim().toUpperCase() !== "DELETE" || deleting}
               onClick={(e) => {
                 e.preventDefault();
                 void handleDelete();
               }}
-              className="bg-rose-600 text-white hover:bg-rose-500 disabled:opacity-40"
+              className="bg-[var(--risk)] text-white hover:opacity-90 disabled:opacity-40"
             >
               {deleting ? "Deleting…" : "Delete forever"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </SettingsShell>
   );
 }

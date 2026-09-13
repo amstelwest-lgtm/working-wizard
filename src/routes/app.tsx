@@ -2296,7 +2296,10 @@ function Index() {
             .from("client_memberships")
             .select("client_id, role")
             .eq("user_id", u.user.id);
-          const ownedRows = (owned ?? []).map((c) => ({ id: c.id as string, name: c.name as string | null }));
+          const ownedRows = (owned ?? []).map((c) => ({
+            id: c.id as string,
+            name: c.name as string | null,
+          }));
           const ownedIds = new Set(ownedRows.map((c) => c.id));
           const extraIds = [
             ...new Set(
@@ -2307,8 +2310,12 @@ function Index() {
           ];
           const extraNames = new Map<string, string | null>();
           if (extraIds.length) {
-            const { data: extra } = await supabase.from("clients").select("id, name").in("id", extraIds);
-            for (const row of extra ?? []) extraNames.set(row.id as string, row.name as string | null);
+            const { data: extra } = await supabase
+              .from("clients")
+              .select("id, name")
+              .in("id", extraIds);
+            for (const row of extra ?? [])
+              extraNames.set(row.id as string, row.name as string | null);
           }
           return mergeOwnerWorkspaces(
             ownedRows,
@@ -2411,11 +2418,18 @@ function Index() {
           localStorage.removeItem(PENDING_INVITE_CLIENT_KEY);
           const workspaces = await listWorkspaces();
           if (!cancelled) setInvitedOwnerEntry(true);
-          applyWorkspaces(workspaces.length ? workspaces : [{
-            clientId: inviteClientId,
-            name: "Invited business",
-            role: "member",
-          }], inviteClientId);
+          applyWorkspaces(
+            workspaces.length
+              ? workspaces
+              : [
+                  {
+                    clientId: inviteClientId,
+                    name: "Invited business",
+                    role: "member",
+                  },
+                ],
+            inviteClientId,
+          );
           return;
         }
 
@@ -2478,9 +2492,7 @@ function Index() {
             }
             if (clientId) {
               writeStoredOwnerClientId(u.user.id, clientId);
-              setOwnerWorkspaces([
-                { clientId, name: clientName, role: "owner" },
-              ]);
+              setOwnerWorkspaces([{ clientId, name: clientName, role: "owner" }]);
             } else {
               setOwnerWorkspaces([]);
             }
@@ -3773,7 +3785,7 @@ function Index() {
                       <span className="founder-app-bar__upload-label hidden sm:inline">Upload</span>
                     </button>
                   )}
-                  <ThemeToggle className="founder-app-bar__theme h-7 rounded-lg border-slate-200 px-2 py-0 text-[9px] font-semibold uppercase tracking-[0.14em] dark:border-slate-700/80" />
+                  <ThemeToggle className="founder-app-bar__theme" />
                   <HeaderShareButton />
 
                   <div className="hidden items-center gap-1 sm:flex">
@@ -4261,7 +4273,11 @@ function Index() {
                               />
                             </div>
                             {hasRealFinancials ? (
-                              <StatusPill variant="live" pulse className="!text-[9px] !tracking-[0.16em]">
+                              <StatusPill
+                                variant="live"
+                                pulse
+                                className="!text-[9px] !tracking-[0.16em]"
+                              >
                                 Live ·{" "}
                                 {formatDate(new Date(), boardMarket, {
                                   day: "2-digit",
@@ -4270,11 +4286,17 @@ function Index() {
                                 }).toUpperCase()}
                               </StatusPill>
                             ) : sampleMode ? (
-                              <StatusPill variant="sample" className="!text-[9px] !tracking-[0.16em]">
+                              <StatusPill
+                                variant="sample"
+                                className="!text-[9px] !tracking-[0.16em]"
+                              >
                                 Sample · illustrative
                               </StatusPill>
                             ) : (
-                              <StatusPill variant="neutral" className="!text-[9px] !tracking-[0.16em]">
+                              <StatusPill
+                                variant="neutral"
+                                className="!text-[9px] !tracking-[0.16em]"
+                              >
                                 No data yet
                               </StatusPill>
                             )}
@@ -4339,87 +4361,87 @@ function Index() {
                                 }
                                 action={
                                   userRole !== "client_member" ? (
-                                  <div className="flex w-full max-w-sm flex-col gap-2.5">
-                                    <button
-                                      id="wizard-first-figures"
-                                      onClick={() => {
-                                        if (isUsCopy(boardMarket)) {
-                                          setShowFinData(true);
-                                          setTimeout(() => uploadRef.current?.click(), 150);
-                                        } else {
-                                          setShowBankDrafter(true);
-                                        }
-                                      }}
-                                      className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#b7872a] px-4 py-2.5 text-sm font-semibold text-white transition-all hover:bg-[#d4a550]"
-                                    >
-                                      <Upload className="h-4 w-4" />
-                                      {isUsCopy(boardMarket)
-                                        ? "Upload Excel, ODS, CSV or PDF financials"
-                                        : "Upload bank statements"}
-                                    </button>
-                                    <div className="flex w-full flex-col gap-2.5 sm:flex-row">
-                                      {isUsCopy(boardMarket) ? (
-                                        <button
-                                          onClick={() => setShowQboDialog(true)}
-                                          className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
-                                        >
-                                          <Plug2 className="h-4 w-4" />
-                                          Connect QuickBooks
-                                        </button>
-                                      ) : (
+                                    <div className="flex w-full max-w-sm flex-col gap-2.5">
+                                      <button
+                                        id="wizard-first-figures"
+                                        onClick={() => {
+                                          if (isUsCopy(boardMarket)) {
+                                            setShowFinData(true);
+                                            setTimeout(() => uploadRef.current?.click(), 150);
+                                          } else {
+                                            setShowBankDrafter(true);
+                                          }
+                                        }}
+                                        className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#b7872a] px-4 py-2.5 text-sm font-semibold text-white transition-all hover:bg-[#d4a550]"
+                                      >
+                                        <Upload className="h-4 w-4" />
+                                        {isUsCopy(boardMarket)
+                                          ? "Upload Excel, ODS, CSV or PDF financials"
+                                          : "Upload bank statements"}
+                                      </button>
+                                      <div className="flex w-full flex-col gap-2.5 sm:flex-row">
+                                        {isUsCopy(boardMarket) ? (
+                                          <button
+                                            onClick={() => setShowQboDialog(true)}
+                                            className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
+                                          >
+                                            <Plug2 className="h-4 w-4" />
+                                            Connect QuickBooks
+                                          </button>
+                                        ) : (
+                                          <button
+                                            onClick={() => {
+                                              setShowFinData(true);
+                                              setTimeout(() => uploadRef.current?.click(), 150);
+                                            }}
+                                            className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
+                                          >
+                                            <Upload className="h-4 w-4" />
+                                            Upload a financial statement
+                                          </button>
+                                        )}
                                         <button
                                           onClick={() => {
                                             setShowFinData(true);
-                                            setTimeout(() => uploadRef.current?.click(), 150);
+                                            setShowInputs(true);
                                           }}
                                           className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
                                         >
-                                          <Upload className="h-4 w-4" />
-                                          Upload a financial statement
+                                          <Database className="h-4 w-4" />
+                                          Enter manually
                                         </button>
-                                      )}
-                                      <button
-                                        onClick={() => {
-                                          setShowFinData(true);
-                                          setShowInputs(true);
-                                        }}
-                                        className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
-                                      >
-                                        <Database className="h-4 w-4" />
-                                        Enter manually
-                                      </button>
-                                    </div>
-                                    <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs text-slate-500">
-                                      {isUsCopy(boardMarket) && (
+                                      </div>
+                                      <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs text-slate-500">
+                                        {isUsCopy(boardMarket) && (
+                                          <button
+                                            onClick={() => setShowBankDrafter(true)}
+                                            className="underline hover:text-slate-700 dark:hover:text-slate-300"
+                                          >
+                                            Have bank statements instead? Upload those
+                                          </button>
+                                        )}
                                         <button
-                                          onClick={() => setShowBankDrafter(true)}
+                                          onClick={() => setFirstRunStep("first-data")}
                                           className="underline hover:text-slate-700 dark:hover:text-slate-300"
                                         >
-                                          Have bank statements instead? Upload those
+                                          See all ways to add figures
                                         </button>
-                                      )}
+                                      </div>
                                       <button
-                                        onClick={() => setFirstRunStep("first-data")}
-                                        className="underline hover:text-slate-700 dark:hover:text-slate-300"
+                                        id="wizard-sample-board"
+                                        onClick={enterSampleMode}
+                                        className="mt-1 inline-flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-sky-500/40 px-3 py-1.5 text-xs font-medium text-sky-700 transition-colors hover:bg-sky-500/10 dark:text-sky-300"
                                       >
-                                        See all ways to add figures
+                                        <FlaskConical className="h-3.5 w-3.5" />
+                                        Not ready? See the board with a sample business
                                       </button>
                                     </div>
-                                    <button
-                                      id="wizard-sample-board"
-                                      onClick={enterSampleMode}
-                                      className="mt-1 inline-flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-sky-500/40 px-3 py-1.5 text-xs font-medium text-sky-700 transition-colors hover:bg-sky-500/10 dark:text-sky-300"
-                                    >
-                                      <FlaskConical className="h-3.5 w-3.5" />
-                                      Not ready? See the board with a sample business
-                                    </button>
-                                  </div>
-                                ) : (
-                                  <p className="max-w-sm text-center text-sm text-slate-500">
-                                    Financial data hasn't been added yet. The owner will set this
-                                    up.
-                                  </p>
-                                )
+                                  ) : (
+                                    <p className="max-w-sm text-center text-sm text-slate-500">
+                                      Financial data hasn't been added yet. The owner will set this
+                                      up.
+                                    </p>
+                                  )
                                 }
                               />
                               {/* Same Milōn Bot mount as the scored board — before figures it

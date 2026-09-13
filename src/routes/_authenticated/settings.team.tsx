@@ -4,7 +4,9 @@ import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { Loader2, Shield, Trash2, UserPlus } from "lucide-react";
 import { BackLink } from "@/components/back-link";
+import { PageHeader } from "@/components/primitives";
 import { ScrollableTable } from "@/components/primitives/scrollable-table";
+import { SettingsShell } from "@/components/settings-shell";
 import { useAuth } from "@/hooks/use-auth";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
@@ -187,22 +189,18 @@ function TeamAccessPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100">
-      <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
-        <div className="mb-8 flex items-center justify-between gap-3">
-          <div>
-            <BackLink onClick={() => navigate({ to: "/settings" })} className="mb-3">
-              Back to settings
-            </BackLink>
-            <h1 className="text-2xl font-semibold tracking-tight">Team & access</h1>
-            <p className="mt-1 text-sm text-slate-400">
-              The business owner approves this practice once. After that you assign your own people
-              to client files. Maximum {PRACTICE_CLIENT_ACCESS_CAP} accountants per client. The
-              owner can revoke anyone, or disconnect the firm, from their settings.
-            </p>
-          </div>
-          <ThemeToggle />
-        </div>
+    <SettingsShell width="lg">
+      <BackLink onClick={() => navigate({ to: "/settings" })} className="mb-3">
+        Back to settings
+      </BackLink>
+      <PageHeader
+        compact
+        className="mb-8"
+        eyebrow="Practice"
+        title="Team & access"
+        subtitle={`The business owner approves this practice once. After that you assign your own people to client files. Maximum ${PRACTICE_CLIENT_ACCESS_CAP} accountants per client. The owner can revoke anyone, or disconnect the firm, from their settings.`}
+        meta={<ThemeToggle />}
+      />
 
         {busy && !board ? (
           <p className="flex items-center gap-2 text-sm text-slate-400">
@@ -575,7 +573,6 @@ function TeamAccessPage() {
         ) : null}
 
         <BackLink to="/dashboard">Back to firm dashboard</BackLink>
-      </div>
-    </div>
+    </SettingsShell>
   );
 }

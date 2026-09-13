@@ -1,0 +1,119 @@
+/*
+ * Settings pages — sit on accountant-portal tokens (gold, cream, glass)
+ * instead of the old slate-950 dashboard chrome.
+ */
+
+.settings-portal__shell {
+  position: relative;
+  z-index: 1;
+  margin: 0 auto;
+  padding: 28px 22px 90px;
+}
+.settings-portal__shell--md { max-width: 42rem; }
+.settings-portal__shell--lg { max-width: 56rem; }
+.settings-portal__shell--xl { max-width: 72rem; }
+
+.settings-portal .settings-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 13px 16px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--bg-2) 55%, transparent);
+  color: var(--ink);
+  font-size: 14px;
+  text-align: left;
+  transition: border-color 0.25s, background 0.25s, transform 0.25s var(--ease);
+}
+.settings-portal .settings-row:hover {
+  border-color: color-mix(in srgb, var(--gold) 55%, transparent);
+  background: color-mix(in srgb, var(--gold) 8%, transparent);
+}
+.settings-portal .settings-row svg { color: var(--gold); flex-shrink: 0; }
+
+.settings-portal .settings-label {
+  display: block;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+.settings-portal .settings-value {
+  margin-top: 4px;
+  font-size: 14px;
+  color: var(--ink);
+}
+
+.settings-portal .settings-field,
+.settings-portal input:not([type="color"]):not([type="checkbox"]):not([type="radio"]),
+.settings-portal select,
+.settings-portal textarea {
+  border-color: var(--line) !important;
+  background: color-mix(in srgb, var(--bg-2) 80%, transparent) !important;
+  color: var(--ink) !important;
+}
+.settings-portal input::placeholder,
+.settings-portal textarea::placeholder {
+  color: var(--ink-faint) !important;
+}
+
+.settings-portal .settings-gold {
+  background: var(--gold-grad) !important;
+  background-size: 200% auto !important;
+  color: #1b1300 !important;
+  border: none !important;
+  font-weight: 700 !important;
+  box-shadow: 0 4px 18px rgba(212, 175, 55, 0.28);
+}
+.settings-portal .settings-gold:hover:not(:disabled) {
+  background-position: 120% center !important;
+  color: #1b1300 !important;
+}
+.settings-portal .settings-gold:disabled {
+  opacity: 0.45;
+}
+
+.settings-portal .settings-danger {
+  border: 1px solid color-mix(in srgb, var(--risk) 40%, transparent);
+  background: color-mix(in srgb, var(--risk) 8%, transparent);
+  border-radius: 14px;
+  padding: 16px 18px;
+}
+.settings-portal .settings-danger h3,
+.settings-portal .settings-danger .settings-danger-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--risk);
+}
+.settings-portal .settings-danger p {
+  margin: 6px 0 0;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--ink-dim);
+}
+
+.settings-portal .settings-member {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--line-soft);
+}
+
+.settings-portal .settings-preview {
+  overflow: hidden;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--bg-2) 70%, transparent);
+  padding: 16px;
+}
+
+@media (max-width: 760px) {
+  .settings-portal__shell { padding: 20px 14px 72px; }
+}
