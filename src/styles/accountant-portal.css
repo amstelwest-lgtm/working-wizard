@@ -74,6 +74,11 @@ html[data-theme="light"] .accountant-portal .card.hero-card{box-shadow:0 18px 50
 /* ===== client brain panel (nested cards align with dashboard attn / pb) ===== */
 .accountant-portal .brain-stack{display:grid;gap:18px}
 .accountant-portal .brain-hero{margin-bottom:20px}
+.accountant-portal .brain-purpose{margin:0 0 12px;color:var(--ink-dim);font-size:13.5px;line-height:1.5;max-width:68ch}
+.accountant-portal .brain-fact-form{display:grid;gap:8px;margin-top:4px}
+.accountant-portal .brain-fact-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.accountant-portal .brain-fact-form textarea.brain-input{min-height:4.5rem;resize:vertical}
+.accountant-portal .brain-fact-row select.brain-input{max-width:22rem}
 .accountant-portal .brain-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
 .accountant-portal .card-inner{border:1px solid var(--line);border-radius:14px;padding:14px 16px;background:color-mix(in srgb,var(--bg-2) 55%,transparent)}
 .accountant-portal .card-inner-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
