@@ -54,6 +54,7 @@
     "test:statement-notes": "vite-node --config scripts/vite-test.config.ts scripts/statement-notes-test.mts",
     "test:staged-upload": "vite-node --config scripts/vite-test.config.ts scripts/staged-upload-test.mts",
     "test:auto-populate": "vite-node --config scripts/vite-test.config.ts scripts/auto-populate-test.mts",
+    "test:client-briefing": "vite-node --config scripts/vite-test.config.ts scripts/client-briefing-test.mts",
     "test:ci": "node scripts/run-ci-tests.mjs",
     "test:google-auth": "vite-node --config scripts/vite-test.config.ts scripts/google-auth-test.mts",
     "test:owner-workspaces": "vite-node --config scripts/vite-test.config.ts scripts/owner-workspaces-test.mts",

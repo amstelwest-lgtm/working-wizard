@@ -1023,6 +1023,7 @@ export type Database = {
           budget: Json | null
           budget_updated_at: string | null
           auto_update_prefs: Json | null
+          briefing_workflow: Json | null
           operating_profile: Json | null
           brain_summary: Json | null
           brain_summary_updated_at: string | null
@@ -1051,6 +1052,7 @@ export type Database = {
           budget?: Json | null
           budget_updated_at?: string | null
           auto_update_prefs?: Json | null
+          briefing_workflow?: Json | null
           operating_profile?: Json | null
           brain_summary?: Json | null
           brain_summary_updated_at?: string | null
@@ -1079,6 +1081,7 @@ export type Database = {
           budget?: Json | null
           budget_updated_at?: string | null
           auto_update_prefs?: Json | null
+          briefing_workflow?: Json | null
           operating_profile?: Json | null
           brain_summary?: Json | null
           brain_summary_updated_at?: string | null

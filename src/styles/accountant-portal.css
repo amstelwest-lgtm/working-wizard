@@ -266,6 +266,52 @@ html[data-theme="light"] .accountant-portal .doc{background:linear-gradient(170d
 .accountant-portal .big-ring{width:74px;height:74px}
 .accountant-portal .big-ring b{font-size:21px}
 
+/* ===== client briefing (status → what matters → this month's workflow) ===== */
+.accountant-portal .briefing{padding:26px 30px;margin-bottom:22px}
+.accountant-portal .briefing h1{font-size:26px;letter-spacing:.02em;margin:0}
+.accountant-portal .briefing-status{display:grid;grid-template-columns:minmax(260px,1.1fr) minmax(280px,1fr);gap:28px 40px;align-items:start}
+.accountant-portal .briefing-id{display:flex;flex-direction:column;gap:18px;min-width:0}
+.accountant-portal .briefing-id-row{display:flex;align-items:center;gap:18px}
+.accountant-portal .briefing-type{margin-top:4px;font-size:13px;color:var(--ink-dim);display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.accountant-portal .briefing-type code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.06em;font-size:12px;color:var(--ink-dim)}
+.accountant-portal .briefing-health{display:flex;gap:12px;align-items:flex-start;padding-top:14px;border-top:1px solid var(--line-soft)}
+.accountant-portal .briefing-health b{display:block;font-size:17px;font-variant-numeric:tabular-nums;margin-top:2px}
+.accountant-portal .briefing-dot{width:9px;height:9px;border-radius:50%;margin-top:6px;flex:none;background:var(--ok);box-shadow:0 0 0 3px color-mix(in srgb,var(--ok) 22%,transparent)}
+.accountant-portal .briefing-dot.warn{background:var(--warn);box-shadow:0 0 0 3px color-mix(in srgb,var(--warn) 22%,transparent)}
+.accountant-portal .briefing-dot.risk{background:var(--risk);box-shadow:0 0 0 3px color-mix(in srgb,var(--risk) 22%,transparent)}
+.accountant-portal .briefing-kicker{display:block;font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-dim);font-weight:600}
+.accountant-portal .briefing-kicker.gold{color:var(--gold)}
+.accountant-portal .briefing-snapshot dl{margin:10px 0 0;display:grid;gap:7px}
+.accountant-portal .briefing-metric{display:flex;justify-content:space-between;align-items:baseline;gap:14px;font-size:13.5px}
+.accountant-portal .briefing-metric dt{color:var(--ink-dim);white-space:nowrap}
+.accountant-portal .briefing-metric dd{margin:0;display:flex;align-items:baseline;gap:8px;font-variant-numeric:tabular-nums}
+.accountant-portal .briefing-value{font-weight:700;color:var(--ink);min-width:64px;text-align:right}
+.accountant-portal .briefing-delta{font-size:11.5px;font-weight:600;min-width:58px}
+.accountant-portal .briefing-delta.good{color:var(--ok)}
+.accountant-portal .briefing-delta.bad{color:var(--risk)}
+.accountant-portal .briefing-delta.flat{color:var(--ink-faint)}
+.accountant-portal .briefing-hint{font-size:11px;color:var(--ink-faint);min-width:58px}
+.accountant-portal .briefing-foot{display:flex;gap:16px;flex-wrap:wrap;margin-top:14px;padding-top:12px;border-top:1px solid var(--line-soft);font-size:12px}
+.accountant-portal .briefing-link{background:none;border:0;padding:0;font:inherit;font-size:12px;font-weight:600;color:var(--gold);cursor:pointer;display:inline-flex;align-items:center;gap:5px}
+.accountant-portal .briefing-link:hover{text-decoration:underline}
+.accountant-portal .briefing-link.muted{color:var(--ink-dim);font-weight:500}
+.accountant-portal .briefing-link:disabled{opacity:.5;cursor:default}
+.accountant-portal .briefing-muted{font-size:12.5px;color:var(--ink-faint);display:inline-flex;align-items:center;gap:6px;margin:0}
+.accountant-portal .briefing-about{margin-top:22px;padding-top:18px;border-top:1px solid var(--line-soft)}
+.accountant-portal .briefing-about p{margin:6px 0 0;font-size:14px;line-height:1.55;color:var(--ink);max-width:70ch}
+.accountant-portal .briefing-links{display:flex;gap:16px;margin-top:8px}
+.accountant-portal .briefing-brief{margin-top:22px;padding:18px 22px;border-radius:14px;border:1px solid var(--line);background:linear-gradient(160deg,rgba(212,175,55,.07),transparent 70%);display:grid;gap:16px}
+.accountant-portal .briefing-brief p{margin:6px 0 0;font-size:14.5px;line-height:1.6;color:var(--ink);max-width:78ch}
+.accountant-portal .briefing-brief .briefing-link{margin-top:8px}
+.accountant-portal .briefing-icon{width:12px;height:12px}
+.accountant-portal .briefing-spin{width:13px;height:13px;animation:briefing-spin 1s linear infinite}
+@keyframes briefing-spin{to{transform:rotate(360deg)}}
+@media(max-width:760px){
+  .accountant-portal .briefing{padding:20px 18px}
+  .accountant-portal .briefing-status{grid-template-columns:1fr;gap:20px}
+  .accountant-portal .briefing h1{font-size:22px}
+}
+
 .accountant-portal .tabs{display:flex;gap:6px;margin-bottom:22px;border-bottom:1px solid var(--line-soft);overflow-x:auto}
 .accountant-portal .tab{padding:12px 20px;border:none;background:transparent;color:var(--ink-dim);font-size:13.5px;font-weight:600;letter-spacing:.03em;position:relative;white-space:nowrap;transition:color .25s}
 .accountant-portal .tab::after{content:"";position:absolute;left:14px;right:14px;bottom:-1px;height:2px;background:var(--gold-grad);transform:scaleX(0);transition:transform .3s var(--ease)}

@@ -89,7 +89,6 @@ import {
   type ClientOperatingProfile,
 } from "@/lib/client-profile";
 import { profileIndustryLabel } from "@/lib/profile-signals";
-import { AccountantOperatingProfile } from "@/components/accountant-operating-profile";
 import { NoteLayer } from "@/components/note-layer";
 import { useNotes } from "@/contexts/notes";
 import { useTrack } from "@/hooks/use-track";
@@ -111,7 +110,16 @@ import {
   emptyDebtSchedule,
   type DebtSchedule,
 } from "@/lib/debt-schedule";
-import { PeriodVarianceStrip } from "@/components/period-variance-strip";
+import { ClientBriefing } from "@/components/client-briefing";
+import {
+  buildFinancialSnapshot,
+  describeBusiness,
+  fallbackWorkflow,
+  whatMatters,
+  workflowInputsHash,
+  type WorkflowContext,
+} from "@/lib/client-briefing";
+import { draftMilonWorkflow, type BriefingWorkflow } from "@/lib/client-briefing.functions";
 import { buildVarianceChips, resolvePriorSnapshot, type SnapshotRow } from "@/lib/prior-period";
 import { AdvisorySentHistory } from "@/components/advisory-sent-history";
 import { ClientBrainSummary } from "@/components/client-brain-summary";
@@ -124,13 +132,7 @@ import {
 } from "@/lib/advisory-deliveries";
 import { upsertCurrentPeriodSnapshot } from "@/lib/financial-snapshots";
 import { stampFromSignoff } from "@/lib/review-signoff-stamp";
-import {
-  EmptyState,
-  ClientWorkspaceSkeleton,
-  SectionCard,
-  StatusPill,
-  statusPillFromHealth,
-} from "@/components/primitives";
+import { EmptyState, ClientWorkspaceSkeleton, SectionCard } from "@/components/primitives";
 
 const ActionPlanPanel = lazyPanel(() => import("@/components/action-plan"), "Action Plan");
 const ReportsStudioPanel = lazyPanel(
@@ -821,6 +823,78 @@ function ClientView() {
     healthScore: healthScoreRounded,
     cashRunwayWeeks: effectiveRunway,
   });
+
+  // ── Client briefing (header) ──────────────────────────────────────────────
+  const briefingProfile = parseOperatingProfile(client?.operating_profile);
+  const briefingSnapshot = buildFinancialSnapshot({
+    chips: varianceChips,
+    cashRunwayWeeks: effectiveRunway,
+    financialsUpdatedAt: client?.financials_updated_at ?? null,
+    lastForecastAt: client?.last_forecast_at ?? null,
+    priorLabel: priorSnapshot?.period_label ?? null,
+    market: clientMarket,
+  });
+  const briefingAbout = describeBusiness(briefingProfile, client?.business_type ?? null);
+  const briefingMatters = whatMatters({
+    healthScore: overallHealth.overall,
+    healthStatus: overallHealth.displayStatus,
+    chips: varianceChips,
+    cashRunwayWeeks: effectiveRunway,
+    profile: briefingProfile,
+    hasFigures,
+  });
+  const workflowCtx: WorkflowContext = {
+    clientName: client?.name ?? "",
+    profile: briefingProfile,
+    businessType: client?.business_type ?? null,
+    healthScore: overallHealth.overall,
+    healthLabel: overallHealth.displayLabel,
+    snapshot: briefingSnapshot,
+    chips: varianceChips,
+    cashRunwayWeeks: effectiveRunway,
+    whatMatters: briefingMatters,
+    openQueries: openQueriesCount,
+  };
+  const workflowHash = workflowInputsHash(workflowCtx);
+  const [workflow, setWorkflow] = useState<BriefingWorkflow | null>(null);
+  const [workflowLoading, setWorkflowLoading] = useState(false);
+  const draftWorkflow = useServerFn(draftMilonWorkflow);
+  const workflowCtxRef = useRef(workflowCtx);
+  workflowCtxRef.current = workflowCtx;
+  const requestWorkflow = useCallback(
+    async (force: boolean) => {
+      if (!clientId) return;
+      setWorkflowLoading(true);
+      try {
+        const res = await draftWorkflow({
+          data: { clientId, force, context: workflowCtxRef.current as never },
+        });
+        setWorkflow(res);
+      } catch (e) {
+        console.warn("[briefing] workflow draft failed:", (e as Error).message);
+      } finally {
+        setWorkflowLoading(false);
+      }
+    },
+    [clientId, draftWorkflow],
+  );
+  // Instant fallback so the briefing is never empty; the drafted line
+  // upgrades it when the cached or newly generated text arrives.
+  useEffect(() => {
+    if (!client || loading || !hasFigures) return;
+    setWorkflow((prev) => {
+      if (prev && prev.inputsHash === workflowHash) return prev;
+      return {
+        text: fallbackWorkflow(workflowCtxRef.current),
+        source: "fallback",
+        generatedAt: new Date().toISOString(),
+        inputsHash: workflowHash,
+      };
+    });
+    const t = setTimeout(() => void requestWorkflow(false), 400);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clientId, workflowHash, loading, hasFigures, Boolean(client)]);
 
   const waterfallFallback = derivePeriodWaterfallFallback(financials);
 
@@ -1522,8 +1596,7 @@ function ClientView() {
       setDrawerTier(tier);
       setDrawerFormula(actual.formula);
       setDrawerActual(
-        actual.calculation ??
-          (actual.missing.length ? `Need: ${actual.missing.join(", ")}` : null),
+        actual.calculation ?? (actual.missing.length ? `Need: ${actual.missing.join(", ")}` : null),
       );
       setDrawerFallbackSteps(actual.steps);
       setDrawerOpen(true);
@@ -1686,133 +1759,44 @@ function ClientView() {
               <span className="aud">Audited</span>
             </div>
 
-            {/* ===== CLIENT HEADER ===== */}
-            <div className="card client-head">
-              <div className="idb">
-                <div className="ring big-ring">
-                  <HealthRing
-                    score={healthScoreRounded}
-                    status={overallHealth.displayStatus}
-                    size={74}
-                    strokeWidth={5}
-                  />
-                </div>
-                <div>
-                  <h1>{client.name}</h1>
-                  <span className="ctype">
-                    {client.client_code ? (
-                      <span
-                        style={{
-                          fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-                          letterSpacing: "0.06em",
-                          marginRight: 8,
-                        }}
-                      >
-                        {client.client_code}
-                      </span>
-                    ) : null}
-                    {profileIndustryLabel(
-                      parseOperatingProfile(client.operating_profile),
-                      client.business_type ?? "—",
-                    )}
-                  </span>
-                  <div
-                    style={{
-                      marginTop: 8,
-                      display: "flex",
-                      flexWrap: "wrap",
-                      gap: 6,
-                      alignItems: "center",
-                    }}
-                  >
-                    <StatusPill
-                      variant={statusPillFromHealth(overallHealth.displayStatus)}
-                      className="!text-[11px]"
-                    >
-                      {overallHealth.displayLabel}
-                    </StatusPill>
-                    {overallHealth.pillars
-                      .filter((p) => p.score != null)
-                      .map((p) => (
-                        <span
-                          key={p.id}
-                          title={`${p.label}: ${p.score}`}
-                          style={{
-                            fontSize: 11,
-                            color: "var(--muted)",
-                            padding: "2px 8px",
-                            borderRadius: 4,
-                            background: "var(--soft, #f1f5f9)",
-                          }}
-                        >
-                          {p.label.split(" ")[0]}{" "}
-                          <b
-                            style={{
-                              color:
-                                p.status === "critical"
-                                  ? "var(--risk)"
-                                  : p.status === "at_risk"
-                                    ? "var(--warn)"
-                                    : "var(--ink)",
-                            }}
-                          >
-                            {p.score}
-                          </b>
-                        </span>
-                      ))}
-                  </div>
-                </div>
-              </div>
-              <div className="meta">
-                <div>
-                  <b>{effectiveRunway != null ? `${effectiveRunway} wk` : "—"}</b>
-                  <span>Cash runway</span>
-                </div>
-                <div>
-                  <b>
-                    {client.last_forecast_at
-                      ? formatDate(client.last_forecast_at, clientMarket, {
-                          day: "numeric",
-                          month: "short",
-                          year: "numeric",
-                        })
-                      : "—"}
-                  </b>
-                  <span>Last forecast</span>
-                </div>
-                <button
-                  type="button"
-                  className="meta-notes"
-                  title="Open and resolved notes"
-                  onClick={() => openArchive(openQueriesCount > 0 ? "open" : "resolved")}
-                >
-                  <b>
-                    {notesLoading && clientNotes.length === 0
-                      ? openQueriesCount
-                      : clientNotes.filter((n) => !n.resolved).length}
-                  </b>
-                  <span>Open queries</span>
-                </button>
-                <div>
-                  <b>{reportsIssued}</b>
-                  <span>Reports issued</span>
-                </div>
-              </div>
-            </div>
-
-            <AccountantOperatingProfile
-              profile={parseOperatingProfile(client.operating_profile)}
-              fallbackType={client.business_type}
-              onEdit={() => setProfileOpen(true)}
-            />
-
-            <PeriodVarianceStrip
-              chips={varianceChips}
-              priorLabel={priorSnapshot?.period_label ?? null}
-              onOpenMovement={() => {
+            {/* ===== CLIENT BRIEFING — status → what matters → this month's workflow ===== */}
+            <ClientBriefing
+              clientName={client.name}
+              clientCode={client.client_code}
+              industryLabel={profileIndustryLabel(briefingProfile, client.business_type ?? "—")}
+              ring={
+                <HealthRing
+                  score={healthScoreRounded}
+                  status={overallHealth.displayStatus}
+                  size={74}
+                  strokeWidth={5}
+                />
+              }
+              healthScore={hasFigures ? overallHealth.overall : null}
+              healthLabel={overallHealth.displayLabel}
+              healthStatus={hasFigures ? overallHealth.displayStatus : null}
+              onViewBreakdown={() => setActiveTab("ratios")}
+              snapshot={briefingSnapshot}
+              about={briefingAbout}
+              profile={briefingProfile}
+              onEditProfile={() => setProfileOpen(true)}
+              whatMatters={briefingMatters}
+              workflow={workflow}
+              workflowLoading={workflowLoading}
+              onRefreshWorkflow={() => void requestWorkflow(true)}
+              openQueries={
+                notesLoading && clientNotes.length === 0
+                  ? openQueriesCount
+                  : clientNotes.filter((n) => !n.resolved).length
+              }
+              onOpenQueries={() => openArchive(openQueriesCount > 0 ? "open" : "resolved")}
+              reportsIssued={reportsIssued}
+              movementReportAvailable
+              onOpenMovementReport={() => {
                 setStudioDeepLink({ report: "movement", action: "preview" });
                 setActiveTab("reports");
               }}
+              hasFigures={hasFigures}
             />
 
             {/* ===== FIRST FIGURES — shown on every tab until the client has numbers ===== */}
@@ -1822,8 +1806,8 @@ function ClientView() {
                   <p className="kicker">Step 1 · Bring in this client's figures</p>
                   <h3>Nothing is scored yet</h3>
                   <p>
-                    The health orb, profit waterfall, cash forecast and Milōn Bot all wait on the first
-                    numbers.{" "}
+                    The health orb, profit waterfall, cash forecast and Milōn Bot all wait on the
+                    first numbers.{" "}
                     {isUsCopy(clientMarket)
                       ? "Fastest: a P&L and balance sheet as Excel, CSV or PDF. Bank statements also work."
                       : "Fastest: about 3 months of bank statements for every account. A P&L and balance sheet also work."}
@@ -2214,9 +2198,9 @@ function ClientView() {
                   <span className="eyebrow">Ratios — accountant summary</span>
                   <p className="sub">
                     All {Object.keys(ratios).length} computed ratios from the period figures. Tap a
-                    row for the formula, the actuals that feed it, and the repair playbook.
-                    Current ratio and debt-to-equity need current assets / liabilities — those
-                    fields are not collected yet.
+                    row for the formula, the actuals that feed it, and the repair playbook. Current
+                    ratio and debt-to-equity need current assets / liabilities — those fields are
+                    not collected yet.
                   </p>
                   {(Object.keys(PILLAR_RATIO_NAMES) as HealthPillarId[]).map((pillarId) => {
                     const names = PILLAR_RATIO_NAMES[pillarId];
@@ -2287,8 +2271,8 @@ function ClientView() {
             <div className={`tabpane${activeTab === "profit" ? " on" : ""}`} id="pane-profit">
               <span className="eyebrow">Product lines</span>
               <p className="sub" style={{ marginBottom: 16 }}>
-                Answer these questions to build revenue and net profit per product line — so you
-                can see which lines actually make the money.
+                Answer these questions to build revenue and net profit per product line — so you can
+                see which lines actually make the money.
               </p>
               <div className="dark" style={{ colorScheme: "dark", marginBottom: 28 }}>
                 <ProductMixPanel
