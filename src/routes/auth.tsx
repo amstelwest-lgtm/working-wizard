@@ -273,34 +273,19 @@ function AuthPage() {
 
         {mounted && (
           <>
-            <div>
-              <GoogleSignInButton
-                intent="accountant"
-                next={googleNext ?? afterAuthPath}
-                tone="entry"
-                label={mode === "signup" ? "Continue with Google" : "Sign in with Google"}
-                disabled={busy}
-                onBeforeStart={() => {
-                  if (mode !== "signup") return true;
-                  const market = draftToSelection(draftMarket);
-                  if (!market) {
-                    toast.error("Pick South Africa or the United States (and a state) first.");
-                    return false;
-                  }
-                  writeVisitorDraft(draftMarket);
-                  stashAccountantGoogleSignup({
-                    firmName: firmName.trim(),
-                    fullName: fullName.trim() || undefined,
-                    marketCountry: market.country,
-                    marketRegion: market.regionCode,
-                  });
-                  return true;
-                }}
-                onError={(msg) => toast.error(msg)}
-              />
-              <AuthDivider />
-            </div>
-            <form onSubmit={handle}>
+            {mode === "signin" && (
+              <div>
+                <GoogleSignInButton
+                  intent="accountant"
+                  next={googleNext ?? afterAuthPath}
+                  tone="entry"
+                  disabled={busy}
+                  onError={(msg) => toast.error(msg)}
+                />
+                <AuthDivider />
+              </div>
+            )}
+            <form onSubmit={handle} className={mode === "signin" ? "" : "mt-4"}>
               {mode === "signup" && (
                 <>
                   <AuthEntryFieldLabel htmlFor="auth-full-name">Your name</AuthEntryFieldLabel>
@@ -324,6 +309,32 @@ function AuthPage() {
                       onChange={setDraftMarket}
                       audience="practice"
                     />
+                  </div>
+                  <div className="mt-5">
+                    <GoogleSignInButton
+                      intent="accountant"
+                      next={googleNext ?? afterAuthPath}
+                      tone="entry"
+                      label="Continue with Google"
+                      disabled={busy}
+                      onBeforeStart={() => {
+                        const market = draftToSelection(draftMarket);
+                        if (!market) {
+                          toast.error("Pick South Africa or the United States (and a state) first.");
+                          return false;
+                        }
+                        writeVisitorDraft(draftMarket);
+                        stashAccountantGoogleSignup({
+                          firmName: firmName.trim(),
+                          fullName: fullName.trim() || undefined,
+                          marketCountry: market.country,
+                          marketRegion: market.regionCode,
+                        });
+                        return true;
+                      }}
+                      onError={(msg) => toast.error(msg)}
+                    />
+                    <AuthDivider />
                   </div>
                 </>
               )}

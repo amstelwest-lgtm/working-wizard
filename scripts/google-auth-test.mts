@@ -226,8 +226,8 @@ const authPage = readFileSync(resolve("src/routes/auth.tsx"), "utf8");
 assert(authPage.includes("Continue with Google"), "Create firm offers Google sign-up");
 assert(authPage.includes("stashAccountantGoogleSignup"), "Create firm Google carries firm name + market");
 assert(
-  !/mode === "signin" && \(/.test(authPage) || authPage.includes('label={mode === "signup"'),
-  "Google is not gated to the Sign in tab only",
+  (authPage.match(/GoogleSignInButton/g) ?? []).length >= 2,
+  "Create firm and Sign in both have a Google button",
 );
 
 console.log("google-auth-test: ok");
