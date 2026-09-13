@@ -334,7 +334,7 @@ export function BudgetVariancePanel({ clientId, doc }: { clientId?: string; doc:
             {report.headline}
           </p>
           <ScrollableTable cardRows className="rounded-lg border border-slate-100 dark:border-slate-800">
-            <table className="milon-data-table w-full min-w-[520px] text-xs">
+            <table className="milon-data-table w-full min-w-[520px] text-xs text-[#0f172a] dark:text-slate-100">
               <thead>
                 <tr className="border-b border-slate-100 text-left text-[10px] uppercase tracking-wider text-slate-400 dark:border-slate-800">
                   <th className="px-3 py-2">Line</th>

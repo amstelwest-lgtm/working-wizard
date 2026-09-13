@@ -584,7 +584,7 @@ function BudgetComplexWorkspace({
                 </button>
               )}
             </div>
-            <table className="milon-data-table w-full min-w-[640px] text-xs">
+            <table className="milon-data-table w-full min-w-[640px] text-xs text-[#0f172a] dark:text-slate-100">
               <thead>
                 <tr className="text-left text-[10px] uppercase tracking-wider text-slate-400">
                   <th className="px-3 py-2">Driver</th>
@@ -670,7 +670,7 @@ function BudgetComplexWorkspace({
           Fixed overheads
         </h3>
         <ScrollableTable className="rounded-xl border border-slate-200/80 dark:border-slate-800">
-          <table className="milon-data-table w-full min-w-[640px] text-xs">
+          <table className="milon-data-table w-full min-w-[640px] text-xs text-[#0f172a] dark:text-slate-100">
             <thead>
               <tr className="border-b border-slate-100 text-left text-[10px] uppercase tracking-wider text-slate-400 dark:border-slate-800">
                 <th className="px-3 py-2">Bucket</th>
@@ -720,7 +720,7 @@ function BudgetComplexWorkspace({
                 </td>
                 <td
                   colSpan={focusMonths.length}
-                  className="px-2 py-1.5 text-right text-xs font-semibold tabular-nums"
+                  className="px-2 py-1.5 text-right text-xs font-semibold tabular-nums text-[#0f172a] dark:text-slate-100"
                 >
                   {money(
                     focusMonths.reduce(
@@ -1041,12 +1041,12 @@ function BudgetComplexWorkspace({
             ].map((s) => (
               <div
                 key={s.l}
-                className="rounded-xl border border-[#d4a550]/25 bg-[#d4a550]/5 px-3 py-3"
+                className="rounded-xl border border-[#d4a550]/35 bg-[#fffdf8] px-3 py-3 dark:bg-slate-900"
               >
                 <div className="text-[10px] font-semibold uppercase tracking-wider text-[#b8860b]">
                   {s.l}
                 </div>
-                <div className="mt-1 text-lg font-semibold tabular-nums text-slate-900 dark:text-slate-100">
+                <div className="mt-1 text-lg font-semibold tabular-nums text-[#0f172a] dark:text-slate-100">
                   {money(s.v)}
                 </div>
               </div>
@@ -1091,7 +1091,7 @@ function BudgetComplexWorkspace({
         )}
 
         <ScrollableTable cardRows className="rounded-xl border border-slate-200/80 dark:border-slate-800">
-          <table className="milon-data-table w-full min-w-[880px] text-xs">
+          <table className="milon-data-table w-full min-w-[880px] text-xs text-[#0f172a] dark:text-slate-100">
             <thead>
               <tr className="border-b border-slate-100 text-left text-[10px] uppercase tracking-wider text-slate-400 dark:border-slate-800">
                 <th className="px-3 py-2">Month</th>

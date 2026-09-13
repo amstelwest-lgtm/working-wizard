@@ -2469,28 +2469,29 @@ function ClientView() {
                   Use <b>Complex</b> for full driver grids, capex, and sensitivity.{" "}
                   <b>Simplified</b> keeps volume × price and cash timing front-and-centre.
                 </p>
-                <div className="dark" style={{ colorScheme: "dark" }}>
-                  <BudgetPanel
-                    clientId={client.id}
-                    clientName={client.name}
-                    simplified={viewMode === "simplified"}
-                    role="accountant"
-                    reloadToken={budgetReloadToken}
-                    canSign
-                    businessTypeId={client.business_type}
-                    operatingProfile={parseOperatingProfile(client.operating_profile)}
-                    financials={financials}
-                    fyStartMonthDefault={
-                      parseOperatingProfile(client.operating_profile)?.fyStartMonth ??
-                      resolveMarket(coerceMarketSelection(client.market)).fyStartMonthDefault
-                    }
-                    onRetakeProfile={() => setProfileOpen(true)}
-                    onPushedToCash={() => {
-                      setCashForecastReloadToken((n) => n + 1);
-                      setActiveTab("cash");
-                    }}
-                  />
-                </div>
+                {/* Follow the portal theme. A nested `.dark` island made Tailwind
+                light-on-dark copy and `color-scheme: dark` inputs fire while
+                budget cards stayed cream/white — revenue and totals vanished. */}
+                <BudgetPanel
+                  clientId={client.id}
+                  clientName={client.name}
+                  simplified={viewMode === "simplified"}
+                  role="accountant"
+                  reloadToken={budgetReloadToken}
+                  canSign
+                  businessTypeId={client.business_type}
+                  operatingProfile={parseOperatingProfile(client.operating_profile)}
+                  financials={financials}
+                  fyStartMonthDefault={
+                    parseOperatingProfile(client.operating_profile)?.fyStartMonth ??
+                    resolveMarket(coerceMarketSelection(client.market)).fyStartMonthDefault
+                  }
+                  onRetakeProfile={() => setProfileOpen(true)}
+                  onPushedToCash={() => {
+                    setCashForecastReloadToken((n) => n + 1);
+                    setActiveTab("cash");
+                  }}
+                />
               </div>
             </div>
 

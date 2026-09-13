@@ -396,6 +396,44 @@ html.dark .accountant-portal #wizard-action-plan{
   color:#f1f5f9;
 }
 
+/* Budget figures inherit portal `--ink`. Nested `.dark` used to flip Tailwind
+   and native inputs to near-white while cards stayed cream — revenue / totals
+   melted into the background. Pin ink + color-scheme to the portal theme. */
+.accountant-portal #wizard-budget-panel,
+.accountant-portal #wizard-budget-plan,
+.accountant-portal #wizard-budget-year-chart,
+.accountant-portal #wizard-budget-variance{
+  --foreground:#1b1608;
+  --card-foreground:#1b1608;
+  color:#1b1608;
+  color-scheme:light;
+}
+.accountant-portal #wizard-budget-panel input,
+.accountant-portal #wizard-budget-panel textarea,
+.accountant-portal #wizard-budget-panel select,
+.accountant-portal #wizard-budget-plan input,
+.accountant-portal #wizard-budget-plan textarea,
+.accountant-portal #wizard-budget-plan select{
+  color:#1b1608;
+}
+html.dark .accountant-portal #wizard-budget-panel,
+html.dark .accountant-portal #wizard-budget-plan,
+html.dark .accountant-portal #wizard-budget-year-chart,
+html.dark .accountant-portal #wizard-budget-variance{
+  --foreground:#f1f5f9;
+  --card-foreground:#f1f5f9;
+  color:#f1f5f9;
+  color-scheme:dark;
+}
+html.dark .accountant-portal #wizard-budget-panel input,
+html.dark .accountant-portal #wizard-budget-panel textarea,
+html.dark .accountant-portal #wizard-budget-panel select,
+html.dark .accountant-portal #wizard-budget-plan input,
+html.dark .accountant-portal #wizard-budget-plan textarea,
+html.dark .accountant-portal #wizard-budget-plan select{
+  color:#f1f5f9;
+}
+
 .accountant-portal .footer-note{margin-top:60px;text-align:center;font-size:12px;color:var(--ink-faint)}
 
 /* ===== dashboard greeting ===== */
