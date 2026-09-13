@@ -2279,7 +2279,7 @@ function ClientView() {
                 Answer these questions to build revenue and net profit per product line — so you can
                 see which lines actually make the money.
               </p>
-              <div className="dark" style={{ colorScheme: "dark", marginBottom: 28 }}>
+              <div style={{ marginBottom: 28 }}>
                 <ProductMixPanel
                   totalRevenue={resolveWaterfallFigures(weeklyInputs, waterfallFallback).revenue}
                   incentive="Answer these to build revenue and net profit per product line."

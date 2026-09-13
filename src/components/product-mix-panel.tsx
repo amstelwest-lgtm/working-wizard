@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ChevronDown, ChevronUp } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Layers } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -12,6 +11,7 @@ import {
 import { useFinancialInputs } from "@/contexts/financial-inputs";
 import { useMarketFormat } from "@/contexts/market";
 import { currencySymbol } from "@/lib/market";
+import { CollapsibleGoldCard } from "@/components/primitives/collapsible-gold-card";
 import {
   PRODUCT_MIX_MAX_LINES,
   PRODUCT_MIX_VERSION,
@@ -475,7 +475,9 @@ function MixBars({ mix }: { mix: ProductMix }) {
           <div key={row.id}>
             <div className="mb-1 flex items-center justify-between gap-2">
               <div className="flex min-w-0 items-center gap-2">
-                <span className="truncate text-xs font-semibold text-slate-200">{row.name}</span>
+                <span className="truncate text-xs font-semibold text-slate-800 dark:text-slate-200">
+                  {row.name}
+                </span>
                 {row.isBest && (
                   <span
                     className="shrink-0 rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider"
@@ -502,7 +504,7 @@ function MixBars({ mix }: { mix: ProductMix }) {
                 <span className="w-10 shrink-0 text-[9px] uppercase tracking-wider text-slate-500">
                   Sales
                 </span>
-                <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-800">
+                <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-amber-900/10 dark:bg-slate-800">
                   <div
                     className="h-full rounded-full bg-[#d4a550]"
                     style={{ width: barWidth(row.revenueSharePct) }}
@@ -513,7 +515,7 @@ function MixBars({ mix }: { mix: ProductMix }) {
                 <span className="w-10 shrink-0 text-[9px] uppercase tracking-wider text-slate-500">
                   GP
                 </span>
-                <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-800">
+                <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-amber-900/10 dark:bg-slate-800">
                   <div
                     className="h-full rounded-full"
                     style={{ width: barWidth(row.gpSharePct), background: tone }}
@@ -521,7 +523,7 @@ function MixBars({ mix }: { mix: ProductMix }) {
                 </div>
               </div>
             </div>
-            <div className="mt-1 text-[10px] text-slate-500">
+            <div className="mt-1 text-[10px] text-slate-500 dark:text-slate-400">
               {fmt(row.revenueAmount)}
               {stated > 0 ? ` of ${fmt(stated)}` : ""}
               {" · "}
@@ -532,7 +534,7 @@ function MixBars({ mix }: { mix: ProductMix }) {
         );
       })}
       {stated > 0 && leftover > 0 && (
-        <p className="text-[10px] text-slate-500">
+        <p className="text-[10px] text-slate-500 dark:text-slate-400">
           {fmt(leftover)} of {fmt(stated)} unallocated — other (no GP share)
         </p>
       )}
@@ -550,91 +552,70 @@ export function ProductMixPanel({
 }) {
   const { productMix, saveProductMix } = useFinancialInputs();
   const { t } = useMarketFormat();
-  const [open, setOpen] = useState(() => Boolean(incentive));
   const [funnelOpen, setFunnelOpen] = useState(false);
   const answered = hasProductMixAnswer(productMix);
   const summary = useMemo(() => productMixSummary(productMix), [productMix]);
 
   return (
     <>
-      <Card className="border border-slate-800 bg-slate-900/60 shadow-sm print:hidden">
-        <CardHeader
-          className="cursor-pointer select-none border-b border-slate-800 pb-3"
-          onClick={() => setOpen((o) => !o)}
-        >
-          <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              <CardTitle className="text-sm font-semibold text-slate-100">Product lines</CardTitle>
-              <CardDescription className="mt-0.5 text-xs text-slate-400">
-                {incentive ?? summary}
-              </CardDescription>
-            </div>
-            <div className="flex shrink-0 items-center gap-1">
-              {!answered ? (
-                <Button
-                  size="sm"
-                  className="h-7 bg-[#d4a550] px-2.5 text-[11px] text-[#0a0e1a] hover:bg-[#c49a45]"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setFunnelOpen(true);
-                  }}
-                >
-                  5 questions
-                </Button>
-              ) : (
-                <button
-                  type="button"
-                  className="mr-1 text-[11px] font-medium text-[#d4a550] hover:underline"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setFunnelOpen(true);
-                  }}
-                >
-                  Update
-                </button>
-              )}
-              <span className="p-1 text-[#d4a550]">
-                {open ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-              </span>
-            </div>
+      <div className="print:hidden">
+        <CollapsibleGoldCard
+          icon={Layers}
+          title="Product lines"
+          subtitle={incentive ?? summary}
+          defaultOpen={Boolean(incentive)}
+          headerRight={
+          !answered ? (
+            <Button
+              size="sm"
+              className="h-7 bg-[#d4a550] px-2.5 text-[11px] text-[#0a0e1a] hover:bg-[#c49a45]"
+              onClick={() => setFunnelOpen(true)}
+            >
+              5 questions
+            </Button>
+          ) : (
+            <button
+              type="button"
+              className="text-[11px] font-medium text-[#b8860b] hover:underline dark:text-[#d4a550]"
+              onClick={() => setFunnelOpen(true)}
+            >
+              Update
+            </button>
+          )
+        }
+      >
+        {!answered && (
+          <div className="flex flex-col items-start gap-2">
+            <p className="text-xs text-slate-600 dark:text-slate-400">
+              {incentive ??
+                "Optional. Of the stated total revenue, how much is from each line — then sales share vs GP share. Does not change the waterfall."}
+            </p>
+            <Button
+              size="sm"
+              className="bg-[#d4a550] text-[#0a0e1a] hover:bg-[#c49a45]"
+              onClick={() => setFunnelOpen(true)}
+            >
+              Break down by product line
+            </Button>
           </div>
-        </CardHeader>
-
-        {open && (
-          <CardContent className="pb-3 pt-4">
-            {!answered && (
-              <div className="flex flex-col items-start gap-2">
-                <p className="text-xs text-slate-400">
-                  {incentive ??
-                    "Optional. Of the stated total revenue, how much is from each line — then sales share vs GP share. Does not change the waterfall."}
-                </p>
-                <Button
-                  size="sm"
-                  className="bg-[#d4a550] text-[#0a0e1a] hover:bg-[#c49a45]"
-                  onClick={() => setFunnelOpen(true)}
-                >
-                  Break down by product line
-                </Button>
-              </div>
-            )}
-            {answered && !productMix.active && (
-              <p className="text-xs text-slate-400">
-                Marked as a single-line business. Update the breakdown if that changes.
-              </p>
-            )}
-            {answered && productMix.active && (
-              <>
-                <MixBars mix={productMix} />
-                <p className="mt-3 text-[10px] text-slate-500">
-                  Sales share is {t("currencyWord")} of stated total revenue. GP share uses that
-                  amount × unit margin. A high-margin line can be a small slice of sales and most of
-                  the profit. Does not change the waterfall figures.
-                </p>
-              </>
-            )}
-          </CardContent>
         )}
-      </Card>
+        {answered && !productMix.active && (
+          <p className="text-xs text-slate-600 dark:text-slate-400">
+            Marked as a single-line business. Update the breakdown if that changes.
+          </p>
+        )}
+        {answered && productMix.active && (
+          <>
+            <MixBars mix={productMix} />
+            <p className="mt-3 text-[10px] text-slate-500 dark:text-slate-400">
+              Sales share is {t("currencyWord")} of stated total revenue. GP share uses that amount ×
+              unit margin. A high-margin line can be a small slice of sales and most of the profit.
+              Does not change the waterfall figures.
+            </p>
+          </>
+        )}
+      </CollapsibleGoldCard>
+      </div>
 
       <ProductMixFunnel
         open={funnelOpen}
