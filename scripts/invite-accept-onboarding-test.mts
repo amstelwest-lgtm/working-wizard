@@ -533,6 +533,8 @@ assert(wizardSrc.includes("Got it — add my first client"), "empty practice tou
   assert(/sign off/i.test(ownerEmpty), "owner-empty says drafts queue for accountant sign-off");
 
   const owner = stepsBlock("OWNER_STEPS");
+  assert(/Pin a question for your accountant/.test(owner), "owner tour explains notes");
+  assert(/wizard-notes-pin/.test(owner), "owner notes step targets the pin button");
   for (const section of ["Profit", "Cash Forecast", "Budget"]) {
     const i = owner.indexOf(`section: "${section}"`);
     const step = owner.slice(i, owner.indexOf("},", i));
@@ -545,6 +547,8 @@ assert(wizardSrc.includes("Got it — add my first client"), "empty practice tou
   assert(/sign-off/.test(acctEmpty), "accountant-empty says tabs wait for sign-off");
 
   const acct = stepsBlock("ACCOUNTANT_CLIENT_STEPS");
+  assert(/Outstanding notes from the owner/.test(acct), "accountant studio tour covers open queries");
+  assert(/wizard-open-queries/.test(acct), "accountant queries step targets the briefing control");
   for (const section of ["Profit", "Cash Forecast", "Budget", "Reports"]) {
     const i = acct.indexOf(`section: "${section}"`);
     const step = acct.slice(i, acct.indexOf("},", i));
@@ -552,14 +556,17 @@ assert(wizardSrc.includes("Got it — add my first client"), "empty practice tou
     assert(/sign/i.test(step), `accountant ${section} step asks for review / sign-off`);
   }
   assert(/Needs re-review/.test(acct), "accountant tour explains re-review after later uploads");
+
+  const dash = stepsBlock("ACCOUNTANT_DASH_STEPS");
+  assert(/Notes waiting on you/.test(dash), "practice-board tour covers outstanding owner notes");
 }
 
 const onboardingSrc = readFileSync(resolve("src/lib/onboarding.ts"), "utf8");
-assert(onboardingSrc.includes('"milon_walkthrough_v10"'), "owner tour key bumped for #175 copy");
+assert(onboardingSrc.includes('"milon_walkthrough_v11"'), "owner tour key bumped for notes step");
 assert(onboardingSrc.includes('"milon_walkthrough_empty_v2"'), "owner-empty tour key bumped");
-assert(onboardingSrc.includes('"milon_accountant_client_tour_v9"'), "accountant client tour key bumped");
+assert(onboardingSrc.includes('"milon_accountant_client_tour_v10"'), "accountant client tour key bumped for queries step");
 assert(onboardingSrc.includes('"milon_accountant_client_tour_empty_v2"'), "accountant client-empty tour key bumped");
-assert(onboardingSrc.includes('"milon_accountant_dash_tour_v8"'), "accountant dashboard tour key bumped");
+assert(onboardingSrc.includes('"milon_accountant_dash_tour_v9"'), "accountant dashboard tour key bumped for queries");
 assert(onboardingSrc.includes('"milon_accountant_dash_empty_v1"'), "empty practice tour key exists");
 assert(
   onboardingSrc.includes("shouldReopenFirstDataAfterEmptyTour"),

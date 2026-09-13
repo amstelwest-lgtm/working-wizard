@@ -114,11 +114,21 @@ export function ClientBriefing(p: ClientBriefingProps) {
           )}
           <div className="briefing-actions">
             {p.openQueries > 0 ? (
-              <button type="button" className="btn gold mini" onClick={p.onOpenQueries}>
+              <button
+                type="button"
+                id="wizard-open-queries"
+                className="btn gold mini"
+                onClick={p.onOpenQueries}
+              >
                 {p.openQueries} open {p.openQueries === 1 ? "query" : "queries"}
               </button>
             ) : (
-              <button type="button" className="btn ghost mini" onClick={p.onOpenQueries}>
+              <button
+                type="button"
+                id="wizard-open-queries"
+                className="btn ghost mini"
+                onClick={p.onOpenQueries}
+              >
                 No open queries
               </button>
             )}

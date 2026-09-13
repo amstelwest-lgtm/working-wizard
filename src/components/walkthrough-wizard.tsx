@@ -82,6 +82,13 @@ const OWNER_STEPS: Step[] = [
     body: "Sitting under the score is Milōn Bot, powered by Claude. Try “why is cash tight?” or “what’s still outstanding?” — answers stay grounded in what’s on file. It won’t invent figures or send email.",
   },
   {
+    tab: "today",
+    targetId: "wizard-notes-pin",
+    section: "Notes",
+    title: "Pin a question for your accountant",
+    body: "The gold pen in the corner drops a note on this page — a ratio, the waterfall, cash, anywhere. Your accountant sees it as an open query on the same deliverable. @mention them to email; resolve the note when the answer lands.",
+  },
+  {
     tab: "waterfall",
     targetId: "wizard-profit-walk",
     section: "Profit",
@@ -138,7 +145,13 @@ const ACCOUNTANT_DASH_STEPS: Step[] = [
     targetId: "wizard-practice-board",
     section: "Practice",
     title: "Your whole book at a glance",
-    body: "Health, runway and status for every client — so you know who needs attention before they call.",
+    body: "Health, runway and status for every client — so you know who needs attention before they call. The Queries column is unresolved notes the owner pinned for you.",
+  },
+  {
+    targetId: "wizard-dash-queries, wizard-practice-board",
+    section: "Queries",
+    title: "Notes waiting on you",
+    body: "This column counts unresolved notes the owner pinned on their board. Open the client and pick them up from Open queries at the top of their workspace — reply on the same deliverable they marked.",
   },
   {
     targetId: ".ctable tbody tr, .client-card, [data-client-row]",
@@ -189,6 +202,13 @@ const ACCOUNTANT_CLIENT_STEPS: Step[] = [
     section: "Milōn Bot",
     title: "Start with Milōn Bot",
     body: "Now that this client has figures, the studio opens here. Ask against the drafted deliverables — ratios, waterfall, cash outlook, next moves, the action plan — or what’s outstanding on the brain. It can draft next steps or an advisory pack for you to review. It won’t invent figures or send email.",
+  },
+  {
+    tab: "ask",
+    targetId: "wizard-open-queries",
+    section: "Queries",
+    title: "Outstanding notes from the owner",
+    body: "When the owner pins a note on their board, it lands here as an open query. Click to read, reply and resolve it on the same tab they marked — Profit, Cash, Health and so on. The Queries column on your practice board counts what is still outstanding.",
   },
   {
     tab: "summary",

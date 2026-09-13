@@ -1699,7 +1699,9 @@ function Dashboard() {
                   <th className="hide-sm">Trend (30d)</th>
                   <th className="hide-sm">Priority</th>
                   <th>Runway</th>
-                  <th className="hide-sm">Queries</th>
+                  <th className="hide-sm" id="wizard-dash-queries">
+                    Queries
+                  </th>
                   <th className="hide-sm">Actions</th>
                   <th className="hide-sm">Op. profit (MTD)</th>
                   <th>Status</th>

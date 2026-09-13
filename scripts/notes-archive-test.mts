@@ -68,5 +68,9 @@ assert(client.includes("onOpenQueries={() => openArchive"), "Open queries is a c
 
 const fab = readFileSync(resolve("src/components/floating-note-button.tsx"), "utf8");
 assert(fab.includes("Open notes archive"), "pin button cluster includes the archive");
+assert(fab.includes('id="wizard-notes-pin"'), "owner tour can spotlight the notes pin");
+
+const briefing = readFileSync(resolve("src/components/client-briefing.tsx"), "utf8");
+assert(briefing.includes('id="wizard-open-queries"'), "accountant tour can spotlight open queries");
 
 console.log("notes-archive-test: ok");
