@@ -197,13 +197,13 @@ export function BudgetSimpleView({
             <div
               key={s.l}
               className={`rounded-xl border px-3 py-3 ${
-                s.warn ? "border-red-500/40 bg-red-500/10" : "border-[#d4a550]/25 bg-[#d4a550]/5"
+                s.warn ? "border-red-500/40 bg-red-500/10" : "border-[#d4a550]/35 bg-[#fffdf8] dark:bg-slate-900"
               }`}
             >
               <div className="text-[10px] font-semibold uppercase tracking-wider text-[#b8860b]">
                 {s.l}
               </div>
-              <div className="mt-1 text-xl font-semibold tabular-nums text-slate-900 dark:text-slate-100">
+              <div className="mt-1 text-xl font-semibold tabular-nums text-[#0f172a] dark:text-slate-100">
                 {money(s.v)}
               </div>
               <div className="text-[11px] text-slate-500">{s.sub}</div>
@@ -379,11 +379,11 @@ export function BudgetSimpleView({
             { l: "Net cash movement", v: fyTotals.netCash },
             { l: "Closing cash (FY end)", v: fyTotals.closingEnd },
           ].map((t) => (
-            <div key={t.l} className="bg-white px-3 py-2.5 dark:bg-slate-950">
-              <div className="text-[10px] uppercase tracking-wider text-slate-400">{t.l}</div>
+            <div key={t.l} className="bg-[#fffdf8] px-3 py-2.5 dark:bg-slate-950">
+              <div className="text-[10px] uppercase tracking-wider text-slate-500">{t.l}</div>
               <div
                 className={`mt-0.5 text-sm font-semibold tabular-nums ${
-                  t.v < 0 ? "text-red-600" : "text-slate-900 dark:text-slate-100"
+                  t.v < 0 ? "text-red-600" : "text-[#0f172a] dark:text-slate-100"
                 }`}
               >
                 {money(t.v)}

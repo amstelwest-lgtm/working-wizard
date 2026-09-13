@@ -109,6 +109,26 @@ assert(
   !/id="wizard-profit-walk"[\s\S]{0,80}className="dark"/.test(studio),
   "waterfall is not forced onto a dark island (text vanished on the cream card)",
 );
+assert(
+  !/id="pane-budget"[\s\S]{0,900}className="dark"/.test(studio),
+  "budget tab is not forced onto a dark island (revenue/totals vanished on cream)",
+);
+
+const portalCss = readFileSync(resolve("src/styles/accountant-portal.css"), "utf8");
+assert(
+  portalCss.includes(".accountant-portal #wizard-budget-panel"),
+  "portal pins budget ink so figures stay readable on cream cards",
+);
+assert(
+  portalCss.includes("html.dark .accountant-portal #wizard-budget-panel"),
+  "dark portal still gives budget figures light ink",
+);
+
+const budgetSimple = readFileSync(resolve("src/components/budget/budget-simple-view.tsx"), "utf8");
+assert(
+  budgetSimple.includes("text-[#0f172a]"),
+  "budget revenue/totals use ink that survives light-mode cream cards",
+);
 
 const cashSrc = readFileSync(resolve("src/components/cash-forecast.tsx"), "utf8");
 assert(cashSrc.includes('title="Detailed cashflow forecast"'), "weekly grid is renamed");

@@ -109,11 +109,11 @@ export function BudgetYearOverviewChart({ doc }: { doc: BudgetDocument }) {
             </span>
           ) : (
             <>
-              <span className="rounded-lg border border-[#d4a550]/25 bg-[#d4a550]/5 px-2.5 py-1.5 text-right">
+              <span className="rounded-lg border border-[#d4a550]/35 bg-[#fffdf8] px-2.5 py-1.5 text-right dark:bg-slate-900">
                 <span className="block text-[9px] font-semibold uppercase tracking-wider text-[#b8860b]">
                   FY revenue
                 </span>
-                <span className="text-sm font-semibold tabular-nums text-slate-900 dark:text-slate-100">
+                <span className="text-sm font-semibold tabular-nums text-[#0f172a] dark:text-slate-100">
                   {money(fyTotals.revenue)}
                 </span>
               </span>
