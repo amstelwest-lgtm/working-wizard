@@ -24,12 +24,14 @@ import {
   type NoteMention,
   type NoteReply,
 } from "@/lib/notes.functions";
+import { noteTabsMatch, type NotesWorkspace } from "@/lib/notes-tabs";
 
 export type { ClientNote as Note, NoteReply as Reply, NoteCollaborator, NoteMention };
 
 type NotesSurface = {
   clientId: string;
   tab: string;
+  workspace: NotesWorkspace;
   authorName: string;
   clientName?: string;
 };
@@ -140,6 +142,7 @@ export function NotesProvider({ children }: { children: ReactNode }) {
         prev &&
         prev.clientId === next.clientId &&
         prev.tab === next.tab &&
+        prev.workspace === next.workspace &&
         prev.authorName === next.authorName
       ) {
         return prev;
@@ -340,7 +343,7 @@ export function NotesProvider({ children }: { children: ReactNode }) {
   );
 
   const getNotesForTab = useCallback(
-    (tab: string) => notes.filter((n) => n.tab === tab),
+    (tab: string) => notes.filter((n) => noteTabsMatch(n.tab, tab)),
     [notes],
   );
 

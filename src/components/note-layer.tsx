@@ -11,15 +11,17 @@ import {
 } from "lucide-react";
 import { useNotes, type NoteCollaborator } from "@/contexts/notes";
 import { useMarketFormat } from "@/contexts/market";
+import { destinationTab, noteTabsMatch, type NotesWorkspace } from "@/lib/notes-tabs";
 
 type NoteLayerProps = {
   clientId: string | null | undefined;
   tab: string;
+  workspace: NotesWorkspace;
   authorName: string;
   clientName?: string;
   /** Fired after a note create / resolve / delete / reply so parents can refresh live counts. */
   onNotesChanged?: () => void;
-  /** Switch the parent tab so a deep-linked note can open. */
+  /** Switch to this workspace tab so a focused note can open on the matching page. */
   onNeedTab?: (tab: string) => void;
 };
 
@@ -194,6 +196,7 @@ function MentionComposer({
 export function NoteLayer({
   clientId,
   tab,
+  workspace,
   authorName,
   clientName,
   onNotesChanged,
@@ -217,6 +220,7 @@ export function NoteLayer({
     focusNoteId,
     requestOpenNote,
     clearFocusNote,
+    archiveOpen,
   } = useNotes();
 
   const [composing, setComposing] = useState<{
@@ -235,8 +239,11 @@ export function NoteLayer({
   const [tagIt, setTagIt] = useState(false);
   const [trayExpanded, setTrayExpanded] = useState(false);
   const [trayHidden, setTrayHidden] = useState(false);
+  const [highlightNoteId, setHighlightNoteId] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const replyRef = useRef<HTMLInputElement>(null);
+  const highlightTimer = useRef<number | null>(null);
+  const sheetWasOpen = useRef(false);
 
   useEffect(() => {
     setMounted(true);
@@ -251,10 +258,11 @@ export function NoteLayer({
     registerSurface({
       clientId,
       tab,
+      workspace,
       authorName,
       clientName,
     });
-  }, [clientId, tab, authorName, clientName, registerSurface, clearSurface]);
+  }, [clientId, tab, workspace, authorName, clientName, registerSurface, clearSurface]);
 
   useEffect(() => {
     return () => {
@@ -328,32 +336,64 @@ export function NoteLayer({
     setReplyText("");
   }
 
+  useEffect(() => {
+    if (archiveOpen) sheetWasOpen.current = true;
+  }, [archiveOpen]);
+
+  const markFocused = (noteId: string) => {
+    setHighlightNoteId(noteId);
+    if (highlightTimer.current) window.clearTimeout(highlightTimer.current);
+    highlightTimer.current = window.setTimeout(() => setHighlightNoteId(null), 1800);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (highlightTimer.current) window.clearTimeout(highlightTimer.current);
+    };
+  }, []);
+
   const openNote = (noteId: string) => {
     const note = allNotes.find((n) => n.id === noteId) ?? tabNotes.find((n) => n.id === noteId);
     if (!note) return;
-    if (note.tab !== tab) {
-      onNeedTab?.(note.tab);
-      requestOpenNote(noteId);
+    if (!noteTabsMatch(note.tab, tab)) {
+      const dest = destinationTab(note.tab, workspace);
+      if (dest && dest !== tab) {
+        onNeedTab?.(dest);
+        requestOpenNote(noteId);
+      }
       return;
     }
     const targetY = Math.max(0, note.y - window.innerHeight * 0.4);
     window.scrollTo({ top: targetY, behavior: "smooth" });
     setOpenNoteId(noteId);
     setScrollY(window.scrollY);
+    markFocused(noteId);
   };
 
   useEffect(() => {
     if (!focusNoteId) return;
+    if (archiveOpen) return;
     const note = allNotes.find((n) => n.id === focusNoteId);
     if (!note) return;
-    if (note.tab !== tab) {
-      onNeedTab?.(note.tab);
+    if (!noteTabsMatch(note.tab, tab)) {
+      const dest = destinationTab(note.tab, workspace);
+      if (dest && dest !== tab) onNeedTab?.(dest);
+      else if (!dest) {
+        openArchive("open");
+        clearFocusNote();
+      }
       return;
     }
-    openNote(focusNoteId);
-    clearFocusNote();
+    const id = focusNoteId;
+    const wait = sheetWasOpen.current ? 280 : 50;
+    sheetWasOpen.current = false;
+    const timer = window.setTimeout(() => {
+      openNote(id);
+      clearFocusNote();
+    }, wait);
+    return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [focusNoteId, allNotes, tab]);
+  }, [focusNoteId, allNotes, tab, workspace, archiveOpen]);
 
   useEffect(() => {
     setTrayExpanded(false);
@@ -507,10 +547,15 @@ export function NoteLayer({
             }}
           >
             <button
+              data-note-focus={highlightNoteId === note.id ? "true" : undefined}
               className={`flex h-7 w-7 items-center justify-center rounded-full border-2 text-[10px] font-extrabold shadow-[0_2px_12px_rgba(0,0,0,0.4)] transition-all hover:scale-110 ${
                 note.resolved
                   ? "border-emerald-500 bg-emerald-900/80 text-emerald-400"
                   : "border-[#d4a550] bg-[#1a2540] text-[#d4a550]"
+              } ${
+                highlightNoteId === note.id
+                  ? "scale-125 ring-2 ring-[#d4a550] ring-offset-2 ring-offset-white dark:ring-offset-[#0d1525]"
+                  : ""
               }`}
               onClick={(e) => {
                 e.stopPropagation();

@@ -208,7 +208,7 @@ const ACCOUNTANT_CLIENT_STEPS: Step[] = [
     targetId: "wizard-open-queries",
     section: "Queries",
     title: "Outstanding notes from the owner",
-    body: "When the owner pins a note on their board, it lands here as an open query. Click to read, reply and resolve it on the same tab they marked — Profit, Cash, Health and so on. The Queries column on your practice board counts what is still outstanding.",
+    body: "When the owner pins a note on their board, it lands here as an open query. Click to jump to the pin on the same deliverable they marked — Profit, Cash, Health and so on. The Queries column on your practice board counts what is still outstanding.",
   },
   {
     tab: "summary",
