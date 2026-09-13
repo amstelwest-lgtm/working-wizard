@@ -1,14 +1,13 @@
 /**
- * Client Brain Summary tab — system-of-record panel.
- * Propose from brain drafts next steps; Draft advisory from brain writes a sign-off pack.
+ * Client Brain Summary tab — the background file on this client.
+ * Context here is what you and Milōn Bot use. Agreed work lives on Action Plan.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import type { Json } from "@/integrations/supabase/types";
 import { useAuth } from "@/hooks/use-auth";
-import { useAccountantProfile } from "@/contexts/accountant-profile";
 import { useMarketFormat } from "@/contexts/market";
 import { parseOperatingProfile, profileNeedsCompletion } from "@/lib/client-profile";
 import { profileIndustryLabel } from "@/lib/profile-signals";
@@ -28,11 +27,9 @@ import { useBrainDrip } from "@/hooks/use-brain-drip";
 import {
   BUSINESS_MAP_FIELDS,
   artifactKindLabel,
-  buildNextStepEditDiff,
   factSourceLabel,
   isMissingBrainRelation,
   mergeBusinessMapFromFacts,
-  nextStepStatusLabel,
   parseBrainSummary,
   parseBusinessMap,
   parseCompetitors,
@@ -41,8 +38,6 @@ import {
   type ClientBrainQuestion,
   type ContextFact,
   type DeliverableDraft,
-  type NextStepStatus,
-  type ProposedNextStep,
 } from "@/lib/client-brain";
 import {
   mergeOutstandingQuestions,
@@ -60,9 +55,23 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Input } from "@/components/ui/input";
 
-export type BrainSummaryTab = "budget" | "ratios" | "advisory" | "profit";
+export type BrainSummaryTab = "budget" | "ratios" | "advisory" | "profit" | "plan";
+
+const FACT_CATEGORIES = [
+  { id: "customers", label: "Customers / concentration" },
+  { id: "pricing", label: "Pricing" },
+  { id: "team", label: "Team / owner time" },
+  { id: "systems", label: "Systems (Xero, bank, payroll)" },
+  { id: "regulatory", label: "Tax / regulatory" },
+  { id: "seasonality", label: "Seasonality" },
+  { id: "cash", label: "Cash / banking" },
+  { id: "other", label: "Other" },
+] as const;
+
+function SectionLead({ children }: { children: ReactNode }) {
+  return <p className="brain-purpose">{children}</p>;
+}
 
 type SnapshotLite = {
   id: string;
@@ -71,11 +80,6 @@ type SnapshotLite = {
   source: string;
   created_at: string;
 };
-
-type StepDialog =
-  | { mode: "approve" | "reject"; step: ProposedNextStep }
-  | { mode: "edit"; step: ProposedNextStep }
-  | null;
 
 function marketStripLabel(raw: unknown): string {
   const sel = coerceMarketSelection(raw);
@@ -132,7 +136,6 @@ export function ClientBrainSummary({
   onAnswerProfile?: () => void;
 }) {
   const { user } = useAuth();
-  const { profile } = useAccountantProfile();
   const { dateTime } = useMarketFormat();
   const { productMix, weeklyInputs } = useFinancialInputs();
 
@@ -158,23 +161,20 @@ export function ClientBrainSummary({
   const [snapshots, setSnapshots] = useState<SnapshotLite[]>([]);
   const [artifacts, setArtifacts] = useState<ClientArtifact[]>([]);
   const [facts, setFacts] = useState<ContextFact[]>([]);
-  const [steps, setSteps] = useState<ProposedNextStep[]>([]);
   const [drafts, setDrafts] = useState<DeliverableDraft[]>([]);
   const [storedQuestions, setStoredQuestions] = useState<ClientBrainQuestion[]>([]);
-  const [dialog, setDialog] = useState<StepDialog>(null);
-  const [note, setNote] = useState("");
-  const [editTitle, setEditTitle] = useState("");
-  const [editRationale, setEditRationale] = useState("");
-  const [saving, setSaving] = useState(false);
   const [proposing, setProposing] = useState(false);
   const [drafting, setDrafting] = useState(false);
   const [fillDialog, setFillDialog] = useState<FillDialog>(null);
   const [fillText, setFillText] = useState("");
   const [fillSaving, setFillSaving] = useState(false);
+  const [factText, setFactText] = useState("");
+  const [factCategory, setFactCategory] = useState<(typeof FACT_CATEGORIES)[number]["id"]>("other");
+  const [factSaving, setFactSaving] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [clientRes, snapRes, artRes, factRes, stepRes, draftRes, qRes] = await Promise.all([
+    const [clientRes, snapRes, artRes, factRes, draftRes, qRes] = await Promise.all([
       supabase
         .from("clients")
         .select("brain_summary, brain_summary_updated_at, budget, budget_updated_at")
@@ -197,12 +197,6 @@ export function ClientBrainSummary({
         .select("*")
         .eq("client_id", clientId)
         .is("superseded_by", null)
-        .order("created_at", { ascending: false })
-        .limit(50),
-      supabase
-        .from("proposed_next_steps")
-        .select("*")
-        .eq("client_id", clientId)
         .order("created_at", { ascending: false })
         .limit(50),
       supabase
@@ -239,7 +233,6 @@ export function ClientBrainSummary({
     if (!snapRes.error) setSnapshots((snapRes.data ?? []) as SnapshotLite[]);
     setArtifacts(isMissingBrainRelation(artRes.error) ? [] : ((artRes.data ?? []) as ClientArtifact[]));
     setFacts(isMissingBrainRelation(factRes.error) ? [] : ((factRes.data ?? []) as ContextFact[]));
-    setSteps(isMissingBrainRelation(stepRes.error) ? [] : ((stepRes.data ?? []) as ProposedNextStep[]));
     setDrafts(isMissingBrainRelation(draftRes.error) ? [] : ((draftRes.data ?? []) as DeliverableDraft[]));
     setStoredQuestions(
       isMissingBrainRelation(qRes.error) ? [] : ((qRes.data ?? []) as ClientBrainQuestion[]),
@@ -286,82 +279,6 @@ export function ClientBrainSummary({
   const budgetFy = typeof budgetDoc?.fyStart === "string" ? budgetDoc.fyStart : null;
   const budgetLines = Array.isArray(budgetDoc?.revenueLines) ? budgetDoc.revenueLines.length : 0;
 
-  const signerName =
-    profile.accountantName.trim() ||
-    (user?.user_metadata as { full_name?: string; name?: string } | null)?.full_name ||
-    (user?.user_metadata as { full_name?: string; name?: string } | null)?.name ||
-    user?.email ||
-    "Accountant";
-
-  const closeDialog = () => {
-    setDialog(null);
-    setNote("");
-    setEditTitle("");
-    setEditRationale("");
-  };
-
-  const openStepDialog = (mode: "approve" | "reject" | "edit", step: ProposedNextStep) => {
-    setDialog({ mode, step });
-    setNote(step.note ?? "");
-    setEditTitle(step.title);
-    setEditRationale(step.rationale ?? "");
-  };
-
-  const applyStepStatus = async () => {
-    if (!dialog) return;
-    setSaving(true);
-    try {
-      const now = new Date().toISOString();
-      const stamp = {
-        signed_off_by_id: user?.id ?? null,
-        signed_off_by_name: signerName,
-        signed_off_by_title: null as string | null,
-        firm_name: profile.firmName.trim() || null,
-        signed_off_at: now,
-        note: note.trim() || null,
-      };
-
-      if (dialog.mode === "edit") {
-        const title = editTitle.trim();
-        if (!title) {
-          toast.error("Title is required");
-          setSaving(false);
-          return;
-        }
-        const rationale = editRationale.trim() || null;
-        const edit_diff = buildNextStepEditDiff(dialog.step, { title, rationale });
-        const { error } = await supabase
-          .from("proposed_next_steps")
-          .update({
-            title,
-            rationale,
-            status: "edited" satisfies NextStepStatus,
-            edit_diff,
-            ...stamp,
-          })
-          .eq("id", dialog.step.id)
-          .eq("client_id", clientId);
-        if (error) throw error;
-        toast.success("Next step updated");
-      } else {
-        const status: NextStepStatus = dialog.mode === "approve" ? "approved" : "rejected";
-        const { error } = await supabase
-          .from("proposed_next_steps")
-          .update({ status, ...stamp })
-          .eq("id", dialog.step.id)
-          .eq("client_id", clientId);
-        if (error) throw error;
-        toast.success(status === "approved" ? "Next step approved" : "Next step rejected");
-      }
-      closeDialog();
-      await load();
-    } catch (e) {
-      toast.error((e as Error).message || "Could not update next step");
-    } finally {
-      setSaving(false);
-    }
-  };
-
   const proposeFromBrain = async () => {
     setProposing(true);
     try {
@@ -370,7 +287,11 @@ export function ClientBrainSummary({
         outstanding.map((q) => ({ key: q.key, prompt: q.prompt, audience: q.audience })),
       );
       const bits: string[] = [];
-      if (result.stepsInserted) bits.push(`${result.stepsInserted} next step${result.stepsInserted === 1 ? "" : "s"}`);
+      if (result.stepsInserted) {
+        bits.push(
+          `${result.stepsInserted} suggested move${result.stepsInserted === 1 ? "" : "s"} (put agreed work on Action Plan)`,
+        );
+      }
       if (result.gapDrafts) bits.push(`${result.gapDrafts} GAP draft${result.gapDrafts === 1 ? "" : "s"}`);
       if (result.competitorDrafts) bits.push(`${result.competitorDrafts} competitor stub${result.competitorDrafts === 1 ? "" : "s"}`);
       if (result.drip) bits.push("one outstanding question");
@@ -379,7 +300,7 @@ export function ClientBrainSummary({
       } else if (bits.length) {
         toast.success(`Proposed ${bits.join(", ")}.`);
       } else {
-        toast.message("Nothing new to propose — open steps already cover this, or context is empty.");
+        toast.message("Nothing new to add — this file is already current, or context is still thin.");
       }
       await load();
     } catch (e) {
@@ -425,6 +346,32 @@ export function ClientBrainSummary({
       toast.success("Competitor signed off");
     } catch (e) {
       toast.error((e as Error).message || "Could not sign off competitor");
+    }
+  };
+
+  const saveFact = async () => {
+    const text = factText.trim();
+    if (!text) {
+      toast.error("Write the fact first — one short sentence is enough.");
+      return;
+    }
+    setFactSaving(true);
+    try {
+      const { error } = await supabase.from("context_facts").insert({
+        client_id: clientId,
+        fact_text: text,
+        category: factCategory,
+        source: "manual",
+        created_by: user?.id ?? null,
+      });
+      if (error) throw error;
+      setFactText("");
+      toast.success("Fact saved to this client’s brain.");
+      await load();
+    } catch (e) {
+      toast.error((e as Error).message || "Could not save the fact");
+    } finally {
+      setFactSaving(false);
     }
   };
 
@@ -524,14 +471,20 @@ export function ClientBrainSummary({
 
   return (
     <div>
-      <div className="card hero-card pad brain-hero">
+      <div id="wizard-brain-hero" className="card hero-card pad brain-hero">
         <span className="eyebrow">Client brain</span>
         <h2 className="h-sec" style={{ marginBottom: 6 }}>
-          Summary · {clientName}
+          The background on {clientName}
         </h2>
         <p className="sub">
-          System of record. Propose from brain drafts next steps for Approve / Edit / Reject.
-          Draft advisory from brain writes a pack with an assumptions list — never auto-sent.
+          This is the collection of context around this client — how they make money, what is on
+          file, and the short facts numbers miss. You and Milōn Bot use it so advice is about{" "}
+          <em>this</em> business, not a generic SME.
+        </p>
+        <p className="sub" style={{ marginTop: 8 }}>
+          Empty blocks below are waiting for a fact, an upload, or a draft. They fill as you work
+          this file. They are not broken. Agreed work the owner will chase lives on the Action Plan
+          tab — not here.
         </p>
         <div className="brain-actions">
           <button
@@ -544,13 +497,23 @@ export function ClientBrainSummary({
           </button>
           <button
             type="button"
-            className="btn ghost mini"
+            className="btn gold mini"
             onClick={() => void draftAdvisoryFromBrain()}
             disabled={proposing || drafting || loading}
           >
             {drafting ? "Drafting…" : "Draft advisory from brain"}
           </button>
+          {onOpenTab && (
+            <button type="button" className="btn ghost mini" onClick={() => onOpenTab("plan")}>
+              Open Action Plan
+            </button>
+          )}
         </div>
+        <p className="brain-purpose" style={{ marginTop: 10 }}>
+          Propose fills GAP drafts, competitor stubs, and suggested moves from what is already on
+          this file. Draft advisory writes a pack that lands under Deliverable drafts — nothing is
+          sent until you sign it off.
+        </p>
       </div>
 
       {loading ? (
@@ -560,6 +523,10 @@ export function ClientBrainSummary({
           {/* 1. Profile strip */}
           <section className="card pad">
             <span className="eyebrow">Profile</span>
+            <SectionLead>
+              How this business makes money. Answer the empties here or in the business profile —
+              Milōn Bot reads this first.
+            </SectionLead>
             <div className="brain-profile">
               <strong className="brain-profile-name">
                 {profileIndustryLabel(parsedProfile, businessType || "Profile not set")}
@@ -615,7 +582,8 @@ export function ClientBrainSummary({
               </div>
             ) : (
               <p className="sub" style={{ marginTop: 14 }}>
-                No saved brain summary yet. Propose from brain can draft one from what is on file.
+                No written summary yet. Propose from brain can draft one from what is already on
+                this file — it will not invent a story.
               </p>
             )}
           </section>
@@ -623,6 +591,10 @@ export function ClientBrainSummary({
           {/* Product line questions */}
           <section className="card pad">
             <span className="eyebrow">Product line questions</span>
+            <SectionLead>
+              What they sell, in their words. Empty until the product mix on Profit is filled — open
+              Profit to capture it. This block does not stay empty forever.
+            </SectionLead>
             <ul className="brain-list">
               {productQuestions.map((q) => (
                 <li key={q.key} className="brain-row">
@@ -651,6 +623,10 @@ export function ClientBrainSummary({
           {/* Mini GAP report */}
           <section className="card pad">
             <span className="eyebrow">Mini GAP report</span>
+            <SectionLead>
+              Gaps between these figures and a healthy business in this sector. Empty until you run
+              Propose from brain. Drafts are not truth until you sign them off.
+            </SectionLead>
             {gapReport?.items.length ? (
               <ul className="brain-list gap-md">
                 {gapReport.items.map((item) => (
@@ -682,7 +658,8 @@ export function ClientBrainSummary({
               </ul>
             ) : (
               <p className="sub" style={{ margin: 0 }}>
-                No GAP items yet. Propose from brain may add drafts — never auto-truth.
+                No GAP items yet. Run Propose from brain when the file has enough context — drafts
+                only, never treated as signed-off truth.
               </p>
             )}
             {gapReport?.updated_at && (
@@ -693,6 +670,10 @@ export function ClientBrainSummary({
           {/* Competitors */}
           <section className="card pad">
             <span className="eyebrow">Competitors</span>
+            <SectionLead>
+              Who they compete with. Empty until you or Propose from brain add a stub. Sign off when
+              you believe the name.
+            </SectionLead>
             {competitors.length > 0 ? (
               <ul className="brain-list gap-md">
                 {competitors.map((c) => (
@@ -726,7 +707,8 @@ export function ClientBrainSummary({
               </ul>
             ) : (
               <p className="sub" style={{ margin: 0 }}>
-                No competitors recorded. Propose from brain may add draft stubs only.
+                No competitors on file yet. That is normal on a new client — Propose from brain may
+                add draft stubs only.
               </p>
             )}
           </section>
@@ -734,6 +716,10 @@ export function ClientBrainSummary({
           {/* Business-map extras */}
           <section className="card pad">
             <span className="eyebrow">Business map</span>
+            <SectionLead>
+              How they sell, price, staff, and run systems. Answer any empty row here — it becomes
+              part of this brain immediately.
+            </SectionLead>
             <ul className="brain-list">
               {BUSINESS_MAP_FIELDS.map((field) => {
                 const value = businessMap[field.key];
@@ -763,7 +749,11 @@ export function ClientBrainSummary({
 
           {/* Artifacts rail */}
           <section className="card pad">
-            <span className="eyebrow">Artifacts</span>
+            <span className="eyebrow">On file</span>
+            <SectionLead>
+              Snapshots, the budget, and documents already saved for this client. Empty until
+              figures are uploaded or a budget is saved — use Upload if nothing is here.
+            </SectionLead>
             <div className="card-inner-grid">
               <div className="card-inner">
                 <div className="mini-kicker">Latest snapshot</div>
@@ -870,15 +860,21 @@ export function ClientBrainSummary({
             </div>
           </section>
 
-          {/* 3. Context facts */}
+          {/* Context facts — short truths the numbers miss */}
           <section className="card pad">
             <span className="eyebrow">Context facts</span>
+            <SectionLead>
+              Short truths the numbers miss — the kind of thing you would tell a colleague before a
+              meeting. Examples: one customer is 40% of revenue; the owner works six days; they want
+              to sell in three years; busy November–January; they run Xero plus a bookkeeper. Milōn
+              Bot reads these. Add one here; they also land from uploads, the profile, and the bot.
+            </SectionLead>
             {facts.length === 0 ? (
-              <p className="sub" style={{ margin: 0 }}>
-                No context facts captured yet.
+              <p className="sub" style={{ margin: "0 0 12px" }}>
+                None on this file yet. That is expected on a new client — add the first one below.
               </p>
             ) : (
-              <ul className="brain-list gap-md">
+              <ul className="brain-list gap-md" style={{ marginBottom: 14 }}>
                 {facts.map((f) => (
                   <li key={f.id} className="brain-row-block">
                     <div className="brain-row-title">{f.fact_text}</div>
@@ -891,52 +887,43 @@ export function ClientBrainSummary({
                 ))}
               </ul>
             )}
-          </section>
-
-          {/* 4. Proposed next steps */}
-          <section className="card pad">
-            <span className="eyebrow">Proposed next steps</span>
-            {steps.length === 0 ? (
-              <p className="sub" style={{ margin: 0 }}>
-                Queue is empty. Use Propose from brain, then Approve / Edit / Reject.
-              </p>
-            ) : (
-              <ul className="brain-list gap-lg">
-                {steps.map((step) => (
-                  <li key={step.id} className="card-inner">
-                    <div className="brain-item-head">
-                      <strong>{step.title}</strong>
-                      <span className="status-tag gold">{nextStepStatusLabel(step.status)}</span>
-                    </div>
-                    {step.rationale && (
-                      <p className="sub" style={{ margin: "6px 0 0" }}>
-                        {step.rationale}
-                      </p>
-                    )}
-                    {step.signed_off_by_name && step.signed_off_at && (
-                      <div className="brain-row-meta" style={{ marginTop: 8 }}>
-                        {nextStepStatusLabel(step.status)} by {step.signed_off_by_name}
-                        {step.firm_name ? ` · ${step.firm_name}` : ""} · {formatWhen(step.signed_off_at, dateTime)}
-                        {step.note ? ` — “${step.note}”` : ""}
-                      </div>
-                    )}
-                    {step.status === "proposed" && (
-                      <div className="brain-actions">
-                        <button type="button" className="btn gold mini" onClick={() => openStepDialog("approve", step)}>
-                          Approve
-                        </button>
-                        <button type="button" className="btn ghost mini" onClick={() => openStepDialog("edit", step)}>
-                          Edit
-                        </button>
-                        <button type="button" className="btn ghost mini" onClick={() => openStepDialog("reject", step)}>
-                          Reject
-                        </button>
-                      </div>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            )}
+            <div className="brain-fact-form">
+              <Label htmlFor="brain-fact-text" className="mini-kicker">
+                Add a fact
+              </Label>
+              <Textarea
+                id="brain-fact-text"
+                value={factText}
+                onChange={(e) => setFactText(e.target.value)}
+                rows={3}
+                placeholder="e.g. Largest customer is 40% of revenue and pays on 60 days."
+                className="brain-input"
+              />
+              <div className="brain-fact-row">
+                <select
+                  aria-label="Fact category"
+                  value={factCategory}
+                  onChange={(e) =>
+                    setFactCategory(e.target.value as (typeof FACT_CATEGORIES)[number]["id"])
+                  }
+                  className="brain-input"
+                >
+                  {FACT_CATEGORIES.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.label}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  className="btn gold mini"
+                  onClick={() => void saveFact()}
+                  disabled={factSaving}
+                >
+                  {factSaving ? "Saving…" : "Save to brain"}
+                </button>
+              </div>
+            </div>
           </section>
 
           <ClientBrainDrafts
@@ -949,9 +936,10 @@ export function ClientBrainSummary({
           {/* Outstanding questions — shared owner + accountant queue */}
           <section className="card pad">
             <span className="eyebrow">Outstanding questions</span>
-            <p className="sub" style={{ margin: "0 0 12px" }}>
-              Shared with the owner. One question is dripped at a time — no spam.
-            </p>
+            <SectionLead>
+              Shared with the owner. One question is dripped at a time — no spam. Answer any of them
+              here so you and the owner are filling the same brain.
+            </SectionLead>
             {drip && (
               <div className="brain-highlight">
                 <div className="mini-kicker">Asking now</div>
@@ -1017,72 +1005,6 @@ export function ClientBrainSummary({
             </Button>
             <Button type="button" onClick={() => void saveFill()} disabled={fillSaving}>
               {fillSaving ? "Saving…" : "Save answer"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={dialog != null} onOpenChange={(open) => !open && closeDialog()}>
-        <DialogContent className="border-[#d4a550]/25 bg-[#0d1117] text-slate-100">
-          <DialogHeader>
-            <DialogTitle>
-              {dialog?.mode === "approve"
-                ? "Approve next step"
-                : dialog?.mode === "reject"
-                  ? "Reject next step"
-                  : "Edit next step"}
-            </DialogTitle>
-            <DialogDescription className="text-slate-400">
-              Status change only — no signature ceremony in this slice.
-              {dialog?.step ? ` “${dialog.step.title}”` : ""}
-            </DialogDescription>
-          </DialogHeader>
-          {dialog?.mode === "edit" && (
-            <div className="grid gap-3">
-              <div className="grid gap-1.5">
-                <Label htmlFor="brain-step-title">Title</Label>
-                <Input
-                  id="brain-step-title"
-                  value={editTitle}
-                  onChange={(e) => setEditTitle(e.target.value)}
-                  className="bg-[#0a0e1a] border-slate-700"
-                />
-              </div>
-              <div className="grid gap-1.5">
-                <Label htmlFor="brain-step-rationale">Rationale</Label>
-                <Textarea
-                  id="brain-step-rationale"
-                  value={editRationale}
-                  onChange={(e) => setEditRationale(e.target.value)}
-                  className="bg-[#0a0e1a] border-slate-700"
-                  rows={3}
-                />
-              </div>
-            </div>
-          )}
-          <div className="grid gap-1.5">
-            <Label htmlFor="brain-step-note">Note (optional)</Label>
-            <Textarea
-              id="brain-step-note"
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              className="bg-[#0a0e1a] border-slate-700"
-              rows={3}
-              placeholder="Why this decision…"
-            />
-          </div>
-          <DialogFooter>
-            <Button type="button" variant="ghost" onClick={closeDialog} disabled={saving}>
-              Cancel
-            </Button>
-            <Button type="button" onClick={() => void applyStepStatus()} disabled={saving}>
-              {saving
-                ? "Saving…"
-                : dialog?.mode === "approve"
-                  ? "Approve"
-                  : dialog?.mode === "reject"
-                    ? "Reject"
-                    : "Save edit"}
             </Button>
           </DialogFooter>
         </DialogContent>

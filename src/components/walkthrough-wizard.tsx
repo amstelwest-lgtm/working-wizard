@@ -191,6 +191,13 @@ const ACCOUNTANT_CLIENT_STEPS: Step[] = [
     body: "Now that this client has figures, the studio opens here. Ask against the drafted deliverables — ratios, waterfall, cash outlook, next moves, the action plan — or what’s outstanding on the brain. It can draft next steps or an advisory pack for you to review. It won’t invent figures or send email.",
   },
   {
+    tab: "summary",
+    targetId: "wizard-brain-hero, pane-summary",
+    section: "Summary",
+    title: "The client brain is the background file",
+    body: "This tab is the collection of context around the client — profile, facts, uploads, drafts — so you and Milōn Bot can advise this business, not a generic SME. Empty blocks are waiting for a fact or an upload; they are not broken. Add a fact here. Agreed work the owner will chase lives on Action Plan.",
+  },
+  {
     tab: "ratios",
     targetId: "finCollapse",
     section: "Figures",

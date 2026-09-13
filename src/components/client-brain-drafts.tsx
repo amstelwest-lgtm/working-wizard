@@ -184,13 +184,20 @@ export function ClientBrainDrafts({
   return (
     <section className="card pad">
       <span className="eyebrow">Deliverable drafts</span>
+      <p className="brain-purpose">
+        Letters and advisory packs drafted from this brain. They show up here so you have a paper
+        trail of what was created for this client. Empty until you click Draft advisory from brain
+        above — then they stay drafts until you mark ready and sign off. Nothing is emailed
+        automatically.
+      </p>
       {drafts.length === 0 ? (
         <p className="sub" style={{ margin: 0 }}>
-          No deliverable drafts yet. Use Draft advisory from brain — it stays a draft until you sign off.
+          No packs on this file yet. That is normal. Draft one from the brain, or write it on
+          Advisory.
           {onOpenAdvisory ? (
             <>
               {" "}
-              <button type="button" className="btn ghost mini" style={{ marginLeft: 8 }} onClick={onOpenAdvisory}>
+              <button type="button" className="btn gold mini" style={{ marginLeft: 8 }} onClick={onOpenAdvisory}>
                 Open Advisory
               </button>
             </>

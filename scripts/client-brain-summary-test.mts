@@ -136,6 +136,23 @@ assert(panelSrc.includes("ClientBrainDrafts"), "drafts panel is extracted");
 assert(panelSrc.includes("Asking now"), "drip highlight on outstanding queue");
 assert(panelSrc.includes("Sign off"), "GAP/competitor drafts can be signed off");
 assert(
+  panelSrc.includes("collection of context around this client"),
+  "hero explains the client brain in plain words",
+);
+assert(
+  panelSrc.includes("Empty blocks below are waiting"),
+  "hero says empty blocks are waiting, not broken",
+);
+assert(panelSrc.includes("brain-fact-text"), "accountant can capture a context fact on this tab");
+assert(panelSrc.includes("Save to brain"), "fact form has a save control");
+assert(
+  panelSrc.includes("Short truths the numbers miss"),
+  "context facts explain what belongs there",
+);
+assert(!panelSrc.includes("Proposed next steps"), "duplicate next-steps block is gone");
+assert(!panelSrc.includes("Queue is empty"), "old next-steps empty copy is gone");
+assert(panelSrc.includes("Open Action Plan"), "hero points agreed work at Action Plan");
+assert(
   panelSrc.includes('.select("id")') && panelSrc.includes("Could not save brain summary"),
   "0-row brain_summary update surfaces as failure",
 );
@@ -421,6 +438,10 @@ assert(!draftFnSrc.toLowerCase().includes("stripe"), "deliverable fn has no Stri
 assert(draftFnSrc.includes("bodiesSimilar"), "idempotent similar-open skip inlined");
 assert(!draftFnSrc.includes('from "./logic.ts"'), "deploy bundle is self-contained");
 assert(configSrc.includes("[functions.brain-deliverable-draft]"), "function is registered");
+assert(
+  draftPanelSrc.includes("Empty until you click Draft advisory from brain"),
+  "empty drafts explain they fill when an advisory is drafted",
+);
 assert(draftPanelSrc.includes("Mark ready"), "accountant can mark ready");
 assert(draftPanelSrc.includes("Discard"), "accountant can discard");
 assert(draftPanelSrc.includes("Sign off and log"), "accountant can promote to deliveries");
