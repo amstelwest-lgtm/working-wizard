@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { Globe } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MarketPicker } from "@/components/market-picker";
+import { SectionCard } from "@/components/primitives";
 import { supabase } from "@/integrations/supabase/client";
 import {
   coerceMarketSelection,
@@ -66,39 +67,38 @@ export function MarketSettingsCard({
   };
 
   return (
-    <section className="mb-6 rounded-2xl border border-slate-800 bg-slate-900/60 p-5 sm:p-6">
-      <div className="mb-4 flex items-center gap-2">
-        <Globe className="h-4 w-4 text-[#d4a550]" />
-        <h2 className="text-sm font-semibold uppercase tracking-[0.14em] text-[#d4a550]">
+    <SectionCard
+      className="mb-6"
+      eyebrow={
+        <span className="inline-flex items-center gap-2">
+          <Globe className="h-4 w-4" />
           Region & tax
-        </h2>
-      </div>
-      <p className="mb-4 text-xs text-slate-500">
-        South Africa uses rand and VAT. The United States uses dollars and your state’s sales tax
-        for budgets. Changing region does not convert historical figures.
-      </p>
+        </span>
+      }
+      description="South Africa uses rand and VAT. The United States uses dollars and your state’s sales tax for budgets. Changing region does not convert historical figures."
+    >
       <MarketPicker value={draft} onChange={setDraft} />
       {resolved?.tax.regime === "sales_tax" && (
-        <p className="mt-3 text-xs leading-relaxed text-slate-500">
+        <p className="mt-3 text-xs leading-relaxed text-[var(--ink-dim)]">
           Default combined rate {formatPercentRate(resolved.tax.combinedRate)} (
           {formatPercentRate(resolved.tax.stateRate)} state +{" "}
           {formatPercentRate(resolved.tax.localRate)} avg local). {SALES_TAX_HONESTY}
         </p>
       )}
       {resolved?.tax.regime === "none" && resolved.country === "US" && (
-        <p className="mt-3 text-xs text-slate-500">
+        <p className="mt-3 text-xs text-[var(--ink-dim)]">
           This state has no statewide sales tax (or none collected). Budgets will not add a
           sales-tax line unless you change that on the budget itself.
         </p>
       )}
       <Button
         type="button"
-        className="mt-4 bg-[#d4a550] text-slate-950 hover:bg-[#e0b45c]"
+        className="settings-gold mt-4"
         disabled={!isDraftComplete(draft) || saving || !recordId}
         onClick={() => void save()}
       >
         {saving ? "Saving…" : "Save region"}
       </Button>
-    </section>
+    </SectionCard>
   );
 }

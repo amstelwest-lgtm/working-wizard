@@ -569,7 +569,9 @@ html.dark .accountant-portal #wizard-budget-plan select{
     width:100%;justify-content:flex-start;border-radius:12px;
   }
   .accountant-portal .topbar-actions .theme-toggle,
-  .accountant-portal .topbar-actions [data-theme-toggle]{width:100%}
+  .accountant-portal .topbar-actions [data-theme-toggle]{
+    width:36px;height:36px;align-self:flex-start;border-radius:50%;
+  }
   .accountant-portal .card.pad{padding:18px 16px}
   .accountant-portal .stats-strip{grid-template-columns:1fr;gap:10px}
   .accountant-portal .stat{padding:16px}

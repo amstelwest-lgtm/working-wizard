@@ -2,10 +2,7 @@ import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { Loader2, Mail, Copy, Check } from "lucide-react";
 import { toast } from "sonner";
-import {
-  accountantInviteStatus,
-  inviteAccountant,
-} from "@/lib/accountant-invite.functions";
+import { accountantInviteStatus, inviteAccountant } from "@/lib/accountant-invite.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -46,7 +43,8 @@ export function InviteAccountantCard({ clientId, tone = "board" }: Props) {
         if (s.pendingEmail) setEmail(s.pendingEmail);
       })
       .catch((err: unknown) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : "Could not load invite status.");
+        if (!cancelled)
+          setError(err instanceof Error ? err.message : "Could not load invite status.");
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -60,10 +58,14 @@ export function InviteAccountantCard({ clientId, tone = "board" }: Props) {
 
   const dark = tone === "settings";
   const box = dark
-    ? "rounded-2xl border border-slate-800 bg-slate-900/60 p-4"
+    ? "milon-section-card milon-section-card--pad"
     : "rounded-xl border border-slate-200/80 bg-white/90 p-4 shadow-[0_8px_24px_rgba(15,23,42,0.05)] dark:border-slate-800/90 dark:bg-[#0d1420]/90";
-  const title = dark ? "text-sm font-semibold text-slate-100" : "text-sm font-semibold text-slate-800 dark:text-slate-100";
-  const copy = dark ? "text-xs leading-relaxed text-slate-400" : "text-xs leading-relaxed text-slate-500 dark:text-slate-400";
+  const title = dark
+    ? "milon-section-card__eyebrow"
+    : "text-sm font-semibold text-slate-800 dark:text-slate-100";
+  const copy = dark
+    ? "text-xs leading-relaxed text-[var(--ink-dim)]"
+    : "text-xs leading-relaxed text-slate-500 dark:text-slate-400";
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -78,7 +80,11 @@ export function InviteAccountantCard({ clientId, tone = "board" }: Props) {
       if (result.emailed) {
         toast.success(`Invite sent to ${result.email}`);
       } else {
-        toast.message(result.sendError ? `Email failed — copy the link instead.` : "Copy the link to send it yourself.");
+        toast.message(
+          result.sendError
+            ? `Email failed — copy the link instead.`
+            : "Copy the link to send it yourself.",
+        );
         setError(result.sendError);
       }
     } catch (err: unknown) {
@@ -112,8 +118,8 @@ export function InviteAccountantCard({ clientId, tone = "board" }: Props) {
         </p>
       ) : firmLinked ? (
         <p className={`mt-2 ${copy}`}>
-          Linked to {firmName || "a practice"}. They can open this workspace from the
-          practice portal.
+          Linked to {firmName || "a practice"}. They can open this workspace from the practice
+          portal.
         </p>
       ) : (
         <>
@@ -134,12 +140,18 @@ export function InviteAccountantCard({ clientId, tone = "board" }: Props) {
               placeholder="accountant@practice.com"
               className={
                 dark
-                  ? "border-slate-700 bg-slate-950 text-slate-100"
+                  ? undefined
                   : "border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-950"
               }
             />
             <div className="flex flex-wrap gap-2">
-              <Button type="submit" disabled={busy} className="bg-[#d4a550] text-[#0a0e1a] hover:bg-[#c4963e]">
+              <Button
+                type="submit"
+                disabled={busy}
+                className={
+                  dark ? "settings-gold" : "bg-[#d4a550] text-[#0a0e1a] hover:bg-[#c4963e]"
+                }
+              >
                 {busy ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Sending…
@@ -158,9 +170,7 @@ export function InviteAccountantCard({ clientId, tone = "board" }: Props) {
               ) : null}
             </div>
           </form>
-          {url ? (
-            <p className={`mt-2 break-all ${copy}`}>{url}</p>
-          ) : null}
+          {url ? <p className={`mt-2 break-all ${copy}`}>{url}</p> : null}
           {error ? <p className="mt-2 text-xs text-rose-400">{error}</p> : null}
         </>
       )}

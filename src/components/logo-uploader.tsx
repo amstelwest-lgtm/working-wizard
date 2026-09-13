@@ -89,7 +89,7 @@ export function LogoUploader() {
 
       {profile.logoUrl ? (
         <div className="flex items-start gap-4">
-          <div className="relative flex h-20 w-40 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-slate-700 bg-slate-900/60 p-2">
+          <div className="relative flex h-20 w-40 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-[var(--line)] bg-[var(--bg-2)] p-2">
             <img
               src={profile.logoUrl}
               alt="Firm logo"
@@ -100,7 +100,7 @@ export function LogoUploader() {
             <Button
               size="sm"
               variant="outline"
-              className="border-slate-700 text-slate-300 hover:text-slate-100 text-xs"
+              className="text-xs"
               onClick={() => inputRef.current?.click()}
               disabled={!canEditBrand || busy}
             >
@@ -114,7 +114,7 @@ export function LogoUploader() {
             <Button
               size="sm"
               variant="ghost"
-              className="text-rose-400 hover:text-rose-300 hover:bg-rose-950/30 text-xs"
+              className="text-xs text-[var(--risk)] hover:bg-[color-mix(in_srgb,var(--risk)_10%,transparent)]"
               onClick={handleRemove}
               disabled={!canEditBrand || busy}
             >
@@ -128,21 +128,23 @@ export function LogoUploader() {
           type="button"
           onClick={() => inputRef.current?.click()}
           disabled={!canEditBrand || busy}
-          className="flex w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-slate-700 bg-slate-900/40 px-6 py-8 text-slate-400 transition-colors hover:border-slate-500 hover:bg-slate-800/40 hover:text-slate-300 disabled:cursor-not-allowed disabled:opacity-50"
+          className="flex w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-[var(--line)] bg-[color-mix(in_srgb,var(--gold)_6%,transparent)] px-6 py-8 text-[var(--ink-dim)] transition-colors hover:border-[var(--gold)] hover:text-[var(--ink)] disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {busy ? <Loader2 className="h-6 w-6 animate-spin" /> : <Upload className="h-6 w-6" />}
+          {busy ? (
+            <Loader2 className="h-6 w-6 animate-spin" />
+          ) : (
+            <Upload className="h-6 w-6 text-[var(--gold)]" />
+          )}
           <span className="text-sm font-medium">Click to upload logo</span>
-          <span className="text-xs text-slate-500">PNG, JPG, SVG — max 2 MB</span>
+          <span className="text-xs text-[var(--ink-faint)]">PNG, JPG, SVG — max 2 MB</span>
         </button>
       )}
 
       {!profile.logoUrl && profile.firmName && (
-        <p className="text-[11px] text-slate-500">
+        <p className="text-[11px] text-[var(--ink-dim)]">
           No logo? Your firm name{" "}
-          <span className="font-semibold text-slate-400">
-            "{profile.firmName}"
-          </span>{" "}
-          will appear as styled text on all reports.
+          <span className="font-semibold text-[var(--ink)]">"{profile.firmName}"</span> will appear
+          as styled text on all reports.
         </p>
       )}
     </div>

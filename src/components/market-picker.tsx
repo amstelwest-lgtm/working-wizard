@@ -168,10 +168,11 @@ export function MarketPicker({
     );
   }
 
-  const idle = "border-slate-700 bg-slate-950/50 text-slate-200";
-  const on = "border-[var(--brand-gold-ui)] bg-[var(--brand-gold-ui)]/10 text-slate-50";
-  const labelCls = "text-[10px] uppercase tracking-[0.14em] text-slate-500";
-  const helpCls = "text-xs text-slate-500";
+  const idle = "border-[var(--line,rgba(212,175,55,.22))] bg-transparent text-[var(--ink,inherit)]";
+  const on =
+    "border-[var(--gold,#d4af37)] bg-[color-mix(in_srgb,var(--gold,#d4af37)_12%,transparent)] text-[var(--ink,inherit)]";
+  const labelCls = "text-[10px] uppercase tracking-[0.14em] text-[var(--ink-dim,#9b958a)]";
+  const helpCls = "text-xs text-[var(--ink-dim,#9b958a)]";
 
   return (
     <div className="space-y-3">
