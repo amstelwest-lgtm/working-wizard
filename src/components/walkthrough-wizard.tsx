@@ -38,7 +38,6 @@ type Spot = {
 };
 
 const CARD_APPROX_H = 280;
-const OWNER_CARD_APPROX_H = 400;
 const SPOT_PAD = 10;
 const ORB_PAD = 4;
 const CARD_GAP = 20;
@@ -383,43 +382,46 @@ function measureSpot(el: Element): Spot {
   };
 }
 
-/** Place the tour card fully outside the spotlight (never overlapping it). */
+function measuredCardHeight(el: HTMLElement | null, fallback = CARD_APPROX_H): number {
+  if (!el) return fallback;
+  return Math.max(el.scrollHeight, el.offsetHeight);
+}
+
+/** Place the tour card fully outside the spotlight, sized to its paragraph. */
 function cardLayoutForSpot(
   spot: Spot | null,
   cardH: number,
-  premium = false,
 ): { top: number; maxHeight: number } {
   const vh = window.innerHeight;
-  const ideal = premium
-    ? Math.min(Math.max(cardH, 300), Math.min(vh * 0.82, 720))
-    : Math.min(Math.max(cardH, 220), Math.min(vh * 0.68, 560));
+  const margin = 12;
+  const needed = Math.max(cardH, 1);
+  const viewportCap = vh - margin * 2;
+
   if (!spot) {
-    return { top: Math.max(12, vh - ideal - 28), maxHeight: ideal };
+    const maxHeight = Math.min(needed, viewportCap);
+    return { top: Math.max(margin, vh - maxHeight - margin), maxHeight };
   }
 
   const belowTop = spot.top + spot.height + CARD_GAP;
-  const spaceBelow = Math.max(0, vh - belowTop - 12);
-  const spaceAbove = Math.max(0, spot.top - CARD_GAP - 12);
-  const targetInUpperHalf = spot.top + spot.height / 2 < vh * 0.5;
-  const floor = premium ? 260 : 200;
+  const spaceBelow = Math.max(0, vh - belowTop - margin);
+  const spaceAbove = Math.max(0, spot.top - CARD_GAP - margin);
 
-  // Prefer below when the feature sits in the upper half (normal flow)
-  if (targetInUpperHalf && spaceBelow >= (premium ? 220 : 160)) {
-    return { top: belowTop, maxHeight: Math.min(ideal, Math.max(floor, spaceBelow)) };
+  if (spaceBelow >= needed) {
+    return { top: belowTop, maxHeight: needed };
   }
-  if (spaceBelow >= Math.min(ideal, premium ? 280 : 220) || spaceBelow >= spaceAbove) {
-    return { top: belowTop, maxHeight: Math.min(ideal, Math.max(floor, spaceBelow)) };
+  if (spaceAbove >= needed) {
+    return { top: Math.max(margin, spot.top - CARD_GAP - needed), maxHeight: needed };
   }
-
-  const maxHeight = Math.min(ideal, Math.max(floor, spaceAbove));
-  const top = Math.max(12, spot.top - CARD_GAP - maxHeight);
-  return { top, maxHeight };
+  if (spaceBelow >= spaceAbove) {
+    return { top: belowTop, maxHeight: Math.max(140, spaceBelow) };
+  }
+  return { top: margin, maxHeight: Math.max(140, spaceAbove) };
 }
 
 function scrollTargetAwayFromCard(el: Element, cardH: number, reduceMotion = false) {
   const r = el.getBoundingClientRect();
   const vh = window.innerHeight;
-  const room = Math.min(Math.max(cardH, 240) + CARD_GAP + 16, vh * 0.62);
+  const room = Math.min(cardH + CARD_GAP + 16, vh * 0.72);
   // Park the feature in the upper band so the card can sit cleanly underneath
   const desiredTop = Math.max(56, Math.min(vh * 0.14, vh - room - Math.min(r.height, vh * 0.4)));
   const delta = r.top - desiredTop;
@@ -518,13 +520,13 @@ export function WalkthroughWizard({
 
     const layout = (el: Element | null) => {
       if (cancelled) return;
-      const cardH = cardRef.current?.offsetHeight || (ownerChrome ? OWNER_CARD_APPROX_H : CARD_APPROX_H);
+      const cardH = measuredCardHeight(cardRef.current);
       if (!el) {
         if (spotRef.current !== null) {
           spotRef.current = null;
           setSpot(null);
         }
-        const pos = cardLayoutForSpot(null, cardH, ownerChrome);
+        const pos = cardLayoutForSpot(null, cardH);
         setCardTop((t) => (Math.abs(t - pos.top) < 1 ? t : pos.top));
         setCardMaxH((h) => (Math.abs(h - pos.maxHeight) < 1 ? h : pos.maxHeight));
         return;
@@ -534,7 +536,7 @@ export function WalkthroughWizard({
         spotRef.current = next;
         setSpot(next);
       }
-      const pos = cardLayoutForSpot(next, cardH, ownerChrome);
+      const pos = cardLayoutForSpot(next, cardH);
       setCardTop((t) => (Math.abs(t - pos.top) < 1 ? t : pos.top));
       setCardMaxH((h) => (Math.abs(h - pos.maxHeight) < 1 ? h : pos.maxHeight));
     };
@@ -564,7 +566,7 @@ export function WalkthroughWizard({
       activeElRef.current = el;
       prevTargetRef.current = s.targetId;
 
-      const cardH = cardRef.current?.offsetHeight || (ownerChrome ? OWNER_CARD_APPROX_H : CARD_APPROX_H);
+      const cardH = measuredCardHeight(cardRef.current);
       scrollTargetAwayFromCard(el, cardH, reduceMotion);
 
       const paint = () => {
@@ -602,13 +604,13 @@ export function WalkthroughWizard({
       raf = window.requestAnimationFrame(() => {
         raf = 0;
         const el = activeElRef.current;
-        const cardH = cardRef.current?.offsetHeight || (ownerChrome ? OWNER_CARD_APPROX_H : CARD_APPROX_H);
+        const cardH = measuredCardHeight(cardRef.current);
         if (!el || !document.contains(el)) {
           if (spotRef.current !== null) {
             spotRef.current = null;
             setSpot(null);
           }
-          const pos = cardLayoutForSpot(null, cardH, ownerChrome);
+          const pos = cardLayoutForSpot(null, cardH);
           setCardTop((t) => (Math.abs(t - pos.top) < 1 ? t : pos.top));
           setCardMaxH((h) => (Math.abs(h - pos.maxHeight) < 1 ? h : pos.maxHeight));
           return;
@@ -625,7 +627,7 @@ export function WalkthroughWizard({
           spotRef.current = next;
           setSpot(next);
         }
-        const pos = cardLayoutForSpot(next, cardH, ownerChrome);
+        const pos = cardLayoutForSpot(next, cardH);
         setCardTop((t) => (Math.abs(t - pos.top) < 1 ? t : pos.top));
         setCardMaxH((h) => (Math.abs(h - pos.maxHeight) < 1 ? h : pos.maxHeight));
       });
@@ -728,10 +730,10 @@ export function WalkthroughWizard({
           top: cardTop,
           bottom: "auto",
           zIndex: 8002,
-          width: ownerChrome ? "min(680px, calc(100vw - 20px))" : "min(560px, calc(100vw - 24px))",
+          width: "min(560px, calc(100vw - 24px))",
           pointerEvents: "all",
           maxHeight: cardMaxH,
-          overflowY: "auto",
+          overflowY: cardMaxH + 8 < measuredCardHeight(cardRef.current) ? "auto" : "hidden",
           transition: reduceMotion
             ? "none"
             : "top var(--brand-duration) var(--brand-ease), max-height var(--brand-duration) var(--brand-ease)",
@@ -746,8 +748,8 @@ export function WalkthroughWizard({
             border: ownerChrome
               ? "1px solid rgba(212, 165, 80, 0.28)"
               : `1px solid rgba(${hexToRgb(sectionColor)}, 0.35)`,
-            borderRadius: ownerChrome ? 20 : 16,
-            padding: ownerChrome ? "26px 28px 22px" : "20px 24px 24px",
+            borderRadius: 16,
+            padding: "20px 24px 22px",
             boxShadow: ownerChrome
               ? "0 36px 72px rgba(0,0,0,0.72), 0 0 0 1px rgba(255,255,255,0.05), 0 0 48px rgba(212,165,80,0.08)"
               : "0 32px 64px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.04)",
@@ -773,13 +775,13 @@ export function WalkthroughWizard({
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
-              marginBottom: ownerChrome ? 16 : 14,
+              marginBottom: 14,
               gap: 12,
             }}
           >
             <span
               style={{
-                fontSize: ownerChrome ? 11 : 10,
+                fontSize: 10,
                 fontWeight: 700,
                 letterSpacing: ownerChrome ? "0.16em" : "0.13em",
                 textTransform: "uppercase",
@@ -787,14 +789,14 @@ export function WalkthroughWizard({
                 background: ownerChrome
                   ? "rgba(212, 165, 80, 0.12)"
                   : `rgba(${hexToRgb(sectionColor)}, 0.12)`,
-                padding: ownerChrome ? "5px 12px" : "3px 10px",
+                padding: "3px 10px",
                 borderRadius: 999,
                 border: ownerChrome ? "1px solid rgba(212, 165, 80, 0.22)" : "none",
               }}
             >
               {ownerChrome ? `Milōn · ${s.section ?? "Overview"}` : (s.section ?? "Overview")}
             </span>
-            <span style={{ fontSize: ownerChrome ? 12 : 11, color: "#64748b", whiteSpace: "nowrap" }}>
+            <span style={{ fontSize: 11, color: "#64748b", whiteSpace: "nowrap" }}>
               {step + 1} / {STEPS.length}
             </span>
           </div>
@@ -802,8 +804,8 @@ export function WalkthroughWizard({
           <div
             style={{
               display: "flex",
-              gap: ownerChrome ? 4 : 3,
-              marginBottom: ownerChrome ? 20 : 18,
+              gap: 3,
+              marginBottom: 16,
               borderRadius: 4,
               overflow: "hidden",
             }}
@@ -812,7 +814,7 @@ export function WalkthroughWizard({
               <div
                 key={i}
                 style={{
-                  height: ownerChrome ? 4 : 3,
+                  height: 3,
                   flex: 1,
                   borderRadius: 2,
                   background: i <= step ? (ownerChrome ? "#d4a550" : sectionColor) : "#1e293b",
@@ -825,8 +827,8 @@ export function WalkthroughWizard({
 
           <h3
             style={{
-              fontSize: ownerChrome ? 24 : 18,
-              fontWeight: ownerChrome ? 500 : 700,
+              fontSize: 18,
+              fontWeight: 700,
               color: "#f8fafc",
               marginBottom: ownerChrome ? 12 : 10,
               lineHeight: 1.28,
@@ -840,11 +842,11 @@ export function WalkthroughWizard({
           {ownerChrome && s.why && (
             <p
               style={{
-                fontSize: 15,
+                fontSize: 13.5,
                 fontWeight: 600,
                 color: "#e5be72",
                 lineHeight: 1.45,
-                margin: "0 0 14px",
+                margin: "0 0 10px",
                 fontFamily: "var(--font-display)",
               }}
             >
@@ -854,10 +856,10 @@ export function WalkthroughWizard({
 
           <p
             style={{
-              fontSize: ownerChrome ? 16.5 : 13.5,
+              fontSize: 13.5,
               color: ownerChrome ? "#cbd5e1" : "#94a3b8",
-              lineHeight: ownerChrome ? 1.62 : 1.65,
-              marginBottom: ownerChrome ? 26 : 24,
+              lineHeight: 1.65,
+              marginBottom: 20,
             }}
           >
             {s.body}
@@ -874,7 +876,7 @@ export function WalkthroughWizard({
             <button
               onClick={dismiss}
               style={{
-                fontSize: ownerChrome ? 13 : 12,
+                fontSize: 12,
                 color: "#64748b",
                 background: "none",
                 border: "none",
@@ -891,13 +893,13 @@ export function WalkthroughWizard({
                 <button
                   onClick={() => setStep((x) => x - 1)}
                   style={{
-                    fontSize: ownerChrome ? 14 : 13,
+                    fontSize: 13,
                     fontWeight: 600,
                     color: "#cbd5e1",
                     background: "#1e293b",
                     border: "1px solid #334155",
-                    borderRadius: ownerChrome ? 10 : 8,
-                    padding: ownerChrome ? "11px 18px" : "9px 18px",
+                    borderRadius: 8,
+                    padding: "9px 18px",
                     cursor: "pointer",
                     fontFamily: "inherit",
                   }}
@@ -915,7 +917,7 @@ export function WalkthroughWizard({
                   onFinish?.();
                 }}
                 style={{
-                  fontSize: ownerChrome ? 14 : 13,
+                  fontSize: 13,
                   fontWeight: 700,
                   color: "#1b1300",
                   background: ownerChrome
@@ -923,8 +925,8 @@ export function WalkthroughWizard({
                     : sectionColor,
                   backgroundSize: ownerChrome ? "200% auto" : undefined,
                   border: "none",
-                  borderRadius: ownerChrome ? 10 : 8,
-                  padding: ownerChrome ? "11px 22px" : "9px 22px",
+                  borderRadius: 8,
+                  padding: "9px 22px",
                   cursor: "pointer",
                   fontFamily: "inherit",
                   boxShadow: ownerChrome ? "0 8px 24px rgba(212, 175, 55, 0.28)" : undefined,

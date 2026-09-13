@@ -16,11 +16,11 @@ function assert(cond: boolean, msg: string) {
 }
 
 const wizard = readFileSync(resolve("src/components/walkthrough-wizard.tsx"), "utf8");
-assert(wizard.includes("min(560px"), "tour card is wide enough to read");
-assert(wizard.includes("vh * 0.68"), "tour card can use most of the viewport height");
+assert(wizard.includes("min(560px"), "tour card is compact enough to read");
+assert(wizard.includes("scrollHeight"), "card height follows the paragraph");
 assert(wizard.includes("vh * 0.28"), "spotlight hole stays compact so the card has room");
-assert(wizard.includes("walkthrough-card--owner"), "owner tour uses a larger premium card");
-assert(wizard.includes("min(680px"), "owner tour card is wide enough for the full body");
+assert(wizard.includes("walkthrough-card--owner"), "owner tour keeps its gold chrome");
+assert(!wizard.includes("min(680px"), "owner tour card is no longer oversized");
 
 const studio = readFileSync(
   resolve("src/routes/_authenticated/clients.$clientId.tsx"),
