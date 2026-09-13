@@ -1902,11 +1902,14 @@ function ClientView() {
               ))}
             </div>
 
-            {/* Simplified / Complex — Health, Budget, Action Plan (not Ask AI, Summary, or Cash) */}
+            {/* Simplified / Complex — Health, Budget, Action Plan (not Ask, Summary, Cash, or Reports) */}
             <div
               style={{
                 display:
-                  activeTab === "ask" || activeTab === "summary" || activeTab === "cash"
+                  activeTab === "ask" ||
+                  activeTab === "summary" ||
+                  activeTab === "cash" ||
+                  activeTab === "reports"
                     ? "none"
                     : "flex",
                 justifyContent: "center",
