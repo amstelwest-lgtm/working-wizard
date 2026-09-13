@@ -39,6 +39,15 @@ assert(!studio.includes("<WeeklyInputTable"), "weekly grid removed from accounta
 
 const sphere = readFileSync(resolve("src/components/sphere-hero.tsx"), "utf8");
 assert(sphere.includes("go(3, p.id)"), "L1 pillar tiles drill into that pillar's drivers");
+assert(
+  sphere.includes("Your next moves to improve this score"),
+  "next-move card names the score as the reason to act",
+);
+assert(sphere.includes("See all recommended moves"), "gold CTA opens the full recommended list");
+assert(
+  !sphere.includes('>\n            Your Next Move\n          </p>'),
+  "old all-caps next-move eyebrow is gone",
+);
 
 assert(PILLAR_DRIVER_KEYS.cash.includes("workingCapitalDays"), "cash drivers match scored ratios");
 assert(!PILLAR_DRIVER_KEYS.cash.includes("currentRatio"), "cash drivers do not list uncollected fields");
