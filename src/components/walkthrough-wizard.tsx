@@ -25,6 +25,8 @@ type Step = {
   section?: string;
   title: string;
   body: string;
+  /** One-line owner incentive — shown as a gold pull-quote on owner tours. */
+  why?: string;
 };
 
 type Spot = {
@@ -36,12 +38,17 @@ type Spot = {
 };
 
 const CARD_APPROX_H = 280;
+const OWNER_CARD_APPROX_H = 400;
 const SPOT_PAD = 10;
 const ORB_PAD = 4;
 const CARD_GAP = 20;
 
+function isOwnerChrome(variant: WalkthroughVariant): boolean {
+  return variant === "owner" || variant === "owner-empty";
+}
+
 /**
- * Owner, no figures yet: two honest steps that point at the one thing to do.
+ * Owner, no figures yet: two honest steps that sell the unlock, not the chrome.
  * The full board tour (OWNER_STEPS) runs the first time a real score exists.
  */
 const OWNER_EMPTY_STEPS: Step[] = [
@@ -49,79 +56,90 @@ const OWNER_EMPTY_STEPS: Step[] = [
     tab: "today",
     targetId: "wizard-empty-score",
     section: "Business Health",
-    title: "Your score lands here",
-    body: "Nothing is invented on this board. Once your figures are in, Milōn scores profit, assets, financing and cash into one number and ranks your first move — and this tour continues on the real thing.",
+    title: "This is where you’ll see if the business is leaking",
+    why: "Catch the weak spot while it’s still cheap to fix.",
+    body: "Once your figures are in, this orb becomes an early-warning system — profit, assets, financing and cash each flag a different bottleneck. Nothing is invented. The rest of this tour continues on your real score the moment it lands.",
   },
   {
     tab: "today",
     targetId: "wizard-first-figures",
     section: "Figures",
-    title: "Step 2 of 2 · Bring in your numbers",
-    body: "This is the only thing to do right now. One upload — bank statements or a financial statement — and Milōn drafts your Profit waterfall, 13-week Cash forecast and Budget from it, then queues each for your accountant to review and sign off. Nothing is final until they do.",
+    title: "One upload unlocks the whole board",
+    why: "You get a working picture today. You get a signed picture when they stamp it.",
+    body: "This is the only job right now. Bank statements or a financial statement — and Milōn drafts your Profit waterfall, 13-week cash forecast and year plan from it, then queues each for your accountant to review and sign off. Nothing is final until they do.",
   },
 ];
 
 /**
- * Owner: profile + first upload happen before this tour; walk the operating
- * board once. The first upload has already drafted Profit, Cash and Budget
- * (#175), so those steps say so — and that each waits for accountant sign-off.
+ * Owner scored-board tour: an incentive-led walk of the operating board.
+ * Every step must answer “what do I get for the business?” Bot and Budget
+ * were dropped — they didn’t earn a slot next to notes, sign-off, product
+ * lines, cash, Claude’s next moves, and the Action Plan.
  */
 const OWNER_STEPS: Step[] = [
   {
     tab: "today",
     targetId: ".health-orb",
     section: "Business Health",
-    title: "Start here — one health score",
-    body: "This orb is your weekly pulse: profit, assets, financing and cash rolled into one number. Tap it anytime to drill into the four pillars. When your accountant signs off, their signature appears beside it.",
-  },
-  {
-    tab: "today",
-    targetId: "ask-ai-overview",
-    section: "Milōn Bot",
-    title: "Ask in plain English",
-    body: "Sitting under the score is Milōn Bot, powered by Claude. Try “why is cash tight?” or “what’s still outstanding?” — answers stay grounded in what’s on file. It won’t invent figures or send email.",
+    title: "This score is an early-warning system — not a report card",
+    why: "The weak pillar is the one quietly taxing the business.",
+    body: "Profit, assets, financing and cash each flag a different bottleneck: customers paying late, stock tying up cash, debt that’s too heavy, or a week you can’t make payroll. Tap the orb. Fix the red one first — that’s how you stop managing by gut feel.",
   },
   {
     tab: "today",
     targetId: "wizard-notes-pin",
     section: "Notes",
-    title: "Pin a question for your accountant",
-    body: "The gold pen in the corner drops a note on this page — a ratio, the waterfall, cash, anywhere. Your accountant sees it as an open query on the same deliverable. @mention them to email; resolve the note when the answer lands.",
+    title: "Pin the question to the number — stop chasing it by email",
+    why: "The answer comes back on the same figure, not in a lost thread.",
+    body: "The gold pen drops a note on this exact page: a ratio, a cash week, a product line. Your accountant sees it as an open query on that deliverable. @mention them to email. Resolve it when you’re satisfied. That’s how you stop talking past each other.",
   },
   {
     tab: "waterfall",
     targetId: "wizard-profit-walk",
     section: "Profit",
-    title: "Your profit story, drafted from the upload",
-    body: "Milōn built this waterfall — revenue to net profit, step by step — from the figures you just uploaded. It is a draft until your accountant reviews and signs it off; their stamp lands top-right when they do.",
+    title: "Watch every rand go from a sale to what’s actually left",
+    why: "Most owners only see a bank balance. This shows why it looks like that.",
+    body: "This waterfall is the profit story in one picture — revenue, costs, and what stays. It is a working draft until your accountant reviews and signs it off. Don’t make a pricing or cost call on an unsigned number.",
+  },
+  {
+    tab: "waterfall",
+    targetId: "wizard-product-mix",
+    section: "Product lines",
+    title: "Find the line that actually makes the money",
+    why: "Busy is not the same as profitable.",
+    body: "Total profit can hide a product that’s loud but barely pays. Five short questions split revenue by line — sales share versus profit share. A quiet high-margin line may be carrying a noisy low-margin one. That’s the conversation that changes what you sell, drop, or reprice.",
+  },
+  {
+    tab: "waterfall",
+    targetId: "wizard-owner-signoff",
+    section: "Sign-off",
+    title: "Your accountant’s name on the number is the green light",
+    why: "Speed from Milōn. Trust from the person who knows the file.",
+    body: "Health, profit and cash wait for their stamp. When they sign, their signature appears here — the same number you can brief a bank or a partner on. Until then, treat it as a working draft. You move fast. They make it final.",
   },
   {
     tab: "cash",
     targetId: "wizard-cash-outlook, wizard-cash-table, wizard-cash-panel",
     section: "Cash Forecast",
-    title: "13 weeks of cash, already forecast",
-    body: "Closing balances and shortfall weeks, drafted from the same upload — no second step. Your accountant reviews and signs off before you lean on it. Each new statement refreshes the forecast and asks them to look again.",
-  },
-  {
-    tab: "budget",
-    targetId: "wizard-budget-plan, wizard-budget-panel",
-    section: "Budget",
-    title: "Your year plan, already built",
-    body: "Months of revenue, costs and cash, seeded from your profile and upload. Like Profit and Cash, it waits for your accountant's sign-off. Further down, a monthly P&L turns it into Budget vs Actuals.",
+    title: "See the next 13 weeks before a shortfall arrives",
+    why: "Profit is last month. Cash is whether week 7 still works.",
+    body: "This forecast is already built from your figures — closing balances and the weeks that go red. Use it to chase invoices, delay a spend, or call the bank while you still have options. Your accountant signs it off before you lean on it. Each new statement refreshes it and asks them to look again.",
   },
   {
     tab: "next",
     targetId: "wizard-moves-hero, wizard-moves-list",
     section: "Next moves",
-    title: "What to do next — ranked",
-    body: "Milōn turns the live ratios into a short priority list. Start at the top. When you’re ready to own a move, send it into the Action Plan.",
+    title: "Claude ranked the next move for this business — not a generic list",
+    why: "The top item is the highest-value hour you can spend this week.",
+    body: "These steps are written for your live ratios, then scored three ways: Eisenhower (do it, decide it, or drop it), Cynefin (simple fix or a messy one?), and impact (which lever moves health the most). Start at the top. Send the one you’ll own into the Action Plan.",
   },
   {
     tab: "tasks",
     targetId: "wizard-action-goal, wizard-action-list, wizard-action-plan, wizard-tasks-panel",
     section: "Action Plan",
-    title: "Turn moves into owned work",
-    body: "Set the quarter outcome up top, then add actions underneath — assign people, track progress, and keep one shared plan with your accountant. You’re set — explore any tab anytime.",
+    title: "Leave with a plan your accountant can see you run",
+    why: "A diagnosis without owners is just a meeting.",
+    body: "Set the quarter outcome up top, pull a move from Next Steps, put a name and a date on it. Same plan your accountant sees — so the next conversation is about progress, not “what were we going to do?” This is how advice turns into money.",
   },
 ];
 
@@ -366,9 +384,15 @@ function measureSpot(el: Element): Spot {
 }
 
 /** Place the tour card fully outside the spotlight (never overlapping it). */
-function cardLayoutForSpot(spot: Spot | null, cardH: number): { top: number; maxHeight: number } {
+function cardLayoutForSpot(
+  spot: Spot | null,
+  cardH: number,
+  premium = false,
+): { top: number; maxHeight: number } {
   const vh = window.innerHeight;
-  const ideal = Math.min(Math.max(cardH, 220), Math.min(vh * 0.68, 560));
+  const ideal = premium
+    ? Math.min(Math.max(cardH, 300), Math.min(vh * 0.82, 720))
+    : Math.min(Math.max(cardH, 220), Math.min(vh * 0.68, 560));
   if (!spot) {
     return { top: Math.max(12, vh - ideal - 28), maxHeight: ideal };
   }
@@ -377,13 +401,13 @@ function cardLayoutForSpot(spot: Spot | null, cardH: number): { top: number; max
   const spaceBelow = Math.max(0, vh - belowTop - 12);
   const spaceAbove = Math.max(0, spot.top - CARD_GAP - 12);
   const targetInUpperHalf = spot.top + spot.height / 2 < vh * 0.5;
-  const floor = 200;
+  const floor = premium ? 260 : 200;
 
   // Prefer below when the feature sits in the upper half (normal flow)
-  if (targetInUpperHalf && spaceBelow >= 160) {
+  if (targetInUpperHalf && spaceBelow >= (premium ? 220 : 160)) {
     return { top: belowTop, maxHeight: Math.min(ideal, Math.max(floor, spaceBelow)) };
   }
-  if (spaceBelow >= Math.min(ideal, 220) || spaceBelow >= spaceAbove) {
+  if (spaceBelow >= Math.min(ideal, premium ? 280 : 220) || spaceBelow >= spaceAbove) {
     return { top: belowTop, maxHeight: Math.min(ideal, Math.max(floor, spaceBelow)) };
   }
 
@@ -429,6 +453,7 @@ export function WalkthroughWizard({
 
   const STEPS = stepsFor(variant);
   const storageKey = storageKeyFor(variant);
+  const ownerChrome = isOwnerChrome(variant);
   const reduceMotion = usePrefersReducedMotion();
   const motionTransition = reduceMotion
     ? "none"
@@ -493,13 +518,13 @@ export function WalkthroughWizard({
 
     const layout = (el: Element | null) => {
       if (cancelled) return;
-      const cardH = cardRef.current?.offsetHeight || CARD_APPROX_H;
+      const cardH = cardRef.current?.offsetHeight || (ownerChrome ? OWNER_CARD_APPROX_H : CARD_APPROX_H);
       if (!el) {
         if (spotRef.current !== null) {
           spotRef.current = null;
           setSpot(null);
         }
-        const pos = cardLayoutForSpot(null, cardH);
+        const pos = cardLayoutForSpot(null, cardH, ownerChrome);
         setCardTop((t) => (Math.abs(t - pos.top) < 1 ? t : pos.top));
         setCardMaxH((h) => (Math.abs(h - pos.maxHeight) < 1 ? h : pos.maxHeight));
         return;
@@ -509,7 +534,7 @@ export function WalkthroughWizard({
         spotRef.current = next;
         setSpot(next);
       }
-      const pos = cardLayoutForSpot(next, cardH);
+      const pos = cardLayoutForSpot(next, cardH, ownerChrome);
       setCardTop((t) => (Math.abs(t - pos.top) < 1 ? t : pos.top));
       setCardMaxH((h) => (Math.abs(h - pos.maxHeight) < 1 ? h : pos.maxHeight));
     };
@@ -539,7 +564,7 @@ export function WalkthroughWizard({
       activeElRef.current = el;
       prevTargetRef.current = s.targetId;
 
-      const cardH = cardRef.current?.offsetHeight || CARD_APPROX_H;
+      const cardH = cardRef.current?.offsetHeight || (ownerChrome ? OWNER_CARD_APPROX_H : CARD_APPROX_H);
       scrollTargetAwayFromCard(el, cardH, reduceMotion);
 
       const paint = () => {
@@ -577,13 +602,13 @@ export function WalkthroughWizard({
       raf = window.requestAnimationFrame(() => {
         raf = 0;
         const el = activeElRef.current;
-        const cardH = cardRef.current?.offsetHeight || CARD_APPROX_H;
+        const cardH = cardRef.current?.offsetHeight || (ownerChrome ? OWNER_CARD_APPROX_H : CARD_APPROX_H);
         if (!el || !document.contains(el)) {
           if (spotRef.current !== null) {
             spotRef.current = null;
             setSpot(null);
           }
-          const pos = cardLayoutForSpot(null, cardH);
+          const pos = cardLayoutForSpot(null, cardH, ownerChrome);
           setCardTop((t) => (Math.abs(t - pos.top) < 1 ? t : pos.top));
           setCardMaxH((h) => (Math.abs(h - pos.maxHeight) < 1 ? h : pos.maxHeight));
           return;
@@ -600,7 +625,7 @@ export function WalkthroughWizard({
           spotRef.current = next;
           setSpot(next);
         }
-        const pos = cardLayoutForSpot(next, cardH);
+        const pos = cardLayoutForSpot(next, cardH, ownerChrome);
         setCardTop((t) => (Math.abs(t - pos.top) < 1 ? t : pos.top));
         setCardMaxH((h) => (Math.abs(h - pos.maxHeight) < 1 ? h : pos.maxHeight));
       });
@@ -613,7 +638,7 @@ export function WalkthroughWizard({
       window.removeEventListener("resize", refresh);
       window.removeEventListener("scroll", refresh, true);
     };
-  }, [visible, step]);
+  }, [visible, step, ownerChrome]);
 
   const dismiss = () => {
     markOnboardingDone(storageKey);
@@ -640,6 +665,9 @@ export function WalkthroughWizard({
     Profit: "#2563eb",
     "Cash Forecast": "#0ea5e9",
     Budget: "#d4a550",
+    Notes: "#d4a550",
+    "Product lines": "#c9962b",
+    "Sign-off": "#d4a550",
     "Next moves": "#10b981",
     "Action Plan": "#8b5cf6",
     Practice: "#c9962b",
@@ -692,6 +720,7 @@ export function WalkthroughWizard({
 
       <div
         ref={cardRef}
+        className={ownerChrome ? "walkthrough-card walkthrough-card--owner" : "walkthrough-card"}
         style={{
           position: "fixed",
           left: "50%",
@@ -699,7 +728,7 @@ export function WalkthroughWizard({
           top: cardTop,
           bottom: "auto",
           zIndex: 8002,
-          width: "min(560px, calc(100vw - 24px))",
+          width: ownerChrome ? "min(680px, calc(100vw - 20px))" : "min(560px, calc(100vw - 24px))",
           pointerEvents: "all",
           maxHeight: cardMaxH,
           overflowY: "auto",
@@ -710,36 +739,62 @@ export function WalkthroughWizard({
       >
         <div
           style={{
-            background: "#0d1525",
-            border: `1px solid rgba(${hexToRgb(sectionColor)}, 0.35)`,
-            borderRadius: 16,
-            padding: "20px 24px 24px",
-            boxShadow: "0 32px 64px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.04)",
+            position: "relative",
+            background: ownerChrome
+              ? "linear-gradient(180deg, #141c2e 0%, #0d1525 28%, #0b1220 100%)"
+              : "#0d1525",
+            border: ownerChrome
+              ? "1px solid rgba(212, 165, 80, 0.28)"
+              : `1px solid rgba(${hexToRgb(sectionColor)}, 0.35)`,
+            borderRadius: ownerChrome ? 20 : 16,
+            padding: ownerChrome ? "26px 28px 22px" : "20px 24px 24px",
+            boxShadow: ownerChrome
+              ? "0 36px 72px rgba(0,0,0,0.72), 0 0 0 1px rgba(255,255,255,0.05), 0 0 48px rgba(212,165,80,0.08)"
+              : "0 32px 64px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.04)",
+            overflow: "hidden",
           }}
         >
+          {ownerChrome && (
+            <div
+              aria-hidden
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                right: 0,
+                height: 3,
+                background:
+                  "linear-gradient(90deg, #ac8400 0%, #d4af37 35%, #fdee79 50%, #d4af37 65%, #ac8400 100%)",
+              }}
+            />
+          )}
           <div
             style={{
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
-              marginBottom: 14,
+              marginBottom: ownerChrome ? 16 : 14,
+              gap: 12,
             }}
           >
             <span
               style={{
-                fontSize: 10,
+                fontSize: ownerChrome ? 11 : 10,
                 fontWeight: 700,
-                letterSpacing: "0.13em",
+                letterSpacing: ownerChrome ? "0.16em" : "0.13em",
                 textTransform: "uppercase",
-                color: sectionColor,
-                background: `rgba(${hexToRgb(sectionColor)}, 0.12)`,
-                padding: "3px 10px",
-                borderRadius: 6,
+                color: ownerChrome ? "#e5be72" : sectionColor,
+                background: ownerChrome
+                  ? "rgba(212, 165, 80, 0.12)"
+                  : `rgba(${hexToRgb(sectionColor)}, 0.12)`,
+                padding: ownerChrome ? "5px 12px" : "3px 10px",
+                borderRadius: 999,
+                border: ownerChrome ? "1px solid rgba(212, 165, 80, 0.22)" : "none",
               }}
             >
-              {s.section ?? "Overview"}
+              {ownerChrome ? `Milōn · ${s.section ?? "Overview"}` : (s.section ?? "Overview")}
             </span>
-            <span style={{ fontSize: 11, color: "#475569" }}>
+            <span style={{ fontSize: ownerChrome ? 12 : 11, color: "#64748b", whiteSpace: "nowrap" }}>
               {step + 1} / {STEPS.length}
             </span>
           </div>
@@ -747,8 +802,8 @@ export function WalkthroughWizard({
           <div
             style={{
               display: "flex",
-              gap: 3,
-              marginBottom: 18,
+              gap: ownerChrome ? 4 : 3,
+              marginBottom: ownerChrome ? 20 : 18,
               borderRadius: 4,
               overflow: "hidden",
             }}
@@ -757,10 +812,10 @@ export function WalkthroughWizard({
               <div
                 key={i}
                 style={{
-                  height: 3,
+                  height: ownerChrome ? 4 : 3,
                   flex: 1,
                   borderRadius: 2,
-                  background: i <= step ? sectionColor : "#1e293b",
+                  background: i <= step ? (ownerChrome ? "#d4a550" : sectionColor) : "#1e293b",
                   opacity: i < step ? 0.45 : 1,
                   transition: reduceMotion ? "none" : "background var(--brand-duration) var(--brand-ease)",
                 }}
@@ -770,23 +825,39 @@ export function WalkthroughWizard({
 
           <h3
             style={{
-              fontSize: 18,
-              fontWeight: 700,
-              color: "#f1f5f9",
-              marginBottom: 10,
-              lineHeight: 1.3,
+              fontSize: ownerChrome ? 24 : 18,
+              fontWeight: ownerChrome ? 500 : 700,
+              color: "#f8fafc",
+              marginBottom: ownerChrome ? 12 : 10,
+              lineHeight: 1.28,
               fontFamily: "var(--font-display)",
+              letterSpacing: ownerChrome ? "-0.015em" : undefined,
             }}
           >
             {s.title}
           </h3>
 
+          {ownerChrome && s.why && (
+            <p
+              style={{
+                fontSize: 15,
+                fontWeight: 600,
+                color: "#e5be72",
+                lineHeight: 1.45,
+                margin: "0 0 14px",
+                fontFamily: "var(--font-display)",
+              }}
+            >
+              {s.why}
+            </p>
+          )}
+
           <p
             style={{
-              fontSize: 13.5,
-              color: "#94a3b8",
-              lineHeight: 1.65,
-              marginBottom: 24,
+              fontSize: ownerChrome ? 16.5 : 13.5,
+              color: ownerChrome ? "#cbd5e1" : "#94a3b8",
+              lineHeight: ownerChrome ? 1.62 : 1.65,
+              marginBottom: ownerChrome ? 26 : 24,
             }}
           >
             {s.body}
@@ -803,8 +874,8 @@ export function WalkthroughWizard({
             <button
               onClick={dismiss}
               style={{
-                fontSize: 12,
-                color: "#475569",
+                fontSize: ownerChrome ? 13 : 12,
+                color: "#64748b",
                 background: "none",
                 border: "none",
                 cursor: "pointer",
@@ -820,13 +891,13 @@ export function WalkthroughWizard({
                 <button
                   onClick={() => setStep((x) => x - 1)}
                   style={{
-                    fontSize: 13,
+                    fontSize: ownerChrome ? 14 : 13,
                     fontWeight: 600,
-                    color: "#94a3b8",
+                    color: "#cbd5e1",
                     background: "#1e293b",
                     border: "1px solid #334155",
-                    borderRadius: 8,
-                    padding: "9px 18px",
+                    borderRadius: ownerChrome ? 10 : 8,
+                    padding: ownerChrome ? "11px 18px" : "9px 18px",
                     cursor: "pointer",
                     fontFamily: "inherit",
                   }}
@@ -844,26 +915,35 @@ export function WalkthroughWizard({
                   onFinish?.();
                 }}
                 style={{
-                  fontSize: 13,
+                  fontSize: ownerChrome ? 14 : 13,
                   fontWeight: 700,
-                  color: "#07090f",
-                  background: sectionColor,
+                  color: "#1b1300",
+                  background: ownerChrome
+                    ? "linear-gradient(120deg, #ac8400, #d4af37 40%, #fdee79 60%, #d4af37 80%, #ac8400)"
+                    : sectionColor,
+                  backgroundSize: ownerChrome ? "200% auto" : undefined,
                   border: "none",
-                  borderRadius: 8,
-                  padding: "9px 22px",
+                  borderRadius: ownerChrome ? 10 : 8,
+                  padding: ownerChrome ? "11px 22px" : "9px 22px",
                   cursor: "pointer",
                   fontFamily: "inherit",
+                  boxShadow: ownerChrome ? "0 8px 24px rgba(212, 175, 55, 0.28)" : undefined,
+                  letterSpacing: ownerChrome ? "0.01em" : undefined,
                 }}
               >
                 {isLast
                   ? variant === "owner-empty"
-                    ? "Got it — add my figures"
-                    : variant === "accountant-dashboard-empty"
-                      ? "Got it — add my first client"
-                      : variant === "accountant-client-empty"
-                        ? "Got it — bring in the figures"
-                        : "Done — let's go"
-                  : "Next"}
+                    ? "Bring in my figures"
+                    : variant === "owner"
+                      ? "Open my Action Plan"
+                      : variant === "accountant-dashboard-empty"
+                        ? "Got it — add my first client"
+                        : variant === "accountant-client-empty"
+                          ? "Got it — bring in the figures"
+                          : "Done — let's go"
+                  : ownerChrome
+                    ? "Show me"
+                    : "Next"}
               </button>
             </div>
           </div>

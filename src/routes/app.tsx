@@ -4915,6 +4915,7 @@ function Index() {
               <TabsContent value="waterfall">
                 <TabErrorBoundary label="Profit">
                   <OwnerTabSignoffRow
+                    id="wizard-owner-signoff"
                     label="Profitability Waterfall"
                     signoff={profitabilitySignoff}
                     scope="profitability"
@@ -4950,7 +4951,7 @@ function Index() {
                     />
                   </div>
                   {/* Optional product-line mix — collapsed until the owner opts in */}
-                  <div className="mt-4">
+                  <div id="wizard-product-mix" className="mt-4">
                     <ProductMixPanel
                       totalRevenue={
                         resolveWaterfallFigures(weeklyInputs, derivePeriodWaterfallFallback(v))

@@ -531,11 +531,18 @@ assert(wizardSrc.includes("Got it — add my first client"), "empty practice tou
   const ownerEmpty = stepsBlock("OWNER_EMPTY_STEPS");
   assert(/drafts your Profit/.test(ownerEmpty), "owner-empty says one upload drafts the deliverables");
   assert(/sign off/i.test(ownerEmpty), "owner-empty says drafts queue for accountant sign-off");
+  assert(/bottleneck/.test(ownerEmpty), "owner-empty sells health as a leak detector");
 
   const owner = stepsBlock("OWNER_STEPS");
-  assert(/Pin a question for your accountant/.test(owner), "owner tour explains notes");
   assert(/wizard-notes-pin/.test(owner), "owner notes step targets the pin button");
-  for (const section of ["Profit", "Cash Forecast", "Budget"]) {
+  assert(/Pin the question to the number/.test(owner), "owner tour sells notes as the alternative to email");
+  assert(/wizard-product-mix/.test(owner), "owner tour highlights product-line profitability");
+  assert(/wizard-owner-signoff/.test(owner), "owner tour points at the accountant stamp");
+  assert(/Eisenhower/.test(owner) && /Cynefin/.test(owner) && /impact/.test(owner), "owner next-moves step names the three decision models");
+  assert(/Claude/.test(owner), "owner next-moves step credits Claude");
+  assert(!/section: "Budget"/.test(owner), "owner tour dropped Budget — cash forecast carries the year-ahead incentive");
+  assert(!/ask-ai-overview/.test(owner), "owner tour dropped Bot — Claude is sold on Next moves");
+  for (const section of ["Profit", "Cash Forecast", "Sign-off"]) {
     const i = owner.indexOf(`section: "${section}"`);
     const step = owner.slice(i, owner.indexOf("},", i));
     assert(i !== -1, `owner tour has a ${section} step`);
@@ -562,8 +569,8 @@ assert(wizardSrc.includes("Got it — add my first client"), "empty practice tou
 }
 
 const onboardingSrc = readFileSync(resolve("src/lib/onboarding.ts"), "utf8");
-assert(onboardingSrc.includes('"milon_walkthrough_v11"'), "owner tour key bumped for notes step");
-assert(onboardingSrc.includes('"milon_walkthrough_empty_v2"'), "owner-empty tour key bumped");
+assert(onboardingSrc.includes('"milon_walkthrough_v12"'), "owner tour key bumped for incentive-led rewrite");
+assert(onboardingSrc.includes('"milon_walkthrough_empty_v3"'), "owner-empty tour key bumped");
 assert(onboardingSrc.includes('"milon_accountant_client_tour_v10"'), "accountant client tour key bumped for queries step");
 assert(onboardingSrc.includes('"milon_accountant_client_tour_empty_v2"'), "accountant client-empty tour key bumped");
 assert(onboardingSrc.includes('"milon_accountant_dash_tour_v9"'), "accountant dashboard tour key bumped for queries");

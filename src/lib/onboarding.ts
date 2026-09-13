@@ -2,12 +2,13 @@
  * Onboarding storage keys + helpers.
  * Keep keys versioned so we can re-show improved tours once.
  *
- * v11 — owner and accountant tours explain notes / outstanding queries.
+ * v12 — owner tour is an incentive-led walk (notes, sign-off, product lines,
+ * cash, Claude next moves, action plan) with a larger premium card.
  */
 
-export const OWNER_TOUR_KEY = "milon_walkthrough_v11";
+export const OWNER_TOUR_KEY = "milon_walkthrough_v12";
 /** Two-step orientation shown on an owner board that has no figures yet. */
-export const OWNER_EMPTY_TOUR_KEY = "milon_walkthrough_empty_v2";
+export const OWNER_EMPTY_TOUR_KEY = "milon_walkthrough_empty_v3";
 export const ACCOUNTANT_DASH_TOUR_KEY = "milon_accountant_dash_tour_v9";
 /** Two-step orientation on an empty practice book — runs before Add client. */
 export const ACCOUNTANT_DASH_EMPTY_TOUR_KEY = "milon_accountant_dash_empty_v1";
