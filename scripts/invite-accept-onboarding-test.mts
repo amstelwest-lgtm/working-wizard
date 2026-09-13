@@ -422,6 +422,8 @@ assert(
   !appSrc.includes('Database className="h-3.5 w-3.5 text-[#a8791a]'),
   "owner app bar has no decorative database icon next to the wordmark",
 );
+assert(appSrc.includes(">Business profile<"), "owner headline names the business-profile control");
+assert(appSrc.includes(">Risk profile<"), "owner headline names the risk-profile control");
 assert(appSrc.includes("hasInviteHandoffFlag"), "founder board does not bounce a just-accepted invite");
 assert(appSrc.includes("ownerBoardRole"), "founder board uses the owner seat on the owner door, not firm_admin");
 assert(appSrc.includes("openInvitedClient"), "founder board prefers the invited workspace for existing accounts");
