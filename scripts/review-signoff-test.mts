@@ -91,6 +91,9 @@ assert(!clientSrc.includes("Report sign-offs"), "reports tab no longer hosts eve
 const fnSrc = readFileSync(resolve("src/lib/review-signoffs.functions.ts"), "utf8");
 assert(fnSrc.includes("signature_data"), "sign-off persists a drawn signature");
 assert(fnSrc.includes("profitability"), "server accepts profitability scope");
+assert(fnSrc.includes("can_sign_off_deliverable"), "sign-off is partner-only at the database");
+assert(fnSrc.includes("submitDeliverable"), "draft can be submitted for review");
+assert(fnSrc.includes("requestDeliverableChanges"), "reviewers can return a deliverable to draft");
 
 const mig = readFileSync(resolve("supabase/migrations/20260831120000_review_signoff_signature_scopes.sql"), "utf8");
 assert(mig.includes("signature_data"), "migration adds signature column");
@@ -102,6 +105,8 @@ assert(uiSrc.includes("data-signoff-certificate"), "proof uses the gold certific
 assert(uiSrc.includes("data-signoff-corner"), "owner board uses the corner signature stamp");
 assert(uiSrc.includes('placement="corner"'), "tab headers request the corner placement");
 assert(uiSrc.includes("this deliverable only"), "copy says stamp is per deliverable");
+assert(uiSrc.includes("Submit for review"), "accountant can submit a draft");
+assert(uiSrc.includes("Request changes"), "reviewers can request changes");
 
 void (null as unknown as ReviewScope);
 console.log("review-signoff-test: ok");

@@ -84,6 +84,28 @@ export function accessRequestEmail(opts: {
   return { subject, html, text };
 }
 
+export function accessGrantedEmail(opts: {
+  recipientName: string;
+  actorName: string;
+  memberName: string;
+  memberEmail: string;
+  clientName: string;
+  firmName: string;
+  classification: PracticeClassification;
+}): { subject: string; html: string; text: string } {
+  const role = CLASSIFICATION_LABELS[opts.classification];
+  const subject = `${opts.memberName} now has access to ${opts.clientName}`;
+  const who = `${opts.firmName} assigned ${opts.memberName} (${opts.memberEmail}) to ${opts.clientName} as ${role}.`;
+  const html = `<!doctype html><html><body style="font-family:Arial,sans-serif;color:#0f172a">
+  <p>Hi ${escapeHtml(opts.recipientName || "there")},</p>
+  <p>${escapeHtml(who)}</p>
+  <p>You already approved this practice. This is a notice, not a request. You can revoke this person — or disconnect the firm — from Settings.</p>
+  <p style="color:#94a3b8;font-size:12px">${escapeHtml(opts.actorName)} · ${escapeHtml(opts.firmName)} · Milōn</p>
+  </body></html>`;
+  const text = `${who}\n\nThis is a notice, not a request. Revoke access from Settings if needed.\n`;
+  return { subject, html, text };
+}
+
 export function firmInviteEmail(opts: {
   recipientName: string;
   firmName: string;
@@ -95,7 +117,7 @@ export function firmInviteEmail(opts: {
   const html = `<!doctype html><html><body style="font-family:Arial,sans-serif;color:#0f172a">
   <p>Hi ${escapeHtml(opts.recipientName || "there")},</p>
   <p><strong>${escapeHtml(opts.inviterName)}</strong> invited you to the ${escapeHtml(opts.firmName)} practice as ${escapeHtml(opts.roleLabel)}.</p>
-  <p>You will only see clients you are assigned to, after both the practice and the business owner approve each file.</p>
+  <p>You will see the client files a firm admin assigns to you. The business owner already approved this practice.</p>
   <p><a href="${escapeHtml(opts.url)}" style="color:#b8860b">Accept this invitation</a></p>
   </body></html>`;
   const text = `${opts.inviterName} invited you to ${opts.firmName} as ${opts.roleLabel}.\n\nAccept: ${opts.url}\n`;

@@ -1033,6 +1033,7 @@ export type Database = {
           created_at: string
           financials: Json | null
           firm_id: string | null
+          firm_connected_at: string | null
           id: string
           last_forecast_at: string | null
           last_login_at: string | null
@@ -1062,6 +1063,7 @@ export type Database = {
           created_at?: string
           financials?: Json | null
           firm_id?: string | null
+          firm_connected_at?: string | null
           id?: string
           last_forecast_at?: string | null
           last_login_at?: string | null
@@ -1091,6 +1093,7 @@ export type Database = {
           created_at?: string
           financials?: Json | null
           firm_id?: string | null
+          firm_connected_at?: string | null
           id?: string
           last_forecast_at?: string | null
           last_login_at?: string | null
@@ -1833,6 +1836,29 @@ export type Database = {
       has_client_access: {
         Args: { _client_id: string; _user_id: string }
         Returns: boolean
+      }
+      can_sign_off_deliverable: {
+        Args: { _user_id: string; _client_id: string }
+        Returns: boolean
+      }
+      effective_practice_classification: {
+        Args: { _user_id: string; _client_id: string }
+        Returns: string
+      }
+      practice_can: {
+        Args: { _class: string; _cap: string }
+        Returns: boolean
+      }
+      write_audit_log: {
+        Args: {
+          _action: string
+          _firm_id?: string
+          _client_id?: string
+          _subject_user_id?: string
+          _details?: Json
+          _actor_id?: string
+        }
+        Returns: string
       }
       has_role: {
         Args: {

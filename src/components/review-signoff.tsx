@@ -17,7 +17,11 @@ import { useAccountantProfile } from "@/contexts/accountant-profile";
 import {
   signoffReview,
   removeReviewSignoff,
+  getDeliverableWorkflow,
+  submitDeliverable,
+  requestDeliverableChanges,
   type ClientReviewSignoff,
+  type DeliverableWorkflow,
   type ReviewScope,
 } from "@/lib/review-signoffs.functions";
 
@@ -384,13 +388,39 @@ export function ReviewSignoffButton({
   const { profile, updateProfile } = useAccountantProfile();
   const doSignoff = useServerFn(signoffReview);
   const doRemove = useServerFn(removeReviewSignoff);
+  const loadWorkflow = useServerFn(getDeliverableWorkflow);
+  const doSubmit = useServerFn(submitDeliverable);
+  const doRequestChanges = useServerFn(requestDeliverableChanges);
 
   const [open, setOpen] = useState(false);
   const [note, setNote] = useState("");
+  const [changeComment, setChangeComment] = useState("");
+  const [askChanges, setAskChanges] = useState(false);
   const [signature, setSignature] = useState<string | null>(profile.signatureDataUrl ?? null);
   const [saving, setSaving] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState(false);
   const [removing, setRemoving] = useState(false);
+  const [workflow, setWorkflow] = useState<DeliverableWorkflow | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void loadWorkflow({ data: { clientId, scope } })
+      .then((w) => {
+        if (!cancelled) setWorkflow(w);
+      })
+      .catch(() => {
+        if (!cancelled) setWorkflow(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [clientId, scope, signoff?.id, signoff?.signed_off_at, isStale, loadWorkflow]);
+
+  const cycleStatus =
+    signoff && !isStale ? "signed_off" : (workflow?.status === "ready_for_review" ? "ready_for_review" : "draft");
+  const canSubmit = workflow?.canSubmit ?? false;
+  const canReview = workflow?.canReview ?? false;
+  const canSignOff = workflow?.canSignOff ?? false;
 
   const handleSignoff = async () => {
     setSaving(true);
@@ -471,17 +501,119 @@ export function ReviewSignoffButton({
       {signoff && isStale && (
         <SignoffCertificate signoff={signoff} scope={scope} isStale />
       )}
-      <button
-        type="button"
-        onClick={() => {
-          setSignature(profile.signatureDataUrl ?? null);
-          setOpen(true);
-        }}
-        className={SIGNOFF_GOLD_BTN}
-      >
-        <PenLine className="h-3.5 w-3.5" />
-        {signoff && isStale ? "Re-sign off" : "Sign off"} {SCOPE_SHORT_LABEL[scope]}
-      </button>
+      {workflow ? (
+        <p className="text-[10px] uppercase tracking-[0.14em] text-slate-500">
+          {cycleStatus === "ready_for_review" ? "Ready for review" : "Draft"}
+          {workflow.changeComment ? ` · ${workflow.changeComment}` : ""}
+        </p>
+      ) : null}
+      <div className="flex flex-wrap justify-end gap-2">
+        {workflow == null ? (
+          <button
+            type="button"
+            onClick={() => {
+              setSignature(profile.signatureDataUrl ?? null);
+              setOpen(true);
+            }}
+            className={SIGNOFF_GOLD_BTN}
+          >
+            <PenLine className="h-3.5 w-3.5" />
+            {signoff && isStale ? "Re-sign off" : "Sign off"} {SCOPE_SHORT_LABEL[scope]}
+          </button>
+        ) : null}
+        {workflow && canSubmit && cycleStatus === "draft" ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8 border-[#d4a550]/40 text-[11px] uppercase tracking-[0.12em]"
+            disabled={saving}
+            onClick={() => {
+              setSaving(true);
+              void doSubmit({ data: { clientId, scope } })
+                .then((r) => {
+                  setWorkflow((w) =>
+                    w ? { ...w, status: r.status, changeComment: null } : w,
+                  );
+                  toast.success("Submitted for review");
+                })
+                .catch((e) => toast.error(e instanceof Error ? e.message : "Submit failed"))
+                .finally(() => setSaving(false));
+            }}
+          >
+            Submit for review
+          </Button>
+        ) : null}
+        {canReview && cycleStatus === "ready_for_review" ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-8 text-[11px] uppercase tracking-[0.12em] text-slate-400"
+            disabled={saving}
+            onClick={() => setAskChanges(true)}
+          >
+            Request changes
+          </Button>
+        ) : null}
+        {(workflow == null || canSignOff) && cycleStatus === "ready_for_review" ? (
+          <button
+            type="button"
+            onClick={() => {
+              setSignature(profile.signatureDataUrl ?? null);
+              setOpen(true);
+            }}
+            className={SIGNOFF_GOLD_BTN}
+          >
+            <PenLine className="h-3.5 w-3.5" />
+            {signoff && isStale ? "Re-sign off" : "Sign off"} {SCOPE_SHORT_LABEL[scope]}
+          </button>
+        ) : null}
+      </div>
+      <Dialog open={askChanges} onOpenChange={setAskChanges}>
+        <DialogContent className="border-[#d4a550]/25 bg-[#0d1117] text-slate-100">
+          <DialogHeader>
+            <DialogTitle>Request changes</DialogTitle>
+            <DialogDescription className="text-slate-400">
+              Returns {SCOPE_LABEL[scope]} to draft. The business cannot see it until a partner signs off again.
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            value={changeComment}
+            onChange={(e) => setChangeComment(e.target.value)}
+            placeholder="What needs to change?"
+            rows={3}
+            className="resize-none border-slate-800 bg-slate-950 text-sm"
+            maxLength={1000}
+          />
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setAskChanges(false)}>
+              Cancel
+            </Button>
+            <Button
+              disabled={saving}
+              onClick={() => {
+                setSaving(true);
+                void doRequestChanges({
+                  data: { clientId, scope, comment: changeComment.trim() || undefined },
+                })
+                  .then((r) => {
+                    setWorkflow((w) =>
+                      w ? { ...w, status: r.status, changeComment: changeComment.trim() || null } : w,
+                    );
+                    setAskChanges(false);
+                    setChangeComment("");
+                    toast.success("Returned to draft");
+                  })
+                  .catch((e) => toast.error(e instanceof Error ? e.message : "Could not request changes"))
+                  .finally(() => setSaving(false));
+              }}
+            >
+              Send back to draft
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={open}

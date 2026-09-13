@@ -2,6 +2,9 @@
 
 export const PRACTICE_CLIENT_ACCESS_CAP = 12;
 export const PRACTICE_ACCESS_MIGRATION = "20260901160000_practice_client_access.sql";
+export const PRACTICE_ACCESS_AMENDMENT_MIGRATION =
+  "20260913120000_team_access_amendment.sql";
+export const PARTNER_ASSIGN_TOOLTIP = "Only a partner can assign partner status.";
 
 export const MEMBERSHIP_ROLES = ["owner", "admin", "member"] as const;
 export type MembershipRole = (typeof MEMBERSHIP_ROLES)[number];
@@ -33,6 +36,74 @@ export const MEMBERSHIP_LABELS: Record<MembershipRole, string> = {
   admin: "Firm admin",
   member: "Team member",
 };
+
+/** Shown on the Firm permissions dropdown. */
+export const FIRM_PERMISSION_HELP: Record<"admin" | "member", string> = {
+  member: "Works on assigned clients only",
+  admin: "Can invite people and assign client access",
+};
+
+export const CLASSIFICATION_HELP =
+  "Only partners can sign off client deliverables.";
+
+/** Seniority: Partner > Manager > Reviewer > Staff = Bookkeeper > Read only. */
+export const CLASS_RANK: Record<PracticeClassification, number> = {
+  partner: 5,
+  manager: 4,
+  reviewer: 3,
+  staff: 2,
+  bookkeeper: 2,
+  read_only: 1,
+};
+
+export type PracticeCapability = "view" | "edit" | "submit" | "review" | "sign_off";
+
+export function canPractice(
+  classification: PracticeClassification | null | undefined,
+  cap: PracticeCapability,
+): boolean {
+  if (!classification) return false;
+  switch (cap) {
+    case "view":
+      return true;
+    case "edit":
+    case "submit":
+      return (
+        classification === "partner" ||
+        classification === "manager" ||
+        classification === "staff" ||
+        classification === "bookkeeper"
+      );
+    case "review":
+      return (
+        classification === "partner" ||
+        classification === "manager" ||
+        classification === "reviewer"
+      );
+    case "sign_off":
+      return classification === "partner";
+    default:
+      return false;
+  }
+}
+
+export function classAtMost(
+  ceiling: PracticeClassification,
+  wanted: PracticeClassification,
+): PracticeClassification {
+  return CLASS_RANK[wanted] <= CLASS_RANK[ceiling] ? wanted : ceiling;
+}
+
+export function effectiveClassification(
+  team: PracticeClassification,
+  perClient: PracticeClassification | null | undefined,
+): PracticeClassification {
+  return classAtMost(team, perClient ?? team);
+}
+
+export function classesAtOrBelow(ceiling: PracticeClassification): PracticeClassification[] {
+  return CLASSIFICATIONS.filter((c) => CLASS_RANK[c] <= CLASS_RANK[ceiling]);
+}
 
 export function parseClassification(raw: unknown): PracticeClassification {
   return CLASSIFICATIONS.includes(raw as PracticeClassification)

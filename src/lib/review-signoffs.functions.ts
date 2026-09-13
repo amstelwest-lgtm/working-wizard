@@ -96,27 +96,85 @@ async function assertClientAccess(
 }
 
 /**
- * Practice-portal users with client access may sign off. Pure client owners /
- * members are blocked (unless they also hold accountant / firm_admin).
- * Users with no role row are allowed — firm signups sometimes lack a role after
- * RLS hardening blocked client-side inserts into user_roles.
+ * Sign-off is Partner-only at the database. Also block client-only logins
+ * so an owner who also has a leftover accountant role cannot skip the
+ * effective-classification check.
  */
-async function assertCanSignOff(userId: string, sb: ReturnType<typeof authedSupabase>) {
+async function assertCanSignOff(
+  userId: string,
+  clientId: string,
+  sb: ReturnType<typeof authedSupabase>,
+) {
   const { data, error } = await (sb as unknown as LooseSb)
     .from("user_roles")
     .select("role")
     .eq("user_id", userId);
   if (error) throw new Error(error.message);
   const roles = (data ?? []).map((r: { role: string }) => r.role);
-  const isPracticeRole =
-    roles.includes("accountant") || roles.includes("firm_admin") || roles.length === 0;
   const isClientOnly =
     (roles.includes("client_owner") || roles.includes("client_member")) &&
     !roles.includes("accountant") &&
     !roles.includes("firm_admin");
-  if (isClientOnly || !isPracticeRole) {
+  if (isClientOnly) {
     throw new Error("Only practice portal users can sign off reviews");
   }
+  const { data: allowed, error: capErr } = await sb.rpc("can_sign_off_deliverable" as never, {
+    _user_id: userId,
+    _client_id: clientId,
+  } as never);
+  if (capErr) throw new Error(capErr.message);
+  if (!allowed) {
+    throw new Error("Only a partner can sign off client deliverables.");
+  }
+}
+
+export type DeliverableStatus = "draft" | "ready_for_review" | "signed_off";
+
+export type DeliverableWorkflow = {
+  status: DeliverableStatus;
+  changeComment: string | null;
+  canSubmit: boolean;
+  canReview: boolean;
+  canSignOff: boolean;
+};
+
+async function practiceCaps(userId: string, clientId: string, sb: ReturnType<typeof authedSupabase>) {
+  const { data: cls } = await sb.rpc("effective_practice_classification" as never, {
+    _user_id: userId,
+    _client_id: clientId,
+  } as never);
+  const classification = typeof cls === "string" ? cls : "";
+  const check = async (cap: string) => {
+    const { data } = await sb.rpc("practice_can" as never, {
+      _class: classification,
+      _cap: cap,
+    } as never);
+    return Boolean(data);
+  };
+  return {
+    canSubmit: await check("submit"),
+    canReview: await check("review"),
+    canSignOff: await check("sign_off"),
+  };
+}
+
+async function loadDeliverableState(
+  sb: LooseSb,
+  clientId: string,
+  scope: ReviewScope,
+): Promise<{ status: DeliverableStatus; change_comment: string | null } | null> {
+  const { data, error } = await sb
+    .from("client_deliverable_states")
+    .select("status, change_comment")
+    .eq("client_id", clientId)
+    .eq("scope", scope)
+    .maybeSingle();
+  if (error && !/does not exist|schema cache/i.test(error.message)) throw new Error(error.message);
+  if (!data) return null;
+  return {
+    status: (data.status as DeliverableStatus) ?? "draft",
+    change_comment: (data.change_comment as string | null) ?? null,
+  };
 }
 
 // ── List sign-offs for a client (both scopes) ────────────────────────────────
@@ -190,8 +248,8 @@ export const signoffReview = createServerFn({ method: "POST" })
     const sb = authedSupabase();
     const { data: userData, error: userErr } = await sb.auth.getUser();
     if (userErr || !userData?.user) throw new Error("Not authenticated");
-    await assertCanSignOff(userData.user.id, sb);
     await assertClientAccess(userData.user.id, data.clientId, sb);
+    await assertCanSignOff(userData.user.id, data.clientId, sb);
 
     // Trusted display name from auth user metadata (signup personal info).
     const meta = (userData.user.user_metadata ?? {}) as Record<string, unknown>;
@@ -231,6 +289,72 @@ export const signoffReview = createServerFn({ method: "POST" })
       .select()
       .single();
     if (error) throw new Error(error.message);
+
+    const { data: prior } = await (sb as unknown as LooseSb)
+      .from("client_deliverable_states")
+      .select("status")
+      .eq("client_id", data.clientId)
+      .eq("scope", data.scope)
+      .maybeSingle();
+    if (!prior) {
+      const { error: seedErr } = await (sb as unknown as LooseSb)
+        .from("client_deliverable_states")
+        .upsert(
+          {
+            client_id: data.clientId,
+            scope: data.scope,
+            status: "ready_for_review",
+            submitted_by: userData.user.id,
+            submitted_at: new Date().toISOString(),
+          },
+          { onConflict: "client_id,scope" },
+        );
+      if (seedErr && !/does not exist|schema cache/i.test(seedErr.message)) {
+        throw new Error(seedErr.message);
+      }
+    } else if (prior.status === "draft") {
+      const { error: readyErr } = await (sb as unknown as LooseSb)
+        .from("client_deliverable_states")
+        .update({
+          status: "ready_for_review",
+          submitted_by: userData.user.id,
+          submitted_at: new Date().toISOString(),
+        })
+        .eq("client_id", data.clientId)
+        .eq("scope", data.scope);
+      if (readyErr && !/does not exist|schema cache/i.test(readyErr.message)) {
+        throw new Error(readyErr.message);
+      }
+    }
+    const { error: stateErr } = await (sb as unknown as LooseSb)
+      .from("client_deliverable_states")
+      .update({
+        status: "signed_off",
+        content_snapshot: {
+          signed_off_by_name: trustedName,
+          signed_off_at: (row as ClientReviewSignoff).signed_off_at,
+          scope: data.scope,
+          note: data.note ?? null,
+        },
+        signed_off_by: userData.user.id,
+        signed_off_at: new Date().toISOString(),
+        change_comment: null,
+      })
+      .eq("client_id", data.clientId)
+      .eq("scope", data.scope);
+    if (stateErr && !/does not exist|schema cache/i.test(stateErr.message)) {
+      throw new Error(stateErr.message);
+    }
+    try {
+      await sb.rpc("write_audit_log" as never, {
+        _action: "deliverable_signed_off",
+        _client_id: data.clientId,
+        _details: { scope: data.scope },
+        _actor_id: userData.user.id,
+      } as never);
+    } catch {
+      /* audit is best-effort when the amendment migration is not applied */
+    }
     return row as ClientReviewSignoff;
   });
 
@@ -248,8 +372,8 @@ export const removeReviewSignoff = createServerFn({ method: "POST" })
     const sb = authedSupabase();
     const { data: userData, error: userErr } = await sb.auth.getUser();
     if (userErr || !userData?.user) throw new Error("Not authenticated");
-    await assertCanSignOff(userData.user.id, sb);
     await assertClientAccess(userData.user.id, data.clientId, sb);
+    await assertCanSignOff(userData.user.id, data.clientId, sb);
 
     const { error } = await (sb as unknown as LooseSb)
       .from("client_review_signoffs")
@@ -257,5 +381,99 @@ export const removeReviewSignoff = createServerFn({ method: "POST" })
       .eq("client_id", data.clientId)
       .eq("scope", data.scope);
     if (error) throw new Error(error.message);
+    await (sb as unknown as LooseSb)
+      .from("client_deliverable_states")
+      .update({ status: "draft", signed_off_by: null, signed_off_at: null })
+      .eq("client_id", data.clientId)
+      .eq("scope", data.scope);
     return { ok: true };
+  });
+
+export const getDeliverableWorkflow = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) =>
+    z.object({ clientId: z.string().uuid(), scope: ScopeSchema }).parse(input),
+  )
+  .handler(async ({ data }): Promise<DeliverableWorkflow> => {
+    const sb = authedSupabase();
+    const { data: userData, error: userErr } = await sb.auth.getUser();
+    if (userErr || !userData?.user) throw new Error("Not authenticated");
+    await assertClientAccess(userData.user.id, data.clientId, sb);
+    const state = await loadDeliverableState(sb as unknown as LooseSb, data.clientId, data.scope);
+    let caps = { canSubmit: true, canReview: true, canSignOff: true };
+    try {
+      caps = await practiceCaps(userData.user.id, data.clientId, sb);
+    } catch {
+      /* amendment RPCs may be missing until the SQL is applied */
+    }
+    return {
+      status: state?.status ?? "draft",
+      changeComment: state?.change_comment ?? null,
+      ...caps,
+    };
+  });
+
+export const submitDeliverable = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) =>
+    z.object({ clientId: z.string().uuid(), scope: ScopeSchema }).parse(input),
+  )
+  .handler(async ({ data }) => {
+    const sb = authedSupabase();
+    const { data: userData, error: userErr } = await sb.auth.getUser();
+    if (userErr || !userData?.user) throw new Error("Not authenticated");
+    await assertClientAccess(userData.user.id, data.clientId, sb);
+    const caps = await practiceCaps(userData.user.id, data.clientId, sb);
+    if (!caps.canSubmit) throw new Error("This professional level cannot submit for review.");
+    const now = new Date().toISOString();
+    const { error } = await (sb as unknown as LooseSb)
+      .from("client_deliverable_states")
+      .upsert(
+        {
+          client_id: data.clientId,
+          scope: data.scope,
+          status: "ready_for_review",
+          submitted_by: userData.user.id,
+          submitted_at: now,
+          change_comment: null,
+        },
+        { onConflict: "client_id,scope" },
+      );
+    if (error) throw new Error(error.message);
+    return { ok: true as const, status: "ready_for_review" as const };
+  });
+
+export const requestDeliverableChanges = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) =>
+    z
+      .object({
+        clientId: z.string().uuid(),
+        scope: ScopeSchema,
+        comment: z.string().trim().max(1000).optional(),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data }) => {
+    const sb = authedSupabase();
+    const { data: userData, error: userErr } = await sb.auth.getUser();
+    if (userErr || !userData?.user) throw new Error("Not authenticated");
+    await assertClientAccess(userData.user.id, data.clientId, sb);
+    const caps = await practiceCaps(userData.user.id, data.clientId, sb);
+    if (!caps.canReview) throw new Error("This professional level cannot request changes.");
+    const { error } = await (sb as unknown as LooseSb)
+      .from("client_deliverable_states")
+      .upsert(
+        {
+          client_id: data.clientId,
+          scope: data.scope,
+          status: "draft",
+          change_comment: data.comment ?? null,
+          signed_off_by: null,
+          signed_off_at: null,
+        },
+        { onConflict: "client_id,scope" },
+      );
+    if (error) throw new Error(error.message);
+    return { ok: true as const, status: "draft" as const };
   });

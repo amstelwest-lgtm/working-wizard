@@ -17,8 +17,10 @@ import {
 import {
   CLASSIFICATION_LABELS,
   MEMBERSHIP_LABELS,
+  PRACTICE_ACCESS_AMENDMENT_MIGRATION,
   PRACTICE_ACCESS_MIGRATION,
   PRACTICE_CLIENT_ACCESS_CAP,
+  classAtMost,
   parseClassification,
   parseMembershipRole,
   type MembershipRole,
@@ -27,6 +29,7 @@ import {
 } from "@/lib/practice-access";
 import {
   accessApproveUrl,
+  accessGrantedEmail,
   accessRequestEmail,
   firmInviteEmail,
   sendAccessEmail,
@@ -59,6 +62,7 @@ export type PracticeAssignment = {
   status: PracticeAccessStatus;
   accountantApproved: boolean;
   ownerApproved: boolean;
+  grantedAt: string | null;
 };
 
 export type PracticeInviteRow = {
@@ -76,12 +80,27 @@ export type PracticeAccessBoard = {
   firmName: string;
   canManage: boolean;
   membershipRole: MembershipRole | null;
+  myClassification: PracticeClassification | null;
+  actorIsPartner: boolean;
   cap: number;
   members: PracticeMember[];
   clients: PracticeClientRow[];
   assignments: PracticeAssignment[];
   invites: PracticeInviteRow[];
   migrationHint: string | null;
+};
+
+export type OwnerPracticePerson = {
+  accessId: string;
+  clientId: string;
+  clientName: string;
+  firmId: string;
+  firmName: string;
+  userId: string;
+  name: string;
+  email: string;
+  classification: PracticeClassification;
+  grantedAt: string | null;
 };
 
 function newToken(): string {
@@ -171,6 +190,74 @@ function canManage(role: MembershipRole, isOwner: boolean): boolean {
   return isOwner || role === "owner" || role === "admin";
 }
 
+function teamClassOf(m: { classification: PracticeClassification; isOwner: boolean }): PracticeClassification {
+  return m.isOwner && m.classification === "staff" ? "partner" : m.classification;
+}
+
+async function writeAudit(
+  admin: LooseAdmin,
+  row: {
+    actorId: string;
+    action: string;
+    firmId?: string | null;
+    clientId?: string | null;
+    subjectUserId?: string | null;
+    details?: Record<string, unknown>;
+  },
+): Promise<void> {
+  const { error } = await admin.from("audit_log").insert({
+    actor_id: row.actorId,
+    action: row.action,
+    firm_id: row.firmId ?? null,
+    client_id: row.clientId ?? null,
+    subject_user_id: row.subjectUserId ?? null,
+    details: row.details ?? {},
+  });
+  if (error) {
+    const viaRpc = await admin.rpc("write_audit_log", {
+      _action: row.action,
+      _firm_id: row.firmId ?? null,
+      _client_id: row.clientId ?? null,
+      _subject_user_id: row.subjectUserId ?? null,
+      _details: row.details ?? {},
+      _actor_id: row.actorId,
+    });
+    if (viaRpc.error) {
+      console.warn("audit_log write failed", error.message, viaRpc.error.message);
+    }
+  }
+}
+
+function assertCanAssignPartner(
+  actorClass: PracticeClassification,
+  nextClass: PracticeClassification | undefined,
+): void {
+  if (nextClass === "partner" && actorClass !== "partner") {
+    throw new Error("Only a partner can assign partner status.");
+  }
+}
+
+async function assertKeepsPartner(
+  admin: LooseAdmin,
+  firmId: string,
+  exceptUserId: string,
+): Promise<void> {
+  const { data: firm } = await admin.from("firms").select("owner_user_id").eq("id", firmId).maybeSingle();
+  if (firm?.owner_user_id && String(firm.owner_user_id) !== exceptUserId) return;
+  const { data: partners } = await admin
+    .from("firm_memberships")
+    .select("user_id")
+    .eq("firm_id", firmId)
+    .eq("classification", "partner");
+  const leftover = (partners ?? []).filter((p: { user_id: string }) => p.user_id !== exceptUserId);
+  if (leftover.length === 0 && String(firm?.owner_user_id ?? "") === exceptUserId) {
+    throw new Error("A practice must keep at least one partner.");
+  }
+  if (leftover.length === 0 && !firm?.owner_user_id) {
+    throw new Error("A practice must keep at least one partner.");
+  }
+}
+
 async function assertManager(
   admin: LooseAdmin,
   userId: string,
@@ -254,6 +341,8 @@ function emptyBoard(hint: string | null): PracticeAccessBoard {
     firmName: "",
     canManage: false,
     membershipRole: null,
+    myClassification: null,
+    actorIsPartner: false,
     cap: PRACTICE_CLIENT_ACCESS_CAP,
     members: [],
     clients: [],
@@ -292,7 +381,7 @@ export const getPracticeAccessBoard = createServerFn({ method: "GET" })
           email: profile.email,
           name: profile.name,
           membershipRole: m.role,
-          classification: m.classification === "staff" && m.isOwner ? "partner" : m.classification,
+          classification: teamClassOf(m),
           isFirmOwner: m.isOwner,
         });
       }
@@ -308,7 +397,7 @@ export const getPracticeAccessBoard = createServerFn({ method: "GET" })
       const { data: assignRows, error: aErr } = await admin
         .from("client_practice_access")
         .select(
-          "id, client_id, user_id, classification, status, accountant_approved_at, owner_approved_at",
+          "id, client_id, user_id, classification, status, accountant_approved_at, owner_approved_at, created_at",
         )
         .eq("firm_id", firm.id);
       if (aErr) throw aErr;
@@ -321,6 +410,11 @@ export const getPracticeAccessBoard = createServerFn({ method: "GET" })
         status: (row.status as PracticeAccessStatus) ?? "pending",
         accountantApproved: Boolean(row.accountant_approved_at),
         ownerApproved: Boolean(row.owner_approved_at),
+        grantedAt:
+          (row.owner_approved_at as string | null) ??
+          (row.accountant_approved_at as string | null) ??
+          (row.created_at as string | null) ??
+          null,
       }));
 
       const countByClient = new Map<string, number>();
@@ -374,6 +468,8 @@ export const getPracticeAccessBoard = createServerFn({ method: "GET" })
         firmName: firm.name,
         canManage: manage,
         membershipRole: mine.role,
+        myClassification: teamClassOf(mine),
+        actorIsPartner: teamClassOf(mine) === "partner",
         cap: PRACTICE_CLIENT_ACCESS_CAP,
         members,
         clients: visibleClients,
@@ -385,7 +481,15 @@ export const getPracticeAccessBoard = createServerFn({ method: "GET" })
       };
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      if (missingRelation(msg)) return emptyBoard(migrationHintFor(PRACTICE_ACCESS_MIGRATION));
+      if (missingRelation(msg)) {
+        return emptyBoard(
+          migrationHintFor(
+            msg.includes("audit_log") || msg.includes("firm_connected") || msg.includes("deliverable")
+              ? PRACTICE_ACCESS_AMENDMENT_MIGRATION
+              : PRACTICE_ACCESS_MIGRATION,
+          ),
+        );
+      }
       throw e instanceof Error ? e : new Error(msg);
     }
   });
@@ -415,6 +519,8 @@ export const inviteFirmStaff = createServerFn({ method: "POST" })
     const firm = await resolveFirm(admin, ctx.userId);
     if (!firm) throw new Error("No practice found.");
     await assertManager(admin, ctx.userId, firm.id);
+    const actor = await membershipOf(admin, firm.id, ctx.userId);
+    assertCanAssignPartner(teamClassOf(actor), data.classification);
 
     const email = data.email.trim().toLowerCase();
     const name = (data.name ?? "").trim() || email.split("@")[0];
@@ -449,6 +555,13 @@ export const inviteFirmStaff = createServerFn({ method: "POST" })
         html: mail.html,
         text: mail.text,
         idempotencyKey: `firm-add-${firm.id}-${email}`,
+      });
+      await writeAudit(admin, {
+        actorId: ctx.userId,
+        action: "member_invited",
+        firmId: firm.id,
+        subjectUserId: existing.id,
+        details: { email, membershipRole: data.membershipRole, classification: data.classification, existing: true },
       });
       return { addedExisting: true as const, invited: false as const };
     }
@@ -489,6 +602,12 @@ export const inviteFirmStaff = createServerFn({ method: "POST" })
       text: mail.text,
       idempotencyKey: `firm-invite-${invite.id}`,
     });
+    await writeAudit(admin, {
+      actorId: ctx.userId,
+      action: "member_invited",
+      firmId: firm.id,
+      details: { email, membershipRole: data.membershipRole, classification: data.classification, existing: false },
+    });
     return { addedExisting: false as const, invited: true as const, emailed: sent.ok };
   });
 
@@ -514,6 +633,16 @@ export const updateFirmMember = createServerFn({ method: "POST" })
     if (data.userId === firm.ownerUserId) {
       throw new Error("The practice owner’s role cannot be changed here.");
     }
+    const actor = await membershipOf(admin, firm.id, ctx.userId);
+    assertCanAssignPartner(teamClassOf(actor), data.classification);
+    const current = await membershipOf(admin, firm.id, data.userId);
+    if (
+      current.classification === "partner" &&
+      data.classification &&
+      data.classification !== "partner"
+    ) {
+      await assertKeepsPartner(admin, firm.id, data.userId);
+    }
     const patch: Record<string, string> = {};
     if (data.membershipRole) patch.role = data.membershipRole;
     if (data.classification) patch.classification = data.classification;
@@ -524,6 +653,24 @@ export const updateFirmMember = createServerFn({ method: "POST" })
       .eq("firm_id", firm.id)
       .eq("user_id", data.userId);
     if (error) throw new Error(error.message);
+    if (data.membershipRole && data.membershipRole !== current.role) {
+      await writeAudit(admin, {
+        actorId: ctx.userId,
+        action: "firm_permissions_changed",
+        firmId: firm.id,
+        subjectUserId: data.userId,
+        details: { from: current.role, to: data.membershipRole },
+      });
+    }
+    if (data.classification && data.classification !== current.classification) {
+      await writeAudit(admin, {
+        actorId: ctx.userId,
+        action: "professional_level_changed",
+        firmId: firm.id,
+        subjectUserId: data.userId,
+        details: { from: current.classification, to: data.classification },
+      });
+    }
     return { ok: true as const };
   });
 
@@ -539,6 +686,10 @@ export const removeFirmMember = createServerFn({ method: "POST" })
     if (data.userId === firm.ownerUserId || data.userId === ctx.userId) {
       throw new Error("The practice owner cannot be removed.");
     }
+    const leaving = await membershipOf(admin, firm.id, data.userId);
+    if (leaving.classification === "partner") {
+      await assertKeepsPartner(admin, firm.id, data.userId);
+    }
     await admin.from("firm_memberships").delete().eq("firm_id", firm.id).eq("user_id", data.userId);
     await admin
       .from("client_practice_access")
@@ -551,8 +702,79 @@ export const removeFirmMember = createServerFn({ method: "POST" })
       .eq("firm_id", firm.id)
       .eq("user_id", data.userId)
       .in("status", ["pending", "active"]);
+    await writeAudit(admin, {
+      actorId: ctx.userId,
+      action: "member_removed",
+      firmId: firm.id,
+      subjectUserId: data.userId,
+    });
     return { ok: true as const };
   });
+
+async function upsertPracticeGrant(
+  admin: LooseAdmin,
+  opts: {
+    clientId: string;
+    userId: string;
+    firmId: string;
+    classification: PracticeClassification;
+    actorId: string;
+  },
+): Promise<{ id: string; activated: boolean }> {
+  const { count } = await admin
+    .from("client_practice_access")
+    .select("id", { count: "exact", head: true })
+    .eq("client_id", opts.clientId)
+    .in("status", ["pending", "active"]);
+  const { data: existing } = await admin
+    .from("client_practice_access")
+    .select("id, status")
+    .eq("client_id", opts.clientId)
+    .eq("user_id", opts.userId)
+    .maybeSingle();
+  const occupying =
+    (count ?? 0) -
+    (existing && (existing.status === "pending" || existing.status === "active") ? 1 : 0);
+  if (occupying >= PRACTICE_CLIENT_ACCESS_CAP) {
+    throw new Error(`A client file can have at most ${PRACTICE_CLIENT_ACCESS_CAP} practice users.`);
+  }
+
+  const now = new Date().toISOString();
+  const row = {
+    client_id: opts.clientId,
+    user_id: opts.userId,
+    firm_id: opts.firmId,
+    classification: opts.classification,
+    status: "active" as const,
+    requested_by: opts.actorId,
+    requested_at: now,
+    accountant_approved_at: now,
+    accountant_approved_by: opts.actorId,
+    owner_approved_at: now,
+    owner_approved_by: opts.actorId,
+    revoked_at: null,
+    revoked_by: null,
+    updated_at: now,
+  };
+  const { data: saved, error } = await admin
+    .from("client_practice_access")
+    .upsert(row, { onConflict: "client_id,user_id" })
+    .select("id")
+    .single();
+  if (error) throw new Error(error.message);
+  const wasActive = existing?.status === "active";
+  if (!wasActive) {
+    await writeAudit(admin, {
+      actorId: opts.actorId,
+      action: "access_granted",
+      firmId: opts.firmId,
+      clientId: opts.clientId,
+      subjectUserId: opts.userId,
+      details: { classification: opts.classification },
+    });
+  }
+  return { id: String(saved.id), activated: !wasActive };
+}
 
 export const requestClientAccess = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -577,97 +799,52 @@ export const requestClientAccess = createServerFn({ method: "POST" })
     const admin = adminLoose();
     const firm = await resolveFirm(admin, ctx.userId);
     if (!firm) throw new Error("No practice found.");
-    const mine = await assertManager(admin, ctx.userId, firm.id);
+    await assertManager(admin, ctx.userId, firm.id);
 
     const { data: client, error: cErr } = await admin
       .from("clients")
-      .select("id, name, firm_id, owner_user_id, contact_email")
+      .select("id, name, firm_id, firm_connected_at, owner_user_id, contact_email")
       .eq("id", data.clientId)
       .maybeSingle();
     if (cErr) throw new Error(cErr.message);
     if (!client || String(client.firm_id) !== firm.id) throw new Error("Client is not in this practice.");
 
-    const { count } = await admin
-      .from("client_practice_access")
-      .select("id", { count: "exact", head: true })
-      .eq("client_id", data.clientId)
-      .in("status", ["pending", "active"]);
-    const { data: existing } = await admin
-      .from("client_practice_access")
-      .select("id, status")
-      .eq("client_id", data.clientId)
-      .eq("user_id", data.userId)
-      .maybeSingle();
-    const occupying = (count ?? 0) - (existing && (existing.status === "pending" || existing.status === "active") ? 1 : 0);
-    if (occupying >= PRACTICE_CLIENT_ACCESS_CAP) {
-      throw new Error(`A client file can have at most ${PRACTICE_CLIENT_ACCESS_CAP} practice users.`);
-    }
+    const memberMem = await membershipOf(admin, firm.id, data.userId);
+    const ceiling = teamClassOf(memberMem);
+    const classification = classAtMost(ceiling, data.classification);
 
-    const now = new Date().toISOString();
+    const saved = await upsertPracticeGrant(admin, {
+      clientId: data.clientId,
+      userId: data.userId,
+      firmId: firm.id,
+      classification,
+      actorId: ctx.userId,
+    });
+
     const owner = await ownerContact(admin, client);
-    const managerAuto = mine.isOwner || mine.role === "owner" || mine.role === "admin";
-    const ownerAuto = !owner?.isDistinctOwner;
-
-    const row = {
-      client_id: data.clientId,
-      user_id: data.userId,
-      firm_id: firm.id,
-      classification: data.classification,
-      status: "pending" as const,
-      requested_by: ctx.userId,
-      requested_at: now,
-      accountant_approved_at: managerAuto ? now : null,
-      accountant_approved_by: managerAuto ? ctx.userId : null,
-      owner_approved_at: ownerAuto ? now : null,
-      owner_approved_by: ownerAuto ? ctx.userId : null,
-      revoked_at: null,
-      revoked_by: null,
-      updated_at: now,
-    };
-
-    const { data: saved, error } = await admin
-      .from("client_practice_access")
-      .upsert(row, { onConflict: "client_id,user_id" })
-      .select("id")
-      .single();
-    if (error) throw new Error(error.message);
-
-    await activateIfReady(admin, saved.id);
-
     const actor = await profileById(admin, ctx.userId);
     const member = await profileById(admin, data.userId);
     const clientName = String(client.name ?? "Client");
+    const firmConnected = Boolean(client.firm_id);
 
-    if (!managerAuto) {
-      const approver = await profileById(admin, firm.ownerUserId);
-      if (approver.email) {
-        const token = await insertToken(admin, {
-          purpose: "accountant_approve",
-          email: approver.email,
-          accessId: saved.id,
-        });
-        const mail = accessRequestEmail({
-          recipientName: approver.name,
-          actorName: actor.name,
-          memberName: member.name,
-          memberEmail: member.email,
-          clientName,
-          firmName: firm.name,
-          classification: data.classification,
-          approveUrl: accessApproveUrl(token),
-          side: "accountant",
-        });
-        await sendAccessEmail({
-          to: approver.email,
-          subject: mail.subject,
-          html: mail.html,
-          text: mail.text,
-          idempotencyKey: `acc-approve-${saved.id}`,
-        });
-      }
-    }
-
-    if (owner?.isDistinctOwner && owner.email) {
+    if (firmConnected && owner?.isDistinctOwner && owner.email && saved.activated) {
+      const mail = accessGrantedEmail({
+        recipientName: owner.name,
+        actorName: actor.name,
+        memberName: member.name,
+        memberEmail: member.email,
+        clientName,
+        firmName: firm.name,
+        classification,
+      });
+      await sendAccessEmail({
+        to: owner.email,
+        subject: mail.subject,
+        html: mail.html,
+        text: mail.text,
+        idempotencyKey: `own-notify-${saved.id}`,
+      });
+    } else if (!firmConnected && owner?.isDistinctOwner && owner.email) {
       const token = await insertToken(admin, {
         purpose: "owner_approve",
         email: owner.email,
@@ -680,7 +857,7 @@ export const requestClientAccess = createServerFn({ method: "POST" })
         memberEmail: member.email,
         clientName,
         firmName: firm.name,
-        classification: data.classification,
+        classification,
         approveUrl: accessApproveUrl(token),
         side: "owner",
       });
@@ -699,9 +876,9 @@ export const requestClientAccess = createServerFn({ method: "POST" })
       .eq("id", saved.id)
       .maybeSingle();
     return {
-      status: (latest?.status as PracticeAccessStatus) ?? "pending",
+      status: (latest?.status as PracticeAccessStatus) ?? (firmConnected ? "active" : "pending"),
       emailedOwner: Boolean(owner?.isDistinctOwner && owner.email),
-      emailedAccountant: !managerAuto,
+      emailedAccountant: false,
     };
   });
 
@@ -725,6 +902,291 @@ export const revokeClientAccess = createServerFn({ method: "POST" })
       .eq("id", data.accessId)
       .eq("firm_id", firm.id);
     if (error) throw new Error(error.message);
+    const { data: revoked } = await admin
+      .from("client_practice_access")
+      .select("client_id, user_id")
+      .eq("id", data.accessId)
+      .maybeSingle();
+    await writeAudit(admin, {
+      actorId: ctx.userId,
+      action: "access_revoked",
+      firmId: firm.id,
+      clientId: revoked?.client_id ? String(revoked.client_id) : null,
+      subjectUserId: revoked?.user_id ? String(revoked.user_id) : null,
+    });
+    return { ok: true as const };
+  });
+
+export const saveClientAssignments = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) =>
+    z
+      .object({
+        userId: z.string().uuid(),
+        grants: z
+          .array(
+            z.object({
+              clientId: z.string().uuid(),
+              classification: z.enum([
+                "partner",
+                "manager",
+                "staff",
+                "bookkeeper",
+                "reviewer",
+                "read_only",
+              ]),
+            }),
+          )
+          .max(200),
+      })
+      .parse(input),
+  )
+  .handler(async ({ context, data }) => {
+    const ctx = context as AuthCtx;
+    const admin = adminLoose();
+    const firm = await resolveFirm(admin, ctx.userId);
+    if (!firm) throw new Error("No practice found.");
+    await assertManager(admin, ctx.userId, firm.id);
+
+    const memberMem = await membershipOf(admin, firm.id, data.userId);
+    const ceiling = teamClassOf(memberMem);
+    const wanted = new Map(
+      data.grants.map((g) => [g.clientId, classAtMost(ceiling, g.classification)] as const),
+    );
+
+    const { data: clientRows } = await admin.from("clients").select("id, name").eq("firm_id", firm.id);
+    const firmClientIds = new Set((clientRows ?? []).map((c: { id: string }) => String(c.id)));
+    for (const id of wanted.keys()) {
+      if (!firmClientIds.has(id)) throw new Error("Client is not in this practice.");
+    }
+
+    const { data: existing } = await admin
+      .from("client_practice_access")
+      .select("id, client_id, user_id, status")
+      .eq("firm_id", firm.id)
+      .eq("user_id", data.userId);
+
+    const keep = new Set(wanted.keys());
+    for (const row of existing ?? []) {
+      const clientId = String(row.client_id);
+      if (keep.has(clientId)) continue;
+      if (row.status !== "pending" && row.status !== "active") continue;
+      await admin
+        .from("client_practice_access")
+        .update({
+          status: "revoked",
+          revoked_at: new Date().toISOString(),
+          revoked_by: ctx.userId,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", row.id);
+      await writeAudit(admin, {
+        actorId: ctx.userId,
+        action: "access_revoked",
+        firmId: firm.id,
+        clientId,
+        subjectUserId: data.userId,
+      });
+    }
+
+    const actor = await profileById(admin, ctx.userId);
+    const member = await profileById(admin, data.userId);
+    let granted = 0;
+    for (const [clientId, classification] of wanted) {
+      const saved = await upsertPracticeGrant(admin, {
+        clientId,
+        userId: data.userId,
+        firmId: firm.id,
+        classification,
+        actorId: ctx.userId,
+      });
+      if (saved.activated) {
+        granted += 1;
+        const client = (clientRows ?? []).find((c: { id: string }) => String(c.id) === clientId);
+        const { data: clientFull } = await admin
+          .from("clients")
+          .select("id, name, firm_id, owner_user_id, contact_email")
+          .eq("id", clientId)
+          .maybeSingle();
+        if (clientFull) {
+          const owner = await ownerContact(admin, clientFull);
+          if (owner?.isDistinctOwner && owner.email) {
+            const mail = accessGrantedEmail({
+              recipientName: owner.name,
+              actorName: actor.name,
+              memberName: member.name,
+              memberEmail: member.email,
+              clientName: String(client?.name ?? clientFull.name ?? "Client"),
+              firmName: firm.name,
+              classification,
+            });
+            await sendAccessEmail({
+              to: owner.email,
+              subject: mail.subject,
+              html: mail.html,
+              text: mail.text,
+              idempotencyKey: `own-notify-${saved.id}`,
+            });
+          }
+        }
+      }
+    }
+    return { ok: true as const, granted };
+  });
+
+export type OwnerFirmConnection = {
+  clientId: string;
+  clientName: string;
+  firmId: string;
+  firmName: string;
+};
+
+export const listOwnerPracticeAccess = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({
+    context,
+  }): Promise<{
+    people: OwnerPracticePerson[];
+    connections: OwnerFirmConnection[];
+    migrationHint: string | null;
+  }> => {
+    const ctx = context as AuthCtx;
+    const admin = adminLoose();
+    try {
+      const { data: owned } = await admin
+        .from("clients")
+        .select("id, name, firm_id")
+        .eq("owner_user_id", ctx.userId)
+        .not("firm_id", "is", null);
+      const people: OwnerPracticePerson[] = [];
+      const connections: OwnerFirmConnection[] = [];
+      for (const client of owned ?? []) {
+        let firmName = "Practice";
+        if (client.firm_id) {
+          const { data: firm } = await admin.from("firms").select("name").eq("id", client.firm_id).maybeSingle();
+          firmName = String(firm?.name ?? "Practice");
+          connections.push({
+            clientId: String(client.id),
+            clientName: String(client.name ?? "Business"),
+            firmId: String(client.firm_id),
+            firmName,
+          });
+        }
+        const { data: rows } = await admin
+          .from("client_practice_access")
+          .select("id, user_id, classification, status, owner_approved_at, created_at, firm_id")
+          .eq("client_id", client.id)
+          .eq("status", "active");
+        for (const row of rows ?? []) {
+          const profile = await profileById(admin, String(row.user_id));
+          people.push({
+            accessId: String(row.id),
+            clientId: String(client.id),
+            clientName: String(client.name ?? "Business"),
+            firmId: String(row.firm_id ?? client.firm_id ?? ""),
+            firmName,
+            userId: String(row.user_id),
+            name: profile.name,
+            email: profile.email,
+            classification: parseClassification(row.classification),
+            grantedAt: (row.owner_approved_at as string | null) ?? (row.created_at as string | null),
+          });
+        }
+      }
+      people.sort((a, b) => a.clientName.localeCompare(b.clientName) || a.name.localeCompare(b.name));
+      return { people, connections, migrationHint: null };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (missingRelation(msg)) {
+        return {
+          people: [],
+          connections: [],
+          migrationHint: migrationHintFor(PRACTICE_ACCESS_AMENDMENT_MIGRATION),
+        };
+      }
+      throw e instanceof Error ? e : new Error(msg);
+    }
+  });
+
+export const ownerRevokePracticeAccess = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) => z.object({ accessId: z.string().uuid() }).parse(input))
+  .handler(async ({ context, data }) => {
+    const ctx = context as AuthCtx;
+    const admin = adminLoose();
+    const { data: row } = await admin
+      .from("client_practice_access")
+      .select("id, client_id, user_id, firm_id, status")
+      .eq("id", data.accessId)
+      .maybeSingle();
+    if (!row) throw new Error("Access record not found.");
+    const { data: client } = await admin
+      .from("clients")
+      .select("id, owner_user_id")
+      .eq("id", row.client_id)
+      .maybeSingle();
+    if (!client || String(client.owner_user_id) !== ctx.userId) {
+      throw new Error("Only the business owner can revoke this access.");
+    }
+    const { error } = await admin
+      .from("client_practice_access")
+      .update({
+        status: "revoked",
+        revoked_at: new Date().toISOString(),
+        revoked_by: ctx.userId,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", data.accessId);
+    if (error) throw new Error(error.message);
+    await writeAudit(admin, {
+      actorId: ctx.userId,
+      action: "access_revoked",
+      firmId: row.firm_id ? String(row.firm_id) : null,
+      clientId: String(row.client_id),
+      subjectUserId: String(row.user_id),
+      details: { by: "owner" },
+    });
+    return { ok: true as const };
+  });
+
+export const ownerDisconnectFirm = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) => z.object({ clientId: z.string().uuid() }).parse(input))
+  .handler(async ({ context, data }) => {
+    const ctx = context as AuthCtx;
+    const admin = adminLoose();
+    const { data: client } = await admin
+      .from("clients")
+      .select("id, owner_user_id, firm_id")
+      .eq("id", data.clientId)
+      .maybeSingle();
+    if (!client || String(client.owner_user_id) !== ctx.userId) {
+      throw new Error("Only the business owner can disconnect the firm.");
+    }
+    const firmId = client.firm_id ? String(client.firm_id) : null;
+    await admin
+      .from("client_practice_access")
+      .update({
+        status: "revoked",
+        revoked_at: new Date().toISOString(),
+        revoked_by: ctx.userId,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("client_id", data.clientId)
+      .in("status", ["pending", "active"]);
+    const { error } = await admin
+      .from("clients")
+      .update({ firm_id: null, firm_connected_at: null })
+      .eq("id", data.clientId)
+      .eq("owner_user_id", ctx.userId);
+    if (error) throw new Error(error.message);
+    await writeAudit(admin, {
+      actorId: ctx.userId,
+      action: "firm_disconnected",
+      firmId,
+      clientId: data.clientId,
+      details: { by: "owner" },
+    });
     return { ok: true as const };
   });
 
@@ -876,6 +1338,13 @@ export const redeemAccessToken = createServerFn({ method: "POST" })
         .update({ accepted_at: now, accepted_by: data.userId })
         .eq("id", invite.id);
       await loose.from("access_approval_tokens").update({ used_at: now }).eq("id", tok.id);
+      await writeAudit(loose, {
+        actorId: data.userId,
+        action: "member_invited",
+        firmId: String(invite.firm_id),
+        subjectUserId: data.userId,
+        details: { accepted: true, email: invite.email },
+      });
       return { ok: true as const, kind: "firm_invite" as const, accepted: true };
     }
 

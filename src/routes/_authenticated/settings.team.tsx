@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
@@ -14,16 +14,21 @@ import {
   getPracticeAccessBoard,
   inviteFirmStaff,
   removeFirmMember,
-  requestClientAccess,
   revokeClientAccess,
+  saveClientAssignments,
   updateFirmMember,
   type PracticeAccessBoard,
 } from "@/lib/practice-access.functions";
 import {
+  CLASSIFICATION_HELP,
   CLASSIFICATION_LABELS,
   CLASSIFICATIONS,
+  CLASS_RANK,
+  FIRM_PERMISSION_HELP,
   MEMBERSHIP_LABELS,
+  PARTNER_ASSIGN_TOOLTIP,
   PRACTICE_CLIENT_ACCESS_CAP,
+  classesAtOrBelow,
   type MembershipRole,
   type PracticeClassification,
 } from "@/lib/practice-access";
@@ -33,6 +38,49 @@ export const Route = createFileRoute("/_authenticated/settings/team")({
   head: () => ({ meta: [{ title: "Team & access — Milōn" }] }),
 });
 
+function ClassificationSelect({
+  value,
+  onChange,
+  actorIsPartner,
+  ceiling,
+  className,
+}: {
+  value: PracticeClassification;
+  onChange: (c: PracticeClassification) => void;
+  actorIsPartner: boolean;
+  ceiling?: PracticeClassification;
+  className?: string;
+}) {
+  return (
+    <select
+      className={className}
+      value={value}
+      title={!actorIsPartner ? PARTNER_ASSIGN_TOOLTIP : undefined}
+      onChange={(e) => {
+        const next = e.target.value as PracticeClassification;
+        if (next === "partner" && !actorIsPartner) return;
+        if (ceiling && CLASS_RANK[next] > CLASS_RANK[ceiling]) return;
+        onChange(next);
+      }}
+    >
+      {CLASSIFICATIONS.map((c) => {
+        const overCeiling = Boolean(ceiling && CLASS_RANK[c] > CLASS_RANK[ceiling]);
+        const partnerLocked = c === "partner" && !actorIsPartner;
+        return (
+          <option
+            key={c}
+            value={c}
+            disabled={overCeiling || partnerLocked}
+            title={partnerLocked ? PARTNER_ASSIGN_TOOLTIP : undefined}
+          >
+            {CLASSIFICATION_LABELS[c]}
+          </option>
+        );
+      })}
+    </select>
+  );
+}
+
 function TeamAccessPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -40,7 +88,7 @@ function TeamAccessPage() {
   const invite = useServerFn(inviteFirmStaff);
   const updateMember = useServerFn(updateFirmMember);
   const removeMember = useServerFn(removeFirmMember);
-  const requestAccess = useServerFn(requestClientAccess);
+  const saveAssignments = useServerFn(saveClientAssignments);
   const revokeAccess = useServerFn(revokeClientAccess);
 
   const [board, setBoard] = useState<PracticeAccessBoard | null>(null);
@@ -54,8 +102,9 @@ function TeamAccessPage() {
   const [saving, setSaving] = useState(false);
 
   const [grantUser, setGrantUser] = useState("");
-  const [grantClient, setGrantClient] = useState("");
-  const [grantClass, setGrantClass] = useState<PracticeClassification>("staff");
+  const [clientSearch, setClientSearch] = useState("");
+  const [draftGrants, setDraftGrants] = useState<Record<string, PracticeClassification>>({});
+  const [savingGrants, setSavingGrants] = useState(false);
 
   const refresh = useCallback(async () => {
     setBusy(true);
@@ -80,6 +129,63 @@ function TeamAccessPage() {
     return map;
   }, [board]);
 
+  const selectedMember = board?.members.find((m) => m.userId === grantUser) ?? null;
+  const teamCeiling = selectedMember?.classification ?? "staff";
+  const actorIsPartner = Boolean(board?.actorIsPartner);
+
+  useEffect(() => {
+    if (!board || !grantUser) {
+      setDraftGrants({});
+      return;
+    }
+    const next: Record<string, PracticeClassification> = {};
+    for (const a of board.assignments) {
+      if (a.userId !== grantUser) continue;
+      if (a.status !== "active" && a.status !== "pending") continue;
+      next[a.clientId] = a.classification;
+    }
+    setDraftGrants(next);
+    setClientSearch("");
+  }, [board, grantUser]);
+
+  const visibleClients = useMemo(() => {
+    const q = clientSearch.trim().toLowerCase();
+    const list = board?.clients ?? [];
+    return (q ? list.filter((c) => c.name.toLowerCase().includes(q)) : list).slice().sort((a, b) =>
+      a.name.localeCompare(b.name),
+    );
+  }, [board, clientSearch]);
+
+  const toggleClient = (clientId: string, checked: boolean) => {
+    setDraftGrants((prev) => {
+      const next = { ...prev };
+      if (checked) next[clientId] = prev[clientId] ?? teamCeiling;
+      else delete next[clientId];
+      return next;
+    });
+  };
+
+  const selectAllVisible = () => {
+    setDraftGrants((prev) => {
+      const next = { ...prev };
+      for (const c of visibleClients) {
+        const already = Boolean(next[c.id]);
+        const atCap = c.assignedCount >= (board?.cap ?? PRACTICE_CLIENT_ACCESS_CAP);
+        if (!already && atCap) continue;
+        next[c.id] = next[c.id] ?? teamCeiling;
+      }
+      return next;
+    });
+  };
+
+  const deselectAllVisible = () => {
+    setDraftGrants((prev) => {
+      const next = { ...prev };
+      for (const c of visibleClients) delete next[c.id];
+      return next;
+    });
+  };
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
       <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
@@ -90,9 +196,9 @@ function TeamAccessPage() {
             </BackLink>
             <h1 className="text-2xl font-semibold tracking-tight">Team & access</h1>
             <p className="mt-1 text-sm text-slate-400">
-              Allocate practice roles and grant each person access to specific clients. Maximum{" "}
-              {PRACTICE_CLIENT_ACCESS_CAP} accountants per client. New file access needs both a
-              practice approver and the business owner via email link.
+              The business owner approves this practice once. After that you assign your own people
+              to client files. Maximum {PRACTICE_CLIENT_ACCESS_CAP} accountants per client. The
+              owner can revoke anyone, or disconnect the firm, from their settings.
             </p>
           </div>
           <ThemeToggle />
@@ -149,29 +255,27 @@ function TeamAccessPage() {
                     />
                   </div>
                   <div>
-                    <Label className="text-xs text-slate-400">Practice role</Label>
+                    <Label className="text-xs text-slate-400">Firm permissions</Label>
                     <select
                       className="mt-1 h-10 w-full rounded-md border border-slate-700 bg-slate-950 px-3 text-sm"
                       value={invRole}
                       onChange={(e) => setInvRole(e.target.value as "admin" | "member")}
                     >
-                      <option value="member">Team member (assigned clients only)</option>
-                      <option value="admin">Firm admin (can assign others)</option>
+                      <option value="member">
+                        Team member — {FIRM_PERMISSION_HELP.member}
+                      </option>
+                      <option value="admin">Firm admin — {FIRM_PERMISSION_HELP.admin}</option>
                     </select>
                   </div>
                   <div>
-                    <Label className="text-xs text-slate-400">Classification</Label>
-                    <select
+                    <Label className="text-xs text-slate-400">Professional level</Label>
+                    <ClassificationSelect
                       className="mt-1 h-10 w-full rounded-md border border-slate-700 bg-slate-950 px-3 text-sm"
                       value={invClass}
-                      onChange={(e) => setInvClass(e.target.value as PracticeClassification)}
-                    >
-                      {CLASSIFICATIONS.map((c) => (
-                        <option key={c} value={c}>
-                          {CLASSIFICATION_LABELS[c]}
-                        </option>
-                      ))}
-                    </select>
+                      onChange={setInvClass}
+                      actorIsPartner={actorIsPartner}
+                    />
+                    <p className="mt-1 text-[11px] text-slate-500">{CLASSIFICATION_HELP}</p>
                   </div>
                   <Button
                     className="sm:col-span-2 bg-[#d4a550] text-slate-950 hover:bg-[#e0b45e]"
@@ -227,6 +331,7 @@ function TeamAccessPage() {
                           <select
                             className="h-9 rounded-md border border-slate-700 bg-slate-950 px-2 text-xs"
                             value={m.membershipRole === "owner" ? "admin" : m.membershipRole}
+                            title="Firm permissions"
                             onChange={(e) =>
                               void updateMember({
                                 data: {
@@ -243,28 +348,20 @@ function TeamAccessPage() {
                             <option value="member">Team member</option>
                             <option value="admin">Firm admin</option>
                           </select>
-                          <select
+                          <ClassificationSelect
                             className="h-9 rounded-md border border-slate-700 bg-slate-950 px-2 text-xs"
                             value={m.classification}
-                            onChange={(e) =>
+                            actorIsPartner={actorIsPartner}
+                            onChange={(classification) =>
                               void updateMember({
-                                data: {
-                                  userId: m.userId,
-                                  classification: e.target.value as PracticeClassification,
-                                },
+                                data: { userId: m.userId, classification },
                               })
                                 .then(() => refresh())
                                 .catch((err) =>
                                   toast.error(err instanceof Error ? err.message : "Update failed"),
                                 )
                             }
-                          >
-                            {CLASSIFICATIONS.map((c) => (
-                              <option key={c} value={c}>
-                                {CLASSIFICATION_LABELS[c]}
-                              </option>
-                            ))}
-                          </select>
+                          />
                           <button
                             type="button"
                             title="Remove from practice"
@@ -305,68 +402,120 @@ function TeamAccessPage() {
                 </h2>
               </div>
               {board.canManage ? (
-                <div className="mb-5 grid gap-3 sm:grid-cols-4">
+                <div className="mb-5 space-y-3">
                   <select
-                    className="h-10 rounded-md border border-slate-700 bg-slate-950 px-3 text-sm sm:col-span-1"
+                    className="h-10 w-full rounded-md border border-slate-700 bg-slate-950 px-3 text-sm"
                     value={grantUser}
                     onChange={(e) => setGrantUser(e.target.value)}
                   >
                     <option value="">Team member…</option>
                     {board.members.map((m) => (
                       <option key={m.userId} value={m.userId}>
-                        {m.name}
+                        {m.name} · {CLASSIFICATION_LABELS[m.classification]}
                       </option>
                     ))}
                   </select>
-                  <select
-                    className="h-10 rounded-md border border-slate-700 bg-slate-950 px-3 text-sm sm:col-span-1"
-                    value={grantClient}
-                    onChange={(e) => setGrantClient(e.target.value)}
-                  >
-                    <option value="">Client…</option>
-                    {board.clients.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name} ({c.assignedCount}/{board.cap})
-                      </option>
-                    ))}
-                  </select>
-                  <select
-                    className="h-10 rounded-md border border-slate-700 bg-slate-950 px-3 text-sm"
-                    value={grantClass}
-                    onChange={(e) => setGrantClass(e.target.value as PracticeClassification)}
-                  >
-                    {CLASSIFICATIONS.map((c) => (
-                      <option key={c} value={c}>
-                        {CLASSIFICATION_LABELS[c]}
-                      </option>
-                    ))}
-                  </select>
-                  <Button
-                    className="bg-[#d4a550] text-slate-950 hover:bg-[#e0b45e]"
-                    disabled={!grantUser || !grantClient}
-                    onClick={() =>
-                      void requestAccess({
-                        data: {
-                          clientId: grantClient,
-                          userId: grantUser,
-                          classification: grantClass,
-                        },
-                      })
-                        .then((r) => {
-                          toast.success(
-                            r.status === "active"
-                              ? "Access is active"
-                              : r.emailedOwner
-                                ? "Requested — waiting for owner approval by email"
-                                : "Requested — waiting for the other approver",
+
+                  {grantUser ? (
+                    <>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Input
+                          className="h-9 min-w-[180px] flex-1 border-slate-700 bg-slate-950 text-slate-100"
+                          value={clientSearch}
+                          onChange={(e) => setClientSearch(e.target.value)}
+                          placeholder="Search clients"
+                        />
+                        <Button type="button" variant="outline" size="sm" className="border-slate-700" onClick={selectAllVisible}>
+                          Select all
+                        </Button>
+                        <Button type="button" variant="ghost" size="sm" onClick={deselectAllVisible}>
+                          Deselect all
+                        </Button>
+                      </div>
+                      <div className="max-h-72 space-y-1 overflow-y-auto rounded-xl border border-slate-800 p-2">
+                        {visibleClients.map((c) => {
+                          const checked = Boolean(draftGrants[c.id]);
+                          const atCap = c.assignedCount >= board.cap && !checked;
+                          const allowed = classesAtOrBelow(teamCeiling);
+                          return (
+                            <label
+                              key={c.id}
+                              className={`flex items-center gap-3 rounded-lg px-2 py-2 text-sm ${
+                                atCap ? "opacity-50" : "hover:bg-slate-800/60"
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                className="h-4 w-4 accent-[#d4a550]"
+                                checked={checked}
+                                disabled={atCap}
+                                title={
+                                  atCap
+                                    ? `This file already has ${board.cap} practice users`
+                                    : undefined
+                                }
+                                onChange={(e) => toggleClient(c.id, e.target.checked)}
+                              />
+                              <span className="min-w-0 flex-1 truncate">{c.name}</span>
+                              <span className="text-[11px] text-slate-500">
+                                {c.assignedCount}/{board.cap}
+                              </span>
+                              {checked ? (
+                                <ClassificationSelect
+                                  className="h-8 max-w-[140px] rounded-md border border-slate-700 bg-slate-950 px-2 text-xs"
+                                  value={
+                                    allowed.includes(draftGrants[c.id])
+                                      ? draftGrants[c.id]
+                                      : teamCeiling
+                                  }
+                                  actorIsPartner={actorIsPartner}
+                                  ceiling={teamCeiling}
+                                  onChange={(classification) =>
+                                    setDraftGrants((prev) => ({ ...prev, [c.id]: classification }))
+                                  }
+                                />
+                              ) : null}
+                            </label>
                           );
-                          return refresh();
-                        })
-                        .catch((e) => toast.error(e instanceof Error ? e.message : "Request failed"))
-                    }
-                  >
-                    Request access
-                  </Button>
+                        })}
+                        {visibleClients.length === 0 ? (
+                          <p className="px-2 py-3 text-xs text-slate-500">No clients match.</p>
+                        ) : null}
+                      </div>
+                      <Button
+                        className="bg-[#d4a550] text-slate-950 hover:bg-[#e0b45e]"
+                        disabled={savingGrants}
+                        onClick={() => {
+                          setSavingGrants(true);
+                          void saveAssignments({
+                            data: {
+                              userId: grantUser,
+                              grants: Object.entries(draftGrants).map(([clientId, classification]) => ({
+                                clientId,
+                                classification,
+                              })),
+                            },
+                          })
+                            .then((r) => {
+                              toast.success(
+                                r.granted
+                                  ? `Saved — ${r.granted} new assignment${r.granted === 1 ? "" : "s"}. Owner notified.`
+                                  : "Saved assignments",
+                              );
+                              return refresh();
+                            })
+                            .catch((e) => toast.error(e instanceof Error ? e.message : "Save failed"))
+                            .finally(() => setSavingGrants(false));
+                        }}
+                      >
+                        {savingGrants ? "Saving…" : "Save assignments"}
+                      </Button>
+                    </>
+                  ) : (
+                    <p className="text-xs text-slate-500">
+                      Choose a person to assign them to every connected client in one save.
+                    </p>
+                  )}
                 </div>
               ) : null}
 
@@ -397,9 +546,6 @@ function TeamAccessPage() {
                           </td>
                           <td data-label="Status" className="py-2 pr-3 text-xs text-slate-400">
                             {a?.status}
-                            {a?.status === "pending"
-                              ? ` · acct ${a.accountantApproved ? "yes" : "no"} · owner ${a.ownerApproved ? "yes" : "no"}`
-                              : ""}
                           </td>
                           <td data-label="" className="py-2 text-right">
                             {board.canManage && a && (a.status === "active" || a.status === "pending") ? (

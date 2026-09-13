@@ -822,7 +822,7 @@ function Dashboard() {
       const orphanIds = rawClients.filter((c) => !c.firm_id).map((c) => c.id);
       const { error: attachErr } = await supabase
         .from("clients")
-        .update({ firm_id: activeFirmId })
+        .update({ firm_id: activeFirmId, firm_connected_at: new Date().toISOString() })
         .in("id", orphanIds)
         .eq("owner_user_id", userId)
         .is("firm_id", null);
