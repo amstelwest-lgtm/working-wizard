@@ -134,6 +134,7 @@
 }
 
 .owner-biz-menu {
+  position: relative;
   min-width: 280px !important;
   max-width: min(360px, calc(100vw - 24px));
   padding: 10px 8px 8px !important;
@@ -235,7 +236,7 @@
 .owner-biz-menu-item-role {
   font-size: 10px;
   font-weight: 600;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
   color: #a8791a;
 }

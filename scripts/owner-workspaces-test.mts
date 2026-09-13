@@ -124,6 +124,7 @@ const switcherSrc = readFileSync(resolve("src/components/owner-business-switcher
 assert(!switcherSrc.includes("<select"), "switcher is a premium menu, not a native select");
 assert(switcherSrc.includes("canOpenOwnerWorkspace"), "menu only emits listed workspace ids");
 assert(switcherSrc.includes("Your businesses"), "menu names the list");
+assert(switcherSrc.includes("never someone else’s"), "menu states the isolation rule");
 
 const settingsSrc = readFileSync(resolve("src/routes/_authenticated/settings.index.tsx"), "utf8");
 assert(settingsSrc.includes("pickOwnedSettingsClient"), "settings stays on the active owned business");

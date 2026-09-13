@@ -88,7 +88,7 @@ export function OwnerBusinessSwitcher({
       <DropdownMenuContent align="start" sideOffset={8} className="owner-biz-menu">
         <div className="owner-biz-menu-rule" aria-hidden />
         <p className="owner-biz-menu-kicker">Your businesses</p>
-        <p className="owner-biz-menu-hint">Only workspaces this login owns or was invited to.</p>
+        <p className="owner-biz-menu-hint">Only businesses on this login — never someone else’s.</p>
         {workspaces.map((w) => (
           <DropdownMenuItem
             key={w.clientId}
