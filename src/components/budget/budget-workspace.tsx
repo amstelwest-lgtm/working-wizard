@@ -65,6 +65,7 @@ export function BudgetWorkspace({
           onChange={onChange}
           actuals={actuals}
           onChangeModel={onChangeModel}
+          role={role}
         />
         <BudgetVariancePanel clientId={clientId} doc={doc} />
       </div>

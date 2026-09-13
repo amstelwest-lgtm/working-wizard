@@ -129,6 +129,17 @@ assert(
   budgetSimple.includes("text-[#0f172a]"),
   "budget revenue/totals use ink that survives light-mode cream cards",
 );
+assert(budgetSimple.includes('id="wizard-budget-month-engine"'), "month fill-in is a named engine, not a bland table");
+assert(
+  budgetSimple.includes("How {monthLabel(focusMonth)} is built"),
+  "month engine names the month it is building",
+);
+assert(budgetSimple.includes("Volume × price"), "month engine explains volume × price becomes revenue");
+assert(budgetSimple.includes("symbol=\"×\""), "volume and price are shown as a times equation");
+assert(!budgetSimple.includes("What you’re selling"), "old bland selling label is gone");
+
+const workspaceSrc = readFileSync(resolve("src/components/budget/budget-workspace.tsx"), "utf8");
+assert(workspaceSrc.includes("role={role}"), "simple budget gets accountant vs owner copy");
 
 const cashSrc = readFileSync(resolve("src/components/cash-forecast.tsx"), "utf8");
 assert(cashSrc.includes('title="Detailed cashflow forecast"'), "weekly grid is renamed");

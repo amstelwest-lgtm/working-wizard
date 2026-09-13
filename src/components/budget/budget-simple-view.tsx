@@ -3,7 +3,7 @@
  * visible COGS + overhead, year strip, FY totals. No spreadsheet noise.
  */
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +16,7 @@ import {
   formatMonthLabel as formatMonthLabelMarket,
 } from "@/lib/budget.months";
 import { computeBudgetMonths, fmtBudgetMoney, lowestCashTrough } from "@/lib/budget.compute";
+import { currencySymbol } from "@/lib/market";
 import { useMarket } from "@/contexts/market";
 
 const SCENARIOS: BudgetScenarioId[] = ["base", "upside", "downside"];
@@ -50,14 +51,17 @@ export function BudgetSimpleView({
   onChange,
   actuals,
   onChangeModel,
+  role = "owner",
 }: {
   doc: BudgetDocument;
   onChange: (next: BudgetDocument) => void;
   actuals?: BudgetActuals | null;
   onChangeModel?: () => void;
+  role?: "owner" | "accountant";
 }) {
   const { market } = useMarket();
   const money = (n: number) => fmtBudgetMoney(n, market);
+  const symbol = currencySymbol(market);
   const monthLabel = (ym: string) => formatMonthLabelMarket(ym, market);
   const months = useMemo(() => fyMonths(doc.fyStart), [doc.fyStart]);
   const [focusMonth, setFocusMonth] = useState(() => {
@@ -212,103 +216,172 @@ export function BudgetSimpleView({
         </div>
       )}
 
-      {/* Month picker + editor */}
-      <section className="rounded-xl border border-slate-200/80 bg-white/80 p-4 dark:border-slate-800 dark:bg-slate-950/50">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              className="h-8 w-8 p-0"
-              disabled={focusIdx <= 0}
-              onClick={() => setFocusMonth(months[Math.max(0, focusIdx - 1)])}
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <div className="min-w-[7rem] text-center text-sm font-semibold text-slate-900 dark:text-slate-100">
-              {monthLabel(focusMonth)}
-            </div>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              className="h-8 w-8 p-0"
-              disabled={focusIdx >= months.length - 1}
-              onClick={() => setFocusMonth(months[Math.min(months.length - 1, focusIdx + 1)])}
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
+      {/* Month engine — volume × price, then margin and overheads */}
+      <section
+        id="wizard-budget-month-engine"
+        className="budget-month-engine relative overflow-hidden rounded-2xl border border-[#d4a550]/30 bg-gradient-to-b from-[#fffdf8] to-white p-5 shadow-[0_18px_40px_rgba(120,90,10,0.06)] dark:from-slate-950 dark:to-slate-950 dark:border-slate-800 sm:p-6"
+      >
+        <div className="pointer-events-none absolute inset-y-5 left-0 w-0.5 rounded-full bg-gradient-to-b from-[#ac8400] via-[#d4af37] to-[#fdee79]" />
+        <div className="flex flex-wrap items-start justify-between gap-3 pl-3 sm:pl-4">
+          <div className="min-w-0 max-w-xl">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[#b8860b]">
+              {role === "accountant" ? "Month engine" : "This month"}
+            </p>
+            <h3 className="serif mt-1 text-[22px] font-semibold tracking-tight text-[#1b1608] dark:text-slate-100">
+              How {monthLabel(focusMonth)} is built
+            </h3>
+            <p className="mt-1.5 text-[13px] leading-relaxed text-[#6b6354] dark:text-slate-400">
+              {role === "accountant"
+                ? "How many they sell × the price they charge becomes revenue. Gross profit % takes cost of sales. Overheads are the rest. The graph and tiles above follow these four numbers."
+                : "How many you sell × the price you charge becomes this month’s revenue. Set the margin, then overheads — leftover is what the month keeps."}
+            </p>
           </div>
-          <label className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
-            <input
-              type="checkbox"
-              checked={sameEveryMonth}
-              onChange={(e) => {
-                const on = e.target.checked;
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="inline-flex items-center rounded-full border border-[#d4a550]/35 bg-white/80 p-0.5 dark:border-slate-700 dark:bg-slate-900">
+              <button
+                type="button"
+                className="grid h-8 w-8 place-items-center rounded-full text-[#8a6508] disabled:opacity-30 dark:text-[#e1b85e]"
+                disabled={focusIdx <= 0}
+                onClick={() => setFocusMonth(months[Math.max(0, focusIdx - 1)])}
+                aria-label="Previous month"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <div className="min-w-[7.5rem] px-1 text-center text-[13px] font-semibold tabular-nums text-[#1b1608] dark:text-slate-100">
+                {monthLabel(focusMonth)}
+              </div>
+              <button
+                type="button"
+                className="grid h-8 w-8 place-items-center rounded-full text-[#8a6508] disabled:opacity-30 dark:text-[#e1b85e]"
+                disabled={focusIdx >= months.length - 1}
+                onClick={() => setFocusMonth(months[Math.min(months.length - 1, focusIdx + 1)])}
+                aria-label="Next month"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                const on = !sameEveryMonth;
                 setSameEveryMonth(on);
-                if (on) {
-                  onChange(applySameMonths(doc, focusMonth));
-                }
+                if (on) onChange(applySameMonths(doc, focusMonth));
               }}
-              className="accent-[#d4a550]"
-            />
-            Same every month
-          </label>
+              className={`rounded-full border px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] transition-colors ${
+                sameEveryMonth
+                  ? "border-[#d4a550] bg-[#d4a550] text-[#1b1300]"
+                  : "border-[#d4a550]/40 bg-transparent text-[#8a6508] hover:border-[#d4a550] dark:text-[#e1b85e]"
+              }`}
+            >
+              {sameEveryMonth ? "Same every month · on" : "Same every month"}
+            </button>
+          </div>
         </div>
 
-        <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-          What you’re selling
-        </div>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div>
-            <Label className="text-[10px] uppercase tracking-wider text-slate-500">
-              {line?.volumeLabel ?? "Volume"}
-            </Label>
+        <div className="mt-5 grid items-stretch gap-3 pl-3 sm:pl-4 lg:grid-cols-[1fr_auto_1fr_auto_1fr]">
+          <DriverPad
+            kicker="How many"
+            label={line?.volumeLabel ?? "Volume"}
+            hint={line?.name ? `${line.name}` : "Units they move this month"}
+          >
             <Input
               type="number"
-              className="mt-1 h-10 text-base"
+              inputMode="decimal"
+              aria-label={line?.volumeLabel ?? "Volume"}
+              className="budget-driver-input mt-2 h-12 border-0 bg-transparent px-0 text-2xl font-semibold tabular-nums shadow-none focus-visible:ring-0"
               value={cell.volume}
               onChange={(e) => patchFocus({ volume: parseFloat(e.target.value) || 0 })}
             />
-          </div>
-          <div>
-            <Label className="text-[10px] uppercase tracking-wider text-slate-500">
-              {line?.priceLabel ?? "Price"}
-            </Label>
-            <Input
-              type="number"
-              className="mt-1 h-10 text-base"
-              value={cell.price}
-              onChange={(e) => patchFocus({ price: parseFloat(e.target.value) || 0 })}
-            />
-          </div>
+          </DriverPad>
+          <EquationOp symbol="×" label="times" />
+          <DriverPad
+            kicker="At what price"
+            label={line?.priceLabel ?? "Price"}
+            hint={`Per unit, ${symbol}`}
+          >
+            <div className="mt-2 flex items-baseline gap-1.5">
+              <span className="text-lg font-medium text-[#b8860b]">{symbol}</span>
+              <Input
+                type="number"
+                inputMode="decimal"
+                aria-label={line?.priceLabel ?? "Price"}
+                className="budget-driver-input h-12 border-0 bg-transparent px-0 text-2xl font-semibold tabular-nums shadow-none focus-visible:ring-0"
+                value={cell.price}
+                onChange={(e) => patchFocus({ price: parseFloat(e.target.value) || 0 })}
+              />
+            </div>
+          </DriverPad>
+          <EquationOp symbol="=" label="equals" />
+          <DriverPad
+            kicker="This month’s revenue"
+            label="Computed"
+            hint="Volume × price — not typed"
+            result
+          >
+            <p className="mt-2 text-2xl font-semibold tabular-nums tracking-tight text-[#1b1608] dark:text-slate-100">
+              {money(focus?.revenue ?? 0)}
+            </p>
+          </DriverPad>
         </div>
 
-        <div className="mt-4 space-y-2 rounded-lg border border-slate-100 bg-slate-50/80 px-3 py-3 text-sm dark:border-slate-800 dark:bg-slate-900/40">
-          <Row label="Revenue" value={money(focus?.revenue ?? 0)} strong />
-          <div className="grid gap-2 sm:grid-cols-[1fr_auto] sm:items-center">
-            <Label className="text-xs text-slate-600 dark:text-slate-300">Gross profit %</Label>
-            <Input
-              type="number"
-              className="h-8 w-24 text-right"
-              value={doc.gpPct}
-              onChange={(e) => setGp(parseFloat(e.target.value) || 0)}
-            />
-          </div>
-          <Row label="COGS" value={money(focus?.cogs ?? 0)} muted />
-          <div className="grid gap-2 sm:grid-cols-[1fr_auto] sm:items-center">
-            <Label className="text-xs text-slate-600 dark:text-slate-300">
-              Fixed overheads (this month)
-            </Label>
-            <Input
-              type="number"
-              className="h-8 w-28 text-right"
-              value={monthOverheadTotal(doc, focusMonth)}
-              onChange={(e) => setOverhead(parseFloat(e.target.value) || 0)}
-            />
-          </div>
-          <Row label="What’s left (EBITDA)" value={money(focus?.ebitda ?? 0)} strong />
+        <div className="mt-4 space-y-0 overflow-hidden rounded-xl border border-[#d4a550]/20 bg-white/70 pl-3 dark:bg-slate-950/40 sm:pl-4">
+          <CascadeRow
+            kicker="Keep as gross profit"
+            label="Gross profit %"
+            hint="Share of revenue left after cost of sales"
+          >
+            <div className="flex items-center gap-3">
+              <Input
+                type="number"
+                inputMode="decimal"
+                aria-label="Gross profit percent"
+                className="budget-driver-input h-10 w-20 border-0 bg-transparent px-0 text-right text-lg font-semibold tabular-nums shadow-none focus-visible:ring-0"
+                value={doc.gpPct}
+                onChange={(e) => setGp(parseFloat(e.target.value) || 0)}
+              />
+              <span className="text-sm font-semibold text-[#b8860b]">%</span>
+              <span className="hidden text-[13px] tabular-nums text-[#6b6354] sm:inline dark:text-slate-400">
+                → {money(focus?.grossProfit ?? 0)}
+              </span>
+            </div>
+          </CascadeRow>
+          <CascadeRow
+            kicker="Implied"
+            label="Cost of sales"
+            hint="The rest of revenue after that margin"
+            muted
+          >
+            <span className="text-[15px] font-semibold tabular-nums text-[#6b6354] dark:text-slate-300">
+              {money(focus?.cogs ?? 0)}
+            </span>
+          </CascadeRow>
+          <CascadeRow
+            kicker="Then pay"
+            label="Fixed overheads"
+            hint="Rent, salaries, keep-the-lights-on this month"
+          >
+            <div className="flex items-center gap-1.5">
+              <span className="text-sm text-[#b8860b]">{symbol}</span>
+              <Input
+                type="number"
+                inputMode="decimal"
+                aria-label="Fixed overheads this month"
+                className="budget-driver-input h-10 w-28 border-0 bg-transparent px-0 text-right text-lg font-semibold tabular-nums shadow-none focus-visible:ring-0"
+                value={monthOverheadTotal(doc, focusMonth)}
+                onChange={(e) => setOverhead(parseFloat(e.target.value) || 0)}
+              />
+            </div>
+          </CascadeRow>
+          <CascadeRow
+            kicker="Leftover"
+            label="What’s left (EBITDA)"
+            hint="After cost of sales and overheads — before interest, tax, cash timing"
+            emphasis
+          >
+            <span className="text-lg font-semibold tabular-nums text-[#1b1608] dark:text-slate-100">
+              {money(focus?.ebitda ?? 0)}
+            </span>
+          </CascadeRow>
         </div>
       </section>
 
@@ -490,33 +563,79 @@ export function BudgetSimpleView({
   );
 }
 
-function Row({
+function DriverPad({
+  kicker,
   label,
-  value,
-  strong,
-  muted,
+  hint,
+  result,
+  children,
 }: {
+  kicker: string;
   label: string;
-  value: string;
-  strong?: boolean;
-  muted?: boolean;
+  hint: string;
+  result?: boolean;
+  children: ReactNode;
 }) {
   return (
-    <div className="flex items-center justify-between gap-3">
-      <span
-        className={`text-xs ${muted ? "text-slate-500" : "text-slate-600 dark:text-slate-300"}`}
-      >
-        {label}
-      </span>
-      <span
-        className={`tabular-nums ${
-          strong
-            ? "text-sm font-semibold text-slate-900 dark:text-slate-100"
-            : "text-xs text-slate-700 dark:text-slate-200"
-        }`}
-      >
-        {value}
-      </span>
+    <div
+      className={`rounded-xl border px-4 py-3.5 ${
+        result
+          ? "border-[#d4a550]/45 bg-[linear-gradient(160deg,rgba(212,175,55,0.12),rgba(255,253,248,0.95))] dark:bg-slate-900"
+          : "border-[#d4a550]/22 bg-[#fffdf8] dark:border-slate-700 dark:bg-slate-900"
+      }`}
+    >
+      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#b8860b]">{kicker}</p>
+      <p className="mt-0.5 text-[13px] font-semibold text-[#1b1608] dark:text-slate-100">{label}</p>
+      <p className="text-[11px] text-[#98917f] dark:text-slate-500">{hint}</p>
+      {children}
+    </div>
+  );
+}
+
+function EquationOp({ symbol, label }: { symbol: string; label: string }) {
+  return (
+    <div
+      className="flex items-center justify-center self-center text-xl font-semibold text-[#d4a550]"
+      aria-label={label}
+    >
+      {symbol}
+    </div>
+  );
+}
+
+function CascadeRow({
+  kicker,
+  label,
+  hint,
+  muted,
+  emphasis,
+  children,
+}: {
+  kicker: string;
+  label: string;
+  hint: string;
+  muted?: boolean;
+  emphasis?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <div
+      className={`flex flex-wrap items-center justify-between gap-3 border-b border-[#d4a550]/12 py-3 last:border-b-0 ${
+        emphasis ? "bg-[rgba(212,175,55,0.06)] pr-3" : ""
+      } ${muted ? "opacity-90" : ""}`}
+    >
+      <div className="min-w-[12rem] pr-2">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#b8860b]">{kicker}</p>
+        <p
+          className={`text-[13.5px] font-semibold ${
+            muted ? "text-[#6b6354] dark:text-slate-400" : "text-[#1b1608] dark:text-slate-100"
+          }`}
+        >
+          {label}
+        </p>
+        <p className="max-w-md text-[11px] leading-snug text-[#98917f] dark:text-slate-500">{hint}</p>
+      </div>
+      <div className="ml-auto">{children}</div>
     </div>
   );
 }
