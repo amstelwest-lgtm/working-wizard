@@ -66,15 +66,15 @@ assert(OWNER_TOUR_KEY === "milon_walkthrough_v12", `owner key is ${OWNER_TOUR_KE
 assert(OWNER_EMPTY_TOUR_KEY === "milon_walkthrough_empty_v3", `empty key is ${OWNER_EMPTY_TOUR_KEY}`);
 
 assert(wizard.includes("walkthrough-card--owner"), "owner tour has its own card chrome");
-assert(wizard.includes("min(680px, calc(100vw - 20px))"), "owner card is wide enough to read the full body");
-assert(wizard.includes("vh * 0.82"), "owner card can use most of the viewport height");
-assert(wizard.includes("fontSize: ownerChrome ? 16.5"), "owner body type is enlarged");
-assert(wizard.includes("fontSize: ownerChrome ? 24"), "owner title type is enlarged");
+assert(wizard.includes("min(560px, calc(100vw - 24px))"), "tour card is compact");
+assert(wizard.includes("scrollHeight"), "card height follows the paragraph, not a fixed tall box");
+assert(wizard.includes('overflowY: cardMaxH + 8 < measuredCardHeight(cardRef.current) ? "auto" : "hidden"'), "no inner scroll when the body fits");
+assert(!wizard.includes("min(680px"), "owner card is no longer oversized");
+assert(!wizard.includes("vh * 0.82"), "owner card no longer claims most of the viewport");
 assert(wizard.includes("Show me"), "owner CTA is sales-led");
 assert(wizard.includes("Open my Action Plan"), "owner finish CTA lands on the plan");
 assert(wizard.includes("Bring in my figures"), "empty-owner finish CTA is the upload");
 assert(wizard.includes("min(560px, calc(100vw - 24px))"), "accountant card width is unchanged");
-assert(wizard.includes("vh * 0.68"), "accountant card height is unchanged");
 
 assert(app.includes('id="wizard-product-mix"'), "product mix is a tour target on the owner board");
 assert(app.includes('id="wizard-owner-signoff"'), "profit sign-off row is a tour target");
