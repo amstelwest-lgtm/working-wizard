@@ -8,6 +8,8 @@ import {
   ACCOUNTANT_INVITE_PURPOSE,
   accountantInviteLandingPath,
   accountantInviteTokenFromPath,
+  accountantJoinFromCallbackSearch,
+  accountantJoinTokenFromNext,
   assertAccountantLinkPurpose,
   assertOwnerHandoffPurpose,
   defaultPracticeName,
@@ -41,6 +43,9 @@ assert(
 );
 assert(accountantInviteTokenFromPath("/join/abc123") === "abc123", "token from /join path");
 assert(accountantInviteTokenFromPath("/?invite=abc123") === null, "owner-invite URL is not an accountant join");
+assert(accountantJoinFromCallbackSearch("?join=tok123&code=pkce") === "tok123", "callback join survives PKCE");
+assert(accountantJoinFromCallbackSearch("?invite=ownerTok&code=pkce") === null, "owner invite is not an accountant join");
+assert(accountantJoinTokenFromNext("/join/tok123") === "tok123", "Google next preserves accountant join");
 
 assert(defaultPracticeName("theo@west.co.za") === "West", "firm name from email domain");
 assert(defaultPracticeName("theo@west.co.za", " West & Co ") === "West & Co", "override wins");
@@ -118,6 +123,8 @@ assert(!mintOwner.includes("accountant_link"), "owner mint helper stays owner-on
 const joinPage = readFileSync(resolve("src/routes/join.$token.tsx"), "utf8");
 assert(joinPage.includes("forcePortal(\"accountant\")"), "join page forces accountant portal");
 assert(joinPage.includes('to: "/dashboard"'), "join page lands on practice portal");
+assert(joinPage.includes("GoogleSignInButton"), "accountant invite can be accepted with Google");
+assert(joinPage.includes("accountantJoin"), "join Google hop carries the invite token");
 
 const card = readFileSync(resolve("src/components/invite-accountant-card.tsx"), "utf8");
 assert(card.includes("inviteAccountant"), "owner UI calls mint/send");

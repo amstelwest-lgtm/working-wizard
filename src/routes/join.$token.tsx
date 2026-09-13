@@ -20,6 +20,8 @@ import {
   OwnerInvitePrimaryButton,
   OwnerInviteShell,
 } from "@/components/owner-invite-shell";
+import { AuthDivider, GoogleSignInButton } from "@/components/google-sign-in-button";
+import { stashAccountantGoogleSignup } from "@/lib/google-auth";
 
 export const Route = createFileRoute("/join/$token")({
   component: AccountantJoinPage,
@@ -182,6 +184,28 @@ function AccountantJoinPage() {
           ) : (
             <OwnerInviteNote>Create a practice login, or sign in if you already have one.</OwnerInviteNote>
           )}
+
+          {!sameAccount ? (
+            <div className="mb-1">
+              <GoogleSignInButton
+                intent="accountant"
+                tone="portal"
+                label={signInMode ? "Sign in with Google" : "Continue with Google"}
+                disabled={busy}
+                accountantJoin={{ token }}
+                next={`/join/${encodeURIComponent(token)}`}
+                onBeforeStart={() => {
+                  stashAccountantGoogleSignup({
+                    firmName: firmName.trim(),
+                    fullName: name.trim() || undefined,
+                  });
+                  return true;
+                }}
+                onError={(msg) => toast.error(msg)}
+              />
+              <AuthDivider label="or use email" />
+            </div>
+          ) : null}
 
           <form onSubmit={(e) => void handleSubmit(e)} className="space-y-0">
             {!sameAccount && !signInMode ? (

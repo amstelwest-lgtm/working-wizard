@@ -17,6 +17,7 @@ import {
 import { isOpsNext, lighthouseTabFromOpsNext } from "@/lib/client-note-link";
 import { accessTokenFromNext } from "@/lib/practice-access";
 import { AuthDivider, GoogleSignInButton } from "@/components/google-sign-in-button";
+import { stashAccountantGoogleSignup } from "@/lib/google-auth";
 import { MarketPicker } from "@/components/market-picker";
 import {
   AuthEntryCard,
@@ -272,19 +273,34 @@ function AuthPage() {
 
         {mounted && (
           <>
-            {mode === "signin" && (
-              <div>
-                <GoogleSignInButton
-                  intent="accountant"
-                  next={googleNext ?? afterAuthPath}
-                  tone="entry"
-                  disabled={busy}
-                  onError={(msg) => toast.error(msg)}
-                />
-                <AuthDivider />
-              </div>
-            )}
-            <form onSubmit={handle} className={mode === "signin" ? "" : "mt-4"}>
+            <div>
+              <GoogleSignInButton
+                intent="accountant"
+                next={googleNext ?? afterAuthPath}
+                tone="entry"
+                label={mode === "signup" ? "Continue with Google" : "Sign in with Google"}
+                disabled={busy}
+                onBeforeStart={() => {
+                  if (mode !== "signup") return true;
+                  const market = draftToSelection(draftMarket);
+                  if (!market) {
+                    toast.error("Pick South Africa or the United States (and a state) first.");
+                    return false;
+                  }
+                  writeVisitorDraft(draftMarket);
+                  stashAccountantGoogleSignup({
+                    firmName: firmName.trim(),
+                    fullName: fullName.trim() || undefined,
+                    marketCountry: market.country,
+                    marketRegion: market.regionCode,
+                  });
+                  return true;
+                }}
+                onError={(msg) => toast.error(msg)}
+              />
+              <AuthDivider />
+            </div>
+            <form onSubmit={handle}>
               {mode === "signup" && (
                 <>
                   <AuthEntryFieldLabel htmlFor="auth-full-name">Your name</AuthEntryFieldLabel>
