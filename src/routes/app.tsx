@@ -3764,9 +3764,6 @@ function Index() {
               <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#d4a550]/80 to-transparent" />
               <div className="flex items-center justify-between gap-2">
                 <div className="flex min-w-0 items-center gap-2">
-                  <div className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-[#d4a550]/30 bg-[#d4a550]/10">
-                    <Database className="h-3.5 w-3.5 text-[#a8791a] dark:text-[#d4a550]" />
-                  </div>
                   <img
                     src="/milon-wordmark.png"
                     alt="Milōn"

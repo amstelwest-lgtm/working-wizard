@@ -418,6 +418,10 @@ assert(handoffSrc.includes("let timer"), "waitForAuthSession does not TDZ on the
 assert(!handoffSrc.includes("sub.subscription.unsubscribe()"), "old sync-unsubscribe TDZ pattern is gone");
 
 const appSrc = readFileSync(resolve("src/routes/app.tsx"), "utf8");
+assert(
+  !appSrc.includes('Database className="h-3.5 w-3.5 text-[#a8791a]'),
+  "owner app bar has no decorative database icon next to the wordmark",
+);
 assert(appSrc.includes("hasInviteHandoffFlag"), "founder board does not bounce a just-accepted invite");
 assert(appSrc.includes("ownerBoardRole"), "founder board uses the owner seat on the owner door, not firm_admin");
 assert(appSrc.includes("openInvitedClient"), "founder board prefers the invited workspace for existing accounts");
