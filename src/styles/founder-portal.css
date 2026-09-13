@@ -34,89 +34,237 @@
 .owner-biz-chip {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  max-width: min(220px, 42vw);
-  border: 1px solid rgba(183, 135, 42, 0.35);
+  gap: 8px;
+  max-width: min(280px, 48vw);
+  border: 1px solid rgba(183, 135, 42, 0.38);
   border-radius: 999px;
-  padding: 3px 10px;
-  font-size: 9px;
-  font-weight: 600;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  padding: 4px 10px 4px 5px;
   color: #64748b;
-  background: rgba(212, 165, 80, 0.08);
+  background:
+    linear-gradient(180deg, rgba(255, 253, 248, 0.92), rgba(247, 241, 228, 0.88));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 1px 6px rgba(183, 135, 42, 0.08);
 }
 
 .dark .owner-biz-chip {
   border-color: rgba(212, 165, 80, 0.28);
   color: #94a3b8;
-  background: rgba(212, 165, 80, 0.08);
+  background: linear-gradient(180deg, rgba(20, 27, 40, 0.96), rgba(11, 18, 32, 0.92));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 1px 8px rgba(0, 0, 0, 0.28);
+}
+
+.owner-biz-switcher-mark {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: rgba(212, 165, 80, 0.16);
+  color: #a8791a;
+}
+
+.dark .owner-biz-switcher-mark {
+  color: #e1b85e;
+}
+
+.owner-biz-switcher-mark svg {
+  width: 11px;
+  height: 11px;
+}
+
+.owner-biz-switcher-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.15;
+}
+
+.owner-biz-switcher-label {
+  flex-shrink: 0;
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #8a6508;
+}
+
+.dark .owner-biz-switcher-label {
+  color: #c9a04a;
 }
 
 .owner-biz-chip b {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: #8a6508;
-  letter-spacing: 0.08em;
+  max-width: 168px;
+  color: #3f2d0a;
+  letter-spacing: 0.01em;
   text-transform: none;
-  font-size: 11px;
+  font-size: 12px;
+  font-weight: 650;
 }
 
 .dark .owner-biz-chip b {
-  color: #e1b85e;
+  color: #f3e3bc;
 }
 
 .owner-biz-switcher {
   cursor: pointer;
-  padding-right: 8px;
-}
-
-.owner-biz-switcher-label {
-  flex-shrink: 0;
-}
-
-.owner-biz-switcher select {
-  appearance: none;
-  -webkit-appearance: none;
-  max-width: 160px;
-  border: 0;
-  background: transparent;
-  color: #8a6508;
   font: inherit;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: none;
-  cursor: pointer;
-  outline: none;
-  padding: 0 14px 0 0;
-  background-image: linear-gradient(45deg, transparent 50%, #8a6508 50%),
-    linear-gradient(135deg, #8a6508 50%, transparent 50%);
-  background-position: calc(100% - 4px) 55%, calc(100% + 1px) 55%;
-  background-size: 5px 5px, 5px 5px;
-  background-repeat: no-repeat;
+  text-align: left;
 }
 
-.dark .owner-biz-switcher select {
+.owner-biz-switcher:hover,
+.owner-biz-switcher[data-state="open"] {
+  border-color: rgba(183, 135, 42, 0.7);
+}
+
+.owner-biz-switcher:focus-visible {
+  outline: 2px solid rgba(212, 165, 80, 0.7);
+  outline-offset: 2px;
+}
+
+.owner-biz-switcher-chevron {
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+  color: #b7872a;
+  opacity: 0.85;
+}
+
+.owner-biz-menu {
+  min-width: 280px !important;
+  max-width: min(360px, calc(100vw - 24px));
+  padding: 10px 8px 8px !important;
+  border-radius: 16px !important;
+  border-color: rgba(183, 135, 42, 0.3) !important;
+  background:
+    radial-gradient(circle at 92% 0%, rgba(212, 165, 80, 0.18), transparent 42%),
+    linear-gradient(180deg, #fffdf8, #f4eee0) !important;
+  box-shadow: 0 22px 50px rgba(109, 79, 22, 0.16) !important;
+  color: #1b1608;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  max-height: min(70vh, 420px);
+}
+
+.dark .owner-biz-menu {
+  border-color: rgba(212, 165, 80, 0.22) !important;
+  background:
+    radial-gradient(circle at 92% 0%, rgba(212, 165, 80, 0.14), transparent 42%),
+    linear-gradient(180deg, #141b28, #0b1220) !important;
+  box-shadow: 0 24px 56px rgba(0, 0, 0, 0.5) !important;
+  color: #f8f4ea;
+}
+
+.owner-biz-menu-rule {
+  pointer-events: none;
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 2px;
+  width: 100%;
+  background: linear-gradient(90deg, #b7872a, #f1d28b 42%, transparent);
+}
+
+.owner-biz-menu-kicker {
+  margin: 4px 8px 2px;
+  font-size: 9px;
+  font-weight: 650;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #8a6508;
+}
+
+.dark .owner-biz-menu-kicker {
   color: #e1b85e;
-  background-image: linear-gradient(45deg, transparent 50%, #e1b85e 50%),
-    linear-gradient(135deg, #e1b85e 50%, transparent 50%);
 }
 
-.owner-biz-switcher select option {
-  color: #0f172a;
-  background: #fff;
+.owner-biz-menu-hint {
+  margin: 0 8px 8px;
+  font-size: 11px;
+  line-height: 1.35;
+  color: #7a6a4a;
+}
+
+.dark .owner-biz-menu-hint {
+  color: #9aa3b5;
+}
+
+.owner-biz-menu-item {
+  position: relative;
+  display: flex !important;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 2px 0;
+  padding: 9px 10px !important;
+  border-radius: 10px !important;
+  cursor: pointer;
+}
+
+.owner-biz-menu-item:focus,
+.owner-biz-menu-item[data-highlighted],
+.owner-biz-menu-item[data-state="checked"] {
+  background: rgba(212, 165, 80, 0.14) !important;
+  color: inherit !important;
+}
+
+.owner-biz-menu-item-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.owner-biz-menu-item-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: #2b2110;
+}
+
+.dark .owner-biz-menu-item-name {
+  color: #f4ead2;
+}
+
+.owner-biz-menu-item-role {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #a8791a;
+}
+
+.dark .owner-biz-menu-item-role {
+  color: #d4a550;
+}
+
+.owner-biz-menu-check {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  color: #b7872a;
+}
+
+.dark .owner-biz-menu-check {
+  color: #e1b85e;
 }
 
 @media (max-width: 480px) {
   .owner-biz-chip {
-    max-width: min(160px, 38vw);
-    padding: 2px 8px;
+    max-width: min(196px, 52vw);
+    padding: 3px 8px 3px 4px;
+    gap: 6px;
   }
 
-  .owner-biz-switcher select {
-    max-width: 110px;
+  .owner-biz-chip b {
+    max-width: 108px;
+    font-size: 11px;
   }
 }
 

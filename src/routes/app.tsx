@@ -52,6 +52,7 @@ import { InviteAccountantCard } from "@/components/invite-accountant-card";
 import { OwnerBusinessSwitcher } from "@/components/owner-business-switcher";
 import {
   boardRoleForWorkspace,
+  canOpenOwnerWorkspace,
   mergeOwnerWorkspaces,
   pickActiveOwnerWorkspace,
   readStoredOwnerClientId,
@@ -2687,12 +2688,19 @@ function Index() {
 
   const switchOwnerWorkspace = useCallback(
     (clientId: string) => {
-      if (!user?.id || !clientId || clientId === effectiveClientId) return;
+      if (!user?.id || clientId === effectiveClientId) return;
+      if (!canOpenOwnerWorkspace(ownerWorkspaces, clientId)) return;
       writeStoredOwnerClientId(user.id, clientId);
+      setReviewOpen(false);
+      setExtractionForReview(null);
+      setShowFinData(false);
+      setShowOnboarding(false);
+      setFirstRunStep(null);
+      setInvitedOwnerEntry(false);
       setHydratedClientId(null);
       setEffectiveClientId(clientId);
     },
-    [user?.id, effectiveClientId],
+    [user?.id, effectiveClientId, ownerWorkspaces],
   );
 
   // Resolve the app role only after the client link settles. A freshly

@@ -111,3 +111,28 @@ export function writeStoredOwnerClientId(userId: string, clientId: string): void
 export function boardRoleForWorkspace(role: OwnerWorkspaceRole): "client_owner" | "client_member" {
   return role === "owner" ? "client_owner" : "client_member";
 }
+
+/** Only IDs already on this login’s workspace list can become the active board. */
+export function canOpenOwnerWorkspace(
+  workspaces: OwnerWorkspace[],
+  clientId: string | null | undefined,
+): boolean {
+  const id = clientId?.trim() ?? "";
+  return Boolean(id) && workspaces.some((w) => w.clientId === id);
+}
+
+/**
+ * Settings tools (invite accountant, market) stay on a business this login
+ * owns. Prefer the board’s last pick when it is still in that owned set.
+ */
+export function pickOwnedSettingsClient<T extends { id?: string | null; firm_id?: string | null }>(
+  rows: T[],
+  storedClientId?: string | null,
+): T | null {
+  const stored = storedClientId?.trim() ?? "";
+  if (stored) {
+    const match = rows.find((r) => (r.id ?? "").trim() === stored);
+    if (match) return match;
+  }
+  return rows.find((r) => !r.firm_id) ?? rows[0] ?? null;
+}

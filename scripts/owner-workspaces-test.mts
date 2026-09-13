@@ -6,9 +6,11 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
   boardRoleForWorkspace,
+  canOpenOwnerWorkspace,
   mergeOwnerWorkspaces,
   ownerActiveClientStorageKey,
   pickActiveOwnerWorkspace,
+  pickOwnedSettingsClient,
   workspaceDisplayName,
 } from "../src/lib/owner-workspaces";
 
@@ -81,10 +83,50 @@ assert(
   "per-user last-business key",
 );
 
+assert(canOpenOwnerWorkspace(merged, first), "owned workspace is openable");
+assert(canOpenOwnerWorkspace(merged, staff), "membership workspace is openable");
+assert(
+  !canOpenOwnerWorkspace(merged, "dddddddd-dddd-4ddd-8ddd-dddddddddddd"),
+  "a foreign client id is not on this login’s list",
+);
+assert(!canOpenOwnerWorkspace(merged, "  "), "blank id is not openable");
+assert(!canOpenOwnerWorkspace([], first), "empty list opens nothing");
+
+assert(
+  pickOwnedSettingsClient(
+    [
+      { id: first, firm_id: "firm-1" },
+      { id: second, firm_id: null },
+    ],
+    first,
+  )?.id === first,
+  "settings follows the board’s last owned business",
+);
+assert(
+  pickOwnedSettingsClient(
+    [
+      { id: first, firm_id: "firm-1" },
+      { id: second, firm_id: null },
+    ],
+    "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+  )?.id === second,
+  "stale / foreign stored id cannot select someone else’s business in settings",
+);
+
 const appSrc = readFileSync(resolve("src/routes/app.tsx"), "utf8");
 assert(appSrc.includes("mergeOwnerWorkspaces"), "founder board lists every owned + membership workspace");
 assert(appSrc.includes("OwnerBusinessSwitcher"), "founder header has the business switcher");
 assert(appSrc.includes("pickActiveOwnerWorkspace"), "founder board picks among all workspaces");
+assert(appSrc.includes("canOpenOwnerWorkspace"), "switch refuses ids that are not on this login’s list");
+assert(appSrc.includes("setExtractionForReview(null)"), "switch clears the previous business’s upload review");
+
+const switcherSrc = readFileSync(resolve("src/components/owner-business-switcher.tsx"), "utf8");
+assert(!switcherSrc.includes("<select"), "switcher is a premium menu, not a native select");
+assert(switcherSrc.includes("canOpenOwnerWorkspace"), "menu only emits listed workspace ids");
+assert(switcherSrc.includes("Your businesses"), "menu names the list");
+
+const settingsSrc = readFileSync(resolve("src/routes/_authenticated/settings.index.tsx"), "utf8");
+assert(settingsSrc.includes("pickOwnedSettingsClient"), "settings stays on the active owned business");
 assert(
   !/from\("clients"\)[\s\S]{0,80}\.eq\("owner_user_id"[\s\S]{0,80}\.limit\(1\)/.test(
     appSrc.slice(appSrc.indexOf("const listWorkspaces"), appSrc.indexOf("const openInvitedClient")),
