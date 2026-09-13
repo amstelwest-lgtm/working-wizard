@@ -229,15 +229,15 @@ export function ProfitabilityWaterfall({
   const LABEL_PAD = 36; // headroom above the tallest bar for its value label
 
   return (
-    <Card className="relative overflow-hidden border border-amber-900/15 bg-[radial-gradient(circle_at_90%_0%,rgba(212,165,80,0.13),transparent_34%),linear-gradient(135deg,#fffdf8,#f8f5ed)] shadow-[0_20px_60px_rgba(109,79,22,0.10)] print:hidden dark:border-slate-800 dark:bg-[radial-gradient(circle_at_90%_0%,rgba(212,165,80,0.12),transparent_34%),linear-gradient(135deg,#111827,#0b1220)] dark:shadow-[0_20px_60px_rgba(0,0,0,0.25)]">
+    <Card className="relative overflow-hidden border border-amber-900/15 bg-[radial-gradient(circle_at_90%_0%,rgba(212,165,80,0.13),transparent_34%),linear-gradient(135deg,#fffdf8,#f8f5ed)] text-[#0f172a] shadow-[0_20px_60px_rgba(109,79,22,0.10)] print:hidden dark:border-slate-800 dark:bg-[radial-gradient(circle_at_90%_0%,rgba(212,165,80,0.12),transparent_34%),linear-gradient(135deg,#111827,#0b1220)] dark:text-[#f1f5f9] dark:shadow-[0_20px_60px_rgba(0,0,0,0.25)]">
       <div className="pointer-events-none absolute left-0 top-0 h-1 w-full bg-gradient-to-r from-[#b7872a] via-[#f1d28b] to-transparent" />
       <CardHeader className="border-b border-amber-900/10 pb-5 dark:border-slate-800">
         <div className="flex items-center justify-between gap-3">
           <div className="flex-1 cursor-pointer" onClick={() => setOpen((o) => !o)}>
-            <CardTitle className="text-xl font-semibold tracking-tight text-slate-950 dark:text-slate-100">
+            <CardTitle className="text-xl font-semibold tracking-tight text-[#0f172a] dark:text-[#f8fafc]">
               Profitability Waterfall
             </CardTitle>
-            <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">
+            <p className="mt-1 text-xs text-[#475569] dark:text-[#94a3b8]">
               How {currencySymbol(market)}1 of revenue becomes profit
               {hasWeekly ? " · aggregated weekly data" : " · period inputs"}
             </p>
@@ -284,7 +284,7 @@ export function ProfitabilityWaterfall({
       {open && (
         <CardContent className="pb-7 pt-6">
           {revenue === 0 && (
-            <p className="mb-4 rounded-lg border border-amber-900/10 bg-amber-50/70 px-3 py-2 text-xs italic text-slate-600 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-400">
+            <p className="mb-4 rounded-lg border border-amber-900/10 bg-amber-50/70 px-3 py-2 text-xs italic text-[#475569] dark:border-slate-700 dark:bg-slate-900/50 dark:text-[#94a3b8]">
               Enter revenue figures in Financial Inputs or Weekly Inputs below to populate the
               waterfall.
             </p>
@@ -358,22 +358,18 @@ export function ProfitabilityWaterfall({
                         }}
                       >
                         <div
-                          className="truncate px-0.5 text-[10px] font-extrabold tracking-tight sm:text-[11px]"
+                          className="truncate rounded-sm bg-[#fffdf8]/90 px-0.5 text-[10px] font-extrabold tracking-tight dark:bg-[#0b1220]/85 sm:text-[11px]"
                           style={{
-                            color: isDec
-                              ? "var(--wf-red, #c0392b)"
-                              : negNet
-                                ? "#c0392b"
-                                : undefined,
+                            color: isDec || negNet ? "#c0392b" : undefined,
                           }}
                         >
-                          <span className={isDec ? "" : "text-slate-900 dark:text-slate-100"}>
+                          <span className={isDec || negNet ? "" : "text-[#0f172a] dark:text-[#f8fafc]"}>
                             {isDec
                               ? `(${fmtCompact(Math.abs(s.delta))})`
                               : fmtCompact(s.runningEnd)}
                           </span>
                         </div>
-                        <div className="truncate text-[9px] font-medium text-slate-500 dark:text-slate-400">
+                        <div className="truncate text-[9px] font-medium text-[#475569] dark:text-[#94a3b8]">
                           {pct(value, revenue)}
                         </div>
                       </div>
@@ -398,7 +394,7 @@ export function ProfitabilityWaterfall({
 
                       {/* column label + badge */}
                       <div className="absolute bottom-0 left-0 right-0 flex h-[84px] flex-col items-center gap-1 pt-2">
-                        <span className="w-full truncate px-0.5 text-center text-[9px] font-bold uppercase tracking-wide text-slate-700 dark:text-slate-300 sm:text-[10px]">
+                        <span className="w-full truncate px-0.5 text-center text-[9px] font-bold uppercase tracking-wide text-[#1e293b] dark:text-[#e2e8f0] sm:text-[10px]">
                           {s.label}
                         </span>
                         {status && (
@@ -430,7 +426,7 @@ export function ProfitabilityWaterfall({
             ].map((l) => (
               <span
                 key={l.t}
-                className="flex items-center gap-1.5 text-[10px] font-medium text-slate-600 dark:text-slate-400"
+                className="flex items-center gap-1.5 text-[10px] font-medium text-[#475569] dark:text-[#94a3b8]"
               >
                 <span className="h-2.5 w-2.5 rounded-sm" style={{ background: l.c }} />
                 {l.t}
@@ -450,10 +446,10 @@ export function ProfitabilityWaterfall({
                     className="flex items-center justify-between gap-2 rounded-lg border border-amber-900/10 bg-white/60 px-3 py-2 dark:border-slate-800 dark:bg-slate-900/50"
                   >
                     <div className="min-w-0">
-                      <div className="truncate text-[10px] font-bold uppercase tracking-wide text-slate-600 dark:text-slate-400">
+                      <div className="truncate text-[10px] font-bold uppercase tracking-wide text-[#475569] dark:text-[#94a3b8]">
                         {s.label}
                       </div>
-                      <div className="truncate text-sm font-extrabold tracking-tight text-slate-950 dark:text-white">
+                      <div className="truncate text-sm font-extrabold tracking-tight text-[#0f172a] dark:text-[#f8fafc]">
                         {fmt(s.runningEnd)}
                         <span className="ml-1.5 text-[10px] font-semibold text-slate-500 dark:text-slate-400">
                           {pct(s.runningEnd, revenue)}
