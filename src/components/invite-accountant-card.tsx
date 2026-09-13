@@ -83,8 +83,12 @@ export function InviteAccountantCard({ clientId, tone = "board" }: Props) {
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Could not send the invite.";
-      setError(msg);
-      toast.error(msg);
+      const timedOut = /504|timed out|timeout|Gateway/i.test(msg);
+      const friendly = timedOut
+        ? "The invite request timed out. Try again — if it keeps failing, send the link yourself after it appears."
+        : msg;
+      setError(friendly);
+      toast.error(friendly);
     } finally {
       setBusy(false);
     }

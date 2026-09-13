@@ -89,6 +89,29 @@ export type AccountantInviteDraftInput = {
   inviteUrl: string;
 };
 
+export function claimsEmailOf(claims: unknown): string | null {
+  if (claims && typeof claims === "object" && "email" in claims) {
+    const email = (claims as { email?: unknown }).email;
+    return typeof email === "string" && email.includes("@") ? email : null;
+  }
+  return null;
+}
+
+/** Owner greeting for the invite email — JWT claims only. Never Auth Admin. */
+export function claimsDisplayName(claims: unknown): string {
+  if (!claims || typeof claims !== "object") return "";
+  const rec = claims as Record<string, unknown>;
+  const meta = rec.user_metadata;
+  if (meta && typeof meta === "object") {
+    const named =
+      (meta as { full_name?: unknown; name?: unknown }).full_name ??
+      (meta as { name?: unknown }).name;
+    if (typeof named === "string" && named.trim()) return named.trim();
+  }
+  if (typeof rec.full_name === "string" && rec.full_name.trim()) return rec.full_name.trim();
+  return claimsEmailOf(claims) ?? "";
+}
+
 export function templateAccountantInviteDraft(input: AccountantInviteDraftInput): {
   subject: string;
   body: string;
