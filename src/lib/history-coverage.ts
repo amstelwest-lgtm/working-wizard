@@ -105,7 +105,7 @@ export function historyCoverageQuestionStates(opts: {
     {
       key: "history.prior_period",
       prompt:
-        "Got a prior year or another period’s figures? One extra pack and the trend lines start working.",
+        "Do you have figures from a prior year or another period we can add?",
       audience: "both",
       answered,
       answer: answered ? `${opts.snapshotCount} periods on file` : null,

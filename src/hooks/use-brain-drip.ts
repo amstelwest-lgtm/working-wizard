@@ -49,12 +49,15 @@ export function useBrainDrip(opts: {
   stored: ClientBrainQuestion[];
   enabled: boolean;
   onStamped?: () => void;
+  /** Increment after the owner answers so the next outstanding question can drip. */
+  advanceToken?: number;
 }): DripCandidate | null {
-  const { clientId, derived, stored, enabled, onStamped } = opts;
+  const { clientId, derived, stored, enabled, onStamped, advanceToken = 0 } = opts;
   const [drip, setDrip] = useState<DripCandidate | null>(null);
   const onStampedRef = useRef(onStamped);
   onStampedRef.current = onStamped;
   const stampedRef = useRef<{ clientId: string; key: string } | null>(null);
+  const prevAdvanceRef = useRef(advanceToken);
 
   const derivedSig = derived.map((q) => `${q.key}:${q.answered ? 1 : 0}:${q.audience}`).join("|");
   const storedSig = stored
@@ -72,6 +75,15 @@ export function useBrainDrip(opts: {
     if (!enabled || !clientId) {
       setDrip(null);
       return;
+    }
+    if (advanceToken !== prevAdvanceRef.current) {
+      prevAdvanceRef.current = advanceToken;
+      stampedRef.current = null;
+      try {
+        sessionStorage.removeItem(sessionKey(clientId));
+      } catch {
+        /* ignore */
+      }
     }
     const now = new Date();
     const active = activeOwnerDrip(candidates, now);
@@ -114,7 +126,7 @@ export function useBrainDrip(opts: {
           /* ignore */
         }
       });
-  }, [candidates, clientId, enabled]);
+  }, [candidates, clientId, enabled, advanceToken]);
 
   return drip;
 }

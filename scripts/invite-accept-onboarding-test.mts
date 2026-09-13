@@ -441,7 +441,9 @@ assert(!appSrc.includes("skipPostUploadOwnerTour"), "first upload no longer supp
 }
 assert(appSrc.includes("handleOwnerFirstRealFinancialsUpload"), "first upload handler is wired");
 assert(appSrc.includes("invokeBrainPropose"), "owner first upload reuses brain-propose");
-assert(appSrc.includes("OwnerBrainFirstInsight"), "scored board surfaces proposed next steps");
+assert(appSrc.includes("OwnerBrainDrip"), "scored board surfaces the fillable one-question drip");
+assert(!appSrc.includes("OwnerBrainFirstInsight"), "Health tab no longer mounts Client Brain insight");
+assert(!appSrc.includes("From your Client Brain"), "Client Brain insight copy is gone from the owner board");
 assert(appSrc.includes("markOwnerFirstUploadHandled"), "first upload persists a per-client guard");
 assert(appSrc.includes("isInvitedOwnerWithFigures"), "invited owner + figures gate is wired");
 assert(appSrc.includes("markOnboardingDone(OWNER_TOUR_KEY)"), "invited owner with figures marks the tour done");

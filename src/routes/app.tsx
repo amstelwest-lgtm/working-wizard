@@ -126,7 +126,6 @@ import { AdminDashboard } from "@/components/admin-dashboard";
 import { ProfileFunnel, type ProfileFunnelMode } from "@/components/profile/profile-funnel";
 import { ProfileCompletionNote } from "@/components/profile/profile-completion-note";
 import { OwnerBrainDrip } from "@/components/owner-brain-drip";
-import { OwnerBrainFirstInsight } from "@/components/owner-brain-first-insight";
 import { SampleBoardBanner } from "@/components/sample-board-banner";
 import { VerifyEmailBanner } from "@/components/verify-email-banner";
 import { SAMPLE_BUSINESS_BLURB, sampleFinancialsFor } from "@/lib/sample-business";
@@ -3128,7 +3127,6 @@ function Index() {
     [invitedOwnerEntry, hasRealFinancials, clientMeta?.financials_updated_at],
   );
   const [ownerFirstUploadHandled, setOwnerFirstUploadHandled] = useState(false);
-  const [brainInsightReloadToken, setBrainInsightReloadToken] = useState(0);
   useEffect(() => {
     if (!effectiveClientId) {
       setOwnerFirstUploadHandled(false);
@@ -3167,8 +3165,6 @@ function Index() {
       await invokeBrainPropose(effectiveClientId);
     } catch (e) {
       console.warn("[owner first upload] brain propose failed:", e);
-    } finally {
-      setBrainInsightReloadToken((n) => n + 1);
     }
   }, [actingClientId, effectiveClientId, invitedOwnerEntry, ownerFirstUploadHandled]);
   useEffect(() => {
@@ -3623,6 +3619,28 @@ function Index() {
 
   const saveProductMix = useCallback((mix: ProductMix) => {
     setProductMix(mix);
+  }, []);
+
+  const saveDripProfile = useCallback(
+    async (profile: ClientOperatingProfile) => {
+      setOperatingProfile(profile);
+      setBusinessTypeId(profile.businessTypeId);
+      if (!effectiveClientId) return;
+      const { error } = await supabase
+        .from("clients")
+        .update({
+          business_type: profile.businessTypeId,
+          operating_profile: profile as unknown as Record<string, unknown>,
+          financial_year_start_month: profile.fyStartMonth,
+        } as never)
+        .eq("id", effectiveClientId);
+      if (error) throw error;
+    },
+    [effectiveClientId],
+  );
+
+  const saveDripWeekly = useCallback((next: WeeklyInputs) => {
+    setWeeklyInputs(next);
   }, []);
 
   const financialInputsCtxValue = useMemo(
@@ -4325,6 +4343,10 @@ function Index() {
                                 onAddPastPeriod={
                                   firstRunStep === null ? () => setPastPeriodOpen(true) : undefined
                                 }
+                                onSaveProfile={saveDripProfile}
+                                onSaveProductMix={saveProductMix}
+                                onSaveWeekly={saveDripWeekly}
+                                enabled={firstRunStep === null}
                               />
                               <EmptyState
                                 id="wizard-empty-score"
@@ -4488,6 +4510,10 @@ function Index() {
                                 onAddPastPeriod={
                                   firstRunStep === null ? () => setPastPeriodOpen(true) : undefined
                                 }
+                                onSaveProfile={saveDripProfile}
+                                onSaveProductMix={saveProductMix}
+                                onSaveWeekly={saveDripWeekly}
+                                enabled={firstRunStep === null}
                               />
                               {needsPastPeriodPrompt({
                                 hasLiveFigures: hasRealFinancials,
@@ -4499,10 +4525,6 @@ function Index() {
                                   <AddPastPeriodLink onOpen={() => setPastPeriodOpen(true)} />
                                 </p>
                               ) : null}
-                              <OwnerBrainFirstInsight
-                                clientId={effectiveClientId}
-                                reloadToken={brainInsightReloadToken}
-                              />
                               <div className="relative rounded-xl border border-slate-200/90 bg-white px-3 py-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)] dark:border-white/10 dark:bg-[#0f172a]/40 dark:shadow-none sm:px-5">
                                 <div className="pointer-events-none absolute right-2 top-2 z-20 hidden sm:block sm:right-3 sm:top-3">
                                   <ReviewSignoffBadge
