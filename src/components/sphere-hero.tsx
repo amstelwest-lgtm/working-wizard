@@ -541,17 +541,17 @@ export function SphereHero({
         </>
       )}
 
-      {/* ── Your Next Move card (levels 1 & 3) ── */}
+      {/* ── Next moves under the score (levels 1 & 3) ── */}
       {topPriority && level !== 2 && (
         <div
           className={`w-full max-w-xl rounded-xl border border-[#d4a550]/35 bg-gradient-to-br from-amber-50/90 via-white to-white shadow-[0_8px_24px_rgba(121,91,27,0.08)] dark:from-[#d4a550]/12 dark:via-slate-950/60 dark:to-slate-950/40 dark:shadow-none ${
             compact ? "mt-3 p-3.5" : "mt-6 p-4"
           }`}
         >
-          <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#b8860b] dark:text-[#d4a550]">
-            Your Next Move
+          <p className="font-display text-[17px] font-medium leading-snug text-slate-900 dark:text-[#f6f1e7]">
+            Your next moves to improve this score
           </p>
-          <p className="mt-1.5 text-[15px] font-semibold leading-snug text-slate-900 dark:text-white">
+          <p className="mt-1.5 text-[14px] font-semibold leading-snug text-slate-800 dark:text-white">
             {topPriority.title}
           </p>
           <p className="mt-1 text-[12px] leading-relaxed text-slate-500 dark:text-slate-400">
@@ -569,7 +569,7 @@ export function SphereHero({
               ))}
             </ul>
           )}
-          <div className="mt-3 flex items-center justify-between gap-3 border-t border-[#d4a550]/20 pt-2.5">
+          <div className="mt-3 space-y-3 border-t border-[#d4a550]/20 pt-2.5">
             <div className="min-w-0">
               <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-slate-500">
                 Potential impact
@@ -579,20 +579,22 @@ export function SphereHero({
                   {topPriority.impactLabel}
                 </p>
               ) : (
-                <p className="mt-0.5 text-xs text-slate-500">Open Next Moves for the full playbook</p>
+                <p className="mt-0.5 text-xs text-slate-500">These are the first three. The full list is one tap away.</p>
               )}
             </div>
-            <button
-              type="button"
-              onClick={() => {
-                playKlink();
-                onTopPriority?.();
-              }}
-              aria-label="Open next move"
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-amber-500/40 bg-[#d4a550]/10 text-amber-600 transition hover:bg-amber-500/20 dark:text-amber-400"
-            >
-              <ChevronRight className="h-5 w-5" />
-            </button>
+            {onTopPriority ? (
+              <button
+                type="button"
+                onClick={() => {
+                  playKlink();
+                  onTopPriority();
+                }}
+                className="inline-flex w-full items-center justify-center gap-1.5 rounded-full border-0 bg-[linear-gradient(120deg,#ac8400,#d4af37_40%,#fdee79_60%,#d4af37_80%,#ac8400)] bg-[length:200%_auto] px-4 py-2.5 text-[13px] font-semibold text-[#1b1300] shadow-[0_4px_20px_rgba(212,175,55,0.35)] transition hover:shadow-[0_8px_30px_rgba(212,175,55,0.5)] hover:brightness-105"
+              >
+                See all recommended moves
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            ) : null}
           </div>
         </div>
       )}

@@ -469,7 +469,7 @@ export function industryPulsePrompt(
     return `You write Industry Pulse for South African small-business owners. Today is ${today}.
 Sector: "${industry}".
 
-This panel sits next to a separate "Your Next Move" action block. Do NOT give coaching, to-dos, or "do this week" advice.
+This panel sits next to a separate "Your next moves to improve this score" action block. Do NOT give coaching, to-dos, or "do this week" advice.
 Your job is situational awareness: what is happening in the sector.
 
 Write for a busy owner — Grade 8 English. No jargon. No MBA speak.
@@ -511,7 +511,7 @@ Rules:
   return `You write Industry Pulse for United States small-business owners. Today is ${today}.
 Sector: "${industry}".
 
-This panel sits next to a separate "Your Next Move" action block. Do NOT give coaching, to-dos, or "do this week" advice.
+This panel sits next to a separate "Your next moves to improve this score" action block. Do NOT give coaching, to-dos, or "do this week" advice.
 Your job is situational awareness: what is happening in the sector.
 
 Write for a busy owner — Grade 8 English. No jargon. No MBA speak.
