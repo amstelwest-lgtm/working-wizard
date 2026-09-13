@@ -21,6 +21,14 @@ function toCamelKey(name: string): string {
   );
 }
 
+/** Playbook JSON key from a UI camelCase key (`debtorDays`) or a display name. */
+export function playbookKeyForUiKey(uiKey: string): string {
+  if (PLAYBOOK_ALIASES[uiKey]) return PLAYBOOK_ALIASES[uiKey];
+  const mapped = RATIO_NAME_TO_KEY[uiKey];
+  if (mapped) return PLAYBOOK_ALIASES[mapped] ?? mapped;
+  return uiKey;
+}
+
 /** Resolve the playbook JSON key for a `computeRatios()` display name. */
 export function playbookKeyForRatioName(name: string): string {
   const key = toCamelKey(name);

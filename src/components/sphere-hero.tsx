@@ -71,6 +71,8 @@ export type SphereHeroProps = {
    * orb card), so text under the orb must be light even in light mode.
    */
   onDark?: boolean;
+  /** Owner Health: open the money briefing for a drilled-down driver ratio. */
+  onDriverClick?: (key: string) => void;
 };
 
 // ── Tier helpers (aligned with scoreTier in @/lib/ratios: 65 / 40) ──────────
@@ -295,6 +297,7 @@ export function SphereHero({
   caption,
   compact = false,
   onDark = false,
+  onDriverClick,
 }: SphereHeroProps) {
   const [level, setLevel] = useState<Level>(1);
   const [activePillarId, setActivePillarId] = useState<SpherePillar["id"] | null>(null);
@@ -506,12 +509,15 @@ export function SphereHero({
             {activePillar.drivers.map((d, i) => {
               const t = tierOf(d.health);
               const pct = isFinite(d.health) ? Math.max(2, Math.min(100, d.health)) : 0;
-              return (
-                <div
-                  key={d.key}
-                  className="animate-in fade-in slide-in-from-bottom-2 rounded-xl border border-amber-900/15 bg-white/85 p-3 shadow-[0_8px_24px_rgba(121,91,27,0.07)] duration-400 dark:border-slate-800/80 dark:bg-slate-950/50 dark:shadow-none"
-                  style={{ animationDelay: `${i * 60}ms`, animationFillMode: "both" }}
-                >
+              const clickable = Boolean(onDriverClick);
+              const rowClass = `w-full animate-in fade-in slide-in-from-bottom-2 rounded-xl border border-amber-900/15 bg-white/85 p-3 text-left shadow-[0_8px_24px_rgba(121,91,27,0.07)] duration-400 dark:border-slate-800/80 dark:bg-slate-950/50 dark:shadow-none ${
+                clickable
+                  ? "cursor-pointer transition hover:border-[#d4a550]/50 hover:bg-amber-50/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60 dark:hover:border-amber-500/40 dark:hover:bg-slate-900/80"
+                  : ""
+              }`;
+              const rowStyle = { animationDelay: `${i * 60}ms`, animationFillMode: "both" as const };
+              const body = (
+                <>
                   <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium text-slate-900 dark:text-slate-100">{d.label}</p>
@@ -534,6 +540,25 @@ export function SphereHero({
                       }}
                     />
                   </div>
+                </>
+              );
+              if (clickable) {
+                return (
+                  <button
+                    key={d.key}
+                    type="button"
+                    onClick={() => onDriverClick?.(d.key)}
+                    aria-label={`${d.label} — open money briefing`}
+                    className={rowClass}
+                    style={rowStyle}
+                  >
+                    {body}
+                  </button>
+                );
+              }
+              return (
+                <div key={d.key} className={rowClass} style={rowStyle}>
+                  {body}
                 </div>
               );
             })}
