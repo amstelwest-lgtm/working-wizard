@@ -349,14 +349,17 @@ export function OwnerTabSignoffRow({
   signoff,
   scope,
   isStale,
+  id,
 }: {
   label: string;
   signoff: ClientReviewSignoff | null;
   scope: ReviewScope;
   isStale: boolean;
+  /** Optional tour target — only set on one row so the id stays unique. */
+  id?: string;
 }) {
   return (
-    <div className="mb-4 flex items-center gap-3 pb-3">
+    <div id={id} className="mb-4 flex items-center gap-3 pb-3">
       <span className="text-[9px] font-semibold uppercase tracking-[0.25em] text-[#b8860b] dark:text-[#d4a550]/80">
         {label}
       </span>
