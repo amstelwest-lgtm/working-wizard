@@ -43,6 +43,7 @@ export type ClientBriefingProps = {
   reportsIssued: number;
   movementReportAvailable: boolean;
   onOpenMovementReport?: () => void;
+  onOpenReports?: () => void;
   hasFigures: boolean;
 };
 
@@ -72,8 +73,8 @@ export function ClientBriefing(p: ClientBriefingProps) {
               <span className="briefing-kicker">Financial Health</span>
               <b>{healthHeadline(p.healthScore, p.healthLabel)}</b>
               {p.healthScore != null && p.onViewBreakdown ? (
-                <button type="button" className="briefing-link" onClick={p.onViewBreakdown}>
-                  View breakdown →
+                <button type="button" className="btn gold mini" onClick={p.onViewBreakdown}>
+                  View breakdown
                 </button>
               ) : null}
             </div>
@@ -111,31 +112,34 @@ export function ClientBriefing(p: ClientBriefingProps) {
               ))}
             </dl>
           )}
-          <div className="briefing-foot">
+          <div className="briefing-actions">
             {p.openQueries > 0 ? (
-              <button type="button" className="briefing-link" onClick={p.onOpenQueries}>
-                {p.openQueries} open {p.openQueries === 1 ? "query" : "queries"} →
+              <button type="button" className="btn gold mini" onClick={p.onOpenQueries}>
+                {p.openQueries} open {p.openQueries === 1 ? "query" : "queries"}
               </button>
             ) : (
-              <button type="button" className="briefing-link muted" onClick={p.onOpenQueries}>
+              <button type="button" className="btn ghost mini" onClick={p.onOpenQueries}>
                 No open queries
               </button>
             )}
-            {p.reportsIssued > 0 ? (
+            {p.hasFigures && p.movementReportAvailable ? (
+              <button type="button" className="btn gold mini" onClick={p.onOpenMovementReport}>
+                Open movement report
+              </button>
+            ) : null}
+            {p.onOpenReports ? (
+              <button type="button" className="btn gold mini" onClick={p.onOpenReports}>
+                {p.reportsIssued > 0 ? "Open Reports" : "Create report"}
+              </button>
+            ) : p.reportsIssued > 0 ? (
               <span className="briefing-muted">
                 {p.reportsIssued} {p.reportsIssued === 1 ? "report" : "reports"} issued
               </span>
             ) : null}
-            {p.hasFigures ? (
-              p.movementReportAvailable ? (
-                <button type="button" className="briefing-link" onClick={p.onOpenMovementReport}>
-                  Open movement report →
-                </button>
-              ) : (
-                <span className="briefing-muted" title="Save a second period snapshot to compare">
-                  Movement report needs a prior period
-                </span>
-              )
+            {p.hasFigures && !p.movementReportAvailable ? (
+              <span className="briefing-muted" title="Save a second period snapshot to compare">
+                Movement report needs a prior period
+              </span>
             ) : null}
           </div>
         </div>
@@ -151,15 +155,19 @@ export function ClientBriefing(p: ClientBriefingProps) {
               No business profile yet — ten questions tune the score, budget and advice.
             </p>
           )}
-          <div className="briefing-links">
+          <div className="briefing-actions">
             {p.profile ? (
-              <button type="button" className="briefing-link" onClick={() => setProfileOpen(true)}>
-                View full profile →
+              <button type="button" className="btn gold mini" onClick={() => setProfileOpen(true)}>
+                View full profile
               </button>
             ) : null}
             {p.onEditProfile ? (
-              <button type="button" className="briefing-link muted" onClick={p.onEditProfile}>
-                {p.profile ? "Edit profile" : "Fill profile now →"}
+              <button
+                type="button"
+                className={p.profile ? "btn ghost mini" : "btn gold mini"}
+                onClick={p.onEditProfile}
+              >
+                {p.profile ? "Edit profile" : "Fill profile now"}
               </button>
             ) : null}
           </div>
@@ -188,7 +196,7 @@ export function ClientBriefing(p: ClientBriefingProps) {
             {p.onRefreshWorkflow && p.workflow ? (
               <button
                 type="button"
-                className="briefing-link muted"
+                className="btn ghost mini"
                 onClick={p.onRefreshWorkflow}
                 disabled={p.workflowLoading}
                 title="Redraft from the current figures"
@@ -225,13 +233,13 @@ export function ClientBriefing(p: ClientBriefingProps) {
           {p.onEditProfile ? (
             <button
               type="button"
-              className="mt-3 self-start text-xs font-medium text-[#d4af37] hover:underline"
+              className="btn gold mini mt-3 self-start"
               onClick={() => {
                 setProfileOpen(false);
                 p.onEditProfile?.();
               }}
             >
-              Edit answers →
+              Edit answers
             </button>
           ) : null}
         </DialogContent>
