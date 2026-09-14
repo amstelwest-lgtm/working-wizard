@@ -20,7 +20,7 @@ import { NoteArchiveSheet } from "@/components/note-archive";
 import { reportClientError } from "@/lib/monitoring";
 
 import appCss from "../styles.css?url";
-import { SHARE_DESCRIPTION, SHARE_TITLE } from "@/lib/share-copy";
+import { organizationGraphJson, pageHead, SEO_PAGES } from "@/lib/seo";
 
 function NotFoundComponent() {
   return (
@@ -81,26 +81,22 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
 }
 
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
-  head: () => ({
+  head: () => {
+    const home = pageHead(SEO_PAGES.home);
+    const jsonLd = {
+      type: "application/ld+json",
+      children: organizationGraphJson(),
+    };
+    return {
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: SHARE_TITLE },
-      { name: "description", content: SHARE_DESCRIPTION },
       { name: "author", content: "Milōn" },
-      { property: "og:title", content: SHARE_TITLE },
-      { property: "og:description", content: SHARE_DESCRIPTION },
-      { property: "og:type", content: "website" },
-      { property: "og:image", content: "/icon-512.png" },
-      { name: "twitter:card", content: "summary" },
-      { name: "twitter:title", content: SHARE_TITLE },
-      { name: "twitter:description", content: SHARE_DESCRIPTION },
-      { name: "twitter:image", content: "/icon-512.png" },
+      ...home.meta,
       { name: "theme-color", content: "#000000" },
       { name: "apple-mobile-web-app-capable", content: "yes" },
       { name: "apple-mobile-web-app-status-bar-style", content: "default" },
       { name: "apple-mobile-web-app-title", content: "Milōn" },
-
     ],
     links: [
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -113,9 +109,11 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { rel: "icon", href: "/icon-192.png?v=2", type: "image/png", sizes: "192x192" },
       { rel: "icon", href: "/icon-512.png?v=2", type: "image/png", sizes: "512x512" },
       { rel: "apple-touch-icon", href: "/apple-touch-icon.png?v=2", sizes: "180x180" },
+      ...home.links,
     ],
     scripts: import.meta.env.DEV
       ? [
+          jsonLd,
           {
             // Dev-only: report FULL browser errors (console truncates them) to
             // the server so hydration failures can be diagnosed from logs.
@@ -170,8 +168,9 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 })();`,
           },
         ]
-      : [],
-  }),
+      : [jsonLd],
+  };
+  },
   shellComponent: RootShell,
   component: RootComponent,
   notFoundComponent: NotFoundComponent,
@@ -188,7 +187,7 @@ function RootShell({ children }: { children: React.ReactNode }) {
 
   return (
     <html
-      lang="en"
+      lang="en-US"
       data-landing={isLanding ? "1" : undefined}
       suppressHydrationWarning
     >

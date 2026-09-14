@@ -41,14 +41,14 @@ import {
   type DraftMarket,
 } from "@/lib/market";
 
+import { pageHead, SEO_PAGES } from "@/lib/seo";
+
 export const Route = createFileRoute("/auth")({
   component: AuthPage,
   validateSearch: (search: Record<string, unknown>): { next?: string } => ({
     next: typeof search.next === "string" && search.next.startsWith("/") ? search.next : undefined,
   }),
-  head: () => ({
-    meta: [{ title: "Sign in — Milōn" }],
-  }),
+  head: () => pageHead(SEO_PAGES.auth),
 });
 
 function AuthPage() {
@@ -384,7 +384,7 @@ function AuthPage() {
       </AuthEntryCard>
 
       <p className="auth-entry__muted mt-6 text-center text-sm">
-        Business owner? <AuthEntryLink to="/">Sign in at milon.co.za →</AuthEntryLink>
+        Business owner? <AuthEntryLink to="/">Sign in at milonfinance.com →</AuthEntryLink>
       </p>
       <div className="mt-4 flex justify-center">
         <PreLoginShareButton />

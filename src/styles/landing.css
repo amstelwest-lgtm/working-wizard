@@ -600,7 +600,7 @@ html[data-landing="1"] .milon-signin-box .field input:focus{outline:none;border-
   html[data-landing="1"] .cash-fill{opacity:1}
 }
 
-/* Visitor market copy pack — hide US strings unless html[data-market=us] */
-html[data-landing="1"] .mk-copy-us{display:none}
-html[data-market="us"] .mk-copy-za{display:none !important}
-html[data-market="us"] .mk-copy-us{display:revert !important}
+/* Visitor market copy pack — US is the default; ZA only when html[data-market=za] */
+html[data-landing="1"] .mk-copy-za{display:none}
+html[data-market="za"] .mk-copy-us{display:none !important}
+html[data-market="za"] .mk-copy-za{display:revert !important}

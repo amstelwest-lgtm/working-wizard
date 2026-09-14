@@ -2,19 +2,13 @@ import { createFileRoute } from "@tanstack/react-router";
 import { MarketCopy, MarketingShell } from "@/components/marketing-shell";
 import { LEGAL_EFFECTIVE, LEGAL_ENTITY } from "@/lib/legal";
 import { LIST_PRICES, VISITOR_MARKET_BOOT_SCRIPT } from "@/lib/market";
+import { pageHead, SEO_PAGES } from "@/lib/seo";
 import marketingCss from "../styles/marketing.css?inline";
 
 export const Route = createFileRoute("/terms")({
   component: TermsPage,
   head: () => ({
-    meta: [
-      { title: "Terms of use — MILŌN" },
-      {
-        name: "description",
-        content:
-          "Terms for using Milōn during early access: your figures stay yours, AI is powered by Claude, and this is not a substitute for your accountant.",
-      },
-    ],
+    ...pageHead(SEO_PAGES.terms),
     styles: [{ children: marketingCss }],
     scripts: [{ children: VISITOR_MARKET_BOOT_SCRIPT }],
   }),

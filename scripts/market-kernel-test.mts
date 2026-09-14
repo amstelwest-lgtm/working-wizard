@@ -255,7 +255,7 @@ assert(
 
 assert(visitorCopyPack({ country: "US" }) === "us", "US visitor copy pack");
 assert(visitorCopyPack({ country: "ZA" }) === "za", "ZA visitor copy pack");
-assert(visitorCopyPack({ country: null }) === "za", "unset visitor defaults ZA");
+assert(visitorCopyPack({ country: null }) === "us", "unset visitor defaults US");
 assert(LIST_PRICES.us.orbit.startsWith("$"), "US Orbit is dollars");
 assert(LIST_PRICES.za.orbit.startsWith("R"), "ZA Orbit is rand");
 assert(LIST_PRICES.us.firm150.startsWith("$"), "US firm price is dollars");

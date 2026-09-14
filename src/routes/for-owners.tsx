@@ -1,19 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { MarketCopy, MarketingShell } from "@/components/marketing-shell";
 import { VISITOR_MARKET_BOOT_SCRIPT } from "@/lib/market";
+import { pageHead, SEO_PAGES } from "@/lib/seo";
 import marketingCss from "../styles/marketing.css?inline";
 
 export const Route = createFileRoute("/for-owners")({
   component: ForOwnersPage,
   head: () => ({
-    meta: [
-      { title: "MILŌN for business owners — know your numbers, sleep at night" },
-      {
-        name: "description",
-        content:
-          "What a South African business owner gets from Milōn in the first week: one health score, a 13-week cash forecast, and a ranked list of what to fix first.",
-      },
-    ],
+    ...pageHead(SEO_PAGES.forOwners),
     styles: [{ children: marketingCss }],
     scripts: [{ children: VISITOR_MARKET_BOOT_SCRIPT }],
   }),
@@ -32,7 +26,7 @@ function ForOwnersPage() {
       lead={
         <>
           Most owners find out how the business is really doing months after the fact, in a set of
-          annual financial statements written for <MarketCopy za="SARS" us="the IRS" /> rather than
+          financial statements written for <MarketCopy za="SARS" us="the IRS" /> rather than
           for them. Milōn turns the same figures into a score, a cash forecast, and a short list of
           what to do next.
         </>

@@ -1,19 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { MarketCopy, MarketingShell } from "@/components/marketing-shell";
 import { LIST_PRICES, VISITOR_MARKET_BOOT_SCRIPT } from "@/lib/market";
+import { pageHead, SEO_PAGES } from "@/lib/seo";
 import marketingCss from "../styles/marketing.css?inline";
 
 export const Route = createFileRoute("/faq")({
   component: FaqPage,
   head: () => ({
-    meta: [
-      { title: "MILŌN — straight answers" },
-      {
-        name: "description",
-        content:
-          "Honest answers about Milōn: what it costs, where your data lives, what the AI does and does not see, and why it does not replace your accountant.",
-      },
-    ],
+    ...pageHead(SEO_PAGES.faq),
     styles: [{ children: marketingCss }],
     scripts: [{ children: VISITOR_MARKET_BOOT_SCRIPT }],
   }),

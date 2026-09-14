@@ -122,10 +122,10 @@ export function MarketingShell({
           <span>
             <MarketCopy
               za="Milōn — financial health for South African businesses."
-              us="Milōn — financial health for US small businesses."
+              us="MILŌN — the AI-automated finance function for accounting firms and the businesses they serve."
             />
           </span>
-          <a href="/">milon.co.za</a>
+          <a href="/">milonfinance.com</a>
           <a href="/faq">Questions</a>
           <a href="/privacy">Privacy</a>
           <a href="/terms">Terms</a>

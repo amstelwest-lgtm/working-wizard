@@ -1,19 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { MarketCopy, MarketingShell } from "@/components/marketing-shell";
 import { LIST_PRICES, VISITOR_MARKET_BOOT_SCRIPT } from "@/lib/market";
+import { pageHead, SEO_PAGES } from "@/lib/seo";
 import marketingCss from "../styles/marketing.css?inline";
 
 export const Route = createFileRoute("/for-accountants")({
   component: ForAccountantsPage,
   head: () => ({
-    meta: [
-      { title: "MILŌN for accountants — advisory that scales across the client book" },
-      {
-        name: "description",
-        content:
-          "Milōn for South African accounting and advisory practices: portfolio health across every client, AI-drafted advisory reports, and white-label output under your brand.",
-      },
-    ],
+    ...pageHead(SEO_PAGES.forAccountants),
     styles: [{ children: marketingCss }],
     scripts: [{ children: VISITOR_MARKET_BOOT_SCRIPT }],
   }),
@@ -58,7 +52,7 @@ function ForAccountantsPage() {
           actual numbers. You correct, sign off, and send — the judgement stays yours.
         </li>
         <li>
-          <strong>White-label output.</strong> Your logo, your colours, your name on the report.
+          <strong>White-label output.</strong> Your logo, your colors, your name on the report.
           Milōn is the engine, not the brand on the cover.
         </li>
         <li>
