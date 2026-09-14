@@ -26,6 +26,8 @@ export type AttentionItem = {
   detail: string;
   /** When true, open the client's Action Plan tab (outstanding work). */
   openPlan?: boolean;
+  /** When true, open the client's query list. */
+  openQueries?: boolean;
 };
 
 export type PortfolioInsight = {
@@ -217,6 +219,7 @@ export function buildAttentionItems(
       reason,
       detail,
       openPlan: row.overdueActions > 0 || row.openActions > 0,
+      openQueries: row.overdueActions === 0 && row.openActions === 0 && row.openQueries > 0,
     });
   }
 

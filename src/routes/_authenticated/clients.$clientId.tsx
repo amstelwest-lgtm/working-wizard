@@ -57,6 +57,7 @@ import {
   type OverallHealth,
 } from "@/lib/health-score";
 import { playbookKeyForRatioName } from "@/lib/playbook-key";
+import { countOpenRatioQueries, openQueryCountForRatio, ratioQueryLabel } from "@/lib/ratio-queries";
 import { ratioActualLine } from "@/lib/ratio-actuals";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
 import { FirmSwitcher } from "@/components/firm-switcher";
@@ -376,6 +377,7 @@ export const Route = createFileRoute("/_authenticated/clients/$clientId")({
     note?: string;
     tab?: string;
     filter?: string;
+    queries?: string;
   } => {
     const out: {
       qbo?: string;
@@ -384,12 +386,14 @@ export const Route = createFileRoute("/_authenticated/clients/$clientId")({
       note?: string;
       tab?: string;
       filter?: string;
+      queries?: string;
     } = {};
     if (typeof search.qbo === "string") out.qbo = search.qbo;
     if (typeof search.reason === "string") out.reason = search.reason;
     if (typeof search.onboard === "string") out.onboard = search.onboard;
     if (typeof search.note === "string") out.note = search.note;
     if (typeof search.tab === "string") out.tab = search.tab;
+    if (typeof search.queries === "string") out.queries = search.queries;
     if (
       search.filter === "overdue" ||
       search.filter === "at_risk" ||
@@ -511,7 +515,7 @@ function ClientView() {
   const { clientId } = Route.useParams();
   const search = Route.useSearch();
   const { user } = useAuth();
-  const { notes: clientNotes, loading: notesLoading, openArchive, requestOpenNote } = useNotes();
+  const { notes: clientNotes, loading: notesLoading, openArchive, requestOpenNote, focusNoteId, clearFocusNote } = useNotes();
   const navigate = useNavigate();
   const { profile, firmId } = useAccountantProfile();
   const track = useTrack();
@@ -564,7 +568,8 @@ function ClientView() {
     const next = resolveAccountantTab(search.tab);
     if (next) setActiveTab(next);
     if (search.note) requestOpenNote(search.note);
-  }, [search.note, search.tab, requestOpenNote]);
+    if (search.queries === "open") openArchive("open");
+  }, [search.note, search.tab, search.queries, requestOpenNote, openArchive]);
   // Landing tab: Ask AI once the client has figures to talk about; before that
   // the studio opens on Health & Ratios, where the orb reads "no data" and the
   // Financials grid / upload buttons sit. Decided once per client, after load,
@@ -751,6 +756,10 @@ function ClientView() {
     }, 120);
   }, []);
   const ratios = computeRatios(ratioInputs);
+  const ratioQueryCounts = useMemo(
+    () => countOpenRatioQueries(clientNotes),
+    [clientNotes],
+  );
   const effectiveRunway = effectiveCashRunwayWeeks(
     client?.cash_runway_weeks,
     client?.cashflow as Parameters<typeof effectiveCashRunwayWeeks>[1],
@@ -1642,6 +1651,25 @@ function ClientView() {
     [clientId, clientMarket, firmId, ratioInputs, track],
   );
 
+  const openDrawerFromUiKey = useCallback(
+    (uiKey: string) => {
+      const name = ratioQueryLabel(uiKey);
+      const val = (ratios as Record<string, number>)[name];
+      const score = Math.round(ratioHealthScore(name, val as number, clientMarket));
+      openDrawer(name, Number.isFinite(score) ? score : 0);
+    },
+    [openDrawer, ratios, clientMarket],
+  );
+
+  useEffect(() => {
+    if (!focusNoteId) return;
+    const note = clientNotes.find((n) => n.id === focusNoteId);
+    if (!note?.ratioKey) return;
+    setActiveTab("ratios");
+    setViewMode("complex");
+    openDrawerFromUiKey(note.ratioKey);
+  }, [focusNoteId, clientNotes, openDrawerFromUiKey]);
+
   // ── Report navigation ─────────────────────────────────────────────────────
 
   const handleTourTabChange = useCallback((tab: string) => {
@@ -2046,6 +2074,8 @@ function ClientView() {
                       overallHealth={isFinite(avgHealth) ? avgHealth : NaN}
                       displayStatus={overallHealth.displayStatus}
                       pillars={spherePillars}
+                      queryCounts={ratioQueryCounts}
+                      onDriverClick={(key) => openDrawerFromUiKey(key)}
                       caption={computeOverviewCaption({
                         hasRealFinancials: hasFigures,
                         avgHealth,
@@ -2273,6 +2303,7 @@ function ClientView() {
                             const actual = ratioActualLine(name, ratioInputs, (n) =>
                               formatMoneyCompact(n, clientMarket),
                             );
+                            const qCount = openQueryCountForRatio(ratioQueryCounts, name);
                             return (
                               <button
                                 key={name}
@@ -2280,7 +2311,14 @@ function ClientView() {
                                 onClick={() => openDrawer(name, score)}
                               >
                                 <span>
-                                  <span className="rn">{name}</span>
+                                  <span className="rn">
+                                    {name}
+                                    {qCount > 0 ? (
+                                      <span className="ml-2 inline-flex rounded-full bg-[#d4a550] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-[#0a1628]">
+                                        {qCount === 1 ? "1 query" : `${qCount} queries`}
+                                      </span>
+                                    ) : null}
+                                  </span>
                                   <span className="ra">{actual.formula}</span>
                                   <span className="ra-calc">
                                     {actual.calculation ??
@@ -2644,7 +2682,10 @@ function ClientView() {
             ratioName={drawerRatioName}
             healthTier={drawerTier}
             open={drawerOpen}
-            onClose={() => setDrawerOpen(false)}
+            onClose={() => {
+              setDrawerOpen(false);
+              clearFocusNote();
+            }}
             clientId={client.id}
             clientName={client.name}
             isAccountant={true}

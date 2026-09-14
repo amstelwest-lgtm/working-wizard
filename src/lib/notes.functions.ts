@@ -6,6 +6,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { getSupabaseAdminOrNull } from "@/integrations/supabase/client.server";
 import type { Database } from "@/integrations/supabase/types";
 import { dispatchNoteMentionEmails, dispatchMilonItQueryEmails } from "@/lib/note-mention-email";
+import { ratioQueryLabel } from "@/lib/ratio-queries";
 
 export type NoteMention = {
   userId: string;
@@ -30,6 +31,8 @@ export type ClientNote = {
   tab: string;
   x: number;
   y: number;
+  /** Owner “ask your accountant” questions are tagged to a Health ratio. */
+  ratioKey: string | null;
   text: string;
   authorId: string;
   author: string;
@@ -116,6 +119,7 @@ function mapNote(
     tab: String(row.tab ?? "overview"),
     x: Number(row.x ?? 0),
     y: Number(row.y ?? 0),
+    ratioKey: typeof row.ratio_key === "string" && row.ratio_key ? row.ratio_key : null,
     text: String(row.body ?? ""),
     authorId: String(row.author_id),
     author: String(row.author_name ?? "User"),
@@ -365,6 +369,7 @@ export const createClientNote = createServerFn({ method: "POST" })
         text: z.string().trim().min(1).max(4000),
         mentions: z.array(mentionSchema).max(20).default([]),
         tagMilonIt: z.boolean().optional(),
+        ratioKey: z.string().trim().min(1).max(64).nullable().optional(),
       })
       .parse(input),
   )
@@ -380,24 +385,30 @@ export const createClientNote = createServerFn({ method: "POST" })
     const tagMilonIt = Boolean(data.tagMilonIt);
 
     const loose = sb as unknown as LooseSb;
-    const { data: row, error } = await loose
-      .from("client_notes")
-      .insert({
-        client_id: data.clientId,
-        tab: data.tab,
-        x: data.x,
-        y: data.y,
-        body: data.text,
-        author_id: author.authorId,
-        author_name: author.authorName,
-        author_email: author.authorEmail,
-        mentions,
-        tagged_milon_it: tagMilonIt,
-        tagged_milon_it_at: tagMilonIt ? new Date().toISOString() : null,
-        tagged_milon_it_by: tagMilonIt ? author.authorId : null,
-      })
-      .select("*")
-      .single();
+    const ratioKey = data.ratioKey?.trim() || null;
+    const payload: Record<string, unknown> = {
+      client_id: data.clientId,
+      tab: data.tab,
+      x: data.x,
+      y: data.y,
+      body: data.text,
+      author_id: author.authorId,
+      author_name: author.authorName,
+      author_email: author.authorEmail,
+      mentions,
+      tagged_milon_it: tagMilonIt,
+      tagged_milon_it_at: tagMilonIt ? new Date().toISOString() : null,
+      tagged_milon_it_by: tagMilonIt ? author.authorId : null,
+    };
+    if (ratioKey) payload.ratio_key = ratioKey;
+
+    let { data: row, error } = await loose.from("client_notes").insert(payload).select("*").single();
+    if (error && ratioKey && /ratio_key/i.test(error.message ?? "")) {
+      delete payload.ratio_key;
+      const retry = await loose.from("client_notes").insert(payload).select("*").single();
+      row = retry.data;
+      error = retry.error;
+    }
     if (error) throw new Error(error.message);
 
     const noteId = String((row as { id: string }).id);
@@ -413,11 +424,12 @@ export const createClientNote = createServerFn({ method: "POST" })
       /* ignore */
     }
 
+    const tabLabel = ratioKey ? ratioQueryLabel(ratioKey) : data.tab;
     const mail = await dispatchNoteMentionEmails(mentions, {
       authorName: author.authorName,
       clientName,
       noteText: data.text,
-      tabLabel: data.tab,
+      tabLabel,
       noteId,
     });
     const itMail = tagMilonIt
@@ -426,7 +438,7 @@ export const createClientNote = createServerFn({ method: "POST" })
           clientName,
           clientId: data.clientId,
           noteText: data.text,
-          tabLabel: data.tab,
+          tabLabel,
           noteId,
         })
       : { sent: [] as string[], failed: [] as Array<{ email: string; error: string }> };

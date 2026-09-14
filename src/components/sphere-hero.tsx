@@ -73,11 +73,22 @@ export type SphereHeroProps = {
   onDark?: boolean;
   /** Owner Health: open the money briefing for a drilled-down driver ratio. */
   onDriverClick?: (key: string) => void;
+  /** Unresolved owner questions keyed by driver ratio (debtorDays, …). */
+  queryCounts?: Record<string, number>;
 };
 
 // ── Tier helpers (aligned with scoreTier in @/lib/ratios: 65 / 40) ──────────
 
 type Tier = "healthy" | "watch" | "critical" | "nodata";
+
+function QueryBadge({ count }: { count: number }) {
+  if (count <= 0) return null;
+  return (
+    <span className="ml-1 inline-flex items-center rounded-full bg-[#d4a550] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-[#0a1628]">
+      {count === 1 ? "1 query" : `${count} queries`}
+    </span>
+  );
+}
 
 function tierOf(h: number): Tier {
   if (!isFinite(h)) return "nodata";
@@ -298,6 +309,7 @@ export function SphereHero({
   compact = false,
   onDark = false,
   onDriverClick,
+  queryCounts,
 }: SphereHeroProps) {
   const [level, setLevel] = useState<Level>(1);
   const [activePillarId, setActivePillarId] = useState<SpherePillar["id"] | null>(null);
@@ -404,6 +416,7 @@ export function SphereHero({
             const Icon = PILLAR_ICON[p.id];
             const t = tierOf(p.health);
             const delta = typeof p.delta === "number" ? p.delta : null;
+            const q = p.drivers.reduce((n, d) => n + (queryCounts?.[d.key] ?? 0), 0);
             return (
               <button
                 key={p.id}
@@ -419,6 +432,7 @@ export function SphereHero({
                 <span className="text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
                   {p.label}
                 </span>
+                <QueryBadge count={q} />
                 <span className={`font-bold tabular-nums ${TIER_TEXT[t]} ${compact ? "text-[15px]" : "text-base"}`}>
                   {fmtScore(p.health)}
                 </span>
@@ -520,7 +534,10 @@ export function SphereHero({
                 <>
                   <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-medium text-slate-900 dark:text-slate-100">{d.label}</p>
+                      <p className="truncate text-sm font-medium text-slate-900 dark:text-slate-100">
+                        {d.label}
+                        <QueryBadge count={queryCounts?.[d.key] ?? 0} />
+                      </p>
                       {d.description && (
                         <p className="truncate text-xs text-slate-500">{d.description}</p>
                       )}

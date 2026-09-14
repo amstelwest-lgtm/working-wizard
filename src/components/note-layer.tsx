@@ -279,6 +279,7 @@ export function NoteLayer({
   }, []);
 
   const tabNotes = clientId ? getNotesForTab(tab) : [];
+  const pinNotes = tabNotes.filter((n) => !n.ratioKey);
   const initials = getInitials(authorName);
 
   function handleCrosshairClick(e: React.MouseEvent<HTMLDivElement>) {
@@ -355,6 +356,12 @@ export function NoteLayer({
   const openNote = (noteId: string) => {
     const note = allNotes.find((n) => n.id === noteId) ?? tabNotes.find((n) => n.id === noteId);
     if (!note) return;
+    if (note.ratioKey) {
+      const dest = destinationTab(note.tab, workspace);
+      if (dest && dest !== tab) onNeedTab?.(dest);
+      requestOpenNote(noteId);
+      return;
+    }
     if (!noteTabsMatch(note.tab, tab)) {
       const dest = destinationTab(note.tab, workspace);
       if (dest && dest !== tab) {
@@ -375,6 +382,11 @@ export function NoteLayer({
     if (archiveOpen) return;
     const note = allNotes.find((n) => n.id === focusNoteId);
     if (!note) return;
+    if (note.ratioKey) {
+      const dest = destinationTab(note.tab, workspace);
+      if (dest && dest !== tab) onNeedTab?.(dest);
+      return;
+    }
     if (!noteTabsMatch(note.tab, tab)) {
       const dest = destinationTab(note.tab, workspace);
       if (dest && dest !== tab) onNeedTab?.(dest);
@@ -525,7 +537,7 @@ export function NoteLayer({
         </div>
       )}
 
-      {tabNotes.map((note) => {
+      {pinNotes.map((note) => {
         const vpX = note.x - window.scrollX;
         const vpY = note.y - scrollY;
         const inView =

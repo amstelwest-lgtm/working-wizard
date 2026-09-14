@@ -57,6 +57,7 @@ assert(archive.includes("Open ("), "archive has an Open tab");
 assert(archive.includes("Reopen"), "resolved notes can be reopened");
 assert(archive.includes('aria-label="Delete note"'), "archive rows always expose delete");
 assert(archive.includes('aria-label={note.resolved ? "Reopen note" : "Close note"}'), "archive rows always expose close");
+assert(archive.includes("ratioQueryLabel"), "archive rows name a ratio query");
 assert(archive.includes("showOnPageLabel"), "archive rows jump to the pin on the matching page");
 assert(archive.includes("closeArchive"), "jumping closes the sheet so the pin is visible");
 assert(archive.includes("requestOpenNote"), "jumping focuses the pin");
@@ -71,6 +72,9 @@ assert(client.includes("onOpenQueries={() => openArchive"), "Open queries is a c
 const fab = readFileSync(resolve("src/components/floating-note-button.tsx"), "utf8");
 assert(fab.includes("Open notes archive"), "pin button cluster includes the archive");
 assert(fab.includes('id="wizard-notes-pin"'), "owner tour can spotlight the notes pin");
+
+const dash = readFileSync(resolve("src/routes/_authenticated/dashboard.tsx"), "utf8");
+assert(dash.includes("openClientQueries"), "Queries column opens the client query list");
 
 const briefing = readFileSync(resolve("src/components/client-briefing.tsx"), "utf8");
 assert(briefing.includes('id="wizard-open-queries"'), "accountant tour can spotlight open queries");

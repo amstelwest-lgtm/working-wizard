@@ -46,9 +46,8 @@ assert(relatedTabForRatio("grossMargin")?.tab === "waterfall", "gross margin jum
 assert(relatedTabForRatio("revenueGrowth")?.tab === "budget", "growth jumps to Budget");
 assert(relatedTabForRatio("salesPerEmployee") === null, "unmapped ratios have no tab jump");
 
-assert(ratioBriefingTitle(za).includes("rands"), "ZA title names rands");
-assert(ratioBriefingTitle(us).includes("dollars"), "US title names dollars");
-assert(!ratioBriefingTitle(us).toLowerCase().includes("rand"), "US title has no rand");
+assert(ratioBriefingTitle() === "What this means in money", "title is money-terms, not a currency word");
+assert(!/rand|dollar/i.test(ratioBriefingTitle()), "title does not name a currency");
 
 const zaDebtor = soWhatInMoney({
   key: "debtorDays",
@@ -59,7 +58,7 @@ const zaDebtor = soWhatInMoney({
 });
 assert(zaDebtor != null, "ZA debtor so-what");
 assert(zaDebtor!.line.includes("R"), `ZA money uses R: ${zaDebtor!.line}`);
-assert(zaDebtor!.detail?.includes("rands") === true, `ZA detail names rands: ${zaDebtor!.detail}`);
+assert(!/rand/i.test(`${zaDebtor!.line} ${zaDebtor!.detail}`), "ZA so-what does not say rands");
 assert(!zaDebtor!.line.includes("$"), "ZA debtor line has no $");
 assert(!zaDebtor!.detail?.includes("$"), "ZA debtor detail has no $");
 
@@ -72,7 +71,7 @@ const usDebtor = soWhatInMoney({
 });
 assert(usDebtor != null, "US debtor so-what");
 assert(usDebtor!.line.includes("$"), `US money uses $: ${usDebtor!.line}`);
-assert(usDebtor!.detail?.includes("dollars") === true, `US detail names dollars: ${usDebtor!.detail}`);
+assert(!/dollar/i.test(`${usDebtor!.line} ${usDebtor!.detail}`), "US so-what does not say dollars");
 assert(!/rand/i.test(usDebtor!.line + usDebtor!.detail), "US debtor copy has no rand");
 assert(!usDebtor!.line.includes("R\u00a0") && !usDebtor!.line.startsWith("R"), "US line is not rand-prefixed");
 
@@ -103,17 +102,23 @@ const zaDol = soWhatInMoney({ key: "dol", value: 2.5, n, market: za });
 assert(zaDol?.line.includes("R") === true, `ZA DOL uses R: ${zaDol?.line}`);
 const usDol = soWhatInMoney({ key: "dol", value: 2.5, n, market: us });
 assert(usDol?.line.includes("$") === true, `US DOL uses $: ${usDol?.line}`);
-assert(/dollars/.test(usDol!.detail ?? ""), `US DOL names dollars: ${usDol!.detail}`);
+assert(!/rand|dollar/i.test(usDol!.detail ?? ""), `US DOL does not name a currency: ${usDol!.detail}`);
 
 const lib = readFileSync(resolve("src/lib/ratio-briefing.ts"), "utf8");
 assert(!lib.includes('"rand"'), "briefing lib does not hardcode rand");
 assert(!lib.includes('"R"'), "briefing lib does not hardcode R");
 assert(lib.includes("formatMoneyCompact"), "briefing uses market money formatter");
-assert(lib.includes("currencyWordPlural"), "briefing uses currencyWord copy");
+assert(!lib.includes("currencyWordPlural"), "briefing does not name rands/dollars in copy");
+assert(!lib.includes("In your"), "briefing does not use In your {currency}");
 
 const briefing = readFileSync(resolve("src/components/owner-ratio-briefing.tsx"), "utf8");
 assert(briefing.includes("One move this week"), "briefing has one-move beat");
-assert(briefing.includes("Ask your accountant"), "briefing has pin exit");
+assert(briefing.includes("Ask your accountant"), "briefing has ask CTA");
+assert(briefing.includes("Ask about this ratio"), "ask opens a question box");
+assert(briefing.includes("ratioKey"), "ask is tagged to the open ratio");
+assert(!briefing.includes("setPinMode"), "ask does not drop into pin-on-page mode");
+assert(briefing.includes("In money terms"), "so-what kicker is In money terms");
+assert(!briefing.includes("In your"), "briefing UI does not say In your rands/dollars");
 assert(briefing.includes("AddToPlanButton"), "briefing can add the move to the plan");
 assert(briefing.includes("getPlaybookSteps"), "briefing loads the real playbook pack");
 assert(!briefing.includes("Explanation Video"), "no video CTA in the owner briefing");
@@ -130,7 +135,10 @@ assert(hero.includes("onDriverClick"), "SphereHero accepts a driver click");
 assert(hero.includes("open money briefing"), "driver rows are labelled as the briefing");
 
 const studio = readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8");
-assert(!studio.includes("onDriverClick"), "accountant SphereHero does not open the owner briefing");
+assert(studio.includes("onDriverClick"), "accountant SphereHero opens the playbook from a driver");
+assert(studio.includes("openDrawerFromUiKey"), "driver click uses the playbook drawer");
 assert(!studio.includes("OwnerRatioBriefing"), "accountant board keeps PlaybookDrawer");
+assert(studio.includes("ratioQueryCounts"), "open owner questions badge the ratio");
+assert(studio.includes('queries: "open"') || studio.includes("search.queries"), "open-queries deep link is accepted");
 
 console.log("ratio-briefing-test: all assertions passed");

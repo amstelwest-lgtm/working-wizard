@@ -51,6 +51,8 @@ type NotesCtx = {
     y: number;
     text: string;
     tagMilonIt?: boolean;
+    ratioKey?: string;
+    mentions?: NoteMention[];
   }) => Promise<ClientNote | null>;
   deleteNote: (id: string) => Promise<void>;
   resolveNote: (id: string) => Promise<void>;
@@ -192,12 +194,27 @@ export function NotesProvider({ children }: { children: ReactNode }) {
   }, [refresh]);
 
   const addNote = useCallback(
-    async (input: { x: number; y: number; text: string; tagMilonIt?: boolean }) => {
+    async (input: {
+      x: number;
+      y: number;
+      text: string;
+      tagMilonIt?: boolean;
+      ratioKey?: string;
+      mentions?: NoteMention[];
+    }) => {
       if (!surface?.clientId) {
         toast.error("Open a client workspace before pinning a note");
         return null;
       }
-      const mentions = extractMentionsFromText(input.text, collaborators);
+      const fromText = extractMentionsFromText(input.text, collaborators);
+      const extra = input.mentions ?? [];
+      const seen = new Set(fromText.map((m) => m.userId));
+      const mentions = [...fromText];
+      for (const m of extra) {
+        if (seen.has(m.userId)) continue;
+        seen.add(m.userId);
+        mentions.push(m);
+      }
       try {
         const res = await createNoteFn({
           data: {
@@ -208,6 +225,7 @@ export function NotesProvider({ children }: { children: ReactNode }) {
             text: input.text,
             mentions,
             tagMilonIt: Boolean(input.tagMilonIt),
+            ratioKey: input.ratioKey ?? null,
           },
         });
         setNotes((prev) => [...prev, res.note]);
