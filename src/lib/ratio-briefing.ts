@@ -83,16 +83,12 @@ function money(n: number, market: BriefingMarket): string {
   return formatMoneyCompact(n, market);
 }
 
-export function currencyWord(market: BriefingMarket, plural = false): string {
-  return t(plural ? "currencyWordPlural" : "currencyWord", market);
-}
-
 export function ratioPlaybookKey(key: string): string {
   return playbookKeyForUiKey(key);
 }
 
-export function ratioBriefingTitle(market: BriefingMarket): string {
-  return `This ratio in your ${currencyWord(market, true)}`;
+export function ratioBriefingTitle(): string {
+  return "What this means in money";
 }
 
 export function ratioFriendlyName(name: string, market: BriefingMarket): string {
@@ -131,7 +127,6 @@ export function soWhatInMoney(opts: {
 
   const dailyRevenue = n.revenue > 0 ? n.revenue / DAYS_IN_YEAR : 0;
   const dailyCogs = n.cogs > 0 ? n.cogs / DAYS_IN_YEAR : 0;
-  const words = currencyWord(market, true);
 
   if (key === "debtorDays") {
     const stock = n.receivables > 0 ? n.receivables : value * dailyRevenue;
@@ -143,7 +138,7 @@ export function soWhatInMoney(opts: {
       return {
         kind: "cash-trapped",
         line: `Customers currently owe you about ${money(stock, market)}. That's ${Math.round(extraDays)} days slower than a typical company in your industry.`,
-        detail: `Collecting at the median (${Math.round(targetDays)} days) would free about ${money(extraCash, market)} of ${words} — roughly ${money(dailyRevenue, market)} a day.`,
+        detail: `Collecting at the median (${Math.round(targetDays)} days) would free about ${money(extraCash, market)} — roughly ${money(dailyRevenue, market)} a day.`,
       };
     }
     if (extraDays < -1) {
@@ -169,7 +164,7 @@ export function soWhatInMoney(opts: {
       return {
         kind: "cash-trapped",
         line: `Stock on the floor is about ${money(stock, market)} — ${Math.round(extraDays)} days more than a typical peer.`,
-        detail: `Getting back to ${Math.round(targetDays)} days would unlock about ${money(extraCash, market)} of ${words}.`,
+        detail: `Getting back to ${Math.round(targetDays)} days would unlock about ${money(extraCash, market)}.`,
       };
     }
     return {
@@ -217,7 +212,7 @@ export function soWhatInMoney(opts: {
       return {
         kind: "cash-trapped",
         line: `${stockBit}You're ${Math.round(extraDays)} days slower than the industry median (${Math.round(targetDays)} days).`,
-        detail: `Closing that gap would free about ${money(extraCash, market)} of ${words} — money currently sitting in ${t("receivables", market).toLowerCase()} and stock instead of the bank.`,
+        detail: `Closing that gap would free about ${money(extraCash, market)} — money currently sitting in ${t("receivables", market).toLowerCase()} and stock instead of the bank.`,
       };
     }
     return {
@@ -250,7 +245,7 @@ export function soWhatInMoney(opts: {
     return {
       kind: "leverage",
       line: `A 10% dip in sales would move operating profit by about ${money(dip, market)} at this leverage (${value.toFixed(1)}×).`,
-      detail: `High operating leverage cuts both ways — the same 10% upswing would add roughly the same ${words} back.`,
+      detail: `High operating leverage cuts both ways — the same 10% upswing would add roughly the same amount back.`,
     };
   }
 

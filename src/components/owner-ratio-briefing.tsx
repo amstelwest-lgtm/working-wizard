@@ -16,7 +16,6 @@ import { getPlaybookSteps, type PlaybookStep } from "@/lib/playbook.functions";
 import { scoreTier } from "@/lib/ratios";
 import type { RatioInputs } from "@/lib/ratios";
 import {
-  currencyWord,
   fallbackMove,
   ratioBriefingTitle,
   ratioFormulaLine,
@@ -186,7 +185,7 @@ export function OwnerRatioBriefing({
           <>
             <SheetHeader className="flex-shrink-0 space-y-1 px-6 pb-4 pt-6 text-left">
               <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#b8860b]">
-                {ratioBriefingTitle(briefingMarket)}
+                {ratioBriefingTitle()}
               </p>
               <SheetTitle className="flex items-center gap-2 text-[18px] font-semibold text-slate-950 dark:text-slate-50">
                 <span className="text-2xl" aria-hidden>
@@ -219,7 +218,7 @@ export function OwnerRatioBriefing({
                 <div className="rounded-xl border border-[#d4a550]/35 bg-gradient-to-br from-amber-50/90 via-white to-white px-4 py-3.5 shadow-[0_8px_24px_rgba(121,91,27,0.08)] dark:from-[#d4a550]/12 dark:via-slate-950/60 dark:to-slate-950/40 dark:shadow-none">
                   <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.22em] text-[#b8860b] dark:text-[#d4a550]">
                     <Wallet className="h-3.5 w-3.5" />
-                    In your {currencyWord(briefingMarket, true)}
+                    In money terms
                   </p>
                   <p className="mt-2 text-[15px] font-semibold leading-snug text-slate-900 dark:text-white">
                     {soWhat.line}
