@@ -81,6 +81,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { KpiTrendline, pctDelta } from "@/components/kpi-trendline";
+import { IndustryQuintile } from "@/components/industry-quintile";
 import { BenchmarkBar } from "@/components/benchmark-bar";
 import { AddToPlanButton } from "@/components/add-to-plan-button";
 import { OwnerRatioBriefing } from "@/components/owner-ratio-briefing";
@@ -4592,6 +4593,18 @@ function Index() {
                           {industryBenchmarkCaption(boardMarket)}
                         </p>
                       )}
+                      {needsPastPeriodPrompt({
+                        hasLiveFigures: hasRealFinancials,
+                        firstRunBusy: firstRunStep !== null,
+                        snapshots: history,
+                      }) && userRole !== "client_member" ? (
+                        <p className="mb-3 text-[12px] leading-relaxed text-slate-600 dark:text-slate-400">
+                          The small trend on each row fills in once you add a past period — a prior
+                          year or quarter. Until then you still see the graph slot; we do not invent
+                          the history.{" "}
+                          <AddPastPeriodLink onOpen={() => setPastPeriodOpen(true)} />
+                        </p>
+                      ) : null}
                       {!showScoredBoard && !actingClientId && (
                         <div className="mb-4 flex items-center gap-3 rounded-lg border border-amber-700/40 bg-amber-950/20 px-4 py-2.5 text-xs text-amber-300">
                           <span className="text-amber-400">⚠</span>
@@ -4840,16 +4853,6 @@ function Index() {
                                   const series = seriesFor(k, rawVal);
                                   const delta = pctDelta(series);
                                   const bm = benchmarkFor(k);
-                                  const quintile = isFinite(health)
-                                    ? Math.min(5, Math.max(1, Math.ceil(health / 20)))
-                                    : 0;
-                                  const qCols = [
-                                    "bg-rose-600",
-                                    "bg-orange-500",
-                                    "bg-amber-400",
-                                    "bg-lime-500",
-                                    "bg-emerald-500",
-                                  ] as const;
                                   const fmtd = !isFinite(rawVal)
                                     ? "—"
                                     : fmt === "pct"
@@ -4916,41 +4919,36 @@ function Index() {
                                             <KpiTrendline values={series} width={52} height={18} />
                                             {delta !== null && (
                                               <span
-                                                className={`text-[9px] tabular-nums ${delta >= 0 ? "text-emerald-400" : "text-rose-400"}`}
+                                                className={`text-[9px] tabular-nums ${delta >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}
                                               >
                                                 {delta >= 0 ? "+" : ""}
                                                 {(delta * 100).toFixed(1)}%
                                               </span>
                                             )}
                                           </div>
-                                        ) : needsPastPeriodPrompt({
-                                            hasLiveFigures: hasRealFinancials,
-                                            firstRunBusy: firstRunStep !== null,
-                                            snapshots: history,
-                                          }) && userRole !== "client_member" ? (
-                                          <AddPastPeriodLink
-                                            onOpen={() => setPastPeriodOpen(true)}
-                                            label="Add period"
+                                        ) : isFinite(rawVal) ? (
+                                          <KpiTrendline
+                                            values={series}
+                                            width={52}
+                                            height={18}
+                                            placeholder
                                           />
                                         ) : (
-                                          <span className="text-[11px] text-slate-700">—</span>
+                                          <span className="text-[11px] text-slate-400 dark:text-slate-500">
+                                            —
+                                          </span>
                                         )}
                                       </td>
                                       <td className="px-2 py-3 text-center">
                                         {bm && isFinite(rawVal) ? (
-                                          <div
-                                            className="flex gap-[2px] justify-center"
+                                          <IndustryQuintile
+                                            health={health}
                                             title={`${industryBenchmarkShortLabel(boardMarket)}: p25=${bm.p25} p50=${bm.p50} p75=${bm.p75}`}
-                                          >
-                                            {qCols.map((c, qi) => (
-                                              <div
-                                                key={qi}
-                                                className={`h-2 w-2.5 rounded-[2px] sm:h-2.5 sm:w-3.5 sm:rounded-[3px] ${qi === quintile - 1 ? c : "bg-slate-700/50"}`}
-                                              />
-                                            ))}
-                                          </div>
+                                          />
                                         ) : (
-                                          <span className="text-[11px] text-slate-700">—</span>
+                                          <span className="text-[11px] text-slate-400 dark:text-slate-500">
+                                            —
+                                          </span>
                                         )}
                                       </td>
                                       <td className="px-4 py-3 text-right">
