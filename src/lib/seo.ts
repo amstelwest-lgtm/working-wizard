@@ -121,7 +121,7 @@ export function pageHead(page: SeoPage) {
   const url = `${SITE_ORIGIN}${path}`;
   const og = page.ogTitle ?? page.title;
   const slug = slugFor(path);
-  const image = `${SITE_ORIGIN}/icon-512.png`;
+  const image = `${SITE_ORIGIN}/og.png`;
   const index = page.index !== false;
   const robots = index
     ? "index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1"
@@ -167,7 +167,7 @@ export function organizationGraphJson(): string {
         url: SITE_ORIGIN,
         logo: {
           "@type": "ImageObject",
-          url: `${SITE_ORIGIN}/icon-512.png`,
+          url: `${SITE_ORIGIN}/icons/icon-512.png`,
           width: 512,
           height: 512,
         },
@@ -231,6 +231,9 @@ export function organizationGraphJson(): string {
 
 export const ROBOTS_TXT = `User-agent: *
 Allow: /
+Allow: /favicon.ico
+Allow: /icons/
+Allow: /og.png
 
 User-agent: GPTBot
 Allow: /
