@@ -73,7 +73,7 @@ const OWNER_EMPTY_STEPS: Step[] = [
  * Owner scored-board tour: an incentive-led walk of the operating board.
  * Every step must answer “what do I get for the business?” Bot and Budget
  * were dropped — they didn’t earn a slot next to notes, sign-off, product
- * lines, cash, Claude’s next moves, and the Action Plan.
+ * lines, cash, Milōn Bot next moves, and the Action Plan.
  */
 const OWNER_STEPS: Step[] = [
   {
@@ -128,9 +128,9 @@ const OWNER_STEPS: Step[] = [
     tab: "next",
     targetId: "wizard-moves-hero, wizard-moves-list",
     section: "Next moves",
-    title: "Claude ranked the next move for this business — not a generic list",
+    title: "Milōn Bot ranked the next move for this business — not a generic list",
     why: "The top item is the highest-value hour you can spend this week.",
-    body: "These steps are written for your live ratios, then scored three ways: Eisenhower (do it, decide it, or drop it), Cynefin (simple fix or a messy one?), and impact (which lever moves health the most). Start at the top. Send the one you’ll own into the Action Plan.",
+    body: "These recommendations are curated from the full Milōn picture of this business. Your accountant can review them and sign off when they are fit to act on. Start at the top. Send the one you’ll own into the Action Plan.",
   },
   {
     tab: "tasks",
