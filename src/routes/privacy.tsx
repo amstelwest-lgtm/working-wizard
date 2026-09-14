@@ -7,19 +7,13 @@ import {
   LEGAL_INFORMATION_OFFICER,
 } from "@/lib/legal";
 import { VISITOR_MARKET_BOOT_SCRIPT } from "@/lib/market";
+import { pageHead, SEO_PAGES } from "@/lib/seo";
 import marketingCss from "../styles/marketing.css?inline";
 
 export const Route = createFileRoute("/privacy")({
   component: PrivacyPage,
   head: () => ({
-    meta: [
-      { title: "Privacy — MILŌN" },
-      {
-        name: "description",
-        content:
-          "How Milōn holds your figures, who can see them, and how AI is used. Financial information sent to Claude is anonymised.",
-      },
-    ],
+    ...pageHead(SEO_PAGES.privacy),
     styles: [{ children: marketingCss }],
     scripts: [{ children: VISITOR_MARKET_BOOT_SCRIPT }],
   }),

@@ -2,19 +2,13 @@ import { createFileRoute } from "@tanstack/react-router";
 import { MarketCopy, MarketingShell } from "@/components/marketing-shell";
 import { LEGAL_EFFECTIVE } from "@/lib/legal";
 import { VISITOR_MARKET_BOOT_SCRIPT } from "@/lib/market";
+import { pageHead, SEO_PAGES } from "@/lib/seo";
 import marketingCss from "../styles/marketing.css?inline";
 
 export const Route = createFileRoute("/ai")({
   component: AiNoticePage,
   head: () => ({
-    meta: [
-      { title: "AI notice — MILŌN" },
-      {
-        name: "description",
-        content:
-          "Milōn uses AI, powered by Claude. Financial information sent to the model is anonymised — no company names and no raw amounts.",
-      },
-    ],
+    ...pageHead(SEO_PAGES.ai),
     styles: [{ children: marketingCss }],
     scripts: [{ children: VISITOR_MARKET_BOOT_SCRIPT }],
   }),

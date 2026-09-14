@@ -254,7 +254,7 @@ import {
   computePositionPercentile,
   computeWeekChanges,
 } from "@/lib/overview-insights";
-import { SHARE_DESCRIPTION, SHARE_TITLE } from "@/lib/share-copy";
+import { pageHead, SEO_PAGES } from "@/lib/seo";
 
 function AppBootSpinner() {
   return <OwnerBootSkeleton />;
@@ -272,9 +272,7 @@ export const Route = createFileRoute("/app")({
       </ClientOnly>
     );
   },
-  head: () => ({
-    meta: [{ title: SHARE_TITLE }, { name: "description", content: SHARE_DESCRIPTION }],
-  }),
+  head: () => pageHead(SEO_PAGES.app),
 });
 
 type Inputs = {

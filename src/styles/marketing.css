@@ -592,13 +592,13 @@ html .mk .mk-foot a:hover {
   }
 }
 
-.mk-copy-us {
+.mk-copy-za {
   display: none;
 }
-html[data-market="us"] .mk-copy-za {
+html[data-market="za"] .mk-copy-us {
   display: none !important;
 }
-html[data-market="us"] .mk-copy-us {
+html[data-market="za"] .mk-copy-za {
   display: revert !important;
 }
 .mk .mk-market-switch button {

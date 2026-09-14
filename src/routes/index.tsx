@@ -29,7 +29,7 @@ import {
 // (external app CSS can still load; these rules win for landing selectors).
 import landingCss from "../styles/landing.css?inline";
 import { peekPendingOwnerInvite, pendingInviteTokenFromSearch } from "@/lib/invite-handoff";
-import { SHARE_DESCRIPTION, SHARE_TITLE } from "@/lib/share-copy";
+import { pageHead, SEO_PAGES } from "@/lib/seo";
 import { OwnerInviteShell } from "@/components/owner-invite-shell";
 import { OwnerInviteSignupPanel } from "@/components/owner-invite-signup-panel";
 import { OwnerInviteSigninOverlay } from "@/components/owner-invite-signin-overlay";
@@ -37,13 +37,7 @@ import { OwnerInviteSigninOverlay } from "@/components/owner-invite-signin-overl
 export const Route = createFileRoute("/")({
   component: LandingPage,
   head: () => ({
-    meta: [
-      { title: "MILŌN — Know your numbers. Sleep at night." },
-      { name: "description", content: SHARE_DESCRIPTION },
-      { property: "og:title", content: SHARE_TITLE },
-      { property: "og:description", content: SHARE_DESCRIPTION },
-      { property: "og:image", content: "/icon-512.png" },
-    ],
+    ...pageHead(SEO_PAGES.home),
     styles: [{ children: landingCss }],
     scripts: [
       {
@@ -595,11 +589,11 @@ function LandingPage() {
     function startQuiz(r: string) {
       const raw = (window as unknown as { __milonDraftMarket?: DraftMarket }).__milonDraftMarket;
       const draft =
-        raw?.country === "US" && raw.regionCode
+        raw?.country === "ZA"
           ? raw
-          : raw?.country === "ZA"
+          : raw?.country === "US"
             ? raw
-            : { country: "ZA" as const, regionCode: null };
+            : { country: "US" as const, regionCode: null };
       qRole = r;
       step = 0;
       answers = {};
@@ -2311,7 +2305,7 @@ function LandingPage() {
               <p>
                 <RegionCopy pack={copyMarket.copyPack}
                   za="31 ratios, 4 pillar scores, one overall health score — mapped against 120 SA industry benchmarks."
-                  us="31 ratios, 4 pillar scores, one overall health score — days and percentages, without treating South African medians as US ones."
+                  us="31 ratios, 4 pillar scores, one overall health score — US industry medians where we have them, otherwise days and percentages."
                 />
               </p>
               <span className="time">Instantly</span>
