@@ -1,7 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { MarketCopy, MarketingShell } from "@/components/marketing-shell";
 import { LIST_PRICES, VISITOR_MARKET_BOOT_SCRIPT } from "@/lib/market";
-import { pageHead, SEO_PAGES } from "@/lib/seo";
+import { ACCOUNTING_SOFTWARE_ANSWER, publicFaqUsItems } from "@/lib/marketing-faq";
+import { faqPageJson, pageHead, SEO_PAGES } from "@/lib/seo";
 import marketingCss from "../styles/marketing.css?inline";
 
 export const Route = createFileRoute("/faq")({
@@ -9,7 +10,10 @@ export const Route = createFileRoute("/faq")({
   head: () => ({
     ...pageHead(SEO_PAGES.faq),
     styles: [{ children: marketingCss }],
-    scripts: [{ children: VISITOR_MARKET_BOOT_SCRIPT }],
+    scripts: [
+      { children: VISITOR_MARKET_BOOT_SCRIPT },
+      { type: "application/ld+json", children: faqPageJson(publicFaqUsItems()) },
+    ],
   }),
 });
 
@@ -134,16 +138,7 @@ function FaqPage() {
       </Qa>
 
       <Qa q="I already have accounting software.">
-        <p className="mk-copy-za">
-          Keep it. Milōn is not a ledger and does not want to be. It reads the output your books
-          already produce — bank statements, Excel, or a PDF — and turns it into a score, a
-          forecast, and a ranked list of what to do. QuickBooks Online and Xero can follow.
-        </p>
-        <p className="mk-copy-us">
-          Keep it. Connect QuickBooks Online when you can; Excel, CSV, or a bank PDF also work. Xero
-          is also on the list, not the lead path. Milōn is not a ledger — it turns the output your
-          books already produce into a score, a forecast, and a ranked list of what to do.
-        </p>
+        <p>{ACCOUNTING_SOFTWARE_ANSWER}</p>
       </Qa>
 
       <Qa q="How accurate is the score?">

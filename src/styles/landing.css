@@ -591,6 +591,15 @@ html[data-landing="1"] .milon-signin-box .field label{display:block;font-size:11
 html[data-landing="1"] .milon-signin-box .field input{width:100%;padding:13px 16px;border-radius:12px;border:1px solid var(--line);background:var(--bg-2);color:var(--ink);font-family:inherit;font-size:15px;transition:border-color .3s,box-shadow .3s}
 html[data-landing="1"] .milon-signin-box .field input:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px rgba(212,175,55,.15)}
 
+html[data-landing="1"] #home-faq{padding-top:40px;padding-bottom:80px}
+html[data-landing="1"] .home-faq{max-width:760px;margin:40px auto 0}
+html[data-landing="1"] .home-faq article{padding:22px 0;border-bottom:1px solid var(--line)}
+html[data-landing="1"] .home-faq article:first-child{border-top:1px solid var(--line)}
+html[data-landing="1"] .home-faq h3{font-size:18px;margin:0 0 10px;line-height:1.35}
+html[data-landing="1"] .home-faq p{margin:0;color:var(--ink-dim);font-size:15px;line-height:1.65}
+html[data-landing="1"] .home-faq-more{max-width:760px;margin:22px auto 0;text-align:center;font-size:14px;color:var(--ink-dim)}
+html[data-landing="1"] .home-faq-more a{color:var(--gold)}
+
 @media(prefers-reduced-motion:reduce){
   html[data-landing="1"] *,html[data-landing="1"] *::before,html[data-landing="1"] *::after{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.2s !important}
   html[data-landing="1"]{scroll-behavior:auto}

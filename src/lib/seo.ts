@@ -44,6 +44,13 @@ export const SEO_PAGES = {
       "Straight answers on cost, data handling, and whether MILŌN replaces your accountant. AI prepares the analysis; a qualified human reviews and signs off.",
     imageAlt: "Frequently asked questions about the MILŌN finance platform",
   },
+  about: {
+    path: "/about",
+    title: "About MILŌN — Built by a Big 4-Trained Auditor",
+    description:
+      "MILŌN was built by a Big 4-trained auditor who saw the same thing in every set of books: the numbers existed, the guidance didn't.",
+    imageAlt: "About MILŌN — founder story and why the product exists",
+  },
   privacy: {
     path: "/privacy",
     title: "Privacy — How MILŌN Handles Financial Data",
@@ -84,6 +91,20 @@ export const SEO_PAGES = {
 export const INDEXABLE_PATHS = Object.values(SEO_PAGES)
   .filter((p) => p.index !== false)
   .map((p) => p.path);
+
+export type FaqItem = { question: string; answer: string };
+
+export function faqPageJson(items: FaqItem[]): string {
+  return JSON.stringify({
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: items.map((item) => ({
+      "@type": "Question",
+      name: item.question,
+      acceptedAnswer: { "@type": "Answer", text: item.answer },
+    })),
+  });
+}
 
 export function canonicalUrl(path: string): string {
   if (path === "/") return `${SITE_ORIGIN}/`;
@@ -155,8 +176,6 @@ export function organizationGraphJson(): string {
         sameAs: ["https://www.linkedin.com/company/milonfinance", "https://x.com/milonfinance"],
         areaServed: [
           { "@type": "Country", name: "United States" },
-          { "@type": "Country", name: "Canada" },
-          { "@type": "Country", name: "United Kingdom" },
           { "@type": "Country", name: "South Africa" },
         ],
         knowsAbout: [
@@ -179,16 +198,15 @@ export function organizationGraphJson(): string {
         url: SITE_ORIGIN,
         publisher: { "@id": `${SITE_ORIGIN}/#organization` },
         description:
-          "AI-automated finance function for accounting firms and small businesses. Financial health scoring, 13-week cash flow forecasting, budget vs actual variance analysis, industry benchmarking, white-label reporting, and assignable action plans.",
+          "AI-automated finance function for accounting firms and small businesses. Financial health scoring, 13-week cash flow forecasting, budget vs actual variance analysis, white-label reporting, and assignable action plans.",
         featureList: [
           "Business financial health score across profit, assets, financing and cash",
-          "31 financial ratios with plain-English explanations and repair playbooks",
+          "19 financial ratios with workings shown and repair playbooks",
           "13-week rolling cash flow forecast",
           "Budget vs actual variance reporting with AI commentary",
-          "AI extraction of financial statements from PDF or photo",
+          "AI extraction of financial statements from PDF, Excel, or CSV",
           "White-label client-ready PDF reports",
           "Assignable action plans with email-based task completion",
-          "Industry benchmarking",
           "Ask AI over your own financial data",
         ],
         offers: {
@@ -246,33 +264,33 @@ export const LLMS_TXT = `# MILŌN
 > MILŌN is an AI-automated finance function and advisory platform for
 > accounting firms and the small and midsize businesses they serve. It
 > generates financial health scoring, 13-week cash flow forecasting,
-> budget vs actual variance analysis, industry benchmarking, and
-> assignable action plans — which a qualified accountant reviews and
-> signs off before they reach the client.
+> budget vs actual variance analysis, and assignable action plans —
+> which a qualified accountant reviews and signs off before they reach
+> the client.
 
 ## What MILŌN does
 - Scores business financial health across four pillars: profit, assets, financing, cash
-- Calculates and explains 31 financial ratios with industry benchmarks and repair playbooks
+- Calculates and explains 19 financial ratios with workings shown and repair playbooks
 - Builds rolling 13-week direct cash flow forecasts
 - Produces budget vs actual variance reporting with written commentary
-- Extracts financial data from PDF or photographed financial statements
+- Extracts financial data from PDF, Excel, CSV, or a bank statement
 - Generates white-label client-ready reports for accounting firms
 - Converts recommendations into assigned tasks completable from email
 
 ## Who it is for
 - Accounting firms, CPA firms and bookkeeping firms launching or scaling client advisory services
 - Small, midsize and family-owned businesses that want to understand their numbers
-- Fractional and outsourced CFOs delivering advisory at scale
 
 ## Key pages
 - Home: ${SITE_ORIGIN}/
 - For accounting firms: ${SITE_ORIGIN}/for-accountants
 - For business owners: ${SITE_ORIGIN}/for-owners
+- About: ${SITE_ORIGIN}/about
 - FAQ: ${SITE_ORIGIN}/faq
 - Privacy: ${SITE_ORIGIN}/privacy
 
 ## Markets
-Primary: United States. Also serving Canada, the United Kingdom and South Africa.
+Primary: United States. Also serving South Africa.
 `;
 
 export function sitemapXml(lastmod: string): string {

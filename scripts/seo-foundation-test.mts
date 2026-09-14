@@ -10,10 +10,12 @@ import {
   ROBOTS_TXT,
   SEO_PAGES,
   SITE_ORIGIN,
+  faqPageJson,
   organizationGraphJson,
   pageHead,
   sitemapXml,
 } from "../src/lib/seo";
+import { ACCOUNTING_SOFTWARE_ANSWER, HOMEPAGE_FAQ_ITEMS } from "../src/lib/marketing-faq";
 import { visitorCopyPack } from "../src/lib/market";
 
 function assert(cond: boolean, msg: string) {
@@ -64,7 +66,14 @@ assert(ROBOTS_TXT.includes("Sitemap: https://milonfinance.com/sitemap.xml"), "ro
 
 assert(LLMS_TXT.includes("AI-automated finance function"), "llms.txt positioning");
 assert(LLMS_TXT.includes("/for-accountants"), "llms.txt keeps existing firm URL");
+assert(LLMS_TXT.includes("/about"), "llms.txt includes about");
 assert(LLMS_TXT.includes("Primary: United States"), "llms.txt US-first");
+assert(!LLMS_TXT.includes("photographed"), "llms.txt does not claim photo ingest");
+assert(!LLMS_TXT.includes("Canada"), "llms.txt does not claim Canada");
+assert(!graph.includes("Canada"), "org schema does not claim Canada");
+assert(!graph.includes("photographed"), "schema does not claim photo ingest");
+assert(graph.includes("19 financial ratios"), "schema uses the real ratio count");
+assert(INDEXABLE_PATHS.includes("/about"), "about is indexable");
 
 const map = sitemapXml("2026-09-14");
 for (const path of INDEXABLE_PATHS) {
@@ -84,6 +93,30 @@ assert(!landing.includes("South African accounting"), "landing meta is not SA-fi
 assert(
   landing.includes('country: "US" as const'),
   "quiz defaults to US when the visitor has no market pick",
+);
+assert(!landing.includes("Connect QuickBooks"), "landing does not claim a QuickBooks connection");
+assert(
+  landing.includes("HOMEPAGE_FAQ_ITEMS"),
+  "landing renders homepage FAQ from the shared copy list",
+);
+assert(!landing.includes("930+"), "landing does not claim 930+ playbook steps");
+assert(!landing.includes("31 ratios"), "landing does not claim 31 ratios");
+assert(!landing.includes("End-to-end encrypted"), "landing does not claim E2E encryption");
+assert(!landing.includes("Live sync"), "landing does not claim live ledger sync");
+assert(landing.includes('href="/about"'), "landing links to about");
+assert(landing.includes('href="/for-owners"'), "landing links to owners hub");
+assert(landing.includes('id="bridge"'), "landing keeps the dual-audience bridge");
+assert(!landing.includes('id="features"'), "landing drops the duplicate features block");
+assert(landing.includes('id="home-faq"'), "landing has a visible FAQ block");
+assert(landing.includes("faqPageJson(HOMEPAGE_FAQ_ITEMS)"), "landing emits homepage FAQ schema");
+assert(HOMEPAGE_FAQ_ITEMS.length === 5, "homepage FAQ is five questions");
+assert(
+  HOMEPAGE_FAQ_ITEMS[1].answer.includes("you do not need QuickBooks or Xero"),
+  "QBO/Xero appear only as not required",
+);
+assert(
+  faqPageJson(HOMEPAGE_FAQ_ITEMS).includes("Does MILŌN replace my accountant?"),
+  "homepage FAQ schema includes the accountant question",
 );
 
 const firms = readFileSync(resolve("src/routes/for-accountants.tsx"), "utf8");
@@ -113,5 +146,20 @@ assert(
   readFileSync(resolve("src/routes/sitemap[.]xml.ts"), "utf8").includes("sitemapXml"),
   "sitemap.xml route",
 );
+
+const about = readFileSync(resolve("src/routes/about.tsx"), "utf8");
+assert(about.includes("SEO_PAGES.about"), "about page uses spec meta");
+assert(about.includes("not affiliated with, endorsed by, or connected to EY"), "about has EY disclaimer");
+assert(!about.includes("QuickBooks"), "about does not claim QuickBooks");
+assert(!about.includes("Delaware"), "about does not invent a US legal entity");
+assert(!about.includes("Xero"), "about does not claim Xero");
+
+const faq = readFileSync(resolve("src/routes/faq.tsx"), "utf8");
+assert(faq.includes("faqPageJson"), "faq emits FAQPage JSON-LD");
+assert(faq.includes("ACCOUNTING_SOFTWARE_ANSWER"), "faq accounting-software answer is shared with schema");
+assert(!faq.includes("QuickBooks"), "faq does not claim QuickBooks");
+assert(!faq.includes("Xero"), "faq does not claim Xero");
+assert(ACCOUNTING_SOFTWARE_ANSWER.includes("not a ledger"), "accounting-software answer stays honest");
+assert(!ACCOUNTING_SOFTWARE_ANSWER.includes("QuickBooks"), "accounting-software answer does not name QBO");
 
 console.log("seo-foundation-test: all assertions passed");
