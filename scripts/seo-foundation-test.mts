@@ -2,7 +2,7 @@
  * US-first marketing SEO foundation (phase 1).
  * Run: pnpm test:seo-foundation
  */
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 import {
   INDEXABLE_PATHS,
@@ -86,6 +86,36 @@ assert(!map.includes("/auth"), "sitemap excludes /auth");
 const root = readFileSync(resolve("src/routes/__root.tsx"), "utf8");
 assert(root.includes('lang="en-US"'), "html lang is en-US");
 assert(root.includes("organizationGraphJson"), "root emits org JSON-LD");
+assert(root.includes('href: "/favicon.ico"'), "root uses /favicon.ico");
+assert(!root.includes("favicon-32"), "old favicon-32 is gone");
+assert(!root.includes("?v=2"), "icon URLs are not cache-busted");
+assert(root.includes('href: "/icons/icon-192.png"'), "png app icon is under /icons");
+assert(root.includes('href: "/icons/apple-touch-icon.png"'), "apple touch icon is under /icons");
+assert(root.includes('href: "/manifest.json"'), "manifest is /manifest.json");
+assert(root.includes('content: "#0A0A0A"'), "theme-color matches the new mark");
+
+assert(
+  home.meta.some((m) => "property" in m && m.property === "og:image" && m.content === `${SITE_ORIGIN}/og.png`),
+  "og:image is the 1200x630 card",
+);
+assert(graph.includes("/icons/icon-512.png"), "org schema logo is the 512 icon");
+assert(!graph.includes(`${SITE_ORIGIN}/icon-512.png"`), "org schema does not use the old root icon path");
+
+assert(ROBOTS_TXT.includes("Allow: /favicon.ico"), "robots allow the favicon");
+assert(ROBOTS_TXT.includes("Allow: /icons/"), "robots allow /icons/");
+assert(!/Disallow: \/icons/.test(ROBOTS_TXT), "robots do not block /icons/");
+assert(!/Disallow: \/favicon/.test(ROBOTS_TXT), "robots do not block the favicon");
+
+const manifest = JSON.parse(readFileSync(resolve("public/manifest.json"), "utf8"));
+assert(manifest.name === "MILŌN", "manifest name");
+assert(manifest.icons.some((i: { src: string }) => i.src === "/icons/icon-maskable-512.png"), "maskable icon");
+
+assert(existsSync(resolve("public/favicon.ico")), "favicon.ico is at the site root");
+assert(existsSync(resolve("public/og.png")), "og.png is at the site root");
+assert(existsSync(resolve("public/icons/icon-192.png")), "192 icon is under /icons");
+assert(!existsSync(resolve("public/favicon-32.png")), "old favicon-32.png is deleted");
+assert(!existsSync(resolve("public/icon-512.png")), "old root icon-512.png is deleted");
+assert(!existsSync(resolve("public/manifest.webmanifest")), "old webmanifest is deleted");
 
 const landing = readFileSync(resolve("src/routes/index.tsx"), "utf8");
 assert(landing.includes("SEO_PAGES.home"), "landing uses spec meta");
@@ -138,6 +168,11 @@ assert(mkCss.includes('html[data-market="za"] .mk-copy-us'), "ZA pack is opt-in 
 const boot = readFileSync(resolve("src/lib/market/marketing.ts"), "utf8");
 assert(boot.includes('d.dataset.market="us"'), "boot script defaults to US");
 assert(boot.includes("Never geo-redirects"), "boot script does not geo-redirect");
+
+const vercel = readFileSync(resolve("vercel.json"), "utf8");
+assert(vercel.includes("/favicon.ico"), "Vercel caches the favicon");
+assert(vercel.includes("/icons/(.*)"), "Vercel caches /icons/");
+assert(!vercel.includes("favicon.ico?"), "favicon URL is not cache-busted");
 
 const robotsRoute = readFileSync(resolve("src/routes/robots[.]txt.ts"), "utf8");
 assert(robotsRoute.includes("ROBOTS_TXT"), "robots.txt is a real route");

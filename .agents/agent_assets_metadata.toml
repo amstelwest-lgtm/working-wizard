@@ -3,21 +3,21 @@ generated = []
 
 [[outputs]]
 id = "6lduwC3GxO9ID738d8YpU"
-uri = "file://public/icon-512.png"
+uri = "file://public/icons/icon-512.png"
 type = "image"
 title = "App icon (512px)"
 
 [[outputs]]
 id = "qMlBvV-jjlJxUXjTqVAkP"
-uri = "file://public/apple-touch-icon.png"
+uri = "file://public/icons/apple-touch-icon.png"
 type = "image"
 title = "Apple touch icon (180px)"
 
 [[outputs]]
 id = "q9aWMz46zzD4QMFU_t7bM"
-uri = "file://public/favicon-32.png"
+uri = "file://public/favicon.ico"
 type = "image"
-title = "Favicon (32px)"
+title = "Favicon"
 
 [[outputs]]
 id = "t5HcJIfZmAezMnkqSiBoF"
