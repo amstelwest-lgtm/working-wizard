@@ -97,4 +97,26 @@ assert(snapSrc.includes(".eq(\"period_date\""), "upsert matches on period_date f
 const dripSrc = readFileSync(resolve("src/components/owner-brain-drip.tsx"), "utf8");
 assert(dripSrc.includes("AddPastPeriodLink"), "drip history question has an upload link");
 
+assert(app.includes("IndustryQuintile"), "complex ratios use the contrast-safe industry bands");
+assert(
+  app.includes("The small trend on each row fills in"),
+  "complex ratios explain that past periods fill the graphs",
+);
+assert(
+  app.includes("height={18}\n                                            placeholder"),
+  "complex ratios keep the trend slot visible without fake history",
+);
+assert(!app.includes('label="Add period"'), "complex ratios dropped the sad per-row Add period links");
+assert(!app.includes("bg-slate-700/50"), "complex ratios dropped the dark-only industry tick fill");
+
+const quintile = readFileSync(resolve("src/components/industry-quintile.tsx"), "utf8");
+assert(quintile.includes("bg-slate-300"), "inactive industry ticks read on light paper");
+assert(quintile.includes("dark:bg-slate-600"), "inactive industry ticks read on dark paper");
+assert(quintile.includes("ring-slate-300"), "industry graphic has a visible track in light mode");
+
+const trend = readFileSync(resolve("src/components/kpi-trendline.tsx"), "utf8");
+assert(trend.includes("placeholder"), "sparkline can show an empty-state silhouette");
+assert(trend.includes("Never invent"), "placeholder is decorative, not assumed history");
+assert(trend.includes("d4a550"), "placeholder uses the board gold so the slot still looks like a graph");
+
 console.log("history-coverage-test: ok");
