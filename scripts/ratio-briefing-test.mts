@@ -113,7 +113,10 @@ assert(!lib.includes("In your"), "briefing does not use In your {currency}");
 
 const briefing = readFileSync(resolve("src/components/owner-ratio-briefing.tsx"), "utf8");
 assert(briefing.includes("One move this week"), "briefing has one-move beat");
-assert(briefing.includes("Ask your accountant"), "briefing has pin exit");
+assert(briefing.includes("Ask your accountant"), "briefing has ask CTA");
+assert(briefing.includes("Ask about this ratio"), "ask opens a question box");
+assert(briefing.includes("ratioKey"), "ask is tagged to the open ratio");
+assert(!briefing.includes("setPinMode"), "ask does not drop into pin-on-page mode");
 assert(briefing.includes("In money terms"), "so-what kicker is In money terms");
 assert(!briefing.includes("In your"), "briefing UI does not say In your rands/dollars");
 assert(briefing.includes("AddToPlanButton"), "briefing can add the move to the plan");
@@ -132,7 +135,10 @@ assert(hero.includes("onDriverClick"), "SphereHero accepts a driver click");
 assert(hero.includes("open money briefing"), "driver rows are labelled as the briefing");
 
 const studio = readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8");
-assert(!studio.includes("onDriverClick"), "accountant SphereHero does not open the owner briefing");
+assert(studio.includes("onDriverClick"), "accountant SphereHero opens the playbook from a driver");
+assert(studio.includes("openDrawerFromUiKey"), "driver click uses the playbook drawer");
 assert(!studio.includes("OwnerRatioBriefing"), "accountant board keeps PlaybookDrawer");
+assert(studio.includes("ratioQueryCounts"), "open owner questions badge the ratio");
+assert(studio.includes('queries: "open"') || studio.includes("search.queries"), "open-queries deep link is accepted");
 
 console.log("ratio-briefing-test: all assertions passed");

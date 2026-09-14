@@ -671,6 +671,7 @@ export type Database = {
           tagged_milon_it_at: string | null
           tagged_milon_it_by: string | null
           mentions: Json
+          ratio_key: string | null
           created_at: string
           updated_at: string
         }
@@ -689,6 +690,7 @@ export type Database = {
           tagged_milon_it_at?: string | null
           tagged_milon_it_by?: string | null
           mentions?: Json
+          ratio_key?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -707,6 +709,7 @@ export type Database = {
           tagged_milon_it_at?: string | null
           tagged_milon_it_by?: string | null
           mentions?: Json
+          ratio_key?: string | null
           created_at?: string
           updated_at?: string
         }

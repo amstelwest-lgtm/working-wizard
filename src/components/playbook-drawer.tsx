@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import {
@@ -11,6 +11,7 @@ import {
   Wallet,
   ShieldAlert,
   AlertTriangle,
+  MessageSquare,
 } from "lucide-react";
 import { getPlaybookSteps } from "@/lib/playbook.functions";
 import type { PlaybookStep } from "@/lib/playbook.functions";
@@ -20,6 +21,8 @@ import {
   SignoffBadgeReadonly,
 } from "@/components/intervention-signoff-button";
 import { useMarket } from "@/contexts/market";
+import { useNotes } from "@/contexts/notes";
+import { noteBelongsToRatio } from "@/lib/ratio-queries";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -136,6 +139,16 @@ export function PlaybookDrawer({
   const loadSignoffs = useServerFn(listInterventionSignoffs);
   const signoffEnabled = Boolean(clientId && ratioKey);
   const { selection } = useMarket();
+  const { notes, replyToNote, resolveNote, focusNoteId } = useNotes();
+  const ratioQueries = useMemo(
+    () =>
+      ratioKey
+        ? notes.filter((n) => !n.resolved && noteBelongsToRatio(n.ratioKey, ratioKey))
+        : [],
+    [notes, ratioKey],
+  );
+  const [replyDraft, setReplyDraft] = useState("");
+  const [replyingId, setReplyingId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open || !ratioKey) {
@@ -242,6 +255,91 @@ export function PlaybookDrawer({
               {actualLine && (
                 <p className="mt-1.5 font-mono text-sm text-slate-100">{actualLine}</p>
               )}
+            </div>
+          )}
+
+          {ratioQueries.length > 0 && (
+            <div data-ratio-queries>
+              <div className="mb-3 flex items-center gap-2">
+                <MessageSquare className="h-3.5 w-3.5 text-[#d4a550]" />
+                <span className="text-[10px] font-bold uppercase tracking-widest text-[#d4a550]">
+                  Owner {ratioQueries.length === 1 ? "query" : "queries"}
+                </span>
+                <div className="flex-1 border-t border-[#d4a550]/30" />
+              </div>
+              <ul className="space-y-2">
+                {ratioQueries.map((q) => (
+                  <li
+                    key={q.id}
+                    className={`rounded-lg border p-3 ${
+                      focusNoteId === q.id
+                        ? "border-[#d4a550] bg-[#d4a550]/10"
+                        : "border-slate-700 bg-slate-900/80"
+                    }`}
+                  >
+                    <p className="text-[11px] font-semibold text-slate-400">{q.author}</p>
+                    <p className="mt-1 text-sm leading-relaxed text-slate-100">{q.text}</p>
+                    {q.replies.length > 0 && (
+                      <ul className="mt-2 space-y-1 border-t border-slate-700 pt-2">
+                        {q.replies.map((r) => (
+                          <li key={r.id} className="text-[12px] text-slate-300">
+                            <span className="font-semibold text-slate-200">{r.author}</span> {r.text}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {isAccountant ? (
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {replyingId === q.id ? (
+                          <form
+                            className="flex w-full gap-2"
+                            onSubmit={(e) => {
+                              e.preventDefault();
+                              const text = replyDraft.trim();
+                              if (!text) return;
+                              void replyToNote(q.id, text).then(() => {
+                                setReplyDraft("");
+                                setReplyingId(null);
+                              });
+                            }}
+                          >
+                            <input
+                              value={replyDraft}
+                              onChange={(e) => setReplyDraft(e.target.value)}
+                              placeholder="Reply…"
+                              className="min-w-0 flex-1 rounded-md border border-slate-600 bg-slate-950 px-2 py-1 text-[12px] text-slate-100"
+                            />
+                            <button
+                              type="submit"
+                              className="rounded-md bg-[#d4a550] px-2 py-1 text-[11px] font-semibold text-[#0a1628]"
+                            >
+                              Send
+                            </button>
+                          </form>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setReplyingId(q.id);
+                              setReplyDraft("");
+                            }}
+                            className="rounded-full px-2 py-0.5 text-[11px] font-semibold text-[#d4a550] hover:bg-[#d4a550]/10"
+                          >
+                            Reply
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => void resolveNote(q.id)}
+                          className="rounded-full px-2 py-0.5 text-[11px] font-medium text-slate-400 hover:text-slate-200"
+                        >
+                          Resolve
+                        </button>
+                      </div>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
           {loading && (

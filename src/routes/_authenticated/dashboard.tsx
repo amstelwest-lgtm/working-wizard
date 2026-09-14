@@ -1185,6 +1185,13 @@ function Dashboard() {
       search: overdue ? { tab: "plan", filter: "overdue" } : { tab: "plan" },
     });
 
+  const openClientQueries = (clientId: string) =>
+    navigate({
+      to: "/clients/$clientId",
+      params: { clientId },
+      search: { queries: "open" },
+    });
+
   const scatterClients = useMemo(
     () =>
       scoredRows
@@ -1547,11 +1554,13 @@ function Dashboard() {
                     onClick={() =>
                       item.openPlan
                         ? openClientPlan(item.clientId, item.detail.includes("overdue"))
-                        : navigate({
-                            to: "/clients/$clientId",
-                            params: { clientId: item.clientId },
-                            search: {},
-                          })
+                        : item.openQueries
+                          ? openClientQueries(item.clientId)
+                          : navigate({
+                              to: "/clients/$clientId",
+                              params: { clientId: item.clientId },
+                              search: {},
+                            })
                     }
                   >
                     <span className="rail" />
@@ -1784,7 +1793,17 @@ function Dashboard() {
                       </td>
                       <td className="num hide-sm" data-label="Queries">
                         {c.openQueries > 0 ? (
-                          <span title="Unresolved notes on this client">{c.openQueries}</span>
+                          <button
+                            type="button"
+                            className="followup-cell"
+                            title="Open queries"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openClientQueries(c.id);
+                            }}
+                          >
+                            {c.openQueries}
+                          </button>
                         ) : (
                           "—"
                         )}
