@@ -505,6 +505,10 @@ html.dark .milon-status-pill--sample,
   color: inherit;
 }
 
+#invite-accountant .milon-metal-bar__hit {
+  align-items: center;
+}
+
 .milon-metal-bar__hit:focus-visible,
 .owner-brain-drip__hit:focus-visible {
   outline: 2px solid rgba(183, 135, 42, 0.55);
@@ -567,6 +571,10 @@ html.dark .milon-status-pill--sample,
   margin-top: 10px;
   color: #b7872a;
   transition: transform 0.2s ease;
+}
+
+#invite-accountant .milon-metal-bar__chevron {
+  margin-top: 0;
 }
 
 .milon-metal-bar__chevron.is-open,

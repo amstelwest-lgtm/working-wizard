@@ -133,6 +133,9 @@ assert(card.includes("inviteAccountant"), "owner UI calls mint/send");
 assert(card.includes("milon-metal-bar"), "invite uses the gold metal bar");
 assert(card.includes("const [open, setOpen] = useState(false)"), "invite starts collapsed");
 assert(card.includes('aria-expanded={open}'), "invite expands on click");
+assert(card.includes("Invite your accountant"), "collapsed label is Invite your accountant");
+assert(!card.includes("Your practice"), "no YOUR PRACTICE kicker");
+assert(!/practice seat|second owner login/i.test(card), "no practice-seat disclaimer");
 
 const mintFn = readFileSync(resolve("src/lib/accountant-invite.functions.ts"), "utf8");
 assert(!mintFn.includes("getUserById"), "mint path must not call Auth Admin (it hangs past the gateway)");
