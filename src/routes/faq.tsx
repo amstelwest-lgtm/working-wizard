@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { MarketCopy, MarketingShell } from "@/components/marketing-shell";
 import { LIST_PRICES, VISITOR_MARKET_BOOT_SCRIPT } from "@/lib/market";
-import { publicFaqUsItems } from "@/lib/marketing-faq";
+import { ACCOUNTING_SOFTWARE_ANSWER, publicFaqUsItems } from "@/lib/marketing-faq";
 import { faqPageJson, pageHead, SEO_PAGES } from "@/lib/seo";
 import marketingCss from "../styles/marketing.css?inline";
 
@@ -138,16 +138,7 @@ function FaqPage() {
       </Qa>
 
       <Qa q="I already have accounting software.">
-        <p className="mk-copy-za">
-          Keep it. Milōn is not a ledger and does not want to be. It reads the output your books
-          already produce — bank statements, Excel, or a PDF — and turns it into a score, a
-          forecast, and a ranked list of what to do.
-        </p>
-        <p className="mk-copy-us">
-          Keep it. Milōn is not a ledger. Upload a P&amp;L and balance sheet as PDF, Excel, or CSV,
-          or a bank statement — it turns the output your books already produce into a score, a
-          forecast, and a ranked list of what to do.
-        </p>
+        <p>{ACCOUNTING_SOFTWARE_ANSWER}</p>
       </Qa>
 
       <Qa q="How accurate is the score?">

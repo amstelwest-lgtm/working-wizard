@@ -15,7 +15,7 @@ import {
   pageHead,
   sitemapXml,
 } from "../src/lib/seo";
-import { HOMEPAGE_FAQ_ITEMS } from "../src/lib/marketing-faq";
+import { ACCOUNTING_SOFTWARE_ANSWER, HOMEPAGE_FAQ_ITEMS } from "../src/lib/marketing-faq";
 import { visitorCopyPack } from "../src/lib/market";
 
 function assert(cond: boolean, msg: string) {
@@ -156,7 +156,10 @@ assert(!about.includes("Xero"), "about does not claim Xero");
 
 const faq = readFileSync(resolve("src/routes/faq.tsx"), "utf8");
 assert(faq.includes("faqPageJson"), "faq emits FAQPage JSON-LD");
+assert(faq.includes("ACCOUNTING_SOFTWARE_ANSWER"), "faq accounting-software answer is shared with schema");
 assert(!faq.includes("QuickBooks"), "faq does not claim QuickBooks");
 assert(!faq.includes("Xero"), "faq does not claim Xero");
+assert(ACCOUNTING_SOFTWARE_ANSWER.includes("not a ledger"), "accounting-software answer stays honest");
+assert(!ACCOUNTING_SOFTWARE_ANSWER.includes("QuickBooks"), "accounting-software answer does not name QBO");
 
 console.log("seo-foundation-test: all assertions passed");

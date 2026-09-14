@@ -1,6 +1,10 @@
 import { LIST_PRICES } from "./market/marketing";
 import type { FaqItem } from "./seo";
 
+/** Visible /faq answer and FAQPage schema for this question must stay identical. */
+export const ACCOUNTING_SOFTWARE_ANSWER =
+  "MILŌN is not a ledger, so you keep your existing accounting system and books. Upload the financial statements you already have — PDF, Excel, CSV, or simply a bank statement — and MILŌN turns them into a financial health score, a 13-week cash forecast, and ranked next moves you can review and act on.";
+
 /** Short homepage set. Visible copy and FAQPage JSON-LD must stay in lockstep. */
 export const HOMEPAGE_FAQ_ITEMS: FaqItem[] = [
   {
@@ -80,8 +84,7 @@ export function publicFaqUsItems(): FaqItem[] {
     },
     {
       question: "I already have accounting software.",
-      answer:
-        "Keep it. MILŌN is not a ledger. Upload a P&L and balance sheet as PDF, Excel, or CSV, or a bank statement — it turns the output your books already produce into a score, a forecast, and a ranked list of what to do.",
+      answer: ACCOUNTING_SOFTWARE_ANSWER,
     },
     {
       question: "How accurate is the score?",
