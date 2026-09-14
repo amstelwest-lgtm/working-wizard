@@ -1824,18 +1824,6 @@ function LandingPage() {
             <a href="#pricing" onClick={() => setMobileNavOpen(false)}>
               Pricing
             </a>
-            <a href="/for-owners" onClick={() => setMobileNavOpen(false)}>
-              For owners
-            </a>
-            <a href="/for-accountants" onClick={() => setMobileNavOpen(false)}>
-              For accountants
-            </a>
-            <a href="/about" onClick={() => setMobileNavOpen(false)}>
-              About
-            </a>
-            <a href="/faq" onClick={() => setMobileNavOpen(false)}>
-              Questions
-            </a>
             <button id="themeToggle" title="Toggle light / dark">
               ☀
             </button>
