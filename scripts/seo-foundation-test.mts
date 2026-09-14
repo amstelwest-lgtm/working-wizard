@@ -10,10 +10,12 @@ import {
   ROBOTS_TXT,
   SEO_PAGES,
   SITE_ORIGIN,
+  faqPageJson,
   organizationGraphJson,
   pageHead,
   sitemapXml,
 } from "../src/lib/seo";
+import { HOMEPAGE_FAQ_ITEMS } from "../src/lib/marketing-faq";
 import { visitorCopyPack } from "../src/lib/market";
 
 function assert(cond: boolean, msg: string) {
@@ -92,8 +94,11 @@ assert(
   landing.includes('country: "US" as const'),
   "quiz defaults to US when the visitor has no market pick",
 );
-assert(!landing.includes("QuickBooks"), "landing does not claim QuickBooks");
-assert(!landing.includes("Xero"), "landing does not claim Xero");
+assert(!landing.includes("Connect QuickBooks"), "landing does not claim a QuickBooks connection");
+assert(
+  landing.includes("HOMEPAGE_FAQ_ITEMS"),
+  "landing renders homepage FAQ from the shared copy list",
+);
 assert(!landing.includes("930+"), "landing does not claim 930+ playbook steps");
 assert(!landing.includes("31 ratios"), "landing does not claim 31 ratios");
 assert(!landing.includes("End-to-end encrypted"), "landing does not claim E2E encryption");
@@ -102,6 +107,17 @@ assert(landing.includes('href="/about"'), "landing links to about");
 assert(landing.includes('href="/for-owners"'), "landing links to owners hub");
 assert(landing.includes('id="bridge"'), "landing keeps the dual-audience bridge");
 assert(!landing.includes('id="features"'), "landing drops the duplicate features block");
+assert(landing.includes('id="home-faq"'), "landing has a visible FAQ block");
+assert(landing.includes("faqPageJson(HOMEPAGE_FAQ_ITEMS)"), "landing emits homepage FAQ schema");
+assert(HOMEPAGE_FAQ_ITEMS.length === 5, "homepage FAQ is five questions");
+assert(
+  HOMEPAGE_FAQ_ITEMS[1].answer.includes("you do not need QuickBooks or Xero"),
+  "QBO/Xero appear only as not required",
+);
+assert(
+  faqPageJson(HOMEPAGE_FAQ_ITEMS).includes("Does MILŌN replace my accountant?"),
+  "homepage FAQ schema includes the accountant question",
+);
 
 const firms = readFileSync(resolve("src/routes/for-accountants.tsx"), "utf8");
 assert(firms.includes("SEO_PAGES.forAccountants"), "firm page uses spec meta");

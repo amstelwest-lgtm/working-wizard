@@ -29,7 +29,8 @@ import {
 // (external app CSS can still load; these rules win for landing selectors).
 import landingCss from "../styles/landing.css?inline";
 import { peekPendingOwnerInvite, pendingInviteTokenFromSearch } from "@/lib/invite-handoff";
-import { pageHead, SEO_PAGES } from "@/lib/seo";
+import { HOMEPAGE_FAQ_ITEMS } from "@/lib/marketing-faq";
+import { faqPageJson, pageHead, SEO_PAGES } from "@/lib/seo";
 import { OwnerInviteShell } from "@/components/owner-invite-shell";
 import { OwnerInviteSignupPanel } from "@/components/owner-invite-signup-panel";
 import { OwnerInviteSigninOverlay } from "@/components/owner-invite-signin-overlay";
@@ -44,6 +45,7 @@ export const Route = createFileRoute("/")({
         children: `(function(){try{var d=document.documentElement;d.dataset.landing="1";var t="dark";try{var s=localStorage.getItem("milon.landing.theme");if(s==="light"||s==="dark")t=s;}catch(e){}d.dataset.theme=t;if(t==="light"){d.classList.remove("dark");d.style.backgroundColor="#f7f4ec";d.style.color="#1b1608";d.style.colorScheme="light";}else{d.classList.add("dark");d.style.backgroundColor="#050507";d.style.color="#f2ecdc";d.style.colorScheme="dark";}}catch(e){}})();`,
       },
       { children: VISITOR_MARKET_BOOT_SCRIPT },
+      { type: "application/ld+json", children: faqPageJson(HOMEPAGE_FAQ_ITEMS) },
     ],
   }),
 });
@@ -2959,6 +2961,30 @@ function LandingPage() {
         </div>
       </section>
 
+      {/* ══════════════════════════ FAQ ══════════════════════════ */}
+      <section id="home-faq">
+        <div className="wrap">
+          <div className="section-head center reveal">
+            <span className="eyebrow">Questions</span>
+            <h2>
+              Straight answers, <span className="gold-text">before you sign up.</span>
+            </h2>
+          </div>
+          <div className="home-faq">
+            {HOMEPAGE_FAQ_ITEMS.map((item) => (
+              <article key={item.question}>
+                <h3>{item.question}</h3>
+                <p>{item.answer}</p>
+              </article>
+            ))}
+          </div>
+          <p className="home-faq-more">
+            More detail on cost, data, and how advisory works is on the{" "}
+            <a href="/faq">questions page</a>.
+          </p>
+        </div>
+      </section>
+
       {/* ══════════════════════════ FOOTER ══════════════════════════ */}
       <footer>
         <div className="wrap">
@@ -2978,7 +3004,8 @@ function LandingPage() {
             <a href="/for-owners">For owners</a>
             <a href="/for-accountants">For accountants</a>
             <a href="/about">About</a>
-            <a href="/faq">Questions</a>
+            <a href="#home-faq">Questions</a>
+            <a href="/faq">All questions</a>
             <a href="/auth">Accountant portal</a>
             <a href="/privacy">Privacy</a>
             <a href="/terms">Terms</a>

@@ -1,9 +1,37 @@
 import { LIST_PRICES } from "./market/marketing";
 import type { FaqItem } from "./seo";
 
+/** Short homepage set. Visible copy and FAQPage JSON-LD must stay in lockstep. */
+export const HOMEPAGE_FAQ_ITEMS: FaqItem[] = [
+  {
+    question: "Does MILŌN replace my accountant?",
+    answer:
+      "No, MILŌN works alongside your accountant to provide financial analysis, financial health insights, cash-flow forecasting, and practical recommendations. AI prepares the analysis using your financial information, while a qualified accountant reviews and signs off before advice is shown to a client. MILŌN is not an accounting ledger, audit, CPA opinion, or regulated financial advice service.",
+  },
+  {
+    question: "Do I need QuickBooks or Xero to use MILŌN?",
+    answer:
+      "No, you do not need QuickBooks or Xero to use MILŌN. Today, you can upload your P&L and balance sheet as a PDF, Excel file, or CSV, or upload a bank statement. MILŌN analyzes the information you provide to assess financial health, calculate key financial ratios, and identify areas that may need attention.",
+  },
+  {
+    question: "Is my financial data used to train AI models?",
+    answer:
+      "No, your client financial information is not used to train third-party AI models. Financial information sent to Claude is anonymised, with company names and raw amounts removed and tax IDs stripped. Client numbers are not used to train third-party models, while AI is used within MILŌN to prepare financial analysis for human accountant review.",
+  },
+  {
+    question: "What does MILŌN do for my business?",
+    answer:
+      "MILŌN turns your financial information into a clear view of your business's financial health and what may need attention. It assesses profit, assets, financing, and cash using 19 carefully selected financial ratios, including DuPont analysis, and provides a 13-week cash-flow forecast. AI then helps prepare context-driven analysis and recommendations for accountant review.",
+  },
+  {
+    question: "How do I get started, and what does MILŌN cost?",
+    answer:
+      "You can start free with Spark during early access, with no card required. Upload your financial figures and MILŌN will generate a financial health score and analysis. Orbit, Constellation, and accounting-firm plans are published but are not being billed yet. Stripe billing will be available soon, so check the MILŌN landing page for updates.",
+  },
+];
+
 /**
  * US answers for FAQPage JSON-LD. Must match the visible US copy on /faq.
- * Homepage FAQs are a separate, shorter set (added when that copy lands).
  */
 export function publicFaqUsItems(): FaqItem[] {
   return [
