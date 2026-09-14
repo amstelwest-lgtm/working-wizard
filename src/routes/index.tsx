@@ -552,7 +552,7 @@ function LandingPage() {
         ],
         "❓": [
           "profit clarity",
-          "You're working hard but flying blind on whether it's actually profitable. <b>MILŌN turns your numbers into one health score and 31 plain-language ratios — so you know, every week, whether the profit is real.</b>",
+          "You're working hard but flying blind on whether it's actually profitable. <b>MILŌN turns your numbers into one health score and 19 plain-language ratios — so you know, every week, whether the profit is real.</b>",
         ],
         "⛓": [
           "debt pressure",
@@ -1818,11 +1818,23 @@ function LandingPage() {
             <a href="#method" onClick={() => setMobileNavOpen(false)}>
               The MILŌN Method
             </a>
-            <a href="#features" onClick={() => setMobileNavOpen(false)}>
-              Platform
+            <a href="#bridge" onClick={() => setMobileNavOpen(false)}>
+              How it works
             </a>
             <a href="#pricing" onClick={() => setMobileNavOpen(false)}>
               Pricing
+            </a>
+            <a href="/for-owners" onClick={() => setMobileNavOpen(false)}>
+              For owners
+            </a>
+            <a href="/for-accountants" onClick={() => setMobileNavOpen(false)}>
+              For accountants
+            </a>
+            <a href="/about" onClick={() => setMobileNavOpen(false)}>
+              About
+            </a>
+            <a href="/faq" onClick={() => setMobileNavOpen(false)}>
+              Questions
             </a>
             <button id="themeToggle" title="Toggle light / dark">
               ☀
@@ -1882,18 +1894,12 @@ function LandingPage() {
                 <span>You see cash trouble coming</span>
               </div>
               <div>
-                <b>930+</b>
-                <span>Proven fixes, ranked for you</span>
+                <b>4</b>
+                <span>Pillars behind the score</span>
               </div>
               <div>
-                <b>
-                  <RegionCopy
-                    pack={copyMarket.copyPack}
-                    za={LIST_PRICES.za.retainerUplift}
-                    us={LIST_PRICES.us.retainerUplift}
-                  />
-                </b>
-                <span>Advisory uplift per client /mo</span>
+                <b>19</b>
+                <span>Ratios with the workings shown</span>
               </div>
             </div>
           </div>
@@ -1905,7 +1911,7 @@ function LandingPage() {
                 <span className="brand">MILŌN</span>
                 <span className="live-pill">
                   <i />
-                  Live · synced 2 min ago
+                  Sample
                 </span>
               </div>
               <div className="dash-main">
@@ -2064,7 +2070,7 @@ function LandingPage() {
             >
               <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
             </svg>
-            <span>End-to-end encrypted</span>
+            <span>Your figures stay in your workspace</span>
           </div>
           <div className="item">
             <svg
@@ -2081,7 +2087,7 @@ function LandingPage() {
               <circle cx="12" cy="12" r="10" />
               <polyline points="12 6 12 12 16 14" />
             </svg>
-            <span>Live sync, every 2 min</span>
+            <span>What reaches Claude is anonymised</span>
           </div>
           <div className="item">
             <svg
@@ -2098,7 +2104,7 @@ function LandingPage() {
               <polyline points="20 6 9 17 4 12" />
             </svg>
             <span>
-              <RegionCopy pack={copyMarket.copyPack} za="SAICA-referenced ratios" us="Industry-standard ratios" />
+            <span>19 ratios you can check</span>
             </span>
           </div>
           <div className="item">
@@ -2224,7 +2230,7 @@ function LandingPage() {
 
       {/* ══════════════════════════ MARQUEE ══════════════════════════ */}
       <div className="marquee-band">
-        <p className="cap">31 ratios calculated on every upload</p>
+        <p className="cap">Calculated on every upload</p>
         <div className="marquee" id="marquee">
           <span>Gross Margin</span>
           <span>Net Margin</span>
@@ -2289,12 +2295,12 @@ function LandingPage() {
             <div className="step-card">
               <span className="n">01</span>
               <h3>
-                <RegionCopy pack={copyMarket.copyPack} za="You upload your financials" us="Connect QuickBooks or upload" />
+                <RegionCopy pack={copyMarket.copyPack} za="You upload your financials" us="Upload a statement" />
               </h3>
               <p>
                 <RegionCopy pack={copyMarket.copyPack}
                   za="Your accountant uploads your income statement, balance sheet, and cash flow — or you do. One PDF, extracted by AI in seconds."
-                  us="Connect QuickBooks Online, or upload Excel, CSV, or a bank PDF. One file is enough to start. Xero is also on the list — we do not lead with it."
+                  us="Upload a P&L and balance sheet as PDF, Excel, or CSV, or a bank statement. One file is enough to start."
                 />
               </p>
               <span className="time">Under 60 seconds</span>
@@ -2304,8 +2310,8 @@ function LandingPage() {
               <h3>MILŌN scores your business</h3>
               <p>
                 <RegionCopy pack={copyMarket.copyPack}
-                  za="31 ratios, 4 pillar scores, one overall health score — mapped against 120 SA industry benchmarks."
-                  us="31 ratios, 4 pillar scores, one overall health score — US industry medians where we have them, otherwise days and percentages."
+                  za="19 ratios, 4 pillar scores, one overall health score — with South African industry context where we have it."
+                  us="19 ratios, 4 pillar scores, one overall health score. Days and percentages, not borrowed SA bands dressed as US medians."
                 />
               </p>
               <span className="time">Instantly</span>
@@ -2314,8 +2320,8 @@ function LandingPage() {
               <span className="n">03</span>
               <h3>You get your next move</h3>
               <p>
-                930+ ranked fixes, an AI-drafted advisory report, and a 13-week cashflow — all in
-                plain language.
+                Ranked next moves from the playbook, an AI-drafted advisory report, and a 13-week
+                cashflow — all in plain language.
               </p>
               <span className="time">Every month</span>
             </div>
@@ -2433,77 +2439,6 @@ function LandingPage() {
           <i />
         </div>
       </div>
-
-      {/* ══════════════════════════ FEATURES ══════════════════════════ */}
-      <section id="features">
-        <div className="wrap">
-          <div className="section-head center reveal">
-            <span className="eyebrow">The Platform</span>
-            <h2>Two portals. One constellation.</h2>
-            <p className="sub">
-              Two sides of the same workspace: owners get clarity they can act on, accountants get
-              the leverage to deliver it across every client. The relationship stops being annual
-              and starts being a monthly advisory practice.
-            </p>
-          </div>
-          <div className="feat-cols stagger">
-            <div className="feat-card">
-              <div className="who">For Business Owners</div>
-              <h3>Your financial cockpit</h3>
-              <ul>
-                <li>
-                  <b>Live health score</b> — one number, updated every time your data changes
-                </li>
-                <li>
-                  <b>13-week cashflow forecast</b> — see shortfalls weeks before they hit
-                </li>
-                <li>
-                  <b>Playbook of 930+ fixes</b> — ranked by impact, filtered to your situation
-                </li>
-                <li>
-                  <b>Four pillar breakdown</b> — profitability, cash, assets, solvency
-                </li>
-                <li>
-                  <b>Accountant notes in-context</b> — advice lands on the exact number it refers to
-                </li>
-                <li>
-                  <b>PDF financial extraction</b> — upload a statement, AI does the rest
-                </li>
-              </ul>
-            </div>
-            <div className="feat-card">
-              <div className="who" style={{ color: "var(--gold-bright)" }}>
-                For Accountants
-              </div>
-              <h3>Your advisory engine</h3>
-              <ul>
-                <li>
-                  <b>Multi-client dashboard</b> — live health across your entire portfolio
-                </li>
-                <li>
-                  <b>AI advisory drafter</b> — Claude drafts the report; you refine and send
-                </li>
-                <li>
-                  <b>10 white-label report formats</b> — your brand, your margin
-                </li>
-                <li>
-                  <b>Risk radar</b> — flag deteriorating clients before the crisis call
-                </li>
-                <li>
-                  <b>Industry news digest</b> — always have sector context ready
-                </li>
-                <li>
-                  <b>Recurring retainer model</b> —{" "}
-                  <RegionCopy pack={copyMarket.copyPack}
-                    za={`${LIST_PRICES.za.retainerUplift} uplift per client per month`}
-                    us={`${LIST_PRICES.us.retainerUplift} uplift per client per month`}
-                  />
-                </li>
-              </ul>
-            </div>
-          </div>
-        </div>
-      </section>
 
       {/* ══════════════════════════ PRICING ══════════════════════════ */}
       <section id="pricing">
@@ -3050,13 +2985,16 @@ function LandingPage() {
           <nav className="fnav" aria-label="Footer navigation">
             <a href="#persona">Start</a>
             <a href="#method">The Method</a>
-            <a href="#features">Platform</a>
+            <a href="#bridge">How it works</a>
             <a href="#pricing">Pricing</a>
+            <a href="/for-owners">For owners</a>
+            <a href="/for-accountants">For accountants</a>
+            <a href="/about">About</a>
+            <a href="/faq">Questions</a>
             <a href="/auth">Accountant portal</a>
             <a href="/privacy">Privacy</a>
             <a href="/terms">Terms</a>
             <a href="/ai">AI notice</a>
-            <a href="/faq">Questions</a>
             <button
               onClick={() => setSigninOpen(true)}
               style={{

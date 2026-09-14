@@ -101,6 +101,7 @@ const SKIP_PATH_PREFIXES = [
   "/ack",
   "/t/",
   "/faq",
+  "/about",
   "/for-owners",
   "/for-accountants",
   "/reports/demo",

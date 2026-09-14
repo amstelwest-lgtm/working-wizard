@@ -42,7 +42,7 @@ function ForOwnersPage() {
       <h2>What you get in the first week</h2>
       <ul className="mk-list">
         <li>
-          <strong>One health score.</strong> Thirty-one ratios and four pillar scores collapsed into
+          <strong>One health score.</strong> Nineteen ratios and four pillar scores collapsed into
           a single number you can actually hold in your head, with the workings still there when you
           want them.
         </li>
@@ -52,7 +52,7 @@ function ForOwnersPage() {
           <MarketCopy za="debit order" us="ACH" /> bounces.
         </li>
         <li>
-          <strong>A ranked list of fixes.</strong> Over nine hundred moves in the playbook, filtered
+          <strong>A ranked list of fixes.</strong> A playbook of ranked next moves, filtered
           to your situation and sorted by what would move your number most.
         </li>
         <li>

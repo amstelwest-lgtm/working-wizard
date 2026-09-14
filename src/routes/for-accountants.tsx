@@ -116,7 +116,7 @@ function ForAccountantsPage() {
           <div>
             <h3>Figures in, score out</h3>
             <p>
-              Thirty-one ratios, four pillars, one score, and a 13-week cash forecast — computed the
+              Nineteen ratios, four pillars, one score, and a 13-week cash forecast — computed the
               same way for every client, every month.
             </p>
           </div>

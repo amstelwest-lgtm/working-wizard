@@ -88,6 +88,9 @@ export function MarketingShell({
         <a className="mk-top-link mk-top-hide-sm" href="/for-accountants">
           For accountants
         </a>
+        <a className="mk-top-link mk-top-hide-sm" href="/about">
+          About
+        </a>
         <a className="mk-top-link" href="/faq">
           Questions
         </a>
@@ -126,6 +129,7 @@ export function MarketingShell({
             />
           </span>
           <a href="/">milonfinance.com</a>
+          <a href="/about">About</a>
           <a href="/faq">Questions</a>
           <a href="/privacy">Privacy</a>
           <a href="/terms">Terms</a>
