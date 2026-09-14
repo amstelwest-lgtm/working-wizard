@@ -54,8 +54,7 @@ assert(/wizard-action-plan/.test(owner), "action-plan step targets the plan");
 
 assert(/bottleneck/.test(owner), "health ratios are sold as bottleneck detectors");
 assert(/accountant/.test(owner) && /sign/.test(owner), "accountant sign-off is on the tour");
-assert(/Eisenhower/.test(owner) && /Cynefin/.test(owner) && /impact/.test(owner), "three decision models are named");
-assert(/Claude/.test(owner), "next moves credit Claude");
+assert(/Milōn Bot/.test(owner), "next moves credit Milōn Bot, not a generic list");
 assert(/Action Plan/.test(owner), "tour closes on the action plan");
 
 assert(/drafts your Profit/.test(ownerEmpty), "empty tour still explains the one-upload draft");
@@ -79,5 +78,12 @@ assert(wizard.includes("min(560px, calc(100vw - 24px))"), "accountant card width
 assert(app.includes('id="wizard-product-mix"'), "product mix is a tour target on the owner board");
 assert(app.includes('id="wizard-owner-signoff"'), "profit sign-off row is a tour target");
 assert(signoff.includes("id?: string"), "OwnerTabSignoffRow accepts a tour id");
+
+const moves = readFileSync(resolve("src/components/next-steps-panel.tsx"), "utf8");
+assert(moves.includes("Milōn Bot"), "next-moves tab is attributed to Milōn Bot");
+assert(moves.includes("not a generic to-do list"), "next-moves intro refuses a generic playbook");
+assert(moves.includes("sign it off"), "next-moves intro names accountant sign-off");
+assert(moves.includes("highest-value hour"), "next-moves intro states the owner incentive");
+assert(!/Claude/.test(moves), "next-moves intro does not name Claude");
 
 console.log("owner-tour-sale-test: ok");

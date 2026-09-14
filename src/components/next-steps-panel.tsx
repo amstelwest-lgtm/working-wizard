@@ -1,6 +1,6 @@
 import { ArrowUpRight, BookOpen, Check, Layers3, Target } from "lucide-react";
 import { AddToPlanButton } from "@/components/add-to-plan-button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { tierColor } from "@/components/owner-board-ui";
 
 export type NextStep<K extends string = string> = {
@@ -210,16 +210,18 @@ export function NextStepsPanel<K extends string>({
           <div className="flex flex-wrap items-end justify-between gap-5">
             <div>
               <div className="mb-2 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[.24em] text-[#9d741d] dark:text-[#d5aa58]">
-                <Target className="h-3.5 w-3.5" /> Advisory queue
+                <Target className="h-3.5 w-3.5" /> Milōn Bot
               </div>
               <CardTitle className="font-display text-2xl text-[#172033] dark:text-[#f6f1e7]">
-                {simplified ? "Your next best moves" : "Operating priorities"}
+                Your next best moves
               </CardTitle>
-              <CardDescription className="mt-1 max-w-2xl text-[#667085] dark:text-slate-400">
-                {simplified
-                  ? "A short list for the week ahead. Start at the top and keep the momentum."
-                  : "A decision-grade view of the levers most likely to improve financial health."}
-              </CardDescription>
+              <p className="mt-2 max-w-2xl text-[14.5px] leading-relaxed text-slate-600 dark:text-slate-300">
+                These are not a generic to-do list. Milōn Bot ranks the next moves for{" "}
+                <span className="font-semibold text-slate-800 dark:text-slate-100">this</span> business —
+                carefully curated from the full Milōn picture already on your board. Your accountant can
+                review the list and sign it off when it is fit to act on. Start at the top: that is the
+                highest-value hour you can spend this week.
+              </p>
             </div>
             <div className="flex items-center gap-2">
               <span className="rounded-full border border-[#b7872a]/30 bg-[#b7872a]/10 px-3 py-1.5 text-xs font-semibold text-[#8a651b] dark:text-[#e5be72]">

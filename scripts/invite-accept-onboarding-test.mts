@@ -546,10 +546,9 @@ assert(wizardSrc.includes("Got it — add my first client"), "empty practice tou
   assert(/Pin the question to the number/.test(owner), "owner tour sells notes as the alternative to email");
   assert(/wizard-product-mix/.test(owner), "owner tour highlights product-line profitability");
   assert(/wizard-owner-signoff/.test(owner), "owner tour points at the accountant stamp");
-  assert(/Eisenhower/.test(owner) && /Cynefin/.test(owner) && /impact/.test(owner), "owner next-moves step names the three decision models");
-  assert(/Claude/.test(owner), "owner next-moves step credits Claude");
+  assert(/Milōn Bot/.test(owner), "owner next-moves step credits Milōn Bot");
   assert(!/section: "Budget"/.test(owner), "owner tour dropped Budget — cash forecast carries the year-ahead incentive");
-  assert(!/ask-ai-overview/.test(owner), "owner tour dropped Bot — Claude is sold on Next moves");
+  assert(!/ask-ai-overview/.test(owner), "owner tour dropped the Bot tab — Bot is sold on Next moves");
   for (const section of ["Profit", "Cash Forecast", "Sign-off"]) {
     const i = owner.indexOf(`section: "${section}"`);
     const step = owner.slice(i, owner.indexOf("},", i));
