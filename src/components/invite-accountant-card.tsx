@@ -56,12 +56,6 @@ export function InviteAccountantCard({ clientId, tone = "board" }: Props) {
 
   if (!clientId) return null;
 
-  const note = firmLinked
-    ? `Linked to ${firmName || "a practice"}. They can open this workspace from the practice portal.`
-    : pendingEmail
-      ? `They get a practice seat on this business — not a second owner login. Last invite: ${pendingEmail}.`
-      : "They get a practice seat on this business — not a second owner login.";
-
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email.trim()) return;
@@ -118,9 +112,7 @@ export function InviteAccountantCard({ clientId, tone = "board" }: Props) {
         onClick={() => setOpen((prev) => !prev)}
       >
         <span className="milon-metal-bar__copy">
-          <span className="milon-metal-bar__kicker">Your practice</span>
           <span className="milon-metal-bar__q">Invite your accountant</span>
-          <span className="milon-metal-bar__note">{note}</span>
         </span>
         <ChevronDown
           className={`milon-metal-bar__chevron h-4 w-4 ${open ? "is-open" : ""}`}
@@ -132,10 +124,10 @@ export function InviteAccountantCard({ clientId, tone = "board" }: Props) {
         <div id="invite-accountant-panel" className="milon-metal-bar__panel">
           {loading ? (
             <p className="milon-metal-bar__note flex items-center gap-2">
-              <Loader2 className="h-3.5 w-3.5 animate-spin" /> Checking workspace…
+              <Loader2 className="h-3.5 w-3.5 animate-spin" /> Checking…
             </p>
           ) : firmLinked ? (
-            <p className="milon-metal-bar__note">{note}</p>
+            <p className="milon-metal-bar__note">Linked to {firmName || "a practice"}.</p>
           ) : (
             <>
               <form onSubmit={handleSend} className="space-y-2">
