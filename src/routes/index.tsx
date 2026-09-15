@@ -42,7 +42,7 @@ export const Route = createFileRoute("/")({
     styles: [{ children: landingCss }],
     scripts: [
       {
-        children: `(function(){try{var d=document.documentElement;d.dataset.landing="1";var t="dark";try{var s=localStorage.getItem("milon.landing.theme");if(s==="light"||s==="dark")t=s;}catch(e){}d.dataset.theme=t;if(t==="light"){d.classList.remove("dark");d.style.backgroundColor="#f7f4ec";d.style.color="#1b1608";d.style.colorScheme="light";}else{d.classList.add("dark");d.style.backgroundColor="#050507";d.style.color="#f2ecdc";d.style.colorScheme="dark";}}catch(e){}})();`,
+        children: `(function(){try{var d=document.documentElement;d.dataset.landing="1";var t="dark";try{var s=localStorage.getItem("milon.landing.theme");if(s==="light"||s==="dark")t=s;}catch(e){}d.dataset.theme=t;var light=t==="light";if(light){d.classList.remove("dark");d.style.backgroundColor="#f7f4ec";d.style.color="#1b1608";d.style.colorScheme="only light";}else{d.classList.add("dark");d.style.backgroundColor="#050507";d.style.color="#f2ecdc";d.style.colorScheme="only dark";}var m=document.getElementById("milon-color-scheme");if(!m){m=document.createElement("meta");m.id="milon-color-scheme";m.setAttribute("name","color-scheme");(document.head||d).appendChild(m);}m.setAttribute("content",light?"only light":"only dark");}catch(e){}})();`,
       },
       { children: VISITOR_MARKET_BOOT_SCRIPT },
       { type: "application/ld+json", children: faqPageJson(HOMEPAGE_FAQ_ITEMS) },
@@ -58,6 +58,19 @@ function pendingInviteTokenFromUrl(): string | null {
   return pendingInviteTokenFromSearch(window.location.search);
 }
 
+function syncLandingColorScheme(theme: "light" | "dark") {
+  const only = theme === "light" ? "only light" : "only dark";
+  document.documentElement.style.colorScheme = only;
+  let meta = document.getElementById("milon-color-scheme");
+  if (!meta) {
+    meta = document.createElement("meta");
+    meta.id = "milon-color-scheme";
+    meta.setAttribute("name", "color-scheme");
+    document.head.appendChild(meta);
+  }
+  meta.setAttribute("content", only);
+}
+
 function applyLandingTheme(theme: "light" | "dark") {
   const root = document.documentElement;
   const body = document.body;
@@ -67,17 +80,16 @@ function applyLandingTheme(theme: "light" | "dark") {
     root.classList.remove("dark");
     root.style.backgroundColor = "#f7f4ec";
     root.style.color = "#1b1608";
-    root.style.colorScheme = "light";
     body.style.backgroundColor = "#f7f4ec";
     body.style.color = "#1b1608";
   } else {
     root.classList.add("dark");
     root.style.backgroundColor = "#050507";
     root.style.color = "#f2ecdc";
-    root.style.colorScheme = "dark";
     body.style.backgroundColor = "#050507";
     body.style.color = "#f2ecdc";
   }
+  syncLandingColorScheme(theme);
   const wrap = document.querySelector<HTMLElement>("[data-milon-landing]");
   if (wrap) {
     wrap.style.background = "var(--bg)";
@@ -312,6 +324,7 @@ function LandingPage() {
       root.style.backgroundColor = prevRootBg;
       root.style.color = prevRootColor;
       root.style.colorScheme = "";
+      document.getElementById("milon-color-scheme")?.remove();
       body.style.backgroundColor = prevBodyBg;
       body.style.color = prevBodyColor;
     };
