@@ -244,7 +244,7 @@ function RootComponent() {
                 <ShareButton />
                 <FloatingNoteButton />
                 <NoteArchiveSheet />
-                <Toaster position="top-right" richColors />
+                <Toaster position="top-right" richColors offset={16} style={{ zIndex: 70 }} />
               </ViewModeProvider>
             </NotesProvider>
           </AnalyticsProvider>

@@ -31,6 +31,7 @@ import landingCss from "../styles/landing.css?inline";
 import { peekPendingOwnerInvite, pendingInviteTokenFromSearch } from "@/lib/invite-handoff";
 import {
   billingStartPath,
+  checkoutEmailRedirectTo,
   clearPendingCheckout,
   paidPlanFromRegisterLabel,
   parsePendingCheckoutFromSearch,
@@ -234,6 +235,7 @@ function LandingPage() {
   const [regBusiness, setRegBusiness] = useState("");
   const [regPlan, setRegPlan] = useState("Spark — Free early access");
   const [regBusy, setRegBusy] = useState(false);
+  const [regError, setRegError] = useState("");
   const [regDone, setRegDone] = useState(false);
   const [resendBusy, setResendBusy] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
@@ -259,6 +261,24 @@ function LandingPage() {
     return () => clearTimeout(id);
   }, [resendCooldown]);
 
+  const showRegisterError = (msg: string) => {
+    setRegError(msg);
+    toast.error(msg);
+    window.requestAnimationFrame(() => {
+      document.getElementById("register-error")?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    });
+  };
+
+  const paidSignupRedirectTo = () => {
+    const pending = peekPendingCheckout();
+    return pending
+      ? checkoutEmailRedirectTo(window.location.origin, pending)
+      : `${window.location.origin}/app`;
+  };
+
   const resendConfirmationTo = async (email: string) => {
     const target = email.trim();
     if (!target) return;
@@ -267,7 +287,7 @@ function LandingPage() {
       const { error } = await supabase.auth.resend({
         type: "signup",
         email: target,
-        options: { emailRedirectTo: `${window.location.origin}/app` },
+        options: { emailRedirectTo: paidSignupRedirectTo() },
       });
       if (error) throw error;
       toast.success(`Confirmation email sent to ${target}`);
@@ -988,17 +1008,18 @@ function LandingPage() {
   /* ── register handler ── */
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
+    setRegError("");
 
     // ── Invite flow: create a user, or attach an existing signed-in account ──
     if (inviteClientId) {
       const sameAccount =
         Boolean(user) && user?.email?.toLowerCase() === regEmail.trim().toLowerCase();
       if (!sameAccount && (!regPassword || regPassword.length < 6)) {
-        toast.error("Password must be at least 6 characters.");
+        showRegisterError("Password must be at least 6 characters.");
         return;
       }
       if (inviteNeedsCode && !regClientCode.trim()) {
-        toast.error("Enter the client code from your invite email (MLN-XXXXXX).");
+        showRegisterError("Enter the client code from your invite email (MLN-XXXXXX).");
         return;
       }
       setRegBusy(true);
@@ -1073,7 +1094,7 @@ function LandingPage() {
         toast.success("Welcome — opening your workspace.");
         await navigate({ to: "/app", replace: true });
       } catch (err: unknown) {
-        toast.error(err instanceof Error ? err.message : "Registration failed.");
+        showRegisterError(err instanceof Error ? err.message : "Registration failed.");
       } finally {
         setRegBusy(false);
       }
@@ -1081,7 +1102,7 @@ function LandingPage() {
     }
 
     if (!regPassword || regPassword.length < 6) {
-      toast.error("Password must be at least 6 characters.");
+      showRegisterError("Password must be at least 6 characters.");
       return;
     }
 
@@ -1092,16 +1113,12 @@ function LandingPage() {
     }
     const market = draftToSelection(draftMarket);
     if (!market) {
-      toast.error("Pick South Africa or the United States (and a state) first.");
-      document.getElementById("register")?.scrollIntoView({ behavior: "smooth" });
+      showRegisterError("Pick South Africa or the United States (and a state) first.");
       return;
     }
     setRegBusy(true);
     try {
-        const pendingCheckout = peekPendingCheckout();
-        const emailRedirectTo = pendingCheckout
-          ? `${window.location.origin}${billingStartPath(pendingCheckout)}`
-          : `${window.location.origin}/app`;
+        const emailRedirectTo = paidSignupRedirectTo();
         const { data, error } = await supabase.auth.signUp({
           email: regEmail,
           password: regPassword,
@@ -1168,7 +1185,7 @@ function LandingPage() {
       }
       setRegDone(true);
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Registration failed.");
+      showRegisterError(err instanceof Error ? err.message : "Registration failed.");
     } finally {
       setRegBusy(false);
     }
@@ -2758,6 +2775,11 @@ function LandingPage() {
           {mounted && (
             <div className="reg-shell">
               <form onSubmit={handleRegister}>
+                {regError && (
+                  <p id="register-error" role="alert" className="reg-error">
+                    {regError}
+                  </p>
+                )}
                 {/* ── Invite flow: simplified form, no role/code/plan ── */}
                 {inviteClientId ? (
                   <>
@@ -2837,7 +2859,7 @@ function LandingPage() {
                           clientCode: regClientCode.trim() || null,
                         }}
                         next={`/?invite=${encodeURIComponent(inviteClientId)}&mode=signup`}
-                        onError={(msg) => toast.error(msg)}
+                        onError={(msg) => showRegisterError(msg)}
                       />
                     </div>
                     <AuthDivider />
@@ -2950,7 +2972,7 @@ function LandingPage() {
                               ? billingStartPath(peekPendingCheckout()!)
                               : undefined
                           }
-                          onError={(msg) => toast.error(msg)}
+                          onError={(msg) => showRegisterError(msg)}
                         />
                         <AuthDivider />
                         <label htmlFor="regNameField">Full name</label>

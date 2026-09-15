@@ -71,8 +71,11 @@ function BillingStartPage() {
 
   if (error) {
     return (
-      <div className="grid min-h-screen place-items-center bg-[#0b1220] px-4 text-slate-200">
-        <div className="w-full max-w-md rounded-2xl border border-white/10 bg-white/5 p-6">
+      <div className="relative z-10 grid min-h-screen place-items-center bg-[#0b1220] px-4 text-slate-200">
+        <div
+          role="alert"
+          className="w-full max-w-md rounded-2xl border border-white/10 bg-white/5 p-6"
+        >
           <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-400">
             Billing
           </p>
