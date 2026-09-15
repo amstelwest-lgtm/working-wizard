@@ -54,26 +54,25 @@ function FaqPage() {
 
       <Qa q="What does it cost?">
         <p className="mk-copy-za">
-          Spark is free during early access and does not ask for a card. Two paid tiers are
-          published — Orbit at {LIST_PRICES.za.orbit} a month and Constellation at{" "}
-          {LIST_PRICES.za.constellation} a month — but neither is being billed yet. For practices,
-          firm pricing is planned at {LIST_PRICES.za.firm150} a month up to 150 clients and{" "}
-          {LIST_PRICES.za.firmUnlimited} a month for unlimited, also not yet billed.
+          Spark is free during early access and does not ask for a card. Two paid tiers are billed
+          monthly through Stripe Checkout — Orbit at {LIST_PRICES.za.orbit} a month and
+          Constellation at {LIST_PRICES.za.constellation} a month. For practices, firm pricing is
+          planned at {LIST_PRICES.za.firm150} a month up to 150 clients and{" "}
+          {LIST_PRICES.za.firmUnlimited} a month for unlimited, and is not yet billed.
         </p>
         <p className="mk-copy-us">
-          Spark is free during early access and does not ask for a card. Two paid tiers are
-          published — Orbit at {LIST_PRICES.us.orbit} a month and Constellation at{" "}
-          {LIST_PRICES.us.constellation} a month — but neither is being billed yet. For practices,
-          firm pricing is planned at {LIST_PRICES.us.firm150} a month up to 150 clients and{" "}
-          {LIST_PRICES.us.firmUnlimited} a month for unlimited, also not yet billed.
+          Spark is free during early access and does not ask for a card. Two paid tiers are billed
+          monthly through Stripe Checkout — Orbit at {LIST_PRICES.us.orbit} a month and
+          Constellation at {LIST_PRICES.us.constellation} a month. For practices, firm pricing is
+          planned at {LIST_PRICES.us.firm150} a month up to 150 clients and{" "}
+          {LIST_PRICES.us.firmUnlimited} a month for unlimited, and is not yet billed.
         </p>
       </Qa>
 
       <Qa q="So what is the catch with free?">
         <p>
-          You are early, and early users shape what gets built. We get real usage and honest
-          feedback, you get the platform without paying while it is still being finished. When
-          billing does start you will be told before it happens, not after.
+          You are early, and early users shape what gets built. Spark stays free during early
+          access. Orbit and Constellation are paid monthly plans billed through Stripe Checkout.
         </p>
       </Qa>
 
@@ -114,7 +113,7 @@ function FaqPage() {
       </Qa>
 
       <Qa q="Do you store card details?">
-        <p>No. Nothing is being billed yet, so there is nothing to store.</p>
+        <p>No. Card numbers are collected by Stripe Checkout. Milōn does not store card details.</p>
       </Qa>
 
       <Qa q="Do you track how I use the product?">

@@ -681,11 +681,11 @@ function OwnerOpsPage() {
                 <Stat label="YTD received" value={dash.revenue.receivedYtdLabel} />
               </div>
               <p className="mt-2 text-[11px] text-[var(--ops-ink-dim)]">
-                All-time received: {dash.revenue.allTimeReceivedLabel}. Public billing is still
-                waitlist. Stripe secret:{" "}
+                All-time received: {dash.revenue.allTimeReceivedLabel}. Orbit and Constellation
+                Checkout is live. Stripe secret:{" "}
                 {dash.stripe.secretPresent ? "present on this deploy" : "missing"}. Publishable:{" "}
-                {dash.stripe.publishablePresent ? "present" : "missing"}. Log cash here until
-                customer Checkout is switched on.
+                {dash.stripe.publishablePresent ? "present" : "missing"}. Log off-platform cash here
+                as well.
               </p>
               <div className="mt-3 flex flex-wrap gap-2">
                 <button

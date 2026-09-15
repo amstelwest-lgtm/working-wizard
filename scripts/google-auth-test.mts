@@ -46,6 +46,11 @@ assert(
     "https://milonfinance.com/auth/callback?join=joinTok",
   "redirectTo carries accountant join (never `invite`, which is owner-handoff)",
 );
+assert(
+  googleOAuthRedirectTo("https://milonfinance.com", { checkout: "orbit", market: "us" }) ===
+    "https://milonfinance.com/auth/callback?checkout=orbit&market=us",
+  "redirectTo carries paid Checkout so an origin hop cannot drop the plan",
+);
 
 assert(
   googleDisplayName({ full_name: "Thabo Nkosi" }, "thabo@x.co") === "Thabo Nkosi",
@@ -200,6 +205,10 @@ assert(
 assert(
   callbackSrc.includes("!intent && !pendingInvite?.token"),
   "existing accountant Google identity must not be inferred while an owner invite is in flight",
+);
+assert(
+  googleSrc.includes("peekPendingCheckout"),
+  "Google sign-in attaches a stashed paid plan to OAuth redirectTo",
 );
 assert(
   googleSrc.includes("accountantJoin"),

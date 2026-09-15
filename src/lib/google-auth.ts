@@ -22,6 +22,9 @@ export type GoogleOAuthHop = {
   clientCode?: string | null;
   /** Owner→accountant join token. Distinct from `invite`. */
   join?: string;
+  /** Paid-plan Checkout to resume after Google (`orbit` / `constellation`). */
+  checkout?: string;
+  market?: string;
 };
 
 export function googleOAuthRedirectTo(origin: string, hop?: GoogleOAuthHop): string {
@@ -35,6 +38,12 @@ export function googleOAuthRedirectTo(origin: string, hop?: GoogleOAuthHop): str
   }
   const join = hop?.join?.trim();
   if (join) q.set("join", join);
+  const checkout = hop?.checkout?.trim();
+  if (checkout) {
+    q.set("checkout", checkout);
+    const market = hop.market?.trim();
+    if (market) q.set("market", market);
+  }
   const qs = q.toString();
   return qs ? `${base}?${qs}` : base;
 }
@@ -266,6 +275,14 @@ export async function startGoogleSignIn(opts: {
     const { accountantInviteLandingPath } = await import("@/lib/accountant-invite");
     hop.join = opts.accountantJoin.token.trim();
     if (!next) next = accountantInviteLandingPath(hop.join);
+  } else {
+    const { peekPendingCheckout, billingStartPath } = await import("@/lib/pending-checkout");
+    const pending = peekPendingCheckout();
+    if (pending) {
+      hop.checkout = pending.plan;
+      hop.market = pending.market;
+      if (!next) next = billingStartPath(pending);
+    }
   }
   stashGoogleAuthIntent(opts.intent, next);
   const { error } = await supabase.auth.signInWithOAuth({

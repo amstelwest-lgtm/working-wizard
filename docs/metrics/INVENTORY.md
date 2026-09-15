@@ -41,7 +41,7 @@ The Claude brief assumed a vanilla HTML/CSS/JS app with no React, no TanStack, G
 | Ask AI disclosure override / rating / copy | Classifier exists (`none` / `summary` / `focused` / `full`). No override, no rating, no copy-to-clipboard telemetry. |
 | 10 report types sent to the client | 10 PDF generators exist. “Sent” is an `advisory_deliveries` ledger row (mailto / WhatsApp / copy / pdf_download / email), not a guaranteed SMTP send. |
 | Invoice issued / paid / days-to-payment | Manual founder ledger `milon_ops_payments`. No Stripe, no invoices, no dunning. |
-| Waitlist signup | Landing “Join waitlist” buttons **do not write a waitlist row**. They scroll to `#register` and keep the user on Spark. |
+| Waitlist signup | Landing paid CTAs now start Stripe Checkout (Orbit / Constellation). Unsigned visitors are sent to `#register` with the chosen plan stashed, then into Checkout. Spark stays free. |
 | Landing quiz answers | Client-only; never persisted. |
 | `ask_ai_enabled` as an enforcement gate | Flag in `milon_ops_settings.feature_flags`. Widget mount is not obviously blocked by it at the edge — treat as **UI/ops knob until confirmed**. |
 
@@ -175,7 +175,7 @@ Actors used below (this product’s roles, not the brief’s enums):
 | `landing.quiz.started` | anonymous | Vanilla quiz engine in `index.tsx` | Frontend click | Client only | time (seconds) | No. Never persisted. |
 | `landing.quiz.completed` | anonymous | Quiz finish → pricing persona class | Frontend | Client only | time | No. |
 | `pricing.viewed` | anonymous | `#pricing` section / nav | Frontend | Client only | free | No. Flag `show_pricing` can hide it. |
-| `pricing.waitlist.clicked` | anonymous | “Join waitlist” on Orbit / Constellation cards | Frontend | Client only | free (no email captured) | No. Scrolls to `#register`; no waitlist table. |
+| `pricing.checkout.clicked` | anonymous / signed-in | “Start Orbit” / “Start Constellation” on pricing cards | Frontend | Client only | money (if they complete Stripe) | Partial. Creates a Checkout Session when signed in; unsigned visitors stash the plan and sign up first. |
 | `signup.started` | anonymous | Submit `#register` | Frontend → `supabase.auth.signUp` or `adminSignUp` | Mixed. Auth user row is server. | time + email | Partial: `auth.users.created_at` after success only. No “started then abandoned”. |
 | `signup.completed.owner` | client_owner | `signUp` + `ensure_own_client` (`index.tsx`, `auth.tsx`, `auth.callback.tsx`) | API / RPC | Server | time + email | Yes: `auth.users` + `user_roles` `client_owner` + `clients` row. |
 | `signup.completed.accountant` | firm_admin | `adminSignUp` `signupType=accountant` → firm insert + `ensure_practice_firm` | Server fn `src/lib/auth.functions.ts` | Server | time + email + firm name | Yes: `firms.created_at`, `user_roles`. |

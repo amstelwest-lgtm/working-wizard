@@ -29,6 +29,15 @@ import {
 // (external app CSS can still load; these rules win for landing selectors).
 import landingCss from "../styles/landing.css?inline";
 import { peekPendingOwnerInvite, pendingInviteTokenFromSearch } from "@/lib/invite-handoff";
+import {
+  billingStartPath,
+  clearPendingCheckout,
+  paidPlanFromRegisterLabel,
+  parsePendingCheckoutFromSearch,
+  peekPendingCheckout,
+  registerLabelForPlan,
+  stashPendingCheckout,
+} from "@/lib/pending-checkout";
 import { HOMEPAGE_FAQ_ITEMS } from "@/lib/marketing-faq";
 import { faqPageJson, pageHead, SEO_PAGES } from "@/lib/seo";
 import { OwnerInviteShell } from "@/components/owner-invite-shell";
@@ -231,6 +240,20 @@ function LandingPage() {
   const [siUnconfirmed, setSiUnconfirmed] = useState(false);
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+    const pending =
+      parsePendingCheckoutFromSearch(window.location.search) ?? peekPendingCheckout();
+    if (!pending) return;
+    stashPendingCheckout(pending);
+    setRegPlan(registerLabelForPlan(pending.plan));
+    const hash = window.location.hash.replace(/^#/, "");
+    const target = hash === "pricing" ? "pricing" : "register";
+    window.setTimeout(() => {
+      document.getElementById(target)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 350);
+  }, []);
+
+  useEffect(() => {
     if (resendCooldown <= 0) return;
     const id = setTimeout(() => setResendCooldown((s) => s - 1), 1000);
     return () => clearTimeout(id);
@@ -281,6 +304,19 @@ function LandingPage() {
       // cannot race the invite effect and dump the user onto /dashboard — and
       // so a Google return to `/` still keeps the owner-seat invite.
       if (pendingInviteTokenFromUrl() || inviteClientId || peekPendingOwnerInvite()) return;
+      const pendingCheckout =
+        peekPendingCheckout() ?? parsePendingCheckoutFromSearch(window.location.search);
+      if (pendingCheckout) {
+        stashPendingCheckout(pendingCheckout);
+        if (!cancelled) {
+          navigate({
+            to: "/billing/start",
+            search: { plan: pendingCheckout.plan, market: pendingCheckout.market },
+            replace: true,
+          });
+        }
+        return;
+      }
       try {
         const { resolvePostLoginPath } = await import("@/lib/user-roles");
         const path = await resolvePostLoginPath(user.id);
@@ -834,6 +870,17 @@ function LandingPage() {
         void navigate({ to: "/ops", replace: true });
         return;
       }
+      const pendingCheckout =
+        peekPendingCheckout() ?? parsePendingCheckoutFromSearch(window.location.search);
+      if (pendingCheckout) {
+        stashPendingCheckout(pendingCheckout);
+        void navigate({
+          to: "/billing/start",
+          search: { plan: pendingCheckout.plan, market: pendingCheckout.market },
+          replace: true,
+        });
+        return;
+      }
       if (pendingInvite) {
         const { forcePortal } = await import("@/lib/user-roles");
         forcePortal("owner");
@@ -1051,21 +1098,25 @@ function LandingPage() {
     }
     setRegBusy(true);
     try {
-      const { data, error } = await supabase.auth.signUp({
-        email: regEmail,
-        password: regPassword,
-        options: {
-          emailRedirectTo: `${window.location.origin}/app`,
-          data: {
-            full_name: regName.trim(),
-            business_name: regBusiness.trim() || regName.trim(),
-            signup_type: "customer",
-            plan: regPlan,
-            market_country: market.country,
-            market_region: market.regionCode,
+        const pendingCheckout = peekPendingCheckout();
+        const emailRedirectTo = pendingCheckout
+          ? `${window.location.origin}${billingStartPath(pendingCheckout)}`
+          : `${window.location.origin}/app`;
+        const { data, error } = await supabase.auth.signUp({
+          email: regEmail,
+          password: regPassword,
+          options: {
+            emailRedirectTo,
+            data: {
+              full_name: regName.trim(),
+              business_name: regBusiness.trim() || regName.trim(),
+              signup_type: "customer",
+              plan: regPlan,
+              market_country: market.country,
+              market_region: market.regionCode,
+            },
           },
-        },
-      });
+        });
       if (error) throw error;
       // With email confirmation on, Supabase returns an obfuscated user with no
       // identities for an address that already has an account. Send them to
@@ -1104,6 +1155,14 @@ function LandingPage() {
           // Don't block navigation — the /app effectiveClientId flow will retry.
           console.error("[signup] ensure_own_client failed:", rpcErr.message);
         }
+        const pendingCheckout = peekPendingCheckout();
+        if (pendingCheckout) {
+          navigate({
+            to: "/billing/start",
+            search: { plan: pendingCheckout.plan, market: pendingCheckout.market },
+          });
+          return;
+        }
         navigate({ to: "/app" });
         return;
       }
@@ -1113,6 +1172,18 @@ function LandingPage() {
     } finally {
       setRegBusy(false);
     }
+  };
+
+  const startPaidPlan = (plan: "orbit" | "constellation") => {
+    const market = visitorCopyPack(draftMarket);
+    stashPendingCheckout({ plan, market });
+    setRegPlan(registerLabelForPlan(plan));
+    if (user) {
+      void navigate({ to: "/billing/start", search: { plan, market } });
+      return;
+    }
+    toast.message(`Create your account or sign in to start ${registerLabelForPlan(plan)}.`);
+    document.getElementById("register")?.scrollIntoView({ behavior: "smooth" });
   };
 
   const activeInviteToken =
@@ -1647,7 +1718,9 @@ function LandingPage() {
                   next={
                     inviteClientId
                       ? `/?invite=${encodeURIComponent(inviteClientId)}&mode=signup`
-                      : undefined
+                      : peekPendingCheckout()
+                        ? billingStartPath(peekPendingCheckout()!)
+                        : undefined
                   }
                   onError={(msg) => setSiError(msg)}
                 />
@@ -2523,6 +2596,7 @@ function LandingPage() {
               <button
                 className="btn btn-gold"
                 onClick={() => {
+                  clearPendingCheckout();
                   setRegPlan("Spark — Free early access");
                   document.getElementById("register")?.scrollIntoView({ behavior: "smooth" });
                 }}
@@ -2549,7 +2623,7 @@ function LandingPage() {
                   }
                 />
               </div>
-              <div className="per">Coming soon — not billed yet</div>
+              <div className="per">Billed monthly through Stripe</div>
               <ul>
                 <li>Live 13-week cashflow forecast</li>
                 <li>Full ratio set + playbook</li>
@@ -2559,13 +2633,9 @@ function LandingPage() {
               <button
                 className="btn btn-ghost"
                 type="button"
-                onClick={() => {
-                  setRegPlan("Spark — Free early access");
-                  toast.message("Orbit billing is not live yet — join on Spark for free.");
-                  document.getElementById("register")?.scrollIntoView({ behavior: "smooth" });
-                }}
+                onClick={() => startPaidPlan("orbit")}
               >
-                Join waitlist
+                Start Orbit
               </button>
             </div>
 
@@ -2587,7 +2657,7 @@ function LandingPage() {
                   }
                 />
               </div>
-              <div className="per">Coming soon — not billed yet</div>
+              <div className="per">Billed monthly through Stripe</div>
               <ul>
                 <li>Everything planned for Orbit</li>
                 <li>AI advisory draft</li>
@@ -2596,13 +2666,9 @@ function LandingPage() {
               <button
                 className="btn btn-ghost"
                 type="button"
-                onClick={() => {
-                  setRegPlan("Spark — Free early access");
-                  toast.message("Constellation billing is not live yet — join on Spark for free.");
-                  document.getElementById("register")?.scrollIntoView({ behavior: "smooth" });
-                }}
+                onClick={() => startPaidPlan("constellation")}
               >
-                Join waitlist
+                Start Constellation
               </button>
             </div>
           </div>
@@ -2879,6 +2945,11 @@ function LandingPage() {
                           tone="landing"
                           label="Continue with Google"
                           disabled={regBusy || !isDraftComplete(draftMarket)}
+                          next={
+                            peekPendingCheckout()
+                              ? billingStartPath(peekPendingCheckout()!)
+                              : undefined
+                          }
                           onError={(msg) => toast.error(msg)}
                         />
                         <AuthDivider />
@@ -2926,11 +2997,25 @@ function LandingPage() {
                         <select
                           id="regPlan"
                           value={regPlan}
-                          onChange={(e) => setRegPlan(e.target.value)}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            setRegPlan(value);
+                            const paid = paidPlanFromRegisterLabel(value);
+                            if (paid) {
+                              stashPendingCheckout({
+                                plan: paid,
+                                market: visitorCopyPack(draftMarket),
+                              });
+                            } else {
+                              clearPendingCheckout();
+                            }
+                          }}
                         >
                           <option value="Spark — Free early access">
                             Spark — Free early access
                           </option>
+                          <option value="Orbit">Orbit</option>
+                          <option value="Constellation">Constellation</option>
                         </select>
 
                         <button
@@ -2939,7 +3024,11 @@ function LandingPage() {
                           disabled={regBusy}
                           style={{ width: "100%", justifyContent: "center", marginTop: 28 }}
                         >
-                          {regBusy ? "Creating your account…" : "Get my free health score ✦"}
+                          {regBusy
+                            ? "Creating your account…"
+                            : paidPlanFromRegisterLabel(regPlan)
+                              ? `Create account and start ${regPlan}`
+                              : "Get my free health score ✦"}
                         </button>
                         <p
                           style={{
@@ -2950,7 +3039,8 @@ function LandingPage() {
                             lineHeight: 1.5,
                           }}
                         >
-                          No credit card for Spark. Paid plans are not billed yet. By creating an
+                          Spark is free and does not ask for a card. Orbit and Constellation start
+                          Stripe Checkout after you create an account. By creating an
                           account you agree to the{" "}
                           <a href="/terms" style={{ color: "inherit" }}>
                             Terms

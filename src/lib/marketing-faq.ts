@@ -30,7 +30,7 @@ export const HOMEPAGE_FAQ_ITEMS: FaqItem[] = [
   {
     question: "How do I get started, and what does MILŌN cost?",
     answer:
-      "You can start free with Spark during early access, with no card required. Upload your financial figures and MILŌN will generate a financial health score and analysis. Orbit, Constellation, and accounting-firm plans are published but are not being billed yet. Stripe billing will be available soon, so check the MILŌN landing page for updates.",
+      "You can start free with Spark during early access, with no card required. Upload your financial figures and MILŌN will generate a financial health score and analysis. Orbit and Constellation are billed monthly through Stripe Checkout after you create an account. Accounting-firm plans are published but are not being billed yet.",
   },
 ];
 
@@ -41,12 +41,12 @@ export function publicFaqUsItems(): FaqItem[] {
   return [
     {
       question: "What does it cost?",
-      answer: `Spark is free during early access and does not ask for a card. Two paid tiers are published — Orbit at ${LIST_PRICES.us.orbit} a month and Constellation at ${LIST_PRICES.us.constellation} a month — but neither is being billed yet. For practices, firm pricing is planned at ${LIST_PRICES.us.firm150} a month up to 150 clients and ${LIST_PRICES.us.firmUnlimited} a month for unlimited, also not yet billed.`,
+      answer: `Spark is free during early access and does not ask for a card. Two paid tiers are billed monthly through Stripe Checkout — Orbit at ${LIST_PRICES.us.orbit} a month and Constellation at ${LIST_PRICES.us.constellation} a month. For practices, firm pricing is planned at ${LIST_PRICES.us.firm150} a month up to 150 clients and ${LIST_PRICES.us.firmUnlimited} a month for unlimited, and is not yet billed.`,
     },
     {
       question: "So what is the catch with free?",
       answer:
-        "You are early, and early users shape what gets built. We get real usage and honest feedback, you get the platform without paying while it is still being finished. When billing does start you will be told before it happens, not after.",
+        "You are early, and early users shape what gets built. Spark stays free during early access. Orbit and Constellation are paid monthly plans billed through Stripe Checkout.",
     },
     {
       question: "What happens if I stop using it?",
@@ -70,7 +70,7 @@ export function publicFaqUsItems(): FaqItem[] {
     },
     {
       question: "Do you store card details?",
-      answer: "No. Nothing is being billed yet, so there is nothing to store.",
+      answer: "No. Card numbers are collected by Stripe Checkout. Milōn does not store card details.",
     },
     {
       question: "Do you track how I use the product?",
