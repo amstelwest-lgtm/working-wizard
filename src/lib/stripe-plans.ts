@@ -3,6 +3,13 @@
  * Amounts are Stripe minor units (cents). Spark stays free / no Checkout.
  */
 
+/**
+ * Stripe Tax: Software as a service (SaaS) — business use.
+ * Canonical list: https://docs.stripe.com/tax/tax-codes
+ * Managed Payments eligible: https://docs.stripe.com/payments/managed-payments/eligibility#product-tax-code-requirements
+ */
+export const STRIPE_SAAS_BUSINESS_TAX_CODE = "txcd_10103001";
+
 export const STRIPE_PAID_PLANS = ["orbit", "constellation"] as const;
 export type StripePaidPlan = (typeof STRIPE_PAID_PLANS)[number];
 export type StripePlanMarket = "za" | "us";
