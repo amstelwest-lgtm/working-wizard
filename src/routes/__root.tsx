@@ -200,7 +200,7 @@ function RootShell({ children }: { children: React.ReactNode }) {
         */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var p=location.pathname;if(p!="/"&&p!="")return;var d=document.documentElement;d.dataset.landing="1";var t="dark";try{var s=localStorage.getItem("milon.landing.theme");if(s==="light"||s==="dark")t=s;}catch(e){}d.dataset.theme=t;if(t==="light"){d.classList.remove("dark");d.style.backgroundColor="#f7f4ec";d.style.color="#1b1608";d.style.colorScheme="light";}else{d.classList.add("dark");d.style.backgroundColor="#050507";d.style.color="#f2ecdc";d.style.colorScheme="dark";}}catch(e){}})();`,
+            __html: `(function(){try{var p=location.pathname;if(p!="/"&&p!="")return;var d=document.documentElement;d.dataset.landing="1";var t="dark";try{var s=localStorage.getItem("milon.landing.theme");if(s==="light"||s==="dark")t=s;}catch(e){}d.dataset.theme=t;var light=t==="light";if(light){d.classList.remove("dark");d.style.backgroundColor="#f7f4ec";d.style.color="#1b1608";d.style.colorScheme="only light";}else{d.classList.add("dark");d.style.backgroundColor="#050507";d.style.color="#f2ecdc";d.style.colorScheme="only dark";}var m=document.getElementById("milon-color-scheme");if(!m){m=document.createElement("meta");m.id="milon-color-scheme";m.setAttribute("name","color-scheme");(document.head||d).appendChild(m);}m.setAttribute("content",light?"only light":"only dark");}catch(e){}})();`,
           }}
         />
         <style
@@ -208,11 +208,11 @@ function RootShell({ children }: { children: React.ReactNode }) {
             __html: [
               'html[data-landing="1"]:not([data-theme="light"]),html[data-landing="1"]:not([data-theme="light"]) body{',
               'background:#050507!important;background-color:#050507!important;',
-              'color:#f2ecdc!important;color-scheme:dark;',
+              'color:#f2ecdc!important;color-scheme:dark;color-scheme:only dark;',
               '}',
               'html[data-landing="1"][data-theme="light"],html[data-landing="1"][data-theme="light"] body{',
               'background:#f7f4ec!important;background-color:#f7f4ec!important;',
-              'color:#1b1608!important;color-scheme:light;',
+              'color:#1b1608!important;color-scheme:light;color-scheme:only light;',
               '}',
               'html.dark:not([data-theme="light"]),html.dark:not([data-theme="light"]) body{',
               'background:#050507!important;background-color:#050507!important;',
