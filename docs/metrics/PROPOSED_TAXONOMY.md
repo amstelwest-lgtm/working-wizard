@@ -52,12 +52,12 @@ Properties listed are the **maximum** we should store. All optional unless noted
 |---|---|---|---|
 | `landing.viewed` | client | `{ path, referrer_host }` | Anonymous RPC or skip until we have a public ingest that cannot be spammed. **Open:** worth it? |
 | `pricing.viewed` | client | `{ persona: accountant\|owner }` | Only if `show_pricing`. |
-| `pricing.waitlist.clicked` | client | `{ plan: orbit\|constellation }` | Today this does **not** capture email. Measuring it without a waitlist row is a vanity click. **Recommend: do not implement until the button writes a lead.** |
+| `pricing.checkout.clicked` | client | `{ plan: orbit\|constellation, market: za\|us }` | Paid CTA. Completing Checkout is the money event. |
 | `landing.quiz.completed` | client | `{ persona }` **no answers** unless you approve storing them | Open question 6. |
 | `lighthouse.trial.clicked` | server | `{ is_bot? }` | Already written on `milon_ops_leads`. Re-emit to spine only with bot flag. Prefetch-vulnerable. |
 | `lighthouse.trial.signed_up` | server | `{ persona }` | From signup that carried `lh` token. |
 
-**Not in Phase 1:** quiz step-level, waitlist without persistence.
+**Not in Phase 1:** quiz step-level.
 
 ### 3.2 Signup and practice setup (server)
 
@@ -270,7 +270,7 @@ Do not treat old `financials_uploaded` as `upload.succeeded` (client-side, wrong
 
 ## 9. Explicitly out of taxonomy until you say otherwise
 
-- Landing waitlist without a row
+- Paid Checkout resume after auth (covered in stripe-checkout tests)
 - Quiz answers payload
 - `/ack` acknowledgement as engagement
 - Magic-link GET fetch

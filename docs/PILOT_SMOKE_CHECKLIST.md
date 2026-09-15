@@ -87,7 +87,7 @@ note route, role, browser, and whether the migrations below were applied. Fix be
 ## 5. Honesty spot-checks
 
 - [ ] Landing says **Claude** where AI is mentioned; no Gemini
-- [ ] Orbit / Constellation say not billed yet / waitlist
+- [ ] Orbit / Constellation start Stripe Checkout (US Orbit on landing → auth if needed → Milon, Inc.)
 - [ ] No "better than X% of peers" on the owner overview; nothing invented before figures exist
 
 ## If something fails

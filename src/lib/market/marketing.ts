@@ -7,7 +7,7 @@ import { MARKET_STORAGE_KEY, type DraftMarket } from "./types";
 
 export type VisitorCopyPack = "za" | "us";
 
-/** Published list prices. Spark is free; paid tiers are not billed yet. */
+/** Published list prices. Spark is free; Orbit and Constellation are billed monthly. */
 export const LIST_PRICES = {
   za: {
     orbit: "R699",

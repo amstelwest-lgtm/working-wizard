@@ -55,13 +55,14 @@ function TermsPage() {
         file returns with the IRS or a state department of revenue.
       </p>
       <p>
-        Spark is free during early access and does not ask for a card. Published paid tiers are not
-        being billed yet. When billing starts you will be told before it happens, not after.
+        Spark is free during early access and does not ask for a card. Orbit and Constellation are
+        billed monthly through Stripe Checkout. Firm seats are published but not billed yet.
       </p>
       <p className="mk-copy-us">
-        US list prices (not billed): Orbit {LIST_PRICES.us.orbit}/mo, Constellation{" "}
-        {LIST_PRICES.us.constellation}/mo. Firm seats {LIST_PRICES.us.firm150}/mo up to 150 clients,{" "}
-        {LIST_PRICES.us.firmUnlimited}/mo unlimited.
+        US list prices: Orbit {LIST_PRICES.us.orbit}/mo, Constellation{" "}
+        {LIST_PRICES.us.constellation}/mo, billed through Stripe Checkout. Firm seats{" "}
+        {LIST_PRICES.us.firm150}/mo up to 150 clients, {LIST_PRICES.us.firmUnlimited}/mo unlimited
+        (not billed yet).
       </p>
 
       <h2>Your account</h2>

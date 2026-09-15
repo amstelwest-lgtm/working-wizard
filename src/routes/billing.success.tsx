@@ -12,7 +12,12 @@ export const Route = createFileRoute("/billing/success")({
     return session_id ? { session_id } : {};
   },
   component: BillingSuccessPage,
-  head: () => ({ meta: [{ title: "Payment received — Milōn" }] }),
+  head: () => ({
+    meta: [
+      { title: "Payment received — Milōn" },
+      { name: "robots", content: "noindex, nofollow" },
+    ],
+  }),
 });
 
 function BillingSuccessPage() {
@@ -34,7 +39,9 @@ function BillingSuccessPage() {
           return;
         }
         if (result.paymentStatus === "paid" || result.status === "complete") {
-          setLabel("Stripe confirmed the checkout. Public billing is still waitlist-only.");
+          setLabel(
+            "Stripe confirmed your payment. Your Orbit or Constellation subscription is active. Spark remains free.",
+          );
           return;
         }
         setLabel(`Stripe session status: ${result.status ?? "unknown"}.`);
@@ -55,13 +62,13 @@ function BillingSuccessPage() {
         <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-400">
           Billing
         </p>
-        <h1 className="mt-2 text-xl font-semibold">Thanks — checkout completed</h1>
+        <h1 className="mt-2 text-xl font-semibold">Payment received</h1>
         <p className="mt-2 text-sm text-slate-400">{label}</p>
         <Link
-          to="/ops"
+          to="/app"
           className="mt-5 inline-flex h-10 items-center rounded-full bg-amber-400 px-4 text-xs font-bold uppercase tracking-wider text-[#1b1300]"
         >
-          Back to Lighthouse
+          Open your workspace
         </Link>
       </div>
     </div>

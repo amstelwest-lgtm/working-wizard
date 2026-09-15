@@ -29,6 +29,13 @@ import {
 import { marketToJson, parseMarketSelection, readVisitorMarket, withMarketRpcFallback } from "@/lib/market";
 import { OPS_UNLOCK_KEY } from "@/lib/owner-ops.functions";
 import { isOpsNext, lighthouseTabFromOpsNext } from "@/lib/client-note-link";
+import {
+  isBillingStartPath,
+  parsePendingCheckoutFromSearch,
+  pendingCheckoutFromNext,
+  peekPendingCheckout,
+  stashPendingCheckout,
+} from "@/lib/pending-checkout";
 import { accessTokenFromNext } from "@/lib/practice-access";
 import { listUserFirms } from "@/lib/firm-brand";
 import {
@@ -256,6 +263,22 @@ function AuthCallbackPage() {
           void navigate({
             to: "/join/$token",
             params: { token: joinToken },
+            replace: true,
+          });
+        }
+        return;
+      }
+
+      const pendingCheckout =
+        parsePendingCheckoutFromSearch(window.location.search) ||
+        pendingCheckoutFromNext(next) ||
+        peekPendingCheckout();
+      if (pendingCheckout) {
+        stashPendingCheckout(pendingCheckout);
+        if (!cancelled) {
+          void navigate({
+            to: "/billing/start",
+            search: { plan: pendingCheckout.plan, market: pendingCheckout.market },
             replace: true,
           });
         }

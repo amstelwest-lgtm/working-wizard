@@ -15,6 +15,11 @@ import {
   shouldOpenItInbox,
 } from "@/lib/user-roles";
 import { isOpsNext, lighthouseTabFromOpsNext } from "@/lib/client-note-link";
+import {
+  isBillingStartPath,
+  pendingCheckoutFromNext,
+  peekPendingCheckout,
+} from "@/lib/pending-checkout";
 import { accessTokenFromNext } from "@/lib/practice-access";
 import { AuthDivider, GoogleSignInButton } from "@/components/google-sign-in-button";
 import { stashAccountantGoogleSignup } from "@/lib/google-auth";
@@ -82,7 +87,8 @@ function AuthPage() {
     : next?.startsWith("/access/")
       ? next
       : "/dashboard";
-  const googleNext = isOpsNext(next) || next?.startsWith("/access/") ? next : undefined;
+  const googleNext =
+    isOpsNext(next) || next?.startsWith("/access/") || isBillingStartPath(next) ? next : undefined;
   const landedPathRef = useRef<string | null>(null);
   const landInflightRef = useRef<Promise<string> | null>(null);
 
@@ -108,6 +114,16 @@ function AuthPage() {
         const tab = lighthouseTabFromOpsNext(next);
         navigate({ to: "/ops", search: tab ? { tab } : {} });
         return "/ops";
+      }
+      const pendingCheckout = pendingCheckoutFromNext(next) ?? peekPendingCheckout();
+      if (pendingCheckout) {
+        const path = `/billing/start?plan=${pendingCheckout.plan}&market=${pendingCheckout.market}`;
+        landedPathRef.current = path;
+        navigate({
+          to: "/billing/start",
+          search: { plan: pendingCheckout.plan, market: pendingCheckout.market },
+        });
+        return path;
       }
       if (await shouldOpenItInbox(userId)) {
         landedPathRef.current = "/ops";
