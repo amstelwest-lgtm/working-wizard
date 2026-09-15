@@ -66,8 +66,8 @@ assert(
   "accountant remounts Action Plan when the tab is opened so owner edits are not stale",
 );
 assert(
-  /activeTab === "plan"[\s\S]{0,80}"none"/.test(clientSrc) ||
-    /activeTab === "cash" \|\|[\s\S]{0,80}activeTab === "plan"/.test(clientSrc),
+  /activeTab === "plan"[\s\S]{0,220}"none"/.test(clientSrc) ||
+    /activeTab === "plan" \|\|[\s\S]{0,80}activeTab === "reports"/.test(clientSrc),
   "accountant simple/complex toggle is hidden on Action Plan — the panel does not change",
 );
 assert(

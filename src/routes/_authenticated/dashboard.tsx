@@ -43,6 +43,7 @@ import { effectiveCashRunwayWeeks } from "@/lib/cash-runway";
 import { countOpenQueriesByClient } from "@/lib/open-queries";
 import "@/styles/accountant-portal.css";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { SettingsNavButton } from "@/components/settings-nav-button";
 import { FirmSwitcher } from "@/components/firm-switcher";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
 import { WalkthroughWizard } from "@/components/walkthrough-wizard";
@@ -333,7 +334,7 @@ function AddClientDialog({
     }
     const email = ownerEmail.trim();
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      toast.error("Enter a valid owner email, or leave it blank");
+      toast.error("Enter a valid email for client management, or leave it blank");
       return;
     }
     const market = draftToSelection(draftMarket);
@@ -519,7 +520,7 @@ function AddClientDialog({
                 marginBottom: 6,
               }}
             >
-              Owner email (optional)
+              Client management email (optional)
             </label>
             <input
               type="email"
@@ -598,7 +599,7 @@ function InviteOwnerDialog({
       <div className="veil open" onClick={onClose} />
       <div className="drawer open" style={{ maxWidth: 480 }}>
         <div className="drawer-head">
-          <div className="cat">Invite owner</div>
+          <div className="cat">Invite client management</div>
           <h3>{draft.clientName}</h3>
           <button className="close" onClick={onClose}>
             ✕
@@ -616,7 +617,7 @@ function InviteOwnerDialog({
             >
               {draft.sendError
                 ? `Could not send automatically (${draft.sendError}). Copy the message or try again.`
-                : "No owner email on file yet — add it to send, or copy the message into your own email."}
+                : "No email on file yet — add client management's email to send, or copy the message into your own email."}
             </p>
           )}
           <div style={{ marginBottom: 14 }}>
@@ -630,7 +631,7 @@ function InviteOwnerDialog({
                 marginBottom: 6,
               }}
             >
-              Owner email
+              Client management email
             </label>
             <input
               type="email"
@@ -1032,7 +1033,7 @@ function Dashboard() {
 
   const sendInviteDraft = async () => {
     if (!inviteDraft?.email.trim()) {
-      toast.error("Enter the owner's email");
+      toast.error("Enter an email for client management");
       return;
     }
     setInviteSending(true);
@@ -1108,12 +1109,7 @@ function Dashboard() {
     (c) => c.health.overall != null && c.health.displayStatus !== "healthy",
   ).length;
   const criticalCount = clientRows.filter((c) => c.health.displayStatus === "critical").length;
-  const openActionsTotal = clientRows.reduce((s, c) => s + c.openActions, 0);
-  const actionsDueThisWeek = clientRows.reduce((s, c) => {
-    // Approximate: overdue counts toward "due this week" pressure; open actions
-    // without dates still contribute to the headline open-actions metric only.
-    return s + c.overdueActions;
-  }, 0);
+  const openQueriesTotal = clientRows.reduce((s, c) => s + c.openQueries, 0);
   const addedThisMonth = clientsAddedThisMonth(clientRows);
   const healthDelta = avgHealthDelta(clientRows);
   const sparkPts = portfolioSparkPoints(scoredRows);
@@ -1364,21 +1360,14 @@ function Dashboard() {
               Team
             </button>
             <ThemeToggle />
-            <button
+            <SettingsNavButton
               className="tb-btn"
-              type="button"
               onClick={() => {
                 setMobileNavOpen(false);
                 openPracticeSettings();
                 navigate({ to: "/settings" });
               }}
-            >
-              <svg viewBox="0 0 24 24">
-                <circle cx="12" cy="12" r="3" />
-                <path d="M12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4" />
-              </svg>
-              Settings
-            </button>
+            />
             <span className="profile-chip" title={profile.accountantName || user?.email || ""}>
               <span className="av">{profileInitials || "·"}</span>
               {greetName}
@@ -1494,24 +1483,21 @@ function Dashboard() {
           />
 
           <MetricTile
-            label="Open actions"
+            label="Open queries"
             icon={
               <svg viewBox="0 0 24 24">
-                <path d="M9 11l3 3L22 4" />
-                <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
               </svg>
             }
-            value={openActionsTotal}
+            value={openQueriesTotal}
             footnote={
-              actionsDueThisWeek > 0
-                ? `${actionsDueThisWeek} overdue — follow up`
-                : openActionsTotal > 0
-                  ? "Across action plans — follow up"
-                  : "No open actions"
+              openQueriesTotal > 0
+                ? "From client management — open a row to reply"
+                : "No open queries"
             }
             onClick={() =>
               document
-                .getElementById("follow-up")
+                .getElementById("wizard-dash-queries")
                 ?.scrollIntoView({ behavior: "smooth", block: "start" })
             }
           />
@@ -1874,7 +1860,7 @@ function Dashboard() {
                           {/* Invite */}
                           <button
                             className="icon-btn"
-                            title="Invite client owner — email + copy message"
+                            title="Invite client management — email + copy message"
                             onClick={() => void openOwnerInvite(c)}
                           >
                             <svg viewBox="0 0 24 24">

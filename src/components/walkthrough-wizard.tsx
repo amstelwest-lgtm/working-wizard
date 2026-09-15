@@ -162,31 +162,31 @@ const ACCOUNTANT_DASH_STEPS: Step[] = [
     targetId: "wizard-practice-board",
     section: "Practice",
     title: "Your whole book at a glance",
-    body: "Health, runway and status for every client — so you know who needs attention before they call. The Queries column is unresolved notes the owner pinned for you.",
+    body: "Health, runway and status for every client — so you know who needs a call before they do. Each tile is a pulse-check on the book, not a to-do list.",
   },
   {
     targetId: "wizard-dash-queries, wizard-practice-board",
     section: "Queries",
-    title: "Notes waiting on you",
-    body: "This column counts unresolved notes the owner pinned on their board. Open the client and pick them up from Open queries at the top of their workspace — reply on the same deliverable they marked.",
+    title: "The Queries column",
+    body: "In the client table, Queries is the inbox for questions from client management. A number here means something is waiting on you — open the row and reply on the same figure they marked.",
   },
   {
     targetId: ".ctable tbody tr, .client-card, [data-client-row]",
     section: "Clients",
     title: "Open a client workspace",
-    body: "Click any row to enter their board — same health, cash, budget and plan the owner sees, ready for an advisory conversation.",
+    body: "Click a row to open the shared workspace. You and the client work on the same numbers and the same tabs. Their screen looks a little different — they see a simpler view — but it is the same file.",
   },
   {
     targetId: "wizard-dash-reports",
     section: "Reports",
-    title: "Reports you can charge for",
-    body: "Reports studio is where branded PDFs live. Generate them from inside a client workspace once you have reviewed and signed off the figures behind them.",
+    title: "Reports you can brand",
+    body: "Reports Studio is where you assemble board-ready PDFs. You can brand them with the client's own logo and colours — not only the firm's.",
   },
   {
     targetId: "wizard-add-client",
     section: "Grow the book",
-    title: "Add the next client the same way",
-    body: "Use Add client and upload ~3 months of banks. Milōn drafts Profit, Cash and Budget from that one upload; you review, sign off and deliver. That loop is the practice.",
+    title: "Add the next client",
+    body: "Use Add client, then start from what they send you — bank statements, management accounts, or a spreadsheet. MILŌN drafts the profitability graphs, the cashflow forecast, and the rolling 12-month budget. You review, correct, and sign off.",
   },
 ];
 
@@ -198,17 +198,17 @@ const ACCOUNTANT_DASH_STEPS: Step[] = [
 const ACCOUNTANT_CLIENT_EMPTY_STEPS: Step[] = [
   {
     tab: "ratios",
-    targetId: ".health-orb",
-    section: "Business Health",
-    title: "This client's score lands here",
-    body: "Nothing is invented in the studio. Once figures are in, Milōn scores profit, assets, financing and cash into one number — the same orb the owner sees — and this tour continues on the real thing.",
+    targetId: "first-figures-card, .health-orb",
+    section: "This file",
+    title: "Nothing is in this file yet",
+    body: "You are looking at an empty client workspace. There is no health score, no profit picture, and no forecast until someone puts numbers in. That is normal on a new file — it is not broken.",
   },
   {
     tab: "ratios",
     targetId: "first-figures-card",
     section: "Figures",
-    title: "Step 2 of 2 · Bring in the figures",
-    body: "This is the only thing to do right now. One upload — bank statements or a P&L and balance sheet (PDF, Excel or CSV) — and Milōn drafts Profit, Cash Forecast and Budget from it. Each tab then waits for your review and sign-off before anything is branded or delivered.",
+    title: "Start with one upload",
+    body: "Ask client management for bank statements or a P&L and balance sheet — or drop the file in yourself. One upload is enough for MILŌN to draft Profitability, the 13-week Cash Forecast, and the 12-month Budget. Each tab then waits for your review and sign-off before anything is branded or delivered.",
   },
 ];
 
@@ -224,64 +224,64 @@ const ACCOUNTANT_CLIENT_STEPS: Step[] = [
     tab: "ask",
     targetId: "wizard-open-queries",
     section: "Queries",
-    title: "Outstanding notes from the owner",
-    body: "When the owner pins a note on their board, it lands here as an open query. Click to jump to the pin on the same deliverable they marked — Profit, Cash, Health and so on. The Queries column on your practice board counts what is still outstanding.",
+    title: "Questions from client management",
+    body: "When client management pins a question on a number, it lands here as an open query. Click to jump to the same figure they marked. The Queries column on your practice board counts what is still waiting.",
   },
   {
     tab: "summary",
     targetId: "wizard-brain-hero, pane-summary",
     section: "Summary",
     title: "The client brain is the background file",
-    body: "This tab is the collection of context around the client — profile, facts, uploads, drafts — so you and Milōn Bot can advise this business, not a generic SME. Empty blocks are waiting for a fact or an upload; they are not broken. Add a fact here. Agreed work the owner will chase lives on Action Plan.",
+    body: "This tab is the context around the client — profile, facts, uploads, drafts — so you and Milōn Bot can advise this business, not a generic SME. Empty blocks are waiting for a fact or an upload; they are not broken. Agreed work that client management will chase lives on Action Plan.",
   },
   {
     tab: "ratios",
     targetId: "finCollapse",
     section: "Figures",
     title: "Figures live here",
-    body: "Open this panel to correct a line, change the period, or upload a new statement. Every upload can refresh Profit, Cash and Budget — and anything you had signed off flips to Needs re-review until you look again.",
+    body: "Open this panel to correct a line, change the period, or upload a new statement. Every upload can refresh Profitability, the Cash Forecast and the Budget — and anything you had signed off flips to Needs re-review until you look again.",
   },
   {
     tab: "ratios",
     targetId: ".health-orb",
     section: "Business Health",
-    title: "Read the score with the owner",
-    body: "Same orb the SME sees. Drill the pillars so you can explain what’s driving the number, then sign off Health here — your signature appears beside the orb on their board.",
+    title: "The health score",
+    body: "The gold orb is this business’s health score — one number built from the ratios underneath. Click through the rings to see what is pulling the score up or down, so you can explain it to client management in plain language.",
   },
   {
     tab: "profit",
     targetId: "wizard-profit-walk",
     section: "Profit",
     title: "Profit is drafted — review it",
-    body: "Milōn built this waterfall from the first upload. Check the lines, then sign off profitability with the gold button. Until you do, the owner sees a draft with no stamp.",
+    body: "MILŌN built this waterfall from the first upload. Check the lines, then sign off Profitability with the gold button. Until you do, client management sees a draft with no stamp.",
   },
   {
     tab: "cash",
     targetId: "wizard-cash-outlook, wizard-cash-table, wizard-cash-panel",
     section: "Cash Forecast",
     title: "13 weeks, forecast for you",
-    body: "Closing balances and crunch weeks, drafted from the same upload. Review the assumptions, sign off, and align the owner on collections or spend timing before a shortfall hits.",
+    body: "Closing balances and crunch weeks, drafted from the same upload. Review the assumptions, sign off the 13-week Cash Forecast, and align client management on collections or spend timing before a shortfall hits.",
   },
   {
     tab: "budget",
-    targetId: "wizard-budget-month-engine, wizard-budget-plan, wizard-budget-panel",
+    targetId: "wizard-budget-tab-head, wizard-budget-plan, wizard-budget-panel",
     section: "Budget",
-    title: "Annual plan, seeded — needs your sign-off",
-    body: "The budget was built from profile and figures at upload. Sign it off once it reads true. Cash timing, Budget vs actuals, and industry checks sit underneath — closed until you open them.",
+    title: "The 12-month Budget",
+    body: "This is the year plan. The graph at the top is the picture; the numbers underneath are the plan you can edit. Sign the 12-month Budget when it reads true, then compare what actually happened against it.",
   },
   {
     tab: "reports",
     targetId: "pane-reports",
     section: "Reports",
     title: "Deliver branded advice",
-    body: "This is the same Reports Studio as the rest of the practice. Sign off Health, Profit, Cash or Budget first — each stamp carries into the board-ready PDF you generate here.",
+    body: "This is the same Reports Studio as the rest of the practice. Sign off Business Health & Ratios, Profitability, the 13-week Cash Forecast, or the 12-month Budget first — each stamp carries into the board-ready PDF you generate here.",
   },
   {
     tab: "plan",
     targetId: "wizard-action-goal, wizard-action-list, wizard-action-plan, pane-plan",
     section: "Action Plan",
-    title: "Leave with an owned plan",
-    body: "Lock the outcome goal and the actions the SME will run. Same plan they see in their app — then move to the next client.",
+    title: "This is the Action Plan",
+    body: "This tab is the shared work list for the engagement: what still needs doing, who owns each item, and what is overdue. Your job is to sign the work off when it is ready, then help client management follow up on anything still outstanding.",
   },
 ];
 
@@ -345,6 +345,20 @@ function measureSpot(el: Element): Spot {
   const vw = window.innerWidth;
   const vh = window.innerHeight;
   const pad = padFor(el);
+  const isOrb = el instanceof HTMLElement && el.classList.contains("health-orb");
+
+  // The health orb is a circle — hug it instead of clipping to a short rectangle.
+  if (isOrb) {
+    const size = Math.max(r.width, r.height) + pad * 2;
+    return {
+      top: r.top + r.height / 2 - size / 2,
+      left: r.left + r.width / 2 - size / 2,
+      width: size,
+      height: size,
+      radius: size / 2,
+    };
+  }
+
   // Intersect with the viewport so tall panes still get a clear lit region
   const top = Math.max(r.top, 10);
   const left = Math.max(r.left, 10);

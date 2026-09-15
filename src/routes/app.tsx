@@ -19,7 +19,6 @@ import {
   ChevronDown,
   Check,
   Pencil,
-  Settings,
   LogOut,
   MoreHorizontal,
 } from "lucide-react";
@@ -86,6 +85,7 @@ import { BenchmarkBar } from "@/components/benchmark-bar";
 import { AddToPlanButton } from "@/components/add-to-plan-button";
 import { OwnerRatioBriefing } from "@/components/owner-ratio-briefing";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { SettingsNavButton } from "@/components/settings-nav-button";
 import {
   annualiseFinancials,
   computeRatios,
@@ -3799,7 +3799,7 @@ function Index() {
                       <span className="founder-app-bar__upload-label hidden sm:inline">Upload</span>
                     </button>
                   )}
-                  <ThemeToggle className="founder-app-bar__theme" />
+                  <ThemeToggle />
                   <HeaderShareButton />
 
                   <div className="hidden items-center gap-1 sm:flex">
@@ -3875,16 +3875,13 @@ function Index() {
                         ⬡ Admin
                       </button>
                     )}
-                    <button
+                    <SettingsNavButton
+                      className="milon-settings-btn"
                       onClick={() => {
                         openOwnerSettings();
                         navigate({ to: "/settings" });
                       }}
-                      className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50/80 px-2 text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-600 transition-colors hover:border-[#b7872a]/50 hover:bg-[#d4a550]/10 dark:border-slate-700/80 dark:bg-slate-900/70 dark:text-slate-300"
-                      title="Settings"
-                    >
-                      Settings
-                    </button>
+                    />
                     <button
                       onClick={() =>
                         signOut().then(() => {
@@ -3947,15 +3944,13 @@ function Index() {
                             Admin
                           </button>
                         )}
-                        <button
+                        <SettingsNavButton
+                          className="milon-settings-btn w-full justify-start"
                           onClick={() => {
                             openOwnerSettings();
                             navigate({ to: "/settings" });
                           }}
-                          className="flex items-center gap-2 rounded-md px-2 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
-                        >
-                          <Settings className="h-3.5 w-3.5" /> Settings
-                        </button>
+                        />
                         <button
                           onClick={() =>
                             signOut().then(() => {

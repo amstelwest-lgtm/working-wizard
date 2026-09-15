@@ -307,7 +307,7 @@ export function BudgetAdvancedPanel({
           </h3>
           <p className="mt-1 max-w-2xl text-[12px] leading-relaxed text-slate-500">
             {role === "accountant"
-              ? "These stay on this client’s budget file. They are not emailed to the owner. Use a note to record why a number was set. Use a challenge when you do not yet believe a figure — so the next person on this file can see the disagreement."
+              ? "These stay on this client’s budget file. They are not emailed to client management. Use a note to record why a number was set. Use a challenge when you do not yet believe a figure — so the next person on this file can see the disagreement."
               : "Notes live on this budget so you and your accountant remember why a number was set. They are not sent as a message."}
           </p>
           <div className="mt-3 grid gap-2 sm:grid-cols-4">

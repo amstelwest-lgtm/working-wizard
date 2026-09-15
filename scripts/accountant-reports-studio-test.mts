@@ -18,10 +18,10 @@ assert(clientSrc.includes("ReportsStudioPanel"), "client Reports tab mounts Repo
 assert(clientSrc.includes("embedded"), "client workspace embeds studio chrome");
 assert(!clientSrc.includes("REPORT_TEMPLATES"), "old report gallery catalogue is gone");
 assert(!clientSrc.includes("rep-grid"), "old report gallery markup is gone");
-assert(clientSrc.includes('setActiveTab("reports")'), "Generate report stays on the client Reports tab");
+assert(clientSrc.includes('revealTab("reports")'), "Generate report opens the client Reports tab and scrolls to it");
 assert(
   /activeTab === "reports"[\s\S]{0,80}"none"/.test(clientSrc) ||
-    /activeTab === "cash" \|\|[\s\S]{0,80}activeTab === "reports"/.test(clientSrc),
+    /activeTab === "reports" \|\|[\s\S]{0,80}activeTab === "advisory"/.test(clientSrc),
   "simple/complex toggle is hidden on Reports — the studio does not change",
 );
 
@@ -29,6 +29,8 @@ const studioSrc = readFileSync(resolve("src/routes/_authenticated/reports.index.
 assert(studioSrc.includes("export function ReportsStudio"), "studio is a reusable panel");
 assert(!studioSrc.includes("/reports/demo"), "studio no longer links to the mock preview");
 assert(studioSrc.includes("embedded"), "studio supports embedded (client tab) chrome");
+assert(studioSrc.includes("REPORT_SIGNOFF_SCOPE"), "each report card maps to a deliverable sign-off");
+assert(studioSrc.includes("report-card__rule"), "studio cards keep the gold hairline");
 
 const demoSrc = readFileSync(resolve("src/routes/_authenticated/reports.demo.tsx"), "utf8");
 assert(demoSrc.includes('to: "/reports"'), "legacy /reports/demo redirects to studio");
@@ -48,6 +50,7 @@ const walkSrc = readFileSync(resolve("src/components/walkthrough-wizard.tsx"), "
   assert(reportsStep.includes('targetId: "pane-reports"'), "Reports step points at the Reports Studio pane");
   assert(reportsStep.includes("same Reports Studio"), "walkthrough describes the studio on the Reports tab");
   assert(/sign off/i.test(reportsStep), "Reports step says deliverables are signed off before delivery (#175)");
+  assert(reportsStep.includes("Business Health & Ratios"), "Reports step uses full deliverable names");
 }
 
 console.log("accountant-reports-studio-test: ok");

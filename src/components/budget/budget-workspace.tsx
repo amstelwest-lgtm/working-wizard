@@ -23,6 +23,10 @@ import { BudgetSimpleView } from "@/components/budget/budget-simple-view";
 import { BudgetVariancePanel } from "@/components/budget/budget-variance-panel";
 import { BudgetYearOverviewChart } from "@/components/budget/budget-year-overview-chart";
 import { ScrollableTable } from "@/components/primitives/scrollable-table";
+import {
+  COLLAPSIBLE_GOLD_RULE,
+  COLLAPSIBLE_GOLD_SHELL,
+} from "@/components/primitives/collapsible-gold-card";
 
 const SCENARIOS: BudgetScenarioId[] = ["base", "upside", "downside"];
 
@@ -512,11 +516,17 @@ function BudgetComplexWorkspace({
       </section>
 
       {/* Revenue drivers */}
-      <section className="space-y-3">
+      <section className={`space-y-3 ${COLLAPSIBLE_GOLD_SHELL} p-4`}>
+        <div className={COLLAPSIBLE_GOLD_RULE} />
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-            Revenue drivers
-          </h3>
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#b8860b]">
+              Drivers
+            </p>
+            <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+              Revenue drivers
+            </h3>
+          </div>
           {doc.revenueLines.length < 5 && (
             <Button
               type="button"
@@ -550,7 +560,7 @@ function BudgetComplexWorkspace({
         {doc.revenueLines.map((line) => (
           <ScrollableTable
             key={line.id}
-            className="rounded-xl border border-slate-200/80 bg-white/70 dark:border-slate-800 dark:bg-slate-950/40"
+            className="rounded-lg border border-amber-900/10 bg-white/70 dark:border-slate-800 dark:bg-slate-950/40"
           >
             <div className="flex items-center justify-between gap-2 border-b border-slate-100 px-3 py-2 dark:border-slate-800">
               <Input
@@ -666,11 +676,17 @@ function BudgetComplexWorkspace({
       </section>
 
       {/* Overheads */}
-      <section className="space-y-2">
-        <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-          Fixed overheads
-        </h3>
-        <ScrollableTable className="rounded-xl border border-slate-200/80 dark:border-slate-800">
+      <section className={`space-y-2 ${COLLAPSIBLE_GOLD_SHELL} p-4`}>
+        <div className={COLLAPSIBLE_GOLD_RULE} />
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#b8860b]">
+            Overheads
+          </p>
+          <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+            Fixed overheads
+          </h3>
+        </div>
+        <ScrollableTable className="rounded-lg border border-amber-900/10 dark:border-slate-800">
           <table className="milon-data-table w-full min-w-[640px] text-xs text-[#0f172a] dark:text-slate-100">
             <thead>
               <tr className="border-b border-slate-100 text-left text-[10px] uppercase tracking-wider text-slate-400 dark:border-slate-800">
@@ -737,10 +753,14 @@ function BudgetComplexWorkspace({
       </section>
 
       {/* Capex — available for every model; collapsed by default */}
-      <details className="group rounded-xl border border-slate-200/80 open:bg-white/70 dark:border-slate-800 dark:open:bg-slate-950/40">
+      <details className={`group ${COLLAPSIBLE_GOLD_SHELL}`}>
+        <div className={COLLAPSIBLE_GOLD_RULE} />
         <summary className="cursor-pointer list-none px-4 py-3 marker:content-none">
           <div className="flex items-center justify-between gap-2">
             <div>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#b8860b]">
+                Capital
+              </p>
               <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
                 Capex{" "}
                 <span className="font-normal text-slate-400">

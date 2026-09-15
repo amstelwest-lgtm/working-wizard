@@ -483,7 +483,7 @@ export function ClientBrainSummary({
         </p>
         <p className="sub" style={{ marginTop: 8 }}>
           Empty blocks below are waiting for a fact, an upload, or a draft. They fill as you work
-          this file. They are not broken. Agreed work the owner will chase lives on the Action Plan
+          this file. They are not broken. Agreed work that client management will chase lives on the Action Plan
           tab — not here.
         </p>
         <div className="brain-actions">
@@ -865,7 +865,7 @@ export function ClientBrainSummary({
             <span className="eyebrow">Context facts</span>
             <SectionLead>
               Short truths the numbers miss — the kind of thing you would tell a colleague before a
-              meeting. Examples: one customer is 40% of revenue; the owner works six days; they want
+              meeting. Examples: one customer is 40% of revenue; client management works six days; they want
               to sell in three years; busy November–January; they run Xero plus a bookkeeper. Milōn
               Bot reads these. Add one here; they also land from uploads, the profile, and the bot.
             </SectionLead>
@@ -937,8 +937,8 @@ export function ClientBrainSummary({
           <section className="card pad">
             <span className="eyebrow">Outstanding questions</span>
             <SectionLead>
-              Shared with the owner. One question is dripped at a time — no spam. Answer any of them
-              here so you and the owner are filling the same brain.
+              Shared with client management. One question is dripped at a time — no spam. Answer any of them
+              here so you and client management are filling the same brain.
             </SectionLead>
             {drip && (
               <div className="brain-highlight">
@@ -985,7 +985,7 @@ export function ClientBrainSummary({
             <DialogDescription className="text-slate-400">
               {fillDialog?.kind === "stored"
                 ? fillDialog.prompt
-                : "Short note that becomes part of the client brain — not sent to the owner."}
+                : "Short note that becomes part of the client brain — not sent to client management."}
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-1.5">

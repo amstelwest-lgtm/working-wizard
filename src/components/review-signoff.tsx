@@ -380,6 +380,7 @@ export function ReviewSignoffButton({
   signoff,
   isStale,
   onChange,
+  compact = false,
 }: {
   clientId: string;
   clientName?: string;
@@ -387,6 +388,8 @@ export function ReviewSignoffButton({
   signoff: ClientReviewSignoff | null;
   isStale: boolean;
   onChange: (next: ClientReviewSignoff | null) => void;
+  /** Tight control for tab headers and report cards. */
+  compact?: boolean;
 }) {
   const { profile, updateProfile } = useAccountantProfile();
   const doSignoff = useServerFn(signoffReview);
@@ -466,8 +469,13 @@ export function ReviewSignoffButton({
 
   if (signoff && !isStale) {
     return (
-      <div className="mt-2 w-full max-w-md">
-        <SignoffCertificate signoff={signoff} scope={scope} isStale={false} />
+      <div className={compact ? "flex flex-col items-end" : "mt-2 w-full max-w-md"}>
+        <SignoffCertificate
+          signoff={signoff}
+          scope={scope}
+          isStale={false}
+          placement={compact ? "compact" : "block"}
+        />
         <button
           type="button"
           onClick={() => setConfirmRemove(true)}
@@ -500,9 +508,14 @@ export function ReviewSignoffButton({
   }
 
   return (
-    <div className="mt-2 flex w-full max-w-md flex-col items-end gap-2">
+    <div className={compact ? "flex flex-col items-end gap-2" : "mt-2 flex w-full max-w-md flex-col items-end gap-2"}>
       {signoff && isStale && (
-        <SignoffCertificate signoff={signoff} scope={scope} isStale />
+        <SignoffCertificate
+          signoff={signoff}
+          scope={scope}
+          isStale
+          placement={compact ? "compact" : "block"}
+        />
       )}
       {workflow ? (
         <p className="text-[10px] uppercase tracking-[0.14em] text-slate-500">

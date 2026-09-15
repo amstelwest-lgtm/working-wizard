@@ -18,6 +18,10 @@ import type { BudgetDocument } from "@/lib/budget.types";
 import { computeBudgetMonths, fmtBudgetMoney } from "@/lib/budget.compute";
 import { budgetWindowLabel, formatMonthLabel } from "@/lib/budget.months";
 import { useMarketFormat } from "@/contexts/market";
+import {
+  COLLAPSIBLE_GOLD_RULE,
+  COLLAPSIBLE_GOLD_SHELL,
+} from "@/components/primitives/collapsible-gold-card";
 
 const GOLD = "#d4a550";
 const GOLD_DARK = "#b8860b";
@@ -86,10 +90,11 @@ export function BudgetYearOverviewChart({ doc }: { doc: BudgetDocument }) {
 
   return (
     <section
-      id="wizard-budget-year-chart"
-      className="rounded-xl border border-slate-200/80 bg-white/70 p-4 dark:border-slate-800 dark:bg-slate-950/50"
+      id="wizard-budget-tab-head"
+      className={`${COLLAPSIBLE_GOLD_SHELL} relative p-4`}
       aria-label="Budget year overview"
     >
+      <div className={COLLAPSIBLE_GOLD_RULE} />
       <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#b8860b]">
