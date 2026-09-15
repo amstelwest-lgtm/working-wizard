@@ -2,7 +2,7 @@
  * Stripe plan catalog amounts match published list prices.
  * Run: pnpm test:stripe-plans
  */
-import { STRIPE_PLAN_CATALOG } from "../src/lib/stripe-plans";
+import { STRIPE_PLAN_CATALOG, STRIPE_SAAS_BUSINESS_TAX_CODE } from "../src/lib/stripe-plans";
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
@@ -14,5 +14,9 @@ assert(STRIPE_PLAN_CATALOG.constellation.za.unitAmount === 129_900, "Constellati
 assert(STRIPE_PLAN_CATALOG.constellation.us.unitAmount === 7_500, "Constellation USD is $75");
 assert(STRIPE_PLAN_CATALOG.orbit.za.currency === "zar", "Orbit ZA currency");
 assert(STRIPE_PLAN_CATALOG.orbit.us.currency === "usd", "Orbit US currency");
+assert(
+  STRIPE_SAAS_BUSINESS_TAX_CODE === "txcd_10103001",
+  "SaaS business tax code matches Stripe tax-codes + Managed Payments eligibility",
+);
 
 console.log("stripe-plans ok");
