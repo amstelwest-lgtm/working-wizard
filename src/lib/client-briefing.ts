@@ -222,7 +222,7 @@ export function whatMatters(s: BriefingSignals): string | null {
     return `${profitable ? "Profitable, but" : "Cash is the constraint:"} runway is ${runwayText}. Worth understanding what is driving the cash position before anything else.`;
   }
   if (revDown && marginsDown) {
-    return "Revenue and operating margin both slipped against the prior period. Understand whether this is volume, price or cost before the owner reacts.";
+    return "Revenue and operating margin both slipped against the prior period. Understand whether this is volume, price or cost before client management reacts.";
   }
   if (revUp && marginsDown) {
     return "Revenue is growing but operating margin has narrowed — growth is being bought with cost. Margin discipline is the theme this month.";
@@ -240,7 +240,7 @@ export function whatMatters(s: BriefingSignals): string | null {
     return `The business appears financially healthy${runway != null ? `, with ${runwayText} of cash runway` : ""} and no single metric demanding attention this month.`;
   }
   if (s.healthStatus === "critical") {
-    return "Several indicators are weak at the same time. Start with cash, then profitability — this is a month for a focused conversation with the owner.";
+    return "Several indicators are weak at the same time. Start with cash, then profitability — this is a month for a focused conversation with client management.";
   }
   if (s.healthStatus === "at_risk") {
     return `The overall position is watchful rather than urgent${
@@ -295,27 +295,27 @@ export const MILON_CAPABILITIES: MilonCapability[] = [
     name: "Branded PDF reports",
     where: "Reports tab",
     does: "Generates firm-branded client reports: health, ratio movement over 3/6/12 months, profitability, working capital cycle, leverage, labour productivity, benchmark, intervention plan and 13-week forecast — with the accountant's sign-off stamp.",
-    output: "PDF deliverables to send to the owner.",
+    output: "PDF deliverables to send to client management.",
   },
   {
     id: "plan",
-    name: "Action plan shared with the owner",
+    name: "Action plan shared with client management",
     where: "Action Plan tab",
-    does: "A live list of agreed actions with owners and due dates; the business owner sees the same plan in their app and can tick items off.",
+    does: "A live list of agreed actions with owners and due dates; client management sees the same plan in their app and can tick items off.",
     output: "Agreed actions, follow-up nudges.",
   },
   {
     id: "advisory",
     name: "Advisory drafter",
     where: "Advisory Drafter tab",
-    does: "Drafts a plain-language advisory note or email to the owner from the current figures, ready to edit and send; delivery and acknowledgement are tracked.",
+    does: "Drafts a plain-language advisory note or email to client management from the current figures, ready to edit and send; delivery and acknowledgement are tracked.",
     output: "Advisory note / email to the client.",
   },
   {
     id: "notes",
     name: "In-context notes and queries",
     where: "Anywhere on the client page",
-    does: "Leaves a note or query on any figure or tab; the owner is notified and the thread is kept until resolved.",
+    does: "Leaves a note or query on any figure or tab; client management is notified and the thread is kept until resolved.",
     output: "Open / resolved queries with the client.",
   },
   {
@@ -323,7 +323,7 @@ export const MILON_CAPABILITIES: MilonCapability[] = [
     name: "Accountant sign-off",
     where: "Each deliverable tab",
     does: "Stamps a deliverable as reviewed by the accountant; any later change to the figures flags it for re-review.",
-    output: "Signed-off deliverables the owner can trust.",
+    output: "Signed-off deliverables client management can trust.",
   },
   {
     id: "bot",
@@ -402,7 +402,7 @@ ${ctx.cashRunwayWeeks != null ? `Cash runway: ${ctx.cashRunwayWeeks} weeks` : ""
 ${ctx.whatMatters ? `What matters (already shown to the accountant): ${ctx.whatMatters}` : ""}
 ${ctx.openQueries ? `Open queries with the client: ${ctx.openQueries}` : ""}
 
-TASK: Write "This month's Milōn workflow" — one or two sentences, max 55 words, telling the accountant (1) which Milōn capability or deliverable to use for this client this month, (2) what to investigate with it, and (3) what to point out or discuss with the owner. Tie it to the owner's stated goal and the most important thing in the figures.
+TASK: Write "This month's Milōn workflow" — one or two sentences, max 55 words, telling the accountant (1) which Milōn capability or deliverable to use for this client this month, (2) what to investigate with it, and (3) what to point out or discuss with client management. Tie it to the stated goal and the most important thing in the figures.
 
 RULES:
 - Only recommend actions Milōn can actually perform from the list above. Never imply capabilities that do not exist (no integrations, no automation, no tax work, no payroll).
@@ -438,22 +438,22 @@ export function fallbackWorkflow(ctx: WorkflowContext): string {
     : null;
 
   if (runway != null && runway <= 8) {
-    return `Use the 13-Week Cash Forecast and its movements view to trace what is driving the ${runway}-week runway, then use the resulting picture to agree near-term cash actions with the owner and log them in the Action Plan.`;
+    return `Use the 13-Week Cash Forecast and its movements view to trace what is driving the ${runway}-week runway, then use the resulting picture to agree near-term cash actions with client management and log them in the Action Plan.`;
   }
   if (om?.current != null && om.current < 0.05) {
     return "Use the Profitability waterfall and product mix to show where gross profit is being absorbed by overheads, then draft an advisory note that names the two cost lines to act on this month.";
   }
   if (rev?.status === "down") {
-    return "Use the Ratio Movement report to show the owner how revenue and margins have shifted over 3, 6 and 12 months, then agree in the Action Plan what recovers the volume.";
+    return "Use the Ratio Movement report to show client management how revenue and margins have shifted over 3, 6 and 12 months, then agree in the Action Plan what recovers the volume.";
   }
   if (pressure === "growth") {
-    return "Use the Budget tab to test what the owner's growth target does to overheads and working capital, then use the Health report to show which ratios must hold as sales grow.";
+    return "Use the Budget tab to test what client management's growth target does to overheads and working capital, then use the Health report to show which ratios must hold as sales grow.";
   }
   if (pressure === "working_capital") {
-    return "Use the Working Capital cycle report and debtor-days ratio to quantify cash tied up with customers, then set a collections target with the owner in the Action Plan.";
+    return "Use the Working Capital cycle report and debtor-days ratio to quantify cash tied up with customers, then set a collections target with client management in the Action Plan.";
   }
   if (pressure === "people") {
-    return "Use the Labour Productivity report and Action Plan to make the owner's dependence visible and agree the first responsibilities to hand over this month.";
+    return "Use the Labour Productivity report and Action Plan to make client management's dependence visible and agree the first responsibilities to hand over this month.";
   }
   return "Use the Health & Ratios drill-down to confirm the position is holding, sign off the deliverables, and send the branded Health report with a short advisory note on the one thing to build on next.";
 }

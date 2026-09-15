@@ -301,7 +301,7 @@ export function BudgetVariancePanel({
                 What you get:
               </strong>{" "}
               a variance table — where the plan is off, by how much, and whether that is good or bad
-              — so you can challenge the owner or revise the budget. This is not the annual
+              — so you can challenge client management or revise the budget. This is not the annual
               financials upload, and it is not “seed from financials”. Those set the starting plan.
               This is the month-by-month check once the year is running.
             </p>

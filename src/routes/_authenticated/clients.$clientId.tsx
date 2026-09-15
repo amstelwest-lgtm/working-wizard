@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { BackLink } from "@/components/back-link";
 import { openPracticeSettings } from "@/lib/user-roles";
-import { useEffect, useRef, useState, useCallback, useMemo, Suspense } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo, Suspense, type ReactNode } from "react";
 import { lazyPanel, TabErrorBoundary } from "@/components/lazy-panel";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
@@ -63,6 +63,7 @@ import { useAccountantProfile } from "@/contexts/accountant-profile";
 import { FirmSwitcher } from "@/components/firm-switcher";
 import "@/styles/accountant-portal.css";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { SettingsNavButton } from "@/components/settings-nav-button";
 import { SphereHero } from "@/components/sphere-hero";
 import { buildSpherePillars } from "@/components/sphere-hero-adapter";
 import { SimplifiedRatios } from "@/components/simplified-ratios";
@@ -446,6 +447,35 @@ const ACCOUNTANT_TABS: ActiveTab[] = [
   "advisory",
 ];
 
+function DeliverableTabHead({
+  id,
+  eyebrow,
+  title,
+  lede,
+  signoff,
+}: {
+  id?: string;
+  eyebrow?: string;
+  title: string;
+  lede?: React.ReactNode;
+  signoff?: React.ReactNode;
+}) {
+  return (
+    <div className="deliverable-tab-head" id={id}>
+      <div>
+        {eyebrow ? <span className="eyebrow">{eyebrow}</span> : null}
+        <div className="h-sec">{title}</div>
+        {lede ? (
+          <p className="sub" style={{ margin: "8px 0 0", maxWidth: "68ch" }}>
+            {lede}
+          </p>
+        ) : null}
+      </div>
+      {signoff ? <div className="deliverable-tab-head__sign">{signoff}</div> : null}
+    </div>
+  );
+}
+
 /** Old Staff tasks deep-links land on Action Plan. */
 function FirstDataChoice({
   primary,
@@ -688,6 +718,8 @@ function ClientView() {
   >({});
   const financialsSignoff = reviewSignoffs.financials ?? null;
   const profitabilitySignoff = reviewSignoffs.profitability ?? null;
+  const cashForecastSignoff = reviewSignoffs.cash_forecast ?? null;
+  const budgetSignoff = reviewSignoffs.budget ?? null;
   const actionPlanSignoff = reviewSignoffs.action_plan ?? null;
   const advisorySignoff = reviewSignoffs.advisory ?? null;
   const patchSignoff = (scope: ReviewScope) => (next: ClientReviewSignoff | null) => {
@@ -1436,10 +1468,18 @@ function ClientView() {
 
   // ── Deliverables bar actions ──────────────────────────────────────────────
 
+  const revealTab = useCallback((tab: ActiveTab, paneId?: string) => {
+    setActiveTab(tab);
+    const id = paneId ?? `pane-${tab}`;
+    window.setTimeout(() => {
+      document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 80);
+  }, []);
+
   const handleGenerateReport = useCallback(() => {
     setStudioDeepLink({});
-    setActiveTab("reports");
-  }, []);
+    revealTab("reports");
+  }, [revealTab]);
 
   const handleExportPDF = useCallback(async () => {
     if (!client) return;
@@ -1763,17 +1803,14 @@ function ClientView() {
               </button>
               <div className={`topbar-actions${mobileNavOpen ? " open" : ""}`}>
                 <ThemeToggle />
-                <button
+                <SettingsNavButton
                   className="tb-btn"
-                  type="button"
                   onClick={() => {
                     setMobileNavOpen(false);
                     openPracticeSettings();
                     navigate({ to: "/settings" });
                   }}
-                >
-                  Settings
-                </button>
+                />
                 <button
                   className="tb-btn gold"
                   onClick={() => {
@@ -1835,7 +1872,7 @@ function ClientView() {
               healthScore={hasFigures ? overallHealth.overall : null}
               healthLabel={overallHealth.displayLabel}
               healthStatus={hasFigures ? overallHealth.displayStatus : null}
-              onViewBreakdown={() => setActiveTab("ratios")}
+              onViewBreakdown={() => revealTab("ratios")}
               snapshot={briefingSnapshot}
               about={briefingAbout}
               profile={briefingProfile}
@@ -1854,10 +1891,10 @@ function ClientView() {
               movementReportAvailable={Boolean(priorSnapshot)}
               onOpenMovementReport={() => {
                 setStudioDeepLink({ report: "movement", action: "preview" });
-                setActiveTab("reports");
+                revealTab("reports");
               }}
               onAddPastPeriod={() => setPastPeriodOpen(true)}
-              onOpenReports={() => setActiveTab("reports")}
+              onOpenReports={() => revealTab("reports")}
               hasFigures={hasFigures}
             />
 
@@ -1972,7 +2009,7 @@ function ClientView() {
               ))}
             </div>
 
-            {/* Simplified / Complex — Health, Budget (not Ask, Summary, Cash, Action Plan, or Reports) */}
+            {/* Simplified / Complex — Health, Profit, Budget (not Ask, Summary, Cash, Action Plan, Reports, or Advisory) */}
             <div
               style={{
                 display:
@@ -1980,7 +2017,8 @@ function ClientView() {
                   activeTab === "summary" ||
                   activeTab === "cash" ||
                   activeTab === "plan" ||
-                  activeTab === "reports"
+                  activeTab === "reports" ||
+                  activeTab === "advisory"
                     ? "none"
                     : "flex",
                 justifyContent: "center",
@@ -2057,6 +2095,25 @@ function ClientView() {
 
             {/* ===== RATIOS TAB ===== */}
             <div className={`tabpane${activeTab === "ratios" ? " on" : ""}`} id="pane-ratios">
+              <DeliverableTabHead
+                eyebrow="Business Health & Ratios"
+                title="Health score"
+                lede="One score from the ratios underneath. Sign off when the picture is right — the stamp carries into the board pack."
+                signoff={
+                  <ReviewSignoffButton
+                    compact
+                    clientId={clientId}
+                    clientName={client?.name}
+                    scope="financials"
+                    signoff={financialsSignoff}
+                    isStale={computeIsStale(
+                      financialsSignoff,
+                      client?.financials_updated_at ?? null,
+                    )}
+                    onChange={patchSignoff("financials")}
+                  />
+                }
+              />
               {/* Simplified view — health orb + pillar cards */}
               {viewMode === "simplified" && (
                 <div style={{ marginBottom: 32 }}>
@@ -2259,18 +2316,6 @@ function ClientView() {
                 </div>
               </div>
 
-              {/* Practice portal: always show interactive sign-off (server still enforces access). */}
-              <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 20 }}>
-                <ReviewSignoffButton
-                  clientId={clientId}
-                  clientName={client?.name}
-                  scope="financials"
-                  signoff={financialsSignoff}
-                  isStale={computeIsStale(financialsSignoff, client?.financials_updated_at ?? null)}
-                  onChange={patchSignoff("financials")}
-                />
-              </div>
-
               {/* Ratio rows — complex mode only */}
               {viewMode === "complex" && (
                 <div style={{ marginTop: 26 }}>
@@ -2356,6 +2401,25 @@ function ClientView() {
 
             {/* ===== PROFIT TAB ===== */}
             <div className={`tabpane${activeTab === "profit" ? " on" : ""}`} id="pane-profit">
+              <DeliverableTabHead
+                eyebrow="Profitability"
+                title="How revenue becomes profit"
+                lede="Review the waterfall, then sign it off so client management can trust the picture."
+                signoff={
+                  <ReviewSignoffButton
+                    compact
+                    clientId={clientId}
+                    clientName={client?.name}
+                    scope="profitability"
+                    signoff={profitabilitySignoff}
+                    isStale={computeIsStale(
+                      profitabilitySignoff,
+                      client?.financials_updated_at ?? null,
+                    )}
+                    onChange={patchSignoff("profitability")}
+                  />
+                }
+              />
               <span className="eyebrow">Product lines</span>
               <p className="sub" style={{ marginBottom: 16 }}>
                 Answer these questions to build revenue and net profit per product line — so you can
@@ -2445,7 +2509,7 @@ function ClientView() {
                         style={{ margin: 0, fontSize: 12, color: "var(--ink-dim)", maxWidth: 420 }}
                       >
                         Edit the period figures here. The waterfall updates from this P&amp;L —
-                        weekly owner inputs stay on the owner board.
+                        weekly figures that client management enters stay on their board.
                       </p>
                       <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                         <button
@@ -2491,19 +2555,6 @@ function ClientView() {
                   </div>
                 </div>
               </div>
-              <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 16 }}>
-                <ReviewSignoffButton
-                  clientId={clientId}
-                  clientName={client?.name}
-                  scope="profitability"
-                  signoff={profitabilitySignoff}
-                  isStale={computeIsStale(
-                    profitabilitySignoff,
-                    client?.financials_updated_at ?? null,
-                  )}
-                  onChange={patchSignoff("profitability")}
-                />
-              </div>
             </div>
 
             {/* ===== CASH TAB ===== */}
@@ -2514,18 +2565,35 @@ function ClientView() {
                     <span className="eyebrow">Signature view</span>
                     <div className="h-sec">13-week cash forecast</div>
                   </div>
-                  <button
-                    type="button"
-                    className="btn ghost mini"
-                    onClick={() => setCashBankUploadToken((n) => n + 1)}
-                  >
-                    Upload bank statements
-                  </button>
+                  <div className="deliverable-tab-head__sign" style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                    <ReviewSignoffButton
+                      compact
+                      clientId={clientId}
+                      clientName={client?.name}
+                      scope="cash_forecast"
+                      signoff={cashForecastSignoff}
+                      isStale={computeIsStale(
+                        cashForecastSignoff,
+                        client?.last_forecast_at ?? null,
+                      )}
+                      onChange={patchSignoff("cash_forecast")}
+                    />
+                    <button
+                      type="button"
+                      className="btn ghost mini"
+                      onClick={() => setCashBankUploadToken((n) => n + 1)}
+                    >
+                      Upload bank statements
+                    </button>
+                  </div>
                 </div>
                 <CashForecastPanel
                   clientId={client.id}
                   clientName={client.name}
                   canSign
+                  hideInlineSignOff
+                  signoff={cashForecastSignoff}
+                  onSignoffChange={patchSignoff("cash_forecast")}
                   reloadToken={cashForecastReloadToken}
                   openBankUploadToken={cashBankUploadToken}
                   initialBankDraft={bankCashDraft}
@@ -2550,12 +2618,22 @@ function ClientView() {
             {/* ===== BUDGET TAB ===== */}
             <div className={`tabpane${activeTab === "budget" ? " on" : ""}`} id="pane-budget">
               <div id="wizard-budget-panel">
-                <span className="eyebrow">Living FY budget</span>
-                <div className="h-sec">Driver-based monthly budget</div>
-                <p className="sub" style={{ marginBottom: 24 }}>
-                  Use <b>Complex</b> for full driver grids, capex, and sensitivity.{" "}
-                  <b>Simplified</b> keeps volume × price and cash timing front-and-centre.
-                </p>
+                <DeliverableTabHead
+                  eyebrow="12-month Budget"
+                  title="The year plan"
+                  lede="Set the year with client management, then compare what actually happened against it. Complex opens the driver grids — revenue, overheads, and capex."
+                  signoff={
+                    <ReviewSignoffButton
+                      compact
+                      clientId={clientId}
+                      clientName={client?.name}
+                      scope="budget"
+                      signoff={budgetSignoff}
+                      isStale={false}
+                      onChange={patchSignoff("budget")}
+                    />
+                  }
+                />
                 {/* Follow the portal theme. A nested `.dark` island made Tailwind
                 light-on-dark copy and `color-scheme: dark` inputs fire while
                 budget cards stayed cream/white — revenue and totals vanished. */}
@@ -2566,6 +2644,9 @@ function ClientView() {
                   role="accountant"
                   reloadToken={budgetReloadToken}
                   canSign
+                  hideInlineSignOff
+                  signoff={budgetSignoff}
+                  onSignoffChange={patchSignoff("budget")}
                   businessTypeId={client.business_type}
                   operatingProfile={parseOperatingProfile(client.operating_profile)}
                   financials={financials}
@@ -2584,10 +2665,11 @@ function ClientView() {
 
             {/* ===== REPORTS TAB — same Reports Studio as /reports ===== */}
             <div className={`tabpane${activeTab === "reports" ? " on" : ""}`} id="pane-reports">
-              <p className="sub" style={{ marginBottom: 8 }}>
-                Sign off Health, Profit, Cash or Budget so that deliverable&apos;s stamp appears on
-                its PDF.
-              </p>
+              <DeliverableTabHead
+                eyebrow="Reports Studio"
+                title="Board-ready PDFs"
+                lede="Each report has its own sign-off. Stamp Business Health & Ratios, Profitability, the 13-week Cash Forecast, or the 12-month Budget so the signature carries into the PDF. You can brand packs with this client's own logo and colours."
+              />
               {activeTab === "reports" && (
                 <TabErrorBoundary label="Reports">
                   <Suspense
@@ -2611,12 +2693,22 @@ function ClientView() {
 
             {/* ===== ACTION PLAN TAB ===== */}
             <div className={`tabpane${activeTab === "plan" ? " on" : ""}`} id="pane-plan">
-              <span className="eyebrow">Live action plan</span>
-              <div className="h-sec">What we agreed they&apos;d do</div>
-              <p className="sub" style={{ marginBottom: 24 }}>
-                Same plan the owner sees under Next Moves / Action Plan — chase overdue work from
-                here, or edit without impersonating.
-              </p>
+              <DeliverableTabHead
+                eyebrow="Action Plan"
+                title="What still needs doing"
+                lede="This is the shared work list for the engagement. You put the next steps here so client management can see them, chase them, and mark them done. Sign the plan off when the list is right, then use it to follow up on outstanding items — that is the point of the tab."
+                signoff={
+                  <ReviewSignoffButton
+                    compact
+                    clientId={clientId}
+                    clientName={client?.name}
+                    scope="action_plan"
+                    signoff={actionPlanSignoff}
+                    isStale={false}
+                    onChange={patchSignoff("action_plan")}
+                  />
+                }
+              />
               {/* Follow the portal theme. A nested `.dark` island made Tailwind
               light-on-dark copy fire while accountant `--card` stayed a
               near-transparent cream — titles vanished in light mode. */}
@@ -2638,36 +2730,32 @@ function ClientView() {
                   )}
                 </Suspense>
               </TabErrorBoundary>
-              <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 16 }}>
-                <ReviewSignoffButton
-                  clientId={clientId}
-                  clientName={client?.name}
-                  scope="action_plan"
-                  signoff={actionPlanSignoff}
-                  isStale={false}
-                  onChange={patchSignoff("action_plan")}
-                />
-              </div>
             </div>
 
             {/* ===== ADVISORY TAB ===== */}
             <div className={`tabpane${activeTab === "advisory" ? " on" : ""}`} id="pane-advisory">
+              <DeliverableTabHead
+                eyebrow="Advisory Drafter"
+                title="Write the note"
+                lede="Draft the advisory pack or email from this client's figures. Sign it off when it is ready to send."
+                signoff={
+                  <ReviewSignoffButton
+                    compact
+                    clientId={clientId}
+                    clientName={client?.name}
+                    scope="advisory"
+                    signoff={advisorySignoff}
+                    isStale={false}
+                    onChange={patchSignoff("advisory")}
+                  />
+                }
+              />
               <AdvisoryDrafter
                 clientId={client.id}
                 clientName={client.name}
                 onLogged={() => setDeliveryRefresh((n) => n + 1)}
               />
               <AdvisorySentHistory clientId={client.id} refreshToken={deliveryRefresh} />
-              <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 16 }}>
-                <ReviewSignoffButton
-                  clientId={clientId}
-                  clientName={client?.name}
-                  scope="advisory"
-                  signoff={advisorySignoff}
-                  isStale={false}
-                  onChange={patchSignoff("advisory")}
-                />
-              </div>
             </div>
 
             <div className="footer-note">

@@ -263,7 +263,7 @@ export function PlaybookDrawer({
               <div className="mb-3 flex items-center gap-2">
                 <MessageSquare className="h-3.5 w-3.5 text-[#d4a550]" />
                 <span className="text-[10px] font-bold uppercase tracking-widest text-[#d4a550]">
-                  Owner {ratioQueries.length === 1 ? "query" : "queries"}
+                  Queries from client management
                 </span>
                 <div className="flex-1 border-t border-[#d4a550]/30" />
               </div>

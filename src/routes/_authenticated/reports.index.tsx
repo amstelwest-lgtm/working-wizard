@@ -64,7 +64,9 @@ import type { AssetProductivityData } from "@/reports/asset-productivity";
 import type { LaborProductivityData } from "@/reports/labor-productivity";
 import type { RatioMovementRow } from "@/reports/ratio-movement";
 import type { BenchmarkRow } from "@/reports/benchmark-report";
-import type { ClientReviewSignoff } from "@/lib/review-signoffs.functions";
+import type { ClientReviewSignoff, ReviewScope } from "@/lib/review-signoffs.functions";
+import { ReviewSignoffButton } from "@/components/review-signoff";
+import "@/styles/accountant-portal.css";
 import type { ReportSignoffStamp } from "@/components/pdf/pdf-document";
 import { parseOperatingProfile, type ClientOperatingProfile } from "@/lib/client-profile";
 import { profileIndustryLabel, profilePriorityWeight } from "@/lib/profile-signals";
@@ -2557,6 +2559,19 @@ const REPORTS: ReportMeta[] = [
   },
 ];
 
+const REPORT_SIGNOFF_SCOPE: Record<string, ReviewScope> = {
+  scorecard: "financials",
+  intervention: "financials",
+  forecast: "cash_forecast",
+  cycle: "cash_forecast",
+  waterfall: "profitability",
+  leverage: "financials",
+  assets: "financials",
+  labor: "financials",
+  movement: "financials",
+  benchmark: "financials",
+};
+
 // ── Preview state ──────────────────────────────────────────────────────────
 
 type PreviewState = {
@@ -2579,6 +2594,11 @@ function ReportCard({
   onGenerate,
   onPreview,
   market = ZA_MARKET,
+  signoff = null,
+  signoffStale = false,
+  clientId,
+  clientName,
+  onSignoffChange,
 }: {
   report: ReportMeta;
   isGenerating: boolean;
@@ -2590,43 +2610,66 @@ function ReportCard({
   onGenerate: () => void;
   onPreview: () => void;
   market?: ResolvedMarket;
+  signoff?: ClientReviewSignoff | null;
+  signoffStale?: boolean;
+  clientId?: string;
+  clientName?: string;
+  onSignoffChange?: (next: ClientReviewSignoff | null) => void;
 }) {
   const disabled = !isClient || dataLoading || blocked;
+  const scope = REPORT_SIGNOFF_SCOPE[report.key];
   return (
     <div
       id={`report-card-${report.key}`}
-      className={`report-card group flex flex-col rounded-xl border bg-card shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:border-[#c9962b]/60 hover:shadow-md ${
-        highlight ? "border-[#c9962b] ring-2 ring-[#c9962b]/30" : "border-border"
+      className={`report-card group flex flex-col ${
+        highlight ? "report-card--on" : ""
       }`}
     >
-      <div className="p-4 pb-3 flex-1">
+      <div className="report-card__rule" />
+      <div className="p-5 pb-3 flex-1">
         <div className="flex items-start gap-3">
           <div
-            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${report.iconBg}`}
+            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${report.iconBg}`}
           >
             {report.icon}
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 mb-1 flex-wrap">
-              <span className="text-[10px] font-semibold text-muted-foreground">#{report.id}</span>
+              <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#b8860b]">
+                #{String(report.id).padStart(2, "0")}
+              </span>
               <span
-                className={`rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${report.category === "essential" ? "bg-[#c9962b]/10 text-[#a8791a] dark:text-[#e5c66b]" : "bg-muted text-muted-foreground"}`}
+                className={`rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.16em] ${report.category === "essential" ? "bg-[#c9962b]/12 text-[#a8791a] dark:text-[#e5c66b]" : "bg-muted text-muted-foreground"}`}
               >
                 {report.category}
               </span>
               <span className="text-[10px] text-muted-foreground">{report.pages}</span>
             </div>
-            <h3 className="text-sm font-semibold leading-snug text-foreground mb-1">
+            <h3 className="report-card__title">
               {localizeCopy(report.name, market)}
             </h3>
-            <p className="text-[11px] leading-relaxed text-muted-foreground">
+            <p className="mt-1.5 text-[12px] leading-relaxed text-muted-foreground">
               {localizeCopy(report.description, market)}
             </p>
           </div>
         </div>
       </div>
 
-      <div className="flex gap-2 px-4 pb-4">
+      {clientId && scope && onSignoffChange ? (
+        <div className="flex justify-end px-5 pb-2">
+          <ReviewSignoffButton
+            compact
+            clientId={clientId}
+            clientName={clientName}
+            scope={scope}
+            signoff={signoff}
+            isStale={signoffStale}
+            onChange={onSignoffChange}
+          />
+        </div>
+      ) : null}
+
+      <div className="flex gap-2 px-5 pb-5">
         <Button
           variant="outline"
           size="sm"
@@ -2679,7 +2722,7 @@ function SettingsPanel({
     "w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-[#c9962b] focus:outline-none focus:ring-1 focus:ring-[#c9962b]/40";
 
   return (
-    <div className="rounded-xl border border-border bg-card p-5 space-y-5 shadow-sm sticky top-6">
+    <div className="reports-settings space-y-5 sticky top-6">
       <div className="flex items-center gap-2">
         <Settings className="h-4 w-4 text-[#c9962b]" />
         <h2 className="text-sm font-semibold text-foreground">Report Settings</h2>
@@ -3175,6 +3218,35 @@ export function ReportsStudio({
   /** Client-linked studio never ships mock figures — upload first. */
   const blockedForClient = Boolean(clientId) && !dataLoading && !clientData?.hasData;
 
+  const patchStudioSignoff = (scope: ReviewScope) => (next: ClientReviewSignoff | null) => {
+    setClientData((cd) =>
+      cd
+        ? {
+            ...cd,
+            reviewSignoffs: {
+              ...cd.reviewSignoffs,
+              [scope]: next,
+            },
+          }
+        : cd,
+    );
+  };
+
+  function reportCardSignoff(r: ReportMeta) {
+    const scope = REPORT_SIGNOFF_SCOPE[r.key];
+    if (!clientId || !scope) return {};
+    const signoff = clientData?.reviewSignoffs[scope as keyof typeof clientData.reviewSignoffs] ?? null;
+    const freshAt =
+      scope === "cash_forecast" ? clientData?.lastForecastAt ?? null : clientData?.financialsUpdatedAt ?? null;
+    return {
+      clientId,
+      clientName: clientData?.clientName ?? clientParam,
+      signoff,
+      signoffStale: isSignoffStale(signoff, freshAt),
+      onSignoffChange: patchStudioSignoff(scope),
+    };
+  }
+
   function openPlaybook(ratio: PlaybookRatio) {
     setSelectedPlaybook(ratio);
     setPlaybookOpen(true);
@@ -3521,8 +3593,8 @@ export function ReportsStudio({
               Financial Reports
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              10 white-label PDF reports — configure settings then generate or preview individual
-              reports.
+              Board-ready PDFs, branded with this client&apos;s own logo and colours. Sign each
+              report off so the stamp carries into the pack.
             </p>
             {/* Client data status badge */}
             {clientId && (
@@ -3621,6 +3693,7 @@ export function ReportsStudio({
                     onGenerate={() => handleGenerate(r)}
                     onPreview={() => handlePreview(r)}
                     market={clientData?.market ?? ZA_MARKET}
+                    {...reportCardSignoff(r)}
                   />
                 ))}
               </div>
@@ -3648,6 +3721,7 @@ export function ReportsStudio({
                     onGenerate={() => handleGenerate(r)}
                     onPreview={() => handlePreview(r)}
                     market={clientData?.market ?? ZA_MARKET}
+                    {...reportCardSignoff(r)}
                   />
                 ))}
               </div>

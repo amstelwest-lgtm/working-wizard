@@ -51,6 +51,9 @@ export function BudgetPanel({
   onRetakeProfile,
   canSign,
   hideReadOnlyStamp,
+  hideInlineSignOff,
+  signoff: signoffProp,
+  onSignoffChange,
   firstActualsMonth,
   reloadToken,
 }: {
@@ -69,6 +72,10 @@ export function BudgetPanel({
   canSign?: boolean;
   /** Owner board already stamps this deliverable in the tab header. */
   hideReadOnlyStamp?: boolean;
+  /** Parent already renders Sign off in the tab header. */
+  hideInlineSignOff?: boolean;
+  signoff?: ClientReviewSignoff | null;
+  onSignoffChange?: (next: ClientReviewSignoff | null) => void;
   /** YYYY-MM of the earliest month with real figures; the budget window starts no earlier. */
   firstActualsMonth?: string | null;
   /** Bump to re-read clients.budget after an external write (auto-populate). */
@@ -89,7 +96,9 @@ export function BudgetPanel({
   const [lowOverlapOpen, setLowOverlapOpen] = useState(false);
   const [snapshotActuals, setSnapshotActuals] = useState<BudgetActuals | null>(null);
   const [budgetUpdatedAt, setBudgetUpdatedAt] = useState<string | null>(null);
-  const [budgetSignoff, setBudgetSignoff] = useState<ClientReviewSignoff | null>(null);
+  const [budgetSignoff, setBudgetSignoff] = useState<ClientReviewSignoff | null>(
+    signoffProp ?? null,
+  );
   const fetchReviewSignoffs = useServerFn(listClientReviewSignoffs);
   const skipAutosave = useRef(false);
   const seededFromProfile = useRef(false);
@@ -140,10 +149,21 @@ export function BudgetPanel({
   }, [clientId, reloadToken]);
 
   useEffect(() => {
+    if (signoffProp !== undefined) setBudgetSignoff(signoffProp);
+  }, [signoffProp]);
+
+  const patchBudgetSignoff = (next: ClientReviewSignoff | null) => {
+    setBudgetSignoff(next);
+    onSignoffChange?.(next);
+  };
+
+  useEffect(() => {
     if (!clientId) return;
     fetchReviewSignoffs({ data: { clientId } })
       .then(({ signoffs }) => {
-        setBudgetSignoff(signoffs.find((s) => s.scope === "budget") ?? null);
+        const row = signoffs.find((s) => s.scope === "budget") ?? null;
+        setBudgetSignoff(row);
+        onSignoffChange?.(row);
       })
       .catch(() => {
         /* sign-off is non-blocking */
@@ -391,7 +411,7 @@ export function BudgetPanel({
           />
         )}
 
-        {clientId && (canSign || role === "accountant") && (
+        {clientId && (canSign || role === "accountant") && !hideInlineSignOff && (
           <div className="flex justify-end">
             <ReviewSignoffButton
               clientId={clientId}
@@ -399,7 +419,7 @@ export function BudgetPanel({
               scope="budget"
               signoff={budgetSignoff}
               isStale={computeIsStale(budgetSignoff, budgetUpdatedAt ?? doc.updatedAt)}
-              onChange={setBudgetSignoff}
+              onChange={patchBudgetSignoff}
             />
           </div>
         )}

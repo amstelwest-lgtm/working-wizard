@@ -39,7 +39,7 @@ type DraftResult = {
 };
 
 const KIND_META: Record<Kind, { label: string; icon: typeof Mail; hint: string }> = {
-  client_email: { label: "Client email", icon: Mail, hint: "Ready-to-send email to the owner" },
+  client_email: { label: "Client email", icon: Mail, hint: "Ready-to-send email to client management" },
   meeting_agenda: {
     label: "Meeting agenda",
     icon: ListChecks,

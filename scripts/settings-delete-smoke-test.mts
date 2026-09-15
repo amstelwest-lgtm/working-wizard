@@ -13,8 +13,8 @@ import {
 
 const expected = {
   OWNER_TOUR_KEY: "milon_walkthrough_v12",
-  ACCOUNTANT_DASH_TOUR_KEY: "milon_accountant_dash_tour_v9",
-  ACCOUNTANT_CLIENT_TOUR_KEY: "milon_accountant_client_tour_v10",
+  ACCOUNTANT_DASH_TOUR_KEY: "milon_accountant_dash_tour_v10",
+  ACCOUNTANT_CLIENT_TOUR_KEY: "milon_accountant_client_tour_v11",
   ACCOUNTANT_FIRST_CLIENT_KEY: "milon_accountant_first_client_done_v2",
 };
 

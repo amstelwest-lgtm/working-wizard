@@ -391,6 +391,9 @@ export function CashForecastPanel({
   simplified,
   canSign,
   hideReadOnlyStamp,
+  hideInlineSignOff,
+  signoff: signoffProp,
+  onSignoffChange,
   reloadToken,
   openBankUploadToken,
   onBankPublish,
@@ -403,6 +406,10 @@ export function CashForecastPanel({
   canSign?: boolean;
   /** Owner board already stamps this deliverable in the tab header. */
   hideReadOnlyStamp?: boolean;
+  /** Parent already renders Sign off in the tab header. */
+  hideInlineSignOff?: boolean;
+  signoff?: ClientReviewSignoff | null;
+  onSignoffChange?: (next: ClientReviewSignoff | null) => void;
   /** Bump to re-load cashflow from Supabase (e.g. after bank→cash publish). */
   reloadToken?: number;
   /** Bump to open the bank-statement upload dialog (e.g. accountant Cash tab header). */
@@ -418,7 +425,9 @@ export function CashForecastPanel({
   const cur = currencySymbol(market);
   const fetchReviewSignoffs = useServerFn(listClientReviewSignoffs);
   const [exporting, setExporting] = useState(false);
-  const [forecastSignoff, setForecastSignoff] = useState<ClientReviewSignoff | null>(null);
+  const [forecastSignoff, setForecastSignoff] = useState<ClientReviewSignoff | null>(
+    signoffProp ?? null,
+  );
   const [lastForecastAt, setLastForecastAt] = useState<string | null>(null);
   const [startDate, setStartDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [openingBalance, setOpeningBalance] = useState("0");
@@ -524,10 +533,21 @@ export function CashForecastPanel({
   }, []);
 
   useEffect(() => {
+    if (signoffProp !== undefined) setForecastSignoff(signoffProp);
+  }, [signoffProp]);
+
+  const patchForecastSignoff = (next: ClientReviewSignoff | null) => {
+    setForecastSignoff(next);
+    onSignoffChange?.(next);
+  };
+
+  useEffect(() => {
     if (!clientId) return;
     fetchReviewSignoffs({ data: { clientId } })
       .then(({ signoffs }) => {
-        setForecastSignoff(signoffs.find((s) => s.scope === "cash_forecast") ?? null);
+        const row = signoffs.find((s) => s.scope === "cash_forecast") ?? null;
+        setForecastSignoff(row);
+        onSignoffChange?.(row);
       })
       .catch(() => {
         // Sign-off state is a trust-signal enhancement, never block the forecast itself.
@@ -1064,7 +1084,7 @@ export function CashForecastPanel({
           </div>
         </CardHeader>
         <CardContent className="pt-5">
-          {canSign && clientId && (
+          {canSign && clientId && !hideInlineSignOff && (
             <div className="mb-4 flex justify-end">
               <ReviewSignoffButton
                 clientId={clientId}
@@ -1072,7 +1092,7 @@ export function CashForecastPanel({
                 scope="cash_forecast"
                 signoff={forecastSignoff}
                 isStale={forecastStale}
-                onChange={setForecastSignoff}
+                onChange={patchForecastSignoff}
               />
             </div>
           )}
@@ -1158,7 +1178,7 @@ export function CashForecastPanel({
           </div>
         </CardHeader>
         <CardContent className="pt-5">
-          {canSign && clientId && (
+          {canSign && clientId && !hideInlineSignOff && (
             <div className="mb-4 flex justify-end">
               <ReviewSignoffButton
                 clientId={clientId}
@@ -1166,7 +1186,7 @@ export function CashForecastPanel({
                 scope="cash_forecast"
                 signoff={forecastSignoff}
                 isStale={forecastStale}
-                onChange={setForecastSignoff}
+                onChange={patchForecastSignoff}
               />
             </div>
           )}

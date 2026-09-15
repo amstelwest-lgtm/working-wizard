@@ -445,12 +445,46 @@ html.dark .milon-status-pill--sample,
 }
 
 .founder-app-bar__theme.milon-theme-toggle {
-  width: 28px;
-  height: 28px;
+  width: 36px;
+  height: 36px;
 }
 .founder-app-bar__theme .milon-theme-toggle__icon {
-  width: 13px;
-  height: 13px;
+  width: 15px;
+  height: 15px;
+}
+
+.milon-settings-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 18px;
+  border-radius: 99px;
+  border: 1px solid var(--brand-border, var(--line, rgba(212, 175, 55, 0.28)));
+  background: transparent;
+  color: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  transition:
+    border-color 0.25s,
+    color 0.25s,
+    transform 0.25s,
+    background 0.25s;
+}
+.milon-settings-btn:hover {
+  border-color: var(--brand-gold, var(--gold, #d4af37));
+  color: var(--brand-gold, var(--gold, #d4af37));
+  transform: translateY(-1px);
+}
+.milon-settings-btn svg {
+  width: 15px;
+  height: 15px;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 /* Compact Health drip + accountant invite — brushed gold plate, expands on click. */

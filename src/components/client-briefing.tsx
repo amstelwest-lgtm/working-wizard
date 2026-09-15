@@ -177,7 +177,7 @@ export function ClientBriefing(p: ClientBriefingProps) {
             {p.onEditProfile ? (
               <button
                 type="button"
-                className={p.profile ? "btn ghost mini" : "btn gold mini"}
+                className="btn gold mini"
                 onClick={p.onEditProfile}
               >
                 {p.profile ? "Edit profile" : "Fill profile now"}
@@ -222,23 +222,26 @@ export function ClientBriefing(p: ClientBriefingProps) {
       )}
 
       <Dialog open={profileOpen} onOpenChange={setProfileOpen}>
-        <DialogContent className="max-w-lg border-[var(--line)] bg-[var(--bg-2)] text-[var(--ink)]">
+        <DialogContent className="briefing-profile-dialog max-w-xl border-[#d4a550]/35 bg-[linear-gradient(180deg,#fffdf8,#f7f1e3)] text-[#1b1300] shadow-[0_28px_80px_rgba(109,79,22,0.18)] dark:bg-[linear-gradient(180deg,#121826,#0b1220)] dark:text-slate-100">
           <DialogHeader>
-            <DialogTitle className="text-[15px] font-semibold uppercase tracking-[0.15em]">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[#b8860b]">
               Business profile
+            </p>
+            <DialogTitle className="font-serif text-[22px] font-semibold tracking-tight">
+              {p.clientName}
             </DialogTitle>
-            <DialogDescription className="text-xs text-[var(--ink-dim)]">
-              The ten answers that tune Milōn for {p.clientName}.
+            <DialogDescription className="text-[13px] text-[#6b6354] dark:text-slate-400">
+              The ten answers that tune Milōn for this business — score, budget and advice.
             </DialogDescription>
           </DialogHeader>
           {p.profile ? (
-            <dl className="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-[minmax(0,9rem)_1fr]">
+            <dl className="mt-2 grid gap-x-8 gap-y-3 border-t border-[#d4a550]/20 pt-4 text-sm sm:grid-cols-[minmax(0,11rem)_1fr]">
               {profileDisplayRows(p.profile, market).map((r) => (
                 <div key={r.label} className="contents">
-                  <dt className="text-[11px] uppercase tracking-[0.14em] text-[var(--ink-dim)] sm:pt-0.5">
+                  <dt className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#b8860b] sm:pt-0.5">
                     {r.label}
                   </dt>
-                  <dd>{r.value}</dd>
+                  <dd className="text-[14px] leading-snug">{r.value}</dd>
                 </div>
               ))}
             </dl>
@@ -246,7 +249,7 @@ export function ClientBriefing(p: ClientBriefingProps) {
           {p.onEditProfile ? (
             <button
               type="button"
-              className="btn gold mini mt-3 self-start"
+              className="btn gold mini mt-5 self-start"
               onClick={() => {
                 setProfileOpen(false);
                 p.onEditProfile?.();
