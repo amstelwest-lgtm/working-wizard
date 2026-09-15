@@ -223,7 +223,7 @@ assert(route.includes("<ClientBriefing"), "route renders ClientBriefing");
 assert(!route.includes("PeriodVarianceStrip") && !route.includes("AccountantOperatingProfile"), "old blocks removed");
 assert(!route.includes("Reports issued</span>") && !route.includes("Last forecast</span>"), "old meta labels gone");
 assert(route.includes("onOpenQueries={() => openArchive"), "queries stay a clickable archive control");
-assert(route.includes("onOpenReports={() => setActiveTab(\"reports\")}"), "Create report opens Reports");
+assert(route.includes("onOpenReports={() => revealTab(\"reports\")}"), "Create report opens Reports and scrolls to the pane");
 assert(!/Claude|Anthropic/i.test(route), "client page copy has no vendor wording");
 assert(!/overallHealth\.pillars\s*\n?\s*\.filter\(\(p\) => p\.score != null\)\s*\n?\s*\.map/.test(route), "pillar score chips removed from header");
 const comp = read("src/components/client-briefing.tsx");

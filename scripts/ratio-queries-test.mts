@@ -50,8 +50,8 @@ assert(archive.includes("ratioQueryLabel"), "open queries name the ratio");
 assert(archive.includes("Show on ${ratioLabel}"), "jump CTA names the ratio");
 
 const drawer = readFileSync(resolve("src/components/playbook-drawer.tsx"), "utf8");
-assert(drawer.includes("data-ratio-queries"), "playbook shows owner queries on that ratio");
-assert(drawer.includes("Owner "), "copy says owner query");
+assert(drawer.includes("data-ratio-queries"), "playbook shows queries on that ratio");
+assert(drawer.includes("Queries from client management"), "copy names queries from client management");
 
 const studio = readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8");
 assert(studio.includes("openDrawerFromUiKey"), "clicking a query opens that ratio");
