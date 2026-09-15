@@ -173,7 +173,8 @@ export function organizationGraphJson(): string {
         },
         description:
           "MILŌN is an AI-automated finance function and advisory platform for accounting firms and the businesses they serve. It generates financial health scoring, cash flow forecasting, budget variance analysis, and actionable advisory plans that a qualified accountant reviews and signs off.",
-        sameAs: ["https://www.linkedin.com/company/milonfinance", "https://x.com/milonfinance"],
+        // Omit sameAs until the LinkedIn company page and X profile are live.
+        // Pointing crawlers at 404 / unverified URLs is worse than omitting the field.
         areaServed: [
           { "@type": "Country", name: "United States" },
           { "@type": "Country", name: "South Africa" },

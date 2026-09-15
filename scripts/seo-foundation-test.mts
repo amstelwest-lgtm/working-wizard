@@ -57,6 +57,13 @@ assert(graph.includes("SoftwareApplication"), "software schema");
 assert(graph.includes("en-US"), "website inLanguage");
 assert(graph.includes('"priceCurrency": "USD"') || graph.includes('"priceCurrency":"USD"'), "USD offer");
 assert(!graph.includes("ZAR"), "primary schema is not ZAR");
+assert(!graph.includes("sameAs"), "org schema omits sameAs until live social profiles exist");
+assert(!graph.includes("linkedin.com"), "org schema does not list a LinkedIn profile");
+assert(!graph.includes("x.com/milonfinance"), "org schema does not list a dead X profile");
+assert(
+  home.meta.some((m) => "name" in m && m.name === "twitter:card" && m.content === "summary_large_image"),
+  "twitter:card meta stays for OG previews",
+);
 
 assert(ROBOTS_TXT.includes("Allow: /"), "robots allow site");
 assert(ROBOTS_TXT.includes("GPTBot"), "robots allow AI crawlers");
@@ -118,6 +125,8 @@ assert(!existsSync(resolve("public/icon-512.png")), "old root icon-512.png is de
 assert(!existsSync(resolve("public/manifest.webmanifest")), "old webmanifest is deleted");
 
 const landing = readFileSync(resolve("src/routes/index.tsx"), "utf8");
+assert(!landing.includes("linkedin.com/company/milonfinance"), "landing does not hardcode a dead LinkedIn URL");
+assert(!landing.includes("x.com/milonfinance"), "landing does not hardcode a dead X URL");
 assert(landing.includes("SEO_PAGES.home"), "landing uses spec meta");
 assert(!landing.includes("South African accounting"), "landing meta is not SA-first");
 assert(
@@ -161,6 +170,8 @@ assert(!owners.includes("South African business owner"), "owners meta is not SA-
 const shell = readFileSync(resolve("src/components/marketing-shell.tsx"), "utf8");
 assert(shell.includes("milonfinance.com"), "collateral footer uses the US domain");
 assert(!shell.includes(">milon.co.za<"), "collateral footer does not lead with milon.co.za");
+assert(!shell.includes("linkedin.com"), "collateral footer does not hardcode LinkedIn");
+assert(!shell.includes("x.com/milonfinance"), "collateral footer does not hardcode a dead X URL");
 
 const mkCss = readFileSync(resolve("src/styles/marketing.css"), "utf8");
 assert(mkCss.includes('html[data-market="za"] .mk-copy-us'), "ZA pack is opt-in in CSS");
@@ -184,6 +195,8 @@ assert(
 
 const about = readFileSync(resolve("src/routes/about.tsx"), "utf8");
 assert(about.includes("SEO_PAGES.about"), "about page uses spec meta");
+assert(!about.includes("linkedin.com/company/milonfinance"), "about does not hardcode a dead LinkedIn URL");
+assert(!about.includes("x.com/milonfinance"), "about does not hardcode a dead X URL");
 assert(about.includes("not affiliated with, endorsed by, or connected to EY"), "about has EY disclaimer");
 assert(!about.includes("QuickBooks"), "about does not claim QuickBooks");
 assert(!about.includes("Delaware"), "about does not invent a US legal entity");
