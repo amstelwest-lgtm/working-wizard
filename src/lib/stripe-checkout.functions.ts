@@ -12,7 +12,12 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { AuthCtx } from "@/lib/owner-ops.guard";
 import { getStripe, stripeConfigured } from "@/lib/stripe.server";
-import { stripePlanPrice, type StripePaidPlan, type StripePlanMarket } from "@/lib/stripe-plans";
+import {
+  STRIPE_SAAS_BUSINESS_TAX_CODE,
+  stripePlanPrice,
+  type StripePaidPlan,
+  type StripePlanMarket,
+} from "@/lib/stripe-plans";
 
 function appOrigin(): string {
   const fromEnv = (process.env.SITE_URL || process.env.VITE_APP_URL || "")
@@ -73,13 +78,19 @@ async function createPaidCheckoutSession(input: {
 
   const session = await stripe.checkout.sessions.create({
     mode: "subscription",
+    // Milon, Inc. is merchant of record. Account-level Managed Payments would
+    // make Stripe the MoR and also require a product tax_code on every item.
+    managed_payments: { enabled: false },
     line_items: [
       {
         price_data: {
           currency: price.currency,
           unit_amount: price.unitAmount,
           recurring: { interval: "month" },
-          product_data: { name: `Milōn ${price.name}` },
+          product_data: {
+            name: `Milōn ${price.name}`,
+            tax_code: STRIPE_SAAS_BUSINESS_TAX_CODE,
+          },
         },
         quantity: 1,
       },

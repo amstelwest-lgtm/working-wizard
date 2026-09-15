@@ -15,7 +15,7 @@ import {
   pendingCheckoutFromNext,
   registerLabelForPlan,
 } from "../src/lib/pending-checkout";
-import { STRIPE_PLAN_CATALOG } from "../src/lib/stripe-plans";
+import { STRIPE_PLAN_CATALOG, STRIPE_SAAS_BUSINESS_TAX_CODE } from "../src/lib/stripe-plans";
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
@@ -72,6 +72,25 @@ assert(!checkoutFn.includes("assertPlatformOwner"), "checkout is not owner-only"
 assert(!checkoutFn.includes("payment_method_types"), "dynamic payment methods");
 assert(checkoutFn.includes("subscription_data"), "plan metadata lands on the subscription");
 assert(checkoutFn.includes("STRIPE_WEBHOOK_SECRET"), "webhook secret is documented as optional");
+assert(
+  /managed_payments:\s*\{\s*enabled:\s*false\s*\}/.test(checkoutFn),
+  "session disables Managed Payments so Milon, Inc. stays merchant of record",
+);
+assert(
+  checkoutFn.includes("tax_code: STRIPE_SAAS_BUSINESS_TAX_CODE"),
+  "inline product_data sets a Stripe product tax code",
+);
+assert(
+  STRIPE_SAAS_BUSINESS_TAX_CODE === "txcd_10103001",
+  "tax_code is SaaS — business use from Stripe's canonical list",
+);
+assert(!checkoutFn.includes("automatic_tax"), "do not enable automatic_tax without a tax registration");
+assert(checkoutFn.includes("integration_identifier"), "keep integration_identifier on session create");
+
+const checkoutDocs = readFileSync(resolve("docs/STRIPE_CHECKOUT.md"), "utf8");
+assert(checkoutDocs.includes("managed_payments"), "docs explain Managed Payments");
+assert(checkoutDocs.includes("txcd_10103001"), "docs name the SaaS business tax code");
+assert(checkoutDocs.includes("Milon, Inc."), "docs say Milon, Inc. is merchant of record");
 
 const landing = readFileSync(resolve("src/routes/index.tsx"), "utf8");
 assert(landing.includes("Start Orbit"), "landing Orbit CTA is a pay button");
