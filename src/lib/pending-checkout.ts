@@ -41,6 +41,20 @@ export function billingStartPath(pending: PendingCheckout): string {
   return `/billing/start?${q.toString()}`;
 }
 
+/**
+ * Confirmation / magic-link redirect. `/billing/start` is not on the Supabase
+ * Auth allowlist (see docs/AUTH_CUSTOM_DOMAIN.md); `/auth/callback` is, and
+ * already resumes Checkout from `?checkout=&market=`.
+ */
+export function checkoutCallbackPath(pending: PendingCheckout): string {
+  const q = new URLSearchParams({ checkout: pending.plan, market: pending.market });
+  return `/auth/callback?${q.toString()}`;
+}
+
+export function checkoutEmailRedirectTo(origin: string, pending: PendingCheckout): string {
+  return `${origin.replace(/\/$/, "")}${checkoutCallbackPath(pending)}`;
+}
+
 export function isBillingStartPath(next: string | undefined): boolean {
   if (!next) return false;
   try {

@@ -6,6 +6,8 @@ import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
   billingStartPath,
+  checkoutCallbackPath,
+  checkoutEmailRedirectTo,
   isBillingStartPath,
   paidPlanFromRegisterLabel,
   parsePendingCheckout,
@@ -38,6 +40,20 @@ assert(
   "market defaults to US when omitted",
 );
 assert(billingStartPath({ plan: "orbit", market: "us" }) === "/billing/start?plan=orbit&market=us", "start path");
+assert(
+  checkoutCallbackPath({ plan: "orbit", market: "us" }) === "/auth/callback?checkout=orbit&market=us",
+  "email confirm uses allowlisted callback",
+);
+assert(
+  checkoutEmailRedirectTo("https://milonfinance.com/", { plan: "orbit", market: "za" }) ===
+    "https://milonfinance.com/auth/callback?checkout=orbit&market=za",
+  "email redirect strips trailing slash",
+);
+assert(
+  checkoutEmailRedirectTo("https://milonfinance.com", { plan: "orbit", market: "us" }) ===
+    "https://milonfinance.com/auth/callback?checkout=orbit&market=us",
+  "email redirect matches the Google OAuth checkout hop",
+);
 assert(isBillingStartPath("/billing/start?plan=orbit&market=us"), "is billing start");
 assert(!isBillingStartPath("/app"), "app is not billing start");
 assert(
@@ -64,11 +80,30 @@ assert(!landing.includes("Join waitlist"), "landing no longer waitlists paid pla
 assert(!landing.includes("billing is not live yet"), "landing no longer says billing is waitlist");
 assert(landing.includes("startPaidPlan"), "landing paid CTAs share one checkout starter");
 assert(landing.includes('option value="Orbit"'), "register can keep Orbit through signup");
-assert(landing.includes("billingStartPath"), "signup email redirect can resume Checkout");
+assert(landing.includes("checkoutEmailRedirectTo"), "signup confirmation uses the allowlisted callback");
+assert(landing.includes("register-error"), "register errors render in the form, not only as a toast");
+assert(!landing.includes("${window.location.origin}${billingStartPath"), "signup does not emailRedirectTo /billing/start");
+
+const landingCss = readFileSync(resolve("src/styles/landing.css"), "utf8");
+assert(
+  landingCss.includes("[data-milon-landing] section"),
+  "landing section padding is scoped so it cannot restyle Sonner",
+);
+assert(
+  !landingCss.includes('html[data-landing="1"] section{'),
+  "unscoped landing section rule would tuck toasts under the nav",
+);
+assert(landingCss.includes("[data-sonner-toaster]"), "landing pins toaster above the page and below the header");
+assert(landingCss.includes("scroll-margin-top:88px"), "register hash scroll clears the sticky nav");
+assert(landingCss.includes(".reg-error"), "register form has an in-flow error banner");
+
+const root = readFileSync(resolve("src/routes/__root.tsx"), "utf8");
+assert(root.includes("zIndex: 70"), "root toaster sits above sticky marketing chrome");
 
 const start = readFileSync(resolve("src/routes/billing.start.tsx"), "utf8");
 assert(start.includes("createStripeCheckout"), "billing start creates a Checkout session");
 assert(start.includes('to: "/"'), "unsigned visitors are sent to signup, not dropped on Spark");
+assert(start.includes('role="alert"'), "checkout-start failure is an accessible alert");
 
 const success = readFileSync(resolve("src/routes/billing.success.tsx"), "utf8");
 assert(!success.includes("waitlist"), "success page is not waitlist copy");

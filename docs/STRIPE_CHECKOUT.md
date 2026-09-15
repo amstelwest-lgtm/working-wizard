@@ -22,3 +22,9 @@ Optional, not needed to go live:
 5. Success returns to `/billing/success`. Cancel returns to pricing and charges nothing.
 
 ZA Orbit is R699/month; Constellation is $75 / R1 299.
+
+## Auth redirect
+
+Confirmation emails and Google return use the allowlisted `/auth/callback?checkout=&market=` URL (same hop as Google OAuth). Do **not** set `emailRedirectTo` to `/billing/start` — that path is not on the Auth redirect allowlist (see `docs/AUTH_CUSTOM_DOMAIN.md`), and signup then fails with an error toast.
+
+After account creation (or sign-in), `/billing/start` creates the Checkout session.

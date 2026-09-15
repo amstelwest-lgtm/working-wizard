@@ -57,7 +57,9 @@ html[data-landing="1"][data-theme="light"],html[data-landing="1"][data-theme="li
   color-scheme:light;
   color-scheme:only light;
 }
-html[data-landing="1"] *{margin:0;padding:0;box-sizing:border-box}
+/* Scope the reset to landing chrome — Sonner toasts are a sibling <section>
+   under html[data-landing] and must not inherit margin/padding:0. */
+html[data-landing="1"] [data-milon-landing] *{margin:0;padding:0;box-sizing:border-box}
 html[data-landing="1"]{scroll-behavior:smooth}
 html[data-landing="1"] body{
   font-family:'Noto Sans',sans-serif;
@@ -153,7 +155,18 @@ html[data-landing="1"][data-theme="light"] #atmos .glow{opacity:.35}
 html[data-landing="1"] #progress{position:fixed;top:0;left:0;height:2px;width:0%;z-index:60;background:var(--gold-grad);background-size:200% auto;box-shadow:0 0 12px rgba(253,238,121,.6)}
 
 html[data-landing="1"] .wrap{max-width:1180px;margin:0 auto;padding:0 28px;position:relative;z-index:2}
-html[data-landing="1"] section{position:relative;z-index:2;padding:120px 0}
+html[data-landing="1"] [data-milon-landing] section{position:relative;z-index:2;padding:120px 0}
+/* Sonner mounts <section data-sonner-toaster> outside [data-milon-landing].
+   Keep it fixed and below the 72px nav (z-index 50) so errors are readable
+   without covering the header or the z-200 sign-in modal. */
+html[data-landing="1"] [data-sonner-toaster]{
+  position:fixed !important;
+  z-index:55 !important;
+  margin:0 !important;
+  padding:0 !important;
+}
+html[data-landing="1"] [data-sonner-toaster][data-y-position="top"]{top:80px !important}
+html[data-landing="1"] #register,html[data-landing="1"] #pricing{scroll-margin-top:88px}
 html[data-landing="1"] .eyebrow{display:inline-flex;align-items:center;gap:10px;font-size:11px;letter-spacing:.45em;text-transform:uppercase;color:var(--gold);-webkit-text-fill-color:var(--gold);font-weight:600;margin-bottom:18px}
 html[data-landing="1"] .eyebrow::before{content:"";width:26px;height:1px;background:var(--gold);background-image:linear-gradient(var(--gold),var(--gold))}
 html[data-landing="1"] h1,html[data-landing="1"] h2,html[data-landing="1"] h3{font-weight:700;letter-spacing:.01em}
@@ -266,7 +279,7 @@ html[data-landing="1"] nav#topnav.nav-open .nav-burger span:nth-child(3){transfo
   html[data-landing="1"] nav#topnav .links #themeToggle{margin:8px 0}
   html[data-landing="1"] nav#topnav .links .btn{width:100%;justify-content:center}
   html[data-landing="1"] .wrap{padding-left:16px;padding-right:16px}
-  html[data-landing="1"] section{padding:72px 0}
+  html[data-landing="1"] [data-milon-landing] section{padding:72px 0}
   html[data-landing="1"] #hero{padding-top:100px;padding-bottom:48px;min-height:auto}
   html[data-landing="1"] .hero-stats>div{padding:10px 0;border-left:0;border-top:1px solid var(--line);width:100%}
   html[data-landing="1"] .hero-stats>div:first-child{border-top:0}
@@ -590,6 +603,12 @@ html[data-landing="1"] .price-card li::before{content:"✦";color:var(--gold)}
 html[data-landing="1"] .price-card .btn{margin-top:30px;justify-content:center}
 @media(max-width:900px){html[data-landing="1"] .price-grid{grid-template-columns:1fr;max-width:480px;margin-left:auto;margin-right:auto}}
 
+html[data-landing="1"] .reg-error{
+  margin:0 0 18px;padding:12px 14px;border-radius:12px;
+  border:1px solid color-mix(in srgb,var(--risk) 45%,transparent);
+  background:color-mix(in srgb,var(--risk) 12%,transparent);
+  color:var(--risk);font-size:14px;line-height:1.45;
+}
 html[data-landing="1"] .reg-shell{max-width:560px;margin:50px auto 0;border-radius:26px;padding:46px 42px;
   background:linear-gradient(var(--glass),var(--glass)) padding-box,
              linear-gradient(150deg,rgba(253,238,121,.4),rgba(212,175,55,.08) 45%,rgba(253,238,121,.25)) border-box;
