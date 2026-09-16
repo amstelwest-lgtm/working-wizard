@@ -11,8 +11,7 @@ export const PENDING_OWNER_INVITE_KEY = "milon_pending_owner_invite";
 export const PENDING_OWNER_INVITE_COOKIE = "milon_owner_invite";
 const OWNER_INVITE_COOKIE_MAX_AGE_S = 15 * 60;
 
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export function isClientUuid(value: string | null | undefined): boolean {
   return Boolean(value && UUID_RE.test(value.trim()));
@@ -74,9 +73,7 @@ export function resolvePendingOwnerInvite(opts: {
   const token = fromUrl?.token || stored?.token || fromNext;
   if (!token) return null;
   const clientCode =
-    fromUrl?.clientCode ||
-    (stored && stored.token === token ? stored.clientCode : null) ||
-    null;
+    fromUrl?.clientCode || (stored && stored.token === token ? stored.clientCode : null) || null;
   return { token, clientCode };
 }
 
@@ -85,7 +82,9 @@ export function encodePendingOwnerInvite(value: PendingOwnerInvite): string {
   return code ? `${value.token}|${code}` : value.token;
 }
 
-export function decodePendingOwnerInvite(raw: string | null | undefined): PendingOwnerInvite | null {
+export function decodePendingOwnerInvite(
+  raw: string | null | undefined,
+): PendingOwnerInvite | null {
   const s = (raw ?? "").trim();
   if (!s) return null;
   const bar = s.indexOf("|");
@@ -198,6 +197,25 @@ export function preferPendingInviteClient(opts: {
 
 export function isEmailAlreadyRegistered(message: string): boolean {
   return /already (been )?registered|already exists|user already/i.test(message);
+}
+
+/**
+ * Supabase anti-enumeration: when email confirmation is on, `signUp` for an
+ * address that already has an account returns a user with an empty identities
+ * array (and usually no session) instead of throwing.
+ */
+export function signupUserLooksAlreadyRegistered(
+  user: { identities?: unknown[] | null } | null | undefined,
+): boolean {
+  return Boolean(user && Array.isArray(user.identities) && user.identities.length === 0);
+}
+
+export function signupLooksAlreadyRegistered(input: {
+  errorMessage?: string | null;
+  user?: { identities?: unknown[] | null } | null;
+}): boolean {
+  if (input.errorMessage && isEmailAlreadyRegistered(input.errorMessage)) return true;
+  return signupUserLooksAlreadyRegistered(input.user);
 }
 
 export function stashInviteHandoff(clientId: string | null | undefined): void {

@@ -18,15 +18,18 @@ import { isOpsNext, lighthouseTabFromOpsNext } from "@/lib/client-note-link";
 import {
   billingStartSearch,
   checkoutEmailRedirectTo,
+  FIRM_BILLING_SIGNIN_MESSAGE,
   isBillingStartPath,
   pendingCheckoutFromNext,
   peekPendingCheckout,
   stashPendingCheckout,
+  stashResumeFirmBilling,
 } from "@/lib/pending-checkout";
 import { starterCheckoutIntent } from "@/lib/stripe-plans";
 import { accessTokenFromNext } from "@/lib/practice-access";
 import { AuthDivider, GoogleSignInButton } from "@/components/google-sign-in-button";
 import { stashAccountantGoogleSignup } from "@/lib/google-auth";
+import { signupLooksAlreadyRegistered } from "@/lib/invite-handoff";
 import { MarketPicker } from "@/components/market-picker";
 import {
   AuthEntryCard,
@@ -210,6 +213,13 @@ function AuthPage() {
             },
           },
         });
+        if (signupLooksAlreadyRegistered({ errorMessage: error?.message, user: data?.user })) {
+          if (!peekPendingCheckout()) stashPendingCheckout(pending);
+          stashResumeFirmBilling();
+          setMode("signin");
+          toast.message(FIRM_BILLING_SIGNIN_MESSAGE);
+          return;
+        }
         if (error) throw error;
         notifySignup("Accountant firm", email, fullName);
         if (!data.session) {
@@ -280,6 +290,13 @@ function AuthPage() {
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Something went wrong";
+      if (mode === "signup" && signupLooksAlreadyRegistered({ errorMessage: msg })) {
+        if (!peekPendingCheckout()) stashPendingCheckout(starterCheckoutIntent());
+        stashResumeFirmBilling();
+        setMode("signin");
+        toast.message(FIRM_BILLING_SIGNIN_MESSAGE);
+        return;
+      }
       toast.error(msg);
     } finally {
       setBusy(false);
@@ -291,8 +308,7 @@ function AuthPage() {
       <AuthEntryEyebrow>Practice sign-in</AuthEntryEyebrow>
       <AuthEntryTitle>Your firm workspace</AuthEntryTitle>
       <AuthEntryLead>
-        For accounting firms and advisory practices.{" "}
-        <AuthEntryLink to="/">Back home</AuthEntryLink>
+        For accounting firms and advisory practices. <AuthEntryLink to="/">Back home</AuthEntryLink>
       </AuthEntryLead>
 
       <AuthEntryCard className="mt-6">
@@ -354,7 +370,9 @@ function AuthPage() {
                       onBeforeStart={() => {
                         const market = draftToSelection(draftMarket);
                         if (!market) {
-                          toast.error("Pick South Africa or the United States (and a state) first.");
+                          toast.error(
+                            "Pick South Africa or the United States (and a state) first.",
+                          );
                           return false;
                         }
                         writeVisitorDraft(draftMarket);

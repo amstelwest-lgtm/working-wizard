@@ -26,10 +26,7 @@ export type FirmBillingPathDecision = "allow" | "require_billing";
 /** Stripe-like subset used by tests — no secret key, no SDK import. */
 export type StripeCustomerSubscriptionReader = {
   customers: {
-    list: (params: {
-      email: string;
-      limit: number;
-    }) => Promise<{ data: Array<{ id: string }> }>;
+    list: (params: { email: string; limit: number }) => Promise<{ data: Array<{ id: string }> }>;
   };
   subscriptions: {
     list: (params: {
@@ -141,6 +138,23 @@ export function decideFirmBillingEntitlement(input: {
     return { entitled: true, reason: "firm_member" };
   }
   return { entitled: false, reason: "no_active_subscription" };
+}
+
+export type PostLoginBillingResume = "billing_start" | "billing_required";
+
+/**
+ * After sign-in from firm signup / pricing, send unpaid firm owners back into
+ * Checkout instead of the owner Spark board. Pending checkout always wins.
+ * Owner-door sign-in without a pending firm band must not steal Spark.
+ */
+export function decidePostLoginBillingResume(input: {
+  hasPendingFirmCheckout: boolean;
+  ownsFirm: boolean;
+  resumeFirmBilling: boolean;
+}): PostLoginBillingResume | null {
+  if (input.hasPendingFirmCheckout) return "billing_start";
+  if (input.resumeFirmBilling && input.ownsFirm) return "billing_required";
+  return null;
 }
 
 export function decideFirmBillingPathGate(input: {
