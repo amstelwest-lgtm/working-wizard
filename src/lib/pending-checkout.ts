@@ -12,6 +12,13 @@ import {
 } from "@/lib/stripe-plans";
 
 export const PENDING_CHECKOUT_KEY = "milon_pending_checkout";
+export const RESUME_FIRM_BILLING_KEY = "milon_resume_firm_billing";
+
+export const FIRM_BILLING_SIGNIN_MESSAGE =
+  "You already have a Milōn account — sign in to finish firm billing.";
+
+export const OWNER_ALREADY_REGISTERED_MESSAGE =
+  "That email already has a Milōn account — sign in instead.";
 
 export type PendingCheckout = {
   plan: FirmCheckoutBand;
@@ -169,5 +176,24 @@ export function clearPendingCheckout(): void {
     sessionStorage.removeItem(PENDING_CHECKOUT_KEY);
   } catch {
     /* ignore */
+  }
+}
+
+/** Set when firm signup hits an existing account so post-login can resume billing. */
+export function stashResumeFirmBilling(): void {
+  try {
+    sessionStorage.setItem(RESUME_FIRM_BILLING_KEY, "1");
+  } catch {
+    /* ignore */
+  }
+}
+
+export function consumeResumeFirmBilling(): boolean {
+  try {
+    const on = sessionStorage.getItem(RESUME_FIRM_BILLING_KEY) === "1";
+    sessionStorage.removeItem(RESUME_FIRM_BILLING_KEY);
+    return on;
+  } catch {
+    return false;
   }
 }

@@ -19,6 +19,8 @@ import {
 import {
   isClientUuid,
   isEmailAlreadyRegistered,
+  signupLooksAlreadyRegistered,
+  signupUserLooksAlreadyRegistered,
   pendingInviteTokenFromSearch,
   ownerInviteLandingPath,
   ownerInviteTokenFromNext,
@@ -42,6 +44,22 @@ assert(!isClientUuid("pending_invite_client_id"), "junk rejected");
 assert(isEmailAlreadyRegistered("User already registered"), "already registered");
 assert(isEmailAlreadyRegistered("A user with this email address has already been registered"), "gotrue copy");
 assert(!isEmailAlreadyRegistered("Invalid login credentials"), "wrong password is not already-registered");
+assert(
+  signupLooksAlreadyRegistered({ errorMessage: "User already registered" }),
+  "signUp error copy is already-registered",
+);
+assert(
+  signupUserLooksAlreadyRegistered({ identities: [] }),
+  "empty identities is the confirmation-on already-registered signal",
+);
+assert(
+  !signupUserLooksAlreadyRegistered({ identities: [{ id: "email" }] }),
+  "a real identity is a new signup",
+);
+assert(
+  !signupLooksAlreadyRegistered({ user: null, errorMessage: null }),
+  "missing user is not already-registered",
+);
 
 assert(
   pendingInviteTokenFromSearch("?invite=tok123456&mode=signup") === "tok123456",

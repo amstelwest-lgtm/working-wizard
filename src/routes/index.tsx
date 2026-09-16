@@ -30,20 +30,29 @@ import {
 // Inline so landing paint doesn't wait on a second stylesheet round-trip
 // (external app CSS can still load; these rules win for landing selectors).
 import landingCss from "../styles/landing.css?inline";
-import { peekPendingOwnerInvite, pendingInviteTokenFromSearch } from "@/lib/invite-handoff";
+import {
+  peekPendingOwnerInvite,
+  pendingInviteTokenFromSearch,
+  signupLooksAlreadyRegistered,
+} from "@/lib/invite-handoff";
 import {
   billingStartPath,
   billingStartSearch,
   checkoutEmailRedirectTo,
   clearPendingCheckout,
+  consumeResumeFirmBilling,
+  FIRM_BILLING_SIGNIN_MESSAGE,
+  OWNER_ALREADY_REGISTERED_MESSAGE,
   paidPlanFromRegisterLabel,
   parsePendingCheckoutFromSearch,
   peekPendingCheckout,
   registerLabelForPlan,
   stashPendingCheckout,
+  stashResumeFirmBilling,
 } from "@/lib/pending-checkout";
 import { stashAccountantGoogleSignup } from "@/lib/google-auth";
 import { forcePortal, setPortalIntent } from "@/lib/user-roles";
+import { decidePostLoginBillingResume } from "@/lib/stripe-entitlement";
 import {
   starterCheckoutIntent,
   type FirmCheckoutBand,
@@ -255,8 +264,7 @@ function LandingPage() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const pending =
-      parsePendingCheckoutFromSearch(window.location.search) ?? peekPendingCheckout();
+    const pending = parsePendingCheckoutFromSearch(window.location.search) ?? peekPendingCheckout();
     if (!pending) return;
     stashPendingCheckout(pending);
     setRegPlan(registerLabelForPlan(pending.plan));
@@ -283,6 +291,29 @@ function LandingPage() {
         block: "center",
       });
     });
+  };
+
+  const promptSignInToFinishFirmBilling = (email: string) => {
+    setPortalIntent("accountant");
+    stashResumeFirmBilling();
+    setRegError(FIRM_BILLING_SIGNIN_MESSAGE);
+    toast.message(FIRM_BILLING_SIGNIN_MESSAGE);
+    setSiEmail(email);
+    setSiError("");
+    setFpMode(false);
+    setSigninOpen(true);
+  };
+
+  const promptSignInExistingAccount = (email: string) => {
+    if (peekPendingCheckout()) {
+      promptSignInToFinishFirmBilling(email);
+      return;
+    }
+    toast.message(OWNER_ALREADY_REGISTERED_MESSAGE);
+    setSiEmail(email);
+    setSiError("");
+    setFpMode(false);
+    setSigninOpen(true);
   };
 
   const paidSignupRedirectTo = () => {
@@ -349,6 +380,27 @@ function LandingPage() {
           });
         }
         return;
+      }
+      const hash = window.location.hash.replace(/^#/, "");
+      if (hash === "register" || hash === "pricing") {
+        try {
+          const { listUserFirms } = await import("@/lib/firm-brand");
+          const firms = await listUserFirms(user.id);
+          if (firms.some((f) => f.owner_user_id === user.id)) {
+            const pending = starterCheckoutIntent();
+            stashPendingCheckout(pending);
+            if (!cancelled) {
+              navigate({
+                to: "/billing/start",
+                search: billingStartSearch(pending),
+                replace: true,
+              });
+            }
+            return;
+          }
+        } catch (err) {
+          console.warn("[landing] firm billing short-circuit failed:", err);
+        }
       }
       try {
         const { resolvePostLoginPath } = await import("@/lib/user-roles");
@@ -882,11 +934,8 @@ function LandingPage() {
         throw error;
       }
       setSiUnconfirmed(false);
-      const {
-        waitForAuthSession,
-        stashInviteHandoff,
-        clearInviteQueryFromUrl,
-      } = await import("@/lib/invite-handoff");
+      const { waitForAuthSession, stashInviteHandoff, clearInviteQueryFromUrl } =
+        await import("@/lib/invite-handoff");
       await waitForAuthSession();
       const pendingInvite = inviteClientId || pendingInviteTokenFromUrl();
       setSigninOpen(false);
@@ -905,7 +954,9 @@ function LandingPage() {
       const pendingCheckout =
         peekPendingCheckout() ?? parsePendingCheckoutFromSearch(window.location.search);
       if (pendingCheckout) {
+        consumeResumeFirmBilling();
         stashPendingCheckout(pendingCheckout);
+        setPortalIntent("accountant");
         void navigate({
           to: "/billing/start",
           search: billingStartSearch(pendingCheckout),
@@ -918,7 +969,9 @@ function LandingPage() {
         forcePortal("owner");
         if (inviteNeedsCode && !regClientCode.trim()) {
           toast.message("Signed in. Enter the client code from your invite email, then accept.");
-          document.getElementById("register")?.scrollIntoView({ behavior: "smooth", block: "start" });
+          document
+            .getElementById("register")
+            ?.scrollIntoView({ behavior: "smooth", block: "start" });
           return;
         }
         try {
@@ -935,7 +988,9 @@ function LandingPage() {
           await navigate({ to: "/app", replace: true });
         } catch (err) {
           toast.error(err instanceof Error ? err.message : "Could not accept the invite.");
-          document.getElementById("register")?.scrollIntoView({ behavior: "smooth", block: "start" });
+          document
+            .getElementById("register")
+            ?.scrollIntoView({ behavior: "smooth", block: "start" });
         }
         return;
       }
@@ -943,6 +998,28 @@ function LandingPage() {
       const uid = auth.user?.id;
       if (uid) {
         try {
+          const resumeFirmBilling = consumeResumeFirmBilling();
+          if (resumeFirmBilling) {
+            const { listUserFirms } = await import("@/lib/firm-brand");
+            const firms = await listUserFirms(uid);
+            const ownsFirm = firms.some((f) => f.owner_user_id === uid);
+            const resume = decidePostLoginBillingResume({
+              hasPendingFirmCheckout: false,
+              ownsFirm,
+              resumeFirmBilling: true,
+            });
+            if (resume) {
+              const pending = starterCheckoutIntent(visitorCopyPack(draftMarket));
+              stashPendingCheckout(pending);
+              setPortalIntent("accountant");
+              void navigate({
+                to: resume === "billing_start" ? "/billing/start" : "/billing/required",
+                search: billingStartSearch(pending),
+                replace: true,
+              });
+              return;
+            }
+          }
           const { resolvePostLoginPath, forcePortal } = await import("@/lib/user-roles");
           forcePortal("owner");
           const path = await resolvePostLoginPath(uid);
@@ -1150,14 +1227,11 @@ function LandingPage() {
             },
           },
         });
-        if (error) throw error;
-        if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
-          toast.message("That email already has a Milōn account — sign in instead.");
-          setSiEmail(regEmail);
-          setSiError("");
-          setSigninOpen(true);
+        if (signupLooksAlreadyRegistered({ errorMessage: error?.message, user: data?.user })) {
+          promptSignInToFinishFirmBilling(regEmail);
           return;
         }
+        if (error) throw error;
         notifySignup("Accountant firm", regEmail, regName.trim());
         if (!data.session) {
           setRegDone(true);
@@ -1178,7 +1252,12 @@ function LandingPage() {
         }
         setRegDone(true);
       } catch (err: unknown) {
-        showRegisterError(err instanceof Error ? err.message : "Registration failed.");
+        const msg = err instanceof Error ? err.message : "Registration failed.";
+        if (signupLooksAlreadyRegistered({ errorMessage: msg })) {
+          promptSignInToFinishFirmBilling(regEmail);
+          return;
+        }
+        showRegisterError(msg);
       } finally {
         setRegBusy(false);
       }
@@ -1188,33 +1267,27 @@ function LandingPage() {
     // ── Standard owner signup ──────────────────────────────────────────────
     setRegBusy(true);
     try {
-        const emailRedirectTo = paidSignupRedirectTo();
-        const { data, error } = await supabase.auth.signUp({
-          email: regEmail,
-          password: regPassword,
-          options: {
-            emailRedirectTo,
-            data: {
-              full_name: regName.trim(),
-              business_name: regBusiness.trim() || regName.trim(),
-              signup_type: "customer",
-              plan: regPlan,
-              market_country: market.country,
-              market_region: market.regionCode,
-            },
+      const emailRedirectTo = paidSignupRedirectTo();
+      const { data, error } = await supabase.auth.signUp({
+        email: regEmail,
+        password: regPassword,
+        options: {
+          emailRedirectTo,
+          data: {
+            full_name: regName.trim(),
+            business_name: regBusiness.trim() || regName.trim(),
+            signup_type: "customer",
+            plan: regPlan,
+            market_country: market.country,
+            market_region: market.regionCode,
           },
-        });
-      if (error) throw error;
-      // With email confirmation on, Supabase returns an obfuscated user with no
-      // identities for an address that already has an account. Send them to
-      // sign in instead of a "check your email" card for a mail that never comes.
-      if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
-        toast.message("That email already has a Milōn account — sign in instead.");
-        setSiEmail(regEmail);
-        setSiError("");
-        setSigninOpen(true);
+        },
+      });
+      if (signupLooksAlreadyRegistered({ errorMessage: error?.message, user: data?.user })) {
+        promptSignInExistingAccount(regEmail);
         return;
       }
+      if (error) throw error;
       notifySignup("Business owner", regEmail, regName.trim());
       if (lhToken) {
         void doTrialVisit({ data: { token: lhToken, signedUp: true } }).catch(() => {});
@@ -1255,7 +1328,12 @@ function LandingPage() {
       }
       setRegDone(true);
     } catch (err: unknown) {
-      showRegisterError(err instanceof Error ? err.message : "Registration failed.");
+      const msg = err instanceof Error ? err.message : "Registration failed.";
+      if (signupLooksAlreadyRegistered({ errorMessage: msg })) {
+        promptSignInExistingAccount(regEmail);
+        return;
+      }
+      showRegisterError(msg);
     } finally {
       setRegBusy(false);
     }
@@ -1276,7 +1354,10 @@ function LandingPage() {
     void navigate({ to: "/auth", search: { signup: true } });
   };
 
-  const goToFirmSignup = (opts?: { plan?: FirmCheckoutBand; scrollTo?: "register" | "pricing" }) => {
+  const goToFirmSignup = (opts?: {
+    plan?: FirmCheckoutBand;
+    scrollTo?: "register" | "pricing";
+  }) => {
     const plan = opts?.plan ?? "starter";
     const market = visitorCopyPack(draftMarket);
     stashPendingCheckout({ plan, interval: firmInterval, market });
@@ -1284,6 +1365,13 @@ function LandingPage() {
     setRegRole("Accountant / Advisory firm");
     setPortalIntent("accountant");
     setMobileNavOpen(false);
+    if (user) {
+      void navigate({
+        to: "/billing/start",
+        search: billingStartSearch({ plan, interval: firmInterval, market }),
+      });
+      return;
+    }
     const target = opts?.scrollTo ?? "register";
     document.getElementById(target)?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
@@ -1297,11 +1385,12 @@ function LandingPage() {
   };
 
   useEffect(() => {
-    (window as unknown as { __mq_firmSignup?: () => void }).__mq_firmSignup = () => goToFirmSignup();
+    (window as unknown as { __mq_firmSignup?: () => void }).__mq_firmSignup = () =>
+      goToFirmSignup();
     return () => {
       delete (window as unknown as { __mq_firmSignup?: () => void }).__mq_firmSignup;
     };
-  }, [draftMarket, firmInterval]);
+  }, [draftMarket, firmInterval, user]);
 
   const activeInviteToken =
     inviteClientId ?? pendingInviteTokenFromUrl() ?? peekPendingOwnerInvite()?.token ?? null;
@@ -1681,7 +1770,13 @@ function LandingPage() {
               }}
             >
               <h2>
-                {fpMode ? (fpDone ? "Check your email" : "Reset password") : "Sign in to MILŌN"}
+                {fpMode
+                  ? fpDone
+                    ? "Check your email"
+                    : "Reset password"
+                  : peekPendingCheckout()
+                    ? "Sign in to finish firm billing"
+                    : "Sign in to MILŌN"}
               </h2>
               <button
                 onClick={() => {
@@ -1706,6 +1801,14 @@ function LandingPage() {
                 ×
               </button>
             </div>
+            {!fpMode && peekPendingCheckout() ? (
+              <p
+                style={{ fontSize: 13, color: "var(--ink-dim)", marginBottom: 18, lineHeight: 1.5 }}
+              >
+                Sign in with this email to resume Stripe Checkout for your firm. Abandoned Checkout
+                does not unlock the accountant workspace.
+              </p>
+            ) : null}
 
             {/* ── forgot-password: done state ── */}
             {fpMode && fpDone ? (
@@ -1971,10 +2074,7 @@ function LandingPage() {
 
       {/* Night sky: scrolls through the opening sections, then fades to --bg. */}
       <div id="landing-sky" aria-hidden="true">
-        <div
-          className="landing-sky-photo"
-          style={{ backgroundImage: "url(/landing-sky.jpg)" }}
-        />
+        <div className="landing-sky-photo" style={{ backgroundImage: "url(/landing-sky.jpg)" }} />
         <div className="landing-sky-veil" />
       </div>
       {/* ── atmosphere ── */}
@@ -2075,9 +2175,9 @@ function LandingPage() {
               recommendations → tracked employee actions.
             </p>
             <p className="sub h-anim d3">
-              AI powers MILŌN&apos;s financial intelligence brain. Your accountant reviews and
-              signs off on the entire function. You see what matters, what comes next, and what
-              needs to get done.
+              AI powers MILŌN&apos;s financial intelligence brain. Your accountant reviews and signs
+              off on the entire function. You see what matters, what comes next, and what needs to
+              get done.
             </p>
             <div className="hero-cta h-anim d4">
               <a className="btn btn-gold" href="#persona">
@@ -2311,7 +2411,7 @@ function LandingPage() {
               <polyline points="20 6 9 17 4 12" />
             </svg>
             <span>
-            <span>19 ratios you can check</span>
+              <span>19 ratios you can check</span>
             </span>
           </div>
           <div className="item">
@@ -2332,7 +2432,11 @@ function LandingPage() {
               <path d="M16 3.13a4 4 0 0 1 0 7.75" />
             </svg>
             <span>
-              <RegionCopy pack={copyMarket.copyPack} za="Built for SA SMEs" us="Built for US SMBs" />
+              <RegionCopy
+                pack={copyMarket.copyPack}
+                za="Built for SA SMEs"
+                us="Built for US SMBs"
+              />
             </span>
           </div>
           <div className="item">
@@ -2390,7 +2494,11 @@ function LandingPage() {
               </p>
               <p>
                 Operating cash, working capital, cash conversion,{" "}
-                <RegionCopy pack={copyMarket.copyPack} za="debtor days, creditor days" us="DSO, DPO" />{" "}
+                <RegionCopy
+                  pack={copyMarket.copyPack}
+                  za="debtor days, creditor days"
+                  us="DSO, DPO"
+                />{" "}
                 and a 13-week forecast.
               </p>
               <div className="score">
@@ -2456,7 +2564,11 @@ function LandingPage() {
             <RegionCopy pack={copyMarket.copyPack} za="Debtor Days" us="Days Sales Outstanding" />
           </span>
           <span>
-            <RegionCopy pack={copyMarket.copyPack} za="Creditor Days" us="Days Payable Outstanding" />
+            <RegionCopy
+              pack={copyMarket.copyPack}
+              za="Creditor Days"
+              us="Days Payable Outstanding"
+            />
           </span>
           <span>Inventory Turnover</span>
           <span>Cash Conversion Cycle</span>
@@ -2468,12 +2580,20 @@ function LandingPage() {
           <span>Break-even Point</span>
           <span>Revenue per Employee</span>
           <span>
-            <RegionCopy pack={copyMarket.copyPack} za="Labour Productivity" us="Labor Productivity" />
+            <RegionCopy
+              pack={copyMarket.copyPack}
+              za="Labour Productivity"
+              us="Labor Productivity"
+            />
           </span>
           <span>Cost Structure</span>
           <span>Revenue Growth</span>
           <span>
-            <RegionCopy pack={copyMarket.copyPack} za="Profit per Rand Earned" us="Profit per Dollar Earned" />
+            <RegionCopy
+              pack={copyMarket.copyPack}
+              za="Profit per Rand Earned"
+              us="Profit per Dollar Earned"
+            />
           </span>
           <span>Cash Burn Rate</span>
           <span>Runway Weeks</span>
@@ -2500,8 +2620,8 @@ function LandingPage() {
             forecast cash, and turn analysis into action.
           </p>
           <p className="sub reveal" style={{ marginTop: 18 }}>
-            MILŌN gives accountants a way to install that capability for their clients — using AI
-            to do the heavy analytical work while the accountant remains in control of the advice.
+            MILŌN gives accountants a way to install that capability for their clients — using AI to
+            do the heavy analytical work while the accountant remains in control of the advice.
           </p>
         </div>
       </section>
@@ -2519,8 +2639,8 @@ function LandingPage() {
               <span className="n">01</span>
               <h3>Upload the financials</h3>
               <p>
-                Upload the P&amp;L and balance sheet you already have as a PDF, Excel file, or CSV
-                — or simply upload a bank statement.
+                Upload the P&amp;L and balance sheet you already have as a PDF, Excel file, or CSV —
+                or simply upload a bank statement.
               </p>
             </div>
             <div className="step-card">
@@ -2575,15 +2695,12 @@ function LandingPage() {
               Your accountant&apos;s expertise. AI&apos;s analysis.{" "}
               <span className="gold-text serif">Your business.</span>
             </h2>
-            <p className="sub">
-              MILŌN brings both sides of the financial workflow together.
-            </p>
+            <p className="sub">MILŌN brings both sides of the financial workflow together.</p>
             <p className="pipeline">
               AI prepares. Accountant reviews and signs off. Owner understands and acts.
             </p>
             <p className="sub">
-              The result is a finance function that can follow the business — not just report on
-              it.
+              The result is a finance function that can follow the business — not just report on it.
             </p>
           </div>
 
@@ -2592,9 +2709,9 @@ function LandingPage() {
               <div className="who">For accounting firms</div>
               <h3>Turn accounting data into an AI-powered finance function.</h3>
               <p>
-                Your clients already depend on you for their financial information. MILŌN gives
-                your firm a structured way to turn that information into ongoing financial
-                analysis, recommendations, and action.
+                Your clients already depend on you for their financial information. MILŌN gives your
+                firm a structured way to turn that information into ongoing financial analysis,
+                recommendations, and action.
               </p>
               <ul>
                 <li>
@@ -2627,7 +2744,10 @@ function LandingPage() {
             <div className="bridge-side">
               <div className="who">For business owners</div>
               <h3>Finally understand what your numbers are telling you.</h3>
-              <p>You shouldn&apos;t need to be a CFO to understand the financial state of your business.</p>
+              <p>
+                You shouldn&apos;t need to be a CFO to understand the financial state of your
+                business.
+              </p>
               <p>
                 MILŌN gives you a clear view of your financial health, where the problems are, what
                 they mean, where cash is heading, and what needs to happen next.
@@ -2671,8 +2791,7 @@ function LandingPage() {
             <div className="bridge-fact">
               <div className="was">Actions → progress</div>
               <div className="now">
-                Recommendations become assigned work.{" "}
-                <b>The owner can see what is getting done.</b>
+                Recommendations become assigned work. <b>The owner can see what is getting done.</b>
               </div>
             </div>
           </div>
@@ -2700,8 +2819,8 @@ function LandingPage() {
               available to businesses that could afford them.
             </p>
             <p className="sub">
-              MILŌN is built around a different idea: the size of your business should not
-              determine the quality of financial information available to you.
+              MILŌN is built around a different idea: the size of your business should not determine
+              the quality of financial information available to you.
             </p>
             <p className="sub">
               An accountant can deploy MILŌN as the finance function behind the business, while the
@@ -2775,7 +2894,10 @@ function LandingPage() {
             </p>
           </div>
           <div className="persona-grid stagger">
-            <div className="persona-card" onClick={() => (window as any).__mq_start?.("accountant")}>
+            <div
+              className="persona-card"
+              onClick={() => (window as any).__mq_start?.("accountant")}
+            >
               <div className="icon">
                 <svg viewBox="0 0 24 24">
                   <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
@@ -2783,9 +2905,9 @@ function LandingPage() {
               </div>
               <h3>Accountant / Advisory Firm</h3>
               <p>
-                Your clients already depend on you for their financial information. MILŌN gives
-                your firm an AI-powered finance function you can run across those clients — you
-                review and sign off before advice reaches them.
+                Your clients already depend on you for their financial information. MILŌN gives your
+                firm an AI-powered finance function you can run across those clients — you review
+                and sign off before advice reaches them.
               </p>
               <div className="go">
                 See MILŌN for my clients <i>→</i>
@@ -3269,8 +3391,7 @@ function LandingPage() {
                         >
                           Spark is free and does not ask for a card. Accounting firms subscribe on
                           USD client-count bands through Stripe Checkout after creating a firm
-                          account. By creating an
-                          account you agree to the{" "}
+                          account. By creating an account you agree to the{" "}
                           <a href="/terms" style={{ color: "inherit" }}>
                             Terms
                           </a>
@@ -3325,7 +3446,11 @@ function LandingPage() {
             <span style={{ fontSize: 12, color: "var(--ink-dim)" }}>
               The AI-powered finance function
               <br />
-              <RegionCopy pack={copyMarket.copyPack} za="for South African SMEs" us="for US small businesses" />
+              <RegionCopy
+                pack={copyMarket.copyPack}
+                za="for South African SMEs"
+                us="for US small businesses"
+              />
             </span>
           </div>
           <nav className="fnav" aria-label="Footer navigation">
@@ -3383,7 +3508,8 @@ function LandingPage() {
                 AI notice
               </a>
               {" · "}
-              <RegionCopy pack={copyMarket.copyPack}
+              <RegionCopy
+                pack={copyMarket.copyPack}
                 za="Built for South Africa · Powered by Claude AI"
                 us="Built for the United States · Powered by Claude AI"
               />

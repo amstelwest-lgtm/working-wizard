@@ -9,6 +9,7 @@ import {
   customerHasEntitlingSubscription,
   decideFirmBillingEntitlement,
   decideFirmBillingPathGate,
+  decidePostLoginBillingResume,
   emailHasEntitlingSubscription,
   isBillingExemptPath,
   isFirmProductPath,
@@ -35,7 +36,10 @@ assert(
   checkoutSessionUnlocksFirm({ status: "complete", paymentStatus: "no_payment_required" }),
   "Starter $0 no_payment_required unlocks",
 );
-assert(!checkoutSessionUnlocksFirm({ status: "open", paymentStatus: "unpaid" }), "open unpaid does not unlock");
+assert(
+  !checkoutSessionUnlocksFirm({ status: "open", paymentStatus: "unpaid" }),
+  "open unpaid does not unlock",
+);
 
 assert(isFirmProductPath("/dashboard"), "dashboard is firm product");
 assert(isFirmProductPath("/clients/abc"), "client workspace is firm product");
@@ -179,6 +183,39 @@ assert(
   "local/dev without Stripe keys does not lock the shell",
 );
 
+assert(
+  decidePostLoginBillingResume({
+    hasPendingFirmCheckout: true,
+    ownsFirm: false,
+    resumeFirmBilling: false,
+  }) === "billing_start",
+  "pending firm checkout resumes /billing/start even on the owner door",
+);
+assert(
+  decidePostLoginBillingResume({
+    hasPendingFirmCheckout: false,
+    ownsFirm: true,
+    resumeFirmBilling: true,
+  }) === "billing_required",
+  "firm-register already-registered + firm owner without pending → billing required",
+);
+assert(
+  decidePostLoginBillingResume({
+    hasPendingFirmCheckout: false,
+    ownsFirm: true,
+    resumeFirmBilling: false,
+  }) === null,
+  "owner-door sign-in of a dual-role email does not steal Spark",
+);
+assert(
+  decidePostLoginBillingResume({
+    hasPendingFirmCheckout: false,
+    ownsFirm: false,
+    resumeFirmBilling: true,
+  }) === null,
+  "Spark-only already-registered does not open firm Checkout",
+);
+
 function mockStripe(opts: {
   customerId?: string;
   statuses?: string[];
@@ -230,11 +267,95 @@ assert(
   "incomplete subscription → not entitled",
 );
 
+const landing = readFileSync(resolve("src/routes/index.tsx"), "utf8");
+assert(
+  landing.includes("getFirmBillingEntitlement") === false,
+  "landing does not Stripe-gate itself",
+);
+assert(
+  landing.includes("promptSignInToFinishFirmBilling"),
+  "firm already-registered opens billing sign-in",
+);
+assert(landing.includes("FIRM_BILLING_SIGNIN_MESSAGE"), "firm already-registered copy is shared");
+assert(
+  landing.includes("signupLooksAlreadyRegistered"),
+  "handles thrown User already registered and empty identities",
+);
+assert(
+  landing.includes("stashResumeFirmBilling"),
+  "already-registered firm signup stamps billing resume",
+);
+assert(
+  landing.includes("consumeResumeFirmBilling"),
+  "landing sign-in consumes the billing-resume flag",
+);
+assert(
+  landing.includes("decidePostLoginBillingResume"),
+  "post-login can send unpaid firm owners to billing",
+);
+const goToFirm = landing.slice(
+  landing.indexOf("const goToFirmSignup"),
+  landing.indexOf("const goToOwnerSpark"),
+);
+assert(goToFirm.includes("if (user)"), "signed-in Create firm CTA checks the session");
+assert(
+  goToFirm.includes('to: "/billing/start"'),
+  "signed-in Create firm CTA short-circuits to billing start",
+);
+
+const firmRegister = landing.slice(
+  landing.indexOf("Firm signup (accountant / advisory)"),
+  landing.indexOf("Standard owner signup"),
+);
+assert(
+  firmRegister.includes("promptSignInToFinishFirmBilling"),
+  "firm register already-registered is not a dead-end toast",
+);
+assert(
+  firmRegister.includes("stashPendingCheckout"),
+  "firm register stashes pending checkout before signUp",
+);
+assert(
+  !firmRegister.includes("That email already has a Milōn account — sign in instead."),
+  "firm already-registered uses billing-resume copy",
+);
+
+const ownerRegister = landing.slice(
+  landing.indexOf("Standard owner signup"),
+  landing.indexOf("startFirmPlan"),
+);
+assert(
+  ownerRegister.includes("promptSignInExistingAccount"),
+  "owner already-registered still opens sign-in",
+);
+assert(
+  ownerRegister.includes("OWNER_ALREADY_REGISTERED_MESSAGE") ||
+    ownerRegister.includes("promptSignInExistingAccount"),
+  "owner keeps the softer sign-in nudge",
+);
+
+const authPage = readFileSync(resolve("src/routes/auth.tsx"), "utf8");
+assert(
+  authPage.includes("signupLooksAlreadyRegistered"),
+  "accountant /auth Create firm handles already-registered",
+);
+assert(
+  authPage.includes("FIRM_BILLING_SIGNIN_MESSAGE"),
+  "accountant /auth already-registered mentions finishing billing",
+);
+assert(
+  authPage.includes('setMode("signin")'),
+  "accountant /auth switches to sign-in instead of check-your-email",
+);
+
 const layout = readFileSync(resolve("src/routes/_authenticated.tsx"), "utf8");
 assert(layout.includes("getFirmBillingEntitlement"), "authenticated shell calls the Stripe gate");
 assert(layout.includes("isFirmProductPath"), "authenticated shell gates firm product paths");
 assert(layout.includes("/billing/required"), "unpaid firms redirect to billing required");
-assert(!layout.includes('to: "/app"') || layout.includes("shouldStayOnAccountantPortal"), "SME bounce to /app remains");
+assert(
+  !layout.includes('to: "/app"') || layout.includes("shouldStayOnAccountantPortal"),
+  "SME bounce to /app remains",
+);
 
 const appSrc = readFileSync(resolve("src/routes/app.tsx"), "utf8");
 assert(!appSrc.includes("getFirmBillingEntitlement"), "owner /app is not Stripe-gated");
@@ -243,7 +364,7 @@ assert(appSrc.includes("shouldBounceFromOwnerApp"), "owner bounce helper still u
 const required = readFileSync(resolve("src/routes/billing.required.tsx"), "utf8");
 assert(required.includes("Finish firm billing to open your practice"), "required page copy");
 assert(required.includes("Resume Checkout"), "required page resumes Checkout");
-assert(required.includes("createFileRoute(\"/billing/required\")"), "required route");
+assert(required.includes('createFileRoute("/billing/required")'), "required route");
 
 const start = readFileSync(resolve("src/routes/billing.start.tsx"), "utf8");
 assert(start.includes("createStripeCheckout"), "billing start still creates Checkout");
