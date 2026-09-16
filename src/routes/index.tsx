@@ -626,37 +626,37 @@ function LandingPage() {
       owner: {
         "💧": [
           "cash flow",
-          "Your cash dries up before the month does. You're not alone — cash kills more SA businesses than losses do. <b>MILŌN's 13-week cashflow forecast shows you the shortfall weeks before it lands — and gives you the exact moves to close it.</b>",
+          "Cash is leaving faster than it arrives. <b>MILŌN's 13-week cash forecast shows where it is heading — and the accountant-reviewed actions that can change the picture.</b>",
         ],
         "❓": [
           "profit clarity",
-          "You're working hard but flying blind on whether it's actually profitable. <b>MILŌN turns your numbers into one health score and 19 plain-language ratios — so you know, every week, whether the profit is real.</b>",
+          "You have the numbers, but not a finance function to interpret them. <b>MILŌN turns those figures into one health score, 19 ratios with the workings shown, and a clear view of what is driving profitability.</b>",
         ],
         "⛓": [
           "debt pressure",
-          "Debt is quietly eating what you earn. <b>MILŌN tracks your debt drag and interest burden live, and ranks the highest-impact moves to lighten the load.</b>",
+          "Financing is creating pressure you can feel but not always name. <b>MILŌN scores how the business is funded — debt, interest cover, gearing and solvency — so the next move is specific.</b>",
         ],
         "🐢": [
           "slow payers",
-          "Late payers are using you as a free bank. <b>MILŌN flags your cash-trapped days, shows the cost in rand, and gives you the playbook to get paid faster.</b>",
+          "Late payers are using you as a free bank. <b>MILŌN shows cash conversion, DSO and DPO, then turns the analysis into recommended actions your accountant can review and assign.</b>",
         ],
       },
       accountant: {
         "⏳": [
           "crisis-only clients",
-          "Your clients only call when it's already on fire. <b>MILŌN gives you a live radar over every client — risk flags reach you before the panic call does.</b>",
+          "Clients come to you after the damage is done. <b>MILŌN gives your firm an AI-powered finance function to run across clients — analysis, recommendations, and tracked actions in one workspace.</b>",
         ],
         "💸": [
           "unbilled advice",
-          "You give away advisory value inside compliance fees. <b>MILŌN packages your insight into a branded, recurring retainer clients can see and gladly pay for.</b>",
+          "Your clients already depend on you for their financial information. <b>MILŌN gives your firm a structured way to turn that information into ongoing financial analysis, recommendations, and action.</b>",
         ],
         "🗂": [
           "messy data",
-          "You can't advise on data that arrives late and broken. <b>MILŌN keeps client numbers live and structured — comment on the actual figures, in context, instantly.</b>",
+          "Advice is only as good as the figures in front of you. <b>Upload the P&amp;L, balance sheet, or bank statement you already have — MILŌN prepares the analysis, and you review and sign off.</b>",
         ],
         "📉": [
           "fee compression",
-          "Compliance is a shrinking island. <b>MILŌN is your bridge to advisory — 10 white-label reports and a system that sells your expertise for you.</b>",
+          "Compliance work is not the same as a finance function. <b>MILŌN lets you give more clients access to that capability without building every analysis from scratch — you stay in control of the advice.</b>",
         ],
       },
     };
@@ -678,19 +678,6 @@ function LandingPage() {
       document.body.classList.remove("persona-owner", "persona-accountant");
       document.body.classList.add("persona-" + r);
       document.body.classList.toggle("market-us", draft.country === "US");
-      if (draft.country === "US") {
-        REFLECT.owner["💧"][1] = REFLECT.owner["💧"][1].replace(
-          "SA businesses",
-          "small businesses",
-        );
-        REFLECT.owner["🐢"][1] = REFLECT.owner["🐢"][1].replace("in rand", "in dollars");
-      } else {
-        REFLECT.owner["💧"][1] = REFLECT.owner["💧"][1].replace(
-          "small businesses",
-          "SA businesses",
-        );
-        REFLECT.owner["🐢"][1] = REFLECT.owner["🐢"][1].replace("in dollars", "in rand");
-      }
       const ownerQuiz = QUIZ.owner as Array<{ key: string; q: string; opts: string[][] }>;
       const sizeQ = ownerQuiz.find((s) => s.key === "size");
       if (sizeQ) {
@@ -774,7 +761,7 @@ function LandingPage() {
           <div class="profile-lines">${lines}<p>Biggest worry: <b>${a.pain?.label}</b></p></div>
         </div>
         <div class="reflect"><span class="serif gold-text">"${a.pain?.label}."</span><br>${r[1]}</div>
-        <p class="hint">Your full diagnostic — health score, cash runway, and your first three moves — is one step away.</p>
+        <p class="hint">Your health score, cash forecast, and recommended next actions are one step away.</p>
         <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:8px">
           <a class="btn btn-gold" href="#register">Unlock my full diagnostic ✦</a>
           <button class="btn btn-ghost" onclick="window.__mq_start('${qRole}')">Redo questions</button>
@@ -1931,7 +1918,7 @@ function LandingPage() {
             <a href="#method" onClick={() => setMobileNavOpen(false)}>
               The MILŌN Method
             </a>
-            <a href="#bridge" onClick={() => setMobileNavOpen(false)}>
+            <a href="#how" onClick={() => setMobileNavOpen(false)}>
               How it works
             </a>
             <a href="#pricing" onClick={() => setMobileNavOpen(false)}>
@@ -1961,18 +1948,21 @@ function LandingPage() {
           <div>
             <span className="hero-badge h-anim d1">
               <span className="pulse" />
-              The financial health platform
+              The AI-powered finance function
             </span>
             <h1 className="h-anim d2">
-              Know your numbers.
+              Give every business
               <br />
-              <span className="gold-text">Sleep at night.</span>
+              a <span className="gold-text">finance function.</span>
             </h1>
+            <p className="hero-lede h-anim d3">
+              MILŌN is the AI-powered finance function accountants can run for their clients.
+            </p>
             <p className="sub h-anim d3">
-              Most owners find out about a cash crisis when it's already here. MILŌN shows you your
-              business's health as one simple score — where the problem lives, what it's costing
-              you, and exactly what to do next. It is also the bridge to your accountant: the same
-              screen, both sides, updated every month instead of once a year.
+              It turns financial statements into financial intelligence — showing business health,
+              cash, problems, recommended actions, and progress in one shared workspace. AI
+              prepares the analysis. The accountant reviews and signs off. The owner gets a clear
+              view of their business finances, wherever they are.
             </p>
             <div className="hero-cta h-anim d4">
               <a className="btn btn-gold" href="#persona">
@@ -1982,21 +1972,21 @@ function LandingPage() {
                 className="btn btn-ghost"
                 onClick={() => setTimeout(() => (window as any).__mq_start?.("accountant"), 300)}
               >
-                I'm an accountant — show me the margin
+                I&apos;m an accountant — see MILŌN for my clients
               </button>
             </div>
             <div className="hero-stats h-anim d5">
               <div>
                 <b>1</b>
-                <span>Score that tells the truth</span>
+                <span>Health score that tells the story</span>
               </div>
               <div>
                 <b>13&nbsp;wks</b>
-                <span>You see cash trouble coming</span>
+                <span>Cash forecast</span>
               </div>
               <div>
                 <b>4</b>
-                <span>Pillars behind the score</span>
+                <span>Financial pillars</span>
               </div>
               <div>
                 <b>19</b>
@@ -2253,21 +2243,20 @@ function LandingPage() {
         <div className="wrap">
           <div className="section-head center reveal">
             <span className="eyebrow">The MILŌN Method</span>
-            <h2>Four pillars. One score. No excuses.</h2>
+            <h2>Four pillars. One financial picture.</h2>
             <p className="sub">
-              Every business runs on four forces. MILŌN scores each one every time you upload
-              financials, and tells you exactly which is dragging your orbit.
+              MILŌN looks at the four forces that determine the financial health of a business.
             </p>
           </div>
           <div className="pillar-grid stagger" id="pillarGrid">
             <div className="pillar-card">
               <div className="node" />
-              <div className="metaphor">The Sun</div>
               <h3>Profitability</h3>
-              <p>
-                Gross margin, net margin, EBITDA, and return on equity — the heat that keeps your
-                orbit alive.
+              <div className="metaphor">The Sun</div>
+              <p className="ask">
+                Is the business actually making money, and what is driving its profitability?
               </p>
+              <p>Gross margin, net margin, EBITDA, return on equity and the underlying drivers.</p>
               <div className="score">
                 <span>Demo</span>
                 <span className="bar">
@@ -2278,12 +2267,15 @@ function LandingPage() {
             </div>
             <div className="pillar-card">
               <div className="node" />
-              <div className="metaphor">The Orbit</div>
               <h3>Cash Flow</h3>
+              <div className="metaphor">The Orbit</div>
+              <p className="ask">
+                Is cash coming in and going out at a rate the business can sustain?
+              </p>
               <p>
-                Operating cash, 13-week forecast,{" "}
-                <RegionCopy pack={copyMarket.copyPack} za="debtor days, creditor days" us="DSO, DPO" />, and cash conversion
-                cycle — the motion that keeps you from falling in.
+                Operating cash, working capital, cash conversion,{" "}
+                <RegionCopy pack={copyMarket.copyPack} za="debtor days, creditor days" us="DSO, DPO" />{" "}
+                and a 13-week forecast.
               </p>
               <div className="score">
                 <span>Demo</span>
@@ -2295,12 +2287,12 @@ function LandingPage() {
             </div>
             <div className="pillar-card warn">
               <div className="node" />
-              <div className="metaphor">The Mass</div>
               <h3>Asset Productivity</h3>
-              <p>
-                Working capital, inventory turns, fixed-asset efficiency — everything you own, and
-                how hard it works.
+              <div className="metaphor">The Mass</div>
+              <p className="ask">
+                How effectively is the business using the assets and working capital it already has?
               </p>
+              <p>Inventory turnover, fixed-asset efficiency and working-capital performance.</p>
               <div className="score">
                 <span>Demo</span>
                 <span className="bar">
@@ -2311,12 +2303,12 @@ function LandingPage() {
             </div>
             <div className="pillar-card">
               <div className="node" />
+              <h3>Financing &amp; Solvency</h3>
               <div className="metaphor">The Gravity</div>
-              <h3>Financing & Solvency</h3>
-              <p>
-                Debt-to-equity, interest cover, gearing, leverage — the force holding it all
-                together, or pulling it in.
+              <p className="ask">
+                How is the business funded, and how much financial pressure is that creating?
               </p>
+              <p>Debt, interest cover, gearing and solvency.</p>
               <div className="score">
                 <span>Demo</span>
                 <span className="bar">
@@ -2375,56 +2367,78 @@ function LandingPage() {
         </div>
       </div>
 
-      {/* ══════════════════════════ PROBLEM ══════════════════════════ */}
-      <section id="problem" style={{ paddingTop: 80, paddingBottom: 80 }}>
+      {/* ══════════════════════════ THE REAL GAP + HOW IT WORKS ══════════════════════════ */}
+      <section id="problem" style={{ paddingTop: 80, paddingBottom: 40 }}>
         <div className="wrap">
           <div className="section-head reveal">
-            <span className="eyebrow">The real problem</span>
+            <span className="eyebrow">The real gap</span>
             <h2>
-              Most businesses
+              Small businesses have the numbers.
               <br />
-              don't fail. They <span className="gold-text serif">drift.</span>
+              Large businesses have the <span className="gold-text serif">finance function.</span>
             </h2>
           </div>
           <p className="sub reveal" style={{ marginTop: 24 }}>
-            <RegionCopy pack={copyMarket.copyPack}
-              za="South African SMEs operate with accountants they see once a quarter, software that reports the past, and no model for what comes next. The result: smart owners, flying blind. MILŌN is the instrument panel that was missing."
-              us="US businesses operate with accountants they see once a quarter, software that reports the past, and no model for what comes next. The result: smart owners, flying blind. MILŌN is the instrument panel that was missing."
-            />
+            A small business can have the same financial statements as a large company without
+            having the finance team behind them to interpret those numbers, spot problems early,
+            forecast cash, and turn analysis into action.
           </p>
-          <div className="steps stagger" style={{ marginTop: 56 }}>
+          <p className="sub reveal" style={{ marginTop: 18 }}>
+            MILŌN gives accountants a way to install that capability for their clients — using AI
+            to do the heavy analytical work while the accountant remains in control of the advice.
+          </p>
+        </div>
+      </section>
+
+      <section id="how" style={{ paddingTop: 40, paddingBottom: 80 }}>
+        <div className="wrap">
+          <div className="section-head reveal">
+            <span className="eyebrow">How it works</span>
+            <h2>
+              From financial statements to <span className="gold-text serif">decisions.</span>
+            </h2>
+          </div>
+          <div className="steps how-steps stagger" style={{ marginTop: 56 }}>
             <div className="step-card">
               <span className="n">01</span>
-              <h3>
-                <RegionCopy pack={copyMarket.copyPack} za="You upload your financials" us="Upload a statement" />
-              </h3>
+              <h3>Upload the financials</h3>
               <p>
-                <RegionCopy pack={copyMarket.copyPack}
-                  za="Your accountant uploads your income statement, balance sheet, and cash flow — or you do. One PDF, extracted by AI in seconds."
-                  us="Upload a P&L and balance sheet as PDF, Excel, or CSV, or a bank statement. One file is enough to start."
-                />
+                Upload the P&amp;L and balance sheet you already have as a PDF, Excel file, or CSV
+                — or simply upload a bank statement.
               </p>
-              <span className="time">Under 60 seconds</span>
             </div>
             <div className="step-card">
               <span className="n">02</span>
-              <h3>MILŌN scores your business</h3>
+              <h3>MILŌN understands the business</h3>
               <p>
-                <RegionCopy pack={copyMarket.copyPack}
-                  za="19 ratios, 4 pillar scores, one overall health score — with South African industry context where we have it."
-                  us="19 ratios, 4 pillar scores, one overall health score. Days and percentages, not borrowed SA bands dressed as US medians."
-                />
+                MILŌN analyzes 19 carefully selected financial ratios across four pillars of
+                financial health. DuPont analysis helps break profitability down to identify where
+                the underlying problem sits.
               </p>
-              <span className="time">Instantly</span>
             </div>
             <div className="step-card">
               <span className="n">03</span>
-              <h3>You get your next move</h3>
+              <h3>AI prepares the next move</h3>
               <p>
-                Ranked next moves from the playbook, an AI-drafted advisory report, and a 13-week
-                cashflow — all in plain language.
+                MILŌN uses Claude to turn the financial analysis and business context into clear
+                recommendations, a 13-week cash forecast, and an actionable plan.
               </p>
-              <span className="time">Every month</span>
+            </div>
+            <div className="step-card">
+              <span className="n">04</span>
+              <h3>Your accountant reviews and signs off</h3>
+              <p>
+                The accountant reviews the AI-generated analysis and recommendations, makes any
+                necessary changes, and signs off before the client sees the advice.
+              </p>
+            </div>
+            <div className="step-card">
+              <span className="n">05</span>
+              <h3>Actions get done</h3>
+              <p>
+                Recommendations become assigned actions that can be followed through and tracked —
+                turning financial advice into an ongoing finance workflow.
+              </p>
             </div>
           </div>
         </div>
@@ -2436,43 +2450,51 @@ function LandingPage() {
         </div>
       </div>
 
-      {/* ══════════════════════════ THE BRIDGE ══════════════════════════ */}
+      {/* ══════════════════════════ ONE SHARED WORKSPACE ══════════════════════════ */}
       <section id="bridge" style={{ paddingTop: 80, paddingBottom: 80 }}>
         <div className="wrap">
           <div className="section-head center reveal">
-            <span className="eyebrow">The bridge</span>
+            <span className="eyebrow">One shared workspace</span>
             <h2>
-              Your accountant has the numbers.
-              <br />
-              You have the <span className="gold-text serif">decisions.</span>
+              Your accountant&apos;s expertise. AI&apos;s analysis.{" "}
+              <span className="gold-text serif">Your business.</span>
             </h2>
             <p className="sub">
-              That gap is where good businesses drift. MILŌN closes it — one shared workspace where
-              the figures your accountant prepares reach you every month, in language you can act
-              on, without either of you chasing the other.
+              MILŌN brings both sides of the financial workflow together.
+            </p>
+            <p className="pipeline">
+              AI prepares. Accountant reviews and signs off. Owner understands and acts.
+            </p>
+            <p className="sub">
+              The result is a finance function that can follow the business — not just report on
+              it.
             </p>
           </div>
 
           <div className="bridge-grid stagger">
             <div className="bridge-side">
-              <div className="who">For the owner</div>
-              <h3>Your numbers, without the wait</h3>
+              <div className="who">For accounting firms</div>
+              <h3>Turn accounting data into an AI-powered finance function.</h3>
               <p>
-                No more finding out in March how last year went. You see where the business stands
-                whenever you want to look.
+                Your clients already depend on you for their financial information. MILŌN gives
+                your firm a structured way to turn that information into ongoing financial
+                analysis, recommendations, and action.
               </p>
               <ul>
                 <li>
-                  <b>Regular</b> — a fresh score every month, not once a year
+                  <b>AI-assisted</b> — Claude prepares the first version of the analysis.
                 </li>
                 <li>
-                  <b>Plain</b> — one number and the reason behind it, not a 40-page pack
+                  <b>Accountant-controlled</b> — You review, edit and sign off before anything
+                  reaches the client.
                 </li>
                 <li>
-                  <b>Yours</b> — open it on your phone without booking a meeting
+                  <b>One workflow</b> — Analysis, recommendations, deliverables, actions and
+                  progress live in one workspace.
                 </li>
                 <li>
-                  <b>Answered</b> — your accountant's notes sit on the exact figure they refer to
+                  <b>Built to scale</b> — Give more clients access to a finance function without
+                  manually building every analysis from scratch.
                 </li>
               </ul>
             </div>
@@ -2483,28 +2505,33 @@ function LandingPage() {
                 <span>MILŌN</span>
               </span>
               <span className="rail" />
-              <span className="cap">One shared view</span>
+              <span className="cap">One shared workspace</span>
             </div>
 
             <div className="bridge-side">
-              <div className="who">For the accountant</div>
-              <h3>Keep every client in the loop</h3>
+              <div className="who">For business owners</div>
+              <h3>Finally understand what your numbers are telling you.</h3>
+              <p>You shouldn&apos;t need to be a CFO to understand the financial state of your business.</p>
               <p>
-                The update your clients keep asking for, without the hours it used to cost you to
-                produce it one at a time.
+                MILŌN gives you a clear view of your financial health, where the problems are, what
+                they mean, where cash is heading, and what needs to happen next.
+              </p>
+              <p>
+                Your accountant remains involved. You get the information in plain English, the
+                recommendations they have reviewed, and a place to track what actually gets done.
               </p>
               <ul>
                 <li>
-                  <b>Scalable</b> — the whole client book updated on one screen
+                  <b>Clear</b> — One health score backed by the numbers behind it.
                 </li>
                 <li>
-                  <b>Drafted</b> — Claude writes the first version, you sign it off
+                  <b>Forward-looking</b> — See your 13-week cash forecast.
                 </li>
                 <li>
-                  <b>Branded</b> — it goes out as your firm's work, not ours
+                  <b>Actionable</b> — Know what needs attention and what to do next.
                 </li>
                 <li>
-                  <b>Proactive</b> — reach the client before they reach you in a panic
+                  <b>Trackable</b> — Follow actions and see whether the business is improving.
                 </li>
               </ul>
             </div>
@@ -2512,25 +2539,60 @@ function LandingPage() {
 
           <div className="bridge-facts stagger">
             <div className="bridge-fact">
-              <div className="was">Before</div>
+              <div className="was">Health → cash</div>
               <div className="now">
-                Numbers explained once a year, in a meeting nobody remembers.{" "}
-                <b>Now: every month, on your own time.</b>
+                One score, then where cash is heading.{" "}
+                <b>Problems become visible before they become a surprise.</b>
               </div>
             </div>
             <div className="bridge-fact">
-              <div className="was">Before</div>
+              <div className="was">Problems → recommendations</div>
               <div className="now">
-                Advice buried in an email thread. <b>Now: attached to the number it is about.</b>
+                AI prepares the analysis.{" "}
+                <b>The accountant reviews and signs off before advice reaches the client.</b>
               </div>
             </div>
             <div className="bridge-fact">
-              <div className="was">Before</div>
+              <div className="was">Actions → progress</div>
               <div className="now">
-                Owner and accountant guessing what the other can see.{" "}
-                <b>Now: the same screen, both sides.</b>
+                Recommendations become assigned work.{" "}
+                <b>The owner can see what is getting done.</b>
               </div>
             </div>
+          </div>
+        </div>
+      </section>
+
+      <div className="divider">
+        <div className="wrap">
+          <i />
+        </div>
+      </div>
+
+      {/* ══════════════════════════ THE BIGGER IDEA ══════════════════════════ */}
+      <section id="idea" style={{ paddingTop: 80, paddingBottom: 80 }}>
+        <div className="wrap">
+          <div className="section-head center reveal">
+            <span className="eyebrow">The bigger idea</span>
+            <h2>
+              Give small businesses the financial intelligence of a{" "}
+              <span className="gold-text serif">much larger company.</span>
+            </h2>
+            <p className="sub">
+              For years, sophisticated financial analysis and dedicated finance teams were largely
+              available to businesses that could afford them.
+            </p>
+            <p className="sub">
+              MILŌN is built around a different idea: the size of your business should not
+              determine the quality of financial information available to you.
+            </p>
+            <p className="sub">
+              An accountant can deploy MILŌN as the finance function behind the business, while the
+              owner gets the clarity, visibility, and information to make better decisions.
+            </p>
+            <p className="idea-close">
+              One platform. One financial picture. A finance function in your pocket.
+            </p>
           </div>
         </div>
       </section>
@@ -2611,7 +2673,7 @@ function LandingPage() {
               <div className="per">Paid by the accounting firm, not the owner</div>
               <ul>
                 <li>Live 13-week cashflow forecast</li>
-                <li>Full ratio set + playbook</li>
+                <li>Full ratio set + recommended actions</li>
                 <li>Accountant advisory notes</li>
                 <li>Monthly comparison report</li>
               </ul>
@@ -2644,11 +2706,27 @@ function LandingPage() {
             <span className="eyebrow">Start here</span>
             <h2>Who are you in this story?</h2>
             <p className="sub">
-              MILŌN serves two constellations, and connects them. Choose yours and we'll show you
-              exactly what you're about to gain.
+              MILŌN is built for accounting firms first, and for the business owners they serve.
+              Choose yours — the same workspace connects both.
             </p>
           </div>
           <div className="persona-grid stagger">
+            <div className="persona-card" onClick={() => (window as any).__mq_start?.("accountant")}>
+              <div className="icon">
+                <svg viewBox="0 0 24 24">
+                  <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+                </svg>
+              </div>
+              <h3>Accountant / Advisory Firm</h3>
+              <p>
+                Your clients already depend on you for their financial information. MILŌN gives
+                your firm an AI-powered finance function you can run across those clients — you
+                review and sign off before advice reaches them.
+              </p>
+              <div className="go">
+                See MILŌN for my clients <i>→</i>
+              </div>
+            </div>
             <div className="persona-card" onClick={() => (window as any).__mq_start?.("owner")}>
               <div className="icon">
                 <svg viewBox="0 0 24 24">
@@ -2660,26 +2738,12 @@ function LandingPage() {
               </div>
               <h3>Business Owner</h3>
               <p>
-                You built something real. Now you want to know if the numbers are lying to you — and
-                what to do about it, without waiting for your accountant's next call.
+                You shouldn&apos;t need to be a CFO to understand the financial state of your
+                business. See your health, cash, problems, recommendations, and progress — reviewed
+                by your accountant — in one workspace.
               </p>
               <div className="go">
                 Take the 90-second diagnostic <i>→</i>
-              </div>
-            </div>
-            <div className="persona-card" onClick={() => (window as any).__mq_start?.("accountant")}>
-              <div className="icon">
-                <svg viewBox="0 0 24 24">
-                  <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
-                </svg>
-              </div>
-              <h3>Accountant / Advisory Firm</h3>
-              <p>
-                Your compliance work is flawless. Now clients want to actually understand their
-                numbers between year-ends — and they'll pay monthly for it.
-              </p>
-              <div className="go">
-                See the advisory revenue model <i>→</i>
               </div>
             </div>
           </div>
@@ -3061,7 +3125,7 @@ function LandingPage() {
           <div>
             <span className="logo-word gold-text">MILŌN</span>
             <span style={{ fontSize: 12, color: "var(--ink-dim)" }}>
-              The financial health platform
+              The AI-powered finance function
               <br />
               <RegionCopy pack={copyMarket.copyPack} za="for South African SMEs" us="for US small businesses" />
             </span>
@@ -3069,7 +3133,8 @@ function LandingPage() {
           <nav className="fnav" aria-label="Footer navigation">
             <a href="#persona">Start</a>
             <a href="#method">The Method</a>
-            <a href="#bridge">How it works</a>
+            <a href="#how">How it works</a>
+            <a href="#bridge">Shared workspace</a>
             <a href="#pricing">Pricing</a>
             <a href="/for-owners">For owners</a>
             <a href="/for-accountants">For accountants</a>

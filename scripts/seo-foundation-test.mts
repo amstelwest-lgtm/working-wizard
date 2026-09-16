@@ -133,6 +133,18 @@ assert(
   landing.includes('country: "US" as const'),
   "quiz defaults to US when the visitor has no market pick",
 );
+assert(landing.includes('id="bridge"'), "landing keeps the dual-audience bridge");
+assert(!landing.includes('id="features"'), "landing drops the duplicate features block");
+assert(landing.includes("Give every business"), "hero is the finance-function promise");
+assert(landing.includes("Small businesses have the numbers"), "gap section is the strategic reposition");
+assert(landing.includes("One shared workspace"), "shared-workspace framing is visible");
+assert(landing.includes("AI prepares"), "AI-prepares pipeline is visible");
+assert(landing.includes("reviews and signs off"), "accountant review/sign-off is visible");
+assert(!landing.includes("don't fail"), "old drift headline is gone");
+assert(!landing.includes("once a quarter"), "quarterly-accountant claim is gone");
+assert(!landing.includes("no model for what comes next"), "old gap copy is gone");
+assert(!landing.includes("borrowed SA bands"), "US median disclaimer is not landing copy");
+assert(!landing.includes("the playbook"), "playbook is not the landing recommendation engine");
 assert(!landing.includes("Connect QuickBooks"), "landing does not claim a QuickBooks connection");
 assert(
   landing.includes("HOMEPAGE_FAQ_ITEMS"),
@@ -144,8 +156,6 @@ assert(!landing.includes("End-to-end encrypted"), "landing does not claim E2E en
 assert(!landing.includes("Live sync"), "landing does not claim live ledger sync");
 assert(landing.includes('href="/about"'), "landing links to about");
 assert(landing.includes('href="/for-owners"'), "landing links to owners hub");
-assert(landing.includes('id="bridge"'), "landing keeps the dual-audience bridge");
-assert(!landing.includes('id="features"'), "landing drops the duplicate features block");
 assert(landing.includes('id="home-faq"'), "landing has a visible FAQ block");
 assert(landing.includes("faqPageJson(HOMEPAGE_FAQ_ITEMS)"), "landing emits homepage FAQ schema");
 assert(HOMEPAGE_FAQ_ITEMS.length === 5, "homepage FAQ is five questions");
