@@ -206,6 +206,12 @@ assert(bandDocs.includes("Do not") && bandDocs.includes("managed_payments"), "ba
 const landing = readFileSync(resolve("src/routes/index.tsx"), "utf8");
 assert(landing.includes("FirmBandPricingTable"), "landing accountant path shows the band table");
 assert(landing.includes("startFirmPlan"), "landing firm CTAs share one checkout starter");
+assert(landing.includes("goToFirmSignup"), "landing has a direct firm signup helper");
+assert(landing.includes('useState("Accountant / Advisory firm")'), "register defaults to accountant");
+assert(landing.includes("Create firm account"), "landing has a create-firm CTA");
+assert(landing.includes("Business owners: start free"), "owner Spark is a secondary path");
+assert(!landing.includes("accountant pricing — shown via body class set by quiz"), "firm prices are not quiz-gated in markup");
+assert(!landing.includes("See firm bands"), "owner Orbit/Constellation cards no longer hide prices behind /for-accountants");
 assert(!landing.includes("Start Orbit"), "landing no longer Checkouts Orbit");
 assert(!landing.includes("Start Constellation"), "landing no longer Checkouts Constellation");
 assert(!landing.includes("Join waitlist"), "landing no longer waitlists paid plans");
@@ -215,6 +221,9 @@ assert(!landing.includes('option value="Orbit"'), "register no longer Checkouts 
 assert(landing.includes("checkoutEmailRedirectTo"), "signup confirmation uses the allowlisted callback");
 assert(landing.includes("register-error"), "register errors render in the form, not only as a toast");
 assert(!landing.includes("${window.location.origin}${billingStartPath"), "signup does not emailRedirectTo /billing/start");
+const heroCta = landing.slice(landing.indexOf("hero-cta"), landing.indexOf("dash-stage"));
+assert(heroCta.includes("create a firm account"), "hero secondary is firm signup");
+assert(!heroCta.includes("__mq_start"), "hero secondary does not launch the quiz");
 
 const landingCss = readFileSync(resolve("src/styles/landing.css"), "utf8");
 assert(
@@ -229,6 +238,9 @@ assert(landingCss.includes("[data-sonner-toaster]"), "landing pins toaster above
 assert(landingCss.includes("scroll-margin-top:88px"), "register hash scroll clears the sticky nav");
 assert(landingCss.includes(".reg-error"), "register form has an in-flow error banner");
 assert(landingCss.includes(".firm-bands-table"), "landing styles the firm band table");
+assert(landingCss.includes(".acc-pricing{display:block"), "firm band table is visible without a quiz");
+assert(!landingCss.includes("body.persona-accountant .acc-pricing"), "persona CSS does not gate firm prices");
+assert(landingCss.includes(".owner-spark-path"), "owner Spark is styled as a secondary path");
 
 const root = readFileSync(resolve("src/routes/__root.tsx"), "utf8");
 assert(root.includes("zIndex: 70"), "root toaster sits above sticky marketing chrome");
@@ -236,6 +248,7 @@ assert(root.includes("zIndex: 70"), "root toaster sits above sticky marketing ch
 const start = readFileSync(resolve("src/routes/billing.start.tsx"), "utf8");
 assert(start.includes("createStripeCheckout"), "billing start creates a Checkout session");
 assert(start.includes('to: "/auth"'), "unsigned visitors are sent to firm signup");
+assert(start.includes("signup: true"), "unsigned checkout visitors land on Create firm");
 assert(start.includes('role="alert"'), "checkout-start failure is an accessible alert");
 
 const success = readFileSync(resolve("src/routes/billing.success.tsx"), "utf8");

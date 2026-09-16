@@ -30,7 +30,7 @@ export const HOMEPAGE_FAQ_ITEMS: FaqItem[] = [
   {
     question: "How do I get started, and what does MILŌN cost?",
     answer:
-      "You can start free with Spark during early access, with no card required. Upload your financial figures and MILŌN will generate a financial health score and analysis. Accounting firms subscribe on USD bands by active client count (Starter free through Scale; Enterprise is a custom quote) through Stripe Checkout. Owner Spark stays free.",
+      "Accounting firms subscribe on USD bands by active client count (Starter free through Scale; Enterprise is a custom quote) through Stripe Checkout. South African firms can pay ZAR at Checkout via Adaptive Pricing. Business owners can start free with Spark during early access, with no card required.",
   },
 ];
 

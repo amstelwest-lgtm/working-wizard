@@ -18,6 +18,7 @@ import {
   draftToSelection,
   isDraftComplete,
   LIST_PRICES,
+  marketToJson,
   readVisitorDraft,
   t,
   visitorCopyPack,
@@ -41,7 +42,10 @@ import {
   registerLabelForPlan,
   stashPendingCheckout,
 } from "@/lib/pending-checkout";
+import { stashAccountantGoogleSignup } from "@/lib/google-auth";
+import { forcePortal, setPortalIntent } from "@/lib/user-roles";
 import {
+  starterCheckoutIntent,
   type FirmCheckoutBand,
   type FirmInterval,
 } from "@/lib/stripe-plans";
@@ -234,12 +238,13 @@ function LandingPage() {
   }, [draftMarket, mounted]);
 
   /* ── register form state ── */
-  const [regRole, setRegRole] = useState("Business owner");
+  const [regRole, setRegRole] = useState("Accountant / Advisory firm");
   const [regName, setRegName] = useState("");
   const [regEmail, setRegEmail] = useState("");
   const [regPassword, setRegPassword] = useState("");
   const [regBusiness, setRegBusiness] = useState("");
-  const [regPlan, setRegPlan] = useState("Spark — Free early access");
+  const [regFirmName, setRegFirmName] = useState("");
+  const [regPlan, setRegPlan] = useState("Starter");
   const [firmInterval, setFirmInterval] = useState<FirmInterval>("month");
   const [regBusy, setRegBusy] = useState(false);
   const [regError, setRegError] = useState("");
@@ -255,6 +260,7 @@ function LandingPage() {
     if (!pending) return;
     stashPendingCheckout(pending);
     setRegPlan(registerLabelForPlan(pending.plan));
+    setRegRole("Accountant / Advisory firm");
     const hash = window.location.hash.replace(/^#/, "");
     const target = hash === "pricing" ? "pricing" : "register";
     window.setTimeout(() => {
@@ -745,6 +751,21 @@ function LandingPage() {
         qRole === "owner"
           ? `<p>Industry: <b>${a.industry?.label}</b></p><p>Cash cycle: <b>${a.cashcycle?.label}</b></p><p>Size band: <b>${a.size?.label}</b></p>`
           : `<p>Practice focus: <b>${a.industry?.label}</b></p><p>Client base: <b>${a.cashcycle?.label}</b></p><p>North star: <b>${a.size?.label}</b></p>`;
+      const cta =
+        qRole === "accountant"
+          ? `<div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:8px">
+          <button class="btn btn-gold" type="button" onclick="window.__mq_firmSignup()">Create firm account ✦</button>
+          <a class="btn btn-ghost" href="#pricing">See firm pricing</a>
+          <button class="btn btn-ghost" onclick="window.__mq_start('${qRole}')">Redo questions</button>
+        </div>`
+          : `<div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:8px">
+          <a class="btn btn-gold" href="#register">Unlock my full diagnostic ✦</a>
+          <button class="btn btn-ghost" onclick="window.__mq_start('${qRole}')">Redo questions</button>
+        </div>`;
+      const hint =
+        qRole === "accountant"
+          ? "Firm bands and a firm account are on this page — no extra quiz required."
+          : "Your health score, cash forecast, and recommended next actions are one step away.";
       const holder = document.getElementById("qsteps");
       if (holder)
         holder.innerHTML = `<div class="q-step on">
@@ -761,11 +782,8 @@ function LandingPage() {
           <div class="profile-lines">${lines}<p>Biggest worry: <b>${a.pain?.label}</b></p></div>
         </div>
         <div class="reflect"><span class="serif gold-text">"${a.pain?.label}."</span><br>${r[1]}</div>
-        <p class="hint">Your health score, cash forecast, and recommended next actions are one step away.</p>
-        <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:8px">
-          <a class="btn btn-gold" href="#register">Unlock my full diagnostic ✦</a>
-          <button class="btn btn-ghost" onclick="window.__mq_start('${qRole}')">Redo questions</button>
-        </div>
+        <p class="hint">${hint}</p>
+        ${cta}
       </div>`;
       const qreward = document.getElementById("qreward");
       if (qreward) qreward.textContent = "";
@@ -1100,16 +1118,74 @@ function LandingPage() {
       return;
     }
 
-    // ── Standard owner signup ──────────────────────────────────────────────
-    if (regRole === "Accountant / Advisory firm") {
-      navigate({ to: "/auth", search: {} });
-      return;
-    }
     const market = draftToSelection(draftMarket);
     if (!market) {
       showRegisterError("Pick South Africa or the United States (and a state) first.");
       return;
     }
+
+    // ── Firm signup (accountant / advisory) ────────────────────────────────
+    if (regRole === "Accountant / Advisory firm") {
+      if (!regFirmName.trim()) {
+        showRegisterError("Enter your firm name.");
+        return;
+      }
+      setRegBusy(true);
+      try {
+        setPortalIntent("accountant");
+        const starter = starterCheckoutIntent(market.country === "ZA" ? "za" : "us");
+        if (!peekPendingCheckout()) stashPendingCheckout(starter);
+        const pending = peekPendingCheckout() ?? starter;
+        const { data, error } = await supabase.auth.signUp({
+          email: regEmail,
+          password: regPassword,
+          options: {
+            emailRedirectTo: checkoutEmailRedirectTo(window.location.origin, pending),
+            data: {
+              full_name: regName.trim(),
+              firm_name: regFirmName.trim(),
+              signup_type: "accountant",
+              market_country: market.country,
+              market_region: market.regionCode,
+            },
+          },
+        });
+        if (error) throw error;
+        if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+          toast.message("That email already has a Milōn account — sign in instead.");
+          setSiEmail(regEmail);
+          setSiError("");
+          setSigninOpen(true);
+          return;
+        }
+        notifySignup("Accountant firm", regEmail, regName.trim());
+        if (!data.session) {
+          setRegDone(true);
+          return;
+        }
+        if (data.user) {
+          const { error: firmErr } = await supabase.rpc("ensure_practice_firm", {
+            p_name: regFirmName.trim() || null,
+            p_market: marketToJson(market),
+          });
+          if (firmErr) console.error("[signup] ensure_practice_firm failed:", firmErr.message);
+          forcePortal("accountant");
+          navigate({
+            to: "/billing/start",
+            search: billingStartSearch(pending),
+          });
+          return;
+        }
+        setRegDone(true);
+      } catch (err: unknown) {
+        showRegisterError(err instanceof Error ? err.message : "Registration failed.");
+      } finally {
+        setRegBusy(false);
+      }
+      return;
+    }
+
+    // ── Standard owner signup ──────────────────────────────────────────────
     setRegBusy(true);
     try {
         const emailRedirectTo = paidSignupRedirectTo();
@@ -1190,13 +1266,42 @@ function LandingPage() {
     const pending = { plan, interval, market };
     stashPendingCheckout(pending);
     setRegPlan(registerLabelForPlan(plan));
+    setRegRole("Accountant / Advisory firm");
+    setPortalIntent("accountant");
     if (user) {
       void navigate({ to: "/billing/start", search: billingStartSearch(pending) });
       return;
     }
     toast.message(`Create your firm account to start ${registerLabelForPlan(plan)}.`);
-    void navigate({ to: "/auth" });
+    void navigate({ to: "/auth", search: { signup: true } });
   };
+
+  const goToFirmSignup = (opts?: { plan?: FirmCheckoutBand; scrollTo?: "register" | "pricing" }) => {
+    const plan = opts?.plan ?? "starter";
+    const market = visitorCopyPack(draftMarket);
+    stashPendingCheckout({ plan, interval: firmInterval, market });
+    setRegPlan(registerLabelForPlan(plan));
+    setRegRole("Accountant / Advisory firm");
+    setPortalIntent("accountant");
+    setMobileNavOpen(false);
+    const target = opts?.scrollTo ?? "register";
+    document.getElementById(target)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  const goToOwnerSpark = () => {
+    clearPendingCheckout();
+    setRegRole("Business owner");
+    setRegPlan("Spark — Free early access");
+    setMobileNavOpen(false);
+    document.getElementById("register")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  useEffect(() => {
+    (window as unknown as { __mq_firmSignup?: () => void }).__mq_firmSignup = () => goToFirmSignup();
+    return () => {
+      delete (window as unknown as { __mq_firmSignup?: () => void }).__mq_firmSignup;
+    };
+  }, [draftMarket, firmInterval]);
 
   const activeInviteToken =
     inviteClientId ?? pendingInviteTokenFromUrl() ?? peekPendingOwnerInvite()?.token ?? null;
@@ -1909,8 +2014,14 @@ function LandingPage() {
             <span />
           </button>
           <div className="links">
-            <a href="#persona" onClick={() => setMobileNavOpen(false)}>
-              Start
+            <a
+              href="#register"
+              onClick={(e) => {
+                e.preventDefault();
+                goToFirmSignup();
+              }}
+            >
+              Create firm account
             </a>
             <a href="#register" onClick={() => setMobileNavOpen(false)}>
               Sign up
@@ -1971,10 +2082,11 @@ function LandingPage() {
                 Get my free health score
               </a>
               <button
+                type="button"
                 className="btn btn-ghost"
-                onClick={() => setTimeout(() => (window as any).__mq_start?.("accountant"), 300)}
+                onClick={() => goToFirmSignup({ scrollTo: "register" })}
               >
-                I&apos;m an accountant — see MILŌN for my clients
+                I&apos;m an accountant — create a firm account
               </button>
             </div>
           </div>
@@ -2610,17 +2722,18 @@ function LandingPage() {
       <section id="pricing">
         <div className="wrap">
           <div className="section-head center reveal">
-            <span className="eyebrow">Pricing</span>
+            <span className="eyebrow">Pricing for firms</span>
             <h2>
-              Start free. <span className="gold-text">Scale when it pays for itself.</span>
+              USD bands by client count. <span className="gold-text">ZAR at Checkout.</span>
             </h2>
             <p className="sub">
-              Firms pay a flat USD band by active client count. Owner Spark stays free. Watchlist
-              clients are free and never billed.
+              Accounting firms subscribe on a flat USD band by active client count. Starter is free
+              (up to 3 active clients). South African firms can pay ZAR at Checkout via Adaptive
+              Pricing. Watchlist clients are free and never billed. AI prepares the analysis; the
+              accountant reviews and signs off.
             </p>
           </div>
 
-          {/* accountant pricing — shown via body class set by quiz */}
           <div className="acc-pricing" id="accPricing">
             <div
               style={{
@@ -2646,58 +2759,15 @@ function LandingPage() {
             />
           </div>
 
-          <div className="price-grid stagger">
-            <div className="price-card hot">
-              <span className="tag">Early access</span>
-              <h3>Spark</h3>
-              <div className="amount">Free</div>
-              <div className="per">Pilot access · no card required</div>
-              <ul>
-                <li>Business health score from your figures</li>
-                <li>Cash forecast + budget workspace</li>
-                <li>Next moves and action plan</li>
-                <li>Share workspace with your accountant</li>
-              </ul>
-              <button
-                className="btn btn-gold"
-                onClick={() => {
-                  clearPendingCheckout();
-                  setRegPlan("Spark — Free early access");
-                  document.getElementById("register")?.scrollIntoView({ behavior: "smooth" });
-                }}
-              >
-                Start free ✦
-              </button>
-            </div>
-
-            <div className="price-card">
-              <h3>Orbit</h3>
-              <div className="amount">Via your firm</div>
-              <div className="per">Paid by the accounting firm, not the owner</div>
-              <ul>
-                <li>Live 13-week cashflow forecast</li>
-                <li>Full ratio set + recommended actions</li>
-                <li>Accountant advisory notes</li>
-                <li>Monthly comparison report</li>
-              </ul>
-              <a className="btn btn-ghost" href="/for-accountants">
-                See firm bands
-              </a>
-            </div>
-
-            <div className="price-card">
-              <h3>Constellation</h3>
-              <div className="amount">Via your firm</div>
-              <div className="per">Paid by the accounting firm, not the owner</div>
-              <ul>
-                <li>Everything in Orbit</li>
-                <li>AI advisory draft</li>
-                <li>Industry digest + priority support</li>
-              </ul>
-              <a className="btn btn-ghost" href="/for-accountants">
-                See firm bands
-              </a>
-            </div>
+          <div className="owner-spark-path">
+            <p>
+              <strong style={{ color: "var(--ink)" }}>Business owners:</strong> Spark is free during
+              early access and does not ask for a card. Your accountant can run the finance function
+              on a firm band above.
+            </p>
+            <button type="button" className="btn btn-ghost" onClick={goToOwnerSpark}>
+              Business owners: start free
+            </button>
           </div>
         </div>
       </section>
@@ -2770,15 +2840,16 @@ function LandingPage() {
       <section id="register" style={{ paddingBottom: 80 }}>
         <div className="wrap">
           <div className="section-head center reveal">
-            <span className="eyebrow">Get started</span>
+            <span className="eyebrow">Create a firm account</span>
             <h2>
-              Your first health score
+              Accountants first.
               <br />
-              is <span className="gold-text">free for early access.</span>
+              <span className="gold-text">AI prepares; you sign off.</span>
             </h2>
             <p className="sub">
-              Upload your figures and MILŌN scores your business — usually within a minute after
-              processing.
+              Set up your practice, pick a USD client-count band (Starter is free for up to 3 active
+              clients), and run the finance function across the book. Business owners can still
+              start on Spark below, free during early access.
             </p>
           </div>
 
@@ -2945,26 +3016,159 @@ function LandingPage() {
                     <select
                       id="regRoleField"
                       value={regRole}
-                      onChange={(e) => setRegRole(e.target.value)}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setRegRole(value);
+                        if (value === "Accountant / Advisory firm") {
+                          goToFirmSignup({ plan: "starter", scrollTo: "register" });
+                        } else {
+                          clearPendingCheckout();
+                          setRegPlan("Spark — Free early access");
+                        }
+                      }}
                     >
-                      <option>Business owner</option>
                       <option>Accountant / Advisory firm</option>
+                      <option>Business owner</option>
                     </select>
 
                     {regRole === "Accountant / Advisory firm" ? (
-                      <p
-                        style={{
-                          marginTop: 18,
-                          color: "var(--ink-dim)",
-                          fontSize: 14,
-                          lineHeight: 1.6,
-                        }}
-                      >
-                        Accountant accounts are set up through our dedicated firm portal.{" "}
-                        <a href="/auth" style={{ color: "var(--gold)" }}>
-                          Click here to register your firm →
-                        </a>
-                      </p>
+                      <>
+                        <div style={{ margin: "8px 0 18px" }}>
+                          <MarketPicker
+                            value={draftMarket}
+                            onChange={setDraftMarket}
+                            variant="landing"
+                            audience="practice"
+                          />
+                        </div>
+                        <GoogleSignInButton
+                          intent="accountant"
+                          tone="landing"
+                          label="Continue with Google"
+                          disabled={regBusy || !isDraftComplete(draftMarket)}
+                          next={billingStartPath(
+                            peekPendingCheckout() ??
+                              starterCheckoutIntent(visitorCopyPack(draftMarket)),
+                          )}
+                          onBeforeStart={() => {
+                            const market = draftToSelection(draftMarket);
+                            if (!market) {
+                              showRegisterError(
+                                "Pick South Africa or the United States (and a state) first.",
+                              );
+                              return false;
+                            }
+                            writeVisitorDraft(draftMarket);
+                            setPortalIntent("accountant");
+                            stashAccountantGoogleSignup({
+                              firmName: regFirmName.trim(),
+                              fullName: regName.trim() || undefined,
+                              marketCountry: market.country,
+                              marketRegion: market.regionCode,
+                            });
+                            if (!peekPendingCheckout()) {
+                              stashPendingCheckout(
+                                starterCheckoutIntent(market.country === "ZA" ? "za" : "us"),
+                              );
+                            }
+                            return true;
+                          }}
+                          onError={(msg) => showRegisterError(msg)}
+                        />
+                        <AuthDivider />
+                        <label htmlFor="regNameField">Your name</label>
+                        <input
+                          id="regNameField"
+                          type="text"
+                          required
+                          placeholder={t("nameExample", copyMarket)}
+                          value={regName}
+                          onChange={(e) => setRegName(e.target.value)}
+                        />
+
+                        <label htmlFor="regFirmNameField">Firm name</label>
+                        <input
+                          id="regFirmNameField"
+                          type="text"
+                          required
+                          placeholder="Acme & Partners"
+                          value={regFirmName}
+                          onChange={(e) => setRegFirmName(e.target.value)}
+                        />
+
+                        <label htmlFor="regEmailField">Work email</label>
+                        <input
+                          id="regEmailField"
+                          type="email"
+                          required
+                          placeholder={t("emailExample", copyMarket)}
+                          value={regEmail}
+                          onChange={(e) => setRegEmail(e.target.value)}
+                        />
+
+                        <label htmlFor="regPasswordField">Password</label>
+                        <input
+                          id="regPasswordField"
+                          type="password"
+                          required
+                          placeholder="At least 6 characters"
+                          minLength={6}
+                          value={regPassword}
+                          onChange={(e) => setRegPassword(e.target.value)}
+                        />
+
+                        <p
+                          style={{
+                            marginTop: 18,
+                            color: "var(--ink-dim)",
+                            fontSize: 13,
+                            lineHeight: 1.6,
+                          }}
+                        >
+                          {paidPlanFromRegisterLabel(regPlan)
+                            ? `You will start on ${regPlan} after creating the firm account. Change band in Pricing if you need a different client count.`
+                            : "Starter is free (up to 3 active clients). Pick another band in Pricing if you already know your book size."}
+                        </p>
+
+                        <button
+                          type="submit"
+                          id="create-firm"
+                          className="btn btn-gold"
+                          disabled={regBusy || !isDraftComplete(draftMarket)}
+                          style={{ width: "100%", justifyContent: "center", marginTop: 20 }}
+                        >
+                          {regBusy ? "Creating your firm account…" : "Create firm account ✦"}
+                        </button>
+                        <p
+                          style={{
+                            textAlign: "center",
+                            fontSize: 11,
+                            color: "var(--ink-dim)",
+                            marginTop: 14,
+                            lineHeight: 1.5,
+                          }}
+                        >
+                          Accounting firms subscribe on USD client-count bands through Stripe
+                          Checkout. AI prepares the analysis; you review and sign off. By creating
+                          an account you agree to the{" "}
+                          <a href="/terms" style={{ color: "inherit" }}>
+                            Terms
+                          </a>
+                          .{" "}
+                          <a href="/privacy" style={{ color: "inherit" }}>
+                            Privacy
+                          </a>
+                          {" · "}
+                          <a href="/ai" style={{ color: "inherit" }}>
+                            AI notice
+                          </a>
+                        </p>
+                        <p style={{ textAlign: "center", marginTop: 16 }}>
+                          <button type="button" className="btn btn-ghost" onClick={goToOwnerSpark}>
+                            Business owners: start free
+                          </button>
+                        </p>
+                      </>
                     ) : (
                       <>
                         <div style={{ margin: "8px 0 18px" }}>
@@ -3134,7 +3338,15 @@ function LandingPage() {
             </span>
           </div>
           <nav className="fnav" aria-label="Footer navigation">
-            <a href="#persona">Start</a>
+            <a
+              href="#register"
+              onClick={(e) => {
+                e.preventDefault();
+                goToFirmSignup();
+              }}
+            >
+              Create firm account
+            </a>
             <a href="#method">The Method</a>
             <a href="#how">How it works</a>
             <a href="#bridge">Shared workspace</a>

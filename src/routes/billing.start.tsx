@@ -61,7 +61,7 @@ function BillingStartPage() {
     if (!user) {
       void navigate({
         to: "/auth",
-        search: { next: billingStartPath(pending) },
+        search: { next: billingStartPath(pending), signup: true },
         replace: true,
       });
       return;

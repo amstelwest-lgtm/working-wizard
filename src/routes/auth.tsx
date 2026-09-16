@@ -54,8 +54,12 @@ import { pageHead, SEO_PAGES } from "@/lib/seo";
 
 export const Route = createFileRoute("/auth")({
   component: AuthPage,
-  validateSearch: (search: Record<string, unknown>): { next?: string } => ({
+  validateSearch: (search: Record<string, unknown>): { next?: string; signup?: boolean } => ({
     next: typeof search.next === "string" && search.next.startsWith("/") ? search.next : undefined,
+    signup:
+      search.signup === true || search.signup === "1" || search.signup === "true"
+        ? true
+        : undefined,
   }),
   head: () => pageHead(SEO_PAGES.auth),
 });
@@ -63,9 +67,9 @@ export const Route = createFileRoute("/auth")({
 function AuthPage() {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
-  const { next } = Route.useSearch();
+  const { next, signup } = Route.useSearch();
   const ensurePractice = useServerFn(ensurePracticePortalAccess);
-  const [mode, setMode] = useState<"signin" | "signup">("signin");
+  const [mode, setMode] = useState<"signin" | "signup">(signup ? "signup" : "signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
@@ -80,6 +84,9 @@ function AuthPage() {
     setMounted(true);
     setDraftMarket(readVisitorDraft());
   }, []);
+  useEffect(() => {
+    if (signup) setMode("signup");
+  }, [signup]);
 
   useEffect(() => {
     if (!mounted) return;
