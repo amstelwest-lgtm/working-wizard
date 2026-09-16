@@ -136,6 +136,9 @@ assert(
 assert(landing.includes('id="bridge"'), "landing keeps the dual-audience bridge");
 assert(!landing.includes('id="features"'), "landing drops the duplicate features block");
 assert(landing.includes("Give every business"), "hero is the finance-function promise");
+assert(landing.includes("Create firm account"), "home has a firm signup CTA");
+assert(landing.includes("USD bands by client count"), "home pricing leads with firm bands");
+assert(!landing.includes("Start free. <span className=\"gold-text\">Scale when it pays for itself."), "home pricing no longer leads with the owner Start-free story");
 assert(landing.includes("Small businesses have the numbers"), "gap section is the strategic reposition");
 assert(landing.includes("One shared workspace"), "shared-workspace framing is visible");
 assert(landing.includes("AI prepares"), "AI-prepares pipeline is visible");

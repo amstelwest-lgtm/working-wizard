@@ -134,7 +134,9 @@ export function MarketPicker({
   if (variant === "landing") {
     return (
       <div className="milon-market">
-        <p className="milon-market-label">Where is this business?</p>
+        <p className="milon-market-label">
+          {audience === "practice" ? "Where is this practice?" : "Where is this business?"}
+        </p>
         <div className="milon-market-choices">
           <button
             type="button"
