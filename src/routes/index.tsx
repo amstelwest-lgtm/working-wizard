@@ -2059,20 +2059,20 @@ function LandingPage() {
           <div>
             <span className="hero-badge h-anim d1">
               <span className="pulse" />
-              MILŌN.
+              <span>AI finance function for firms</span>
             </span>
             <h1 className="h-anim d2">
-              A full finance function
+              MILŌN.
               <br />
-              <span className="gold-text" style={{ whiteSpace: "nowrap" }}>
-                in your pocket.
+              <span className="gold-text">
+                A full finance function in your pocket.
               </span>
             </h1>
             <p className="hero-lede h-anim d3">
               MILŌN gives accountants an AI-powered finance function to run for their clients —
-              turning financial statements into a financial health tool that diagnoses the
-              business, cash forecasts, profitability waterfalls, a full-year budget, strategic
-              recommendations, and tracked employee actions, all in one shared workspace.
+              turning financial statements into a shared workspace with a financial health
+              diagnosis → cash forecasts → profitability waterfalls → a full-year budget →
+              strategic recommendations → tracked employee actions.
             </p>
             <p className="sub h-anim d3">
               AI powers MILŌN&apos;s financial intelligence brain. Your accountant reviews and
