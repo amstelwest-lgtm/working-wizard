@@ -47,8 +47,8 @@ assert(
   "redirectTo carries accountant join (never `invite`, which is owner-handoff)",
 );
 assert(
-  googleOAuthRedirectTo("https://milonfinance.com", { checkout: "orbit", market: "us" }) ===
-    "https://milonfinance.com/auth/callback?checkout=orbit&market=us",
+  googleOAuthRedirectTo("https://milonfinance.com", { checkout: "solo", interval: "month", market: "us" }) ===
+    "https://milonfinance.com/auth/callback?checkout=solo&interval=month&market=us",
   "redirectTo carries paid Checkout so an origin hop cannot drop the plan",
 );
 

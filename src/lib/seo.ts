@@ -13,7 +13,7 @@ export type SeoPage = {
   index?: boolean;
 };
 
-const USD_LIST_PRICE = LIST_PRICES.us.orbit.replace(/[^0-9.]/g, "") || "39";
+const USD_LIST_PRICE = LIST_PRICES.us.firmSolo.replace(/[^0-9.]/g, "") || "99";
 
 export const SEO_PAGES = {
   home: {

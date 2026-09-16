@@ -105,7 +105,7 @@ Supabase Dashboard → **Authentication → URL Configuration**:
   - `https://milonfinance.com/dashboard`
   - `http://localhost:5000/**` (local dev)
 
-Paid Orbit / Constellation signup confirmation uses `/auth/callback?checkout=&market=` (already allowlisted). Do not add `/billing/start` as `emailRedirectTo`.
+Paid firm-band signup confirmation uses `/auth/callback?checkout=&interval=&market=` (already allowlisted). Do not add `/billing/start` as `emailRedirectTo`.
 
 Align with existing launch checklist in [`docs/PILOT_SMOKE_CHECKLIST.md`](./PILOT_SMOKE_CHECKLIST.md).
 

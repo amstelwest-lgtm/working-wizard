@@ -40,7 +40,7 @@ function BillingSuccessPage() {
         }
         if (result.paymentStatus === "paid" || result.status === "complete") {
           setLabel(
-            "Stripe confirmed your payment. Your Orbit or Constellation subscription is active. Spark remains free.",
+            "Stripe confirmed your payment. Your firm subscription is active. Watchlist clients stay free. Owner Spark remains free.",
           );
           return;
         }

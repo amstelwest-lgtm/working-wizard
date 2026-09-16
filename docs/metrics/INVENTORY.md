@@ -175,7 +175,7 @@ Actors used below (this product’s roles, not the brief’s enums):
 | `landing.quiz.started` | anonymous | Vanilla quiz engine in `index.tsx` | Frontend click | Client only | time (seconds) | No. Never persisted. |
 | `landing.quiz.completed` | anonymous | Quiz finish → pricing persona class | Frontend | Client only | time | No. |
 | `pricing.viewed` | anonymous | `#pricing` section / nav | Frontend | Client only | free | No. Flag `show_pricing` can hide it. |
-| `pricing.checkout.clicked` | anonymous / signed-in | “Start Orbit” / “Start Constellation” on pricing cards | Frontend | Client only | money (if they complete Stripe) | Partial. Creates a Checkout Session when signed in; unsigned visitors stash the plan and sign up first. |
+| `pricing.checkout.clicked` | anonymous / signed-in | Firm band CTAs (“Start Solo”, Starter, …) on accountant pricing | Frontend | Client only | money (if they complete Stripe) | Partial. Creates a Checkout Session when signed in; unsigned visitors stash the band and open firm signup. |
 | `signup.started` | anonymous | Submit `#register` | Frontend → `supabase.auth.signUp` or `adminSignUp` | Mixed. Auth user row is server. | time + email | Partial: `auth.users.created_at` after success only. No “started then abandoned”. |
 | `signup.completed.owner` | client_owner | `signUp` + `ensure_own_client` (`index.tsx`, `auth.tsx`, `auth.callback.tsx`) | API / RPC | Server | time + email | Yes: `auth.users` + `user_roles` `client_owner` + `clients` row. |
 | `signup.completed.accountant` | firm_admin | `adminSignUp` `signupType=accountant` → firm insert + `ensure_practice_firm` | Server fn `src/lib/auth.functions.ts` | Server | time + email + firm name | Yes: `firms.created_at`, `user_roles`. |

@@ -681,8 +681,8 @@ function OwnerOpsPage() {
                 <Stat label="YTD received" value={dash.revenue.receivedYtdLabel} />
               </div>
               <p className="mt-2 text-[11px] text-[var(--ops-ink-dim)]">
-                All-time received: {dash.revenue.allTimeReceivedLabel}. Orbit and Constellation
-                Checkout is live. Stripe secret:{" "}
+                All-time received: {dash.revenue.allTimeReceivedLabel}. Firm-band Checkout is live
+                (lookup_keys + Adaptive Pricing). Stripe secret:{" "}
                 {dash.stripe.secretPresent ? "present on this deploy" : "missing"}. Publishable:{" "}
                 {dash.stripe.publishablePresent ? "present" : "missing"}. Log off-platform cash here
                 as well.
@@ -695,7 +695,7 @@ function OwnerOpsPage() {
                     setCheckoutBusy(true);
                     try {
                       const { url } = await startStripeCheckout({
-                        data: { plan: "orbit", market: "za" },
+                        data: { plan: "solo", interval: "month", market: "za" },
                       });
                       window.location.href = url;
                     } catch (ex) {
@@ -710,7 +710,7 @@ function OwnerOpsPage() {
                   {checkoutBusy ? (
                     <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
                   ) : null}
-                  Test Orbit checkout (ZAR)
+                  Test Solo checkout (Adaptive Pricing)
                 </button>
               </div>
 

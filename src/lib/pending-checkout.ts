@@ -1,30 +1,47 @@
 /**
- * Paid-plan checkout intent that must survive signup / sign-in / Google.
- * Spark is free and never stored here.
+ * Firm-band checkout intent that must survive signup / sign-in / Google.
+ * Owner Spark is free and never stored here.
  */
 
-import { isStripePaidPlan, type StripePaidPlan, type StripePlanMarket } from "@/lib/stripe-plans";
+import {
+  isFirmCheckoutBand,
+  isFirmInterval,
+  type FirmCheckoutBand,
+  type FirmInterval,
+  type StripePlanMarket,
+} from "@/lib/stripe-plans";
 
 export const PENDING_CHECKOUT_KEY = "milon_pending_checkout";
 
 export type PendingCheckout = {
-  plan: StripePaidPlan;
+  plan: FirmCheckoutBand;
+  interval: FirmInterval;
   market: StripePlanMarket;
+  promo?: string;
 };
 
 export function parseStripePlanMarket(value: unknown): StripePlanMarket | null {
   return value === "za" || value === "us" ? value : null;
 }
 
+export function parseFirmInterval(value: unknown): FirmInterval {
+  return typeof value === "string" && isFirmInterval(value) ? value : "month";
+}
+
 export function parsePendingCheckout(input: {
   plan?: unknown;
   market?: unknown;
   checkout?: unknown;
+  interval?: unknown;
+  promo?: unknown;
 }): PendingCheckout | null {
   const rawPlan = input.plan ?? input.checkout;
-  if (typeof rawPlan !== "string" || !isStripePaidPlan(rawPlan)) return null;
+  if (typeof rawPlan !== "string" || !isFirmCheckoutBand(rawPlan)) return null;
   const market = parseStripePlanMarket(input.market) ?? "us";
-  return { plan: rawPlan, market };
+  const interval = parseFirmInterval(input.interval);
+  const promo =
+    typeof input.promo === "string" && input.promo.trim() ? input.promo.trim() : undefined;
+  return { plan: rawPlan, interval, market, ...(promo ? { promo } : {}) };
 }
 
 export function parsePendingCheckoutFromSearch(search: string): PendingCheckout | null {
@@ -33,21 +50,47 @@ export function parsePendingCheckoutFromSearch(search: string): PendingCheckout 
     plan: q.get("plan"),
     checkout: q.get("checkout"),
     market: q.get("market") ?? q.get("mkt"),
+    interval: q.get("interval"),
+    promo: q.get("promo"),
   });
 }
 
+export function billingStartSearch(pending: PendingCheckout): {
+  plan: FirmCheckoutBand;
+  interval: FirmInterval;
+  market: StripePlanMarket;
+  promo?: string;
+} {
+  return {
+    plan: pending.plan,
+    interval: pending.interval,
+    market: pending.market,
+    ...(pending.promo ? { promo: pending.promo } : {}),
+  };
+}
+
 export function billingStartPath(pending: PendingCheckout): string {
-  const q = new URLSearchParams({ plan: pending.plan, market: pending.market });
+  const q = new URLSearchParams({
+    plan: pending.plan,
+    interval: pending.interval,
+    market: pending.market,
+  });
+  if (pending.promo) q.set("promo", pending.promo);
   return `/billing/start?${q.toString()}`;
 }
 
 /**
  * Confirmation / magic-link redirect. `/billing/start` is not on the Supabase
  * Auth allowlist (see docs/AUTH_CUSTOM_DOMAIN.md); `/auth/callback` is, and
- * already resumes Checkout from `?checkout=&market=`.
+ * already resumes Checkout from `?checkout=&interval=&market=`.
  */
 export function checkoutCallbackPath(pending: PendingCheckout): string {
-  const q = new URLSearchParams({ checkout: pending.plan, market: pending.market });
+  const q = new URLSearchParams({
+    checkout: pending.plan,
+    interval: pending.interval,
+    market: pending.market,
+  });
+  if (pending.promo) q.set("promo", pending.promo);
   return `/auth/callback?${q.toString()}`;
 }
 
@@ -75,15 +118,16 @@ export function pendingCheckoutFromNext(next: string | undefined): PendingChecko
   }
 }
 
-export function registerLabelForPlan(plan: StripePaidPlan): string {
-  return plan === "orbit" ? "Orbit" : "Constellation";
+export function registerLabelForPlan(plan: FirmCheckoutBand): string {
+  return plan.charAt(0).toUpperCase() + plan.slice(1);
 }
 
-export function paidPlanFromRegisterLabel(label: string): StripePaidPlan | null {
+export function paidPlanFromRegisterLabel(label: string): FirmCheckoutBand | null {
   const v = label.trim().toLowerCase();
-  if (v === "orbit" || v.startsWith("orbit")) return "orbit";
-  if (v === "constellation" || v.startsWith("constellation")) return "constellation";
-  return null;
+  if (v.startsWith("spark")) return null;
+  if (isFirmCheckoutBand(v)) return v;
+  const first = v.split(/[\s—-]/)[0];
+  return first && isFirmCheckoutBand(first) ? first : null;
 }
 
 export function stashPendingCheckout(pending: PendingCheckout): void {
@@ -98,7 +142,12 @@ export function peekPendingCheckout(): PendingCheckout | null {
   try {
     const raw = sessionStorage.getItem(PENDING_CHECKOUT_KEY);
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as { plan?: unknown; market?: unknown };
+    const parsed = JSON.parse(raw) as {
+      plan?: unknown;
+      market?: unknown;
+      interval?: unknown;
+      promo?: unknown;
+    };
     return parsePendingCheckout(parsed);
   } catch {
     return null;

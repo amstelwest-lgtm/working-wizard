@@ -16,10 +16,14 @@ import {
 } from "@/lib/user-roles";
 import { isOpsNext, lighthouseTabFromOpsNext } from "@/lib/client-note-link";
 import {
+  billingStartSearch,
+  checkoutEmailRedirectTo,
   isBillingStartPath,
   pendingCheckoutFromNext,
   peekPendingCheckout,
+  stashPendingCheckout,
 } from "@/lib/pending-checkout";
+import { starterCheckoutIntent } from "@/lib/stripe-plans";
 import { accessTokenFromNext } from "@/lib/practice-access";
 import { AuthDivider, GoogleSignInButton } from "@/components/google-sign-in-button";
 import { stashAccountantGoogleSignup } from "@/lib/google-auth";
@@ -117,11 +121,11 @@ function AuthPage() {
       }
       const pendingCheckout = pendingCheckoutFromNext(next) ?? peekPendingCheckout();
       if (pendingCheckout) {
-        const path = `/billing/start?plan=${pendingCheckout.plan}&market=${pendingCheckout.market}`;
+        const path = `/billing/start?plan=${pendingCheckout.plan}&interval=${pendingCheckout.interval}&market=${pendingCheckout.market}`;
         landedPathRef.current = path;
         navigate({
           to: "/billing/start",
-          search: { plan: pendingCheckout.plan, market: pendingCheckout.market },
+          search: billingStartSearch(pendingCheckout),
         });
         return path;
       }
@@ -177,11 +181,18 @@ function AuthPage() {
     setBusy(true);
     try {
       if (mode === "signup") {
+        if (!market) {
+          toast.error("Pick South Africa or the United States (and a state) first.");
+          return;
+        }
+        const starter = starterCheckoutIntent(market.country === "ZA" ? "za" : "us");
+        if (!peekPendingCheckout()) stashPendingCheckout(starter);
+        const pending = peekPendingCheckout() ?? starter;
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
           options: {
-            emailRedirectTo: `${window.location.origin}/dashboard`,
+            emailRedirectTo: checkoutEmailRedirectTo(window.location.origin, pending),
             data: {
               full_name: fullName,
               firm_name: firmName.trim(),
@@ -346,6 +357,11 @@ function AuthPage() {
                           marketCountry: market.country,
                           marketRegion: market.regionCode,
                         });
+                        if (!peekPendingCheckout()) {
+                          stashPendingCheckout(
+                            starterCheckoutIntent(market.country === "ZA" ? "za" : "us"),
+                          );
+                        }
                         return true;
                       }}
                       onError={(msg) => toast.error(msg)}

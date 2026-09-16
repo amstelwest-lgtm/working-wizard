@@ -19,8 +19,8 @@ function BillingCancelPage() {
         </p>
         <h1 className="mt-2 text-xl font-semibold">Checkout cancelled</h1>
         <p className="mt-2 text-sm text-slate-400">
-          Nothing was charged. You can start Orbit or Constellation again from pricing whenever you
-          are ready. Spark stays free.
+          Nothing was charged. You can start a firm band again from pricing whenever you are ready.
+          Owner Spark stays free.
         </p>
         <a
           href="/#pricing"

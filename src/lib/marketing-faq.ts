@@ -30,7 +30,7 @@ export const HOMEPAGE_FAQ_ITEMS: FaqItem[] = [
   {
     question: "How do I get started, and what does MILŌN cost?",
     answer:
-      "You can start free with Spark during early access, with no card required. Upload your financial figures and MILŌN will generate a financial health score and analysis. Orbit and Constellation are billed monthly through Stripe Checkout after you create an account. Accounting-firm plans are published but are not being billed yet.",
+      "You can start free with Spark during early access, with no card required. Upload your financial figures and MILŌN will generate a financial health score and analysis. Accounting firms subscribe on USD bands by active client count (Starter free through Scale; Enterprise is a custom quote) through Stripe Checkout. Owner Spark stays free.",
   },
 ];
 
@@ -41,12 +41,12 @@ export function publicFaqUsItems(): FaqItem[] {
   return [
     {
       question: "What does it cost?",
-      answer: `Spark is free during early access and does not ask for a card. Two paid tiers are billed monthly through Stripe Checkout — Orbit at ${LIST_PRICES.us.orbit} a month and Constellation at ${LIST_PRICES.us.constellation} a month. For practices, firm pricing is planned at ${LIST_PRICES.us.firm150} a month up to 150 clients and ${LIST_PRICES.us.firmUnlimited} a month for unlimited, and is not yet billed.`,
+      answer: `Spark is free during early access and does not ask for a card. Accounting firms subscribe on USD client-count bands billed through Stripe Checkout — Starter is free (up to 3 active clients), Solo starts at ${LIST_PRICES.us.firmSolo} a month, and Scale is ${LIST_PRICES.us.firmScale} a month. Annual billing is about 20% off. Watchlist clients are free. Enterprise is a custom quote. South African firms can pay ZAR at Checkout via Adaptive Pricing.`,
     },
     {
       question: "So what is the catch with free?",
       answer:
-        "You are early, and early users shape what gets built. Spark stays free during early access. Orbit and Constellation are paid monthly plans billed through Stripe Checkout.",
+        "You are early, and early users shape what gets built. Spark stays free during early access. Accounting firms pay a flat USD band by active client count through Stripe Checkout.",
     },
     {
       question: "What happens if I stop using it?",

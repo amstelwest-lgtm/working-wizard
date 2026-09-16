@@ -4,19 +4,26 @@ import { useServerFn } from "@tanstack/react-start";
 import { useAuth } from "@/hooks/use-auth";
 import { createStripeCheckout } from "@/lib/stripe-checkout.functions";
 import {
+  billingStartPath,
   consumePendingCheckout,
   parsePendingCheckout,
   registerLabelForPlan,
   stashPendingCheckout,
   type PendingCheckout,
 } from "@/lib/pending-checkout";
-import { STRIPE_PLAN_CATALOG, type StripePaidPlan, type StripePlanMarket } from "@/lib/stripe-plans";
+import {
+  FIRM_BAND_CATALOG,
+  firmUsdListPrice,
+  type FirmCheckoutBand,
+  type FirmInterval,
+} from "@/lib/stripe-plans";
 
 export const Route = createFileRoute("/billing/start")({
   validateSearch: (search: Record<string, unknown>): PendingCheckout => {
     return (
       parsePendingCheckout(search) ?? {
-        plan: "orbit",
+        plan: "starter",
+        interval: "month",
         market: "us",
       }
     );
@@ -30,10 +37,11 @@ export const Route = createFileRoute("/billing/start")({
   }),
 });
 
-function priceLabel(plan: StripePaidPlan, market: StripePlanMarket): string {
-  const amount = STRIPE_PLAN_CATALOG[plan][market].unitAmount;
-  if (market === "za") return `R${(amount / 100).toLocaleString("en-ZA")}/mo`;
-  return `$${(amount / 100).toLocaleString("en-US")}/mo`;
+function priceLabel(plan: FirmCheckoutBand, interval: FirmInterval): string {
+  const amount = firmUsdListPrice(plan, interval);
+  if (!amount) return FIRM_BAND_CATALOG[plan].name;
+  if (amount === "Free") return "Free";
+  return interval === "year" ? `${amount}/yr` : `${amount}/mo`;
 }
 
 function BillingStartPage() {
@@ -51,12 +59,23 @@ function BillingStartPage() {
   useEffect(() => {
     if (loading) return;
     if (!user) {
-      void navigate({ to: "/", hash: "register", replace: true });
+      void navigate({
+        to: "/auth",
+        search: { next: billingStartPath(pending) },
+        replace: true,
+      });
       return;
     }
     if (startedRef.current) return;
     startedRef.current = true;
-    void startCheckout({ data: { plan: pending.plan, market: pending.market } })
+    void startCheckout({
+      data: {
+        plan: pending.plan,
+        interval: pending.interval,
+        market: pending.market,
+        promo: pending.promo,
+      },
+    })
       .then(({ url }) => {
         consumePendingCheckout();
         window.location.href = url;
@@ -115,8 +134,8 @@ function BillingStartPage() {
         </h1>
         <p className="mt-2 text-sm text-slate-400">
           {user
-            ? `Redirecting to Stripe Checkout for ${planName} (${priceLabel(pending.plan, pending.market)}).`
-            : `Create an account or sign in, then we will send you to Stripe for ${planName} (${priceLabel(pending.plan, pending.market)}). Spark stays free.`}
+            ? `Redirecting to Stripe for ${planName} (${priceLabel(pending.plan, pending.interval)}). South African firms may be charged in ZAR via Adaptive Pricing.`
+            : `Create a firm account or sign in, then we will send you to Stripe for ${planName} (${priceLabel(pending.plan, pending.interval)}). Owner Spark stays free.`}
         </p>
       </div>
     </div>

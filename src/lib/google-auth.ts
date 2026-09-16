@@ -22,9 +22,11 @@ export type GoogleOAuthHop = {
   clientCode?: string | null;
   /** Owner→accountant join token. Distinct from `invite`. */
   join?: string;
-  /** Paid-plan Checkout to resume after Google (`orbit` / `constellation`). */
+  /** Firm-band Checkout to resume after Google (`starter` / `solo` / …). */
   checkout?: string;
+  interval?: string;
   market?: string;
+  promo?: string;
 };
 
 export function googleOAuthRedirectTo(origin: string, hop?: GoogleOAuthHop): string {
@@ -41,8 +43,12 @@ export function googleOAuthRedirectTo(origin: string, hop?: GoogleOAuthHop): str
   const checkout = hop?.checkout?.trim();
   if (checkout) {
     q.set("checkout", checkout);
-    const market = hop.market?.trim();
+    const interval = hop?.interval?.trim();
+    if (interval) q.set("interval", interval);
+    const market = hop?.market?.trim();
     if (market) q.set("market", market);
+    const promo = hop?.promo?.trim();
+    if (promo) q.set("promo", promo);
   }
   const qs = q.toString();
   return qs ? `${base}?${qs}` : base;
@@ -280,7 +286,9 @@ export async function startGoogleSignIn(opts: {
     const pending = peekPendingCheckout();
     if (pending) {
       hop.checkout = pending.plan;
+      hop.interval = pending.interval;
       hop.market = pending.market;
+      hop.promo = pending.promo;
       if (!next) next = billingStartPath(pending);
     }
   }

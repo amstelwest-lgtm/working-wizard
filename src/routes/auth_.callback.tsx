@@ -30,12 +30,14 @@ import { marketToJson, parseMarketSelection, readVisitorMarket, withMarketRpcFal
 import { OPS_UNLOCK_KEY } from "@/lib/owner-ops.functions";
 import { isOpsNext, lighthouseTabFromOpsNext } from "@/lib/client-note-link";
 import {
+  billingStartSearch,
   isBillingStartPath,
   parsePendingCheckoutFromSearch,
   pendingCheckoutFromNext,
   peekPendingCheckout,
   stashPendingCheckout,
 } from "@/lib/pending-checkout";
+import { starterCheckoutIntent } from "@/lib/stripe-plans";
 import { accessTokenFromNext } from "@/lib/practice-access";
 import { listUserFirms } from "@/lib/firm-brand";
 import {
@@ -269,16 +271,25 @@ function AuthCallbackPage() {
         return;
       }
 
-      const pendingCheckout =
+      let pendingCheckout =
         parsePendingCheckoutFromSearch(window.location.search) ||
         pendingCheckoutFromNext(next) ||
         peekPendingCheckout();
+      if (
+        !pendingCheckout &&
+        intent === "accountant" &&
+        isFreshAuthUser(user.created_at)
+      ) {
+        pendingCheckout = starterCheckoutIntent(
+          readVisitorMarket()?.country === "ZA" ? "za" : "us",
+        );
+      }
       if (pendingCheckout) {
         stashPendingCheckout(pendingCheckout);
         if (!cancelled) {
           void navigate({
             to: "/billing/start",
-            search: { plan: pendingCheckout.plan, market: pendingCheckout.market },
+            search: billingStartSearch(pendingCheckout),
             replace: true,
           });
         }
