@@ -31,6 +31,7 @@ import { Route as JoinTokenRouteImport } from './routes/join.$token'
 import { Route as EmailUnsubscribeRouteImport } from './routes/email/unsubscribe'
 import { Route as BillingSuccessRouteImport } from './routes/billing.success'
 import { Route as BillingStartRouteImport } from './routes/billing.start'
+import { Route as BillingRequiredRouteImport } from './routes/billing.required'
 import { Route as BillingCancelRouteImport } from './routes/billing.cancel'
 import { Route as AuthVerifiedRouteImport } from './routes/auth_.verified'
 import { Route as AuthCallbackRouteImport } from './routes/auth_.callback'
@@ -162,6 +163,11 @@ const BillingSuccessRoute = BillingSuccessRouteImport.update({
 const BillingStartRoute = BillingStartRouteImport.update({
   id: '/billing/start',
   path: '/billing/start',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BillingRequiredRoute = BillingRequiredRouteImport.update({
+  id: '/billing/required',
+  path: '/billing/required',
   getParentRoute: () => rootRouteImport,
 } as any)
 const BillingCancelRoute = BillingCancelRouteImport.update({
@@ -316,6 +322,7 @@ export interface FileRoutesByFullPath {
   '/auth/callback': typeof AuthCallbackRoute
   '/auth/verified': typeof AuthVerifiedRoute
   '/billing/cancel': typeof BillingCancelRoute
+  '/billing/required': typeof BillingRequiredRoute
   '/billing/start': typeof BillingStartRoute
   '/billing/success': typeof BillingSuccessRoute
   '/email/unsubscribe': typeof EmailUnsubscribeRoute
@@ -362,6 +369,7 @@ export interface FileRoutesByTo {
   '/auth/callback': typeof AuthCallbackRoute
   '/auth/verified': typeof AuthVerifiedRoute
   '/billing/cancel': typeof BillingCancelRoute
+  '/billing/required': typeof BillingRequiredRoute
   '/billing/start': typeof BillingStartRoute
   '/billing/success': typeof BillingSuccessRoute
   '/email/unsubscribe': typeof EmailUnsubscribeRoute
@@ -410,6 +418,7 @@ export interface FileRoutesById {
   '/auth_/callback': typeof AuthCallbackRoute
   '/auth_/verified': typeof AuthVerifiedRoute
   '/billing/cancel': typeof BillingCancelRoute
+  '/billing/required': typeof BillingRequiredRoute
   '/billing/start': typeof BillingStartRoute
   '/billing/success': typeof BillingSuccessRoute
   '/email/unsubscribe': typeof EmailUnsubscribeRoute
@@ -458,6 +467,7 @@ export interface FileRouteTypes {
     | '/auth/callback'
     | '/auth/verified'
     | '/billing/cancel'
+    | '/billing/required'
     | '/billing/start'
     | '/billing/success'
     | '/email/unsubscribe'
@@ -504,6 +514,7 @@ export interface FileRouteTypes {
     | '/auth/callback'
     | '/auth/verified'
     | '/billing/cancel'
+    | '/billing/required'
     | '/billing/start'
     | '/billing/success'
     | '/email/unsubscribe'
@@ -551,6 +562,7 @@ export interface FileRouteTypes {
     | '/auth_/callback'
     | '/auth_/verified'
     | '/billing/cancel'
+    | '/billing/required'
     | '/billing/start'
     | '/billing/success'
     | '/email/unsubscribe'
@@ -597,6 +609,7 @@ export interface RootRouteChildren {
   AuthCallbackRoute: typeof AuthCallbackRoute
   AuthVerifiedRoute: typeof AuthVerifiedRoute
   BillingCancelRoute: typeof BillingCancelRoute
+  BillingRequiredRoute: typeof BillingRequiredRoute
   BillingStartRoute: typeof BillingStartRoute
   BillingSuccessRoute: typeof BillingSuccessRoute
   EmailUnsubscribeRoute: typeof EmailUnsubscribeRoute
@@ -765,6 +778,13 @@ declare module '@tanstack/react-router' {
       path: '/billing/start'
       fullPath: '/billing/start'
       preLoaderRoute: typeof BillingStartRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/billing/required': {
+      id: '/billing/required'
+      path: '/billing/required'
+      fullPath: '/billing/required'
+      preLoaderRoute: typeof BillingRequiredRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/billing/cancel': {
@@ -984,6 +1004,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthCallbackRoute: AuthCallbackRoute,
   AuthVerifiedRoute: AuthVerifiedRoute,
   BillingCancelRoute: BillingCancelRoute,
+  BillingRequiredRoute: BillingRequiredRoute,
   BillingStartRoute: BillingStartRoute,
   BillingSuccessRoute: BillingSuccessRoute,
   EmailUnsubscribeRoute: EmailUnsubscribeRoute,

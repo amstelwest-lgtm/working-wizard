@@ -303,6 +303,10 @@ assert(
   layoutSrc.includes("shouldStayOnAccountantPortal"),
   "practice routes under /_authenticated bounce business-client sessions",
 );
+assert(
+  layoutSrc.includes("getFirmBillingEntitlement"),
+  "practice routes under /_authenticated require an entitling Stripe subscription",
+);
 
 const profileSrc = readFileSync(resolve("src/contexts/accountant-profile.tsx"), "utf8");
 assert(profileSrc.includes("isPracticeSignupMeta"), "profile provider skips minting firms for SME logins");

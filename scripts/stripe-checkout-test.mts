@@ -163,7 +163,8 @@ assert(paidPlanFromRegisterLabel("Solo") === "solo", "label back to plan");
 assert(paidPlanFromRegisterLabel("Spark — Free early access") === null, "spark label is not paid");
 
 const checkoutFn = readFileSync(resolve("src/lib/stripe-checkout.functions.ts"), "utf8");
-assert(checkoutFn.includes("createStripeCheckout"), "public checkout export");
+assert(checkoutFn.includes("getFirmBillingEntitlement"), "firm shell entitlement export");
+assert(checkoutFn.includes("customerHasEntitlingSubscription"), "active/trialing helper used for Checkout and the gate");
 assert(checkoutFn.includes("createOwnerStripeCheckout = createStripeCheckout"), "ops alias kept");
 assert(checkoutFn.includes("createBillingPortalSession"), "portal session export");
 assert(checkoutFn.includes("requireSupabaseAuth"), "checkout requires a signed-in user");
@@ -202,6 +203,7 @@ assert(bandDocs.includes("FOUNDING applies to monthly"), "band docs: FOUNDING mo
 assert(bandDocs.includes("adaptive_pricing"), "band docs: Adaptive Pricing");
 assert(bandDocs.includes("Wilmington"), "band docs: tax head office");
 assert(bandDocs.includes("Do not") && bandDocs.includes("managed_payments"), "band docs: do not force-disable MP");
+assert(bandDocs.includes("Accountant product gate"), "band docs: firm product requires an active Stripe subscription");
 
 const landing = readFileSync(resolve("src/routes/index.tsx"), "utf8");
 assert(landing.includes("FirmBandPricingTable"), "landing accountant path shows the band table");
@@ -255,11 +257,13 @@ assert(start.includes('role="alert"'), "checkout-start failure is an accessible 
 const success = readFileSync(resolve("src/routes/billing.success.tsx"), "utf8");
 assert(!success.includes("waitlist"), "success page is not waitlist copy");
 assert(success.includes("subscription is active") || success.includes("Payment received"), "success tells the truth");
-assert(success.includes('to="/app"'), "success returns to the workspace");
+assert(success.includes('to="/dashboard"'), "success returns to the practice portal");
+assert(success.includes("checkoutSessionUnlocksFirm"), "success treats Starter complete as unlock");
 
 const cancel = readFileSync(resolve("src/routes/billing.cancel.tsx"), "utf8");
 assert(!cancel.includes("Lighthouse"), "cancel is not a Lighthouse-only test page");
 assert(cancel.includes("Nothing was charged"), "cancel says nothing was charged");
+assert(cancel.includes("Resume Checkout"), "cancel can resume Checkout");
 
 const callback = readFileSync(resolve("src/routes/auth_.callback.tsx"), "utf8");
 assert(callback.includes("pendingCheckout"), "Google return resumes paid Checkout");
