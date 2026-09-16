@@ -345,8 +345,9 @@ html[data-landing="1"] #hero .sub{max-width:640px}
   html[data-landing="1"] .hero-stats{margin-top:40px}
   html[data-landing="1"] .hero-stats b{font-size:26px}
 }
-html[data-landing="1"] .hero-badge{display:inline-flex;gap:9px;align-items:center;border:1px solid var(--line);border-radius:999px;padding:7px 16px;font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:var(--gold);-webkit-text-fill-color:var(--gold);background:var(--card)}
-html[data-landing="1"] .hero-badge .pulse{width:7px;height:7px;border-radius:50%;background:var(--gold-bright);box-shadow:0 0 0 0 rgba(253,238,121,.6);animation:pulseDot 2.2s infinite}
+html[data-landing="1"] .hero-badge{display:inline-flex;gap:9px;align-items:center;max-width:100%;border:1px solid var(--line);border-radius:999px;padding:7px 16px;font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:var(--gold);-webkit-text-fill-color:var(--gold);background:var(--card)}
+html[data-landing="1"] .hero-badge .pulse{width:7px;height:7px;flex:0 0 auto;border-radius:50%;background:var(--gold-bright);box-shadow:0 0 0 0 rgba(253,238,121,.6);animation:pulseDot 2.2s infinite}
+html[data-landing="1"] .hero-badge > span:not(.pulse){min-width:0}
 @keyframes pulseDot{70%{box-shadow:0 0 0 9px rgba(253,238,121,0)}100%{box-shadow:0 0 0 0 rgba(253,238,121,0)}}
 html[data-landing="1"] .hero-cta{display:flex;gap:16px;margin-top:28px;flex-wrap:wrap}
 html[data-landing="1"] .hero-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px 24px;margin-top:28px;max-width:none;grid-column:1/-1;padding-top:22px;border-top:1px solid var(--line)}

@@ -135,8 +135,10 @@ assert(
 );
 assert(landing.includes('id="bridge"'), "landing keeps the dual-audience bridge");
 assert(!landing.includes('id="features"'), "landing drops the duplicate features block");
-assert(landing.includes("A full finance function"), "hero is the finance-function promise");
-assert(landing.includes("in your pocket."), "hero pocket line is present");
+assert(landing.includes("AI finance function for firms"), "hero badge is the category, not the brand");
+assert(landing.includes("A full finance function in your pocket."), "hero gold line is the full tagline");
+assert(landing.includes("financial health diagnosis"), "hero lede lists diagnosis as a deliverable");
+assert(!landing.includes("health tool that diagnoses the"), "old run-on hero lede is gone");
 assert(!landing.includes("Give every business"), "old give-every-business hero is gone");
 assert(landing.includes("Create firm account"), "home has a firm signup CTA");
 assert(landing.includes("USD bands by client count"), "home pricing leads with firm bands");

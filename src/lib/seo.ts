@@ -20,7 +20,7 @@ export const SEO_PAGES = {
     path: "/",
     title: "AI Finance Function for Accountants & Businesses | MILŌN",
     description:
-      "A full finance function in your pocket. MILŌN gives accountants an AI-powered finance function to run for their clients. AI powers MILŌN's financial intelligence brain. Your accountant reviews and signs off.",
+      "MILŌN. A full finance function in your pocket. MILŌN gives accountants an AI-powered finance function to run for their clients. AI powers MILŌN's financial intelligence brain. Your accountant reviews and signs off.",
     imageAlt: "MILŌN — AI-powered finance function for accounting firms and businesses",
   },
   forAccountants: {
