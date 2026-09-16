@@ -1953,7 +1953,9 @@ function LandingPage() {
             <h1 className="h-anim d2">
               Give every business
               <br />
-              a <span className="gold-text">finance function.</span>
+              <span className="gold-text" style={{ whiteSpace: "nowrap" }}>
+                a finance function.
+              </span>
             </h1>
             <p className="hero-lede h-anim d3">
               MILŌN is the AI-powered finance function accountants can run for their clients.
@@ -1974,24 +1976,6 @@ function LandingPage() {
               >
                 I&apos;m an accountant — see MILŌN for my clients
               </button>
-            </div>
-            <div className="hero-stats h-anim d5">
-              <div>
-                <b>1</b>
-                <span>Health score that tells the story</span>
-              </div>
-              <div>
-                <b>13&nbsp;wks</b>
-                <span>Cash forecast</span>
-              </div>
-              <div>
-                <b>4</b>
-                <span>Financial pillars</span>
-              </div>
-              <div>
-                <b>19</b>
-                <span>Ratios with the workings shown</span>
-              </div>
             </div>
           </div>
 
@@ -2139,6 +2123,24 @@ function LandingPage() {
             <div className="float-card fc-2">
               <b>+9 pts</b>
               <span>Health score · this quarter</span>
+            </div>
+          </div>
+          <div className="hero-stats h-anim d5">
+            <div>
+              <b>1</b>
+              <span>Health score that tells the story</span>
+            </div>
+            <div>
+              <b>13&nbsp;wks</b>
+              <span>Cash forecast</span>
+            </div>
+            <div>
+              <b>4</b>
+              <span>Financial pillars</span>
+            </div>
+            <div>
+              <b>19</b>
+              <span>Ratios with the workings shown</span>
             </div>
           </div>
         </div>
@@ -2575,8 +2577,9 @@ function LandingPage() {
           <div className="section-head center reveal">
             <span className="eyebrow">The bigger idea</span>
             <h2>
-              Give small businesses the financial intelligence of a{" "}
-              <span className="gold-text serif">much larger company.</span>
+              Give small businesses the financial intelligence
+              <br />
+              of a <span className="gold-text serif">much larger company.</span>
             </h2>
             <p className="sub">
               For years, sophisticated financial analysis and dedicated finance teams were largely

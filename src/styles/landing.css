@@ -283,8 +283,9 @@ html[data-landing="1"] nav#topnav.nav-open .nav-burger span:nth-child(3){transfo
   html[data-landing="1"] .wrap{padding-left:16px;padding-right:16px}
   html[data-landing="1"] [data-milon-landing] section{padding:72px 0}
   html[data-landing="1"] #hero{padding-top:100px;padding-bottom:48px;min-height:auto}
-  html[data-landing="1"] .hero-stats>div{padding:10px 0;border-left:0;border-top:1px solid var(--line);width:100%}
+  html[data-landing="1"] .hero-stats>div{padding:10px 0;border-left:0;border-top:1px solid var(--line);width:auto}
   html[data-landing="1"] .hero-stats>div:first-child{border-top:0}
+  html[data-landing="1"] .hero-stats{grid-template-columns:1fr;max-width:none;gap:0}
   html[data-landing="1"] .quiz-shell,
   html[data-landing="1"] .reg-shell{padding:28px 18px}
   html[data-landing="1"] .persona-card,
@@ -294,10 +295,10 @@ html[data-landing="1"] nav#topnav.nav-open .nav-burger span:nth-child(3){transfo
   html[data-landing="1"] .fc-2{display:none}
 }
 
-html[data-landing="1"] #hero{min-height:100vh;display:flex;align-items:center;padding-top:130px;padding-bottom:80px}
-html[data-landing="1"] #hero .wrap{display:grid;grid-template-columns:1.02fr .98fr;gap:64px;align-items:center}
-html[data-landing="1"] #hero h1{font-size:clamp(38px,5.4vw,66px);line-height:1.07;margin:22px 0 18px}
-html[data-landing="1"] #hero .hero-lede{font-size:clamp(17px,1.55vw,20px);line-height:1.45;max-width:640px;margin:0 0 16px;color:var(--ink);font-weight:600}
+html[data-landing="1"] #hero{min-height:100vh;display:flex;align-items:flex-start;padding-top:100px;padding-bottom:40px}
+html[data-landing="1"] #hero .wrap{display:grid;grid-template-columns:1.02fr .98fr;gap:64px;align-items:start}
+html[data-landing="1"] #hero h1{font-size:clamp(36px,5vw,58px);line-height:1.07;margin:18px 0 14px}
+html[data-landing="1"] #hero .hero-lede{font-size:clamp(17px,1.55vw,20px);line-height:1.45;max-width:640px;margin:0 0 14px;color:var(--ink);font-weight:600}
 html[data-landing="1"] #hero .sub{max-width:640px}
 
 /* Large desktops: scale the hero composition, not the rest of the page.
@@ -313,19 +314,19 @@ html[data-landing="1"] #hero .sub{max-width:640px}
     gap:clamp(48px,4.6vw,96px);
     padding-left:clamp(36px,5vw,80px);
     padding-right:clamp(24px,3.2vw,52px);
-    align-items:center;
+    align-items:start;
   }
   html[data-landing="1"] #hero h1{
-    font-size:clamp(66px,3.55vw,72px);
+    font-size:clamp(52px,3.2vw,62px);
   }
   html[data-landing="1"] #hero .hero-lede{
     max-width:min(42em,100%);
-    font-size:21px;
+    font-size:20px;
   }
   html[data-landing="1"] #hero .sub{
     max-width:min(46em,100%);
-    font-size:18px;
-    line-height:1.62;
+    font-size:17px;
+    line-height:1.58;
   }
   html[data-landing="1"] .dash-stage{
     width:calc(100% + clamp(8px,2.4vw,40px));
@@ -341,18 +342,21 @@ html[data-landing="1"] #hero .sub{max-width:640px}
   html[data-landing="1"] .gauge svg{width:100%;height:100%}
   html[data-landing="1"] .gauge .val b{font-size:clamp(40px,2.2vw,48px)}
   html[data-landing="1"] .dash-main{gap:clamp(26px,1.8vw,36px)}
-  html[data-landing="1"] .hero-stats{margin-top:56px}
-  html[data-landing="1"] .hero-stats b{font-size:28px}
+  html[data-landing="1"] .hero-stats{margin-top:40px}
+  html[data-landing="1"] .hero-stats b{font-size:26px}
 }
 html[data-landing="1"] .hero-badge{display:inline-flex;gap:9px;align-items:center;border:1px solid var(--line);border-radius:999px;padding:7px 16px;font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:var(--gold);-webkit-text-fill-color:var(--gold);background:var(--card)}
 html[data-landing="1"] .hero-badge .pulse{width:7px;height:7px;border-radius:50%;background:var(--gold-bright);box-shadow:0 0 0 0 rgba(253,238,121,.6);animation:pulseDot 2.2s infinite}
 @keyframes pulseDot{70%{box-shadow:0 0 0 9px rgba(253,238,121,0)}100%{box-shadow:0 0 0 0 rgba(253,238,121,0)}}
-html[data-landing="1"] .hero-cta{display:flex;gap:16px;margin-top:36px;flex-wrap:wrap}
-html[data-landing="1"] .hero-stats{display:flex;gap:0;margin-top:52px;flex-wrap:wrap}
-html[data-landing="1"] .hero-stats>div{padding:0 34px;border-left:1px solid var(--line)}
-html[data-landing="1"] .hero-stats>div:first-child{padding-left:0;border-left:none}
+html[data-landing="1"] .hero-cta{display:flex;gap:16px;margin-top:28px;flex-wrap:wrap}
+html[data-landing="1"] .hero-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px 24px;margin-top:28px;max-width:none;grid-column:1/-1;padding-top:22px;border-top:1px solid var(--line)}
+html[data-landing="1"] .hero-stats>div{padding:0;border:none}
 html[data-landing="1"] .hero-stats b{display:block;font-size:27px;color:var(--gold);font-weight:800;font-variant-numeric:tabular-nums}
-html[data-landing="1"] .hero-stats span{font-size:11.5px;color:var(--ink-dim);letter-spacing:.1em;text-transform:uppercase;max-width:11.5em;display:block}
+html[data-landing="1"] .hero-stats span{font-size:11.5px;color:var(--ink-dim);letter-spacing:.08em;text-transform:uppercase;max-width:none;display:block}
+@media(max-width:760px){
+  html[data-landing="1"] .hero-stats{grid-template-columns:1fr 1fr;max-width:none;gap:16px 20px;margin-top:28px;padding-top:18px}
+  html[data-landing="1"] .hero-stats>div{padding:0;border-top:0}
+}
 
 html[data-landing="1"] .h-anim{opacity:0;transform:translateY(28px);animation:heroUp 1s var(--ease) forwards}
 html[data-landing="1"] .h-anim.d1{animation-delay:.05s}html[data-landing="1"] .h-anim.d2{animation-delay:.18s}html[data-landing="1"] .h-anim.d3{animation-delay:.32s}html[data-landing="1"] .h-anim.d4{animation-delay:.46s}html[data-landing="1"] .h-anim.d5{animation-delay:.6s}
@@ -576,7 +580,7 @@ html[data-landing="1"] .idea-close{margin-top:28px;font-family:'Cormorant Garamo
 html[data-landing="1"] .bridge-side ul{list-style:none;display:flex;flex-direction:column;gap:12px}
 html[data-landing="1"] .bridge-side li{display:flex;gap:11px;font-size:14px;color:var(--ink-dim)}
 html[data-landing="1"] .bridge-side li::before{content:"✦";color:var(--gold);flex-shrink:0;line-height:1.6}
-html[data-landing="1"] .bridge-side li b{color:var(--ink);font-weight:600}
+html[data-landing="1"] .bridge-side li b{color:var(--ink);font-weight:600;white-space:nowrap}
 
 html[data-landing="1"] .bridge-link{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;min-width:120px;padding:8px 0}
 html[data-landing="1"] .bridge-link .rail{flex:1;width:2px;border-radius:2px;background:linear-gradient(180deg,transparent,rgba(212,175,55,.55),transparent);min-height:40px}
@@ -598,6 +602,7 @@ html[data-landing="1"] .bridge-fact .now b{color:var(--gold);-webkit-text-fill-c
   html[data-landing="1"] .bridge-link .rail{width:auto;height:2px;min-height:0;flex:1;background:linear-gradient(90deg,transparent,rgba(212,175,55,.55),transparent)}
   html[data-landing="1"] .bridge-link .cap{display:none}
   html[data-landing="1"] .bridge-facts{grid-template-columns:1fr}
+  html[data-landing="1"] .bridge-side li b{white-space:normal}
 }
 
 html[data-landing="1"] .acc-pricing{display:none;max-width:760px;margin:40px auto 0;border-radius:22px;padding:34px 36px;
