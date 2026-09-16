@@ -44,12 +44,10 @@ export function FirmBandPricingTable({
         <table className="firm-bands-table">
           <thead>
             <tr>
-              <th>Band</th>
-              <th>Active clients</th>
-              <th>{interval === "year" ? "Annual" : "Monthly"}</th>
-              <th>
-                <span className="sr-only">Start</span>
-              </th>
+              <th scope="col">Band</th>
+              <th scope="col">Active clients</th>
+              <th scope="col">{interval === "year" ? "Annual" : "Monthly"}</th>
+              <th scope="col">Start</th>
             </tr>
           </thead>
           <tbody>
@@ -62,19 +60,19 @@ export function FirmBandPricingTable({
                     : firmUsdListPrice(band.id, interval === "year" && band.yearlyUsdCents == null ? "month" : interval);
               const checkoutBand = band.id !== "enterprise" && (interval === "month" || band.yearlyUsdCents != null);
               return (
-                <tr key={band.id}>
-                  <td>
+                <tr key={band.id} className={band.id === "starter" ? "is-starter" : undefined} data-band={band.id}>
+                  <td className="firm-bands-name">
                     <strong>{band.name}</strong>
                   </td>
-                  <td>
+                  <td className="firm-bands-limit">
                     {band.clientLimit == null
                       ? "Unlimited"
                       : `Up to ${band.clientLimit}`}
                   </td>
-                  <td>
+                  <td className="firm-bands-price">
                     {price === "Free" ? "Free" : price === "Custom" || price === "Monthly only" ? price : interval === "year" ? `${price}/yr` : `${price}/mo`}
                   </td>
-                  <td>
+                  <td className="firm-bands-cta">
                     {band.customQuote ? (
                       <a className="btn btn-ghost" href={enterpriseHref}>
                         Talk to us

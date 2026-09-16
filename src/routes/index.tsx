@@ -2735,19 +2735,8 @@ function LandingPage() {
           </div>
 
           <div className="acc-pricing" id="accPricing">
-            <div
-              style={{
-                fontWeight: 700,
-                fontSize: 12,
-                letterSpacing: ".3em",
-                textTransform: "uppercase",
-                color: "var(--gold)",
-                marginBottom: 10,
-              }}
-            >
-              Accountant / Advisory Firm Pricing
-            </div>
-            <p style={{ color: "var(--ink-dim)", fontSize: 14, marginBottom: 18 }}>
+            <div className="acc-pricing-kicker">Accountant / Advisory Firm Pricing</div>
+            <p className="acc-pricing-lede">
               White-label the whole platform. Charge your clients a monthly advisory retainer. MILŌN
               is your engine. Billed in USD (Solo from {LIST_PRICES.us.firmSolo}/mo); South African
               firms can pay ZAR at Checkout.

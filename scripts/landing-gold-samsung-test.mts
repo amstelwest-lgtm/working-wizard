@@ -50,4 +50,21 @@ assert(landing.includes('colorScheme = "only dark"') || landing.includes('"only 
 assert(landing.includes("syncLandingColorScheme"), "theme toggle keeps the color-scheme meta in sync");
 assert(landing.includes("milon-color-scheme") && landing.includes(".remove()"), "leaving / clears the landing meta");
 
+const firmBandsIdx = css.indexOf(".firm-bands-table{");
+assert(firmBandsIdx !== -1, "firm band table is styled");
+const firmBands = css.slice(firmBandsIdx, css.indexOf(".price-grid{", firmBandsIdx));
+assert(firmBands.includes("background-color:var(--bg-2)"), "firm band cells sit on a solid --bg-2 surface");
+assert(firmBands.includes("-webkit-text-fill-color:var(--ink)"), "firm band body text pins cream fill, not a clipped gold");
+assert(firmBands.includes("-webkit-text-fill-color:#1b1300"), "firm band gold CTAs pin near-black fill");
+assert(
+  !firmBands.split(/[;{}]/).some((part) => part.trim() === "color:transparent"),
+  "firm band copy is never transparent clipped text",
+);
+assert(css.includes(".acc-pricing{") && css.includes("background-color:var(--bg-2)"), "pricing panel has a solid surface under the glass");
+
+const mk = readFileSync(resolve("src/styles/marketing.css"), "utf8");
+assert(mk.includes(".firm-bands-table"), "public collateral pages style the firm band table");
+assert(mk.includes("-webkit-text-fill-color: var(--ink)") || mk.includes("-webkit-text-fill-color:var(--ink)"), "marketing table pins readable fill");
+assert(mk.includes("background-color: var(--bg-2)") || mk.includes("background-color:var(--bg-2)"), "marketing table wrap/cells have a solid surface");
+
 console.log("landing-gold-samsung-test: ok");
