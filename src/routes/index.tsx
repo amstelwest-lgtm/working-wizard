@@ -2070,9 +2070,9 @@ function LandingPage() {
             </h1>
             <p className="hero-lede h-anim d3">
               MILŌN gives accountants an AI-powered finance function to run for their clients —
-              turning financial statements into a shared workspace with a financial health
-              diagnosis → cash forecasts → profitability waterfalls → a full-year budget →
-              strategic recommendations → tracked employee actions.
+              turning financial statements into a shared workspace with a financial health diagnosis
+              → cash forecasts → profitability waterfalls → a full-year budget → strategic
+              recommendations → tracked employee actions.
             </p>
             <p className="sub h-anim d3">
               AI powers MILŌN&apos;s financial intelligence brain. Your accountant reviews and
