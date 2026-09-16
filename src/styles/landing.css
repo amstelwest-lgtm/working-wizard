@@ -605,25 +605,47 @@ html[data-landing="1"] .bridge-fact .now b{color:var(--gold);-webkit-text-fill-c
   html[data-landing="1"] .bridge-side li b{white-space:normal}
 }
 
-/* Firm bands are the default #pricing view — not gated on the accountant quiz. */
+/* Firm bands are the default #pricing view — not gated on the accountant quiz.
+   Solid --bg-2 paint + pinned fills: a transparent table lets Samsung
+   force-dark remap cream ink until it vanishes into the page. */
 html[data-landing="1"] .acc-pricing{display:block;max-width:960px;margin:40px auto 0;border-radius:22px;padding:34px 36px;
-  background:linear-gradient(180deg,rgba(212,175,55,.09),var(--card)) padding-box,
+  background:linear-gradient(180deg,rgba(212,175,55,.09),var(--glass)) padding-box,
              linear-gradient(150deg,rgba(253,238,121,.85),rgba(212,175,55,.12)) border-box;
-  border:1px solid transparent;box-shadow:var(--shadow-gold)}
-html[data-landing="1"] .owner-spark-path{max-width:560px;margin:36px auto 0;border:1px solid var(--line);border-radius:18px;padding:22px 26px;background:var(--card);text-align:center}
-html[data-landing="1"] .owner-spark-path p{color:var(--ink-dim);font-size:14px;line-height:1.55;margin:0 0 14px}
+  background-color:var(--bg-2);
+  border:1px solid transparent;box-shadow:var(--shadow-gold);backdrop-filter:blur(14px);color:var(--ink)}
+html[data-landing="1"] .acc-pricing-kicker{font-weight:700;font-size:12px;letter-spacing:.3em;text-transform:uppercase;color:var(--gold);-webkit-text-fill-color:var(--gold);margin-bottom:10px}
+html[data-landing="1"] .acc-pricing-lede{color:var(--ink);-webkit-text-fill-color:var(--ink);font-size:14px;line-height:1.55;margin:0 0 18px}
+html[data-landing="1"] .owner-spark-path{max-width:560px;margin:36px auto 0;border:1px solid var(--line);border-radius:18px;padding:22px 26px;background-color:var(--bg-2);background-image:linear-gradient(var(--card),var(--card));text-align:center}
+html[data-landing="1"] .owner-spark-path p{color:var(--ink);-webkit-text-fill-color:var(--ink);font-size:14px;line-height:1.55;margin:0 0 14px}
 html[data-landing="1"] .owner-spark-path .btn{margin:0 auto}
 
-html[data-landing="1"] .firm-bands-toggle{display:flex;gap:8px;margin:0 0 14px}
-html[data-landing="1"] .firm-bands-toggle button{height:34px;padding:0 14px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--ink);font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;cursor:pointer}
-html[data-landing="1"] .firm-bands-toggle button.on{background-color:var(--gold);color:#1b1300;border-color:var(--gold)}
-html[data-landing="1"] .firm-bands-note{color:var(--ink-dim);font-size:13px;line-height:1.5;margin:0 0 16px}
-html[data-landing="1"] .firm-bands-table-wrap{overflow-x:auto}
-html[data-landing="1"] .firm-bands-table{width:100%;border-collapse:collapse;font-size:14px}
-html[data-landing="1"] .firm-bands-table th{text-align:left;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-dim);padding:8px 10px;border-bottom:1px solid var(--line)}
-html[data-landing="1"] .firm-bands-table td{padding:12px 10px;border-bottom:1px solid var(--line);color:var(--ink);vertical-align:middle}
-html[data-landing="1"] .firm-bands-table .btn{margin:0;height:34px;padding:0 14px;font-size:11px;white-space:nowrap}
+html[data-landing="1"] .firm-bands-toggle{display:inline-flex;gap:4px;margin:0 0 16px;padding:4px;border-radius:999px;border:1px solid var(--line);background-color:var(--bg);flex-wrap:wrap}
+html[data-landing="1"] .firm-bands-toggle button{height:32px;padding:0 14px;border-radius:999px;border:0;background:transparent;color:var(--ink);-webkit-text-fill-color:var(--ink);font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;font-family:inherit}
+html[data-landing="1"] .firm-bands-toggle button.on{background-color:var(--gold);color:#1b1300;-webkit-text-fill-color:#1b1300}
+html[data-landing="1"] .firm-bands-toggle button:focus-visible{outline:2px solid var(--gold-bright);outline-offset:2px}
+html[data-landing="1"] .firm-bands-note{color:var(--ink);-webkit-text-fill-color:var(--ink);font-size:13px;line-height:1.55;margin:0 0 16px}
+html[data-landing="1"] .firm-bands-table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:14px;border:1px solid var(--line);background-color:var(--bg-2);box-shadow:inset 0 1px 0 rgba(255,255,255,.04)}
+html[data-landing="1"] .firm-bands-table{width:100%;min-width:620px;border-collapse:collapse;font-size:14px;color:var(--ink);-webkit-text-fill-color:var(--ink)}
+html[data-landing="1"] .firm-bands-table th{text-align:left;font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--ink);-webkit-text-fill-color:var(--ink);padding:12px 16px;border-bottom:1px solid var(--line);background-color:color-mix(in srgb,var(--gold) 12%,var(--bg-2))}
+html[data-landing="1"] .firm-bands-table td{padding:14px 16px;border-bottom:1px solid var(--line-soft);color:var(--ink);-webkit-text-fill-color:var(--ink);vertical-align:middle;background-color:var(--bg-2)}
+html[data-landing="1"] .firm-bands-table tbody tr:nth-child(even) td{background-color:color-mix(in srgb,var(--ink) 4%,var(--bg-2))}
+html[data-landing="1"] .firm-bands-table tbody tr.is-starter td{background-color:color-mix(in srgb,var(--gold) 10%,var(--bg-2))}
+html[data-landing="1"] .firm-bands-table tbody tr:hover td{background-color:color-mix(in srgb,var(--gold) 14%,var(--bg-2))}
+html[data-landing="1"] .firm-bands-table tbody tr:last-child td{border-bottom:0}
+html[data-landing="1"] .firm-bands-table .firm-bands-name strong{font-weight:700;letter-spacing:.02em;color:var(--ink);-webkit-text-fill-color:var(--ink)}
+html[data-landing="1"] .firm-bands-table .firm-bands-limit{font-weight:500}
+html[data-landing="1"] .firm-bands-table .firm-bands-price{font-weight:800;font-size:15.5px;font-variant-numeric:tabular-nums;letter-spacing:-.01em;white-space:nowrap}
+html[data-landing="1"] .firm-bands-table th:last-child,html[data-landing="1"] .firm-bands-table .firm-bands-cta{text-align:right}
+html[data-landing="1"] .firm-bands-table .btn{margin:0;height:34px;padding:0 14px;font-size:11px;font-weight:700;letter-spacing:.08em;white-space:nowrap}
+html[data-landing="1"] .firm-bands-table .btn-gold{color:#1b1300;-webkit-text-fill-color:#1b1300;background-color:var(--gold)}
+html[data-landing="1"] .firm-bands-table .btn-ghost{color:var(--ink);-webkit-text-fill-color:var(--ink);background-color:transparent;border:1px solid var(--line)}
+html[data-landing="1"] .firm-bands-table .btn-ghost:hover{border-color:var(--gold);color:var(--gold);-webkit-text-fill-color:var(--gold)}
+html[data-landing="1"] .firm-bands-compact .firm-bands-table th,html[data-landing="1"] .firm-bands-compact .firm-bands-table td{padding:10px 12px}
+html[data-landing="1"] .firm-bands-compact .firm-bands-price{font-size:14px}
 html[data-landing="1"] .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+@media(max-width:760px){
+  html[data-landing="1"] .acc-pricing{padding:24px 18px;border-radius:18px}
+}
 html[data-landing="1"] .price-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-top:54px}
 html[data-landing="1"] .price-card{border:1px solid var(--line);border-radius:26px;padding:42px 34px;background:var(--card);position:relative;transition:transform .4s var(--ease),box-shadow .4s,border-color .4s;display:flex;flex-direction:column}
 html[data-landing="1"] .price-card:hover{transform:translateY(-8px);border-color:var(--gold);box-shadow:var(--shadow-gold)}
