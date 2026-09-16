@@ -25,6 +25,13 @@ import {
   firmIntegrationIdentifier,
   resolveFirmCatalogPrice,
 } from "@/lib/stripe-checkout.core";
+import {
+  customerHasEntitlingSubscription,
+  decideFirmBillingEntitlement,
+  emailHasEntitlingSubscription,
+  findCustomerIdByEmail as findStripeCustomerIdByEmail,
+  type FirmBillingEntitlement,
+} from "@/lib/stripe-entitlement";
 
 function appOrigin(): string {
   const fromEnv = (process.env.SITE_URL || process.env.VITE_APP_URL || "")
@@ -38,14 +45,23 @@ function appOrigin(): string {
   }
 }
 
-async function checkoutActor(context: unknown): Promise<{ userId: string; email: string }> {
-  const ctx = context as AuthCtx & {
-    supabase?: {
-      auth: {
-        getUser: () => Promise<{ data: { user: { email?: string | null } | null } }>;
+type BillingAuthCtx = AuthCtx & {
+  supabase?: {
+    auth: {
+      getUser: () => Promise<{ data: { user: { email?: string | null } | null } }>;
+    };
+    from: (table: string) => {
+      select: (columns: string) => {
+        eq: (column: string, value: string) => {
+          limit: (n: number) => Promise<{ data: Array<{ id?: string }> | null }>;
+        };
       };
     };
   };
+};
+
+async function checkoutActor(context: unknown): Promise<{ userId: string; email: string }> {
+  const ctx = context as BillingAuthCtx;
   const userId = ctx.userId;
   let email = (ctx.claims?.email ?? "").trim();
   if (!email && ctx.supabase) {
@@ -56,18 +72,90 @@ async function checkoutActor(context: unknown): Promise<{ userId: string; email:
 }
 
 async function findCustomerIdByEmail(email: string): Promise<string | undefined> {
-  if (!email) return undefined;
-  const listed = await getStripe().customers.list({ email, limit: 1 });
-  return listed.data[0]?.id;
+  return findStripeCustomerIdByEmail(getStripe(), email);
 }
 
 async function customerHasActiveSubscription(customerId: string): Promise<boolean> {
-  const listed = await getStripe().subscriptions.list({
-    customer: customerId,
-    status: "active",
-    limit: 1,
-  });
-  return listed.data.length > 0;
+  return customerHasEntitlingSubscription(getStripe(), customerId);
+}
+
+const ENTITLEMENT_CACHE_TTL_MS = 45_000;
+const entitlementCache = new Map<string, { value: FirmBillingEntitlement; at: number }>();
+
+function cachedEntitlement(email: string): FirmBillingEntitlement | undefined {
+  const key = email.trim().toLowerCase();
+  if (!key) return undefined;
+  const hit = entitlementCache.get(key);
+  if (!hit) return undefined;
+  if (Date.now() - hit.at > ENTITLEMENT_CACHE_TTL_MS) {
+    entitlementCache.delete(key);
+    return undefined;
+  }
+  return hit.value;
+}
+
+function rememberEntitlement(email: string, value: FirmBillingEntitlement): void {
+  const key = email.trim().toLowerCase();
+  if (!key) return;
+  if (!value.entitled) {
+    entitlementCache.delete(key);
+    return;
+  }
+  entitlementCache.set(key, { value, at: Date.now() });
+}
+
+async function countOwnedFirms(
+  supabase: BillingAuthCtx["supabase"],
+  userId: string,
+): Promise<number> {
+  if (!supabase) return 0;
+  const { data } = await supabase.from("firms").select("id").eq("owner_user_id", userId).limit(1);
+  return data?.length ?? 0;
+}
+
+async function countFirmMemberships(
+  supabase: BillingAuthCtx["supabase"],
+  userId: string,
+): Promise<number> {
+  if (!supabase) return 0;
+  const { data } = await supabase.from("firm_memberships").select("id").eq("user_id", userId).limit(1);
+  return data?.length ?? 0;
+}
+
+async function resolveFirmBillingEntitlement(
+  context: unknown,
+  refresh: boolean,
+): Promise<FirmBillingEntitlement> {
+  if (!stripeConfigured()) {
+    return { entitled: true, reason: "stripe_unconfigured" };
+  }
+  const ctx = context as BillingAuthCtx;
+  const { userId, email } = await checkoutActor(ctx);
+  if (!refresh) {
+    const cached = cachedEntitlement(email);
+    if (cached) return cached;
+  }
+  try {
+    const [hasEntitlingSubscription, owned, memberships] = await Promise.all([
+      emailHasEntitlingSubscription(getStripe(), email),
+      countOwnedFirms(ctx.supabase, userId),
+      countFirmMemberships(ctx.supabase, userId),
+    ]);
+    const result = decideFirmBillingEntitlement({
+      stripeConfigured: true,
+      hasEntitlingSubscription,
+      ownsFirm: owned > 0,
+      isFirmMember: memberships > 0,
+    });
+    rememberEntitlement(email, result);
+    return result;
+  } catch (err) {
+    console.warn(
+      "[stripe-entitlement] live check failed",
+      err instanceof Error ? err.message : err,
+    );
+    return { entitled: false, reason: "stripe_error" };
+  }
 }
 
 async function resolveFoundingPromotionCodeId(promo?: string | null): Promise<string | undefined> {
@@ -209,4 +297,14 @@ export const getCheckoutSessionStatus = createServerFn({ method: "POST" })
       status: session.status,
       paymentStatus: session.payment_status,
     };
+  });
+
+/** Live Stripe entitlement for the accountant firm shell. */
+export const getFirmBillingEntitlement = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) =>
+    z.object({ refresh: z.boolean().optional() }).parse(input ?? {}),
+  )
+  .handler(async ({ data, context }) => {
+    return resolveFirmBillingEntitlement(context, Boolean(data?.refresh));
   });

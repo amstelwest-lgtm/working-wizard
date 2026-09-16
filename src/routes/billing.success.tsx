@@ -1,7 +1,11 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { getCheckoutSessionStatus } from "@/lib/stripe-checkout.functions";
+import {
+  getCheckoutSessionStatus,
+  getFirmBillingEntitlement,
+} from "@/lib/stripe-checkout.functions";
+import { checkoutSessionUnlocksFirm } from "@/lib/stripe-entitlement";
 
 export const Route = createFileRoute("/billing/success")({
   validateSearch: (search: Record<string, unknown>): { session_id?: string } => {
@@ -23,11 +27,15 @@ export const Route = createFileRoute("/billing/success")({
 function BillingSuccessPage() {
   const { session_id: sessionId } = Route.useSearch();
   const loadStatus = useServerFn(getCheckoutSessionStatus);
+  const refreshEntitlement = useServerFn(getFirmBillingEntitlement);
   const [label, setLabel] = useState("Checking Stripe…");
+  const [unlocked, setUnlocked] = useState(false);
 
   useEffect(() => {
     if (!sessionId) {
       setLabel("Checkout finished. Open Stripe Dashboard if you need the receipt.");
+      setUnlocked(true);
+      void refreshEntitlement({ data: { refresh: true } }).catch(() => undefined);
       return;
     }
     let cancelled = false;
@@ -36,12 +44,15 @@ function BillingSuccessPage() {
         if (cancelled) return;
         if (!result.ok) {
           setLabel("Checkout finished. Stripe status is not available on this deploy.");
+          setUnlocked(true);
           return;
         }
-        if (result.paymentStatus === "paid" || result.status === "complete") {
+        if (checkoutSessionUnlocksFirm(result)) {
           setLabel(
-            "Stripe confirmed your payment. Your firm subscription is active. Watchlist clients stay free. Owner Spark remains free.",
+            "Stripe confirmed your firm subscription is active (Starter $0 counts once Checkout completes). Watchlist clients stay free. Owner Spark remains free.",
           );
+          setUnlocked(true);
+          void refreshEntitlement({ data: { refresh: true } }).catch(() => undefined);
           return;
         }
         setLabel(`Stripe session status: ${result.status ?? "unknown"}.`);
@@ -54,7 +65,7 @@ function BillingSuccessPage() {
     return () => {
       cancelled = true;
     };
-  }, [sessionId, loadStatus]);
+  }, [sessionId, loadStatus, refreshEntitlement]);
 
   return (
     <div className="grid min-h-screen place-items-center bg-[#0b1220] px-4 text-slate-200">
@@ -65,10 +76,10 @@ function BillingSuccessPage() {
         <h1 className="mt-2 text-xl font-semibold">Payment received</h1>
         <p className="mt-2 text-sm text-slate-400">{label}</p>
         <Link
-          to="/app"
+          to="/dashboard"
           className="mt-5 inline-flex h-10 items-center rounded-full bg-amber-400 px-4 text-xs font-bold uppercase tracking-wider text-[#1b1300]"
         >
-          Open your workspace
+          {unlocked ? "Open your practice" : "Open your workspace"}
         </Link>
       </div>
     </div>

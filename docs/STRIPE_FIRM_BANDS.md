@@ -92,3 +92,24 @@ Confirmation emails and Google return use the allowlisted
 
 After account creation (or sign-in), `/billing/start` creates the Checkout
 session (or a Portal session if a subscription already exists).
+
+## Accountant product gate
+
+Failed or skipped Checkout must not leave a firm with an open accountant
+workspace. Auth account creation can still happen before Checkout; after login,
+**firm product UI requires an entitling Stripe subscription**.
+
+- **Gated:** `/dashboard`, `/clients/*`, `/reports*`, `/settings/team`,
+  `/settings/brand` for accountant / firm **owners**.
+- **Entitled when:** Stripe customer for the signed-in email has a subscription
+  with status `active` or `trialing`. Starter $0 counts once Checkout completes
+  successfully (`complete` / `paid` / `no_payment_required`).
+- **Not gated:** Owner Spark (`/app`), owner invite-accept, public/marketing,
+  `/auth/callback` mid-checkout, `/billing/*` (start, success, cancel, required),
+  Customer Portal start, shared `/settings` (so billing can be completed),
+  `/ops`, invited firm **staff** who are members but not the firm owner.
+- Live check: `customers.list` by email + `subscriptions.list` (same helpers as
+  Checkout). Brief in-memory cache of **positive** results only. No local
+  entitlement table until a webhook writes one.
+- Unpaid owners land on `/billing/required` (“Finish firm billing to open your
+  practice”) and can resume Checkout (pending band, default Starter monthly).

@@ -72,6 +72,7 @@
     "test:edge-no-smoke-stubs": "vite-node --config scripts/vite-test.config.ts scripts/edge-no-smoke-stubs-test.mts",
     "test:stripe-plans": "vite-node --config scripts/vite-test.config.ts scripts/stripe-plans-test.mts",
     "test:stripe-checkout": "vite-node --config scripts/vite-test.config.ts scripts/stripe-checkout-test.mts",
+    "test:firm-billing-gate": "vite-node --config scripts/vite-test.config.ts scripts/firm-billing-gate-test.mts",
     "test:ratio-briefing": "vite-node --config scripts/vite-test.config.ts scripts/ratio-briefing-test.mts",
     "test:ratio-queries": "vite-node --config scripts/vite-test.config.ts scripts/ratio-queries-test.mts",
     "test:seo-foundation": "vite-node --config scripts/vite-test.config.ts scripts/seo-foundation-test.mts",
