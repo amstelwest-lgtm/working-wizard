@@ -222,7 +222,8 @@ assert(landing.includes("checkoutEmailRedirectTo"), "signup confirmation uses th
 assert(landing.includes("register-error"), "register errors render in the form, not only as a toast");
 assert(!landing.includes("${window.location.origin}${billingStartPath"), "signup does not emailRedirectTo /billing/start");
 const heroCta = landing.slice(landing.indexOf("hero-cta"), landing.indexOf("dash-stage"));
-assert(heroCta.includes("create a firm account"), "hero secondary is firm signup");
+assert(heroCta.includes("see MILŌN for my clients"), "hero secondary is the accountant path");
+assert(heroCta.includes("goToFirmSignup"), "hero secondary still routes to firm signup");
 assert(!heroCta.includes("__mq_start"), "hero secondary does not launch the quiz");
 
 const landingCss = readFileSync(resolve("src/styles/landing.css"), "utf8");

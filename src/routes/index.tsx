@@ -2059,23 +2059,25 @@ function LandingPage() {
           <div>
             <span className="hero-badge h-anim d1">
               <span className="pulse" />
-              The AI-powered finance function
+              MILŌN.
             </span>
             <h1 className="h-anim d2">
-              Give every business
+              A full finance function
               <br />
               <span className="gold-text" style={{ whiteSpace: "nowrap" }}>
-                a finance function.
+                in your pocket.
               </span>
             </h1>
             <p className="hero-lede h-anim d3">
-              MILŌN is the AI-powered finance function accountants can run for their clients.
+              MILŌN gives accountants an AI-powered finance function to run for their clients —
+              turning financial statements into a financial health tool that diagnoses the
+              business, cash forecasts, profitability waterfalls, a full-year budget, strategic
+              recommendations, and tracked employee actions, all in one shared workspace.
             </p>
             <p className="sub h-anim d3">
-              It turns financial statements into financial intelligence — showing business health,
-              cash, problems, recommended actions, and progress in one shared workspace. AI
-              prepares the analysis. The accountant reviews and signs off. The owner gets a clear
-              view of their business finances, wherever they are.
+              AI powers MILŌN&apos;s financial intelligence brain. Your accountant reviews and
+              signs off on the entire function. You see what matters, what comes next, and what
+              needs to get done.
             </p>
             <div className="hero-cta h-anim d4">
               <a className="btn btn-gold" href="#persona">
@@ -2086,7 +2088,7 @@ function LandingPage() {
                 className="btn btn-ghost"
                 onClick={() => goToFirmSignup({ scrollTo: "register" })}
               >
-                I&apos;m an accountant — create a firm account
+                I&apos;m an accountant — see MILŌN for my clients
               </button>
             </div>
           </div>

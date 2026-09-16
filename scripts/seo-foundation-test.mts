@@ -135,7 +135,9 @@ assert(
 );
 assert(landing.includes('id="bridge"'), "landing keeps the dual-audience bridge");
 assert(!landing.includes('id="features"'), "landing drops the duplicate features block");
-assert(landing.includes("Give every business"), "hero is the finance-function promise");
+assert(landing.includes("A full finance function"), "hero is the finance-function promise");
+assert(landing.includes("in your pocket."), "hero pocket line is present");
+assert(!landing.includes("Give every business"), "old give-every-business hero is gone");
 assert(landing.includes("Create firm account"), "home has a firm signup CTA");
 assert(landing.includes("USD bands by client count"), "home pricing leads with firm bands");
 assert(!landing.includes("Start free. <span className=\"gold-text\">Scale when it pays for itself."), "home pricing no longer leads with the owner Start-free story");
