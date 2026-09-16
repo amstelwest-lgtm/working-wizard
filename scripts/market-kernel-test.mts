@@ -258,7 +258,7 @@ assert(visitorCopyPack({ country: "ZA" }) === "za", "ZA visitor copy pack");
 assert(visitorCopyPack({ country: null }) === "us", "unset visitor defaults US");
 assert(LIST_PRICES.us.orbit.startsWith("$"), "US Orbit is dollars");
 assert(LIST_PRICES.za.orbit.startsWith("R"), "ZA Orbit is rand");
-assert(LIST_PRICES.us.firm150.startsWith("$"), "US firm price is dollars");
+assert(LIST_PRICES.us.firmSolo.startsWith("$"), "US firm price is dollars");
 assert(t("nameExample", tx) === "Jordan Hale", "US name example");
 assert(t("nameExample", ZA_MARKET) === "Thabo Nkosi", "ZA name example");
 assert(t("entityExample", tx) === "Acme LLC", "US entity example");

@@ -52,7 +52,7 @@ Properties listed are the **maximum** we should store. All optional unless noted
 |---|---|---|---|
 | `landing.viewed` | client | `{ path, referrer_host }` | Anonymous RPC or skip until we have a public ingest that cannot be spammed. **Open:** worth it? |
 | `pricing.viewed` | client | `{ persona: accountant\|owner }` | Only if `show_pricing`. |
-| `pricing.checkout.clicked` | client | `{ plan: orbit\|constellation, market: za\|us }` | Paid CTA. Completing Checkout is the money event. |
+| `pricing.checkout.clicked` | client | `{ plan: starter\|solo\|…, interval: month\|year, market: za\|us }` | Firm-band CTA. Completing Checkout is the money event. |
 | `landing.quiz.completed` | client | `{ persona }` **no answers** unless you approve storing them | Open question 6. |
 | `lighthouse.trial.clicked` | server | `{ is_bot? }` | Already written on `milon_ops_leads`. Re-emit to spine only with bot flag. Prefetch-vulnerable. |
 | `lighthouse.trial.signed_up` | server | `{ persona }` | From signup that carried `lh` token. |

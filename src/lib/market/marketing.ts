@@ -7,20 +7,32 @@ import { MARKET_STORAGE_KEY, type DraftMarket } from "./types";
 
 export type VisitorCopyPack = "za" | "us";
 
-/** Published list prices. Spark is free; Orbit and Constellation are billed monthly. */
+/** Published list prices. Owner Spark is free. Firm bands are USD catalog amounts. */
 export const LIST_PRICES = {
   za: {
     orbit: "R699",
     constellation: "R1 299",
-    firm150: "R4 500",
-    firmUnlimited: "R7 200",
+    firmStarter: "Free",
+    firmSolo: "$99",
+    firmSmall: "$149",
+    firmGrowing: "$249",
+    firmEstablished: "$349",
+    firmLarger: "$499",
+    firmAdvanced: "$649",
+    firmScale: "$999",
     retainerUplift: "R1 200+",
   },
   us: {
     orbit: "$39",
     constellation: "$75",
-    firm150: "$249",
-    firmUnlimited: "$399",
+    firmStarter: "Free",
+    firmSolo: "$99",
+    firmSmall: "$149",
+    firmGrowing: "$249",
+    firmEstablished: "$349",
+    firmLarger: "$499",
+    firmAdvanced: "$649",
+    firmScale: "$999",
     retainerUplift: "$70+",
   },
 } as const;

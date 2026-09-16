@@ -10,6 +10,7 @@ import { previewOwnerInvite } from "@/lib/invite-tokens.functions";
 import { OPS_UNLOCK_KEY, unlockOwnerOps } from "@/lib/owner-ops.functions";
 import { registerLighthouseTrialVisit } from "@/lib/lighthouse.functions";
 import { AuthDivider, GoogleSignInButton } from "@/components/google-sign-in-button";
+import { FirmBandPricingTable } from "@/components/firm-band-pricing";
 import { MarketPicker } from "@/components/market-picker";
 import { RegionCopy } from "@/components/marketing-shell";
 import {
@@ -31,6 +32,7 @@ import landingCss from "../styles/landing.css?inline";
 import { peekPendingOwnerInvite, pendingInviteTokenFromSearch } from "@/lib/invite-handoff";
 import {
   billingStartPath,
+  billingStartSearch,
   checkoutEmailRedirectTo,
   clearPendingCheckout,
   paidPlanFromRegisterLabel,
@@ -39,6 +41,10 @@ import {
   registerLabelForPlan,
   stashPendingCheckout,
 } from "@/lib/pending-checkout";
+import {
+  type FirmCheckoutBand,
+  type FirmInterval,
+} from "@/lib/stripe-plans";
 import { HOMEPAGE_FAQ_ITEMS } from "@/lib/marketing-faq";
 import { faqPageJson, pageHead, SEO_PAGES } from "@/lib/seo";
 import { OwnerInviteShell } from "@/components/owner-invite-shell";
@@ -234,6 +240,7 @@ function LandingPage() {
   const [regPassword, setRegPassword] = useState("");
   const [regBusiness, setRegBusiness] = useState("");
   const [regPlan, setRegPlan] = useState("Spark — Free early access");
+  const [firmInterval, setFirmInterval] = useState<FirmInterval>("month");
   const [regBusy, setRegBusy] = useState(false);
   const [regError, setRegError] = useState("");
   const [regDone, setRegDone] = useState(false);
@@ -331,7 +338,7 @@ function LandingPage() {
         if (!cancelled) {
           navigate({
             to: "/billing/start",
-            search: { plan: pendingCheckout.plan, market: pendingCheckout.market },
+            search: billingStartSearch(pendingCheckout),
             replace: true,
           });
         }
@@ -896,7 +903,7 @@ function LandingPage() {
         stashPendingCheckout(pendingCheckout);
         void navigate({
           to: "/billing/start",
-          search: { plan: pendingCheckout.plan, market: pendingCheckout.market },
+          search: billingStartSearch(pendingCheckout),
           replace: true,
         });
         return;
@@ -1176,7 +1183,7 @@ function LandingPage() {
         if (pendingCheckout) {
           navigate({
             to: "/billing/start",
-            search: { plan: pendingCheckout.plan, market: pendingCheckout.market },
+            search: billingStartSearch(pendingCheckout),
           });
           return;
         }
@@ -1191,16 +1198,17 @@ function LandingPage() {
     }
   };
 
-  const startPaidPlan = (plan: "orbit" | "constellation") => {
+  const startFirmPlan = (plan: FirmCheckoutBand, interval: FirmInterval = "month") => {
     const market = visitorCopyPack(draftMarket);
-    stashPendingCheckout({ plan, market });
+    const pending = { plan, interval, market };
+    stashPendingCheckout(pending);
     setRegPlan(registerLabelForPlan(plan));
     if (user) {
-      void navigate({ to: "/billing/start", search: { plan, market } });
+      void navigate({ to: "/billing/start", search: billingStartSearch(pending) });
       return;
     }
-    toast.message(`Create your account or sign in to start ${registerLabelForPlan(plan)}.`);
-    document.getElementById("register")?.scrollIntoView({ behavior: "smooth" });
+    toast.message(`Create your firm account to start ${registerLabelForPlan(plan)}.`);
+    void navigate({ to: "/auth" });
   };
 
   const activeInviteToken =
@@ -2542,8 +2550,8 @@ function LandingPage() {
               Start free. <span className="gold-text">Scale when it pays for itself.</span>
             </h2>
             <p className="sub">
-              Every plan includes the core health score and cashflow forecast. Upgrade when you're
-              ready for the full constellation.
+              Firms pay a flat USD band by active client count. Owner Spark stays free. Watchlist
+              clients are free and never billed.
             </p>
           </div>
 
@@ -2563,39 +2571,14 @@ function LandingPage() {
             </div>
             <p style={{ color: "var(--ink-dim)", fontSize: 14, marginBottom: 18 }}>
               White-label the whole platform. Charge your clients a monthly advisory retainer. MILŌN
-              is your engine.
+              is your engine. Billed in USD (Solo from {LIST_PRICES.us.firmSolo}/mo); South African
+              firms can pay ZAR at Checkout.
             </p>
-            <ul style={{ listStyle: "none", display: "flex", flexDirection: "column", gap: 10 }}>
-              <li style={{ display: "flex", gap: 10, fontSize: 14, color: "var(--ink-dim)" }}>
-                <span style={{ color: "var(--gold)" }}>✦</span>Up to 150 clients — planned{" "}
-                <RegionCopy pack={copyMarket.copyPack}
-                  za={`${LIST_PRICES.za.firm150}/mo`}
-                  us={`${LIST_PRICES.us.firm150}/mo`}
-                />{" "}
-                (not billed yet)
-              </li>
-              <li style={{ display: "flex", gap: 10, fontSize: 14, color: "var(--ink-dim)" }}>
-                <span style={{ color: "var(--gold)" }}>✦</span>Unlimited clients — planned{" "}
-                <RegionCopy pack={copyMarket.copyPack}
-                  za={`${LIST_PRICES.za.firmUnlimited}/mo`}
-                  us={`${LIST_PRICES.us.firmUnlimited}/mo`}
-                />{" "}
-                (not billed yet)
-              </li>
-              <li style={{ display: "flex", gap: 10, fontSize: 14, color: "var(--ink-dim)" }}>
-                <span style={{ color: "var(--gold)" }}>✦</span>White-label onboarding support
-                included
-              </li>
-              <li style={{ display: "flex", gap: 10, fontSize: 14, color: "var(--ink-dim)" }}>
-                <span style={{ color: "var(--gold)" }}>✦</span>Your branding on every report and
-                portal
-              </li>
-            </ul>
-            <div style={{ marginTop: 22 }}>
-              <a className="btn btn-gold" href="/auth">
-                Set up your firm account →
-              </a>
-            </div>
+            <FirmBandPricingTable
+              interval={firmInterval}
+              onIntervalChange={setFirmInterval}
+              onSelectBand={startFirmPlan}
+            />
           </div>
 
           <div className="price-grid stagger">
@@ -2624,69 +2607,31 @@ function LandingPage() {
 
             <div className="price-card">
               <h3>Orbit</h3>
-              <div className="amount">
-                <RegionCopy pack={copyMarket.copyPack}
-                  za={
-                    <>
-                      {LIST_PRICES.za.orbit}
-                      <small>/mo</small>
-                    </>
-                  }
-                  us={
-                    <>
-                      {LIST_PRICES.us.orbit}
-                      <small>/mo</small>
-                    </>
-                  }
-                />
-              </div>
-              <div className="per">Billed monthly through Stripe</div>
+              <div className="amount">Via your firm</div>
+              <div className="per">Paid by the accounting firm, not the owner</div>
               <ul>
                 <li>Live 13-week cashflow forecast</li>
                 <li>Full ratio set + playbook</li>
                 <li>Accountant advisory notes</li>
                 <li>Monthly comparison report</li>
               </ul>
-              <button
-                className="btn btn-ghost"
-                type="button"
-                onClick={() => startPaidPlan("orbit")}
-              >
-                Start Orbit
-              </button>
+              <a className="btn btn-ghost" href="/for-accountants">
+                See firm bands
+              </a>
             </div>
 
             <div className="price-card">
               <h3>Constellation</h3>
-              <div className="amount">
-                <RegionCopy pack={copyMarket.copyPack}
-                  za={
-                    <>
-                      {LIST_PRICES.za.constellation}
-                      <small>/mo</small>
-                    </>
-                  }
-                  us={
-                    <>
-                      {LIST_PRICES.us.constellation}
-                      <small>/mo</small>
-                    </>
-                  }
-                />
-              </div>
-              <div className="per">Billed monthly through Stripe</div>
+              <div className="amount">Via your firm</div>
+              <div className="per">Paid by the accounting firm, not the owner</div>
               <ul>
-                <li>Everything planned for Orbit</li>
+                <li>Everything in Orbit</li>
                 <li>AI advisory draft</li>
                 <li>Industry digest + priority support</li>
               </ul>
-              <button
-                className="btn btn-ghost"
-                type="button"
-                onClick={() => startPaidPlan("constellation")}
-              >
-                Start Constellation
-              </button>
+              <a className="btn btn-ghost" href="/for-accountants">
+                See firm bands
+              </a>
             </div>
           </div>
         </div>
@@ -3026,6 +2971,7 @@ function LandingPage() {
                             if (paid) {
                               stashPendingCheckout({
                                 plan: paid,
+                                interval: "month",
                                 market: visitorCopyPack(draftMarket),
                               });
                             } else {
@@ -3036,8 +2982,6 @@ function LandingPage() {
                           <option value="Spark — Free early access">
                             Spark — Free early access
                           </option>
-                          <option value="Orbit">Orbit</option>
-                          <option value="Constellation">Constellation</option>
                         </select>
 
                         <button
@@ -3061,8 +3005,9 @@ function LandingPage() {
                             lineHeight: 1.5,
                           }}
                         >
-                          Spark is free and does not ask for a card. Orbit and Constellation start
-                          Stripe Checkout after you create an account. By creating an
+                          Spark is free and does not ask for a card. Accounting firms subscribe on
+                          USD client-count bands through Stripe Checkout after creating a firm
+                          account. By creating an
                           account you agree to the{" "}
                           <a href="/terms" style={{ color: "inherit" }}>
                             Terms

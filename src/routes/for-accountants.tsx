@@ -1,6 +1,10 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { MarketCopy, MarketingShell } from "@/components/marketing-shell";
-import { LIST_PRICES, VISITOR_MARKET_BOOT_SCRIPT } from "@/lib/market";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useState } from "react";
+import { MarketingShell } from "@/components/marketing-shell";
+import { FirmBandPricingTable } from "@/components/firm-band-pricing";
+import { VISITOR_MARKET_BOOT_SCRIPT, visitorCopyPack, readVisitorDraft } from "@/lib/market";
+import { stashPendingCheckout } from "@/lib/pending-checkout";
+import { type FirmCheckoutBand, type FirmInterval } from "@/lib/stripe-plans";
 import { pageHead, SEO_PAGES } from "@/lib/seo";
 import marketingCss from "../styles/marketing.css?inline";
 
@@ -14,6 +18,15 @@ export const Route = createFileRoute("/for-accountants")({
 });
 
 function ForAccountantsPage() {
+  const navigate = useNavigate();
+  const [interval, setInterval] = useState<FirmInterval>("month");
+
+  const startBand = (plan: FirmCheckoutBand, nextInterval: FirmInterval) => {
+    const market = visitorCopyPack(readVisitorDraft());
+    stashPendingCheckout({ plan, interval: nextInterval, market });
+    void navigate({ to: "/auth" });
+  };
+
   return (
     <MarketingShell
       eyebrow="For accounting and advisory practices"
@@ -133,23 +146,26 @@ function ForAccountantsPage() {
       </ol>
 
       <h2>Pricing for firms</h2>
+      <p>
+        Flat USD monthly or annual bands by active client count. Watchlist clients are free and are
+        not billed. South African firms can pay ZAR at Checkout via Adaptive Pricing — we do not
+        publish a separate rand catalog.
+      </p>
+      <FirmBandPricingTable
+        interval={interval}
+        onIntervalChange={setInterval}
+        onSelectBand={startBand}
+      />
       <ul className="mk-list">
         <li>
-          <strong>Up to 150 clients</strong> — planned at{" "}
-          <MarketCopy za={`${LIST_PRICES.za.firm150}`} us={`${LIST_PRICES.us.firm150}`} /> per
-          month, not billed yet.
+          <strong>Starter</strong> is free (up to 3 active clients) so every firm has a
+          subscription from day one.
         </li>
         <li>
-          <strong>Unlimited clients</strong> — planned at{" "}
-          <MarketCopy
-            za={`${LIST_PRICES.za.firmUnlimited}`}
-            us={`${LIST_PRICES.us.firmUnlimited}`}
-          />{" "}
-          per month, not billed yet.
+          <strong>FOUNDING</strong> is 50% off monthly only and does not stack with annual billing.
         </li>
         <li>
-          <strong>Early access is free</strong> while we build with our first practices, and
-          white-label onboarding support is included.
+          White-label onboarding support is included. Your branding on every report and portal.
         </li>
       </ul>
 

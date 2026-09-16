@@ -2,10 +2,11 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { Users, Building2, LogOut, Palette, RotateCcw, Scale, Trash2, User } from "lucide-react";
+import { Users, Building2, LogOut, Palette, RotateCcw, Scale, Trash2, User, CreditCard } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { deleteOwnAccount } from "@/lib/account.functions";
+import { createBillingPortalSession } from "@/lib/stripe-checkout.functions";
 import { resetOnboardingTours } from "@/lib/onboarding";
 import { BackLink } from "@/components/back-link";
 import { Button } from "@/components/ui/button";
@@ -51,6 +52,7 @@ function SettingsPage() {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const doDelete = useServerFn(deleteOwnAccount);
+  const startBillingPortal = useServerFn(createBillingPortalSession);
   const { firmId } = useAccountantProfile();
 
   const [view, setView] = useState<SettingsView>("owner");
@@ -281,6 +283,24 @@ function SettingsPage() {
               <Building2 className="h-4 w-4" />
               Firm dashboard & clients
             </Link>
+            <button
+              type="button"
+              className="settings-row"
+              onClick={() => {
+                void startBillingPortal()
+                  .then(({ url }) => {
+                    window.location.href = url;
+                  })
+                  .catch((ex: unknown) => {
+                    toast.error(
+                      ex instanceof Error ? ex.message : "Could not open Stripe billing portal.",
+                    );
+                  });
+              }}
+            >
+              <CreditCard className="h-4 w-4" />
+              Manage billing
+            </button>
           </div>
         </SectionCard>
       )}

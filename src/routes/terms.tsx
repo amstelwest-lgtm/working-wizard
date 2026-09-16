@@ -55,14 +55,13 @@ function TermsPage() {
         file returns with the IRS or a state department of revenue.
       </p>
       <p>
-        Spark is free during early access and does not ask for a card. Orbit and Constellation are
-        billed monthly through Stripe Checkout. Firm seats are published but not billed yet.
+        Spark is free during early access and does not ask for a card. Accounting firms subscribe
+        on USD client-count bands through Stripe Checkout. Owner Spark stays free.
       </p>
       <p className="mk-copy-us">
-        US list prices: Orbit {LIST_PRICES.us.orbit}/mo, Constellation{" "}
-        {LIST_PRICES.us.constellation}/mo, billed through Stripe Checkout. Firm seats{" "}
-        {LIST_PRICES.us.firm150}/mo up to 150 clients, {LIST_PRICES.us.firmUnlimited}/mo unlimited
-        (not billed yet).
+        US list prices: Starter free, Solo {LIST_PRICES.us.firmSolo}/mo, Scale{" "}
+        {LIST_PRICES.us.firmScale}/mo, billed through Stripe Checkout. Annual is about 20% off.
+        Enterprise is a custom quote. Watchlist clients are free.
       </p>
 
       <h2>Your account</h2>
