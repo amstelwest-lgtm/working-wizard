@@ -37,6 +37,7 @@ import {
   type ClientOperatingProfile,
 } from "@/lib/client-profile";
 import { useMarket } from "@/contexts/market";
+import { DeliverableInputConfig } from "@/components/deliverable-input-config";
 
 export function BudgetPanel({
   clientId,
@@ -360,31 +361,59 @@ export function BudgetPanel({
     return <div className="p-6 text-sm text-slate-400">Loading budget…</div>;
   }
 
+  const budgetInputConfig = (
+    <DeliverableInputConfig
+      className="mb-5"
+      clientId={clientId}
+      deliverableId="budget"
+      context={{
+        financials,
+        operatingProfile: profile,
+        budgetWc: doc?.wc ?? null,
+        budgetSeasonality: doc?.qualification.seasonality ?? profile?.seasonality ?? null,
+      }}
+      onEngineBoundChange={(patch) => {
+        setDoc((d) => {
+          if (!d) return d;
+          const wc = { ...d.wc };
+          if (typeof patch.daysAr === "number") wc.debtorDays = patch.daysAr;
+          if (typeof patch.daysAp === "number") wc.creditorDays = patch.daysAp;
+          if (typeof patch.inventoryDays === "number") wc.inventoryDays = patch.inventoryDays;
+          return { ...d, wc, updatedAt: new Date().toISOString() };
+        });
+      }}
+    />
+  );
+
   if (!doc) {
     return (
-      <div className="space-y-3 rounded-xl border border-dashed border-slate-300 p-6 text-sm dark:border-slate-700">
-        <p className="font-semibold text-slate-800 dark:text-slate-100">
-          Budget needs your business profile
-        </p>
-        <p className="text-slate-500">
-          Answer the intro questions once — we use them to pick the right volume × price drivers
-          (and to tune health, cash, and advice across Milōn).
-        </p>
-        {onRetakeProfile && (
-          <Button
-            type="button"
-            className="bg-[#d4a550] text-[#0a0e1a] hover:bg-[#c49a45]"
-            onClick={onRetakeProfile}
-          >
-            Set up business profile
-          </Button>
-        )}
-      </div>
+      <>
+        {budgetInputConfig}
+        <div className="space-y-3 rounded-xl border border-dashed border-slate-300 p-6 text-sm dark:border-slate-700">
+          <p className="font-semibold text-slate-800 dark:text-slate-100">
+            Budget needs your business profile
+          </p>
+          <p className="text-slate-500">
+            Answer the intro questions once — we use them to pick the right volume × price drivers
+            (and to tune health, cash, and advice across Milōn).
+          </p>
+          {onRetakeProfile && (
+            <Button
+              type="button"
+              className="bg-[#d4a550] text-[#0a0e1a] hover:bg-[#c49a45]"
+              onClick={onRetakeProfile}
+            >
+              Set up business profile
+            </Button>
+          )}
+        </div>
+      </>
     );
   }
 
   return (
     <>
+      {budgetInputConfig}
       <BudgetWorkspace
         doc={doc}
         onChange={setDoc}

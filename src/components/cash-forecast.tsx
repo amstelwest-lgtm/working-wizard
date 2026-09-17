@@ -56,6 +56,12 @@ import {
   computeIsStale,
 } from "@/components/review-signoff";
 import { CashFromBanksDrafter } from "@/components/cash-from-banks-drafter";
+import { DeliverableInputConfig } from "@/components/deliverable-input-config";
+import {
+  bankAccountsFromDraft,
+  parseOperatingProfileUnknown,
+} from "@/lib/deliverable-input-config";
+import type { ClientOperatingProfile } from "@/lib/client-profile";
 import { ScrollableTable } from "@/components/primitives/scrollable-table";
 import type {
   CashForecastPublishPayload,
@@ -446,6 +452,20 @@ export function CashForecastPanel({
   const [loaded, setLoaded] = useState(!clientId);
   const [mounted, setMounted] = useState(false);
   const [showBankUpload, setShowBankUpload] = useState(false);
+  const [inputFinancials, setInputFinancials] = useState<Record<
+    string,
+    string | number | null | undefined
+  > | null>(null);
+  const [inputProfile, setInputProfile] = useState<ClientOperatingProfile | null>(null);
+  const [inputBudgetWc, setInputBudgetWc] = useState<{
+    debtorDays: number;
+    creditorDays: number;
+    inventoryDays: number;
+  } | null>(null);
+  const [inputBankAccounts, setInputBankAccounts] = useState(() =>
+    bankAccountsFromDraft(initialBankDraft),
+  );
+  const [inputHasBankDraft, setInputHasBankDraft] = useState(Boolean(initialBankDraft));
   // Guards against the autosave effect firing the instant hydration finishes —
   // otherwise merely opening the forecast bumps last_forecast_at and falsely
   // invalidates an accountant's sign-off with no real data change.
@@ -493,6 +513,7 @@ export function CashForecastPanel({
     setCapexWeek(payload.capexWeek);
     setShowBankUpload(false);
     toast.success("Cash forecast updated from bank statements.");
+    setInputHasBankDraft(true);
 
     if (!clientId) {
       onBankPublish?.(payload);
@@ -557,51 +578,83 @@ export function CashForecastPanel({
 
   useEffect(() => {
     if (!clientId) return;
+    const applyRow = (data: Record<string, unknown> | null) => {
+      setLastForecastAt((data?.last_forecast_at as string | null | undefined) ?? null);
+      const cf = data?.cashflow as {
+        startDate?: string;
+        openingBalance?: string;
+        revenue?: LineItem[];
+        expenses?: LineItem[];
+        other?: LineItem[];
+        revAdj?: number;
+        expAdj?: number;
+        collectDelay?: number;
+        headcountDelta?: number;
+        avgSalary?: string;
+        fixedCostDelta?: string;
+        revGrowthPct?: number;
+        capexAmount?: string;
+        capexWeek?: number;
+      } | null;
+      if (cf) {
+        if (cf.startDate) setStartDate(cf.startDate);
+        if (cf.openingBalance != null) setOpeningBalance(cf.openingBalance);
+        if (cf.revenue) setRevenue(cf.revenue);
+        if (cf.expenses) setExpenses(cf.expenses);
+        if (cf.other) setOther(cf.other);
+        if (cf.revAdj != null) setRevAdj(cf.revAdj);
+        if (cf.expAdj != null) setExpAdj(cf.expAdj);
+        if (cf.collectDelay != null) setCollectDelay(cf.collectDelay);
+        if (cf.headcountDelta != null) setHeadcountDelta(cf.headcountDelta);
+        if (cf.avgSalary != null) setAvgSalary(cf.avgSalary);
+        if (cf.fixedCostDelta != null) setFixedCostDelta(cf.fixedCostDelta);
+        if (cf.revGrowthPct != null) setRevGrowthPct(cf.revGrowthPct);
+        if (cf.capexAmount != null) setCapexAmount(cf.capexAmount);
+        if (cf.capexWeek != null) setCapexWeek(cf.capexWeek);
+      }
+      setInputFinancials(
+        (data?.financials as Record<string, string | number | null | undefined> | null) ?? null,
+      );
+      setInputProfile(parseOperatingProfileUnknown(data?.operating_profile));
+      const wc = (
+        data?.budget as {
+          wc?: { debtorDays?: number; creditorDays?: number; inventoryDays?: number };
+        } | null
+      )?.wc;
+      setInputBudgetWc(
+        wc
+          ? {
+              debtorDays: wc.debtorDays ?? 0,
+              creditorDays: wc.creditorDays ?? 0,
+              inventoryDays: wc.inventoryDays ?? 0,
+            }
+          : null,
+      );
+      const fromDraft = bankAccountsFromDraft(data?.cashflow_bank_draft);
+      setInputBankAccounts(fromDraft.length ? fromDraft : bankAccountsFromDraft(initialBankDraft));
+      setInputHasBankDraft(Boolean(data?.cashflow_bank_draft) || Boolean(initialBankDraft));
+      skipNextAutosave.current = true;
+      setLoaded(true);
+    };
     supabase
       .from("clients")
-      .select("cashflow, last_forecast_at")
+      .select(
+        "cashflow, last_forecast_at, cashflow_bank_draft, operating_profile, financials, budget",
+      )
       .eq("id", clientId)
       .maybeSingle()
-      .then(({ data }) => {
-        setLastForecastAt(
-          (data as { last_forecast_at?: string | null } | null)?.last_forecast_at ?? null,
-        );
-        const cf = data?.cashflow as {
-          startDate?: string;
-          openingBalance?: string;
-          revenue?: LineItem[];
-          expenses?: LineItem[];
-          other?: LineItem[];
-          revAdj?: number;
-          expAdj?: number;
-          collectDelay?: number;
-          headcountDelta?: number;
-          avgSalary?: string;
-          fixedCostDelta?: string;
-          revGrowthPct?: number;
-          capexAmount?: string;
-          capexWeek?: number;
-        } | null;
-        if (cf) {
-          if (cf.startDate) setStartDate(cf.startDate);
-          if (cf.openingBalance != null) setOpeningBalance(cf.openingBalance);
-          if (cf.revenue) setRevenue(cf.revenue);
-          if (cf.expenses) setExpenses(cf.expenses);
-          if (cf.other) setOther(cf.other);
-          if (cf.revAdj != null) setRevAdj(cf.revAdj);
-          if (cf.expAdj != null) setExpAdj(cf.expAdj);
-          if (cf.collectDelay != null) setCollectDelay(cf.collectDelay);
-          if (cf.headcountDelta != null) setHeadcountDelta(cf.headcountDelta);
-          if (cf.avgSalary != null) setAvgSalary(cf.avgSalary);
-          if (cf.fixedCostDelta != null) setFixedCostDelta(cf.fixedCostDelta);
-          if (cf.revGrowthPct != null) setRevGrowthPct(cf.revGrowthPct);
-          if (cf.capexAmount != null) setCapexAmount(cf.capexAmount);
-          if (cf.capexWeek != null) setCapexWeek(cf.capexWeek);
+      .then(({ data, error }) => {
+        if (error) {
+          return supabase
+            .from("clients")
+            .select("cashflow, last_forecast_at, operating_profile, financials")
+            .eq("id", clientId)
+            .maybeSingle()
+            .then((retry) => applyRow((retry.data as Record<string, unknown> | null) ?? null));
         }
-        skipNextAutosave.current = true;
-        setLoaded(true);
+        applyRow((data as Record<string, unknown> | null) ?? null);
       });
-  }, [clientId, reloadToken]);
+  }, [clientId, reloadToken, initialBankDraft]);
 
   useEffect(() => {
     if (!clientId || !loaded) return;
@@ -789,7 +842,9 @@ export function CashForecastPanel({
   ) => {
     const patch = (list: LineItem[]) =>
       list.map((l) =>
-        l.id === id ? { ...l, weekOverrides: setWeekOverride(l.weekOverrides, weekIndex, value) } : l,
+        l.id === id
+          ? { ...l, weekOverrides: setWeekOverride(l.weekOverrides, weekIndex, value) }
+          : l,
       );
     if (bucket === "revenue") setRevenue(patch);
     else if (bucket === "expenses") setExpenses(patch);
@@ -1055,93 +1110,124 @@ export function CashForecastPanel({
     </div>
   ) : null;
 
+  const configureInputs = (
+    <DeliverableInputConfig
+      className="mb-5"
+      clientId={clientId}
+      deliverableId="cash"
+      context={{
+        financials: inputFinancials,
+        operatingProfile: inputProfile,
+        bankAccounts: inputBankAccounts,
+        hasBankDraft: inputHasBankDraft,
+        hasCashLines: !forecastEmpty,
+        budgetWc: inputBudgetWc,
+        collectDelay,
+        revGrowthPct,
+        openingBalance,
+      }}
+      onEngineBoundChange={(patch) => {
+        if (typeof patch.collectDelay === "number") {
+          setCollectDelay(Math.max(0, Math.min(6, Math.round(patch.collectDelay))));
+        }
+        if (typeof patch.revGrowthPct === "number") {
+          setRevGrowthPct(patch.revGrowthPct);
+        }
+      }}
+    />
+  );
+
   // ── Simplified mode: glanceable hero ─────────────────────────────────────
   if (simplified) {
     return (
-      <Card id="wizard-cash-outlook" className={CARD_SHELL}>
-        <div className={GOLD_RULE} />
-        <CardHeader className="border-b border-amber-900/10 pb-4 dark:border-slate-800">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <CardTitle className="text-xl font-semibold tracking-tight text-slate-950 dark:text-slate-100">
-                Cash Outlook
-              </CardTitle>
-              <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">
-                13-week closing balance trajectory · opening {fmtR(calc.opening)}
-              </p>
+      <div className="space-y-0">
+        {configureInputs}
+        <Card id="wizard-cash-outlook" className={CARD_SHELL}>
+          <div className={GOLD_RULE} />
+          <CardHeader className="border-b border-amber-900/10 pb-4 dark:border-slate-800">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <CardTitle className="text-xl font-semibold tracking-tight text-slate-950 dark:text-slate-100">
+                  Cash Outlook
+                </CardTitle>
+                <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">
+                  13-week closing balance trajectory · opening {fmtR(calc.opening)}
+                </p>
+              </div>
+              <div className="flex flex-col items-end gap-1.5">
+                {heroBadge}
+                {!hideReadOnlyStamp && (
+                  <ReviewSignoffBadge
+                    signoff={forecastSignoff}
+                    scope="cash_forecast"
+                    isStale={forecastStale}
+                    placement="corner"
+                  />
+                )}
+              </div>
             </div>
-            <div className="flex flex-col items-end gap-1.5">
-              {heroBadge}
-              {!hideReadOnlyStamp && (
-                <ReviewSignoffBadge
-                  signoff={forecastSignoff}
+          </CardHeader>
+          <CardContent className="pt-5">
+            {canSign && clientId && !hideInlineSignOff && (
+              <div className="mb-4 flex justify-end">
+                <ReviewSignoffButton
+                  clientId={clientId}
+                  clientName={clientName}
                   scope="cash_forecast"
+                  signoff={forecastSignoff}
                   isStale={forecastStale}
-                  placement="corner"
+                  onChange={patchForecastSignoff}
                 />
-              )}
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="pt-5">
-          {canSign && clientId && !hideInlineSignOff && (
-            <div className="mb-4 flex justify-end">
-              <ReviewSignoffButton
-                clientId={clientId}
-                clientName={clientName}
-                scope="cash_forecast"
-                signoff={forecastSignoff}
-                isStale={forecastStale}
-                onChange={patchForecastSignoff}
+              </div>
+            )}
+            {emptyNotice}
+            <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <Stat
+                label="Closing · Week 13"
+                value={fmtCompact(closingW13)}
+                tone={closingW13 < 0 ? "bad" : "neutral"}
+                sub={
+                  <span className="inline-flex items-center gap-1">
+                    {trajectory >= 0 ? (
+                      <TrendingUp className="h-3 w-3 text-[#3f9c72]" />
+                    ) : (
+                      <TrendingDown className="h-3 w-3 text-[#c0392b]" />
+                    )}
+                    {trajectory >= 0 ? "+" : ""}
+                    {fmtCompact(trajectory)} over 13 weeks
+                  </span>
+                }
+              />
+              <Stat
+                label="Lowest balance"
+                value={fmtCompact(lowestBal)}
+                tone={shortfall ? "bad" : "good"}
+                sub={`Week ${lowestWeek} · ${weeks[lowestWeek - 1]}`}
+              />
+              <Stat
+                label="Cash runway"
+                value={runwayWeeks >= WEEKS ? `${WEEKS}+ wk` : `${runwayWeeks} wk`}
+                tone={runwayWeeks < 8 ? "bad" : runwayWeeks < 13 ? "neutral" : "good"}
+                sub={`Above ${fmtCompact(CASH_RUNWAY_THRESHOLD_RAND)} floor`}
+              />
+              <Stat
+                label="Net cash · next 4 weeks"
+                value={fmtCompact(calc.net.slice(0, 4).reduce((a, b) => a + b, 0))}
+                tone={calc.net.slice(0, 4).reduce((a, b) => a + b, 0) < 0 ? "bad" : "good"}
+                sub="Inflows minus outflows"
               />
             </div>
-          )}
-          {emptyNotice}
-          <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <Stat
-              label="Closing · Week 13"
-              value={fmtCompact(closingW13)}
-              tone={closingW13 < 0 ? "bad" : "neutral"}
-              sub={
-                <span className="inline-flex items-center gap-1">
-                  {trajectory >= 0 ? (
-                    <TrendingUp className="h-3 w-3 text-[#3f9c72]" />
-                  ) : (
-                    <TrendingDown className="h-3 w-3 text-[#c0392b]" />
-                  )}
-                  {trajectory >= 0 ? "+" : ""}
-                  {fmtCompact(trajectory)} over 13 weeks
-                </span>
-              }
-            />
-            <Stat
-              label="Lowest balance"
-              value={fmtCompact(lowestBal)}
-              tone={shortfall ? "bad" : "good"}
-              sub={`Week ${lowestWeek} · ${weeks[lowestWeek - 1]}`}
-            />
-            <Stat
-              label="Cash runway"
-              value={runwayWeeks >= WEEKS ? `${WEEKS}+ wk` : `${runwayWeeks} wk`}
-              tone={runwayWeeks < 8 ? "bad" : runwayWeeks < 13 ? "neutral" : "good"}
-              sub={`Above ${fmtCompact(CASH_RUNWAY_THRESHOLD_RAND)} floor`}
-            />
-            <Stat
-              label="Net cash · next 4 weeks"
-              value={fmtCompact(calc.net.slice(0, 4).reduce((a, b) => a + b, 0))}
-              tone={calc.net.slice(0, 4).reduce((a, b) => a + b, 0) < 0 ? "bad" : "good"}
-              sub="Inflows minus outflows"
-            />
-          </div>
-          {heroChart(180)}
-        </CardContent>
-      </Card>
+            {heroChart(180)}
+          </CardContent>
+        </Card>
+      </div>
     );
   }
 
   // ── Complex mode ──────────────────────────────────────────────────────────
   return (
     <div id="wizard-cash-outlook" className="space-y-5">
+      {configureInputs}
       {/* Hero: summary + chart */}
       <Card className={CARD_SHELL}>
         <div className={GOLD_RULE} />
