@@ -57,7 +57,11 @@ import {
   type OverallHealth,
 } from "@/lib/health-score";
 import { playbookKeyForRatioName } from "@/lib/playbook-key";
-import { countOpenRatioQueries, openQueryCountForRatio, ratioQueryLabel } from "@/lib/ratio-queries";
+import {
+  countOpenRatioQueries,
+  openQueryCountForRatio,
+  ratioQueryLabel,
+} from "@/lib/ratio-queries";
 import { ratioActualLine } from "@/lib/ratio-actuals";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
 import { FirmSwitcher } from "@/components/firm-switcher";
@@ -79,8 +83,9 @@ import {
   emptyWeeklyInputs,
   derivePeriodWaterfallFallback,
   resolveWaterfallFigures,
+  hasWeeklyProfitFigures,
 } from "@/lib/weekly-inputs";
-import { emptyProductMix, type ProductMix } from "@/lib/product-mix";
+import { emptyProductMix, type ProductMix, hasProductMixAnswer } from "@/lib/product-mix";
 import { useServerFn } from "@tanstack/react-start";
 import { listClientReviewSignoffs, indexReviewSignoffs } from "@/lib/review-signoffs.functions";
 import type { ClientReviewSignoff, ReviewScope } from "@/lib/review-signoffs.functions";
@@ -139,6 +144,8 @@ import { AddPastPeriodLink } from "@/components/add-past-period-link";
 import { PastPeriodUploadDialog } from "@/components/past-period-upload";
 import { stampFromSignoff } from "@/lib/review-signoff-stamp";
 import { EmptyState, ClientWorkspaceSkeleton, SectionCard } from "@/components/primitives";
+import { DeliverableInputConfig } from "@/components/deliverable-input-config";
+import { bankAccountsFromDraft } from "@/lib/deliverable-input-config";
 
 const ActionPlanPanel = lazyPanel(() => import("@/components/action-plan"), "Action Plan");
 const ReportsStudioPanel = lazyPanel(
@@ -545,7 +552,14 @@ function ClientView() {
   const { clientId } = Route.useParams();
   const search = Route.useSearch();
   const { user } = useAuth();
-  const { notes: clientNotes, loading: notesLoading, openArchive, requestOpenNote, focusNoteId, clearFocusNote } = useNotes();
+  const {
+    notes: clientNotes,
+    loading: notesLoading,
+    openArchive,
+    requestOpenNote,
+    focusNoteId,
+    clearFocusNote,
+  } = useNotes();
   const navigate = useNavigate();
   const { profile, firmId } = useAccountantProfile();
   const track = useTrack();
@@ -788,10 +802,7 @@ function ClientView() {
     }, 120);
   }, []);
   const ratios = computeRatios(ratioInputs);
-  const ratioQueryCounts = useMemo(
-    () => countOpenRatioQueries(clientNotes),
-    [clientNotes],
-  );
+  const ratioQueryCounts = useMemo(() => countOpenRatioQueries(clientNotes), [clientNotes]);
   const effectiveRunway = effectiveCashRunwayWeeks(
     client?.cash_runway_weeks,
     client?.cashflow as Parameters<typeof effectiveCashRunwayWeeks>[1],
@@ -877,6 +888,35 @@ function ClientView() {
 
   // ── Client briefing (header) ──────────────────────────────────────────────
   const briefingProfile = parseOperatingProfile(client?.operating_profile);
+  const openRatioQueryLabels = useMemo(() => {
+    const labels = Object.entries(ratioQueryCounts)
+      .filter(([, n]) => n > 0)
+      .map(([key]) => ratioQueryLabel(key));
+    return [...new Set(labels)];
+  }, [ratioQueryCounts]);
+  const deliverableInputContext = useMemo(
+    () => ({
+      financials,
+      operatingProfile: briefingProfile,
+      hasCashLines: Boolean(client?.cashflow),
+      hasBankDraft: Boolean(bankCashDraft),
+      bankAccounts: bankAccountsFromDraft(bankCashDraft),
+      openRatioQueryLabels,
+      productMixIncomplete: !hasProductMixAnswer(productMix),
+      hasPriorPeriod: Boolean(priorSnapshot),
+      hasWeeklyInputs: hasWeeklyProfitFigures(weeklyInputs),
+    }),
+    [
+      financials,
+      briefingProfile,
+      client?.cashflow,
+      bankCashDraft,
+      openRatioQueryLabels,
+      productMix,
+      priorSnapshot,
+      weeklyInputs,
+    ],
+  );
   const briefingSnapshot = buildFinancialSnapshot({
     chips: varianceChips,
     cashRunwayWeeks: effectiveRunway,
@@ -1939,8 +1979,7 @@ function ClientView() {
               </div>
             )}
 
-            {hasFigures &&
-            needsPastPeriodPrompt({ hasLiveFigures: hasFigures, snapshots }) ? (
+            {hasFigures && needsPastPeriodPrompt({ hasLiveFigures: hasFigures, snapshots }) ? (
               <p className="text-[12px] leading-relaxed text-[color:var(--ink-dim)]">
                 Trend lines and movement need another period.{" "}
                 <AddPastPeriodLink onOpen={() => setPastPeriodOpen(true)} />
@@ -2073,16 +2112,24 @@ function ClientView() {
             {/* ===== SUMMARY TAB ===== */}
             <div className={`tabpane${activeTab === "summary" ? " on" : ""}`} id="pane-summary">
               {activeTab === "summary" && (
-                <ClientBrainSummary
-                  clientId={client.id}
-                  clientName={client.name}
-                  operatingProfile={client.operating_profile}
-                  market={client.market}
-                  businessType={client.business_type}
-                  onOpenUpload={() => setUploadOpen(true)}
-                  onOpenTab={(tab) => setActiveTab(tab)}
-                  onAnswerProfile={() => setProfileOpen(true)}
-                />
+                <>
+                  <DeliverableInputConfig
+                    className="mb-5"
+                    clientId={clientId}
+                    deliverableId="summary"
+                    context={deliverableInputContext}
+                  />
+                  <ClientBrainSummary
+                    clientId={client.id}
+                    clientName={client.name}
+                    operatingProfile={client.operating_profile}
+                    market={client.market}
+                    businessType={client.business_type}
+                    onOpenUpload={() => setUploadOpen(true)}
+                    onOpenTab={(tab) => setActiveTab(tab)}
+                    onAnswerProfile={() => setProfileOpen(true)}
+                  />
+                </>
               )}
             </div>
 
@@ -2113,6 +2160,17 @@ function ClientView() {
                     onChange={patchSignoff("financials")}
                   />
                 }
+              />
+              <DeliverableInputConfig
+                className="mb-5"
+                clientId={clientId}
+                deliverableId="ratios"
+                context={deliverableInputContext}
+                onEngineBoundChange={(patch) => {
+                  if (typeof patch.periodMonths === "number") {
+                    handleFinancialChange(PERIOD_MONTHS_KEY, String(patch.periodMonths));
+                  }
+                }}
               />
               {/* Simplified view — health orb + pillar cards */}
               {viewMode === "simplified" && (
@@ -2420,6 +2478,12 @@ function ClientView() {
                   />
                 }
               />
+              <DeliverableInputConfig
+                className="mb-5"
+                clientId={clientId}
+                deliverableId="profit"
+                context={deliverableInputContext}
+              />
               <span className="eyebrow">Product lines</span>
               <p className="sub" style={{ marginBottom: 16 }}>
                 Answer these questions to build revenue and net profit per product line — so you can
@@ -2565,7 +2629,15 @@ function ClientView() {
                     <span className="eyebrow">Signature view</span>
                     <div className="h-sec">13-week cash forecast</div>
                   </div>
-                  <div className="deliverable-tab-head__sign" style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                  <div
+                    className="deliverable-tab-head__sign"
+                    style={{
+                      display: "flex",
+                      gap: 10,
+                      flexWrap: "wrap",
+                      justifyContent: "flex-end",
+                    }}
+                  >
                     <ReviewSignoffButton
                       compact
                       clientId={clientId}
@@ -2670,6 +2742,12 @@ function ClientView() {
                 title="Board-ready PDFs"
                 lede="Each report has its own sign-off. Stamp Business Health & Ratios, Profitability, the 13-week Cash Forecast, or the 12-month Budget so the signature carries into the PDF. You can brand packs with this client's own logo and colours."
               />
+              <DeliverableInputConfig
+                className="mb-5"
+                clientId={clientId}
+                deliverableId="reports"
+                context={deliverableInputContext}
+              />
               {activeTab === "reports" && (
                 <TabErrorBoundary label="Reports">
                   <Suspense
@@ -2708,6 +2786,12 @@ function ClientView() {
                     onChange={patchSignoff("action_plan")}
                   />
                 }
+              />
+              <DeliverableInputConfig
+                className="mb-5"
+                clientId={clientId}
+                deliverableId="plan"
+                context={deliverableInputContext}
               />
               {/* Follow the portal theme. A nested `.dark` island made Tailwind
               light-on-dark copy fire while accountant `--card` stayed a
@@ -2749,6 +2833,12 @@ function ClientView() {
                     onChange={patchSignoff("advisory")}
                   />
                 }
+              />
+              <DeliverableInputConfig
+                className="mb-5"
+                clientId={clientId}
+                deliverableId="advisory"
+                context={deliverableInputContext}
               />
               <AdvisoryDrafter
                 clientId={client.id}
