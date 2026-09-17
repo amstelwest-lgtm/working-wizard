@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { MarketCopy, MarketingShell } from "@/components/marketing-shell";
 import { LEGAL_EFFECTIVE } from "@/lib/legal";
 import { VISITOR_MARKET_BOOT_SCRIPT } from "@/lib/market";
+import { AI_IDENTIFIERS_LINE } from "@/lib/marketing-faq";
 import { pageHead, SEO_PAGES } from "@/lib/seo";
 import marketingCss from "../styles/marketing.css?inline";
 
@@ -20,7 +21,7 @@ function AiNoticePage() {
       heroTone="plain"
       eyebrow="AI notice"
       title="Use of an AI model"
-      lead="Milōn uses an AI model (Claude, from Anthropic). Financial information sent to the model is anonymised. This page records what that means."
+      lead="Milōn uses an AI model (Claude, from Anthropic). Identifiers are stripped before model calls; amounts stay. This page records what that means."
       ctaTitle={<>The rest of the legal pages</>}
       ctaBody={<>Privacy covers what we store. Terms cover how the workspace may be used.</>}
       ctaLabel="Privacy ✦"
@@ -31,8 +32,8 @@ function AiNoticePage() {
       <h2>What we send — and what we do not</h2>
       <p>
         When you ask the in-app assistant a question, or when the platform needs model help to talk
-        about a business, the financial information that leaves Milōn for Claude is anonymised
-        first.
+        about a business, identifiers are stripped from what leaves Milōn for Claude. Amounts stay,
+        so workings and accountant sign-off use real figures.
       </p>
       <ul className="mk-list">
         <li>
@@ -40,10 +41,7 @@ function AiNoticePage() {
           name, or the people on the account.
         </li>
         <li>
-          <strong>No raw amounts.</strong> It does not see{" "}
-          <MarketCopy za="“R 4 312 088 of revenue”" us="“$4,312,088 of revenue”" />. It sees ratio
-          context and bands — margins, days, a health score — not the{" "}
-          <MarketCopy za="rand" us="dollar" /> figure from the statement.
+          <strong>Amounts stay.</strong> {AI_IDENTIFIERS_LINE}
         </li>
         <li>
           <strong>
@@ -56,9 +54,9 @@ function AiNoticePage() {
         </li>
       </ul>
       <p>
-        What remains is enough for the assistant to be useful — industry, the shape of the ratios, a
-        revenue band — and not enough to reconstruct the books or identify the business from the
-        payload.
+        What remains is enough for the assistant to be useful — industry, the shape of the ratios,
+        and the actual figures needed for workings — without the company name, tax IDs, or account
+        numbers that would identify the business.
       </p>
 
       <h2>The model</h2>

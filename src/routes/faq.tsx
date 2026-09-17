@@ -1,7 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { MarketCopy, MarketingShell } from "@/components/marketing-shell";
+import { MarketingShell } from "@/components/marketing-shell";
 import { LIST_PRICES, VISITOR_MARKET_BOOT_SCRIPT } from "@/lib/market";
-import { ACCOUNTING_SOFTWARE_ANSWER, publicFaqUsItems } from "@/lib/marketing-faq";
+import {
+  ACCOUNTING_SOFTWARE_ANSWER,
+  AI_IDENTIFIERS_LINE,
+  FOUNDING_CALLOUT,
+  publicFaqUsItems,
+  WATCHLIST_DEFINITION,
+} from "@/lib/marketing-faq";
 import { faqPageJson, pageHead, SEO_PAGES } from "@/lib/seo";
 import marketingCss from "../styles/marketing.css?inline";
 
@@ -57,17 +63,17 @@ function FaqPage() {
           Spark is free during early access and does not ask for a card. Accounting firms subscribe
           on USD client-count bands billed through Stripe Checkout — Starter is free (up to 3
           active clients), Solo starts at {LIST_PRICES.za.firmSolo} a month, and Scale is{" "}
-          {LIST_PRICES.za.firmScale} a month. Annual billing is about 20% off. Watchlist clients
-          are free. Enterprise is a custom quote. South African firms can pay ZAR at Checkout via
-          Adaptive Pricing.
+          {LIST_PRICES.za.firmScale} a month. Annual billing is about 20% off.{" "}
+          {WATCHLIST_DEFINITION} {FOUNDING_CALLOUT} Enterprise is a custom quote. South African
+          firms can pay ZAR at Checkout via Adaptive Pricing.
         </p>
         <p className="mk-copy-us">
           Spark is free during early access and does not ask for a card. Accounting firms subscribe
           on USD client-count bands billed through Stripe Checkout — Starter is free (up to 3
           active clients), Solo starts at {LIST_PRICES.us.firmSolo} a month, and Scale is{" "}
-          {LIST_PRICES.us.firmScale} a month. Annual billing is about 20% off. Watchlist clients
-          are free. Enterprise is a custom quote. South African firms can pay ZAR at Checkout via
-          Adaptive Pricing.
+          {LIST_PRICES.us.firmScale} a month. Annual billing is about 20% off.{" "}
+          {WATCHLIST_DEFINITION} {FOUNDING_CALLOUT} Enterprise is a custom quote. South African
+          firms can pay ZAR at Checkout via Adaptive Pricing.
         </p>
       </Qa>
 
@@ -106,11 +112,8 @@ function FaqPage() {
 
       <Qa q="What does the AI see?">
         <p>
-          We use AI. It is powered by Claude. Financial information sent to the model is anonymised
-          — no company names and no raw amounts — with{" "}
-          <MarketCopy za="VAT and account numbers" us="EIN / tax IDs and account numbers" />{" "}
-          stripped before anything leaves the platform. Where an AI drafts a report for an
-          accountant, a human reads and signs it before a client ever sees it. The{" "}
+          We use AI. It is powered by Claude. {AI_IDENTIFIERS_LINE} Where an AI drafts a report for
+          an accountant, a human reads and signs it before a client ever sees it. The{" "}
           <a href="/ai">AI notice</a> is the public version of that sentence.
         </p>
       </Qa>

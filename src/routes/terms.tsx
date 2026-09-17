@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { MarketCopy, MarketingShell } from "@/components/marketing-shell";
 import { LEGAL_EFFECTIVE, LEGAL_ENTITY } from "@/lib/legal";
 import { LIST_PRICES, VISITOR_MARKET_BOOT_SCRIPT } from "@/lib/market";
+import { AI_IDENTIFIERS_LINE, WATCHLIST_DEFINITION } from "@/lib/marketing-faq";
 import { pageHead, SEO_PAGES } from "@/lib/seo";
 import marketingCss from "../styles/marketing.css?inline";
 
@@ -61,7 +62,7 @@ function TermsPage() {
       <p className="mk-copy-us">
         US list prices: Starter free, Solo {LIST_PRICES.us.firmSolo}/mo, Scale{" "}
         {LIST_PRICES.us.firmScale}/mo, billed through Stripe Checkout. Annual is about 20% off.
-        Enterprise is a custom quote. Watchlist clients are free.
+        Enterprise is a custom quote. {WATCHLIST_DEFINITION}
       </p>
 
       <h2>Your account</h2>
@@ -81,11 +82,8 @@ function TermsPage() {
 
       <h2>AI</h2>
       <p>
-        Some features use AI. They are powered by <strong>Claude</strong>.{" "}
-        <strong>Financial information sent to the model is anonymised</strong> — no company names
-        and no raw amounts, with{" "}
-        <MarketCopy za="VAT and account numbers" us="EIN / tax IDs and account numbers" /> stripped.
-        The <a href="/ai">AI notice</a> is the full version of that sentence. AI output can be
+        Some features use AI. They are powered by <strong>Claude</strong>. {AI_IDENTIFIERS_LINE} The{" "}
+        <a href="/ai">AI notice</a> is the full version of that sentence. AI output can be
         wrong; you (or the accountant who signs a draft) remain responsible for what you send a
         client.
       </p>

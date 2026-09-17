@@ -624,6 +624,7 @@ html[data-landing="1"] .firm-bands-toggle{display:inline-flex;gap:4px;margin:0 0
 html[data-landing="1"] .firm-bands-toggle button{height:32px;padding:0 14px;border-radius:999px;border:0;background:transparent;color:var(--ink);-webkit-text-fill-color:var(--ink);font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;font-family:inherit}
 html[data-landing="1"] .firm-bands-toggle button.on{background-color:var(--gold);color:#1b1300;-webkit-text-fill-color:#1b1300}
 html[data-landing="1"] .firm-bands-toggle button:focus-visible{outline:2px solid var(--gold-bright);outline-offset:2px}
+html[data-landing="1"] .firm-bands-founding{margin:0 0 12px;padding:10px 14px;border:1px solid var(--gold);border-radius:10px;background-color:color-mix(in srgb,var(--gold) 14%,var(--bg-2));color:var(--ink);-webkit-text-fill-color:var(--ink);font-size:14px;line-height:1.45;font-weight:600}
 html[data-landing="1"] .firm-bands-note{color:var(--ink);-webkit-text-fill-color:var(--ink);font-size:13px;line-height:1.55;margin:0 0 16px}
 html[data-landing="1"] .firm-bands-table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:14px;border:1px solid var(--line);background-color:var(--bg-2);box-shadow:inset 0 1px 0 rgba(255,255,255,.04)}
 html[data-landing="1"] .firm-bands-table{width:100%;min-width:620px;border-collapse:collapse;font-size:14px;color:var(--ink);-webkit-text-fill-color:var(--ink)}

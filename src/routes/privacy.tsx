@@ -7,6 +7,7 @@ import {
   LEGAL_INFORMATION_OFFICER,
 } from "@/lib/legal";
 import { VISITOR_MARKET_BOOT_SCRIPT } from "@/lib/market";
+import { AI_IDENTIFIERS_LINE } from "@/lib/marketing-faq";
 import { pageHead, SEO_PAGES } from "@/lib/seo";
 import marketingCss from "../styles/marketing.css?inline";
 
@@ -49,8 +50,7 @@ function PrivacyPage() {
       ctaTitle={<>Read how the AI is used</>}
       ctaBody={
         <>
-          We use Claude. Financial information sent to it is anonymised — no company names, no raw
-          amounts. The short notice is one page.
+          We use Claude. {AI_IDENTIFIERS_LINE} The short notice is one page.
         </>
       }
       ctaLabel="AI notice ✦"
@@ -130,15 +130,13 @@ function PrivacyPage() {
 
       <h2>How AI is used</h2>
       <p>
-        Milōn uses AI. It is powered by <strong>Claude</strong> (Anthropic).{" "}
-        <strong>Financial information sent to the model is anonymised</strong> — no company names,{" "}
+        Milōn uses AI. It is powered by <strong>Claude</strong> (Anthropic). {AI_IDENTIFIERS_LINE}{" "}
         <MarketCopy
-          za="no raw rand amounts, and VAT numbers and account numbers are stripped"
-          us="no raw dollar amounts, and EIN / tax IDs and account numbers are stripped"
+          za="VAT numbers and account numbers are among the identifiers stripped"
+          us="EIN / tax IDs and account numbers are among the identifiers stripped"
         />{" "}
-        before anything leaves the platform. What remains is ratio context and industry labels, so
-        the assistant can talk about the shape of the business without seeing who you are or the
-        exact figures.
+        before anything leaves the platform. The assistant can talk about the shape of the business
+        and the real figures without receiving the company name or account numbers.
       </p>
       <p>
         Where AI drafts a report for an accountant, a human reads and signs it before a client ever
