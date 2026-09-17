@@ -38,7 +38,8 @@ assert(!LEGAL_ENTITY.includes("MILŌN"), "product name is not the registered com
 assert(/\d{4}/.test(LEGAL_EFFECTIVE), "effective date has a year");
 assert(privacy.includes("powered by"), "privacy says AI is used");
 assert(privacy.includes("Claude"), "privacy names Claude");
-assert(privacy.includes("anonymised"), "privacy says financials are anonymised");
+assert(privacy.includes("AI_IDENTIFIERS_LINE") || privacy.includes("amounts stay"), "privacy says identifiers are stripped and amounts stay");
+assert(!privacy.includes("no raw amounts"), "privacy does not claim amounts are stripped");
 assert(privacy.includes("Protection of Personal Information"), "privacy mentions POPIA");
 assert(privacy.includes("privacy contact"), "US privacy names a privacy contact");
 assert(privacy.includes("California resident"), "US privacy mentions California requests");
@@ -47,7 +48,8 @@ assert(privacy.includes("mk-copy-us"), "privacy has a US pack");
 
 assert(terms.includes("not a substitute"), "terms: not a substitute");
 assert(terms.includes("Claude"), "terms name Claude");
-assert(terms.includes("anonymised"), "terms repeat anonymisation");
+assert(terms.includes("AI_IDENTIFIERS_LINE") || terms.includes("amounts stay"), "terms: identifiers stripped, amounts stay");
+assert(!terms.includes("no raw amounts"), "terms do not claim amounts are stripped");
 assert(terms.includes("South Africa"), "terms sit under SA law");
 assert(
   terms.includes("not tax, legal, or investment advice"),
@@ -61,8 +63,9 @@ assert(ai.includes("Anthropic"), "AI notice names the supplier");
 assert(!ai.includes("mk-gold"), "AI notice does not gold-highlight Claude");
 assert(ai.includes('heroTone="plain"'), "AI notice uses the quiet hero");
 assert(ai.includes("No company names"), "AI notice: no company names");
-assert(ai.includes("No raw amounts"), "AI notice: no raw amounts");
-assert(ai.includes("anonymised"), "AI notice: anonymised");
+assert(ai.includes("Amounts stay"), "AI notice: amounts stay");
+assert(!ai.includes("No raw amounts"), "AI notice does not claim amounts are stripped");
+assert(ai.includes("anonymised") || ai.includes("stripped"), "AI notice: identifiers stripped");
 assert(ai.includes("VAT"), "AI notice: VAT stripped");
 assert(ai.includes("EIN"), "AI notice: EIN stripped on US pack");
 

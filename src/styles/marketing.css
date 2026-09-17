@@ -646,6 +646,18 @@ html[data-market="za"] .mk-copy-za {
   outline: 2px solid var(--gold-bright);
   outline-offset: 2px;
 }
+html .mk .firm-bands-founding {
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--gold);
+  border-radius: 10px;
+  background-color: color-mix(in srgb, var(--gold) 14%, var(--bg-2));
+  color: var(--ink) !important;
+  -webkit-text-fill-color: var(--ink);
+  font-size: 14px;
+  line-height: 1.45;
+  font-weight: 600;
+}
 html .mk .firm-bands-note {
   color: var(--ink) !important;
   -webkit-text-fill-color: var(--ink);

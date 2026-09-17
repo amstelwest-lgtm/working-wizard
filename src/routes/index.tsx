@@ -58,7 +58,7 @@ import {
   type FirmCheckoutBand,
   type FirmInterval,
 } from "@/lib/stripe-plans";
-import { HOMEPAGE_FAQ_ITEMS } from "@/lib/marketing-faq";
+import { FOUNDING_CALLOUT, HOMEPAGE_FAQ_ITEMS, WATCHLIST_DEFINITION } from "@/lib/marketing-faq";
 import { faqPageJson, pageHead, SEO_PAGES } from "@/lib/seo";
 import { OwnerInviteShell } from "@/components/owner-invite-shell";
 import { OwnerInviteSignupPanel } from "@/components/owner-invite-signup-panel";
@@ -2394,7 +2394,7 @@ function LandingPage() {
               <circle cx="12" cy="12" r="10" />
               <polyline points="12 6 12 12 16 14" />
             </svg>
-            <span>What reaches Claude is anonymised</span>
+            <span>Identifiers stripped before Claude — amounts stay</span>
           </div>
           <div className="item">
             <svg
@@ -2549,20 +2549,19 @@ function LandingPage() {
       <div className="marquee-band">
         <p className="cap">Calculated on every upload</p>
         <div className="marquee" id="marquee">
-          <span>Gross Margin</span>
           <span>Net Margin</span>
-          <span>EBITDA Margin</span>
-          <span>Return on Assets</span>
+          <span>Operating Margin</span>
+          <span>Gross Margin</span>
           <span>Return on Equity</span>
-          <span>Current Ratio</span>
-          <span>Quick Ratio</span>
-          <span>Debt-to-Equity</span>
-          <span>Interest Cover</span>
-          <span>Operating Cash Ratio</span>
-          <span>13-Week Cash Forecast</span>
+          <span>Return on Assets</span>
+          <span>Asset Turnover</span>
+          <span>Equity Multiplier</span>
+          <span>Interest Burden</span>
+          <span>Tax Burden</span>
           <span>
             <RegionCopy pack={copyMarket.copyPack} za="Debtor Days" us="Days Sales Outstanding" />
           </span>
+          <span>Inventory Days</span>
           <span>
             <RegionCopy
               pack={copyMarket.copyPack}
@@ -2570,36 +2569,19 @@ function LandingPage() {
               us="Days Payable Outstanding"
             />
           </span>
-          <span>Inventory Turnover</span>
-          <span>Cash Conversion Cycle</span>
-          <span>Working Capital Ratio</span>
-          <span>Asset Turnover</span>
-          <span>Fixed Asset Efficiency</span>
-          <span>Gearing Ratio</span>
-          <span>Leverage Ratio</span>
-          <span>Break-even Point</span>
-          <span>Revenue per Employee</span>
+          <span>Working Capital Days</span>
+          <span>Fixed Cost Ratio</span>
+          <span>Degree of Operating Leverage</span>
+          <span>Top-5 Customer Share</span>
           <span>
             <RegionCopy
               pack={copyMarket.copyPack}
-              za="Labour Productivity"
-              us="Labor Productivity"
+              za="Gross Profit / Labour"
+              us="Gross Profit / Labor"
             />
           </span>
-          <span>Cost Structure</span>
-          <span>Revenue Growth</span>
-          <span>
-            <RegionCopy
-              pack={copyMarket.copyPack}
-              za="Profit per Rand Earned"
-              us="Profit per Dollar Earned"
-            />
-          </span>
-          <span>Cash Burn Rate</span>
-          <span>Runway Weeks</span>
-          <span>Net Working Capital</span>
-          <span>Capital Efficiency</span>
-          <span>Equity Multiplier</span>
+          <span>Sales-per-Employee Ratio</span>
+          <span>OCF / EBITDA</span>
         </div>
       </div>
 
@@ -2850,7 +2832,7 @@ function LandingPage() {
             <p className="sub">
               Accounting firms subscribe on a flat USD band by active client count. Starter is free
               (up to 3 active clients). South African firms can pay ZAR at Checkout via Adaptive
-              Pricing. Watchlist clients are free and never billed. AI prepares the analysis; the
+              Pricing. {WATCHLIST_DEFINITION} {FOUNDING_CALLOUT} AI prepares the analysis; the
               accountant reviews and signs off.
             </p>
           </div>
@@ -3112,7 +3094,8 @@ function LandingPage() {
                       <a href="/terms" style={{ color: "inherit" }}>
                         Terms
                       </a>
-                      . AI is powered by Claude; financial information sent to it is anonymised.{" "}
+                      . AI is powered by Claude; identifiers are stripped before model calls, amounts
+                      stay.{" "}
                       <a href="/privacy" style={{ color: "inherit" }}>
                         Privacy
                       </a>
@@ -3395,7 +3378,8 @@ function LandingPage() {
                           <a href="/terms" style={{ color: "inherit" }}>
                             Terms
                           </a>
-                          . AI is powered by Claude; financial information sent to it is anonymised.{" "}
+                          . AI is powered by Claude; identifiers are stripped before model calls,
+                          amounts stay.{" "}
                           <a href="/privacy" style={{ color: "inherit" }}>
                             Privacy
                           </a>

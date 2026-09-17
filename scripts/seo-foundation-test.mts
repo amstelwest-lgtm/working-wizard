@@ -15,7 +15,14 @@ import {
   pageHead,
   sitemapXml,
 } from "../src/lib/seo";
-import { ACCOUNTING_SOFTWARE_ANSWER, HOMEPAGE_FAQ_ITEMS } from "../src/lib/marketing-faq";
+import {
+  ACCOUNTING_SOFTWARE_ANSWER,
+  AI_IDENTIFIERS_LINE,
+  FOUNDING_CALLOUT,
+  HOMEPAGE_FAQ_ITEMS,
+  publicFaqUsItems,
+  WATCHLIST_DEFINITION,
+} from "../src/lib/marketing-faq";
 import { visitorCopyPack } from "../src/lib/market";
 
 function assert(cond: boolean, msg: string) {
@@ -159,6 +166,24 @@ assert(
 );
 assert(!landing.includes("930+"), "landing does not claim 930+ playbook steps");
 assert(!landing.includes("31 ratios"), "landing does not claim 31 ratios");
+assert(!landing.includes("13-Week Cash Forecast"), "marquee does not count the cash forecast as a ratio");
+assert(!landing.includes("Current Ratio"), "marquee does not list Current Ratio");
+assert(!landing.includes("Quick Ratio"), "marquee does not list Quick Ratio");
+assert(!landing.includes("EBITDA Margin"), "marquee does not list EBITDA Margin");
+assert(landing.includes("OCF / EBITDA"), "marquee lists OCF / EBITDA");
+assert(landing.includes("Top-5 Customer Share"), "marquee lists Top-5 Customer Share");
+assert(landing.includes("Degree of Operating Leverage"), "marquee lists Degree of Operating Leverage");
+assert(landing.includes("Sales-per-Employee Ratio"), "marquee lists Sales-per-Employee Ratio");
+assert(landing.includes("Working Capital Days"), "marquee lists Working Capital Days");
+assert(landing.includes("Fixed Cost Ratio"), "marquee lists Fixed Cost Ratio");
+assert(landing.includes("Interest Burden"), "marquee lists Interest Burden");
+assert(landing.includes("Tax Burden"), "marquee lists Tax Burden");
+assert(landing.includes("Inventory Days"), "marquee lists Inventory Days");
+assert(landing.includes("Gross Profit / Labor"), "marquee lists Gross Profit / Labor");
+assert(landing.includes("Identifiers stripped before Claude"), "trust chip is identifier-only");
+assert(landing.includes("WATCHLIST_DEFINITION"), "landing pricing defines watchlist");
+assert(landing.includes("FOUNDING_CALLOUT"), "landing pricing surfaces FOUNDING");
+assert(!landing.includes("raw amounts removed"), "landing FAQ does not claim amounts are stripped");
 assert(!landing.includes("End-to-end encrypted"), "landing does not claim E2E encryption");
 assert(!landing.includes("Live sync"), "landing does not claim live ledger sync");
 assert(landing.includes('href="/about"'), "landing links to about");
@@ -226,5 +251,38 @@ assert(!faq.includes("QuickBooks"), "faq does not claim QuickBooks");
 assert(!faq.includes("Xero"), "faq does not claim Xero");
 assert(ACCOUNTING_SOFTWARE_ANSWER.includes("not a ledger"), "accounting-software answer stays honest");
 assert(!ACCOUNTING_SOFTWARE_ANSWER.includes("QuickBooks"), "accounting-software answer does not name QBO");
+assert(faq.includes("AI_IDENTIFIERS_LINE"), "faq uses the identifier-only anonymisation line");
+assert(faq.includes("WATCHLIST_DEFINITION"), "faq defines watchlist clients");
+assert(faq.includes("FOUNDING_CALLOUT"), "faq surfaces FOUNDING 50% off");
+assert(!faq.includes("raw amounts"), "faq does not claim raw amounts are stripped");
+assert(
+  HOMEPAGE_FAQ_ITEMS.some((item) => item.answer.includes(AI_IDENTIFIERS_LINE)),
+  "homepage FAQ says identifiers are stripped and amounts stay",
+);
+assert(
+  HOMEPAGE_FAQ_ITEMS.every((item) => !item.answer.includes("raw amounts")),
+  "homepage FAQ does not claim raw amounts are removed",
+);
+assert(
+  publicFaqUsItems().some((item) => item.answer.includes(WATCHLIST_DEFINITION)),
+  "public FAQ defines watchlist",
+);
+assert(
+  publicFaqUsItems().some((item) => item.answer.includes(FOUNDING_CALLOUT)),
+  "public FAQ mentions FOUNDING 50% off",
+);
+assert(
+  publicFaqUsItems().every((item) => !item.answer.includes("raw amounts")),
+  "public FAQ does not claim raw amounts are stripped",
+);
+
+const pricingTable = readFileSync(resolve("src/components/firm-band-pricing.tsx"), "utf8");
+assert(pricingTable.includes("firm-bands-founding"), "firm pricing has a visible FOUNDING callout");
+assert(pricingTable.includes("FOUNDING_CALLOUT"), "firm pricing callout uses the live 50% copy");
+assert(pricingTable.includes("WATCHLIST_DEFINITION"), "firm pricing defines watchlist");
+
+const marqueeBlock = landing.split('id="marquee"')[1]?.split("</div>")[0] ?? "";
+const marqueeChips = marqueeBlock.match(/<span[>\s]/g) ?? [];
+assert(marqueeChips.length === 19, `marquee lists 19 ratio chips, got ${marqueeChips.length}`);
 
 console.log("seo-foundation-test: all assertions passed");

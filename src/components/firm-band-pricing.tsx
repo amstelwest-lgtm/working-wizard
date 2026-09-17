@@ -1,3 +1,4 @@
+import { FOUNDING_CALLOUT, WATCHLIST_DEFINITION } from "@/lib/marketing-faq";
 import { FIRM_BAND_TABLE, firmUsdListPrice, type FirmCheckoutBand, type FirmInterval } from "@/lib/stripe-plans";
 
 type Props = {
@@ -35,10 +36,10 @@ export function FirmBandPricingTable({
           </button>
         </div>
       ) : null}
+      <p className="firm-bands-founding">{FOUNDING_CALLOUT}</p>
       <p className="firm-bands-note">
-        USD list prices. South African firms can pay in ZAR at Checkout (Adaptive Pricing). Watchlist
-        clients are free and not billed. FOUNDING (50% off) is monthly only and does not stack with
-        annual billing.
+        USD list prices. South African firms can pay in ZAR at Checkout (Adaptive Pricing).{" "}
+        {WATCHLIST_DEFINITION}
       </p>
       <div className="firm-bands-table-wrap">
         <table className="firm-bands-table">

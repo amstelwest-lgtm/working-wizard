@@ -5,6 +5,21 @@ import type { FaqItem } from "./seo";
 export const ACCOUNTING_SOFTWARE_ANSWER =
   "MILŌN is not a ledger, so you keep your existing accounting system and books. Upload the financial statements you already have — PDF, Excel, CSV, or simply a bank statement — and MILŌN turns them into a financial health score, a 13-week cash forecast, and ranked next moves you can review and act on.";
 
+/**
+ * Ask-AI sanitizer strips identifiers (VAT/tax IDs, account numbers, company-name
+ * heuristics) — not monetary amounts. Marketing must not claim amounts are removed.
+ */
+export const AI_IDENTIFIERS_LINE =
+  "Identifiers (company names, tax IDs, account numbers) are stripped before model calls; amounts stay so workings and accountant sign-off use real figures.";
+
+/** Monitoring seat, not a billed advisory client. Stripe does not line-item these. */
+export const WATCHLIST_DEFINITION =
+  "Watchlist clients stay on your radar at no charge — they don't count toward billed seats until you activate a full workspace.";
+
+/** Live Stripe promo FOUNDING / FOUNDING50. Monthly only; does not stack with annual. */
+export const FOUNDING_CALLOUT =
+  "FOUNDING is 50% off monthly firm bands and does not stack with annual billing.";
+
 /** Short homepage set. Visible copy and FAQPage JSON-LD must stay in lockstep. */
 export const HOMEPAGE_FAQ_ITEMS: FaqItem[] = [
   {
@@ -20,7 +35,7 @@ export const HOMEPAGE_FAQ_ITEMS: FaqItem[] = [
   {
     question: "Is my financial data used to train AI models?",
     answer:
-      "No, your client financial information is not used to train third-party AI models. Financial information sent to Claude is anonymised, with company names and raw amounts removed and tax IDs stripped. Client numbers are not used to train third-party models, while AI is used within MILŌN to prepare financial analysis for human accountant review.",
+      `No, your client financial information is not used to train third-party AI models. ${AI_IDENTIFIERS_LINE} Client numbers are not used to train third-party models, while AI is used within MILŌN to prepare financial analysis for human accountant review.`,
   },
   {
     question: "What does MILŌN do for my business?",
@@ -41,7 +56,7 @@ export function publicFaqUsItems(): FaqItem[] {
   return [
     {
       question: "What does it cost?",
-      answer: `Spark is free during early access and does not ask for a card. Accounting firms subscribe on USD client-count bands billed through Stripe Checkout — Starter is free (up to 3 active clients), Solo starts at ${LIST_PRICES.us.firmSolo} a month, and Scale is ${LIST_PRICES.us.firmScale} a month. Annual billing is about 20% off. Watchlist clients are free. Enterprise is a custom quote. South African firms can pay ZAR at Checkout via Adaptive Pricing.`,
+      answer: `Spark is free during early access and does not ask for a card. Accounting firms subscribe on USD client-count bands billed through Stripe Checkout — Starter is free (up to 3 active clients), Solo starts at ${LIST_PRICES.us.firmSolo} a month, and Scale is ${LIST_PRICES.us.firmScale} a month. Annual billing is about 20% off. ${WATCHLIST_DEFINITION} ${FOUNDING_CALLOUT} Enterprise is a custom quote. South African firms can pay ZAR at Checkout via Adaptive Pricing.`,
     },
     {
       question: "So what is the catch with free?",
@@ -66,7 +81,7 @@ export function publicFaqUsItems(): FaqItem[] {
     {
       question: "What does the AI see?",
       answer:
-        "We use AI. It is powered by Claude. Financial information sent to the model is anonymised — no company names and no raw amounts — with EIN / tax IDs and account numbers stripped before anything leaves the platform. Where an AI drafts a report for an accountant, a human reads and signs it before a client ever sees it. The AI notice at https://milonfinance.com/ai is the public version of that sentence.",
+        `We use AI. It is powered by Claude. ${AI_IDENTIFIERS_LINE} Where an AI drafts a report for an accountant, a human reads and signs it before a client ever sees it. The AI notice at https://milonfinance.com/ai is the public version of that sentence.`,
     },
     {
       question: "Do you store card details?",

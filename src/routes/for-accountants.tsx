@@ -5,6 +5,7 @@ import { FirmBandPricingTable } from "@/components/firm-band-pricing";
 import { VISITOR_MARKET_BOOT_SCRIPT, visitorCopyPack, readVisitorDraft } from "@/lib/market";
 import { stashPendingCheckout } from "@/lib/pending-checkout";
 import { type FirmCheckoutBand, type FirmInterval } from "@/lib/stripe-plans";
+import { FOUNDING_CALLOUT, WATCHLIST_DEFINITION } from "@/lib/marketing-faq";
 import { pageHead, SEO_PAGES } from "@/lib/seo";
 import marketingCss from "../styles/marketing.css?inline";
 
@@ -147,9 +148,9 @@ function ForAccountantsPage() {
 
       <h2>Pricing for firms</h2>
       <p>
-        Flat USD monthly or annual bands by active client count. Watchlist clients are free and are
-        not billed. South African firms can pay ZAR at Checkout via Adaptive Pricing — we do not
-        publish a separate rand catalog.
+        Flat USD monthly or annual bands by active client count. {WATCHLIST_DEFINITION} South
+        African firms can pay ZAR at Checkout via Adaptive Pricing — we do not publish a separate
+        rand catalog.
       </p>
       <FirmBandPricingTable
         interval={interval}
@@ -161,9 +162,7 @@ function ForAccountantsPage() {
           <strong>Starter</strong> is free (up to 3 active clients) so every firm has a
           subscription from day one.
         </li>
-        <li>
-          <strong>FOUNDING</strong> is 50% off monthly only and does not stack with annual billing.
-        </li>
+        <li>{FOUNDING_CALLOUT}</li>
         <li>
           White-label onboarding support is included. Your branding on every report and portal.
         </li>

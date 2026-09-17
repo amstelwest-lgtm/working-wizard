@@ -69,7 +69,7 @@ export const SEO_PAGES = {
     path: "/ai",
     title: "AI Data Handling | MILŌN",
     description:
-      "How MILŌN uses AI on financial data. Information sent to the model is anonymized. Client numbers are never used to train third-party models.",
+      "How MILŌN uses AI on financial data. Identifiers (company names, tax IDs, account numbers) are stripped before model calls; amounts stay. Client numbers are never used to train third-party models.",
     imageAlt: "MILŌN AI notice",
   },
   auth: {
