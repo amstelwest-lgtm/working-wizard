@@ -1,5 +1,5 @@
 ---
-name: Advisory OS spine (P0.1 state machine, P0.2 recommendations, P0.3 Next Step, P0.4 shell, P0.5 direct-client path)
+name: Advisory OS spine (P0.1 state machine, P0.2 recommendations, P0.3 Next Step, P0.4 shell, P0.5 direct-client path, P0.6 data requests)
 description: Where the per-client advisory state lives, how it advances, how recommendations/outcomes attach, and how the Next Step is resolved
 ---
 
@@ -81,6 +81,25 @@ regexes mirror `TRANSACTION_LEVEL_CLAIMS` — test asserts they agree), and stam
 (`createActionWithoutRpc`, links via `linked_action_item_id`) when the RPC is absent.
 The RPC itself now checks `is_action_plan_writer` (SECURITY DEFINER bypasses RLS, so
 invited members must not get a back door). Test: `pnpm test:direct-client-path`.
+
+**Active data requests (P0.6):** `20260918140000_data_requests.sql` adds `data_requests`
+(kind / severity / status / source / rule_key; one live row per `(client_id, rule_key)`;
+writes limited to `is_action_plan_writer`, no delete policy). Detector is pure
+(`detectDataGaps` in `src/lib/data-requests.ts`): four rules — `stale_figures` (>75 days,
+critical), `forecast_opening_balance` (forecast live but blank opening balance, critical),
+`debtor_days_no_ageing` (>45, important), `creditor_days_no_ageing` (>60, important).
+Pre-data states never open requests. `syncDataRequests` (server fn) gathers facts,
+applies `suppressRecentlyResolved` (hand-fulfilled/waived within 90 days are not re-asked;
+auto-closed ones are) and calls the `data_requests_sync` RPC, which opens missing system
+asks and auto-fulfils system asks whose rule stopped firing — human asks are never touched.
+Triggers auto-fulfil: snapshot insert → `bank_statement`/`management_accounts`; `clients.cashflow`
+openingBalance saved → `bank_balance`. Emits `data.request_opened` / `data.request_fulfilled`
+(reserved in P0.1; quiet events). `NextStepCard` calls `syncDataRequests` before `getNextStep`,
+which now counts open|sent rows → `openDataRequests` → blocking `data_request` step.
+`DataRequestsPanel` (shared) sits under the card on both surfaces; accountant gets "Email the
+owner" (`sendDataRequestEmail` → Resend via `sendAccessEmail`, marks rows `sent`, link is
+`/app?tab=today`, no tokens) and "Ask for a document". Owner emailing themselves is refused.
+Test: `pnpm test:data-requests`; SQL validated on scratch Postgres (/tmp/dr-flow.sql).
 
 **Gotcha:** `clients.cashflow_bank_draft` has no in-repo migration; the clients
 trigger reads it through `to_jsonb(NEW)->'cashflow_bank_draft'` so a missing

@@ -769,6 +769,99 @@ export type Database = {
           },
         ]
       }
+      data_requests: {
+        Row: {
+          id: string
+          client_id: string
+          cycle_id: string | null
+          kind: string
+          title: string
+          reason: string | null
+          severity: string
+          status: string
+          source: string
+          rule_key: string | null
+          requested_by: string | null
+          requested_at: string
+          due_at: string | null
+          sent_at: string | null
+          sent_to: string | null
+          last_reminded_at: string | null
+          fulfilled_at: string | null
+          fulfilled_by: string | null
+          fulfilled_with: Json | null
+          waived_reason: string | null
+          meta: Json
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          client_id: string
+          cycle_id?: string | null
+          kind: string
+          title: string
+          reason?: string | null
+          severity?: string
+          status?: string
+          source?: string
+          rule_key?: string | null
+          requested_by?: string | null
+          requested_at?: string
+          due_at?: string | null
+          sent_at?: string | null
+          sent_to?: string | null
+          last_reminded_at?: string | null
+          fulfilled_at?: string | null
+          fulfilled_by?: string | null
+          fulfilled_with?: Json | null
+          waived_reason?: string | null
+          meta?: Json
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          client_id?: string
+          cycle_id?: string | null
+          kind?: string
+          title?: string
+          reason?: string | null
+          severity?: string
+          status?: string
+          source?: string
+          rule_key?: string | null
+          requested_by?: string | null
+          requested_at?: string
+          due_at?: string | null
+          sent_at?: string | null
+          sent_to?: string | null
+          last_reminded_at?: string | null
+          fulfilled_at?: string | null
+          fulfilled_by?: string | null
+          fulfilled_with?: Json | null
+          waived_reason?: string | null
+          meta?: Json
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "data_requests_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "data_requests_cycle_id_fkey"
+            columns: ["cycle_id"]
+            isOneToOne: false
+            referencedRelation: "advisory_cycles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_employees: {
         Row: {
           active: boolean
@@ -2233,6 +2326,26 @@ export type Database = {
           p_approve?: boolean
         }
         Returns: string
+      }
+      data_requests_sync: {
+        Args: {
+          p_client_id: string
+          p_wanted: Json
+        }
+        Returns: {
+          opened: number
+          closed: number
+          open_total: number
+        }[]
+      }
+      data_requests_fulfil: {
+        Args: {
+          p_client_id: string
+          p_kinds: string[]
+          p_with: Json
+          p_actor?: string | null
+        }
+        Returns: number
       }
     }
     Enums: {

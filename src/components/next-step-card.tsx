@@ -17,6 +17,7 @@ import { ArrowRight, Check, Loader2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { useTrack } from "@/hooks/use-track";
 import { appendAdvisoryEvent } from "@/lib/advisory-state.functions";
+import { syncDataRequests } from "@/lib/data-requests.functions";
 import { getNextStep } from "@/lib/next-step.functions";
 import {
   outstandingChips,
@@ -40,6 +41,7 @@ type Props = {
 
 export function NextStepCard({ clientId, audience, onAct, refreshKey, className, surface }: Props) {
   const fetchNextStep = useServerFn(getNextStep);
+  const syncRequests = useServerFn(syncDataRequests);
   const recordEvent = useServerFn(appendAdvisoryEvent);
   const track = useTrack();
   const [step, setStep] = useState<NextStep | null>(null);
@@ -54,6 +56,9 @@ export function NextStepCard({ clientId, audience, onAct, refreshKey, className,
     const mine = ++seq.current;
     setError(null);
     try {
+      // P0.6: run the gap detector first so a blocking data request is never a
+      // stale count. Failure here must not hide the Next Step itself.
+      await syncRequests({ data: { clientId } }).catch(() => null);
       const res = await fetchNextStep({ data: { clientId, audience } });
       if (mine !== seq.current) return;
       setStep(res.nextStep);
@@ -64,7 +69,7 @@ export function NextStepCard({ clientId, audience, onAct, refreshKey, className,
     } finally {
       if (mine === seq.current) setLoading(false);
     }
-  }, [clientId, audience, fetchNextStep]);
+  }, [clientId, audience, fetchNextStep, syncRequests]);
 
   useEffect(() => {
     if (!clientId) {

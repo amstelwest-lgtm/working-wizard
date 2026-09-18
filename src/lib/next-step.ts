@@ -72,7 +72,7 @@ export type NextStepFacts = {
   blockedActions: number;
   /** approved/edited recommendations that have actions but no recorded outcome. */
   actionedUnmeasured: number;
-  /** Open `data_requests` (P0.6). Always 0 until that lands. */
+  /** `data_requests` with status open|sent (P0.6). */
   openDataRequests: number;
   nextReviewAt: string | null;
   /** ISO timestamp used for every date comparison. */

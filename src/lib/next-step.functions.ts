@@ -176,6 +176,7 @@ export const getNextStep = createServerFn({ method: "GET" })
       overdueActions,
       blockedActions,
       gaps,
+      openDataRequests,
     ] = await Promise.all([
       count(sb, "client_financial_snapshots", data.clientId),
       count(sb, "client_brain_questions", data.clientId, (q) =>
@@ -188,6 +189,8 @@ export const getNextStep = createServerFn({ method: "GET" })
       ),
       count(sb, "action_items", data.clientId, (q) => q.eq("status", "blocked")),
       recommendationGaps(sb, data.clientId),
+      // P0.6: open or sent asks. 0 on a pre-P0.6 database.
+      count(sb, "data_requests", data.clientId, (q) => q.in("status", ["open", "sent"])),
     ]);
 
     const facts: NextStepFacts = {
@@ -206,8 +209,7 @@ export const getNextStep = createServerFn({ method: "GET" })
       overdueActions,
       blockedActions,
       actionedUnmeasured: gaps.actionedUnmeasured,
-      // P0.6 adds `data_requests`; until then nothing can be open.
-      openDataRequests: 0,
+      openDataRequests,
       nextReviewAt: snapshot.nextReviewAt,
       now,
     };

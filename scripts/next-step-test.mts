@@ -334,7 +334,10 @@ const acct = (f: NextStepFacts) => resolveNextStep(f, "accountant");
     fns.includes("resolveNextStep(facts, audience)"),
     "server fn delegates to the pure resolver",
   );
-  assert(fns.includes("openDataRequests: 0"), "P0.6 placeholder is explicit");
+  assert(
+    fns.includes('count(sb, "data_requests", data.clientId'),
+    "openDataRequests counts live data_requests (P0.6)",
+  );
   assert(
     fns.includes('.eq("status", "unanswered").in("audience", questionAudiences)'),
     "questions filtered by audience",

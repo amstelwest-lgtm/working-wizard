@@ -121,6 +121,7 @@ import {
 import { ClientBriefing } from "@/components/client-briefing";
 import { NextStepCard } from "@/components/next-step-card";
 import { RecommendationsPanel } from "@/components/recommendations-panel";
+import { DataRequestsPanel } from "@/components/data-requests-panel";
 import { nextStepRoute, type NextStep, type NextStepTarget } from "@/lib/next-step";
 import {
   buildFinancialSnapshot,
@@ -1942,6 +1943,16 @@ function ClientView() {
               surface="accountant_portal"
               refreshKey={`${activeTab}|${snapshots.length}|${hasFigures ? 1 : 0}|${client.last_forecast_at ?? ""}|${advisoryBump}`}
               onAct={handleNextStepAct}
+            />
+            {/* P0.6 — tracked data asks (system + by hand); accountant can email the owner. */}
+            <DataRequestsPanel
+              className="mb-4"
+              clientId={client.id}
+              audience="accountant"
+              refreshKey={`${activeTab}|${snapshots.length}|${advisoryBump}`}
+              onUpload={() => setFirstDataOpen(true)}
+              onOpenForecast={() => setActiveTab("cash")}
+              onChanged={() => setAdvisoryBump((n) => n + 1)}
             />
 
             {/* ===== CLIENT BRIEFING — status → what matters → this month's workflow ===== */}

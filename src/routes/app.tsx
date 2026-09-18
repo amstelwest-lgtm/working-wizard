@@ -130,6 +130,7 @@ import { ProfileCompletionNote } from "@/components/profile/profile-completion-n
 import { OwnerBrainDrip } from "@/components/owner-brain-drip";
 import { NextStepCard } from "@/components/next-step-card";
 import { RecommendationsPanel } from "@/components/recommendations-panel";
+import { DataRequestsPanel } from "@/components/data-requests-panel";
 import {
   OWNER_BOARD_TABS,
   nextStepRoute,
@@ -4253,6 +4254,18 @@ function Index() {
                   }|${advisoryBump}`}
                   onAct={handleNextStepAct}
                 />
+                {/* P0.6 — tracked asks for missing / stale data; hidden when nothing is open. */}
+                {userRole !== "client_member" ? (
+                  <DataRequestsPanel
+                    className="mt-3"
+                    clientId={effectiveClientId}
+                    audience="owner"
+                    refreshKey={`${activeTab}|${advisoryBump}|${firstRunStep ?? ""}`}
+                    onUpload={() => setFirstRunStep("first-data")}
+                    onOpenForecast={() => setActiveTab("cash")}
+                    onChanged={() => setAdvisoryBump((n) => n + 1)}
+                  />
+                ) : null}
               </div>
             ) : null}
 
