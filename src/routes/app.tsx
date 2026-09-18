@@ -128,6 +128,16 @@ import { AdminDashboard } from "@/components/admin-dashboard";
 import { ProfileFunnel, type ProfileFunnelMode } from "@/components/profile/profile-funnel";
 import { ProfileCompletionNote } from "@/components/profile/profile-completion-note";
 import { OwnerBrainDrip } from "@/components/owner-brain-drip";
+import { NextStepCard } from "@/components/next-step-card";
+import { RecommendationsPanel } from "@/components/recommendations-panel";
+import { DataRequestsPanel } from "@/components/data-requests-panel";
+import { AdvisoryPackPanel } from "@/components/advisory-pack-panel";
+import {
+  OWNER_BOARD_TABS,
+  nextStepRoute,
+  type NextStep,
+  type NextStepTarget,
+} from "@/lib/next-step";
 import { SampleBoardBanner } from "@/components/sample-board-banner";
 import { VerifyEmailBanner } from "@/components/verify-email-banner";
 import { SAMPLE_BUSINESS_BLURB, sampleFinancialsFor } from "@/lib/sample-business";
@@ -265,6 +275,11 @@ export const Route = createFileRoute("/app")({
   // /app uses browser auth + localStorage. SSR of this tree was throwing
   // "This page didn't load" on first paint (signed-out visit and post-login).
   ssr: false,
+  // ?tab= lets Next Step emails / links (P0.3 routes) land on a board tab.
+  validateSearch: (search: Record<string, unknown>): { tab?: string } =>
+    typeof search.tab === "string" && (OWNER_BOARD_TABS as readonly string[]).includes(search.tab)
+      ? { tab: search.tab }
+      : {},
   pendingComponent: AppBootSpinner,
   component: function AppRoute() {
     return (
@@ -2537,6 +2552,8 @@ function Index() {
     last_forecast_at?: string | null;
     budget_updated_at?: string | null;
     operating_profile?: ClientOperatingProfile | null;
+    /** P1: a firm attached means the accountant seat signs off the advisory pack. */
+    firm_id?: string | null;
   } | null>(null);
   const [onboardingGateReady, setOnboardingGateReady] = useState(false);
   const [activeTab, setActiveTab] = useState<string>("today");
@@ -2556,6 +2573,39 @@ function Index() {
   // firstRunStep: null = not first run (or done); 'pick-type' = must complete profile funnel; 'first-data' = nudge to upload data
   const [firstRunStep, setFirstRunStep] = useState<null | "pick-type" | "first-data">(null);
   const [operatingProfile, setOperatingProfile] = useState<ClientOperatingProfile | null>(null);
+
+  // ?tab= deep link (Next Step routes / emails). Applied whenever it changes;
+  // the board otherwise keeps its own tab state.
+  const { tab: searchTab } = Route.useSearch();
+  useEffect(() => {
+    if (searchTab) setActiveTab(searchTab);
+  }, [searchTab]);
+
+  // Next Step (P0.4): the card resolves the step; the board performs the CTA.
+  const handleNextStepAct = useCallback(
+    (step: NextStep, target?: NextStepTarget) => {
+      const key = target ?? step.key;
+      switch (key) {
+        case "profile":
+          openProfileDialog(operatingProfile ? "complete" : "retake");
+          return;
+        case "upload":
+        case "restart":
+          setFirstRunStep("first-data");
+          return;
+        default: {
+          const tab = nextStepRoute(key, "owner", effectiveClientId ?? "").tab ?? "today";
+          setActiveTab(tab);
+          window.setTimeout(() => {
+            document
+              .getElementById("owner-board-tabs")
+              ?.scrollIntoView({ behavior: "smooth", block: "start" });
+          }, 80);
+        }
+      }
+    },
+    [openProfileDialog, operatingProfile, effectiveClientId],
+  );
   const boardMarket = useMemo(
     () => resolveMarket(coerceMarketSelection(workspaceMarket)),
     [workspaceMarket],
@@ -2596,9 +2646,9 @@ function Index() {
     let cancelled = false;
     const loadMeta = async () => {
       const fullSelect =
-        "business_type, cash_runway_weeks, cashflow, financials_updated_at, last_forecast_at, budget_updated_at, operating_profile, financial_year_start_month, market";
+        "business_type, cash_runway_weeks, cashflow, financials_updated_at, last_forecast_at, budget_updated_at, operating_profile, financial_year_start_month, market, firm_id";
       const legacySelect =
-        "business_type, cash_runway_weeks, cashflow, financials_updated_at, last_forecast_at, budget_updated_at, operating_profile, financial_year_start_month";
+        "business_type, cash_runway_weeks, cashflow, financials_updated_at, last_forecast_at, budget_updated_at, operating_profile, financial_year_start_month, firm_id";
       let res = await supabase
         .from("clients")
         .select(fullSelect)
@@ -2625,6 +2675,7 @@ function Index() {
           operating_profile?: unknown;
           financial_year_start_month?: number | null;
           market?: unknown;
+          firm_id?: string | null;
         } | null;
         const profile = parseOperatingProfile(data?.operating_profile);
         const parsedMarket = parseMarketSelection(data?.market);
@@ -2645,6 +2696,7 @@ function Index() {
                 last_forecast_at: data.last_forecast_at,
                 budget_updated_at: data.budget_updated_at,
                 operating_profile: profile,
+                firm_id: data.firm_id ?? null,
               }
             : null,
         );
@@ -3116,6 +3168,9 @@ function Index() {
   // so nothing is written, and any route to real figures drops the sample first.
   const [sampleMode, setSampleMode] = useState(false);
   const showScoredBoard = hasRealFinancials || sampleMode;
+  // Bumped by the recommendations panel after a decision / action so the
+  // Next Step card re-resolves without a reload.
+  const [advisoryBump, setAdvisoryBump] = useState(0);
   const skipInvitedSetupChrome = useMemo(
     () =>
       isInvitedOwnerWithFigures({
@@ -4191,13 +4246,46 @@ function Index() {
               />
             )}
 
+            {/* Next Step (P0.4): first screen is action, not ratios. Hidden in
+                sample mode — the sample business has no advisory state. */}
+            {effectiveClientId && !sampleMode ? (
+              <div className="mb-3">
+                <NextStepCard
+                  clientId={effectiveClientId}
+                  audience="owner"
+                  surface="owner_app"
+                  refreshKey={`${activeTab}|${firstRunStep ?? ""}|${showOnboarding ? 1 : 0}|${
+                    clientMeta?.budget_updated_at ?? ""
+                  }|${advisoryBump}`}
+                  onAct={handleNextStepAct}
+                />
+                {/* P0.6 — tracked asks for missing / stale data; hidden when nothing is open. */}
+                {userRole !== "client_member" ? (
+                  <DataRequestsPanel
+                    className="mt-3"
+                    clientId={effectiveClientId}
+                    audience="owner"
+                    refreshKey={`${activeTab}|${advisoryBump}|${firstRunStep ?? ""}`}
+                    onUpload={() => setFirstRunStep("first-data")}
+                    onOpenForecast={() => setActiveTab("cash")}
+                    onChanged={() => setAdvisoryBump((n) => n + 1)}
+                  />
+                ) : null}
+              </div>
+            ) : null}
+
             {userRole === "client_owner" && !actingClientId && effectiveClientId ? (
               <div className="mb-3">
                 <InviteAccountantCard clientId={effectiveClientId} tone="board" />
               </div>
             ) : null}
 
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+            <Tabs
+              id="owner-board-tabs"
+              value={activeTab}
+              onValueChange={setActiveTab}
+              className="w-full"
+            >
               <TabsList className="mb-2 flex h-auto w-full gap-0 overflow-x-auto rounded-none border-0 border-b border-[#b7872a]/20 bg-transparent p-0 [-ms-overflow-style:none] [scrollbar-width:none] sm:grid sm:grid-cols-6 [&::-webkit-scrollbar]:hidden">
                 {[
                   { value: "today", label: "Business Health", short: "Health" },
@@ -5041,6 +5129,30 @@ function Index() {
                     onAddFigures={() => setFirstRunStep("first-data")}
                   />
                 )}
+                {/* P1 — the advisory pack frames the moves below; owner reads / accepts it here. */}
+                {effectiveClientId && !sampleMode && userRole !== "client_member" ? (
+                  <AdvisoryPackPanel
+                    className="mb-5"
+                    clientId={effectiveClientId}
+                    audience="owner"
+                    canGenerate={hasRealFinancials}
+                    hasFirm={Boolean(clientMeta?.firm_id)}
+                    refreshKey={`${activeTab}|${advisoryBump}`}
+                    onChanged={() => setAdvisoryBump((n) => n + 1)}
+                  />
+                ) : null}
+                {/* P0.5 — recommendations the owner decides on directly; no accountant required. */}
+                {effectiveClientId && !sampleMode && userRole !== "client_member" ? (
+                  <RecommendationsPanel
+                    className="mb-5"
+                    clientId={effectiveClientId}
+                    audience="owner"
+                    canPropose={hasRealFinancials}
+                    onChanged={() => setAdvisoryBump((n) => n + 1)}
+                    onOpenActions={() => setActiveTab("tasks")}
+                    onAddFigures={() => setFirstRunStep("first-data")}
+                  />
+                ) : null}
                 <div id="wizard-moves-list">
                   <NextStepsPanel
                     steps={nextSteps}

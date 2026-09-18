@@ -2,6 +2,10 @@ import { supabase } from "@/integrations/supabase/client";
 
 export type BrainProposeResult = {
   stepsInserted: number;
+  /** Proposals dropped for claiming invoice/customer-level knowledge on statement data. */
+  stepsDropped?: number;
+  /** Decided server-side from clients.firm_id. */
+  audience?: "owner" | "accountant";
   gapDrafts: number;
   competitorDrafts: number;
   drip: { key: string; prompt: string } | null;
@@ -31,6 +35,8 @@ export async function invokeBrainPropose(
   }
   return {
     stepsInserted: body.stepsInserted ?? 0,
+    stepsDropped: body.stepsDropped ?? 0,
+    audience: body.audience,
     gapDrafts: body.gapDrafts ?? 0,
     competitorDrafts: body.competitorDrafts ?? 0,
     drip: body.drip ?? null,

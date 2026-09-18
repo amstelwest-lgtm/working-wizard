@@ -119,6 +119,11 @@ import {
   type DebtSchedule,
 } from "@/lib/debt-schedule";
 import { ClientBriefing } from "@/components/client-briefing";
+import { NextStepCard } from "@/components/next-step-card";
+import { RecommendationsPanel } from "@/components/recommendations-panel";
+import { DataRequestsPanel } from "@/components/data-requests-panel";
+import { AdvisoryPackPanel } from "@/components/advisory-pack-panel";
+import { nextStepRoute, type NextStep, type NextStepTarget } from "@/lib/next-step";
 import {
   buildFinancialSnapshot,
   describeBusiness,
@@ -429,6 +434,8 @@ type Client = {
   financials_updated_at?: string | null;
   cashflow?: ExistingCashflow | null;
   market?: unknown;
+  /** P1: firm attached → the accountant seat signs off advisory packs. */
+  firm_id?: string | null;
 };
 
 type ActiveTab =
@@ -723,6 +730,8 @@ function ClientView() {
   const [firstDataOpen, setFirstDataOpen] = useState(false);
   const [snapshots, setSnapshots] = useState<SnapshotRow[]>([]);
   const [deliveryRefresh, setDeliveryRefresh] = useState(0);
+  // Bumped by the recommendations panel so the Next Step card re-resolves.
+  const [advisoryBump, setAdvisoryBump] = useState(0);
   const [queriesRefresh, setQueriesRefresh] = useState(0);
 
   // Accountant sign-off — one stamp per deliverable tab
@@ -1048,7 +1057,7 @@ function ClientView() {
         const { data, error } = await supabase
           .from("clients")
           .select(
-            "id, name, business_type, client_code, operating_profile, cash_runway_weeks, last_forecast_at, financials, financials_updated_at, reports_issued_count, cashflow, market",
+            "id, name, business_type, client_code, operating_profile, cash_runway_weeks, last_forecast_at, financials, financials_updated_at, reports_issued_count, cashflow, market, firm_id",
           )
           .eq("id", clientId)
           .maybeSingle();
@@ -1062,9 +1071,9 @@ function ClientView() {
             msg.includes("client_code")
           ) {
             const withoutMarket =
-              "id, name, business_type, client_code, operating_profile, cash_runway_weeks, last_forecast_at, financials, financials_updated_at, reports_issued_count, cashflow";
+              "id, name, business_type, client_code, operating_profile, cash_runway_weeks, last_forecast_at, financials, financials_updated_at, reports_issued_count, cashflow, firm_id";
             const stripped =
-              "id, name, business_type, operating_profile, cash_runway_weeks, last_forecast_at, financials, financials_updated_at, cashflow";
+              "id, name, business_type, operating_profile, cash_runway_weeks, last_forecast_at, financials, financials_updated_at, cashflow, firm_id";
             const retrySelect = /market/i.test(msg) ? withoutMarket : stripped;
             const { data: data2, error: error2 } = await supabase
               .from("clients")
@@ -1757,6 +1766,39 @@ function ClientView() {
     if (next) setActiveTab(next);
   }, []);
 
+  // ── Next Step (P0.4) — the card resolves; the studio performs the CTA ─────
+  const handleNextStepAct = useCallback(
+    (step: NextStep, target?: NextStepTarget) => {
+      const key = target ?? step.key;
+      switch (key) {
+        case "profile":
+          setProfileOpen(true);
+          return;
+        case "upload":
+        case "restart":
+          // Same two doors the first-figures card offers.
+          if (hasFigures) setUploadOpen(true);
+          else setFirstDataOpen(true);
+          return;
+        default: {
+          const route = nextStepRoute(key, "accountant", clientId);
+          const tab = resolveAccountantTab(route.tab ?? undefined) ?? "summary";
+          revealTab(tab);
+          // Action Plan reads ?filter= for overdue / blocked deep links.
+          if (route.search.filter) {
+            navigate({
+              to: "/clients/$clientId",
+              params: { clientId },
+              search: (prev) => ({ ...prev, tab, filter: route.search.filter }),
+              replace: true,
+            });
+          }
+        }
+      }
+    },
+    [clientId, hasFigures, navigate, revealTab],
+  );
+
   // ── Loading / error states ────────────────────────────────────────────────
 
   if (loading) {
@@ -1895,6 +1937,26 @@ function ClientView() {
               </span>
               <span className="aud">Audited</span>
             </div>
+
+            {/* ===== NEXT STEP — one CTA, above everything else (P0.4) ===== */}
+            <NextStepCard
+              className="mb-4"
+              clientId={client.id}
+              audience="accountant"
+              surface="accountant_portal"
+              refreshKey={`${activeTab}|${snapshots.length}|${hasFigures ? 1 : 0}|${client.last_forecast_at ?? ""}|${advisoryBump}`}
+              onAct={handleNextStepAct}
+            />
+            {/* P0.6 — tracked data asks (system + by hand); accountant can email the owner. */}
+            <DataRequestsPanel
+              className="mb-4"
+              clientId={client.id}
+              audience="accountant"
+              refreshKey={`${activeTab}|${snapshots.length}|${advisoryBump}`}
+              onUpload={() => setFirstDataOpen(true)}
+              onOpenForecast={() => setActiveTab("cash")}
+              onChanged={() => setAdvisoryBump((n) => n + 1)}
+            />
 
             {/* ===== CLIENT BRIEFING — status → what matters → this month's workflow ===== */}
             <ClientBriefing
@@ -2833,6 +2895,26 @@ function ClientView() {
                     onChange={patchSignoff("advisory")}
                   />
                 }
+              />
+              {/* P1 — the reviewable pack: edit, comment, request changes, sign off. */}
+              <AdvisoryPackPanel
+                className="mb-5"
+                clientId={client.id}
+                audience="accountant"
+                canGenerate={hasFigures}
+                hasFirm={Boolean(client.firm_id)}
+                refreshKey={`${activeTab}|${snapshots.length}|${advisoryBump}`}
+                onChanged={() => setAdvisoryBump((n) => n + 1)}
+              />
+              {/* P0.5 — the recommendation object finally has a surface; Next Step routes review/decide here. */}
+              <RecommendationsPanel
+                className="mb-5"
+                clientId={client.id}
+                audience="accountant"
+                canPropose={hasFigures}
+                onChanged={() => setAdvisoryBump((n) => n + 1)}
+                onOpenActions={() => setActiveTab("plan")}
+                onAddFigures={() => setFirstDataOpen(true)}
               />
               <DeliverableInputConfig
                 className="mb-5"

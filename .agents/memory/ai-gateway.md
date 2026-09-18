@@ -1,15 +1,29 @@
 ---
-name: Lovable AI gateway pattern
-description: How server-side AI calls work in this project
+name: AI provider reality (Claude direct, not Gemini)
+description: Where LLM calls actually go in this project and what is dead code
 ---
 
-All AI calls go through the Lovable AI gateway, NOT directly to Gemini/Anthropic.
+All live AI calls go **directly to Anthropic** (`https://api.anthropic.com/v1/messages`)
+with `ANTHROPIC_API_KEY`. Model is `CLAUDE_MODEL` (default `claude-sonnet-4-6`).
 
-- Endpoint: `https://ai.gateway.lovable.dev/v1/chat/completions`
-- Auth: `Authorization: Bearer ${process.env.LOVABLE_API_KEY}`
-- Model: `google/gemini-2.5-flash`
-- Pattern: `createServerFn` with `.middleware([requireSupabaseAuth])` + `.inputValidator(zod)`
+- Numbers Q&A: Supabase Edge Function `supabase/functions/ask-ai/` (`anthropic.ts`),
+  tiered disclosure + sanitiser + cache + rate limit. Client: `src/lib/ask-ai.js`.
+- Client Brain / tool calls: Edge Function `supabase/functions/milon-bot/` (`claude.ts`).
+- Server-side extraction / drafting: `src/lib/claude-messages.ts` and the
+  `*.functions.ts` that import it (extraction, briefing, brain propose/deliverable).
 
-**Why:** GEMINI_API_KEY is available in secrets but the project architecture routes through the Lovable gateway for billing/rate-limit management. Direct use of GEMINI_API_KEY will not work.
+**Dead / misleading paths — do not extend them:**
+- `src/lib/ai.functions.ts` `askYourNumbers` is deprecated (superseded by `ask-ai`).
+- The Lovable AI gateway (`ai.gateway.lovable.dev`, `LOVABLE_API_KEY`) is no longer
+  called by anything live.
+- `@google/genai` is in `package.json` but unused; Gemini code exists only under
+  `attached_assets/` (not part of the app). `GEMINI_API_KEY` is not read by the app.
 
-**How to apply:** Follow the `askYourNumbers` pattern in `src/lib/ai.functions.ts` for any new server-side AI feature.
+**Cost rule (advisory OS):** workflow/Next Step is deterministic (no LLM);
+LLM only for extraction, diagnosis narrative, recommendation drafting and Ask AI.
+Planned tiering: Haiku-class for clean PDF/CSV extraction, Sonnet for scan/merge
+fallback. Never embed full statements on every chat turn.
+
+**How to apply:** for a new server-side AI feature, follow an existing
+`createServerFn` + `.middleware([requireSupabaseAuth])` + `.inputValidator(zod)`
+file that imports `claude-messages.ts`; for owner/accountant Q&A, add to `ask-ai`.
