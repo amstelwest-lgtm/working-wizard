@@ -132,6 +132,7 @@ import { NextStepCard } from "@/components/next-step-card";
 import { RecommendationsPanel } from "@/components/recommendations-panel";
 import { DataRequestsPanel } from "@/components/data-requests-panel";
 import { AdvisoryPackPanel } from "@/components/advisory-pack-panel";
+import { OutcomesPanel } from "@/components/outcomes-panel";
 import {
   OWNER_BOARD_TABS,
   nextStepRoute,
@@ -5151,6 +5152,16 @@ function Index() {
                     onChanged={() => setAdvisoryBump((n) => n + 1)}
                     onOpenActions={() => setActiveTab("tasks")}
                     onAddFigures={() => setFirstRunStep("first-data")}
+                  />
+                ) : null}
+                {/* P2.1 — did the money move? measured from snapshots; manual where statements can't tell. */}
+                {effectiveClientId && !sampleMode && userRole !== "client_member" ? (
+                  <OutcomesPanel
+                    className="mb-5"
+                    clientId={effectiveClientId}
+                    audience="owner"
+                    refreshKey={`${activeTab}|${advisoryBump}`}
+                    onChanged={() => setAdvisoryBump((n) => n + 1)}
                   />
                 ) : null}
                 <div id="wizard-moves-list">

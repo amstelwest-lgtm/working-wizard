@@ -19,6 +19,7 @@ import { useTrack } from "@/hooks/use-track";
 import { appendAdvisoryEvent } from "@/lib/advisory-state.functions";
 import { syncDataRequests } from "@/lib/data-requests.functions";
 import { getNextStep } from "@/lib/next-step.functions";
+import { measureOutcomes } from "@/lib/outcomes.functions";
 import { runWorkflow } from "@/lib/workflow-emails.functions";
 import {
   outstandingChips,
@@ -44,6 +45,7 @@ export function NextStepCard({ clientId, audience, onAct, refreshKey, className,
   const fetchNextStep = useServerFn(getNextStep);
   const syncRequests = useServerFn(syncDataRequests);
   const workflow = useServerFn(runWorkflow);
+  const measure = useServerFn(measureOutcomes);
   const recordEvent = useServerFn(appendAdvisoryEvent);
   const track = useTrack();
   const [step, setStep] = useState<NextStep | null>(null);
@@ -60,7 +62,12 @@ export function NextStepCard({ clientId, audience, onAct, refreshKey, className,
     try {
       // P0.6: run the gap detector first so a blocking data request is never a
       // stale count. Failure here must not hide the Next Step itself.
-      await syncRequests({ data: { clientId } }).catch(() => null);
+      // P2.1: measure last cycle's outcomes from any new snapshot (idempotent),
+      // in parallel with the data-request sync; both feed the step's counts.
+      await Promise.all([
+        syncRequests({ data: { clientId } }).catch(() => null),
+        measure({ data: { clientId } }).catch(() => null),
+      ]);
       const res = await fetchNextStep({ data: { clientId, audience } });
       // P1.3: workflow mail is idempotent (log-guarded), so running it on every
       // resolve is safe; it must never delay or hide the step itself.
@@ -74,7 +81,7 @@ export function NextStepCard({ clientId, audience, onAct, refreshKey, className,
     } finally {
       if (mine === seq.current) setLoading(false);
     }
-  }, [clientId, audience, fetchNextStep, syncRequests, workflow]);
+  }, [clientId, audience, fetchNextStep, syncRequests, measure, workflow]);
 
   useEffect(() => {
     if (!clientId) {
