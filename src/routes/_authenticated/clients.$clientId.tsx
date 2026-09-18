@@ -119,6 +119,8 @@ import {
   type DebtSchedule,
 } from "@/lib/debt-schedule";
 import { ClientBriefing } from "@/components/client-briefing";
+import { NextStepCard } from "@/components/next-step-card";
+import { nextStepRoute, type NextStep, type NextStepTarget } from "@/lib/next-step";
 import {
   buildFinancialSnapshot,
   describeBusiness,
@@ -1757,6 +1759,39 @@ function ClientView() {
     if (next) setActiveTab(next);
   }, []);
 
+  // ── Next Step (P0.4) — the card resolves; the studio performs the CTA ─────
+  const handleNextStepAct = useCallback(
+    (step: NextStep, target?: NextStepTarget) => {
+      const key = target ?? step.key;
+      switch (key) {
+        case "profile":
+          setProfileOpen(true);
+          return;
+        case "upload":
+        case "restart":
+          // Same two doors the first-figures card offers.
+          if (hasFigures) setUploadOpen(true);
+          else setFirstDataOpen(true);
+          return;
+        default: {
+          const route = nextStepRoute(key, "accountant", clientId);
+          const tab = resolveAccountantTab(route.tab ?? undefined) ?? "summary";
+          revealTab(tab);
+          // Action Plan reads ?filter= for overdue / blocked deep links.
+          if (route.search.filter) {
+            navigate({
+              to: "/clients/$clientId",
+              params: { clientId },
+              search: (prev) => ({ ...prev, tab, filter: route.search.filter }),
+              replace: true,
+            });
+          }
+        }
+      }
+    },
+    [clientId, hasFigures, navigate, revealTab],
+  );
+
   // ── Loading / error states ────────────────────────────────────────────────
 
   if (loading) {
@@ -1895,6 +1930,16 @@ function ClientView() {
               </span>
               <span className="aud">Audited</span>
             </div>
+
+            {/* ===== NEXT STEP — one CTA, above everything else (P0.4) ===== */}
+            <NextStepCard
+              className="mb-4"
+              clientId={client.id}
+              audience="accountant"
+              surface="accountant_portal"
+              refreshKey={`${activeTab}|${snapshots.length}|${hasFigures ? 1 : 0}|${client.last_forecast_at ?? ""}`}
+              onAct={handleNextStepAct}
+            />
 
             {/* ===== CLIENT BRIEFING — status → what matters → this month's workflow ===== */}
             <ClientBriefing

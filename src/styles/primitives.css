@@ -80,7 +80,11 @@
 }
 
 .milon-section-card:hover {
-  border-color: color-mix(in srgb, var(--brand-gold, var(--gold, var(--milon-gold))) 32%, transparent);
+  border-color: color-mix(
+    in srgb,
+    var(--brand-gold, var(--gold, var(--milon-gold))) 32%,
+    transparent
+  );
 }
 
 .milon-section-card__head {
@@ -122,7 +126,11 @@
 .milon-empty-state--dashed {
   border: 1px dashed var(--brand-border, var(--line, var(--milon-border)));
   border-radius: 12px;
-  background: color-mix(in srgb, var(--brand-bg-elevated, var(--bg-2, var(--milon-bg-elevated))) 60%, transparent);
+  background: color-mix(
+    in srgb,
+    var(--brand-bg-elevated, var(--bg-2, var(--milon-bg-elevated))) 60%,
+    transparent
+  );
 }
 
 .milon-empty-state__icon {
@@ -170,7 +178,8 @@
 .milon-loading-state__spinner {
   width: 1.25rem;
   height: 1.25rem;
-  border: 2px solid color-mix(in srgb, var(--brand-gold-ui, var(--brand-gold, var(--gold))) 25%, transparent);
+  border: 2px solid
+    color-mix(in srgb, var(--brand-gold-ui, var(--brand-gold, var(--gold))) 25%, transparent);
   border-top-color: var(--brand-gold-ui, var(--brand-gold, var(--gold, var(--milon-gold))));
   border-radius: 50%;
   animation: milon-spin var(--brand-duration-slow) linear infinite;
@@ -202,7 +211,11 @@
 }
 
 .milon-metric-tile--interactive:hover {
-  border-color: color-mix(in srgb, var(--brand-gold, var(--gold, var(--milon-gold))) 35%, transparent);
+  border-color: color-mix(
+    in srgb,
+    var(--brand-gold, var(--gold, var(--milon-gold))) 35%,
+    transparent
+  );
   transform: translateY(-1px);
 }
 
@@ -303,20 +316,34 @@
 }
 
 .milon-status-pill--warn {
-  border: 1px solid color-mix(in srgb, var(--brand-warn, var(--warn, var(--milon-warn))) 35%, transparent);
-  background: color-mix(in srgb, var(--brand-warn, var(--warn, var(--milon-warn))) 12%, transparent);
+  border: 1px solid
+    color-mix(in srgb, var(--brand-warn, var(--warn, var(--milon-warn))) 35%, transparent);
+  background: color-mix(
+    in srgb,
+    var(--brand-warn, var(--warn, var(--milon-warn))) 12%,
+    transparent
+  );
   color: var(--brand-warn, var(--warn, var(--milon-warn)));
 }
 
 .milon-status-pill--risk {
-  border: 1px solid color-mix(in srgb, var(--brand-risk, var(--risk, var(--milon-risk))) 35%, transparent);
-  background: color-mix(in srgb, var(--brand-risk, var(--risk, var(--milon-risk))) 12%, transparent);
+  border: 1px solid
+    color-mix(in srgb, var(--brand-risk, var(--risk, var(--milon-risk))) 35%, transparent);
+  background: color-mix(
+    in srgb,
+    var(--brand-risk, var(--risk, var(--milon-risk))) 12%,
+    transparent
+  );
   color: var(--brand-risk, var(--risk, var(--milon-risk)));
 }
 
 .milon-status-pill--neutral {
   border: 1px solid var(--brand-border, var(--line, var(--milon-border)));
-  background: color-mix(in srgb, var(--brand-bg-elevated, var(--bg-2, var(--milon-bg-elevated))) 70%, transparent);
+  background: color-mix(
+    in srgb,
+    var(--brand-bg-elevated, var(--bg-2, var(--milon-bg-elevated))) 70%,
+    transparent
+  );
   color: var(--brand-ink-muted, var(--ink-dim, var(--milon-ink-muted)));
 }
 
@@ -437,7 +464,9 @@ html.dark .milon-status-pill--sample,
 }
 .milon-theme-toggle:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px var(--brand-bg, var(--bg, #050507)), 0 0 0 4px var(--brand-gold, var(--gold, #d4af37));
+  box-shadow:
+    0 0 0 2px var(--brand-bg, var(--bg, #050507)),
+    0 0 0 4px var(--brand-gold, var(--gold, #d4af37));
 }
 .milon-theme-toggle__icon {
   width: 15px;
@@ -651,4 +680,313 @@ html.dark .milon-status-pill--sample,
 .milon-metal-bar__answer:disabled,
 .owner-brain-drip__answer:disabled {
   opacity: 0.55;
+}
+
+/* Next Step card (P0.4) — one CTA above health on the client home. Same
+   brushed-gold plate as the metal bars so the board reads as one surface;
+   works under both `.dark` (owner board) and the accountant portal. */
+.milon-next-step {
+  position: relative;
+  overflow: hidden;
+  border-radius: 16px;
+  border: 1px solid rgba(183, 135, 42, 0.42);
+  padding: 14px 16px 14px;
+  background:
+    radial-gradient(120% 160% at 100% -10%, rgba(241, 210, 139, 0.42), transparent 46%),
+    linear-gradient(180deg, #fffef8 0%, #f7ecd2 52%, #efe0b6 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.88),
+    inset 0 -1px 0 rgba(140, 98, 18, 0.14),
+    0 10px 28px rgba(109, 79, 22, 0.12);
+  color: #3f2d0a;
+}
+
+.milon-next-step::before {
+  content: "";
+  pointer-events: none;
+  position: absolute;
+  inset: 0 0 auto;
+  height: 3px;
+  background: linear-gradient(90deg, #b7872a, #f1d28b 46%, transparent);
+}
+
+.milon-next-step[data-urgency="blocking"]::before {
+  background: linear-gradient(90deg, #b3261e, #f0a08a 46%, transparent);
+}
+
+.dark .milon-next-step,
+.accountant-portal .milon-next-step {
+  border-color: rgba(212, 165, 80, 0.36);
+  background:
+    radial-gradient(120% 160% at 100% -10%, rgba(212, 165, 80, 0.22), transparent 46%),
+    linear-gradient(180deg, #1c1910 0%, #141820 58%, #0d121c 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 236, 180, 0.16),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.35),
+    0 12px 30px rgba(0, 0, 0, 0.34);
+  color: #f4e7c2;
+}
+
+html[data-theme="light"] .accountant-portal .milon-next-step {
+  border-color: rgba(183, 135, 42, 0.42);
+  background:
+    radial-gradient(120% 160% at 100% -10%, rgba(241, 210, 139, 0.42), transparent 46%),
+    linear-gradient(180deg, #fffef8 0%, #f7ecd2 52%, #efe0b6 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.88),
+    inset 0 -1px 0 rgba(140, 98, 18, 0.14),
+    0 10px 28px rgba(109, 79, 22, 0.12);
+  color: #3f2d0a;
+}
+
+.milon-next-step__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.milon-next-step__kicker {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: #9a7014;
+}
+
+.dark .milon-next-step__kicker,
+.accountant-portal .milon-next-step__kicker {
+  color: #e1b85e;
+}
+
+html[data-theme="light"] .accountant-portal .milon-next-step__kicker {
+  color: #9a7014;
+}
+
+.milon-next-step__pill {
+  flex-shrink: 0;
+  border-radius: 999px;
+  padding: 2px 9px;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #6b4d0c;
+  background: rgba(183, 135, 42, 0.14);
+  border: 1px solid rgba(183, 135, 42, 0.3);
+}
+
+.dark .milon-next-step__pill,
+.accountant-portal .milon-next-step__pill {
+  color: #f1d28b;
+  background: rgba(212, 165, 80, 0.14);
+  border-color: rgba(212, 165, 80, 0.32);
+}
+
+.milon-next-step[data-urgency="blocking"] .milon-next-step__pill {
+  color: #7a1d15;
+  background: rgba(179, 38, 30, 0.12);
+  border-color: rgba(179, 38, 30, 0.34);
+}
+
+.dark .milon-next-step[data-urgency="blocking"] .milon-next-step__pill,
+.accountant-portal .milon-next-step[data-urgency="blocking"] .milon-next-step__pill {
+  color: #ffb4a8;
+  background: rgba(240, 100, 80, 0.14);
+  border-color: rgba(240, 100, 80, 0.4);
+}
+
+.milon-next-step[data-urgency="info"] .milon-next-step__pill,
+.milon-next-step[data-urgency="soon"] .milon-next-step__pill {
+  opacity: 0.8;
+}
+
+.milon-next-step__title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+}
+
+.milon-next-step__reason {
+  margin: 5px 0 0;
+  max-width: 68ch;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: rgba(88, 64, 18, 0.8);
+}
+
+.dark .milon-next-step__reason,
+.accountant-portal .milon-next-step__reason {
+  color: rgba(232, 214, 164, 0.74);
+}
+
+html[data-theme="light"] .accountant-portal .milon-next-step__reason {
+  color: rgba(88, 64, 18, 0.8);
+}
+
+.milon-next-step__title--skeleton,
+.milon-next-step__reason--skeleton {
+  height: 14px;
+  border-radius: 6px;
+  background: rgba(183, 135, 42, 0.16);
+  animation: milon-next-step-pulse 1.4s ease-in-out infinite;
+}
+
+.milon-next-step__title--skeleton {
+  width: 46%;
+  height: 18px;
+}
+
+.milon-next-step__reason--skeleton {
+  width: 72%;
+  margin-top: 8px;
+}
+
+@keyframes milon-next-step-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.milon-next-step__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.milon-next-step__cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 11px;
+  padding: 9px 16px;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #1b1300;
+  cursor: pointer;
+  background: linear-gradient(180deg, #f3d98a 0%, #d4a550 46%, #b7872a 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.45),
+    0 6px 18px rgba(183, 135, 42, 0.3);
+  transition:
+    transform 0.15s ease,
+    filter 0.15s ease;
+}
+
+.milon-next-step__cta:hover {
+  filter: brightness(1.05);
+  transform: translateY(-1px);
+}
+
+.milon-next-step__cta:focus-visible,
+.milon-next-step__secondary:focus-visible,
+.milon-next-step__chip:focus-visible {
+  outline: 2px solid rgba(183, 135, 42, 0.65);
+  outline-offset: 2px;
+}
+
+.milon-next-step__secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 10px;
+  padding: 7px 12px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  color: #5b420e;
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(183, 135, 42, 0.32);
+}
+
+.dark .milon-next-step__secondary,
+.accountant-portal .milon-next-step__secondary {
+  color: #f1d28b;
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(212, 165, 80, 0.32);
+}
+
+.milon-next-step__secondary:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.milon-next-step__spinner {
+  color: #b7872a;
+}
+
+.milon-next-step__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.milon-next-step__chip {
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  color: #5b420e;
+  background: rgba(183, 135, 42, 0.1);
+  border: 1px solid rgba(183, 135, 42, 0.26);
+}
+
+.milon-next-step__chip:hover {
+  background: rgba(183, 135, 42, 0.18);
+}
+
+.dark .milon-next-step__chip,
+.accountant-portal .milon-next-step__chip {
+  color: #e8d6a4;
+  background: rgba(212, 165, 80, 0.1);
+  border-color: rgba(212, 165, 80, 0.28);
+}
+
+.milon-next-step__chip[data-chip="overdueActions"],
+.milon-next-step__chip[data-chip="blockedActions"],
+.milon-next-step__chip[data-chip="openDataRequests"] {
+  color: #7a1d15;
+  background: rgba(179, 38, 30, 0.1);
+  border-color: rgba(179, 38, 30, 0.3);
+}
+
+.dark .milon-next-step__chip[data-chip="overdueActions"],
+.dark .milon-next-step__chip[data-chip="blockedActions"],
+.dark .milon-next-step__chip[data-chip="openDataRequests"],
+.accountant-portal .milon-next-step__chip[data-chip="overdueActions"],
+.accountant-portal .milon-next-step__chip[data-chip="blockedActions"],
+.accountant-portal .milon-next-step__chip[data-chip="openDataRequests"] {
+  color: #ffb4a8;
+  background: rgba(240, 100, 80, 0.12);
+  border-color: rgba(240, 100, 80, 0.36);
+}
+
+.milon-next-step__foot {
+  margin: 10px 0 0;
+  font-size: 10.5px;
+  line-height: 1.4;
+  opacity: 0.7;
+}
+
+@media (max-width: 640px) {
+  .milon-next-step {
+    padding: 12px 13px;
+  }
+  .milon-next-step__title {
+    font-size: 16px;
+  }
 }

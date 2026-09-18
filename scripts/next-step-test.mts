@@ -13,7 +13,9 @@ import {
   OWNER_BOARD_TABS,
   daysBetween,
   nextStepRoute,
+  outstandingChips,
   resolveNextStep,
+  urgencyLabel,
   type NextStepFacts,
 } from "../src/lib/next-step";
 
@@ -341,6 +343,113 @@ const acct = (f: NextStepFacts) => resolveNextStep(f, "accountant");
     scripts: Record<string, string>;
   };
   assert(Boolean(pkg.scripts["test:next-step"]), "test:next-step script registered");
+}
+
+// ── 7. P0.4 presentation helpers ─────────────────────────────────────────────
+
+{
+  for (const u of NEXT_STEP_URGENCIES) assert(urgencyLabel(u).length > 0, `urgency label ${u}`);
+
+  const o = {
+    openQuestions: 2,
+    proposedRecommendations: 3,
+    approvedWithoutAction: 1,
+    openActions: 5,
+    overdueActions: 2,
+    blockedActions: 1,
+    actionedUnmeasured: 1,
+    openDataRequests: 0,
+  };
+  const ownerChips = outstandingChips(o, "owner");
+  eq(
+    ownerChips.map((c) => c.key).join(","),
+    "overdueActions,blockedActions,openActions,proposedRecommendations,approvedWithoutAction,actionedUnmeasured,openQuestions",
+    "chips ordered most urgent first; zero counts omitted",
+  );
+  eq(ownerChips[0].label, "2 overdue", "overdue chip");
+  eq(ownerChips[1].label, "1 blocked", "blocked chip singular");
+  eq(ownerChips[3].label, "3 to decide", "owner decides");
+  eq(outstandingChips(o, "accountant")[3].label, "3 to review", "accountant reviews");
+  eq(ownerChips[3].target, "decide", "owner chip target");
+  eq(outstandingChips(o, "accountant")[3].target, "review", "accountant chip target");
+  eq(ownerChips[5].label, "1 result to record", "unmeasured singular");
+  for (const c of ownerChips) {
+    assert((NEXT_STEP_TARGETS as readonly string[]).includes(c.target), `chip ${c.key} target`);
+  }
+  eq(
+    outstandingChips(
+      {
+        ...o,
+        openQuestions: 0,
+        proposedRecommendations: 0,
+        approvedWithoutAction: 0,
+        openActions: 0,
+        overdueActions: 0,
+        blockedActions: 0,
+        actionedUnmeasured: 0,
+      },
+      "owner",
+    ).length,
+    0,
+    "no chips when nothing outstanding",
+  );
+}
+
+// ── 8. P0.4 shell wiring — first screen is action, not ratios ────────────────
+
+{
+  const card = readFileSync(resolve("src/components/next-step-card.tsx"), "utf8");
+  assert(card.includes("useServerFn(getNextStep)"), "card fetches getNextStep");
+  assert(
+    card.includes('event: "diagnosis.reviewed"'),
+    "card records diagnosis.reviewed (only app-writable step)",
+  );
+  assert(card.includes("outstandingChips("), "card renders outstanding chips");
+  assert(card.includes("visibilitychange"), "card refreshes when the tab regains focus");
+  assert(
+    !/navigate\(|useNavigate|window\.location/.test(card),
+    "card never navigates itself; host performs the CTA",
+  );
+
+  const studio = readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8");
+  const studioCard = studio.indexOf("<NextStepCard");
+  const studioBriefing = studio.indexOf("<ClientBriefing");
+  const studioTabs = studio.indexOf("{/* ===== TABS ===== */}");
+  assert(studioCard > 0, "accountant studio renders NextStepCard");
+  assert(
+    studioCard < studioBriefing && studioBriefing < studioTabs,
+    "studio: Next Step above briefing above tabs",
+  );
+  assert(studio.includes('audience="accountant"'), "studio uses accountant audience");
+  assert(
+    studio.includes("setFirstDataOpen(true)") && studio.includes("setProfileOpen(true)"),
+    "studio CTA opens upload / profile dialogs",
+  );
+  assert(
+    studio.includes("filter: route.search.filter"),
+    "studio CTA carries overdue/blocked filter to the plan",
+  );
+
+  const app = readFileSync(resolve("src/routes/app.tsx"), "utf8");
+  const appCard = app.indexOf("<NextStepCard");
+  const appTabs = app.indexOf('id="owner-board-tabs"');
+  assert(appCard > 0, "owner board renders NextStepCard");
+  assert(appCard < appTabs, "owner board: Next Step above the tab strip (health)");
+  assert(app.includes('audience="owner"'), "owner board uses owner audience");
+  assert(app.includes("effectiveClientId && !sampleMode"), "hidden in sample mode");
+  assert(
+    app.includes('setFirstRunStep("first-data")') && app.includes("openProfileDialog("),
+    "owner CTA opens upload / profile flows",
+  );
+  assert(
+    /validateSearch[\s\S]*OWNER_BOARD_TABS/.test(app),
+    "/app accepts ?tab= from Next Step routes",
+  );
+  assert(app.includes("if (searchTab) setActiveTab(searchTab)"), "/app applies ?tab=");
+
+  const css = readFileSync(resolve("src/styles/primitives.css"), "utf8");
+  assert(css.includes(".milon-next-step {"), "card styles present");
+  assert(css.includes('.milon-next-step[data-urgency="blocking"]'), "blocking urgency styled");
 }
 
 console.log("next-step: all checks passed");

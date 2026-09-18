@@ -528,6 +528,88 @@ export function resolveNextStep(facts: NextStepFacts, audience: NextStepAudience
   };
 }
 
+// ── Presentation helpers (used by NextStepCard; pure so they are testable) ──
+
+export function urgencyLabel(u: NextStepUrgency): string {
+  switch (u) {
+    case "blocking":
+      return "Needs attention";
+    case "now":
+      return "Up next";
+    case "soon":
+      return "Coming up";
+    case "info":
+      return "In progress";
+  }
+}
+
+export type OutstandingChip = {
+  key: keyof NextStepOutstanding;
+  label: string;
+  target: NextStepTarget;
+};
+
+/**
+ * Non-zero outstanding counts as short chips, most urgent first. Each chip
+ * names the target it would open so the shell can make chips clickable.
+ */
+export function outstandingChips(
+  o: NextStepOutstanding,
+  audience: NextStepAudience,
+): OutstandingChip[] {
+  const acct = audience === "accountant";
+  const out: OutstandingChip[] = [];
+  if (o.openDataRequests > 0)
+    out.push({
+      key: "openDataRequests",
+      label: plural(o.openDataRequests, "document missing", "documents missing"),
+      target: "data_request",
+    });
+  if (o.overdueActions > 0)
+    out.push({
+      key: "overdueActions",
+      label: `${o.overdueActions} overdue`,
+      target: "chase",
+    });
+  if (o.blockedActions > 0)
+    out.push({
+      key: "blockedActions",
+      label: `${o.blockedActions} blocked`,
+      target: "unblock",
+    });
+  if (o.openActions > 0)
+    out.push({
+      key: "openActions",
+      label: plural(o.openActions, "open action"),
+      target: "actions",
+    });
+  if (o.proposedRecommendations > 0)
+    out.push({
+      key: "proposedRecommendations",
+      label: `${o.proposedRecommendations} to ${acct ? "review" : "decide"}`,
+      target: acct ? "review" : "decide",
+    });
+  if (o.approvedWithoutAction > 0)
+    out.push({
+      key: "approvedWithoutAction",
+      label: `${o.approvedWithoutAction} approved, not planned`,
+      target: "start_actions",
+    });
+  if (o.actionedUnmeasured > 0)
+    out.push({
+      key: "actionedUnmeasured",
+      label: plural(o.actionedUnmeasured, "result to record", "results to record"),
+      target: "outcome",
+    });
+  if (o.openQuestions > 0)
+    out.push({
+      key: "openQuestions",
+      label: plural(o.openQuestions, "open question"),
+      target: "questions",
+    });
+  return out;
+}
+
 /** Tab ids each surface can activate; the test asserts every route lands on one. */
 export const OWNER_BOARD_TABS = ["today", "waterfall", "cash", "budget", "next", "tasks"] as const;
 export const ACCOUNTANT_STUDIO_TABS = [

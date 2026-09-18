@@ -1,5 +1,5 @@
 ---
-name: Advisory OS spine (P0.1 state machine, P0.2 recommendations, P0.3 Next Step)
+name: Advisory OS spine (P0.1 state machine, P0.2 recommendations, P0.3 Next Step, P0.4 shell)
 description: Where the per-client advisory state lives, how it advances, how recommendations/outcomes attach, and how the Next Step is resolved
 ---
 
@@ -56,6 +56,14 @@ pure and deterministic (clock injected via `facts.now`). Priority: open data req
 - count queries that return 0 on un-migrated schema; audience defaults from
   `clients.owner_user_id === userId`. `openDataRequests` is hard-coded 0 until P0.6.
   Test: `pnpm test:next-step` (totality across every state × audience, route validity).
+
+**Next Step shell (P0.4):** `src/components/next-step-card.tsx` fetches `getNextStep` and
+renders one CTA + outstanding chips; it never navigates — the host's `onAct(step, target)`
+switches tabs / opens dialogs. Mounted above `ClientBriefing` in the accountant studio
+and above the tab strip on `/app` (hidden in sample mode). `/app` now accepts `?tab=`
+(owner board tab ids) via `validateSearch`. Only app-recorded event: "Mark as reviewed"
+→ `diagnosis.reviewed`. Styles: `.milon-next-step*` in `primitives.css` (works under
+`.dark` and `.accountant-portal`).
 
 **Gotcha:** `clients.cashflow_bank_draft` has no in-repo migration; the clients
 trigger reads it through `to_jsonb(NEW)->'cashflow_bank_draft'` so a missing

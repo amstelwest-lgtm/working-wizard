@@ -128,6 +128,13 @@ import { AdminDashboard } from "@/components/admin-dashboard";
 import { ProfileFunnel, type ProfileFunnelMode } from "@/components/profile/profile-funnel";
 import { ProfileCompletionNote } from "@/components/profile/profile-completion-note";
 import { OwnerBrainDrip } from "@/components/owner-brain-drip";
+import { NextStepCard } from "@/components/next-step-card";
+import {
+  OWNER_BOARD_TABS,
+  nextStepRoute,
+  type NextStep,
+  type NextStepTarget,
+} from "@/lib/next-step";
 import { SampleBoardBanner } from "@/components/sample-board-banner";
 import { VerifyEmailBanner } from "@/components/verify-email-banner";
 import { SAMPLE_BUSINESS_BLURB, sampleFinancialsFor } from "@/lib/sample-business";
@@ -265,6 +272,11 @@ export const Route = createFileRoute("/app")({
   // /app uses browser auth + localStorage. SSR of this tree was throwing
   // "This page didn't load" on first paint (signed-out visit and post-login).
   ssr: false,
+  // ?tab= lets Next Step emails / links (P0.3 routes) land on a board tab.
+  validateSearch: (search: Record<string, unknown>): { tab?: string } =>
+    typeof search.tab === "string" && (OWNER_BOARD_TABS as readonly string[]).includes(search.tab)
+      ? { tab: search.tab }
+      : {},
   pendingComponent: AppBootSpinner,
   component: function AppRoute() {
     return (
@@ -2556,6 +2568,39 @@ function Index() {
   // firstRunStep: null = not first run (or done); 'pick-type' = must complete profile funnel; 'first-data' = nudge to upload data
   const [firstRunStep, setFirstRunStep] = useState<null | "pick-type" | "first-data">(null);
   const [operatingProfile, setOperatingProfile] = useState<ClientOperatingProfile | null>(null);
+
+  // ?tab= deep link (Next Step routes / emails). Applied whenever it changes;
+  // the board otherwise keeps its own tab state.
+  const { tab: searchTab } = Route.useSearch();
+  useEffect(() => {
+    if (searchTab) setActiveTab(searchTab);
+  }, [searchTab]);
+
+  // Next Step (P0.4): the card resolves the step; the board performs the CTA.
+  const handleNextStepAct = useCallback(
+    (step: NextStep, target?: NextStepTarget) => {
+      const key = target ?? step.key;
+      switch (key) {
+        case "profile":
+          openProfileDialog(operatingProfile ? "complete" : "retake");
+          return;
+        case "upload":
+        case "restart":
+          setFirstRunStep("first-data");
+          return;
+        default: {
+          const tab = nextStepRoute(key, "owner", effectiveClientId ?? "").tab ?? "today";
+          setActiveTab(tab);
+          window.setTimeout(() => {
+            document
+              .getElementById("owner-board-tabs")
+              ?.scrollIntoView({ behavior: "smooth", block: "start" });
+          }, 80);
+        }
+      }
+    },
+    [openProfileDialog, operatingProfile, effectiveClientId],
+  );
   const boardMarket = useMemo(
     () => resolveMarket(coerceMarketSelection(workspaceMarket)),
     [workspaceMarket],
@@ -4191,13 +4236,34 @@ function Index() {
               />
             )}
 
+            {/* Next Step (P0.4): first screen is action, not ratios. Hidden in
+                sample mode — the sample business has no advisory state. */}
+            {effectiveClientId && !sampleMode ? (
+              <div className="mb-3">
+                <NextStepCard
+                  clientId={effectiveClientId}
+                  audience="owner"
+                  surface="owner_app"
+                  refreshKey={`${activeTab}|${firstRunStep ?? ""}|${showOnboarding ? 1 : 0}|${
+                    clientMeta?.budget_updated_at ?? ""
+                  }`}
+                  onAct={handleNextStepAct}
+                />
+              </div>
+            ) : null}
+
             {userRole === "client_owner" && !actingClientId && effectiveClientId ? (
               <div className="mb-3">
                 <InviteAccountantCard clientId={effectiveClientId} tone="board" />
               </div>
             ) : null}
 
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+            <Tabs
+              id="owner-board-tabs"
+              value={activeTab}
+              onValueChange={setActiveTab}
+              className="w-full"
+            >
               <TabsList className="mb-2 flex h-auto w-full gap-0 overflow-x-auto rounded-none border-0 border-b border-[#b7872a]/20 bg-transparent p-0 [-ms-overflow-style:none] [scrollbar-width:none] sm:grid sm:grid-cols-6 [&::-webkit-scrollbar]:hidden">
                 {[
                   { value: "today", label: "Business Health", short: "Health" },
