@@ -86,7 +86,8 @@
     "test:recommendation-actions": "vite-node --config scripts/vite-test.config.ts scripts/recommendation-actions-test.mts",
     "test:advisory-pack": "vite-node --config scripts/vite-test.config.ts scripts/advisory-pack-test.mts",
     "test:workflow-emails": "vite-node --config scripts/vite-test.config.ts scripts/workflow-emails-test.mts",
-    "test:outcomes": "vite-node --config scripts/vite-test.config.ts scripts/outcomes-test.mts"
+    "test:outcomes": "vite-node --config scripts/vite-test.config.ts scripts/outcomes-test.mts",
+    "test:marketplace": "vite-node --config scripts/vite-test.config.ts scripts/marketplace-test.mts"
   },
   "dependencies": {
     "@cloudflare/vite-plugin": "^1.25.5",

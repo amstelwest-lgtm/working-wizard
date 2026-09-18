@@ -922,6 +922,122 @@ export type Database = {
           },
         ]
       }
+      firm_listings: {
+        Row: {
+          firm_id: string
+          is_listed: boolean
+          accepting: boolean
+          headline: string | null
+          bio: string | null
+          industries: string[]
+          regions: string[]
+          services: string[]
+          contact_email: string | null
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          firm_id: string
+          is_listed?: boolean
+          accepting?: boolean
+          headline?: string | null
+          bio?: string | null
+          industries?: string[]
+          regions?: string[]
+          services?: string[]
+          contact_email?: string | null
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          firm_id?: string
+          is_listed?: boolean
+          accepting?: boolean
+          headline?: string | null
+          bio?: string | null
+          industries?: string[]
+          regions?: string[]
+          services?: string[]
+          contact_email?: string | null
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "firm_listings_firm_id_fkey"
+            columns: ["firm_id"]
+            isOneToOne: true
+            referencedRelation: "firms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      accountant_requests: {
+        Row: {
+          id: string
+          client_id: string
+          firm_id: string
+          status: string
+          message: string | null
+          pack_id: string | null
+          match_score: number | null
+          created_by: string | null
+          created_at: string
+          responded_by: string | null
+          responded_at: string | null
+          response_note: string | null
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          client_id: string
+          firm_id: string
+          status?: string
+          message?: string | null
+          pack_id?: string | null
+          match_score?: number | null
+          created_by?: string | null
+          created_at?: string
+          responded_by?: string | null
+          responded_at?: string | null
+          response_note?: string | null
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          client_id?: string
+          firm_id?: string
+          status?: string
+          message?: string | null
+          pack_id?: string | null
+          match_score?: number | null
+          created_by?: string | null
+          created_at?: string
+          responded_by?: string | null
+          responded_at?: string | null
+          response_note?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "accountant_requests_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "accountant_requests_firm_id_fkey"
+            columns: ["firm_id"]
+            isOneToOne: false
+            referencedRelation: "firms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       workflow_email_log: {
         Row: {
           id: number
@@ -2578,6 +2694,57 @@ export type Database = {
       workflow_recipients: {
         Args: {
           p_client_id: string
+        }
+        Returns: {
+          user_id: string
+          email: string
+          full_name: string | null
+          role: string
+        }[]
+      }
+      marketplace_match_firms: {
+        Args: {
+          p_client_id: string
+        }
+        Returns: {
+          firm_id: string
+          name: string
+          headline: string | null
+          bio: string | null
+          industries: string[]
+          regions: string[]
+          services: string[]
+          accepting: boolean
+          score: number
+          reasons: string[]
+          request_status: string | null
+        }[]
+      }
+      accountant_request_create: {
+        Args: {
+          p_client_id: string
+          p_firm_id: string
+          p_message?: string | null
+        }
+        Returns: string
+      }
+      accountant_request_withdraw: {
+        Args: {
+          p_request_id: string
+        }
+        Returns: string
+      }
+      accountant_request_respond: {
+        Args: {
+          p_request_id: string
+          p_accept: boolean
+          p_note?: string | null
+        }
+        Returns: string
+      }
+      accountant_request_recipients: {
+        Args: {
+          p_request_id: string
         }
         Returns: {
           user_id: string

@@ -75,6 +75,7 @@ import {
   statusPillFromHealth,
 } from "@/components/primitives";
 import { PortfolioExceptions } from "@/components/portfolio-exceptions";
+import { AccountantInbox } from "@/components/accountant-inbox";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   component: Dashboard,
@@ -1641,6 +1642,12 @@ function Dashboard() {
 
         {/* P2.3 — portfolio by exception: which clients need a human today, and why. */}
         <PortfolioExceptions firmId={firmId} refreshKey={clientRows.length} className="mb-5" />
+        {/* P3 — marketplace: owner requests to this firm + the firm's own listing. */}
+        <AccountantInbox
+          firmId={firmId}
+          className="mb-5"
+          onChanged={() => void load(firmId, user?.id)}
+        />
 
         {/* ===== CLIENTS TABLE ===== */}
         <div className="clients-head" id="clients-table">

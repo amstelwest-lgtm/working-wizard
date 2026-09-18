@@ -166,15 +166,32 @@ export const runWorkflow = createServerFn({ method: "POST" })
       (r) => r.email && r.email.includes("@"),
     );
 
+    // P3: members of a requested (not yet attached) firm come from a per-request RPC.
+    const requestRecipients = new Map<string, Recipient[]>();
+    for (const intent of intents) {
+      if (intent.audience !== "requested_firm" || !intent.requestId) continue;
+      const { data: rows } = await sb.rpc("accountant_request_recipients", {
+        p_request_id: intent.requestId,
+      });
+      requestRecipients.set(
+        intent.requestId,
+        ((rows ?? []) as Recipient[])
+          .filter((r) => r.email && r.email.includes("@"))
+          .map((r) => ({ ...r, role: "requested_firm" as const })),
+      );
+    }
+    const recipientsFor = (intent: WorkflowEmailIntent): Recipient[] =>
+      intent.audience === "requested_firm"
+        ? (requestRecipients.get(intent.requestId ?? "") ?? [])
+        : recipients.filter((r) => r.role === intent.audience);
+
     // Fan out: one row per (intent, matching recipient).
     const fanned = intents.flatMap((intent: WorkflowEmailIntent) =>
-      recipients
-        .filter((r) => r.role === intent.audience)
-        .map((r) => ({ ...intent, email: r.email, recipient: r })),
+      recipientsFor(intent).map((r) => ({ ...intent, email: r.email, recipient: r })),
     );
     const skipped: RunWorkflowResult["skipped"] = [];
     for (const intent of intents) {
-      if (!recipients.some((r) => r.role === intent.audience)) {
+      if (recipientsFor(intent).length === 0) {
         skipped.push({
           kind: intent.kind,
           reason: `no ${intent.audience} recipient with an email`,
@@ -233,7 +250,7 @@ export const runWorkflow = createServerFn({ method: "POST" })
         ref_key: d.refKey,
         recipient_user_id: d.recipient.user_id,
         recipient_email: d.email,
-        recipient_role: d.audience,
+        recipient_role: d.audience === "requested_firm" ? "accountant" : d.audience,
         status,
         subject: mail.subject,
         error,
