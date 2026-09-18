@@ -358,7 +358,10 @@ const legacyRow = {
     /IF v_rec\.status NOT IN \('approved', 'edited'\) THEN\s+RAISE EXCEPTION/.test(sql),
     "RPC refuses unapproved recommendations",
   );
-  assert(sql.includes("has_client_access(v_uid, v_rec.client_id)"), "RPC checks client access");
+  assert(
+    sql.includes("is_action_plan_writer(v_uid, v_rec.client_id)"),
+    "RPC uses the owner-or-firm write boundary (SECURITY DEFINER bypasses action_items RLS)",
+  );
   assert(
     sql.includes(
       "GRANT EXECUTE ON FUNCTION public.advisory_create_action_from_recommendation(uuid, text, date, uuid, boolean) TO authenticated",

@@ -129,6 +129,7 @@ import { ProfileFunnel, type ProfileFunnelMode } from "@/components/profile/prof
 import { ProfileCompletionNote } from "@/components/profile/profile-completion-note";
 import { OwnerBrainDrip } from "@/components/owner-brain-drip";
 import { NextStepCard } from "@/components/next-step-card";
+import { RecommendationsPanel } from "@/components/recommendations-panel";
 import {
   OWNER_BOARD_TABS,
   nextStepRoute,
@@ -3161,6 +3162,9 @@ function Index() {
   // so nothing is written, and any route to real figures drops the sample first.
   const [sampleMode, setSampleMode] = useState(false);
   const showScoredBoard = hasRealFinancials || sampleMode;
+  // Bumped by the recommendations panel after a decision / action so the
+  // Next Step card re-resolves without a reload.
+  const [advisoryBump, setAdvisoryBump] = useState(0);
   const skipInvitedSetupChrome = useMemo(
     () =>
       isInvitedOwnerWithFigures({
@@ -4246,7 +4250,7 @@ function Index() {
                   surface="owner_app"
                   refreshKey={`${activeTab}|${firstRunStep ?? ""}|${showOnboarding ? 1 : 0}|${
                     clientMeta?.budget_updated_at ?? ""
-                  }`}
+                  }|${advisoryBump}`}
                   onAct={handleNextStepAct}
                 />
               </div>
@@ -5107,6 +5111,18 @@ function Index() {
                     onAddFigures={() => setFirstRunStep("first-data")}
                   />
                 )}
+                {/* P0.5 — recommendations the owner decides on directly; no accountant required. */}
+                {effectiveClientId && !sampleMode && userRole !== "client_member" ? (
+                  <RecommendationsPanel
+                    className="mb-5"
+                    clientId={effectiveClientId}
+                    audience="owner"
+                    canPropose={hasRealFinancials}
+                    onChanged={() => setAdvisoryBump((n) => n + 1)}
+                    onOpenActions={() => setActiveTab("tasks")}
+                    onAddFigures={() => setFirstRunStep("first-data")}
+                  />
+                ) : null}
                 <div id="wizard-moves-list">
                   <NextStepsPanel
                     steps={nextSteps}

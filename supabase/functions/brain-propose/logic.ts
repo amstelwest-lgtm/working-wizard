@@ -51,7 +51,10 @@ function asTrimmed(raw: unknown): string | undefined {
 }
 
 export function normalizeStepTitle(title: string): string {
-  return title.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  return title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
 }
 
 export function titlesSimilar(a: string, b: string): boolean {
@@ -66,6 +69,79 @@ export function titlesSimilar(a: string, b: string): boolean {
   let overlap = 0;
   for (const w of ta) if (tb.has(w)) overlap += 1;
   return overlap / Math.min(ta.size, tb.size) >= 0.8;
+}
+
+// ── Audience + data-depth rules (P0.5 direct-client path) ────────────────────
+//
+// The same brain proposes for two seats. A firm-connected client's steps are
+// reviewed by the accountant first; an owner-only client reads them directly,
+// so the copy must speak to the owner and never assume a reviewer exists.
+// Audience is decided server-side from clients.firm_id, never from the body.
+
+export type ProposeAudience = "owner" | "accountant";
+
+const SCHEMA_LINE =
+  '{"next_steps":[{"title":"","rationale":"","assumptions":[""]}],"gap_items":[{"key":"","title":"","detail":"","severity":"high|medium|low"}],"competitors":[{"name":"","notes":"","threat":""}]}';
+
+const SHARED_RULES = [
+  "- Ground every item in the provided context. If evidence is missing, use an empty array for that key.",
+  "- Never invent figures, competitor names, GAP items, or next steps.",
+  "- Max 3 next_steps, max 3 gap_items, max 3 competitors.",
+  "- Do not mark anything signed_off. Do not treat drafts as truth.",
+  "- You only see statement totals and ratios, never the ledger. Never name or count specific invoices, customers, suppliers, debtors or transactions; talk about the ratio, the trend and the amount instead.",
+];
+
+export function systemPromptFor(audience: ProposeAudience): string {
+  if (audience === "owner") {
+    return [
+      "You are a sharp SME CFO copilot talking directly to the business owner. There is no accountant in the loop.",
+      "Return ONLY valid JSON, no markdown, no prose.",
+      "Schema:",
+      SCHEMA_LINE,
+      "Rules:",
+      ...SHARED_RULES,
+      "- Write in plain language the owner can act on this week. No accounting jargon without a one-clause explanation.",
+      "- Titles must be concrete moves the owner can Accept or decline; rationale says what should change in cash or profit and roughly by how much, when the numbers support it.",
+      "- Frame everything as analysis and suggestion, never as regulated financial, tax or legal advice.",
+    ].join("\n");
+  }
+  return [
+    "You are a sharp SME CFO copilot briefing an accountant.",
+    "Return ONLY valid JSON, no markdown, no prose.",
+    "Schema:",
+    SCHEMA_LINE,
+    "Rules:",
+    ...SHARED_RULES,
+    "- Titles must be concrete actions an accountant could Approve / Edit / Reject.",
+  ].join("\n");
+}
+
+// Mirrors TRANSACTION_LEVEL_CLAIMS in src/lib/recommendations.ts — keep both
+// in step (scripts/direct-client-path-test.mts checks the two agree).
+const OVERCLAIM_PATTERNS: RegExp[] = [
+  /\b(these|those|the|your|top|five|5|ten|10)\s+(\w+\s+){0,2}invoices?\b/i,
+  /\binvoices?\s+(#|no\.?|number)\s*\w+/i,
+  /\b(customers?|clients?|debtors?)\s+(who|that|which)\s+(owe|owes|haven'?t|hasn'?t|are|is)\b/i,
+  /\b(largest|biggest|top|slowest)\s+(\w+\s+){0,2}(customers?|debtors?|suppliers?|creditors?)\b/i,
+  /\b(this|that|the)\s+(transaction|payment|receipt|supplier invoice)\b/i,
+  /\bpaid\s+(late|on)\s+\d{1,2}\s+\w+\b/i,
+];
+
+export function stepOverclaims(step: Pick<ProposedStepInput, "title" | "rationale">): boolean {
+  const text = `${step.title}\n${step.rationale ?? ""}`;
+  return OVERCLAIM_PATTERNS.some((re) => re.test(text));
+}
+
+/**
+ * Statement-depth proposals must not claim ledger-level knowledge. Dropping
+ * beats rewriting: a softened hallucination is still a hallucination.
+ */
+export function dropOverclaimingSteps(steps: ProposedStepInput[]): {
+  kept: ProposedStepInput[];
+  dropped: number;
+} {
+  const kept = steps.filter((s) => !stepOverclaims(s));
+  return { kept, dropped: steps.length - kept.length };
 }
 
 export function filterNewProposedSteps(
@@ -157,7 +233,10 @@ export function asBrainSummaryObject(raw: unknown): Record<string, unknown> {
 export function parseExistingGapItems(raw: unknown): GapItem[] {
   if (!raw || typeof raw !== "object") return [];
   const o = raw as Record<string, unknown>;
-  const src = o.gap_report && typeof o.gap_report === "object" ? (o.gap_report as Record<string, unknown>) : o;
+  const src =
+    o.gap_report && typeof o.gap_report === "object"
+      ? (o.gap_report as Record<string, unknown>)
+      : o;
   const list = Array.isArray(src.items) ? src.items : [];
   const items: GapItem[] = [];
   for (const item of list) {
@@ -170,7 +249,8 @@ export function parseExistingGapItems(raw: unknown): GapItem[] {
       title,
       detail: asTrimmed(row.detail),
       severity: asTrimmed(row.severity),
-      status: row.status === "signed_off" ? "signed_off" : row.status === "draft" ? "draft" : undefined,
+      status:
+        row.status === "signed_off" ? "signed_off" : row.status === "draft" ? "draft" : undefined,
     });
   }
   return items;
@@ -194,7 +274,8 @@ export function parseExistingCompetitors(raw: unknown): Competitor[] {
       name,
       notes: asTrimmed(row.notes),
       threat: asTrimmed(row.threat),
-      status: row.status === "signed_off" ? "signed_off" : row.status === "draft" ? "draft" : undefined,
+      status:
+        row.status === "signed_off" ? "signed_off" : row.status === "draft" ? "draft" : undefined,
     });
   }
   return out;
@@ -207,7 +288,10 @@ export function applyDraftBrainPatches(
 ): { blob: Record<string, unknown>; gapAdded: number; competitorAdded: number } {
   const blob = asBrainSummaryObject(rawSummary);
   const gap = mergeDraftGapItems(parseExistingGapItems(rawSummary), payload.gap_items);
-  const competitors = mergeDraftCompetitors(parseExistingCompetitors(rawSummary), payload.competitors);
+  const competitors = mergeDraftCompetitors(
+    parseExistingCompetitors(rawSummary),
+    payload.competitors,
+  );
   if (gap.added > 0) {
     blob.gap_report = { items: gap.items, updated_at: nowIso };
   }
@@ -218,7 +302,10 @@ export function applyDraftBrainPatches(
 }
 
 export function extractJsonText(raw: string): string {
-  return raw.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "").trim();
+  return raw
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/```\s*$/i, "")
+    .trim();
 }
 
 export function parseClaudeProposePayload(raw: string): ClaudeProposePayload {
@@ -248,7 +335,10 @@ export function parseClaudeProposePayload(raw: string): ClaudeProposePayload {
     const assumptions: unknown[] = [];
     if (Array.isArray(assumptionsRaw)) {
       assumptionsRaw.forEach((item, i) => {
-        const text = typeof item === "string" ? asTrimmed(item) : asTrimmed((item as { text?: unknown })?.text);
+        const text =
+          typeof item === "string"
+            ? asTrimmed(item)
+            : asTrimmed((item as { text?: unknown })?.text);
         if (text) assumptions.push({ id: `a-${i}`, text, checked: false });
       });
     }
@@ -258,7 +348,11 @@ export function parseClaudeProposePayload(raw: string): ClaudeProposePayload {
       assumptions,
     });
   }
-  const gapRaw = Array.isArray(o.gap_items) ? o.gap_items : Array.isArray(o.gap_report) ? o.gap_report : [];
+  const gapRaw = Array.isArray(o.gap_items)
+    ? o.gap_items
+    : Array.isArray(o.gap_report)
+      ? o.gap_report
+      : [];
   const gap_items: ClaudeProposePayload["gap_items"] = [];
   for (const item of gapRaw) {
     if (!item || typeof item !== "object") continue;
@@ -287,7 +381,11 @@ export function parseClaudeProposePayload(raw: string): ClaudeProposePayload {
   return { next_steps, gap_items, competitors };
 }
 
-export function isWithinDripCooldown(lastAskedAt: string | null, now: Date, days = DRIP_COOLDOWN_DAYS): boolean {
+export function isWithinDripCooldown(
+  lastAskedAt: string | null,
+  now: Date,
+  days = DRIP_COOLDOWN_DAYS,
+): boolean {
   if (!lastAskedAt) return false;
   const t = Date.parse(lastAskedAt);
   if (!Number.isFinite(t)) return false;
@@ -305,7 +403,7 @@ export function pickNextOwnerDrip(candidates: DripCandidate[], now: Date): DripC
   if (activeOwnerDrip(candidates, now)) return null;
   const eligible = candidates.filter((c) => !isWithinDripCooldown(c.lastAskedAt, now));
   const neverAsked = eligible.filter((c) => !c.lastAskedAt);
-  return (neverAsked[0] ?? eligible[0]) ?? null;
+  return neverAsked[0] ?? eligible[0] ?? null;
 }
 
 export function ownerDripCandidatesFromStored(

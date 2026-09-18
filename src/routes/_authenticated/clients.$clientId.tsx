@@ -120,6 +120,7 @@ import {
 } from "@/lib/debt-schedule";
 import { ClientBriefing } from "@/components/client-briefing";
 import { NextStepCard } from "@/components/next-step-card";
+import { RecommendationsPanel } from "@/components/recommendations-panel";
 import { nextStepRoute, type NextStep, type NextStepTarget } from "@/lib/next-step";
 import {
   buildFinancialSnapshot,
@@ -725,6 +726,8 @@ function ClientView() {
   const [firstDataOpen, setFirstDataOpen] = useState(false);
   const [snapshots, setSnapshots] = useState<SnapshotRow[]>([]);
   const [deliveryRefresh, setDeliveryRefresh] = useState(0);
+  // Bumped by the recommendations panel so the Next Step card re-resolves.
+  const [advisoryBump, setAdvisoryBump] = useState(0);
   const [queriesRefresh, setQueriesRefresh] = useState(0);
 
   // Accountant sign-off — one stamp per deliverable tab
@@ -1937,7 +1940,7 @@ function ClientView() {
               clientId={client.id}
               audience="accountant"
               surface="accountant_portal"
-              refreshKey={`${activeTab}|${snapshots.length}|${hasFigures ? 1 : 0}|${client.last_forecast_at ?? ""}`}
+              refreshKey={`${activeTab}|${snapshots.length}|${hasFigures ? 1 : 0}|${client.last_forecast_at ?? ""}|${advisoryBump}`}
               onAct={handleNextStepAct}
             />
 
@@ -2878,6 +2881,16 @@ function ClientView() {
                     onChange={patchSignoff("advisory")}
                   />
                 }
+              />
+              {/* P0.5 — the recommendation object finally has a surface; Next Step routes review/decide here. */}
+              <RecommendationsPanel
+                className="mb-5"
+                clientId={client.id}
+                audience="accountant"
+                canPropose={hasFigures}
+                onChanged={() => setAdvisoryBump((n) => n + 1)}
+                onOpenActions={() => setActiveTab("plan")}
+                onAddFigures={() => setFirstDataOpen(true)}
               />
               <DeliverableInputConfig
                 className="mb-5"

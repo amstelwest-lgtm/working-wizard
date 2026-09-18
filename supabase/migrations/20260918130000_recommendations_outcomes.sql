@@ -435,7 +435,10 @@ BEGIN
   IF NOT FOUND THEN
     RAISE EXCEPTION 'Recommendation not found';
   END IF;
-  IF NOT public.has_client_access(v_uid, v_rec.client_id) THEN
+  -- SECURITY DEFINER bypasses the action_items RLS, so apply the same
+  -- owner-or-firm boundary those policies use (invited members can read
+  -- the plan but never write it).
+  IF NOT public.is_action_plan_writer(v_uid, v_rec.client_id) THEN
     RAISE EXCEPTION 'You do not have access to this client';
   END IF;
 

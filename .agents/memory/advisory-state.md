@@ -1,5 +1,5 @@
 ---
-name: Advisory OS spine (P0.1 state machine, P0.2 recommendations, P0.3 Next Step, P0.4 shell)
+name: Advisory OS spine (P0.1 state machine, P0.2 recommendations, P0.3 Next Step, P0.4 shell, P0.5 direct-client path)
 description: Where the per-client advisory state lives, how it advances, how recommendations/outcomes attach, and how the Next Step is resolved
 ---
 
@@ -64,6 +64,23 @@ and above the tab strip on `/app` (hidden in sample mode). `/app` now accepts `?
 (owner board tab ids) via `validateSearch`. Only app-recorded event: "Mark as reviewed"
 → `diagnosis.reviewed`. Styles: `.milon-next-step*` in `primitives.css` (works under
 `.dark` and `.accountant-portal`).
+
+**Direct-client path (P0.5):** DB layer was already owner-safe (`has_client_access` and
+`is_action_plan_writer` both include `owner_user_id`); the gate was UI. `proposed_next_steps`
+had no surface anywhere — `brain-propose` wrote rows nobody could see, so an owner-only
+client could never reach `client_decision`. `src/components/recommendations-panel.tsx`
+(shared, `audience` prop) lists open + approved recommendations with Accept/Not now
+(owner) or Approve/Reject (accountant), "Add to action plan", and a "Suggest moves"
+button → `invokeBrainPropose`. Mounted on `/app` Next Moves tab and the studio Advisory
+tab (where `nextStepRoute` already sends `recommend/review/decide`). `brain-propose`
+picks its audience server-side from `clients.firm_id` (`systemPromptFor` in logic.ts),
+drops proposals that claim invoice/customer-level knowledge (`dropOverclaimingSteps`,
+regexes mirror `TRANSACTION_LEVEL_CLAIMS` — test asserts they agree), and stamps
+`source: 'ai', data_depth: 'statement'` (retries without on pre-P0.2 DB).
+`createActionFromRecommendation` falls back to a TS implementation
+(`createActionWithoutRpc`, links via `linked_action_item_id`) when the RPC is absent.
+The RPC itself now checks `is_action_plan_writer` (SECURITY DEFINER bypasses RLS, so
+invited members must not get a back door). Test: `pnpm test:direct-client-path`.
 
 **Gotcha:** `clients.cashflow_bank_draft` has no in-repo migration; the clients
 trigger reads it through `to_jsonb(NEW)->'cashflow_bank_draft'` so a missing

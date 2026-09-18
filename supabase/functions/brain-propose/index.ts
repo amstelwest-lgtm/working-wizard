@@ -10,12 +10,15 @@ import { callClaude } from "../ask-ai/anthropic.ts";
 import {
   PROPOSE_RATE_LIMIT,
   applyDraftBrainPatches,
+  dropOverclaimingSteps,
   filterNewProposedSteps,
   ownerDripCandidatesFromStored,
   parseClaudeProposePayload,
   pickNextOwnerDrip,
   activeOwnerDrip,
+  systemPromptFor,
   type DripCandidate,
+  type ProposeAudience,
 } from "./logic.ts";
 
 function buildCorsHeaders(requestOrigin: string | null): Record<string, string> {
@@ -40,20 +43,12 @@ function buildCorsHeaders(requestOrigin: string | null): Record<string, string> 
 function json(body: unknown, status = 200, corsHeaders?: Record<string, string>) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...(corsHeaders ?? { "Access-Control-Allow-Origin": "*" }), "Content-Type": "application/json" },
+    headers: {
+      ...(corsHeaders ?? { "Access-Control-Allow-Origin": "*" }),
+      "Content-Type": "application/json",
+    },
   });
 }
-
-const SYSTEM = `You are a sharp SME CFO copilot briefing an accountant.
-Return ONLY valid JSON, no markdown, no prose.
-Schema:
-{"next_steps":[{"title":"","rationale":"","assumptions":[""]}],"gap_items":[{"key":"","title":"","detail":"","severity":"high|medium|low"}],"competitors":[{"name":"","notes":"","threat":""}]}
-Rules:
-- Ground every item in the provided context. If evidence is missing, use an empty array for that key.
-- Never invent figures, competitor names, GAP items, or next steps.
-- Max 3 next_steps, max 3 gap_items, max 3 competitors.
-- Do not mark anything signed_off. Do not treat drafts as truth.
-- Titles must be concrete actions an accountant could Approve / Edit / Reject.`;
 
 function compact(value: unknown, max = 800): string {
   const text = typeof value === "string" ? value : JSON.stringify(value);
@@ -92,7 +87,10 @@ Deno.serve(async (req: Request) => {
   });
   const adminClient = createClient(supabaseUrl, serviceKey);
 
-  const { data: { user }, error: authErr } = await userClient.auth.getUser();
+  const {
+    data: { user },
+    error: authErr,
+  } = await userClient.auth.getUser();
   if (authErr || !user) return respond({ error: "Unauthorised" }, 401);
 
   let body: {
@@ -107,8 +105,10 @@ Deno.serve(async (req: Request) => {
   const clientId = body.clientId;
   if (!clientId) return respond({ error: "clientId is required" }, 400);
 
-  const { data: hasAccess, error: accessErr } = await adminClient
-    .rpc("has_client_access", { _user_id: user.id, _client_id: clientId });
+  const { data: hasAccess, error: accessErr } = await adminClient.rpc("has_client_access", {
+    _user_id: user.id,
+    _client_id: clientId,
+  });
   if (accessErr) {
     console.error("has_client_access error:", accessErr.message);
     return respond({ error: "Access check failed" }, 500);
@@ -133,7 +133,9 @@ Deno.serve(async (req: Request) => {
   const [clientRes, snapRes, stepRes, qRes] = await Promise.all([
     userClient
       .from("clients")
-      .select("name, business_type, operating_profile, brain_summary, brain_summary_updated_at")
+      .select(
+        "name, business_type, firm_id, operating_profile, brain_summary, brain_summary_updated_at",
+      )
       .eq("id", clientId)
       .maybeSingle(),
     userClient
@@ -158,6 +160,8 @@ Deno.serve(async (req: Request) => {
   ]);
 
   const client = clientRes.data;
+  // Owner-only client → speak to the owner; firm-connected → brief the accountant.
+  const audience: ProposeAudience = client?.firm_id ? "accountant" : "owner";
   const brainSummary = client?.brain_summary ?? null;
   const existingSteps = (stepRes.data ?? []) as Array<{ title: string; status: string }>;
   const storedQuestions = (qRes.data ?? []) as Array<{
@@ -224,15 +228,20 @@ Deno.serve(async (req: Request) => {
   if (brainSummary && typeof brainSummary === "object") {
     const blob = brainSummary as Record<string, unknown>;
     if (blob.headline || blob.body || blob.summary) {
-      contextLines.push(`Brain summary: ${compact(blob.headline ?? blob.body ?? blob.summary, 600)}`);
+      contextLines.push(
+        `Brain summary: ${compact(blob.headline ?? blob.body ?? blob.summary, 600)}`,
+      );
     }
     if (blob.gap_report) contextLines.push(`Existing GAP: ${compact(blob.gap_report, 800)}`);
-    if (blob.competitors) contextLines.push(`Existing competitors: ${compact(blob.competitors, 600)}`);
+    if (blob.competitors)
+      contextLines.push(`Existing competitors: ${compact(blob.competitors, 600)}`);
     if (blob.business_map) contextLines.push(`Business map: ${compact(blob.business_map, 600)}`);
   }
   const snap = snapRes.data;
   if (snap) {
-    contextLines.push(`Latest snapshot: ${snap.period_label ?? snap.period_date ?? "unknown"} (${snap.source ?? "n/a"})`);
+    contextLines.push(
+      `Latest snapshot: ${snap.period_label ?? snap.period_date ?? "unknown"} (${snap.source ?? "n/a"})`,
+    );
     const ratios = ratioLines(snap.ratios);
     if (ratios.length) contextLines.push(`Ratios:\n  ${ratios.join("\n  ")}`);
   }
@@ -248,7 +257,9 @@ Deno.serve(async (req: Request) => {
   }
   const openSteps = existingSteps.filter((s) => s.status === "proposed" || s.status === "edited");
   if (openSteps.length) {
-    contextLines.push("Open proposed next steps:\n" + openSteps.map((s) => `  - ${s.title}`).join("\n"));
+    contextLines.push(
+      "Open proposed next steps:\n" + openSteps.map((s) => `  - ${s.title}`).join("\n"),
+    );
   }
 
   let skippedReason: "ai_not_configured" | "empty_context" | undefined;
@@ -261,7 +272,7 @@ Deno.serve(async (req: Request) => {
   } else {
     try {
       const claude = await callClaude(
-        SYSTEM,
+        systemPromptFor(audience),
         `Propose next steps from this client brain. Empty arrays when evidence is missing.\n\n${contextLines.join("\n")}`,
         { maxTokens: 1400, temperature: 0.2 },
       );
@@ -291,19 +302,27 @@ Deno.serve(async (req: Request) => {
     }
   }
 
-  const toInsert = filterNewProposedSteps(payload.next_steps, existingSteps);
+  // Statement-depth only: anything claiming invoice/customer-level knowledge
+  // is dropped before it can reach either seat.
+  const { kept: depthSafe, dropped: stepsDropped } = dropOverclaimingSteps(payload.next_steps);
+  const toInsert = filterNewProposedSteps(depthSafe, existingSteps);
   let stepsInserted = 0;
   if (toInsert.length) {
-    const { error: insErr } = await userClient.from("proposed_next_steps").insert(
-      toInsert.map((step) => ({
-        client_id: clientId,
-        title: step.title,
-        rationale: step.rationale,
-        assumptions: step.assumptions,
-        status: "proposed",
-        created_by: user.id,
-      })),
-    );
+    const baseRows = toInsert.map((step) => ({
+      client_id: clientId,
+      title: step.title,
+      rationale: step.rationale,
+      assumptions: step.assumptions,
+      status: "proposed",
+      created_by: user.id,
+    }));
+    // P0.2 columns; retry without them on a database that predates that migration.
+    let { error: insErr } = await userClient
+      .from("proposed_next_steps")
+      .insert(baseRows.map((row) => ({ ...row, source: "ai", data_depth: "statement" })));
+    if (insErr && /column|schema cache/i.test(insErr.message)) {
+      ({ error: insErr } = await userClient.from("proposed_next_steps").insert(baseRows));
+    }
     if (insErr) {
       console.error("proposed_next_steps insert:", insErr.message);
       return respond({ error: insErr.message }, 500);
@@ -335,6 +354,8 @@ Deno.serve(async (req: Request) => {
 
   return respond({
     stepsInserted,
+    stepsDropped,
+    audience,
     gapDrafts: patched.gapAdded,
     competitorDrafts: patched.competitorAdded,
     drip: drip ? { key: drip.key, prompt: drip.prompt } : null,

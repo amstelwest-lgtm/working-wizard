@@ -268,8 +268,117 @@ export const supersedeRecommendation = createServerFn({ method: "POST" })
 // ── approved recommendation → action_item ────────────────────────────────────
 
 export type CreateActionResult =
-  | { ok: true; actionItemId: string }
+  | { ok: true; actionItemId: string; via: "rpc" | "fallback" }
   | { ok: false; reason: "not_migrated" };
+
+/**
+ * Pre-P0.2 fallback: same steps as the RPC, done through the caller's client
+ * so RLS (`is_action_plan_writer`: owner or firm member) still applies. Links
+ * via the legacy `linked_action_item_id` because `recommendation_id` does not
+ * exist yet; the migration backfills it from that column later.
+ */
+async function createActionWithoutRpc(
+  sb: LooseSb,
+  data: {
+    clientId: string;
+    recommendationId: string;
+    title?: string;
+    dueDate?: string;
+    ownerId?: string;
+    approve?: boolean;
+  },
+): Promise<CreateActionResult> {
+  const rec = await sb
+    .from("proposed_next_steps")
+    .select("id, title, rationale, status, linked_action_item_id")
+    .eq("id", data.recommendationId)
+    .eq("client_id", data.clientId)
+    .maybeSingle();
+  if (rec.error) throw new Error(rec.error.message);
+  if (!rec.data) throw new Error("Recommendation not found");
+  if (rec.data.linked_action_item_id) {
+    return { ok: true, actionItemId: String(rec.data.linked_action_item_id), via: "fallback" };
+  }
+  let status: string = rec.data.status;
+  if (status === "proposed" && data.approve) {
+    const up = await sb
+      .from("proposed_next_steps")
+      .update({ status: "approved" })
+      .eq("id", data.recommendationId)
+      .eq("client_id", data.clientId);
+    if (up.error) throw new Error(up.error.message);
+    status = "approved";
+  }
+  if (status !== "approved" && status !== "edited") {
+    throw new Error(
+      `Recommendation must be approved before it becomes an action (status: ${status})`,
+    );
+  }
+
+  const plan = await sb
+    .from("action_plans")
+    .select("id")
+    .eq("client_id", data.clientId)
+    .eq("is_active", true)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (plan.error) throw new Error(plan.error.message);
+  let planId: string | null = plan.data?.id ?? null;
+  if (!planId) {
+    const now = new Date();
+    const q = Math.floor(now.getUTCMonth() / 3) + 1;
+    const y = now.getUTCFullYear();
+    const quarterEnd = new Date(Date.UTC(y, q * 3, 0)).toISOString().slice(0, 10);
+    const created = await sb
+      .from("action_plans")
+      .insert({
+        client_id: data.clientId,
+        period_label: `Q${q} ${y}`,
+        outcome_goal: "Set your outcome goal for this quarter",
+        target_date: quarterEnd,
+      })
+      .select("id")
+      .single();
+    if (created.error) throw new Error(created.error.message);
+    planId = String(created.data.id);
+  }
+
+  const seqRes = await sb
+    .from("action_items")
+    .select("seq")
+    .eq("plan_id", planId)
+    .order("seq", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (seqRes.error) throw new Error(seqRes.error.message);
+  const seq = (seqRes.data?.seq ?? 0) + 1;
+
+  const item = await sb
+    .from("action_items")
+    .insert({
+      plan_id: planId,
+      client_id: data.clientId,
+      seq,
+      title: data.title?.trim() || rec.data.title,
+      outcome_why: rec.data.rationale ?? null,
+      owner_id: data.ownerId ?? null,
+      due_date: data.dueDate ?? null,
+      source: "manual",
+    })
+    .select("id")
+    .single();
+  if (item.error) throw new Error(item.error.message);
+  const actionItemId = String(item.data.id);
+
+  const link = await sb
+    .from("proposed_next_steps")
+    .update({ linked_action_item_id: actionItemId })
+    .eq("id", data.recommendationId)
+    .eq("client_id", data.clientId);
+  if (link.error) throw new Error(link.error.message);
+  return { ok: true, actionItemId, via: "fallback" };
+}
 
 export const createActionFromRecommendation = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -301,10 +410,10 @@ export const createActionFromRecommendation = createServerFn({ method: "POST" })
       p_approve: data.approve ?? false,
     });
     if (error) {
-      if (isMissingRecommendationRelation(error)) return { ok: false, reason: "not_migrated" };
+      if (isMissingRecommendationRelation(error)) return createActionWithoutRpc(sb, data);
       throw new Error(error.message);
     }
-    return { ok: true, actionItemId: String(actionId) };
+    return { ok: true, actionItemId: String(actionId), via: "rpc" };
   });
 
 // ── outcomes ─────────────────────────────────────────────────────────────────
