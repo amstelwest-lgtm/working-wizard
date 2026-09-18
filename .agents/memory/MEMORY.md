@@ -1,5 +1,6 @@
 - [Supabase user_roles schema](user-roles-schema.md) — column is `role` (not `app_role`); role enum values: accountant | firm_admin | client_owner | client_member
-- [AI gateway pattern](ai-gateway.md) — uses Lovable AI gateway (not Gemini directly); LOVABLE_API_KEY env var; endpoint ai.gateway.lovable.dev/v1; model google/gemini-2.5-flash
+- [AI provider reality](ai-gateway.md) — all live LLM calls go direct to Anthropic Claude Sonnet 4.6 (ask-ai / milon-bot edge fns, claude-messages.ts); Lovable gateway + `@google/genai` are dead code, GEMINI_API_KEY unused
+- [Advisory state machine](advisory-state.md) — clients.advisory_state advanced by DB triggers via advisory_apply_event; rules live in src/lib/advisory-state.ts and are seeded into advisory_transition_rules; test:advisory-state guards drift
 - [Context provider placement](provider-placement.md) — global contexts (Analytics, Notes) must go in __root.tsx so hooks work in any route component
 - [GitHub push playbook](github-push-playbook.md) — git push always fails (pack corruption + sandbox blocks); use GitHub API via Node.js bash script as reliable fallback
 - [Supabase project URL/key drift](supabase-project-drift.md) — vite.config.ts define maps non-VITE_-prefixed SUPABASE_URL/KEY into the client bundle; verify actual runtime value, don't trust .env or VITE_ vars alone
