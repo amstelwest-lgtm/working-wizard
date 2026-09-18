@@ -546,6 +546,146 @@ export type Database = {
           },
         ]
       }
+      advisory_cycles: {
+        Row: {
+          id: string
+          client_id: string
+          seq: number
+          state: string
+          trigger_event: string
+          started_at: string
+          closed_at: string | null
+          closed_reason: string | null
+          next_review_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          client_id: string
+          seq: number
+          state: string
+          trigger_event: string
+          started_at?: string
+          closed_at?: string | null
+          closed_reason?: string | null
+          next_review_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          client_id?: string
+          seq?: number
+          state?: string
+          trigger_event?: string
+          started_at?: string
+          closed_at?: string | null
+          closed_reason?: string | null
+          next_review_at?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "advisory_cycles_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      advisory_events: {
+        Row: {
+          id: number
+          client_id: string
+          cycle_id: string | null
+          event: string
+          from_state: string | null
+          to_state: string
+          changed: boolean
+          actor_kind: string
+          actor_id: string | null
+          source: string
+          ref_table: string | null
+          ref_id: string | null
+          payload: Json
+          created_at: string
+        }
+        Insert: {
+          id?: number
+          client_id: string
+          cycle_id?: string | null
+          event: string
+          from_state?: string | null
+          to_state: string
+          changed?: boolean
+          actor_kind?: string
+          actor_id?: string | null
+          source?: string
+          ref_table?: string | null
+          ref_id?: string | null
+          payload?: Json
+          created_at?: string
+        }
+        Update: {
+          id?: number
+          client_id?: string
+          cycle_id?: string | null
+          event?: string
+          from_state?: string | null
+          to_state?: string
+          changed?: boolean
+          actor_kind?: string
+          actor_id?: string | null
+          source?: string
+          ref_table?: string | null
+          ref_id?: string | null
+          payload?: Json
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "advisory_events_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "advisory_events_cycle_id_fkey"
+            columns: ["cycle_id"]
+            isOneToOne: false
+            referencedRelation: "advisory_cycles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      advisory_transition_rules: {
+        Row: {
+          seq: number
+          event: string
+          from_state: string
+          guard: string
+          to_state: string
+          new_cycle: boolean
+        }
+        Insert: {
+          seq: number
+          event: string
+          from_state: string
+          guard: string
+          to_state: string
+          new_cycle?: boolean
+        }
+        Update: {
+          seq?: number
+          event?: string
+          from_state?: string
+          guard?: string
+          to_state?: string
+          new_cycle?: boolean
+        }
+        Relationships: []
+      }
       client_employees: {
         Row: {
           active: boolean
@@ -1949,6 +2089,14 @@ export type Database = {
       }
       analytics_purge_old_events: {
         Args: { p_months?: number }
+        Returns: number
+      }
+      advisory_record_event: {
+        Args: { p_client_id: string; p_event: string; p_payload?: Json }
+        Returns: number
+      }
+      advisory_mark_reviews_due: {
+        Args: Record<PropertyKey, never>
         Returns: number
       }
     }
