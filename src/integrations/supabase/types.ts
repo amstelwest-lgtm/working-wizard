@@ -82,6 +82,7 @@ export type Database = {
           owner_id: string | null
           plan_id: string
           progress_pct: number
+          recommendation_id: string | null
           sent_at: string | null
           seq: number
           source: Database["public"]["Enums"]["action_source"]
@@ -102,6 +103,7 @@ export type Database = {
           owner_id?: string | null
           plan_id: string
           progress_pct?: number
+          recommendation_id?: string | null
           sent_at?: string | null
           seq: number
           source?: Database["public"]["Enums"]["action_source"]
@@ -122,6 +124,7 @@ export type Database = {
           owner_id?: string | null
           plan_id?: string
           progress_pct?: number
+          recommendation_id?: string | null
           sent_at?: string | null
           seq?: number
           source?: Database["public"]["Enums"]["action_source"]
@@ -150,6 +153,13 @@ export type Database = {
             columns: ["plan_id"]
             isOneToOne: false
             referencedRelation: "action_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "action_items_recommendation_id_fkey"
+            columns: ["recommendation_id"]
+            isOneToOne: false
+            referencedRelation: "proposed_next_steps"
             referencedColumns: ["id"]
           },
         ]
@@ -685,6 +695,79 @@ export type Database = {
           new_cycle?: boolean
         }
         Relationships: []
+      }
+      recommendation_outcomes: {
+        Row: {
+          id: string
+          client_id: string
+          recommendation_id: string
+          cycle_id: string | null
+          metric: string
+          expected_amount: number | null
+          actual_amount: number | null
+          variance_amount: number | null
+          method: string
+          baseline_snapshot_id: string | null
+          measured_snapshot_id: string | null
+          period_label: string | null
+          measured_at: string
+          notes: string | null
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          client_id: string
+          recommendation_id: string
+          cycle_id?: string | null
+          metric: string
+          expected_amount?: number | null
+          actual_amount?: number | null
+          method?: string
+          baseline_snapshot_id?: string | null
+          measured_snapshot_id?: string | null
+          period_label?: string | null
+          measured_at?: string
+          notes?: string | null
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          client_id?: string
+          recommendation_id?: string
+          cycle_id?: string | null
+          metric?: string
+          expected_amount?: number | null
+          actual_amount?: number | null
+          method?: string
+          baseline_snapshot_id?: string | null
+          measured_snapshot_id?: string | null
+          period_label?: string | null
+          measured_at?: string
+          notes?: string | null
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recommendation_outcomes_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recommendation_outcomes_recommendation_id_fkey"
+            columns: ["recommendation_id"]
+            isOneToOne: false
+            referencedRelation: "proposed_next_steps"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       client_employees: {
         Row: {
@@ -1331,6 +1414,20 @@ export type Database = {
           created_by: string | null
           created_at: string
           updated_at: string
+          cycle_id: string | null
+          problem: string | null
+          evidence: Json
+          priority: string
+          confidence: number | null
+          data_depth: string
+          expected_impact_metric: string | null
+          expected_impact_amount: number | null
+          expected_impact_horizon_days: number | null
+          expected_impact_note: string | null
+          source: string
+          superseded_by: string | null
+          decided_at: string | null
+          decided_by: string | null
         }
         Insert: {
           id?: string
@@ -1350,6 +1447,20 @@ export type Database = {
           created_by?: string | null
           created_at?: string
           updated_at?: string
+          cycle_id?: string | null
+          problem?: string | null
+          evidence?: Json
+          priority?: string
+          confidence?: number | null
+          data_depth?: string
+          expected_impact_metric?: string | null
+          expected_impact_amount?: number | null
+          expected_impact_horizon_days?: number | null
+          expected_impact_note?: string | null
+          source?: string
+          superseded_by?: string | null
+          decided_at?: string | null
+          decided_by?: string | null
         }
         Update: {
           id?: string
@@ -1369,6 +1480,20 @@ export type Database = {
           created_by?: string | null
           created_at?: string
           updated_at?: string
+          cycle_id?: string | null
+          problem?: string | null
+          evidence?: Json
+          priority?: string
+          confidence?: number | null
+          data_depth?: string
+          expected_impact_metric?: string | null
+          expected_impact_amount?: number | null
+          expected_impact_horizon_days?: number | null
+          expected_impact_note?: string | null
+          source?: string
+          superseded_by?: string | null
+          decided_at?: string | null
+          decided_by?: string | null
         }
         Relationships: [
           {
@@ -2098,6 +2223,16 @@ export type Database = {
       advisory_mark_reviews_due: {
         Args: Record<PropertyKey, never>
         Returns: number
+      }
+      advisory_create_action_from_recommendation: {
+        Args: {
+          p_recommendation_id: string
+          p_title?: string | null
+          p_due_date?: string | null
+          p_owner_id?: string | null
+          p_approve?: boolean
+        }
+        Returns: string
       }
     }
     Enums: {

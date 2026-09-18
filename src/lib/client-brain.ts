@@ -25,7 +25,7 @@ export const FACT_SOURCES = [
 ] as const;
 export type FactSource = (typeof FACT_SOURCES)[number];
 
-export const NEXT_STEP_STATUSES = ["proposed", "approved", "edited", "rejected"] as const;
+export const NEXT_STEP_STATUSES = ["proposed", "approved", "edited", "rejected", "superseded"] as const;
 export type NextStepStatus = (typeof NEXT_STEP_STATUSES)[number];
 
 export const DRAFT_STATUSES = ["draft", "ready", "sent", "discarded"] as const;
@@ -329,6 +329,7 @@ export function nextStepStatusLabel(status: NextStepStatus): string {
   if (status === "proposed") return "Proposed";
   if (status === "approved") return "Approved";
   if (status === "edited") return "Edited";
+  if (status === "superseded") return "Superseded";
   return "Rejected";
 }
 

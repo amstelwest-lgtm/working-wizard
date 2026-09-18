@@ -2,11 +2,13 @@
  * Advisory state machine — pure module (P0.1 of the advisory OS spine).
  *
  * One persistent advisory state per client, advanced by append-only events.
- * The transition RULES below are the single source of truth: the migration
- * `supabase/migrations/20260918120000_advisory_state.sql` seeds the exact same
- * rows into `public.advisory_transition_rules`, and `pnpm test:advisory-state`
- * fails if the two ever drift. Change rules here first, then regenerate the
- * SQL block (the test prints the expected block on mismatch).
+ * The transition RULES below are the single source of truth: the advisory
+ * migrations (`supabase/migrations/*advisory*.sql`, `*recommendations*.sql`)
+ * seed the exact same rows into `public.advisory_transition_rules`, and
+ * `pnpm test:advisory-state` fails if the latest SQL definition of the rules,
+ * state/event/guard CHECKs or RPC allowlist ever drifts from this file. Change
+ * here first, then add a NEW migration that re-seeds / re-declares the piece
+ * that changed (the test prints the expected block on mismatch).
  *
  * Semantics: a state names what MILŌN is waiting for / doing right now, not
  * what the user last clicked. Nothing in this file touches the network.
@@ -54,6 +56,7 @@ export const ADVISORY_EVENTS = [
   "recommendation.proposed",
   "recommendation.approved",
   "recommendation.rejected",
+  "recommendation.superseded",
   "review.signed_off",
   "review.retracted",
   // actions
@@ -61,6 +64,8 @@ export const ADVISORY_EVENTS = [
   "action.started",
   "action.completed",
   "action.blocked",
+  // outcomes (P0.2)
+  "outcome.recorded",
 ] as const;
 export type AdvisoryEvent = (typeof ADVISORY_EVENTS)[number];
 
