@@ -83,7 +83,8 @@
     "test:next-step": "vite-node --config scripts/vite-test.config.ts scripts/next-step-test.mts",
     "test:direct-client-path": "vite-node --config scripts/vite-test.config.ts scripts/direct-client-path-test.mts",
     "test:data-requests": "vite-node --config scripts/vite-test.config.ts scripts/data-requests-test.mts",
-    "test:recommendation-actions": "vite-node --config scripts/vite-test.config.ts scripts/recommendation-actions-test.mts"
+    "test:recommendation-actions": "vite-node --config scripts/vite-test.config.ts scripts/recommendation-actions-test.mts",
+    "test:advisory-pack": "vite-node --config scripts/vite-test.config.ts scripts/advisory-pack-test.mts"
   },
   "dependencies": {
     "@cloudflare/vite-plugin": "^1.25.5",

@@ -122,6 +122,7 @@ import { ClientBriefing } from "@/components/client-briefing";
 import { NextStepCard } from "@/components/next-step-card";
 import { RecommendationsPanel } from "@/components/recommendations-panel";
 import { DataRequestsPanel } from "@/components/data-requests-panel";
+import { AdvisoryPackPanel } from "@/components/advisory-pack-panel";
 import { nextStepRoute, type NextStep, type NextStepTarget } from "@/lib/next-step";
 import {
   buildFinancialSnapshot,
@@ -433,6 +434,8 @@ type Client = {
   financials_updated_at?: string | null;
   cashflow?: ExistingCashflow | null;
   market?: unknown;
+  /** P1: firm attached → the accountant seat signs off advisory packs. */
+  firm_id?: string | null;
 };
 
 type ActiveTab =
@@ -1054,7 +1057,7 @@ function ClientView() {
         const { data, error } = await supabase
           .from("clients")
           .select(
-            "id, name, business_type, client_code, operating_profile, cash_runway_weeks, last_forecast_at, financials, financials_updated_at, reports_issued_count, cashflow, market",
+            "id, name, business_type, client_code, operating_profile, cash_runway_weeks, last_forecast_at, financials, financials_updated_at, reports_issued_count, cashflow, market, firm_id",
           )
           .eq("id", clientId)
           .maybeSingle();
@@ -1068,9 +1071,9 @@ function ClientView() {
             msg.includes("client_code")
           ) {
             const withoutMarket =
-              "id, name, business_type, client_code, operating_profile, cash_runway_weeks, last_forecast_at, financials, financials_updated_at, reports_issued_count, cashflow";
+              "id, name, business_type, client_code, operating_profile, cash_runway_weeks, last_forecast_at, financials, financials_updated_at, reports_issued_count, cashflow, firm_id";
             const stripped =
-              "id, name, business_type, operating_profile, cash_runway_weeks, last_forecast_at, financials, financials_updated_at, cashflow";
+              "id, name, business_type, operating_profile, cash_runway_weeks, last_forecast_at, financials, financials_updated_at, cashflow, firm_id";
             const retrySelect = /market/i.test(msg) ? withoutMarket : stripped;
             const { data: data2, error: error2 } = await supabase
               .from("clients")
@@ -2892,6 +2895,16 @@ function ClientView() {
                     onChange={patchSignoff("advisory")}
                   />
                 }
+              />
+              {/* P1 — the reviewable pack: edit, comment, request changes, sign off. */}
+              <AdvisoryPackPanel
+                className="mb-5"
+                clientId={client.id}
+                audience="accountant"
+                canGenerate={hasFigures}
+                hasFirm={Boolean(client.firm_id)}
+                refreshKey={`${activeTab}|${snapshots.length}|${advisoryBump}`}
+                onChanged={() => setAdvisoryBump((n) => n + 1)}
               />
               {/* P0.5 — the recommendation object finally has a surface; Next Step routes review/decide here. */}
               <RecommendationsPanel

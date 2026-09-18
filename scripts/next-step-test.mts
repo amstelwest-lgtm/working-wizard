@@ -154,11 +154,68 @@ const acct = (f: NextStepFacts) => resolveNextStep(f, "accountant");
   eq(owner(facts({ state: "recommendations" })).cta.route.tab, "next", "owner reads next moves");
 
   // accountant_review: the two seats see different work.
+  // P1: with no pack yet the accountant builds one; the pack is the review unit.
   const ar = facts({ state: "accountant_review", hasFirm: true, proposedRecommendations: 2 });
-  eq(acct(ar).key, "review", "accountant reviews");
-  eq(acct(ar).title, "Review 2 proposed recommendations", "review count");
+  eq(acct(ar).key, "generate_pack", "accountant generates the pack first");
+  eq(acct(ar).cta.route.tab, "advisory", "pack lives on the advisory tab");
   eq(owner(ar).key, "wait", "owner waits");
   eq(owner(ar).urgency, "info", "waiting is informational, not a CTA to hammer");
+  const arPack = facts({ ...ar, packStatus: "in_review", packVersion: 3 });
+  eq(acct(arPack).key, "review_pack", "pack in review → review it");
+  eq(acct(arPack).title, "Review advisory pack v3", "pack version in title");
+  eq(
+    owner(arPack).title,
+    "Your accountant is reviewing your advisory pack",
+    "owner copy names the pack",
+  );
+  eq(
+    acct(facts({ ...ar, packStatus: "changes_requested" })).key,
+    "review_pack",
+    "changes requested → still the accountant's",
+  );
+  eq(
+    acct(facts({ ...ar, packStatus: "rejected" })).key,
+    "generate_pack",
+    "rejected → build a new one",
+  );
+  // Approved pack but state still accountant_review (e.g. sign-off via a
+  // different route): fall back to reviewing the remaining recommendations.
+  eq(acct(facts({ ...ar, packStatus: "approved" })).key, "review", "approved pack → plain review");
+  eq(
+    acct(facts({ ...ar, packStatus: "approved" })).title,
+    "Review 2 proposed recommendations",
+    "review count",
+  );
+
+  // client_decision + pack: owner reads before deciding.
+  const cdPack = facts({
+    state: "client_decision",
+    hasFirm: true,
+    proposedRecommendations: 0,
+    approvedWithoutAction: 2,
+    packStatus: "approved",
+    packVersion: 2,
+    packRequiresReview: true,
+    packDelivered: false,
+  });
+  eq(owner(cdPack).key, "read_pack", "owner reads the signed-off pack before actions");
+  eq(owner(cdPack).cta.route.tab, "next", "pack sits on Next Moves for the owner");
+  eq(owner({ ...cdPack, packDelivered: true }).key, "start_actions", "once read, on to actions");
+  eq(acct(cdPack).key, "start_actions", "accountant is not asked to read their own pack");
+  const cdOwnerOnly = facts({
+    state: "client_decision",
+    hasFirm: false,
+    proposedRecommendations: 3,
+    packStatus: "draft",
+    packVersion: 1,
+  });
+  eq(owner(cdOwnerOnly).key, "read_pack", "owner-only draft pack → read and accept");
+  eq(owner(cdOwnerOnly).title, "Read and accept advisory pack v1", "accept copy");
+  eq(
+    owner({ ...cdOwnerOnly, packStatus: "approved", packDelivered: true }).key,
+    "decide",
+    "accepted → decide",
+  );
 
   // client_decision branches.
   eq(

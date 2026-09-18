@@ -38,6 +38,9 @@ export const NEXT_STEP_TARGETS = [
   "chase", // overdue actions
   "unblock", // blocked actions
   "data_request", // fulfil an open data request (P0.6)
+  "generate_pack", // build the advisory pack for this cycle (P1.1)
+  "review_pack", // accountant reviews / signs off the pack (P1.2)
+  "read_pack", // owner reads (and, without a firm, accepts) the pack (P1.2)
   "outcome", // measure what the actions changed
   "restart", // start the next cycle with fresh statements
   "wait", // nothing for this seat right now (informational)
@@ -74,6 +77,11 @@ export type NextStepFacts = {
   actionedUnmeasured: number;
   /** `data_requests` with status open|sent (P0.6). */
   openDataRequests: number;
+  /** Latest non-superseded advisory pack (P1). Absent/null = no pack yet. */
+  packStatus?: "draft" | "in_review" | "changes_requested" | "approved" | "rejected" | null;
+  packVersion?: number | null;
+  packRequiresReview?: boolean;
+  packDelivered?: boolean;
   nextReviewAt: string | null;
   /** ISO timestamp used for every date comparison. */
   now: string;
@@ -133,6 +141,9 @@ const OWNER_TAB: Record<NextStepTarget, string | null> = {
   chase: "tasks",
   unblock: "tasks",
   data_request: "today",
+  generate_pack: "next",
+  review_pack: "next",
+  read_pack: "next",
   outcome: "tasks",
   restart: "today",
   wait: "today",
@@ -154,6 +165,9 @@ const ACCOUNTANT_TAB: Record<NextStepTarget, string> = {
   chase: "plan",
   unblock: "plan",
   data_request: "summary",
+  generate_pack: "advisory",
+  review_pack: "advisory",
+  read_pack: "advisory",
   outcome: "plan",
   restart: "ratios",
   wait: "summary",
@@ -347,6 +361,27 @@ function stateStep(f: NextStepFacts, audience: NextStepAudience): Draft {
 
     case "accountant_review":
       if (acct) {
+        // P1: the pack is the review unit once it exists; without one, build it.
+        if (f.packStatus === "in_review" || f.packStatus === "changes_requested") {
+          return {
+            key: "review_pack",
+            urgency: "now",
+            title: `Review advisory pack v${f.packVersion ?? 1}`,
+            reason:
+              "MILŌN wrapped the diagnosis, forecast and proposed moves into one pack. Edit what you disagree with, then sign it off — the client only reads what you approve.",
+            ctaLabel: "Open the pack",
+          };
+        }
+        if (!f.packStatus || f.packStatus === "rejected") {
+          return {
+            key: "generate_pack",
+            urgency: "now",
+            title: "Generate the advisory pack",
+            reason:
+              "The moves are drafted. The pack puts them next to the diagnosis and cash forecast so you can review one thing, not five tabs.",
+            ctaLabel: "Generate pack",
+          };
+        }
         return {
           key: "review",
           urgency: "now",
@@ -359,13 +394,38 @@ function stateStep(f: NextStepFacts, audience: NextStepAudience): Draft {
       return {
         key: "wait",
         urgency: "info",
-        title: "Your accountant is reviewing the recommendations",
+        title:
+          f.packStatus === "in_review" || f.packStatus === "changes_requested"
+            ? "Your accountant is reviewing your advisory pack"
+            : "Your accountant is reviewing the recommendations",
         reason:
           "MILŌN has drafted moves from your numbers. They reach you once your accountant has checked them.",
         ctaLabel: "See what's in review",
       };
 
     case "client_decision":
+      // P1: a signed-off (or, without a firm, freshly built) pack is read first.
+      if (!acct && f.packStatus === "approved" && !f.packDelivered) {
+        return {
+          key: "read_pack",
+          urgency: "now",
+          title: `Read your advisory pack v${f.packVersion ?? 1}`,
+          reason: f.packRequiresReview
+            ? "Your accountant has signed it off. It explains where the business stands, what changed and which moves are on the table."
+            : "It explains where the business stands, what changed and which moves are on the table.",
+          ctaLabel: "Open the pack",
+        };
+      }
+      if (!acct && !f.hasFirm && f.packStatus === "draft") {
+        return {
+          key: "read_pack",
+          urgency: "now",
+          title: `Read and accept advisory pack v${f.packVersion ?? 1}`,
+          reason:
+            "MILŌN built it from your figures. Accepting it records that you have read the analysis before deciding on the moves.",
+          ctaLabel: "Open the pack",
+        };
+      }
       if (f.proposedRecommendations > 0 && !f.hasFirm) {
         return {
           key: "decide",

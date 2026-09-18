@@ -131,6 +131,7 @@ import { OwnerBrainDrip } from "@/components/owner-brain-drip";
 import { NextStepCard } from "@/components/next-step-card";
 import { RecommendationsPanel } from "@/components/recommendations-panel";
 import { DataRequestsPanel } from "@/components/data-requests-panel";
+import { AdvisoryPackPanel } from "@/components/advisory-pack-panel";
 import {
   OWNER_BOARD_TABS,
   nextStepRoute,
@@ -2551,6 +2552,8 @@ function Index() {
     last_forecast_at?: string | null;
     budget_updated_at?: string | null;
     operating_profile?: ClientOperatingProfile | null;
+    /** P1: a firm attached means the accountant seat signs off the advisory pack. */
+    firm_id?: string | null;
   } | null>(null);
   const [onboardingGateReady, setOnboardingGateReady] = useState(false);
   const [activeTab, setActiveTab] = useState<string>("today");
@@ -2643,9 +2646,9 @@ function Index() {
     let cancelled = false;
     const loadMeta = async () => {
       const fullSelect =
-        "business_type, cash_runway_weeks, cashflow, financials_updated_at, last_forecast_at, budget_updated_at, operating_profile, financial_year_start_month, market";
+        "business_type, cash_runway_weeks, cashflow, financials_updated_at, last_forecast_at, budget_updated_at, operating_profile, financial_year_start_month, market, firm_id";
       const legacySelect =
-        "business_type, cash_runway_weeks, cashflow, financials_updated_at, last_forecast_at, budget_updated_at, operating_profile, financial_year_start_month";
+        "business_type, cash_runway_weeks, cashflow, financials_updated_at, last_forecast_at, budget_updated_at, operating_profile, financial_year_start_month, firm_id";
       let res = await supabase
         .from("clients")
         .select(fullSelect)
@@ -2672,6 +2675,7 @@ function Index() {
           operating_profile?: unknown;
           financial_year_start_month?: number | null;
           market?: unknown;
+          firm_id?: string | null;
         } | null;
         const profile = parseOperatingProfile(data?.operating_profile);
         const parsedMarket = parseMarketSelection(data?.market);
@@ -2692,6 +2696,7 @@ function Index() {
                 last_forecast_at: data.last_forecast_at,
                 budget_updated_at: data.budget_updated_at,
                 operating_profile: profile,
+                firm_id: data.firm_id ?? null,
               }
             : null,
         );
@@ -5124,6 +5129,18 @@ function Index() {
                     onAddFigures={() => setFirstRunStep("first-data")}
                   />
                 )}
+                {/* P1 — the advisory pack frames the moves below; owner reads / accepts it here. */}
+                {effectiveClientId && !sampleMode && userRole !== "client_member" ? (
+                  <AdvisoryPackPanel
+                    className="mb-5"
+                    clientId={effectiveClientId}
+                    audience="owner"
+                    canGenerate={hasRealFinancials}
+                    hasFirm={Boolean(clientMeta?.firm_id)}
+                    refreshKey={`${activeTab}|${advisoryBump}`}
+                    onChanged={() => setAdvisoryBump((n) => n + 1)}
+                  />
+                ) : null}
                 {/* P0.5 — recommendations the owner decides on directly; no accountant required. */}
                 {effectiveClientId && !sampleMode && userRole !== "client_member" ? (
                   <RecommendationsPanel

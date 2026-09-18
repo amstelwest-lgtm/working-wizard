@@ -125,6 +125,44 @@ export type GetNextStepResult = {
   facts: NextStepFacts;
 };
 
+/**
+ * Latest advisory pack that is not superseded (P1). null when none exists or
+ * the P1.1 migration is not applied.
+ */
+async function latestPack(
+  sb: LooseSb,
+  clientId: string,
+): Promise<{
+  status: NonNullable<NextStepFacts["packStatus"]>;
+  version: number;
+  requiresReview: boolean;
+  delivered: boolean;
+} | null> {
+  const { data, error } = await sb
+    .from("advisory_packs")
+    .select("status, version, requires_review, delivered_at")
+    .eq("client_id", clientId)
+    .neq("status", "superseded")
+    .order("version", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error || !data) return null;
+  const row = data as {
+    status: string;
+    version: number;
+    requires_review: boolean;
+    delivered_at: string | null;
+  };
+  const ok = ["draft", "in_review", "changes_requested", "approved", "rejected"];
+  if (!ok.includes(row.status)) return null;
+  return {
+    status: row.status as NonNullable<NextStepFacts["packStatus"]>,
+    version: row.version,
+    requiresReview: row.requires_review === true,
+    delivered: row.delivered_at != null,
+  };
+}
+
 export const getNextStep = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input) =>
@@ -177,6 +215,7 @@ export const getNextStep = createServerFn({ method: "GET" })
       blockedActions,
       gaps,
       openDataRequests,
+      pack,
     ] = await Promise.all([
       count(sb, "client_financial_snapshots", data.clientId),
       count(sb, "client_brain_questions", data.clientId, (q) =>
@@ -191,6 +230,7 @@ export const getNextStep = createServerFn({ method: "GET" })
       recommendationGaps(sb, data.clientId),
       // P0.6: open or sent asks. 0 on a pre-P0.6 database.
       count(sb, "data_requests", data.clientId, (q) => q.in("status", ["open", "sent"])),
+      latestPack(sb, data.clientId),
     ]);
 
     const facts: NextStepFacts = {
@@ -210,6 +250,10 @@ export const getNextStep = createServerFn({ method: "GET" })
       blockedActions,
       actionedUnmeasured: gaps.actionedUnmeasured,
       openDataRequests,
+      packStatus: pack?.status ?? null,
+      packVersion: pack?.version ?? null,
+      packRequiresReview: pack?.requiresReview ?? false,
+      packDelivered: pack?.delivered ?? false,
       nextReviewAt: snapshot.nextReviewAt,
       now,
     };

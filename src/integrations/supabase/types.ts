@@ -769,6 +769,159 @@ export type Database = {
           },
         ]
       }
+      advisory_packs: {
+        Row: {
+          id: string
+          client_id: string
+          cycle_id: string | null
+          version: number
+          status: string
+          requires_review: boolean
+          period_label: string | null
+          figures_as_of: string | null
+          snapshot_id: string | null
+          generator: string
+          ai_draft: Json
+          content: Json
+          edit_stats: Json | null
+          generated_by: string | null
+          generated_at: string
+          reviewed_by: string | null
+          reviewed_by_kind: string | null
+          reviewed_at: string | null
+          review_note: string | null
+          delivered_at: string | null
+          delivered_to: string | null
+          meta: Json
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          client_id: string
+          cycle_id?: string | null
+          version: number
+          status?: string
+          requires_review?: boolean
+          period_label?: string | null
+          figures_as_of?: string | null
+          snapshot_id?: string | null
+          generator?: string
+          ai_draft: Json
+          content: Json
+          edit_stats?: Json | null
+          generated_by?: string | null
+          generated_at?: string
+          reviewed_by?: string | null
+          reviewed_by_kind?: string | null
+          reviewed_at?: string | null
+          review_note?: string | null
+          delivered_at?: string | null
+          delivered_to?: string | null
+          meta?: Json
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          client_id?: string
+          cycle_id?: string | null
+          version?: number
+          status?: string
+          requires_review?: boolean
+          period_label?: string | null
+          figures_as_of?: string | null
+          snapshot_id?: string | null
+          generator?: string
+          ai_draft?: Json
+          content?: Json
+          edit_stats?: Json | null
+          generated_by?: string | null
+          generated_at?: string
+          reviewed_by?: string | null
+          reviewed_by_kind?: string | null
+          reviewed_at?: string | null
+          review_note?: string | null
+          delivered_at?: string | null
+          delivered_to?: string | null
+          meta?: Json
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "advisory_packs_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "advisory_packs_cycle_id_fkey"
+            columns: ["cycle_id"]
+            isOneToOne: false
+            referencedRelation: "advisory_cycles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      advisory_pack_reviews: {
+        Row: {
+          id: number
+          pack_id: string
+          client_id: string
+          action: string
+          actor_id: string | null
+          actor_kind: string
+          section: string | null
+          before: Json | null
+          after: Json | null
+          note: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: number
+          pack_id: string
+          client_id: string
+          action: string
+          actor_id?: string | null
+          actor_kind?: string
+          section?: string | null
+          before?: Json | null
+          after?: Json | null
+          note?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: number
+          pack_id?: string
+          client_id?: string
+          action?: string
+          actor_id?: string | null
+          actor_kind?: string
+          section?: string | null
+          before?: Json | null
+          after?: Json | null
+          note?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "advisory_pack_reviews_pack_id_fkey"
+            columns: ["pack_id"]
+            isOneToOne: false
+            referencedRelation: "advisory_packs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "advisory_pack_reviews_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       data_requests: {
         Row: {
           id: string
@@ -2346,6 +2499,28 @@ export type Database = {
           p_actor?: string | null
         }
         Returns: number
+      }
+      advisory_pack_create: {
+        Args: {
+          p_client_id: string
+          p_content: Json
+          p_period_label?: string | null
+          p_figures_as_of?: string | null
+          p_snapshot_id?: string | null
+          p_generator?: string
+        }
+        Returns: string
+      }
+      advisory_pack_review: {
+        Args: {
+          p_pack_id: string
+          p_action: string
+          p_section?: string | null
+          p_after?: Json | null
+          p_note?: string | null
+          p_edit_stats?: Json | null
+        }
+        Returns: Json
       }
     }
     Enums: {

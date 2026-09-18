@@ -59,6 +59,12 @@ export const ADVISORY_EVENTS = [
   "recommendation.superseded",
   "review.signed_off",
   "review.retracted",
+  // advisory pack (P1.1) — the versioned deliverable + its review trail
+  "pack.generated",
+  "pack.approved",
+  "pack.changes_requested",
+  "pack.rejected",
+  "pack.delivered",
   // actions
   "action.created",
   "action.started",
@@ -181,6 +187,8 @@ const RULE_GROUPS: readonly RuleGroup[] = [
     guard: "scope_advisory",
     to: "client_decision",
   },
+  // An approved pack is the accountant's review decision (P1.1).
+  { event: "pack.approved", from: ["accountant_review"], to: "client_decision" },
 
   {
     event: "action.created",
