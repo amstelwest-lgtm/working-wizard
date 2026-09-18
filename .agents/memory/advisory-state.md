@@ -1,5 +1,5 @@
 ---
-name: Advisory OS spine (P0.1 state machine, P0.2 recommendations, P0.3 Next Step, P0.4 shell, P0.5 direct-client path, P0.6 data requests, P0.7 actions↔recommendations)
+name: Advisory OS spine (P0.1 state machine, P0.2 recommendations, P0.3 Next Step, P0.4 shell, P0.5 direct-client path, P0.6 data requests, P0.7 actions↔recommendations, P1 pack + review + workflow emails)
 description: Where the per-client advisory state lives, how it advances, how recommendations/outcomes attach, and how the Next Step is resolved
 ---
 
@@ -113,6 +113,37 @@ is the primary header button whenever approved/edited recommendations lack an ac
 Chase/nudge email and `task-link` GET (read-only) untouched. Test:
 `pnpm test:recommendation-actions`. Gotcha: any future `ALTER TABLE action_items ADD COLUMN`
 needs the view recreated again.
+
+**Advisory pack (P1.1/P1.2):** `20260918160000_advisory_packs.sql` — `advisory_packs`
+(`ai_draft` frozen at generation, `content` edited, `edit_stats`, `requires_review` = firm
+attached, reviewer + sign-off, delivery) and append-only `advisory_pack_reviews`. **No direct
+write policies**: `advisory_pack_create` (versions, supersedes the open pack, owner-or-firm)
+and `advisory_pack_review` (edit / comment / approve / request_changes / reject / deliver /
+read). Only the firm seat can approve/request changes when `requires_review`; owner-only
+packs are `draft` and the owner accepts them; approved packs are final (regenerate instead).
+Owner `read` of an approved pack = delivery. Events `pack.*`; rule `pack.approved`:
+accountant_review → client_decision (rules re-seeded there; drift test finds the latest
+`^\d+_advisory` file). Builder `buildAdvisoryPack` in `src/lib/advisory-pack.ts` is
+**deterministic, rules-first, no LLM** (health, ≥5% ratio moves, forecast low week, recs,
+gaps, HITL disclosure, locked); the honesty test runs `checkRootCauseClaims` over every
+section — it caught my own copy once. `computeEditStats` = char edit-distance / draft chars;
+`HIGH_EDIT_RATE` 0.35 is the "draft not ready" signal shown to the accountant. Next Step:
+`generate_pack` (accountant, no pack) → `review_pack` (in_review/changes_requested) →
+owner `read_pack` before deciding. `AdvisoryPackPanel` above the recommendations on both
+surfaces; studio/board selects now include `firm_id`. Test: `pnpm test:advisory-pack`.
+
+**Workflow emails (P1.3):** `20260918170000_workflow_emails.sql` — `workflow_email_log`
+(immutable; partial unique index on `(client, kind, ref_key, recipient_email) WHERE sent`
+is the idempotency guard) + `workflow_recipients(client)` SECURITY DEFINER RPC (owner +
+firm members with emails; profiles RLS does not cross that boundary). Pure planner
+`planWorkflowEmails` in `src/lib/workflow-emails.ts`: `forecast_break` (closings < 0, both
+seats, keyed by `last_forecast_at`), `pack_ready_for_review` (accountant), `pack_signed_off`
+(owner, until read), `pack_changes_requested` (owner, keyed by pack+reviewed_at),
+`cycle_restarted` (owner, ≤14 days, keyed by event id). Pre-data states send nothing.
+`runWorkflow` server fn runs **as the user** (never service role), fire-and-forget from
+`NextStepCard` after the step resolves; links are plain `/app?tab=` or `/clients/:id?tab=`
+(no tokens). Action overdue/nudge mail stays in the action machine. Test:
+`pnpm test:workflow-emails`.
 
 **Gotcha:** `clients.cashflow_bank_draft` has no in-repo migration; the clients
 trigger reads it through `to_jsonb(NEW)->'cashflow_bank_draft'` so a missing

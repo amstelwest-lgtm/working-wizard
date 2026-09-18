@@ -19,6 +19,7 @@ import { useTrack } from "@/hooks/use-track";
 import { appendAdvisoryEvent } from "@/lib/advisory-state.functions";
 import { syncDataRequests } from "@/lib/data-requests.functions";
 import { getNextStep } from "@/lib/next-step.functions";
+import { runWorkflow } from "@/lib/workflow-emails.functions";
 import {
   outstandingChips,
   urgencyLabel,
@@ -42,6 +43,7 @@ type Props = {
 export function NextStepCard({ clientId, audience, onAct, refreshKey, className, surface }: Props) {
   const fetchNextStep = useServerFn(getNextStep);
   const syncRequests = useServerFn(syncDataRequests);
+  const workflow = useServerFn(runWorkflow);
   const recordEvent = useServerFn(appendAdvisoryEvent);
   const track = useTrack();
   const [step, setStep] = useState<NextStep | null>(null);
@@ -60,6 +62,9 @@ export function NextStepCard({ clientId, audience, onAct, refreshKey, className,
       // stale count. Failure here must not hide the Next Step itself.
       await syncRequests({ data: { clientId } }).catch(() => null);
       const res = await fetchNextStep({ data: { clientId, audience } });
+      // P1.3: workflow mail is idempotent (log-guarded), so running it on every
+      // resolve is safe; it must never delay or hide the step itself.
+      void workflow({ data: { clientId } }).catch(() => null);
       if (mine !== seq.current) return;
       setStep(res.nextStep);
       setDerived(res.facts.stateSource === "derived");
@@ -69,7 +74,7 @@ export function NextStepCard({ clientId, audience, onAct, refreshKey, className,
     } finally {
       if (mine === seq.current) setLoading(false);
     }
-  }, [clientId, audience, fetchNextStep, syncRequests]);
+  }, [clientId, audience, fetchNextStep, syncRequests, workflow]);
 
   useEffect(() => {
     if (!clientId) {

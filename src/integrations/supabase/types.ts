@@ -922,6 +922,59 @@ export type Database = {
           },
         ]
       }
+      workflow_email_log: {
+        Row: {
+          id: number
+          client_id: string
+          kind: string
+          ref_key: string
+          recipient_user_id: string | null
+          recipient_email: string
+          recipient_role: string
+          status: string
+          subject: string | null
+          error: string | null
+          triggered_by: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: number
+          client_id: string
+          kind: string
+          ref_key: string
+          recipient_user_id?: string | null
+          recipient_email: string
+          recipient_role: string
+          status: string
+          subject?: string | null
+          error?: string | null
+          triggered_by?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: number
+          client_id?: string
+          kind?: string
+          ref_key?: string
+          recipient_user_id?: string | null
+          recipient_email?: string
+          recipient_role?: string
+          status?: string
+          subject?: string | null
+          error?: string | null
+          triggered_by?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workflow_email_log_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       data_requests: {
         Row: {
           id: string
@@ -2521,6 +2574,17 @@ export type Database = {
           p_edit_stats?: Json | null
         }
         Returns: Json
+      }
+      workflow_recipients: {
+        Args: {
+          p_client_id: string
+        }
+        Returns: {
+          user_id: string
+          email: string
+          full_name: string | null
+          role: string
+        }[]
       }
     }
     Enums: {
