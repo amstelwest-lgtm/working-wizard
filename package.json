@@ -77,7 +77,8 @@
     "test:ratio-briefing": "vite-node --config scripts/vite-test.config.ts scripts/ratio-briefing-test.mts",
     "test:ratio-queries": "vite-node --config scripts/vite-test.config.ts scripts/ratio-queries-test.mts",
     "test:seo-foundation": "vite-node --config scripts/vite-test.config.ts scripts/seo-foundation-test.mts",
-    "test:landing-gold": "vite-node --config scripts/vite-test.config.ts scripts/landing-gold-samsung-test.mts"
+    "test:landing-gold": "vite-node --config scripts/vite-test.config.ts scripts/landing-gold-samsung-test.mts",
+    "test:advisory-state": "vite-node --config scripts/vite-test.config.ts scripts/advisory-state-test.mts"
   },
   "dependencies": {
     "@cloudflare/vite-plugin": "^1.25.5",
