@@ -17,14 +17,26 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
+import { useServerFn } from "@tanstack/react-start";
 import { sendTransactionalEmail } from "@/lib/email/send";
 import { useMarketFormat } from "@/contexts/market";
+import {
+  createActionFromRecommendation,
+  listRecommendations,
+} from "@/lib/recommendations.functions";
+import {
+  expectedImpactLabel,
+  isActionable,
+  priorityLabel,
+  type Recommendation,
+} from "@/lib/recommendations";
 import {
   AlertTriangle,
   CalendarDays,
   Check,
   ChevronRight,
   GripVertical,
+  Lightbulb,
   Link as LinkIcon,
   Loader2,
   Mail,
@@ -91,6 +103,12 @@ type Item = {
   owner_email?: string | null;
   health?: Health;
   days_remaining?: number | null;
+  /** P0.7 — parent recommendation (FK + joined columns on action_items_v). */
+  recommendation_id?: string | null;
+  recommendation_title?: string | null;
+  recommendation_status?: string | null;
+  recommendation_metric?: string | null;
+  recommendation_amount?: number | null;
 };
 
 type Employee = { id: string; name: string; email: string | null; role: string | null };
@@ -202,6 +220,10 @@ export function toActionItemWrite(patch: Partial<Item>): Record<string, unknown>
     owner_email: _ownerEmail,
     health: _health,
     days_remaining: _daysRemaining,
+    recommendation_title: _recTitle,
+    recommendation_status: _recStatus,
+    recommendation_metric: _recMetric,
+    recommendation_amount: _recAmount,
     ...row
   } = patch;
   return row;
@@ -346,6 +368,11 @@ export default function ActionPlanPanel({
   const [sortBy, setSortBy] = useState<"seq" | "due" | "owner" | "status">("seq");
   const [drawerId, setDrawerId] = useState<string | null>(null);
   const [importOpen, setImportOpen] = useState(false);
+  // P0.7 — approved recommendations with no action yet: the default way in.
+  const [recOpen, setRecOpen] = useState(false);
+  const [pendingRecs, setPendingRecs] = useState<Recommendation[]>([]);
+  const fetchRecommendations = useServerFn(listRecommendations);
+  const actionFromRecommendation = useServerFn(createActionFromRecommendation);
   const [teamOpen, setTeamOpen] = useState(false);
   const [sending, setSending] = useState(false);
   const seqMaxRef = useRef(0);
@@ -464,6 +491,51 @@ export default function ActionPlanPanel({
     setLoading(true);
     refresh();
   }, [refresh]);
+
+  // P0.7 — approved / edited recommendations not yet on the plan. Loaded
+  // alongside items so the "Add from recommendations" path is the first thing
+  // an owner sees, not something they have to go looking for.
+  const refreshPendingRecs = useCallback(async () => {
+    if (!clientId || !isOwner) {
+      setPendingRecs([]);
+      return;
+    }
+    try {
+      const res = await fetchRecommendations({ data: { clientId } });
+      setPendingRecs(
+        res.recommendations.filter((r) => isActionable(r) && !r.linked_action_item_id),
+      );
+    } catch {
+      setPendingRecs([]);
+    }
+  }, [clientId, isOwner, fetchRecommendations]);
+
+  useEffect(() => {
+    void refreshPendingRecs();
+  }, [refreshPendingRecs, items.length]);
+
+  const addFromRecommendations = async (ids: string[]) => {
+    if (!clientId || ids.length === 0) return;
+    let created = 0;
+    for (const recommendationId of ids) {
+      try {
+        const res = await actionFromRecommendation({ data: { clientId, recommendationId } });
+        if (res.ok) created += 1;
+      } catch (err: unknown) {
+        toast.error(err instanceof Error ? err.message : "Could not create the action.");
+      }
+    }
+    if (created > 0) {
+      toast.success(
+        created === 1
+          ? "Action added from the recommendation"
+          : `${created} actions added from recommendations`,
+      );
+      await refresh();
+      await refreshPendingRecs();
+    }
+    setRecOpen(false);
+  };
 
   // Owner and accountant share action_plans / action_items by client_id.
   // Refetch when the window is focused so a plan edited on the other side
@@ -904,9 +976,25 @@ export default function ActionPlanPanel({
             </div>
             {isOwner && (
               <div className="flex flex-wrap items-center gap-2">
+                {pendingRecs.length > 0 && (
+                  <Button
+                    size="sm"
+                    className="bg-[#b8860b] text-white hover:bg-[#9a7009] dark:bg-[#d4a550] dark:text-slate-950 dark:hover:bg-[#c69440]"
+                    onClick={() => setRecOpen(true)}
+                    data-add-from-recommendations={pendingRecs.length}
+                  >
+                    <Lightbulb className="mr-1 h-3.5 w-3.5" />
+                    Add from recommendations ({pendingRecs.length})
+                  </Button>
+                )}
                 <Button
                   size="sm"
-                  className="bg-[#b8860b] text-white hover:bg-[#9a7009] dark:bg-[#d4a550] dark:text-slate-950 dark:hover:bg-[#c69440]"
+                  variant={pendingRecs.length > 0 ? "outline" : "default"}
+                  className={
+                    pendingRecs.length > 0
+                      ? INPUT_CLS
+                      : "bg-[#b8860b] text-white hover:bg-[#9a7009] dark:bg-[#d4a550] dark:text-slate-950 dark:hover:bg-[#c69440]"
+                  }
                   onClick={() => {
                     quickAddRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
                     quickAddRef.current?.focus();
@@ -1032,17 +1120,32 @@ export default function ActionPlanPanel({
             <div className="px-6 py-8 text-center">
               <p className="text-sm text-slate-500 dark:text-slate-400">
                 {items.length === 0
-                  ? "No actions yet. Add one manually or import from Strategic Moves."
+                  ? pendingRecs.length > 0
+                    ? `No actions yet. ${pendingRecs.length} approved ${
+                        pendingRecs.length === 1 ? "recommendation is" : "recommendations are"
+                      } waiting to become dated, owned work.`
+                    : "No actions yet. Start from an approved recommendation, add one manually, or import from Strategic Moves."
                   : "Nothing matches this filter."}
               </p>
               {isOwner && items.length === 0 && (
                 <Button
                   size="sm"
                   className="mt-3 bg-[#b8860b] text-white hover:bg-[#9a7009] dark:bg-[#d4a550] dark:text-slate-950 dark:hover:bg-[#c69440]"
-                  onClick={() => quickAddRef.current?.focus()}
+                  onClick={() =>
+                    pendingRecs.length > 0 ? setRecOpen(true) : quickAddRef.current?.focus()
+                  }
                 >
-                  <Plus className="mr-1 h-3.5 w-3.5" />
-                  Add action
+                  {pendingRecs.length > 0 ? (
+                    <>
+                      <Lightbulb className="mr-1 h-3.5 w-3.5" />
+                      Add from recommendations
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="mr-1 h-3.5 w-3.5" />
+                      Add action
+                    </>
+                  )}
                 </Button>
               )}
             </div>
@@ -1106,6 +1209,14 @@ export default function ActionPlanPanel({
           importedKeys={importedKeys}
           onClose={() => setImportOpen(false)}
           onImport={importMoves}
+        />
+      )}
+
+      {recOpen && (
+        <FromRecommendationsPanel
+          recommendations={pendingRecs}
+          onClose={() => setRecOpen(false)}
+          onAdd={addFromRecommendations}
         />
       )}
 
@@ -1575,11 +1686,25 @@ function ItemRow({
           </button>
         )}
         <div className="mt-0.5 flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
-          {item.source === "strategic_move" && (
+          {item.recommendation_id ? (
+            <span
+              className="inline-flex min-w-0 items-center gap-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#b8860b] dark:text-[#d4a550]/90"
+              title={item.recommendation_title ?? undefined}
+              data-recommendation={item.recommendation_id}
+            >
+              <Lightbulb className="h-2.5 w-2.5 shrink-0" /> From recommendation
+              {item.recommendation_title ? (
+                <span className="truncate font-medium normal-case tracking-normal text-slate-500 dark:text-slate-400">
+                  {" "}
+                  · {item.recommendation_title}
+                </span>
+              ) : null}
+            </span>
+          ) : item.source === "strategic_move" ? (
             <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#b8860b] dark:text-[#d4a550]/90">
               <Sparkles className="h-2.5 w-2.5" /> From strategic moves
             </span>
-          )}
+          ) : null}
           {item.outcome_why && <span className="truncate">{item.outcome_why}</span>}
         </div>
       </div>
@@ -1999,6 +2124,112 @@ function ImportPanel({
   );
 }
 
+// ═══ From recommendations (P0.7) ════════════════════════════════════════════
+// Approved / edited recommendations that have no action yet. Each becomes one
+// action through `createActionFromRecommendation`, keeping the FK so the
+// outcome loop can later compare expected vs actual.
+function FromRecommendationsPanel({
+  recommendations,
+  onClose,
+  onAdd,
+}: {
+  recommendations: Recommendation[];
+  onClose: () => void;
+  onAdd: (ids: string[]) => void | Promise<void>;
+}) {
+  const [sel, setSel] = useState<Set<string>>(() => new Set(recommendations.map((r) => r.id)));
+  const [busy, setBusy] = useState(false);
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center"
+      onClick={onClose}
+    >
+      <div
+        className={`w-full max-w-lg rounded-2xl p-5 ${CARD_SHELL}`}
+        onClick={(e) => e.stopPropagation()}
+        data-from-recommendations-panel
+      >
+        <div className={GOLD_RULE} />
+        <div className="mb-1 flex items-center justify-between">
+          <h3 className="text-base font-bold text-slate-950 dark:text-white">
+            Add from recommendations
+          </h3>
+          <button onClick={onClose} aria-label="Close">
+            <X className="h-4 w-4 text-slate-400" />
+          </button>
+        </div>
+        <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
+          Each approved recommendation becomes one owned, dated action. The link is kept so the
+          result can be measured against what was expected.
+        </p>
+        <div className="max-h-80 space-y-1.5 overflow-auto">
+          {recommendations.map((r) => {
+            const checked = sel.has(r.id);
+            const impact = expectedImpactLabel(r);
+            return (
+              <button
+                key={r.id}
+                onClick={() =>
+                  setSel((s) => {
+                    const n = new Set(s);
+                    checked ? n.delete(r.id) : n.add(r.id);
+                    return n;
+                  })
+                }
+                className={`flex w-full items-start gap-3 rounded-lg border px-3 py-2.5 text-left transition-colors ${
+                  checked
+                    ? "border-[#d4a550]/60 bg-[#d4a550]/10"
+                    : "border-amber-900/10 hover:border-[#d4a550]/40 dark:border-slate-800"
+                }`}
+              >
+                <span
+                  className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[10px] font-black ${
+                    checked
+                      ? "border-[#b8860b] bg-[#b8860b] text-white dark:border-[#d4a550] dark:bg-[#d4a550] dark:text-slate-950"
+                      : "border-slate-300 dark:border-slate-600"
+                  }`}
+                >
+                  {checked && "✓"}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
+                    {r.title}
+                  </span>
+                  <span className="block text-[11px] text-slate-500 dark:text-slate-400">
+                    {priorityLabel(r.priority)}
+                    {impact ? ` · ${impact}` : ""}
+                    {r.problem ? ` · ${r.problem}` : r.rationale ? ` · ${r.rationale}` : ""}
+                  </span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+        <Button
+          disabled={!sel.size || busy}
+          onClick={async () => {
+            setBusy(true);
+            try {
+              await onAdd([...sel]);
+            } finally {
+              setBusy(false);
+            }
+          }}
+          className="mt-4 w-full bg-[#b8860b] text-white hover:bg-[#9a7009] dark:bg-[#d4a550] dark:text-slate-950 dark:hover:bg-[#c69440]"
+        >
+          {busy ? (
+            <>
+              <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> Adding…
+            </>
+          ) : (
+            `Add ${sel.size || ""} action${sel.size === 1 ? "" : "s"} to the plan`
+          )}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 // ═══ Team members ════════════════════════════════════════════════════════════
 function TeamPanel({
   employees,
@@ -2287,6 +2518,23 @@ function ItemDrawer({
             <h3 className="mt-2 text-lg font-black leading-tight text-slate-950 dark:text-white">
               {item.title}
             </h3>
+            {item.recommendation_id ? (
+              <p
+                className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-[#b8860b] dark:text-[#d4a550]"
+                data-drawer-recommendation
+              >
+                <Lightbulb className="h-3 w-3" />
+                From recommendation
+                {item.recommendation_title ? `: ${item.recommendation_title}` : ""}
+                {item.recommendation_metric && item.recommendation_amount != null
+                  ? ` · expected ${expectedImpactLabel({
+                      expected_impact_metric: item.recommendation_metric as never,
+                      expected_impact_amount: item.recommendation_amount,
+                      expected_impact_horizon_days: null,
+                    })}`
+                  : ""}
+              </p>
+            ) : null}
             {item.outcome_why && (
               <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{item.outcome_why}</p>
             )}

@@ -1,5 +1,5 @@
 ---
-name: Advisory OS spine (P0.1 state machine, P0.2 recommendations, P0.3 Next Step, P0.4 shell, P0.5 direct-client path, P0.6 data requests)
+name: Advisory OS spine (P0.1 state machine, P0.2 recommendations, P0.3 Next Step, P0.4 shell, P0.5 direct-client path, P0.6 data requests, P0.7 actions↔recommendations)
 description: Where the per-client advisory state lives, how it advances, how recommendations/outcomes attach, and how the Next Step is resolved
 ---
 
@@ -100,6 +100,19 @@ which now counts open|sent rows → `openDataRequests` → blocking `data_reques
 owner" (`sendDataRequestEmail` → Resend via `sendAccessEmail`, marks rows `sent`, link is
 `/app?tab=today`, no tokens) and "Ask for a document". Owner emailing themselves is refused.
 Test: `pnpm test:data-requests`; SQL validated on scratch Postgres (/tmp/dr-flow.sql).
+
+**Actions ↔ recommendations (P0.7):** `action_items_v` was `select ai.*` and froze its
+columns before P0.2 added `recommendation_id`, so the plan UI could not see the FK.
+`20260918150000_action_items_recommendation_view.sql` DROP+CREATEs the view with
+`recommendation_id` + joined `recommendation_title/status/metric/amount` (security_invoker).
+`action-plan.tsx`: `Item` carries those fields, `toActionItemWrite` strips the joined ones
+(PostgREST rejects them on writes), rows show "From recommendation · title" (wins over the
+strategic-move badge), the drawer shows expected impact, and "Add from recommendations (N)"
+is the primary header button whenever approved/edited recommendations lack an action
+(`FromRecommendationsPanel`, preselects all, goes through `createActionFromRecommendation`).
+Chase/nudge email and `task-link` GET (read-only) untouched. Test:
+`pnpm test:recommendation-actions`. Gotcha: any future `ALTER TABLE action_items ADD COLUMN`
+needs the view recreated again.
 
 **Gotcha:** `clients.cashflow_bank_draft` has no in-repo migration; the clients
 trigger reads it through `to_jsonb(NEW)->'cashflow_bank_draft'` so a missing
