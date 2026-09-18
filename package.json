@@ -79,7 +79,8 @@
     "test:seo-foundation": "vite-node --config scripts/vite-test.config.ts scripts/seo-foundation-test.mts",
     "test:landing-gold": "vite-node --config scripts/vite-test.config.ts scripts/landing-gold-samsung-test.mts",
     "test:advisory-state": "vite-node --config scripts/vite-test.config.ts scripts/advisory-state-test.mts",
-    "test:recommendations": "vite-node --config scripts/vite-test.config.ts scripts/recommendations-test.mts"
+    "test:recommendations": "vite-node --config scripts/vite-test.config.ts scripts/recommendations-test.mts",
+    "test:next-step": "vite-node --config scripts/vite-test.config.ts scripts/next-step-test.mts"
   },
   "dependencies": {
     "@cloudflare/vite-plugin": "^1.25.5",

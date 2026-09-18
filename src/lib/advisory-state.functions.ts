@@ -30,7 +30,7 @@ import {
 // regenerated Database type with or without them (same pattern as
 // review-signoffs.functions.ts).
 /* eslint-disable @typescript-eslint/no-explicit-any */
-type LooseSb = {
+export type LooseSb = {
   from: (t: string) => any;
   rpc: (fn: string, args?: Record<string, unknown>) => any;
 };
@@ -141,7 +141,8 @@ async function deriveAdvisoryState(
   });
 }
 
-async function loadAdvisorySnapshot(
+/** Shared with the P0.3 Next Step resolver; not a server fn so it can be composed. */
+export async function loadAdvisorySnapshot(
   sb: LooseSb,
   userId: string,
   data: { clientId: string; eventLimit?: number },

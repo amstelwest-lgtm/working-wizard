@@ -1,6 +1,6 @@
 ---
-name: Advisory state machine (P0.1 of the advisory OS)
-description: Where the per-client advisory state lives, how it advances, and how to change the rules safely
+name: Advisory OS spine (P0.1 state machine, P0.2 recommendations, P0.3 Next Step)
+description: Where the per-client advisory state lives, how it advances, how recommendations/outcomes attach, and how the Next Step is resolved
 ---
 
 # Advisory state machine
@@ -34,14 +34,28 @@ groups, run the test, paste the block into a NEW migration that re-seeds the tab
 migration isn't applied, so callers always get a state (`source: "derived"`).
 
 **Recommendations (P0.2):** the recommendation object IS `proposed_next_steps`
-(extended: problem/evidence/priority/confidence/data_depth/expected_impact_*/
-cycle_id/decided_*; status adds `superseded`). `action_items.recommendation_id`
+(extended: problem/evidence/priority/confidence/data*depth/expected_impact*_/
+cycle*id/decided*_; status adds `superseded`). `action_items.recommendation_id`
 is the FK (legacy `linked_action_item_id` is kept in sync by trigger).
 `recommendation_outcomes` holds expected vs actual per metric. Approved → task
 goes through RPC `advisory_create_action_from_recommendation` (refuses
 unapproved unless `p_approve`). Helpers: `src/lib/recommendations.ts` /
 `.functions.ts`; `checkRootCauseClaims()` blocks invoice/customer-level copy on
 `data_depth = 'statement'`. Migration: `20260918130000_recommendations_outcomes.sql`.
+
+**Next Step (P0.3):** `resolveNextStep(facts, audience)` in `src/lib/next-step.ts` is
+pure and deterministic (clock injected via `facts.now`). Priority: open data request
+
+> overdue actions > blocked actions (only once past data collection) > state-based
+> step, specialised per seat (owner vs accountant see different work in
+> `accountant_review` / `client_decision`). Routes: owner → `/app` + in-app `tab`
+> (`/app` reads no `?tab=` yet; P0.4 shell wires it), accountant →
+> `/clients/:id?tab=…` (+`onboard=1` for upload, `filter=overdue|blocked`). Server
+> fn `getNextStep` (`next-step.functions.ts`) gathers facts via `loadAdvisorySnapshot`
+
+- count queries that return 0 on un-migrated schema; audience defaults from
+  `clients.owner_user_id === userId`. `openDataRequests` is hard-coded 0 until P0.6.
+  Test: `pnpm test:next-step` (totality across every state × audience, route validity).
 
 **Gotcha:** `clients.cashflow_bank_draft` has no in-repo migration; the clients
 trigger reads it through `to_jsonb(NEW)->'cashflow_bank_draft'` so a missing
