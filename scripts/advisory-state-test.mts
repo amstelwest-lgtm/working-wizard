@@ -2,7 +2,7 @@
  * Advisory state machine (P0.1) — pure transitions + SQL/TS drift guard.
  * Run: pnpm test:advisory-state
  */
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
   ADVISORY_EVENTS,
@@ -36,13 +36,24 @@ function eq<T>(actual: T, expected: T, msg: string) {
   const seqs = ADVISORY_TRANSITION_RULES.map((r) => r.seq);
   assert(new Set(seqs).size === seqs.length, "rule seq values are unique");
   for (const r of ADVISORY_TRANSITION_RULES) {
-    assert((ADVISORY_EVENTS as readonly string[]).includes(r.event), `rule ${r.seq}: unknown event ${r.event}`);
     assert(
-      r.from === "*" || r.from === "none" || (ADVISORY_STATES as readonly string[]).includes(r.from),
+      (ADVISORY_EVENTS as readonly string[]).includes(r.event),
+      `rule ${r.seq}: unknown event ${r.event}`,
+    );
+    assert(
+      r.from === "*" ||
+        r.from === "none" ||
+        (ADVISORY_STATES as readonly string[]).includes(r.from),
       `rule ${r.seq}: unknown from ${r.from}`,
     );
-    assert((ADVISORY_STATES as readonly string[]).includes(r.to), `rule ${r.seq}: unknown to ${r.to}`);
-    assert((ADVISORY_GUARDS as readonly string[]).includes(r.guard), `rule ${r.seq}: unknown guard ${r.guard}`);
+    assert(
+      (ADVISORY_STATES as readonly string[]).includes(r.to),
+      `rule ${r.seq}: unknown to ${r.to}`,
+    );
+    assert(
+      (ADVISORY_GUARDS as readonly string[]).includes(r.guard),
+      `rule ${r.seq}: unknown guard ${r.guard}`,
+    );
   }
   for (const s of ADVISORY_STATES) {
     assert(Boolean(ADVISORY_STATE_LABELS[s]?.label), `label for ${s}`);
@@ -73,7 +84,10 @@ function eq<T>(actual: T, expected: T, msg: string) {
 
   const noise = nextAdvisoryState(null, "action.started");
   eq(noise.to, "onboarding", "unmatched event on state-less client still bootstraps");
-  assert(noise.changed && noise.newCycle && noise.rule === null, "bootstrap recorded, no rule fired");
+  assert(
+    noise.changed && noise.newCycle && noise.rule === null,
+    "bootstrap recorded, no rule fired",
+  );
 }
 
 // ── 3. Owner-only happy path (no accountant anywhere) ────────────────────────
@@ -149,7 +163,13 @@ function eq<T>(actual: T, expected: T, msg: string) {
 // ── 5. Re-upload semantics + restart ─────────────────────────────────────────
 
 {
-  for (const from of ["diagnosis", "forecasting", "recommendations", "accountant_review", "client_decision"] as const) {
+  for (const from of [
+    "diagnosis",
+    "forecasting",
+    "recommendations",
+    "accountant_review",
+    "client_decision",
+  ] as const) {
     const t = nextAdvisoryState(from, "data.uploaded");
     eq(t.to, "data_validation", `re-upload from ${from} re-validates`);
     assert(!t.newCycle, `re-upload from ${from} stays in the same cycle`);
@@ -183,6 +203,8 @@ function eq<T>(actual: T, expected: T, msg: string) {
     "action.started",
     "action.blocked",
     "review.retracted",
+    "recommendation.superseded",
+    "outcome.recorded",
     "data.request_opened",
     "data.request_fulfilled",
     "cycle.backfilled",
@@ -211,75 +233,149 @@ function eq<T>(actual: T, expected: T, msg: string) {
     doneActions: 0,
   };
   eq(inferAdvisoryStateFromFacts(base), "onboarding", "empty client");
-  eq(inferAdvisoryStateFromFacts({ ...base, hasProfile: true }), "financial_data_collection", "profile only");
-  eq(inferAdvisoryStateFromFacts({ ...base, hasFinancials: true }), "data_validation", "financials only");
-  eq(inferAdvisoryStateFromFacts({ ...base, hasFinancials: true, hasSnapshot: true }), "diagnosis", "snapshot");
-  eq(inferAdvisoryStateFromFacts({ ...base, hasSnapshot: true, hasForecast: true }), "recommendations", "forecast");
-  eq(inferAdvisoryStateFromFacts({ ...base, hasForecast: true, proposedSteps: 1 }), "client_decision", "owner proposal");
+  eq(
+    inferAdvisoryStateFromFacts({ ...base, hasProfile: true }),
+    "financial_data_collection",
+    "profile only",
+  );
+  eq(
+    inferAdvisoryStateFromFacts({ ...base, hasFinancials: true }),
+    "data_validation",
+    "financials only",
+  );
+  eq(
+    inferAdvisoryStateFromFacts({ ...base, hasFinancials: true, hasSnapshot: true }),
+    "diagnosis",
+    "snapshot",
+  );
+  eq(
+    inferAdvisoryStateFromFacts({ ...base, hasSnapshot: true, hasForecast: true }),
+    "recommendations",
+    "forecast",
+  );
+  eq(
+    inferAdvisoryStateFromFacts({ ...base, hasForecast: true, proposedSteps: 1 }),
+    "client_decision",
+    "owner proposal",
+  );
   eq(
     inferAdvisoryStateFromFacts({ ...base, hasFirm: true, hasForecast: true, proposedSteps: 1 }),
     "accountant_review",
     "firm proposal",
   );
-  eq(inferAdvisoryStateFromFacts({ ...base, proposedSteps: 1, approvedSteps: 1 }), "client_decision", "approved");
+  eq(
+    inferAdvisoryStateFromFacts({ ...base, proposedSteps: 1, approvedSteps: 1 }),
+    "client_decision",
+    "approved",
+  );
   eq(inferAdvisoryStateFromFacts({ ...base, doneActions: 2 }), "outcome_monitoring", "all done");
-  eq(inferAdvisoryStateFromFacts({ ...base, doneActions: 2, openActions: 1 }), "action_execution", "open beats done");
+  eq(
+    inferAdvisoryStateFromFacts({ ...base, doneActions: 2, openActions: 1 }),
+    "action_execution",
+    "open beats done",
+  );
 
-  assert(isMissingAdvisoryRelation({ message: 'relation "public.advisory_events" does not exist' }), "missing relation");
+  assert(
+    isMissingAdvisoryRelation({ message: 'relation "public.advisory_events" does not exist' }),
+    "missing relation",
+  );
   assert(
     isMissingAdvisoryRelation({
       message: "Could not find the 'advisory_state' column of 'clients' in the schema cache",
     }),
     "missing column",
   );
-  assert(!isMissingAdvisoryRelation({ message: "permission denied for table clients" }), "other errors pass through");
+  assert(
+    !isMissingAdvisoryRelation({ message: "permission denied for table clients" }),
+    "other errors pass through",
+  );
 }
 
 // ── 8. SQL ↔ TS drift guard ──────────────────────────────────────────────────
 
 {
-  const sql = readFileSync(resolve("supabase/migrations/20260918120000_advisory_state.sql"), "utf8");
+  // The advisory spine is spread over several additive migrations. For each
+  // guarded definition the LAST migration (by filename) that declares it wins,
+  // so a later migration can re-declare a CHECK / re-seed the rules table.
+  const migrationsDir = resolve("supabase/migrations");
+  const advisoryFiles = readdirSync(migrationsDir)
+    .filter((f) => /^\d+_(advisory|recommendations)/.test(f) && f.endsWith(".sql"))
+    .sort();
+  assert(advisoryFiles.includes("20260918120000_advisory_state.sql"), "P0.1 migration present");
+  assert(
+    advisoryFiles.includes("20260918130000_recommendations_outcomes.sql"),
+    "P0.2 migration present",
+  );
+  const sources = advisoryFiles.map((f) => ({
+    file: f,
+    sql: readFileSync(resolve(migrationsDir, f), "utf8"),
+  }));
+  const latest = (re: RegExp, label: string): RegExpMatchArray => {
+    for (let i = sources.length - 1; i >= 0; i--) {
+      const m = sources[i].sql.match(re);
+      if (m) return m;
+    }
+    throw new Error(`${label}: not found in any advisory migration`);
+  };
+  const anySql = (needle: string) => sources.some((s) => s.sql.includes(needle));
+  const sql = sources.find((s) => s.file === "20260918120000_advisory_state.sql")!.sql;
 
   const expectedValues = advisoryRulesSqlValues();
-  if (!sql.includes(expectedValues)) {
+  const seedFile = [...sources]
+    .reverse()
+    .find((s) => s.sql.includes("INSERT INTO public.advisory_transition_rules"));
+  assert(Boolean(seedFile), "a migration seeds advisory_transition_rules");
+  if (!seedFile!.sql.includes(expectedValues)) {
     throw new Error(
-      "advisory_transition_rules seed in the migration does not match src/lib/advisory-state.ts.\n" +
-        "Replace the VALUES block with:\n" +
+      `advisory_transition_rules seed in ${seedFile!.file} does not match src/lib/advisory-state.ts.\n` +
+        "Add a new migration that re-seeds the table with:\n" +
         expectedValues,
     );
   }
 
   const quoted = (block: string) => Array.from(block.matchAll(/'([a-z_.*]+)'/g), (m) => m[1]);
 
-  const stateCheck = sql.match(/clients_advisory_state_check CHECK \(([\s\S]*?)\);/);
-  assert(Boolean(stateCheck), "clients.advisory_state CHECK present");
-  const sqlStates = new Set(quoted(stateCheck![1]));
+  const stateCheck = latest(/clients_advisory_state_check CHECK \(([\s\S]*?)\);/, "state CHECK");
+  const sqlStates = new Set(quoted(stateCheck[1]));
   for (const s of ADVISORY_STATES) assert(sqlStates.has(s), `SQL state CHECK missing ${s}`);
   eq(sqlStates.size, ADVISORY_STATES.length, "SQL state CHECK has no extra states");
 
-  const eventCheck = sql.match(/event\s+text NOT NULL CHECK \(event IN \(([\s\S]*?)\)\),/);
-  assert(Boolean(eventCheck), "advisory_events.event CHECK present");
-  const sqlEvents = new Set(quoted(eventCheck![1]));
+  const eventCheck = latest(
+    /(?:event\s+text NOT NULL CHECK \(event IN \(|advisory_events_event_check CHECK \(event IN \()([\s\S]*?)\)\)/,
+    "event CHECK",
+  );
+  const sqlEvents = new Set(quoted(eventCheck[1]));
   for (const e of ADVISORY_EVENTS) assert(sqlEvents.has(e), `SQL event CHECK missing ${e}`);
   eq(sqlEvents.size, ADVISORY_EVENTS.length, "SQL event CHECK has no extra events");
 
-  const guardCheck = sql.match(/guard\s+text NOT NULL CHECK \(guard IN \(([\s\S]*?)\)\)/);
-  assert(Boolean(guardCheck), "advisory_transition_rules.guard CHECK present");
-  const sqlGuards = new Set(quoted(guardCheck![1]));
+  const guardCheck = latest(
+    /guard\s+text NOT NULL CHECK \(guard IN \(([\s\S]*?)\)\)/,
+    "guard CHECK",
+  );
+  const sqlGuards = new Set(quoted(guardCheck[1]));
   for (const g of ADVISORY_GUARDS) assert(sqlGuards.has(g), `SQL guard CHECK missing ${g}`);
   eq(sqlGuards.size, ADVISORY_GUARDS.length, "SQL guard CHECK has no extra guards");
 
-  const allow = sql.match(/IF p_event NOT IN \(([\s\S]*?)\) THEN/);
-  assert(Boolean(allow), "advisory_record_event allowlist present");
-  const sqlAllow = new Set(quoted(allow![1]));
-  for (const e of APP_WRITABLE_ADVISORY_EVENTS) assert(sqlAllow.has(e), `RPC allowlist missing ${e}`);
+  const allow = latest(/IF p_event NOT IN \(([\s\S]*?)\) THEN/, "RPC allowlist");
+  const sqlAllow = new Set(quoted(allow[1]));
+  for (const e of APP_WRITABLE_ADVISORY_EVENTS)
+    assert(sqlAllow.has(e), `RPC allowlist missing ${e}`);
   eq(sqlAllow.size, APP_WRITABLE_ADVISORY_EVENTS.length, "RPC allowlist has no extra events");
 
   // Guard evaluation in SQL covers every guard name.
   for (const g of ADVISORY_GUARDS) {
-    assert(sql.includes(`r.guard = '${g}'`), `advisory_next_state evaluates guard ${g}`);
+    assert(anySql(`r.guard = '${g}'`), `advisory_next_state evaluates guard ${g}`);
   }
   assert(sql.includes("interval '30 days'"), "SQL review cadence is 30 days");
+
+  // Every event that a trigger/RPC emits is a declared event.
+  for (const s of sources) {
+    for (const m of s.sql.matchAll(
+      /advisory_(?:emit|apply_event|record_event)\([^,]+,\s*'([a-z_.]+)'/g,
+    )) {
+      assert(sqlEvents.has(m[1]), `${s.file} emits undeclared event ${m[1]}`);
+    }
+  }
 
   // Emission points wired.
   for (const trg of [
@@ -294,20 +390,28 @@ function eq<T>(actual: T, expected: T, msg: string) {
   }
 
   // Security posture: writes only via SECURITY DEFINER functions; reads via has_client_access.
-  assert(!/CREATE POLICY "advisory_(events|cycles) (insert|update|delete)/.test(sql), "no direct write policies");
+  assert(
+    !/CREATE POLICY "advisory_(events|cycles) (insert|update|delete)/.test(sql),
+    "no direct write policies",
+  );
   assert(
     /advisory_events select access"[\s\S]*?has_client_access\(auth\.uid\(\), client_id\)/.test(sql),
     "events readable via has_client_access",
   );
   assert(
-    /REVOKE ALL ON FUNCTION public\.advisory_apply_event[\s\S]*?FROM PUBLIC, anon, authenticated/.test(sql),
+    /REVOKE ALL ON FUNCTION public\.advisory_apply_event[\s\S]*?FROM PUBLIC, anon, authenticated/.test(
+      sql,
+    ),
     "apply_event not callable by authenticated",
   );
   assert(
     /GRANT EXECUTE ON FUNCTION public\.advisory_record_event[\s\S]*?TO authenticated/.test(sql),
     "record_event callable by authenticated",
   );
-  assert(sql.includes("has_client_access(v_uid, p_client_id)"), "record_event checks client access");
+  assert(
+    sql.includes("has_client_access(v_uid, p_client_id)"),
+    "record_event checks client access",
+  );
 
   // Additive-only: no drops of existing business tables/columns.
   assert(!/DROP TABLE/i.test(sql), "no DROP TABLE");
@@ -326,11 +430,18 @@ function eq<T>(actual: T, expected: T, msg: string) {
   assert(fns.includes("requireSupabaseAuth"), "server fns use auth middleware");
 
   const types = readFileSync(resolve("src/integrations/supabase/types.ts"), "utf8");
-  for (const t of ["advisory_cycles: {", "advisory_events: {", "advisory_transition_rules: {", "advisory_record_event: {"]) {
+  for (const t of [
+    "advisory_cycles: {",
+    "advisory_events: {",
+    "advisory_transition_rules: {",
+    "advisory_record_event: {",
+  ]) {
     assert(types.includes(t), `types.ts has ${t}`);
   }
 
-  const pkg = JSON.parse(readFileSync(resolve("package.json"), "utf8")) as { scripts: Record<string, string> };
+  const pkg = JSON.parse(readFileSync(resolve("package.json"), "utf8")) as {
+    scripts: Record<string, string>;
+  };
   assert(Boolean(pkg.scripts["test:advisory-state"]), "test:advisory-state script registered");
 }
 
