@@ -123,6 +123,7 @@ import { NextStepCard } from "@/components/next-step-card";
 import { RecommendationsPanel } from "@/components/recommendations-panel";
 import { DataRequestsPanel } from "@/components/data-requests-panel";
 import { AdvisoryPackPanel } from "@/components/advisory-pack-panel";
+import { OutcomesPanel } from "@/components/outcomes-panel";
 import { nextStepRoute, type NextStep, type NextStepTarget } from "@/lib/next-step";
 import {
   buildFinancialSnapshot,
@@ -2915,6 +2916,14 @@ function ClientView() {
                 onChanged={() => setAdvisoryBump((n) => n + 1)}
                 onOpenActions={() => setActiveTab("plan")}
                 onAddFigures={() => setFirstDataOpen(true)}
+              />
+              {/* P2.1 — outcomes: what the last cycle's recommendations actually did. */}
+              <OutcomesPanel
+                className="mb-5"
+                clientId={client.id}
+                audience="accountant"
+                refreshKey={`${activeTab}|${snapshots.length}|${advisoryBump}`}
+                onChanged={() => setAdvisoryBump((n) => n + 1)}
               />
               <DeliverableInputConfig
                 className="mb-5"

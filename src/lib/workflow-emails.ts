@@ -22,10 +22,15 @@ export const WORKFLOW_EMAIL_KINDS = [
   "pack_changes_requested",
   "forecast_break",
   "cycle_restarted",
+  // P3 — marketplace
+  "accountant_request_received",
+  "accountant_attached",
+  "accountant_request_declined",
 ] as const;
 export type WorkflowEmailKind = (typeof WORKFLOW_EMAIL_KINDS)[number];
 
-export type WorkflowRecipientRole = "owner" | "accountant";
+/** `requested_firm` = members of the firm a request targets (not attached yet). */
+export type WorkflowRecipientRole = "owner" | "accountant" | "requested_firm";
 
 export type WorkflowFacts = {
   clientId: string;
@@ -46,6 +51,16 @@ export type WorkflowFacts = {
   forecast: { lastForecastAt: string; closings: number[] } | null;
   /** Most recent cycle.restarted advisory event, if any. */
   lastRestart: { eventId: number | string; at: string } | null;
+  /** P3: marketplace requests for this client (any status, newest first). */
+  accountantRequests?: Array<{
+    id: string;
+    firmId: string;
+    firmName: string | null;
+    status: "open" | "accepted" | "declined" | "withdrawn" | "expired";
+    createdAt: string;
+    respondedAt: string | null;
+    responseNote: string | null;
+  }>;
   /** Pre-data states get no workflow mail; upload is the whole story there. */
   pastDataCollection: boolean;
   now: string;
@@ -58,6 +73,8 @@ export type WorkflowEmailIntent = {
   audience: WorkflowRecipientRole;
   /** Data the renderer needs; kept small and serialisable. */
   data: Record<string, string | number | boolean | null>;
+  /** For `requested_firm` audiences: which request's firm to resolve. */
+  requestId?: string;
 };
 
 /** Restarts older than this are history, not news. */
@@ -137,6 +154,40 @@ export function planWorkflowEmails(f: WorkflowFacts): WorkflowEmailIntent[] {
     }
   }
 
+  // P3 — marketplace. Requests are news for the firm while open, and for the
+  // owner once answered (within the same window as restarts).
+  for (const r of f.accountantRequests ?? []) {
+    if (r.status === "open") {
+      out.push({
+        kind: "accountant_request_received",
+        refKey: r.id,
+        audience: "requested_firm",
+        requestId: r.id,
+        data: {},
+      });
+    } else if (r.status === "accepted" && r.respondedAt) {
+      const age = daysOld(r.respondedAt, f.now);
+      if (age !== null && age <= RESTART_NEWS_WINDOW_DAYS) {
+        out.push({
+          kind: "accountant_attached",
+          refKey: r.id,
+          audience: "owner",
+          data: { firmName: r.firmName },
+        });
+      }
+    } else if (r.status === "declined" && r.respondedAt) {
+      const age = daysOld(r.respondedAt, f.now);
+      if (age !== null && age <= RESTART_NEWS_WINDOW_DAYS) {
+        out.push({
+          kind: "accountant_request_declined",
+          refKey: r.id,
+          audience: "owner",
+          data: { firmName: r.firmName, note: r.responseNote },
+        });
+      }
+    }
+  }
+
   if (f.lastRestart) {
     const age = daysOld(f.lastRestart.at, f.now);
     if (age !== null && age <= RESTART_NEWS_WINDOW_DAYS) {
@@ -198,6 +249,7 @@ export function workflowEmailHref(
   siteUrl: string,
 ): string {
   const base = siteUrl.replace(/\/$/, "");
+  if (audience === "requested_firm") return `${base}/dashboard#accountant-inbox`;
   if (audience === "accountant") {
     const tab = kind === "forecast_break" ? "cash" : "advisory";
     return `${base}/clients/${clientId}?tab=${tab}`;
@@ -263,6 +315,35 @@ export function renderWorkflowEmail(input: RenderInput): RenderedEmail {
           : "That is the number every recommendation is judged against. Check the assumptions — a late debtor or an early supplier bill is often the difference — then look at the moves MILŌN proposes.",
       ];
       cta = "Open the cash forecast";
+      break;
+    }
+    case "accountant_request_received": {
+      subject = `${clientName} has asked your firm to review their advisory pack`;
+      lines = [
+        `${clientName} runs MILŌN on their own and would like an accountant in the loop. They have sent you their current advisory pack — the diagnosis, cash forecast and proposed moves — not raw statements.`,
+        "Accept and the client is attached to your firm: their packs come to you for sign-off, their data gaps and overdue actions show in your portfolio, and MILŌN keeps the numbers current between meetings. Decline and they simply hear that you are not a fit right now.",
+      ];
+      cta = "Open the request";
+      break;
+    }
+    case "accountant_attached": {
+      const who = intent.data.firmName ? String(intent.data.firmName) : "The firm";
+      subject = `${clientName}: ${who} has accepted your request`;
+      lines = [
+        `${who} is now your accountant on MILŌN. From here your advisory packs go to them for review before you act on them, and they see the same Next Step you do.`,
+        "Nothing else changes: your figures, forecast and actions stay exactly where they are.",
+      ];
+      cta = "See what's next";
+      break;
+    }
+    case "accountant_request_declined": {
+      const who = intent.data.firmName ? String(intent.data.firmName) : "The firm";
+      subject = `${clientName}: ${who} can't take you on right now`;
+      lines = [
+        `${who} has declined your review request${intent.data.note ? `: "${String(intent.data.note)}"` : "."}`,
+        "MILŌN keeps working for you without an accountant. You can ask another listed firm whenever you like.",
+      ];
+      cta = "See other firms";
       break;
     }
     case "cycle_restarted": {

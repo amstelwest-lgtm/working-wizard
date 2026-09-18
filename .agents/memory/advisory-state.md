@@ -1,5 +1,5 @@
 ---
-name: Advisory OS spine (P0.1 state machine, P0.2 recommendations, P0.3 Next Step, P0.4 shell, P0.5 direct-client path, P0.6 data requests, P0.7 actions↔recommendations, P1 pack + review + workflow emails)
+name: Advisory OS spine (P0.1 state machine, P0.2 recommendations, P0.3 Next Step, P0.4 shell, P0.5 direct-client path, P0.6 data requests, P0.7 actions↔recommendations, P1 pack + review + workflow emails, P2 outcomes + portfolio, P3 marketplace)
 description: Where the per-client advisory state lives, how it advances, how recommendations/outcomes attach, and how the Next Step is resolved
 ---
 
@@ -144,6 +144,36 @@ seats, keyed by `last_forecast_at`), `pack_ready_for_review` (accountant), `pack
 `NextStepCard` after the step resolves; links are plain `/app?tab=` or `/clients/:id?tab=`
 (no tokens). Action overdue/nudge mail stays in the action machine. Test:
 `pnpm test:workflow-emails`.
+
+**Outcomes (P2, no migration — reuses `recommendation_outcomes`):** `src/lib/outcomes.ts`
+`measureOutcomes` compares each approved recommendation's metric between the snapshot current
+at the decision (baseline) and the newest snapshot; idempotent per (recommendation, measured
+snapshot); readers for debtor/creditor/stock days, gross margin (pts), revenue, profit — cash
+and "other" are manual (`recordRecommendationOutcome`). Fired from `NextStepCard` alongside
+the data-request sync. `outcomeStory` → the one-sentence "did the money move" line; the pack
+gains `last_cycle_results` right after the headline (`PACK_SECTION_KEYS[1]`).
+`deliveryByMetric` / `calibratedConfidence` (×0.9, floor 0.2) feed `createRecommendation`;
+`brain-propose` gets a "Track record" block (`trackRecordLines` in logic.ts mirrors the maths)
+and a rule not to re-propose measured misses. Portfolio: `src/lib/portfolio.ts`
+`exceptionsFor`/`rankPortfolio` (pack waiting, blocking data, went backwards = sev 1; overdue,
+blocked, stuck >21d, unreviewed = 2; stale, review due, owner inactive = 3);
+`getFirmPortfolio` batches by `client_id IN (...)`, never per client; `PortfolioExceptions`
+above the dashboard clients table. Test: `pnpm test:outcomes`.
+
+**Marketplace (P3):** `20260918180000_marketplace.sql` — `firm_listings` (firm members manage
+directly by RLS; owners only see listed firms via RPC) and `accountant_requests` (one open per
+client+firm; **no direct write policies**). `marketplace_match_firms` (owner only, no firm
+attached): +3 industry tag = business_type, +2 region tag = market country/regionCode, +1
+accepting — `scoreFirm` in `src/lib/marketplace.ts` mirrors it. `accountant_request_create`
+attaches the latest live pack; `accountant_request_respond(accept)` sets `clients.firm_id`,
+expires the client's other open requests, and from then on P0/P1 treat the client as
+firm-connected (next pack `requires_review`, `workflow_recipients` includes the firm,
+portfolio shows it). `accountant_request_recipients` resolves the not-yet-attached firm's
+members for mail. Workflow kinds added: `accountant_request_received` (audience
+`requested_firm`, logged as role accountant), `accountant_attached`, `accountant_request_declined`
+— the `kind` CHECK is re-declared here, so the workflow test reads this file. UI:
+`FindAccountantPanel` (owner board, hidden once a firm exists), `AccountantInbox` (dashboard,
+under portfolio; inbox + listing form). Test: `pnpm test:marketplace`.
 
 **Gotcha:** `clients.cashflow_bank_draft` has no in-repo migration; the clients
 trigger reads it through `to_jsonb(NEW)->'cashflow_bank_draft'` so a missing

@@ -35,7 +35,12 @@ import {
 } from "@/lib/cash-runway";
 import { parseDataRequestRow, type DataRequest } from "@/lib/data-requests";
 import { computeOverallHealth } from "@/lib/health-score";
-import { parseRecommendationRow, type Recommendation } from "@/lib/recommendations";
+import { outcomeStories } from "@/lib/outcomes";
+import {
+  parseRecommendationRow,
+  type Recommendation,
+  type RecommendationOutcome,
+} from "@/lib/recommendations";
 
 async function assertClientAccess(sb: LooseSb, userId: string, clientId: string) {
   const { data, error } = await sb.rpc("has_client_access", {
@@ -127,42 +132,49 @@ export async function gatherPackInputs(
   clientId: string,
   now: string,
 ): Promise<Parameters<typeof buildAdvisoryPack>[0] | null> {
-  const [clientRes, snapsRes, recsRes, reqsRes, openRes, overdueRes] = await Promise.all([
-    sb
-      .from("clients")
-      .select("name, firm_id, cashflow, cash_runway_weeks, financials_updated_at")
-      .eq("id", clientId)
-      .maybeSingle(),
-    sb
-      .from("client_financial_snapshots")
-      .select("id, period_label, period_date, ratios")
-      .eq("client_id", clientId)
-      .order("period_date", { ascending: false })
-      .limit(2),
-    sb
-      .from("proposed_next_steps")
-      .select("*")
-      .eq("client_id", clientId)
-      .in("status", ["proposed", "approved", "edited"])
-      .limit(50),
-    sb
-      .from("data_requests")
-      .select("*")
-      .eq("client_id", clientId)
-      .in("status", ["open", "sent"])
-      .limit(50),
-    sb
-      .from("action_items")
-      .select("id", { count: "exact", head: true })
-      .eq("client_id", clientId)
-      .neq("status", "done"),
-    sb
-      .from("action_items")
-      .select("id", { count: "exact", head: true })
-      .eq("client_id", clientId)
-      .neq("status", "done")
-      .lt("due_date", now.slice(0, 10)),
-  ]);
+  const [clientRes, snapsRes, recsRes, reqsRes, openRes, overdueRes, outcomesRes] =
+    await Promise.all([
+      sb
+        .from("clients")
+        .select("name, firm_id, cashflow, cash_runway_weeks, financials_updated_at")
+        .eq("id", clientId)
+        .maybeSingle(),
+      sb
+        .from("client_financial_snapshots")
+        .select("id, period_label, period_date, ratios")
+        .eq("client_id", clientId)
+        .order("period_date", { ascending: false })
+        .limit(2),
+      sb
+        .from("proposed_next_steps")
+        .select("*")
+        .eq("client_id", clientId)
+        .in("status", ["proposed", "approved", "edited"])
+        .limit(50),
+      sb
+        .from("data_requests")
+        .select("*")
+        .eq("client_id", clientId)
+        .in("status", ["open", "sent"])
+        .limit(50),
+      sb
+        .from("action_items")
+        .select("id", { count: "exact", head: true })
+        .eq("client_id", clientId)
+        .neq("status", "done"),
+      sb
+        .from("action_items")
+        .select("id", { count: "exact", head: true })
+        .eq("client_id", clientId)
+        .neq("status", "done")
+        .lt("due_date", now.slice(0, 10)),
+      sb
+        .from("recommendation_outcomes")
+        .select("*")
+        .eq("client_id", clientId)
+        .order("measured_at", { ascending: false })
+        .limit(300),
+    ]);
   if (clientRes.error) throw new Error(clientRes.error.message);
   const client = clientRes.data as {
     name: string;
@@ -229,6 +241,10 @@ export async function gatherPackInputs(
     dataRequests,
     openActions: openRes.error ? 0 : (openRes.count ?? 0),
     overdueActions: overdueRes.error ? 0 : (overdueRes.count ?? 0),
+    outcomes: outcomeStories(
+      recommendations,
+      (outcomesRes.error ? [] : (outcomesRes.data ?? [])) as RecommendationOutcome[],
+    ),
     now,
   };
 }

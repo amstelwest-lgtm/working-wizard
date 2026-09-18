@@ -507,7 +507,8 @@ function gap(over: Partial<DataGapFacts> = {}): DataGapFacts {
 
   const card = readFileSync(resolve("src/components/next-step-card.tsx"), "utf8");
   assert(
-    card.includes("await syncRequests({ data: { clientId } }).catch(() => null)"),
+    card.includes("syncRequests({ data: { clientId } }).catch(() => null)") &&
+      card.indexOf("syncRequests({ data: { clientId } })") < card.indexOf("await fetchNextStep("),
     "card syncs before resolving, failure-tolerant",
   );
 

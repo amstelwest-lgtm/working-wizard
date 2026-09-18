@@ -89,7 +89,62 @@ const SHARED_RULES = [
   "- Max 3 next_steps, max 3 gap_items, max 3 competitors.",
   "- Do not mark anything signed_off. Do not treat drafts as truth.",
   "- You only see statement totals and ratios, never the ledger. Never name or count specific invoices, customers, suppliers, debtors or transactions; talk about the ratio, the trend and the amount instead.",
+  "- If a 'Track record' block is present, treat it as evidence: do not re-propose a move that was measured as missed or went the other way unless the rationale says what will be different this time, and lean towards the kinds of move that delivered.",
 ];
+
+// ── Outcome history (P2.2) ────────────────────────────────────────────────────
+// Mirrors deliveryByMetric() in src/lib/outcomes.ts closely enough for a prompt:
+// one line per metric with how much of the expected impact past moves delivered.
+
+export type OutcomeRow = {
+  recommendation_title: string;
+  metric: string;
+  expected_amount: number | null;
+  actual_amount: number | null;
+};
+
+const LOWER_IS_BETTER = new Set(["debtor_days", "stock_days"]);
+const METRIC_LABEL: Record<string, string> = {
+  cash: "Cash",
+  profit: "Profit",
+  revenue: "Revenue",
+  gross_margin: "Gross margin",
+  debtor_days: "Debtor days",
+  creditor_days: "Creditor days",
+  stock_days: "Stock days",
+  other: "Other",
+};
+
+export function trackRecordLines(rows: OutcomeRow[]): string[] {
+  const byMetric = new Map<string, { ratios: number[]; missed: string[]; delivered: string[] }>();
+  for (const r of rows) {
+    if (r.actual_amount === null || r.expected_amount === null || r.expected_amount === 0) continue;
+    const dir = LOWER_IS_BETTER.has(r.metric) ? -1 : 1;
+    const ratio = Math.max(0, Math.min(1.5, (r.actual_amount * dir) / (r.expected_amount * dir)));
+    const b = byMetric.get(r.metric) ?? { ratios: [], missed: [], delivered: [] };
+    b.ratios.push(ratio);
+    if (ratio < 0.5) b.missed.push(r.recommendation_title);
+    else if (ratio >= 0.9) b.delivered.push(r.recommendation_title);
+    byMetric.set(r.metric, b);
+  }
+  const out: string[] = [];
+  for (const [metric, b] of byMetric) {
+    const avg = Math.round((b.ratios.reduce((a, x) => a + x, 0) / b.ratios.length) * 100);
+    let line = `${METRIC_LABEL[metric] ?? metric}: ${b.ratios.length} past move${b.ratios.length === 1 ? "" : "s"} measured, delivered ${avg}% of expected on average.`;
+    if (b.delivered.length)
+      line += ` Worked: ${b.delivered
+        .slice(0, 3)
+        .map((t) => `"${t}"`)
+        .join(", ")}.`;
+    if (b.missed.length)
+      line += ` Missed: ${b.missed
+        .slice(0, 3)
+        .map((t) => `"${t}"`)
+        .join(", ")}.`;
+    out.push(line);
+  }
+  return out.sort();
+}
 
 export function systemPromptFor(audience: ProposeAudience): string {
   if (audience === "owner") {
