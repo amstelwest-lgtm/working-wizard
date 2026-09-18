@@ -33,6 +33,16 @@ groups, run the test, paste the block into a NEW migration that re-seeds the tab
 `getAdvisoryState` falls back to `inferAdvisoryStateFromFacts()` when the
 migration isn't applied, so callers always get a state (`source: "derived"`).
 
+**Recommendations (P0.2):** the recommendation object IS `proposed_next_steps`
+(extended: problem/evidence/priority/confidence/data_depth/expected_impact_*/
+cycle_id/decided_*; status adds `superseded`). `action_items.recommendation_id`
+is the FK (legacy `linked_action_item_id` is kept in sync by trigger).
+`recommendation_outcomes` holds expected vs actual per metric. Approved → task
+goes through RPC `advisory_create_action_from_recommendation` (refuses
+unapproved unless `p_approve`). Helpers: `src/lib/recommendations.ts` /
+`.functions.ts`; `checkRootCauseClaims()` blocks invoice/customer-level copy on
+`data_depth = 'statement'`. Migration: `20260918130000_recommendations_outcomes.sql`.
+
 **Gotcha:** `clients.cashflow_bank_draft` has no in-repo migration; the clients
 trigger reads it through `to_jsonb(NEW)->'cashflow_bank_draft'` so a missing
 column is NULL rather than an error that would roll back sibling emits.
