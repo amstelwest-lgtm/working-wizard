@@ -133,6 +133,10 @@ const periodOnly = resolveWaterfallFigures(emptyWeeklyInputs(), period);
 assert(periodOnly.source === "period", "empty weeks fall back to period");
 assert(periodOnly.revenue === 500000, "period fallback revenue");
 
+const xeroOverWeekly = resolveWaterfallFigures(weeks, period, { preferPeriod: true });
+assert(xeroOverWeekly.source === "period", "a Xero statement wins over weekly totals");
+assert(xeroOverWeekly.revenue === 500000, "Xero period revenue is not the week grid");
+
 const overlaid = overlayWeeklyInputs(
   { revenue: "500000", cogs: "200000", debt_schedule: { lines: [{ amount: 1 }] } },
   weeks,

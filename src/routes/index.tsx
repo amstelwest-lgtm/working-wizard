@@ -1233,6 +1233,10 @@ function LandingPage() {
         }
         if (error) throw error;
         notifySignup("Accountant firm", regEmail, regName.trim());
+        // Production Auth auto-confirms: signUp returns a session and
+        // confirmation_sent_at stays null, so this inbox screen is not the
+        // path accountants or owners actually hit. Invited members are created
+        // with email_confirm and also receive no confirmation mail.
         if (!data.session) {
           setRegDone(true);
           return;

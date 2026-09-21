@@ -147,13 +147,19 @@ export type ResolvedWaterfallFigures = {
   source: "weekly" | "period";
 };
 
-/** Single figure path for both portals — weekly totals win once any week has revenue or COGS. */
+/**
+ * Single figure path for both portals.
+ * Weekly totals win once any week has revenue or COGS, unless a ledger
+ * statement (Xero) is the source of truth — then the statement period wins
+ * so an older week grid cannot hide the synced month.
+ */
 export function resolveWaterfallFigures(
   weekly: WeeklyInputs,
   fallback?: WaterfallFallback,
+  opts?: { preferPeriod?: boolean },
 ): ResolvedWaterfallFigures {
   const agg = aggregateWeeklyInputs(weekly);
-  const hasWeekly = hasWeeklyProfitFigures(weekly);
+  const hasWeekly = hasWeeklyProfitFigures(weekly) && !opts?.preferPeriod;
   return {
     revenue: hasWeekly ? agg.revenue : (fallback?.revenue ?? 0),
     costOfSales: hasWeekly ? agg.costOfSales : (fallback?.cogs ?? 0),

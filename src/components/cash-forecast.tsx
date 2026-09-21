@@ -712,14 +712,24 @@ export function CashForecastPanel({
     capexWeek,
   ]);
 
-  const weeks = useMemo(() => {
+  const forecastDates = useMemo(() => {
     const d = new Date(startDate);
     return Array.from({ length: WEEKS }, (_, i) => {
       const w = new Date(d);
       w.setDate(d.getDate() + i * 7);
-      return date(w, { day: "2-digit", month: "short" });
+      return w;
     });
-  }, [startDate, date]);
+  }, [startDate]);
+
+  const weeks = useMemo(
+    () => forecastDates.map((w) => date(w, { day: "2-digit", month: "short" })),
+    [forecastDates, date],
+  );
+
+  const horizonLabel =
+    forecastDates.length >= WEEKS
+      ? `${date(forecastDates[0]!, { day: "numeric", month: "short", year: "numeric" })} – ${date(forecastDates[WEEKS - 1]!, { day: "numeric", month: "short", year: "numeric" })}`
+      : "";
 
   const computeScenario = (opts: {
     rMul: number;
@@ -941,8 +951,8 @@ export function CashForecastPanel({
           : []),
       ];
 
-      const now = new Date();
-      const period = date(now, { month: "long", year: "numeric" });
+      const period =
+        horizonLabel || date(new Date(), { month: "long", year: "numeric" });
       const name = clientName?.trim() || "Your Business";
 
       const blob = await pdf(
@@ -1001,7 +1011,7 @@ export function CashForecastPanel({
   const heroChart = (height: number) => (
     <div style={{ height }} className="w-full">
       <ResponsiveContainer width="100%" height="100%">
-        <ComposedChart data={chartData} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+        <ComposedChart data={chartData} margin={{ top: 8, right: 12, left: 0, bottom: 8 }}>
           <defs>
             <linearGradient id="cfGoldFill" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor={GOLD} stopOpacity={0.35} />
@@ -1009,7 +1019,18 @@ export function CashForecastPanel({
             </linearGradient>
           </defs>
           <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.25)" />
-          <XAxis dataKey="week" stroke="#94a3b8" fontSize={10} tickLine={false} axisLine={false} />
+          <XAxis
+            dataKey="label"
+            stroke="#94a3b8"
+            fontSize={10}
+            tickLine={false}
+            axisLine={false}
+            interval={0}
+            minTickGap={18}
+            angle={-35}
+            textAnchor="end"
+            height={48}
+          />
           <YAxis
             stroke="#94a3b8"
             fontSize={10}
@@ -1151,7 +1172,8 @@ export function CashForecastPanel({
                   Cash Outlook
                 </CardTitle>
                 <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">
-                  13-week closing balance trajectory · opening {fmtR(calc.opening)}
+                  13-week closing balance
+                  {horizonLabel ? ` · ${horizonLabel}` : ""} · opening {fmtR(calc.opening)}
                 </p>
               </div>
               <div className="flex flex-col items-end gap-1.5">
@@ -1238,7 +1260,8 @@ export function CashForecastPanel({
                 13-Week Cash Forecast
               </CardTitle>
               <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">
-                Forecast every cent in and out of the bank · catch a shortfall before it hits
+                Forecast every cent in and out of the bank
+                {horizonLabel ? ` · ${horizonLabel}` : ""} · catch a shortfall before it hits
               </p>
             </div>
             <div className="flex items-center gap-2">

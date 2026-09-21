@@ -4,7 +4,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { assertClientScope } from "@/lib/assert-client-scope";
 import { getSupabaseAdminOrNull, supabaseAdmin } from "@/integrations/supabase/client.server";
 import { computeRatios, type RatioInputs } from "@/lib/ratios";
-import { currentPeriodDate, currentPeriodLabel } from "@/lib/financial-snapshots";
+import { calendarMonthStamp } from "@/lib/statement-period";
 import {
   reduceXeroConnection,
   sanitizeXeroReturnPath,
@@ -15,9 +15,8 @@ import {
   buildXeroAuthUrl,
   deleteXeroConnection,
   exchangeXeroCodeForTokens,
-  fetchXeroBalanceSheet,
   fetchXeroConnections,
-  fetchXeroProfitAndLoss,
+  fetchXeroLedgerStatement,
   mapXeroToFinancialInputs,
   pickXeroTenant,
   refreshXeroToken,
@@ -84,22 +83,54 @@ export type XeroStatus = {
   syncError: string | null;
   dataDepth: string;
   phase: XeroConnectionState["phase"];
+  /** Set only after a sync that stored statementSource=xero (month column, not YTD). */
+  periodLabel: string | null;
+  periodStart: string | null;
+  periodEnd: string | null;
+  revenue: number | null;
 } | null;
 
-function statusFromRow(conn: {
-  tenant_id: string | null;
-  tenant_name: string | null;
-  connected_at: string | null;
-  last_synced_at: string | null;
-  sync_status: string | null;
-  sync_error: string | null;
-  data_depth: string | null;
-}): NonNullable<XeroStatus> {
+function xeroFigureProof(financials: unknown): {
+  periodLabel: string | null;
+  periodStart: string | null;
+  periodEnd: string | null;
+  revenue: number | null;
+} {
+  const empty = { periodLabel: null, periodStart: null, periodEnd: null, revenue: null };
+  if (!financials || typeof financials !== "object" || Array.isArray(financials)) return empty;
+  const f = financials as Record<string, unknown>;
+  if (f.statementSource !== "xero") return empty;
+  const periodLabel = typeof f.periodLabel === "string" && f.periodLabel.trim() ? f.periodLabel.trim() : null;
+  const periodStart = typeof f.periodStart === "string" && f.periodStart.trim() ? f.periodStart.trim() : null;
+  const periodEnd = typeof f.periodEnd === "string" && f.periodEnd.trim() ? f.periodEnd.trim() : null;
+  const raw = f.revenue;
+  const n = typeof raw === "number" ? raw : parseFloat(String(raw ?? ""));
+  return {
+    periodLabel,
+    periodStart,
+    periodEnd,
+    revenue: Number.isFinite(n) ? n : null,
+  };
+}
+
+function statusFromRow(
+  conn: {
+    tenant_id: string | null;
+    tenant_name: string | null;
+    connected_at: string | null;
+    last_synced_at: string | null;
+    sync_status: string | null;
+    sync_error: string | null;
+    data_depth: string | null;
+  },
+  financials: unknown,
+): NonNullable<XeroStatus> {
   const derived = xeroStateFromStored({
     present: true,
     syncStatus: conn.sync_status,
     syncError: conn.sync_error,
   });
+  const proof = xeroFigureProof(financials);
   return {
     tenantId: conn.tenant_id ?? "",
     tenantName: conn.tenant_name ?? null,
@@ -109,6 +140,7 @@ function statusFromRow(conn: {
     syncError: derived.syncError,
     dataDepth: conn.data_depth ?? "statement",
     phase: derived.phase,
+    ...proof,
   };
 }
 
@@ -120,7 +152,7 @@ export const getXeroStatus = createServerFn({ method: "POST" })
 
     const { data: client } = await context.supabase
       .from("clients")
-      .select("id")
+      .select("id, financials")
       .eq("id", data.clientId)
       .maybeSingle();
     if (!client) throw new Error("Client not found");
@@ -137,7 +169,7 @@ export const getXeroStatus = createServerFn({ method: "POST" })
       .maybeSingle();
 
     if (!conn) return null;
-    return statusFromRow(conn);
+    return statusFromRow(conn, (client as { financials?: unknown }).financials);
   });
 
 export const getXeroStatuses = createServerFn({ method: "POST" })
@@ -181,7 +213,12 @@ export const getXeroStatuses = createServerFn({ method: "POST" })
 
 export type XeroSyncResult = {
   mappedInputs: Record<string, number>;
+  /** Every mapped field, including period label strings, ready for the financials blob. */
+  fields: Record<string, string>;
   periodMonths: string | null;
+  periodLabel: string | null;
+  periodStart: string | null;
+  periodEnd: string | null;
   dataDepth: "statement";
   summary: {
     revenue: number;
@@ -189,6 +226,7 @@ export type XeroSyncResult = {
     totalAssets: number;
     equity: number;
     cash: number;
+    periodLabel: string | null;
   };
 };
 
@@ -200,31 +238,47 @@ function mappedNumbers(mapped: Record<string, number | string>): Record<string, 
   return out;
 }
 
+async function findSnapshotId(
+  clientId: string,
+  column: "period_date" | "period_label",
+  value: string,
+): Promise<string | null> {
+  const { data } = await supabaseAdmin
+    .from("client_financial_snapshots")
+    .select("id")
+    .eq("client_id", clientId)
+    .eq(column, value)
+    .order("created_at", { ascending: false })
+    .limit(1);
+  const row = (data ?? [])[0] as { id?: string } | undefined;
+  return row?.id ?? null;
+}
+
 async function upsertXeroSnapshot(
   clientId: string,
   financials: Record<string, unknown>,
   userId: string | null,
+  periodDate: string,
+  periodLabel: string,
 ) {
-  const periodDate = currentPeriodDate();
-  const periodLabel = currentPeriodLabel();
   const ratios = computeRatios(financials as unknown as RatioInputs);
 
-  const { data: existing } = await supabaseAdmin
-    .from("client_financial_snapshots")
-    .select("id")
-    .eq("client_id", clientId)
-    .eq("period_date", periodDate)
-    .maybeSingle();
-
-  let id = (existing as { id?: string } | null)?.id ?? null;
+  let id = await findSnapshotId(clientId, "period_date", periodDate);
+  if (!id) id = await findSnapshotId(clientId, "period_label", periodLabel);
+  // Earlier syncs stamped year-to-date figures as "Sep 2026". Replace that row.
   if (!id) {
-    const { data: byLabel } = await supabaseAdmin
-      .from("client_financial_snapshots")
-      .select("id")
-      .eq("client_id", clientId)
-      .eq("period_label", periodLabel)
-      .maybeSingle();
-    id = (byLabel as { id?: string } | null)?.id ?? null;
+    const monthStamp = calendarMonthStamp(periodDate);
+    if (monthStamp) {
+      const { data } = await supabaseAdmin
+        .from("client_financial_snapshots")
+        .select("id")
+        .eq("client_id", clientId)
+        .eq("source", "xero")
+        .eq("period_label", monthStamp)
+        .order("created_at", { ascending: false })
+        .limit(1);
+      id = ((data ?? [])[0] as { id?: string } | undefined)?.id ?? null;
+    }
   }
 
   if (id) {
@@ -309,13 +363,18 @@ export const triggerXeroSync = createServerFn({ method: "POST" })
       }
 
       const tenantId = conn.tenant_id as string;
-      const [pnl, bs] = await Promise.all([
-        fetchXeroProfitAndLoss(tenantId, accessToken),
-        fetchXeroBalanceSheet(tenantId, accessToken),
-      ]);
+      const ledger = await fetchXeroLedgerStatement(tenantId, accessToken);
+      const { pnl, bs } = ledger;
 
-      const mapped = mapXeroToFinancialInputs(pnl, bs);
+      const mapped = mapXeroToFinancialInputs(pnl, bs, {
+        from: ledger.from,
+        to: ledger.to,
+        label: ledger.periodLabel,
+      });
       const mappedInputs = mappedNumbers(mapped);
+      const fields = Object.fromEntries(
+        Object.entries(mapped).map(([k, v]) => [k, String(v)]),
+      );
 
       const { data: existing } = await supabaseAdmin
         .from("clients")
@@ -339,11 +398,27 @@ export const triggerXeroSync = createServerFn({ method: "POST" })
         })
         .eq("id", data.clientId);
 
-      await upsertXeroSnapshot(data.clientId, merged, context.userId ?? null);
+      await upsertXeroSnapshot(
+        data.clientId,
+        merged,
+        context.userId ?? null,
+        ledger.to,
+        ledger.periodLabel,
+      );
 
       const nowIso = new Date().toISOString();
       const cacheRows = [
-        { client_id: data.clientId, data_type: "pl", raw_data: pnl as never, synced_at: nowIso },
+        {
+          client_id: data.clientId,
+          data_type: "pl",
+          raw_data: {
+            ...pnl,
+            from: ledger.from,
+            to: ledger.to,
+            periodLabel: ledger.periodLabel,
+          } as never,
+          synced_at: nowIso,
+        },
         { client_id: data.clientId, data_type: "bs", raw_data: bs as never, synced_at: nowIso },
       ];
       await supabaseAdmin.from("xero_sync_data").upsert(cacheRows, { onConflict: "client_id,data_type" });
@@ -361,7 +436,11 @@ export const triggerXeroSync = createServerFn({ method: "POST" })
 
       return {
         mappedInputs,
+        fields,
         periodMonths: typeof mapped.periodMonths === "string" ? mapped.periodMonths : null,
+        periodLabel: ledger.periodLabel,
+        periodStart: ledger.from,
+        periodEnd: ledger.to,
         dataDepth: "statement",
         summary: {
           revenue: pnl.revenue,
@@ -369,6 +448,7 @@ export const triggerXeroSync = createServerFn({ method: "POST" })
           totalAssets: bs.totalAssets,
           equity: bs.equity,
           cash: bs.cash,
+          periodLabel: ledger.periodLabel,
         },
       };
     } catch (err) {

@@ -102,6 +102,8 @@ import { accountantWorkspaceTab } from "@/lib/notes-tabs";
 import { useTrack } from "@/hooks/use-track";
 import { QboConnectCard } from "@/components/qbo-connect";
 import { XeroConnectCard } from "@/components/xero-connect";
+import { getXeroStatus, type XeroStatus } from "@/lib/xero.functions";
+import { readStatementMeta } from "@/lib/statement-period";
 import { effectiveCashRunwayWeeks, runwayWeeksFromCashflow } from "@/lib/cash-runway";
 import { countOpenQueriesForClient } from "@/lib/open-queries";
 import { ProfileFunnel } from "@/components/profile/profile-funnel";
@@ -771,11 +773,31 @@ function ClientView() {
 
   // Financials state (flat key-value for the fin-grid)
   const [financials, setFinancials] = useState<Record<string, string>>({});
+  const [xeroLink, setXeroLink] = useState<XeroStatus>(null);
+  const [xeroRefresh, setXeroRefresh] = useState(0);
+  const fetchXeroLink = useServerFn(getXeroStatus);
   const [debtSchedule, setDebtSchedule] = useState<DebtSchedule>(emptyDebtSchedule());
   const [weeklyInputs, setWeeklyInputs] = useState<WeeklyInputs>(emptyWeeklyInputs);
   const [productMix, setProductMix] = useState<ProductMix>(emptyProductMix);
   const financialsRef = useRef(financials);
   financialsRef.current = financials;
+
+  useEffect(() => {
+    if (!clientId) return;
+    let cancelled = false;
+    void fetchXeroLink({ data: { clientId } })
+      .then((status) => {
+        if (!cancelled) setXeroLink(status);
+      })
+      .catch(() => {
+        if (!cancelled) setXeroLink(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // fetchXeroLink identity is not stable; clientId + refresh token are the triggers.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clientId, xeroRefresh]);
   const debtScheduleRef = useRef(debtSchedule);
   debtScheduleRef.current = debtSchedule;
   const weeklyInputsRef = useRef(weeklyInputs);
@@ -1360,12 +1382,12 @@ function ClientView() {
     [clientId, mergeCurrentBlob],
   );
 
-  const onXeroSyncComplete = useCallback((inputs: Record<string, number>) => {
-    const next = Object.fromEntries(Object.entries(inputs).map(([k, val]) => [k, String(val)]));
-    const nextScalars = { ...financialsRef.current, ...next };
+  const onXeroSyncComplete = useCallback((inputs: Record<string, string>) => {
+    const nextScalars = { ...financialsRef.current, ...inputs };
     financialsRef.current = nextScalars;
     setFinancials(nextScalars);
     setClient((c) => (c ? { ...c, financials_updated_at: new Date().toISOString() } : c));
+    setXeroRefresh((n) => n + 1);
   }, []);
 
   const handleFinancialChange = useCallback(
@@ -2136,6 +2158,17 @@ function ClientView() {
                   onUpload={() => setUploadOpen(true)}
                   onConnectQuickBooks={() => setShowQboDialog(true)}
                   onConnectXero={() => setShowXeroDialog(true)}
+                  xeroLink={
+                    xeroLink
+                      ? {
+                          tenantName: xeroLink.tenantName,
+                          lastSyncedAt: xeroLink.lastSyncedAt,
+                          syncStatus: xeroLink.syncStatus,
+                          periodLabel: xeroLink.periodLabel,
+                          revenue: xeroLink.revenue,
+                        }
+                      : null
+                  }
                 />
 
                 {/* ===== FIRST FIGURES — shown on every tab until the client has numbers ===== */}
@@ -2419,6 +2452,7 @@ function ClientView() {
                     <XeroConnectCard
                       clientId={clientId}
                       returnPath={`/clients/${clientId}`}
+                      refreshToken={xeroRefresh}
                       onSyncComplete={onXeroSyncComplete}
                     />
                   </div>
@@ -2657,7 +2691,9 @@ function ClientView() {
                   <div style={{ marginBottom: 28 }}>
                     <ProductMixPanel
                       totalRevenue={
-                        resolveWaterfallFigures(weeklyInputs, waterfallFallback).revenue
+                        resolveWaterfallFigures(weeklyInputs, waterfallFallback, {
+                          preferPeriod: readStatementMeta(financials).statementSource === "xero",
+                        }).revenue
                       }
                       incentive="Answer these to build revenue and net profit per product line."
                     />
@@ -2675,6 +2711,8 @@ function ClientView() {
                       fallback={waterfallFallback}
                       clientName={client?.name}
                       clientId={client?.id}
+                      periodLabel={readStatementMeta(financials).periodLabel}
+                      preferPeriod={readStatementMeta(financials).statementSource === "xero"}
                       reviewSignoff={stampFromSignoff(
                         profitabilitySignoff,
                         computeIsStale(profitabilitySignoff, client?.financials_updated_at ?? null),
@@ -3207,6 +3245,7 @@ function ClientView() {
               <XeroConnectCard
                 clientId={clientId}
                 returnPath={`/clients/${clientId}`}
+                refreshToken={xeroRefresh}
                 onSyncComplete={(inputs) => {
                   onXeroSyncComplete(inputs);
                   setShowXeroDialog(false);

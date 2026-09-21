@@ -110,6 +110,7 @@ import {
   overlayWeeklyInputs,
   resolveWaterfallFigures,
 } from "@/lib/weekly-inputs";
+import { readStatementMeta } from "@/lib/statement-period";
 import {
   emptyProductMix,
   hasProductMixAnswer,
@@ -5167,14 +5168,17 @@ function Index() {
                         ),
                       )}
                       fallback={derivePeriodWaterfallFallback(v)}
+                      periodLabel={readStatementMeta(v).periodLabel}
+                      preferPeriod={readStatementMeta(v).statementSource === "xero"}
                     />
                   </div>
                   {/* Optional product-line mix — collapsed until the owner opts in */}
                   <div id="wizard-product-mix" className="mt-4">
                     <ProductMixPanel
                       totalRevenue={
-                        resolveWaterfallFigures(weeklyInputs, derivePeriodWaterfallFallback(v))
-                          .revenue
+                        resolveWaterfallFigures(weeklyInputs, derivePeriodWaterfallFallback(v), {
+                          preferPeriod: readStatementMeta(v).statementSource === "xero",
+                        }).revenue
                       }
                     />
                   </div>
@@ -5968,9 +5972,7 @@ function Index() {
                 onSyncComplete={(inputs) => {
                   setV((prev) => ({
                     ...prev,
-                    ...Object.fromEntries(
-                      Object.entries(inputs).map(([k, val]) => [k, String(val)]),
-                    ),
+                    ...inputs,
                   }));
                   setHasRealFinancials(true);
                   void handleOwnerFirstRealFinancialsUpload();

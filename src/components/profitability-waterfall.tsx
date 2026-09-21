@@ -69,6 +69,7 @@ async function exportPDF(opts: {
   createdBy?: string | null;
   firmId?: string | null;
   market?: import("@/lib/market").ResolvedMarket;
+  periodLabel?: string | null;
 }) {
   const { revenue, costOfSales, fixedCosts, interest, tax } = opts;
   const grossProfit = revenue - costOfSales;
@@ -82,10 +83,12 @@ async function exportPDF(opts: {
   ]);
 
   const now = new Date();
-  const period = now.toLocaleDateString(opts.market?.locale ?? "en-ZA", {
-    month: "long",
-    year: "numeric",
-  });
+  const period =
+    opts.periodLabel?.trim() ||
+    now.toLocaleDateString(opts.market?.locale ?? "en-ZA", {
+      month: "long",
+      year: "numeric",
+    });
   const name = opts.clientName?.trim() || "Your Business";
 
   const profitabilityData = {
@@ -143,11 +146,17 @@ export function ProfitabilityWaterfall({
   clientName,
   clientId,
   reviewSignoff = null,
+  periodLabel = null,
+  preferPeriod = false,
 }: {
   fallback?: WaterfallFallback;
   clientName?: string;
   clientId?: string;
   reviewSignoff?: ReportSignoffStamp | null;
+  /** Explicit statement range, e.g. "1–21 Sep 2026" or "Sep 2026". */
+  periodLabel?: string | null;
+  /** Xero (or another ledger) statement wins over weekly totals. */
+  preferPeriod?: boolean;
 }) {
   const { weeklyInputs } = useFinancialInputs();
   const { profile, firmId } = useAccountantProfile();
@@ -162,8 +171,10 @@ export function ProfitabilityWaterfall({
     return () => cancelAnimationFrame(t);
   }, []);
 
-  const figures = resolveWaterfallFigures(weeklyInputs, fallback);
+  const figures = resolveWaterfallFigures(weeklyInputs, fallback, { preferPeriod });
   const hasWeekly = figures.source === "weekly";
+  const periodBit = periodLabel?.trim() || null;
+  const sourceBit = preferPeriod ? "Xero" : hasWeekly ? "aggregated weekly data" : "period inputs";
 
   const revenue = figures.revenue;
   const costOfSales = figures.costOfSales;
@@ -239,7 +250,7 @@ export function ProfitabilityWaterfall({
             </CardTitle>
             <p className="mt-1 text-xs text-[#475569] dark:text-[#94a3b8]">
               How {currencySymbol(market)}1 of revenue becomes profit
-              {hasWeekly ? " · aggregated weekly data" : " · period inputs"}
+              {periodBit ? ` · ${periodBit}` : ""} · {sourceBit}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -265,6 +276,7 @@ export function ProfitabilityWaterfall({
                     createdBy: user?.id ?? null,
                     firmId,
                     market,
+                    periodLabel: periodBit,
                   });
                 } finally {
                   setExporting(false);

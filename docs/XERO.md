@@ -4,6 +4,13 @@ OAuth2 **web app** (authorization code + refresh). Not a Custom Connection.
 Connect one org, pull P&L + balance sheet, write `clients.financials` and a
 snapshot with `source = 'xero'`. Same path as a statement upload.
 
+The P&L request is the current month plus up to 11 prior months
+(`periods=11&timeframe=MONTH&standardLayout=true`). Profitability stores the
+most recent month that has revenue, with `periodStart`, `periodEnd`,
+`periodLabel`, and `statementSource = xero`. It does not store calendar
+year-to-date under the current month's name. Amounts are read from the first
+figure column (the period itself), not a trailing comparison or zero column.
+
 ## Env vars (only these)
 
 | Name | Where |

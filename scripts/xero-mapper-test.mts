@@ -13,10 +13,13 @@ import {
   periodMonthsBetween,
   pickXeroTenant,
   redactSecrets,
+  selectFreshestXeroProfitAndLoss,
+  xeroLedgerProfitAndLossPath,
   xeroRowAmount,
   xeroScopes,
   ytdRange,
 } from "../src/lib/xero";
+import { calendarMonthBounds, formatStatementPeriodLabel } from "../src/lib/statement-period";
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
@@ -221,6 +224,171 @@ assert(leaked.includes("[redacted]"), "redaction marker");
 
 assert(xeroRowAmount({ Cells: [{ Value: "Sales" }, { Value: "1,200.50" }] }) === 1200.5, "comma amount");
 assert(xeroRowAmount({ Cells: [{ Value: "Loss" }, { Value: "(40)" }] }) === -40, "paren negative");
+assert(
+  xeroRowAmount({
+    Cells: [{ Value: "Sales" }, { Value: "8633.60" }, { Value: "29539.18" }],
+  }) === 8633.6,
+  "current period is the first amount column, not the later total",
+);
+assert(
+  xeroRowAmount({
+    Cells: [{ Value: "Total Assets" }, { Value: "42000.00" }, { Value: "0.00" }],
+  }) === 42000,
+  "trailing comparison zero is not the balance-sheet total",
+);
+
+const trailingZeroBs = parseXeroBalanceSheet({
+  Reports: [
+    {
+      Rows: [
+        {
+          RowType: "Header",
+          Cells: [{ Value: "" }, { Value: "21 Sep 2026" }, { Value: "31 Aug 2026" }],
+        },
+        {
+          RowType: "Section",
+          Title: "Bank",
+          Rows: [
+            {
+              RowType: "Row",
+              Cells: [{ Value: "Business Bank Account" }, { Value: "1500.00" }, { Value: "0.00" }],
+            },
+          ],
+        },
+        {
+          RowType: "Section",
+          Title: "",
+          Rows: [
+            {
+              RowType: "SummaryRow",
+              Cells: [{ Value: "Total Assets" }, { Value: "42000.00" }, { Value: "0.00" }],
+            },
+          ],
+        },
+      ],
+    },
+  ],
+});
+assert(trailingZeroBs.cash === 1500, `bs cash ignores trailing 0, got ${trailingZeroBs.cash}`);
+assert(trailingZeroBs.totalAssets === 42000, `bs assets ignore trailing 0, got ${trailingZeroBs.totalAssets}`);
+
+function monthColumns(
+  label: string,
+  amounts: string[],
+  type = "Row",
+) {
+  return {
+    RowType: type,
+    Cells: [{ Value: label }, ...amounts.map((amount) => ({ Value: amount }))],
+  };
+}
+
+const multiMonthPnl = {
+  Reports: [
+    {
+      Rows: [
+        {
+          RowType: "Header",
+          Cells: [
+            { Value: "" },
+            { Value: "1–21 Sep 2026" },
+            { Value: "Aug 2026" },
+            { Value: "Total" },
+          ],
+        },
+        {
+          RowType: "Section",
+          Title: "Income",
+          Rows: [
+            monthColumns("Sales", ["8633.60", "11210.89", "29539.18"]),
+            monthColumns("Total Trading Income", ["8633.60", "11210.89", "29539.18"], "SummaryRow"),
+          ],
+        },
+        {
+          RowType: "Section",
+          Title: "Less Cost of Sales",
+          Rows: [
+            monthColumns("Purchases", ["100.00", "200.00", "775.98"]),
+            monthColumns("Total Cost of Sales", ["100.00", "200.00", "775.98"], "SummaryRow"),
+          ],
+        },
+        monthColumns("Net Profit", ["2000.00", "3000.00", "8266.73"]),
+      ],
+    },
+  ],
+};
+
+const freshest = selectFreshestXeroProfitAndLoss(multiMonthPnl, {
+  from: "2026-09-01",
+  to: "2026-09-21",
+});
+assert(freshest.column === 0, `freshest column ${freshest.column}`);
+assert(freshest.pnl.revenue === 8633.6, `freshest revenue ${freshest.pnl.revenue}`);
+assert(freshest.pnl.cogs === 100, `freshest cogs stay on that column, got ${freshest.pnl.cogs}`);
+assert(freshest.from === "2026-09-01" && freshest.to === "2026-09-21", "mtd bounds");
+assert(freshest.periodLabel === "1–21 Sep 2026", `label ${freshest.periodLabel}`);
+assert(freshest.pnl.revenue !== 29539.18, "year-to-date total column is not revenue");
+
+const priorMonthPnl = {
+  Reports: [
+    {
+      Rows: [
+        {
+          RowType: "Header",
+          Cells: [{ Value: "" }, { Value: "Sep 2026" }, { Value: "Aug 2026" }],
+        },
+        {
+          RowType: "Section",
+          Title: "Trading Income",
+          Rows: [
+            monthColumns("Sales", ["0.00", "8633.60"]),
+            monthColumns("Total Trading Income", ["0.00", "8633.60"], "SummaryRow"),
+          ],
+        },
+        monthColumns("Net Profit", ["0.00", "1200.00"]),
+      ],
+    },
+  ],
+};
+const prior = selectFreshestXeroProfitAndLoss(priorMonthPnl, {
+  from: "2026-09-01",
+  to: "2026-09-21",
+});
+assert(prior.column === 1, `falls back to prior month, got ${prior.column}`);
+assert(prior.pnl.revenue === 8633.6, `prior month revenue ${prior.pnl.revenue}`);
+assert(prior.from === "2026-08-01" && prior.to === "2026-08-31", `prior bounds ${prior.from} ${prior.to}`);
+assert(prior.periodLabel === "Aug 2026", `prior label ${prior.periodLabel}`);
+
+const sepBounds = calendarMonthBounds(new Date("2026-09-21T15:00:00Z"), 0);
+assert(sepBounds.from === "2026-09-01" && sepBounds.to === "2026-09-21", "open month ends today");
+const augBounds = calendarMonthBounds(new Date("2026-09-21T15:00:00Z"), 1);
+assert(augBounds.from === "2026-08-01" && augBounds.to === "2026-08-31", "prior month is complete");
+assert(
+  formatStatementPeriodLabel("2026-09-01", "2026-09-30") === "Sep 2026",
+  "full month label",
+);
+assert(
+  formatStatementPeriodLabel("2026-09-01", "2026-09-21") === "1–21 Sep 2026",
+  "month-to-date label",
+);
+const ledgerPath = xeroLedgerProfitAndLossPath(sepBounds.from, sepBounds.to);
+assert(ledgerPath.includes("fromDate=2026-09-01"), "ledger pull starts this month");
+assert(ledgerPath.includes("periods=11"), "ledger pull asks for prior months");
+assert(ledgerPath.includes("timeframe=MONTH"), "ledger pull is monthly");
+assert(ledgerPath.includes("standardLayout=true"), "ledger pull uses the standard layout");
+assert(!ledgerPath.includes("fromDate=2026-01-01"), "ledger pull is not calendar YTD");
+
+const periodMapped = mapXeroToFinancialInputs(freshest.pnl, bs, {
+  from: freshest.from,
+  to: freshest.to,
+  label: freshest.periodLabel,
+});
+assert(periodMapped.statementSource === "xero", "statement source tagged");
+assert(periodMapped.periodStart === "2026-09-01", "period start stored");
+assert(periodMapped.periodEnd === "2026-09-21", "period end stored");
+assert(periodMapped.periodLabel === "1–21 Sep 2026", "period label stored");
+assert(periodMapped.revenue === 8633.6, "mapped revenue is the month, not YTD");
+assert(periodMapped.periodMonths === "1", "a month is not annualised as nine months");
 
 const empty = parseXeroProfitAndLoss({ Reports: [{ Rows: [] }] });
 assert(empty.revenue === 0 && empty.netIncome === 0, "empty report is zeros, not throw");
@@ -252,6 +420,7 @@ assert(
 );
 const briefingSrc = readFileSync(resolve("src/components/client-briefing.tsx"), "utf8");
 assert(briefingSrc.includes('id="client-connect-xero"'), "briefing labels Connect Xero");
+assert(briefingSrc.includes('id="xero-link-proof"'), "briefing shows the Xero link proof");
 assert(briefingSrc.includes('id="client-connect-qbo"'), "briefing labels Connect QuickBooks beside Xero");
 assert(briefingSrc.includes('id="client-upload-cta"'), "briefing has the primary Upload CTA");
 
@@ -260,6 +429,9 @@ assert(snapSrc.includes('"xero"'), "snapshot source includes xero");
 
 const fnSrc = readFileSync(resolve("src/lib/xero.functions.ts"), "utf8");
 assert(fnSrc.includes('source: "xero"'), "sync writes snapshot source xero");
+assert(fnSrc.includes("fetchXeroLedgerStatement"), "sync pulls the freshest month, not year-to-date");
+assert(!fnSrc.includes("ytdRange("), "sync does not stamp calendar YTD as this month");
+assert(fnSrc.includes("statementSource"), "status exposes a linked Xero statement");
 assert(fnSrc.includes("assertClientScope"), "server fns check impersonation scope");
 assert(!fnSrc.includes("fetchXeroInvoices"), "no invoice pull in day-1 sync");
 assert(!/console\.(log|info|debug|error)\([^)]*access_token/.test(fnSrc), "functions never log tokens");

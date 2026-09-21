@@ -21,6 +21,32 @@ import type { BriefingWorkflow } from "@/lib/client-briefing.functions";
 import { useMarketFormat } from "@/contexts/market";
 import { AddPastPeriodLink } from "@/components/add-past-period-link";
 
+export type XeroLinkProof = {
+  tenantName: string | null;
+  lastSyncedAt: string | null;
+  syncStatus: string;
+  periodLabel: string | null;
+  revenue: number | null;
+};
+
+function fmtProofWhen(iso: string | null) {
+  if (!iso) return "not yet";
+  const d = new Date(iso);
+  if (!Number.isFinite(d.getTime())) return "not yet";
+  return d.toLocaleString(undefined, {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function fmtProofMoney(n: number | null) {
+  if (n == null || !Number.isFinite(n)) return null;
+  return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 export type ClientBriefingProps = {
   clientName: string;
   clientCode?: string | null;
@@ -51,6 +77,8 @@ export type ClientBriefingProps = {
   onUpload?: () => void;
   onConnectQuickBooks?: () => void;
   onConnectXero?: () => void;
+  /** Present when this client has a Xero connection. Revenue only after a month-column sync. */
+  xeroLink?: XeroLinkProof | null;
 };
 
 export function ClientBriefing(p: ClientBriefingProps) {
@@ -118,6 +146,21 @@ export function ClientBriefing(p: ClientBriefingProps) {
               ))}
             </dl>
           )}
+          {p.xeroLink ? (
+            <p className="briefing-muted" id="xero-link-proof" style={{ marginTop: 10 }}>
+              <span className="briefing-kicker">Xero linked</span>
+              <br />
+              <b>{p.xeroLink.tenantName?.trim() || "Organisation connected"}</b>
+              {" · "}
+              {p.xeroLink.syncStatus === "error"
+                ? "Last sync needs attention"
+                : `Last sync ${fmtProofWhen(p.xeroLink.lastSyncedAt)}`}
+              {p.xeroLink.periodLabel ? ` · ${p.xeroLink.periodLabel}` : ""}
+              {fmtProofMoney(p.xeroLink.revenue)
+                ? ` · Revenue ${fmtProofMoney(p.xeroLink.revenue)}`
+                : " · Sync to store this month's revenue"}
+            </p>
+          ) : null}
           <div className="briefing-actions">
             {p.onUpload ? (
               <button
