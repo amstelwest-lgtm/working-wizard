@@ -27,7 +27,6 @@ import {
   dataAsOfLabel,
   derivePriority,
   firstNameOf,
-  portfolioSparkPoints,
   portfolioSummaryLine,
   revenueOf,
   timeGreeting,
@@ -1126,7 +1125,6 @@ function Dashboard() {
   const openQueriesTotal = clientRows.reduce((s, c) => s + c.openQueries, 0);
   const addedThisMonth = clientsAddedThisMonth(clientRows);
   const healthDelta = avgHealthDelta(clientRows);
-  const sparkPts = portfolioSparkPoints(scoredRows);
   const greetName = firstNameOf(profile.accountantName || user?.email?.split("@")[0]);
   const greeting = `${timeGreeting()}, ${greetName}.`;
   const summaryLine = portfolioSummaryLine({
@@ -1271,10 +1269,6 @@ function Dashboard() {
     return c.trendDelta > 0 ? `↑ ${c.trendDelta}` : `↓ ${Math.abs(c.trendDelta)}`;
   }
 
-  const scrollToClients = () => {
-    document.getElementById("clients-table")?.scrollIntoView({ behavior: "smooth" });
-  };
-
   // ── Render ────────────────────────────────────────────────────────────────
   if (!portalReady) {
     return (
@@ -1287,7 +1281,7 @@ function Dashboard() {
   }
 
   return (
-    <div className="accountant-portal milon-page-enter">
+    <div className="accountant-portal practice-home milon-page-enter">
       <WalkthroughWizard
         variant={clientRows.length > 0 ? "accountant-dashboard" : "accountant-dashboard-empty"}
         ready={!loading && !brandLoading && !firstClientOpen && !addOpen}
@@ -1397,6 +1391,7 @@ function Dashboard() {
 
         {/* ===== GREETING ===== */}
         <PageHeader
+          compact
           className="dash-hero"
           title={greeting}
           subtitle={summaryLine}
@@ -1416,7 +1411,7 @@ function Dashboard() {
           {loading ? (
             <>
               {Array.from({ length: 4 }).map((_, i) => (
-                <SkeletonTile key={i} className="min-h-[108px]" />
+                <SkeletonTile key={i} className="min-h-[72px]" />
               ))}
             </>
           ) : (
@@ -1431,13 +1426,8 @@ function Dashboard() {
                 value={clientRows.length}
                 footnote={
                   <div className={addedThisMonth > 0 ? "up" : undefined}>
-                    {addedThisMonth > 0 ? `+${addedThisMonth} this month` : "Active on platform"}
+                    {addedThisMonth > 0 ? `+${addedThisMonth} this month` : "On the platform"}
                   </div>
-                }
-                sparkline={
-                  sparkPts.length > 1 ? (
-                    <SparkSvg points={sparkPts} className="stat-spark" width={72} height={22} />
-                  ) : undefined
                 }
               />
 
@@ -1471,11 +1461,6 @@ function Dashboard() {
                       : `${healthDelta > 0 ? "↑" : healthDelta < 0 ? "↓" : "→"} ${Math.abs(healthDelta)} pts vs last month`}
                   </div>
                 }
-                sparkline={
-                  sparkPts.length > 1 ? (
-                    <SparkSvg points={sparkPts} className="stat-spark" width={72} height={22} />
-                  ) : undefined
-                }
               />
 
               <MetricTile
@@ -1504,11 +1489,7 @@ function Dashboard() {
                   </svg>
                 }
                 value={openQueriesTotal}
-                footnote={
-                  openQueriesTotal > 0
-                    ? "From client management — open a row to reply"
-                    : "No open queries"
-                }
+                footnote={openQueriesTotal > 0 ? "Waiting on a reply" : "No open queries"}
                 onClick={() =>
                   document
                     .getElementById("wizard-dash-queries")
@@ -1519,38 +1500,16 @@ function Dashboard() {
           )}
         </div>
 
-        {/* ===== PORTFOLIO HEALTH + ATTENTION ===== */}
-        <div className="portfolio-grid">
-          <PortfolioHealthScatter
-            clients={scatterClients}
-            onSelect={(clientId) =>
-              navigate({
-                to: "/clients/$clientId",
-                params: { clientId },
-                search: {},
-              })
-            }
-          />
-
-          <div className="attn-panel">
-            <div className="attn-head">
-              <h2>Needs your attention</h2>
-              <button type="button" className="linkish" onClick={scrollToClients}>
-                View all →
-              </button>
-            </div>
-            {attentionItems.length === 0 ? (
-              <EmptyState
-                className="attn-empty !py-8"
-                title={loading ? "Loading…" : "No clients need urgent attention — nice work."}
-              />
-            ) : (
-              <div className="attn-list">
-                {attentionItems.map((item) => (
+        {/* Thin strip only when something is actually urgent. No empty celebration. */}
+        {!loading && attentionItems.length > 0 ? (
+          <section className="attn-strip" id="needs-attention" aria-label="Needs attention">
+            <h2>Needs attention</h2>
+            <ul>
+              {attentionItems.map((item) => (
+                <li key={item.clientId}>
                   <button
-                    key={item.clientId}
                     type="button"
-                    className={`attn-card ${item.severity}`}
+                    className={`attn-strip-row ${item.severity}`}
                     onClick={() =>
                       item.openPlan
                         ? openClientPlan(item.clientId, item.detail.includes("overdue"))
@@ -1563,102 +1522,22 @@ function Dashboard() {
                             })
                     }
                   >
-                    <span className="rail" />
-                    <div>
-                      <span className="attn-name">{item.name}</span>
-                      <span className="attn-sev">{item.severityLabel}</span>
-                    </div>
-                    <div className="attn-reason">{item.reason}</div>
-                    <div className="attn-detail">{item.detail}</div>
+                    <span className="attn-strip-name">{item.name}</span>
+                    <span className="attn-strip-reason">{item.reason}</span>
+                    <span className="attn-strip-detail">{item.detail}</span>
+                    <span className="attn-strip-go">{item.openPlan ? "Chase →" : "Open →"}</span>
                   </button>
-                ))}
-              </div>
-            )}
-            <button type="button" className="btn gold attn-cta" onClick={scrollToClients}>
-              View all priorities
-            </button>
-          </div>
-        </div>
-
-        {/* ===== FOLLOW UP ON OUTSTANDING ACTIONS ===== */}
-        <div className="followup-panel" id="follow-up">
-          <div className="attn-head">
-            <h2>Follow up</h2>
-            <span className="followup-meta">
-              {loading
-                ? "Loading…"
-                : followUpItems.length
-                  ? `${followUpItems.length} client${followUpItems.length === 1 ? "" : "s"} with open Action Plan work`
-                  : "Nothing outstanding"}
-            </span>
-          </div>
-          {followUpItems.length === 0 ? (
-            <p className="followup-empty">
-              {loading
-                ? "Checking action plans…"
-                : "No overdue or open actions across the portfolio."}
-            </p>
-          ) : (
-            <div className="followup-list">
-              {followUpItems.map((item) => (
-                <button
-                  key={item.clientId}
-                  type="button"
-                  className="followup-row"
-                  onClick={() => openClientPlan(item.clientId, item.overdueActions > 0)}
-                >
-                  <span className="followup-name">{item.name}</span>
-                  <span className={`followup-count${item.overdueActions > 0 ? " overdue" : ""}`}>
-                    {item.overdueActions > 0
-                      ? `${item.overdueActions} overdue`
-                      : `${item.openActions} open`}
-                  </span>
-                  <span className="followup-cta">Chase →</span>
-                </button>
+                </li>
               ))}
-            </div>
-          )}
-        </div>
+            </ul>
+          </section>
+        ) : null}
 
-        {/* ===== PORTFOLIO INSIGHTS ===== */}
-        {insights.length > 0 && (
-          <div className="insights-strip">
-            <div className="insights-items">
-              {insights.map((ins) => (
-                <div key={ins.id} className={`insight ${ins.kind}`}>
-                  <span className="ic">
-                    {ins.kind === "trend" ? (
-                      <svg viewBox="0 0 24 24">
-                        <path d="M3 17l6-6 4 4 8-8" />
-                        <path d="M14 7h7v7" />
-                      </svg>
-                    ) : ins.kind === "risk" ? (
-                      <svg viewBox="0 0 24 24">
-                        <path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0zM12 9v4M12 17h.01" />
-                      </svg>
-                    ) : (
-                      <svg viewBox="0 0 24 24">
-                        <path d="M12 2l2.4 7.2H22l-6 4.8 2.3 7L12 16.8 5.7 21l2.3-7-6-4.8h7.6z" />
-                      </svg>
-                    )}
-                  </span>
-                  <p>{ins.text}</p>
-                </div>
-              ))}
-            </div>
-            <button type="button" className="insights-cta" onClick={scrollToClients}>
-              View full insights →
-            </button>
-          </div>
-        )}
-
-        {/* P2.3 — portfolio by exception: which clients need a human today, and why. */}
-        <PortfolioExceptions firmId={firmId} refreshKey={clientRows.length} className="mb-5" />
-        {/* P3 — marketplace: owner requests to this firm + the firm's own listing. */}
-        <AccountantInbox
+        <PortfolioExceptions
           firmId={firmId}
-          className="mb-5"
-          onChanged={() => void load(firmId, user?.id)}
+          refreshKey={clientRows.length}
+          hideWhenClear
+          className="mb-3"
         />
 
         {/* ===== CLIENTS TABLE ===== */}
@@ -1939,47 +1818,126 @@ function Dashboard() {
           </ScrollableTable>
         )}
 
-        {/* ===== PLAYBOOK LIBRARY ===== */}
-        <div className="pb-section" id="playbooks">
-          <span className="eyebrow">Playbook library — always at hand</span>
-          <div className="h-sec">
-            {playbookCatalogue.length} ratios. Every definition. Every fix.
-          </div>
-          <p className="sub" style={{ maxWidth: "62ch" }}>
-            The same intelligence that powers your reports, available any time: what each ratio
-            means, how it&apos;s calculated, and the highest-impact steps to repair it — ready to
-            hand a client.
-          </p>
-          <div className="pb-grid">
-            {Object.entries(playbookByCategory).map(([cat, items]) => (
-              <Fragment key={cat}>
-                <div className="pb-cat">{cat}</div>
-                {items.map((p) => (
+        {followUpItems.length > 0 ? (
+          <details className="home-fold" id="follow-up">
+            <summary>
+              <span>Follow up</span>
+              <span className="home-fold-meta">
+                {followUpItems.length} with open Action Plan work
+              </span>
+            </summary>
+            <div className="home-fold-body">
+              <div className="followup-list">
+                {followUpItems.map((item) => (
                   <button
-                    key={p.ratioKey}
-                    className="pb-card"
-                    onClick={() => openDrawer(p.ratioKey, p.ratioName)}
+                    key={item.clientId}
+                    type="button"
+                    className="followup-row"
+                    onClick={() => openClientPlan(item.clientId, item.overdueActions > 0)}
                   >
-                    <div className="t">
-                      <b>{p.ratioName}</b>
-                      <span className="chip warn">
-                        <i />
-                        Definition
-                      </span>
-                    </div>
-                    <div className="bar">
-                      <i style={{ width: "60%", background: "var(--gold)" }} />
-                    </div>
-                    <div className="m">
-                      <span>{cat}</span>
-                      <a>Definition &amp; steps →</a>
-                    </div>
+                    <span className="followup-name">{item.name}</span>
+                    <span className={`followup-count${item.overdueActions > 0 ? " overdue" : ""}`}>
+                      {item.overdueActions > 0
+                        ? `${item.overdueActions} overdue`
+                        : `${item.openActions} open`}
+                    </span>
+                    <span className="followup-cta">Chase →</span>
                   </button>
                 ))}
-              </Fragment>
-            ))}
+              </div>
+            </div>
+          </details>
+        ) : null}
+
+        <details className="home-fold" id="portfolio-insights">
+          <summary>
+            <span>Portfolio insights</span>
+            <span className="home-fold-meta">Health trend</span>
+          </summary>
+          <div className="home-fold-body">
+            <PortfolioHealthScatter
+              clients={scatterClients}
+              onSelect={(clientId) =>
+                navigate({
+                  to: "/clients/$clientId",
+                  params: { clientId },
+                  search: {},
+                })
+              }
+            />
+            {insights.length > 0 ? (
+              <div className="insights-strip insights-strip--nested">
+                <div className="insights-items">
+                  {insights.map((ins) => (
+                    <div key={ins.id} className={`insight ${ins.kind}`}>
+                      <span className="ic">
+                        {ins.kind === "trend" ? (
+                          <svg viewBox="0 0 24 24">
+                            <path d="M3 17l6-6 4 4 8-8" />
+                            <path d="M14 7h7v7" />
+                          </svg>
+                        ) : ins.kind === "risk" ? (
+                          <svg viewBox="0 0 24 24">
+                            <path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0zM12 9v4M12 17h.01" />
+                          </svg>
+                        ) : (
+                          <svg viewBox="0 0 24 24">
+                            <path d="M12 2l2.4 7.2H22l-6 4.8 2.3 7L12 16.8 5.7 21l2.3-7-6-4.8h7.6z" />
+                          </svg>
+                        )}
+                      </span>
+                      <p>{ins.text}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </div>
-        </div>
+        </details>
+
+        <AccountantInbox firmId={firmId} quiet onChanged={() => void load(firmId, user?.id)} />
+
+        {/* ===== PLAYBOOK LIBRARY ===== */}
+        <details className="home-fold" id="playbooks">
+          <summary>
+            <span>Playbook library</span>
+            <span className="home-fold-meta">{playbookCatalogue.length} ratios</span>
+          </summary>
+          <div className="home-fold-body pb-section">
+            <p className="sub" style={{ maxWidth: "62ch" }}>
+              Definitions and the highest-impact repair steps — ready to hand a client.
+            </p>
+            <div className="pb-grid">
+              {Object.entries(playbookByCategory).map(([cat, items]) => (
+                <Fragment key={cat}>
+                  <div className="pb-cat">{cat}</div>
+                  {items.map((p) => (
+                    <button
+                      key={p.ratioKey}
+                      className="pb-card"
+                      onClick={() => openDrawer(p.ratioKey, p.ratioName)}
+                    >
+                      <div className="t">
+                        <b>{p.ratioName}</b>
+                        <span className="chip warn">
+                          <i />
+                          Definition
+                        </span>
+                      </div>
+                      <div className="bar">
+                        <i style={{ width: "60%", background: "var(--gold)" }} />
+                      </div>
+                      <div className="m">
+                        <span>{cat}</span>
+                        <a>Definition &amp; steps →</a>
+                      </div>
+                    </button>
+                  ))}
+                </Fragment>
+              ))}
+            </div>
+          </div>
+        </details>
 
         <div className="footer-note">
           MILŌN Practice Portal · <span className="serif gold-text">The passion to perform.</span>
