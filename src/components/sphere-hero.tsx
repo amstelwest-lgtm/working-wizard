@@ -346,14 +346,16 @@ export function SphereHero({
         </div>
       )}
 
-      {/* back control (levels 2 & 3) */}
+      {/* back control (levels 2 & 3). Color lives in .sphere-drill-back —
+          text-slate-* is forced near-black in light mode and disappears on
+          the accountant orb plate. */}
       <div
         className={`mb-2 flex w-full items-center ${reduceMotion ? "" : "transition-opacity duration-300"} ${level > 1 ? "opacity-100" : "pointer-events-none h-0 opacity-0"}`}
       >
         <button
           type="button"
           onClick={() => go(level === 3 ? 2 : 1)}
-          className="flex items-center gap-2 rounded-lg px-2 py-1 text-sm text-slate-600 transition hover:text-amber-700 dark:text-slate-300 dark:hover:text-amber-300"
+          className={`sphere-drill-back flex items-center gap-2 rounded-lg px-2.5 py-1 text-sm font-medium ${onDark ? "sphere-drill-back--on-dark" : ""}`}
         >
           <ArrowLeft className="h-4 w-4" />
           {level === 3 ? "Back to pillars" : "Back to overview"}

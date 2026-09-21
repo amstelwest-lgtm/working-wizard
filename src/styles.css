@@ -622,6 +622,61 @@ html:not(.dark) .health-orb .text-emerald-400 { color: #1f6b45 !important; }
 html:not(.dark) .sphere-orb .text-rose-400,
 html:not(.dark) .health-orb .text-rose-400 { color: #9b2424 !important; }
 
+/* Health drill "Back to pillars" / "Back to overview".
+   Do not use text-slate-* here: light mode remaps that scale to near-black
+   with !important, which vanishes on the accountant orb plate (#0a0e1a).
+   Light mode uses near-black ink; on that dark plate it sits in a cream chip
+   so the same control stays readable. Dark mode stays light-on-dark. */
+.sphere-drill-back {
+  color: #1b1608;
+  background: rgba(255, 253, 248, 0.88);
+  border: 1px solid rgba(27, 22, 8, 0.42);
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+.sphere-drill-back:hover {
+  color: #1b1608;
+  background: #fffdf8;
+  border-color: rgba(27, 22, 8, 0.72);
+}
+.sphere-drill-back:focus-visible {
+  outline: 2px solid #1b1608;
+  outline-offset: 2px;
+}
+html.dark .sphere-drill-back {
+  color: #f6f1e7;
+  background: rgba(255, 253, 248, 0.06);
+  border-color: rgba(246, 241, 231, 0.4);
+}
+html.dark .sphere-drill-back:hover {
+  color: #fffdf8;
+  background: rgba(255, 253, 248, 0.12);
+  border-color: rgba(246, 241, 231, 0.68);
+}
+html.dark .sphere-drill-back:focus-visible {
+  outline-color: #f6f1e7;
+}
+/* Accountant Health plate is dark even when the page is light. */
+html:not(.dark) .sphere-drill-back--on-dark {
+  color: #1b1608;
+  background: #fffdf8;
+  border-color: rgba(27, 22, 8, 0.55);
+  box-shadow: 0 1px 2px rgba(10, 14, 26, 0.28);
+}
+html:not(.dark) .sphere-drill-back--on-dark:hover {
+  color: #1b1608;
+  background: #fffdf8;
+  border-color: #1b1608;
+}
+
+/* Firm-dashboard crumb on the accountant client page is gold (#d4af37) on
+   cream in light mode. Pin it to the same near-black ink. */
+html[data-theme="light"] .accountant-portal .crumb a {
+  color: #1b1608;
+}
+html[data-theme="light"] .accountant-portal .crumb a:hover {
+  color: #3f2d0a;
+}
+
 /* Google sign-in — accountant portal and callback pages */
 .milon-google-btn {
   display: inline-flex;
