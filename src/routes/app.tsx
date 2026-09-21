@@ -280,10 +280,29 @@ export const Route = createFileRoute("/app")({
   // "This page didn't load" on first paint (signed-out visit and post-login).
   ssr: false,
   // ?tab= lets Next Step emails / links (P0.3 routes) land on a board tab.
-  validateSearch: (search: Record<string, unknown>): { tab?: string } =>
-    typeof search.tab === "string" && (OWNER_BOARD_TABS as readonly string[]).includes(search.tab)
-      ? { tab: search.tab }
-      : {},
+  // qbo / xero / reason must survive too: the OAuth callback lands here, and
+  // dropping them makes a finished connect look like it never returned.
+  validateSearch: (
+    search: Record<string, unknown>,
+  ): { tab?: string; qbo?: string; xero?: string; reason?: string } => {
+    const out: { tab?: string; qbo?: string; xero?: string; reason?: string } = {};
+    if (
+      typeof search.tab === "string" &&
+      (OWNER_BOARD_TABS as readonly string[]).includes(search.tab)
+    ) {
+      out.tab = search.tab;
+    }
+    if (search.qbo === "connected" || search.qbo === "error") out.qbo = search.qbo;
+    if (search.xero === "connected" || search.xero === "error") out.xero = search.xero;
+    if (
+      typeof search.reason === "string" &&
+      search.reason.length > 0 &&
+      search.reason.length <= 80
+    ) {
+      out.reason = search.reason;
+    }
+    return out;
+  },
   pendingComponent: AppBootSpinner,
   component: function AppRoute() {
     return (
@@ -2095,26 +2114,35 @@ function Index() {
   }, [user, authLoading, navigate]);
 
   // Handle QBO / Xero OAuth callback: ?qbo= / ?xero= connected|error
+  const oauthReturn = Route.useSearch();
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    const p = new URLSearchParams(window.location.search);
-    const qbo = p.get("qbo");
-    const xero = p.get("xero");
+    const qbo = oauthReturn.qbo;
+    const xero = oauthReturn.xero;
     if (!qbo && !xero) return;
     if (qbo === "connected") {
       toast.success("QuickBooks Online connected — tap Sync to import P&L and balance sheet");
       setShowQboDialog(true);
     } else if (qbo === "error") {
-      toast.error(`QuickBooks connection failed: ${p.get("reason") ?? "unknown error"}`);
+      toast.error(`QuickBooks connection failed: ${oauthReturn.reason ?? "unknown error"}`);
       setShowQboDialog(true);
     }
     if (xero === "connected") {
       toast.success("Xero connected — tap Sync to import P&L and balance sheet");
       setShowXeroDialog(true);
     } else if (xero === "error")
-      toast.error(`Xero connection failed: ${p.get("reason") ?? "unknown error"}`);
-    window.history.replaceState({}, "", "/app");
-  }, []);
+      toast.error(`Xero connection failed: ${oauthReturn.reason ?? "unknown error"}`);
+    navigate({
+      to: "/app",
+      search: (prev) => {
+        const next = { ...prev };
+        delete next.qbo;
+        delete next.xero;
+        delete next.reason;
+        return next;
+      },
+      replace: true,
+    });
+  }, [oauthReturn.qbo, oauthReturn.xero, oauthReturn.reason, navigate]);
 
   const doExtract = useServerFn(extractFinancials);
   const doExtractPdf = useServerFn(extractPDFsWithAI);

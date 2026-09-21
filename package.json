@@ -90,6 +90,7 @@
     "test:marketplace": "vite-node --config scripts/vite-test.config.ts scripts/marketplace-test.mts",
     "test:xero-mapper": "vite-node --config scripts/vite-test.config.ts scripts/xero-mapper-test.mts",
     "test:xero-state": "vite-node --config scripts/vite-test.config.ts scripts/xero-state-test.mts",
+    "test:qbo-state": "vite-node --config scripts/vite-test.config.ts scripts/qbo-state-test.mts",
     "test:qbo-mapper": "vite-node --config scripts/vite-test.config.ts scripts/qbo-mapper-test.mts",
     "test:qbo-intuit-tid": "vite-node --config scripts/vite-test.config.ts scripts/qbo-intuit-tid-test.mts"
   },

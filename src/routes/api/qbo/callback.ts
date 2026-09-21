@@ -2,7 +2,9 @@ import { createFileRoute } from "@tanstack/react-router";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { exchangeCodeForTokens, fetchQboCompanyName, intuitTidFromError } from "@/lib/qbo";
 import {
+  qboOauthCallbackIssue,
   qboOauthStateIsFresh,
+  readQboRealmId,
   sanitizeQboOauthReason,
   sanitizeQboReturnPath,
 } from "@/lib/qbo-state";
@@ -22,17 +24,26 @@ export const Route = createFileRoute("/api/qbo/callback")({
 
         const code = url.searchParams.get("code");
         const state = url.searchParams.get("state");
-        const realmId = url.searchParams.get("realmId");
+        const realmId = readQboRealmId(url.searchParams);
         const oauthError = url.searchParams.get("error");
 
-        const { data: stateRow } = state
+        const stateLookup = state
           ? await supabaseAdmin
               .from("qbo_oauth_states")
               .select("client_id, return_path, created_at")
               .eq("state", state)
               .maybeSingle()
-          : { data: null };
+          : { data: null, error: null };
 
+        if (stateLookup.error) {
+          console.error("[QBO callback] state lookup failed", { code: stateLookup.error.code });
+          return redirectTo(appOrigin, "/app", {
+            qbo: "error",
+            reason: "state_lookup_failed",
+          });
+        }
+
+        const stateRow = stateLookup.data;
         const clientId = (stateRow as { client_id?: string } | null)?.client_id ?? "";
         const returnPath = clientId
           ? sanitizeQboReturnPath(
@@ -49,8 +60,32 @@ export const Route = createFileRoute("/api/qbo/callback")({
           });
         }
 
+        const issue = qboOauthCallbackIssue({
+          code,
+          state,
+          realmId,
+          stateFound: Boolean(stateRow && clientId),
+        });
+        if (issue) {
+          // Keep the state when the company id is the only gap so a retry of
+          // the same Intuit redirect can still finish. Every other miss is dead.
+          if (state && issue !== "missing_realm") {
+            await supabaseAdmin.from("qbo_oauth_states").delete().eq("state", state);
+          }
+          console.error("[QBO callback] rejected", {
+            reason: issue,
+            hasCode: Boolean(code),
+            hasState: Boolean(state),
+            hasRealmId: Boolean(realmId),
+            stateFound: Boolean(stateRow),
+          });
+          return redirectTo(appOrigin, returnPath, {
+            qbo: "error",
+            reason: issue,
+          });
+        }
+
         if (!code || !state || !realmId || !stateRow || !clientId) {
-          if (state) await supabaseAdmin.from("qbo_oauth_states").delete().eq("state", state);
           return redirectTo(appOrigin, returnPath, {
             qbo: "error",
             reason: "missing_params",
