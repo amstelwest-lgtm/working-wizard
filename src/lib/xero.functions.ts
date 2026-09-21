@@ -5,6 +5,7 @@ import { assertClientScope } from "@/lib/assert-client-scope";
 import { getSupabaseAdminOrNull, supabaseAdmin } from "@/integrations/supabase/client.server";
 import { computeRatios, type RatioInputs } from "@/lib/ratios";
 import { calendarMonthStamp, readStatementMeta, XERO_YTD_FIELD_KEYS } from "@/lib/statement-period";
+import { applyXeroOpeningCash } from "@/lib/xero-opening";
 import {
   reduceXeroConnection,
   sanitizeXeroReturnPath,
@@ -16,10 +17,13 @@ import {
   deleteXeroConnection,
   exchangeXeroCodeForTokens,
   fetchXeroConnections,
+  bankSummaryRange,
+  coverageFromXeroCache,
   fetchXeroLedgerStatement,
   mapXeroToFinancialInputs,
   pickXeroTenant,
   refreshXeroToken,
+  resolveXeroCash,
   revokeXeroToken,
   XERO_CLIENT_ID,
   type XeroBalanceSheet,
@@ -96,6 +100,11 @@ export type XeroStatus = {
   ytdNetIncome: number | null;
   ytdPeriodLabel: string | null;
   ytdBasis: "financial" | "calendar" | null;
+  /** Balance-sheet date. The month-to-date end when the cache has no as-of. */
+  bsAsOf: string | null;
+  bankCount: number | null;
+  bankTotal: number | null;
+  bankWarning: string | null;
 } | null;
 
 function numField(fields: Record<string, unknown>, key: string): number | null {
@@ -117,6 +126,10 @@ function xeroFigureProof(financials: unknown): {
   ytdNetIncome: number | null;
   ytdPeriodLabel: string | null;
   ytdBasis: "financial" | "calendar" | null;
+  bsAsOf: string | null;
+  bankCount: number | null;
+  bankTotal: number | null;
+  bankWarning: string | null;
 } {
   const empty = {
     periodLabel: null,
@@ -131,6 +144,10 @@ function xeroFigureProof(financials: unknown): {
     ytdNetIncome: null,
     ytdPeriodLabel: null,
     ytdBasis: null as "financial" | "calendar" | null,
+    bsAsOf: null,
+    bankCount: null,
+    bankTotal: null,
+    bankWarning: null,
   };
   if (!financials || typeof financials !== "object" || Array.isArray(financials)) return empty;
   const meta = readStatementMeta(financials);
@@ -149,6 +166,10 @@ function xeroFigureProof(financials: unknown): {
     ytdNetIncome: meta.ytdNetIncome,
     ytdPeriodLabel: meta.ytdPeriodLabel,
     ytdBasis: meta.ytdBasis,
+    bsAsOf: meta.periodEnd,
+    bankCount: null,
+    bankTotal: null,
+    bankWarning: null,
   };
 }
 
@@ -208,7 +229,20 @@ export const getXeroStatus = createServerFn({ method: "POST" })
       .maybeSingle();
 
     if (!conn) return null;
-    return statusFromRow(conn, (client as { financials?: unknown }).financials);
+    const status = statusFromRow(conn, (client as { financials?: unknown }).financials);
+    const { data: caches } = await admin
+      .from("xero_sync_data")
+      .select("data_type, raw_data")
+      .eq("client_id", data.clientId)
+      .in("data_type", ["bs", "bank"]);
+    const coverage = coverageFromXeroCache(caches ?? []);
+    return {
+      ...status,
+      bsAsOf: coverage.bsAsOf ?? status.bsAsOf,
+      bankCount: coverage.bankCount,
+      bankTotal: coverage.bankTotal,
+      bankWarning: coverage.bankWarning,
+    };
   });
 
 export const getXeroStatuses = createServerFn({ method: "POST" })
@@ -272,6 +306,10 @@ export type XeroSyncResult = {
     ytdNetIncome: number | null;
     ytdPeriodLabel: string | null;
     ytdBasis: "financial" | "calendar" | null;
+    bsAsOf: string | null;
+    bankCount: number | null;
+    bankTotal: number | null;
+    bankWarning: string | null;
   };
 };
 
@@ -428,6 +466,7 @@ export const triggerXeroSync = createServerFn({ method: "POST" })
               basis: ledger.year.basis,
             }
           : null,
+        ledger.bank,
       );
       const mappedInputs = mappedNumbers(mapped);
       const fields: Record<string, string> = Object.fromEntries(
@@ -439,7 +478,7 @@ export const triggerXeroSync = createServerFn({ method: "POST" })
 
       const { data: existing } = await supabaseAdmin
         .from("clients")
-        .select("financials")
+        .select("financials, cashflow")
         .eq("id", data.clientId)
         .maybeSingle();
       const prev =
@@ -454,11 +493,21 @@ export const triggerXeroSync = createServerFn({ method: "POST" })
         for (const key of XERO_YTD_FIELD_KEYS) delete merged[key];
       }
 
+      const nowIso = new Date().toISOString();
+      const cashPosition = resolveXeroCash(bs, ledger.bank);
+      const opening = applyXeroOpeningCash(
+        (existing as { cashflow?: unknown } | null)?.cashflow,
+        cashPosition,
+        ledger.to,
+      );
       await supabaseAdmin
         .from("clients")
         .update({
           financials: merged as never,
-          financials_updated_at: new Date().toISOString(),
+          financials_updated_at: nowIso,
+          ...(opening.changed
+            ? { cashflow: opening.cashflow as never, last_forecast_at: nowIso }
+            : {}),
         })
         .eq("id", data.clientId);
 
@@ -470,7 +519,6 @@ export const triggerXeroSync = createServerFn({ method: "POST" })
         ledger.periodLabel,
       );
 
-      const nowIso = new Date().toISOString();
       const cacheRows = [
         {
           client_id: data.clientId,
@@ -494,7 +542,20 @@ export const triggerXeroSync = createServerFn({ method: "POST" })
           } as never,
           synced_at: nowIso,
         },
-        { client_id: data.clientId, data_type: "bs", raw_data: bs as never, synced_at: nowIso },
+        { client_id: data.clientId, data_type: "bs", raw_data: { ...bs, asOf: ledger.to } as never, synced_at: nowIso },
+        {
+          client_id: data.clientId,
+          data_type: "bank",
+          raw_data: (ledger.bank
+            ? { ...ledger.bank, warning: null }
+            : {
+                ...bankSummaryRange(ledger.to),
+                accounts: [],
+                totalClosing: null,
+                warning: ledger.bankWarning,
+              }) as never,
+          synced_at: nowIso,
+        },
       ];
       await supabaseAdmin.from("xero_sync_data").upsert(cacheRows, { onConflict: "client_id,data_type" });
 
@@ -522,7 +583,6 @@ export const triggerXeroSync = createServerFn({ method: "POST" })
           netIncome: pnl.netIncome,
           totalAssets: bs.totalAssets,
           equity: bs.equity,
-          cash: bs.cash,
           periodLabel: ledger.periodLabel,
           periodStart: ledger.from,
           periodEnd: ledger.to,
@@ -530,6 +590,11 @@ export const triggerXeroSync = createServerFn({ method: "POST" })
           ytdNetIncome: ledger.year?.pnl.netIncome ?? null,
           ytdPeriodLabel: ledger.year?.periodLabel ?? null,
           ytdBasis: ledger.year?.basis ?? null,
+          bsAsOf: ledger.to,
+          bankCount: ledger.bank ? ledger.bank.accounts.length : null,
+          bankTotal: ledger.bank ? ledger.bank.totalClosing : null,
+          bankWarning: ledger.bankWarning,
+          cash: cashPosition,
         },
       };
     } catch (err) {

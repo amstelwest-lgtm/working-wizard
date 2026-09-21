@@ -1,8 +1,9 @@
-# Xero — day-1 connect
+# Xero — statements and bank position
 
 OAuth2 **web app** (authorization code + refresh). Not a Custom Connection.
-Connect one org, pull P&L + balance sheet, write `clients.financials` and a
-snapshot with `source = 'xero'`. Same path as a statement upload.
+Connect one org, pull P&L, the balance sheet, and bank account balances.
+Writes `clients.financials`, the cash-forecast opening balance, and a snapshot
+with `source = 'xero'`. Same path as a statement upload.
 
 Sync requests two Profit and Loss reports, each with explicit `fromDate` and
 `toDate` and `standardLayout=true`. It does not send `periods` or `timeframe`.
@@ -16,7 +17,16 @@ Sync requests two Profit and Loss reports, each with explicit `fromDate` and
 - When the two ranges are the same month, only the month is stored.
 - Balance sheet: `date` = the month-to-date end, `standardLayout=true`, one
   amount column. Amounts are the first figure cell. A trailing `0.00` is not
-  the total.
+  the total. Mapped into the fields ratios and the cash forecast read: cash,
+  receivables, payables, inventory, current assets, current liabilities,
+  total assets, and equity. Debt-to-equity uses total assets and equity
+  (debt = assets − equity). The parsed loan total is kept on the balance-sheet
+  cache; it is not a separate ratio input.
+- Bank Summary: `fromDate` / `toDate` covering the 13 weeks ending on that
+  balance-sheet date. Each bank account's name and closing balance. The sum of
+  closing balances is starting cash for the 13-week forecast (an overdraft
+  stays negative). Cash received and cash spent in that window are cached.
+  Individual bank transactions are not pulled.
 
 Both ranges are stored with start and end (`periodStart` / `periodEnd`, and
 `ytdPeriodStart` / `ytdPeriodEnd`) plus `statementSource = xero`. The waterfall
@@ -31,8 +41,12 @@ sync that saved a multi-month total with no dates stays until the next Sync.
 | `XERO_CLIENT_SECRET` | Vercel (Production + Preview) |
 | `XERO_REDIRECT_URI` | Vercel. Production: `https://milonfinance.com/api/xero/callback` |
 
-Do not prefix `VITE_`. Redeploy after saving. No extra Supabase secrets — apply
-migration `20260921120000_xero_tables.sql` and use the existing service role.
+Do not prefix `VITE_`. Redeploy after saving. No extra Supabase secrets.
+
+Bank balances are cached in the existing `xero_sync_data` table
+(`data_type = 'bank'`). No new migration. Production `jxclnsbsqpixxqlbcapl`
+already has `20260921120000_xero_tables.sql` — nothing further to apply.
+Row level security stays deny-all; the service role reads and writes the cache.
 
 ## Redirect URI (Xero portal + Vercel)
 
@@ -50,16 +64,28 @@ offline_access
 accounting.settings.read
 accounting.reports.profitandloss.read
 accounting.reports.balancesheet.read
+accounting.reports.banksummary.read
 ```
+
+`accounting.reports.banksummary.read` is the Bank Summary report (account names
+and balances). Do not enable `accounting.banktransactions` or a bank-feed
+scope for this sync.
+
+**Existing connections must reconnect.** A Xero refresh token keeps only the
+scopes granted at the last consent. After the new scope is ticked, disconnect
+the organisation in Milōn and connect it again. Until then, Sync still saves
+P&L and the balance sheet, and the card says bank balances need a reconnect.
 
 ## What Theo creates in the Xero developer portal
 
 1. Go to [developer.xero.com/app/manage](https://developer.xero.com/app/manage).
-2. **New app** → type **Web app** (OAuth 2.0 authorization code). Do **not**
-   choose Custom Connection.
-3. Paste redirect URI `https://milonfinance.com/api/xero/callback`.
-4. Enable the four scopes above.
-5. Copy Client ID and Client secret into the Vercel env vars.
+2. Open the existing **Web app** (OAuth 2.0 authorization code). Do **not**
+   switch it to a Custom Connection.
+3. Confirm redirect URI `https://milonfinance.com/api/xero/callback`.
+4. Enable the five scopes above, including `accounting.reports.banksummary.read`.
+5. Client ID and Client secret stay in the Vercel env vars — no new variable.
+6. In Milōn, disconnect Yankees Demo Company (Global) and connect it again so
+   the consent screen grants the bank summary scope. Then Sync.
 
 P&L / balance-sheet report scopes on a brand-new app may require Xero App
 Partner enrolment. Every Accounting API call sends `Xero-tenant-id` (stored

@@ -20,7 +20,7 @@ import { healthHeadline, type SnapshotMetric } from "@/lib/client-briefing";
 import type { BriefingWorkflow } from "@/lib/client-briefing.functions";
 import { useMarketFormat } from "@/contexts/market";
 import { AddPastPeriodLink } from "@/components/add-past-period-link";
-import { yearToDateTitle } from "@/lib/statement-period";
+import { formatIsoDateUTC, yearToDateTitle } from "@/lib/statement-period";
 
 export type LedgerLinkProof = {
   tenantName: string | null;
@@ -31,6 +31,10 @@ export type LedgerLinkProof = {
   ytdPeriodLabel?: string | null;
   ytdRevenue?: number | null;
   ytdBasis?: "financial" | "calendar" | null;
+  bsAsOf?: string | null;
+  bankCount?: number | null;
+  bankTotal?: number | null;
+  bankWarning?: string | null;
 };
 
 export type XeroLinkProof = LedgerLinkProof;
@@ -94,6 +98,26 @@ function LedgerProof({
           {fmtProofMoney(link.ytdRevenue ?? null)
             ? ` · Revenue ${fmtProofMoney(link.ytdRevenue ?? null)}`
             : ""}
+        </>
+      ) : null}
+      {link.bsAsOf ? (
+        <>
+          <br />
+          Balance sheet as of {formatIsoDateUTC(link.bsAsOf)}
+        </>
+      ) : null}
+      {link.bankCount != null ? (
+        <>
+          <br />
+          Bank accounts · {link.bankCount}
+          {fmtProofMoney(link.bankTotal ?? null)
+            ? ` · ${fmtProofMoney(link.bankTotal ?? null)}`
+            : ""}
+        </>
+      ) : link.bankWarning ? (
+        <>
+          <br />
+          {link.bankWarning}
         </>
       ) : null}
     </p>
