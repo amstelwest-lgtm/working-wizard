@@ -4,6 +4,7 @@
  * Only import this file from server-side code (server functions / API routes).
  *
  * Never log access_token, refresh_token, or client_secret.
+ * Every Intuit HTTP response logs the `intuit_tid` response header.
  */
 
 import { PERIOD_MONTHS_KEY } from "@/lib/ratios";
@@ -78,6 +79,96 @@ export function redactSecrets(text: string): string {
     .replace(/Bearer\s+[A-Za-z0-9._\-+/=]+/gi, "Bearer [redacted]");
 }
 
+/** Intuit request ids are short tokens. Reject anything that could be a secret or a log injection. */
+const INTUIT_TID_RE = /^[A-Za-z0-9._:-]{1,128}$/;
+
+/**
+ * Intuit's per-request id. The documented header is `intuit_tid`; some
+ * responses send `intuit-tid`. Fetch header lookup is case-insensitive.
+ */
+export function readIntuitTid(headers: { get(name: string): string | null }): string | null {
+  for (const name of ["intuit_tid", "intuit-tid"] as const) {
+    const value = headers.get(name)?.trim() ?? "";
+    if (INTUIT_TID_RE.test(value)) return value;
+  }
+  return null;
+}
+
+/** Path only. Query strings can carry report filters and must not be logged. */
+export function qboRequestPath(url: string): string {
+  try {
+    return new URL(url).pathname;
+  } catch {
+    const q = url.indexOf("?");
+    return q === -1 ? url : url.slice(0, q);
+  }
+}
+
+export function intuitTidFromError(error: unknown): string | null {
+  const seen = new Set<unknown>();
+  let current: unknown = error;
+  while (current && typeof current === "object" && !seen.has(current)) {
+    seen.add(current);
+    const tid = (current as { intuitTid?: unknown }).intuitTid;
+    if (typeof tid === "string" && INTUIT_TID_RE.test(tid)) return tid;
+    current = (current as { cause?: unknown }).cause;
+  }
+  return null;
+}
+
+export class QboHttpError extends Error {
+  readonly intuitTid: string | null;
+  readonly status: number;
+  readonly path: string;
+  readonly realmId?: string;
+
+  constructor(
+    message: string,
+    fields: { intuitTid: string | null; status: number; path: string; realmId?: string },
+  ) {
+    super(message);
+    this.name = "QboHttpError";
+    this.intuitTid = fields.intuitTid;
+    this.status = fields.status;
+    this.path = fields.path;
+    if (fields.realmId) this.realmId = fields.realmId;
+  }
+}
+
+function safeRealmId(realmId?: string): string | undefined {
+  if (!realmId || !/^[0-9A-Za-z_-]{1,64}$/.test(realmId)) return undefined;
+  return realmId;
+}
+
+function logQboResponse(res: Response, url: string, realmId?: string): void {
+  const fields: Record<string, unknown> = {
+    intuit_tid: readIntuitTid(res.headers),
+    status: res.status,
+    path: qboRequestPath(url),
+    ok: res.ok,
+  };
+  const realm = safeRealmId(realmId);
+  if (realm) fields.realm_id = realm;
+  if (res.ok) console.info("qbo.response", fields);
+  else console.error("qbo.response", fields);
+}
+
+/** Single Intuit HTTP entry. Accounting, token, and revoke calls all go through here. */
+async function qboFetch(url: string, init: RequestInit, realmId?: string): Promise<Response> {
+  const res = await fetch(url, init);
+  logQboResponse(res, url, realmId);
+  return res;
+}
+
+function failQbo(message: string, res: Response, url: string, realmId?: string): QboHttpError {
+  return new QboHttpError(message, {
+    intuitTid: readIntuitTid(res.headers),
+    status: res.status,
+    path: qboRequestPath(url),
+    realmId: safeRealmId(realmId),
+  });
+}
+
 // ─── OAuth ───────────────────────────────────────────────────────────────────
 
 export function buildQboAuthUrl(state: string): string {
@@ -109,7 +200,7 @@ export type TokenResponse = {
 };
 
 export async function exchangeCodeForTokens(code: string): Promise<TokenResponse> {
-  const res = await fetch(QBO_TOKEN_ENDPOINT, {
+  const res = await qboFetch(QBO_TOKEN_ENDPOINT, {
     method: "POST",
     headers: {
       Authorization: `Basic ${basicCredentials()}`,
@@ -123,7 +214,11 @@ export async function exchangeCodeForTokens(code: string): Promise<TokenResponse
     }),
   });
   if (!res.ok) {
-    throw new Error(`QBO token exchange failed (${res.status}): ${await qboErrorText(res)}`);
+    throw failQbo(
+      `QBO token exchange failed (${res.status}): ${await qboErrorText(res)}`,
+      res,
+      QBO_TOKEN_ENDPOINT,
+    );
   }
   return res.json() as Promise<TokenResponse>;
 }
@@ -131,7 +226,7 @@ export async function exchangeCodeForTokens(code: string): Promise<TokenResponse
 export async function refreshQboToken(
   refreshToken: string,
 ): Promise<Omit<TokenResponse, "x_refresh_token_expires_in">> {
-  const res = await fetch(QBO_TOKEN_ENDPOINT, {
+  const res = await qboFetch(QBO_TOKEN_ENDPOINT, {
     method: "POST",
     headers: {
       Authorization: `Basic ${basicCredentials()}`,
@@ -144,7 +239,11 @@ export async function refreshQboToken(
     }),
   });
   if (!res.ok) {
-    throw new Error(`QBO token refresh failed (${res.status}): ${await qboErrorText(res)}`);
+    throw failQbo(
+      `QBO token refresh failed (${res.status}): ${await qboErrorText(res)}`,
+      res,
+      QBO_TOKEN_ENDPOINT,
+    );
   }
   return res.json() as Promise<TokenResponse>;
 }
@@ -152,7 +251,7 @@ export async function refreshQboToken(
 /** Revoke the grant. A 400 means the token is already dead — disconnect can continue. */
 export async function revokeQboToken(token: string): Promise<void> {
   if (!token) return;
-  const res = await fetch(QBO_REVOKE_ENDPOINT, {
+  const res = await qboFetch(QBO_REVOKE_ENDPOINT, {
     method: "POST",
     headers: {
       Authorization: `Basic ${basicCredentials()}`,
@@ -162,7 +261,11 @@ export async function revokeQboToken(token: string): Promise<void> {
     body: JSON.stringify({ token }),
   });
   if (!res.ok && res.status !== 400) {
-    throw new Error(`QBO token revoke failed (${res.status}): ${await qboErrorText(res)}`);
+    throw failQbo(
+      `QBO token revoke failed (${res.status}): ${await qboErrorText(res)}`,
+      res,
+      QBO_REVOKE_ENDPOINT,
+    );
   }
 }
 
@@ -171,14 +274,23 @@ export async function revokeQboToken(token: string): Promise<void> {
 export async function qboGet(realmId: string, accessToken: string, path: string): Promise<unknown> {
   const sep = path.includes("?") ? "&" : "?";
   const url = `${qboApiBase()}/v3/company/${realmId}${path}${sep}minorversion=${MINOR_VERSION}`;
-  const res = await fetch(url, {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      Accept: "application/json",
+  const res = await qboFetch(
+    url,
+    {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: "application/json",
+      },
     },
-  });
+    realmId,
+  );
   if (!res.ok) {
-    throw new Error(`QBO API ${path.split("?")[0]} → ${res.status}: ${await qboErrorText(res)}`);
+    throw failQbo(
+      `QBO API ${path.split("?")[0]} → ${res.status}: ${await qboErrorText(res)}`,
+      res,
+      url,
+      realmId,
+    );
   }
   return res.json();
 }
