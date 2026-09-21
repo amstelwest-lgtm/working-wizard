@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import { exchangeCodeForTokens, fetchQboCompanyName } from "@/lib/qbo";
+import { exchangeCodeForTokens, fetchQboCompanyName, intuitTidFromError } from "@/lib/qbo";
 import {
   qboOauthStateIsFresh,
   sanitizeQboOauthReason,
@@ -89,7 +89,10 @@ export const Route = createFileRoute("/api/qbo/callback")({
           return redirectTo(appOrigin, returnPath, { qbo: "connected" });
         } catch (err) {
           const message = err instanceof Error ? err.message : "token_exchange_failed";
-          console.error("[QBO callback] token exchange error:", message);
+          console.error("[QBO callback] token exchange error:", {
+            message,
+            intuit_tid: intuitTidFromError(err),
+          });
           return redirectTo(appOrigin, returnPath, {
             qbo: "error",
             reason: "token_exchange_failed",

@@ -17,6 +17,7 @@ import {
   fetchQboLedgerStatement,
   fetchRecentTransactions,
   mapQboToFinancialInputs,
+  intuitTidFromError,
   qboCredentialsConfigured,
   refreshQboToken,
   revokeQboToken,
@@ -535,7 +536,11 @@ export const triggerQboSync = createServerFn({ method: "POST" })
         .from("qbo_connections")
         .update({ sync_status: "error", sync_error: msg })
         .eq("client_id", data.clientId);
-      throw new Error(`Sync failed: ${msg}`);
+      const wrapped = new Error(`Sync failed: ${msg}`);
+      if (err instanceof Error) wrapped.cause = err;
+      const tid = intuitTidFromError(err);
+      if (tid) Object.assign(wrapped, { intuitTid: tid });
+      throw wrapped;
     }
   });
 
@@ -565,7 +570,10 @@ export const disconnectQbo = createServerFn({ method: "POST" })
         await revokeQboToken((conn.refresh_token as string) || (conn.access_token as string));
       } catch (err) {
         const message = err instanceof Error ? err.message : "revoke failed";
-        console.error("[QBO disconnect] revoke failed:", message);
+        console.error("[QBO disconnect] revoke failed:", {
+          message,
+          intuit_tid: intuitTidFromError(err),
+        });
       }
     }
 
