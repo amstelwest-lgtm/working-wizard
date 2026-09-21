@@ -10,7 +10,8 @@ import {
   type XeroStatus,
   type XeroSyncResult,
 } from "@/lib/xero.functions";
-import { RefreshCw, Link2, Unlink, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
+import { RefreshCw, Unlink, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
+import { BrandConnectButton } from "@/components/brand-connect-button";
 import { formatIsoDateUTC, yearToDateTitle } from "@/lib/statement-period";
 
 type Props = {
@@ -296,36 +297,7 @@ export function XeroConnectCard({ clientId, returnPath, refreshToken = 0, onSync
           Connect to sync P&amp;L, the balance sheet and bank balances into this client&apos;s figures
         </p>
       </div>
-      <button
-        onClick={handleConnect}
-        disabled={connecting}
-        style={{
-          display: "inline-flex",
-          alignItems: "center",
-          gap: 6,
-          fontSize: 12,
-          fontWeight: 700,
-          color: "#07212b",
-          background: "#13B5EA",
-          border: "none",
-          borderRadius: 8,
-          padding: "8px 16px",
-          cursor: connecting ? "default" : "pointer",
-          opacity: connecting ? 0.7 : 1,
-          fontFamily: "inherit",
-          flexShrink: 0,
-          transition: "filter 150ms",
-        }}
-        onMouseEnter={(e) =>
-          ((e.currentTarget as HTMLButtonElement).style.filter = "brightness(1.08)")
-        }
-        onMouseLeave={(e) =>
-          ((e.currentTarget as HTMLButtonElement).style.filter = "none")
-        }
-      >
-        {connecting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Link2 className="h-3.5 w-3.5" />}
-        {connecting ? "Opening Xero…" : "Connect Xero"}
-      </button>
+      <BrandConnectButton brand="xero" busy={connecting} onClick={handleConnect} />
     </div>
   );
 }

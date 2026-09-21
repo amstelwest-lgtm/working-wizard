@@ -20,6 +20,7 @@ import { healthHeadline, type SnapshotMetric } from "@/lib/client-briefing";
 import type { BriefingWorkflow } from "@/lib/client-briefing.functions";
 import { useMarketFormat } from "@/contexts/market";
 import { AddPastPeriodLink } from "@/components/add-past-period-link";
+import { BrandConnectButton } from "@/components/brand-connect-button";
 import { formatIsoDateUTC, yearToDateTitle } from "@/lib/statement-period";
 
 export type LedgerLinkProof = {
@@ -256,24 +257,14 @@ export function ClientBriefing(p: ClientBriefingProps) {
               </button>
             ) : null}
             {p.onConnectQuickBooks ? (
-              <button
-                type="button"
+              <BrandConnectButton
                 id="client-connect-qbo"
-                className="btn ghost mini"
+                brand="quickbooks"
                 onClick={p.onConnectQuickBooks}
-              >
-                Connect QuickBooks
-              </button>
+              />
             ) : null}
             {p.onConnectXero ? (
-              <button
-                type="button"
-                id="client-connect-xero"
-                className="btn ghost mini"
-                onClick={p.onConnectXero}
-              >
-                Connect Xero
-              </button>
+              <BrandConnectButton id="client-connect-xero" brand="xero" onClick={p.onConnectXero} />
             ) : null}
             {p.openQueries > 0 ? (
               <button
