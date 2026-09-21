@@ -124,15 +124,17 @@ import {
 } from "@/lib/debt-schedule";
 import { ClientBriefing } from "@/components/client-briefing";
 import { NextStepCard } from "@/components/next-step-card";
-import { WorkflowArrival, WorkflowCoachStrip } from "@/components/workflow-coach";
+import { DataUpToDate } from "@/components/data-up-to-date";
+import { WorkflowCoachStrip } from "@/components/workflow-coach";
 import {
   coachPageForTab,
+  dataFreshnessLine,
+  dataStepDone,
   evidenceForBriefingTab,
   evidenceForPillar,
   pillarIsWeak,
   type CoachDestination,
   type CoachDone,
-  type CoachPage,
 } from "@/lib/workflow-coach";
 import { relatedTabForRatio } from "@/lib/ratio-briefing";
 import { RecommendationsPanel } from "@/components/recommendations-panel";
@@ -1712,7 +1714,12 @@ function ClientView() {
         },
         replace: true,
       });
-      const targetId = dest.focus === "pillars" ? "coach-pillars" : `pane-${tab}`;
+      const targetId =
+        dest.focus === "pillars"
+          ? "coach-pillars"
+          : tab === "summary"
+            ? "data-up-to-date"
+            : `pane-${tab}`;
       window.setTimeout(() => {
         document.getElementById(targetId)?.scrollIntoView({ behavior: "smooth", block: "start" });
       }, 80);
@@ -1741,6 +1748,11 @@ function ClientView() {
   );
 
   const coachDone: CoachDone = {
+    data: dataStepDone({
+      xero: xeroLink,
+      qbo: qboLink,
+      snapshotCount: snapshots.length,
+    }),
     health: healthSeen,
     pillars: pillarsSeen,
     profit: Boolean(profitabilitySignoff),
@@ -1748,6 +1760,23 @@ function ClientView() {
     budget: Boolean(budgetSignoff),
     actions: Boolean(actionPlanSignoff),
   };
+  const dataFreshness = dataFreshnessLine({
+    xero: xeroLink
+      ? {
+          lastSyncedAt: xeroLink.lastSyncedAt,
+          syncStatus: xeroLink.syncStatus,
+          periodLabel: xeroLink.periodLabel,
+        }
+      : null,
+    qbo: qboLink
+      ? {
+          lastSyncedAt: qboLink.lastSyncedAt,
+          syncStatus: qboLink.syncStatus,
+          periodLabel: qboLink.periodLabel,
+        }
+      : null,
+    snapshotPeriod: snapshots[0]?.period_label ?? null,
+  });
   const coachPage = coachPageForTab(activeTab, search.focus);
 
   const handleGenerateReport = useCallback(() => {
@@ -2047,15 +2076,6 @@ function ClientView() {
   }
 
   const reportsIssued = client.reports_issued_count ?? 0;
-  const coachArrival = (page: CoachPage) => (
-    <WorkflowArrival
-      page={page}
-      intent={search.coach}
-      why={search.why}
-      done={coachDone}
-      onOpen={openCoach}
-    />
-  );
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -2464,6 +2484,16 @@ function ClientView() {
                 <div className={`tabpane${activeTab === "summary" ? " on" : ""}`} id="pane-summary">
                   {activeTab === "summary" && (
                     <>
+                      <DataUpToDate
+                        clientId={clientId}
+                        returnPath={`/clients/${clientId}`}
+                        xeroRefresh={xeroRefresh}
+                        qboRefresh={qboRefresh}
+                        onXeroSyncComplete={onXeroSyncComplete}
+                        onQboSyncComplete={onQboSyncComplete}
+                        onUpload={() => setUploadOpen(true)}
+                        freshness={dataFreshness}
+                      />
                       <DeliverableInputConfig
                         className="mb-5"
                         clientId={clientId}
@@ -2486,7 +2516,6 @@ function ClientView() {
 
                 {/* ===== MILŌN BOT TAB ===== */}
                 <div className={`tabpane${activeTab === "ask" ? " on" : ""}`} id="pane-ask">
-                  {coachArrival("ask")}
                   <SectionCard className="card hero-card ask-ai-studio-shell">
                     <div id="ask-ai-accountant" />
                   </SectionCard>
@@ -2517,7 +2546,6 @@ function ClientView() {
                       />
                     }
                   />
-                  {coachArrival(search.focus === "pillars" ? "pillars" : "health")}
                   <DeliverableInputConfig
                     className="mb-5"
                     clientId={clientId}
@@ -2846,7 +2874,6 @@ function ClientView() {
                       />
                     }
                   />
-                  {coachArrival("profit")}
                   <DeliverableInputConfig
                     className="mb-5"
                     clientId={clientId}
@@ -3050,7 +3077,6 @@ function ClientView() {
                         </button>
                       </div>
                     </div>
-                    {coachArrival("cash")}
                     <CashForecastPanel
                       clientId={client.id}
                       clientName={client.name}
@@ -3098,7 +3124,6 @@ function ClientView() {
                         />
                       }
                     />
-                    {coachArrival("budget")}
                     {/* Follow the portal theme. A nested `.dark` island made Tailwind
                 light-on-dark copy and `color-scheme: dark` inputs fire while
                 budget cards stayed cream/white — revenue and totals vanished. */}
@@ -3135,7 +3160,6 @@ function ClientView() {
                     title="Board-ready PDFs"
                     lede="Each report has its own sign-off. Stamp Business Health & Ratios, Profitability, the 13-week Cash Forecast, or the 12-month Budget so the signature carries into the PDF. You can brand packs with this client's own logo and colours."
                   />
-                  {coachArrival("reports")}
                   <DeliverableInputConfig
                     className="mb-5"
                     clientId={clientId}
@@ -3183,7 +3207,6 @@ function ClientView() {
                       />
                     }
                   />
-                  {coachArrival("actions")}
                   <DeliverableInputConfig
                     className="mb-5"
                     clientId={clientId}
@@ -3236,7 +3259,6 @@ function ClientView() {
                       />
                     }
                   />
-                  {coachArrival("advisory")}
                   {/* P1 — the reviewable pack: edit, comment, request changes, sign off. */}
                   <AdvisoryPackPanel
                     className="mb-5"
