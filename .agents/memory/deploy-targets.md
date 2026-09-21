@@ -44,7 +44,7 @@ allowing a Vercel build without forking the config.
   and must be set in Vercel project env. (`GEMINI_API_KEY` is not used by the app.)
 - Production is the **Vercel** path; the Cloudflare Worker path (`wrangler.jsonc`,
   `pnpm run deploy`) is kept working but is not where the product runs.
-- `QBO_REDIRECT_URI` must be exactly `https://milonfinance.com/api/qbo/callback` in production (see `docs/QBO.md`). Scope is `com.intuit.quickbooks.accounting`. `QBO_ENVIRONMENT` is `production` or `sandbox`.
+- QBO env names are `QBO_CLIENT_ID`, `QBO_CLIENT_SECRET`, `QBO_REDIRECT_URI`. Production `QBO_REDIRECT_URI` is exactly `https://milonfinance.com/api/qbo/callback` (route `/api/qbo/callback`). Scope is `com.intuit.quickbooks.accounting`. Optional `QBO_ENVIRONMENT=production` or it calls the sandbox API. See `docs/QBO.md`.
 - The one thing only verifiable post-deploy: Vercel rewrites must preserve the
   original URL/path to the function (needed for SSR routing). Standard behavior,
   but confirm with a nested route + a direct `/assets/*` request after deploy.

@@ -27,19 +27,25 @@ only. Never log them.
 
 ## Env vars (only these)
 
-Set on the Vercel project **working-wizard2**, Production and Preview. Do not
-prefix `VITE_`. Redeploy after saving. Do not put the values in git.
+The connect card and the server read these three names. Set them on the Vercel
+project **working-wizard2**, Production and Preview. Do not prefix `VITE_`.
+Redeploy after saving. Do not put the values in git.
 
 | Name | Value |
 | --- | --- |
-| `QBO_CLIENT_ID` | Intuit app Client ID for the environment you are using |
+| `QBO_CLIENT_ID` | Intuit app Client ID |
 | `QBO_CLIENT_SECRET` | Intuit app Client Secret |
 | `QBO_REDIRECT_URI` | `https://milonfinance.com/api/qbo/callback` |
-| `QBO_ENVIRONMENT` | `production` for live companies. `sandbox` only for an Intuit sandbox company |
+
+`QBO_REDIRECT_URI` must be that string. The route in code is `/api/qbo/callback`.
 
 Paste the ID and secret through the CoS secure fields, or set them yourself in
 Vercel → working-wizard2 → Settings → Environment Variables. This repo never
 stores them.
+
+Optional: `QBO_ENVIRONMENT`. Unset means `sandbox` (Intuit's sandbox API). For
+live companies set `QBO_ENVIRONMENT=production`. It is not one of the three
+names on the connect card.
 
 ## Redirect URI (Intuit Developer + Vercel)
 
@@ -71,14 +77,18 @@ add Payments, Payroll, or OpenID.
 1. Open [developer.intuit.com](https://developer.intuit.com) → your app (or
    **Create an app** → QuickBooks Online).
 2. **Keys & credentials**. Use **Production** keys for live books. Development
-   keys only talk to sandbox companies, and then `QBO_ENVIRONMENT` must be
-   `sandbox`.
-3. Add the redirect URI `https://milonfinance.com/api/qbo/callback` on that
-   same environment (Production or Development). Intuit keeps those lists
-   separate.
+   keys only talk to sandbox companies (leave `QBO_ENVIRONMENT` unset, or set
+   `sandbox`).
+3. Add this redirect URI on that same environment (Production or Development).
+   Intuit keeps those lists separate:
+
+   `https://milonfinance.com/api/qbo/callback`
+
 4. Confirm the scope is Accounting (`com.intuit.quickbooks.accounting`).
-5. Copy Client ID and Client Secret into the four Vercel env vars above.
-   `QBO_ENVIRONMENT=production` when the keys are Production keys.
+5. Copy Client ID and Client Secret into `QBO_CLIENT_ID` and
+   `QBO_CLIENT_SECRET`. Set `QBO_REDIRECT_URI` to
+   `https://milonfinance.com/api/qbo/callback`. For live books also set
+   `QBO_ENVIRONMENT=production`.
 6. Redeploy working-wizard2.
 
 ## Database

@@ -175,9 +175,8 @@ export function QboConnectCard({ clientId, returnPath, refreshToken = 0, onSyncC
         </p>
         <p style={{ fontSize: 11, color: "#64748b", marginTop: 6 }}>
           Admins: set <code style={codeStyle}>QBO_CLIENT_ID</code>,{" "}
-          <code style={codeStyle}>QBO_CLIENT_SECRET</code>,{" "}
-          <code style={codeStyle}>QBO_REDIRECT_URI</code> and{" "}
-          <code style={codeStyle}>QBO_ENVIRONMENT</code> to enable live sync.
+          <code style={codeStyle}>QBO_CLIENT_SECRET</code> and{" "}
+          <code style={codeStyle}>QBO_REDIRECT_URI</code> to enable live sync.
         </p>
       </div>
     );
