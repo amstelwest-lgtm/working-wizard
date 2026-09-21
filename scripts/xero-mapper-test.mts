@@ -229,10 +229,31 @@ const ownerSrc = readFileSync(resolve("src/routes/app.tsx"), "utf8");
 assert(ownerSrc.includes("<XeroConnectCard"), "owner app mounts Xero connect");
 assert(ownerSrc.includes('returnPath="/app"'), "owner OAuth returns to /app");
 assert(!ownerSrc.includes("Xero coming later"), "placeholder copy removed from owner app");
+assert(ownerSrc.includes('id="owner-connect-xero"'), "owner data sources show Connect Xero");
+assert(ownerSrc.includes('id="owner-connect-qbo"'), "owner Connect Xero sits next to QuickBooks");
+assert(ownerSrc.includes('id="owner-header-xero"'), "owner header shows Xero without opening a tab");
+const ownerConnect = ownerSrc.indexOf('id="owner-accounting-connect"');
+const ownerUploadGrid = ownerSrc.indexOf(': "Upload financial statements"}');
+assert(
+  ownerConnect !== -1 && ownerUploadGrid !== -1 && ownerConnect < ownerUploadGrid,
+  "owner data sources lead with QuickBooks and Xero",
+);
 
 const studioSrc = readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8");
 assert(studioSrc.includes("<XeroConnectCard"), "accountant studio mounts Xero connect");
 assert(studioSrc.includes("search.xero"), "accountant studio handles ?xero= return");
+assert(studioSrc.includes('id="accounting-connect"'), "accountant Xero is outside the Financials collapse");
+assert(studioSrc.includes("onConnectXero={() => setShowXeroDialog(true)}"), "accountant briefing opens Xero");
+const accountingConnect = studioSrc.indexOf('id="accounting-connect"');
+const finCollapse = studioSrc.indexOf('id="finCollapse"');
+assert(
+  accountingConnect !== -1 && finCollapse !== -1 && accountingConnect < finCollapse,
+  "Xero renders before the collapsed Financials body",
+);
+const briefingSrc = readFileSync(resolve("src/components/client-briefing.tsx"), "utf8");
+assert(briefingSrc.includes('id="client-connect-xero"'), "briefing labels Connect Xero");
+assert(briefingSrc.includes('id="client-connect-qbo"'), "briefing labels Connect QuickBooks beside Xero");
+assert(briefingSrc.includes('id="client-upload-cta"'), "briefing has the primary Upload CTA");
 
 const snapSrc = readFileSync(resolve("src/lib/financial-snapshots.ts"), "utf8");
 assert(snapSrc.includes('"xero"'), "snapshot source includes xero");

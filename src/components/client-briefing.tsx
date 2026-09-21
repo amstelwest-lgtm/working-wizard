@@ -47,6 +47,10 @@ export type ClientBriefingProps = {
   onOpenReports?: () => void;
   onAddPastPeriod?: () => void;
   hasFigures: boolean;
+  /** Primary upload — always in the briefing, not behind a tab. */
+  onUpload?: () => void;
+  onConnectQuickBooks?: () => void;
+  onConnectXero?: () => void;
 };
 
 export function ClientBriefing(p: ClientBriefingProps) {
@@ -115,6 +119,39 @@ export function ClientBriefing(p: ClientBriefingProps) {
             </dl>
           )}
           <div className="briefing-actions">
+            {p.onUpload ? (
+              <button
+                type="button"
+                id="client-upload-cta"
+                className="btn gold"
+                onClick={p.onUpload}
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 15V3M7 8l5-5 5 5M5 21h14" />
+                </svg>
+                Upload
+              </button>
+            ) : null}
+            {p.onConnectQuickBooks ? (
+              <button
+                type="button"
+                id="client-connect-qbo"
+                className="btn ghost mini"
+                onClick={p.onConnectQuickBooks}
+              >
+                Connect QuickBooks
+              </button>
+            ) : null}
+            {p.onConnectXero ? (
+              <button
+                type="button"
+                id="client-connect-xero"
+                className="btn ghost mini"
+                onClick={p.onConnectXero}
+              >
+                Connect Xero
+              </button>
+            ) : null}
             {p.openQueries > 0 ? (
               <button
                 type="button"

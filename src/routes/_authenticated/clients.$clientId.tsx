@@ -575,19 +575,27 @@ function ClientView() {
   const navigate = useNavigate();
   const { profile, firmId } = useAccountantProfile();
   const track = useTrack();
+  const [showQboDialog, setShowQboDialog] = useState(false);
+  const [showXeroDialog, setShowXeroDialog] = useState(false);
 
   // QBO / Xero OAuth return — callbacks land here for accountants.
+  // Open the connect dialog so Sync is on screen; the inline cards sit on
+  // Health & Ratios and are easy to miss after the redirect.
   useEffect(() => {
     if (!search.qbo && !search.xero) return;
     if (search.qbo === "connected") {
       toast.success("QuickBooks Online connected — tap Sync to import data");
+      setShowQboDialog(true);
     } else if (search.qbo === "error") {
       toast.error(`QuickBooks connection failed: ${search.reason ?? "unknown error"}`);
+      setShowQboDialog(true);
     }
     if (search.xero === "connected") {
       toast.success("Xero connected — tap Sync to import P&L and balance sheet");
+      setShowXeroDialog(true);
     } else if (search.xero === "error") {
       toast.error(`Xero connection failed: ${search.reason ?? "unknown error"}`);
+      setShowXeroDialog(true);
     }
     navigate({
       to: "/clients/$clientId",
@@ -1276,6 +1284,46 @@ function ClientView() {
     [clientId],
   );
 
+  const onQboSyncComplete = useCallback(
+    (inputs: Record<string, number>) => {
+      const next = Object.fromEntries(Object.entries(inputs).map(([k, val]) => [k, String(val)]));
+      const nextScalars = { ...financialsRef.current, ...next };
+      financialsRef.current = nextScalars;
+      setFinancials(nextScalars);
+      const updated = mergeCurrentBlob(nextScalars);
+      const updatedAt = new Date().toISOString();
+      void supabase
+        .from("clients")
+        .update({
+          financials: updated as never,
+          financials_updated_at: updatedAt,
+        })
+        .eq("id", clientId)
+        .then(({ error }) => {
+          if (error) {
+            toast.error(`QBO sync save failed: ${error.message}`);
+            return;
+          }
+          setClient((c) => (c ? { ...c, financials_updated_at: updatedAt } : c));
+          void upsertCurrentPeriodSnapshot({
+            clientId,
+            financials: updated as Record<string, unknown>,
+            source: "qbo",
+          });
+          toast.success("Financials updated from QuickBooks");
+        });
+    },
+    [clientId, mergeCurrentBlob],
+  );
+
+  const onXeroSyncComplete = useCallback((inputs: Record<string, number>) => {
+    const next = Object.fromEntries(Object.entries(inputs).map(([k, val]) => [k, String(val)]));
+    const nextScalars = { ...financialsRef.current, ...next };
+    financialsRef.current = nextScalars;
+    setFinancials(nextScalars);
+    setClient((c) => (c ? { ...c, financials_updated_at: new Date().toISOString() } : c));
+  }, []);
+
   const handleFinancialChange = useCallback(
     (key: string, value: string) => {
       setFinancials((prev) => {
@@ -1854,7 +1902,9 @@ function ClientView() {
               !!client &&
               !firstDataOpen &&
               !showBankDrafter &&
-              !uploadOpen
+              !uploadOpen &&
+              !showQboDialog &&
+              !showXeroDialog
             }
             onTabChange={handleTourTabChange}
             onFinish={
@@ -2009,6 +2059,9 @@ function ClientView() {
               onAddPastPeriod={() => setPastPeriodOpen(true)}
               onOpenReports={() => revealTab("reports")}
               hasFigures={hasFigures}
+              onUpload={() => setUploadOpen(true)}
+              onConnectQuickBooks={() => setShowQboDialog(true)}
+              onConnectXero={() => setShowXeroDialog(true)}
             />
 
             {/* ===== FIRST FIGURES — shown on every tab until the client has numbers ===== */}
@@ -2302,6 +2355,19 @@ function ClientView() {
                 </div>
               )}
 
+              {/* Accounting connections — visible on Health & Ratios without opening Financials */}
+              <div
+                id="accounting-connect"
+                style={{ marginBottom: 16, display: "grid", gap: 10 }}
+              >
+                <QboConnectCard clientId={clientId} onSyncComplete={onQboSyncComplete} />
+                <XeroConnectCard
+                  clientId={clientId}
+                  returnPath={`/clients/${clientId}`}
+                  onSyncComplete={onXeroSyncComplete}
+                />
+              </div>
+
               {/* Collapsible Financials */}
               <div className={`card collapse${finOpen ? " open" : ""}`} id="finCollapse">
                 <div
@@ -2390,60 +2456,6 @@ function ClientView() {
                         </svg>
                         Upload statement
                       </button>
-                    </div>
-                    <div style={{ marginBottom: 16, display: "grid", gap: 10 }}>
-                      <QboConnectCard
-                        clientId={clientId}
-                        onSyncComplete={(inputs) => {
-                          const next = Object.fromEntries(
-                            Object.entries(inputs).map(([k, val]) => [k, String(val)]),
-                          );
-                          const nextScalars = { ...financialsRef.current, ...next };
-                          financialsRef.current = nextScalars;
-                          setFinancials(nextScalars);
-                          const updated = mergeCurrentBlob(nextScalars);
-                          const updatedAt = new Date().toISOString();
-                          void supabase
-                            .from("clients")
-                            .update({
-                              financials: updated as never,
-                              financials_updated_at: updatedAt,
-                            })
-                            .eq("id", clientId)
-                            .then(({ error }) => {
-                              if (error) {
-                                toast.error(`QBO sync save failed: ${error.message}`);
-                                return;
-                              }
-                              setClient((c) =>
-                                c ? { ...c, financials_updated_at: updatedAt } : c,
-                              );
-                              void upsertCurrentPeriodSnapshot({
-                                clientId,
-                                financials: updated as Record<string, unknown>,
-                                source: "qbo",
-                              });
-                              toast.success("Financials updated from QuickBooks");
-                            });
-                        }}
-                      />
-                      <XeroConnectCard
-                        clientId={clientId}
-                        returnPath={`/clients/${clientId}`}
-                        onSyncComplete={(inputs) => {
-                          const next = Object.fromEntries(
-                            Object.entries(inputs).map(([k, val]) => [k, String(val)]),
-                          );
-                          const nextScalars = { ...financialsRef.current, ...next };
-                          financialsRef.current = nextScalars;
-                          setFinancials(nextScalars);
-                          setClient((c) =>
-                            c
-                              ? { ...c, financials_updated_at: new Date().toISOString() }
-                              : c,
-                          );
-                        }}
-                      />
                     </div>
                     <div className="fin-grid">
                       {FIELD_LABELS.map(({ key, label }) => (
@@ -3083,6 +3095,48 @@ function ClientView() {
             }}
           />
 
+          <Dialog open={showQboDialog} onOpenChange={setShowQboDialog}>
+            <DialogContent className="max-w-2xl border border-slate-800 bg-slate-950 text-slate-50">
+              <DialogHeader>
+                <DialogTitle className="text-[15px] font-semibold uppercase tracking-[0.15em] text-slate-100">
+                  QuickBooks Integration
+                </DialogTitle>
+                <DialogDescription className="text-xs text-slate-400">
+                  Connect QuickBooks Online to pull this client&apos;s figures into Milōn.
+                </DialogDescription>
+              </DialogHeader>
+              <QboConnectCard
+                clientId={clientId}
+                onSyncComplete={(inputs) => {
+                  onQboSyncComplete(inputs);
+                  setShowQboDialog(false);
+                }}
+              />
+            </DialogContent>
+          </Dialog>
+
+          <Dialog open={showXeroDialog} onOpenChange={setShowXeroDialog}>
+            <DialogContent className="max-w-2xl border border-slate-800 bg-slate-950 text-slate-50">
+              <DialogHeader>
+                <DialogTitle className="text-[15px] font-semibold uppercase tracking-[0.15em] text-slate-100">
+                  Xero Integration
+                </DialogTitle>
+                <DialogDescription className="text-xs text-slate-400">
+                  Connect a Xero organisation to pull P&amp;L and balance sheet into this
+                  client&apos;s figures.
+                </DialogDescription>
+              </DialogHeader>
+              <XeroConnectCard
+                clientId={clientId}
+                returnPath={`/clients/${clientId}`}
+                onSyncComplete={(inputs) => {
+                  onXeroSyncComplete(inputs);
+                  setShowXeroDialog(false);
+                }}
+              />
+            </DialogContent>
+          </Dialog>
+
           {/* First-client: bank statements nudge */}
           <Dialog open={firstDataOpen} onOpenChange={setFirstDataOpen}>
             <DialogContent className="max-w-md border border-slate-700 bg-slate-950 text-slate-50">
@@ -3141,6 +3195,22 @@ function ClientView() {
                     />
                   </>
                 )}
+                <FirstDataChoice
+                  label="Connect QuickBooks"
+                  hint="Live sync from QuickBooks Online"
+                  onClick={() => {
+                    setFirstDataOpen(false);
+                    setShowQboDialog(true);
+                  }}
+                />
+                <FirstDataChoice
+                  label="Connect Xero"
+                  hint="Live sync of P&L and balance sheet"
+                  onClick={() => {
+                    setFirstDataOpen(false);
+                    setShowXeroDialog(true);
+                  }}
+                />
                 <FirstDataChoice
                   label="Type the figures by hand"
                   hint="Fill the financials grid yourself"

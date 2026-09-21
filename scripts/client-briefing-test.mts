@@ -224,9 +224,12 @@ assert(!route.includes("PeriodVarianceStrip") && !route.includes("AccountantOper
 assert(!route.includes("Reports issued</span>") && !route.includes("Last forecast</span>"), "old meta labels gone");
 assert(route.includes("onOpenQueries={() => openArchive"), "queries stay a clickable archive control");
 assert(route.includes("onOpenReports={() => revealTab(\"reports\")}"), "Create report opens Reports and scrolls to the pane");
+assert(route.includes("onUpload={() => setUploadOpen(true)}"), "briefing Upload opens the statement dialog");
 assert(!/Claude|Anthropic/i.test(route), "client page copy has no vendor wording");
 assert(!/overallHealth\.pillars\s*\n?\s*\.filter\(\(p\) => p\.score != null\)\s*\n?\s*\.map/.test(route), "pillar score chips removed from header");
 const comp = read("src/components/client-briefing.tsx");
+assert(comp.includes('id="client-upload-cta"'), "Upload sits in the client briefing");
+assert(comp.includes("Connect Xero"), "briefing offers Connect Xero");
 for (const must of ["Financial Health", "Financial snapshot", "About this business", "What matters", "Milōn workflow", "View full profile", "View breakdown", "No open queries", "Open movement report"]) {
   assert(comp.includes(must), `component has "${must}"`);
 }
