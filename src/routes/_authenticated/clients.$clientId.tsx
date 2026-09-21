@@ -575,19 +575,27 @@ function ClientView() {
   const navigate = useNavigate();
   const { profile, firmId } = useAccountantProfile();
   const track = useTrack();
+  const [showQboDialog, setShowQboDialog] = useState(false);
+  const [showXeroDialog, setShowXeroDialog] = useState(false);
 
   // QBO / Xero OAuth return — callbacks land here for accountants.
+  // Open the connect dialog so Sync is on screen; the inline cards sit on
+  // Health & Ratios and are easy to miss after the redirect.
   useEffect(() => {
     if (!search.qbo && !search.xero) return;
     if (search.qbo === "connected") {
       toast.success("QuickBooks Online connected — tap Sync to import data");
+      setShowQboDialog(true);
     } else if (search.qbo === "error") {
       toast.error(`QuickBooks connection failed: ${search.reason ?? "unknown error"}`);
+      setShowQboDialog(true);
     }
     if (search.xero === "connected") {
       toast.success("Xero connected — tap Sync to import P&L and balance sheet");
+      setShowXeroDialog(true);
     } else if (search.xero === "error") {
       toast.error(`Xero connection failed: ${search.reason ?? "unknown error"}`);
+      setShowXeroDialog(true);
     }
     navigate({
       to: "/clients/$clientId",
@@ -1276,6 +1284,46 @@ function ClientView() {
     [clientId],
   );
 
+  const onQboSyncComplete = useCallback(
+    (inputs: Record<string, number>) => {
+      const next = Object.fromEntries(Object.entries(inputs).map(([k, val]) => [k, String(val)]));
+      const nextScalars = { ...financialsRef.current, ...next };
+      financialsRef.current = nextScalars;
+      setFinancials(nextScalars);
+      const updated = mergeCurrentBlob(nextScalars);
+      const updatedAt = new Date().toISOString();
+      void supabase
+        .from("clients")
+        .update({
+          financials: updated as never,
+          financials_updated_at: updatedAt,
+        })
+        .eq("id", clientId)
+        .then(({ error }) => {
+          if (error) {
+            toast.error(`QBO sync save failed: ${error.message}`);
+            return;
+          }
+          setClient((c) => (c ? { ...c, financials_updated_at: updatedAt } : c));
+          void upsertCurrentPeriodSnapshot({
+            clientId,
+            financials: updated as Record<string, unknown>,
+            source: "qbo",
+          });
+          toast.success("Financials updated from QuickBooks");
+        });
+    },
+    [clientId, mergeCurrentBlob],
+  );
+
+  const onXeroSyncComplete = useCallback((inputs: Record<string, number>) => {
+    const next = Object.fromEntries(Object.entries(inputs).map(([k, val]) => [k, String(val)]));
+    const nextScalars = { ...financialsRef.current, ...next };
+    financialsRef.current = nextScalars;
+    setFinancials(nextScalars);
+    setClient((c) => (c ? { ...c, financials_updated_at: new Date().toISOString() } : c));
+  }, []);
+
   const handleFinancialChange = useCallback(
     (key: string, value: string) => {
       setFinancials((prev) => {
@@ -1854,7 +1902,9 @@ function ClientView() {
               !!client &&
               !firstDataOpen &&
               !showBankDrafter &&
-              !uploadOpen
+              !uploadOpen &&
+              !showQboDialog &&
+              !showXeroDialog
             }
             onTabChange={handleTourTabChange}
             onFinish={
@@ -1949,1021 +1999,1015 @@ function ClientView() {
               <span className="aud">Audited</span>
             </div>
 
-            {/* ===== NEXT STEP — one CTA, above everything else (P0.4) ===== */}
-            <NextStepCard
-              className="mb-4"
-              clientId={client.id}
-              audience="accountant"
-              surface="accountant_portal"
-              refreshKey={`${activeTab}|${snapshots.length}|${hasFigures ? 1 : 0}|${client.last_forecast_at ?? ""}|${advisoryBump}`}
-              onAct={handleNextStepAct}
-            />
-            {/* P0.6 — tracked data asks (system + by hand); accountant can email the owner. */}
-            <DataRequestsPanel
-              className="mb-4"
-              clientId={client.id}
-              audience="accountant"
-              refreshKey={`${activeTab}|${snapshots.length}|${advisoryBump}`}
-              onUpload={() => setFirstDataOpen(true)}
-              onOpenForecast={() => setActiveTab("cash")}
-              onChanged={() => setAdvisoryBump((n) => n + 1)}
-            />
-
-            {/* ===== CLIENT BRIEFING — status → what matters → this month's workflow ===== */}
-            <ClientBriefing
-              clientName={client.name}
-              clientCode={client.client_code}
-              industryLabel={profileIndustryLabel(briefingProfile, client.business_type ?? "—")}
-              ring={
-                <HealthRing
-                  score={healthScoreRounded}
-                  status={overallHealth.displayStatus}
-                  size={74}
-                  strokeWidth={5}
-                />
-              }
-              healthScore={hasFigures ? overallHealth.overall : null}
-              healthLabel={overallHealth.displayLabel}
-              healthStatus={hasFigures ? overallHealth.displayStatus : null}
-              onViewBreakdown={() => revealTab("ratios")}
-              snapshot={briefingSnapshot}
-              about={briefingAbout}
-              profile={briefingProfile}
-              onEditProfile={() => setProfileOpen(true)}
-              whatMatters={briefingMatters}
-              workflow={workflow}
-              workflowLoading={workflowLoading}
-              onRefreshWorkflow={() => void requestWorkflow(true)}
-              openQueries={
-                notesLoading && clientNotes.length === 0
-                  ? openQueriesCount
-                  : clientNotes.filter((n) => !n.resolved).length
-              }
-              onOpenQueries={() => openArchive(openQueriesCount > 0 ? "open" : "resolved")}
-              reportsIssued={reportsIssued}
-              movementReportAvailable={Boolean(priorSnapshot)}
-              onOpenMovementReport={() => {
-                setStudioDeepLink({ report: "movement", action: "preview" });
-                revealTab("reports");
-              }}
-              onAddPastPeriod={() => setPastPeriodOpen(true)}
-              onOpenReports={() => revealTab("reports")}
-              hasFigures={hasFigures}
-            />
-
-            {/* ===== FIRST FIGURES — shown on every tab until the client has numbers ===== */}
-            {!hasFigures && (
-              <div className="card hero-card first-figures" id="first-figures-card">
-                <div className="ff-copy">
-                  <p className="kicker">Step 1 · Bring in this client's figures</p>
-                  <h3>Nothing is scored yet</h3>
-                  <p>
-                    The health orb, profit waterfall, cash forecast and Milōn Bot all wait on the
-                    first numbers.{" "}
-                    {isUsCopy(clientMarket)
-                      ? "Fastest: a P&L and balance sheet as Excel, CSV or PDF. Bank statements also work."
-                      : "Fastest: about 3 months of bank statements for every account. A P&L and balance sheet also work."}
-                  </p>
-                </div>
-                <div className="ff-actions">
-                  {isUsCopy(clientMarket) ? (
-                    <>
-                      <button className="btn gold mini" onClick={() => setUploadOpen(true)}>
-                        Upload P&amp;L / balance sheet
-                      </button>
-                      <button className="btn ghost mini" onClick={() => setShowBankDrafter(true)}>
-                        Draft from bank statements
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <button className="btn gold mini" onClick={() => setShowBankDrafter(true)}>
-                        Draft from bank statements
-                      </button>
-                      <button className="btn ghost mini" onClick={() => setUploadOpen(true)}>
-                        Upload P&amp;L / balance sheet
-                      </button>
-                    </>
-                  )}
-                  <button className="btn ghost mini" onClick={jumpToFinancials}>
-                    Type figures by hand
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {hasFigures && needsPastPeriodPrompt({ hasLiveFigures: hasFigures, snapshots }) ? (
-              <p className="text-[12px] leading-relaxed text-[color:var(--ink-dim)]">
-                Trend lines and movement need another period.{" "}
-                <AddPastPeriodLink onOpen={() => setPastPeriodOpen(true)} />
-              </p>
-            ) : null}
-
-            {/* ===== DELIVERABLES ACTION BAR — nothing to export before figures ===== */}
-            {hasFigures && (
-              <div className="card hero-card action-bar">
-                <span className="lbl">
-                  <b>Deliverables</b> — export, send, or draft for this client
-                </span>
-                <button className="btn gold mini" onClick={handleGenerateReport}>
-                  <svg viewBox="0 0 24 24">
-                    <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
-                    <path d="M14 3v6h6" />
-                  </svg>
-                  Generate report
-                </button>
-                <button className="btn ghost mini" onClick={handleExportPDF}>
-                  <svg viewBox="0 0 24 24">
-                    <path d="M12 3v12M7 10l5 5 5-5M5 21h14" />
-                  </svg>
-                  Export PDF
-                </button>
-                <button className="btn ghost mini" onClick={handleEmailDraft}>
-                  <svg viewBox="0 0 24 24">
-                    <rect x="3" y="5" width="18" height="14" rx="2" />
-                    <path d="M3 7l9 6 9-6" />
-                  </svg>
-                  Email draft
-                </button>
-                <button className="btn ghost mini" onClick={handleWhatsApp}>
-                  <svg viewBox="0 0 24 24">
-                    <path d="M21 12a9 9 0 0 1-13.4 7.8L3 21l1.3-4.4A9 9 0 1 1 21 12z" />
-                  </svg>
-                  WhatsApp
-                </button>
-              </div>
-            )}
-
-            {/* ===== TABS ===== */}
-            <div className="tabs">
-              {(
-                [
-                  { id: "summary", label: "Summary" },
-                  { id: "ask", label: "Milōn Bot", star: true },
-                  { id: "ratios", label: "Health & Ratios" },
-                  { id: "profit", label: "Profitability" },
-                  { id: "cash", label: "13-Week Cash Forecast", star: true },
-                  { id: "budget", label: "Budget" },
-                  { id: "reports", label: "Reports", star: true },
-                  { id: "plan", label: "Action Plan", star: true },
-                  { id: "advisory", label: "Advisory Drafter" },
-                ] as { id: ActiveTab; label: string; star?: boolean }[]
-              ).map((t) => (
-                <button
-                  key={t.id}
-                  className={`tab${activeTab === t.id ? " on" : ""}`}
-                  data-tab={t.id}
-                  onClick={() => setActiveTab(t.id)}
-                >
-                  {t.label}
-                  {t.star && <span className="star">✦</span>}
-                </button>
-              ))}
-            </div>
-
-            {/* Simplified / Complex — Health, Profit, Budget (not Ask, Summary, Cash, Action Plan, Reports, or Advisory) */}
-            <div
-              style={{
-                display:
-                  activeTab === "ask" ||
-                  activeTab === "summary" ||
-                  activeTab === "cash" ||
-                  activeTab === "plan" ||
-                  activeTab === "reports" ||
-                  activeTab === "advisory"
-                    ? "none"
-                    : "flex",
-                justifyContent: "center",
-                margin: "8px 0 20px",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 2,
-                  borderRadius: 999,
-                  background: "rgba(255,255,255,0.05)",
-                  padding: 3,
-                  border: "1px solid var(--line)",
-                }}
-              >
-                {(["simplified", "complex"] as const).map((m) => (
+            <div className="client-workspace">
+              <nav className="deliverable-rail" aria-label="Deliverables">
+                <span className="rail-kicker">Deliverables</span>
+                {(
+                  [
+                    { id: "summary", label: "Summary" },
+                    { id: "ask", label: "Milōn Bot", star: true },
+                    { id: "ratios", label: "Health & Ratios" },
+                    { id: "profit", label: "Profitability" },
+                    { id: "cash", label: "13-Week Cash Forecast", star: true },
+                    { id: "budget", label: "Budget" },
+                    { id: "reports", label: "Reports", star: true },
+                    { id: "plan", label: "Action Plan", star: true },
+                    { id: "advisory", label: "Advisory Drafter" },
+                  ] as { id: ActiveTab; label: string; star?: boolean }[]
+                ).map((t) => (
                   <button
-                    key={m}
+                    key={t.id}
                     type="button"
-                    onClick={() => {
-                      setViewMode(m);
-                      track("view_mode_toggled", {
-                        mode: m,
-                        surface: "accountant_portal",
-                        clientId,
-                        firmId,
-                      });
-                    }}
-                    style={{
-                      borderRadius: 999,
-                      padding: "5px 18px",
-                      fontSize: 11,
-                      fontWeight: 700,
-                      letterSpacing: "0.08em",
-                      textTransform: "uppercase",
-                      transition: "all 0.18s",
-                      border: "none",
-                      cursor: "pointer",
-                      background: viewMode === m ? "#d4a550" : "transparent",
-                      color: viewMode === m ? "#0a0e1a" : "var(--ink-dim)",
-                      boxShadow: viewMode === m ? "0 2px 8px rgba(212,165,80,0.35)" : "none",
-                    }}
+                    className={`tab${activeTab === t.id ? " on" : ""}`}
+                    data-tab={t.id}
+                    aria-current={activeTab === t.id ? "page" : undefined}
+                    onClick={() => setActiveTab(t.id)}
                   >
-                    {m}
+                    {t.label}
+                    {t.star && <span className="star">✦</span>}
                   </button>
                 ))}
-              </div>
-            </div>
+              </nav>
+              <div className="deliverable-main">
+                {/* ===== NEXT STEP — one CTA, above everything else (P0.4) ===== */}
+                <NextStepCard
+                  className="mb-4"
+                  clientId={client.id}
+                  audience="accountant"
+                  surface="accountant_portal"
+                  refreshKey={`${activeTab}|${snapshots.length}|${hasFigures ? 1 : 0}|${client.last_forecast_at ?? ""}|${advisoryBump}`}
+                  onAct={handleNextStepAct}
+                />
+                {/* P0.6 — tracked data asks (system + by hand); accountant can email the owner. */}
+                <DataRequestsPanel
+                  className="mb-4"
+                  clientId={client.id}
+                  audience="accountant"
+                  refreshKey={`${activeTab}|${snapshots.length}|${advisoryBump}`}
+                  onUpload={() => setFirstDataOpen(true)}
+                  onOpenForecast={() => setActiveTab("cash")}
+                  onChanged={() => setAdvisoryBump((n) => n + 1)}
+                />
 
-            {/* ===== SUMMARY TAB ===== */}
-            <div className={`tabpane${activeTab === "summary" ? " on" : ""}`} id="pane-summary">
-              {activeTab === "summary" && (
-                <>
+                {/* ===== CLIENT BRIEFING — status → what matters → this month's workflow ===== */}
+                <ClientBriefing
+                  clientName={client.name}
+                  clientCode={client.client_code}
+                  industryLabel={profileIndustryLabel(briefingProfile, client.business_type ?? "—")}
+                  ring={
+                    <HealthRing
+                      score={healthScoreRounded}
+                      status={overallHealth.displayStatus}
+                      size={74}
+                      strokeWidth={5}
+                    />
+                  }
+                  healthScore={hasFigures ? overallHealth.overall : null}
+                  healthLabel={overallHealth.displayLabel}
+                  healthStatus={hasFigures ? overallHealth.displayStatus : null}
+                  onViewBreakdown={() => revealTab("ratios")}
+                  snapshot={briefingSnapshot}
+                  about={briefingAbout}
+                  profile={briefingProfile}
+                  onEditProfile={() => setProfileOpen(true)}
+                  whatMatters={briefingMatters}
+                  workflow={workflow}
+                  workflowLoading={workflowLoading}
+                  onRefreshWorkflow={() => void requestWorkflow(true)}
+                  openQueries={
+                    notesLoading && clientNotes.length === 0
+                      ? openQueriesCount
+                      : clientNotes.filter((n) => !n.resolved).length
+                  }
+                  onOpenQueries={() => openArchive(openQueriesCount > 0 ? "open" : "resolved")}
+                  reportsIssued={reportsIssued}
+                  movementReportAvailable={Boolean(priorSnapshot)}
+                  onOpenMovementReport={() => {
+                    setStudioDeepLink({ report: "movement", action: "preview" });
+                    revealTab("reports");
+                  }}
+                  onAddPastPeriod={() => setPastPeriodOpen(true)}
+                  onOpenReports={() => revealTab("reports")}
+                  hasFigures={hasFigures}
+                  onUpload={() => setUploadOpen(true)}
+                  onConnectQuickBooks={() => setShowQboDialog(true)}
+                  onConnectXero={() => setShowXeroDialog(true)}
+                />
+
+                {/* ===== FIRST FIGURES — shown on every tab until the client has numbers ===== */}
+                {!hasFigures && (
+                  <div className="card hero-card first-figures" id="first-figures-card">
+                    <div className="ff-copy">
+                      <p className="kicker">Step 1 · Bring in this client's figures</p>
+                      <h3>Nothing is scored yet</h3>
+                      <p>
+                        The health orb, profit waterfall, cash forecast and Milōn Bot all wait on
+                        the first numbers.{" "}
+                        {isUsCopy(clientMarket)
+                          ? "Fastest: a P&L and balance sheet as Excel, CSV or PDF. Bank statements also work."
+                          : "Fastest: about 3 months of bank statements for every account. A P&L and balance sheet also work."}
+                      </p>
+                    </div>
+                    <div className="ff-actions">
+                      {isUsCopy(clientMarket) ? (
+                        <>
+                          <button className="btn gold mini" onClick={() => setUploadOpen(true)}>
+                            Upload P&amp;L / balance sheet
+                          </button>
+                          <button
+                            className="btn ghost mini"
+                            onClick={() => setShowBankDrafter(true)}
+                          >
+                            Draft from bank statements
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            className="btn gold mini"
+                            onClick={() => setShowBankDrafter(true)}
+                          >
+                            Draft from bank statements
+                          </button>
+                          <button className="btn ghost mini" onClick={() => setUploadOpen(true)}>
+                            Upload P&amp;L / balance sheet
+                          </button>
+                        </>
+                      )}
+                      <button className="btn ghost mini" onClick={jumpToFinancials}>
+                        Type figures by hand
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {hasFigures && needsPastPeriodPrompt({ hasLiveFigures: hasFigures, snapshots }) ? (
+                  <p className="text-[12px] leading-relaxed text-[color:var(--ink-dim)]">
+                    Trend lines and movement need another period.{" "}
+                    <AddPastPeriodLink onOpen={() => setPastPeriodOpen(true)} />
+                  </p>
+                ) : null}
+
+                {/* ===== DELIVERABLES ACTION BAR — nothing to export before figures ===== */}
+                {hasFigures && (
+                  <div className="card hero-card action-bar">
+                    <span className="lbl">
+                      <b>Deliverables</b> — export, send, or draft for this client
+                    </span>
+                    <button className="btn gold mini" onClick={handleGenerateReport}>
+                      <svg viewBox="0 0 24 24">
+                        <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
+                        <path d="M14 3v6h6" />
+                      </svg>
+                      Generate report
+                    </button>
+                    <button className="btn ghost mini" onClick={handleExportPDF}>
+                      <svg viewBox="0 0 24 24">
+                        <path d="M12 3v12M7 10l5 5 5-5M5 21h14" />
+                      </svg>
+                      Export PDF
+                    </button>
+                    <button className="btn ghost mini" onClick={handleEmailDraft}>
+                      <svg viewBox="0 0 24 24">
+                        <rect x="3" y="5" width="18" height="14" rx="2" />
+                        <path d="M3 7l9 6 9-6" />
+                      </svg>
+                      Email draft
+                    </button>
+                    <button className="btn ghost mini" onClick={handleWhatsApp}>
+                      <svg viewBox="0 0 24 24">
+                        <path d="M21 12a9 9 0 0 1-13.4 7.8L3 21l1.3-4.4A9 9 0 1 1 21 12z" />
+                      </svg>
+                      WhatsApp
+                    </button>
+                  </div>
+                )}
+
+                {/* Simplified / Complex — Health, Profit, Budget (not Ask, Summary, Cash, Action Plan, Reports, or Advisory) */}
+                <div
+                  style={{
+                    display:
+                      activeTab === "ask" ||
+                      activeTab === "summary" ||
+                      activeTab === "cash" ||
+                      activeTab === "plan" ||
+                      activeTab === "reports" ||
+                      activeTab === "advisory"
+                        ? "none"
+                        : "flex",
+                    justifyContent: "flex-start",
+                    margin: "0 0 16px",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 2,
+                      borderRadius: 999,
+                      background: "rgba(255,255,255,0.05)",
+                      padding: 3,
+                      border: "1px solid var(--line)",
+                    }}
+                  >
+                    {(["simplified", "complex"] as const).map((m) => (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => {
+                          setViewMode(m);
+                          track("view_mode_toggled", {
+                            mode: m,
+                            surface: "accountant_portal",
+                            clientId,
+                            firmId,
+                          });
+                        }}
+                        style={{
+                          borderRadius: 999,
+                          padding: "5px 18px",
+                          fontSize: 11,
+                          fontWeight: 700,
+                          letterSpacing: "0.08em",
+                          textTransform: "uppercase",
+                          transition: "all 0.18s",
+                          border: "none",
+                          cursor: "pointer",
+                          background: viewMode === m ? "#d4a550" : "transparent",
+                          color: viewMode === m ? "#0a0e1a" : "var(--ink-dim)",
+                          boxShadow: viewMode === m ? "0 2px 8px rgba(212,165,80,0.35)" : "none",
+                        }}
+                      >
+                        {m}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* ===== SUMMARY TAB ===== */}
+                <div className={`tabpane${activeTab === "summary" ? " on" : ""}`} id="pane-summary">
+                  {activeTab === "summary" && (
+                    <>
+                      <DeliverableInputConfig
+                        className="mb-5"
+                        clientId={clientId}
+                        deliverableId="summary"
+                        context={deliverableInputContext}
+                      />
+                      <ClientBrainSummary
+                        clientId={client.id}
+                        clientName={client.name}
+                        operatingProfile={client.operating_profile}
+                        market={client.market}
+                        businessType={client.business_type}
+                        onOpenUpload={() => setUploadOpen(true)}
+                        onOpenTab={(tab) => setActiveTab(tab)}
+                        onAnswerProfile={() => setProfileOpen(true)}
+                      />
+                    </>
+                  )}
+                </div>
+
+                {/* ===== MILŌN BOT TAB ===== */}
+                <div className={`tabpane${activeTab === "ask" ? " on" : ""}`} id="pane-ask">
+                  <SectionCard className="card hero-card ask-ai-studio-shell">
+                    <div id="ask-ai-accountant" />
+                  </SectionCard>
+                </div>
+
+                {/* ===== RATIOS TAB ===== */}
+                <div className={`tabpane${activeTab === "ratios" ? " on" : ""}`} id="pane-ratios">
+                  <DeliverableTabHead
+                    eyebrow="Business Health & Ratios"
+                    title="Health score"
+                    lede="One score from the ratios underneath. Sign off when the picture is right — the stamp carries into the board pack."
+                    signoff={
+                      <ReviewSignoffButton
+                        compact
+                        clientId={clientId}
+                        clientName={client?.name}
+                        scope="financials"
+                        signoff={financialsSignoff}
+                        isStale={computeIsStale(
+                          financialsSignoff,
+                          client?.financials_updated_at ?? null,
+                        )}
+                        onChange={patchSignoff("financials")}
+                      />
+                    }
+                  />
                   <DeliverableInputConfig
                     className="mb-5"
                     clientId={clientId}
-                    deliverableId="summary"
+                    deliverableId="ratios"
+                    context={deliverableInputContext}
+                    onEngineBoundChange={(patch) => {
+                      if (typeof patch.periodMonths === "number") {
+                        handleFinancialChange(PERIOD_MONTHS_KEY, String(patch.periodMonths));
+                      }
+                    }}
+                  />
+                  {/* Simplified view — health orb + pillar cards */}
+                  {viewMode === "simplified" && (
+                    <div style={{ marginBottom: 32 }}>
+                      {/* Orb — always-dark container so sphere colours read correctly */}
+                      <div
+                        style={{
+                          background: "#0a0e1a",
+                          borderRadius: 20,
+                          padding: "16px 8px",
+                          marginBottom: 20,
+                        }}
+                      >
+                        <SphereHero
+                          onDark
+                          overallHealth={isFinite(avgHealth) ? avgHealth : NaN}
+                          displayStatus={overallHealth.displayStatus}
+                          pillars={spherePillars}
+                          queryCounts={ratioQueryCounts}
+                          onDriverClick={(key) => openDrawerFromUiKey(key)}
+                          caption={computeOverviewCaption({
+                            hasRealFinancials: hasFigures,
+                            avgHealth,
+                            cashHealth: pillarHealths.cash ?? NaN,
+                          })}
+                          topPriority={(() => {
+                            const worst = Object.entries(pillarHealths)
+                              .filter(([, h]) => isFinite(h))
+                              .sort(([, a], [, b]) => a - b)[0];
+                            if (!worst)
+                              return {
+                                title: "Upload financial data",
+                                description:
+                                  "Add figures to see a health score and your highest-impact first move.",
+                              };
+                            const labels: Record<string, string> = {
+                              profit: "Profitability",
+                              assets: "Asset Efficiency",
+                              financing: "Financing",
+                              cash: "Cash & Working Capital",
+                            };
+                            return {
+                              title: `Improve ${labels[worst[0]] ?? worst[0]}`,
+                              description: `This pillar scores ${Math.round(worst[1])}% — your highest-impact area right now.`,
+                            };
+                          })()}
+                        />
+                      </div>
+                      {/* Pillar summary cards */}
+                      <div style={{ background: "#0a0e1a", borderRadius: 20, padding: 16 }}>
+                        <SimplifiedRatios
+                          sections={simplifiedSections}
+                          onAddPastPeriod={() => setPastPeriodOpen(true)}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Accounting connections — visible on Health & Ratios without opening Financials */}
+                  <div
+                    id="accounting-connect"
+                    style={{ marginBottom: 16, display: "grid", gap: 10 }}
+                  >
+                    <QboConnectCard clientId={clientId} onSyncComplete={onQboSyncComplete} />
+                    <XeroConnectCard
+                      clientId={clientId}
+                      returnPath={`/clients/${clientId}`}
+                      onSyncComplete={onXeroSyncComplete}
+                    />
+                  </div>
+
+                  {/* Collapsible Financials */}
+                  <div className={`card collapse${finOpen ? " open" : ""}`} id="finCollapse">
+                    <div
+                      className="c-head"
+                      onClick={() => setFinOpen((v) => !v)}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => e.key === "Enter" && setFinOpen((v) => !v)}
+                    >
+                      <h3>
+                        Financials{" "}
+                        {autosaveStatus === "saving" && (
+                          <span className="autosave" style={{ marginLeft: 10 }}>
+                            Saving…
+                          </span>
+                        )}
+                        {autosaveStatus === "saved" && (
+                          <span className="autosave" style={{ marginLeft: 10 }}>
+                            Auto-saved
+                          </span>
+                        )}
+                        {autosaveStatus === "idle" && (
+                          <span className="autosave" style={{ marginLeft: 10 }}>
+                            Auto-saved
+                          </span>
+                        )}
+                      </h3>
+                      <span className="hint">
+                        Edit figures or upload a statement — every ratio recalculates live
+                      </span>
+                      <span className="chev">
+                        <svg
+                          width="14"
+                          height="14"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                        >
+                          <path d="M6 9l6 6 6-6" />
+                        </svg>
+                      </span>
+                    </div>
+                    <div className="c-body">
+                      <div className="c-inner">
+                        <div
+                          style={{
+                            display: "flex",
+                            gap: 10,
+                            alignItems: "center",
+                            justifyContent: "flex-end",
+                            flexWrap: "wrap",
+                            marginBottom: 16,
+                          }}
+                        >
+                          <label
+                            className="fin-period"
+                            title="P&L and cash-flow figures are scaled to a 12-month equivalent for ratios, the health score and the budget seed. Balance-sheet figures are never scaled."
+                          >
+                            <span>Figures cover</span>
+                            <select
+                              value={String(periodMonths)}
+                              onChange={(e) =>
+                                handleFinancialChange(PERIOD_MONTHS_KEY, e.target.value)
+                              }
+                            >
+                              {PERIOD_MONTH_OPTIONS.map((o) => (
+                                <option key={o.months} value={String(o.months)}>
+                                  {o.label}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <span style={{ flex: 1 }} />
+                          <button className="btn ghost mini" onClick={handleSaveSnapshot}>
+                            Save snapshot
+                          </button>
+                          <button
+                            className="btn gold mini"
+                            onClick={() => setShowBankDrafter(true)}
+                          >
+                            <svg viewBox="0 0 24 24">
+                              <path d="M12 15V3M7 8l5-5 5 5M5 21h14" />
+                            </svg>
+                            Draft from banks
+                          </button>
+                          <button className="btn ghost mini" onClick={() => setUploadOpen(true)}>
+                            <svg viewBox="0 0 24 24">
+                              <path d="M12 15V3M7 8l5-5 5 5M5 21h14" />
+                            </svg>
+                            Upload statement
+                          </button>
+                        </div>
+                        <div className="fin-grid">
+                          {FIELD_LABELS.map(({ key, label }) => (
+                            <div key={key}>
+                              <label>{label}</label>
+                              <input
+                                value={financials[key] ?? ""}
+                                onChange={(e) => handleFinancialChange(key, e.target.value)}
+                                onBlur={(e) => handleFinancialChange(key, e.target.value)}
+                                placeholder="—"
+                                type="number"
+                              />
+                            </div>
+                          ))}
+                        </div>
+                        <DebtScheduleEditor
+                          value={debtSchedule}
+                          onChange={handleDebtScheduleChange}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Ratio rows — complex mode only */}
+                  {viewMode === "complex" && (
+                    <div style={{ marginTop: 26 }}>
+                      <span className="eyebrow">Ratios — accountant summary</span>
+                      <p className="sub">
+                        All {Object.keys(ratios).length} computed ratios from the period figures.
+                        Tap a row for the formula, the actuals that feed it, and the repair
+                        playbook. Current ratio and debt-to-equity need current assets / liabilities
+                        — those fields are not collected yet.
+                      </p>
+                      {(Object.keys(PILLAR_RATIO_NAMES) as HealthPillarId[]).map((pillarId) => {
+                        const names = PILLAR_RATIO_NAMES[pillarId];
+                        return (
+                          <div key={pillarId} className="ratio-group">
+                            <span className="eyebrow">{PILLAR_LABELS[pillarId]}</span>
+                            <div className="ratio-rows">
+                              {names.map((name) => {
+                                const val = (ratios as Record<string, number>)[name];
+                                const score = Math.round(
+                                  ratioHealthScore(name, val as number, clientMarket),
+                                );
+                                const tier = scoreTier(score);
+                                const band = tierToBand(tier);
+                                const color = bandColor(band);
+                                const formattedVal = formatRatioValue(
+                                  name,
+                                  val as number,
+                                  clientMarket,
+                                );
+                                const actual = ratioActualLine(name, ratioInputs, (n) =>
+                                  formatMoneyCompact(n, clientMarket),
+                                );
+                                const qCount = openQueryCountForRatio(ratioQueryCounts, name);
+                                return (
+                                  <button
+                                    key={name}
+                                    className="ratio-row"
+                                    onClick={() => openDrawer(name, score)}
+                                  >
+                                    <span>
+                                      <span className="rn">
+                                        {name}
+                                        {qCount > 0 ? (
+                                          <span className="ml-2 inline-flex rounded-full bg-[#d4a550] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-[#0a1628]">
+                                            {qCount === 1 ? "1 query" : `${qCount} queries`}
+                                          </span>
+                                        ) : null}
+                                      </span>
+                                      <span className="ra">{actual.formula}</span>
+                                      <span className="ra-calc">
+                                        {actual.calculation ??
+                                          (actual.missing.length
+                                            ? `Need: ${actual.missing.join(", ")}`
+                                            : "—")}
+                                      </span>
+                                    </span>
+                                    <span className="rv" style={{ color }}>
+                                      {formattedVal}
+                                    </span>
+                                    <span className="bar">
+                                      <i
+                                        style={{
+                                          width: `${Number.isFinite(score) ? score : 0}%`,
+                                          background: color,
+                                        }}
+                                      />
+                                    </span>
+                                    <span className={`chip ${band}`}>
+                                      <i />
+                                      {Number.isFinite(val as number) ? bandLabel(band) : "No data"}
+                                    </span>
+                                    <span className="arr">→</span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* ===== PROFIT TAB ===== */}
+                <div className={`tabpane${activeTab === "profit" ? " on" : ""}`} id="pane-profit">
+                  <DeliverableTabHead
+                    eyebrow="Profitability"
+                    title="How revenue becomes profit"
+                    lede="Review the waterfall, then sign it off so client management can trust the picture."
+                    signoff={
+                      <ReviewSignoffButton
+                        compact
+                        clientId={clientId}
+                        clientName={client?.name}
+                        scope="profitability"
+                        signoff={profitabilitySignoff}
+                        isStale={computeIsStale(
+                          profitabilitySignoff,
+                          client?.financials_updated_at ?? null,
+                        )}
+                        onChange={patchSignoff("profitability")}
+                      />
+                    }
+                  />
+                  <DeliverableInputConfig
+                    className="mb-5"
+                    clientId={clientId}
+                    deliverableId="profit"
                     context={deliverableInputContext}
                   />
-                  <ClientBrainSummary
-                    clientId={client.id}
-                    clientName={client.name}
-                    operatingProfile={client.operating_profile}
-                    market={client.market}
-                    businessType={client.business_type}
-                    onOpenUpload={() => setUploadOpen(true)}
-                    onOpenTab={(tab) => setActiveTab(tab)}
-                    onAnswerProfile={() => setProfileOpen(true)}
-                  />
-                </>
-              )}
-            </div>
-
-            {/* ===== MILŌN BOT TAB ===== */}
-            <div className={`tabpane${activeTab === "ask" ? " on" : ""}`} id="pane-ask">
-              <SectionCard className="card hero-card ask-ai-studio-shell">
-                <div id="ask-ai-accountant" />
-              </SectionCard>
-            </div>
-
-            {/* ===== RATIOS TAB ===== */}
-            <div className={`tabpane${activeTab === "ratios" ? " on" : ""}`} id="pane-ratios">
-              <DeliverableTabHead
-                eyebrow="Business Health & Ratios"
-                title="Health score"
-                lede="One score from the ratios underneath. Sign off when the picture is right — the stamp carries into the board pack."
-                signoff={
-                  <ReviewSignoffButton
-                    compact
-                    clientId={clientId}
-                    clientName={client?.name}
-                    scope="financials"
-                    signoff={financialsSignoff}
-                    isStale={computeIsStale(
-                      financialsSignoff,
-                      client?.financials_updated_at ?? null,
-                    )}
-                    onChange={patchSignoff("financials")}
-                  />
-                }
-              />
-              <DeliverableInputConfig
-                className="mb-5"
-                clientId={clientId}
-                deliverableId="ratios"
-                context={deliverableInputContext}
-                onEngineBoundChange={(patch) => {
-                  if (typeof patch.periodMonths === "number") {
-                    handleFinancialChange(PERIOD_MONTHS_KEY, String(patch.periodMonths));
-                  }
-                }}
-              />
-              {/* Simplified view — health orb + pillar cards */}
-              {viewMode === "simplified" && (
-                <div style={{ marginBottom: 32 }}>
-                  {/* Orb — always-dark container so sphere colours read correctly */}
-                  <div
-                    style={{
-                      background: "#0a0e1a",
-                      borderRadius: 20,
-                      padding: "16px 8px",
-                      marginBottom: 20,
-                    }}
-                  >
-                    <SphereHero
-                      onDark
-                      overallHealth={isFinite(avgHealth) ? avgHealth : NaN}
-                      displayStatus={overallHealth.displayStatus}
-                      pillars={spherePillars}
-                      queryCounts={ratioQueryCounts}
-                      onDriverClick={(key) => openDrawerFromUiKey(key)}
-                      caption={computeOverviewCaption({
-                        hasRealFinancials: hasFigures,
-                        avgHealth,
-                        cashHealth: pillarHealths.cash ?? NaN,
-                      })}
-                      topPriority={(() => {
-                        const worst = Object.entries(pillarHealths)
-                          .filter(([, h]) => isFinite(h))
-                          .sort(([, a], [, b]) => a - b)[0];
-                        if (!worst)
-                          return {
-                            title: "Upload financial data",
-                            description:
-                              "Add figures to see a health score and your highest-impact first move.",
-                          };
-                        const labels: Record<string, string> = {
-                          profit: "Profitability",
-                          assets: "Asset Efficiency",
-                          financing: "Financing",
-                          cash: "Cash & Working Capital",
-                        };
-                        return {
-                          title: `Improve ${labels[worst[0]] ?? worst[0]}`,
-                          description: `This pillar scores ${Math.round(worst[1])}% — your highest-impact area right now.`,
-                        };
-                      })()}
-                    />
-                  </div>
-                  {/* Pillar summary cards */}
-                  <div style={{ background: "#0a0e1a", borderRadius: 20, padding: 16 }}>
-                    <SimplifiedRatios
-                      sections={simplifiedSections}
-                      onAddPastPeriod={() => setPastPeriodOpen(true)}
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* Collapsible Financials */}
-              <div className={`card collapse${finOpen ? " open" : ""}`} id="finCollapse">
-                <div
-                  className="c-head"
-                  onClick={() => setFinOpen((v) => !v)}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => e.key === "Enter" && setFinOpen((v) => !v)}
-                >
-                  <h3>
-                    Financials{" "}
-                    {autosaveStatus === "saving" && (
-                      <span className="autosave" style={{ marginLeft: 10 }}>
-                        Saving…
-                      </span>
-                    )}
-                    {autosaveStatus === "saved" && (
-                      <span className="autosave" style={{ marginLeft: 10 }}>
-                        Auto-saved
-                      </span>
-                    )}
-                    {autosaveStatus === "idle" && (
-                      <span className="autosave" style={{ marginLeft: 10 }}>
-                        Auto-saved
-                      </span>
-                    )}
-                  </h3>
-                  <span className="hint">
-                    Edit figures or upload a statement — every ratio recalculates live
-                  </span>
-                  <span className="chev">
-                    <svg
-                      width="14"
-                      height="14"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                    >
-                      <path d="M6 9l6 6 6-6" />
-                    </svg>
-                  </span>
-                </div>
-                <div className="c-body">
-                  <div className="c-inner">
-                    <div
-                      style={{
-                        display: "flex",
-                        gap: 10,
-                        alignItems: "center",
-                        justifyContent: "flex-end",
-                        flexWrap: "wrap",
-                        marginBottom: 16,
-                      }}
-                    >
-                      <label
-                        className="fin-period"
-                        title="P&L and cash-flow figures are scaled to a 12-month equivalent for ratios, the health score and the budget seed. Balance-sheet figures are never scaled."
-                      >
-                        <span>Figures cover</span>
-                        <select
-                          value={String(periodMonths)}
-                          onChange={(e) => handleFinancialChange(PERIOD_MONTHS_KEY, e.target.value)}
-                        >
-                          {PERIOD_MONTH_OPTIONS.map((o) => (
-                            <option key={o.months} value={String(o.months)}>
-                              {o.label}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <span style={{ flex: 1 }} />
-                      <button className="btn ghost mini" onClick={handleSaveSnapshot}>
-                        Save snapshot
-                      </button>
-                      <button className="btn gold mini" onClick={() => setShowBankDrafter(true)}>
-                        <svg viewBox="0 0 24 24">
-                          <path d="M12 15V3M7 8l5-5 5 5M5 21h14" />
-                        </svg>
-                        Draft from banks
-                      </button>
-                      <button className="btn ghost mini" onClick={() => setUploadOpen(true)}>
-                        <svg viewBox="0 0 24 24">
-                          <path d="M12 15V3M7 8l5-5 5 5M5 21h14" />
-                        </svg>
-                        Upload statement
-                      </button>
-                    </div>
-                    <div style={{ marginBottom: 16, display: "grid", gap: 10 }}>
-                      <QboConnectCard
-                        clientId={clientId}
-                        onSyncComplete={(inputs) => {
-                          const next = Object.fromEntries(
-                            Object.entries(inputs).map(([k, val]) => [k, String(val)]),
-                          );
-                          const nextScalars = { ...financialsRef.current, ...next };
-                          financialsRef.current = nextScalars;
-                          setFinancials(nextScalars);
-                          const updated = mergeCurrentBlob(nextScalars);
-                          const updatedAt = new Date().toISOString();
-                          void supabase
-                            .from("clients")
-                            .update({
-                              financials: updated as never,
-                              financials_updated_at: updatedAt,
-                            })
-                            .eq("id", clientId)
-                            .then(({ error }) => {
-                              if (error) {
-                                toast.error(`QBO sync save failed: ${error.message}`);
-                                return;
-                              }
-                              setClient((c) =>
-                                c ? { ...c, financials_updated_at: updatedAt } : c,
-                              );
-                              void upsertCurrentPeriodSnapshot({
-                                clientId,
-                                financials: updated as Record<string, unknown>,
-                                source: "qbo",
-                              });
-                              toast.success("Financials updated from QuickBooks");
-                            });
-                        }}
-                      />
-                      <XeroConnectCard
-                        clientId={clientId}
-                        returnPath={`/clients/${clientId}`}
-                        onSyncComplete={(inputs) => {
-                          const next = Object.fromEntries(
-                            Object.entries(inputs).map(([k, val]) => [k, String(val)]),
-                          );
-                          const nextScalars = { ...financialsRef.current, ...next };
-                          financialsRef.current = nextScalars;
-                          setFinancials(nextScalars);
-                          setClient((c) =>
-                            c
-                              ? { ...c, financials_updated_at: new Date().toISOString() }
-                              : c,
-                          );
-                        }}
-                      />
-                    </div>
-                    <div className="fin-grid">
-                      {FIELD_LABELS.map(({ key, label }) => (
-                        <div key={key}>
-                          <label>{label}</label>
-                          <input
-                            value={financials[key] ?? ""}
-                            onChange={(e) => handleFinancialChange(key, e.target.value)}
-                            onBlur={(e) => handleFinancialChange(key, e.target.value)}
-                            placeholder="—"
-                            type="number"
-                          />
-                        </div>
-                      ))}
-                    </div>
-                    <DebtScheduleEditor value={debtSchedule} onChange={handleDebtScheduleChange} />
-                  </div>
-                </div>
-              </div>
-
-              {/* Ratio rows — complex mode only */}
-              {viewMode === "complex" && (
-                <div style={{ marginTop: 26 }}>
-                  <span className="eyebrow">Ratios — accountant summary</span>
-                  <p className="sub">
-                    All {Object.keys(ratios).length} computed ratios from the period figures. Tap a
-                    row for the formula, the actuals that feed it, and the repair playbook. Current
-                    ratio and debt-to-equity need current assets / liabilities — those fields are
-                    not collected yet.
+                  <span className="eyebrow">Product lines</span>
+                  <p className="sub" style={{ marginBottom: 16 }}>
+                    Answer these questions to build revenue and net profit per product line — so you
+                    can see which lines actually make the money.
                   </p>
-                  {(Object.keys(PILLAR_RATIO_NAMES) as HealthPillarId[]).map((pillarId) => {
-                    const names = PILLAR_RATIO_NAMES[pillarId];
-                    return (
-                      <div key={pillarId} className="ratio-group">
-                        <span className="eyebrow">{PILLAR_LABELS[pillarId]}</span>
-                        <div className="ratio-rows">
-                          {names.map((name) => {
-                            const val = (ratios as Record<string, number>)[name];
-                            const score = Math.round(
-                              ratioHealthScore(name, val as number, clientMarket),
-                            );
-                            const tier = scoreTier(score);
-                            const band = tierToBand(tier);
-                            const color = bandColor(band);
-                            const formattedVal = formatRatioValue(
-                              name,
-                              val as number,
-                              clientMarket,
-                            );
-                            const actual = ratioActualLine(name, ratioInputs, (n) =>
-                              formatMoneyCompact(n, clientMarket),
-                            );
-                            const qCount = openQueryCountForRatio(ratioQueryCounts, name);
-                            return (
-                              <button
-                                key={name}
-                                className="ratio-row"
-                                onClick={() => openDrawer(name, score)}
-                              >
-                                <span>
-                                  <span className="rn">
-                                    {name}
-                                    {qCount > 0 ? (
-                                      <span className="ml-2 inline-flex rounded-full bg-[#d4a550] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-[#0a1628]">
-                                        {qCount === 1 ? "1 query" : `${qCount} queries`}
-                                      </span>
-                                    ) : null}
-                                  </span>
-                                  <span className="ra">{actual.formula}</span>
-                                  <span className="ra-calc">
-                                    {actual.calculation ??
-                                      (actual.missing.length
-                                        ? `Need: ${actual.missing.join(", ")}`
-                                        : "—")}
-                                  </span>
-                                </span>
-                                <span className="rv" style={{ color }}>
-                                  {formattedVal}
-                                </span>
-                                <span className="bar">
-                                  <i
-                                    style={{
-                                      width: `${Number.isFinite(score) ? score : 0}%`,
-                                      background: color,
-                                    }}
-                                  />
-                                </span>
-                                <span className={`chip ${band}`}>
-                                  <i />
-                                  {Number.isFinite(val as number) ? bandLabel(band) : "No data"}
-                                </span>
-                                <span className="arr">→</span>
-                              </button>
-                            );
-                          })}
+                  <div style={{ marginBottom: 28 }}>
+                    <ProductMixPanel
+                      totalRevenue={
+                        resolveWaterfallFigures(weeklyInputs, waterfallFallback).revenue
+                      }
+                      incentive="Answer these to build revenue and net profit per product line."
+                    />
+                  </div>
+
+                  <span className="eyebrow">Profitability Waterfall</span>
+                  <p className="sub" style={{ marginBottom: 24 }}>
+                    How revenue converts to profit — step by step. Period figures below (or an
+                    upload) feed this view.
+                  </p>
+
+                  {/* Wrap in a Tailwind dark context so the component's dark: variants fire */}
+                  <div id="wizard-profit-walk">
+                    <ProfitabilityWaterfall
+                      fallback={waterfallFallback}
+                      clientName={client?.name}
+                      clientId={client?.id}
+                      reviewSignoff={stampFromSignoff(
+                        profitabilitySignoff,
+                        computeIsStale(profitabilitySignoff, client?.financials_updated_at ?? null),
+                      )}
+                    />
+                  </div>
+
+                  <div
+                    className={`card collapse${profitFinOpen ? " open" : ""}`}
+                    id="profitFinCollapse"
+                    style={{ marginTop: 20, marginBottom: 20 }}
+                  >
+                    <div
+                      className="c-head"
+                      onClick={() => setProfitFinOpen((v) => !v)}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => e.key === "Enter" && setProfitFinOpen((v) => !v)}
+                    >
+                      <h3>
+                        Profitability inputs{" "}
+                        {autosaveStatus === "saving" && (
+                          <span className="autosave" style={{ marginLeft: 10 }}>
+                            Saving…
+                          </span>
+                        )}
+                        {(autosaveStatus === "saved" || autosaveStatus === "idle") && (
+                          <span className="autosave" style={{ marginLeft: 10 }}>
+                            Auto-saved
+                          </span>
+                        )}
+                      </h3>
+                      <span className="hint">
+                        Period P&amp;L that feeds the waterfall — same figures as Health &amp;
+                        Ratios
+                      </span>
+                      <span className="chev">
+                        <svg
+                          width="14"
+                          height="14"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                        >
+                          <path d="M6 9l6 6 6-6" />
+                        </svg>
+                      </span>
+                    </div>
+                    <div className="c-body">
+                      <div className="c-inner">
+                        <div
+                          style={{
+                            display: "flex",
+                            flexWrap: "wrap",
+                            gap: 10,
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            marginBottom: 16,
+                          }}
+                        >
+                          <p
+                            style={{
+                              margin: 0,
+                              fontSize: 12,
+                              color: "var(--ink-dim)",
+                              maxWidth: 420,
+                            }}
+                          >
+                            Edit the period figures here. The waterfall updates from this P&amp;L —
+                            weekly figures that client management enters stay on their board.
+                          </p>
+                          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                            <button
+                              type="button"
+                              className="btn ghost mini"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setActiveTab("ratios");
+                                setFinOpen(true);
+                              }}
+                            >
+                              Full financials
+                            </button>
+                            <button
+                              type="button"
+                              className="btn gold mini"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setUploadOpen(true);
+                              }}
+                            >
+                              <svg viewBox="0 0 24 24">
+                                <path d="M12 15V3M7 8l5-5 5 5M5 21h14" />
+                              </svg>
+                              Upload statement
+                            </button>
+                          </div>
+                        </div>
+                        <div className="fin-grid">
+                          {PROFIT_FIELD_LABELS.map(({ key, label }) => (
+                            <div key={key}>
+                              <label>{label}</label>
+                              <input
+                                value={financials[key] ?? ""}
+                                onChange={(e) => handleFinancialChange(key, e.target.value)}
+                                onBlur={(e) => handleFinancialChange(key, e.target.value)}
+                                placeholder="—"
+                                type="number"
+                              />
+                            </div>
+                          ))}
                         </div>
                       </div>
-                    );
-                  })}
+                    </div>
+                  </div>
                 </div>
-              )}
-            </div>
 
-            {/* ===== PROFIT TAB ===== */}
-            <div className={`tabpane${activeTab === "profit" ? " on" : ""}`} id="pane-profit">
-              <DeliverableTabHead
-                eyebrow="Profitability"
-                title="How revenue becomes profit"
-                lede="Review the waterfall, then sign it off so client management can trust the picture."
-                signoff={
-                  <ReviewSignoffButton
-                    compact
-                    clientId={clientId}
-                    clientName={client?.name}
-                    scope="profitability"
-                    signoff={profitabilitySignoff}
-                    isStale={computeIsStale(
-                      profitabilitySignoff,
-                      client?.financials_updated_at ?? null,
-                    )}
-                    onChange={patchSignoff("profitability")}
-                  />
-                }
-              />
-              <DeliverableInputConfig
-                className="mb-5"
-                clientId={clientId}
-                deliverableId="profit"
-                context={deliverableInputContext}
-              />
-              <span className="eyebrow">Product lines</span>
-              <p className="sub" style={{ marginBottom: 16 }}>
-                Answer these questions to build revenue and net profit per product line — so you can
-                see which lines actually make the money.
-              </p>
-              <div style={{ marginBottom: 28 }}>
-                <ProductMixPanel
-                  totalRevenue={resolveWaterfallFigures(weeklyInputs, waterfallFallback).revenue}
-                  incentive="Answer these to build revenue and net profit per product line."
-                />
-              </div>
-
-              <span className="eyebrow">Profitability Waterfall</span>
-              <p className="sub" style={{ marginBottom: 24 }}>
-                How revenue converts to profit — step by step. Period figures below (or an upload)
-                feed this view.
-              </p>
-
-              {/* Wrap in a Tailwind dark context so the component's dark: variants fire */}
-              <div id="wizard-profit-walk">
-                <ProfitabilityWaterfall
-                  fallback={waterfallFallback}
-                  clientName={client?.name}
-                  clientId={client?.id}
-                  reviewSignoff={stampFromSignoff(
-                    profitabilitySignoff,
-                    computeIsStale(profitabilitySignoff, client?.financials_updated_at ?? null),
-                  )}
-                />
-              </div>
-
-              <div
-                className={`card collapse${profitFinOpen ? " open" : ""}`}
-                id="profitFinCollapse"
-                style={{ marginTop: 20, marginBottom: 20 }}
-              >
-                <div
-                  className="c-head"
-                  onClick={() => setProfitFinOpen((v) => !v)}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => e.key === "Enter" && setProfitFinOpen((v) => !v)}
-                >
-                  <h3>
-                    Profitability inputs{" "}
-                    {autosaveStatus === "saving" && (
-                      <span className="autosave" style={{ marginLeft: 10 }}>
-                        Saving…
-                      </span>
-                    )}
-                    {(autosaveStatus === "saved" || autosaveStatus === "idle") && (
-                      <span className="autosave" style={{ marginLeft: 10 }}>
-                        Auto-saved
-                      </span>
-                    )}
-                  </h3>
-                  <span className="hint">
-                    Period P&amp;L that feeds the waterfall — same figures as Health &amp; Ratios
-                  </span>
-                  <span className="chev">
-                    <svg
-                      width="14"
-                      height="14"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                    >
-                      <path d="M6 9l6 6 6-6" />
-                    </svg>
-                  </span>
-                </div>
-                <div className="c-body">
-                  <div className="c-inner">
-                    <div
-                      style={{
-                        display: "flex",
-                        flexWrap: "wrap",
-                        gap: 10,
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        marginBottom: 16,
-                      }}
-                    >
-                      <p
-                        style={{ margin: 0, fontSize: 12, color: "var(--ink-dim)", maxWidth: 420 }}
+                {/* ===== CASH TAB ===== */}
+                <div className={`tabpane${activeTab === "cash" ? " on" : ""}`} id="pane-cash">
+                  <div className="card cf-wrap" id="wizard-cash-panel">
+                    <div className="cf-head">
+                      <div>
+                        <span className="eyebrow">Signature view</span>
+                        <div className="h-sec">13-week cash forecast</div>
+                      </div>
+                      <div
+                        className="deliverable-tab-head__sign"
+                        style={{
+                          display: "flex",
+                          gap: 10,
+                          flexWrap: "wrap",
+                          justifyContent: "flex-end",
+                        }}
                       >
-                        Edit the period figures here. The waterfall updates from this P&amp;L —
-                        weekly figures that client management enters stay on their board.
-                      </p>
-                      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                        <ReviewSignoffButton
+                          compact
+                          clientId={clientId}
+                          clientName={client?.name}
+                          scope="cash_forecast"
+                          signoff={cashForecastSignoff}
+                          isStale={computeIsStale(
+                            cashForecastSignoff,
+                            client?.last_forecast_at ?? null,
+                          )}
+                          onChange={patchSignoff("cash_forecast")}
+                        />
                         <button
                           type="button"
                           className="btn ghost mini"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setActiveTab("ratios");
-                            setFinOpen(true);
-                          }}
+                          onClick={() => setCashBankUploadToken((n) => n + 1)}
                         >
-                          Full financials
-                        </button>
-                        <button
-                          type="button"
-                          className="btn gold mini"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setUploadOpen(true);
-                          }}
-                        >
-                          <svg viewBox="0 0 24 24">
-                            <path d="M12 15V3M7 8l5-5 5 5M5 21h14" />
-                          </svg>
-                          Upload statement
+                          Upload bank statements
                         </button>
                       </div>
                     </div>
-                    <div className="fin-grid">
-                      {PROFIT_FIELD_LABELS.map(({ key, label }) => (
-                        <div key={key}>
-                          <label>{label}</label>
-                          <input
-                            value={financials[key] ?? ""}
-                            onChange={(e) => handleFinancialChange(key, e.target.value)}
-                            onBlur={(e) => handleFinancialChange(key, e.target.value)}
-                            placeholder="—"
-                            type="number"
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* ===== CASH TAB ===== */}
-            <div className={`tabpane${activeTab === "cash" ? " on" : ""}`} id="pane-cash">
-              <div className="card cf-wrap" id="wizard-cash-panel">
-                <div className="cf-head">
-                  <div>
-                    <span className="eyebrow">Signature view</span>
-                    <div className="h-sec">13-week cash forecast</div>
-                  </div>
-                  <div
-                    className="deliverable-tab-head__sign"
-                    style={{
-                      display: "flex",
-                      gap: 10,
-                      flexWrap: "wrap",
-                      justifyContent: "flex-end",
-                    }}
-                  >
-                    <ReviewSignoffButton
-                      compact
-                      clientId={clientId}
-                      clientName={client?.name}
-                      scope="cash_forecast"
+                    <CashForecastPanel
+                      clientId={client.id}
+                      clientName={client.name}
+                      canSign
+                      hideInlineSignOff
                       signoff={cashForecastSignoff}
-                      isStale={computeIsStale(
-                        cashForecastSignoff,
-                        client?.last_forecast_at ?? null,
-                      )}
-                      onChange={patchSignoff("cash_forecast")}
+                      onSignoffChange={patchSignoff("cash_forecast")}
+                      reloadToken={cashForecastReloadToken}
+                      openBankUploadToken={cashBankUploadToken}
+                      initialBankDraft={bankCashDraft}
+                      onBankPublish={(payload) => {
+                        setBankCashDraft(null);
+                        const runway = runwayWeeksFromCashflow(payload);
+                        setClient((c) =>
+                          c
+                            ? {
+                                ...c,
+                                cashflow: payload,
+                                last_forecast_at: new Date().toISOString(),
+                                ...(runway != null ? { cash_runway_weeks: runway } : {}),
+                              }
+                            : c,
+                        );
+                      }}
                     />
-                    <button
-                      type="button"
-                      className="btn ghost mini"
-                      onClick={() => setCashBankUploadToken((n) => n + 1)}
-                    >
-                      Upload bank statements
-                    </button>
                   </div>
                 </div>
-                <CashForecastPanel
-                  clientId={client.id}
-                  clientName={client.name}
-                  canSign
-                  hideInlineSignOff
-                  signoff={cashForecastSignoff}
-                  onSignoffChange={patchSignoff("cash_forecast")}
-                  reloadToken={cashForecastReloadToken}
-                  openBankUploadToken={cashBankUploadToken}
-                  initialBankDraft={bankCashDraft}
-                  onBankPublish={(payload) => {
-                    setBankCashDraft(null);
-                    const runway = runwayWeeksFromCashflow(payload);
-                    setClient((c) =>
-                      c
-                        ? {
-                            ...c,
-                            cashflow: payload,
-                            last_forecast_at: new Date().toISOString(),
-                            ...(runway != null ? { cash_runway_weeks: runway } : {}),
-                          }
-                        : c,
-                    );
-                  }}
-                />
-              </div>
-            </div>
 
-            {/* ===== BUDGET TAB ===== */}
-            <div className={`tabpane${activeTab === "budget" ? " on" : ""}`} id="pane-budget">
-              <div id="wizard-budget-panel">
-                <DeliverableTabHead
-                  eyebrow="12-month Budget"
-                  title="The year plan"
-                  lede="Set the year with client management, then compare what actually happened against it. Complex opens the driver grids — revenue, overheads, and capex."
-                  signoff={
-                    <ReviewSignoffButton
-                      compact
-                      clientId={clientId}
-                      clientName={client?.name}
-                      scope="budget"
-                      signoff={budgetSignoff}
-                      isStale={false}
-                      onChange={patchSignoff("budget")}
+                {/* ===== BUDGET TAB ===== */}
+                <div className={`tabpane${activeTab === "budget" ? " on" : ""}`} id="pane-budget">
+                  <div id="wizard-budget-panel">
+                    <DeliverableTabHead
+                      eyebrow="12-month Budget"
+                      title="The year plan"
+                      lede="Set the year with client management, then compare what actually happened against it. Complex opens the driver grids — revenue, overheads, and capex."
+                      signoff={
+                        <ReviewSignoffButton
+                          compact
+                          clientId={clientId}
+                          clientName={client?.name}
+                          scope="budget"
+                          signoff={budgetSignoff}
+                          isStale={false}
+                          onChange={patchSignoff("budget")}
+                        />
+                      }
                     />
-                  }
-                />
-                {/* Follow the portal theme. A nested `.dark` island made Tailwind
+                    {/* Follow the portal theme. A nested `.dark` island made Tailwind
                 light-on-dark copy and `color-scheme: dark` inputs fire while
                 budget cards stayed cream/white — revenue and totals vanished. */}
-                <BudgetPanel
-                  clientId={client.id}
-                  clientName={client.name}
-                  simplified={viewMode === "simplified"}
-                  role="accountant"
-                  reloadToken={budgetReloadToken}
-                  canSign
-                  hideInlineSignOff
-                  signoff={budgetSignoff}
-                  onSignoffChange={patchSignoff("budget")}
-                  businessTypeId={client.business_type}
-                  operatingProfile={parseOperatingProfile(client.operating_profile)}
-                  financials={financials}
-                  fyStartMonthDefault={
-                    parseOperatingProfile(client.operating_profile)?.fyStartMonth ??
-                    resolveMarket(coerceMarketSelection(client.market)).fyStartMonthDefault
-                  }
-                  onRetakeProfile={() => setProfileOpen(true)}
-                  onPushedToCash={() => {
-                    setCashForecastReloadToken((n) => n + 1);
-                    setActiveTab("cash");
-                  }}
-                />
-              </div>
-            </div>
-
-            {/* ===== REPORTS TAB — same Reports Studio as /reports ===== */}
-            <div className={`tabpane${activeTab === "reports" ? " on" : ""}`} id="pane-reports">
-              <DeliverableTabHead
-                eyebrow="Reports Studio"
-                title="Board-ready PDFs"
-                lede="Each report has its own sign-off. Stamp Business Health & Ratios, Profitability, the 13-week Cash Forecast, or the 12-month Budget so the signature carries into the PDF. You can brand packs with this client's own logo and colours."
-              />
-              <DeliverableInputConfig
-                className="mb-5"
-                clientId={clientId}
-                deliverableId="reports"
-                context={deliverableInputContext}
-              />
-              {activeTab === "reports" && (
-                <TabErrorBoundary label="Reports">
-                  <Suspense
-                    fallback={
-                      <div style={{ padding: 24, color: "var(--ink-dim)" }}>Loading reports…</div>
-                    }
-                  >
-                    <ReportsStudioPanel
-                      key={client.id}
-                      client={client.name}
-                      clientId={client.id}
-                      report={studioDeepLink.report}
-                      action={studioDeepLink.action}
-                      embedded
-                      onSearchCleared={() => setStudioDeepLink({})}
-                    />
-                  </Suspense>
-                </TabErrorBoundary>
-              )}
-            </div>
-
-            {/* ===== ACTION PLAN TAB ===== */}
-            <div className={`tabpane${activeTab === "plan" ? " on" : ""}`} id="pane-plan">
-              <DeliverableTabHead
-                eyebrow="Action Plan"
-                title="What still needs doing"
-                lede="This is the shared work list for the engagement. You put the next steps here so client management can see them, chase them, and mark them done. Sign the plan off when the list is right, then use it to follow up on outstanding items — that is the point of the tab."
-                signoff={
-                  <ReviewSignoffButton
-                    compact
-                    clientId={clientId}
-                    clientName={client?.name}
-                    scope="action_plan"
-                    signoff={actionPlanSignoff}
-                    isStale={false}
-                    onChange={patchSignoff("action_plan")}
-                  />
-                }
-              />
-              <DeliverableInputConfig
-                className="mb-5"
-                clientId={clientId}
-                deliverableId="plan"
-                context={deliverableInputContext}
-              />
-              {/* Follow the portal theme. A nested `.dark` island made Tailwind
-              light-on-dark copy fire while accountant `--card` stayed a
-              near-transparent cream — titles vanished in light mode. */}
-              <TabErrorBoundary label="Action Plan">
-                <Suspense
-                  fallback={
-                    <div style={{ padding: 24, color: "var(--ink-dim)" }}>Loading plan…</div>
-                  }
-                >
-                  {activeTab === "plan" && (
-                    <ActionPlanPanel
-                      key={`${client.id}-${search.filter === "overdue" ? "overdue" : "all"}`}
+                    <BudgetPanel
                       clientId={client.id}
                       clientName={client.name}
                       simplified={viewMode === "simplified"}
-                      isOwner
-                      initialFilter={search.filter === "overdue" ? "overdue" : undefined}
+                      role="accountant"
+                      reloadToken={budgetReloadToken}
+                      canSign
+                      hideInlineSignOff
+                      signoff={budgetSignoff}
+                      onSignoffChange={patchSignoff("budget")}
+                      businessTypeId={client.business_type}
+                      operatingProfile={parseOperatingProfile(client.operating_profile)}
+                      financials={financials}
+                      fyStartMonthDefault={
+                        parseOperatingProfile(client.operating_profile)?.fyStartMonth ??
+                        resolveMarket(coerceMarketSelection(client.market)).fyStartMonthDefault
+                      }
+                      onRetakeProfile={() => setProfileOpen(true)}
+                      onPushedToCash={() => {
+                        setCashForecastReloadToken((n) => n + 1);
+                        setActiveTab("cash");
+                      }}
                     />
-                  )}
-                </Suspense>
-              </TabErrorBoundary>
-            </div>
+                  </div>
+                </div>
 
-            {/* ===== ADVISORY TAB ===== */}
-            <div className={`tabpane${activeTab === "advisory" ? " on" : ""}`} id="pane-advisory">
-              <DeliverableTabHead
-                eyebrow="Advisory Drafter"
-                title="Write the note"
-                lede="Draft the advisory pack or email from this client's figures. Sign it off when it is ready to send."
-                signoff={
-                  <ReviewSignoffButton
-                    compact
-                    clientId={clientId}
-                    clientName={client?.name}
-                    scope="advisory"
-                    signoff={advisorySignoff}
-                    isStale={false}
-                    onChange={patchSignoff("advisory")}
+                {/* ===== REPORTS TAB — same Reports Studio as /reports ===== */}
+                <div className={`tabpane${activeTab === "reports" ? " on" : ""}`} id="pane-reports">
+                  <DeliverableTabHead
+                    eyebrow="Reports Studio"
+                    title="Board-ready PDFs"
+                    lede="Each report has its own sign-off. Stamp Business Health & Ratios, Profitability, the 13-week Cash Forecast, or the 12-month Budget so the signature carries into the PDF. You can brand packs with this client's own logo and colours."
                   />
-                }
-              />
-              {/* P1 — the reviewable pack: edit, comment, request changes, sign off. */}
-              <AdvisoryPackPanel
-                className="mb-5"
-                clientId={client.id}
-                audience="accountant"
-                canGenerate={hasFigures}
-                hasFirm={Boolean(client.firm_id)}
-                refreshKey={`${activeTab}|${snapshots.length}|${advisoryBump}`}
-                onChanged={() => setAdvisoryBump((n) => n + 1)}
-              />
-              {/* P0.5 — the recommendation object finally has a surface; Next Step routes review/decide here. */}
-              <RecommendationsPanel
-                className="mb-5"
-                clientId={client.id}
-                audience="accountant"
-                canPropose={hasFigures}
-                onChanged={() => setAdvisoryBump((n) => n + 1)}
-                onOpenActions={() => setActiveTab("plan")}
-                onAddFigures={() => setFirstDataOpen(true)}
-              />
-              {/* P2.1 — outcomes: what the last cycle's recommendations actually did. */}
-              <OutcomesPanel
-                className="mb-5"
-                clientId={client.id}
-                audience="accountant"
-                refreshKey={`${activeTab}|${snapshots.length}|${advisoryBump}`}
-                onChanged={() => setAdvisoryBump((n) => n + 1)}
-              />
-              <DeliverableInputConfig
-                className="mb-5"
-                clientId={clientId}
-                deliverableId="advisory"
-                context={deliverableInputContext}
-              />
-              <AdvisoryDrafter
-                clientId={client.id}
-                clientName={client.name}
-                onLogged={() => setDeliveryRefresh((n) => n + 1)}
-              />
-              <AdvisorySentHistory clientId={client.id} refreshToken={deliveryRefresh} />
+                  <DeliverableInputConfig
+                    className="mb-5"
+                    clientId={clientId}
+                    deliverableId="reports"
+                    context={deliverableInputContext}
+                  />
+                  {activeTab === "reports" && (
+                    <TabErrorBoundary label="Reports">
+                      <Suspense
+                        fallback={
+                          <div style={{ padding: 24, color: "var(--ink-dim)" }}>
+                            Loading reports…
+                          </div>
+                        }
+                      >
+                        <ReportsStudioPanel
+                          key={client.id}
+                          client={client.name}
+                          clientId={client.id}
+                          report={studioDeepLink.report}
+                          action={studioDeepLink.action}
+                          embedded
+                          onSearchCleared={() => setStudioDeepLink({})}
+                        />
+                      </Suspense>
+                    </TabErrorBoundary>
+                  )}
+                </div>
+
+                {/* ===== ACTION PLAN TAB ===== */}
+                <div className={`tabpane${activeTab === "plan" ? " on" : ""}`} id="pane-plan">
+                  <DeliverableTabHead
+                    eyebrow="Action Plan"
+                    title="What still needs doing"
+                    lede="This is the shared work list for the engagement. You put the next steps here so client management can see them, chase them, and mark them done. Sign the plan off when the list is right, then use it to follow up on outstanding items — that is the point of the tab."
+                    signoff={
+                      <ReviewSignoffButton
+                        compact
+                        clientId={clientId}
+                        clientName={client?.name}
+                        scope="action_plan"
+                        signoff={actionPlanSignoff}
+                        isStale={false}
+                        onChange={patchSignoff("action_plan")}
+                      />
+                    }
+                  />
+                  <DeliverableInputConfig
+                    className="mb-5"
+                    clientId={clientId}
+                    deliverableId="plan"
+                    context={deliverableInputContext}
+                  />
+                  {/* Follow the portal theme. A nested `.dark` island made Tailwind
+              light-on-dark copy fire while accountant `--card` stayed a
+              near-transparent cream — titles vanished in light mode. */}
+                  <TabErrorBoundary label="Action Plan">
+                    <Suspense
+                      fallback={
+                        <div style={{ padding: 24, color: "var(--ink-dim)" }}>Loading plan…</div>
+                      }
+                    >
+                      {activeTab === "plan" && (
+                        <ActionPlanPanel
+                          key={`${client.id}-${search.filter === "overdue" ? "overdue" : "all"}`}
+                          clientId={client.id}
+                          clientName={client.name}
+                          simplified={viewMode === "simplified"}
+                          isOwner
+                          initialFilter={search.filter === "overdue" ? "overdue" : undefined}
+                        />
+                      )}
+                    </Suspense>
+                  </TabErrorBoundary>
+                </div>
+
+                {/* ===== ADVISORY TAB ===== */}
+                <div
+                  className={`tabpane${activeTab === "advisory" ? " on" : ""}`}
+                  id="pane-advisory"
+                >
+                  <DeliverableTabHead
+                    eyebrow="Advisory Drafter"
+                    title="Write the note"
+                    lede="Draft the advisory pack or email from this client's figures. Sign it off when it is ready to send."
+                    signoff={
+                      <ReviewSignoffButton
+                        compact
+                        clientId={clientId}
+                        clientName={client?.name}
+                        scope="advisory"
+                        signoff={advisorySignoff}
+                        isStale={false}
+                        onChange={patchSignoff("advisory")}
+                      />
+                    }
+                  />
+                  {/* P1 — the reviewable pack: edit, comment, request changes, sign off. */}
+                  <AdvisoryPackPanel
+                    className="mb-5"
+                    clientId={client.id}
+                    audience="accountant"
+                    canGenerate={hasFigures}
+                    hasFirm={Boolean(client.firm_id)}
+                    refreshKey={`${activeTab}|${snapshots.length}|${advisoryBump}`}
+                    onChanged={() => setAdvisoryBump((n) => n + 1)}
+                  />
+                  {/* P0.5 — the recommendation object finally has a surface; Next Step routes review/decide here. */}
+                  <RecommendationsPanel
+                    className="mb-5"
+                    clientId={client.id}
+                    audience="accountant"
+                    canPropose={hasFigures}
+                    onChanged={() => setAdvisoryBump((n) => n + 1)}
+                    onOpenActions={() => setActiveTab("plan")}
+                    onAddFigures={() => setFirstDataOpen(true)}
+                  />
+                  {/* P2.1 — outcomes: what the last cycle's recommendations actually did. */}
+                  <OutcomesPanel
+                    className="mb-5"
+                    clientId={client.id}
+                    audience="accountant"
+                    refreshKey={`${activeTab}|${snapshots.length}|${advisoryBump}`}
+                    onChanged={() => setAdvisoryBump((n) => n + 1)}
+                  />
+                  <DeliverableInputConfig
+                    className="mb-5"
+                    clientId={clientId}
+                    deliverableId="advisory"
+                    context={deliverableInputContext}
+                  />
+                  <AdvisoryDrafter
+                    clientId={client.id}
+                    clientName={client.name}
+                    onLogged={() => setDeliveryRefresh((n) => n + 1)}
+                  />
+                  <AdvisorySentHistory clientId={client.id} refreshToken={deliveryRefresh} />
+                </div>
+              </div>
             </div>
 
             <div className="footer-note">
@@ -3083,6 +3127,48 @@ function ClientView() {
             }}
           />
 
+          <Dialog open={showQboDialog} onOpenChange={setShowQboDialog}>
+            <DialogContent className="max-w-2xl border border-slate-800 bg-slate-950 text-slate-50">
+              <DialogHeader>
+                <DialogTitle className="text-[15px] font-semibold uppercase tracking-[0.15em] text-slate-100">
+                  QuickBooks Integration
+                </DialogTitle>
+                <DialogDescription className="text-xs text-slate-400">
+                  Connect QuickBooks Online to pull this client&apos;s figures into Milōn.
+                </DialogDescription>
+              </DialogHeader>
+              <QboConnectCard
+                clientId={clientId}
+                onSyncComplete={(inputs) => {
+                  onQboSyncComplete(inputs);
+                  setShowQboDialog(false);
+                }}
+              />
+            </DialogContent>
+          </Dialog>
+
+          <Dialog open={showXeroDialog} onOpenChange={setShowXeroDialog}>
+            <DialogContent className="max-w-2xl border border-slate-800 bg-slate-950 text-slate-50">
+              <DialogHeader>
+                <DialogTitle className="text-[15px] font-semibold uppercase tracking-[0.15em] text-slate-100">
+                  Xero Integration
+                </DialogTitle>
+                <DialogDescription className="text-xs text-slate-400">
+                  Connect a Xero organisation to pull P&amp;L and balance sheet into this
+                  client&apos;s figures.
+                </DialogDescription>
+              </DialogHeader>
+              <XeroConnectCard
+                clientId={clientId}
+                returnPath={`/clients/${clientId}`}
+                onSyncComplete={(inputs) => {
+                  onXeroSyncComplete(inputs);
+                  setShowXeroDialog(false);
+                }}
+              />
+            </DialogContent>
+          </Dialog>
+
           {/* First-client: bank statements nudge */}
           <Dialog open={firstDataOpen} onOpenChange={setFirstDataOpen}>
             <DialogContent className="max-w-md border border-slate-700 bg-slate-950 text-slate-50">
@@ -3141,6 +3227,22 @@ function ClientView() {
                     />
                   </>
                 )}
+                <FirstDataChoice
+                  label="Connect QuickBooks"
+                  hint="Live sync from QuickBooks Online"
+                  onClick={() => {
+                    setFirstDataOpen(false);
+                    setShowQboDialog(true);
+                  }}
+                />
+                <FirstDataChoice
+                  label="Connect Xero"
+                  hint="Live sync of P&L and balance sheet"
+                  onClick={() => {
+                    setFirstDataOpen(false);
+                    setShowXeroDialog(true);
+                  }}
+                />
                 <FirstDataChoice
                   label="Type the figures by hand"
                   hint="Fill the financials grid yourself"

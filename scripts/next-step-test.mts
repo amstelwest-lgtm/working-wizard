@@ -474,11 +474,13 @@ const acct = (f: NextStepFacts) => resolveNextStep(f, "accountant");
   const studio = readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8");
   const studioCard = studio.indexOf("<NextStepCard");
   const studioBriefing = studio.indexOf("<ClientBriefing");
-  const studioTabs = studio.indexOf("{/* ===== TABS ===== */}");
+  const studioSections = studio.indexOf("{/* ===== SUMMARY TAB ===== */}");
+  const studioRail = studio.indexOf('className="deliverable-rail"');
   assert(studioCard > 0, "accountant studio renders NextStepCard");
+  assert(studioRail > 0, "studio lists deliverables in a left rail");
   assert(
-    studioCard < studioBriefing && studioBriefing < studioTabs,
-    "studio: Next Step above briefing above tabs",
+    studioCard < studioBriefing && studioBriefing < studioSections,
+    "studio: Next Step above briefing above the open section",
   );
   assert(studio.includes('audience="accountant"'), "studio uses accountant audience");
   assert(
