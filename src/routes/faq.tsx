@@ -5,6 +5,8 @@ import {
   ACCOUNTING_SOFTWARE_ANSWER,
   AI_IDENTIFIERS_LINE,
   FOUNDING_CALLOUT,
+  LEDGER_CONNECT_ANSWER,
+  LEDGER_CONNECT_QUESTION,
   publicFaqUsItems,
   WATCHLIST_DEFINITION,
 } from "@/lib/marketing-faq";
@@ -144,6 +146,10 @@ function FaqPage() {
 
       <Qa q="I already have accounting software.">
         <p>{ACCOUNTING_SOFTWARE_ANSWER}</p>
+      </Qa>
+
+      <Qa q={LEDGER_CONNECT_QUESTION}>
+        <p>{LEDGER_CONNECT_ANSWER}</p>
       </Qa>
 
       <Qa q="How accurate is the score?">

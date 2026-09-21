@@ -328,6 +328,7 @@ html[data-landing="1"] #hero .sub{max-width:640px}
     font-size:17px;
     line-height:1.58;
   }
+  html[data-landing="1"] .integrations{max-width:min(42em,100%)}
   html[data-landing="1"] .dash-stage{
     width:calc(100% + clamp(8px,2.4vw,40px));
     max-width:none;
@@ -349,6 +350,18 @@ html[data-landing="1"] .hero-badge{display:inline-flex;gap:9px;align-items:cente
 html[data-landing="1"] .hero-badge .pulse{width:7px;height:7px;flex:0 0 auto;border-radius:50%;background:var(--gold-bright);box-shadow:0 0 0 0 rgba(253,238,121,.6);animation:pulseDot 2.2s infinite}
 html[data-landing="1"] .hero-badge > span:not(.pulse){min-width:0}
 @keyframes pulseDot{70%{box-shadow:0 0 0 9px rgba(253,238,121,0)}100%{box-shadow:0 0 0 0 rgba(253,238,121,0)}}
+html[data-landing="1"] .integrations{margin-top:20px;max-width:640px}
+html[data-landing="1"] #integrations{scroll-margin-top:88px}
+html[data-landing="1"] .integrations-kicker{font-family:inherit;font-size:11px;line-height:1.2;letter-spacing:.22em;text-transform:uppercase;color:var(--gold);-webkit-text-fill-color:var(--gold);font-weight:700;margin:0 0 8px}
+html[data-landing="1"] .integrations-line{margin:0 0 12px;max-width:38em;font-size:14.5px;line-height:1.5;color:var(--ink-dim);font-weight:500}
+html[data-landing="1"] .integrations-chips{display:flex;flex-wrap:wrap;gap:8px;list-style:none;margin:0;padding:0}
+html[data-landing="1"] .integrations-chips li{
+  border-radius:999px;padding:8px 14px;font-size:13.5px;font-weight:600;letter-spacing:.01em;color:var(--ink);
+  background:linear-gradient(var(--glass),var(--glass)) padding-box,
+             linear-gradient(150deg,color-mix(in srgb,var(--gold-bright) 75%,transparent),color-mix(in srgb,var(--gold) 42%,transparent) 42%,color-mix(in srgb,var(--gold) 16%,transparent)) border-box;
+  border:1px solid transparent;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.06);
+}
 html[data-landing="1"] .hero-cta{display:flex;gap:16px;margin-top:28px;flex-wrap:wrap}
 html[data-landing="1"] .hero-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px 24px;margin-top:28px;max-width:none;grid-column:1/-1;padding-top:22px;border-top:1px solid var(--line)}
 html[data-landing="1"] .hero-stats>div{padding:0;border:none}
