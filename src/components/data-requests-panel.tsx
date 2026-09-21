@@ -194,7 +194,7 @@ export function DataRequestsPanel({
     <section className={shell} id="data-requests" data-audience={audience} data-count={rows.length}>
       <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <span className="block text-[9.5px] font-bold uppercase tracking-[0.22em] text-[#9a7014] dark:text-[#e1b85e]">
+          <span className="block text-[9.5px] font-bold uppercase tracking-[0.22em] text-[#5b420e] dark:text-[#e1b85e]">
             {audience === "owner" ? "MILŌN needs" : "Data requests"}
           </span>
           <h3 className="mt-0.5 text-[15px] font-bold leading-tight text-slate-900 dark:text-[#f4e7c2]">

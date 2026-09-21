@@ -28,13 +28,6 @@ function fmtDate(iso: string | null) {
   });
 }
 
-const codeStyle = {
-  fontSize: 11,
-  background: "#1e293b",
-  padding: "1px 5px",
-  borderRadius: 4,
-} as const;
-
 function fmtMoney(n: number) {
   if (!isFinite(n)) return "—";
   const abs = Math.abs(n);
@@ -129,19 +122,9 @@ export function QboConnectCard({ clientId, onSyncComplete }: Props) {
   // ── Skeleton while loading ──────────────────────────────────────────────────
   if (loadingStatus && configured === null) {
     return (
-      <div
-        style={{
-          border: "1px solid #1e293b",
-          borderRadius: 10,
-          background: "rgba(15,23,42,0.6)",
-          padding: "14px 16px",
-          display: "flex",
-          alignItems: "center",
-          gap: 10,
-        }}
-      >
+      <div className="ledger-connect ledger-connect--panel ledger-connect--row">
         <Loader2 className="h-4 w-4 animate-spin text-slate-500" />
-        <span style={{ fontSize: 12, color: "#64748b" }}>Checking QuickBooks…</span>
+        <span className="ledger-connect__hint">Checking QuickBooks…</span>
       </div>
     );
   }
@@ -149,35 +132,17 @@ export function QboConnectCard({ clientId, onSyncComplete }: Props) {
   // ── QBO credentials not configured in env ──────────────────────────────────
   if (configured === false) {
     return (
-      <div
-        style={{
-          border: "1px dashed #334155",
-          borderRadius: 10,
-          background: "rgba(15,23,42,0.4)",
-          padding: "14px 16px",
-        }}
-      >
-        <p
-          style={{
-            fontSize: 11,
-            fontWeight: 700,
-            letterSpacing: "0.12em",
-            textTransform: "uppercase",
-            color: "#475569",
-            marginBottom: 6,
-          }}
-        >
-          QuickBooks Online
-        </p>
-        <p style={{ fontSize: 12, color: "#94a3b8" }}>
+      <div className="ledger-connect ledger-connect--dashed">
+        <p className="ledger-connect__kicker">QuickBooks Online</p>
+        <p className="ledger-connect__body">
           QuickBooks sync isn&apos;t switched on for this workspace yet. You are not stuck: export a
           P&amp;L and balance sheet from QuickBooks (Excel, CSV or PDF) and upload them — the board
           fills in the same way.
         </p>
-        <p style={{ fontSize: 11, color: "#64748b", marginTop: 6 }}>
-          Admins: set <code style={codeStyle}>QBO_CLIENT_ID</code>,{" "}
-          <code style={codeStyle}>QBO_CLIENT_SECRET</code> and{" "}
-          <code style={codeStyle}>QBO_REDIRECT_URI</code> to enable live sync.
+        <p className="ledger-connect__meta">
+          Admins: set <code className="ledger-connect__code">QBO_CLIENT_ID</code>,{" "}
+          <code className="ledger-connect__code">QBO_CLIENT_SECRET</code> and{" "}
+          <code className="ledger-connect__code">QBO_REDIRECT_URI</code> to enable live sync.
         </p>
       </div>
     );
@@ -187,26 +152,11 @@ export function QboConnectCard({ clientId, onSyncComplete }: Props) {
   if (status) {
     const isError = status.syncStatus === "error";
     return (
-      <div
-        style={{
-          border: `1px solid ${isError ? "rgba(239,68,68,0.3)" : "rgba(16,185,129,0.3)"}`,
-          borderRadius: 10,
-          background: isError ? "rgba(239,68,68,0.05)" : "rgba(16,185,129,0.05)",
-          padding: "14px 16px",
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
-          <div style={{ minWidth: 0 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
-              <p
-                style={{
-                  fontSize: 11,
-                  fontWeight: 700,
-                  letterSpacing: "0.12em",
-                  textTransform: "uppercase",
-                  color: "#475569",
-                }}
-              >
+      <div className={`ledger-connect ${isError ? "ledger-connect--error" : "ledger-connect--ok"}`}>
+        <div className="ledger-connect__head">
+          <div className="ledger-connect__identity">
+            <div className="ledger-connect__title-row">
+              <p className="ledger-connect__kicker" style={{ marginBottom: 0 }}>
                 QuickBooks Online
               </p>
               {isError ? (
@@ -215,35 +165,21 @@ export function QboConnectCard({ clientId, onSyncComplete }: Props) {
                 <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
               )}
             </div>
-            <p style={{ fontSize: 13, fontWeight: 600, color: "#f1f5f9", marginBottom: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            <p className="ledger-connect__name">
               {status.companyName ?? `Realm ${status.realmId}`}
             </p>
-            <p style={{ fontSize: 11, color: "#64748b" }}>
+            <p className="ledger-connect__meta ledger-connect__meta--flush">
               {isError
                 ? `Error: ${status.syncError?.slice(0, 80) ?? "unknown"}`
                 : `Last sync: ${fmtDate(status.lastSyncedAt)}`}
             </p>
           </div>
-          <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+          <div className="ledger-connect__actions">
             <button
               onClick={handleSync}
               disabled={syncing || disconnecting}
               title="Sync now"
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 5,
-                fontSize: 11,
-                fontWeight: 600,
-                color: "#94a3b8",
-                background: "#1e293b",
-                border: "1px solid #334155",
-                borderRadius: 7,
-                padding: "6px 10px",
-                cursor: syncing ? "default" : "pointer",
-                opacity: syncing || disconnecting ? 0.6 : 1,
-                fontFamily: "inherit",
-              }}
+              className="ledger-connect__sync"
             >
               {syncing ? (
                 <Loader2 className="h-3 w-3 animate-spin" />
@@ -256,21 +192,7 @@ export function QboConnectCard({ clientId, onSyncComplete }: Props) {
               onClick={handleDisconnect}
               disabled={syncing || disconnecting}
               title="Disconnect QuickBooks"
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 4,
-                fontSize: 11,
-                fontWeight: 600,
-                color: "#ef4444",
-                background: "rgba(239,68,68,0.08)",
-                border: "1px solid rgba(239,68,68,0.25)",
-                borderRadius: 7,
-                padding: "6px 10px",
-                cursor: disconnecting ? "default" : "pointer",
-                opacity: syncing || disconnecting ? 0.6 : 1,
-                fontFamily: "inherit",
-              }}
+              className="ledger-connect__disconnect"
             >
               <Unlink className="h-3 w-3" />
               {disconnecting ? "…" : "Disconnect"}
@@ -280,16 +202,7 @@ export function QboConnectCard({ clientId, onSyncComplete }: Props) {
 
         {/* Sync result preview */}
         {lastSync && (
-          <div
-            style={{
-              marginTop: 12,
-              paddingTop: 12,
-              borderTop: "1px solid rgba(16,185,129,0.15)",
-              display: "grid",
-              gridTemplateColumns: "repeat(3, 1fr)",
-              gap: 8,
-            }}
-          >
+          <div className="ledger-connect__stats ledger-connect__stats--ok">
             {[
               { label: "Revenue", value: fmtMoney(lastSync.revenue) },
               { label: "Net income", value: fmtMoney(lastSync.netIncome) },
@@ -299,14 +212,8 @@ export function QboConnectCard({ clientId, onSyncComplete }: Props) {
               { label: `${lastSync.accountsCount} accounts · ${lastSync.transactionsCount} txns`, value: "" },
             ].map((item) => (
               <div key={item.label}>
-                <div style={{ fontSize: 10, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.1em" }}>
-                  {item.label}
-                </div>
-                {item.value && (
-                  <div style={{ fontSize: 13, fontWeight: 700, color: "#e2e8f0" }}>
-                    {item.value}
-                  </div>
-                )}
+                <div className="ledger-connect__stat-label">{item.label}</div>
+                {item.value && <div className="ledger-connect__stat-value">{item.value}</div>}
               </div>
             ))}
           </div>
@@ -317,33 +224,12 @@ export function QboConnectCard({ clientId, onSyncComplete }: Props) {
 
   // ── Not connected ───────────────────────────────────────────────────────────
   return (
-    <div
-      style={{
-        border: "1px solid #1e293b",
-        borderRadius: 10,
-        background: "rgba(15,23,42,0.6)",
-        padding: "14px 16px",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        gap: 12,
-        flexWrap: "wrap",
-      }}
-    >
+    <div className="ledger-connect ledger-connect--panel ledger-connect--split">
       <div>
-        <p
-          style={{
-            fontSize: 11,
-            fontWeight: 700,
-            letterSpacing: "0.12em",
-            textTransform: "uppercase",
-            color: "#475569",
-            marginBottom: 4,
-          }}
-        >
+        <p className="ledger-connect__kicker" style={{ marginBottom: 4 }}>
           QuickBooks Online
         </p>
-        <p style={{ fontSize: 12, color: "#64748b" }}>
+        <p className="ledger-connect__hint">
           Connect to auto-sync P&L, Balance Sheet, Cash Flow & transactions
         </p>
       </div>
