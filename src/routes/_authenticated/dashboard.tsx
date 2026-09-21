@@ -37,6 +37,7 @@ import {
 } from "@/lib/portfolio-dashboard";
 import { useServerFn } from "@tanstack/react-start";
 import { getQboStatuses } from "@/lib/qbo.functions";
+import { getXeroStatuses } from "@/lib/xero.functions";
 import { createFirmClient } from "@/lib/firm-clients.functions";
 import { inviteClientOwner, sendDraftedOwnerInvite } from "@/lib/client-invite.functions";
 import { effectiveCashRunwayWeeks } from "@/lib/cash-runway";
@@ -755,6 +756,9 @@ function Dashboard() {
   const [qboStatuses, setQboStatuses] = useState<
     Record<string, { companyName: string | null; lastSyncedAt: string | null; syncStatus: string }>
   >({});
+  const [xeroStatuses, setXeroStatuses] = useState<
+    Record<string, { tenantName: string | null; lastSyncedAt: string | null; syncStatus: string }>
+  >({});
   const [playbookCatalogue, setPlaybookCatalogue] = useState<PlaybookMeta[]>([]);
   // playbook drawer state
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -772,6 +776,7 @@ function Dashboard() {
   }, []);
 
   const getStatuses = useServerFn(getQboStatuses);
+  const getXeroStatusMap = useServerFn(getXeroStatuses);
   const mintInvite = useServerFn(inviteClientOwner);
   const sendDraftedInvite = useServerFn(sendDraftedOwnerInvite);
 
@@ -782,6 +787,7 @@ function Dashboard() {
     if (!userId) {
       setClientRows([]);
       setQboStatuses({});
+      setXeroStatuses({});
       setIsItMember(false);
       setLoading(false);
       return;
@@ -834,12 +840,18 @@ function Dashboard() {
       }
     }
 
-    // QBO statuses (non-fatal)
+    // QBO / Xero statuses (non-fatal)
     let qbo: typeof qboStatuses = {};
     if (rawClients.length > 0) {
+      const ids = rawClients.map((c) => c.id);
       try {
-        qbo = await getStatuses({ data: { clientIds: rawClients.map((c) => c.id) } });
+        qbo = await getStatuses({ data: { clientIds: ids } });
         setQboStatuses(qbo);
+      } catch {
+        // non-fatal
+      }
+      try {
+        setXeroStatuses(await getXeroStatusMap({ data: { clientIds: ids } }));
       } catch {
         // non-fatal
       }
@@ -1708,6 +1720,7 @@ function Dashboard() {
                   const chip = chipFromHealth(c.health);
                   const score = c.score != null ? Math.round(c.score) : null;
                   const qbo = qboStatuses[c.id];
+                  const xero = xeroStatuses[c.id];
                   return (
                     <tr
                       key={c.id}
@@ -1835,6 +1848,23 @@ function Dashboard() {
                             }}
                           >
                             QB
+                          </span>
+                        )}
+                        {xero && (
+                          <span
+                            title={`Xero${xero.tenantName ? ` — ${xero.tenantName}` : ""}`}
+                            style={{
+                              fontSize: 9,
+                              fontWeight: 800,
+                              letterSpacing: "0.08em",
+                              color: "#07212b",
+                              background: "#13B5EA",
+                              padding: "2px 6px",
+                              borderRadius: 4,
+                              marginLeft: 6,
+                            }}
+                          >
+                            XO
                           </span>
                         )}
                       </td>

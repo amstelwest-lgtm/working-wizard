@@ -235,6 +235,7 @@ import { OwnerUploadsPanel } from "@/components/owner-uploads-panel";
 import { archiveUploads, describeArchiveFailures } from "@/lib/client-documents-browser";
 import { DEFAULT_UPLOAD_VISIBILITY, type UploadVisibility } from "@/lib/client-documents";
 import { QboConnectCard } from "@/components/qbo-connect";
+import { XeroConnectCard } from "@/components/xero-connect";
 import { Button } from "@/components/ui/button";
 import { SphereHero } from "@/components/sphere-hero";
 import { buildSpherePillars } from "@/components/sphere-hero-adapter";
@@ -2090,16 +2091,22 @@ function Index() {
     };
   }, [user, authLoading, navigate]);
 
-  // Handle QBO OAuth callback: ?qbo=connected or ?qbo=error
+  // Handle QBO / Xero OAuth callback: ?qbo= / ?xero= connected|error
   useEffect(() => {
     if (typeof window === "undefined") return;
     const p = new URLSearchParams(window.location.search);
     const qbo = p.get("qbo");
-    if (!qbo) return;
+    const xero = p.get("xero");
+    if (!qbo && !xero) return;
     if (qbo === "connected")
       toast.success("QuickBooks Online connected — tap Sync to import your data");
     else if (qbo === "error")
       toast.error(`QuickBooks connection failed: ${p.get("reason") ?? "unknown error"}`);
+    if (xero === "connected") {
+      toast.success("Xero connected — tap Sync to import P&L, balance sheet and bank totals");
+      setShowXeroDialog(true);
+    } else if (xero === "error")
+      toast.error(`Xero connection failed: ${p.get("reason") ?? "unknown error"}`);
     window.history.replaceState({}, "", "/app");
   }, []);
 
@@ -3086,6 +3093,7 @@ function Index() {
   const [btSaving, setBtSaving] = useState(false);
   const [btSaveError, setBtSaveError] = useState<string | null>(null);
   const [showQboDialog, setShowQboDialog] = useState(false);
+  const [showXeroDialog, setShowXeroDialog] = useState(false);
   const [showBankDrafter, setShowBankDrafter] = useState(false);
   const [showCashFromBanks, setShowCashFromBanks] = useState(false);
   const [bankCashDraft, setBankCashDraft] = useState<
@@ -3259,6 +3267,7 @@ function Index() {
       showFinData ||
       showBankDrafter ||
       showQboDialog ||
+      showXeroDialog ||
       showCashFromBanks ||
       reviewOpen
     ) {
@@ -3271,6 +3280,7 @@ function Index() {
     showFinData,
     showBankDrafter,
     showQboDialog,
+    showXeroDialog,
     showCashFromBanks,
     reviewOpen,
   ]);
@@ -3785,6 +3795,7 @@ function Index() {
                   !showFinData &&
                   !reviewOpen &&
                   !showQboDialog &&
+                  !showXeroDialog &&
                   hydratedClientId === effectiveClientId
                 }
                 onTabChange={handleTourTabChange}
@@ -3846,8 +3857,8 @@ function Index() {
                       className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-[#b7872a]/50 bg-gradient-to-b from-[#d4a550]/20 to-[#b7872a]/10 px-2.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-[#8a6508] shadow-[0_1px_6px_rgba(212,165,80,0.16)] transition-colors hover:border-[#b7872a]/80 hover:from-[#d4a550]/30 hover:to-[#b7872a]/20 dark:text-[#e1b85e]"
                       title={
                         isUsCopy(boardMarket)
-                          ? "Connect QuickBooks or upload statements"
-                          : "Upload financial statements or connect QuickBooks Online"
+                          ? "Connect QuickBooks or Xero, or upload statements"
+                          : "Upload financial statements or connect Xero"
                       }
                     >
                       <Upload className="h-3 w-3 shrink-0" />
@@ -4120,14 +4131,14 @@ function Index() {
                   </DialogTitle>
                   <DialogDescription className="text-slate-400">
                     {isUsCopy(boardMarket)
-                      ? "Fastest US path: upload a P&L and balance sheet — Excel, OpenDocument, CSV or PDF, straight from QuickBooks or your accountant. Connect QuickBooks for live sync, or use bank statements if that is what you have."
-                      : "Fastest path: drop the last ~3 months of statements (add every bank account). We draft your P&L, pre-fill budget, build a cash forecast, and show movements in balances — from one upload."}
+                      ? "Fastest US path: upload a P&L and balance sheet — Excel, OpenDocument, CSV or PDF, straight from QuickBooks, Xero or your accountant. Connect QuickBooks or Xero for live sync, or use bank statements if that is what you have."
+                      : "Fastest path: drop the last ~3 months of statements (add every bank account), or connect Xero. We draft your P&L, pre-fill budget, build a cash forecast, and show movements in balances."}
                   </DialogDescription>
                 </DialogHeader>
                 <div className="flex flex-col gap-3 pt-2">
                   {(isUsCopy(boardMarket)
-                    ? (["files", "qbo", "bank"] as const)
-                    : (["bank", "files", "qbo"] as const)
+                    ? (["files", "qbo", "xero", "bank"] as const)
+                    : (["bank", "xero", "files", "qbo"] as const)
                   ).map((id) => {
                     const hero =
                       (isUsCopy(boardMarket) && id === "files") ||
@@ -4138,6 +4149,11 @@ function Index() {
                             setFirstRunStep(null);
                             setShowQboDialog(true);
                           }
+                        : id === "xero"
+                          ? () => {
+                              setFirstRunStep(null);
+                              setShowXeroDialog(true);
+                            }
                         : id === "files"
                           ? () => {
                               setFirstRunStep(null);
@@ -4151,6 +4167,8 @@ function Index() {
                     const title =
                       id === "qbo"
                         ? "Connect QuickBooks Online"
+                        : id === "xero"
+                          ? "Connect Xero"
                         : id === "files"
                           ? isUsCopy(boardMarket)
                             ? "Upload Excel, ODS, CSV or PDF financials (recommended)"
@@ -4160,14 +4178,14 @@ function Index() {
                             : "Upload bank statements (recommended)";
                     const sub =
                       id === "qbo"
-                        ? isUsCopy(boardMarket)
-                          ? "Live sync from your books (Xero coming later)"
-                          : "Live sync from your books (Xero not available yet)"
+                        ? "Live sync from QuickBooks Online"
+                        : id === "xero"
+                          ? "Live sync of P&L, balance sheet and bank totals"
                         : id === "files"
                           ? "P&L and balance sheet · Excel, OpenDocument, CSV or PDF · you confirm before saving"
                           : "PDF, CSV or Excel exports · ~3 months · AI drafts your figures";
                     const icon =
-                      id === "qbo" ? (
+                      id === "qbo" || id === "xero" ? (
                         <Plug2 className="h-4 w-4" />
                       ) : id === "files" ? (
                         <Database className="h-4 w-4" />
@@ -4190,6 +4208,8 @@ function Index() {
                               ? "bg-[#d4a550]/20 text-[#d4a550]"
                               : id === "qbo"
                                 ? "bg-emerald-500/10 text-emerald-400"
+                                : id === "xero"
+                                  ? "bg-sky-500/10 text-sky-400"
                                 : "bg-slate-700 text-slate-300"
                           }`}
                         >
@@ -4490,6 +4510,13 @@ function Index() {
                                             Upload a financial statement
                                           </button>
                                         )}
+                                        <button
+                                          onClick={() => setShowXeroDialog(true)}
+                                          className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition-all hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
+                                        >
+                                          <Plug2 className="h-4 w-4" />
+                                          Connect Xero
+                                        </button>
                                         <button
                                           onClick={() => {
                                             setShowFinData(true);
@@ -5436,7 +5463,23 @@ function Index() {
                   <span className="text-xs text-slate-600 dark:text-slate-400">
                     {isUsCopy(boardMarket)
                       ? "Live sync from your books once QBO is switched on for this workspace. Until then, export a P&L and balance sheet and upload them above."
-                      : "Sync live accounting data when QBO is configured for this workspace. Xero is not available yet."}
+                      : "Sync live accounting data when QBO is configured for this workspace."}
+                  </span>
+                </button>
+                <button
+                  onClick={() => {
+                    setShowFinData(false);
+                    setShowXeroDialog(true);
+                  }}
+                  className="flex flex-col items-start gap-1.5 rounded-lg border border-sky-700/30 bg-sky-50 p-4 text-left transition-colors hover:border-sky-700/60 hover:bg-sky-100 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-sky-500/60 dark:hover:bg-slate-800"
+                >
+                  <span className="flex items-center gap-2 text-sm font-semibold text-sky-900 dark:text-slate-100">
+                    <Plug2 className="h-4 w-4" />
+                    Connect Xero
+                  </span>
+                  <span className="text-xs text-slate-600 dark:text-slate-400">
+                    Sync P&amp;L, balance sheet and bank totals when Xero is configured for this
+                    workspace. Statement-level first — invoices are a later step.
                   </span>
                 </button>
                 <button
@@ -5827,6 +5870,35 @@ function Index() {
                   setHasRealFinancials(true);
                   void handleOwnerFirstRealFinancialsUpload();
                   setShowQboDialog(false);
+                }}
+              />
+            </DialogContent>
+          </Dialog>
+
+          <Dialog open={showXeroDialog} onOpenChange={setShowXeroDialog}>
+            <DialogContent className="max-w-2xl border border-slate-800 bg-slate-950 text-slate-50">
+              <DialogHeader>
+                <DialogTitle className="text-[15px] font-semibold uppercase tracking-[0.15em] text-slate-100">
+                  Xero Integration
+                </DialogTitle>
+                <DialogDescription className="text-xs text-slate-400">
+                  Connect a Xero organisation to pull P&amp;L, balance sheet and bank totals into
+                  this client&apos;s figures. Invoices are Phase 2.
+                </DialogDescription>
+              </DialogHeader>
+              <XeroConnectCard
+                clientId={effectiveClientId}
+                returnPath="/app"
+                onSyncComplete={(inputs) => {
+                  setV((prev) => ({
+                    ...prev,
+                    ...Object.fromEntries(
+                      Object.entries(inputs).map(([k, val]) => [k, String(val)]),
+                    ),
+                  }));
+                  setHasRealFinancials(true);
+                  void handleOwnerFirstRealFinancialsUpload();
+                  setShowXeroDialog(false);
                 }}
               />
             </DialogContent>

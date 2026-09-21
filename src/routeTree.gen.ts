@@ -47,6 +47,7 @@ import { Route as AuthenticatedReportsIndexRouteImport } from './routes/_authent
 import { Route as LovableEmailSuppressionRouteImport } from './routes/lovable/email/suppression'
 import { Route as ApiResendWebhookRouteImport } from './routes/api/resend/webhook'
 import { Route as ApiQboCallbackRouteImport } from './routes/api/qbo/callback'
+import { Route as ApiXeroCallbackRouteImport } from './routes/api/xero/callback'
 import { Route as AuthenticatedSettingsTeamRouteImport } from './routes/_authenticated/settings.team'
 import { Route as AuthenticatedSettingsBrandRouteImport } from './routes/_authenticated/settings.brand'
 import { Route as AuthenticatedReportsDemoRouteImport } from './routes/_authenticated/reports.demo'
@@ -247,6 +248,11 @@ const ApiQboCallbackRoute = ApiQboCallbackRouteImport.update({
   path: '/api/qbo/callback',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiXeroCallbackRoute = ApiXeroCallbackRouteImport.update({
+  id: '/api/xero/callback',
+  path: '/api/xero/callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthenticatedSettingsTeamRoute =
   AuthenticatedSettingsTeamRouteImport.update({
     id: '/settings/team',
@@ -335,6 +341,7 @@ export interface FileRoutesByFullPath {
   '/settings/brand': typeof AuthenticatedSettingsBrandRoute
   '/settings/team': typeof AuthenticatedSettingsTeamRoute
   '/api/qbo/callback': typeof ApiQboCallbackRoute
+  '/api/xero/callback': typeof ApiXeroCallbackRoute
   '/api/resend/webhook': typeof ApiResendWebhookRoute
   '/lovable/email/suppression': typeof LovableEmailSuppressionRoute
   '/reports/': typeof AuthenticatedReportsIndexRoute
@@ -382,6 +389,7 @@ export interface FileRoutesByTo {
   '/settings/brand': typeof AuthenticatedSettingsBrandRoute
   '/settings/team': typeof AuthenticatedSettingsTeamRoute
   '/api/qbo/callback': typeof ApiQboCallbackRoute
+  '/api/xero/callback': typeof ApiXeroCallbackRoute
   '/api/resend/webhook': typeof ApiResendWebhookRoute
   '/lovable/email/suppression': typeof LovableEmailSuppressionRoute
   '/reports': typeof AuthenticatedReportsIndexRoute
@@ -431,6 +439,7 @@ export interface FileRoutesById {
   '/_authenticated/settings/brand': typeof AuthenticatedSettingsBrandRoute
   '/_authenticated/settings/team': typeof AuthenticatedSettingsTeamRoute
   '/api/qbo/callback': typeof ApiQboCallbackRoute
+  '/api/xero/callback': typeof ApiXeroCallbackRoute
   '/api/resend/webhook': typeof ApiResendWebhookRoute
   '/lovable/email/suppression': typeof LovableEmailSuppressionRoute
   '/_authenticated/reports/': typeof AuthenticatedReportsIndexRoute
@@ -480,6 +489,7 @@ export interface FileRouteTypes {
     | '/settings/brand'
     | '/settings/team'
     | '/api/qbo/callback'
+    | '/api/xero/callback'
     | '/api/resend/webhook'
     | '/lovable/email/suppression'
     | '/reports/'
@@ -527,6 +537,7 @@ export interface FileRouteTypes {
     | '/settings/brand'
     | '/settings/team'
     | '/api/qbo/callback'
+    | '/api/xero/callback'
     | '/api/resend/webhook'
     | '/lovable/email/suppression'
     | '/reports'
@@ -575,6 +586,7 @@ export interface FileRouteTypes {
     | '/_authenticated/settings/brand'
     | '/_authenticated/settings/team'
     | '/api/qbo/callback'
+    | '/api/xero/callback'
     | '/api/resend/webhook'
     | '/lovable/email/suppression'
     | '/_authenticated/reports/'
@@ -617,6 +629,7 @@ export interface RootRouteChildren {
   LhUnsubscribeRoute: typeof LhUnsubscribeRoute
   TTokenRoute: typeof TTokenRoute
   ApiQboCallbackRoute: typeof ApiQboCallbackRoute
+  ApiXeroCallbackRoute: typeof ApiXeroCallbackRoute
   ApiResendWebhookRoute: typeof ApiResendWebhookRoute
   LovableEmailSuppressionRoute: typeof LovableEmailSuppressionRoute
   LovableEmailQueueProcessRoute: typeof LovableEmailQueueProcessRoute
@@ -892,6 +905,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiQboCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/xero/callback': {
+      id: '/api/xero/callback'
+      path: '/api/xero/callback'
+      fullPath: '/api/xero/callback'
+      preLoaderRoute: typeof ApiXeroCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_authenticated/settings/team': {
       id: '/_authenticated/settings/team'
       path: '/settings/team'
@@ -1012,6 +1032,7 @@ const rootRouteChildren: RootRouteChildren = {
   LhUnsubscribeRoute: LhUnsubscribeRoute,
   TTokenRoute: TTokenRoute,
   ApiQboCallbackRoute: ApiQboCallbackRoute,
+  ApiXeroCallbackRoute: ApiXeroCallbackRoute,
   ApiResendWebhookRoute: ApiResendWebhookRoute,
   LovableEmailSuppressionRoute: LovableEmailSuppressionRoute,
   LovableEmailQueueProcessRoute: LovableEmailQueueProcessRoute,
