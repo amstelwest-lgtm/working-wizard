@@ -3,10 +3,11 @@
 
 -- ── Short-lived OAuth state tokens (CSRF protection, 10-minute TTL) ──────────
 CREATE TABLE IF NOT EXISTS qbo_oauth_states (
-  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  state      TEXT NOT NULL UNIQUE,
-  client_id  UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
-  created_at TIMESTAMPTZ DEFAULT NOW()
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  state       TEXT NOT NULL UNIQUE,
+  client_id   UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  return_path TEXT,
+  created_at  TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- ── One QBO company connection per Milōn client ───────────────────────────────
