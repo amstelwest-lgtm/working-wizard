@@ -1,5 +1,5 @@
 /**
- * Accountant studio — Milōn Bot is the first tab and a large studio widget.
+ * Accountant studio — Overview, then Client Brain, then Milōn Bot as a large studio widget.
  * Run: pnpm test:accountant-ask-ai-tab
  */
 import { readFileSync } from "node:fs";
@@ -19,15 +19,25 @@ const cssSrc = readFileSync(resolve("public/ask-ai.css"), "utf8");
 const tourSrc = readFileSync(resolve("src/components/walkthrough-wizard.tsx"), "utf8");
 const indexSrc = readFileSync(resolve("supabase/functions/ask-ai/index.ts"), "utf8");
 
-assert(/type ActiveTab =[\s\S]{0,40}"ask"/.test(clientSrc), "Milōn Bot is an accountant studio tab");
+assert(/type ActiveTab =[\s\S]{0,80}"ask"/.test(clientSrc), "Milōn Bot is an accountant studio tab");
 assert(
-  /const ACCOUNTANT_TABS[\s\S]*?"ask"[\s\S]*?"ratios"/.test(clientSrc),
-  "Milōn Bot is the first accountant tab",
+  clientSrc.includes('{ id: "overview", label: "Overview" }') &&
+    clientSrc.indexOf('{ id: "overview", label: "Overview" }') <
+      clientSrc.indexOf('{ id: "summary", label: "Client Brain" }') &&
+    clientSrc.indexOf('{ id: "summary", label: "Client Brain" }') <
+      clientSrc.indexOf('{ id: "ask", label: "Milōn Bot"'),
+  "Overview sits above Client Brain, above Milōn Bot",
 );
-assert(clientSrc.includes('useState<ActiveTab>("ask")'), "studio lands on Milōn Bot");
+assert(clientSrc.includes('useState<ActiveTab>("overview")'), "studio lands on Overview");
 assert(
-  clientSrc.includes('setActiveTab(figures ? "ask" : "ratios")'),
-  "before any figures the studio lands on Health & Ratios, where the inputs are",
+  clientSrc.includes('setActiveTab("overview")'),
+  "opening a client without a deep link lands on Overview",
+);
+assert(
+  clientSrc.includes('id="pane-overview"') &&
+    clientSrc.indexOf('id="pane-overview"') < clientSrc.indexOf("<ClientBriefing") &&
+    clientSrc.indexOf("<ClientBriefing") < clientSrc.indexOf('id="pane-summary"'),
+  "the client briefing lives only in the Overview pane",
 );
 assert(clientSrc.includes('id="first-figures-card"'), "empty studio shows the first-figures card");
 assert(clientSrc.includes('{ id: "ask", label: "Milōn Bot"'), "Milōn Bot appears in the deliverable list");
@@ -43,8 +53,9 @@ assert(clientSrc.includes('variant: "studio"'), "accountant widget uses the larg
 assert(clientSrc.includes('audience: "accountant"'), "accountant questions send accountant audience");
 assert(clientSrc.includes("functions/v1/milon-bot"), "studio widget can call brain tools");
 assert(
-  /activeTab === "ask"[\s\S]{0,280}"none"/.test(clientSrc),
-  "simple/complex toggle is hidden on Milōn Bot",
+  /activeTab === "overview"[\s\S]{0,700}"none"/.test(clientSrc) &&
+    /activeTab === "ask"[\s\S]{0,700}"none"/.test(clientSrc),
+  "simple/complex toggle is hidden on Overview and Milōn Bot",
 );
 assert(
   clientSrc.includes('activeTab === "cash"'),

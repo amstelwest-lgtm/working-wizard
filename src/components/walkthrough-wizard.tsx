@@ -197,14 +197,14 @@ const ACCOUNTANT_DASH_STEPS: Step[] = [
  */
 const ACCOUNTANT_CLIENT_EMPTY_STEPS: Step[] = [
   {
-    tab: "ratios",
+    tab: "overview",
     targetId: "first-figures-card, .health-orb",
     section: "This file",
     title: "Nothing is in this file yet",
     body: "You are looking at an empty client workspace. There is no health score, no profit picture, and no forecast until someone puts numbers in. That is normal on a new file — it is not broken.",
   },
   {
-    tab: "ratios",
+    tab: "overview",
     targetId: "first-figures-card",
     section: "Figures",
     title: "Start with one upload",
@@ -218,10 +218,10 @@ const ACCOUNTANT_CLIENT_STEPS: Step[] = [
     targetId: "ask-ai-accountant",
     section: "Milōn Bot",
     title: "Start with Milōn Bot",
-    body: "Now that this client has figures, the studio opens here. Ask against the drafted deliverables — ratios, waterfall, cash outlook, next moves, the action plan — or what’s outstanding on the brain. It can draft next steps or an advisory pack for you to review. It won’t invent figures or send email.",
+    body: "Ask against the drafted deliverables — ratios, waterfall, cash outlook, next moves, the action plan — or what’s outstanding on the brain. It can draft next steps or an advisory pack for you to review. It won’t invent figures or send email.",
   },
   {
-    tab: "ask",
+    tab: "overview",
     targetId: "wizard-open-queries",
     section: "Queries",
     title: "Questions from client management",
@@ -230,7 +230,7 @@ const ACCOUNTANT_CLIENT_STEPS: Step[] = [
   {
     tab: "summary",
     targetId: "wizard-brain-hero, pane-summary",
-    section: "Summary",
+    section: "Client Brain",
     title: "The client brain is the background file",
     body: "This tab is the context around the client — profile, facts, uploads, drafts — so you and Milōn Bot can advise this business, not a generic SME. Empty blocks are waiting for a fact or an upload; they are not broken. Agreed work that client management will chase lives on Action Plan.",
   },

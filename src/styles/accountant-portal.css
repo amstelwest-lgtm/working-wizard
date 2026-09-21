@@ -357,6 +357,11 @@ html[data-theme="light"] .accountant-portal .doc{background:linear-gradient(170d
   font-weight:700;
   padding:2px 10px 10px;
 }
+.accountant-portal .deliverable-rail .rail-kicker-split{
+  margin-top:12px;
+  padding-top:12px;
+  border-top:1px solid var(--line-soft);
+}
 .accountant-portal .deliverable-rail .tab{
   display:flex;
   align-items:flex-start;

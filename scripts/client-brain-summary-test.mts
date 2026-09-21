@@ -125,7 +125,7 @@ assert(typesSrc.includes("client_brain_questions:"), "types include client_brain
 assert(typesSrc.includes("brain_summary: Json | null"), "types include brain_summary");
 
 assert(clientSrc.includes('"summary"'), "summary is an ActiveTab");
-assert(clientSrc.includes('{ id: "summary", label: "Summary" }'), "Summary tab in strip");
+assert(clientSrc.includes('{ id: "summary", label: "Client Brain" }'), "Client Brain tab in the rail");
 assert(clientSrc.includes('id="pane-summary"'), "Summary pane exists");
 assert(clientSrc.includes("ClientBrainSummary"), "panel is mounted");
 assert(clientSrc.includes('from "@/components/client-brain-summary"'), "panel imported");

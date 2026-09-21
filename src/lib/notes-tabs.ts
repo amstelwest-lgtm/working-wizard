@@ -12,7 +12,7 @@
  *
  * No parallel page (stay in Open queries; do not dump the user on the wrong tab):
  *   next → owner Next moves only
- *   summary, ask, reports, advisory → accountant studio only
+ *   overview, summary, ask, reports, advisory → accountant studio only
  */
 
 export type NotesWorkspace = "owner" | "accountant";
@@ -27,6 +27,7 @@ export const OWNER_NOTE_TABS = [
 ] as const;
 
 export const ACCOUNTANT_NOTE_TABS = [
+  "overview",
   "summary",
   "ask",
   "ratios",
@@ -46,6 +47,7 @@ const TAB_GROUPS: readonly (readonly string[])[] = [
   ["cash"],
   ["budget"],
   ["next"],
+  ["overview"],
   ["summary"],
   ["ask"],
   ["reports"],
@@ -70,7 +72,8 @@ export const NOTE_TAB_LABELS: Record<string, string> = {
   plan: "Action plan",
   reports: "Reports",
   advisory: "Advisory",
-  summary: "Summary",
+  overview: "Overview",
+  summary: "Client Brain",
   ask: "Milōn Bot",
 };
 

@@ -478,9 +478,11 @@ const acct = (f: NextStepFacts) => resolveNextStep(f, "accountant");
   const studioRail = studio.indexOf('className="deliverable-rail"');
   assert(studioCard > 0, "accountant studio renders NextStepCard");
   assert(studioRail > 0, "studio lists deliverables in a left rail");
+  const studioOverview = studio.indexOf('id="pane-overview"');
+  assert(studioOverview > 0 && studioOverview < studioCard, "overview pane holds the Next Step");
   assert(
     studioCard < studioBriefing && studioBriefing < studioSections,
-    "studio: Next Step above briefing above the open section",
+    "studio: Next Step and briefing sit in Overview, above Client Brain",
   );
   assert(studio.includes('audience="accountant"'), "studio uses accountant audience");
   assert(
