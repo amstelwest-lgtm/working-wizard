@@ -53,7 +53,7 @@ export const XERO_INVOICE_SCOPE = "accounting.invoices.read";
 export function xeroScopes(): string {
   const override = (process.env.XERO_SCOPES ?? "").trim();
   if (override) return override;
-  const base = [...XERO_DEFAULT_SCOPES];
+  const base: string[] = [...XERO_DEFAULT_SCOPES];
   if (xeroInvoiceSyncEnabled() && !base.includes(XERO_INVOICE_SCOPE)) {
     base.push(XERO_INVOICE_SCOPE);
   }
