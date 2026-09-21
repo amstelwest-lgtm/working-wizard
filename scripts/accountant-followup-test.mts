@@ -43,6 +43,21 @@ assert(dashSrc.includes('filter: "overdue"'), "overdue Chase deep-links filter=o
 assert(dashSrc.includes("Follow up on Action Plan"), "client row has follow-up action");
 assert(dashSrc.includes("openClientPlan"), "attention cards can open the plan");
 
+const clientsAt = dashSrc.indexOf('id="clients-table"');
+const followAt = dashSrc.indexOf('id="follow-up"');
+const insightsAt = dashSrc.indexOf('id="portfolio-insights"');
+const playAt = dashSrc.indexOf('id="playbooks"');
+assert(clientsAt > 0 && followAt > clientsAt, "follow-up sits below the client list");
+assert(insightsAt > clientsAt, "portfolio insights sit below the client list");
+assert(playAt > clientsAt, "playbooks sit below the client list");
+assert(dashSrc.includes("hideWhenClear"), "clear portfolio does not render an empty card");
+assert(!dashSrc.includes("nice work"), "empty needs-attention does not celebrate");
+assert(dashSrc.includes('id="needs-attention"'), "urgent items use a needs-attention strip");
+assert(
+  dashSrc.includes('<details className="home-fold" id="playbooks">'),
+  "playbook library is collapsed by default",
+);
+
 const clientSrc = readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8");
 assert(clientSrc.includes("filter?: string"), "client search accepts filter");
 assert(clientSrc.includes('search.filter === "overdue"'), "Action Plan receives overdue filter");

@@ -9,6 +9,7 @@
 
 import { supabase } from "@/integrations/supabase/client";
 import { computeRatios, type RatioInputs } from "@/lib/ratios";
+import { resolveSnapshotPeriodLabel } from "@/lib/statement-period";
 
 export type SnapshotSource = "autosave" | "manual" | "upload" | "qbo" | "xero" | "pdf_upload";
 
@@ -47,27 +48,30 @@ export async function upsertPeriodSnapshot(opts: {
   source?: SnapshotSource;
 }): Promise<{ id: string | null; error: string | null; periodLabel: string; periodDate: string }> {
   const periodDate = periodDateFromUnknown(opts.periodDate);
-  const periodLabel = opts.periodLabel?.trim() || periodLabelFromDate(periodDate);
-  const ratiosOut =
-    opts.ratios ?? computeRatios(opts.financials as unknown as RatioInputs);
+  const requestedLabel = opts.periodLabel?.trim() || periodLabelFromDate(periodDate);
+  const ratiosOut = opts.ratios ?? computeRatios(opts.financials as unknown as RatioInputs);
 
   const byDate = await supabase
     .from("client_financial_snapshots")
-    .select("id")
+    .select("id, period_label")
     .eq("client_id", opts.clientId)
     .eq("period_date", periodDate)
     .maybeSingle();
 
-  let existingId = (byDate.data as { id?: string } | null)?.id ?? null;
+  let existing = byDate.data as { id?: string; period_label?: string | null } | null;
+  let existingId = existing?.id ?? null;
   if (!existingId) {
     const byLabel = await supabase
       .from("client_financial_snapshots")
-      .select("id")
+      .select("id, period_label")
       .eq("client_id", opts.clientId)
-      .eq("period_label", periodLabel)
+      .eq("period_label", requestedLabel)
       .maybeSingle();
-    existingId = (byLabel.data as { id?: string } | null)?.id ?? null;
+    existing = byLabel.data as { id?: string; period_label?: string | null } | null;
+    existingId = existing?.id ?? null;
   }
+
+  const periodLabel = resolveSnapshotPeriodLabel(existing?.period_label, requestedLabel);
 
   if (existingId) {
     const { error } = await supabase

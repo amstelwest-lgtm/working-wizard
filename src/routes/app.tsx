@@ -110,7 +110,7 @@ import {
   overlayWeeklyInputs,
   resolveWaterfallFigures,
 } from "@/lib/weekly-inputs";
-import { readStatementMeta, statementYearLine } from "@/lib/statement-period";
+import { preferStatementPeriod, readStatementMeta, statementYearLine } from "@/lib/statement-period";
 import {
   emptyProductMix,
   hasProductMixAnswer,
@@ -2101,10 +2101,13 @@ function Index() {
     const qbo = p.get("qbo");
     const xero = p.get("xero");
     if (!qbo && !xero) return;
-    if (qbo === "connected")
-      toast.success("QuickBooks Online connected — tap Sync to import your data");
-    else if (qbo === "error")
+    if (qbo === "connected") {
+      toast.success("QuickBooks Online connected — tap Sync to import P&L and balance sheet");
+      setShowQboDialog(true);
+    } else if (qbo === "error") {
       toast.error(`QuickBooks connection failed: ${p.get("reason") ?? "unknown error"}`);
+      setShowQboDialog(true);
+    }
     if (xero === "connected") {
       toast.success("Xero connected — tap Sync to import P&L and balance sheet");
       setShowXeroDialog(true);
@@ -5169,7 +5172,7 @@ function Index() {
                       )}
                       fallback={derivePeriodWaterfallFallback(v)}
                       periodLabel={readStatementMeta(v).periodLabel}
-                      preferPeriod={readStatementMeta(v).statementSource === "xero"}
+                      preferPeriod={preferStatementPeriod(v)}
                       yearToDate={statementYearLine(v)}
                     />
                   </div>
@@ -5178,7 +5181,7 @@ function Index() {
                     <ProductMixPanel
                       totalRevenue={
                         resolveWaterfallFigures(weeklyInputs, derivePeriodWaterfallFallback(v), {
-                          preferPeriod: readStatementMeta(v).statementSource === "xero",
+                          preferPeriod: preferStatementPeriod(v),
                         }).revenue
                       }
                     />
@@ -5941,12 +5944,11 @@ function Index() {
               </DialogHeader>
               <QboConnectCard
                 clientId={effectiveClientId}
+                returnPath="/app"
                 onSyncComplete={(inputs) => {
                   setV((prev) => ({
                     ...prev,
-                    ...Object.fromEntries(
-                      Object.entries(inputs).map(([k, val]) => [k, String(val)]),
-                    ),
+                    ...inputs,
                   }));
                   setHasRealFinancials(true);
                   void handleOwnerFirstRealFinancialsUpload();

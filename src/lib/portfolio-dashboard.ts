@@ -286,26 +286,16 @@ export function buildPortfolioInsights(
   return insights.slice(0, 3);
 }
 
-/** Portfolio summary sentence under the greeting. */
+/** One short line under the practice-home greeting. KPIs carry the numbers. */
 export function portfolioSummaryLine(input: {
   clientCount: number;
   needAttention: number;
   avgHealth: number | null;
 }): string {
-  const { clientCount, needAttention, avgHealth } = input;
-  if (clientCount === 0) {
-    return "Add your first client to start tracking portfolio health.";
-  }
-  if (needAttention === 0) {
-    return avgHealth != null && avgHealth >= 70
-      ? "Your portfolio is healthy overall — no clients need urgent attention."
-      : "No clients are flagged for attention right now.";
-  }
-  const healthyEnough = avgHealth != null && avgHealth >= 65;
-  if (healthyEnough) {
-    return `Your portfolio is healthy overall, but ${needAttention} client${needAttention === 1 ? "" : "s"} need attention.`;
-  }
-  return `${needAttention} client${needAttention === 1 ? "" : "s"} need attention across your book.`;
+  const { clientCount, needAttention } = input;
+  if (clientCount === 0) return "Add your first client.";
+  if (needAttention === 0) return "Nothing urgent in the book.";
+  return `${needAttention} client${needAttention === 1 ? "" : "s"} need attention.`;
 }
 
 /** Revenue figure for bubble sizing (null-safe). */

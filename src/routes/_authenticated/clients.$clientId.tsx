@@ -103,7 +103,8 @@ import { useTrack } from "@/hooks/use-track";
 import { QboConnectCard } from "@/components/qbo-connect";
 import { XeroConnectCard } from "@/components/xero-connect";
 import { getXeroStatus, type XeroStatus } from "@/lib/xero.functions";
-import { readStatementMeta, statementYearLine } from "@/lib/statement-period";
+import { getQboStatus, type QboStatus } from "@/lib/qbo.functions";
+import { preferStatementPeriod, readStatementMeta, statementYearLine } from "@/lib/statement-period";
 import { effectiveCashRunwayWeeks, runwayWeeksFromCashflow } from "@/lib/cash-runway";
 import { countOpenQueriesForClient } from "@/lib/open-queries";
 import { ProfileFunnel } from "@/components/profile/profile-funnel";
@@ -776,6 +777,9 @@ function ClientView() {
   const [xeroLink, setXeroLink] = useState<XeroStatus>(null);
   const [xeroRefresh, setXeroRefresh] = useState(0);
   const fetchXeroLink = useServerFn(getXeroStatus);
+  const [qboLink, setQboLink] = useState<QboStatus>(null);
+  const [qboRefresh, setQboRefresh] = useState(0);
+  const fetchQboLink = useServerFn(getQboStatus);
   const [debtSchedule, setDebtSchedule] = useState<DebtSchedule>(emptyDebtSchedule());
   const [weeklyInputs, setWeeklyInputs] = useState<WeeklyInputs>(emptyWeeklyInputs);
   const [productMix, setProductMix] = useState<ProductMix>(emptyProductMix);
@@ -798,6 +802,23 @@ function ClientView() {
     // fetchXeroLink identity is not stable; clientId + refresh token are the triggers.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId, xeroRefresh]);
+
+  useEffect(() => {
+    if (!clientId) return;
+    let cancelled = false;
+    void fetchQboLink({ data: { clientId } })
+      .then((status) => {
+        if (!cancelled) setQboLink(status);
+      })
+      .catch(() => {
+        if (!cancelled) setQboLink(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // fetchQboLink identity is not stable; clientId + refresh token are the triggers.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clientId, qboRefresh]);
   const debtScheduleRef = useRef(debtSchedule);
   debtScheduleRef.current = debtSchedule;
   const weeklyInputsRef = useRef(weeklyInputs);
@@ -1350,37 +1371,13 @@ function ClientView() {
     [clientId],
   );
 
-  const onQboSyncComplete = useCallback(
-    (inputs: Record<string, number>) => {
-      const next = Object.fromEntries(Object.entries(inputs).map(([k, val]) => [k, String(val)]));
-      const nextScalars = { ...financialsRef.current, ...next };
-      financialsRef.current = nextScalars;
-      setFinancials(nextScalars);
-      const updated = mergeCurrentBlob(nextScalars);
-      const updatedAt = new Date().toISOString();
-      void supabase
-        .from("clients")
-        .update({
-          financials: updated as never,
-          financials_updated_at: updatedAt,
-        })
-        .eq("id", clientId)
-        .then(({ error }) => {
-          if (error) {
-            toast.error(`QBO sync save failed: ${error.message}`);
-            return;
-          }
-          setClient((c) => (c ? { ...c, financials_updated_at: updatedAt } : c));
-          void upsertCurrentPeriodSnapshot({
-            clientId,
-            financials: updated as Record<string, unknown>,
-            source: "qbo",
-          });
-          toast.success("Financials updated from QuickBooks");
-        });
-    },
-    [clientId, mergeCurrentBlob],
-  );
+  const onQboSyncComplete = useCallback((inputs: Record<string, string>) => {
+    const nextScalars = { ...financialsRef.current, ...inputs };
+    financialsRef.current = nextScalars;
+    setFinancials(nextScalars);
+    setClient((c) => (c ? { ...c, financials_updated_at: new Date().toISOString() } : c));
+    setQboRefresh((n) => n + 1);
+  }, []);
 
   const onXeroSyncComplete = useCallback((inputs: Record<string, string>) => {
     const nextScalars = { ...financialsRef.current, ...inputs };
@@ -2158,6 +2155,20 @@ function ClientView() {
                   onUpload={() => setUploadOpen(true)}
                   onConnectQuickBooks={() => setShowQboDialog(true)}
                   onConnectXero={() => setShowXeroDialog(true)}
+                  qboLink={
+                    qboLink
+                      ? {
+                          tenantName: qboLink.companyName,
+                          lastSyncedAt: qboLink.lastSyncedAt,
+                          syncStatus: qboLink.syncStatus,
+                          periodLabel: qboLink.periodLabel,
+                          revenue: qboLink.revenue,
+                          ytdPeriodLabel: qboLink.ytdPeriodLabel,
+                          ytdRevenue: qboLink.ytdRevenue,
+                          ytdBasis: qboLink.ytdBasis,
+                        }
+                      : null
+                  }
                   xeroLink={
                     xeroLink
                       ? {
@@ -2451,7 +2462,12 @@ function ClientView() {
                     id="accounting-connect"
                     style={{ marginBottom: 16, display: "grid", gap: 10 }}
                   >
-                    <QboConnectCard clientId={clientId} onSyncComplete={onQboSyncComplete} />
+                    <QboConnectCard
+                      clientId={clientId}
+                      returnPath={`/clients/${clientId}`}
+                      refreshToken={qboRefresh}
+                      onSyncComplete={onQboSyncComplete}
+                    />
                     <XeroConnectCard
                       clientId={clientId}
                       returnPath={`/clients/${clientId}`}
@@ -2695,7 +2711,7 @@ function ClientView() {
                     <ProductMixPanel
                       totalRevenue={
                         resolveWaterfallFigures(weeklyInputs, waterfallFallback, {
-                          preferPeriod: readStatementMeta(financials).statementSource === "xero",
+                          preferPeriod: preferStatementPeriod(financials),
                         }).revenue
                       }
                       incentive="Answer these to build revenue and net profit per product line."
@@ -2715,12 +2731,16 @@ function ClientView() {
                       clientName={client?.name}
                       clientId={client?.id}
                       periodLabel={readStatementMeta(financials).periodLabel}
-                      preferPeriod={readStatementMeta(financials).statementSource === "xero"}
+                      preferPeriod={preferStatementPeriod(financials)}
                       yearToDate={statementYearLine(financials)}
                       periodNote={
-                        xeroLink && readStatementMeta(financials).statementSource !== "xero"
-                          ? "This total has no period dates. Sync Xero again — it is a multi-month figure, not this month."
-                          : null
+                        preferStatementPeriod(financials) || (!qboLink && !xeroLink)
+                          ? null
+                          : qboLink && !xeroLink
+                            ? "This total has no period dates. Sync QuickBooks again — it is a multi-month figure, not this month."
+                            : !qboLink && xeroLink
+                              ? "This total has no period dates. Sync Xero again — it is a multi-month figure, not this month."
+                              : "This total has no period dates. Sync again — it is a multi-month figure, not this month."
                       }
                       reviewSignoff={stampFromSignoff(
                         profitabilitySignoff,
@@ -3232,6 +3252,8 @@ function ClientView() {
               </DialogHeader>
               <QboConnectCard
                 clientId={clientId}
+                returnPath={`/clients/${clientId}`}
+                refreshToken={qboRefresh}
                 onSyncComplete={(inputs) => {
                   onQboSyncComplete(inputs);
                   setShowQboDialog(false);

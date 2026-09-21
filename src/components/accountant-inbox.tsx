@@ -21,7 +21,13 @@ import {
   upsertFirmListing,
 } from "@/lib/marketplace.functions";
 
-type Props = { firmId: string | null; onChanged?: () => void; className?: string };
+type Props = {
+  firmId: string | null;
+  onChanged?: () => void;
+  className?: string;
+  /** Practice home: one collapsed line unless a request is waiting. */
+  quiet?: boolean;
+};
 
 const GOLD_BTN =
   "inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-b from-[#f3d98a] via-[#d4a550] to-[#b7872a] px-3 py-1.5 text-[12px] font-bold text-[#1b1300] disabled:opacity-50";
@@ -30,7 +36,7 @@ const GHOST_BTN =
 const INPUT =
   "w-full rounded-md border border-slate-300/70 bg-white px-2 py-1.5 text-[12.5px] font-normal text-slate-900 dark:border-white/15 dark:bg-transparent dark:text-slate-100";
 
-export function AccountantInbox({ firmId, onChanged, className }: Props) {
+export function AccountantInbox({ firmId, onChanged, className, quiet }: Props) {
   const track = useTrack();
   const fetchInbox = useServerFn(listFirmInbox);
   const fetchListing = useServerFn(getFirmListing);
@@ -57,6 +63,7 @@ export function AccountantInbox({ firmId, onChanged, className }: Props) {
     contactEmail: "",
   });
   const seq = useRef(0);
+  const foldRef = useRef<HTMLDetailsElement>(null);
 
   const load = useCallback(async () => {
     if (!firmId) return;
@@ -94,6 +101,11 @@ export function AccountantInbox({ firmId, onChanged, className }: Props) {
     if (!firmId) return;
     void load();
   }, [firmId, load]);
+
+  useEffect(() => {
+    if (!quiet || !loaded || !foldRef.current) return;
+    if (requests.some((r) => r.status === "open")) foldRef.current.open = true;
+  }, [quiet, loaded, requests]);
 
   const decide = async (r: AccountantRequest, accept: boolean) => {
     if (busy) return;
@@ -145,43 +157,49 @@ export function AccountantInbox({ firmId, onChanged, className }: Props) {
     .filter(Boolean)
     .join(" ");
 
-  return (
-    <section
-      className={shell}
-      id="accountant-inbox"
-      data-open={open.length}
-      data-listed={listing?.is_listed ? 1 : 0}
-    >
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <span className="block text-[9.5px] font-bold uppercase tracking-[0.22em] text-[#9a7014] dark:text-[#e1b85e]">
-            Marketplace
-          </span>
-          <h3 className="mt-0.5 flex items-center gap-1.5 text-[15px] font-bold leading-tight text-slate-900 dark:text-[#f4e7c2]">
-            <Inbox className="h-4 w-4 text-[#b7872a]" aria-hidden />
-            {open.length === 0
-              ? listing?.is_listed
-                ? "No new requests"
-                : "Your firm is not listed yet"
-              : `${open.length} business${open.length === 1 ? "" : "es"} asking for your review`}
-          </h3>
-          <p className="mt-1 max-w-[64ch] text-[12px] leading-relaxed text-slate-600 dark:text-slate-300/80">
-            {listing?.is_listed
-              ? "Owners running MILŌN alone can ask you to review their advisory pack. Accepting attaches them to your firm: packs come to you for sign-off and they appear in your portfolio."
-              : "List your firm and owners who run MILŌN without an accountant can ask you to review their pack. You judge the work MILŌN has already done, not raw statements."}
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => setShowListing((v) => !v)}
-          className={GHOST_BTN}
-          aria-expanded={showListing}
-          data-listing-toggle
-        >
-          <Store className="h-3.5 w-3.5" aria-hidden />{" "}
-          {listing?.is_listed ? "Edit listing" : "List your firm"}
-        </button>
+  const summary =
+    open.length > 0
+      ? `${open.length} request${open.length === 1 ? "" : "s"}`
+      : listing?.is_listed
+        ? "No new requests"
+        : "List your firm";
+
+  const heading = (
+    <div className="flex flex-wrap items-start justify-between gap-3">
+      <div>
+        <span className="block text-[9.5px] font-bold uppercase tracking-[0.22em] text-[#9a7014] dark:text-[#e1b85e]">
+          Marketplace
+        </span>
+        <h3 className="mt-0.5 flex items-center gap-1.5 text-[15px] font-bold leading-tight text-slate-900 dark:text-[#f4e7c2]">
+          <Inbox className="h-4 w-4 text-[#b7872a]" aria-hidden />
+          {open.length === 0
+            ? listing?.is_listed
+              ? "No new requests"
+              : "Your firm is not listed yet"
+            : `${open.length} business${open.length === 1 ? "" : "es"} asking for your review`}
+        </h3>
+        <p className="mt-1 max-w-[64ch] text-[12px] leading-relaxed text-slate-600 dark:text-slate-300/80">
+          {listing?.is_listed
+            ? "Owners running MILŌN alone can ask you to review their advisory pack. Accepting attaches them to your firm: packs come to you for sign-off and they appear in your portfolio."
+            : "List your firm and owners who run MILŌN without an accountant can ask you to review their pack. You judge the work MILŌN has already done, not raw statements."}
+        </p>
       </div>
+      <button
+        type="button"
+        onClick={() => setShowListing((v) => !v)}
+        className={GHOST_BTN}
+        aria-expanded={showListing}
+        data-listing-toggle
+      >
+        <Store className="h-3.5 w-3.5" aria-hidden />{" "}
+        {listing?.is_listed ? "Edit listing" : "List your firm"}
+      </button>
+    </div>
+  );
+
+  const body = (
+    <>
+      {heading}
 
       {showListing ? (
         <form
@@ -409,6 +427,35 @@ export function AccountantInbox({ firmId, onChanged, className }: Props) {
           ) : null}
         </>
       ) : null}
+    </>
+  );
+
+  if (quiet) {
+    return (
+      <details
+        ref={foldRef}
+        className={["home-fold", className].filter(Boolean).join(" ")}
+        id="accountant-inbox"
+        data-open={open.length}
+        data-listed={listing?.is_listed ? 1 : 0}
+      >
+        <summary>
+          <span>Marketplace</span>
+          <span className="home-fold-meta">{summary}</span>
+        </summary>
+        <div className="home-fold-body">{body}</div>
+      </details>
+    );
+  }
+
+  return (
+    <section
+      className={shell}
+      id="accountant-inbox"
+      data-open={open.length}
+      data-listed={listing?.is_listed ? 1 : 0}
+    >
+      {body}
     </section>
   );
 }

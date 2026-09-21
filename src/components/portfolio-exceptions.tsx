@@ -1,10 +1,9 @@
 /**
  * Portfolio by exception (P2.3) — the accountant's one screen.
  *
- * Which clients need a human today, and why, ranked. Sits above the clients
- * table on the dashboard. Each exception deep-links to the studio tab that
- * resolves it. Hidden when the firm has no clients; shows a calm "all quiet"
- * line when nothing needs attention, so silence is informative.
+ * Which clients need a human today, and why, ranked. Each exception deep-links
+ * to the studio tab that resolves it. Hidden when the firm has no clients.
+ * Practice home passes hideWhenClear so an empty book does not render a card.
  */
 import { useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
@@ -13,7 +12,16 @@ import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Loader2 } from "lu
 import type { PortfolioRow } from "@/lib/portfolio";
 import { getFirmPortfolio, type PortfolioResult } from "@/lib/portfolio.functions";
 
-type Props = { firmId: string | null; refreshKey?: string | number; className?: string };
+type Props = {
+  firmId: string | null;
+  refreshKey?: string | number;
+  className?: string;
+  /**
+   * Practice home: skip the all-clear card. Render a thin strip only when a
+   * client actually needs a human today.
+   */
+  hideWhenClear?: boolean;
+};
 
 const SEV_CLASS: Record<1 | 2 | 3, string> = {
   1: "border-rose-400/50 bg-rose-500/10 text-rose-700 dark:text-rose-300",
@@ -21,7 +29,7 @@ const SEV_CLASS: Record<1 | 2 | 3, string> = {
   3: "border-slate-300/70 bg-slate-500/10 text-slate-600 dark:border-white/15 dark:text-slate-300",
 };
 
-export function PortfolioExceptions({ firmId, refreshKey, className }: Props) {
+export function PortfolioExceptions({ firmId, refreshKey, className, hideWhenClear }: Props) {
   const fetch = useServerFn(getFirmPortfolio);
   const [data, setData] = useState<PortfolioResult | null>(null);
   const [loading, setLoading] = useState(false);
@@ -51,6 +59,48 @@ export function PortfolioExceptions({ firmId, refreshKey, className }: Props) {
   const attention = data ? data.rows.filter((r) => r.exceptions.some((e) => e.severity <= 2)) : [];
   const quiet = data ? data.rows.filter((r) => !r.exceptions.some((e) => e.severity <= 2)) : [];
   const visible: PortfolioRow[] = showAll ? [...attention, ...quiet] : attention;
+
+  if (hideWhenClear) {
+    if (!data || attention.length === 0) return null;
+    const shown = attention.slice(0, 3);
+    const more = attention.length - shown.length;
+    return (
+      <section
+        className={["attn-strip", className].filter(Boolean).join(" ")}
+        id="portfolio-exceptions"
+        data-attention={attention.length}
+      >
+        <h2>Needs attention</h2>
+        <ul>
+          {shown.map((r) => {
+            const reasons = r.exceptions
+              .filter((e) => e.severity <= 2)
+              .map((e) => e.label)
+              .join(" · ");
+            const first = r.exceptions.find((e) => e.severity <= 2);
+            return (
+              <li key={r.clientId}>
+                <Link
+                  to="/clients/$clientId"
+                  params={{ clientId: r.clientId }}
+                  search={{ tab: first?.tab } as never}
+                  className="attn-strip-row"
+                  data-client={r.clientId}
+                >
+                  <span className="attn-strip-name">{r.name}</span>
+                  <span className="attn-strip-reason">{reasons || r.stateLabel}</span>
+                  <span className="attn-strip-go">Open →</span>
+                </Link>
+              </li>
+            );
+          })}
+          {more > 0 ? (
+            <li className="attn-strip-more">and {more} more in the client list</li>
+          ) : null}
+        </ul>
+      </section>
+    );
+  }
 
   const shell = [
     "rounded-2xl border border-[#b7872a]/25 bg-white/70 p-4 shadow-sm dark:border-[#d4a550]/20 dark:bg-white/[0.035]",

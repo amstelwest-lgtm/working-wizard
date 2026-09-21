@@ -22,7 +22,7 @@ import { useMarketFormat } from "@/contexts/market";
 import { AddPastPeriodLink } from "@/components/add-past-period-link";
 import { yearToDateTitle } from "@/lib/statement-period";
 
-export type XeroLinkProof = {
+export type LedgerLinkProof = {
   tenantName: string | null;
   lastSyncedAt: string | null;
   syncStatus: string;
@@ -32,6 +32,8 @@ export type XeroLinkProof = {
   ytdRevenue?: number | null;
   ytdBasis?: "financial" | "calendar" | null;
 };
+
+export type XeroLinkProof = LedgerLinkProof;
 
 function fmtProofWhen(iso: string | null) {
   if (!iso) return "not yet";
@@ -49,6 +51,53 @@ function fmtProofWhen(iso: string | null) {
 function fmtProofMoney(n: number | null) {
   if (n == null || !Number.isFinite(n)) return null;
   return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function LedgerProof({
+  id,
+  title,
+  link,
+  fallbackName,
+}: {
+  id: string;
+  title: string;
+  link: LedgerLinkProof;
+  fallbackName: string;
+}) {
+  return (
+    <p className="briefing-muted" id={id} style={{ marginTop: 10 }}>
+      <span className="briefing-kicker">{title}</span>
+      <br />
+      <b>{link.tenantName?.trim() || fallbackName}</b>
+      {" · "}
+      {link.syncStatus === "error"
+        ? "Last sync needs attention"
+        : `Last sync ${fmtProofWhen(link.lastSyncedAt)}`}
+      {link.periodLabel ? (
+        <>
+          <br />
+          Month to date · {link.periodLabel}
+          {fmtProofMoney(link.revenue) ? ` · Revenue ${fmtProofMoney(link.revenue)}` : ""}
+        </>
+      ) : (
+        <>
+          <br />
+          Sync again — the stored total has no period dates, so it is not this month.
+        </>
+      )}
+      {link.ytdPeriodLabel ? (
+        <>
+          <br />
+          {yearToDateTitle(link.ytdBasis ?? null)}
+          {" · "}
+          {link.ytdPeriodLabel}
+          {fmtProofMoney(link.ytdRevenue ?? null)
+            ? ` · Revenue ${fmtProofMoney(link.ytdRevenue ?? null)}`
+            : ""}
+        </>
+      ) : null}
+    </p>
+  );
 }
 
 export type ClientBriefingProps = {
@@ -81,6 +130,8 @@ export type ClientBriefingProps = {
   onUpload?: () => void;
   onConnectQuickBooks?: () => void;
   onConnectXero?: () => void;
+  /** Present when this client has a QuickBooks connection. Revenue only after a dated sync. */
+  qboLink?: LedgerLinkProof | null;
   /** Present when this client has a Xero connection. Revenue only after a dated sync. */
   xeroLink?: XeroLinkProof | null;
 };
@@ -150,41 +201,21 @@ export function ClientBriefing(p: ClientBriefingProps) {
               ))}
             </dl>
           )}
+          {p.qboLink ? (
+            <LedgerProof
+              id="qbo-link-proof"
+              title="QuickBooks linked"
+              link={p.qboLink}
+              fallbackName="Company connected"
+            />
+          ) : null}
           {p.xeroLink ? (
-            <p className="briefing-muted" id="xero-link-proof" style={{ marginTop: 10 }}>
-              <span className="briefing-kicker">Xero linked</span>
-              <br />
-              <b>{p.xeroLink.tenantName?.trim() || "Organisation connected"}</b>
-              {" · "}
-              {p.xeroLink.syncStatus === "error"
-                ? "Last sync needs attention"
-                : `Last sync ${fmtProofWhen(p.xeroLink.lastSyncedAt)}`}
-              {p.xeroLink.periodLabel ? (
-                <>
-                  <br />
-                  Month to date · {p.xeroLink.periodLabel}
-                  {fmtProofMoney(p.xeroLink.revenue)
-                    ? ` · Revenue ${fmtProofMoney(p.xeroLink.revenue)}`
-                    : ""}
-                </>
-              ) : (
-                <>
-                  <br />
-                  Sync again — the stored total has no period dates, so it is not this month.
-                </>
-              )}
-              {p.xeroLink.ytdPeriodLabel ? (
-                <>
-                  <br />
-                  {yearToDateTitle(p.xeroLink.ytdBasis ?? null)}
-                  {" · "}
-                  {p.xeroLink.ytdPeriodLabel}
-                  {fmtProofMoney(p.xeroLink.ytdRevenue ?? null)
-                    ? ` · Revenue ${fmtProofMoney(p.xeroLink.ytdRevenue ?? null)}`
-                    : ""}
-                </>
-              ) : null}
-            </p>
+            <LedgerProof
+              id="xero-link-proof"
+              title="Xero linked"
+              link={p.xeroLink}
+              fallbackName="Organisation connected"
+            />
           ) : null}
           <div className="briefing-actions">
             {p.onUpload ? (
@@ -280,11 +311,7 @@ export function ClientBriefing(p: ClientBriefingProps) {
               </button>
             ) : null}
             {p.onEditProfile ? (
-              <button
-                type="button"
-                className="btn gold mini"
-                onClick={p.onEditProfile}
-              >
+              <button type="button" className="btn gold mini" onClick={p.onEditProfile}>
                 {p.profile ? "Edit profile" : "Fill profile now"}
               </button>
             ) : null}
