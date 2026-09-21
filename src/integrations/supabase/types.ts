@@ -2327,18 +2327,21 @@ export type Database = {
           client_id: string
           created_at: string | null
           id: string
+          return_path: string | null
           state: string
         }
         Insert: {
           client_id: string
           created_at?: string | null
           id?: string
+          return_path?: string | null
           state: string
         }
         Update: {
           client_id?: string
           created_at?: string | null
           id?: string
+          return_path?: string | null
           state?: string
         }
         Relationships: [

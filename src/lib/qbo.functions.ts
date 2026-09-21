@@ -3,17 +3,25 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { assertClientScope } from "@/lib/assert-client-scope";
 import { getSupabaseAdminOrNull, supabaseAdmin } from "@/integrations/supabase/client.server";
+import { computeRatios, type RatioInputs } from "@/lib/ratios";
+import { sanitizeQboReturnPath } from "@/lib/qbo-state";
+import {
+  calendarMonthStamp,
+  readStatementMeta,
+  STATEMENT_YTD_FIELD_KEYS,
+} from "@/lib/statement-period";
 import {
   buildQboAuthUrl,
   exchangeCodeForTokens,
-  refreshQboToken,
-  fetchPnL,
-  fetchBalanceSheet,
-  fetchCashFlow,
   fetchChartOfAccounts,
+  fetchQboLedgerStatement,
   fetchRecentTransactions,
-  mapToFinancialInputs,
-  QBO_CLIENT_ID,
+  mapQboToFinancialInputs,
+  qboCredentialsConfigured,
+  refreshQboToken,
+  revokeQboToken,
+  type QboBalanceSheet,
+  type QboPnL,
 } from "@/lib/qbo";
 
 // ─── Check whether QBO credentials are configured ────────────────────────────
@@ -21,12 +29,7 @@ import {
 export const getQboConfig = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async () => {
-    try {
-      QBO_CLIENT_ID(); // throws if missing
-      return { configured: true };
-    } catch {
-      return { configured: false };
-    }
+    return { configured: qboCredentialsConfigured() };
   });
 
 // ─── Generate OAuth URL (creates state for CSRF protection) ──────────────────
@@ -34,23 +37,29 @@ export const getQboConfig = createServerFn({ method: "POST" })
 export const getQboAuthUrl = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input) =>
-    z.object({ clientId: z.string().uuid() }).parse(input),
+    z
+      .object({
+        clientId: z.string().uuid(),
+        returnPath: z.string().max(200).optional(),
+      })
+      .parse(input),
   )
   .handler(async ({ data, context }) => {
     assertClientScope(context.actingAsClientId, data.clientId);
 
     const { data: client } = await context.supabase
       .from("clients")
-      .select("id, name")
+      .select("id")
       .eq("id", data.clientId)
       .maybeSingle();
     if (!client) throw new Error("Client not found");
 
-    // Random state token for CSRF protection (10-minute TTL enforced on callback)
     const state = crypto.randomUUID();
+    const returnPath = sanitizeQboReturnPath(data.returnPath, data.clientId);
     await supabaseAdmin.from("qbo_oauth_states").insert({
       state,
       client_id: data.clientId,
+      return_path: returnPath,
     });
 
     return { authUrl: buildQboAuthUrl(state) };
@@ -65,24 +74,94 @@ export type QboStatus = {
   lastSyncedAt: string | null;
   syncStatus: string;
   syncError: string | null;
+  /** Set only after a sync that stored statementSource=qbo with explicit dates. */
+  periodLabel: string | null;
+  periodStart: string | null;
+  periodEnd: string | null;
+  revenue: number | null;
+  netIncome: number | null;
+  cash: number | null;
+  totalAssets: number | null;
+  equity: number | null;
+  ytdRevenue: number | null;
+  ytdNetIncome: number | null;
+  ytdPeriodLabel: string | null;
+  ytdBasis: "financial" | "calendar" | null;
 } | null;
+
+function numField(fields: Record<string, unknown>, key: string): number | null {
+  const raw = fields[key];
+  const n = typeof raw === "number" ? raw : parseFloat(String(raw ?? ""));
+  return Number.isFinite(n) ? n : null;
+}
+
+function qboFigureProof(financials: unknown): {
+  periodLabel: string | null;
+  periodStart: string | null;
+  periodEnd: string | null;
+  revenue: number | null;
+  netIncome: number | null;
+  cash: number | null;
+  totalAssets: number | null;
+  equity: number | null;
+  ytdRevenue: number | null;
+  ytdNetIncome: number | null;
+  ytdPeriodLabel: string | null;
+  ytdBasis: "financial" | "calendar" | null;
+} {
+  const empty = {
+    periodLabel: null,
+    periodStart: null,
+    periodEnd: null,
+    revenue: null,
+    netIncome: null,
+    cash: null,
+    totalAssets: null,
+    equity: null,
+    ytdRevenue: null,
+    ytdNetIncome: null,
+    ytdPeriodLabel: null,
+    ytdBasis: null as "financial" | "calendar" | null,
+  };
+  if (!financials || typeof financials !== "object" || Array.isArray(financials)) return empty;
+  const meta = readStatementMeta(financials);
+  if (meta.statementSource !== "qbo") return empty;
+  const f = financials as Record<string, unknown>;
+  return {
+    periodLabel: meta.periodLabel,
+    periodStart: meta.periodStart,
+    periodEnd: meta.periodEnd,
+    revenue: numField(f, "revenue"),
+    netIncome: numField(f, "netIncome"),
+    cash: numField(f, "cash"),
+    totalAssets: numField(f, "totalAssets"),
+    equity: numField(f, "equity"),
+    ytdRevenue: meta.ytdRevenue,
+    ytdNetIncome: meta.ytdNetIncome,
+    ytdPeriodLabel: meta.ytdPeriodLabel,
+    ytdBasis: meta.ytdBasis,
+  };
+}
 
 export const getQboStatus = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input) =>
-    z.object({ clientId: z.string().uuid() }).parse(input),
-  )
+  .inputValidator((input) => z.object({ clientId: z.string().uuid() }).parse(input))
   .handler(async ({ data, context }): Promise<QboStatus> => {
     assertClientScope(context.actingAsClientId, data.clientId);
+
+    const { data: client } = await context.supabase
+      .from("clients")
+      .select("id, financials")
+      .eq("id", data.clientId)
+      .maybeSingle();
+    if (!client) throw new Error("Client not found");
 
     const admin = getSupabaseAdminOrNull();
     if (!admin) return null;
 
     const { data: conn } = await admin
       .from("qbo_connections")
-      .select(
-        "realm_id, company_name, connected_at, last_synced_at, sync_status, sync_error",
-      )
+      .select("realm_id, company_name, connected_at, last_synced_at, sync_status, sync_error")
       .eq("client_id", data.clientId)
       .maybeSingle();
 
@@ -94,6 +173,7 @@ export const getQboStatus = createServerFn({ method: "POST" })
       lastSyncedAt: conn.last_synced_at ?? null,
       syncStatus: conn.sync_status ?? "idle",
       syncError: conn.sync_error ?? null,
+      ...qboFigureProof((client as { financials?: unknown }).financials),
     };
   });
 
@@ -102,19 +182,25 @@ export const getQboStatus = createServerFn({ method: "POST" })
 export const getQboStatuses = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input) =>
-    z
-      .object({ clientIds: z.array(z.string().uuid()).max(200) })
-      .parse(input),
+    z.object({ clientIds: z.array(z.string().uuid()).max(200) }).parse(input),
   )
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
     if (data.clientIds.length === 0) return {};
-    // Optional — never toast-fail login/dashboard when service role isn't set in Lovable.
     const admin = getSupabaseAdminOrNull();
     if (!admin) return {};
+
+    const { data: visible } = await context.supabase
+      .from("clients")
+      .select("id")
+      .in("id", data.clientIds);
+    const allowed = new Set((visible ?? []).map((c) => c.id));
+    const scoped = data.clientIds.filter((id) => allowed.has(id));
+    if (scoped.length === 0) return {};
+
     const { data: rows } = await admin
       .from("qbo_connections")
       .select("client_id, company_name, last_synced_at, sync_status")
-      .in("client_id", data.clientIds);
+      .in("client_id", scoped);
 
     const out: Record<
       string,
@@ -134,26 +220,113 @@ export const getQboStatuses = createServerFn({ method: "POST" })
 
 export type SyncResult = {
   mappedInputs: Record<string, number>;
+  /** Every mapped field, including period label strings, ready for the financials blob. */
+  fields: Record<string, string>;
+  periodMonths: string | null;
+  periodLabel: string | null;
+  periodStart: string | null;
+  periodEnd: string | null;
   summary: {
     revenue: number;
     netIncome: number;
     totalAssets: number;
     equity: number;
-    operatingCashflow: number;
+    cash: number;
+    operatingCashflow: number | null;
     accountsCount: number;
     transactionsCount: number;
+    periodLabel: string | null;
+    periodStart: string | null;
+    periodEnd: string | null;
+    ytdRevenue: number | null;
+    ytdNetIncome: number | null;
+    ytdPeriodLabel: string | null;
+    ytdBasis: "financial" | "calendar" | null;
   };
 };
 
+function mappedNumbers(mapped: Record<string, number | string>): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const [k, v] of Object.entries(mapped)) {
+    if (typeof v === "number" && Number.isFinite(v)) out[k] = v;
+  }
+  return out;
+}
+
+async function findSnapshotId(
+  clientId: string,
+  column: "period_date" | "period_label",
+  value: string,
+): Promise<string | null> {
+  const { data } = await supabaseAdmin
+    .from("client_financial_snapshots")
+    .select("id")
+    .eq("client_id", clientId)
+    .eq(column, value)
+    .order("created_at", { ascending: false })
+    .limit(1);
+  const row = (data ?? [])[0] as { id?: string } | undefined;
+  return row?.id ?? null;
+}
+
+async function upsertQboSnapshot(
+  clientId: string,
+  financials: Record<string, unknown>,
+  userId: string | null,
+  periodDate: string,
+  periodLabel: string,
+) {
+  const ratios = computeRatios(financials as unknown as RatioInputs);
+
+  let id = await findSnapshotId(clientId, "period_date", periodDate);
+  if (!id) id = await findSnapshotId(clientId, "period_label", periodLabel);
+  // Earlier syncs could stamp a multi-month total as "Sep 2026". Replace that row.
+  if (!id) {
+    const monthStamp = calendarMonthStamp(periodDate);
+    if (monthStamp) {
+      const { data } = await supabaseAdmin
+        .from("client_financial_snapshots")
+        .select("id")
+        .eq("client_id", clientId)
+        .eq("source", "qbo")
+        .eq("period_label", monthStamp)
+        .order("created_at", { ascending: false })
+        .limit(1);
+      id = ((data ?? [])[0] as { id?: string } | undefined)?.id ?? null;
+    }
+  }
+
+  if (id) {
+    await supabaseAdmin
+      .from("client_financial_snapshots")
+      .update({
+        financials: financials as never,
+        ratios: ratios as never,
+        period_label: periodLabel,
+        period_date: periodDate,
+        source: "qbo",
+      })
+      .eq("id", id);
+    return;
+  }
+
+  await supabaseAdmin.from("client_financial_snapshots").insert({
+    client_id: clientId,
+    period_label: periodLabel,
+    period_date: periodDate,
+    financials: financials as never,
+    ratios: ratios as never,
+    source: "qbo",
+    created_by: userId,
+  });
+}
+
 export const triggerQboSync = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input) =>
-    z.object({ clientId: z.string().uuid() }).parse(input),
-  )
+  .inputValidator((input) => z.object({ clientId: z.string().uuid() }).parse(input))
   .handler(async ({ data, context }): Promise<SyncResult> => {
     assertClientScope(context.actingAsClientId, data.clientId);
 
-    // Verify client access
     const { data: client } = await context.supabase
       .from("clients")
       .select("id")
@@ -161,7 +334,6 @@ export const triggerQboSync = createServerFn({ method: "POST" })
       .maybeSingle();
     if (!client) throw new Error("Client not found");
 
-    // Get connection (admin — tokens are sensitive)
     const { data: connRaw } = await supabaseAdmin
       .from("qbo_connections")
       .select("*")
@@ -170,97 +342,191 @@ export const triggerQboSync = createServerFn({ method: "POST" })
     if (!connRaw) throw new Error("QuickBooks is not connected for this client");
     const conn = connRaw;
 
-    // Mark syncing
     await supabaseAdmin
       .from("qbo_connections")
       .update({ sync_status: "syncing", sync_error: null })
       .eq("client_id", data.clientId);
 
-    let accessToken = conn.access_token;
+    let accessToken = conn.access_token as string;
 
     try {
-      // Refresh token if expired (60-second buffer)
-      const expiry = new Date(conn.token_expiry).getTime();
+      const expiry = new Date(conn.token_expiry as string).getTime();
       if (Date.now() + 60_000 > expiry) {
-        const tokens = await refreshQboToken(conn.refresh_token);
+        const tokens = await refreshQboToken(conn.refresh_token as string);
         accessToken = tokens.access_token;
         await supabaseAdmin
           .from("qbo_connections")
           .update({
             access_token: tokens.access_token,
             refresh_token: tokens.refresh_token,
-            token_expiry: new Date(
-              Date.now() + tokens.expires_in * 1000,
-            ).toISOString(),
+            token_expiry: new Date(Date.now() + tokens.expires_in * 1000).toISOString(),
           })
           .eq("client_id", data.clientId);
       }
 
-      // Fetch all reports in parallel
-      const [pnl, bs, cf, coa, txns] = await Promise.all([
-        fetchPnL(conn.realm_id, accessToken),
-        fetchBalanceSheet(conn.realm_id, accessToken),
-        fetchCashFlow(conn.realm_id, accessToken),
-        fetchChartOfAccounts(conn.realm_id, accessToken),
-        fetchRecentTransactions(conn.realm_id, accessToken),
+      const realmId = conn.realm_id as string;
+      const ledger = await fetchQboLedgerStatement(realmId, accessToken);
+      const { pnl, bs } = ledger;
+
+      const [accounts, transactions] = await Promise.all([
+        fetchChartOfAccounts(realmId, accessToken).catch(() => null),
+        fetchRecentTransactions(realmId, accessToken).catch(() => null),
       ]);
 
-      const mappedInputs = mapToFinancialInputs(pnl, bs, cf);
+      const mapped = mapQboToFinancialInputs(
+        pnl,
+        bs,
+        { from: ledger.from, to: ledger.to, label: ledger.periodLabel },
+        ledger.year
+          ? {
+              pnl: ledger.year.pnl,
+              from: ledger.year.from,
+              to: ledger.year.to,
+              label: ledger.year.periodLabel,
+              basis: ledger.year.basis,
+            }
+          : null,
+        ledger.operatingCashflow,
+      );
+      const mappedInputs = mappedNumbers(mapped);
+      const fields: Record<string, string> = Object.fromEntries(
+        Object.entries(mapped).map(([k, v]) => [k, String(v)]),
+      );
+      if (!ledger.year) {
+        for (const key of STATEMENT_YTD_FIELD_KEYS) fields[key] = "";
+      }
 
-      // Merge with existing financials (don't overwrite fields QBO doesn't cover)
       const { data: existing } = await supabaseAdmin
         .from("clients")
         .select("financials")
         .eq("id", data.clientId)
         .maybeSingle();
       const prev =
-        (existing?.financials && typeof existing.financials === "object" && !Array.isArray(existing.financials)
-          ? (existing.financials as Record<string, string>)
-          : {});
-      const merged = {
+        existing?.financials &&
+        typeof existing.financials === "object" &&
+        !Array.isArray(existing.financials)
+          ? (existing.financials as Record<string, unknown>)
+          : {};
+      const merged: Record<string, unknown> = {
         ...prev,
-        ...Object.fromEntries(
-          Object.entries(mappedInputs).map(([k, v]) => [k, String(v)]),
-        ),
+        ...fields,
       };
+      if (!ledger.year) {
+        for (const key of STATEMENT_YTD_FIELD_KEYS) delete merged[key];
+      }
 
       await supabaseAdmin
         .from("clients")
-        .update({ financials: merged, financials_updated_at: new Date().toISOString() })
+        .update({
+          financials: merged as never,
+          financials_updated_at: new Date().toISOString(),
+        })
         .eq("id", data.clientId);
 
-      // Cache raw sync data (upsert per data type)
-      await supabaseAdmin.from("qbo_sync_data").upsert(
-        [
-          { client_id: data.clientId, data_type: "pl", raw_data: pnl, synced_at: new Date().toISOString() },
-          { client_id: data.clientId, data_type: "bs", raw_data: bs, synced_at: new Date().toISOString() },
-          { client_id: data.clientId, data_type: "cf", raw_data: cf, synced_at: new Date().toISOString() },
-          { client_id: data.clientId, data_type: "coa", raw_data: { accounts: coa }, synced_at: new Date().toISOString() },
-          { client_id: data.clientId, data_type: "transactions", raw_data: { transactions: txns }, synced_at: new Date().toISOString() },
-        ],
-        { onConflict: "client_id,data_type" },
+      await upsertQboSnapshot(
+        data.clientId,
+        merged,
+        context.userId ?? null,
+        ledger.to,
+        ledger.periodLabel,
       );
 
-      // Mark idle + record sync time
+      const nowIso = new Date().toISOString();
+      const cacheRows: Array<{
+        client_id: string;
+        data_type: string;
+        raw_data: unknown;
+        synced_at: string;
+      }> = [
+        {
+          client_id: data.clientId,
+          data_type: "pl",
+          raw_data: {
+            ...pnl,
+            from: ledger.from,
+            to: ledger.to,
+            periodLabel: ledger.periodLabel,
+            year: ledger.year
+              ? {
+                  from: ledger.year.from,
+                  to: ledger.year.to,
+                  periodLabel: ledger.year.periodLabel,
+                  basis: ledger.year.basis,
+                  revenue: ledger.year.pnl.revenue,
+                  netIncome: ledger.year.pnl.netIncome,
+                  periodMonths: ledger.year.pnl.periodMonths,
+                }
+              : null,
+          },
+          synced_at: nowIso,
+        },
+        {
+          client_id: data.clientId,
+          data_type: "bs",
+          raw_data: bs,
+          synced_at: nowIso,
+        },
+      ];
+      if (ledger.operatingCashflow != null) {
+        cacheRows.push({
+          client_id: data.clientId,
+          data_type: "cf",
+          raw_data: { operatingCashflow: ledger.operatingCashflow },
+          synced_at: nowIso,
+        });
+      }
+      if (accounts) {
+        cacheRows.push({
+          client_id: data.clientId,
+          data_type: "coa",
+          raw_data: { accounts },
+          synced_at: nowIso,
+        });
+      }
+      if (transactions) {
+        cacheRows.push({
+          client_id: data.clientId,
+          data_type: "transactions",
+          raw_data: { transactions },
+          synced_at: nowIso,
+        });
+      }
+      await supabaseAdmin.from("qbo_sync_data").upsert(cacheRows as never, {
+        onConflict: "client_id,data_type",
+      });
+
       await supabaseAdmin
         .from("qbo_connections")
         .update({
           sync_status: "idle",
           sync_error: null,
-          last_synced_at: new Date().toISOString(),
+          last_synced_at: nowIso,
         })
         .eq("client_id", data.clientId);
 
       return {
         mappedInputs,
+        fields,
+        periodMonths: typeof mapped.periodMonths === "string" ? mapped.periodMonths : null,
+        periodLabel: ledger.periodLabel,
+        periodStart: ledger.from,
+        periodEnd: ledger.to,
         summary: {
           revenue: pnl.revenue,
           netIncome: pnl.netIncome,
           totalAssets: bs.totalAssets,
           equity: bs.equity,
-          operatingCashflow: cf.operatingCashflow,
-          accountsCount: coa.length,
-          transactionsCount: txns.length,
+          cash: bs.cash,
+          operatingCashflow: ledger.operatingCashflow,
+          accountsCount: accounts?.length ?? 0,
+          transactionsCount: transactions?.length ?? 0,
+          periodLabel: ledger.periodLabel,
+          periodStart: ledger.from,
+          periodEnd: ledger.to,
+          ytdRevenue: ledger.year?.pnl.revenue ?? null,
+          ytdNetIncome: ledger.year?.pnl.netIncome ?? null,
+          ytdPeriodLabel: ledger.year?.periodLabel ?? null,
+          ytdBasis: ledger.year?.basis ?? null,
         },
       };
     } catch (err) {
@@ -277,9 +543,7 @@ export const triggerQboSync = createServerFn({ method: "POST" })
 
 export const disconnectQbo = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input) =>
-    z.object({ clientId: z.string().uuid() }).parse(input),
-  )
+  .inputValidator((input) => z.object({ clientId: z.string().uuid() }).parse(input))
   .handler(async ({ data, context }) => {
     assertClientScope(context.actingAsClientId, data.clientId);
 
@@ -290,13 +554,26 @@ export const disconnectQbo = createServerFn({ method: "POST" })
       .maybeSingle();
     if (!client) throw new Error("Client not found");
 
-    await supabaseAdmin
+    const { data: conn } = await supabaseAdmin
       .from("qbo_connections")
-      .delete()
-      .eq("client_id", data.clientId);
+      .select("access_token, refresh_token")
+      .eq("client_id", data.clientId)
+      .maybeSingle();
+
+    if (conn) {
+      try {
+        await revokeQboToken((conn.refresh_token as string) || (conn.access_token as string));
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "revoke failed";
+        console.error("[QBO disconnect] revoke failed:", message);
+      }
+    }
+
+    await supabaseAdmin.from("qbo_connections").delete().eq("client_id", data.clientId);
+    await supabaseAdmin.from("qbo_sync_data").delete().eq("client_id", data.clientId);
 
     return { success: true };
   });
 
-// ─── Re-export token exchange for callback route ──────────────────────────────
 export { exchangeCodeForTokens };
+export type { QboBalanceSheet, QboPnL };

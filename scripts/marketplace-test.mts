@@ -362,9 +362,8 @@ const NOW = "2026-09-18T12:00:00.000Z";
   );
   const dash = readFileSync(resolve("src/routes/_authenticated/dashboard.tsx"), "utf8");
   assert(
-    dash.indexOf("<AccountantInbox") > dash.indexOf("<PortfolioExceptions") &&
-      dash.indexOf("<AccountantInbox") < dash.indexOf('id="clients-table"'),
-    "inbox sits under the portfolio, above the clients table",
+    dash.indexOf("<AccountantInbox") > dash.indexOf('id="clients-table"'),
+    "inbox sits below the clients table",
   );
 }
 

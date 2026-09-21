@@ -1,85 +1,76 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import { exchangeCodeForTokens } from "@/lib/qbo";
+import { exchangeCodeForTokens, fetchQboCompanyName } from "@/lib/qbo";
+import {
+  qboOauthStateIsFresh,
+  sanitizeQboOauthReason,
+  sanitizeQboReturnPath,
+} from "@/lib/qbo-state";
+
+function redirectTo(appOrigin: string, path: string, params: Record<string, string>) {
+  const url = new URL(path, appOrigin);
+  for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
+  return Response.redirect(url.toString());
+}
 
 export const Route = createFileRoute("/api/qbo/callback")({
   server: {
     handlers: {
       GET: async ({ request }) => {
         const url = new URL(request.url);
-        const appOrigin = url.origin; // redirect back to same domain
+        const appOrigin = url.origin;
 
         const code = url.searchParams.get("code");
         const state = url.searchParams.get("state");
         const realmId = url.searchParams.get("realmId");
         const oauthError = url.searchParams.get("error");
 
-        // User denied access
+        const { data: stateRow } = state
+          ? await supabaseAdmin
+              .from("qbo_oauth_states")
+              .select("client_id, return_path, created_at")
+              .eq("state", state)
+              .maybeSingle()
+          : { data: null };
+
+        const clientId = (stateRow as { client_id?: string } | null)?.client_id ?? "";
+        const returnPath = clientId
+          ? sanitizeQboReturnPath(
+              (stateRow as { return_path?: string | null } | null)?.return_path,
+              clientId,
+            )
+          : "/app";
+
         if (oauthError) {
-          return Response.redirect(
-            `${appOrigin}/app?qbo=error&reason=${encodeURIComponent(oauthError)}`,
-          );
+          if (state) await supabaseAdmin.from("qbo_oauth_states").delete().eq("state", state);
+          return redirectTo(appOrigin, returnPath, {
+            qbo: "error",
+            reason: sanitizeQboOauthReason(oauthError),
+          });
         }
 
-        if (!code || !state || !realmId) {
-          return Response.redirect(
-            `${appOrigin}/app?qbo=error&reason=missing_params`,
-          );
+        if (!code || !state || !realmId || !stateRow || !clientId) {
+          if (state) await supabaseAdmin.from("qbo_oauth_states").delete().eq("state", state);
+          return redirectTo(appOrigin, returnPath, {
+            qbo: "error",
+            reason: "missing_params",
+          });
         }
 
-        // Validate state (CSRF) — must exist and be < 10 minutes old
-        const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
-        const { data: stateRow } = await supabaseAdmin
-          .from("qbo_oauth_states")
-          .select("client_id, created_at")
-          .eq("state", state)
-          .gte("created_at", tenMinutesAgo)
-          .maybeSingle();
-
-        if (!stateRow) {
-          return Response.redirect(
-            `${appOrigin}/app?qbo=error&reason=invalid_or_expired_state`,
-          );
+        if (!qboOauthStateIsFresh((stateRow as { created_at: string }).created_at ?? "")) {
+          await supabaseAdmin.from("qbo_oauth_states").delete().eq("state", state);
+          return redirectTo(appOrigin, returnPath, {
+            qbo: "error",
+            reason: "invalid_or_expired_state",
+          });
         }
 
-        const { client_id: clientId } = stateRow as { client_id: string; created_at: string };
-
-        // Consume state immediately to prevent replay
-        await supabaseAdmin
-          .from("qbo_oauth_states")
-          .delete()
-          .eq("state", state);
+        await supabaseAdmin.from("qbo_oauth_states").delete().eq("state", state);
 
         try {
           const tokens = await exchangeCodeForTokens(code);
+          const companyName = await fetchQboCompanyName(realmId, tokens.access_token);
 
-          // Try to get the company name from QBO company info endpoint
-          let companyName: string | null = null;
-          try {
-            const base =
-              process.env.QBO_ENVIRONMENT === "production"
-                ? "https://quickbooks.api.intuit.com"
-                : "https://sandbox-quickbooks.api.intuit.com";
-            const infoRes = await fetch(
-              `${base}/v3/company/${realmId}/companyinfo/${realmId}?minorversion=70`,
-              {
-                headers: {
-                  Authorization: `Bearer ${tokens.access_token}`,
-                  Accept: "application/json",
-                },
-              },
-            );
-            if (infoRes.ok) {
-              const info = (await infoRes.json()) as {
-                CompanyInfo?: { CompanyName?: string };
-              };
-              companyName = info.CompanyInfo?.CompanyName ?? null;
-            }
-          } catch {
-            // non-fatal — fall back to null
-          }
-
-          // Upsert connection (one QBO company per Milōn client)
           await supabaseAdmin.from("qbo_connections").upsert(
             {
               client_id: clientId,
@@ -87,9 +78,7 @@ export const Route = createFileRoute("/api/qbo/callback")({
               company_name: companyName,
               access_token: tokens.access_token,
               refresh_token: tokens.refresh_token,
-              token_expiry: new Date(
-                Date.now() + tokens.expires_in * 1000,
-              ).toISOString(),
+              token_expiry: new Date(Date.now() + tokens.expires_in * 1000).toISOString(),
               connected_at: new Date().toISOString(),
               sync_status: "idle",
               sync_error: null,
@@ -97,12 +86,14 @@ export const Route = createFileRoute("/api/qbo/callback")({
             { onConflict: "client_id" },
           );
 
-          return Response.redirect(`${appOrigin}/clients/${clientId}?qbo=connected`);
+          return redirectTo(appOrigin, returnPath, { qbo: "connected" });
         } catch (err) {
-          console.error("[QBO callback] token exchange error:", err);
-          return Response.redirect(
-            `${appOrigin}/clients/${clientId}?qbo=error&reason=token_exchange_failed`,
-          );
+          const message = err instanceof Error ? err.message : "token_exchange_failed";
+          console.error("[QBO callback] token exchange error:", message);
+          return redirectTo(appOrigin, returnPath, {
+            qbo: "error",
+            reason: "token_exchange_failed",
+          });
         }
       },
     },
