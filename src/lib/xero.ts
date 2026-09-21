@@ -7,6 +7,12 @@
  */
 
 import { PERIOD_MONTHS_KEY } from "@/lib/ratios";
+import {
+  calendarMonthBounds,
+  financialYearToDate,
+  formatStatementPeriodLabel,
+  type YearBasis,
+} from "@/lib/statement-period";
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
@@ -290,17 +296,26 @@ function parseAmount(raw: string): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-/** Amount from a 2-column row — col 0 is label, last numeric cell is the figure. */
-export function xeroRowAmount(row: XeroReportRow | undefined): number {
+/**
+ * Amount for one report column.
+ * Cell 0 is the label when the row has more than one cell. Column 0 is the
+ * current period — the first amount — not the last cell. Xero comparison
+ * reports put older periods, and sometimes a trailing 0.00, after it.
+ * Returns 0 when that column is absent (callers must not clamp onto the last column).
+ */
+export function xeroRowAmount(row: XeroReportRow | undefined, amountColumn = 0): number {
   if (!row) return 0;
   const cells = row.Cells ?? [];
-  for (let i = cells.length - 1; i >= 0; i--) {
+  const start = cells.length > 1 ? 1 : 0;
+  const amounts: number[] = [];
+  for (let i = start; i < cells.length; i++) {
     const v = cells[i]?.Value ?? "";
     if (v === "" || v == null) continue;
     if (!/[0-9]/.test(String(v))) continue;
-    return parseAmount(String(v));
+    amounts.push(parseAmount(String(v)));
   }
-  return 0;
+  if (amountColumn < 0 || amountColumn >= amounts.length) return 0;
+  return amounts[amountColumn] ?? 0;
 }
 
 function rowLabel(row: XeroReportRow | undefined): string {
@@ -342,22 +357,22 @@ function findRowByLabel(rows: XeroReportRow[], ...labels: string[]): XeroReportR
   return found;
 }
 
-function sectionTotal(section: XeroReportRow | undefined): number {
+function sectionTotal(section: XeroReportRow | undefined, amountColumn = 0): number {
   if (!section) return 0;
   const summary =
     (section.Rows ?? []).find((r) => (r.RowType ?? "").toLowerCase() === "summaryrow") ??
     findRowByLabel(section.Rows ?? [], "total");
-  if (summary) return xeroRowAmount(summary);
+  if (summary) return xeroRowAmount(summary, amountColumn);
   // Fall back to summing leaf rows (skip nested summaries already counted).
   let sum = 0;
   for (const r of section.Rows ?? []) {
-    if ((r.RowType ?? "").toLowerCase() === "row") sum += xeroRowAmount(r);
+    if ((r.RowType ?? "").toLowerCase() === "row") sum += xeroRowAmount(r, amountColumn);
   }
   return sum;
 }
 
-function absAmount(row: XeroReportRow | undefined): number {
-  return Math.abs(xeroRowAmount(row));
+function absAmount(row: XeroReportRow | undefined, amountColumn = 0): number {
+  return Math.abs(xeroRowAmount(row, amountColumn));
 }
 
 // ─── P&L ─────────────────────────────────────────────────────────────────────
@@ -397,6 +412,7 @@ export function ytdRange(now = new Date()): { from: string; to: string; periodMo
 export function parseXeroProfitAndLoss(
   json: unknown,
   periodMonths = 12,
+  amountColumn = 0,
 ): XeroPnL {
   const report = firstXeroReport(json);
   const rows = report?.Rows ?? [];
@@ -406,33 +422,33 @@ export function parseXeroProfitAndLoss(
   const opexSection = findSection(rows, "operating expense", "less operating");
 
   const revenue =
-    absAmount(findRowByLabel(rows, "total income", "total revenue")) ||
-    Math.abs(sectionTotal(incomeSection));
+    absAmount(findRowByLabel(rows, "total income", "total revenue", "total trading income"), amountColumn) ||
+    Math.abs(sectionTotal(incomeSection, amountColumn));
   const cogs =
-    absAmount(findRowByLabel(rows, "total cost of sales", "total cost of goods")) ||
-    Math.abs(sectionTotal(cogsSection));
+    absAmount(findRowByLabel(rows, "total cost of sales", "total cost of goods"), amountColumn) ||
+    Math.abs(sectionTotal(cogsSection, amountColumn));
   const grossProfitRow = findRowByLabel(rows, "gross profit");
-  const grossProfit = grossProfitRow ? xeroRowAmount(grossProfitRow) : revenue - cogs;
+  const grossProfit = grossProfitRow ? xeroRowAmount(grossProfitRow, amountColumn) : revenue - cogs;
 
   const opex =
-    absAmount(findRowByLabel(rows, "total operating expense", "total expenses")) ||
-    Math.abs(sectionTotal(opexSection));
+    absAmount(findRowByLabel(rows, "total operating expense", "total expenses"), amountColumn) ||
+    Math.abs(sectionTotal(opexSection, amountColumn));
 
   const depRow =
     findRowByLabel(rows, "depreciation") ?? findRowByLabel(rows, "amortisation", "amortization");
-  const depreciation = depRow ? Math.abs(xeroRowAmount(depRow)) : 0;
+  const depreciation = depRow ? Math.abs(xeroRowAmount(depRow, amountColumn)) : 0;
 
   const netRow =
     findRowByLabel(rows, "net profit") ??
     findRowByLabel(rows, "net income") ??
     findRowByLabel(rows, "profit for the period") ??
     findRowByLabel(rows, "surplus");
-  const netIncome = netRow ? xeroRowAmount(netRow) : grossProfit - opex;
+  const netIncome = netRow ? xeroRowAmount(netRow, amountColumn) : grossProfit - opex;
 
   const taxRow = findRowByLabel(rows, "income tax", "tax expense");
   const interestRow = findRowByLabel(rows, "interest expense", "interest paid");
-  const tax = taxRow ? Math.abs(xeroRowAmount(taxRow)) : 0;
-  const interest = interestRow ? Math.abs(xeroRowAmount(interestRow)) : 0;
+  const tax = taxRow ? Math.abs(xeroRowAmount(taxRow, amountColumn)) : 0;
+  const interest = interestRow ? Math.abs(xeroRowAmount(interestRow, amountColumn)) : 0;
 
   const ebit = opex ? grossProfit - opex : netIncome + tax + interest;
   const ebt = tax ? netIncome + tax : ebit;
@@ -452,6 +468,25 @@ export function parseXeroProfitAndLoss(
   };
 }
 
+/** One P&L for an explicit range. No `periods` — that would add unlabeled columns. */
+export function xeroProfitAndLossRangePath(from: string, to: string): string {
+  const q = new URLSearchParams({
+    fromDate: from,
+    toDate: to,
+    standardLayout: "true",
+  });
+  return `/Reports/ProfitAndLoss?${q.toString()}`;
+}
+
+/** Balance sheet as at one date. One amount column, standard layout. */
+export function xeroBalanceSheetPath(date: string): string {
+  const q = new URLSearchParams({
+    date,
+    standardLayout: "true",
+  });
+  return `/Reports/BalanceSheet?${q.toString()}`;
+}
+
 export async function fetchXeroProfitAndLoss(
   tenantId: string,
   accessToken: string,
@@ -460,9 +495,107 @@ export async function fetchXeroProfitAndLoss(
   const data = await xeroGet(
     tenantId,
     accessToken,
-    `/Reports/ProfitAndLoss?fromDate=${range.from}&toDate=${range.to}`,
+    xeroProfitAndLossRangePath(range.from, range.to),
   );
   return parseXeroProfitAndLoss(data, range.periodMonths);
+}
+
+/** Organisation.FinancialYearEndMonth (1–12) and FinancialYearEndDay. */
+export function parseXeroFinancialYearEnd(json: unknown): { month: number; day: number } | null {
+  if (!json || typeof json !== "object") return null;
+  const orgs = (json as { Organisations?: unknown }).Organisations;
+  const org = Array.isArray(orgs) ? orgs[0] : null;
+  if (!org || typeof org !== "object") return null;
+  const row = org as Record<string, unknown>;
+  const month = Number(row.FinancialYearEndMonth);
+  const day = Number(row.FinancialYearEndDay);
+  if (!Number.isInteger(month) || month < 1 || month > 12) return null;
+  if (!Number.isInteger(day) || day < 1 || day > 31) return null;
+  return { month, day };
+}
+
+export type XeroYearStatement = {
+  pnl: XeroPnL;
+  from: string;
+  to: string;
+  periodLabel: string;
+  basis: YearBasis;
+};
+
+export type XeroLedgerStatement = {
+  /** Month to date — the range an accountant compares in the Xero month view. */
+  pnl: XeroPnL;
+  bs: XeroBalanceSheet;
+  from: string;
+  to: string;
+  periodLabel: string;
+  /** Financial year to date, or calendar year to date when the org year-end is unknown. Null when that range is the month. */
+  year: XeroYearStatement | null;
+};
+
+async function resolveYearRange(
+  tenantId: string,
+  accessToken: string,
+  now: Date,
+): Promise<{ from: string; to: string; basis: YearBasis }> {
+  try {
+    const org = await xeroGet(tenantId, accessToken, "/Organisation");
+    const fy = parseXeroFinancialYearEnd(org);
+    if (fy) {
+      const range = financialYearToDate(now, fy.month, fy.day);
+      return { ...range, basis: "financial" };
+    }
+  } catch {
+    // Settings read failed. Calendar year to date, labeled as calendar — not as FY.
+  }
+  const calendar = ytdRange(now);
+  return { from: calendar.from, to: calendar.to, basis: "calendar" };
+}
+
+/**
+ * Two explicit P&L ranges (month to date, and financial year to date) plus the
+ * balance sheet at the month-end date. Each report is one fromDate/toDate.
+ */
+export async function fetchXeroLedgerStatement(
+  tenantId: string,
+  accessToken: string,
+  now = new Date(),
+): Promise<XeroLedgerStatement> {
+  const month = calendarMonthBounds(now, 0);
+  const yearRange = await resolveYearRange(tenantId, accessToken, now);
+  const same = yearRange.from === month.from && yearRange.to === month.to;
+  const [monthJson, yearJson, bsJson] = await Promise.all([
+    xeroGet(tenantId, accessToken, xeroProfitAndLossRangePath(month.from, month.to)),
+    same
+      ? Promise.resolve(null)
+      : xeroGet(
+          tenantId,
+          accessToken,
+          xeroProfitAndLossRangePath(yearRange.from, yearRange.to),
+        ),
+    xeroGet(tenantId, accessToken, xeroBalanceSheetPath(month.to)),
+  ]);
+  const year = yearJson
+    ? {
+        pnl: parseXeroProfitAndLoss(
+          yearJson,
+          periodMonthsBetween(yearRange.from, yearRange.to),
+          0,
+        ),
+        from: yearRange.from,
+        to: yearRange.to,
+        periodLabel: formatStatementPeriodLabel(yearRange.from, yearRange.to),
+        basis: yearRange.basis,
+      }
+    : null;
+  return {
+    pnl: parseXeroProfitAndLoss(monthJson, 1, 0),
+    bs: parseXeroBalanceSheet(bsJson),
+    from: month.from,
+    to: month.to,
+    periodLabel: formatStatementPeriodLabel(month.from, month.to),
+    year,
+  };
 }
 
 // ─── Balance Sheet ────────────────────────────────────────────────────────────
@@ -524,7 +657,7 @@ export async function fetchXeroBalanceSheet(
   accessToken: string,
   date = new Date().toISOString().slice(0, 10),
 ): Promise<XeroBalanceSheet> {
-  const data = await xeroGet(tenantId, accessToken, `/Reports/BalanceSheet?date=${date}`);
+  const data = await xeroGet(tenantId, accessToken, xeroBalanceSheetPath(date));
   return parseXeroBalanceSheet(data);
 }
 
@@ -534,13 +667,28 @@ export async function fetchXeroBalanceSheet(
  * Maps Xero P&L + Balance Sheet totals onto the existing financials vocabulary
  * used by `computeRatios`. Day-1 only — no invoices, payroll, or bank feeds.
  */
+export type XeroMappedYear = {
+  pnl: Pick<XeroPnL, "revenue" | "netIncome" | "periodMonths">;
+  from: string;
+  to: string;
+  label: string;
+  basis: YearBasis;
+};
+
 export function mapXeroToFinancialInputs(
   pnl: XeroPnL,
   bs: XeroBalanceSheet,
+  period?: { from: string; to: string; label: string },
+  year?: XeroMappedYear | null,
 ): Record<string, number | string> {
   const out: Record<string, number | string> = {};
+  const dated = Boolean(period?.from && period?.to);
   const set = (k: string, v: number) => {
-    if (Number.isFinite(v) && v !== 0) out[k] = v;
+    if (!Number.isFinite(v)) return;
+    // A dated statement replaces the previous total, including a real zero.
+    // Undated balance-sheet zeros stay unset so a bad column does not wipe cash.
+    if (!dated && v === 0) return;
+    out[k] = v;
   };
   set("revenue", pnl.revenue);
   set("cogs", pnl.cogs);
@@ -549,14 +697,38 @@ export function mapXeroToFinancialInputs(
   set("netIncome", pnl.netIncome);
   set("ebitda", pnl.ebitda);
   set("fixedCosts", pnl.operatingExpenses);
-  set("totalAssets", bs.totalAssets);
-  set("equity", bs.equity);
-  set("receivables", bs.receivables);
-  set("inventory", bs.inventory);
-  set("payables", bs.payables);
-  set("cash", bs.cash);
+  const setBs = (k: string, v: number) => {
+    if (Number.isFinite(v) && v !== 0) out[k] = v;
+  };
+  setBs("totalAssets", bs.totalAssets);
+  setBs("equity", bs.equity);
+  setBs("receivables", bs.receivables);
+  setBs("inventory", bs.inventory);
+  setBs("payables", bs.payables);
+  setBs("cash", bs.cash);
   if (Number.isFinite(pnl.periodMonths) && pnl.periodMonths >= 1 && pnl.periodMonths <= 12) {
     out[PERIOD_MONTHS_KEY] = String(pnl.periodMonths);
+  }
+  if (period?.from && period.to) {
+    out.statementSource = "xero";
+    out.periodStart = period.from;
+    out.periodEnd = period.to;
+    out.periodLabel = period.label || formatStatementPeriodLabel(period.from, period.to);
+  }
+  if (
+    year?.from &&
+    year.to &&
+    !(period?.from === year.from && period?.to === year.to)
+  ) {
+    if (Number.isFinite(year.pnl.revenue)) out.ytdRevenue = year.pnl.revenue;
+    if (Number.isFinite(year.pnl.netIncome)) out.ytdNetIncome = year.pnl.netIncome;
+    out.ytdPeriodStart = year.from;
+    out.ytdPeriodEnd = year.to;
+    out.ytdPeriodLabel = year.label || formatStatementPeriodLabel(year.from, year.to);
+    if (Number.isFinite(year.pnl.periodMonths) && year.pnl.periodMonths >= 1) {
+      out.ytdPeriodMonths = String(year.pnl.periodMonths);
+    }
+    out.ytdBasis = year.basis;
   }
   return out;
 }

@@ -42,7 +42,7 @@ export function WeeklyInputTable({ role = "owner" }: { role?: "owner" | "account
     <CollapsibleGoldCard
       icon={CalendarDays}
       title="Weekly Inputs"
-      subtitle="Last 4 weeks · figures feed the Profitability Waterfall"
+      subtitle="Last 4 weeks · used on the waterfall when no Xero statement is synced"
       defaultOpen={role === "accountant"}
     >
       <ScrollableTable cardRows hint={false}>
