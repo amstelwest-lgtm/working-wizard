@@ -1,6 +1,7 @@
 /**
  * Sticky reading-path coach for the accountant client shell.
  * Light surface, dark text — readable in light mode and on the dark portal.
+ * One Continue lives here. Deliverable pages do not repeat it.
  */
 import {
   COACH_STEPS,
@@ -11,7 +12,7 @@ import {
 } from "@/lib/workflow-coach";
 
 type Props = {
-  /** Null on Overview / Client Brain — the spine stays visible, no step is current. */
+  /** Null on Overview / Milōn Bot / Reports / Advisory — Client Brain is the Data step. */
   page: CoachPage | null;
   intent?: string | null;
   why?: string | null;
@@ -57,25 +58,5 @@ export function WorkflowCoachStrip(props: Props) {
         {view.cta}
       </button>
     </nav>
-  );
-}
-
-export function WorkflowArrival(props: Props) {
-  const view = coachView(props);
-  return (
-    <div className="workflow-arrival" data-coach-arrival="" data-coach-page={props.page}>
-      <p className="workflow-arrival__line">
-        <span data-coach-because="">You&apos;re here because {view.because}.</span>{" "}
-        <span data-coach-next="">Next: {view.nextCue}.</span>
-      </p>
-      <button
-        type="button"
-        className="workflow-coach__go"
-        data-coach-continue=""
-        onClick={() => props.onOpen(view.destination)}
-      >
-        {view.cta}
-      </button>
-    </div>
   );
 }

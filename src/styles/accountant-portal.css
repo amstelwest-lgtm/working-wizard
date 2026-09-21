@@ -809,27 +809,56 @@ html[data-theme="light"] .accountant-portal .budget-month-engine{
 }
 .accountant-portal .workflow-coach__go:hover,
 .ask-ai-handoff:hover{background:#e0b85c}
-.accountant-portal .workflow-arrival{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:12px 16px;
-  flex-wrap:wrap;
+.accountant-portal .data-fresh{
   margin:0 0 18px;
-  padding:12px 14px;
-  border-radius:14px;
+  padding:16px 16px 14px;
+  border-radius:16px;
   border:1px solid #e4d7b0;
   background:#fffdf6;
   color:#1b1608;
 }
-.accountant-portal .workflow-arrival__line{
+.accountant-portal .data-fresh__kicker{
+  display:block;
+  margin:0 0 4px;
+  font-size:10px;
+  font-weight:700;
+  letter-spacing:.16em;
+  text-transform:uppercase;
+  color:#8a6508;
+}
+.accountant-portal .data-fresh__title{
+  margin:0 0 6px;
+  font-size:22px;
+  font-weight:700;
+  color:#1b1608;
+}
+.accountant-portal .data-fresh__lede,
+.accountant-portal .data-fresh__line{
   margin:0;
-  max-width:72ch;
+  max-width:68ch;
   font-size:14px;
   line-height:1.5;
   color:#1b1608;
 }
-.accountant-portal .workflow-arrival__line [data-coach-next]{font-weight:700}
+.accountant-portal .data-fresh__line{margin-top:6px;font-weight:700}
+.accountant-portal .data-fresh__ledgers{
+  display:grid;
+  gap:10px;
+  margin-top:14px;
+}
+.accountant-portal .data-fresh__upload{
+  margin-top:12px;
+  border:none;
+  border-radius:999px;
+  background:#d4a550;
+  color:#1b1300;
+  font-family:'Noto Sans',sans-serif;
+  font-size:13px;
+  font-weight:700;
+  padding:8px 16px;
+  cursor:pointer;
+}
+.accountant-portal .data-fresh__upload:hover{background:#e0b85c}
 .accountant-portal .pillar-evidence{
   align-self:flex-start;
   margin-top:8px;
@@ -844,7 +873,7 @@ html[data-theme="light"] .accountant-portal .budget-month-engine{
   cursor:pointer;
 }
 .accountant-portal .pillar-evidence:hover{background:#f3ead2}
-#coach-pillars,#action-plan-work{scroll-margin-top:150px}
+#coach-pillars,#action-plan-work,#data-up-to-date{scroll-margin-top:150px}
 @media(max-width:860px){
   .accountant-portal .workflow-coach{top:8px}
 }

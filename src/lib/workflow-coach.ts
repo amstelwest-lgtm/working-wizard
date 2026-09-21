@@ -1,17 +1,20 @@
 /**
  * Accountant reading path — navigation only.
  *
- * Health → Pillars → Profitability → Cash → Budget → Actions
- *   1. Health score diagnoses the problem
- *   2. Pillars show where it hurts
- *   3–5. Evidence: waterfall, 13-week cash, budget
- *   6. Assign the moves
+ * Data → Health → Pillars → Profitability → Cash → Budget → Actions
+ *   1. Data confirms the books (Xero, QuickBooks, or an upload) on Client Brain
+ *   2. Health score diagnoses the problem
+ *   3. Pillars show where it hurts
+ *   4–6. Evidence: waterfall, 13-week cash, budget
+ *   7. Assign the moves
  *
  * Continue prefers the next step that is not yet done, then the immediate
- * next page, so a deliverable is never a dead end.
+ * next page, so a deliverable is never a dead end. One Continue lives on
+ * the sticky strip.
  */
 
 export const COACH_STEPS = [
+  { id: "data", label: "Data", tab: "summary" },
   { id: "health", label: "Health", tab: "ratios", focus: "health" },
   { id: "pillars", label: "Pillars", tab: "ratios", focus: "pillars" },
   { id: "profit", label: "Profitability", tab: "profit" },
@@ -43,6 +46,7 @@ export type CoachDestination = {
 const STEP_IDS = new Set<string>(COACH_STEPS.map((s) => s.id));
 
 const DELIVERABLE_TABS = new Set([
+  "summary",
   "ask",
   "ratios",
   "profit",
@@ -54,6 +58,7 @@ const DELIVERABLE_TABS = new Set([
 ]);
 
 const NEXT_CUE: Record<CoachStepId, string> = {
+  data: "confirm the books are in — sync or upload",
   health: "read the health score",
   pillars: "drill into the pillars",
   profit: "open the profitability waterfall",
@@ -63,6 +68,7 @@ const NEXT_CUE: Record<CoachStepId, string> = {
 };
 
 const DEFAULT_BECAUSE: Record<CoachPage, string> = {
+  data: "the read starts by checking the books are current",
   health: "the score diagnoses the problem before you open the detail",
   pillars: "each pillar shows where the score actually hurts",
   profit: "the waterfall is the evidence for margin — how revenue becomes profit",
@@ -77,6 +83,7 @@ const DEFAULT_BECAUSE: Record<CoachPage, string> = {
 type Intent = { page: CoachPage; because: string };
 
 const INTENTS: Record<string, Intent> = {
+  data: { page: "data", because: DEFAULT_BECAUSE.data },
   health: { page: "health", because: DEFAULT_BECAUSE.health },
   pillars: { page: "pillars", because: "a pillar is where the score actually hurts" },
   margin: {
@@ -106,6 +113,8 @@ export function isCoachSurface(tab: string): boolean {
 
 export function coachPageForTab(tab: string, focus?: string | null): CoachPage | null {
   switch (tab) {
+    case "summary":
+      return "data";
     case "ratios":
       return focus === "pillars" ? "pillars" : "health";
     case "profit":
@@ -229,9 +238,10 @@ export function coachView(input: {
   };
 }
 
-type HandoffKind = "health" | "pillars" | "profit" | "cash" | "budget" | "actions";
+type HandoffKind = "data" | "health" | "pillars" | "profit" | "cash" | "budget" | "actions";
 
 const HANDOFF: Record<HandoffKind, CoachDestination & { label: string }> = {
+  data: { tab: "summary", coach: "data", label: "Open Data" },
   health: { tab: "ratios", focus: "health", coach: "health", label: "Open Health" },
   pillars: { tab: "ratios", focus: "pillars", coach: "pillars", label: "Open Pillars" },
   profit: { tab: "profit", coach: "margin", label: "Open Profitability" },
@@ -261,7 +271,89 @@ export function deliverableHandoff(
     /where should we focus/.test(q)
   )
     kind = "pillars";
+  else if (
+    /\b(xero|quickbooks|qbo)\b/.test(q) ||
+    /\b(sync(?:ed|ing)?|upload(?:ed|ing)?)\b/.test(q) ||
+    /data (?:is |up to date|current)/.test(q) ||
+    /\bbooks (?:are |up to date|current)\b/.test(q)
+  )
+    kind = "data";
   else if (/\b(health|score|ratios?|diagnos)/.test(q)) kind = "health";
   if (!kind) return null;
   return { ...HANDOFF[kind], why: clipCoachWhy(question) };
+}
+
+/** Ledger link fields the Data step needs. Null when that ledger is not connected. */
+export type DataSyncLink = {
+  lastSyncedAt: string | null;
+  syncStatus: string;
+  periodLabel?: string | null;
+} | null;
+
+/**
+ * A sync counts when it finished with a timestamp and the latest attempt
+ * is not an error. Connected-but-never-synced does not count.
+ */
+export function syncSucceeded(link: DataSyncLink | undefined): boolean {
+  if (!link?.lastSyncedAt) return false;
+  if (!Number.isFinite(Date.parse(link.lastSyncedAt))) return false;
+  return link.syncStatus !== "error";
+}
+
+/**
+ * Data is done when Xero or QuickBooks has a successful sync, or a financial
+ * snapshot is already on file (an upload writes one). Continue stays available
+ * either way — this only drives the check on the strip.
+ */
+export function dataStepDone(input: {
+  xero?: DataSyncLink;
+  qbo?: DataSyncLink;
+  snapshotCount?: number;
+}): boolean {
+  return syncSucceeded(input.xero) || syncSucceeded(input.qbo) || (input.snapshotCount ?? 0) > 0;
+}
+
+function formatSyncStamp(iso: string): string {
+  const d = new Date(iso);
+  if (!Number.isFinite(d.getTime())) return iso;
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: "UTC",
+  }).format(d);
+}
+
+/** One line for the Client Brain data section: latest successful sync, else the snapshot period. */
+export function dataFreshnessLine(input: {
+  xero?: DataSyncLink;
+  qbo?: DataSyncLink;
+  snapshotPeriod?: string | null;
+}): string {
+  const rows: { label: string; at: string; period: string | null }[] = [];
+  if (syncSucceeded(input.xero) && input.xero?.lastSyncedAt) {
+    rows.push({
+      label: "Xero",
+      at: input.xero.lastSyncedAt,
+      period: input.xero.periodLabel ?? null,
+    });
+  }
+  if (syncSucceeded(input.qbo) && input.qbo?.lastSyncedAt) {
+    rows.push({
+      label: "QuickBooks",
+      at: input.qbo.lastSyncedAt,
+      period: input.qbo.periodLabel ?? null,
+    });
+  }
+  rows.sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+  const best = rows[0];
+  if (best) {
+    const period = best.period ? ` · ${best.period}` : "";
+    return `Last sync ${formatSyncStamp(best.at)} · ${best.label}${period}`;
+  }
+  const snapshot = input.snapshotPeriod?.trim();
+  if (snapshot) return `Snapshot on file · ${snapshot}`;
+  return "No sync yet. Connect Xero or QuickBooks, or upload statements.";
 }
