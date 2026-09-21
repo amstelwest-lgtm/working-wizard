@@ -1,5 +1,5 @@
 /**
- * ClientBriefing — the top of the accountant client page.
+ * ClientBriefing — the accountant Overview tab only.
  *
  * Status (identity, health, financial snapshot) → what matters → this month's
  * Milōn workflow. One card, no duplicated metrics, no unexplained numbers.

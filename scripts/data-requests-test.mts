@@ -415,7 +415,7 @@ function gap(over: Partial<DataGapFacts> = {}): DataGapFacts {
   eq(owner.urgency, "blocking", "blocking urgency");
   eq(owner.cta.route.tab, "today", "owner lands on Today where the panel sits under the Next Step");
   const acct = resolveNextStep(facts, "accountant");
-  eq(acct.cta.route.search.tab, "summary", "accountant lands on Summary");
+  eq(acct.cta.route.search.tab, "overview", "accountant lands on Overview, where the requests panel sits");
   eq(
     resolveNextStep({ ...facts, openDataRequests: 0 }).key,
     "chase",

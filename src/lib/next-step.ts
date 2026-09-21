@@ -164,13 +164,13 @@ const ACCOUNTANT_TAB: Record<NextStepTarget, string> = {
   actions: "plan",
   chase: "plan",
   unblock: "plan",
-  data_request: "summary",
+  data_request: "overview",
   generate_pack: "advisory",
   review_pack: "advisory",
   read_pack: "advisory",
   outcome: "plan",
   restart: "ratios",
-  wait: "summary",
+  wait: "overview",
 };
 
 /** Extra query params the accountant studio already reacts to. */
@@ -673,6 +673,7 @@ export function outstandingChips(
 /** Tab ids each surface can activate; the test asserts every route lands on one. */
 export const OWNER_BOARD_TABS = ["today", "waterfall", "cash", "budget", "next", "tasks"] as const;
 export const ACCOUNTANT_STUDIO_TABS = [
+  "overview",
   "summary",
   "ask",
   "ratios",

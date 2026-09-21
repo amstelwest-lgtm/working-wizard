@@ -444,6 +444,7 @@ type Client = {
 };
 
 type ActiveTab =
+  | "overview"
   | "ask"
   | "ratios"
   | "profit"
@@ -455,6 +456,7 @@ type ActiveTab =
   | "summary";
 
 const ACCOUNTANT_TABS: ActiveTab[] = [
+  "overview",
   "summary",
   "ask",
   "ratios",
@@ -465,6 +467,49 @@ const ACCOUNTANT_TABS: ActiveTab[] = [
   "plan",
   "advisory",
 ];
+
+const CLIENT_RAIL: { id: ActiveTab; label: string; star?: boolean }[] = [
+  { id: "overview", label: "Overview" },
+  { id: "summary", label: "Client Brain" },
+];
+
+const DELIVERABLE_RAIL: { id: ActiveTab; label: string; star?: boolean }[] = [
+  { id: "ask", label: "Milōn Bot", star: true },
+  { id: "ratios", label: "Health & Ratios" },
+  { id: "profit", label: "Profitability" },
+  { id: "cash", label: "13-Week Cash Forecast", star: true },
+  { id: "budget", label: "Budget" },
+  { id: "reports", label: "Reports", star: true },
+  { id: "plan", label: "Action Plan", star: true },
+  { id: "advisory", label: "Advisory Drafter" },
+];
+
+function ClientRailButton({
+  id,
+  label,
+  star,
+  active,
+  onSelect,
+}: {
+  id: ActiveTab;
+  label: string;
+  star?: boolean;
+  active: boolean;
+  onSelect: (id: ActiveTab) => void;
+}) {
+  return (
+    <button
+      type="button"
+      className={`tab${active ? " on" : ""}`}
+      data-tab={id}
+      aria-current={active ? "page" : undefined}
+      onClick={() => onSelect(id)}
+    >
+      {label}
+      {star ? <span className="star">✦</span> : null}
+    </button>
+  );
+}
 
 function DeliverableTabHead({
   id,
@@ -629,7 +674,7 @@ function ClientView() {
 
   const [client, setClient] = useState<Client | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<ActiveTab>("ask");
+  const [activeTab, setActiveTab] = useState<ActiveTab>("overview");
   const [studioDeepLink, setStudioDeepLink] = useState<{
     report?: string;
     action?: "preview" | "download";
@@ -640,13 +685,12 @@ function ClientView() {
     if (search.note) requestOpenNote(search.note);
     if (search.queries === "open") openArchive("open");
   }, [search.note, search.tab, search.queries, requestOpenNote, openArchive]);
-  // Landing tab: Ask AI once the client has figures to talk about; before that
-  // the studio opens on Health & Ratios, where the orb reads "no data" and the
-  // Financials grid / upload buttons sit. Decided once per client, after load,
-  // and never over a ?tab= deep link.
+  // Landing tab: Overview — the client explanation, profile, and upload.
+  // Deliverables stay clean. Decided once per client, after load, and never
+  // over a ?tab= deep link.
   // The tour variant is fixed at the same moment: flipping to the full tour
-  // the instant the first figure is typed would yank the user to Ask AI
-  // mid-entry. The full tour runs on the next visit once figures exist.
+  // the instant the first figure is typed would yank the user mid-entry.
+  // The full tour runs on the next visit once figures exist.
   const landingTabDecidedFor = useRef<string | null>(null);
   const [tourVariant, setTourVariant] = useState<
     "accountant-client" | "accountant-client-empty" | null
@@ -658,7 +702,7 @@ function ClientView() {
       const figures = FIELD_LABELS.some(({ key }) => (scalars[key] ?? "").trim() !== "");
       setTourVariant(figures ? "accountant-client" : "accountant-client-empty");
       if (resolveAccountantTab(search.tab)) return;
-      setActiveTab(figures ? "ask" : "ratios");
+      setActiveTab("overview");
     },
     [clientId, search.tab],
   );
@@ -1841,7 +1885,7 @@ function ClientView() {
           return;
         default: {
           const route = nextStepRoute(key, "accountant", clientId);
-          const tab = resolveAccountantTab(route.tab ?? undefined) ?? "summary";
+          const tab = resolveAccountantTab(route.tab ?? undefined) ?? "overview";
           revealTab(tab);
           // Action Plan reads ?filter= for overdue / blocked deep links.
           if (route.search.filter) {
@@ -2000,36 +2044,36 @@ function ClientView() {
             </div>
 
             <div className="client-workspace">
-              <nav className="deliverable-rail" aria-label="Deliverables">
-                <span className="rail-kicker">Deliverables</span>
-                {(
-                  [
-                    { id: "summary", label: "Summary" },
-                    { id: "ask", label: "Milōn Bot", star: true },
-                    { id: "ratios", label: "Health & Ratios" },
-                    { id: "profit", label: "Profitability" },
-                    { id: "cash", label: "13-Week Cash Forecast", star: true },
-                    { id: "budget", label: "Budget" },
-                    { id: "reports", label: "Reports", star: true },
-                    { id: "plan", label: "Action Plan", star: true },
-                    { id: "advisory", label: "Advisory Drafter" },
-                  ] as { id: ActiveTab; label: string; star?: boolean }[]
-                ).map((t) => (
-                  <button
+              <nav className="deliverable-rail" aria-label="Client workspace">
+                <span className="rail-kicker">Client</span>
+                {CLIENT_RAIL.map((t) => (
+                  <ClientRailButton
                     key={t.id}
-                    type="button"
-                    className={`tab${activeTab === t.id ? " on" : ""}`}
-                    data-tab={t.id}
-                    aria-current={activeTab === t.id ? "page" : undefined}
-                    onClick={() => setActiveTab(t.id)}
-                  >
-                    {t.label}
-                    {t.star && <span className="star">✦</span>}
-                  </button>
+                    id={t.id}
+                    label={t.label}
+                    star={t.star}
+                    active={activeTab === t.id}
+                    onSelect={setActiveTab}
+                  />
+                ))}
+                <span className="rail-kicker rail-kicker-split">Deliverables</span>
+                {DELIVERABLE_RAIL.map((t) => (
+                  <ClientRailButton
+                    key={t.id}
+                    id={t.id}
+                    label={t.label}
+                    star={t.star}
+                    active={activeTab === t.id}
+                    onSelect={setActiveTab}
+                  />
                 ))}
               </nav>
               <div className="deliverable-main">
-                {/* ===== NEXT STEP — one CTA, above everything else (P0.4) ===== */}
+                <div
+                  className={`tabpane${activeTab === "overview" ? " on" : ""}`}
+                  id="pane-overview"
+                >
+                {/* ===== NEXT STEP — one CTA, on Overview only (P0.4) ===== */}
                 <NextStepCard
                   className="mb-4"
                   clientId={client.id}
@@ -2182,11 +2226,13 @@ function ClientView() {
                     </button>
                   </div>
                 )}
+                </div>
 
-                {/* Simplified / Complex — Health, Profit, Budget (not Ask, Summary, Cash, Action Plan, Reports, or Advisory) */}
+                {/* Simplified / Complex — Health, Profit, Budget only */}
                 <div
                   style={{
                     display:
+                      activeTab === "overview" ||
                       activeTab === "ask" ||
                       activeTab === "summary" ||
                       activeTab === "cash" ||
