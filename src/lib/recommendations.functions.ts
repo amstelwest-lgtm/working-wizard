@@ -11,6 +11,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { calibratedConfidence, deliveryByMetric } from "@/lib/outcomes";
+import { loadOutcomeInputs } from "@/lib/outcomes.functions";
 import {
   DATA_DEPTHS,
   IMPACT_METRICS,
@@ -154,6 +156,19 @@ export const createRecommendation = createServerFn({ method: "POST" })
       );
     }
 
+    // P2.2: when no confidence is given, calibrate from what this metric has
+    // historically delivered for this client (null when there is no history).
+    let calibrated: number | null = null;
+    if (data.confidence === undefined && data.expectedImpact?.metric) {
+      const hist = await loadOutcomeInputs(sb, data.clientId).catch(() => null);
+      if (hist?.migrated) {
+        calibrated = calibratedConfidence(
+          data.expectedImpact.metric,
+          deliveryByMetric(hist.recommendations, hist.outcomes),
+        );
+      }
+    }
+
     const { data: row, error } = await sb
       .from("proposed_next_steps")
       .insert({
@@ -163,7 +178,7 @@ export const createRecommendation = createServerFn({ method: "POST" })
         problem: data.problem ?? null,
         evidence: data.evidence ?? [],
         priority: data.priority ?? "medium",
-        confidence: data.confidence ?? null,
+        confidence: data.confidence ?? calibrated,
         data_depth: dataDepth,
         expected_impact_metric: data.expectedImpact?.metric ?? null,
         expected_impact_amount: data.expectedImpact?.amount ?? null,

@@ -132,6 +132,8 @@ import { NextStepCard } from "@/components/next-step-card";
 import { RecommendationsPanel } from "@/components/recommendations-panel";
 import { DataRequestsPanel } from "@/components/data-requests-panel";
 import { AdvisoryPackPanel } from "@/components/advisory-pack-panel";
+import { OutcomesPanel } from "@/components/outcomes-panel";
+import { FindAccountantPanel } from "@/components/find-accountant-panel";
 import {
   OWNER_BOARD_TABS,
   nextStepRoute,
@@ -3001,7 +3003,9 @@ function Index() {
             const ratios = computeRatios(blob as never);
             setHistory((h) => {
               const next = { period_label: periodLabel, period_date: periodDate, ratios };
-              const idx = h.findIndex((s) => s.period_label === periodLabel || s.period_date === periodDate);
+              const idx = h.findIndex(
+                (s) => s.period_label === periodLabel || s.period_date === periodDate,
+              );
               if (idx >= 0) {
                 const copy = h.slice();
                 copy[idx] = { ...copy[idx], ...next };
@@ -4711,8 +4715,7 @@ function Index() {
                         <p className="mb-3 text-[12px] leading-relaxed text-slate-600 dark:text-slate-400">
                           The small trend on each row fills in once you add a past period — a prior
                           year or quarter. Until then you still see the graph slot; we do not invent
-                          the history.{" "}
-                          <AddPastPeriodLink onOpen={() => setPastPeriodOpen(true)} />
+                          the history. <AddPastPeriodLink onOpen={() => setPastPeriodOpen(true)} />
                         </p>
                       ) : null}
                       {!showScoredBoard && !actingClientId && (
@@ -4991,7 +4994,9 @@ function Index() {
                                   );
                                   const actualLine =
                                     actual.calculation ??
-                                    (actual.missing.length ? `Need: ${actual.missing.join(", ")}` : null);
+                                    (actual.missing.length
+                                      ? `Need: ${actual.missing.join(", ")}`
+                                      : null);
                                   return (
                                     <tr
                                       key={k}
@@ -5168,6 +5173,20 @@ function Index() {
                     onChanged={() => setAdvisoryBump((n) => n + 1)}
                   />
                 ) : null}
+                {/* P3 — owner-only clients can ask a listed firm to review the pack; hidden once a firm is attached. */}
+                {effectiveClientId &&
+                !sampleMode &&
+                userRole !== "client_member" &&
+                !clientMeta?.firm_id ? (
+                  <FindAccountantPanel
+                    className="mb-5"
+                    clientId={effectiveClientId}
+                    hasFirm={Boolean(clientMeta?.firm_id)}
+                    packStatus={null}
+                    refreshKey={`${activeTab}|${advisoryBump}`}
+                    onChanged={() => setAdvisoryBump((n) => n + 1)}
+                  />
+                ) : null}
                 {/* P0.5 — recommendations the owner decides on directly; no accountant required. */}
                 {effectiveClientId && !sampleMode && userRole !== "client_member" ? (
                   <RecommendationsPanel
@@ -5178,6 +5197,16 @@ function Index() {
                     onChanged={() => setAdvisoryBump((n) => n + 1)}
                     onOpenActions={() => setActiveTab("tasks")}
                     onAddFigures={() => setFirstRunStep("first-data")}
+                  />
+                ) : null}
+                {/* P2.1 — did the money move? measured from snapshots; manual where statements can't tell. */}
+                {effectiveClientId && !sampleMode && userRole !== "client_member" ? (
+                  <OutcomesPanel
+                    className="mb-5"
+                    clientId={effectiveClientId}
+                    audience="owner"
+                    refreshKey={`${activeTab}|${advisoryBump}`}
+                    onChanged={() => setAdvisoryBump((n) => n + 1)}
                   />
                 ) : null}
                 <div id="wizard-moves-list">
@@ -5765,10 +5794,14 @@ function Index() {
                   ...entries,
                   ...Object.entries(extras).filter(([k]) => k in defaults),
                 ];
-                if (historyUpload && effectiveClientId && allEntries.length > 0 && !replaceLiveOnHistory) {
+                if (
+                  historyUpload &&
+                  effectiveClientId &&
+                  allEntries.length > 0 &&
+                  !replaceLiveOnHistory
+                ) {
                   const fields = Object.fromEntries(allEntries) as Record<string, string>;
-                  const periodEnd =
-                    extractionForReview?.document_metadata?.period_end_date ?? null;
+                  const periodEnd = extractionForReview?.document_metadata?.period_end_date ?? null;
                   void upsertPeriodSnapshot({
                     clientId: effectiveClientId,
                     financials: fields,

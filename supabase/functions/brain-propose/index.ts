@@ -11,6 +11,7 @@ import {
   PROPOSE_RATE_LIMIT,
   applyDraftBrainPatches,
   dropOverclaimingSteps,
+  trackRecordLines,
   filterNewProposedSteps,
   ownerDripCandidatesFromStored,
   parseClaudeProposePayload,
@@ -130,7 +131,7 @@ Deno.serve(async (req: Request) => {
     return respond({ error: "Rate limit exceeded. Try proposing again in an hour." }, 429);
   }
 
-  const [clientRes, snapRes, stepRes, qRes] = await Promise.all([
+  const [clientRes, snapRes, stepRes, qRes, outcomeRes] = await Promise.all([
     userClient
       .from("clients")
       .select(
@@ -157,6 +158,13 @@ Deno.serve(async (req: Request) => {
       .eq("client_id", clientId)
       .order("created_at", { ascending: false })
       .limit(80),
+    // P2.2: what past recommendations actually delivered (empty pre-P0.2).
+    userClient
+      .from("recommendation_outcomes")
+      .select("metric, expected_amount, actual_amount, measured_at, proposed_next_steps(title)")
+      .eq("client_id", clientId)
+      .order("measured_at", { ascending: false })
+      .limit(60),
   ]);
 
   const client = clientRes.data;
@@ -254,6 +262,26 @@ Deno.serve(async (req: Request) => {
           .map((q) => `  - ${q.question_key}: ${q.prompt_text ?? ""}`)
           .join("\n"),
     );
+  }
+  // P2.2: track record — calibrates the next round, never re-proposes a miss blindly.
+  const outcomeRows = ((outcomeRes.error ? [] : outcomeRes.data) ?? []) as Array<{
+    metric: string;
+    expected_amount: number | null;
+    actual_amount: number | null;
+    proposed_next_steps: { title: string } | { title: string }[] | null;
+  }>;
+  const trackRecord = trackRecordLines(
+    outcomeRows.map((o) => ({
+      metric: o.metric,
+      expected_amount: o.expected_amount,
+      actual_amount: o.actual_amount,
+      recommendation_title: Array.isArray(o.proposed_next_steps)
+        ? (o.proposed_next_steps[0]?.title ?? "")
+        : (o.proposed_next_steps?.title ?? ""),
+    })),
+  );
+  if (trackRecord.length) {
+    contextLines.push("Track record of past recommendations:\n  " + trackRecord.join("\n  "));
   }
   const openSteps = existingSteps.filter((s) => s.status === "proposed" || s.status === "edited");
   if (openSteps.length) {

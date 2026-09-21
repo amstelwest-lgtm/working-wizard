@@ -75,6 +75,8 @@ import {
   StatusPill,
   statusPillFromHealth,
 } from "@/components/primitives";
+import { PortfolioExceptions } from "@/components/portfolio-exceptions";
+import { AccountantInbox } from "@/components/accountant-inbox";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   component: Dashboard,
@@ -1419,100 +1421,100 @@ function Dashboard() {
             </>
           ) : (
             <>
-          <MetricTile
-            label="Clients"
-            icon={
-              <svg viewBox="0 0 24 24">
-                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
-              </svg>
-            }
-            value={clientRows.length}
-            footnote={
-              <div className={addedThisMonth > 0 ? "up" : undefined}>
-                {addedThisMonth > 0 ? `+${addedThisMonth} this month` : "Active on platform"}
-              </div>
-            }
-            sparkline={
-              sparkPts.length > 1 ? (
-                <SparkSvg points={sparkPts} className="stat-spark" width={72} height={22} />
-              ) : undefined
-            }
-          />
-
-          <MetricTile
-            label="Avg health"
-            icon={
-              <svg viewBox="0 0 24 24">
-                <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
-              </svg>
-            }
-            value={
-              <>
-                {avgHealth == null ? "—" : avgHealth}
-                {avgHealth != null && <small>/100</small>}
-              </>
-            }
-            footnote={
-              <div
-                className={
-                  healthDelta != null && healthDelta > 0
-                    ? "up"
-                    : healthDelta != null && healthDelta < 0
-                      ? "warn"
-                      : undefined
+              <MetricTile
+                label="Clients"
+                icon={
+                  <svg viewBox="0 0 24 24">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
+                  </svg>
                 }
-              >
-                {healthDelta == null
-                  ? scoredRows.length
-                    ? `Across ${scoredRows.length} scored`
-                    : "No scored clients yet"
-                  : `${healthDelta > 0 ? "↑" : healthDelta < 0 ? "↓" : "→"} ${Math.abs(healthDelta)} pts vs last month`}
-              </div>
-            }
-            sparkline={
-              sparkPts.length > 1 ? (
-                <SparkSvg points={sparkPts} className="stat-spark" width={72} height={22} />
-              ) : undefined
-            }
-          />
+                value={clientRows.length}
+                footnote={
+                  <div className={addedThisMonth > 0 ? "up" : undefined}>
+                    {addedThisMonth > 0 ? `+${addedThisMonth} this month` : "Active on platform"}
+                  </div>
+                }
+                sparkline={
+                  sparkPts.length > 1 ? (
+                    <SparkSvg points={sparkPts} className="stat-spark" width={72} height={22} />
+                  ) : undefined
+                }
+              />
 
-          <MetricTile
-            label="Need attention"
-            icon={
-              <svg viewBox="0 0 24 24">
-                <path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0zM12 9v4M12 17h.01" />
-              </svg>
-            }
-            value={atRiskCount}
-            valueClassName={atRiskCount ? "text-[var(--risk)]" : "text-[var(--ok)]"}
-            footnote={
-              <div className="warn">
-                {atRiskCount === 0
-                  ? "All clear"
-                  : `${criticalCount} critical · ${Math.max(0, atRiskCount - criticalCount)} declining`}
-              </div>
-            }
-          />
+              <MetricTile
+                label="Avg health"
+                icon={
+                  <svg viewBox="0 0 24 24">
+                    <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+                  </svg>
+                }
+                value={
+                  <>
+                    {avgHealth == null ? "—" : avgHealth}
+                    {avgHealth != null && <small>/100</small>}
+                  </>
+                }
+                footnote={
+                  <div
+                    className={
+                      healthDelta != null && healthDelta > 0
+                        ? "up"
+                        : healthDelta != null && healthDelta < 0
+                          ? "warn"
+                          : undefined
+                    }
+                  >
+                    {healthDelta == null
+                      ? scoredRows.length
+                        ? `Across ${scoredRows.length} scored`
+                        : "No scored clients yet"
+                      : `${healthDelta > 0 ? "↑" : healthDelta < 0 ? "↓" : "→"} ${Math.abs(healthDelta)} pts vs last month`}
+                  </div>
+                }
+                sparkline={
+                  sparkPts.length > 1 ? (
+                    <SparkSvg points={sparkPts} className="stat-spark" width={72} height={22} />
+                  ) : undefined
+                }
+              />
 
-          <MetricTile
-            label="Open queries"
-            icon={
-              <svg viewBox="0 0 24 24">
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-              </svg>
-            }
-            value={openQueriesTotal}
-            footnote={
-              openQueriesTotal > 0
-                ? "From client management — open a row to reply"
-                : "No open queries"
-            }
-            onClick={() =>
-              document
-                .getElementById("wizard-dash-queries")
-                ?.scrollIntoView({ behavior: "smooth", block: "start" })
-            }
-          />
+              <MetricTile
+                label="Need attention"
+                icon={
+                  <svg viewBox="0 0 24 24">
+                    <path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0zM12 9v4M12 17h.01" />
+                  </svg>
+                }
+                value={atRiskCount}
+                valueClassName={atRiskCount ? "text-[var(--risk)]" : "text-[var(--ok)]"}
+                footnote={
+                  <div className="warn">
+                    {atRiskCount === 0
+                      ? "All clear"
+                      : `${criticalCount} critical · ${Math.max(0, atRiskCount - criticalCount)} declining`}
+                  </div>
+                }
+              />
+
+              <MetricTile
+                label="Open queries"
+                icon={
+                  <svg viewBox="0 0 24 24">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                  </svg>
+                }
+                value={openQueriesTotal}
+                footnote={
+                  openQueriesTotal > 0
+                    ? "From client management — open a row to reply"
+                    : "No open queries"
+                }
+                onClick={() =>
+                  document
+                    .getElementById("wizard-dash-queries")
+                    ?.scrollIntoView({ behavior: "smooth", block: "start" })
+                }
+              />
             </>
           )}
         </div>
@@ -1649,6 +1651,15 @@ function Dashboard() {
             </button>
           </div>
         )}
+
+        {/* P2.3 — portfolio by exception: which clients need a human today, and why. */}
+        <PortfolioExceptions firmId={firmId} refreshKey={clientRows.length} className="mb-5" />
+        {/* P3 — marketplace: owner requests to this firm + the firm's own listing. */}
+        <AccountantInbox
+          firmId={firmId}
+          className="mb-5"
+          onChanged={() => void load(firmId, user?.id)}
+        />
 
         {/* ===== CLIENTS TABLE ===== */}
         <div className="clients-head" id="clients-table">
