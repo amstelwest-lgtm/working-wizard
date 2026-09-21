@@ -35,13 +35,6 @@ function fmtDate(iso: string | null) {
   });
 }
 
-const codeStyle = {
-  fontSize: 11,
-  background: "#1e293b",
-  padding: "1px 5px",
-  borderRadius: 4,
-} as const;
-
 function fmtExact(n: number | null) {
   if (n == null || !isFinite(n)) return "—";
   return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -138,53 +131,25 @@ export function XeroConnectCard({ clientId, returnPath, refreshToken = 0, onSync
 
   if (loadingStatus && configured === null) {
     return (
-      <div
-        style={{
-          border: "1px solid #1e293b",
-          borderRadius: 10,
-          background: "rgba(15,23,42,0.6)",
-          padding: "14px 16px",
-          display: "flex",
-          alignItems: "center",
-          gap: 10,
-        }}
-      >
+      <div className="ledger-connect ledger-connect--panel ledger-connect--row">
         <Loader2 className="h-4 w-4 animate-spin text-slate-500" />
-        <span style={{ fontSize: 12, color: "#64748b" }}>Checking Xero…</span>
+        <span className="ledger-connect__hint">Checking Xero…</span>
       </div>
     );
   }
 
   if (configured === false) {
     return (
-      <div
-        style={{
-          border: "1px dashed #334155",
-          borderRadius: 10,
-          background: "rgba(15,23,42,0.4)",
-          padding: "14px 16px",
-        }}
-      >
-        <p
-          style={{
-            fontSize: 11,
-            fontWeight: 700,
-            letterSpacing: "0.12em",
-            textTransform: "uppercase",
-            color: "#475569",
-            marginBottom: 6,
-          }}
-        >
-          Xero
-        </p>
-        <p style={{ fontSize: 12, color: "#94a3b8" }}>
+      <div className="ledger-connect ledger-connect--dashed">
+        <p className="ledger-connect__kicker">Xero</p>
+        <p className="ledger-connect__body">
           Xero sync isn&apos;t switched on for this workspace yet. Export a P&amp;L and
           balance sheet from Xero and upload them — the board fills in the same way.
         </p>
-        <p style={{ fontSize: 11, color: "#64748b", marginTop: 6 }}>
-          Admins: set <code style={codeStyle}>XERO_CLIENT_ID</code>,{" "}
-          <code style={codeStyle}>XERO_CLIENT_SECRET</code> and{" "}
-          <code style={codeStyle}>XERO_REDIRECT_URI</code> to enable live sync.
+        <p className="ledger-connect__meta">
+          Admins: set <code className="ledger-connect__code">XERO_CLIENT_ID</code>,{" "}
+          <code className="ledger-connect__code">XERO_CLIENT_SECRET</code> and{" "}
+          <code className="ledger-connect__code">XERO_REDIRECT_URI</code> to enable live sync.
         </p>
       </div>
     );
@@ -193,26 +158,11 @@ export function XeroConnectCard({ clientId, returnPath, refreshToken = 0, onSync
   if (status) {
     const isError = status.syncStatus === "error" || status.phase === "error";
     return (
-      <div
-        style={{
-          border: `1px solid ${isError ? "rgba(239,68,68,0.3)" : "rgba(19,181,234,0.35)"}`,
-          borderRadius: 10,
-          background: isError ? "rgba(239,68,68,0.05)" : "rgba(19,181,234,0.06)",
-          padding: "14px 16px",
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
-          <div style={{ minWidth: 0 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
-              <p
-                style={{
-                  fontSize: 11,
-                  fontWeight: 700,
-                  letterSpacing: "0.12em",
-                  textTransform: "uppercase",
-                  color: "#475569",
-                }}
-              >
+      <div className={`ledger-connect ${isError ? "ledger-connect--error" : "ledger-connect--xero"}`}>
+        <div className="ledger-connect__head">
+          <div className="ledger-connect__identity">
+            <div className="ledger-connect__title-row">
+              <p className="ledger-connect__kicker" style={{ marginBottom: 0 }}>
                 Xero
               </p>
               {isError ? (
@@ -221,20 +171,10 @@ export function XeroConnectCard({ clientId, returnPath, refreshToken = 0, onSync
                 <CheckCircle2 className="h-3.5 w-3.5 text-sky-400" />
               )}
             </div>
-            <p
-              style={{
-                fontSize: 13,
-                fontWeight: 600,
-                color: "#f1f5f9",
-                marginBottom: 2,
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-              }}
-            >
+            <p className="ledger-connect__name">
               {status.tenantName ?? `Tenant ${status.tenantId.slice(0, 8)}`}
             </p>
-            <p style={{ fontSize: 11, color: "#64748b" }}>
+            <p className="ledger-connect__meta ledger-connect__meta--flush">
               {isError
                 ? `Error: ${status.syncError?.slice(0, 80) ?? "unknown"}`
                 : status.periodLabel
@@ -249,7 +189,7 @@ export function XeroConnectCard({ clientId, returnPath, refreshToken = 0, onSync
                     }`
                   : `Linked. Last sync ${fmtDate(status.lastSyncedAt)}. Sync again — the stored total has no period dates.`}
             </p>
-            <p id="xero-sync-proof" style={{ fontSize: 11, color: "#94a3b8", marginTop: 6, lineHeight: 1.45 }}>
+            <p id="xero-sync-proof" className="ledger-connect__meta">
               {status.periodLabel ? `P&L month to date ${status.periodLabel}` : "P&L period not dated yet"}
               {status.ytdPeriodLabel
                 ? ` · ${yearToDateTitle(status.ytdBasis)} ${status.ytdPeriodLabel}`
@@ -270,26 +210,12 @@ export function XeroConnectCard({ clientId, returnPath, refreshToken = 0, onSync
                 : (lastSync?.bankWarning ?? status.bankWarning ?? "Bank balances appear after the next Sync")}
             </p>
           </div>
-          <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+          <div className="ledger-connect__actions">
             <button
               onClick={handleSync}
               disabled={syncing || disconnecting}
               title="Sync now"
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 5,
-                fontSize: 11,
-                fontWeight: 600,
-                color: "#94a3b8",
-                background: "#1e293b",
-                border: "1px solid #334155",
-                borderRadius: 7,
-                padding: "6px 10px",
-                cursor: syncing ? "default" : "pointer",
-                opacity: syncing || disconnecting ? 0.6 : 1,
-                fontFamily: "inherit",
-              }}
+              className="ledger-connect__sync"
             >
               {syncing ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
               {syncing ? "Syncing…" : "Sync"}
@@ -298,21 +224,7 @@ export function XeroConnectCard({ clientId, returnPath, refreshToken = 0, onSync
               onClick={handleDisconnect}
               disabled={syncing || disconnecting}
               title="Disconnect Xero"
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 4,
-                fontSize: 11,
-                fontWeight: 600,
-                color: "#ef4444",
-                background: "rgba(239,68,68,0.08)",
-                border: "1px solid rgba(239,68,68,0.25)",
-                borderRadius: 7,
-                padding: "6px 10px",
-                cursor: disconnecting ? "default" : "pointer",
-                opacity: syncing || disconnecting ? 0.6 : 1,
-                fontFamily: "inherit",
-              }}
+              className="ledger-connect__disconnect"
             >
               <Unlink className="h-3 w-3" />
               {disconnecting ? "…" : "Disconnect"}
@@ -321,16 +233,7 @@ export function XeroConnectCard({ clientId, returnPath, refreshToken = 0, onSync
         </div>
 
         {(lastSync || status.periodLabel) && (
-          <div
-            style={{
-              marginTop: 12,
-              paddingTop: 12,
-              borderTop: "1px solid rgba(19,181,234,0.2)",
-              display: "grid",
-              gridTemplateColumns: "repeat(3, 1fr)",
-              gap: 8,
-            }}
-          >
+          <div className="ledger-connect__stats ledger-connect__stats--xero">
             {[
               {
                 label: "Month to date",
@@ -373,19 +276,8 @@ export function XeroConnectCard({ clientId, returnPath, refreshToken = 0, onSync
               { label: "Equity", value: fmtExact(lastSync?.equity ?? status.equity) },
             ].map((item) => (
               <div key={item.label}>
-                <div
-                  style={{
-                    fontSize: 10,
-                    color: "#64748b",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.1em",
-                  }}
-                >
-                  {item.label}
-                </div>
-                {item.value && (
-                  <div style={{ fontSize: 13, fontWeight: 700, color: "#e2e8f0" }}>{item.value}</div>
-                )}
+                <div className="ledger-connect__stat-label">{item.label}</div>
+                {item.value && <div className="ledger-connect__stat-value">{item.value}</div>}
               </div>
             ))}
           </div>
@@ -395,33 +287,12 @@ export function XeroConnectCard({ clientId, returnPath, refreshToken = 0, onSync
   }
 
   return (
-    <div
-      style={{
-        border: "1px solid #1e293b",
-        borderRadius: 10,
-        background: "rgba(15,23,42,0.6)",
-        padding: "14px 16px",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        gap: 12,
-        flexWrap: "wrap",
-      }}
-    >
+    <div className="ledger-connect ledger-connect--panel ledger-connect--split">
       <div>
-        <p
-          style={{
-            fontSize: 11,
-            fontWeight: 700,
-            letterSpacing: "0.12em",
-            textTransform: "uppercase",
-            color: "#475569",
-            marginBottom: 4,
-          }}
-        >
+        <p className="ledger-connect__kicker" style={{ marginBottom: 4 }}>
           Xero
         </p>
-        <p style={{ fontSize: 12, color: "#64748b" }}>
+        <p className="ledger-connect__hint">
           Connect to sync P&amp;L, the balance sheet and bank balances into this client&apos;s figures
         </p>
       </div>
