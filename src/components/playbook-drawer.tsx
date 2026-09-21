@@ -118,6 +118,8 @@ interface PlaybookDrawerProps {
   formula?: string | null;
   actualLine?: string | null;
   fallbackSteps?: string[];
+  /** Weak ratio → the evidence deliverable (cash, profitability, budget). */
+  evidence?: { label: string; onOpen: () => void } | null;
 }
 
 export function PlaybookDrawer({
@@ -132,6 +134,7 @@ export function PlaybookDrawer({
   formula = null,
   actualLine = null,
   fallbackSteps = [],
+  evidence = null,
 }: PlaybookDrawerProps) {
   const [steps, setSteps] = useState<PlaybookStep[]>([]);
   const [loading, setLoading] = useState(false);
@@ -241,6 +244,11 @@ export function PlaybookDrawer({
               </p>
             )}
           </div>
+          {evidence ? (
+            <button type="button" className="pillar-evidence mt-3" onClick={evidence.onOpen}>
+              {evidence.label}
+            </button>
+          ) : null}
         </SheetHeader>
 
         {/* Body */}
