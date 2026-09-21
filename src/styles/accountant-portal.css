@@ -830,3 +830,43 @@ html[data-theme="dark"] .reports-studio .reports-settings{
     linear-gradient(180deg,#141a28,#0b1220);
 }
 
+/* ===== practice home: clients first ===== */
+.accountant-portal.practice-home .topbar{margin-bottom:14px}
+.accountant-portal.practice-home .dash-hero{align-items:center;margin-bottom:12px}
+.accountant-portal.practice-home .dash-hero h1{font-size:26px;margin:0}
+.accountant-portal.practice-home .dash-hero .milon-page-header__subtitle{font-size:13px;margin-top:2px}
+.accountant-portal.practice-home .dash-asof{padding:6px 10px;font-size:12px}
+.accountant-portal.practice-home .stats-strip{gap:10px;margin-bottom:12px}
+.accountant-portal.practice-home .stats-strip .milon-metric-tile{padding:10px 14px;border-radius:14px}
+.accountant-portal.practice-home .stats-strip .milon-metric-tile__label{margin-bottom:2px;font-size:10px;letter-spacing:.16em}
+.accountant-portal.practice-home .stats-strip .milon-metric-tile__value{font-size:22px}
+.accountant-portal.practice-home .stats-strip .milon-metric-tile__foot{margin-top:2px;font-size:11.5px}
+.accountant-portal.practice-home .clients-head{margin:2px 0 8px}
+.accountant-portal.practice-home .clients-head h2{font-size:18px}
+.accountant-portal.practice-home .footer-note{margin-top:28px}
+.accountant-portal .attn-strip{display:flex;align-items:flex-start;gap:14px;border:1px solid var(--line);border-radius:14px;background:var(--card);padding:8px 12px;margin:0 0 12px}
+.accountant-portal .attn-strip h2{margin:7px 0 0;font-size:10px;letter-spacing:.16em;text-transform:uppercase;font-weight:700;color:var(--warn);white-space:nowrap}
+.accountant-portal .attn-strip ul{list-style:none;margin:0;padding:0;flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.accountant-portal .attn-strip-row{display:flex;align-items:center;gap:12px;width:100%;background:transparent;border:0;border-radius:8px;padding:5px 6px;cursor:pointer;text-align:left;color:inherit;font:inherit;text-decoration:none}
+.accountant-portal .attn-strip-row:hover{background:rgba(212,175,55,.08)}
+.accountant-portal .attn-strip-name{font-weight:700;font-size:13.5px}
+.accountant-portal .attn-strip-reason,.accountant-portal .attn-strip-detail{font-size:12.5px;color:var(--ink-dim)}
+.accountant-portal .attn-strip-go{margin-left:auto;font-size:12px;font-weight:600;color:var(--gold);white-space:nowrap}
+.accountant-portal .attn-strip-more{padding:4px 6px;font-size:12px;color:var(--ink-dim)}
+.accountant-portal .home-fold{border:1px solid var(--line);border-radius:16px;background:var(--card);margin-top:14px}
+.accountant-portal .home-fold > summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:12px;padding:12px 16px;font-weight:700;font-size:14px}
+.accountant-portal .home-fold > summary::-webkit-details-marker{display:none}
+.accountant-portal .home-fold > summary::after{content:"▸";color:var(--gold);font-size:12px;margin-left:4px}
+.accountant-portal .home-fold[open] > summary::after{content:"▾"}
+.accountant-portal .home-fold-meta{margin-left:auto;font-weight:500;font-size:12px;color:var(--ink-dim)}
+.accountant-portal .home-fold-body{padding:0 16px 16px}
+.accountant-portal .home-fold .pb-section{margin-top:0}
+.accountant-portal .home-fold .followup-list{margin-top:0}
+.accountant-portal .home-fold .ph-scatter{border:0;background:transparent;padding:0;min-height:0;box-shadow:none}
+.accountant-portal .home-fold .insights-strip--nested{margin:16px 0 0;padding:0;border:0;background:transparent;box-shadow:none}
+@media(max-width:720px){
+  .accountant-portal .attn-strip{flex-direction:column;gap:6px}
+  .accountant-portal .attn-strip-row{flex-wrap:wrap}
+  .accountant-portal .home-fold > summary{flex-wrap:wrap}
+}
+
