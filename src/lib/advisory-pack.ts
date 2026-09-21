@@ -30,6 +30,7 @@ import {
   type Recommendation,
 } from "@/lib/recommendations";
 import type { DataRequest } from "@/lib/data-requests";
+import type { OutcomeStory } from "@/lib/outcomes";
 
 export const PACK_STATUSES = [
   "draft",
@@ -70,6 +71,7 @@ export type PackGenerator = (typeof PACK_GENERATORS)[number];
 
 export const PACK_SECTION_KEYS = [
   "headline",
+  "last_cycle_results",
   "state_of_business",
   "what_changed",
   "what_matters",
@@ -423,6 +425,8 @@ export type PackInputs = {
   dataRequests: DataRequest[];
   openActions: number;
   overdueActions: number;
+  /** P2.2: what last cycle's approved recommendations actually did. */
+  outcomes?: OutcomeStory[];
   now: string;
   currency?: string;
 };
@@ -658,8 +662,32 @@ export function buildAdvisoryPack(input: PackInputs): AdvisoryPackContent {
       : " No accountant has reviewed this pack."
   }`;
 
+  // P2.2 — the sentence no reporting tool can write: did last cycle's moves work?
+  const stories = input.outcomes ?? [];
+  const measuredStories = stories.filter((o) => o.verdict !== "unmeasured");
+  const deliveredCount = measuredStories.filter(
+    (o) => o.verdict === "exceeded" || o.verdict === "on_target",
+  ).length;
+  const missedCount = measuredStories.filter(
+    (o) => o.verdict === "missed" || o.verdict === "worsened",
+  ).length;
+  const resultsBody =
+    stories.length === 0
+      ? "No recommendations were actioned in the last cycle, so there is nothing to measure yet. From the next pack on, this section reports whether the moves you accepted actually moved the numbers."
+      : measuredStories.length === 0
+        ? `${stories.length} recommendation${stories.length === 1 ? " was" : "s were"} accepted last cycle. None can be measured yet — results appear here as soon as the next figures land (or once you record them).`
+        : `${measuredStories.length} of ${stories.length} accepted recommendation${stories.length === 1 ? "" : "s"} measured: ${deliveredCount} delivered${
+            missedCount ? `, ${missedCount} missed` : ""
+          }${measuredStories.length - deliveredCount - missedCount ? `, ${measuredStories.length - deliveredCount - missedCount} partly` : ""}. Expected versus actual, from the statements, not from memory.`;
+
   const sections: PackSection[] = [
     { key: "headline", title: "In one line", body: headline },
+    {
+      key: "last_cycle_results",
+      title: "What the last cycle achieved",
+      body: resultsBody,
+      bullets: stories.length ? stories.slice(0, 6).map((o) => o.sentence) : undefined,
+    },
     { key: "state_of_business", title: "Where the business stands", body: stateLines.join(" ") },
     {
       key: "what_changed",

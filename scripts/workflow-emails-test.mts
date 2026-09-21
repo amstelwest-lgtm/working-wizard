@@ -323,7 +323,9 @@ const keys = (f: WorkflowFacts) => planWorkflowEmails(f).map((i) => `${i.kind}â†
     resolve("supabase/migrations/20260918170000_workflow_emails.sql"),
     "utf8",
   );
-  const m = sql.match(/kind\s+text NOT NULL CHECK \(kind IN \(([\s\S]*?)\)\)/);
+  // The kind CHECK is re-declared by later migrations (P3 added marketplace kinds): last wins.
+  const mk = readFileSync(resolve("supabase/migrations/20260918180000_marketplace.sql"), "utf8");
+  const m = mk.match(/workflow_email_log_kind_check CHECK \(kind IN \(([\s\S]*?)\)\)/);
   assert(Boolean(m), "kind CHECK present");
   eq(
     Array.from(m![1].matchAll(/'([a-z_]+)'/g), (x) => x[1])
