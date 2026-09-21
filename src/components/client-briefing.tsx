@@ -20,7 +20,7 @@ import { healthHeadline, type SnapshotMetric } from "@/lib/client-briefing";
 import type { BriefingWorkflow } from "@/lib/client-briefing.functions";
 import { useMarketFormat } from "@/contexts/market";
 import { AddPastPeriodLink } from "@/components/add-past-period-link";
-import { yearToDateTitle } from "@/lib/statement-period";
+import { formatIsoDateUTC, yearToDateTitle } from "@/lib/statement-period";
 
 export type XeroLinkProof = {
   tenantName: string | null;
@@ -31,6 +31,10 @@ export type XeroLinkProof = {
   ytdPeriodLabel?: string | null;
   ytdRevenue?: number | null;
   ytdBasis?: "financial" | "calendar" | null;
+  bsAsOf?: string | null;
+  bankCount?: number | null;
+  bankTotal?: number | null;
+  bankWarning?: string | null;
 };
 
 function fmtProofWhen(iso: string | null) {
@@ -182,6 +186,26 @@ export function ClientBriefing(p: ClientBriefingProps) {
                   {fmtProofMoney(p.xeroLink.ytdRevenue ?? null)
                     ? ` · Revenue ${fmtProofMoney(p.xeroLink.ytdRevenue ?? null)}`
                     : ""}
+                </>
+              ) : null}
+              {p.xeroLink.bsAsOf ? (
+                <>
+                  <br />
+                  Balance sheet as of {formatIsoDateUTC(p.xeroLink.bsAsOf)}
+                </>
+              ) : null}
+              {p.xeroLink.bankCount != null ? (
+                <>
+                  <br />
+                  Bank accounts · {p.xeroLink.bankCount}
+                  {fmtProofMoney(p.xeroLink.bankTotal ?? null)
+                    ? ` · ${fmtProofMoney(p.xeroLink.bankTotal ?? null)}`
+                    : ""}
+                </>
+              ) : p.xeroLink.bankWarning ? (
+                <>
+                  <br />
+                  {p.xeroLink.bankWarning}
                 </>
               ) : null}
             </p>

@@ -7,19 +7,25 @@ import { resolve } from "node:path";
 import { computeRatios, type RatioInputs } from "../src/lib/ratios";
 import {
   mapXeroToFinancialInputs,
+  bankSummaryRange,
+  coverageFromXeroCache,
   parseXeroBalanceSheet,
+  parseXeroBankSummary,
   parseXeroConnections,
   parseXeroFinancialYearEnd,
   parseXeroProfitAndLoss,
   periodMonthsBetween,
   pickXeroTenant,
   redactSecrets,
+  resolveXeroCash,
   xeroBalanceSheetPath,
+  xeroBankSummaryPath,
   xeroProfitAndLossRangePath,
   xeroRowAmount,
   xeroScopes,
   ytdRange,
 } from "../src/lib/xero";
+import { applyXeroOpeningCash, forecastOpeningFromStored } from "../src/lib/xero-opening";
 import {
   calendarMonthBounds,
   financialYearToDate,
@@ -149,6 +155,10 @@ assert(mapped.totalAssets === 220000, "mapped assets");
 assert(mapped.equity === 150000, "mapped equity");
 assert(mapped.receivables === 42000, "mapped ar");
 assert(mapped.cash === 85000, "mapped cash from balance sheet Bank line");
+assert(mapped.currentAssets === 158000, "current assets fall back to cash + receivables + inventory");
+assert(mapped.currentLiabilities === 28000, "current liabilities fall back to payables");
+const derivedDebt = Number(mapped.totalAssets) - Number(mapped.equity);
+assert(derivedDebt === 70000 && Number(mapped.equity) > 0, "debt-to-equity reads assets and equity");
 assert(mapped.fixedCosts === 150000, "mapped opex as fixedCosts");
 assert(mapped.periodMonths === "9", "YTD periodMonths so computeRatios annualises");
 assert(mapped.operatingCashflow == null, "OCF stays unset — day-1 is P&L + BS only");
@@ -215,11 +225,13 @@ assert(pickXeroTenant([]) === null, "empty tenants");
 
 assert(
   xeroScopes() ===
-    "offline_access accounting.settings.read accounting.reports.profitandloss.read accounting.reports.balancesheet.read",
-  "day-1 scopes only",
+    "offline_access accounting.settings.read accounting.reports.profitandloss.read accounting.reports.balancesheet.read accounting.reports.banksummary.read",
+  "statement scopes plus bank summary",
 );
 assert(!xeroScopes().includes("invoice"), "no invoice scope");
-assert(!xeroScopes().includes("banksummary"), "no bank-feed / bank-summary scope");
+assert(xeroScopes().includes("accounting.reports.banksummary.read"), "bank summary scope");
+assert(!xeroScopes().includes("accounting.banktransactions"), "no bank-transaction scope");
+assert(!xeroScopes().includes("bankfeeds"), "no bank-feed scope");
 
 const leaked = redactSecrets(
   '{"access_token":"secret-token","refresh_token":"r1"} Bearer abc.def Authorization: Bearer xyz',
@@ -494,7 +506,22 @@ assert(periodSrc.includes("Financial year to date"), "financial year label");
 assert(periodSrc.includes("Calendar year to date"), "calendar year label");
 const cashSrc = readFileSync(resolve("src/components/cash-forecast.tsx"), "utf8");
 assert(cashSrc.includes("horizonLabel"), "cash forecast shows the horizon dates");
+assert(cashSrc.includes("forecastOpeningFromStored"), "forecast uses stored Xero cash when opening is empty");
 assert(fnSrc.includes("assertClientScope"), "server fns check impersonation scope");
+assert(fnSrc.includes("applyXeroOpeningCash"), "sync writes the forecast opening from Xero cash");
+assert(fnSrc.includes('data_type: "bank"'), "bank summary is cached on xero_sync_data");
+assert(!fnSrc.includes("fetchXeroInvoices"), "no invoice pull");
+assert(!fnSrc.includes("BankTransactions"), "no bank-transaction pull");
+assert(xeroSrc.includes("xeroBankSummaryPath"), "client requests the Bank Summary report");
+assert(!xeroSrc.includes("BankTransactions"), "client does not pull bank transactions");
+assert(briefingSrc.includes("Balance sheet as of"), "briefing shows the balance-sheet date");
+assert(briefingSrc.includes("Bank accounts"), "briefing shows the bank account count");
+const cardSrc = readFileSync(resolve("src/components/xero-connect.tsx"), "utf8");
+assert(cardSrc.includes('id="xero-sync-proof"'), "Xero card shows what was synced");
+assert(cardSrc.includes("Balance sheet as of"), "Xero card names the balance-sheet date");
+const docsSrc = readFileSync(resolve("docs/XERO.md"), "utf8");
+assert(docsSrc.includes("accounting.reports.banksummary.read"), "env doc lists the bank summary scope");
+assert(docsSrc.includes("disconnect"), "env doc says existing connections must reconnect");
 assert(!fnSrc.includes("fetchXeroInvoices"), "no invoice pull in day-1 sync");
 assert(!/console\.(log|info|debug|error)\([^)]*access_token/.test(fnSrc), "functions never log tokens");
 
@@ -504,5 +531,190 @@ assert(envSrc.includes("XERO_CLIENT_SECRET="), "env: client secret");
 assert(envSrc.includes("XERO_REDIRECT_URI="), "env: redirect");
 assert(!envSrc.includes("XERO_SCOPES"), "env docs are the three vars only");
 assert(!envSrc.includes("XERO_SYNC"), "no invoice flag in env");
+assert(envSrc.includes("accounting.reports.banksummary.read"), "env example lists the bank summary scope");
+
+function bsRow(label: string, amount: string, type = "Row") {
+  return { RowType: type, Cells: [{ Value: label }, { Value: amount }] };
+}
+function bsSection(title: string, rows: ReturnType<typeof bsRow>[]) {
+  return { RowType: "Section", Title: title, Rows: rows };
+}
+
+const fullBs = parseXeroBalanceSheet({
+  Reports: [
+    {
+      Rows: [
+        bsSection("Bank", [
+          bsRow("Business Cheque", "40000.00"),
+          bsRow("Savings", "45000.00"),
+          bsRow("Total Bank", "85000.00", "SummaryRow"),
+        ]),
+        bsSection("Current Assets", [
+          bsRow("Accounts Receivable", "42000.00"),
+          bsRow("Inventory", "31000.00"),
+          bsRow("Total Current Assets", "73000.00", "SummaryRow"),
+        ]),
+        bsSection("Current Liabilities", [
+          bsRow("Accounts Payable", "28000.00"),
+          bsRow("Bank Loan", "5000.00"),
+          bsRow("Total Current Liabilities", "33000.00", "SummaryRow"),
+        ]),
+        bsSection("Non-current Liabilities", [
+          bsRow("Loan", "40000.00"),
+          bsRow("Total Non-current Liabilities", "40000.00", "SummaryRow"),
+        ]),
+        bsRow("Total Assets", "220000.00", "SummaryRow"),
+        bsRow("Total Liabilities", "73000.00", "SummaryRow"),
+        bsRow("Total Equity", "147000.00", "SummaryRow"),
+      ],
+    },
+  ],
+});
+assert(fullBs.cash === 85000, `bank section total, not the first account, got ${fullBs.cash}`);
+assert(fullBs.currentAssets === 158000, `current assets add bank cash, got ${fullBs.currentAssets}`);
+assert(fullBs.currentLiabilities === 33000, `current liabilities ${fullBs.currentLiabilities}`);
+assert(fullBs.debt === 45000, `loans in current and non-current, got ${fullBs.debt}`);
+assert(fullBs.receivables === 42000 && fullBs.payables === 28000 && fullBs.inventory === 31000, "AR AP inventory");
+assert(fullBs.equity === 147000, "equity from total equity");
+assert(fullBs.totalAssets === 220000, `total assets is not the current-assets subtotal, got ${fullBs.totalAssets}`);
+
+const nestedBank = parseXeroBalanceSheet({
+  Reports: [
+    {
+      Rows: [
+        bsSection("Current Assets", [
+          bsSection("Bank", [
+            bsRow("Cheque", "10000.00"),
+            bsRow("Total Bank", "10000.00", "SummaryRow"),
+          ]) as never,
+          bsRow("Accounts Receivable", "5000.00"),
+          bsRow("Total Current Assets", "15000.00", "SummaryRow"),
+        ]),
+      ],
+    },
+  ],
+});
+assert(nestedBank.currentAssets === 15000, `bank inside current assets is not added twice, got ${nestedBank.currentAssets}`);
+assert(nestedBank.cash === 10000, "nested bank section still supplies cash");
+
+const bankWindow = bankSummaryRange("2026-09-21");
+assert(bankWindow.to === "2026-09-21", "bank summary ends on the balance-sheet date");
+assert(bankWindow.from === "2026-06-22", `13 weeks before 21 Sep is ${bankWindow.from}`);
+const bankPath = xeroBankSummaryPath(bankWindow.from, bankWindow.to);
+assert(bankPath.includes("fromDate=2026-06-22") && bankPath.includes("toDate=2026-09-21"), "bank summary path");
+assert(!bankPath.includes("standardLayout"), "bank summary has no layout flag");
+
+const banks = parseXeroBankSummary(
+  {
+    Reports: [
+      {
+        Rows: [
+          {
+            RowType: "Header",
+            Cells: [
+              { Value: "Bank Accounts" },
+              { Value: "Opening Balance" },
+              { Value: "Cash Received" },
+              { Value: "Cash Spent" },
+              { Value: "Closing Balance" },
+            ],
+          },
+          {
+            RowType: "Section",
+            Title: "",
+            Rows: [
+              {
+                RowType: "Row",
+                Cells: [
+                  {
+                    Value: "Business Bank Account",
+                    Attributes: [{ Value: "acc-1", Id: "accountID" }],
+                  },
+                  { Value: "80000.00" },
+                  { Value: "10000.00" },
+                  { Value: "5000.00" },
+                  { Value: "85000.00" },
+                ],
+              },
+              {
+                RowType: "Row",
+                Cells: [
+                  { Value: "Credit Card", Attributes: [{ Value: "acc-2", Id: "accountID" }] },
+                  { Value: "-1000.00" },
+                  { Value: "0.00" },
+                  { Value: "500.00" },
+                  { Value: "-1500.00" },
+                ],
+              },
+            ],
+          },
+          {
+            RowType: "Section",
+            Title: "Total",
+            Rows: [
+              {
+                RowType: "Row",
+                Cells: [
+                  { Value: "Total" },
+                  { Value: "79000.00" },
+                  { Value: "10000.00" },
+                  { Value: "5500.00" },
+                  { Value: "83500.00" },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  },
+  bankWindow,
+);
+assert(banks.accounts.length === 2, `two accounts, not the total row, got ${banks.accounts.length}`);
+assert(banks.accounts[0]?.accountId === "acc-1", "account id from the report attribute");
+assert(banks.accounts[0]?.name === "Business Bank Account", "account name");
+assert(banks.totalClosing === 83500, `signed closings sum to ${banks.totalClosing}`);
+assert(resolveXeroCash(fullBs, banks) === 83500, "forecast cash prefers the bank summary");
+assert(resolveXeroCash(fullBs, null) === 85000, "without a bank summary, use the balance sheet");
+
+const withBank = mapXeroToFinancialInputs(pnl, fullBs, undefined, null, banks);
+assert(withBank.cash === 83500, "mapped cash is the bank total");
+assert(withBank.currentAssets === 158000, "mapped current assets");
+assert(withBank.currentLiabilities === 33000, "mapped current liabilities");
+
+const emptyOpening = applyXeroOpeningCash(null, 83500, "2026-09-21");
+assert(emptyOpening.changed && emptyOpening.cashflow.openingBalance === "83500", "empty forecast takes Xero cash");
+assert(emptyOpening.cashflow.openingBalanceSource === "xero", "opening is marked as Xero");
+assert(emptyOpening.cashflow.startDate === "2026-09-21", "opening date is the balance-sheet date");
+const keptLines = applyXeroOpeningCash(
+  { openingBalance: "10", revenue: [{ name: "Sales" }], openingBalanceSource: "accountant" },
+  83500,
+  "2026-09-21",
+);
+assert(!keptLines.changed && keptLines.cashflow.openingBalance === "10", "a typed opening is kept");
+assert(
+  Array.isArray(keptLines.cashflow.revenue) && keptLines.cashflow.revenue.length === 1,
+  "forecast lines stay",
+);
+const refreshed = applyXeroOpeningCash(
+  { openingBalance: "1000", openingBalanceSource: "xero", startDate: "2026-09-01", expenses: [] },
+  83500,
+  "2026-09-21",
+);
+assert(refreshed.changed && refreshed.cashflow.openingBalance === "83500", "Xero-owned opening refreshes");
+assert(Array.isArray(refreshed.cashflow.expenses), "other forecast fields stay");
+assert(!applyXeroOpeningCash(null, 0, "2026-09-21").changed, "a zero bank balance does not invent an opening");
+assert(forecastOpeningFromStored("0", "83500") === "83500", "screen uses financials cash when opening is zero");
+assert(forecastOpeningFromStored("10", "83500") === null, "screen keeps a non-zero opening");
+
+const coverage = coverageFromXeroCache([
+  { data_type: "bs", raw_data: { asOf: "2026-09-21", cash: 85000 } },
+  { data_type: "bank", raw_data: { accounts: banks.accounts, totalClosing: 83500, warning: null } },
+]);
+assert(coverage.bsAsOf === "2026-09-21" && coverage.bankCount === 2 && coverage.bankTotal === 83500, "cache coverage");
+const blocked = coverageFromXeroCache([
+  { data_type: "bank", raw_data: { accounts: [], totalClosing: null, warning: "reconnect" } },
+]);
+assert(blocked.bankCount === null && blocked.bankWarning === "reconnect", "missing scope is not zero accounts");
 
 console.log("xero-mapper-test: ok");

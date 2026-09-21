@@ -31,14 +31,26 @@ export const XERO_CLIENT_SECRET = () => {
 export const XERO_REDIRECT_URI = () => process.env.XERO_REDIRECT_URI ?? "";
 
 /**
- * Day-1 scopes: refresh + org name + P&L + balance sheet.
- * No invoices, payroll, or bank-feed scopes.
+ * Scopes the Xero web app must grant. A refresh token keeps only the scopes
+ * from the last consent, so an existing connection has to disconnect and
+ * connect again after `accounting.reports.banksummary.read` is enabled.
+ *
+ * offline_access
+ * accounting.settings.read               — organisation name and financial year end
+ * accounting.reports.profitandloss.read  — month-to-date and year-to-date P&L
+ * accounting.reports.balancesheet.read   — balance sheet
+ * accounting.reports.banksummary.read    — bank account names and closing balances
+ *
+ * Not requested: accounting.banktransactions, invoices, payroll, or bank feeds.
+ * Bank Summary over the 13 weeks ending on the balance-sheet date is enough
+ * for starting cash. It is not a bank-feed product.
  */
 export const XERO_DEFAULT_SCOPES = [
   "offline_access",
   "accounting.settings.read",
   "accounting.reports.profitandloss.read",
   "accounting.reports.balancesheet.read",
+  "accounting.reports.banksummary.read",
 ] as const;
 
 export function xeroScopes(): string {
@@ -487,6 +499,27 @@ export function xeroBalanceSheetPath(date: string): string {
   return `/Reports/BalanceSheet?${q.toString()}`;
 }
 
+/** 13 weeks — the cash-forecast horizon. Bank Summary refuses ranges over a year. */
+export const XERO_BANK_SUMMARY_DAYS = 13 * 7;
+
+/**
+ * Bank Summary window ending on the balance-sheet date.
+ * Closing balances are the forecast's starting cash. Cash received and cash
+ * spent in the window are stored with the cache; they are not turned into
+ * forecast lines.
+ */
+export function bankSummaryRange(asOfIso: string): { from: string; to: string } {
+  const to = /^\d{4}-\d{2}-\d{2}/.test(asOfIso) ? asOfIso.slice(0, 10) : new Date().toISOString().slice(0, 10);
+  const end = new Date(`${to}T00:00:00Z`);
+  end.setUTCDate(end.getUTCDate() - XERO_BANK_SUMMARY_DAYS);
+  return { from: end.toISOString().slice(0, 10), to };
+}
+
+export function xeroBankSummaryPath(from: string, to: string): string {
+  const q = new URLSearchParams({ fromDate: from, toDate: to });
+  return `/Reports/BankSummary?${q.toString()}`;
+}
+
 export async function fetchXeroProfitAndLoss(
   tenantId: string,
   accessToken: string,
@@ -531,6 +564,9 @@ export type XeroLedgerStatement = {
   periodLabel: string;
   /** Financial year to date, or calendar year to date when the org year-end is unknown. Null when that range is the month. */
   year: XeroYearStatement | null;
+  /** Null when the connection has not granted the bank-summary scope yet. */
+  bank: XeroBankSummary | null;
+  bankWarning: string | null;
 };
 
 async function resolveYearRange(
@@ -552,9 +588,29 @@ async function resolveYearRange(
   return { from: calendar.from, to: calendar.to, basis: "calendar" };
 }
 
+const BANK_SCOPE_WARNING =
+  "Bank balances need a reconnect. In the Xero app, enable accounting.reports.banksummary.read, then disconnect and connect again.";
+
+async function fetchXeroBankSummarySafe(
+  tenantId: string,
+  accessToken: string,
+  range: { from: string; to: string },
+): Promise<{ bank: XeroBankSummary | null; bankWarning: string | null }> {
+  try {
+    const data = await xeroGet(tenantId, accessToken, xeroBankSummaryPath(range.from, range.to));
+    return { bank: parseXeroBankSummary(data, range), bankWarning: null };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Xero bank summary failed";
+    // A missing scope is 401/403 on this report only. P&L and the balance sheet still save.
+    if (/\b(401|403)\b/.test(msg)) return { bank: null, bankWarning: BANK_SCOPE_WARNING };
+    throw err instanceof Error ? err : new Error(msg);
+  }
+}
+
 /**
- * Two explicit P&L ranges (month to date, and financial year to date) plus the
- * balance sheet at the month-end date. Each report is one fromDate/toDate.
+ * Two explicit P&L ranges (month to date, and financial year to date), the
+ * balance sheet at the month-end date, and a Bank Summary for the 13 weeks
+ * ending that day. Each report is one fromDate/toDate.
  */
 export async function fetchXeroLedgerStatement(
   tenantId: string,
@@ -563,8 +619,9 @@ export async function fetchXeroLedgerStatement(
 ): Promise<XeroLedgerStatement> {
   const month = calendarMonthBounds(now, 0);
   const yearRange = await resolveYearRange(tenantId, accessToken, now);
+  const banks = bankSummaryRange(month.to);
   const same = yearRange.from === month.from && yearRange.to === month.to;
-  const [monthJson, yearJson, bsJson] = await Promise.all([
+  const [monthJson, yearJson, bsJson, bankResult] = await Promise.all([
     xeroGet(tenantId, accessToken, xeroProfitAndLossRangePath(month.from, month.to)),
     same
       ? Promise.resolve(null)
@@ -574,6 +631,7 @@ export async function fetchXeroLedgerStatement(
           xeroProfitAndLossRangePath(yearRange.from, yearRange.to),
         ),
     xeroGet(tenantId, accessToken, xeroBalanceSheetPath(month.to)),
+    fetchXeroBankSummarySafe(tenantId, accessToken, banks),
   ]);
   const year = yearJson
     ? {
@@ -588,13 +646,16 @@ export async function fetchXeroLedgerStatement(
         basis: yearRange.basis,
       }
     : null;
+  const parsedBs = parseXeroBalanceSheet(bsJson);
   return {
     pnl: parseXeroProfitAndLoss(monthJson, 1, 0),
-    bs: parseXeroBalanceSheet(bsJson),
+    bs: { ...parsedBs, asOf: month.to },
     from: month.from,
     to: month.to,
     periodLabel: formatStatementPeriodLabel(month.from, month.to),
     year,
+    bank: bankResult.bank,
+    bankWarning: bankResult.bankWarning,
   };
 }
 
@@ -608,7 +669,66 @@ export type XeroBalanceSheet = {
   inventory: number;
   payables: number;
   cash: number;
+  /** Bank plus the Current Assets section. Current ratio reads this. */
+  currentAssets: number;
+  /** Current Liabilities section, else payables. Current ratio reads this. */
+  currentLiabilities: number;
+  /**
+   * Interest-bearing debt (non-current liabilities plus loans sitting in
+   * current liabilities). Debt-to-equity on the board is still
+   * (total assets − equity), which is every liability, not only this figure.
+   */
+  debt: number;
+  /** ISO date the report was requested for. Empty when parsed from a fixture. */
+  asOf: string;
 };
+
+function sectionTitle(row: XeroReportRow): string {
+  return (row.Title ?? rowLabel(row)).toLowerCase();
+}
+
+function findTitledSection(
+  rows: XeroReportRow[],
+  match: (title: string) => boolean,
+): XeroReportRow | undefined {
+  let found: XeroReportRow | undefined;
+  walkRows(rows, (r) => {
+    if (found) return;
+    if ((r.RowType ?? "").toLowerCase() !== "section") return;
+    if (match(sectionTitle(r))) found = r;
+  });
+  return found;
+}
+
+function isNonCurrentTitle(title: string): boolean {
+  return title.includes("non-current") || title.includes("non current");
+}
+
+function sectionIsInside(parent: XeroReportRow | undefined, child: XeroReportRow | undefined): boolean {
+  if (!parent || !child) return false;
+  let hit = false;
+  walkRows(parent.Rows, (r) => {
+    if (r === child) hit = true;
+  });
+  return hit;
+}
+
+const DEBT_LABEL =
+  /loan|borrowing|overdraft|hire purchase|finance lease|long[- ]term debt|term loan|mortgage|asset finance/i;
+const NOT_DEBT_LABEL = /bad debt|debtor/i;
+
+function sumDebtRows(section: XeroReportRow | undefined): number {
+  if (!section) return 0;
+  let sum = 0;
+  walkRows(section.Rows, (r) => {
+    const type = (r.RowType ?? "").toLowerCase();
+    if (type === "header" || type === "section" || type === "summaryrow") return;
+    const label = rowLabel(r);
+    if (!DEBT_LABEL.test(label) || NOT_DEBT_LABEL.test(label)) return;
+    sum += Math.abs(xeroRowAmount(r));
+  });
+  return sum;
+}
 
 export function parseXeroBalanceSheet(json: unknown): XeroBalanceSheet {
   const report = firstXeroReport(json);
@@ -637,9 +757,51 @@ export function parseXeroBalanceSheet(json: unknown): XeroBalanceSheet {
   const payables = absAmount(
     findRowByLabel(rows, "accounts payable", "trade payables", "trade creditors", "accounts payable"),
   );
-  const cash = absAmount(
-    findRowByLabel(rows, "bank", "cash and cash equivalent", "cash at bank", "bank accounts"),
+
+  const bankSection = findTitledSection(
+    rows,
+    (title) => title === "bank" || title === "bank accounts" || title.startsWith("bank ") || title.includes("cash and cash"),
   );
+  const bankTotal = bankSection ? Math.abs(sectionTotal(bankSection)) : 0;
+  const cash =
+    bankTotal ||
+    absAmount(
+      findRowByLabel(rows, "total bank", "cash and cash equivalent", "cash at bank", "cash and cash equivalents"),
+    ) ||
+    absAmount(findRowByLabel(rows, "bank"));
+
+  const currentAssetsSection = findTitledSection(
+    rows,
+    (title) => !isNonCurrentTitle(title) && title.includes("current asset"),
+  );
+  const currentLiabSection = findTitledSection(
+    rows,
+    (title) => !isNonCurrentTitle(title) && title.includes("current liabilit"),
+  );
+
+  let currentAssets = 0;
+  if (currentAssetsSection) {
+    currentAssets = Math.abs(sectionTotal(currentAssetsSection));
+    if (bankSection && !sectionIsInside(currentAssetsSection, bankSection)) {
+      currentAssets += bankTotal || cash;
+    }
+  } else {
+    currentAssets = cash + receivables + inventory;
+  }
+
+  const currentLiabilities = currentLiabSection
+    ? Math.abs(sectionTotal(currentLiabSection))
+    : payables || totalLiabilities;
+
+  const nonCurrentLiab = findTitledSection(
+    rows,
+    (title) =>
+      title.includes("non-current liabilit") ||
+      title.includes("non current liabilit") ||
+      title.includes("long-term liabilit") ||
+      title.includes("long term liabilit"),
+  );
+  const debt = (nonCurrentLiab ? Math.abs(sectionTotal(nonCurrentLiab)) : 0) + sumDebtRows(currentLiabSection);
 
   return {
     totalAssets,
@@ -649,6 +811,130 @@ export function parseXeroBalanceSheet(json: unknown): XeroBalanceSheet {
     inventory,
     payables,
     cash,
+    currentAssets,
+    currentLiabilities,
+    debt,
+    asOf: "",
+  };
+}
+
+// ─── Bank Summary ─────────────────────────────────────────────────────────────
+
+export type XeroBankAccount = {
+  accountId: string | null;
+  name: string;
+  opening: number;
+  cashReceived: number;
+  cashSpent: number;
+  closing: number;
+};
+
+export type XeroBankSummary = {
+  from: string;
+  to: string;
+  accounts: XeroBankAccount[];
+  totalClosing: number;
+};
+
+function accountIdOf(cell: XeroReportCell | undefined): string | null {
+  const attrs = cell?.Attributes;
+  if (!Array.isArray(attrs)) return null;
+  for (const attr of attrs) {
+    if (!attr || typeof attr !== "object") continue;
+    const row = attr as { Id?: unknown; Value?: unknown };
+    const id = typeof row.Id === "string" ? row.Id : "";
+    if (!/account/i.test(id)) continue;
+    return typeof row.Value === "string" && row.Value ? row.Value : null;
+  }
+  return null;
+}
+
+function headerColumn(header: XeroReportRow | undefined, needles: string[], fallback: number): number {
+  const cells = header?.Cells ?? [];
+  const idx = cells.findIndex((cell) =>
+    needles.some((needle) => String(cell?.Value ?? "").toLowerCase().includes(needle)),
+  );
+  return idx >= 0 ? idx : fallback;
+}
+
+/**
+ * Bank Summary rows: account name, opening, cash received, cash spent, closing.
+ * The Total row is not an account. Closing balances stay signed (an overdraft
+ * reduces starting cash).
+ */
+export function parseXeroBankSummary(
+  json: unknown,
+  range: { from: string; to: string },
+): XeroBankSummary {
+  const report = firstXeroReport(json);
+  const rows = report?.Rows ?? [];
+  let header: XeroReportRow | undefined;
+  walkRows(rows, (row) => {
+    if (header) return;
+    if ((row.RowType ?? "").toLowerCase() === "header") header = row;
+  });
+  const nameIdx = headerColumn(header, ["bank account", "account"], 0);
+  const openIdx = headerColumn(header, ["opening"], 1);
+  const inIdx = headerColumn(header, ["received"], 2);
+  const outIdx = headerColumn(header, ["spent"], 3);
+  const closeIdx = headerColumn(header, ["closing"], 4);
+
+  const accounts: XeroBankAccount[] = [];
+  walkRows(rows, (row) => {
+    if ((row.RowType ?? "").toLowerCase() !== "row") return;
+    const name = cellValue(row, nameIdx).trim();
+    if (!name || /^total\b/i.test(name)) return;
+    accounts.push({
+      accountId: accountIdOf(row.Cells?.[nameIdx]),
+      name,
+      opening: parseAmount(cellValue(row, openIdx)),
+      cashReceived: parseAmount(cellValue(row, inIdx)),
+      cashSpent: parseAmount(cellValue(row, outIdx)),
+      closing: parseAmount(cellValue(row, closeIdx)),
+    });
+  });
+  const totalClosing = Math.round(accounts.reduce((sum, account) => sum + account.closing, 0) * 100) / 100;
+  return { from: range.from, to: range.to, accounts, totalClosing };
+}
+
+/** Bank Summary closing total when accounts came back; otherwise the balance-sheet cash line. */
+export function resolveXeroCash(
+  bs: { cash: number },
+  bank: { accounts: unknown[]; totalClosing: number } | null | undefined,
+): number {
+  if (bank && bank.accounts.length > 0 && Number.isFinite(bank.totalClosing)) return bank.totalClosing;
+  return bs.cash;
+}
+
+export type XeroSyncCoverage = {
+  bsAsOf: string | null;
+  bankCount: number | null;
+  bankTotal: number | null;
+  bankWarning: string | null;
+};
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+}
+
+/** Read the cached balance sheet and bank summary written by sync. */
+export function coverageFromXeroCache(
+  rows: Array<{ data_type?: string | null; raw_data?: unknown }>,
+): XeroSyncCoverage {
+  const bs = asRecord(rows.find((row) => row.data_type === "bs")?.raw_data);
+  const bank = asRecord(rows.find((row) => row.data_type === "bank")?.raw_data);
+  const warning = typeof bank?.warning === "string" && bank.warning.trim() ? bank.warning : null;
+  const accounts = Array.isArray(bank?.accounts) ? bank.accounts : null;
+  const total =
+    typeof bank?.totalClosing === "number" && Number.isFinite(bank.totalClosing) ? bank.totalClosing : null;
+  const granted = accounts != null && !warning;
+  const asOf = typeof bs?.asOf === "string" && bs.asOf.trim() ? bs.asOf : null;
+  return {
+    bsAsOf: asOf,
+    bankCount: granted ? accounts.length : null,
+    bankTotal: granted ? total : null,
+    bankWarning: warning,
   };
 }
 
@@ -664,8 +950,13 @@ export async function fetchXeroBalanceSheet(
 // ─── Data mapper ──────────────────────────────────────────────────────────────
 
 /**
- * Maps Xero P&L + Balance Sheet totals onto the existing financials vocabulary
- * used by `computeRatios`. Day-1 only — no invoices, payroll, or bank feeds.
+ * Maps Xero P&L + balance sheet onto the financials the health score, ratios,
+ * and cash forecast already read.
+ *
+ * Current ratio reads `currentAssets` and `currentLiabilities`.
+ * Debt-to-equity reads `totalAssets` and `equity` (debt = assets − equity).
+ * The cash forecast opening reads `cash`: bank-summary closing balances when
+ * the Bank Summary came back, otherwise the balance-sheet Bank section.
  */
 export type XeroMappedYear = {
   pnl: Pick<XeroPnL, "revenue" | "netIncome" | "periodMonths">;
@@ -680,6 +971,7 @@ export function mapXeroToFinancialInputs(
   bs: XeroBalanceSheet,
   period?: { from: string; to: string; label: string },
   year?: XeroMappedYear | null,
+  bank?: XeroBankSummary | null,
 ): Record<string, number | string> {
   const out: Record<string, number | string> = {};
   const dated = Boolean(period?.from && period?.to);
@@ -705,7 +997,9 @@ export function mapXeroToFinancialInputs(
   setBs("receivables", bs.receivables);
   setBs("inventory", bs.inventory);
   setBs("payables", bs.payables);
-  setBs("cash", bs.cash);
+  setBs("currentAssets", bs.currentAssets);
+  setBs("currentLiabilities", bs.currentLiabilities);
+  setBs("cash", resolveXeroCash(bs, bank));
   if (Number.isFinite(pnl.periodMonths) && pnl.periodMonths >= 1 && pnl.periodMonths <= 12) {
     out[PERIOD_MONTHS_KEY] = String(pnl.periodMonths);
   }

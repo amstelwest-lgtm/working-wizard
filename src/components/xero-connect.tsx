@@ -11,7 +11,7 @@ import {
   type XeroSyncResult,
 } from "@/lib/xero.functions";
 import { RefreshCw, Link2, Unlink, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
-import { yearToDateTitle } from "@/lib/statement-period";
+import { formatIsoDateUTC, yearToDateTitle } from "@/lib/statement-period";
 
 type Props = {
   clientId: string | null;
@@ -105,7 +105,11 @@ export function XeroConnectCard({ clientId, returnPath, refreshToken = 0, onSync
       const result = await doSync({ data: { clientId } });
       setLastSync(result.summary);
       onSyncComplete?.(result.fields, result.summary);
-      toast.success("Xero sync complete — P&L and balance sheet updated");
+      toast.success(
+        result.summary.bankWarning
+          ? "Xero sync saved the P&L and balance sheet. Bank balances need a reconnect."
+          : "Xero sync complete — P&L, balance sheet and bank balances updated",
+      );
       await load();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Sync failed");
@@ -245,6 +249,26 @@ export function XeroConnectCard({ clientId, returnPath, refreshToken = 0, onSync
                     }`
                   : `Linked. Last sync ${fmtDate(status.lastSyncedAt)}. Sync again — the stored total has no period dates.`}
             </p>
+            <p id="xero-sync-proof" style={{ fontSize: 11, color: "#94a3b8", marginTop: 6, lineHeight: 1.45 }}>
+              {status.periodLabel ? `P&L month to date ${status.periodLabel}` : "P&L period not dated yet"}
+              {status.ytdPeriodLabel
+                ? ` · ${yearToDateTitle(status.ytdBasis)} ${status.ytdPeriodLabel}`
+                : ""}
+              <br />
+              {`Balance sheet as of ${
+                formatIsoDateUTC(lastSync?.bsAsOf ?? status.bsAsOf) || "the last sync"
+              }`}
+              <br />
+              {status.bankCount != null || lastSync?.bankCount != null
+                ? `${lastSync?.bankCount ?? status.bankCount} bank ${
+                    (lastSync?.bankCount ?? status.bankCount) === 1 ? "account" : "accounts"
+                  }${
+                    (lastSync?.bankTotal ?? status.bankTotal) != null
+                      ? ` · ${fmtExact(lastSync?.bankTotal ?? status.bankTotal ?? null)}`
+                      : ""
+                  }`
+                : (lastSync?.bankWarning ?? status.bankWarning ?? "Bank balances appear after the next Sync")}
+            </p>
           </div>
           <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
             <button
@@ -332,7 +356,19 @@ export function XeroConnectCard({ clientId, returnPath, refreshToken = 0, onSync
                 label: "Year net income",
                 value: fmtExact(lastSync?.ytdNetIncome ?? status.ytdNetIncome),
               },
-              { label: "Cash (BS)", value: fmtExact(lastSync?.cash ?? status.cash) },
+              { label: "Cash", value: fmtExact(lastSync?.cash ?? status.cash) },
+              {
+                label: "Balance sheet",
+                value: formatIsoDateUTC(lastSync?.bsAsOf ?? status.bsAsOf) || "—",
+              },
+              {
+                label: "Bank accounts",
+                value:
+                  (lastSync?.bankCount ?? status.bankCount) == null
+                    ? "—"
+                    : String(lastSync?.bankCount ?? status.bankCount),
+              },
+              { label: "Bank total", value: fmtExact(lastSync?.bankTotal ?? status.bankTotal) },
               { label: "Total assets", value: fmtExact(lastSync?.totalAssets ?? status.totalAssets) },
               { label: "Equity", value: fmtExact(lastSync?.equity ?? status.equity) },
             ].map((item) => (
@@ -386,7 +422,7 @@ export function XeroConnectCard({ clientId, returnPath, refreshToken = 0, onSync
           Xero
         </p>
         <p style={{ fontSize: 12, color: "#64748b" }}>
-          Connect to sync P&amp;L and balance sheet into this client&apos;s figures
+          Connect to sync P&amp;L, the balance sheet and bank balances into this client&apos;s figures
         </p>
       </div>
       <button

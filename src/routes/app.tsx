@@ -5963,8 +5963,9 @@ function Index() {
                   Xero Integration
                 </DialogTitle>
                 <DialogDescription className="text-xs text-slate-400">
-                  Connect a Xero organisation to pull P&amp;L and balance sheet into this
-                  client&apos;s figures.
+                  Connect a Xero organisation to pull P&amp;L, the balance sheet and bank
+                  balances. Existing connections need a reconnect once the bank summary scope
+                  is enabled.
                 </DialogDescription>
               </DialogHeader>
               <XeroConnectCard

@@ -1388,6 +1388,7 @@ function ClientView() {
     setFinancials(nextScalars);
     setClient((c) => (c ? { ...c, financials_updated_at: new Date().toISOString() } : c));
     setXeroRefresh((n) => n + 1);
+    setCashForecastReloadToken((n) => n + 1);
   }, []);
 
   const handleFinancialChange = useCallback(
@@ -2169,6 +2170,10 @@ function ClientView() {
                           ytdPeriodLabel: xeroLink.ytdPeriodLabel,
                           ytdRevenue: xeroLink.ytdRevenue,
                           ytdBasis: xeroLink.ytdBasis,
+                          bsAsOf: xeroLink.bsAsOf,
+                          bankCount: xeroLink.bankCount,
+                          bankTotal: xeroLink.bankTotal,
+                          bankWarning: xeroLink.bankWarning,
                         }
                       : null
                   }
@@ -3247,8 +3252,9 @@ function ClientView() {
                   Xero Integration
                 </DialogTitle>
                 <DialogDescription className="text-xs text-slate-400">
-                  Connect a Xero organisation to pull P&amp;L and balance sheet into this
-                  client&apos;s figures.
+                  Connect a Xero organisation to pull P&amp;L, the balance sheet and bank
+                  balances into this client&apos;s figures. Existing connections need a reconnect
+                  once the bank summary scope is enabled.
                 </DialogDescription>
               </DialogHeader>
               <XeroConnectCard

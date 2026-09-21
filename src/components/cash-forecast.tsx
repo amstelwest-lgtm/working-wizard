@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { forecastOpeningFromStored } from "@/lib/xero-opening";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -596,9 +597,12 @@ export function CashForecastPanel({
         capexAmount?: string;
         capexWeek?: number;
       } | null;
+      const finCash = (data?.financials as { cash?: string | number | null } | null)?.cash;
+      const seededOpening = forecastOpeningFromStored(cf?.openingBalance, finCash);
+      if (seededOpening) setOpeningBalance(seededOpening);
       if (cf) {
         if (cf.startDate) setStartDate(cf.startDate);
-        if (cf.openingBalance != null) setOpeningBalance(cf.openingBalance);
+        if (!seededOpening && cf.openingBalance != null) setOpeningBalance(cf.openingBalance);
         if (cf.revenue) setRevenue(cf.revenue);
         if (cf.expenses) setExpenses(cf.expenses);
         if (cf.other) setOther(cf.other);

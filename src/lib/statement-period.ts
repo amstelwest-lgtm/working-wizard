@@ -92,6 +92,14 @@ export function formatStatementPeriodLabel(fromIso: string, toIso: string): stri
   return `${stamp(from)} – ${stamp(to)}`;
 }
 
+/** One UTC calendar date, e.g. `21 Sep 2026`. */
+export function formatIsoDateUTC(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const d = utcDate(iso);
+  if (!d) return iso;
+  return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+}
+
 /** Short month stamp used by older snapshots (`Sep 2026`), UTC so it matches the report month. */
 export function calendarMonthStamp(iso: string): string {
   const d = utcDate(iso);
