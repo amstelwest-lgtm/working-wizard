@@ -229,7 +229,27 @@ assert(!/Claude|Anthropic/i.test(route), "client page copy has no vendor wording
 assert(!/overallHealth\.pillars\s*\n?\s*\.filter\(\(p\) => p\.score != null\)\s*\n?\s*\.map/.test(route), "pillar score chips removed from header");
 const comp = read("src/components/client-briefing.tsx");
 assert(comp.includes('id="client-upload-cta"'), "Upload sits in the client briefing");
-assert(comp.includes("Connect Xero"), "briefing offers Connect Xero");
+assert(comp.includes('brand="xero"'), "briefing offers Connect to Xero");
+assert(comp.includes('brand="quickbooks"'), "briefing offers Connect to QuickBooks");
+assert(comp.includes('id="client-connect-xero"'), "briefing keeps the Xero connect id");
+assert(comp.includes('id="client-connect-qbo"'), "briefing keeps the QuickBooks connect id");
+const connectSlice = comp.slice(comp.indexOf('id="client-connect-qbo"'), comp.indexOf('id="wizard-open-queries"'));
+assert(!connectSlice.includes("ghost") && !connectSlice.includes("gold"), "connect CTAs are not Milōn gold or ghost buttons");
+const brandBtn = read("src/components/brand-connect-button.tsx");
+assert(brandBtn.includes("Connect to Xero"), "Xero label matches the brand button");
+assert(brandBtn.includes("Connect to QuickBooks"), "QuickBooks label matches the brand button");
+const qboCard = read("src/components/qbo-connect.tsx");
+const xeroCard = read("src/components/xero-connect.tsx");
+assert(qboCard.includes('brand="quickbooks"'), "Health & Ratios QuickBooks card uses the brand button");
+assert(xeroCard.includes('brand="xero"'), "Health & Ratios Xero card uses the brand button");
+assert(qboCard.includes("ledger-connect__disconnect"), "QuickBooks disconnect stays a secondary action");
+assert(xeroCard.includes("ledger-connect__sync"), "Xero sync stays a secondary action");
+assert(!qboCard.includes("Connect QuickBooks"), "QuickBooks card drops the short generic label");
+assert(!xeroCard.includes(">Connect Xero<"), "Xero card drops the short generic label");
+const primitives = read("src/styles/primitives.css");
+assert(primitives.includes("#2CA01C"), "QuickBooks button uses Intuit green");
+assert(primitives.includes("#13B5EA"), "Xero button uses Xero blue");
+assert(primitives.includes(".ledger-connect__disconnect"), "disconnect styling is unchanged");
 for (const must of ["Financial Health", "Financial snapshot", "About this business", "What matters", "Milōn workflow", "View full profile", "View breakdown", "No open queries", "Open movement report"]) {
   assert(comp.includes(must), `component has "${must}"`);
 }

@@ -1244,3 +1244,103 @@ html[data-theme="light"] .ledger-connect__code {
 html[data-theme="light"] .ledger-connect__code {
   background: rgba(27, 22, 8, 0.08);
 }
+
+/* Intuit / Xero connect buttons. Fills stay the brand hex in light and dark
+   so they stay recognizable on cream cards and on the dark board.
+   Sync and Disconnect keep .ledger-connect__sync / __disconnect. */
+.brand-connect,
+.accountant-portal .brand-connect {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  box-sizing: border-box;
+  min-height: 44px;
+  margin: 0;
+  padding: 10px 22px;
+  border: 0;
+  border-radius: 6px;
+  background-image: none;
+  box-shadow: none;
+  font-family: Inter, "Noto Sans", sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  font-style: normal;
+  line-height: 1.1;
+  letter-spacing: 0;
+  text-transform: none;
+  text-decoration: none;
+  white-space: nowrap;
+  color: #ffffff;
+  -webkit-text-fill-color: #ffffff;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background-color 150ms ease;
+}
+
+.brand-connect--quickbooks,
+.accountant-portal .brand-connect--quickbooks {
+  background-color: #2CA01C;
+}
+
+.brand-connect--quickbooks:hover:not(:disabled),
+.accountant-portal .brand-connect--quickbooks:hover:not(:disabled) {
+  background-color: #248c18;
+}
+
+.brand-connect--xero,
+.accountant-portal .brand-connect--xero {
+  gap: 12px;
+  padding: 4px 18px 4px 4px;
+  background-color: #13B5EA;
+}
+
+.brand-connect--xero:hover:not(:disabled),
+.accountant-portal .brand-connect--xero:hover:not(:disabled) {
+  background-color: #0ea0d0;
+}
+
+.brand-connect:disabled,
+.accountant-portal .brand-connect:disabled {
+  cursor: default;
+  opacity: 0.72;
+}
+
+.brand-connect:focus-visible,
+.accountant-portal .brand-connect:focus-visible {
+  outline: 2px solid #ffffff;
+  outline-offset: 3px;
+}
+
+html[data-theme="light"] .brand-connect:focus-visible,
+html[data-theme="light"] .accountant-portal .brand-connect:focus-visible {
+  outline-color: #1b1608;
+}
+
+.brand-connect__label {
+  color: #ffffff;
+  -webkit-text-fill-color: #ffffff;
+}
+
+.brand-connect__mark {
+  display: block;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+}
+
+.brand-connect__spinner {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+  border: 2px solid rgba(255, 255, 255, 0.45);
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  animation: milon-spin 0.7s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .brand-connect__spinner {
+    animation: none;
+  }
+}

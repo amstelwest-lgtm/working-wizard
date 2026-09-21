@@ -10,7 +10,8 @@ import {
   type QboStatus,
   type SyncResult,
 } from "@/lib/qbo.functions";
-import { RefreshCw, Link2, Unlink, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
+import { RefreshCw, Unlink, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
+import { BrandConnectButton } from "@/components/brand-connect-button";
 import { yearToDateTitle } from "@/lib/statement-period";
 
 type Props = {
@@ -255,38 +256,7 @@ export function QboConnectCard({ clientId, returnPath, refreshToken = 0, onSyncC
           Connect to sync P&amp;L and balance sheet into this client&apos;s figures
         </p>
       </div>
-      <button
-        onClick={handleConnect}
-        disabled={connecting}
-        style={{
-          display: "inline-flex",
-          alignItems: "center",
-          gap: 6,
-          fontSize: 12,
-          fontWeight: 700,
-          color: "#07090f",
-          background: "#2CA01C",
-          border: "none",
-          borderRadius: 8,
-          padding: "8px 16px",
-          cursor: connecting ? "default" : "pointer",
-          opacity: connecting ? 0.7 : 1,
-          fontFamily: "inherit",
-          flexShrink: 0,
-          transition: "filter 150ms",
-        }}
-        onMouseEnter={(e) =>
-          ((e.currentTarget as HTMLButtonElement).style.filter = "brightness(1.1)")
-        }
-        onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.filter = "none")}
-      >
-        {connecting ? (
-          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-        ) : (
-          <Link2 className="h-3.5 w-3.5" />
-        )}
-        {connecting ? "Opening QuickBooks…" : "Connect QuickBooks"}
-      </button>
+      <BrandConnectButton brand="quickbooks" busy={connecting} onClick={handleConnect} />
     </div>
   );
 }
