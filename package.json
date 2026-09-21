@@ -66,6 +66,7 @@
     "test:market": "vite-node --config scripts/vite-test.config.ts scripts/market-kernel-test.mts",
     "test:client-brain": "vite-node --config scripts/vite-test.config.ts scripts/client-brain-summary-test.mts",
     "test:milon-bot": "vite-node --config scripts/vite-test.config.ts scripts/milon-bot-test.mts",
+    "test:workflow-coach": "vite-node --config scripts/vite-test.config.ts scripts/workflow-coach-test.mts",
     "test:accountant-studio-clarity": "vite-node --config scripts/vite-test.config.ts scripts/accountant-studio-clarity-test.mts",
     "test:owner-tour": "vite-node --config scripts/vite-test.config.ts scripts/owner-tour-sale-test.mts",
     "test:cash-forecast-detail": "vite-node --config scripts/vite-test.config.ts scripts/cash-forecast-detail-test.mts",

@@ -1,6 +1,7 @@
 import { Sparkline } from "@/components/sparkline";
 import { scoreTier } from "@/lib/ratios";
 import { AddPastPeriodLink } from "@/components/add-past-period-link";
+import { evidenceForPillar, pillarIsWeak } from "@/lib/workflow-coach";
 
 interface SectionCard {
   id: string;
@@ -12,6 +13,8 @@ interface SectionCard {
 interface SimplifiedRatiosProps {
   sections: SectionCard[];
   onAddPastPeriod?: () => void;
+  /** Weak pillar → the evidence page that explains it. */
+  onOpenEvidence?: (pillarId: string) => void;
 }
 
 function statusLabel(health: number): string {
@@ -38,13 +41,19 @@ function trendDir(series: number[]): "up" | "down" | "flat" {
   return "flat";
 }
 
-export function SimplifiedRatios({ sections, onAddPastPeriod }: SimplifiedRatiosProps) {
+export function SimplifiedRatios({
+  sections,
+  onAddPastPeriod,
+  onOpenEvidence,
+}: SimplifiedRatiosProps) {
   return (
-    <div className="grid grid-cols-2 gap-3 p-1">
+    <div className="grid grid-cols-2 gap-3 p-1" id="coach-pillars">
       {sections.map((card) => {
         const color = statusColor(card.health);
         const trend = trendDir(card.series);
         const displayHealth = isFinite(card.health) ? `${Math.round(card.health)}%` : "—";
+        const evidence =
+          onOpenEvidence && pillarIsWeak(card.health) ? evidenceForPillar(card.id) : null;
 
         return (
           <div
@@ -74,6 +83,15 @@ export function SimplifiedRatios({ sections, onAddPastPeriod }: SimplifiedRatios
                 )}
               </div>
             )}
+            {evidence ? (
+              <button
+                type="button"
+                className="pillar-evidence"
+                onClick={() => onOpenEvidence?.(card.id)}
+              >
+                {evidence.label}
+              </button>
+            ) : null}
           </div>
         );
       })}

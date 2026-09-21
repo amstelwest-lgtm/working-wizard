@@ -14,8 +14,15 @@ import {
   deriveMilonBotEndpoint,
   routeMilonIntent,
 } from "./milon-bot-copy.ts";
+import { deliverableHandoff } from "./workflow-coach.ts";
 
-export { routeMilonIntent, MILON_BOT_TITLE, MILON_BOT_SUBTITLE, MILON_BOT_ACCOUNTANT_CHIPS, MILON_BOT_OWNER_CHIPS };
+export {
+  routeMilonIntent,
+  MILON_BOT_TITLE,
+  MILON_BOT_SUBTITLE,
+  MILON_BOT_ACCOUNTANT_CHIPS,
+  MILON_BOT_OWNER_CHIPS,
+};
 
 const SPARKLES_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/></svg>`;
 
@@ -156,6 +163,8 @@ export function mountAskAi(container, options) {
     // Small line under the header, e.g. "answers get more relevant once your
     // figures are in". Omit / null to hide.
     note = null,
+    // Accountant studio: open the deliverable this answer is about, with coach intent.
+    onOpenDeliverable = null,
   } = options || {};
   const studio = variant === "studio";
   const accountant = audience === "accountant";
@@ -352,6 +361,26 @@ export function mountAskAi(container, options) {
             chipRow.appendChild(btn);
           });
           answerEl.appendChild(chipRow);
+        }
+
+        const handoff =
+          typeof onOpenDeliverable === "function" ? deliverableHandoff(question) : null;
+        if (handoff) {
+          const go = document.createElement("button");
+          go.type = "button";
+          go.className = "ask-ai-handoff";
+          go.dataset.coach = handoff.coach || "";
+          go.dataset.tab = handoff.tab;
+          go.textContent = `${handoff.label} →`;
+          go.addEventListener("click", () => {
+            onOpenDeliverable({
+              tab: handoff.tab,
+              focus: handoff.focus,
+              coach: handoff.coach,
+              why: handoff.why,
+            });
+          });
+          answerEl.appendChild(go);
         }
 
         panel.appendChild(answerEl);

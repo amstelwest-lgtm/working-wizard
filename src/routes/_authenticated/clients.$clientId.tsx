@@ -124,6 +124,17 @@ import {
 } from "@/lib/debt-schedule";
 import { ClientBriefing } from "@/components/client-briefing";
 import { NextStepCard } from "@/components/next-step-card";
+import { WorkflowArrival, WorkflowCoachStrip } from "@/components/workflow-coach";
+import {
+  coachPageForTab,
+  evidenceForBriefingTab,
+  evidenceForPillar,
+  pillarIsWeak,
+  type CoachDestination,
+  type CoachDone,
+  type CoachPage,
+} from "@/lib/workflow-coach";
+import { relatedTabForRatio } from "@/lib/ratio-briefing";
 import { RecommendationsPanel } from "@/components/recommendations-panel";
 import { DataRequestsPanel } from "@/components/data-requests-panel";
 import { AdvisoryPackPanel } from "@/components/advisory-pack-panel";
@@ -397,6 +408,12 @@ export const Route = createFileRoute("/_authenticated/clients/$clientId")({
     tab?: string;
     filter?: string;
     queries?: string;
+    /** Coach intent from Milōn Bot or a weak pillar (`margin`, `liquidity`, …). */
+    coach?: string;
+    /** Short reason shown on the destination (“Milōn Bot asked …”). */
+    why?: string;
+    /** Health page sub-step: the score, or the pillar drill. */
+    focus?: string;
   } => {
     const out: {
       qbo?: string;
@@ -407,6 +424,9 @@ export const Route = createFileRoute("/_authenticated/clients/$clientId")({
       tab?: string;
       filter?: string;
       queries?: string;
+      coach?: string;
+      why?: string;
+      focus?: string;
     } = {};
     if (typeof search.qbo === "string") out.qbo = search.qbo;
     if (typeof search.xero === "string") out.xero = search.xero;
@@ -415,6 +435,9 @@ export const Route = createFileRoute("/_authenticated/clients/$clientId")({
     if (typeof search.note === "string") out.note = search.note;
     if (typeof search.tab === "string") out.tab = search.tab;
     if (typeof search.queries === "string") out.queries = search.queries;
+    if (typeof search.coach === "string" && search.coach.length <= 32) out.coach = search.coach;
+    if (typeof search.why === "string" && search.why.trim()) out.why = search.why.slice(0, 180);
+    if (search.focus === "health" || search.focus === "pillars") out.focus = search.focus;
     if (
       search.filter === "overdue" ||
       search.filter === "at_risk" ||
@@ -678,6 +701,9 @@ function ClientView() {
   const [client, setClient] = useState<Client | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<ActiveTab>("overview");
+  const [healthSeen, setHealthSeen] = useState(false);
+  const [pillarsSeen, setPillarsSeen] = useState(false);
+  const openFromBotRef = useRef<(handoff: CoachDestination & { why?: string }) => void>(() => {});
   const [studioDeepLink, setStudioDeepLink] = useState<{
     report?: string;
     action?: "preview" | "download";
@@ -688,6 +714,11 @@ function ClientView() {
     if (search.note) requestOpenNote(search.note);
     if (search.queries === "open") openArchive("open");
   }, [search.note, search.tab, search.queries, requestOpenNote, openArchive]);
+  useEffect(() => {
+    if (activeTab !== "ratios") return;
+    if (search.focus === "pillars") setPillarsSeen(true);
+    else setHealthSeen(true);
+  }, [activeTab, search.focus]);
   // Landing tab: Overview — the client explanation, profile, and upload.
   // Deliverables stay clean. Decided once per client, after load, and never
   // over a ?tab= deep link.
@@ -1133,6 +1164,8 @@ function ClientView() {
           botEndpoint: `${base}/functions/v1/milon-bot`,
           variant: "studio",
           audience: "accountant",
+          onOpenDeliverable: (handoff: CoachDestination & { why?: string }) =>
+            openFromBotRef.current(handoff),
           note: hasFigures
             ? null
             : "Answers get more relevant once this client's figures are in — upload a statement, draft from bank statements, or type them into Financials.",
@@ -1648,6 +1681,75 @@ function ClientView() {
     }, 80);
   }, []);
 
+  const openCoach = useCallback(
+    (dest: CoachDestination) => {
+      if (dest.assign) {
+        setActiveTab("plan");
+        window.setTimeout(() => {
+          document.getElementById("action-plan-work")?.scrollIntoView({
+            behavior: "smooth",
+            block: "start",
+          });
+        }, 60);
+        return;
+      }
+      const tab = resolveAccountantTab(dest.tab);
+      if (!tab) return;
+      setActiveTab(tab);
+      if (dest.focus === "pillars") setPillarsSeen(true);
+      navigate({
+        to: "/clients/$clientId",
+        params: { clientId },
+        search: (prev) => {
+          const next = { ...prev, tab };
+          if (dest.coach) next.coach = dest.coach;
+          else delete next.coach;
+          if (dest.why) next.why = dest.why;
+          else delete next.why;
+          if (dest.focus) next.focus = dest.focus;
+          else delete next.focus;
+          return next;
+        },
+        replace: true,
+      });
+      const targetId = dest.focus === "pillars" ? "coach-pillars" : `pane-${tab}`;
+      window.setTimeout(() => {
+        document.getElementById(targetId)?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 80);
+    },
+    [clientId, navigate],
+  );
+  openFromBotRef.current = openCoach;
+
+  const selectRail = useCallback(
+    (id: ActiveTab) => {
+      setActiveTab(id);
+      navigate({
+        to: "/clients/$clientId",
+        params: { clientId },
+        search: (prev) => {
+          const next = { ...prev, tab: id };
+          delete next.coach;
+          delete next.why;
+          delete next.focus;
+          return next;
+        },
+        replace: true,
+      });
+    },
+    [clientId, navigate],
+  );
+
+  const coachDone: CoachDone = {
+    health: healthSeen,
+    pillars: pillarsSeen,
+    profit: Boolean(profitabilitySignoff),
+    cash: Boolean(cashForecastSignoff),
+    budget: Boolean(budgetSignoff),
+    actions: Boolean(actionPlanSignoff),
+  };
+  const coachPage = coachPageForTab(activeTab, search.focus);
+
   const handleGenerateReport = useCallback(() => {
     setStudioDeepLink({});
     revealTab("reports");
@@ -1945,6 +2047,15 @@ function ClientView() {
   }
 
   const reportsIssued = client.reports_issued_count ?? 0;
+  const coachArrival = (page: CoachPage) => (
+    <WorkflowArrival
+      page={page}
+      intent={search.coach}
+      why={search.why}
+      done={coachDone}
+      onOpen={openCoach}
+    />
+  );
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -2073,7 +2184,7 @@ function ClientView() {
                     label={t.label}
                     star={t.star}
                     active={activeTab === t.id}
-                    onSelect={setActiveTab}
+                    onSelect={selectRail}
                   />
                 ))}
                 <span className="rail-kicker rail-kicker-split">Deliverables</span>
@@ -2084,11 +2195,18 @@ function ClientView() {
                     label={t.label}
                     star={t.star}
                     active={activeTab === t.id}
-                    onSelect={setActiveTab}
+                    onSelect={selectRail}
                   />
                 ))}
               </nav>
               <div className="deliverable-main">
+                <WorkflowCoachStrip
+                  page={coachPage}
+                  intent={search.coach}
+                  why={search.why}
+                  done={coachDone}
+                  onOpen={openCoach}
+                />
                 <div
                   className={`tabpane${activeTab === "overview" ? " on" : ""}`}
                   id="pane-overview"
@@ -2368,6 +2486,7 @@ function ClientView() {
 
                 {/* ===== MILŌN BOT TAB ===== */}
                 <div className={`tabpane${activeTab === "ask" ? " on" : ""}`} id="pane-ask">
+                  {coachArrival("ask")}
                   <SectionCard className="card hero-card ask-ai-studio-shell">
                     <div id="ask-ai-accountant" />
                   </SectionCard>
@@ -2376,9 +2495,13 @@ function ClientView() {
                 {/* ===== RATIOS TAB ===== */}
                 <div className={`tabpane${activeTab === "ratios" ? " on" : ""}`} id="pane-ratios">
                   <DeliverableTabHead
-                    eyebrow="Business Health & Ratios"
-                    title="Health score"
-                    lede="One score from the ratios underneath. Sign off when the picture is right — the stamp carries into the board pack."
+                    eyebrow={search.focus === "pillars" ? "Pillars" : "Business Health & Ratios"}
+                    title={search.focus === "pillars" ? "Where it hurts" : "Health score"}
+                    lede={
+                      search.focus === "pillars"
+                        ? "Each pillar is a place the score can break. A weak one opens the evidence that explains it."
+                        : "One score from the ratios underneath. Sign off when the picture is right — the stamp carries into the board pack."
+                    }
                     signoff={
                       <ReviewSignoffButton
                         compact
@@ -2394,6 +2517,7 @@ function ClientView() {
                       />
                     }
                   />
+                  {coachArrival(search.focus === "pillars" ? "pillars" : "health")}
                   <DeliverableInputConfig
                     className="mb-5"
                     clientId={clientId}
@@ -2457,6 +2581,12 @@ function ClientView() {
                         <SimplifiedRatios
                           sections={simplifiedSections}
                           onAddPastPeriod={() => setPastPeriodOpen(true)}
+                          onOpenEvidence={(id) => {
+                            const evidence = evidenceForPillar(id);
+                            if (!evidence) return;
+                            setPillarsSeen(true);
+                            openCoach(evidence);
+                          }}
                         />
                       </div>
                     </div>
@@ -2599,7 +2729,7 @@ function ClientView() {
 
                   {/* Ratio rows — complex mode only */}
                   {viewMode === "complex" && (
-                    <div style={{ marginTop: 26 }}>
+                    <div style={{ marginTop: 26 }} id="coach-pillars">
                       <span className="eyebrow">Ratios — accountant summary</span>
                       <p className="sub">
                         All {Object.keys(ratios).length} computed ratios from the period figures.
@@ -2609,9 +2739,24 @@ function ClientView() {
                       </p>
                       {(Object.keys(PILLAR_RATIO_NAMES) as HealthPillarId[]).map((pillarId) => {
                         const names = PILLAR_RATIO_NAMES[pillarId];
+                        const evidence = pillarIsWeak(pillarHealths[pillarId])
+                          ? evidenceForPillar(pillarId)
+                          : null;
                         return (
                           <div key={pillarId} className="ratio-group">
                             <span className="eyebrow">{PILLAR_LABELS[pillarId]}</span>
+                            {evidence ? (
+                              <button
+                                type="button"
+                                className="pillar-evidence"
+                                onClick={() => {
+                                  setPillarsSeen(true);
+                                  openCoach(evidence);
+                                }}
+                              >
+                                {evidence.label}
+                              </button>
+                            ) : null}
                             <div className="ratio-rows">
                               {names.map((name) => {
                                 const val = (ratios as Record<string, number>)[name];
@@ -2701,6 +2846,7 @@ function ClientView() {
                       />
                     }
                   />
+                  {coachArrival("profit")}
                   <DeliverableInputConfig
                     className="mb-5"
                     clientId={clientId}
@@ -2904,6 +3050,7 @@ function ClientView() {
                         </button>
                       </div>
                     </div>
+                    {coachArrival("cash")}
                     <CashForecastPanel
                       clientId={client.id}
                       clientName={client.name}
@@ -2951,6 +3098,7 @@ function ClientView() {
                         />
                       }
                     />
+                    {coachArrival("budget")}
                     {/* Follow the portal theme. A nested `.dark` island made Tailwind
                 light-on-dark copy and `color-scheme: dark` inputs fire while
                 budget cards stayed cream/white — revenue and totals vanished. */}
@@ -2987,6 +3135,7 @@ function ClientView() {
                     title="Board-ready PDFs"
                     lede="Each report has its own sign-off. Stamp Business Health & Ratios, Profitability, the 13-week Cash Forecast, or the 12-month Budget so the signature carries into the PDF. You can brand packs with this client's own logo and colours."
                   />
+                  {coachArrival("reports")}
                   <DeliverableInputConfig
                     className="mb-5"
                     clientId={clientId}
@@ -3034,6 +3183,7 @@ function ClientView() {
                       />
                     }
                   />
+                  {coachArrival("actions")}
                   <DeliverableInputConfig
                     className="mb-5"
                     clientId={clientId}
@@ -3044,6 +3194,7 @@ function ClientView() {
               light-on-dark copy fire while accountant `--card` stayed a
               near-transparent cream — titles vanished in light mode. */}
                   <TabErrorBoundary label="Action Plan">
+                    <div id="action-plan-work">
                     <Suspense
                       fallback={
                         <div style={{ padding: 24, color: "var(--ink-dim)" }}>Loading plan…</div>
@@ -3060,6 +3211,7 @@ function ClientView() {
                         />
                       )}
                     </Suspense>
+                    </div>
                   </TabErrorBoundary>
                 </div>
 
@@ -3084,6 +3236,7 @@ function ClientView() {
                       />
                     }
                   />
+                  {coachArrival("advisory")}
                   {/* P1 — the reviewable pack: edit, comment, request changes, sign off. */}
                   <AdvisoryPackPanel
                     className="mb-5"
@@ -3150,6 +3303,20 @@ function ClientView() {
             formula={drawerFormula}
             actualLine={drawerActual}
             fallbackSteps={drawerFallbackSteps}
+            evidence={(() => {
+              if (!drawerRatioKey || drawerTier === "healthy") return null;
+              const related = relatedTabForRatio(drawerRatioKey);
+              if (!related) return null;
+              const evidence = evidenceForBriefingTab(related.tab);
+              return {
+                label: evidence.label,
+                onOpen: () => {
+                  setDrawerOpen(false);
+                  setPillarsSeen(true);
+                  openCoach(evidence);
+                },
+              };
+            })()}
           />
 
           {/* Contextual notes — shared with owner app, persisted per client */}
