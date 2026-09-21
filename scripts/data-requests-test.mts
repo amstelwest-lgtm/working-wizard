@@ -550,7 +550,7 @@ function gap(over: Partial<DataGapFacts> = {}): DataGapFacts {
     "studio: requests under Next Step, above briefing",
   );
   assert(
-    studio.includes('audience="accountant"\n              refreshKey'),
+    studio.includes('audience="accountant"\n                  refreshKey'),
     "studio panel uses accountant audience",
   );
 }

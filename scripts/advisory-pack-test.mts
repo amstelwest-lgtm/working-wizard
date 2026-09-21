@@ -595,7 +595,7 @@ function inputs(over: Partial<PackInputs> = {}): PackInputs {
   const sRecs = studio.indexOf("<RecommendationsPanel");
   assert(sPack > 0 && sPack < sRecs, "studio: pack above recommendations on the advisory tab");
   assert(
-    studio.includes('audience="accountant"\n                canGenerate={hasFigures}'),
+    studio.includes('audience="accountant"\n                    canGenerate={hasFigures}'),
     "studio pack panel is the accountant seat",
   );
 }

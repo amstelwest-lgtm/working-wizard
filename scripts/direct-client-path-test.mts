@@ -272,7 +272,7 @@ function facts(over: Partial<NextStepFacts>): NextStepFacts {
     "studio mounts the panel on the Advisory tab (where Next Step routes review)",
   );
   assert(
-    studio.includes('audience="accountant"\n                canPropose={hasFigures}'),
+    studio.includes('audience="accountant"\n                    canPropose={hasFigures}'),
     "studio panel uses accountant audience",
   );
 
