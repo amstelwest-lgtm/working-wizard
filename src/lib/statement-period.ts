@@ -29,6 +29,37 @@ export const XERO_YTD_FIELD_KEYS = [
   "ytdBasis",
 ] as const;
 
+/** Same companion keys on a QuickBooks sync. */
+export const STATEMENT_YTD_FIELD_KEYS = XERO_YTD_FIELD_KEYS;
+
+/** Xero and QuickBooks both store an explicit from/to on the financials blob. */
+export function isDatedLedgerSource(source: string | null | undefined): boolean {
+  return source === "xero" || source === "qbo";
+}
+
+const MONTH_STAMP = /^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{4}$/;
+
+export function isMonthStampLabel(label: string): boolean {
+  return MONTH_STAMP.test(label.trim());
+}
+
+export function isStatementRangeLabel(label: string): boolean {
+  return label.includes("–") && /\d{4}/.test(label);
+}
+
+/**
+ * Autosave uses a calendar month stamp ("Sep 2026"). A ledger snapshot already
+ * labeled with both dates must keep that label.
+ */
+export function resolveSnapshotPeriodLabel(
+  existing: string | null | undefined,
+  incoming: string,
+): string {
+  const prev = existing?.trim() ?? "";
+  if (prev && isStatementRangeLabel(prev) && isMonthStampLabel(incoming)) return prev;
+  return incoming;
+}
+
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 function utcDate(iso: string): Date | null {
@@ -154,13 +185,24 @@ export function yearToDateTitle(basis: YearBasis | null): string {
   return basis === "calendar" ? "Calendar year to date" : "Financial year to date";
 }
 
-/** Year companion for the waterfall. Null until a dated Xero sync stored a different range. */
+/** True when the blob came from a dated Xero or QuickBooks sync. */
+export function preferStatementPeriod(fields: object | null | undefined): boolean {
+  return isDatedLedgerSource(readStatementMeta(fields).statementSource);
+}
+
+/** Year companion for the waterfall. Null until a dated Xero or QuickBooks sync stored a different range. */
 export function statementYearLine(fields: object | null | undefined): {
   basis: YearBasis | null;
   periodLabel: string;
   revenue: number;
 } | null {
   const meta = readStatementMeta(fields);
-  if (meta.statementSource !== "xero" || meta.ytdRevenue == null || !meta.ytdPeriodLabel) return null;
+  if (
+    !isDatedLedgerSource(meta.statementSource) ||
+    meta.ytdRevenue == null ||
+    !meta.ytdPeriodLabel
+  ) {
+    return null;
+  }
   return { basis: meta.ytdBasis, periodLabel: meta.ytdPeriodLabel, revenue: meta.ytdRevenue };
 }

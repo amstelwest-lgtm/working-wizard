@@ -11,11 +11,15 @@ import {
   type SyncResult,
 } from "@/lib/qbo.functions";
 import { RefreshCw, Link2, Unlink, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
+import { yearToDateTitle } from "@/lib/statement-period";
 
 type Props = {
   clientId: string | null;
-  /** Called after a successful sync with the numeric financial inputs to auto-fill the ratio form. */
-  onSyncComplete?: (inputs: Record<string, number>, summary: SyncResult["summary"]) => void;
+  /** Owner board should return to /app; accountant studio to /clients/:id. */
+  returnPath?: string;
+  /** Bump to reload status after a sync started from another card. */
+  refreshToken?: number;
+  onSyncComplete?: (inputs: Record<string, string>, summary: SyncResult["summary"]) => void;
 };
 
 function fmtDate(iso: string | null) {
@@ -35,15 +39,12 @@ const codeStyle = {
   borderRadius: 4,
 } as const;
 
-function fmtMoney(n: number) {
-  if (!isFinite(n)) return "—";
-  const abs = Math.abs(n);
-  if (abs >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (abs >= 1_000) return `${(n / 1_000).toFixed(0)}k`;
-  return n.toFixed(0);
+function fmtExact(n: number | null) {
+  if (n == null || !isFinite(n)) return "—";
+  return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-export function QboConnectCard({ clientId, onSyncComplete }: Props) {
+export function QboConnectCard({ clientId, returnPath, refreshToken = 0, onSyncComplete }: Props) {
   const fetchStatus = useServerFn(getQboStatus);
   const fetchAuthUrl = useServerFn(getQboAuthUrl);
   const doSync = useServerFn(triggerQboSync);
@@ -78,13 +79,13 @@ export function QboConnectCard({ clientId, onSyncComplete }: Props) {
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clientId]);
+  }, [clientId, refreshToken]);
 
   const handleConnect = async () => {
     if (!clientId) return;
     setConnecting(true);
     try {
-      const { authUrl } = await fetchAuthUrl({ data: { clientId } });
+      const { authUrl } = await fetchAuthUrl({ data: { clientId, returnPath } });
       window.location.href = authUrl;
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to start OAuth flow");
@@ -98,8 +99,8 @@ export function QboConnectCard({ clientId, onSyncComplete }: Props) {
     try {
       const result = await doSync({ data: { clientId } });
       setLastSync(result.summary);
-      onSyncComplete?.(result.mappedInputs, result.summary);
-      toast.success("QuickBooks sync complete — financial inputs updated");
+      onSyncComplete?.(result.fields, result.summary);
+      toast.success("QuickBooks sync complete — P&L and balance sheet updated");
       await load();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Sync failed");
@@ -126,7 +127,6 @@ export function QboConnectCard({ clientId, onSyncComplete }: Props) {
 
   if (!clientId) return null;
 
-  // ── Skeleton while loading ──────────────────────────────────────────────────
   if (loadingStatus && configured === null) {
     return (
       <div
@@ -146,7 +146,6 @@ export function QboConnectCard({ clientId, onSyncComplete }: Props) {
     );
   }
 
-  // ── QBO credentials not configured in env ──────────────────────────────────
   if (configured === false) {
     return (
       <div
@@ -183,19 +182,28 @@ export function QboConnectCard({ clientId, onSyncComplete }: Props) {
     );
   }
 
-  // ── Connected ───────────────────────────────────────────────────────────────
   if (status) {
     const isError = status.syncStatus === "error";
+    const periodLabel = lastSync?.periodLabel ?? status.periodLabel;
+    const ytdPeriodLabel = lastSync?.ytdPeriodLabel ?? status.ytdPeriodLabel;
+    const ytdBasis = lastSync?.ytdBasis ?? status.ytdBasis;
     return (
       <div
         style={{
-          border: `1px solid ${isError ? "rgba(239,68,68,0.3)" : "rgba(16,185,129,0.3)"}`,
+          border: `1px solid ${isError ? "rgba(239,68,68,0.3)" : "rgba(44,160,28,0.35)"}`,
           borderRadius: 10,
-          background: isError ? "rgba(239,68,68,0.05)" : "rgba(16,185,129,0.05)",
+          background: isError ? "rgba(239,68,68,0.05)" : "rgba(44,160,28,0.06)",
           padding: "14px 16px",
         }}
       >
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "flex-start",
+            justifyContent: "space-between",
+            gap: 8,
+          }}
+        >
           <div style={{ minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
               <p
@@ -215,13 +223,37 @@ export function QboConnectCard({ clientId, onSyncComplete }: Props) {
                 <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
               )}
             </div>
-            <p style={{ fontSize: 13, fontWeight: 600, color: "#f1f5f9", marginBottom: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            <p
+              style={{
+                fontSize: 13,
+                fontWeight: 600,
+                color: "#f1f5f9",
+                marginBottom: 2,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
               {status.companyName ?? `Realm ${status.realmId}`}
             </p>
             <p style={{ fontSize: 11, color: "#64748b" }}>
               {isError
                 ? `Error: ${status.syncError?.slice(0, 80) ?? "unknown"}`
-                : `Last sync: ${fmtDate(status.lastSyncedAt)}`}
+                : periodLabel
+                  ? `Last sync ${fmtDate(status.lastSyncedAt)} · Month to date ${periodLabel}${
+                      (lastSync?.revenue ?? status.revenue) != null
+                        ? ` · Revenue ${fmtExact(lastSync?.revenue ?? status.revenue)}`
+                        : ""
+                    }${
+                      ytdPeriodLabel
+                        ? ` · ${yearToDateTitle(ytdBasis)} ${ytdPeriodLabel}${
+                            (lastSync?.ytdRevenue ?? status.ytdRevenue) != null
+                              ? ` · Revenue ${fmtExact(lastSync?.ytdRevenue ?? status.ytdRevenue)}`
+                              : ""
+                          }`
+                        : ""
+                    }`
+                  : `Linked. Last sync ${fmtDate(status.lastSyncedAt)}. Sync again — the stored total has no period dates.`}
             </p>
           </div>
           <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
@@ -278,28 +310,43 @@ export function QboConnectCard({ clientId, onSyncComplete }: Props) {
           </div>
         </div>
 
-        {/* Sync result preview */}
-        {lastSync && (
+        {(lastSync || status.periodLabel) && (
           <div
             style={{
               marginTop: 12,
               paddingTop: 12,
-              borderTop: "1px solid rgba(16,185,129,0.15)",
+              borderTop: "1px solid rgba(44,160,28,0.2)",
               display: "grid",
               gridTemplateColumns: "repeat(3, 1fr)",
               gap: 8,
             }}
           >
             {[
-              { label: "Revenue", value: fmtMoney(lastSync.revenue) },
-              { label: "Net income", value: fmtMoney(lastSync.netIncome) },
-              { label: "Op. cashflow", value: fmtMoney(lastSync.operatingCashflow) },
-              { label: "Total assets", value: fmtMoney(lastSync.totalAssets) },
-              { label: "Equity", value: fmtMoney(lastSync.equity) },
-              { label: `${lastSync.accountsCount} accounts · ${lastSync.transactionsCount} txns`, value: "" },
+              { label: "Month to date", value: periodLabel ?? "—" },
+              { label: "Revenue", value: fmtExact(lastSync?.revenue ?? status.revenue) },
+              { label: "Net income", value: fmtExact(lastSync?.netIncome ?? status.netIncome) },
+              { label: yearToDateTitle(ytdBasis), value: ytdPeriodLabel ?? "—" },
+              { label: "Year revenue", value: fmtExact(lastSync?.ytdRevenue ?? status.ytdRevenue) },
+              {
+                label: "Year net income",
+                value: fmtExact(lastSync?.ytdNetIncome ?? status.ytdNetIncome),
+              },
+              { label: "Cash (BS)", value: fmtExact(lastSync?.cash ?? status.cash) },
+              {
+                label: "Total assets",
+                value: fmtExact(lastSync?.totalAssets ?? status.totalAssets),
+              },
+              { label: "Equity", value: fmtExact(lastSync?.equity ?? status.equity) },
             ].map((item) => (
               <div key={item.label}>
-                <div style={{ fontSize: 10, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.1em" }}>
+                <div
+                  style={{
+                    fontSize: 10,
+                    color: "#64748b",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.1em",
+                  }}
+                >
                   {item.label}
                 </div>
                 {item.value && (
@@ -315,7 +362,6 @@ export function QboConnectCard({ clientId, onSyncComplete }: Props) {
     );
   }
 
-  // ── Not connected ───────────────────────────────────────────────────────────
   return (
     <div
       style={{
@@ -344,7 +390,7 @@ export function QboConnectCard({ clientId, onSyncComplete }: Props) {
           QuickBooks Online
         </p>
         <p style={{ fontSize: 12, color: "#64748b" }}>
-          Connect to auto-sync P&L, Balance Sheet, Cash Flow & transactions
+          Connect to sync P&amp;L and balance sheet into this client&apos;s figures
         </p>
       </div>
       <button
@@ -357,7 +403,7 @@ export function QboConnectCard({ clientId, onSyncComplete }: Props) {
           fontSize: 12,
           fontWeight: 700,
           color: "#07090f",
-          background: "#2CA01C", // Intuit green
+          background: "#2CA01C",
           border: "none",
           borderRadius: 8,
           padding: "8px 16px",
@@ -370,9 +416,7 @@ export function QboConnectCard({ clientId, onSyncComplete }: Props) {
         onMouseEnter={(e) =>
           ((e.currentTarget as HTMLButtonElement).style.filter = "brightness(1.1)")
         }
-        onMouseLeave={(e) =>
-          ((e.currentTarget as HTMLButtonElement).style.filter = "none")
-        }
+        onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.filter = "none")}
       >
         {connecting ? (
           <Loader2 className="h-3.5 w-3.5 animate-spin" />
