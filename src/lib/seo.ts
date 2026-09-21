@@ -20,28 +20,28 @@ export const SEO_PAGES = {
     path: "/",
     title: "AI Finance Function for Accountants & Businesses | MILŌN",
     description:
-      "MILŌN. A full finance function in your pocket. MILŌN gives accountants an AI-powered finance function to run for their clients. AI powers MILŌN's financial intelligence brain. Your accountant reviews and signs off.",
+      "Accountants run an AI finance function for clients in MILŌN. Works with QuickBooks Online and Xero. Your accountant reviews and signs off.",
     imageAlt: "MILŌN — AI-powered finance function for accounting firms and businesses",
   },
   forAccountants: {
     path: "/for-accountants",
     title: "AI Advisory Software for Accounting Firms | MILŌN",
     description:
-      "Launch client advisory services without hiring. MILŌN runs the analysis, forecasting, and reporting — your team reviews and signs off. New recurring revenue per client.",
+      "Launch advisory without extra headcount. Connect QuickBooks Online or Xero — MILŌN drafts the analysis; your team reviews and signs off.",
     imageAlt: "MILŌN for accounting firms — advisory delivery without extra headcount",
   },
   forOwners: {
     path: "/for-owners",
     title: "Know Your Numbers: Financial Clarity for Owners | MILŌN",
     description:
-      "See your business's financial health score, 13-week cash flow forecast, and what to fix next — reviewed by your own accountant. Built for owner-run businesses.",
+      "Health score, 13-week cash forecast, and next moves from QuickBooks Online, Xero, or an upload — reviewed by your accountant.",
     imageAlt: "MILŌN for business owners — health score, cash forecast, and next moves",
   },
   faq: {
     path: "/faq",
     title: "MILŌN FAQ — Pricing, Data, and How Advisory Works",
     description:
-      "Straight answers on cost, data handling, and whether MILŌN replaces your accountant. AI prepares the analysis; a qualified human reviews and signs off.",
+      "Answers on pricing, data, and connecting QuickBooks Online or Xero. AI prepares the analysis; a qualified accountant reviews and signs off.",
     imageAlt: "Frequently asked questions about the MILŌN finance platform",
   },
   about: {
@@ -187,6 +187,8 @@ export function organizationGraphJson(): string {
           "Budget variance analysis",
           "Artificial intelligence in accounting",
           "Small business financial management",
+          "QuickBooks Online",
+          "Xero",
         ],
       },
       {
@@ -199,8 +201,9 @@ export function organizationGraphJson(): string {
         url: SITE_ORIGIN,
         publisher: { "@id": `${SITE_ORIGIN}/#organization` },
         description:
-          "AI-automated finance function for accounting firms and small businesses. Financial health scoring, 13-week cash flow forecasting, budget vs actual variance analysis, white-label reporting, and assignable action plans.",
+          "AI-automated finance function for accounting firms and small businesses. Connect QuickBooks Online or Xero, or upload statements. Financial health scoring, 13-week cash flow forecasting, budget vs actual variance analysis, white-label reporting, and assignable action plans.",
         featureList: [
+          "Connect QuickBooks Online or Xero, or upload PDF, Excel, or CSV statements",
           "Business financial health score across profit, assets, financing and cash",
           "19 financial ratios with workings shown and repair playbooks",
           "13-week rolling cash flow forecast",
@@ -273,6 +276,7 @@ export const LLMS_TXT = `# MILŌN
 > the client.
 
 ## What MILŌN does
+- Connects to QuickBooks Online or Xero, or reads an uploaded PDF, Excel, CSV, or bank statement
 - Scores business financial health across four pillars: profit, assets, financing, cash
 - Calculates and explains 19 financial ratios with workings shown and repair playbooks
 - Builds rolling 13-week direct cash flow forecasts

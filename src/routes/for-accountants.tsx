@@ -54,6 +54,26 @@ function ForAccountantsPage() {
       ctaLabel="Set up your firm account ✦"
       ctaHref="/auth"
     >
+      <h2>Works with QuickBooks Online and Xero</h2>
+      <p>
+        Connect QuickBooks Online or Xero for a client. MILŌN reads the profit and loss and balance
+        sheet into the same workspace as an upload, and you review and sign off. The books stay in
+        QuickBooks or Xero — MILŌN is not a ledger.
+      </p>
+      <div className="mk-grid">
+        <div className="mk-card">
+          <h3>QuickBooks Online</h3>
+          <p>Connect a client&apos;s company and read the statements you already keep there.</p>
+        </div>
+        <div className="mk-card">
+          <h3>Xero</h3>
+          <p>
+            Connect a Xero organisation the same way. Upload still works when the books live
+            somewhere else.
+          </p>
+        </div>
+      </div>
+
       <h2>What changes in the practice</h2>
       <ul className="mk-list">
         <li>
@@ -130,8 +150,9 @@ function ForAccountantsPage() {
           <div>
             <h3>Figures in, score out</h3>
             <p>
-              Nineteen ratios, four pillars, one score, and a 13-week cash forecast — computed the
-              same way for every client, every month.
+              Connect QuickBooks Online or Xero, or upload the statements. Nineteen ratios, four
+              pillars, one score, and a 13-week cash forecast — computed the same way for every
+              client, every month.
             </p>
           </div>
         </li>

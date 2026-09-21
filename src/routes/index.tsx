@@ -2183,6 +2183,17 @@ function LandingPage() {
               off on the entire function. You see what matters, what comes next, and what needs to
               get done.
             </p>
+            <div className="integrations h-anim d4" id="integrations">
+              <h2 className="integrations-kicker">Integrations</h2>
+              <p className="integrations-line">
+                Works with QuickBooks Online and Xero. Connect QuickBooks Online or Xero, or upload
+                the statements you already have.
+              </p>
+              <ul className="integrations-chips" aria-label="QuickBooks Online and Xero">
+                <li>QuickBooks Online</li>
+                <li>Xero</li>
+              </ul>
+            </div>
             <div className="hero-cta h-anim d4">
               <a className="btn btn-gold" href="#persona">
                 Get my free health score
@@ -2623,10 +2634,10 @@ function LandingPage() {
           <div className="steps how-steps stagger" style={{ marginTop: 56 }}>
             <div className="step-card">
               <span className="n">01</span>
-              <h3>Upload the financials</h3>
+              <h3>Bring in the financials</h3>
               <p>
-                Upload the P&amp;L and balance sheet you already have as a PDF, Excel file, or CSV —
-                or simply upload a bank statement.
+                Connect QuickBooks Online or Xero, or upload the P&amp;L and balance sheet you
+                already have as a PDF, Excel file, or CSV — or simply upload a bank statement.
               </p>
             </div>
             <div className="step-card">
@@ -2710,6 +2721,10 @@ function LandingPage() {
                 <li>
                   <b>One workflow</b> — Analysis, recommendations, deliverables, actions and
                   progress live in one workspace.
+                </li>
+                <li>
+                  <b>QuickBooks Online and Xero</b> — Connect either ledger, or start from an
+                  upload. The books stay where they are.
                 </li>
                 <li>
                   <b>Built to scale</b> — Give more clients access to a finance function without
@@ -3453,6 +3468,7 @@ function LandingPage() {
             </a>
             <a href="#method">The Method</a>
             <a href="#how">How it works</a>
+            <a href="#integrations">QuickBooks &amp; Xero</a>
             <a href="#bridge">Shared workspace</a>
             <a href="#pricing">Pricing</a>
             <a href="/for-owners">For owners</a>
@@ -3480,6 +3496,7 @@ function LandingPage() {
             </button>
           </nav>
           <div className="copy">
+            <span>Works with QuickBooks Online and Xero.</span>
             <span>
               © {new Date().getFullYear()} Eish2oh (Pty) Ltd. Trading as MILŌN. All rights reserved.
             </span>

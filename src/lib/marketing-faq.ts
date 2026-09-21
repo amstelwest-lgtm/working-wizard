@@ -3,7 +3,13 @@ import type { FaqItem } from "./seo";
 
 /** Visible /faq answer and FAQPage schema for this question must stay identical. */
 export const ACCOUNTING_SOFTWARE_ANSWER =
-  "MILŌN is not a ledger, so you keep your existing accounting system and books. Upload the financial statements you already have — PDF, Excel, CSV, or simply a bank statement — and MILŌN turns them into a financial health score, a 13-week cash forecast, and ranked next moves you can review and act on.";
+  "MILŌN is not a ledger, so you keep your existing accounting system and books. Connect QuickBooks Online or Xero, or upload the financial statements you already have — PDF, Excel, CSV, or a bank statement — and MILŌN turns them into a financial health score, a 13-week cash forecast, and ranked next moves you can review and act on.";
+
+/** Visible /faq answer and FAQPage schema for this question must stay identical. */
+export const LEDGER_CONNECT_QUESTION = "Does MILŌN work with QuickBooks or Xero?";
+
+export const LEDGER_CONNECT_ANSWER =
+  "Yes. Connect QuickBooks Online or Xero and MILŌN reads the profit and loss and balance sheet. You do not need either system — a PDF, Excel file, CSV, or bank statement still works. MILŌN is not a ledger and does not replace QuickBooks Online or Xero.";
 
 /**
  * Ask-AI sanitizer strips identifiers (VAT/tax IDs, account numbers, company-name
@@ -30,7 +36,7 @@ export const HOMEPAGE_FAQ_ITEMS: FaqItem[] = [
   {
     question: "Do I need QuickBooks or Xero to use MILŌN?",
     answer:
-      "No, you do not need QuickBooks or Xero to use MILŌN. Today, you can upload your P&L and balance sheet as a PDF, Excel file, or CSV, or upload a bank statement. MILŌN analyzes the information you provide to assess financial health, calculate key financial ratios, and identify areas that may need attention.",
+      "No, you do not need QuickBooks or Xero to use MILŌN. When the books are already there, connect QuickBooks Online or Xero and MILŌN reads the profit and loss and balance sheet. You can also upload a P&L and balance sheet as a PDF, Excel file, or CSV, or upload a bank statement.",
   },
   {
     question: "Is my financial data used to train AI models?",
@@ -100,6 +106,10 @@ export function publicFaqUsItems(): FaqItem[] {
     {
       question: "I already have accounting software.",
       answer: ACCOUNTING_SOFTWARE_ANSWER,
+    },
+    {
+      question: LEDGER_CONNECT_QUESTION,
+      answer: LEDGER_CONNECT_ANSWER,
     },
     {
       question: "How accurate is the score?",

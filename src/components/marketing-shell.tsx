@@ -128,6 +128,7 @@ export function MarketingShell({
               us="MILŌN — the AI-automated finance function for accounting firms and the businesses they serve."
             />
           </span>
+          <span>Works with QuickBooks Online and Xero.</span>
           <a href="/">milonfinance.com</a>
           <a href="/about">About</a>
           <a href="/faq">Questions</a>

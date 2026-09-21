@@ -20,6 +20,8 @@ import {
   AI_IDENTIFIERS_LINE,
   FOUNDING_CALLOUT,
   HOMEPAGE_FAQ_ITEMS,
+  LEDGER_CONNECT_ANSWER,
+  LEDGER_CONNECT_QUESTION,
   publicFaqUsItems,
   WATCHLIST_DEFINITION,
 } from "../src/lib/marketing-faq";
@@ -79,6 +81,8 @@ assert(ROBOTS_TXT.includes("Disallow: /auth/"), "robots hide auth");
 assert(ROBOTS_TXT.includes("Sitemap: https://milonfinance.com/sitemap.xml"), "robots points at sitemap");
 
 assert(LLMS_TXT.includes("AI-automated finance function"), "llms.txt positioning");
+assert(LLMS_TXT.includes("QuickBooks Online"), "llms.txt names QuickBooks Online");
+assert(LLMS_TXT.includes("Xero"), "llms.txt names Xero");
 assert(LLMS_TXT.includes("/for-accountants"), "llms.txt keeps existing firm URL");
 assert(LLMS_TXT.includes("/about"), "llms.txt includes about");
 assert(LLMS_TXT.includes("Primary: United States"), "llms.txt US-first");
@@ -87,6 +91,10 @@ assert(!LLMS_TXT.includes("Canada"), "llms.txt does not claim Canada");
 assert(!graph.includes("Canada"), "org schema does not claim Canada");
 assert(!graph.includes("photographed"), "schema does not claim photo ingest");
 assert(graph.includes("19 financial ratios"), "schema uses the real ratio count");
+assert(graph.includes("QuickBooks Online"), "schema names QuickBooks Online");
+assert(graph.includes("Xero"), "schema names Xero");
+assert(!graph.includes("certified"), "schema does not claim certification");
+assert(!graph.includes("Intuit"), "schema does not claim an Intuit relationship");
 assert(INDEXABLE_PATHS.includes("/about"), "about is indexable");
 
 const map = sitemapXml("2026-09-14");
@@ -159,7 +167,18 @@ assert(!landing.includes("once a quarter"), "quarterly-accountant claim is gone"
 assert(!landing.includes("no model for what comes next"), "old gap copy is gone");
 assert(!landing.includes("borrowed SA bands"), "US median disclaimer is not landing copy");
 assert(!landing.includes("the playbook"), "playbook is not the landing recommendation engine");
-assert(!landing.includes("Connect QuickBooks"), "landing does not claim a QuickBooks connection");
+assert(landing.includes('id="integrations"'), "landing has an integrations callout");
+assert(
+  landing.includes("Works with QuickBooks Online and Xero"),
+  "landing states both ledgers in crawlable text",
+);
+assert(
+  landing.includes("Connect QuickBooks Online or Xero"),
+  "landing tells visitors they can connect either ledger",
+);
+assert(!landing.includes("certified"), "landing does not claim certification");
+assert(!landing.includes("Intuit"), "landing does not claim an Intuit relationship");
+assert(!landing.includes("marketplace"), "landing does not claim marketplace approval");
 assert(
   landing.includes("HOMEPAGE_FAQ_ITEMS"),
   "landing renders homepage FAQ from the shared copy list",
@@ -193,7 +212,11 @@ assert(landing.includes("faqPageJson(HOMEPAGE_FAQ_ITEMS)"), "landing emits homep
 assert(HOMEPAGE_FAQ_ITEMS.length === 5, "homepage FAQ is five questions");
 assert(
   HOMEPAGE_FAQ_ITEMS[1].answer.includes("you do not need QuickBooks or Xero"),
-  "QBO/Xero appear only as not required",
+  "homepage FAQ still says neither ledger is required",
+);
+assert(
+  HOMEPAGE_FAQ_ITEMS[1].answer.includes("connect QuickBooks Online or Xero"),
+  "homepage FAQ also says both ledgers can be connected",
 );
 assert(
   faqPageJson(HOMEPAGE_FAQ_ITEMS).includes("Does MILŌN replace my accountant?"),
@@ -204,12 +227,27 @@ const firms = readFileSync(resolve("src/routes/for-accountants.tsx"), "utf8");
 assert(firms.includes("SEO_PAGES.forAccountants"), "firm page uses spec meta");
 assert(!firms.includes("South African accounting"), "firm page meta is not SA-first");
 assert(firms.includes("your colors"), "firm page uses US spelling");
+assert(firms.includes("Works with QuickBooks Online and Xero"), "firm page names both ledgers");
+assert(firms.includes("Connect QuickBooks Online or Xero"), "firm page says connect either ledger");
+assert(!firms.includes("certified"), "firm page does not claim certification");
+assert(!firms.includes("Intuit"), "firm page does not claim an Intuit relationship");
 
 const owners = readFileSync(resolve("src/routes/for-owners.tsx"), "utf8");
 assert(owners.includes("SEO_PAGES.forOwners"), "owners page uses spec meta");
 assert(!owners.includes("South African business owner"), "owners meta is not SA-first");
+assert(owners.includes("QuickBooks Online"), "owners page names QuickBooks Online");
+assert(owners.includes("Xero"), "owners page names Xero");
+assert(!owners.includes("certified"), "owners page does not claim certification");
+
+for (const page of [SEO_PAGES.home, SEO_PAGES.forAccountants, SEO_PAGES.forOwners, SEO_PAGES.faq]) {
+  assert(page.description.includes("QuickBooks Online"), `${page.path} meta names QuickBooks Online`);
+  assert(page.description.includes("Xero"), `${page.path} meta names Xero`);
+  assert(page.description.length <= 170, `${page.path} meta description stays snippet-length`);
+  assert(!page.description.includes("certified"), `${page.path} meta does not claim certification`);
+}
 
 const shell = readFileSync(resolve("src/components/marketing-shell.tsx"), "utf8");
+assert(shell.includes("Works with QuickBooks Online and Xero."), "collateral footer names both ledgers");
 assert(shell.includes("milonfinance.com"), "collateral footer uses the US domain");
 assert(!shell.includes(">milon.co.za<"), "collateral footer does not lead with milon.co.za");
 assert(!shell.includes("linkedin.com"), "collateral footer does not hardcode LinkedIn");
@@ -247,10 +285,21 @@ assert(!about.includes("Xero"), "about does not claim Xero");
 const faq = readFileSync(resolve("src/routes/faq.tsx"), "utf8");
 assert(faq.includes("faqPageJson"), "faq emits FAQPage JSON-LD");
 assert(faq.includes("ACCOUNTING_SOFTWARE_ANSWER"), "faq accounting-software answer is shared with schema");
-assert(!faq.includes("QuickBooks"), "faq does not claim QuickBooks");
-assert(!faq.includes("Xero"), "faq does not claim Xero");
+assert(faq.includes("LEDGER_CONNECT_QUESTION"), "faq renders the ledger question from shared copy");
+assert(faq.includes("LEDGER_CONNECT_ANSWER"), "faq renders the ledger answer from shared copy");
 assert(ACCOUNTING_SOFTWARE_ANSWER.includes("not a ledger"), "accounting-software answer stays honest");
-assert(!ACCOUNTING_SOFTWARE_ANSWER.includes("QuickBooks"), "accounting-software answer does not name QBO");
+assert(ACCOUNTING_SOFTWARE_ANSWER.includes("QuickBooks Online"), "accounting-software answer names QBO");
+assert(ACCOUNTING_SOFTWARE_ANSWER.includes("Xero"), "accounting-software answer names Xero");
+assert(LEDGER_CONNECT_ANSWER.includes("Connect QuickBooks Online or Xero"), "ledger answer says connect");
+assert(LEDGER_CONNECT_ANSWER.includes("do not need either system"), "ledger answer keeps upload as enough");
+assert(!LEDGER_CONNECT_ANSWER.includes("certified"), "ledger answer does not claim certification");
+assert(!LEDGER_CONNECT_ANSWER.includes("Intuit"), "ledger answer does not claim an Intuit relationship");
+assert(
+  publicFaqUsItems().some(
+    (item) => item.question === LEDGER_CONNECT_QUESTION && item.answer === LEDGER_CONNECT_ANSWER,
+  ),
+  "public FAQ schema matches the visible QuickBooks and Xero answer",
+);
 assert(faq.includes("AI_IDENTIFIERS_LINE"), "faq uses the identifier-only anonymisation line");
 assert(faq.includes("WATCHLIST_DEFINITION"), "faq defines watchlist clients");
 assert(faq.includes("FOUNDING_CALLOUT"), "faq surfaces FOUNDING 50% off");
