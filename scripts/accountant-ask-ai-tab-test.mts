@@ -30,7 +30,13 @@ assert(
   "before any figures the studio lands on Health & Ratios, where the inputs are",
 );
 assert(clientSrc.includes('id="first-figures-card"'), "empty studio shows the first-figures card");
-assert(clientSrc.includes('{ id: "ask", label: "Milōn Bot"'), "Milōn Bot appears in the tab strip");
+assert(clientSrc.includes('{ id: "ask", label: "Milōn Bot"'), "Milōn Bot appears in the deliverable list");
+assert(clientSrc.includes('className="deliverable-rail"'), "deliverables are a left stacked rail");
+assert(!clientSrc.includes('className="tabs"'), "horizontal mid-page tab strip is gone");
+assert(
+  clientSrc.indexOf('className="deliverable-rail"') < clientSrc.indexOf("<NextStepCard"),
+  "the rail sits at the top of the client workspace, beside the header",
+);
 assert(clientSrc.includes('id="pane-ask"'), "Milōn Bot pane exists");
 assert(clientSrc.includes('id="ask-ai-accountant"'), "studio still mounts the same widget");
 assert(clientSrc.includes('variant: "studio"'), "accountant widget uses the large studio variant");
