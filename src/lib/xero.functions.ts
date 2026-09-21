@@ -16,18 +16,14 @@ import {
   deleteXeroConnection,
   exchangeXeroCodeForTokens,
   fetchXeroBalanceSheet,
-  fetchXeroBankSummary,
   fetchXeroConnections,
-  fetchXeroInvoices,
   fetchXeroProfitAndLoss,
   mapXeroToFinancialInputs,
   pickXeroTenant,
   refreshXeroToken,
   revokeXeroToken,
-  xeroInvoiceSyncEnabled,
   XERO_CLIENT_ID,
   type XeroBalanceSheet,
-  type XeroBankSummary,
   type XeroPnL,
 } from "@/lib/xero";
 
@@ -38,9 +34,9 @@ export const getXeroConfig = createServerFn({ method: "POST" })
   .handler(async () => {
     try {
       XERO_CLIENT_ID();
-      return { configured: true, invoiceSync: xeroInvoiceSyncEnabled() };
+      return { configured: true };
     } catch {
-      return { configured: false, invoiceSync: false };
+      return { configured: false };
     }
   });
 
@@ -186,15 +182,13 @@ export const getXeroStatuses = createServerFn({ method: "POST" })
 export type XeroSyncResult = {
   mappedInputs: Record<string, number>;
   periodMonths: string | null;
-  dataDepth: "statement" | "transaction";
+  dataDepth: "statement";
   summary: {
     revenue: number;
     netIncome: number;
     totalAssets: number;
     equity: number;
     cash: number;
-    operatingCashflow: number | null;
-    invoiceCount: number;
   };
 };
 
@@ -315,24 +309,12 @@ export const triggerXeroSync = createServerFn({ method: "POST" })
       }
 
       const tenantId = conn.tenant_id as string;
-      const [pnl, bs, bank] = await Promise.all([
+      const [pnl, bs] = await Promise.all([
         fetchXeroProfitAndLoss(tenantId, accessToken),
         fetchXeroBalanceSheet(tenantId, accessToken),
-        fetchXeroBankSummary(tenantId, accessToken).catch(() => null),
       ]);
 
-      let invoices: unknown[] = [];
-      let dataDepth: "statement" | "transaction" = "statement";
-      if (xeroInvoiceSyncEnabled()) {
-        try {
-          invoices = await fetchXeroInvoices(tenantId, accessToken);
-          if (invoices.length) dataDepth = "transaction";
-        } catch {
-          // Phase 2 is optional — never fail a statement sync on invoices.
-        }
-      }
-
-      const mapped = mapXeroToFinancialInputs(pnl, bs, bank);
+      const mapped = mapXeroToFinancialInputs(pnl, bs);
       const mappedInputs = mappedNumbers(mapped);
 
       const { data: existing } = await supabaseAdmin
@@ -363,21 +345,7 @@ export const triggerXeroSync = createServerFn({ method: "POST" })
       const cacheRows = [
         { client_id: data.clientId, data_type: "pl", raw_data: pnl as never, synced_at: nowIso },
         { client_id: data.clientId, data_type: "bs", raw_data: bs as never, synced_at: nowIso },
-        {
-          client_id: data.clientId,
-          data_type: "bank",
-          raw_data: (bank ?? {}) as never,
-          synced_at: nowIso,
-        },
       ];
-      if (xeroInvoiceSyncEnabled()) {
-        cacheRows.push({
-          client_id: data.clientId,
-          data_type: "invoices",
-          raw_data: { invoices } as never,
-          synced_at: nowIso,
-        });
-      }
       await supabaseAdmin.from("xero_sync_data").upsert(cacheRows, { onConflict: "client_id,data_type" });
 
       const ok = reduceXeroConnection(started, { type: "sync_succeeded" });
@@ -387,22 +355,20 @@ export const triggerXeroSync = createServerFn({ method: "POST" })
           sync_status: ok.syncStatus,
           sync_error: null,
           last_synced_at: nowIso,
-          data_depth: dataDepth,
+          data_depth: "statement",
         })
         .eq("client_id", data.clientId);
 
       return {
         mappedInputs,
         periodMonths: typeof mapped.periodMonths === "string" ? mapped.periodMonths : null,
-        dataDepth,
+        dataDepth: "statement",
         summary: {
           revenue: pnl.revenue,
           netIncome: pnl.netIncome,
           totalAssets: bs.totalAssets,
           equity: bs.equity,
-          cash: bank?.closingCash || bs.cash,
-          operatingCashflow: null,
-          invoiceCount: invoices.length,
+          cash: bs.cash,
         },
       };
     } catch (err) {
@@ -451,4 +417,4 @@ export const disconnectXero = createServerFn({ method: "POST" })
 export { exchangeXeroCodeForTokens, fetchXeroConnections, pickXeroTenant };
 
 // Re-export types used by the UI card.
-export type { XeroBalanceSheet, XeroBankSummary, XeroPnL };
+export type { XeroBalanceSheet, XeroPnL };

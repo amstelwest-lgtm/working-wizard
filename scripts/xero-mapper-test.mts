@@ -8,15 +8,13 @@ import { computeRatios, type RatioInputs } from "../src/lib/ratios";
 import {
   mapXeroToFinancialInputs,
   parseXeroBalanceSheet,
-  parseXeroBankSummary,
   parseXeroConnections,
-  parseXeroInvoices,
   parseXeroProfitAndLoss,
   periodMonthsBetween,
   pickXeroTenant,
   redactSecrets,
-  xeroInvoiceSyncEnabled,
   xeroRowAmount,
+  xeroScopes,
   ytdRange,
 } from "../src/lib/xero";
 
@@ -113,35 +111,6 @@ const bsFixture = {
   ],
 };
 
-const bankFixture = {
-  Reports: [
-    {
-      ReportID: "BankSummary",
-      ReportName: "Bank Summary",
-      Rows: [
-        section("Business Cheque", [
-          { label: "Opening Balance", amount: "40000.00" },
-          { label: "Closing Balance", amount: "62000.00" },
-        ]),
-        section("Savings", [
-          { label: "Opening Balance", amount: "20000.00" },
-          { label: "Closing Balance", amount: "23000.00" },
-        ]),
-        {
-          RowType: "Section",
-          Title: "",
-          Rows: [
-            {
-              RowType: "SummaryRow",
-              Cells: [{ Value: "Total Closing" }, { Value: "85000.00" }],
-            },
-          ],
-        },
-      ],
-    },
-  ],
-};
-
 const pnl = parseXeroProfitAndLoss(pnlFixture, 9);
 assert(pnl.revenue === 480000, `revenue ${pnl.revenue}`);
 assert(pnl.cogs === 180000, `cogs ${pnl.cogs}`);
@@ -163,22 +132,17 @@ assert(bs.inventory === 31000, `inv ${bs.inventory}`);
 assert(bs.payables === 28000, `ap ${bs.payables}`);
 assert(bs.cash === 85000, `cash ${bs.cash}`);
 
-const bank = parseXeroBankSummary(bankFixture);
-assert(bank.closingCash === 85000, `bank close ${bank.closingCash}`);
-assert(bank.accounts.length === 2, "two bank accounts");
-assert(bank.accounts[0].closing === 62000, "cheque closing");
-
-const mapped = mapXeroToFinancialInputs(pnl, bs, bank);
+const mapped = mapXeroToFinancialInputs(pnl, bs);
 assert(mapped.revenue === 480000, "mapped revenue");
 assert(mapped.cogs === 180000, "mapped cogs");
 assert(mapped.netIncome === 120000, "mapped ni");
 assert(mapped.totalAssets === 220000, "mapped assets");
 assert(mapped.equity === 150000, "mapped equity");
 assert(mapped.receivables === 42000, "mapped ar");
-assert(mapped.cash === 85000, "mapped cash from bank");
+assert(mapped.cash === 85000, "mapped cash from balance sheet Bank line");
 assert(mapped.fixedCosts === 150000, "mapped opex as fixedCosts");
 assert(mapped.periodMonths === "9", "YTD periodMonths so computeRatios annualises");
-assert(mapped.operatingCashflow == null, "OCF must stay unset — Xero reports have no CF statement");
+assert(mapped.operatingCashflow == null, "OCF stays unset — day-1 is P&L + BS only");
 
 const ratioInputs = {
   netIncome: String(mapped.netIncome),
@@ -240,11 +204,13 @@ assert(picked?.tenantId === "ten-new", `picked latest org, got ${picked?.tenantI
 assert(parseXeroConnections(null).length === 0, "null connections");
 assert(pickXeroTenant([]) === null, "empty tenants");
 
-const invoices = parseXeroInvoices({
-  Invoices: [{ InvoiceID: "i1", Type: "ACCREC", Status: "AUTHORISED", Total: 250, DateString: "2026-09-01" }],
-});
-assert(invoices[0].total === 250, "invoice stub");
-assert(xeroInvoiceSyncEnabled() === false, "invoice pull off by default in CI");
+assert(
+  xeroScopes() ===
+    "offline_access accounting.settings.read accounting.reports.profitandloss.read accounting.reports.balancesheet.read",
+  "day-1 scopes only",
+);
+assert(!xeroScopes().includes("invoice"), "no invoice scope");
+assert(!xeroScopes().includes("banksummary"), "no bank-feed / bank-summary scope");
 
 const leaked = redactSecrets(
   '{"access_token":"secret-token","refresh_token":"r1"} Bearer abc.def Authorization: Bearer xyz',
@@ -274,6 +240,14 @@ assert(snapSrc.includes('"xero"'), "snapshot source includes xero");
 const fnSrc = readFileSync(resolve("src/lib/xero.functions.ts"), "utf8");
 assert(fnSrc.includes('source: "xero"'), "sync writes snapshot source xero");
 assert(fnSrc.includes("assertClientScope"), "server fns check impersonation scope");
+assert(!fnSrc.includes("fetchXeroInvoices"), "no invoice pull in day-1 sync");
 assert(!/console\.(log|info|debug|error)\([^)]*access_token/.test(fnSrc), "functions never log tokens");
+
+const envSrc = readFileSync(resolve(".env.example"), "utf8");
+assert(envSrc.includes("XERO_CLIENT_ID="), "env: client id");
+assert(envSrc.includes("XERO_CLIENT_SECRET="), "env: client secret");
+assert(envSrc.includes("XERO_REDIRECT_URI="), "env: redirect");
+assert(!envSrc.includes("XERO_SCOPES"), "env docs are the three vars only");
+assert(!envSrc.includes("XERO_SYNC"), "no invoice flag in env");
 
 console.log("xero-mapper-test: ok");

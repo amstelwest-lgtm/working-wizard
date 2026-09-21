@@ -105,7 +105,7 @@ export function XeroConnectCard({ clientId, returnPath, onSyncComplete }: Props)
       const result = await doSync({ data: { clientId } });
       setLastSync(result.summary);
       onSyncComplete?.(result.mappedInputs, result.summary);
-      toast.success("Xero sync complete — P&L, balance sheet and bank totals updated");
+      toast.success("Xero sync complete — P&L and balance sheet updated");
       await load();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Sync failed");
@@ -300,16 +300,9 @@ export function XeroConnectCard({ clientId, returnPath, onSyncComplete }: Props)
             {[
               { label: "Revenue", value: fmtMoney(lastSync.revenue) },
               { label: "Net income", value: fmtMoney(lastSync.netIncome) },
-              { label: "Bank / cash", value: fmtMoney(lastSync.cash) },
+              { label: "Cash (BS)", value: fmtMoney(lastSync.cash) },
               { label: "Total assets", value: fmtMoney(lastSync.totalAssets) },
               { label: "Equity", value: fmtMoney(lastSync.equity) },
-              {
-                label:
-                  lastSync.operatingCashflow == null
-                    ? "OCF not in Xero reports"
-                    : "Op. cashflow",
-                value: fmtMoney(lastSync.operatingCashflow),
-              },
             ].map((item) => (
               <div key={item.label}>
                 <div
@@ -361,7 +354,7 @@ export function XeroConnectCard({ clientId, returnPath, onSyncComplete }: Props)
           Xero
         </p>
         <p style={{ fontSize: 12, color: "#64748b" }}>
-          Connect to sync P&L, balance sheet and bank totals (statement-level)
+          Connect to sync P&amp;L and balance sheet into this client&apos;s figures
         </p>
       </div>
       <button

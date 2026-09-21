@@ -584,7 +584,7 @@ function ClientView() {
       toast.error(`QuickBooks connection failed: ${search.reason ?? "unknown error"}`);
     }
     if (search.xero === "connected") {
-      toast.success("Xero connected — tap Sync to import P&L, balance sheet and bank totals");
+      toast.success("Xero connected — tap Sync to import P&L and balance sheet");
     } else if (search.xero === "error") {
       toast.error(`Xero connection failed: ${search.reason ?? "unknown error"}`);
     }

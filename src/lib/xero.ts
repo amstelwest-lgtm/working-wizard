@@ -25,39 +25,18 @@ export const XERO_CLIENT_SECRET = () => {
 export const XERO_REDIRECT_URI = () => process.env.XERO_REDIRECT_URI ?? "";
 
 /**
- * Phase 2 invoice / transaction pull. Off by default — statement-level sync
- * must not wait on invoice root-cause.
- */
-export function xeroInvoiceSyncEnabled(): boolean {
-  const raw = (process.env.XERO_SYNC_INVOICES ?? process.env.XERO_SYNC_TRANSACTIONS ?? "")
-    .trim()
-    .toLowerCase();
-  return raw === "1" || raw === "true" || raw === "yes";
-}
-
-/**
- * Default scopes for apps created after 2 March 2026 (granular reports).
- * Override with XERO_SCOPES (space-separated) if the Xero app still has the
- * legacy `accounting.reports.read` grant.
+ * Day-1 scopes: refresh + org name + P&L + balance sheet.
+ * No invoices, payroll, or bank-feed scopes.
  */
 export const XERO_DEFAULT_SCOPES = [
   "offline_access",
   "accounting.settings.read",
   "accounting.reports.profitandloss.read",
   "accounting.reports.balancesheet.read",
-  "accounting.reports.banksummary.read",
 ] as const;
 
-export const XERO_INVOICE_SCOPE = "accounting.invoices.read";
-
 export function xeroScopes(): string {
-  const override = (process.env.XERO_SCOPES ?? "").trim();
-  if (override) return override;
-  const base: string[] = [...XERO_DEFAULT_SCOPES];
-  if (xeroInvoiceSyncEnabled() && !base.includes(XERO_INVOICE_SCOPE)) {
-    base.push(XERO_INVOICE_SCOPE);
-  }
-  return base.join(" ");
+  return XERO_DEFAULT_SCOPES.join(" ");
 }
 
 const XERO_AUTH_ENDPOINT = "https://login.xero.com/identity/connect/authorize";
@@ -549,112 +528,15 @@ export async function fetchXeroBalanceSheet(
   return parseXeroBalanceSheet(data);
 }
 
-// ─── Bank summary (cash) ──────────────────────────────────────────────────────
-
-export type XeroBankSummary = {
-  closingCash: number;
-  openingCash: number;
-  accounts: Array<{ name: string; closing: number }>;
-};
-
-export function parseXeroBankSummary(json: unknown): XeroBankSummary {
-  const report = firstXeroReport(json);
-  const rows = report?.Rows ?? [];
-  const accounts: Array<{ name: string; closing: number }> = [];
-
-  walkRows(rows, (r) => {
-    if ((r.RowType ?? "").toLowerCase() !== "section") return;
-    const name = (r.Title ?? "").trim();
-    if (!name) return;
-    const closing = findRowByLabel(r.Rows ?? [], "closing balance", "closing");
-    if (closing) accounts.push({ name, closing: xeroRowAmount(closing) });
-  });
-
-  const totalClosing =
-    xeroRowAmount(findRowByLabel(rows, "total closing", "total bank")) ||
-    accounts.reduce((s, a) => s + a.closing, 0);
-  const totalOpening =
-    xeroRowAmount(findRowByLabel(rows, "total opening")) ||
-    accounts.reduce((s, a) => {
-      const section = findSection(rows, a.name.toLowerCase());
-      return s + xeroRowAmount(findRowByLabel(section?.Rows ?? [], "opening balance", "opening"));
-    }, 0);
-
-  return {
-    closingCash: totalClosing,
-    openingCash: totalOpening,
-    accounts,
-  };
-}
-
-export async function fetchXeroBankSummary(
-  tenantId: string,
-  accessToken: string,
-  range = ytdRange(),
-): Promise<XeroBankSummary> {
-  const data = await xeroGet(
-    tenantId,
-    accessToken,
-    `/Reports/BankSummary?fromDate=${range.from}&toDate=${range.to}`,
-  );
-  return parseXeroBankSummary(data);
-}
-
-// ─── Phase 2 invoices (flagged) ───────────────────────────────────────────────
-
-export type XeroInvoiceStub = {
-  invoiceID: string;
-  type: string;
-  status: string;
-  total: number;
-  date: string;
-};
-
-export function parseXeroInvoices(json: unknown): XeroInvoiceStub[] {
-  if (!json || typeof json !== "object") return [];
-  const list = (json as { Invoices?: unknown }).Invoices;
-  if (!Array.isArray(list)) return [];
-  const out: XeroInvoiceStub[] = [];
-  for (const row of list) {
-    if (!row || typeof row !== "object") continue;
-    const o = row as Record<string, unknown>;
-    out.push({
-      invoiceID: typeof o.InvoiceID === "string" ? o.InvoiceID : "",
-      type: typeof o.Type === "string" ? o.Type : "",
-      status: typeof o.Status === "string" ? o.Status : "",
-      total: typeof o.Total === "number" ? o.Total : parseFloat(String(o.Total ?? 0)) || 0,
-      date: typeof o.DateString === "string" ? o.DateString : String(o.Date ?? ""),
-    });
-  }
-  return out;
-}
-
-export async function fetchXeroInvoices(
-  tenantId: string,
-  accessToken: string,
-): Promise<XeroInvoiceStub[]> {
-  const since = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-  const data = await xeroGet(
-    tenantId,
-    accessToken,
-    `/Invoices?where=${encodeURIComponent(`Date >= DateTime(${since.slice(0, 4)}, ${Number(since.slice(5, 7))}, ${Number(since.slice(8, 10))})`)}&page=1`,
-  );
-  return parseXeroInvoices(data);
-}
-
 // ─── Data mapper ──────────────────────────────────────────────────────────────
 
 /**
- * Maps Xero report totals onto the Milōn financials vocabulary used by
- * `computeRatios` / health score. Statement-level only — no invoice root-cause.
- *
- * `operatingCashflow` is left unset: Xero's Reports API has no cash-flow
- * statement. Bank closing cash is mapped to `cash` for forecast seeding.
+ * Maps Xero P&L + Balance Sheet totals onto the existing financials vocabulary
+ * used by `computeRatios`. Day-1 only — no invoices, payroll, or bank feeds.
  */
 export function mapXeroToFinancialInputs(
   pnl: XeroPnL,
   bs: XeroBalanceSheet,
-  bank?: XeroBankSummary | null,
 ): Record<string, number | string> {
   const out: Record<string, number | string> = {};
   const set = (k: string, v: number) => {
@@ -672,8 +554,7 @@ export function mapXeroToFinancialInputs(
   set("receivables", bs.receivables);
   set("inventory", bs.inventory);
   set("payables", bs.payables);
-  const cash = bank?.closingCash || bs.cash;
-  set("cash", cash);
+  set("cash", bs.cash);
   if (Number.isFinite(pnl.periodMonths) && pnl.periodMonths >= 1 && pnl.periodMonths <= 12) {
     out[PERIOD_MONTHS_KEY] = String(pnl.periodMonths);
   }

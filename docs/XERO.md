@@ -1,107 +1,50 @@
-# Xero integration
+# Xero — day-1 connect
 
-MILŌN connects one Xero organisation (tenant) per client, pulls **statement-level**
-P&amp;L, balance sheet and bank summary, and writes the totals into
-`clients.financials` plus a `client_financial_snapshots` row with `source = 'xero'`.
-Health, ratios, cash forecast seeding, advisory pack and Next Step then run on
-those figures — no PDF upload required.
+OAuth2 **web app** (authorization code + refresh). Not a Custom Connection.
+Connect one org, pull P&L + balance sheet, write `clients.financials` and a
+snapshot with `source = 'xero'`. Same path as a statement upload.
 
-Invoice / transaction pull is **Phase 2**, behind `XERO_SYNC_INVOICES`. It must
-not block a statement sync.
+## Env vars (only these)
 
-## Token storage
-
-Same pattern as QuickBooks (`qbo_connections`):
-
-- Tokens live in `xero_connections.access_token` / `refresh_token` as `TEXT`.
-- RLS is enabled with **no policies**, so the anon and authenticated keys cannot
-  read them. Server functions use the Supabase service role and must check
-  client access (`assertClientScope` + a user-scoped `clients` SELECT) before
-  touching a row.
-- Supabase encrypts the disk at rest. There is no separate vault column for QBO
-  or Xero. Do not log tokens, `client_secret`, or raw callback bodies.
-
-Xero **rotates refresh tokens** on every refresh. The new pair is written before
-any report call continues.
-
-## Create the Xero app
-
-1. Sign in at [developer.xero.com](https://developer.xero.com/app/manage) and
-   create a **Web app**.
-2. OAuth 2.0 grant: **Authorization Code**.
-3. Redirect URI — paste **exactly** (scheme, host, path, no trailing slash):
-
-   | Environment | Redirect URI |
-   | --- | --- |
-   | Production | `https://milonfinance.com/api/xero/callback` |
-   | Vercel preview | `https://<preview-host>.vercel.app/api/xero/callback` |
-   | Local | `http://localhost:5000/api/xero/callback` |
-
-   Add each URI you will actually use. Xero rejects mismatches.
-4. Scopes (apps created after 2 March 2026 use **granular** report scopes):
-
-   ```
-   offline_access
-   accounting.settings.read
-   accounting.reports.profitandloss.read
-   accounting.reports.balancesheet.read
-   accounting.reports.banksummary.read
-   ```
-
-   Optional Phase 2: `accounting.invoices.read`.
-
-   Xero may require **App Partner** enrolment before P&amp;L / balance-sheet
-   report scopes appear on a brand-new app. If the portal still shows the
-   legacy `accounting.reports.read` grant, set `XERO_SCOPES` to that plus
-   `offline_access` and `accounting.settings.read`.
-5. Copy the **Client ID** and **Client secret**. Never commit them.
-
-## Secrets to paste
-
-### Vercel (Production + Preview)
-
-| Name | Value |
+| Name | Where |
 | --- | --- |
-| `XERO_CLIENT_ID` | from the Xero app |
-| `XERO_CLIENT_SECRET` | from the Xero app |
-| `XERO_REDIRECT_URI` | `https://milonfinance.com/api/xero/callback` on Production; the matching preview URL on Preview |
+| `XERO_CLIENT_ID` | Vercel (Production + Preview) |
+| `XERO_CLIENT_SECRET` | Vercel (Production + Preview) |
+| `XERO_REDIRECT_URI` | Vercel. Production: `https://milonfinance.com/api/xero/callback` |
 
-Optional:
+Do not prefix `VITE_`. Redeploy after saving. No extra Supabase secrets — apply
+migration `20260921120000_xero_tables.sql` and use the existing service role.
 
-| Name | Value |
-| --- | --- |
-| `XERO_SCOPES` | space-separated override |
-| `XERO_SYNC_INVOICES` | `1` to cache recent invoices (Phase 2) |
+## Redirect URI (Xero portal + Vercel)
 
-Redeploy after saving. These are **server-only** — do not prefix `VITE_`.
+```
+https://milonfinance.com/api/xero/callback
+```
 
-### Supabase
+Optional extras if you actually use them: `https://<preview>.vercel.app/api/xero/callback`,
+`http://localhost:5000/api/xero/callback`.
 
-No extra Supabase secrets are required for Xero. Apply migration
-`20260921120000_xero_tables.sql` (`xero_oauth_states`, `xero_connections`,
-`xero_sync_data`). The app already uses `SUPABASE_SERVICE_ROLE_KEY` for token
-rows, same as QBO.
+## Scopes to tick in the Xero app
 
-### Xero developer portal
+```
+offline_access
+accounting.settings.read
+accounting.reports.profitandloss.read
+accounting.reports.balancesheet.read
+```
 
-- Redirect URI: `https://milonfinance.com/api/xero/callback`
-- Tenant header: every Accounting API call sends `Xero-tenant-id` (stored per
-  client after `GET https://api.xero.com/connections`). You do not paste a
-  tenant id into Vercel.
+## What Theo creates in the Xero developer portal
 
-## What syncs in Phase 1
+1. Go to [developer.xero.com/app/manage](https://developer.xero.com/app/manage).
+2. **New app** → type **Web app** (OAuth 2.0 authorization code). Do **not**
+   choose Custom Connection.
+3. Paste redirect URI `https://milonfinance.com/api/xero/callback`.
+4. Enable the four scopes above.
+5. Copy Client ID and Client secret into the Vercel env vars.
 
-| Xero report | Milōn fields |
-| --- | --- |
-| Profit and Loss (YTD) | `revenue`, `cogs`, `ebit`, `ebt`, `netIncome`, `ebitda`, `fixedCosts`, `periodMonths` |
-| Balance Sheet | `totalAssets`, `equity`, `receivables`, `inventory`, `payables` |
-| Bank Summary | `cash` (closing) |
+P&L / balance-sheet report scopes on a brand-new app may require Xero App
+Partner enrolment. Every Accounting API call sends `Xero-tenant-id` (stored
+after `GET https://api.xero.com/connections`) — you do not paste a tenant id.
 
-`operatingCashflow` is left blank: Xero’s Reports API has no cash-flow
-statement. `data_depth` stays `statement` until Phase 2 invoices succeed.
-
-## Where it appears
-
-- Accountant client studio → Financials (next to QuickBooks)
-- Owner app → Upload / data sources, first-data nudge, empty board
-- Firm dashboard → `XO` badge when a tenant is connected
+Tokens sit in `xero_connections` the same way QBO does: RLS deny-all, service
+role only, disk encrypted at rest. Never log them.

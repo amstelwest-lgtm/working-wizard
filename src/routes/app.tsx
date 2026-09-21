@@ -2103,7 +2103,7 @@ function Index() {
     else if (qbo === "error")
       toast.error(`QuickBooks connection failed: ${p.get("reason") ?? "unknown error"}`);
     if (xero === "connected") {
-      toast.success("Xero connected — tap Sync to import P&L, balance sheet and bank totals");
+      toast.success("Xero connected — tap Sync to import P&L and balance sheet");
       setShowXeroDialog(true);
     } else if (xero === "error")
       toast.error(`Xero connection failed: ${p.get("reason") ?? "unknown error"}`);
@@ -4180,7 +4180,7 @@ function Index() {
                       id === "qbo"
                         ? "Live sync from QuickBooks Online"
                         : id === "xero"
-                          ? "Live sync of P&L, balance sheet and bank totals"
+                          ? "Live sync of P&L and balance sheet"
                         : id === "files"
                           ? "P&L and balance sheet · Excel, OpenDocument, CSV or PDF · you confirm before saving"
                           : "PDF, CSV or Excel exports · ~3 months · AI drafts your figures";
@@ -5478,8 +5478,7 @@ function Index() {
                     Connect Xero
                   </span>
                   <span className="text-xs text-slate-600 dark:text-slate-400">
-                    Sync P&amp;L, balance sheet and bank totals when Xero is configured for this
-                    workspace. Statement-level first — invoices are a later step.
+                    Sync P&amp;L and balance sheet when Xero is configured for this workspace.
                   </span>
                 </button>
                 <button
@@ -5882,8 +5881,8 @@ function Index() {
                   Xero Integration
                 </DialogTitle>
                 <DialogDescription className="text-xs text-slate-400">
-                  Connect a Xero organisation to pull P&amp;L, balance sheet and bank totals into
-                  this client&apos;s figures. Invoices are Phase 2.
+                  Connect a Xero organisation to pull P&amp;L and balance sheet into this
+                  client&apos;s figures.
                 </DialogDescription>
               </DialogHeader>
               <XeroConnectCard
