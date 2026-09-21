@@ -2383,6 +2383,126 @@ export type Database = {
           },
         ]
       }
+      xero_connections: {
+        Row: {
+          access_token: string
+          client_id: string
+          connection_id: string | null
+          connected_at: string
+          data_depth: string
+          id: string
+          last_synced_at: string | null
+          refresh_token: string
+          sync_error: string | null
+          sync_status: string
+          tenant_id: string
+          tenant_name: string | null
+          token_expiry: string
+        }
+        Insert: {
+          access_token: string
+          client_id: string
+          connection_id?: string | null
+          connected_at?: string
+          data_depth?: string
+          id?: string
+          last_synced_at?: string | null
+          refresh_token: string
+          sync_error?: string | null
+          sync_status?: string
+          tenant_id: string
+          tenant_name?: string | null
+          token_expiry: string
+        }
+        Update: {
+          access_token?: string
+          client_id?: string
+          connection_id?: string | null
+          connected_at?: string
+          data_depth?: string
+          id?: string
+          last_synced_at?: string | null
+          refresh_token?: string
+          sync_error?: string | null
+          sync_status?: string
+          tenant_id?: string
+          tenant_name?: string | null
+          token_expiry?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "xero_connections_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: true
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      xero_oauth_states: {
+        Row: {
+          client_id: string
+          created_at: string
+          id: string
+          return_path: string | null
+          state: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          id?: string
+          return_path?: string | null
+          state: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          id?: string
+          return_path?: string | null
+          state?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "xero_oauth_states_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      xero_sync_data: {
+        Row: {
+          client_id: string
+          data_type: string
+          id: string
+          raw_data: Json | null
+          synced_at: string
+        }
+        Insert: {
+          client_id: string
+          data_type: string
+          id?: string
+          raw_data?: Json | null
+          synced_at?: string
+        }
+        Update: {
+          client_id?: string
+          data_type?: string
+          id?: string
+          raw_data?: Json | null
+          synced_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "xero_sync_data_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           created_at: string

@@ -101,6 +101,7 @@ import { useNotes } from "@/contexts/notes";
 import { accountantWorkspaceTab } from "@/lib/notes-tabs";
 import { useTrack } from "@/hooks/use-track";
 import { QboConnectCard } from "@/components/qbo-connect";
+import { XeroConnectCard } from "@/components/xero-connect";
 import { effectiveCashRunwayWeeks, runwayWeeksFromCashflow } from "@/lib/cash-runway";
 import { countOpenQueriesForClient } from "@/lib/open-queries";
 import { ProfileFunnel } from "@/components/profile/profile-funnel";
@@ -386,6 +387,7 @@ export const Route = createFileRoute("/_authenticated/clients/$clientId")({
     search: Record<string, unknown>,
   ): {
     qbo?: string;
+    xero?: string;
     reason?: string;
     onboard?: string;
     note?: string;
@@ -395,6 +397,7 @@ export const Route = createFileRoute("/_authenticated/clients/$clientId")({
   } => {
     const out: {
       qbo?: string;
+      xero?: string;
       reason?: string;
       onboard?: string;
       note?: string;
@@ -403,6 +406,7 @@ export const Route = createFileRoute("/_authenticated/clients/$clientId")({
       queries?: string;
     } = {};
     if (typeof search.qbo === "string") out.qbo = search.qbo;
+    if (typeof search.xero === "string") out.xero = search.xero;
     if (typeof search.reason === "string") out.reason = search.reason;
     if (typeof search.onboard === "string") out.onboard = search.onboard;
     if (typeof search.note === "string") out.note = search.note;
@@ -572,13 +576,18 @@ function ClientView() {
   const { profile, firmId } = useAccountantProfile();
   const track = useTrack();
 
-  // QBO OAuth return (?qbo=connected|error) — callback lands here for accountants.
+  // QBO / Xero OAuth return — callbacks land here for accountants.
   useEffect(() => {
-    if (!search.qbo) return;
+    if (!search.qbo && !search.xero) return;
     if (search.qbo === "connected") {
       toast.success("QuickBooks Online connected — tap Sync to import data");
     } else if (search.qbo === "error") {
       toast.error(`QuickBooks connection failed: ${search.reason ?? "unknown error"}`);
+    }
+    if (search.xero === "connected") {
+      toast.success("Xero connected — tap Sync to import P&L and balance sheet");
+    } else if (search.xero === "error") {
+      toast.error(`Xero connection failed: ${search.reason ?? "unknown error"}`);
     }
     navigate({
       to: "/clients/$clientId",
@@ -586,12 +595,13 @@ function ClientView() {
       search: (prev) => {
         const next = { ...prev };
         delete next.qbo;
+        delete next.xero;
         delete next.reason;
         return next;
       },
       replace: true,
     });
-  }, [search.qbo, search.reason, clientId, navigate]);
+  }, [search.qbo, search.xero, search.reason, clientId, navigate]);
 
   // First-client onboarding: land from dashboard with ?onboard=1 → bank upload nudge
   useEffect(() => {
@@ -2381,7 +2391,7 @@ function ClientView() {
                         Upload statement
                       </button>
                     </div>
-                    <div style={{ marginBottom: 16 }}>
+                    <div style={{ marginBottom: 16, display: "grid", gap: 10 }}>
                       <QboConnectCard
                         clientId={clientId}
                         onSyncComplete={(inputs) => {
@@ -2415,6 +2425,23 @@ function ClientView() {
                               });
                               toast.success("Financials updated from QuickBooks");
                             });
+                        }}
+                      />
+                      <XeroConnectCard
+                        clientId={clientId}
+                        returnPath={`/clients/${clientId}`}
+                        onSyncComplete={(inputs) => {
+                          const next = Object.fromEntries(
+                            Object.entries(inputs).map(([k, val]) => [k, String(val)]),
+                          );
+                          const nextScalars = { ...financialsRef.current, ...next };
+                          financialsRef.current = nextScalars;
+                          setFinancials(nextScalars);
+                          setClient((c) =>
+                            c
+                              ? { ...c, financials_updated_at: new Date().toISOString() }
+                              : c,
+                          );
                         }}
                       />
                     </div>

@@ -10,7 +10,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { computeRatios, type RatioInputs } from "@/lib/ratios";
 
-export type SnapshotSource = "autosave" | "manual" | "upload" | "qbo" | "pdf_upload";
+export type SnapshotSource = "autosave" | "manual" | "upload" | "qbo" | "xero" | "pdf_upload";
 
 /** Calendar period label used across Studio / score history / autosave. */
 export function currentPeriodLabel(now = new Date()): string {
