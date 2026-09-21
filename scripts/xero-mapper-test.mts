@@ -9,17 +9,23 @@ import {
   mapXeroToFinancialInputs,
   parseXeroBalanceSheet,
   parseXeroConnections,
+  parseXeroFinancialYearEnd,
   parseXeroProfitAndLoss,
   periodMonthsBetween,
   pickXeroTenant,
   redactSecrets,
-  selectFreshestXeroProfitAndLoss,
-  xeroLedgerProfitAndLossPath,
+  xeroBalanceSheetPath,
+  xeroProfitAndLossRangePath,
   xeroRowAmount,
   xeroScopes,
   ytdRange,
 } from "../src/lib/xero";
-import { calendarMonthBounds, formatStatementPeriodLabel } from "../src/lib/statement-period";
+import {
+  calendarMonthBounds,
+  financialYearToDate,
+  formatStatementPeriodLabel,
+  statementYearLine,
+} from "../src/lib/statement-period";
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
@@ -318,77 +324,119 @@ const multiMonthPnl = {
   ],
 };
 
-const freshest = selectFreshestXeroProfitAndLoss(multiMonthPnl, {
-  from: "2026-09-01",
-  to: "2026-09-21",
-});
-assert(freshest.column === 0, `freshest column ${freshest.column}`);
-assert(freshest.pnl.revenue === 8633.6, `freshest revenue ${freshest.pnl.revenue}`);
-assert(freshest.pnl.cogs === 100, `freshest cogs stay on that column, got ${freshest.pnl.cogs}`);
-assert(freshest.from === "2026-09-01" && freshest.to === "2026-09-21", "mtd bounds");
-assert(freshest.periodLabel === "1–21 Sep 2026", `label ${freshest.periodLabel}`);
-assert(freshest.pnl.revenue !== 29539.18, "year-to-date total column is not revenue");
+const monthParsed = parseXeroProfitAndLoss(multiMonthPnl, 1, 0);
+assert(monthParsed.revenue === 8633.6, `first column revenue ${monthParsed.revenue}`);
+assert(monthParsed.cogs === 100, `first column cogs ${monthParsed.cogs}`);
+assert(monthParsed.revenue !== 29539.18, "a later total column is not this month");
 
-const priorMonthPnl = {
-  Reports: [
-    {
-      Rows: [
-        {
-          RowType: "Header",
-          Cells: [{ Value: "" }, { Value: "Sep 2026" }, { Value: "Aug 2026" }],
-        },
-        {
-          RowType: "Section",
-          Title: "Trading Income",
-          Rows: [
-            monthColumns("Sales", ["0.00", "8633.60"]),
-            monthColumns("Total Trading Income", ["0.00", "8633.60"], "SummaryRow"),
-          ],
-        },
-        monthColumns("Net Profit", ["0.00", "1200.00"]),
-      ],
-    },
-  ],
-};
-const prior = selectFreshestXeroProfitAndLoss(priorMonthPnl, {
-  from: "2026-09-01",
-  to: "2026-09-21",
-});
-assert(prior.column === 1, `falls back to prior month, got ${prior.column}`);
-assert(prior.pnl.revenue === 8633.6, `prior month revenue ${prior.pnl.revenue}`);
-assert(prior.from === "2026-08-01" && prior.to === "2026-08-31", `prior bounds ${prior.from} ${prior.to}`);
-assert(prior.periodLabel === "Aug 2026", `prior label ${prior.periodLabel}`);
-
-const sepBounds = calendarMonthBounds(new Date("2026-09-21T15:00:00Z"), 0);
+const now = new Date("2026-09-21T15:00:00Z");
+const sepBounds = calendarMonthBounds(now, 0);
 assert(sepBounds.from === "2026-09-01" && sepBounds.to === "2026-09-21", "open month ends today");
-const augBounds = calendarMonthBounds(new Date("2026-09-21T15:00:00Z"), 1);
+const augBounds = calendarMonthBounds(now, 1);
 assert(augBounds.from === "2026-08-01" && augBounds.to === "2026-08-31", "prior month is complete");
 assert(
-  formatStatementPeriodLabel("2026-09-01", "2026-09-30") === "Sep 2026",
-  "full month label",
+  formatStatementPeriodLabel("2026-09-01", "2026-09-30") === "1 Sep 2026 – 30 Sep 2026",
+  "full month keeps start and end",
 );
 assert(
-  formatStatementPeriodLabel("2026-09-01", "2026-09-21") === "1–21 Sep 2026",
-  "month-to-date label",
+  formatStatementPeriodLabel("2026-09-01", "2026-09-21") === "1 Sep 2026 – 21 Sep 2026",
+  "month-to-date keeps start and end",
 );
-const ledgerPath = xeroLedgerProfitAndLossPath(sepBounds.from, sepBounds.to);
-assert(ledgerPath.includes("fromDate=2026-09-01"), "ledger pull starts this month");
-assert(ledgerPath.includes("periods=11"), "ledger pull asks for prior months");
-assert(ledgerPath.includes("timeframe=MONTH"), "ledger pull is monthly");
-assert(ledgerPath.includes("standardLayout=true"), "ledger pull uses the standard layout");
-assert(!ledgerPath.includes("fromDate=2026-01-01"), "ledger pull is not calendar YTD");
+assert(
+  formatStatementPeriodLabel("2026-04-01", "2026-09-21") === "1 Apr 2026 – 21 Sep 2026",
+  "year range keeps both dates",
+);
 
-const periodMapped = mapXeroToFinancialInputs(freshest.pnl, bs, {
-  from: freshest.from,
-  to: freshest.to,
-  label: freshest.periodLabel,
-});
+const fyMar = financialYearToDate(now, 3, 31);
+assert(fyMar.from === "2026-04-01" && fyMar.to === "2026-09-21", `FY end 31 Mar → ${fyMar.from}`);
+const fyDec = financialYearToDate(now, 12, 31);
+assert(fyDec.from === "2026-01-01" && fyDec.to === "2026-09-21", `FY end 31 Dec → ${fyDec.from}`);
+const fyJun = financialYearToDate(now, 6, 30);
+assert(fyJun.from === "2026-07-01" && fyJun.to === "2026-09-21", `FY end 30 Jun → ${fyJun.from}`);
+const fyFeb = financialYearToDate(new Date("2026-02-15T00:00:00Z"), 3, 31);
+assert(
+  fyFeb.from === "2025-04-01" && fyFeb.to === "2026-02-15",
+  `FY still open in February → ${fyFeb.from} ${fyFeb.to}`,
+);
+const clamped = financialYearToDate(new Date("2026-03-10T00:00:00Z"), 2, 31);
+assert(clamped.from === "2026-03-01", `29 Feb clamp starts 1 Mar, got ${clamped.from}`);
+
+assert(
+  parseXeroFinancialYearEnd({
+    Organisations: [{ FinancialYearEndMonth: 3, FinancialYearEndDay: 31, Name: "Demo Company (Global)" }],
+  })?.month === 3,
+  "org financial year end month",
+);
+assert(parseXeroFinancialYearEnd({ Organisations: [] }) === null, "missing org year end");
+
+const ledgerPath = xeroProfitAndLossRangePath(sepBounds.from, sepBounds.to);
+assert(ledgerPath.includes("fromDate=2026-09-01"), "month pull starts this month");
+assert(ledgerPath.includes("toDate=2026-09-21"), "month pull ends today");
+assert(ledgerPath.includes("standardLayout=true"), "month pull uses the standard layout");
+assert(!ledgerPath.includes("periods="), "month pull has no comparison periods");
+assert(!ledgerPath.includes("timeframe="), "month pull has no timeframe");
+const yearPath = xeroProfitAndLossRangePath(fyMar.from, fyMar.to);
+assert(yearPath.includes("fromDate=2026-04-01"), "FY pull starts the financial year");
+assert(yearPath.includes("toDate=2026-09-21"), "FY pull ends today");
+assert(!yearPath.includes("periods="), "FY pull has no comparison periods");
+const bsPath = xeroBalanceSheetPath(sepBounds.to);
+assert(bsPath.includes("date=2026-09-21"), "balance sheet is as at the month end");
+assert(bsPath.includes("standardLayout=true"), "balance sheet uses the standard layout");
+assert(!bsPath.includes("periods="), "balance sheet is a single date");
+
+const monthLabel = formatStatementPeriodLabel(sepBounds.from, sepBounds.to);
+const periodMapped = mapXeroToFinancialInputs(
+  { ...monthParsed, periodMonths: 1 },
+  bs,
+  { from: sepBounds.from, to: sepBounds.to, label: monthLabel },
+  {
+    pnl: { revenue: 29539.18, netIncome: 8266.73, periodMonths: 6 },
+    from: fyMar.from,
+    to: fyMar.to,
+    label: formatStatementPeriodLabel(fyMar.from, fyMar.to),
+    basis: "financial",
+  },
+);
 assert(periodMapped.statementSource === "xero", "statement source tagged");
 assert(periodMapped.periodStart === "2026-09-01", "period start stored");
 assert(periodMapped.periodEnd === "2026-09-21", "period end stored");
-assert(periodMapped.periodLabel === "1–21 Sep 2026", "period label stored");
+assert(periodMapped.periodLabel === "1 Sep 2026 – 21 Sep 2026", "period label stored");
 assert(periodMapped.revenue === 8633.6, "mapped revenue is the month, not YTD");
 assert(periodMapped.periodMonths === "1", "a month is not annualised as nine months");
+assert(periodMapped.ytdRevenue === 29539.18, "year revenue is stored beside the month");
+assert(periodMapped.ytdNetIncome === 8266.73, "year net income stored");
+assert(periodMapped.ytdBasis === "financial", "year basis is the financial year");
+assert(periodMapped.ytdPeriodStart === "2026-04-01", "year start stored");
+assert(periodMapped.ytdPeriodEnd === "2026-09-21", "year end stored");
+assert(periodMapped.ytdPeriodLabel === "1 Apr 2026 – 21 Sep 2026", "year label stored");
+assert(periodMapped.ytdPeriodMonths === "6", "year month count stored");
+
+const zeroMonth = mapXeroToFinancialInputs(
+  { ...monthParsed, revenue: 0, periodMonths: 1 },
+  bs,
+  { from: sepBounds.from, to: sepBounds.to, label: monthLabel },
+);
+assert(zeroMonth.revenue === 0, "a dated month replaces a previous multi-month revenue");
+assert(zeroMonth.ytdRevenue == null, "no year companion when the year report is omitted");
+
+const sameRange = mapXeroToFinancialInputs(
+  { ...monthParsed, periodMonths: 1 },
+  bs,
+  { from: "2026-01-01", to: "2026-01-21", label: "1 Jan 2026 – 21 Jan 2026" },
+  {
+    pnl: { revenue: 29539.18, netIncome: 8266.73, periodMonths: 1 },
+    from: "2026-01-01",
+    to: "2026-01-21",
+    label: "1 Jan 2026 – 21 Jan 2026",
+    basis: "financial",
+  },
+);
+assert(sameRange.ytdRevenue == null, "identical month and year ranges are not duplicated");
+
+const yearLine = statementYearLine(periodMapped);
+assert(yearLine?.revenue === 29539.18, "waterfall year line reads the companion");
+assert(yearLine?.periodLabel === "1 Apr 2026 – 21 Sep 2026", "waterfall year line has both dates");
+assert(statementYearLine({ revenue: "29539.18" }) === null, "undated total is not shown as a year");
 
 const empty = parseXeroProfitAndLoss({ Reports: [{ Rows: [] }] });
 assert(empty.revenue === 0 && empty.netIncome === 0, "empty report is zeros, not throw");
@@ -429,9 +477,23 @@ assert(snapSrc.includes('"xero"'), "snapshot source includes xero");
 
 const fnSrc = readFileSync(resolve("src/lib/xero.functions.ts"), "utf8");
 assert(fnSrc.includes('source: "xero"'), "sync writes snapshot source xero");
-assert(fnSrc.includes("fetchXeroLedgerStatement"), "sync pulls the freshest month, not year-to-date");
+assert(fnSrc.includes("fetchXeroLedgerStatement"), "sync pulls explicit dated statements");
 assert(!fnSrc.includes("ytdRange("), "sync does not stamp calendar YTD as this month");
+assert(!fnSrc.includes("periods=11"), "sync does not request comparison columns");
 assert(fnSrc.includes("statementSource"), "status exposes a linked Xero statement");
+const xeroSrc = readFileSync(resolve("src/lib/xero.ts"), "utf8");
+assert(xeroSrc.includes('xeroGet(tenantId, accessToken, "/Organisation")'), "sync reads the financial year end");
+assert(xeroSrc.includes("xeroProfitAndLossRangePath"), "P&L uses fromDate and toDate");
+assert(!xeroSrc.includes("periods=11"), "client does not request comparison columns");
+assert(!xeroSrc.includes("timeframe=MONTH"), "client does not ask for month columns");
+const waterfallSrc = readFileSync(resolve("src/components/profitability-waterfall.tsx"), "utf8");
+assert(waterfallSrc.includes("Month to date"), "waterfall names the month range");
+assert(waterfallSrc.includes("yearToDateTitle"), "waterfall names the year range");
+const periodSrc = readFileSync(resolve("src/lib/statement-period.ts"), "utf8");
+assert(periodSrc.includes("Financial year to date"), "financial year label");
+assert(periodSrc.includes("Calendar year to date"), "calendar year label");
+const cashSrc = readFileSync(resolve("src/components/cash-forecast.tsx"), "utf8");
+assert(cashSrc.includes("horizonLabel"), "cash forecast shows the horizon dates");
 assert(fnSrc.includes("assertClientScope"), "server fns check impersonation scope");
 assert(!fnSrc.includes("fetchXeroInvoices"), "no invoice pull in day-1 sync");
 assert(!/console\.(log|info|debug|error)\([^)]*access_token/.test(fnSrc), "functions never log tokens");

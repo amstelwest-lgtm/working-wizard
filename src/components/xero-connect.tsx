@@ -11,6 +11,7 @@ import {
   type XeroSyncResult,
 } from "@/lib/xero.functions";
 import { RefreshCw, Link2, Unlink, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
+import { yearToDateTitle } from "@/lib/statement-period";
 
 type Props = {
   clientId: string | null;
@@ -233,10 +234,16 @@ export function XeroConnectCard({ clientId, returnPath, refreshToken = 0, onSync
               {isError
                 ? `Error: ${status.syncError?.slice(0, 80) ?? "unknown"}`
                 : status.periodLabel
-                  ? `Last sync ${fmtDate(status.lastSyncedAt)} · ${status.periodLabel}${
+                  ? `Last sync ${fmtDate(status.lastSyncedAt)} · Month to date ${status.periodLabel}${
                       status.revenue != null ? ` · Revenue ${fmtExact(status.revenue)}` : ""
+                    }${
+                      status.ytdPeriodLabel
+                        ? ` · ${yearToDateTitle(status.ytdBasis)} ${status.ytdPeriodLabel}${
+                            status.ytdRevenue != null ? ` · Revenue ${fmtExact(status.ytdRevenue)}` : ""
+                          }`
+                        : ""
                     }`
-                  : `Linked. Last sync ${fmtDate(status.lastSyncedAt)}. Sync again to load the latest month onto Profitability.`}
+                  : `Linked. Last sync ${fmtDate(status.lastSyncedAt)}. Sync again — the stored total has no period dates.`}
             </p>
           </div>
           <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
@@ -289,7 +296,7 @@ export function XeroConnectCard({ clientId, returnPath, refreshToken = 0, onSync
           </div>
         </div>
 
-        {lastSync && (
+        {(lastSync || status.periodLabel) && (
           <div
             style={{
               marginTop: 12,
@@ -301,12 +308,33 @@ export function XeroConnectCard({ clientId, returnPath, refreshToken = 0, onSync
             }}
           >
             {[
-              { label: "Period", value: lastSync.periodLabel ?? "—" },
-              { label: "Revenue", value: fmtExact(lastSync.revenue) },
-              { label: "Net income", value: fmtExact(lastSync.netIncome) },
-              { label: "Cash (BS)", value: fmtExact(lastSync.cash) },
-              { label: "Total assets", value: fmtExact(lastSync.totalAssets) },
-              { label: "Equity", value: fmtExact(lastSync.equity) },
+              {
+                label: "Month to date",
+                value: lastSync?.periodLabel ?? status.periodLabel ?? "—",
+              },
+              {
+                label: "Revenue",
+                value: fmtExact(lastSync?.revenue ?? status.revenue),
+              },
+              {
+                label: "Net income",
+                value: fmtExact(lastSync?.netIncome ?? status.netIncome),
+              },
+              {
+                label: yearToDateTitle(lastSync?.ytdBasis ?? status.ytdBasis),
+                value: lastSync?.ytdPeriodLabel ?? status.ytdPeriodLabel ?? "—",
+              },
+              {
+                label: "Year revenue",
+                value: fmtExact(lastSync?.ytdRevenue ?? status.ytdRevenue),
+              },
+              {
+                label: "Year net income",
+                value: fmtExact(lastSync?.ytdNetIncome ?? status.ytdNetIncome),
+              },
+              { label: "Cash (BS)", value: fmtExact(lastSync?.cash ?? status.cash) },
+              { label: "Total assets", value: fmtExact(lastSync?.totalAssets ?? status.totalAssets) },
+              { label: "Equity", value: fmtExact(lastSync?.equity ?? status.equity) },
             ].map((item) => (
               <div key={item.label}>
                 <div

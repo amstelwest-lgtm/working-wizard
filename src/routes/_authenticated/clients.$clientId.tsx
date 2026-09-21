@@ -103,7 +103,7 @@ import { useTrack } from "@/hooks/use-track";
 import { QboConnectCard } from "@/components/qbo-connect";
 import { XeroConnectCard } from "@/components/xero-connect";
 import { getXeroStatus, type XeroStatus } from "@/lib/xero.functions";
-import { readStatementMeta } from "@/lib/statement-period";
+import { readStatementMeta, statementYearLine } from "@/lib/statement-period";
 import { effectiveCashRunwayWeeks, runwayWeeksFromCashflow } from "@/lib/cash-runway";
 import { countOpenQueriesForClient } from "@/lib/open-queries";
 import { ProfileFunnel } from "@/components/profile/profile-funnel";
@@ -2166,6 +2166,9 @@ function ClientView() {
                           syncStatus: xeroLink.syncStatus,
                           periodLabel: xeroLink.periodLabel,
                           revenue: xeroLink.revenue,
+                          ytdPeriodLabel: xeroLink.ytdPeriodLabel,
+                          ytdRevenue: xeroLink.ytdRevenue,
+                          ytdBasis: xeroLink.ytdBasis,
                         }
                       : null
                   }
@@ -2713,6 +2716,12 @@ function ClientView() {
                       clientId={client?.id}
                       periodLabel={readStatementMeta(financials).periodLabel}
                       preferPeriod={readStatementMeta(financials).statementSource === "xero"}
+                      yearToDate={statementYearLine(financials)}
+                      periodNote={
+                        xeroLink && readStatementMeta(financials).statementSource !== "xero"
+                          ? "This total has no period dates. Sync Xero again — it is a multi-month figure, not this month."
+                          : null
+                      }
                       reviewSignoff={stampFromSignoff(
                         profitabilitySignoff,
                         computeIsStale(profitabilitySignoff, client?.financials_updated_at ?? null),

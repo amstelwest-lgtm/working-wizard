@@ -110,7 +110,7 @@ import {
   overlayWeeklyInputs,
   resolveWaterfallFigures,
 } from "@/lib/weekly-inputs";
-import { readStatementMeta } from "@/lib/statement-period";
+import { readStatementMeta, statementYearLine } from "@/lib/statement-period";
 import {
   emptyProductMix,
   hasProductMixAnswer,
@@ -5170,6 +5170,7 @@ function Index() {
                       fallback={derivePeriodWaterfallFallback(v)}
                       periodLabel={readStatementMeta(v).periodLabel}
                       preferPeriod={readStatementMeta(v).statementSource === "xero"}
+                      yearToDate={statementYearLine(v)}
                     />
                   </div>
                   {/* Optional product-line mix — collapsed until the owner opts in */}

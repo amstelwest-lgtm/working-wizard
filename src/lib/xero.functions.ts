@@ -4,7 +4,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { assertClientScope } from "@/lib/assert-client-scope";
 import { getSupabaseAdminOrNull, supabaseAdmin } from "@/integrations/supabase/client.server";
 import { computeRatios, type RatioInputs } from "@/lib/ratios";
-import { calendarMonthStamp } from "@/lib/statement-period";
+import { calendarMonthStamp, readStatementMeta, XERO_YTD_FIELD_KEYS } from "@/lib/statement-period";
 import {
   reduceXeroConnection,
   sanitizeXeroReturnPath,
@@ -83,33 +83,72 @@ export type XeroStatus = {
   syncError: string | null;
   dataDepth: string;
   phase: XeroConnectionState["phase"];
-  /** Set only after a sync that stored statementSource=xero (month column, not YTD). */
+  /** Set only after a sync that stored statementSource=xero with explicit dates. */
   periodLabel: string | null;
   periodStart: string | null;
   periodEnd: string | null;
   revenue: number | null;
+  netIncome: number | null;
+  cash: number | null;
+  totalAssets: number | null;
+  equity: number | null;
+  ytdRevenue: number | null;
+  ytdNetIncome: number | null;
+  ytdPeriodLabel: string | null;
+  ytdBasis: "financial" | "calendar" | null;
 } | null;
+
+function numField(fields: Record<string, unknown>, key: string): number | null {
+  const raw = fields[key];
+  const n = typeof raw === "number" ? raw : parseFloat(String(raw ?? ""));
+  return Number.isFinite(n) ? n : null;
+}
 
 function xeroFigureProof(financials: unknown): {
   periodLabel: string | null;
   periodStart: string | null;
   periodEnd: string | null;
   revenue: number | null;
+  netIncome: number | null;
+  cash: number | null;
+  totalAssets: number | null;
+  equity: number | null;
+  ytdRevenue: number | null;
+  ytdNetIncome: number | null;
+  ytdPeriodLabel: string | null;
+  ytdBasis: "financial" | "calendar" | null;
 } {
-  const empty = { periodLabel: null, periodStart: null, periodEnd: null, revenue: null };
+  const empty = {
+    periodLabel: null,
+    periodStart: null,
+    periodEnd: null,
+    revenue: null,
+    netIncome: null,
+    cash: null,
+    totalAssets: null,
+    equity: null,
+    ytdRevenue: null,
+    ytdNetIncome: null,
+    ytdPeriodLabel: null,
+    ytdBasis: null as "financial" | "calendar" | null,
+  };
   if (!financials || typeof financials !== "object" || Array.isArray(financials)) return empty;
+  const meta = readStatementMeta(financials);
+  if (meta.statementSource !== "xero") return empty;
   const f = financials as Record<string, unknown>;
-  if (f.statementSource !== "xero") return empty;
-  const periodLabel = typeof f.periodLabel === "string" && f.periodLabel.trim() ? f.periodLabel.trim() : null;
-  const periodStart = typeof f.periodStart === "string" && f.periodStart.trim() ? f.periodStart.trim() : null;
-  const periodEnd = typeof f.periodEnd === "string" && f.periodEnd.trim() ? f.periodEnd.trim() : null;
-  const raw = f.revenue;
-  const n = typeof raw === "number" ? raw : parseFloat(String(raw ?? ""));
   return {
-    periodLabel,
-    periodStart,
-    periodEnd,
-    revenue: Number.isFinite(n) ? n : null,
+    periodLabel: meta.periodLabel,
+    periodStart: meta.periodStart,
+    periodEnd: meta.periodEnd,
+    revenue: numField(f, "revenue"),
+    netIncome: numField(f, "netIncome"),
+    cash: numField(f, "cash"),
+    totalAssets: numField(f, "totalAssets"),
+    equity: numField(f, "equity"),
+    ytdRevenue: meta.ytdRevenue,
+    ytdNetIncome: meta.ytdNetIncome,
+    ytdPeriodLabel: meta.ytdPeriodLabel,
+    ytdBasis: meta.ytdBasis,
   };
 }
 
@@ -227,6 +266,12 @@ export type XeroSyncResult = {
     equity: number;
     cash: number;
     periodLabel: string | null;
+    periodStart: string | null;
+    periodEnd: string | null;
+    ytdRevenue: number | null;
+    ytdNetIncome: number | null;
+    ytdPeriodLabel: string | null;
+    ytdBasis: "financial" | "calendar" | null;
   };
 };
 
@@ -366,15 +411,31 @@ export const triggerXeroSync = createServerFn({ method: "POST" })
       const ledger = await fetchXeroLedgerStatement(tenantId, accessToken);
       const { pnl, bs } = ledger;
 
-      const mapped = mapXeroToFinancialInputs(pnl, bs, {
-        from: ledger.from,
-        to: ledger.to,
-        label: ledger.periodLabel,
-      });
+      const mapped = mapXeroToFinancialInputs(
+        pnl,
+        bs,
+        {
+          from: ledger.from,
+          to: ledger.to,
+          label: ledger.periodLabel,
+        },
+        ledger.year
+          ? {
+              pnl: ledger.year.pnl,
+              from: ledger.year.from,
+              to: ledger.year.to,
+              label: ledger.year.periodLabel,
+              basis: ledger.year.basis,
+            }
+          : null,
+      );
       const mappedInputs = mappedNumbers(mapped);
-      const fields = Object.fromEntries(
+      const fields: Record<string, string> = Object.fromEntries(
         Object.entries(mapped).map(([k, v]) => [k, String(v)]),
       );
+      if (!ledger.year) {
+        for (const key of XERO_YTD_FIELD_KEYS) fields[key] = "";
+      }
 
       const { data: existing } = await supabaseAdmin
         .from("clients")
@@ -387,8 +448,11 @@ export const triggerXeroSync = createServerFn({ method: "POST" })
           : {};
       const merged: Record<string, unknown> = {
         ...prev,
-        ...Object.fromEntries(Object.entries(mapped).map(([k, v]) => [k, String(v)])),
+        ...fields,
       };
+      if (!ledger.year) {
+        for (const key of XERO_YTD_FIELD_KEYS) delete merged[key];
+      }
 
       await supabaseAdmin
         .from("clients")
@@ -416,6 +480,17 @@ export const triggerXeroSync = createServerFn({ method: "POST" })
             from: ledger.from,
             to: ledger.to,
             periodLabel: ledger.periodLabel,
+            year: ledger.year
+              ? {
+                  from: ledger.year.from,
+                  to: ledger.year.to,
+                  periodLabel: ledger.year.periodLabel,
+                  basis: ledger.year.basis,
+                  revenue: ledger.year.pnl.revenue,
+                  netIncome: ledger.year.pnl.netIncome,
+                  periodMonths: ledger.year.pnl.periodMonths,
+                }
+              : null,
           } as never,
           synced_at: nowIso,
         },
@@ -449,6 +524,12 @@ export const triggerXeroSync = createServerFn({ method: "POST" })
           equity: bs.equity,
           cash: bs.cash,
           periodLabel: ledger.periodLabel,
+          periodStart: ledger.from,
+          periodEnd: ledger.to,
+          ytdRevenue: ledger.year?.pnl.revenue ?? null,
+          ytdNetIncome: ledger.year?.pnl.netIncome ?? null,
+          ytdPeriodLabel: ledger.year?.periodLabel ?? null,
+          ytdBasis: ledger.year?.basis ?? null,
         },
       };
     } catch (err) {

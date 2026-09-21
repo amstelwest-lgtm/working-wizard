@@ -8,6 +8,7 @@ import { useAccountantProfile } from "@/contexts/accountant-profile";
 import { useAuth } from "@/hooks/use-auth";
 import { useMarketFormat } from "@/contexts/market";
 import { currencySymbol } from "@/lib/market";
+import { yearToDateTitle } from "@/lib/statement-period";
 import {
   hashFigures,
   latestSnapshotId,
@@ -148,15 +149,25 @@ export function ProfitabilityWaterfall({
   reviewSignoff = null,
   periodLabel = null,
   preferPeriod = false,
+  yearToDate = null,
+  periodNote = null,
 }: {
   fallback?: WaterfallFallback;
   clientName?: string;
   clientId?: string;
   reviewSignoff?: ReportSignoffStamp | null;
-  /** Explicit statement range, e.g. "1–21 Sep 2026" or "Sep 2026". */
+  /** Explicit statement range, "1 Sep 2026 – 21 Sep 2026". */
   periodLabel?: string | null;
   /** Xero (or another ledger) statement wins over weekly totals. */
   preferPeriod?: boolean;
+  /** Financial-year or calendar year companion. Hidden when it is the same month. */
+  yearToDate?: {
+    basis: "financial" | "calendar" | null;
+    periodLabel: string;
+    revenue: number;
+  } | null;
+  /** Shown when a Xero link exists but the stored total has no dates yet. */
+  periodNote?: string | null;
 }) {
   const { weeklyInputs } = useFinancialInputs();
   const { profile, firmId } = useAccountantProfile();
@@ -250,8 +261,24 @@ export function ProfitabilityWaterfall({
             </CardTitle>
             <p className="mt-1 text-xs text-[#475569] dark:text-[#94a3b8]">
               How {currencySymbol(market)}1 of revenue becomes profit
-              {periodBit ? ` · ${periodBit}` : ""} · {sourceBit}
+              {periodBit
+                ? preferPeriod
+                  ? ` · Month to date · ${periodBit}`
+                  : ` · ${periodBit}`
+                : ""}
+              {` · ${sourceBit}`}
             </p>
+            {yearToDate?.periodLabel ? (
+              <p className="mt-0.5 text-xs text-[#475569] dark:text-[#94a3b8]">
+                {yearToDateTitle(yearToDate.basis)}
+                {" · "}
+                {yearToDate.periodLabel}
+                {Number.isFinite(yearToDate.revenue) ? ` · Revenue ${fmt(yearToDate.revenue)}` : ""}
+              </p>
+            ) : null}
+            {periodNote ? (
+              <p className="mt-0.5 text-xs text-amber-800 dark:text-amber-200">{periodNote}</p>
+            ) : null}
           </div>
           <div className="flex items-center gap-2">
             <Button

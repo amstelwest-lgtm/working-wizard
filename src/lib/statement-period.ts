@@ -3,12 +3,31 @@
  * cash-forecast UI. Pure — safe to import from client components.
  */
 
+export type YearBasis = "financial" | "calendar";
+
 export type StatementMeta = {
   statementSource: string | null;
   periodLabel: string | null;
   periodStart: string | null;
   periodEnd: string | null;
+  /** Companion total. Null when it is the same range as the month, or absent. */
+  ytdRevenue: number | null;
+  ytdNetIncome: number | null;
+  ytdPeriodLabel: string | null;
+  ytdPeriodStart: string | null;
+  ytdPeriodEnd: string | null;
+  ytdBasis: YearBasis | null;
 };
+
+export const XERO_YTD_FIELD_KEYS = [
+  "ytdRevenue",
+  "ytdNetIncome",
+  "ytdPeriodStart",
+  "ytdPeriodEnd",
+  "ytdPeriodLabel",
+  "ytdPeriodMonths",
+  "ytdBasis",
+] as const;
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -39,40 +58,38 @@ export function calendarMonthBounds(
   return { from: isoDateUTC(start), to: isoDateUTC(end) };
 }
 
-/**
- * Comparison column 0 is the primary range. Later columns are full calendar
- * months stepping backward (Xero `timeframe=MONTH`).
- */
-export function columnPeriod(
-  primaryFrom: string,
-  primaryTo: string,
-  column: number,
-): { from: string; to: string } {
-  if (column <= 0) return { from: primaryFrom, to: primaryTo };
-  const start = utcDate(primaryFrom);
-  if (!start) return { from: primaryFrom, to: primaryTo };
-  const shifted = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() - column, 1));
-  const end = new Date(Date.UTC(shifted.getUTCFullYear(), shifted.getUTCMonth() + 1, 0));
-  return { from: isoDateUTC(shifted), to: isoDateUTC(end) };
+function utcDay(year: number, monthIndex: number, day: number): Date {
+  const last = new Date(Date.UTC(year, monthIndex + 1, 0)).getUTCDate();
+  const clamped = Math.min(Math.max(day, 1), last);
+  return new Date(Date.UTC(year, monthIndex, clamped));
 }
 
-/** "Sep 2026" for a full month, "1–21 Sep 2026" for a month-to-date range. */
+/**
+ * Financial year that contains `now`, from the day after the previous year-end
+ * through today (UTC). `fyEndMonth` is 1–12. `fyEndDay` is clamped to the month.
+ */
+export function financialYearToDate(
+  now: Date,
+  fyEndMonth: number,
+  fyEndDay: number,
+): { from: string; to: string } {
+  const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const year = today.getUTCFullYear();
+  const monthIndex = fyEndMonth - 1;
+  const endThisYear = utcDay(year, monthIndex, fyEndDay);
+  const previousEnd =
+    today.getTime() <= endThisYear.getTime() ? utcDay(year - 1, monthIndex, fyEndDay) : endThisYear;
+  const start = new Date(previousEnd.getTime() + 24 * 60 * 60 * 1000);
+  return { from: isoDateUTC(start), to: isoDateUTC(today) };
+}
+
+/** Always "1 Sep 2026 – 21 Sep 2026". Never a bare month name. */
 export function formatStatementPeriodLabel(fromIso: string, toIso: string): string {
   const from = utcDate(fromIso);
   const to = utcDate(toIso);
   if (!from || !to) return "";
-  const fy = from.getUTCFullYear();
-  const fm = from.getUTCMonth();
-  const fd = from.getUTCDate();
-  const ty = to.getUTCFullYear();
-  const tm = to.getUTCMonth();
-  const td = to.getUTCDate();
-  if (fy === ty && fm === tm) {
-    const last = new Date(Date.UTC(fy, fm + 1, 0)).getUTCDate();
-    if (fd === 1 && td === last) return `${MONTHS[fm]} ${fy}`;
-    return `${fd}–${td} ${MONTHS[fm]} ${fy}`;
-  }
-  return `${fd} ${MONTHS[fm]} ${fy} – ${td} ${MONTHS[tm]} ${ty}`;
+  const stamp = (d: Date) => `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+  return `${stamp(from)} – ${stamp(to)}`;
 }
 
 /** Short month stamp used by older snapshots (`Sep 2026`), UTC so it matches the report month. */
@@ -84,9 +101,19 @@ export function calendarMonthStamp(iso: string): string {
 
 function str(fields: Record<string, unknown>, key: string): string | null {
   const v = fields[key];
-  if (typeof v !== "string") return null;
-  const t = v.trim();
+  if (typeof v !== "string" && typeof v !== "number") return null;
+  const t = String(v).trim();
   return t ? t : null;
+}
+
+function num(fields: Record<string, unknown>, key: string): number | null {
+  const v = fields[key];
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  if (typeof v === "string" && v.trim()) {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
 }
 
 export function readStatementMeta(fields: object | null | undefined): StatementMeta {
@@ -94,6 +121,14 @@ export function readStatementMeta(fields: object | null | undefined): StatementM
   const periodStart = str(f, "periodStart");
   const periodEnd = str(f, "periodEnd");
   const explicit = str(f, "periodLabel");
+  const ytdPeriodStart = str(f, "ytdPeriodStart");
+  const ytdPeriodEnd = str(f, "ytdPeriodEnd");
+  const sameRange = Boolean(
+    periodStart && periodEnd && periodStart === ytdPeriodStart && periodEnd === ytdPeriodEnd,
+  );
+  const basisRaw = str(f, "ytdBasis");
+  const ytdBasis: YearBasis | null =
+    basisRaw === "financial" || basisRaw === "calendar" ? basisRaw : null;
   return {
     statementSource: str(f, "statementSource"),
     periodStart,
@@ -101,5 +136,31 @@ export function readStatementMeta(fields: object | null | undefined): StatementM
     periodLabel:
       explicit ||
       (periodStart && periodEnd ? formatStatementPeriodLabel(periodStart, periodEnd) : null),
+    ytdRevenue: sameRange ? null : num(f, "ytdRevenue"),
+    ytdNetIncome: sameRange ? null : num(f, "ytdNetIncome"),
+    ytdPeriodStart: sameRange ? null : ytdPeriodStart,
+    ytdPeriodEnd: sameRange ? null : ytdPeriodEnd,
+    ytdPeriodLabel: sameRange
+      ? null
+      : str(f, "ytdPeriodLabel") ||
+        (ytdPeriodStart && ytdPeriodEnd
+          ? formatStatementPeriodLabel(ytdPeriodStart, ytdPeriodEnd)
+          : null),
+    ytdBasis: sameRange ? null : ytdBasis,
   };
+}
+
+export function yearToDateTitle(basis: YearBasis | null): string {
+  return basis === "calendar" ? "Calendar year to date" : "Financial year to date";
+}
+
+/** Year companion for the waterfall. Null until a dated Xero sync stored a different range. */
+export function statementYearLine(fields: object | null | undefined): {
+  basis: YearBasis | null;
+  periodLabel: string;
+  revenue: number;
+} | null {
+  const meta = readStatementMeta(fields);
+  if (meta.statementSource !== "xero" || meta.ytdRevenue == null || !meta.ytdPeriodLabel) return null;
+  return { basis: meta.ytdBasis, periodLabel: meta.ytdPeriodLabel, revenue: meta.ytdRevenue };
 }

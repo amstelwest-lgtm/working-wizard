@@ -4,12 +4,24 @@ OAuth2 **web app** (authorization code + refresh). Not a Custom Connection.
 Connect one org, pull P&L + balance sheet, write `clients.financials` and a
 snapshot with `source = 'xero'`. Same path as a statement upload.
 
-The P&L request is the current month plus up to 11 prior months
-(`periods=11&timeframe=MONTH&standardLayout=true`). Profitability stores the
-most recent month that has revenue, with `periodStart`, `periodEnd`,
-`periodLabel`, and `statementSource = xero`. It does not store calendar
-year-to-date under the current month's name. Amounts are read from the first
-figure column (the period itself), not a trailing comparison or zero column.
+Sync requests two Profit and Loss reports, each with explicit `fromDate` and
+`toDate` and `standardLayout=true`. It does not send `periods` or `timeframe`.
+
+- Month to date: the 1st of the current UTC month through today. This is the
+  figure on the profitability waterfall (`periodMonths = 1`).
+- Financial year to date: from the day after the organisation's
+  `FinancialYearEndDay` / `FinancialYearEndMonth` (`GET /Organisation`) through
+  today. If that read fails, the companion is calendar year to date (1 Jan
+  through today) and is labeled calendar, not financial year.
+- When the two ranges are the same month, only the month is stored.
+- Balance sheet: `date` = the month-to-date end, `standardLayout=true`, one
+  amount column. Amounts are the first figure cell. A trailing `0.00` is not
+  the total.
+
+Both ranges are stored with start and end (`periodStart` / `periodEnd`, and
+`ytdPeriodStart` / `ytdPeriodEnd`) plus `statementSource = xero`. The waterfall
+and the accountant briefing show those dates next to the revenue. A previous
+sync that saved a multi-month total with no dates stays until the next Sync.
 
 ## Env vars (only these)
 

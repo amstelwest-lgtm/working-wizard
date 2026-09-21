@@ -20,6 +20,7 @@ import { healthHeadline, type SnapshotMetric } from "@/lib/client-briefing";
 import type { BriefingWorkflow } from "@/lib/client-briefing.functions";
 import { useMarketFormat } from "@/contexts/market";
 import { AddPastPeriodLink } from "@/components/add-past-period-link";
+import { yearToDateTitle } from "@/lib/statement-period";
 
 export type XeroLinkProof = {
   tenantName: string | null;
@@ -27,6 +28,9 @@ export type XeroLinkProof = {
   syncStatus: string;
   periodLabel: string | null;
   revenue: number | null;
+  ytdPeriodLabel?: string | null;
+  ytdRevenue?: number | null;
+  ytdBasis?: "financial" | "calendar" | null;
 };
 
 function fmtProofWhen(iso: string | null) {
@@ -77,7 +81,7 @@ export type ClientBriefingProps = {
   onUpload?: () => void;
   onConnectQuickBooks?: () => void;
   onConnectXero?: () => void;
-  /** Present when this client has a Xero connection. Revenue only after a month-column sync. */
+  /** Present when this client has a Xero connection. Revenue only after a dated sync. */
   xeroLink?: XeroLinkProof | null;
 };
 
@@ -155,10 +159,31 @@ export function ClientBriefing(p: ClientBriefingProps) {
               {p.xeroLink.syncStatus === "error"
                 ? "Last sync needs attention"
                 : `Last sync ${fmtProofWhen(p.xeroLink.lastSyncedAt)}`}
-              {p.xeroLink.periodLabel ? ` · ${p.xeroLink.periodLabel}` : ""}
-              {fmtProofMoney(p.xeroLink.revenue)
-                ? ` · Revenue ${fmtProofMoney(p.xeroLink.revenue)}`
-                : " · Sync to store this month's revenue"}
+              {p.xeroLink.periodLabel ? (
+                <>
+                  <br />
+                  Month to date · {p.xeroLink.periodLabel}
+                  {fmtProofMoney(p.xeroLink.revenue)
+                    ? ` · Revenue ${fmtProofMoney(p.xeroLink.revenue)}`
+                    : ""}
+                </>
+              ) : (
+                <>
+                  <br />
+                  Sync again — the stored total has no period dates, so it is not this month.
+                </>
+              )}
+              {p.xeroLink.ytdPeriodLabel ? (
+                <>
+                  <br />
+                  {yearToDateTitle(p.xeroLink.ytdBasis ?? null)}
+                  {" · "}
+                  {p.xeroLink.ytdPeriodLabel}
+                  {fmtProofMoney(p.xeroLink.ytdRevenue ?? null)
+                    ? ` · Revenue ${fmtProofMoney(p.xeroLink.ytdRevenue ?? null)}`
+                    : ""}
+                </>
+              ) : null}
             </p>
           ) : null}
           <div className="briefing-actions">
