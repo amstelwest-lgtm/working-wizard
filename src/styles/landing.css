@@ -703,6 +703,10 @@ html[data-landing="1"] footer .fnav{display:flex;gap:26px;flex-wrap:wrap}
 html[data-landing="1"] footer .fnav a{color:var(--ink-dim);text-decoration:none;transition:color .2s}
 html[data-landing="1"] footer .fnav a:hover{color:var(--gold)}
 html[data-landing="1"] footer .copy{width:100%;margin-top:26px;padding-top:22px;border-top:1px solid var(--line-soft);display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;font-size:12px}
+html[data-landing="1"] footer .preferred-source{margin-top:16px}
+html[data-landing="1"] footer .preferred-source-link{color:var(--ink-dim);font-size:12px;line-height:1.4;text-decoration:underline;text-underline-offset:3px}
+html[data-landing="1"] footer .preferred-source-link:hover{color:var(--gold)}
+@media print{html[data-landing="1"] footer .preferred-source{display:none !important}}
 
 /* sign-in modal */
 html[data-landing="1"] .milon-signin-modal{position:fixed;inset:0;z-index:200;display:flex;align-items:center;justify-content:center;padding:0 16px;background:rgba(5,5,7,.85);backdrop-filter:blur(8px);animation:fadeUp .25s var(--ease)}

@@ -475,6 +475,23 @@ html .mk .mk-foot a:hover {
   color: var(--ink) !important;
 }
 
+html .mk .mk-foot .preferred-source {
+  flex: 1 0 100%;
+  margin-top: 4px;
+}
+
+html .mk .mk-foot .preferred-source-link {
+  color: var(--ink-dim) !important;
+  font-size: 12.5px;
+  line-height: 1.4;
+  text-decoration: none;
+  border-bottom: 1px solid var(--line);
+}
+
+html .mk .mk-foot .preferred-source-link:hover {
+  color: var(--ink) !important;
+}
+
 @media (max-width: 640px) {
   .mk .mk-hero {
     padding: 42px 0 26px;

@@ -10,6 +10,7 @@ import { previewOwnerInvite } from "@/lib/invite-tokens.functions";
 import { OPS_UNLOCK_KEY, unlockOwnerOps } from "@/lib/owner-ops.functions";
 import { registerLighthouseTrialVisit } from "@/lib/lighthouse.functions";
 import { AuthDivider, GoogleSignInButton } from "@/components/google-sign-in-button";
+import { GooglePreferredSourceButton } from "@/components/google-preferred-source-button";
 import { FirmBandPricingTable } from "@/components/firm-band-pricing";
 import { MarketPicker } from "@/components/market-picker";
 import { RegionCopy } from "@/components/marketing-shell";
@@ -3455,6 +3456,7 @@ function LandingPage() {
                 us="for US small businesses"
               />
             </span>
+            <GooglePreferredSourceButton defaultTheme="dark" />
           </div>
           <nav className="fnav" aria-label="Footer navigation">
             <a
