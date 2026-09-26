@@ -134,7 +134,8 @@ function signalFor(delta: number, higherIsBetter: boolean): VarianceSignal {
   return favourable ? "favourable" : "adverse";
 }
 
-function line(
+/** Same variance line the month engine uses. Exported for the budget PDF — not a new formula. */
+export function varianceLine(
   key: VarianceTaxonomyKey,
   label: string,
   budget: number,
@@ -163,12 +164,12 @@ export function computeMonthVariance(
 ): MonthVarianceReport {
   const a = normalizeTaxonomyTotals(actual);
   const lines: VarianceLine[] = [
-    line("revenue", "Revenue", budget.revenue, a.revenue, true),
-    line("cogs", "COGS", budget.cogs, a.cogs, false),
-    line("gross_profit", "Gross profit", budget.grossProfit, a.grossProfit, true),
-    line("overheads_total", "Overheads", budget.overheads, a.overheadsTotal, false),
-    line("depreciation", "Depreciation", budget.depreciation, a.depreciation, false),
-    line("ebit", "EBIT", budget.ebit, a.ebit, true),
+    varianceLine("revenue", "Revenue", budget.revenue, a.revenue, true),
+    varianceLine("cogs", "COGS", budget.cogs, a.cogs, false),
+    varianceLine("gross_profit", "Gross profit", budget.grossProfit, a.grossProfit, true),
+    varianceLine("overheads_total", "Overheads", budget.overheads, a.overheadsTotal, false),
+    varianceLine("depreciation", "Depreciation", budget.depreciation, a.depreciation, false),
+    varianceLine("ebit", "EBIT", budget.ebit, a.ebit, true),
   ];
 
   const material = lines.filter(isMaterialVariance);

@@ -588,6 +588,46 @@ const cases: TestCase[] = [
       });
     },
   },
+  {
+    name: "BudgetVariance / draft with one month actual",
+    async build() {
+      const { BudgetVariancePDF } = await import("../src/reports/budget-variance.js");
+      const { buildBudgetPdfModel, illustrativeBudgetPack } = await import("../src/lib/budget-pdf.js");
+      const { ZA_MARKET } = await import("../src/lib/market/resolve.js");
+      const pack = illustrativeBudgetPack("2026-01");
+      return createElement(BudgetVariancePDF, {
+        smeData: SME,
+        accountantProfile: ACCOUNTANT,
+        model: buildBudgetPdfModel(pack.doc, pack.actuals, ZA_MARKET),
+        draft: true,
+        market: ZA_MARKET,
+      });
+    },
+  },
+  {
+    name: "BudgetVariance / signed, budget only",
+    async build() {
+      const { BudgetVariancePDF } = await import("../src/reports/budget-variance.js");
+      const { buildBudgetPdfModel, illustrativeBudgetPack } = await import("../src/lib/budget-pdf.js");
+      const { ZA_MARKET } = await import("../src/lib/market/resolve.js");
+      const pack = illustrativeBudgetPack("2026-01");
+      return createElement(BudgetVariancePDF, {
+        smeData: SME,
+        accountantProfile: ACCOUNTANT,
+        model: buildBudgetPdfModel(pack.doc, [], ZA_MARKET),
+        draft: false,
+        reviewSignoff: {
+          signedOffByName: "Jane Doe",
+          signedOffByInitials: "JD",
+          signedOffByTitle: "Partner",
+          firmName: "Test Accounting Co",
+          signedOffAt: "2026-03-01T09:00:00.000Z",
+          signatureData: null,
+        },
+        market: ZA_MARKET,
+      });
+    },
+  },
 ];
 
 // ── Runner ───────────────────────────────────────────────────────────────────

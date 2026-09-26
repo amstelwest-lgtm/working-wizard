@@ -31,6 +31,14 @@ assert(!studioSrc.includes("/reports/demo"), "studio no longer links to the mock
 assert(studioSrc.includes("embedded"), "studio supports embedded (client tab) chrome");
 assert(studioSrc.includes("REPORT_SIGNOFF_SCOPE"), "each report card maps to a deliverable sign-off");
 assert(studioSrc.includes("report-card__rule"), "studio cards keep the gold hairline");
+assert(studioSrc.includes('key: "budget"'), "studio lists a Budget & variance PDF");
+assert(studioSrc.includes('budget: "budget"'), "budget PDF uses the budget sign-off scope");
+
+const budgetPanel = readFileSync(resolve("src/components/budget/budget-panel.tsx"), "utf8");
+assert(budgetPanel.includes("BudgetPdfExportButton"), "client Budget tab exports the PDF");
+const budgetExport = readFileSync(resolve("src/components/budget/budget-pdf-export.tsx"), "utf8");
+assert(budgetExport.includes("budget-export-pdf"), "Budget tab download control is the budget PDF button");
+assert(budgetExport.includes("BudgetVariancePDF"), "Budget tab uses the shared budget PDF");
 
 const demoSrc = readFileSync(resolve("src/routes/_authenticated/reports.demo.tsx"), "utf8");
 assert(demoSrc.includes('to: "/reports"'), "legacy /reports/demo redirects to studio");

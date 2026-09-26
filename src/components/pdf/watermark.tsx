@@ -40,6 +40,17 @@ export function DemoWatermark() {
   );
 }
 
+/** Unsigned budget — same placement as the illustrative watermark, labelled Draft. */
+export function DraftWatermark() {
+  return (
+    <View style={styles.layer} fixed>
+      <Text style={[styles.diagonal, { opacity: 0.09, fontSize: 64, letterSpacing: 10 }]}>
+        DRAFT
+      </Text>
+    </View>
+  );
+}
+
 const chip = StyleSheet.create({
   wrap: {
     alignSelf: "flex-start",
@@ -69,9 +80,17 @@ export function DemoNotice() {
   return (
     <View style={chip.wrap}>
       <View style={chip.dot} />
-      <Text style={chip.text}>
-        Demo data — illustrative figures, not client results
-      </Text>
+      <Text style={chip.text}>Demo data — illustrative figures, not client results</Text>
+    </View>
+  );
+}
+
+/** Unsigned deliverable — download is allowed; the page says it is still a draft. */
+export function DraftNotice() {
+  return (
+    <View style={chip.wrap}>
+      <View style={chip.dot} />
+      <Text style={chip.text}>Draft — not signed off</Text>
     </View>
   );
 }
