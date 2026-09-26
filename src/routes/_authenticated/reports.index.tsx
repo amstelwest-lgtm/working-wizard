@@ -18,6 +18,7 @@ import {
   Settings,
   Zap,
   ExternalLink,
+  Scale,
 } from "lucide-react";
 import { BackLink } from "@/components/back-link";
 import { Button } from "@/components/ui/button";
@@ -64,6 +65,13 @@ import type { AssetProductivityData } from "@/reports/asset-productivity";
 import type { LaborProductivityData } from "@/reports/labor-productivity";
 import type { RatioMovementRow } from "@/reports/ratio-movement";
 import type { BenchmarkRow } from "@/reports/benchmark-report";
+import {
+  buildBudgetPdfModel,
+  illustrativeBudgetPack,
+  parseBudgetDocument,
+  type BudgetPdfActual,
+} from "@/lib/budget-pdf";
+import type { BudgetDocument } from "@/lib/budget.types";
 import type { ClientReviewSignoff, ReviewScope } from "@/lib/review-signoffs.functions";
 import { ReviewSignoffButton } from "@/components/review-signoff";
 import "@/styles/accountant-portal.css";
@@ -107,6 +115,7 @@ const REPORT_KEYS = [
   "labor",
   "movement",
   "benchmark",
+  "budget",
 ] as const;
 
 // ── Constants ──────────────────────────────────────────────────────────────
@@ -1096,7 +1105,12 @@ type ClientReportData = {
     financials: ClientReviewSignoff | null;
     cash_forecast: ClientReviewSignoff | null;
     profitability: ClientReviewSignoff | null;
+    budget: ClientReviewSignoff | null;
   };
+  /** Saved `clients.budget`. Null when the client has no plan yet. */
+  budget: BudgetDocument | null;
+  budgetActuals: BudgetPdfActual[];
+  budgetUpdatedAt: string | null;
   /** Owner 10Q profile — shapes report narratives / ordering, not layout. */
   operatingProfile: ClientOperatingProfile | null;
   /**
@@ -1132,7 +1146,10 @@ const EMPTY_CLIENT_DATA: ClientReportData = {
   cashForecast: null,
   financialsUpdatedAt: null,
   lastForecastAt: null,
-  reviewSignoffs: { financials: null, cash_forecast: null, profitability: null },
+  reviewSignoffs: { financials: null, cash_forecast: null, profitability: null, budget: null },
+  budget: null,
+  budgetActuals: [],
+  budgetUpdatedAt: null,
   operatingProfile: null,
   benchmarkSector: null,
   market: ZA_MARKET,
@@ -1925,12 +1942,56 @@ async function buildInterventions(
   return result;
 }
 
+async function loadBudgetActualsForPdf(clientId: string): Promise<BudgetPdfActual[]> {
+  const loose = supabase as unknown as {
+    from: (t: string) => {
+      select: (c: string) => {
+        eq: (
+          k: string,
+          v: string,
+        ) => {
+          order: (
+            k: string,
+            o: { ascending: boolean },
+          ) => Promise<{
+            data: Array<{ month: string; status: string; totals: unknown }> | null;
+            error: { message: string } | null;
+          }>;
+        };
+      };
+    };
+  };
+  const { data, error } = await loose
+    .from("budget_month_actuals")
+    .select("month, status, totals")
+    .eq("client_id", clientId)
+    .order("month", { ascending: true });
+  if (error) {
+    if (!/budget_month_actuals|42P01|42703/i.test(error.message ?? "")) {
+      console.warn("budget actuals for report:", error.message);
+    }
+    return [];
+  }
+  const out: BudgetPdfActual[] = [];
+  for (const row of data ?? []) {
+    if (!/^\d{4}-\d{2}$/.test(row.month)) continue;
+    out.push({
+      month: row.month,
+      status: row.status === "confirmed" ? "confirmed" : "draft",
+      totals: (row.totals && typeof row.totals === "object"
+        ? row.totals
+        : {}) as BudgetPdfActual["totals"],
+    });
+  }
+  return out;
+}
+
 async function loadClientReportData(clientId: string): Promise<ClientReportData> {
   const [clientRes, snapshotRes, signoffRes] = await Promise.all([
     supabase
       .from("clients")
       .select(
-        "id, name, cash_runway_weeks, financials, cashflow, financials_updated_at, last_forecast_at, operating_profile, business_type, market",
+        "id, name, cash_runway_weeks, financials, cashflow, financials_updated_at, last_forecast_at, operating_profile, business_type, market, budget, budget_updated_at",
       )
       .eq("id", clientId)
       .maybeSingle(),
@@ -1973,6 +2034,8 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
     operating_profile?: unknown;
     business_type?: string | null;
     market?: unknown;
+    budget?: unknown;
+    budget_updated_at?: string | null;
   } | null;
   const market = resolveMarket(
     parseMarketSelection(clientRow?.market) ?? coerceMarketSelection(clientRow?.market ?? null),
@@ -1989,7 +2052,11 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
     financials: (signoffRes.data ?? []).find((s) => s.scope === "financials") ?? null,
     cash_forecast: (signoffRes.data ?? []).find((s) => s.scope === "cash_forecast") ?? null,
     profitability: (signoffRes.data ?? []).find((s) => s.scope === "profitability") ?? null,
+    budget: (signoffRes.data ?? []).find((s) => s.scope === "budget") ?? null,
   };
+  const budget = parseBudgetDocument(clientRow?.budget);
+  const budgetUpdatedAt = clientRow?.budget_updated_at ?? budget?.updatedAt ?? null;
+  const budgetActuals = await loadBudgetActualsForPdf(clientId);
   const baseEmpty = {
     ...EMPTY_CLIENT_DATA,
     clientName: clientRow?.name ?? "",
@@ -2000,6 +2067,9 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
     operatingProfile,
     benchmarkSector,
     market,
+    budget,
+    budgetActuals,
+    budgetUpdatedAt,
   };
   if (!clientRow?.financials) return baseEmpty;
 
@@ -2100,6 +2170,9 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
     operatingProfile,
     benchmarkSector,
     market,
+    budget,
+    budgetActuals,
+    budgetUpdatedAt,
   };
 }
 
@@ -2110,14 +2183,21 @@ function isSignoffStale(signoff: ClientReviewSignoff | null, freshAt: string | n
   return new Date(freshAt).getTime() > new Date(signoff.signed_off_at).getTime();
 }
 
+function signoffFreshAt(scope: ReviewScope, cd: ClientReportData | null): string | null {
+  if (!cd) return null;
+  if (scope === "cash_forecast") return cd.lastForecastAt;
+  if (scope === "budget") return cd.budgetUpdatedAt;
+  return cd.financialsUpdatedAt;
+}
+
 /** Only current (non-stale) sign-offs are stamped onto a report footer. */
 function signoffStampFor(
-  scope: "financials" | "cash_forecast" | "profitability",
+  scope: "financials" | "cash_forecast" | "profitability" | "budget",
   cd: ClientReportData | null,
 ): ReportSignoffStamp | null {
   if (!cd) return null;
   const signoff = cd.reviewSignoffs[scope];
-  const freshAt = scope === "cash_forecast" ? cd.lastForecastAt : cd.financialsUpdatedAt;
+  const freshAt = signoffFreshAt(scope, cd);
   if (!signoff || isSignoffStale(signoff, freshAt)) return null;
   return {
     signedOffByName: signoff.signed_off_by_name,
@@ -2408,6 +2488,33 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
         market,
       });
     },
+    budget: async (s, p) => {
+      const { BudgetVariancePDF } = await import("@/reports/budget-variance");
+      const isDemo = !cd;
+      const pack = isDemo ? illustrativeBudgetPack() : null;
+      const doc = isDemo ? pack!.doc : cd!.budget;
+      if (!doc) {
+        throw new Error(
+          "No budget saved yet — open the Budget tab and save a plan before generating this PDF.",
+        );
+      }
+      const model = buildBudgetPdfModel(doc, isDemo ? pack!.actuals : cd!.budgetActuals, market);
+      const budgetStamp = signoffStampFor("budget", clientData);
+      return renderToBlob(BudgetVariancePDF, {
+        smeData: {
+          name: isDemo ? s.smeName || "Demo Client" : cd!.clientName,
+          period: isDemo
+            ? `${model.periodLabel} · Demo Data — illustrative figures`
+            : model.periodLabel,
+        },
+        model,
+        accountantProfile: p,
+        isDemo,
+        draft: !isDemo && !budgetStamp,
+        reviewSignoff: budgetStamp,
+        market,
+      });
+    },
   };
 }
 
@@ -2557,6 +2664,19 @@ const REPORTS: ReportMeta[] = [
     btnBg: "bg-yellow-600 hover:bg-yellow-700",
     filename: "BenchmarkReport",
   },
+  {
+    id: 11,
+    key: "budget",
+    name: "Budget & Variance",
+    description:
+      "FY plan versus uploaded month actuals — revenue, COGS, operating expenses, and profit, with over/under variance.",
+    pages: "2–3 pages",
+    category: "essential",
+    icon: <Scale className="h-4 w-4 text-[#c9962b]" />,
+    iconBg: "bg-[#c9962b]/15",
+    btnBg: "bg-[#b8851f] hover:bg-[#a8791a]",
+    filename: "BudgetVariance",
+  },
 ];
 
 const REPORT_SIGNOFF_SCOPE: Record<string, ReviewScope> = {
@@ -2570,6 +2690,7 @@ const REPORT_SIGNOFF_SCOPE: Record<string, ReviewScope> = {
   labor: "financials",
   movement: "financials",
   benchmark: "financials",
+  budget: "budget",
 };
 
 // ── Preview state ──────────────────────────────────────────────────────────
@@ -3236,8 +3357,7 @@ export function ReportsStudio({
     const scope = REPORT_SIGNOFF_SCOPE[r.key];
     if (!clientId || !scope) return {};
     const signoff = clientData?.reviewSignoffs[scope as keyof typeof clientData.reviewSignoffs] ?? null;
-    const freshAt =
-      scope === "cash_forecast" ? clientData?.lastForecastAt ?? null : clientData?.financialsUpdatedAt ?? null;
+    const freshAt = signoffFreshAt(scope, clientData);
     return {
       clientId,
       clientName: clientData?.clientName ?? clientParam,

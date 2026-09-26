@@ -3,7 +3,7 @@ import type { AccountantProfile } from "@/contexts/accountant-profile";
 import { ZA_MARKET, type ResolvedMarket } from "@/lib/market";
 import { ReportHeader } from "./report-header";
 import { ReportFooter } from "./report-footer";
-import { DemoWatermark } from "./watermark";
+import { DemoWatermark, DraftWatermark } from "./watermark";
 import { PdfMarketContext } from "./pdf-market";
 
 export type SmeData = {
@@ -28,6 +28,8 @@ type Props = {
   accountantProfile: AccountantProfile;
   /** When true, every page carries an elegant "illustrative data" watermark. */
   isDemo?: boolean;
+  /** Unsigned live deliverable. Ignored when isDemo is set (illustrative watermark wins). */
+  draft?: boolean;
   /** Only pass a non-stale sign-off — the footer renders it unconditionally when present. */
   reviewSignoff?: ReportSignoffStamp | null;
   /** Client (or firm) market — currency, locale, copy. Defaults to ZA. */
@@ -50,6 +52,7 @@ export function PDFDocument({
   smeData,
   accountantProfile,
   isDemo,
+  draft,
   reviewSignoff,
   market,
   children,
@@ -71,7 +74,7 @@ export function PDFDocument({
             backgroundColor: "#ffffff",
           }}
         >
-          {isDemo ? <DemoWatermark /> : null}
+          {isDemo ? <DemoWatermark /> : draft ? <DraftWatermark /> : null}
 
           {/* Fixed header — renders at the top of every page */}
           <ReportHeader

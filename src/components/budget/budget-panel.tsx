@@ -38,6 +38,7 @@ import {
 } from "@/lib/client-profile";
 import { useMarket } from "@/contexts/market";
 import { DeliverableInputConfig } from "@/components/deliverable-input-config";
+import { BudgetPdfExportButton } from "@/components/budget/budget-pdf-export";
 
 export function BudgetPanel({
   clientId,
@@ -414,6 +415,15 @@ export function BudgetPanel({
   return (
     <>
       {budgetInputConfig}
+      <div className="mb-3 flex justify-end">
+        <BudgetPdfExportButton
+          doc={doc}
+          clientId={clientId}
+          clientName={clientName}
+          signoff={budgetSignoff}
+          budgetUpdatedAt={budgetUpdatedAt ?? doc.updatedAt}
+        />
+      </div>
       <BudgetWorkspace
         doc={doc}
         onChange={setDoc}
