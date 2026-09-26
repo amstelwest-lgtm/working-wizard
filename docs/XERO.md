@@ -26,7 +26,19 @@ Sync requests two Profit and Loss reports, each with explicit `fromDate` and
   balance-sheet date. Each bank account's name and closing balance. The sum of
   closing balances is starting cash for the 13-week forecast (an overdraft
   stays negative). Cash received and cash spent in that window are cached.
-  Individual bank transactions are not pulled.
+  When the forecast has no typed amounts, those two totals are seeded as a
+  weekly run-rate (total ÷ 13) on lines marked `forecastLinesSource:
+  xero-bank-summary`. A typed opening is not replaced. Any non-zero forecast
+  line that is not one of those two Xero lines is left as it is, and the Xero
+  card says so. Editing a seeded line clears the marker on the next save, so
+  the following Sync will not overwrite it. Individual bank transactions are
+  not pulled.
+
+After Sync the Xero card and the client briefing state the Bank Summary
+window, how many accounts came back, whether opening cash was applied or
+skipped, and whether the weekly lines were seeded or left alone. A missing
+bank-summary scope still saves the P&L and balance sheet; the card says to
+disconnect and connect again.
 
 Both ranges are stored with start and end (`periodStart` / `periodEnd`, and
 `ytdPeriodStart` / `ytdPeriodEnd`) plus `statementSource = xero`. The waterfall

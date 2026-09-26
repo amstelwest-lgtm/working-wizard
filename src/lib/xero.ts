@@ -505,8 +505,8 @@ export const XERO_BANK_SUMMARY_DAYS = 13 * 7;
 /**
  * Bank Summary window ending on the balance-sheet date.
  * Closing balances are the forecast's starting cash. Cash received and cash
- * spent in the window are stored with the cache; they are not turned into
- * forecast lines.
+ * spent in the window are cached and, when the 13-week forecast has no typed
+ * amounts, seeded as a weekly run-rate. They are not a week-by-week replay.
  */
 export function bankSummaryRange(asOfIso: string): { from: string; to: string } {
   const to = /^\d{4}-\d{2}-\d{2}/.test(asOfIso) ? asOfIso.slice(0, 10) : new Date().toISOString().slice(0, 10);
@@ -911,6 +911,10 @@ export type XeroSyncCoverage = {
   bankCount: number | null;
   bankTotal: number | null;
   bankWarning: string | null;
+  bankFrom: string | null;
+  bankTo: string | null;
+  openingCashNote: string | null;
+  forecastLinesNote: string | null;
 };
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -930,11 +934,22 @@ export function coverageFromXeroCache(
     typeof bank?.totalClosing === "number" && Number.isFinite(bank.totalClosing) ? bank.totalClosing : null;
   const granted = accounts != null && !warning;
   const asOf = typeof bs?.asOf === "string" && bs.asOf.trim() ? bs.asOf : null;
+  const isoDay = (value: unknown): string | null =>
+    typeof value === "string" && /^\d{4}-\d{2}-\d{2}/.test(value) ? value.slice(0, 10) : null;
+  const note = (key: string): string | null => {
+    const block = asRecord(bank?.[key]);
+    const reason = typeof block?.reason === "string" ? block.reason.trim() : "";
+    return reason || null;
+  };
   return {
     bsAsOf: asOf,
     bankCount: granted ? accounts.length : null,
     bankTotal: granted ? total : null,
     bankWarning: warning,
+    bankFrom: isoDay(bank?.from),
+    bankTo: isoDay(bank?.to),
+    openingCashNote: note("openingCash"),
+    forecastLinesNote: note("forecastLines"),
   };
 }
 

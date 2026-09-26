@@ -25,7 +25,12 @@ import {
   xeroScopes,
   ytdRange,
 } from "../src/lib/xero";
-import { applyXeroOpeningCash, forecastOpeningFromStored } from "../src/lib/xero-opening";
+import {
+  applyXeroOpeningCash,
+  describeXeroOpeningCash,
+  forecastOpeningFromStored,
+  seedXeroBankForecastLines,
+} from "../src/lib/xero-opening";
 import {
   calendarMonthBounds,
   financialYearToDate,
@@ -507,8 +512,11 @@ assert(periodSrc.includes("Calendar year to date"), "calendar year label");
 const cashSrc = readFileSync(resolve("src/components/cash-forecast.tsx"), "utf8");
 assert(cashSrc.includes("horizonLabel"), "cash forecast shows the horizon dates");
 assert(cashSrc.includes("forecastOpeningFromStored"), "forecast uses stored Xero cash when opening is empty");
+assert(cashSrc.includes("openingBalanceSource"), "forecast save keeps a Xero-owned opening");
+assert(cashSrc.includes('id="xero-bank-forecast-note"'), "forecast shows the Bank Summary run-rate note");
 assert(fnSrc.includes("assertClientScope"), "server fns check impersonation scope");
 assert(fnSrc.includes("applyXeroOpeningCash"), "sync writes the forecast opening from Xero cash");
+assert(fnSrc.includes("seedXeroBankForecastLines"), "sync seeds forecast lines from bank cash received and spent");
 assert(fnSrc.includes('data_type: "bank"'), "bank summary is cached on xero_sync_data");
 assert(!fnSrc.includes("fetchXeroInvoices"), "no invoice pull");
 assert(!fnSrc.includes("BankTransactions"), "no bank-transaction pull");
@@ -516,8 +524,12 @@ assert(xeroSrc.includes("xeroBankSummaryPath"), "client requests the Bank Summar
 assert(!xeroSrc.includes("BankTransactions"), "client does not pull bank transactions");
 assert(briefingSrc.includes("Balance sheet as of"), "briefing shows the balance-sheet date");
 assert(briefingSrc.includes("Bank accounts"), "briefing shows the bank account count");
+assert(briefingSrc.includes("openingCashNote"), "briefing shows whether opening cash was applied");
+assert(briefingSrc.includes("Bank Summary"), "briefing names the Bank Summary window");
 const cardSrc = readFileSync(resolve("src/components/xero-connect.tsx"), "utf8");
 assert(cardSrc.includes('id="xero-sync-proof"'), "Xero card shows what was synced");
+assert(cardSrc.includes('id="xero-bank-summary-status"'), "Xero card states the Bank Summary result");
+assert(cardSrc.includes("openingCashNote"), "Xero card shows whether opening cash was applied");
 assert(cardSrc.includes("Balance sheet as of"), "Xero card names the balance-sheet date");
 const docsSrc = readFileSync(resolve("docs/XERO.md"), "utf8");
 assert(docsSrc.includes("accounting.reports.banksummary.read"), "env doc lists the bank summary scope");
@@ -684,14 +696,20 @@ assert(withBank.currentLiabilities === 33000, "mapped current liabilities");
 
 const emptyOpening = applyXeroOpeningCash(null, 83500, "2026-09-21");
 assert(emptyOpening.changed && emptyOpening.cashflow.openingBalance === "83500", "empty forecast takes Xero cash");
+assert(emptyOpening.reason === "applied", "empty forecast records that opening cash was applied");
 assert(emptyOpening.cashflow.openingBalanceSource === "xero", "opening is marked as Xero");
 assert(emptyOpening.cashflow.startDate === "2026-09-21", "opening date is the balance-sheet date");
+assert(
+  describeXeroOpeningCash("applied", 83500, "bank_summary").includes("Bank Summary"),
+  "opening proof names Bank Summary",
+);
 const keptLines = applyXeroOpeningCash(
   { openingBalance: "10", revenue: [{ name: "Sales" }], openingBalanceSource: "accountant" },
   83500,
   "2026-09-21",
 );
 assert(!keptLines.changed && keptLines.cashflow.openingBalance === "10", "a typed opening is kept");
+assert(keptLines.reason === "typed_opening", "a typed opening is named as the skip reason");
 assert(
   Array.isArray(keptLines.cashflow.revenue) && keptLines.cashflow.revenue.length === 1,
   "forecast lines stay",
@@ -704,6 +722,75 @@ const refreshed = applyXeroOpeningCash(
 assert(refreshed.changed && refreshed.cashflow.openingBalance === "83500", "Xero-owned opening refreshes");
 assert(Array.isArray(refreshed.cashflow.expenses), "other forecast fields stay");
 assert(!applyXeroOpeningCash(null, 0, "2026-09-21").changed, "a zero bank balance does not invent an opening");
+assert(
+  applyXeroOpeningCash({ openingBalance: "10" }, 0, "2026-09-21").reason === "typed_opening",
+  "a typed opening is kept even when the bank total is zero",
+);
+
+const flows = {
+  accountCount: banks.accounts.length,
+  cashReceived: 10000,
+  cashSpent: 5500,
+  from: bankWindow.from,
+  to: bankWindow.to,
+};
+const seededLines = seedXeroBankForecastLines(emptyOpening.cashflow, flows);
+assert(seededLines.status === "seeded" && seededLines.changed, "empty forecast takes a weekly run-rate");
+const seededRevenue = seededLines.cashflow.revenue as Array<{ id: string; amount: string; frequency: string }>;
+const seededExpenses = seededLines.cashflow.expenses as Array<{ id: string; amount: string }>;
+assert(seededRevenue.length === 1 && seededRevenue[0]?.id === "xero-bank-received", "cash received is one revenue line");
+assert(seededRevenue[0]?.frequency === "recurring-weekly", "cash received is a weekly run-rate");
+assert(
+  seededRevenue[0]?.amount === String(Math.round((10000 / 13) * 100) / 100),
+  "weekly received is the 13-week total divided by 13",
+);
+assert(seededExpenses[0]?.id === "xero-bank-spent", "cash spent is one expense line");
+assert(seededLines.cashflow.forecastLinesSource === "xero-bank-summary", "seeded lines are marked as Xero");
+const again = seedXeroBankForecastLines(seededLines.cashflow, flows);
+assert(!again.changed && again.status === "unchanged", "a second sync does not rewrite the same run-rate");
+const typedForecast = seedXeroBankForecastLines(
+  {
+    openingBalance: "10",
+    revenue: [
+      {
+        id: "sales",
+        name: "Sales",
+        amount: "500",
+        frequency: "recurring-weekly",
+        startWeek: 1,
+        splitCount: 1,
+      },
+    ],
+  },
+  flows,
+);
+assert(typedForecast.status === "skipped" && !typedForecast.changed, "typed forecast amounts block the Bank Summary seed");
+assert(typedForecast.reason.includes("typed amounts"), "the skip reason says typed lines were kept");
+assert(
+  Array.isArray(typedForecast.cashflow.revenue) && typedForecast.cashflow.revenue.length === 1,
+  "typed revenue stays",
+);
+const editedSeed = seedXeroBankForecastLines(
+  {
+    revenue: [
+      {
+        id: "xero-bank-received",
+        name: "Cash received (Xero Bank Summary)",
+        amount: "1",
+        frequency: "recurring-weekly",
+        startWeek: 1,
+        splitCount: 1,
+      },
+    ],
+    expenses: [],
+  },
+  flows,
+);
+assert(editedSeed.status === "skipped", "an edited Xero line is not overwritten once the marker is gone");
+assert(
+  seedXeroBankForecastLines(emptyOpening.cashflow, null).reason.includes("not returned"),
+  "a missing Bank Summary does not invent lines",
+);
 assert(forecastOpeningFromStored("0", "83500") === "83500", "screen uses financials cash when opening is zero");
 assert(forecastOpeningFromStored("10", "83500") === null, "screen keeps a non-zero opening");
 
@@ -716,5 +803,25 @@ const blocked = coverageFromXeroCache([
   { data_type: "bank", raw_data: { accounts: [], totalClosing: null, warning: "reconnect" } },
 ]);
 assert(blocked.bankCount === null && blocked.bankWarning === "reconnect", "missing scope is not zero accounts");
+const noted = coverageFromXeroCache([
+  {
+    data_type: "bank",
+    raw_data: {
+      from: "2026-06-22",
+      to: "2026-09-21",
+      accounts: banks.accounts,
+      totalClosing: 83500,
+      warning: null,
+      openingCash: { status: "applied", reason: "Opening cash applied from Bank Summary (83500)." },
+      forecastLines: { status: "seeded", reason: "Forecast lines seeded from Bank Summary." },
+    },
+  },
+]);
+assert(noted.bankFrom === "2026-06-22" && noted.bankTo === "2026-09-21", "cache keeps the Bank Summary window");
+assert(
+  noted.openingCashNote === "Opening cash applied from Bank Summary (83500)." &&
+    noted.forecastLinesNote === "Forecast lines seeded from Bank Summary.",
+  "cache keeps opening and forecast-line status",
+);
 
 console.log("xero-mapper-test: ok");

@@ -6008,6 +6008,7 @@ function Index() {
                   }));
                   setHasRealFinancials(true);
                   void handleOwnerFirstRealFinancialsUpload();
+                  setCashForecastReloadToken((n) => n + 1);
                   setShowXeroDialog(false);
                 }}
               />
