@@ -16,6 +16,16 @@ import {
   type CollectionsContact,
   type CollectionsSnapshot,
 } from "@/lib/collections";
+import {
+  finalizePayables,
+  parseXeroAgedPayablesByContact,
+  parseXeroSuppliersPage,
+  selectXeroSuppliersForAging,
+  skippedPayables,
+  XERO_AGED_AP_RECONNECT,
+  type PayablesSnapshot,
+  type PayablesSupplier,
+} from "@/lib/payables";
 import { PERIOD_MONTHS_KEY } from "@/lib/ratios";
 import {
   calendarMonthBounds,
@@ -50,14 +60,15 @@ export const XERO_REDIRECT_URI = () => process.env.XERO_REDIRECT_URI ?? "";
  * accounting.reports.profitandloss.read  — month-to-date and year-to-date P&L
  * accounting.reports.balancesheet.read   — balance sheet
  * accounting.reports.banksummary.read    — bank account names and closing balances
- * accounting.reports.aged.read          — Aged Receivables by contact
- * accounting.contacts.read              — contact names for that report
+ * accounting.reports.aged.read          — Aged Receivables and Aged Payables by contact
+ * accounting.contacts.read              — customer and supplier names for those reports
  *
  * Not requested: accounting.banktransactions, invoices, payroll, or bank feeds.
  * Bank Summary over the 13 weeks ending on the balance-sheet date is enough
- * for starting cash. Aged receivables is a read of the books' report, not an
- * invoice dump and not a write-back. Existing connections must reconnect
- * before Sync can read the aged report.
+ * for starting cash. Aged receivables and aged payables are reads of the
+ * books' reports, not an invoice dump and not a write-back. Existing
+ * connections that already granted those two scopes do not need a new
+ * consent for payables. A connection that never granted them must reconnect.
  */
 export const XERO_DEFAULT_SCOPES = [
   "offline_access",
@@ -1094,6 +1105,114 @@ export async function fetchXeroAgedReceivables(
     asOf,
     syncedAt,
     contacts: found,
+    note: notes.join(" ") || null,
+  });
+}
+
+export function xeroAgedPayablesPath(contactId: string, asOf: string): string {
+  const q = new URLSearchParams({ contactId, date: asOf });
+  return `/Reports/AgedPayablesByContact?${q.toString()}`;
+}
+
+/**
+ * Aged Payables by contact. Same scopes and the same cap as receivables.
+ * A missing scope or a rate limit is a skip on this row only.
+ */
+export async function fetchXeroAgedPayables(
+  tenantId: string,
+  accessToken: string,
+  asOf: string,
+  syncedAt = new Date().toISOString(),
+): Promise<PayablesSnapshot> {
+  const suppliers: ReturnType<typeof parseXeroSuppliersPage> = [];
+  let pagesTruncated = false;
+  try {
+    for (let page = 1; page <= XERO_CONTACT_PAGE_CAP; page++) {
+      const json = await xeroGet(tenantId, accessToken, `/Contacts?page=${page}`);
+      const rawCount = Array.isArray((json as { Contacts?: unknown }).Contacts)
+        ? (json as { Contacts: unknown[] }).Contacts.length
+        : 0;
+      suppliers.push(...parseXeroSuppliersPage(json));
+      if (rawCount < 100) break;
+      if (page === XERO_CONTACT_PAGE_CAP) pagesTruncated = true;
+    }
+  } catch (err) {
+    const status = xeroHttpStatus(err);
+    if (status === 401 || status === 403) {
+      return skippedPayables({
+        source: "xero",
+        asOf,
+        syncedAt,
+        skipReason: XERO_AGED_AP_RECONNECT,
+      });
+    }
+    const msg = err instanceof Error ? err.message : "Xero contacts failed";
+    return skippedPayables({
+      source: "xero",
+      asOf,
+      syncedAt,
+      skipReason: `Aged payables were not applied. ${msg.replace(/\s+/g, " ").slice(0, 180)}`,
+    });
+  }
+
+  const picked = selectXeroSuppliersForAging(suppliers, XERO_AGED_CONTACT_CAP);
+  const notes = [picked.note, pagesTruncated ? "Not every Xero contact page was read this sync." : null].filter(
+    (line): line is string => Boolean(line),
+  );
+  if (!picked.selected.length) {
+    return finalizePayables({
+      source: "xero",
+      asOf,
+      syncedAt,
+      suppliers: [],
+      note: notes.join(" ") || null,
+    });
+  }
+
+  const found: PayablesSupplier[] = [];
+  let authFailed = false;
+  let rateLimited = false;
+  const queue = [...picked.selected];
+  const workers = Math.min(4, queue.length);
+
+  async function pullOne(): Promise<void> {
+    while (queue.length && !authFailed && !rateLimited) {
+      const supplier = queue.shift();
+      if (!supplier) return;
+      try {
+        const json = await xeroGet(
+          tenantId,
+          accessToken,
+          xeroAgedPayablesPath(supplier.contactId, asOf),
+        );
+        const parsed = parseXeroAgedPayablesByContact(json, supplier);
+        if (parsed) found.push(parsed);
+      } catch (err) {
+        const status = xeroHttpStatus(err);
+        if (status === 401 || status === 403) authFailed = true;
+        else if (status === 429) rateLimited = true;
+      }
+    }
+  }
+
+  await Promise.all(Array.from({ length: workers }, () => pullOne()));
+
+  if (authFailed && found.length === 0) {
+    return skippedPayables({
+      source: "xero",
+      asOf,
+      syncedAt,
+      skipReason: XERO_AGED_AP_RECONNECT,
+    });
+  }
+  if (rateLimited) {
+    notes.push("Xero rate-limited the aged payables pull. The supplier list is partial.");
+  }
+  return finalizePayables({
+    source: "xero",
+    asOf,
+    syncedAt,
+    suppliers: found,
     note: notes.join(" ") || null,
   });
 }

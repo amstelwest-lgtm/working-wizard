@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { AdvisoryDrafter } from "@/components/advisory-drafter";
 import { CashForecastPanel } from "@/components/cash-forecast";
 import { CollectionsPanel } from "@/components/collections-panel";
+import { PayablesPanel } from "@/components/payables-panel";
 import { BudgetPanel } from "@/components/budget/budget-panel";
 import type { ExistingCashflow } from "@/lib/cash-from-banks.publish";
 import { UploadFinancials } from "@/components/upload-financials";
@@ -479,6 +480,7 @@ type ActiveTab =
   | "profit"
   | "cash"
   | "collections"
+  | "payables"
   | "budget"
   | "reports"
   | "plan"
@@ -493,6 +495,7 @@ const ACCOUNTANT_TABS: ActiveTab[] = [
   "profit",
   "cash",
   "collections",
+  "payables",
   "budget",
   "reports",
   "plan",
@@ -510,6 +513,7 @@ const DELIVERABLE_RAIL: { id: ActiveTab; label: string; star?: boolean }[] = [
   { id: "profit", label: "Profitability" },
   { id: "cash", label: "13-Week Cash Forecast", star: true },
   { id: "collections", label: "Collections" },
+  { id: "payables", label: "Payables" },
   { id: "budget", label: "Budget" },
   { id: "reports", label: "Reports", star: true },
   { id: "plan", label: "Action Plan", star: true },
@@ -3126,6 +3130,25 @@ function ClientView() {
                   <CollectionsPanel
                     clientId={client.id}
                     market={clientMarket}
+                    onOpenDrafts={() => setActiveTab("advisory")}
+                    onOpenActions={() => setActiveTab("plan")}
+                  />
+                </div>
+
+                {/* ===== PAYABLES ===== */}
+                <div
+                  className={`tabpane${activeTab === "payables" ? " on" : ""}`}
+                  id="pane-payables"
+                >
+                  <DeliverableTabHead
+                    eyebrow="Payables"
+                    title="Who to pay, delay, or renegotiate"
+                    lede="Named suppliers and age buckets from the aged payables report, read against the cash runway already on file. Xero and QuickBooks stay the books. Milōn drafts the move; it does not send a payment or record the bill."
+                  />
+                  <PayablesPanel
+                    clientId={client.id}
+                    market={clientMarket}
+                    runwayWeeks={effectiveCashRunwayWeeks(client.cash_runway_weeks, client.cashflow)}
                     onOpenDrafts={() => setActiveTab("advisory")}
                     onOpenActions={() => setActiveTab("plan")}
                   />

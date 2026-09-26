@@ -15,6 +15,14 @@ import {
   skippedCollections,
   type CollectionsSnapshot,
 } from "@/lib/collections";
+import {
+  attachQboBillDetail,
+  finalizePayables,
+  parseQboAgedPayables,
+  qboAgedPayableSkipReason,
+  skippedPayables,
+  type PayablesSnapshot,
+} from "@/lib/payables";
 import { PERIOD_MONTHS_KEY } from "@/lib/ratios";
 import {
   calendarMonthBounds,
@@ -446,6 +454,21 @@ export function qboAgedReceivableDetailPath(date: string): string {
   return `/reports/AgedReceivableDetail?${q.toString()}`;
 }
 
+/** Aged payables summary. Same Accounting scope as Aged Receivables. */
+export function qboAgedPayablesPath(date: string): string {
+  const q = new URLSearchParams({
+    report_date: date,
+    accounting_method: "Accrual",
+  });
+  return `/reports/AgedPayables?${q.toString()}`;
+}
+
+/** Bill numbers and due dates for the same as-of date. */
+export function qboAgedPayableDetailPath(date: string): string {
+  const q = new URLSearchParams({ report_date: date });
+  return `/reports/AgedPayableDetail?${q.toString()}`;
+}
+
 export function qboCashFlowPath(from: string, to: string): string {
   const q = new URLSearchParams({
     start_date: from,
@@ -873,6 +896,52 @@ export async function fetchQboAgedReceivables(
       asOf,
       syncedAt,
       skipReason: qboAgedSkipReason(msg),
+    });
+  }
+}
+
+/**
+ * Aged payables under the existing Accounting scope. A failed report is a
+ * skip on the connection card; P&L and the balance sheet still save.
+ */
+export async function fetchQboAgedPayables(
+  realmId: string,
+  accessToken: string,
+  asOf: string,
+  syncedAt = new Date().toISOString(),
+): Promise<PayablesSnapshot> {
+  try {
+    const summary = await qboGet(realmId, accessToken, qboAgedPayablesPath(asOf));
+    let suppliers = parseQboAgedPayables(summary, asOf);
+    let note: string | null = null;
+    try {
+      const detail = await qboGet(realmId, accessToken, qboAgedPayableDetailPath(asOf));
+      suppliers = attachQboBillDetail(suppliers, detail, asOf);
+      if (suppliers.length && suppliers.every((supplier) => supplier.bills.length === 0)) {
+        note =
+          "Bill references were not on the detail report. The payables list has supplier names and age buckets only.";
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "";
+      note = /\b(401|403)\b/.test(msg)
+        ? "Bill detail was not returned. Supplier names and age buckets are from the aged payables summary."
+        : "Bill references were not returned. The payables list has supplier names and age buckets only.";
+    }
+    const headerAsOf = (summary as { Header?: { EndPeriod?: string } }).Header?.EndPeriod;
+    return finalizePayables({
+      source: "qbo",
+      asOf: typeof headerAsOf === "string" && headerAsOf ? headerAsOf.slice(0, 10) : asOf,
+      syncedAt,
+      suppliers,
+      note,
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "QuickBooks aged payables failed";
+    return skippedPayables({
+      source: "qbo",
+      asOf,
+      syncedAt,
+      skipReason: qboAgedPayableSkipReason(msg),
     });
   }
 }

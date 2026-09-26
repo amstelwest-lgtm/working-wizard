@@ -253,6 +253,8 @@ export function XeroConnectCard({ clientId, returnPath, refreshToken = 0, onSync
               </span>
               <br />
               <span id="xero-aged-ar-status">{lastSync?.agedArLine ?? status.agedArLine}</span>
+              <br />
+              <span id="xero-aged-ap-status">{lastSync?.agedApLine ?? status.agedApLine}</span>
             </p>
           </div>
           <div className="ledger-connect__actions">

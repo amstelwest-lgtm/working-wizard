@@ -82,21 +82,26 @@ accounting.contacts.read
 ```
 
 `accounting.reports.banksummary.read` is the Bank Summary report (account names
-and balances). `accounting.reports.aged.read` is Aged Receivables by contact.
-`accounting.contacts.read` supplies the customer name for that report. Do not
-enable `accounting.banktransactions`, `accounting.invoices`, or a bank-feed
-scope for this sync. Collections does not write invoices or send email.
+and balances). `accounting.reports.aged.read` is Aged Receivables by contact
+and Aged Payables by contact. `accounting.contacts.read` supplies the customer
+and supplier names for those reports. Do not enable
+`accounting.banktransactions`, `accounting.invoices`, or a bank-feed scope for
+this sync. Collections does not write invoices or send email. Payables does
+not send a payment or record a bill.
 
 Aged receivables are cached on the existing `xero_sync_data` row
-`data_type = 'aged_ar'`. That upsert does not rewrite the P&L, balance sheet,
-or bank rows. No new table.
+`data_type = 'aged_ar'`. Aged payables use `data_type = 'aged_ap'` on the same
+table. Those upserts do not rewrite the P&L, balance sheet, or bank rows. No
+new table. A connection that already granted the aged and contacts scopes for
+Collections does not need another consent for payables.
 
 **Existing connections must reconnect.** A Xero refresh token keeps only the
 scopes granted at the last consent. After a new scope is ticked, disconnect
 the organisation in Milōn and connect it again. Until then, Sync still saves
 P&L, the balance sheet, and bank balances. The card says bank balances need a
-reconnect when that scope is missing, and aged receivables need a reconnect
-when the aged or contacts scope is missing.
+reconnect when that scope is missing, and aged receivables or aged payables
+need a reconnect when the aged or contacts scope is missing. Statement sync
+still saves if either aged report is skipped.
 
 ## What Theo creates in the Xero developer portal
 
