@@ -904,27 +904,33 @@ html[data-theme="light"] .accountant-portal .budget-month-engine{
   flex-wrap:wrap;
 }
 .accountant-portal .collections-muted,
-.accountant-portal .collections-note{
+.accountant-portal .collections-note,
+.accountant-portal .payables-muted,
+.accountant-portal .payables-note{
   color:var(--ink-dim);
   font-size:13px;
   line-height:1.5;
   max-width:68ch;
   margin:0 0 12px;
 }
-.accountant-portal .collections-kicker{
+.accountant-portal .collections-kicker,
+.accountant-portal .payables-kicker{
   font-size:11px;
   letter-spacing:.04em;
   text-transform:uppercase;
   color:var(--ink-dim);
   margin:0 0 8px;
 }
-.accountant-portal .collections-scroll{overflow-x:auto;margin:0 0 16px}
-.accountant-portal .collections-table{
+.accountant-portal .collections-scroll,
+.accountant-portal .payables-scroll{overflow-x:auto;margin:0 0 16px}
+.accountant-portal .collections-table,
+.accountant-portal .payables-table{
   width:100%;
   border-collapse:collapse;
   font-size:13px;
 }
-.accountant-portal .collections-table th{
+.accountant-portal .collections-table th,
+.accountant-portal .payables-table th{
   text-align:left;
   font-size:11px;
   font-weight:600;
@@ -934,12 +940,14 @@ html[data-theme="light"] .accountant-portal .budget-month-engine{
   padding:8px 10px 8px 0;
   border-bottom:1px solid var(--line);
 }
-.accountant-portal .collections-table td{
+.accountant-portal .collections-table td,
+.accountant-portal .payables-table td{
   padding:10px 10px 10px 0;
   border-bottom:1px solid var(--line);
   vertical-align:top;
 }
-.accountant-portal .collections-script pre{
+.accountant-portal .collections-script pre,
+.accountant-portal .payables-script pre{
   white-space:pre-wrap;
   font-family:inherit;
   font-size:13px;
@@ -947,7 +955,8 @@ html[data-theme="light"] .accountant-portal .budget-month-engine{
   margin:0 0 12px;
   max-width:72ch;
 }
-.accountant-portal .collections-actions{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px}
+.accountant-portal .collections-actions,
+.accountant-portal .payables-actions{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px}
 
 /* ===== Reports Studio — ultra-premium catalogue ===== */
 .reports-studio{

@@ -4,6 +4,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { assertClientScope } from "@/lib/assert-client-scope";
 import { getSupabaseAdminOrNull, supabaseAdmin } from "@/integrations/supabase/client.server";
 import { agedArProofLine, readCollectionsSnapshot } from "@/lib/collections";
+import { agedApProofLine, readPayablesSnapshot, skippedPayables } from "@/lib/payables";
 import { computeRatios, type RatioInputs } from "@/lib/ratios";
 import { sanitizeQboReturnPath } from "@/lib/qbo-state";
 import {
@@ -15,6 +16,7 @@ import {
   buildQboAuthUrl,
   exchangeCodeForTokens,
   fetchChartOfAccounts,
+  fetchQboAgedPayables,
   fetchQboAgedReceivables,
   fetchQboLedgerStatement,
   fetchRecentTransactions,
@@ -91,6 +93,7 @@ export type QboStatus = {
   ytdPeriodLabel: string | null;
   ytdBasis: "financial" | "calendar" | null;
   agedArLine: string;
+  agedApLine: string;
 } | null;
 
 function numField(fields: Record<string, unknown>, key: string): number | null {
@@ -113,6 +116,7 @@ function qboFigureProof(financials: unknown): {
   ytdPeriodLabel: string | null;
   ytdBasis: "financial" | "calendar" | null;
   agedArLine: string;
+  agedApLine: string;
 } {
   const empty = {
     periodLabel: null,
@@ -128,6 +132,7 @@ function qboFigureProof(financials: unknown): {
     ytdPeriodLabel: null,
     ytdBasis: null as "financial" | "calendar" | null,
     agedArLine: "Aged receivables appear after the next Sync",
+    agedApLine: "Aged payables appear after the next Sync",
   };
   if (!financials || typeof financials !== "object" || Array.isArray(financials)) return empty;
   const meta = readStatementMeta(financials);
@@ -147,6 +152,7 @@ function qboFigureProof(financials: unknown): {
     ytdPeriodLabel: meta.ytdPeriodLabel,
     ytdBasis: meta.ytdBasis,
     agedArLine: "Aged receivables appear after the next Sync",
+    agedApLine: "Aged payables appear after the next Sync",
   };
 }
 
@@ -174,13 +180,17 @@ export const getQboStatus = createServerFn({ method: "POST" })
 
     if (!conn) return null;
     const proof = qboFigureProof((client as { financials?: unknown }).financials);
-    const { data: agedRow } = await admin
+    const { data: agedRows } = await admin
       .from("qbo_sync_data")
-      .select("raw_data")
+      .select("data_type, raw_data")
       .eq("client_id", data.clientId)
-      .eq("data_type", "aged_ar")
-      .maybeSingle();
-    const aged = readCollectionsSnapshot(agedRow?.raw_data);
+      .in("data_type", ["aged_ar", "aged_ap"]);
+    const aged = readCollectionsSnapshot(
+      (agedRows ?? []).find((row) => row.data_type === "aged_ar")?.raw_data,
+    );
+    const agedAp = readPayablesSnapshot(
+      (agedRows ?? []).find((row) => row.data_type === "aged_ap")?.raw_data,
+    );
     return {
       realmId: conn.realm_id ?? "",
       companyName: conn.company_name ?? null,
@@ -190,6 +200,7 @@ export const getQboStatus = createServerFn({ method: "POST" })
       syncError: conn.sync_error ?? null,
       ...proof,
       agedArLine: aged ? agedArProofLine(aged) : proof.agedArLine,
+      agedApLine: agedAp ? agedApProofLine(agedAp) : proof.agedApLine,
     };
   });
 
@@ -259,6 +270,7 @@ export type SyncResult = {
     ytdPeriodLabel: string | null;
     ytdBasis: "financial" | "calendar" | null;
     agedArLine: string;
+    agedApLine: string;
   };
 };
 
@@ -385,10 +397,19 @@ export const triggerQboSync = createServerFn({ method: "POST" })
       const ledger = await fetchQboLedgerStatement(realmId, accessToken);
       const { pnl, bs } = ledger;
 
-      const [accounts, transactions, agedAr] = await Promise.all([
+      const [accounts, transactions, agedAr, agedAp] = await Promise.all([
         fetchChartOfAccounts(realmId, accessToken).catch(() => null),
         fetchRecentTransactions(realmId, accessToken).catch(() => null),
         fetchQboAgedReceivables(realmId, accessToken, ledger.to),
+        fetchQboAgedPayables(realmId, accessToken, ledger.to).catch((err: unknown) => {
+          const msg = err instanceof Error ? err.message : "Aged payables failed";
+          return skippedPayables({
+            source: "qbo",
+            asOf: ledger.to,
+            syncedAt: new Date().toISOString(),
+            skipReason: `Aged payables were not applied. ${msg.replace(/\s+/g, " ").slice(0, 180)}`,
+          });
+        }),
       ]);
 
       const mapped = mapQboToFinancialInputs(
@@ -515,6 +536,12 @@ export const triggerQboSync = createServerFn({ method: "POST" })
         raw_data: { ...agedAr, syncedAt: nowIso },
         synced_at: nowIso,
       });
+      cacheRows.push({
+        client_id: data.clientId,
+        data_type: "aged_ap",
+        raw_data: { ...agedAp, syncedAt: nowIso },
+        synced_at: nowIso,
+      });
       await supabaseAdmin.from("qbo_sync_data").upsert(cacheRows as never, {
         onConflict: "client_id,data_type",
       });
@@ -545,6 +572,7 @@ export const triggerQboSync = createServerFn({ method: "POST" })
           accountsCount: accounts?.length ?? 0,
           transactionsCount: transactions?.length ?? 0,
           agedArLine: agedArProofLine({ ...agedAr, syncedAt: nowIso }),
+          agedApLine: agedApProofLine({ ...agedAp, syncedAt: nowIso }),
           periodLabel: ledger.periodLabel,
           periodStart: ledger.from,
           periodEnd: ledger.to,

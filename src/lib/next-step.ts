@@ -680,6 +680,7 @@ export const ACCOUNTANT_STUDIO_TABS = [
   "profit",
   "cash",
   "collections",
+  "payables",
   "budget",
   "reports",
   "plan",

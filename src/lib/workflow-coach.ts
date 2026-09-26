@@ -27,7 +27,7 @@ export type CoachStepId = (typeof COACH_STEPS)[number]["id"];
 export type CoachStep = (typeof COACH_STEPS)[number];
 
 /** Pages that show the coach but are not themselves a spine step. */
-export type CoachSidePage = "ask" | "reports" | "advisory" | "collections";
+export type CoachSidePage = "ask" | "reports" | "advisory" | "collections" | "payables";
 export type CoachPage = CoachStepId | CoachSidePage;
 
 export type CoachDone = Partial<Record<CoachStepId, boolean>>;
@@ -52,6 +52,7 @@ const DELIVERABLE_TABS = new Set([
   "profit",
   "cash",
   "collections",
+  "payables",
   "budget",
   "reports",
   "plan",
@@ -75,6 +76,7 @@ const DEFAULT_BECAUSE: Record<CoachPage, string> = {
   profit: "the waterfall is the evidence for margin — how revenue becomes profit",
   cash: "the 13-week forecast is the evidence for liquidity",
   collections: "the chase list names who owes what, from the aged receivables report",
+  payables: "the payables list names who to pay, delay, or renegotiate, from the aged payables report",
   budget: "the budget tests whether the plan fits the numbers",
   actions: "the read is done — these are the moves to assign",
   ask: "Milōn Bot drafts the next read from what is already on file",
@@ -107,6 +109,7 @@ const INTENTS: Record<string, Intent> = {
   },
   budget: { page: "budget", because: DEFAULT_BECAUSE.budget },
   collections: { page: "collections", because: DEFAULT_BECAUSE.collections },
+  payables: { page: "payables", because: DEFAULT_BECAUSE.payables },
   actions: { page: "actions", because: "the diagnosis is ready to become assigned moves" },
 };
 
@@ -126,6 +129,8 @@ export function coachPageForTab(tab: string, focus?: string | null): CoachPage |
       return "cash";
     case "collections":
       return "collections";
+    case "payables":
+      return "payables";
     case "budget":
       return "budget";
     case "plan":
@@ -243,7 +248,16 @@ export function coachView(input: {
   };
 }
 
-type HandoffKind = "data" | "health" | "pillars" | "profit" | "cash" | "collections" | "budget" | "actions";
+type HandoffKind =
+  | "data"
+  | "health"
+  | "pillars"
+  | "profit"
+  | "cash"
+  | "collections"
+  | "payables"
+  | "budget"
+  | "actions";
 
 const HANDOFF: Record<HandoffKind, CoachDestination & { label: string }> = {
   data: { tab: "summary", coach: "data", label: "Open Data" },
@@ -252,6 +266,7 @@ const HANDOFF: Record<HandoffKind, CoachDestination & { label: string }> = {
   profit: { tab: "profit", coach: "margin", label: "Open Profitability" },
   cash: { tab: "cash", coach: "liquidity", label: "Open Cash" },
   collections: { tab: "collections", coach: "collections", label: "Open Collections" },
+  payables: { tab: "payables", coach: "payables", label: "Open Payables" },
   budget: { tab: "budget", coach: "budget", label: "Open Budget" },
   actions: { tab: "plan", coach: "actions", label: "Open Actions" },
 };
@@ -268,6 +283,8 @@ export function deliverableHandoff(
   let kind: HandoffKind | null = null;
   if (/\b(action plan|assign(ed|ing)?|next steps?)\b/.test(q)) kind = "actions";
   else if (/\bbudget\b/.test(q)) kind = "budget";
+  else if (/\b(payables?|aged creditors?|bills? to pay|suppliers? to pay)\b/.test(q))
+    kind = "payables";
   else if (/\b(collections?|chase list|aged receivables?|aged debtors?)\b/.test(q))
     kind = "collections";
   else if (/\b(cash|liquidity|runway|forecast|13-week|13 week|debtor|working capital)\b/.test(q))

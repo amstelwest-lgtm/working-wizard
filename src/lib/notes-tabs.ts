@@ -9,6 +9,7 @@
  *   Action plan   tasks | plan
  *   Cash          cash
  *   Collections   collections (accountant only)
+ *   Payables      payables (accountant only)
  *   Budget        budget
  *
  * No parallel page (stay in Open queries; do not dump the user on the wrong tab):
@@ -35,6 +36,7 @@ export const ACCOUNTANT_NOTE_TABS = [
   "profit",
   "cash",
   "collections",
+  "payables",
   "budget",
   "reports",
   "plan",
@@ -48,6 +50,7 @@ const TAB_GROUPS: readonly (readonly string[])[] = [
   ["tasks", "plan"],
   ["cash"],
   ["collections"],
+  ["payables"],
   ["budget"],
   ["next"],
   ["overview"],
@@ -71,6 +74,7 @@ export const NOTE_TAB_LABELS: Record<string, string> = {
   next: "Next moves",
   cash: "Cash",
   collections: "Collections",
+  payables: "Payables",
   budget: "Budget",
   tasks: "Action plan",
   plan: "Action plan",

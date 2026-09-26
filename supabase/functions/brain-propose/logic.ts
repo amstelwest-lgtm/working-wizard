@@ -148,12 +148,20 @@ export function trackRecordLines(rows: OutcomeRow[]): string[] {
 
 export function systemPromptFor(
   audience: ProposeAudience,
-  opts?: { collections?: boolean },
+  opts?: { collections?: boolean; payables?: boolean },
 ): string {
-  const collectionsRule = opts?.collections
-    ? "- An aged receivables list is in the context. Do not name customers or invoices yourself; a collections draft is filed from that list. Refer to overdue receivables only using totals printed in that list."
-    : null;
-  const rules = collectionsRule ? [...SHARED_RULES, collectionsRule] : SHARED_RULES;
+  const extra: string[] = [];
+  if (opts?.collections) {
+    extra.push(
+      "- An aged receivables list is in the context. Do not name customers or invoices yourself; a collections draft is filed from that list. Refer to overdue receivables only using totals printed in that list.",
+    );
+  }
+  if (opts?.payables) {
+    extra.push(
+      "- An aged payables list is in the context. Do not name suppliers or bills yourself; a payables draft is filed from that list. Refer to overdue payables only using totals printed in that list. If a cash-runway figure is printed there, use that figure and do not invent another.",
+    );
+  }
+  const rules = extra.length ? [...SHARED_RULES, ...extra] : SHARED_RULES;
   if (audience === "owner") {
     return [
       "You are a sharp SME CFO copilot talking directly to the business owner. There is no accountant in the loop.",

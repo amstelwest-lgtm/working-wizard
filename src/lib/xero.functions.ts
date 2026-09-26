@@ -4,6 +4,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { assertClientScope } from "@/lib/assert-client-scope";
 import { getSupabaseAdminOrNull, supabaseAdmin } from "@/integrations/supabase/client.server";
 import { agedArProofLine, readCollectionsSnapshot } from "@/lib/collections";
+import { agedApProofLine, readPayablesSnapshot, skippedPayables } from "@/lib/payables";
 import { computeRatios, type RatioInputs } from "@/lib/ratios";
 import { calendarMonthStamp, readStatementMeta, XERO_YTD_FIELD_KEYS } from "@/lib/statement-period";
 import { runwayWeeksFromCashflow, type SavedCashflowLike } from "@/lib/cash-runway";
@@ -26,6 +27,7 @@ import {
   fetchXeroConnections,
   bankSummaryRange,
   coverageFromXeroCache,
+  fetchXeroAgedPayables,
   fetchXeroAgedReceivables,
   fetchXeroLedgerStatement,
   mapXeroToFinancialInputs,
@@ -119,6 +121,8 @@ export type XeroStatus = {
   forecastLinesNote: string | null;
   /** Aged receivables proof: applied, empty, or the skip reason. */
   agedArLine: string;
+  /** Aged payables proof: applied, empty, or the skip reason. */
+  agedApLine: string;
 } | null;
 
 function numField(fields: Record<string, unknown>, key: string): number | null {
@@ -149,6 +153,7 @@ function xeroFigureProof(financials: unknown): {
   openingCashNote: string | null;
   forecastLinesNote: string | null;
   agedArLine: string;
+  agedApLine: string;
 } {
   const empty = {
     periodLabel: null,
@@ -172,6 +177,7 @@ function xeroFigureProof(financials: unknown): {
     openingCashNote: null,
     forecastLinesNote: null,
     agedArLine: "Aged receivables appear after the next Sync",
+    agedApLine: "Aged payables appear after the next Sync",
   };
   if (!financials || typeof financials !== "object" || Array.isArray(financials)) return empty;
   const meta = readStatementMeta(financials);
@@ -199,6 +205,7 @@ function xeroFigureProof(financials: unknown): {
     openingCashNote: null,
     forecastLinesNote: null,
     agedArLine: "Aged receivables appear after the next Sync",
+    agedApLine: "Aged payables appear after the next Sync",
   };
 }
 
@@ -263,10 +270,13 @@ export const getXeroStatus = createServerFn({ method: "POST" })
       .from("xero_sync_data")
       .select("data_type, raw_data")
       .eq("client_id", data.clientId)
-      .in("data_type", ["bs", "bank", "aged_ar"]);
+      .in("data_type", ["bs", "bank", "aged_ar", "aged_ap"]);
     const coverage = coverageFromXeroCache(caches ?? []);
     const aged = readCollectionsSnapshot(
       (caches ?? []).find((row) => row.data_type === "aged_ar")?.raw_data,
+    );
+    const agedAp = readPayablesSnapshot(
+      (caches ?? []).find((row) => row.data_type === "aged_ap")?.raw_data,
     );
     return {
       ...status,
@@ -279,6 +289,7 @@ export const getXeroStatus = createServerFn({ method: "POST" })
       openingCashNote: coverage.openingCashNote,
       forecastLinesNote: coverage.forecastLinesNote,
       agedArLine: aged ? agedArProofLine(aged) : status.agedArLine,
+      agedApLine: agedAp ? agedApProofLine(agedAp) : status.agedApLine,
     };
   });
 
@@ -352,6 +363,7 @@ export type XeroSyncResult = {
     openingCashNote: string | null;
     forecastLinesNote: string | null;
     agedArLine: string;
+    agedApLine: string;
   };
 };
 
@@ -537,6 +549,17 @@ export const triggerXeroSync = createServerFn({ method: "POST" })
 
       const nowIso = new Date().toISOString();
       const agedAr = await fetchXeroAgedReceivables(tenantId, accessToken, ledger.to, nowIso);
+      const agedAp = await fetchXeroAgedPayables(tenantId, accessToken, ledger.to, nowIso).catch(
+        (err: unknown) => {
+          const msg = err instanceof Error ? err.message : "Aged payables failed";
+          return skippedPayables({
+            source: "xero",
+            asOf: ledger.to,
+            syncedAt: nowIso,
+            skipReason: `Aged payables were not applied. ${msg.replace(/\s+/g, " ").slice(0, 180)}`,
+          });
+        },
+      );
       const cashPosition = resolveXeroCash(bs, ledger.bank);
       const cashSource: XeroOpeningCashSource =
         ledger.bank && ledger.bank.accounts.length > 0 && Number.isFinite(ledger.bank.totalClosing)
@@ -640,6 +663,12 @@ export const triggerXeroSync = createServerFn({ method: "POST" })
           raw_data: agedAr as never,
           synced_at: nowIso,
         },
+        {
+          client_id: data.clientId,
+          data_type: "aged_ap",
+          raw_data: agedAp as never,
+          synced_at: nowIso,
+        },
       ];
       await supabaseAdmin.from("xero_sync_data").upsert(cacheRows, { onConflict: "client_id,data_type" });
 
@@ -683,6 +712,7 @@ export const triggerXeroSync = createServerFn({ method: "POST" })
           openingCashNote,
           forecastLinesNote,
           agedArLine: agedArProofLine(agedAr),
+          agedApLine: agedApProofLine(agedAp),
           cash: cashPosition,
         },
       };

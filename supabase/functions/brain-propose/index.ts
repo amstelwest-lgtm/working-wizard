@@ -29,6 +29,13 @@ import {
   collectionsPromptBlock,
   readCollectionsSnapshot,
 } from "./collections.ts";
+import {
+  buildPayablesDraft,
+  choosePayables,
+  payablesPromptBlock,
+  readPayablesSnapshot,
+} from "./payables.ts";
+import { effectiveCashRunwayWeeks } from "../../../src/lib/cash-runway.ts";
 
 function buildCorsHeaders(requestOrigin: string | null): Record<string, string> {
   const allowed = Deno.env.get("ALLOWED_ORIGINS");
@@ -139,11 +146,12 @@ Deno.serve(async (req: Request) => {
     return respond({ error: "Rate limit exceeded. Try proposing again in an hour." }, 429);
   }
 
-  const [clientRes, snapRes, stepRes, qRes, outcomeRes, xeroArRes, qboArRes] = await Promise.all([
+  const [clientRes, snapRes, stepRes, qRes, outcomeRes, xeroArRes, qboArRes, xeroApRes, qboApRes] =
+    await Promise.all([
     userClient
       .from("clients")
       .select(
-        "name, business_type, firm_id, operating_profile, brain_summary, brain_summary_updated_at",
+        "name, business_type, firm_id, operating_profile, brain_summary, brain_summary_updated_at, cash_runway_weeks, cashflow",
       )
       .eq("id", clientId)
       .maybeSingle(),
@@ -184,6 +192,18 @@ Deno.serve(async (req: Request) => {
       .select("raw_data")
       .eq("client_id", clientId)
       .eq("data_type", "aged_ar")
+      .maybeSingle(),
+    adminClient
+      .from("xero_sync_data")
+      .select("raw_data")
+      .eq("client_id", clientId)
+      .eq("data_type", "aged_ap")
+      .maybeSingle(),
+    adminClient
+      .from("qbo_sync_data")
+      .select("raw_data")
+      .eq("client_id", clientId)
+      .eq("data_type", "aged_ap")
       .maybeSingle(),
   ]);
 
@@ -315,6 +335,25 @@ Deno.serve(async (req: Request) => {
   ]);
   const collectionsBlock = collectionsPromptBlock(collectionsSnap);
   if (collectionsBlock) contextLines.push(collectionsBlock);
+  const payablesSnap = choosePayables([
+    readPayablesSnapshot(xeroApRes.data?.raw_data),
+    readPayablesSnapshot(qboApRes.data?.raw_data),
+  ]);
+  const rawRunway = client?.cash_runway_weeks;
+  const storedRunway =
+    typeof rawRunway === "number"
+      ? rawRunway
+      : typeof rawRunway === "string" && rawRunway.trim()
+        ? Number(rawRunway)
+        : null;
+  const runwayWeeks = effectiveCashRunwayWeeks(
+    storedRunway,
+    client?.cashflow && typeof client.cashflow === "object" && !Array.isArray(client.cashflow)
+      ? client.cashflow
+      : null,
+  );
+  const payablesBlock = payablesPromptBlock(payablesSnap, runwayWeeks);
+  if (payablesBlock) contextLines.push(payablesBlock);
 
   let skippedReason: "ai_not_configured" | "empty_context" | undefined;
   let payload = parseClaudeProposePayload("{}");
@@ -325,9 +364,14 @@ Deno.serve(async (req: Request) => {
     skippedReason = "empty_context";
   } else {
     try {
+      const agedLists =
+        collectionsSnap?.status === "applied" || payablesSnap?.status === "applied";
       const claude = await callClaude(
-        collectionsSnap?.status === "applied"
-          ? systemPromptFor(audience, { collections: true })
+        agedLists
+          ? systemPromptFor(audience, {
+              collections: collectionsSnap?.status === "applied",
+              payables: payablesSnap?.status === "applied",
+            })
           : systemPromptFor(audience),
         `Propose next steps from this client brain. Empty arrays when evidence is missing.\n\n${contextLines.join("\n")}`,
         { maxTokens: 1400, temperature: 0.2 },
@@ -387,7 +431,7 @@ Deno.serve(async (req: Request) => {
   }
 
   const collectionsDraft = buildCollectionsDraft(collectionsSnap);
-  const openAfterPropose =
+  let openAfterPropose =
     existingSteps.filter((step) => step.status === "proposed" || step.status === "edited").length +
     toInsert.length;
   if (
@@ -421,6 +465,45 @@ Deno.serve(async (req: Request) => {
     const { error: colErr } = await userClient.from("proposed_next_steps").insert(row);
     if (colErr) {
       console.error("collections draft insert:", colErr.message);
+    } else {
+      stepsInserted += 1;
+      openAfterPropose += 1;
+    }
+  }
+
+  const payablesDraft = buildPayablesDraft(payablesSnap, runwayWeeks);
+  if (
+    payablesDraft &&
+    openAfterPropose < MAX_OPEN_PROPOSED_STEPS &&
+    !existingSteps.some(
+      (step) =>
+        (step.status === "proposed" || step.status === "edited") &&
+        titlesSimilar(step.title, payablesDraft.title),
+    ) &&
+    !toInsert.some((step) => titlesSimilar(step.title, payablesDraft.title)) &&
+    !(collectionsDraft && titlesSimilar(collectionsDraft.title, payablesDraft.title))
+  ) {
+    const row = {
+      client_id: clientId,
+      title: payablesDraft.title,
+      rationale: payablesDraft.rationale,
+      assumptions: payablesDraft.assumptions,
+      problem: payablesDraft.problem,
+      evidence: payablesDraft.evidence,
+      priority: payablesDraft.priority,
+      confidence: 0.8,
+      data_depth: payablesDraft.dataDepth,
+      expected_impact_metric: payablesDraft.expectedImpact.metric,
+      expected_impact_amount: payablesDraft.expectedImpact.amount,
+      expected_impact_horizon_days: payablesDraft.expectedImpact.horizonDays,
+      expected_impact_note: payablesDraft.expectedImpact.note,
+      source: "system",
+      status: "proposed",
+      created_by: user.id,
+    };
+    const { error: payErr } = await userClient.from("proposed_next_steps").insert(row);
+    if (payErr) {
+      console.error("payables draft insert:", payErr.message);
     } else {
       stepsInserted += 1;
     }
