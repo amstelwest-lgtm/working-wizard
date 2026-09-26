@@ -8,6 +8,7 @@
  *   Profit        waterfall | profit
  *   Action plan   tasks | plan
  *   Cash          cash
+ *   Collections   collections (accountant only)
  *   Budget        budget
  *
  * No parallel page (stay in Open queries; do not dump the user on the wrong tab):
@@ -33,6 +34,7 @@ export const ACCOUNTANT_NOTE_TABS = [
   "ratios",
   "profit",
   "cash",
+  "collections",
   "budget",
   "reports",
   "plan",
@@ -45,6 +47,7 @@ const TAB_GROUPS: readonly (readonly string[])[] = [
   ["waterfall", "profit"],
   ["tasks", "plan"],
   ["cash"],
+  ["collections"],
   ["budget"],
   ["next"],
   ["overview"],
@@ -67,6 +70,7 @@ export const NOTE_TAB_LABELS: Record<string, string> = {
   profit: "Profit",
   next: "Next moves",
   cash: "Cash",
+  collections: "Collections",
   budget: "Budget",
   tasks: "Action plan",
   plan: "Action plan",

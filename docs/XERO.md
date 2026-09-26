@@ -77,16 +77,26 @@ accounting.settings.read
 accounting.reports.profitandloss.read
 accounting.reports.balancesheet.read
 accounting.reports.banksummary.read
+accounting.reports.aged.read
+accounting.contacts.read
 ```
 
 `accounting.reports.banksummary.read` is the Bank Summary report (account names
-and balances). Do not enable `accounting.banktransactions` or a bank-feed
-scope for this sync.
+and balances). `accounting.reports.aged.read` is Aged Receivables by contact.
+`accounting.contacts.read` supplies the customer name for that report. Do not
+enable `accounting.banktransactions`, `accounting.invoices`, or a bank-feed
+scope for this sync. Collections does not write invoices or send email.
+
+Aged receivables are cached on the existing `xero_sync_data` row
+`data_type = 'aged_ar'`. That upsert does not rewrite the P&L, balance sheet,
+or bank rows. No new table.
 
 **Existing connections must reconnect.** A Xero refresh token keeps only the
-scopes granted at the last consent. After the new scope is ticked, disconnect
+scopes granted at the last consent. After a new scope is ticked, disconnect
 the organisation in Milōn and connect it again. Until then, Sync still saves
-P&L and the balance sheet, and the card says bank balances need a reconnect.
+P&L, the balance sheet, and bank balances. The card says bank balances need a
+reconnect when that scope is missing, and aged receivables need a reconnect
+when the aged or contacts scope is missing.
 
 ## What Theo creates in the Xero developer portal
 
@@ -94,7 +104,7 @@ P&L and the balance sheet, and the card says bank balances need a reconnect.
 2. Open the existing **Web app** (OAuth 2.0 authorization code). Do **not**
    switch it to a Custom Connection.
 3. Confirm redirect URI `https://milonfinance.com/api/xero/callback`.
-4. Enable the five scopes above, including `accounting.reports.banksummary.read`.
+4. Enable the scopes above, including `accounting.reports.banksummary.read`, `accounting.reports.aged.read`, and `accounting.contacts.read`.
 5. Client ID and Client secret stay in the Vercel env vars — no new variable.
 6. In Milōn, disconnect Yankees Demo Company (Global) and connect it again so
    the consent screen grants the bank summary scope. Then Sync.

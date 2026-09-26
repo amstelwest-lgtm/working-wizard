@@ -2,7 +2,7 @@
 
 Compared with `XERO_DEFAULT_SCOPES` in `src/lib/xero.ts` on this branch, and with what Sync actually calls.
 
-OAuth scopes are **not** expanded in this change. `accounting.reports.banksummary.read` was already requested. A refresh token keeps only the scopes from the last consent, so a connection made before that scope was granted still needs disconnect + connect. This table is the map for later phases.
+P1 Collections requests `accounting.reports.aged.read` and `accounting.contacts.read` in addition to the statement scopes. A refresh token keeps only the scopes from the last consent, so an existing connection must disconnect and connect again. Do not add invoice, bank-transaction, or budget scopes in this pull. This table is the map for later phases.
 
 `offline_access` is requested and is not in the developer-portal list below. It is what lets Sync refresh the token. Keep it.
 
@@ -16,7 +16,7 @@ OAuth scopes are **not** expanded in this change. `accounting.reports.banksummar
 | app.connections | no | no — `GET /connections` uses the user token | P2 ignore | — |
 | accounting.settings | no | no — write | P2 ignore | Do not post settings back to Xero |
 | accounting.contacts | no | no — write | P2 ignore | — |
-| accounting.contacts.read | no | no | P1 | Action Plan, Bot — customer and supplier names, after invoices or aged detail exist |
+| accounting.contacts.read | yes | yes — contact names for Aged Receivables by contact. Not a write. | P1 | Collections |
 | accounting.attachments | no | no — write | P2 ignore | — |
 | accounting.attachments.read | no | no | P2 ignore | — |
 | accounting.budgets.read | no | no | P1 | Budget |
@@ -28,7 +28,7 @@ OAuth scopes are **not** expanded in this change. `accounting.reports.banksummar
 | accounting.banktransactions.read | no | no | P1 | Cash — replace the even weekly run-rate with real weeks. Not required for Bank Summary |
 | accounting.manualjournals | no | no — write | P2 ignore | — |
 | accounting.manualjournals.read | no | no | P2 ignore | — |
-| accounting.reports.aged.read | no | no | P1 | Health, Cash, Action Plan — aged debtors and creditors. The statement-depth disclosure already points at this report |
+| accounting.reports.aged.read | yes | yes — `Reports/AgedReceivablesByContact` on Sync, cached as `xero_sync_data.data_type = aged_ar` | P1 | Collections, Bot, Action Plan |
 | accounting.reports.budgetsummary.read | no | no | P1 | Budget — budget versus actual |
 | accounting.reports.executivesummary.read | no | no | P2 | Health already uses P&L and the balance sheet |
 | accounting.reports.trialbalance.read | no | no | P2 | Bot — tie-out, not a board figure |

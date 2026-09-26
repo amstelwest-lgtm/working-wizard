@@ -146,7 +146,14 @@ export function trackRecordLines(rows: OutcomeRow[]): string[] {
   return out.sort();
 }
 
-export function systemPromptFor(audience: ProposeAudience): string {
+export function systemPromptFor(
+  audience: ProposeAudience,
+  opts?: { collections?: boolean },
+): string {
+  const collectionsRule = opts?.collections
+    ? "- An aged receivables list is in the context. Do not name customers or invoices yourself; a collections draft is filed from that list. Refer to overdue receivables only using totals printed in that list."
+    : null;
+  const rules = collectionsRule ? [...SHARED_RULES, collectionsRule] : SHARED_RULES;
   if (audience === "owner") {
     return [
       "You are a sharp SME CFO copilot talking directly to the business owner. There is no accountant in the loop.",
@@ -154,7 +161,7 @@ export function systemPromptFor(audience: ProposeAudience): string {
       "Schema:",
       SCHEMA_LINE,
       "Rules:",
-      ...SHARED_RULES,
+      ...rules,
       "- Write in plain language the owner can act on this week. No accounting jargon without a one-clause explanation.",
       "- Titles must be concrete moves the owner can Accept or decline; rationale says what should change in cash or profit and roughly by how much, when the numbers support it.",
       "- Frame everything as analysis and suggestion, never as regulated financial, tax or legal advice.",
@@ -166,7 +173,7 @@ export function systemPromptFor(audience: ProposeAudience): string {
     "Schema:",
     SCHEMA_LINE,
     "Rules:",
-    ...SHARED_RULES,
+    ...rules,
     "- Titles must be concrete actions an accountant could Approve / Edit / Reject.",
   ].join("\n");
 }
@@ -176,6 +183,8 @@ export function systemPromptFor(audience: ProposeAudience): string {
 const OVERCLAIM_PATTERNS: RegExp[] = [
   /\b(these|those|the|your|top|five|5|ten|10)\s+(\w+\s+){0,2}invoices?\b/i,
   /\binvoices?\s+(#|no\.?|number)\s*\w+/i,
+  /\bINV-\d+/i,
+  /\binvoices?:\s+\S+/i,
   /\b(customers?|clients?|debtors?)\s+(who|that|which)\s+(owe|owes|haven'?t|hasn'?t|are|is)\b/i,
   /\b(largest|biggest|top|slowest)\s+(\w+\s+){0,2}(customers?|debtors?|suppliers?|creditors?)\b/i,
   /\b(this|that|the)\s+(transaction|payment|receipt|supplier invoice)\b/i,

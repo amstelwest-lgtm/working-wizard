@@ -69,8 +69,10 @@ Tick **Accounting** only. The OAuth scope string is:
 com.intuit.quickbooks.accounting
 ```
 
-That covers CompanyInfo, Profit and Loss, Balance Sheet, and Cash Flow. Do not
-add Payments, Payroll, or OpenID.
+That covers CompanyInfo, Profit and Loss, Balance Sheet, Cash Flow, and the
+Aged Receivables report (customer names are on the report). Do not add
+Payments, Payroll, or OpenID. Sync stores the chase list on `qbo_sync_data`
+with `data_type = 'aged_ar'`. No new Intuit consent.
 
 ## What Theo does in the Intuit Developer portal
 

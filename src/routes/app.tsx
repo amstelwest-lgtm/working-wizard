@@ -23,6 +23,7 @@ import {
   MoreHorizontal,
 } from "lucide-react";
 import { NextStepsPanel } from "@/components/next-steps-panel";
+import { CollectionsOverdueNote } from "@/components/collections-overdue-note";
 import { formatVal, HealthBar, tierColor } from "@/components/owner-board-ui";
 import { MarketProvider, useMarket } from "@/contexts/market";
 import { MarketGate } from "@/components/market-gate";
@@ -4694,6 +4695,7 @@ function Index() {
                                   <AddPastPeriodLink onOpen={() => setPastPeriodOpen(true)} />
                                 </p>
                               ) : null}
+                              <CollectionsOverdueNote clientId={effectiveClientId} market={boardMarket} />
                               <div className="relative rounded-xl border border-slate-200/90 bg-white px-3 py-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)] dark:border-white/10 dark:bg-[#0f172a]/40 dark:shadow-none sm:px-5">
                                 <div className="pointer-events-none absolute right-2 top-2 z-20 hidden sm:block sm:right-3 sm:top-3">
                                   <ReviewSignoffBadge
