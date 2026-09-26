@@ -1720,43 +1720,58 @@ function Dashboard() {
                         {opMarginStr(c)}
                       </td>
                       <td data-label="Status">
-                        <StatusPill variant={statusPillFromHealth(c.health.displayStatus)}>
-                          {chip.label}
-                        </StatusPill>
-                        {qbo && (
-                          <span
-                            title={`QuickBooks${qbo.companyName ? ` — ${qbo.companyName}` : ""}`}
-                            style={{
-                              fontSize: 9,
-                              fontWeight: 800,
-                              letterSpacing: "0.08em",
-                              color: "#fff",
-                              background: "#2CA01C",
-                              padding: "2px 6px",
-                              borderRadius: 4,
-                              marginLeft: 6,
-                            }}
-                          >
-                            QB
-                          </span>
-                        )}
-                        {xero && (
-                          <span
-                            title={`Xero${xero.tenantName ? ` — ${xero.tenantName}` : ""}`}
-                            style={{
-                              fontSize: 9,
-                              fontWeight: 800,
-                              letterSpacing: "0.08em",
-                              color: "#07212b",
-                              background: "#13B5EA",
-                              padding: "2px 6px",
-                              borderRadius: 4,
-                              marginLeft: 6,
-                            }}
-                          >
-                            XO
-                          </span>
-                        )}
+                        <div
+                          style={{
+                            display: "flex",
+                            flexDirection: "column",
+                            alignItems: "flex-start",
+                            gap: 6,
+                          }}
+                        >
+                          <StatusPill variant={statusPillFromHealth(c.health.displayStatus)}>
+                            {chip.label}
+                          </StatusPill>
+                          {(qbo || xero) && (
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                              {qbo && (
+                                <span
+                                  title={`QuickBooks${qbo.companyName ? ` — ${qbo.companyName}` : ""}`}
+                                  style={{
+                                    fontSize: 9,
+                                    fontWeight: 800,
+                                    letterSpacing: "0.08em",
+                                    color: "#fff",
+                                    background: "#2CA01C",
+                                    padding: "2px 6px",
+                                    borderRadius: 4,
+                                  }}
+                                >
+                                  QB
+                                </span>
+                              )}
+                              {xero && (
+                                <span
+                                  title={`Xero${xero.tenantName ? ` — ${xero.tenantName}` : ""}`}
+                                  aria-label="Xero connected"
+                                  style={{
+                                    display: "inline-block",
+                                    fontSize: 11,
+                                    fontWeight: 800,
+                                    letterSpacing: "0.01em",
+                                    textTransform: "none",
+                                    color: "#fff",
+                                    background: "#13B5EA",
+                                    padding: "2px 8px",
+                                    borderRadius: 4,
+                                    whiteSpace: "nowrap",
+                                  }}
+                                >
+                                  xero
+                                </span>
+                              )}
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td data-label="">
                         <div className="row-actions" onClick={(e) => e.stopPropagation()}>
