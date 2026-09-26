@@ -41,6 +41,30 @@ function fmtExact(n: number | null) {
   return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+function bankSummaryLines(input: {
+  from: string | null;
+  to: string | null;
+  count: number | null;
+  total: number | null;
+  warning: string | null;
+  openingNote: string | null;
+  linesNote: string | null;
+}): string[] {
+  const window =
+    input.from && input.to
+      ? `Bank Summary ${formatIsoDateUTC(input.from)} – ${formatIsoDateUTC(input.to)}`
+      : null;
+  const accounts =
+    input.count == null
+      ? null
+      : `${input.count} bank ${input.count === 1 ? "account" : "accounts"}${
+          input.total != null ? ` · ${fmtExact(input.total)}` : ""
+        }`;
+  return [window, accounts, input.warning, input.openingNote, input.linesNote].filter(
+    (line): line is string => Boolean(line),
+  );
+}
+
 export function XeroConnectCard({ clientId, returnPath, refreshToken = 0, onSyncComplete }: Props) {
   const fetchStatus = useServerFn(getXeroStatus);
   const fetchAuthUrl = useServerFn(getXeroAuthUrl);
@@ -99,10 +123,18 @@ export function XeroConnectCard({ clientId, returnPath, refreshToken = 0, onSync
       const result = await doSync({ data: { clientId } });
       setLastSync(result.summary);
       onSyncComplete?.(result.fields, result.summary);
+      const bankStatus = [
+        result.summary.openingCashNote,
+        result.summary.forecastLinesNote,
+        result.summary.bankWarning,
+      ]
+        .filter((line): line is string => Boolean(line))
+        .join(" ");
       toast.success(
         result.summary.bankWarning
-          ? "Xero sync saved the P&L and balance sheet. Bank balances need a reconnect."
-          : "Xero sync complete — P&L, balance sheet and bank balances updated",
+          ? "Xero sync saved the P&L and balance sheet."
+          : "Xero sync complete.",
+        bankStatus ? { description: bankStatus } : undefined,
       );
       await load();
     } catch (err) {
@@ -158,6 +190,15 @@ export function XeroConnectCard({ clientId, returnPath, refreshToken = 0, onSync
 
   if (status) {
     const isError = status.syncStatus === "error" || status.phase === "error";
+    const bankLines = bankSummaryLines({
+      from: lastSync?.bankFrom ?? status.bankFrom,
+      to: lastSync?.bankTo ?? status.bankTo,
+      count: lastSync?.bankCount ?? status.bankCount,
+      total: lastSync?.bankTotal ?? status.bankTotal,
+      warning: lastSync?.bankWarning ?? status.bankWarning,
+      openingNote: lastSync?.openingCashNote ?? status.openingCashNote,
+      linesNote: lastSync?.forecastLinesNote ?? status.forecastLinesNote,
+    });
     return (
       <div className={`ledger-connect ${isError ? "ledger-connect--error" : "ledger-connect--xero"}`}>
         <div className="ledger-connect__head">
@@ -200,15 +241,16 @@ export function XeroConnectCard({ clientId, returnPath, refreshToken = 0, onSync
                 formatIsoDateUTC(lastSync?.bsAsOf ?? status.bsAsOf) || "the last sync"
               }`}
               <br />
-              {status.bankCount != null || lastSync?.bankCount != null
-                ? `${lastSync?.bankCount ?? status.bankCount} bank ${
-                    (lastSync?.bankCount ?? status.bankCount) === 1 ? "account" : "accounts"
-                  }${
-                    (lastSync?.bankTotal ?? status.bankTotal) != null
-                      ? ` · ${fmtExact(lastSync?.bankTotal ?? status.bankTotal ?? null)}`
-                      : ""
-                  }`
-                : (lastSync?.bankWarning ?? status.bankWarning ?? "Bank balances appear after the next Sync")}
+              <span id="xero-bank-summary-status">
+                {bankLines.length
+                  ? bankLines.map((line, index) => (
+                      <span key={`${index}-${line}`}>
+                        {index > 0 ? <br /> : null}
+                        {line}
+                      </span>
+                    ))
+                  : "Bank balances appear after the next Sync"}
+              </span>
             </p>
           </div>
           <div className="ledger-connect__actions">

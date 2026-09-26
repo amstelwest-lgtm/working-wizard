@@ -36,6 +36,10 @@ export type LedgerLinkProof = {
   bankCount?: number | null;
   bankTotal?: number | null;
   bankWarning?: string | null;
+  bankFrom?: string | null;
+  bankTo?: string | null;
+  openingCashNote?: string | null;
+  forecastLinesNote?: string | null;
 };
 
 export type XeroLinkProof = LedgerLinkProof;
@@ -107,6 +111,12 @@ function LedgerProof({
           Balance sheet as of {formatIsoDateUTC(link.bsAsOf)}
         </>
       ) : null}
+      {link.bankFrom && link.bankTo ? (
+        <>
+          <br />
+          Bank Summary {formatIsoDateUTC(link.bankFrom)} – {formatIsoDateUTC(link.bankTo)}
+        </>
+      ) : null}
       {link.bankCount != null ? (
         <>
           <br />
@@ -119,6 +129,18 @@ function LedgerProof({
         <>
           <br />
           {link.bankWarning}
+        </>
+      ) : null}
+      {link.openingCashNote ? (
+        <>
+          <br />
+          {link.openingCashNote}
+        </>
+      ) : null}
+      {link.forecastLinesNote ? (
+        <>
+          <br />
+          {link.forecastLinesNote}
         </>
       ) : null}
     </p>

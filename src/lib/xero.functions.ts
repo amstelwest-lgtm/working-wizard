@@ -5,7 +5,13 @@ import { assertClientScope } from "@/lib/assert-client-scope";
 import { getSupabaseAdminOrNull, supabaseAdmin } from "@/integrations/supabase/client.server";
 import { computeRatios, type RatioInputs } from "@/lib/ratios";
 import { calendarMonthStamp, readStatementMeta, XERO_YTD_FIELD_KEYS } from "@/lib/statement-period";
-import { applyXeroOpeningCash } from "@/lib/xero-opening";
+import { runwayWeeksFromCashflow, type SavedCashflowLike } from "@/lib/cash-runway";
+import {
+  applyXeroOpeningCash,
+  describeXeroOpeningCash,
+  seedXeroBankForecastLines,
+  type XeroOpeningCashSource,
+} from "@/lib/xero-opening";
 import {
   reduceXeroConnection,
   sanitizeXeroReturnPath,
@@ -105,6 +111,10 @@ export type XeroStatus = {
   bankCount: number | null;
   bankTotal: number | null;
   bankWarning: string | null;
+  bankFrom: string | null;
+  bankTo: string | null;
+  openingCashNote: string | null;
+  forecastLinesNote: string | null;
 } | null;
 
 function numField(fields: Record<string, unknown>, key: string): number | null {
@@ -130,6 +140,10 @@ function xeroFigureProof(financials: unknown): {
   bankCount: number | null;
   bankTotal: number | null;
   bankWarning: string | null;
+  bankFrom: string | null;
+  bankTo: string | null;
+  openingCashNote: string | null;
+  forecastLinesNote: string | null;
 } {
   const empty = {
     periodLabel: null,
@@ -148,6 +162,10 @@ function xeroFigureProof(financials: unknown): {
     bankCount: null,
     bankTotal: null,
     bankWarning: null,
+    bankFrom: null,
+    bankTo: null,
+    openingCashNote: null,
+    forecastLinesNote: null,
   };
   if (!financials || typeof financials !== "object" || Array.isArray(financials)) return empty;
   const meta = readStatementMeta(financials);
@@ -170,6 +188,10 @@ function xeroFigureProof(financials: unknown): {
     bankCount: null,
     bankTotal: null,
     bankWarning: null,
+    bankFrom: null,
+    bankTo: null,
+    openingCashNote: null,
+    forecastLinesNote: null,
   };
 }
 
@@ -242,6 +264,10 @@ export const getXeroStatus = createServerFn({ method: "POST" })
       bankCount: coverage.bankCount,
       bankTotal: coverage.bankTotal,
       bankWarning: coverage.bankWarning,
+      bankFrom: coverage.bankFrom,
+      bankTo: coverage.bankTo,
+      openingCashNote: coverage.openingCashNote,
+      forecastLinesNote: coverage.forecastLinesNote,
     };
   });
 
@@ -310,6 +336,10 @@ export type XeroSyncResult = {
     bankCount: number | null;
     bankTotal: number | null;
     bankWarning: string | null;
+    bankFrom: string | null;
+    bankTo: string | null;
+    openingCashNote: string | null;
+    forecastLinesNote: string | null;
   };
 };
 
@@ -495,18 +525,48 @@ export const triggerXeroSync = createServerFn({ method: "POST" })
 
       const nowIso = new Date().toISOString();
       const cashPosition = resolveXeroCash(bs, ledger.bank);
+      const cashSource: XeroOpeningCashSource =
+        ledger.bank && ledger.bank.accounts.length > 0 && Number.isFinite(ledger.bank.totalClosing)
+          ? "bank_summary"
+          : "balance_sheet";
       const opening = applyXeroOpeningCash(
         (existing as { cashflow?: unknown } | null)?.cashflow,
         cashPosition,
         ledger.to,
       );
+      const round2 = (n: number) => Math.round(n * 100) / 100;
+      const flows = ledger.bank
+        ? {
+            accountCount: ledger.bank.accounts.length,
+            cashReceived: round2(
+              ledger.bank.accounts.reduce((sum, account) => sum + account.cashReceived, 0),
+            ),
+            cashSpent: round2(
+              ledger.bank.accounts.reduce((sum, account) => sum + account.cashSpent, 0),
+            ),
+            from: ledger.bank.from,
+            to: ledger.bank.to,
+          }
+        : null;
+      const seeded = seedXeroBankForecastLines(opening.cashflow, flows);
+      const openingCashNote = describeXeroOpeningCash(opening.reason, cashPosition, cashSource);
+      const forecastLinesNote = seeded.reason;
+      const cashflowChanged = opening.changed || seeded.changed;
+      const runway = cashflowChanged
+        ? runwayWeeksFromCashflow(seeded.cashflow as SavedCashflowLike)
+        : null;
+      const bankWindow = ledger.bank ?? { ...bankSummaryRange(ledger.to), accounts: [] as const };
       await supabaseAdmin
         .from("clients")
         .update({
           financials: merged as never,
           financials_updated_at: nowIso,
-          ...(opening.changed
-            ? { cashflow: opening.cashflow as never, last_forecast_at: nowIso }
+          ...(cashflowChanged
+            ? {
+                cashflow: seeded.cashflow as never,
+                last_forecast_at: nowIso,
+                ...(runway != null ? { cash_runway_weeks: runway } : {}),
+              }
             : {}),
         })
         .eq("id", data.clientId);
@@ -546,14 +606,19 @@ export const triggerXeroSync = createServerFn({ method: "POST" })
         {
           client_id: data.clientId,
           data_type: "bank",
-          raw_data: (ledger.bank
-            ? { ...ledger.bank, warning: null }
-            : {
-                ...bankSummaryRange(ledger.to),
-                accounts: [],
-                totalClosing: null,
-                warning: ledger.bankWarning,
-              }) as never,
+          raw_data: {
+            ...(ledger.bank
+              ? { ...ledger.bank, warning: null }
+              : {
+                  from: bankWindow.from,
+                  to: bankWindow.to,
+                  accounts: [],
+                  totalClosing: null,
+                  warning: ledger.bankWarning,
+                }),
+            openingCash: { status: opening.reason, reason: openingCashNote },
+            forecastLines: { status: seeded.status, reason: forecastLinesNote },
+          } as never,
           synced_at: nowIso,
         },
       ];
@@ -594,6 +659,10 @@ export const triggerXeroSync = createServerFn({ method: "POST" })
           bankCount: ledger.bank ? ledger.bank.accounts.length : null,
           bankTotal: ledger.bank ? ledger.bank.totalClosing : null,
           bankWarning: ledger.bankWarning,
+          bankFrom: bankWindow.from,
+          bankTo: bankWindow.to,
+          openingCashNote,
+          forecastLinesNote,
           cash: cashPosition,
         },
       };

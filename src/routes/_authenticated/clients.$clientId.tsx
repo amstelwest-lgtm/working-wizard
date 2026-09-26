@@ -2323,6 +2323,10 @@ function ClientView() {
                           bankCount: xeroLink.bankCount,
                           bankTotal: xeroLink.bankTotal,
                           bankWarning: xeroLink.bankWarning,
+                          bankFrom: xeroLink.bankFrom,
+                          bankTo: xeroLink.bankTo,
+                          openingCashNote: xeroLink.openingCashNote,
+                          forecastLinesNote: xeroLink.forecastLinesNote,
                         }
                       : null
                   }

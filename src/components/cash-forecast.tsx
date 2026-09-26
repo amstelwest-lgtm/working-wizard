@@ -471,6 +471,19 @@ export function CashForecastPanel({
   // otherwise merely opening the forecast bumps last_forecast_at and falsely
   // invalidates an accountant's sign-off with no real data change.
   const skipNextAutosave = useRef(false);
+  const [xeroBankNote, setXeroBankNote] = useState<string | null>(null);
+  const xeroBankNoteRef = useRef<string | null>(null);
+  const xeroCashMarkers = useRef<{
+    openingSource: "xero" | null;
+    openingBalance: string | null;
+    linesSource: "xero-bank-summary" | null;
+    linesKey: string | null;
+  }>({
+    openingSource: null,
+    openingBalance: null,
+    linesSource: null,
+    linesKey: null,
+  });
 
   useEffect(() => {
     if (openBankUploadToken == null || openBankUploadToken <= 0) return;
@@ -584,6 +597,9 @@ export function CashForecastPanel({
       const cf = data?.cashflow as {
         startDate?: string;
         openingBalance?: string;
+        openingBalanceSource?: string;
+        forecastLinesSource?: string;
+        forecastLinesNote?: string;
         revenue?: LineItem[];
         expenses?: LineItem[];
         other?: LineItem[];
@@ -600,6 +616,25 @@ export function CashForecastPanel({
       const finCash = (data?.financials as { cash?: string | number | null } | null)?.cash;
       const seededOpening = forecastOpeningFromStored(cf?.openingBalance, finCash);
       if (seededOpening) setOpeningBalance(seededOpening);
+      const shownOpening =
+        seededOpening ??
+        (cf?.openingBalance != null && cf.openingBalance !== "" ? String(cf.openingBalance) : null);
+      xeroCashMarkers.current = {
+        openingSource: cf?.openingBalanceSource === "xero" && !seededOpening ? "xero" : null,
+        openingBalance: shownOpening,
+        linesSource: cf?.forecastLinesSource === "xero-bank-summary" ? "xero-bank-summary" : null,
+        linesKey: JSON.stringify({
+          revenue: cf?.revenue ?? null,
+          expenses: cf?.expenses ?? null,
+          other: cf?.other ?? null,
+        }),
+      };
+      const bankNote =
+        cf?.forecastLinesSource === "xero-bank-summary" && typeof cf.forecastLinesNote === "string"
+          ? cf.forecastLinesNote
+          : null;
+      xeroBankNoteRef.current = bankNote;
+      setXeroBankNote(bankNote);
       if (cf) {
         if (cf.startDate) setStartDate(cf.startDate);
         if (!seededOpening && cf.openingBalance != null) setOpeningBalance(cf.openingBalance);
@@ -667,6 +702,10 @@ export function CashForecastPanel({
       return;
     }
     const t = setTimeout(async () => {
+      const markers = xeroCashMarkers.current;
+      const linesUntouched =
+        markers.linesSource === "xero-bank-summary" &&
+        JSON.stringify({ revenue, expenses, other }) === markers.linesKey;
       const payload = {
         startDate,
         openingBalance,
@@ -682,6 +721,15 @@ export function CashForecastPanel({
         revGrowthPct,
         capexAmount,
         capexWeek,
+        ...(markers.openingSource === "xero" && openingBalance === markers.openingBalance
+          ? { openingBalanceSource: "xero" as const }
+          : {}),
+        ...(linesUntouched
+          ? {
+              forecastLinesSource: "xero-bank-summary" as const,
+              ...(xeroBankNoteRef.current ? { forecastLinesNote: xeroBankNoteRef.current } : {}),
+            }
+          : {}),
       };
       const forecastUpdatedAt = new Date().toISOString();
       const runway = runwayWeeksFromCashflow(payload);
@@ -1179,6 +1227,14 @@ export function CashForecastPanel({
                   13-week closing balance
                   {horizonLabel ? ` · ${horizonLabel}` : ""} · opening {fmtR(calc.opening)}
                 </p>
+                {xeroBankNote ? (
+                  <p
+                    id="xero-bank-forecast-note"
+                    className="mt-2 max-w-xl text-xs text-slate-600 dark:text-slate-400"
+                  >
+                    {xeroBankNote}
+                  </p>
+                ) : null}
               </div>
               <div className="flex flex-col items-end gap-1.5">
                 {heroBadge}
@@ -1706,6 +1762,14 @@ export function CashForecastPanel({
               className={INPUT_CLS}
             />
           </div>
+          {xeroBankNote ? (
+            <p
+              id="xero-bank-forecast-note"
+              className="text-xs text-slate-600 md:col-span-2 dark:text-slate-400"
+            >
+              {xeroBankNote}
+            </p>
+          ) : null}
         </div>
       </CollapsibleGoldCard>
 
