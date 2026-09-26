@@ -278,6 +278,8 @@ const TRANSACTION_LEVEL_CLAIMS: ReadonlyArray<{ re: RegExp; what: string }> = [
     what: "specific invoices",
   },
   { re: /\binvoices?\s+(#|no\.?|number)\s*\w+/i, what: "an invoice number" },
+  { re: /\bINV-\d+/i, what: "an invoice number" },
+  { re: /\binvoices?:\s+\S+/i, what: "specific invoices" },
   {
     re: /\b(customers?|clients?|debtors?)\s+(who|that|which)\s+(owe|owes|haven'?t|hasn'?t|are|is)\b/i,
     what: "named customers",

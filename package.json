@@ -90,6 +90,7 @@
     "test:workflow-emails": "vite-node --config scripts/vite-test.config.ts scripts/workflow-emails-test.mts",
     "test:outcomes": "vite-node --config scripts/vite-test.config.ts scripts/outcomes-test.mts",
     "test:marketplace": "vite-node --config scripts/vite-test.config.ts scripts/marketplace-test.mts",
+    "test:collections": "vite-node --config scripts/vite-test.config.ts scripts/collections-test.mts",
     "test:xero-mapper": "vite-node --config scripts/vite-test.config.ts scripts/xero-mapper-test.mts",
     "test:xero-state": "vite-node --config scripts/vite-test.config.ts scripts/xero-state-test.mts",
     "test:qbo-state": "vite-node --config scripts/vite-test.config.ts scripts/qbo-state-test.mts",

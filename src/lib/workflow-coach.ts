@@ -27,7 +27,7 @@ export type CoachStepId = (typeof COACH_STEPS)[number]["id"];
 export type CoachStep = (typeof COACH_STEPS)[number];
 
 /** Pages that show the coach but are not themselves a spine step. */
-export type CoachSidePage = "ask" | "reports" | "advisory";
+export type CoachSidePage = "ask" | "reports" | "advisory" | "collections";
 export type CoachPage = CoachStepId | CoachSidePage;
 
 export type CoachDone = Partial<Record<CoachStepId, boolean>>;
@@ -51,6 +51,7 @@ const DELIVERABLE_TABS = new Set([
   "ratios",
   "profit",
   "cash",
+  "collections",
   "budget",
   "reports",
   "plan",
@@ -73,6 +74,7 @@ const DEFAULT_BECAUSE: Record<CoachPage, string> = {
   pillars: "each pillar shows where the score actually hurts",
   profit: "the waterfall is the evidence for margin — how revenue becomes profit",
   cash: "the 13-week forecast is the evidence for liquidity",
+  collections: "the chase list names who owes what, from the aged receivables report",
   budget: "the budget tests whether the plan fits the numbers",
   actions: "the read is done — these are the moves to assign",
   ask: "Milōn Bot drafts the next read from what is already on file",
@@ -104,6 +106,7 @@ const INTENTS: Record<string, Intent> = {
     because: "financing is the weak pillar, and the budget shows what that structure can carry",
   },
   budget: { page: "budget", because: DEFAULT_BECAUSE.budget },
+  collections: { page: "collections", because: DEFAULT_BECAUSE.collections },
   actions: { page: "actions", because: "the diagnosis is ready to become assigned moves" },
 };
 
@@ -121,6 +124,8 @@ export function coachPageForTab(tab: string, focus?: string | null): CoachPage |
       return "profit";
     case "cash":
       return "cash";
+    case "collections":
+      return "collections";
     case "budget":
       return "budget";
     case "plan":
@@ -238,7 +243,7 @@ export function coachView(input: {
   };
 }
 
-type HandoffKind = "data" | "health" | "pillars" | "profit" | "cash" | "budget" | "actions";
+type HandoffKind = "data" | "health" | "pillars" | "profit" | "cash" | "collections" | "budget" | "actions";
 
 const HANDOFF: Record<HandoffKind, CoachDestination & { label: string }> = {
   data: { tab: "summary", coach: "data", label: "Open Data" },
@@ -246,6 +251,7 @@ const HANDOFF: Record<HandoffKind, CoachDestination & { label: string }> = {
   pillars: { tab: "ratios", focus: "pillars", coach: "pillars", label: "Open Pillars" },
   profit: { tab: "profit", coach: "margin", label: "Open Profitability" },
   cash: { tab: "cash", coach: "liquidity", label: "Open Cash" },
+  collections: { tab: "collections", coach: "collections", label: "Open Collections" },
   budget: { tab: "budget", coach: "budget", label: "Open Budget" },
   actions: { tab: "plan", coach: "actions", label: "Open Actions" },
 };
@@ -262,6 +268,8 @@ export function deliverableHandoff(
   let kind: HandoffKind | null = null;
   if (/\b(action plan|assign(ed|ing)?|next steps?)\b/.test(q)) kind = "actions";
   else if (/\bbudget\b/.test(q)) kind = "budget";
+  else if (/\b(collections?|chase list|aged receivables?|aged debtors?)\b/.test(q))
+    kind = "collections";
   else if (/\b(cash|liquidity|runway|forecast|13-week|13 week|debtor|working capital)\b/.test(q))
     kind = "cash";
   else if (/\b(margin|waterfall|profit|gross)\b/.test(q)) kind = "profit";

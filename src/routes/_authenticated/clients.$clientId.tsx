@@ -8,6 +8,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
 import { AdvisoryDrafter } from "@/components/advisory-drafter";
 import { CashForecastPanel } from "@/components/cash-forecast";
+import { CollectionsPanel } from "@/components/collections-panel";
 import { BudgetPanel } from "@/components/budget/budget-panel";
 import type { ExistingCashflow } from "@/lib/cash-from-banks.publish";
 import { UploadFinancials } from "@/components/upload-financials";
@@ -477,6 +478,7 @@ type ActiveTab =
   | "ratios"
   | "profit"
   | "cash"
+  | "collections"
   | "budget"
   | "reports"
   | "plan"
@@ -490,6 +492,7 @@ const ACCOUNTANT_TABS: ActiveTab[] = [
   "ratios",
   "profit",
   "cash",
+  "collections",
   "budget",
   "reports",
   "plan",
@@ -506,6 +509,7 @@ const DELIVERABLE_RAIL: { id: ActiveTab; label: string; star?: boolean }[] = [
   { id: "ratios", label: "Health & Ratios" },
   { id: "profit", label: "Profitability" },
   { id: "cash", label: "13-Week Cash Forecast", star: true },
+  { id: "collections", label: "Collections" },
   { id: "budget", label: "Budget" },
   { id: "reports", label: "Reports", star: true },
   { id: "plan", label: "Action Plan", star: true },
@@ -3107,6 +3111,24 @@ function ClientView() {
                       }}
                     />
                   </div>
+                </div>
+
+                {/* ===== COLLECTIONS ===== */}
+                <div
+                  className={`tabpane${activeTab === "collections" ? " on" : ""}`}
+                  id="pane-collections"
+                >
+                  <DeliverableTabHead
+                    eyebrow="Collections"
+                    title="Who to chase this week"
+                    lede="Named contacts and age buckets from the aged receivables report. Xero and QuickBooks stay the books. Milōn drafts the chase; it does not send it or record the receipt."
+                  />
+                  <CollectionsPanel
+                    clientId={client.id}
+                    market={clientMarket}
+                    onOpenDrafts={() => setActiveTab("advisory")}
+                    onOpenActions={() => setActiveTab("plan")}
+                  />
                 </div>
 
                 {/* ===== BUDGET TAB ===== */}

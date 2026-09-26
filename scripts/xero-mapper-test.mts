@@ -230,8 +230,8 @@ assert(pickXeroTenant([]) === null, "empty tenants");
 
 assert(
   xeroScopes() ===
-    "offline_access accounting.settings.read accounting.reports.profitandloss.read accounting.reports.balancesheet.read accounting.reports.banksummary.read",
-  "statement scopes plus bank summary",
+    "offline_access accounting.settings.read accounting.reports.profitandloss.read accounting.reports.balancesheet.read accounting.reports.banksummary.read accounting.reports.aged.read accounting.contacts.read",
+  "statement scopes plus bank summary and aged receivables",
 );
 assert(!xeroScopes().includes("invoice"), "no invoice scope");
 assert(xeroScopes().includes("accounting.reports.banksummary.read"), "bank summary scope");

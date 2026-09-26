@@ -7,6 +7,14 @@
  * Every Intuit HTTP response logs the `intuit_tid` response header.
  */
 
+import {
+  attachQboInvoiceDetail,
+  finalizeCollections,
+  parseQboAgedReceivables,
+  qboAgedSkipReason,
+  skippedCollections,
+  type CollectionsSnapshot,
+} from "@/lib/collections";
 import { PERIOD_MONTHS_KEY } from "@/lib/ratios";
 import {
   calendarMonthBounds,
@@ -423,6 +431,21 @@ export function qboBalanceSheetPath(date: string): string {
   return `/reports/BalanceSheet?${q.toString()}`;
 }
 
+/** Aged receivables summary. Accounting scope already covers this report. */
+export function qboAgedReceivablesPath(date: string): string {
+  const q = new URLSearchParams({
+    report_date: date,
+    accounting_method: "Accrual",
+  });
+  return `/reports/AgedReceivables?${q.toString()}`;
+}
+
+/** Invoice numbers and due dates for the same as-of date. */
+export function qboAgedReceivableDetailPath(date: string): string {
+  const q = new URLSearchParams({ report_date: date });
+  return `/reports/AgedReceivableDetail?${q.toString()}`;
+}
+
 export function qboCashFlowPath(from: string, to: string): string {
   const q = new URLSearchParams({
     start_date: from,
@@ -806,4 +829,50 @@ export function mapQboToFinancialInputs(
     out.ytdBasis = year.basis;
   }
   return out;
+}
+
+/**
+ * Aged receivables under the existing Accounting scope. A failed report is a
+ * skip on the connection card; P&L and the balance sheet still save.
+ */
+export async function fetchQboAgedReceivables(
+  realmId: string,
+  accessToken: string,
+  asOf: string,
+  syncedAt = new Date().toISOString(),
+): Promise<CollectionsSnapshot> {
+  try {
+    const summary = await qboGet(realmId, accessToken, qboAgedReceivablesPath(asOf));
+    let contacts = parseQboAgedReceivables(summary, asOf);
+    let note: string | null = null;
+    try {
+      const detail = await qboGet(realmId, accessToken, qboAgedReceivableDetailPath(asOf));
+      contacts = attachQboInvoiceDetail(contacts, detail, asOf);
+      if (contacts.length && contacts.every((contact) => contact.invoices.length === 0)) {
+        note =
+          "Invoice references were not on the detail report. The chase list has customer names and age buckets only.";
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "";
+      note = /\b(401|403)\b/.test(msg)
+        ? "Invoice detail was not returned. Customer names and age buckets are from the aged receivables summary."
+        : "Invoice references were not returned. The chase list has customer names and age buckets only.";
+    }
+    const headerAsOf = (summary as { Header?: { EndPeriod?: string } }).Header?.EndPeriod;
+    return finalizeCollections({
+      source: "qbo",
+      asOf: typeof headerAsOf === "string" && headerAsOf ? headerAsOf.slice(0, 10) : asOf,
+      syncedAt,
+      contacts,
+      note,
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "QuickBooks aged receivables failed";
+    return skippedCollections({
+      source: "qbo",
+      asOf,
+      syncedAt,
+      skipReason: qboAgedSkipReason(msg),
+    });
+  }
 }

@@ -189,6 +189,9 @@ export function QboConnectCard({ clientId, returnPath, refreshToken = 0, onSyncC
                     }`
                   : `Linked. Last sync ${fmtDate(status.lastSyncedAt)}. Sync again — the stored total has no period dates.`}
             </p>
+            <p id="qbo-aged-ar-status" className="ledger-connect__meta">
+              {lastSync?.agedArLine ?? status.agedArLine}
+            </p>
           </div>
           <div className="ledger-connect__actions">
             <button

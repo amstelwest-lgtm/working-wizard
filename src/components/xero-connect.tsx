@@ -251,6 +251,8 @@ export function XeroConnectCard({ clientId, returnPath, refreshToken = 0, onSync
                     ))
                   : "Bank balances appear after the next Sync"}
               </span>
+              <br />
+              <span id="xero-aged-ar-status">{lastSync?.agedArLine ?? status.agedArLine}</span>
             </p>
           </div>
           <div className="ledger-connect__actions">

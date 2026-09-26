@@ -11,6 +11,7 @@ import {
   PROPOSE_RATE_LIMIT,
   applyDraftBrainPatches,
   dropOverclaimingSteps,
+  MAX_OPEN_PROPOSED_STEPS,
   trackRecordLines,
   filterNewProposedSteps,
   ownerDripCandidatesFromStored,
@@ -18,9 +19,16 @@ import {
   pickNextOwnerDrip,
   activeOwnerDrip,
   systemPromptFor,
+  titlesSimilar,
   type DripCandidate,
   type ProposeAudience,
 } from "./logic.ts";
+import {
+  buildCollectionsDraft,
+  chooseCollections,
+  collectionsPromptBlock,
+  readCollectionsSnapshot,
+} from "./collections.ts";
 
 function buildCorsHeaders(requestOrigin: string | null): Record<string, string> {
   const allowed = Deno.env.get("ALLOWED_ORIGINS");
@@ -131,7 +139,7 @@ Deno.serve(async (req: Request) => {
     return respond({ error: "Rate limit exceeded. Try proposing again in an hour." }, 429);
   }
 
-  const [clientRes, snapRes, stepRes, qRes, outcomeRes] = await Promise.all([
+  const [clientRes, snapRes, stepRes, qRes, outcomeRes, xeroArRes, qboArRes] = await Promise.all([
     userClient
       .from("clients")
       .select(
@@ -165,6 +173,18 @@ Deno.serve(async (req: Request) => {
       .eq("client_id", clientId)
       .order("measured_at", { ascending: false })
       .limit(60),
+    adminClient
+      .from("xero_sync_data")
+      .select("raw_data")
+      .eq("client_id", clientId)
+      .eq("data_type", "aged_ar")
+      .maybeSingle(),
+    adminClient
+      .from("qbo_sync_data")
+      .select("raw_data")
+      .eq("client_id", clientId)
+      .eq("data_type", "aged_ar")
+      .maybeSingle(),
   ]);
 
   const client = clientRes.data;
@@ -289,6 +309,12 @@ Deno.serve(async (req: Request) => {
       "Open proposed next steps:\n" + openSteps.map((s) => `  - ${s.title}`).join("\n"),
     );
   }
+  const collectionsSnap = chooseCollections([
+    readCollectionsSnapshot(xeroArRes.data?.raw_data),
+    readCollectionsSnapshot(qboArRes.data?.raw_data),
+  ]);
+  const collectionsBlock = collectionsPromptBlock(collectionsSnap);
+  if (collectionsBlock) contextLines.push(collectionsBlock);
 
   let skippedReason: "ai_not_configured" | "empty_context" | undefined;
   let payload = parseClaudeProposePayload("{}");
@@ -300,7 +326,9 @@ Deno.serve(async (req: Request) => {
   } else {
     try {
       const claude = await callClaude(
-        systemPromptFor(audience),
+        collectionsSnap?.status === "applied"
+          ? systemPromptFor(audience, { collections: true })
+          : systemPromptFor(audience),
         `Propose next steps from this client brain. Empty arrays when evidence is missing.\n\n${contextLines.join("\n")}`,
         { maxTokens: 1400, temperature: 0.2 },
       );
@@ -356,6 +384,46 @@ Deno.serve(async (req: Request) => {
       return respond({ error: insErr.message }, 500);
     }
     stepsInserted = toInsert.length;
+  }
+
+  const collectionsDraft = buildCollectionsDraft(collectionsSnap);
+  const openAfterPropose =
+    existingSteps.filter((step) => step.status === "proposed" || step.status === "edited").length +
+    toInsert.length;
+  if (
+    collectionsDraft &&
+    openAfterPropose < MAX_OPEN_PROPOSED_STEPS &&
+    !existingSteps.some(
+      (step) =>
+        (step.status === "proposed" || step.status === "edited") &&
+        titlesSimilar(step.title, collectionsDraft.title),
+    ) &&
+    !toInsert.some((step) => titlesSimilar(step.title, collectionsDraft.title))
+  ) {
+    const row = {
+      client_id: clientId,
+      title: collectionsDraft.title,
+      rationale: collectionsDraft.rationale,
+      assumptions: collectionsDraft.assumptions,
+      problem: collectionsDraft.problem,
+      evidence: collectionsDraft.evidence,
+      priority: collectionsDraft.priority,
+      confidence: 0.8,
+      data_depth: collectionsDraft.dataDepth,
+      expected_impact_metric: collectionsDraft.expectedImpact.metric,
+      expected_impact_amount: collectionsDraft.expectedImpact.amount,
+      expected_impact_horizon_days: collectionsDraft.expectedImpact.horizonDays,
+      expected_impact_note: collectionsDraft.expectedImpact.note,
+      source: "system",
+      status: "proposed",
+      created_by: user.id,
+    };
+    const { error: colErr } = await userClient.from("proposed_next_steps").insert(row);
+    if (colErr) {
+      console.error("collections draft insert:", colErr.message);
+    } else {
+      stepsInserted += 1;
+    }
   }
 
   const nowIso = new Date().toISOString();

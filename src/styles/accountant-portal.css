@@ -903,6 +903,51 @@ html[data-theme="light"] .accountant-portal .budget-month-engine{
   gap:16px;
   flex-wrap:wrap;
 }
+.accountant-portal .collections-muted,
+.accountant-portal .collections-note{
+  color:var(--ink-dim);
+  font-size:13px;
+  line-height:1.5;
+  max-width:68ch;
+  margin:0 0 12px;
+}
+.accountant-portal .collections-kicker{
+  font-size:11px;
+  letter-spacing:.04em;
+  text-transform:uppercase;
+  color:var(--ink-dim);
+  margin:0 0 8px;
+}
+.accountant-portal .collections-scroll{overflow-x:auto;margin:0 0 16px}
+.accountant-portal .collections-table{
+  width:100%;
+  border-collapse:collapse;
+  font-size:13px;
+}
+.accountant-portal .collections-table th{
+  text-align:left;
+  font-size:11px;
+  font-weight:600;
+  letter-spacing:.03em;
+  text-transform:uppercase;
+  color:var(--ink-dim);
+  padding:8px 10px 8px 0;
+  border-bottom:1px solid var(--line);
+}
+.accountant-portal .collections-table td{
+  padding:10px 10px 10px 0;
+  border-bottom:1px solid var(--line);
+  vertical-align:top;
+}
+.accountant-portal .collections-script pre{
+  white-space:pre-wrap;
+  font-family:inherit;
+  font-size:13px;
+  line-height:1.5;
+  margin:0 0 12px;
+  max-width:72ch;
+}
+.accountant-portal .collections-actions{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px}
 
 /* ===== Reports Studio — ultra-premium catalogue ===== */
 .reports-studio{

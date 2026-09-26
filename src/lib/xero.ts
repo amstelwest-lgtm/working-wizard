@@ -6,6 +6,16 @@
  * Never log access_token, refresh_token, or client_secret.
  */
 
+import {
+  finalizeCollections,
+  parseXeroAgedReceivablesByContact,
+  parseXeroContactsPage,
+  selectXeroContactsForAging,
+  skippedCollections,
+  XERO_AGED_RECONNECT,
+  type CollectionsContact,
+  type CollectionsSnapshot,
+} from "@/lib/collections";
 import { PERIOD_MONTHS_KEY } from "@/lib/ratios";
 import {
   calendarMonthBounds,
@@ -40,10 +50,14 @@ export const XERO_REDIRECT_URI = () => process.env.XERO_REDIRECT_URI ?? "";
  * accounting.reports.profitandloss.read  — month-to-date and year-to-date P&L
  * accounting.reports.balancesheet.read   — balance sheet
  * accounting.reports.banksummary.read    — bank account names and closing balances
+ * accounting.reports.aged.read          — Aged Receivables by contact
+ * accounting.contacts.read              — contact names for that report
  *
  * Not requested: accounting.banktransactions, invoices, payroll, or bank feeds.
  * Bank Summary over the 13 weeks ending on the balance-sheet date is enough
- * for starting cash. It is not a bank-feed product.
+ * for starting cash. Aged receivables is a read of the books' report, not an
+ * invoice dump and not a write-back. Existing connections must reconnect
+ * before Sync can read the aged report.
  */
 export const XERO_DEFAULT_SCOPES = [
   "offline_access",
@@ -51,6 +65,8 @@ export const XERO_DEFAULT_SCOPES = [
   "accounting.reports.profitandloss.read",
   "accounting.reports.balancesheet.read",
   "accounting.reports.banksummary.read",
+  "accounting.reports.aged.read",
+  "accounting.contacts.read",
 ] as const;
 
 export function xeroScopes(): string {
@@ -960,6 +976,126 @@ export async function fetchXeroBalanceSheet(
 ): Promise<XeroBalanceSheet> {
   const data = await xeroGet(tenantId, accessToken, xeroBalanceSheetPath(date));
   return parseXeroBalanceSheet(data);
+}
+
+// ─── Aged receivables (read-only) ─────────────────────────────────────────────
+
+const XERO_AGED_CONTACT_CAP = 40;
+const XERO_CONTACT_PAGE_CAP = 4;
+
+function xeroHttpStatus(err: unknown): number | null {
+  const msg = err instanceof Error ? err.message : String(err);
+  const match = /\b(401|403|429)\b/.exec(msg);
+  return match ? Number(match[1]) : null;
+}
+
+export function xeroAgedReceivablesPath(contactId: string, asOf: string): string {
+  const q = new URLSearchParams({ contactId, date: asOf });
+  return `/Reports/AgedReceivablesByContact?${q.toString()}`;
+}
+
+/**
+ * Aged Receivables by contact, labeled with contact names.
+ * A missing scope is a skip, not a failed P&L sync. The contact list has no
+ * balances on the collection endpoint, so the pull is capped.
+ */
+export async function fetchXeroAgedReceivables(
+  tenantId: string,
+  accessToken: string,
+  asOf: string,
+  syncedAt = new Date().toISOString(),
+): Promise<CollectionsSnapshot> {
+  const contacts: ReturnType<typeof parseXeroContactsPage> = [];
+  let pagesTruncated = false;
+  try {
+    for (let page = 1; page <= XERO_CONTACT_PAGE_CAP; page++) {
+      const json = await xeroGet(tenantId, accessToken, `/Contacts?page=${page}`);
+      const rawCount = Array.isArray((json as { Contacts?: unknown }).Contacts)
+        ? (json as { Contacts: unknown[] }).Contacts.length
+        : 0;
+      contacts.push(...parseXeroContactsPage(json));
+      if (rawCount < 100) break;
+      if (page === XERO_CONTACT_PAGE_CAP) pagesTruncated = true;
+    }
+  } catch (err) {
+    const status = xeroHttpStatus(err);
+    if (status === 401 || status === 403) {
+      return skippedCollections({
+        source: "xero",
+        asOf,
+        syncedAt,
+        skipReason: XERO_AGED_RECONNECT,
+      });
+    }
+    const msg = err instanceof Error ? err.message : "Xero contacts failed";
+    return skippedCollections({
+      source: "xero",
+      asOf,
+      syncedAt,
+      skipReason: `Aged receivables were not applied. ${msg.replace(/\s+/g, " ").slice(0, 180)}`,
+    });
+  }
+
+  const picked = selectXeroContactsForAging(contacts, XERO_AGED_CONTACT_CAP);
+  const notes = [picked.note, pagesTruncated ? "Not every Xero contact page was read this sync." : null].filter(
+    (line): line is string => Boolean(line),
+  );
+  if (!picked.selected.length) {
+    return finalizeCollections({
+      source: "xero",
+      asOf,
+      syncedAt,
+      contacts: [],
+      note: notes.join(" ") || null,
+    });
+  }
+
+  const found: CollectionsContact[] = [];
+  let authFailed = false;
+  let rateLimited = false;
+  const queue = [...picked.selected];
+  const workers = Math.min(4, queue.length);
+
+  async function pullOne(): Promise<void> {
+    while (queue.length && !authFailed && !rateLimited) {
+      const contact = queue.shift();
+      if (!contact) return;
+      try {
+        const json = await xeroGet(
+          tenantId,
+          accessToken,
+          xeroAgedReceivablesPath(contact.contactId, asOf),
+        );
+        const parsed = parseXeroAgedReceivablesByContact(json, contact);
+        if (parsed) found.push(parsed);
+      } catch (err) {
+        const status = xeroHttpStatus(err);
+        if (status === 401 || status === 403) authFailed = true;
+        else if (status === 429) rateLimited = true;
+      }
+    }
+  }
+
+  await Promise.all(Array.from({ length: workers }, () => pullOne()));
+
+  if (authFailed && found.length === 0) {
+    return skippedCollections({
+      source: "xero",
+      asOf,
+      syncedAt,
+      skipReason: XERO_AGED_RECONNECT,
+    });
+  }
+  if (rateLimited) {
+    notes.push("Xero rate-limited the aged receivables pull. The chase list is partial.");
+  }
+  return finalizeCollections({
+    source: "xero",
+    asOf,
+    syncedAt,
+    contacts: found,
+    note: notes.join(" ") || null,
+  });
 }
 
 // ─── Data mapper ──────────────────────────────────────────────────────────────
