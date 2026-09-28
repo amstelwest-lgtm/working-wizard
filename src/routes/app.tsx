@@ -88,6 +88,7 @@ import { AddToPlanButton } from "@/components/add-to-plan-button";
 import { OwnerRatioBriefing } from "@/components/owner-ratio-briefing";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { SettingsNavButton } from "@/components/settings-nav-button";
+import { FeatureFinder } from "@/components/feature-finder";
 import {
   annualiseFinancials,
   computeRatios,
@@ -3923,6 +3924,7 @@ function Index() {
                       </button>
                     </>
                   )}
+                  <FeatureFinder audience="owner" clientId={effectiveClientId} chrome="owner" />
                   <ThemeToggle />
                   <HeaderShareButton />
 

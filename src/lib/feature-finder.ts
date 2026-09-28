@@ -1,0 +1,406 @@
+/**
+ * Feature finder — jump list for the product shells.
+ *
+ * Accountant destinations reuse the reading-path tabs in `workflow-coach`
+ * (`COACH_STEPS`) and the studio tab ids in `next-step`
+ * (`ACCOUNTANT_STUDIO_TABS`). Owner destinations reuse `OWNER_BOARD_TABS`,
+ * the same pairs as `notes-tabs.ts` (today/ratios, waterfall/profit, tasks/plan).
+ *
+ * Upload uses the studio's existing `?onboard=1` deep link, which opens the
+ * bring-in-figures dialog, on the Client Brain tab where the upload control
+ * lives. Connect / sync lands on that same tab: Xero and QuickBooks cards
+ * are rendered there. Billing has no standalone page — Manage billing is on
+ * Settings, and only for the practice view.
+ */
+import { ACCOUNTANT_STUDIO_TABS, OWNER_BOARD_TABS } from "@/lib/next-step";
+import { COACH_STEPS, type CoachStepId } from "@/lib/workflow-coach";
+
+export type FeatureAudience = "accountant" | "owner";
+
+export type FeatureFinderContext = {
+  audience: FeatureAudience;
+  /** Studio client. Omitted on the firm dashboard and anywhere a file isn't open. */
+  clientId?: string | null;
+};
+
+type StudioTab = (typeof ACCOUNTANT_STUDIO_TABS)[number];
+type OwnerTab = (typeof OWNER_BOARD_TABS)[number];
+
+export type FeatureDestination =
+  | {
+      kind: "client";
+      clientId: string;
+      search: { tab: StudioTab; focus?: "health" | "pillars"; onboard?: "1" };
+    }
+  | { kind: "owner"; tab: OwnerTab }
+  | { kind: "dashboard" }
+  | { kind: "settings" };
+
+export type FeatureResult = {
+  id: string;
+  label: string;
+  hint: string;
+  group: string;
+  destination: FeatureDestination;
+  href: string;
+};
+
+export type FeatureSearch = {
+  results: FeatureResult[];
+  /**
+   * The query matched a client studio page, but this view has no client open,
+   * so nothing from that match is selectable.
+   */
+  needsClient: boolean;
+};
+
+type StudioTarget = { tab: StudioTab; focus?: "health" | "pillars"; onboard?: "1" };
+
+type FeatureDef = {
+  id: string;
+  label: string;
+  hint: string;
+  order: number;
+  scope: "client" | "practice";
+  synonyms: readonly string[];
+  extraSynonyms?: Partial<Record<FeatureAudience, readonly string[]>>;
+  audiences: readonly FeatureAudience[];
+  requiresClient?: boolean;
+  studio?: StudioTarget;
+  ownerTab?: OwnerTab;
+  practice?: "dashboard" | "settings";
+};
+
+const STUDIO_TABS: readonly string[] = ACCOUNTANT_STUDIO_TABS;
+
+function coachTarget(id: CoachStepId): StudioTarget {
+  const step = COACH_STEPS.find((s) => s.id === id);
+  if (!step) throw new Error(`missing coach step ${id}`);
+  if (!STUDIO_TABS.includes(step.tab)) {
+    throw new Error(`coach step ${id} tab ${step.tab} is not a studio tab`);
+  }
+  const tab = step.tab as StudioTab;
+  if ("focus" in step && (step.focus === "health" || step.focus === "pillars")) {
+    return { tab, focus: step.focus };
+  }
+  return { tab };
+}
+
+const DATA = coachTarget("data");
+const HEALTH = coachTarget("health");
+const PILLARS = coachTarget("pillars");
+const PROFIT = coachTarget("profit");
+const CASH = coachTarget("cash");
+const BUDGET = coachTarget("budget");
+const ACTIONS = coachTarget("actions");
+
+const FEATURES: readonly FeatureDef[] = [
+  {
+    id: "health",
+    label: "Health",
+    hint: "Health score",
+    order: 10,
+    scope: "client",
+    synonyms: ["health score", "score", "ratios", "diagnosis", "business health"],
+    extraSynonyms: { owner: ["pillars", "pillar", "where it hurts"] },
+    audiences: ["accountant", "owner"],
+    requiresClient: true,
+    studio: HEALTH,
+    ownerTab: "today",
+  },
+  {
+    id: "pillars",
+    label: "Pillars",
+    hint: "Where it hurts",
+    order: 20,
+    scope: "client",
+    synonyms: ["pillar", "where it hurts", "drag", "weakest pillar"],
+    audiences: ["accountant"],
+    requiresClient: true,
+    studio: PILLARS,
+  },
+  {
+    id: "profitability",
+    label: "Profitability",
+    hint: "Waterfall",
+    order: 30,
+    scope: "client",
+    synonyms: ["profit", "margin", "waterfall", "gross margin"],
+    audiences: ["accountant", "owner"],
+    requiresClient: true,
+    studio: PROFIT,
+    ownerTab: "waterfall",
+  },
+  {
+    id: "cash",
+    label: "Cash",
+    hint: "13-week forecast",
+    order: 40,
+    scope: "client",
+    synonyms: ["forecast", "13-week", "13 week", "liquidity", "runway", "cash forecast"],
+    audiences: ["accountant", "owner"],
+    requiresClient: true,
+    studio: CASH,
+    ownerTab: "cash",
+  },
+  {
+    id: "budget",
+    label: "Budget",
+    hint: "12-month budget",
+    order: 50,
+    scope: "client",
+    synonyms: ["variance", "12-month", "12 month"],
+    audiences: ["accountant", "owner"],
+    requiresClient: true,
+    studio: BUDGET,
+    ownerTab: "budget",
+  },
+  {
+    id: "collections",
+    label: "Collections",
+    hint: "Aged receivables · AR",
+    order: 60,
+    scope: "client",
+    synonyms: ["ar", "aged receivables", "aged debtors", "debtors", "receivables", "chase list"],
+    audiences: ["accountant"],
+    requiresClient: true,
+    studio: { tab: "collections" },
+  },
+  {
+    id: "payables",
+    label: "Payables",
+    hint: "Aged payables · AP",
+    order: 70,
+    scope: "client",
+    synonyms: ["ap", "aged payables", "aged creditors", "creditors", "bills", "suppliers"],
+    audiences: ["accountant"],
+    requiresClient: true,
+    studio: { tab: "payables" },
+  },
+  {
+    id: "bot",
+    label: "Milōn Bot",
+    hint: "Drafts",
+    order: 80,
+    scope: "client",
+    synonyms: ["drafts", "draft", "bot", "ask", "milon bot", "chat"],
+    audiences: ["accountant"],
+    requiresClient: true,
+    studio: { tab: "ask" },
+  },
+  {
+    id: "action-plan",
+    label: "Action Plan",
+    hint: "Sign-off",
+    order: 90,
+    scope: "client",
+    synonyms: ["actions", "tasks", "work list", "assign", "sign-off", "signoff", "sign off"],
+    audiences: ["accountant", "owner"],
+    requiresClient: true,
+    studio: ACTIONS,
+    ownerTab: "tasks",
+  },
+  {
+    id: "data-sync",
+    label: "Data & sync",
+    hint: "Xero · QuickBooks",
+    order: 100,
+    scope: "client",
+    synonyms: [
+      "data",
+      "sync",
+      "books",
+      "client brain",
+      "brain",
+      "xero",
+      "qbo",
+      "quickbooks",
+      "quickbooks online",
+      "connect",
+      "connect xero",
+      "connect quickbooks",
+      "accounting",
+    ],
+    audiences: ["accountant"],
+    requiresClient: true,
+    studio: DATA,
+  },
+  {
+    id: "upload",
+    label: "Upload",
+    hint: "Statements",
+    order: 110,
+    scope: "client",
+    synonyms: ["upload statements", "statement", "statements", "pdf", "import"],
+    audiences: ["accountant"],
+    requiresClient: true,
+    studio: { ...DATA, onboard: "1" },
+  },
+  {
+    id: "clients",
+    label: "Clients",
+    hint: "Practice list",
+    order: 200,
+    scope: "practice",
+    synonyms: ["practice", "portfolio", "firm dashboard", "dashboard", "client list"],
+    audiences: ["accountant"],
+    practice: "dashboard",
+  },
+  {
+    id: "billing",
+    label: "Billing",
+    hint: "Manage in Settings",
+    order: 210,
+    scope: "practice",
+    synonyms: ["subscription", "stripe", "invoice", "manage billing"],
+    audiences: ["accountant"],
+    practice: "settings",
+  },
+];
+
+export function normalizeFeatureQuery(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function synonymsFor(def: FeatureDef, audience: FeatureAudience): string[] {
+  return [...def.synonyms, ...(def.extraSynonyms?.[audience] ?? [])];
+}
+
+function scoreText(query: string, text: string): number {
+  if (!query || !text) return 0;
+  if (text === query) return 100;
+  const tokens = text.split(" ");
+  if (tokens.includes(query)) return 95;
+  if (query.length >= 2 && text.startsWith(query)) return 80;
+  if (query.length >= 3 && text.includes(query)) return 60;
+  if (query.length >= 3) {
+    const qTokens = query.split(" ");
+    if (
+      qTokens.length > 0 &&
+      qTokens.every((qt) => qt.length >= 2 && tokens.some((tt) => tt.startsWith(qt)))
+    ) {
+      return 50;
+    }
+  }
+  if (query.length >= 4 && isSubsequence(query.replace(/ /g, ""), text.replace(/ /g, ""))) {
+    return 25;
+  }
+  return 0;
+}
+
+function isSubsequence(needle: string, hay: string): boolean {
+  let i = 0;
+  for (const ch of hay) {
+    if (ch === needle[i]) i += 1;
+    if (i === needle.length) return true;
+  }
+  return false;
+}
+
+function scoreFeature(query: string, def: FeatureDef, audience: FeatureAudience): number {
+  const fields = [def.label, ...synonymsFor(def, audience)];
+  let best = 0;
+  for (const field of fields) {
+    const score = scoreText(query, normalizeFeatureQuery(field));
+    if (score > best) best = score;
+  }
+  return best;
+}
+
+function destinationFor(def: FeatureDef, ctx: FeatureFinderContext): FeatureDestination | null {
+  if (def.practice === "dashboard") return { kind: "dashboard" };
+  if (def.practice === "settings") return { kind: "settings" };
+  if (ctx.audience === "owner" && def.ownerTab) return { kind: "owner", tab: def.ownerTab };
+  if (ctx.audience === "accountant" && def.studio) {
+    const clientId = ctx.clientId?.trim();
+    if (!clientId) return null;
+    return { kind: "client", clientId, search: def.studio };
+  }
+  return null;
+}
+
+export function featureHref(dest: FeatureDestination): string {
+  if (dest.kind === "dashboard") return "/dashboard";
+  if (dest.kind === "settings") return "/settings";
+  if (dest.kind === "owner") return `/app?tab=${encodeURIComponent(dest.tab)}`;
+  const params = new URLSearchParams();
+  params.set("tab", dest.search.tab);
+  if (dest.search.focus) params.set("focus", dest.search.focus);
+  if (dest.search.onboard) params.set("onboard", dest.search.onboard);
+  return `/clients/${encodeURIComponent(dest.clientId)}?${params.toString()}`;
+}
+
+function groupLabel(def: FeatureDef, audience: FeatureAudience): string {
+  if (def.scope === "practice") return "Practice";
+  return audience === "owner" ? "Board" : "This client";
+}
+
+export function searchFeatures(query: string, ctx: FeatureFinderContext): FeatureSearch {
+  const q = normalizeFeatureQuery(query);
+  const visible = FEATURES.filter((def) => def.audiences.includes(ctx.audience));
+  const scored = visible.map((def) => ({
+    def,
+    score: q ? scoreFeature(q, def, ctx.audience) : 1,
+  }));
+  const matched = scored.filter((row) => row.score > 0);
+  const clientId = ctx.clientId?.trim() ?? "";
+  const omitted = matched.filter((row) => row.def.requiresClient && !clientId);
+  const shown = matched
+    .filter((row) => !(row.def.requiresClient && !clientId))
+    .sort((a, b) => b.score - a.score || a.def.order - b.def.order);
+
+  const results: FeatureResult[] = [];
+  for (const row of shown) {
+    const destination = destinationFor(row.def, ctx);
+    if (!destination) continue;
+    results.push({
+      id: row.def.id,
+      label: row.def.label,
+      hint: row.def.hint,
+      group: groupLabel(row.def, ctx.audience),
+      destination,
+      href: featureHref(destination),
+    });
+  }
+
+  return {
+    results,
+    needsClient: omitted.length > 0 && results.length === 0,
+  };
+}
+
+/** Labels and synonyms actually indexed for an audience. Used by the PR note and tests. */
+export function featureIndex(
+  audience: FeatureAudience,
+): { id: string; label: string; synonyms: string[] }[] {
+  return FEATURES.filter((def) => def.audiences.includes(audience)).map((def) => ({
+    id: def.id,
+    label: def.label,
+    synonyms: synonymsFor(def, audience),
+  }));
+}
+
+export function isMacPlatform(platform: string, userAgent = ""): boolean {
+  return /Mac|iPod|iPhone|iPad/i.test(platform) || /Mac OS X/i.test(userAgent);
+}
+
+export function featureFinderShortcutLabel(mac: boolean): "⌘K" | "Ctrl+K" {
+  return mac ? "⌘K" : "Ctrl+K";
+}
+
+export function isFeatureFinderShortcut(
+  event: { key: string; metaKey: boolean; ctrlKey: boolean; altKey: boolean; shiftKey: boolean },
+  platform: string,
+  userAgent = "",
+): boolean {
+  if (event.altKey || event.shiftKey) return false;
+  if (event.key.toLowerCase() !== "k") return false;
+  const mac = isMacPlatform(platform, userAgent);
+  if (mac) return event.metaKey && !event.ctrlKey;
+  return event.ctrlKey && !event.metaKey;
+}

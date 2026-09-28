@@ -70,6 +70,7 @@ import { FirmSwitcher } from "@/components/firm-switcher";
 import "@/styles/accountant-portal.css";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { SettingsNavButton } from "@/components/settings-nav-button";
+import { FeatureFinder } from "@/components/feature-finder";
 import { SphereHero } from "@/components/sphere-hero";
 import { buildSpherePillars } from "@/components/sphere-hero-adapter";
 import { SimplifiedRatios } from "@/components/simplified-ratios";
@@ -2131,6 +2132,7 @@ function ClientView() {
                 <span className="gold-text">MILŌN</span>
               </span>
               <FirmSwitcher />
+              <FeatureFinder audience="accountant" clientId={clientId} />
               <span className="spacer" />
               <button
                 type="button"

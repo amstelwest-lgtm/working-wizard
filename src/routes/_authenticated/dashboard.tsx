@@ -44,6 +44,7 @@ import { countOpenQueriesByClient } from "@/lib/open-queries";
 import "@/styles/accountant-portal.css";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { SettingsNavButton } from "@/components/settings-nav-button";
+import { FeatureFinder } from "@/components/feature-finder";
 import { FirmSwitcher } from "@/components/firm-switcher";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
 import { WalkthroughWizard } from "@/components/walkthrough-wizard";
@@ -1301,6 +1302,7 @@ function Dashboard() {
             <span className="gold-text">MILŌN</span>
           </span>
           <FirmSwitcher />
+          <FeatureFinder audience="accountant" clientId={null} />
           <span className="spacer" />
           <button
             type="button"
