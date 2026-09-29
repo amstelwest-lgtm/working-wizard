@@ -74,6 +74,13 @@ Every new firm is sent to Checkout on a **paid** band after `/auth` signup (emai
 - FOUNDING / FOUNDING50 applies to monthly paid Solo+ invoices after the trial. It is not a free-forever coupon.
 - When the trial ends unpaid or canceled (`past_due`, `unpaid`, `canceled`, `incomplete`), the firm is not entitled and resumes at `/billing/required`.
 
+## Trial cliff emails — later PR, not this one
+
+Growth owns the Resend sends. Do not add day-12 or day-14 mail in the Checkout / client-cap change. Locked copy for that follow-up:
+
+- Day 12: “2 days left — subscribe to keep your 3 clients’ Health + Action Plans live.”
+- Day 14: “Trial ended — subscribe now to reopen sign-off, or access stays read-only/archived.”
+
 ## Starter price — archive, do not delete
 
 `milon_starter_monthly` stays in the catalog map so a legacy subscription still resolves to a 3-client band. New Checkout never requests it (`prices.list` uses `active: true`).
