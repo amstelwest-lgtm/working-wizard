@@ -43,8 +43,15 @@ export function parsePendingCheckout(input: {
   promo?: unknown;
 }): PendingCheckout | null {
   const rawPlan = input.plan ?? input.checkout;
-  if (typeof rawPlan !== "string" || !isFirmCheckoutBand(rawPlan)) return null;
   const market = parseStripePlanMarket(input.market) ?? "us";
+  // Archived Starter links resume onto paid Solo. The server omits a second trial
+  // when this customer already has a subscription.
+  if (rawPlan === "starter") {
+    const promo =
+      typeof input.promo === "string" && input.promo.trim() ? input.promo.trim() : undefined;
+    return { plan: "solo", interval: "month", market, ...(promo ? { promo } : {}) };
+  }
+  if (typeof rawPlan !== "string" || !isFirmCheckoutBand(rawPlan)) return null;
   const interval = parseFirmInterval(input.interval);
   const promo =
     typeof input.promo === "string" && input.promo.trim() ? input.promo.trim() : undefined;

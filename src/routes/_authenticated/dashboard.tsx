@@ -37,7 +37,9 @@ import {
 import { useServerFn } from "@tanstack/react-start";
 import { getQboStatuses } from "@/lib/qbo.functions";
 import { getXeroStatuses } from "@/lib/xero.functions";
-import { createFirmClient } from "@/lib/firm-clients.functions";
+import { createFirmClient, getFirmClientCreateAllowance } from "@/lib/firm-clients.functions";
+import type { FirmClientCreateAllowance } from "@/lib/firm-client-cap";
+import { createBillingPortalSession, endFirmTrialNow } from "@/lib/stripe-checkout.functions";
 import { inviteClientOwner, sendDraftedOwnerInvite } from "@/lib/client-invite.functions";
 import { effectiveCashRunwayWeeks } from "@/lib/cash-runway";
 import { countOpenQueriesByClient } from "@/lib/open-queries";
@@ -268,6 +270,72 @@ function SparkSvg({
 
 // ── Add Client Dialog ─────────────────────────────────────────────────────────
 
+function FirmClientCapNotice({
+  cap,
+  upgrading,
+  confirmUpgrade,
+  onConfirm,
+  onUpgrade,
+  onCancelConfirm,
+  onManage,
+}: {
+  cap: Extract<FirmClientCreateAllowance, { allowed: false }>;
+  upgrading: boolean;
+  confirmUpgrade: boolean;
+  onConfirm: () => void;
+  onUpgrade: () => void;
+  onCancelConfirm: () => void;
+  onManage: () => void;
+}) {
+  return (
+    <div role="alert">
+      <p style={{ margin: "0 0 8px", fontSize: 15, fontWeight: 700, color: "var(--ink)" }}>
+        {cap.code === "trial_client_cap" ? "Trial client limit" : "Plan client limit"}
+      </p>
+      <p style={{ margin: "0 0 16px", fontSize: 13, color: "var(--ink-dim)", lineHeight: 1.55 }}>
+        {cap.message}
+      </p>
+      {cap.canEndTrial && confirmUpgrade ? (
+        <p style={{ margin: "0 0 16px", fontSize: 13, color: "var(--ink)", lineHeight: 1.55 }}>
+          This charges the card on file today and ends the 14-day free trial. The paid band’s client
+          limit applies after that.
+        </p>
+      ) : null}
+      {!cap.canEndTrial ? (
+        <p style={{ margin: "0 0 16px", fontSize: 13, color: "var(--ink-dim)", lineHeight: 1.55 }}>
+          The firm owner can upgrade from Settings → Manage billing.
+        </p>
+      ) : null}
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+        {cap.canEndTrial ? (
+          confirmUpgrade ? (
+            <>
+              <button className="btn gold" type="button" onClick={onUpgrade} disabled={upgrading}>
+                {upgrading ? "Starting paid plan…" : "Start paid plan now"}
+              </button>
+              <button
+                className="btn ghost"
+                type="button"
+                onClick={onCancelConfirm}
+                disabled={upgrading}
+              >
+                Back
+              </button>
+            </>
+          ) : (
+            <button className="btn gold" type="button" onClick={onConfirm}>
+              Upgrade to paid plan
+            </button>
+          )
+        ) : null}
+        <button className="btn ghost" type="button" onClick={onManage} disabled={upgrading}>
+          Manage billing
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function AddClientDialog({
   open,
   onClose,
@@ -304,6 +372,12 @@ function AddClientDialog({
   const inputRef = useRef<HTMLInputElement>(null);
   const createClient = useServerFn(createFirmClient);
   const inviteOwner = useServerFn(inviteClientOwner);
+  const checkCap = useServerFn(getFirmClientCreateAllowance);
+  const endTrial = useServerFn(endFirmTrialNow);
+  const openPortal = useServerFn(createBillingPortalSession);
+  const [cap, setCap] = useState<FirmClientCreateAllowance | null>(null);
+  const [confirmUpgrade, setConfirmUpgrade] = useState(false);
+  const [upgrading, setUpgrading] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -327,6 +401,39 @@ function AddClientDialog({
       setTimeout(() => inputRef.current?.focus(), 50);
     }
   }, [open, defaultName, firmId]);
+
+  useEffect(() => {
+    if (!open) {
+      setCap(null);
+      setConfirmUpgrade(false);
+      return;
+    }
+    if (!firmId) {
+      setCap({ allowed: true, canEndTrial: false });
+      return;
+    }
+    setCap(null);
+    let cancelled = false;
+    void checkCap({ data: { firmId } })
+      .then((result) => {
+        if (!cancelled) setCap(result);
+      })
+      .catch(() => {
+        if (!cancelled) setCap({ allowed: true, canEndTrial: false });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, firmId, checkCap]);
+
+  const refreshCap = async () => {
+    if (!firmId) {
+      setCap({ allowed: true, canEndTrial: false });
+      return;
+    }
+    const result = await checkCap({ data: { firmId } });
+    setCap(result);
+  };
 
   if (!open) return null;
 
@@ -387,7 +494,35 @@ function AddClientDialog({
       });
       onClose();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not add client");
+      const message = err instanceof Error ? err.message : "Could not add client";
+      const trialCap = message.includes("14-day free trial");
+      const bandCap = message.includes("Upgrade to a larger band");
+      if (trialCap || bandCap) {
+        try {
+          await refreshCap();
+        } catch {
+          setCap({
+            allowed: false,
+            code: trialCap ? "trial_client_cap" : "band_client_cap",
+            message,
+            bandName: null,
+            canEndTrial: false,
+          });
+        }
+        setCap((current) =>
+          current && !current.allowed
+            ? current
+            : {
+                allowed: false,
+                code: trialCap ? "trial_client_cap" : "band_client_cap",
+                message,
+                bandName: null,
+                canEndTrial: false,
+              },
+        );
+        return;
+      }
+      toast.error(message);
     } finally {
       setSaving(false);
     }
@@ -405,164 +540,214 @@ function AddClientDialog({
           </button>
         </div>
         <div className="drawer-body" style={{ padding: "24px 30px" }}>
-          {blurb && (
-            <p
-              style={{ marginBottom: 16, fontSize: 13, color: "var(--ink-dim)", lineHeight: 1.55 }}
-            >
-              {blurb}
-            </p>
+          {firmId && !cap ? (
+            <p style={{ margin: 0, fontSize: 13, color: "var(--ink-dim)" }}>Checking your plan…</p>
+          ) : cap && !cap.allowed ? (
+            <FirmClientCapNotice
+              cap={cap}
+              upgrading={upgrading}
+              confirmUpgrade={confirmUpgrade}
+              onConfirm={() => setConfirmUpgrade(true)}
+              onCancelConfirm={() => setConfirmUpgrade(false)}
+              onUpgrade={() => {
+                setUpgrading(true);
+                void endTrial()
+                  .then(async () => {
+                    toast.success("Paid plan started. You can add another client.");
+                    setConfirmUpgrade(false);
+                    await refreshCap();
+                  })
+                  .catch((err: unknown) => {
+                    toast.error(
+                      err instanceof Error ? err.message : "Could not start the paid plan.",
+                    );
+                  })
+                  .finally(() => setUpgrading(false));
+              }}
+              onManage={() => {
+                void openPortal()
+                  .then(({ url }) => {
+                    window.location.href = url;
+                  })
+                  .catch((err: unknown) => {
+                    toast.error(
+                      err instanceof Error ? err.message : "Could not open Stripe billing.",
+                    );
+                  });
+              }}
+            />
+          ) : (
+            <>
+              {blurb && (
+                <p
+                  style={{
+                    marginBottom: 16,
+                    fontSize: 13,
+                    color: "var(--ink-dim)",
+                    lineHeight: 1.55,
+                  }}
+                >
+                  {blurb}
+                </p>
+              )}
+              {brandLoading && !firmId && (
+                <p style={{ marginBottom: 16, fontSize: 13, color: "var(--ink-dim)" }}>
+                  Loading your practice — you can still add the client.
+                </p>
+              )}
+              {!brandLoading && !firmId && (
+                <p style={{ marginBottom: 16, fontSize: 13, color: "var(--ink-dim)" }}>
+                  A practice firm will be created automatically with this first client.
+                </p>
+              )}
+              <div style={{ marginBottom: 16 }}>
+                <label
+                  style={{
+                    fontSize: 10.5,
+                    letterSpacing: ".14em",
+                    textTransform: "uppercase",
+                    color: "var(--ink-dim)",
+                    display: "block",
+                    marginBottom: 6,
+                  }}
+                >
+                  Business name *
+                </label>
+                <input
+                  ref={inputRef}
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") void add();
+                  }}
+                  style={{
+                    width: "100%",
+                    padding: "11px 14px",
+                    borderRadius: 11,
+                    border: "1px solid var(--line)",
+                    background: "var(--bg-2)",
+                    color: "var(--ink)",
+                    fontFamily: "inherit",
+                    fontSize: 14,
+                  }}
+                  placeholder="e.g. Karoo Traders"
+                />
+                {sandboxName && newName.trim() !== sandboxName && (
+                  <button
+                    type="button"
+                    onClick={() => setNewName(sandboxName)}
+                    style={{
+                      marginTop: 8,
+                      background: "none",
+                      border: "none",
+                      padding: 0,
+                      cursor: "pointer",
+                      fontSize: 12,
+                      color: "var(--ink-dim)",
+                      textDecoration: "underline",
+                      textUnderlineOffset: 3,
+                      fontFamily: "inherit",
+                    }}
+                  >
+                    No statements to hand? Use a sandbox client — “{sandboxName}”
+                  </button>
+                )}
+              </div>
+              <div style={{ marginBottom: 24 }}>
+                <MarketPicker
+                  value={draftMarket}
+                  onChange={setDraftMarket}
+                  variant="app"
+                  audience="practice"
+                />
+              </div>
+              <div style={{ marginBottom: 24 }}>
+                <label
+                  style={{
+                    fontSize: 10.5,
+                    letterSpacing: ".14em",
+                    textTransform: "uppercase",
+                    color: "var(--ink-dim)",
+                    display: "block",
+                    marginBottom: 6,
+                  }}
+                >
+                  Business type (optional)
+                </label>
+                <input
+                  value={newType}
+                  onChange={(e) => setNewType(e.target.value)}
+                  style={{
+                    width: "100%",
+                    padding: "11px 14px",
+                    borderRadius: 11,
+                    border: "1px solid var(--line)",
+                    background: "var(--bg-2)",
+                    color: "var(--ink)",
+                    fontFamily: "inherit",
+                    fontSize: 14,
+                  }}
+                  placeholder="Services / Retail / SaaS…"
+                />
+              </div>
+              <div style={{ marginBottom: 24 }}>
+                <label
+                  style={{
+                    fontSize: 10.5,
+                    letterSpacing: ".14em",
+                    textTransform: "uppercase",
+                    color: "var(--ink-dim)",
+                    display: "block",
+                    marginBottom: 6,
+                  }}
+                >
+                  Client management email (optional)
+                </label>
+                <input
+                  type="email"
+                  value={ownerEmail}
+                  onChange={(e) => setOwnerEmail(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") void add();
+                  }}
+                  style={{
+                    width: "100%",
+                    padding: "11px 14px",
+                    borderRadius: 11,
+                    border: "1px solid var(--line)",
+                    background: "var(--bg-2)",
+                    color: "var(--ink)",
+                    fontFamily: "inherit",
+                    fontSize: 14,
+                  }}
+                  placeholder="owner@business.co.za"
+                />
+                <p
+                  style={{
+                    margin: "8px 0 0",
+                    fontSize: 12,
+                    color: "var(--ink-dim)",
+                    lineHeight: 1.45,
+                  }}
+                >
+                  We email them a claim link and copy a paste-ready message for you.
+                </p>
+              </div>
+              <div style={{ display: "flex", gap: 12 }}>
+                <button className="btn ghost" onClick={onClose} style={{ flex: 1 }}>
+                  Cancel
+                </button>
+                <button
+                  className="btn gold"
+                  onClick={() => void add()}
+                  disabled={saving || !newName.trim() || !isDraftComplete(draftMarket)}
+                  style={{ flex: 1 }}
+                >
+                  {saving ? "Saving…" : "Add client"}
+                </button>
+              </div>
+            </>
           )}
-          {brandLoading && !firmId && (
-            <p style={{ marginBottom: 16, fontSize: 13, color: "var(--ink-dim)" }}>
-              Loading your practice — you can still add the client.
-            </p>
-          )}
-          {!brandLoading && !firmId && (
-            <p style={{ marginBottom: 16, fontSize: 13, color: "var(--ink-dim)" }}>
-              A practice firm will be created automatically with this first client.
-            </p>
-          )}
-          <div style={{ marginBottom: 16 }}>
-            <label
-              style={{
-                fontSize: 10.5,
-                letterSpacing: ".14em",
-                textTransform: "uppercase",
-                color: "var(--ink-dim)",
-                display: "block",
-                marginBottom: 6,
-              }}
-            >
-              Business name *
-            </label>
-            <input
-              ref={inputRef}
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") void add();
-              }}
-              style={{
-                width: "100%",
-                padding: "11px 14px",
-                borderRadius: 11,
-                border: "1px solid var(--line)",
-                background: "var(--bg-2)",
-                color: "var(--ink)",
-                fontFamily: "inherit",
-                fontSize: 14,
-              }}
-              placeholder="e.g. Karoo Traders"
-            />
-            {sandboxName && newName.trim() !== sandboxName && (
-              <button
-                type="button"
-                onClick={() => setNewName(sandboxName)}
-                style={{
-                  marginTop: 8,
-                  background: "none",
-                  border: "none",
-                  padding: 0,
-                  cursor: "pointer",
-                  fontSize: 12,
-                  color: "var(--ink-dim)",
-                  textDecoration: "underline",
-                  textUnderlineOffset: 3,
-                  fontFamily: "inherit",
-                }}
-              >
-                No statements to hand? Use a sandbox client — “{sandboxName}”
-              </button>
-            )}
-          </div>
-          <div style={{ marginBottom: 24 }}>
-            <MarketPicker
-              value={draftMarket}
-              onChange={setDraftMarket}
-              variant="app"
-              audience="practice"
-            />
-          </div>
-          <div style={{ marginBottom: 24 }}>
-            <label
-              style={{
-                fontSize: 10.5,
-                letterSpacing: ".14em",
-                textTransform: "uppercase",
-                color: "var(--ink-dim)",
-                display: "block",
-                marginBottom: 6,
-              }}
-            >
-              Business type (optional)
-            </label>
-            <input
-              value={newType}
-              onChange={(e) => setNewType(e.target.value)}
-              style={{
-                width: "100%",
-                padding: "11px 14px",
-                borderRadius: 11,
-                border: "1px solid var(--line)",
-                background: "var(--bg-2)",
-                color: "var(--ink)",
-                fontFamily: "inherit",
-                fontSize: 14,
-              }}
-              placeholder="Services / Retail / SaaS…"
-            />
-          </div>
-          <div style={{ marginBottom: 24 }}>
-            <label
-              style={{
-                fontSize: 10.5,
-                letterSpacing: ".14em",
-                textTransform: "uppercase",
-                color: "var(--ink-dim)",
-                display: "block",
-                marginBottom: 6,
-              }}
-            >
-              Client management email (optional)
-            </label>
-            <input
-              type="email"
-              value={ownerEmail}
-              onChange={(e) => setOwnerEmail(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") void add();
-              }}
-              style={{
-                width: "100%",
-                padding: "11px 14px",
-                borderRadius: 11,
-                border: "1px solid var(--line)",
-                background: "var(--bg-2)",
-                color: "var(--ink)",
-                fontFamily: "inherit",
-                fontSize: 14,
-              }}
-              placeholder="owner@business.co.za"
-            />
-            <p
-              style={{ margin: "8px 0 0", fontSize: 12, color: "var(--ink-dim)", lineHeight: 1.45 }}
-            >
-              We email them a claim link and copy a paste-ready message for you.
-            </p>
-          </div>
-          <div style={{ display: "flex", gap: 12 }}>
-            <button className="btn ghost" onClick={onClose} style={{ flex: 1 }}>
-              Cancel
-            </button>
-            <button
-              className="btn gold"
-              onClick={() => void add()}
-              disabled={saving || !newName.trim() || !isDraftComplete(draftMarket)}
-              style={{ flex: 1 }}
-            >
-              {saving ? "Saving…" : "Add client"}
-            </button>
-          </div>
         </div>
       </div>
     </>

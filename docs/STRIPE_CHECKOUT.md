@@ -12,7 +12,7 @@ Firm Checkout **does not** pass `managed_payments: { enabled: false }`. Leave Ma
 
 ## FOUNDING
 
-Coupon `FOUNDING50` / code `FOUNDING` is **monthly only** and must not stack with annual ~20% off. Enforced in checkout create.
+Coupon `FOUNDING50` / code `FOUNDING` is **monthly only** and must not stack with annual ~20% off. It discounts paid Solo+ invoices after the 14-day trial. It is not a free-forever coupon. Enforced in checkout create.
 
 ## Env
 
@@ -22,10 +22,10 @@ Coupon `FOUNDING50` / code `FOUNDING` is **monthly only** and must not stack wit
 
 ## Smoke
 
-1. Open https://milonfinance.com, choose the accountant path, pick **Solo** (or Starter).
+1. Open https://milonfinance.com, choose the accountant path, pick **Solo** (or another paid band). There is no Starter $0 signup.
 2. Create a firm account at `/auth` if needed.
-3. Stripe Checkout should open on **Milon, Inc.** for the catalog price (ZAR presentment possible via Adaptive Pricing).
-4. Success returns to `/billing/success`. Cancel charges nothing.
+3. Stripe Checkout should open on **Milon, Inc.** for the catalog price resolved by lookup_key, collect a card, and start `trial_period_days: 14` (ZAR presentment possible via Adaptive Pricing). Copy: “14-day free trial · up to 3 clients”.
+4. Success returns to `/billing/success`. Cancel charges nothing. A fourth client during the trial is blocked until the paid plan is active.
 5. Practice Settings → **Manage billing** opens the Stripe Customer Portal.
 
 ## Auth redirect

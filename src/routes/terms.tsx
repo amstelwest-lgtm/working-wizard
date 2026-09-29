@@ -56,13 +56,14 @@ function TermsPage() {
         file returns with the IRS or a state department of revenue.
       </p>
       <p>
-        Spark is free during early access and does not ask for a card. Accounting firms subscribe
-        on USD client-count bands through Stripe Checkout. Owner Spark stays free.
+        Spark is free during early access and does not ask for a card. Accounting firms start with a
+        14-day free trial · up to 3 clients (card on file), then a paid USD client-count band
+        through Stripe Checkout. Owner Spark stays free.
       </p>
       <p className="mk-copy-us">
-        US list prices: Starter free, Solo {LIST_PRICES.us.firmSolo}/mo, Scale{" "}
-        {LIST_PRICES.us.firmScale}/mo, billed through Stripe Checkout. Annual is about 20% off.
-        Enterprise is a custom quote. {WATCHLIST_DEFINITION}
+        US list prices: Solo {LIST_PRICES.us.firmSolo}/mo after a 14-day free trial · up to 3
+        clients, Scale {LIST_PRICES.us.firmScale}/mo, billed through Stripe Checkout. Annual is
+        about 20% off. Enterprise is a custom quote. {WATCHLIST_DEFINITION}
       </p>
 
       <h2>Your account</h2>
@@ -83,9 +84,8 @@ function TermsPage() {
       <h2>AI</h2>
       <p>
         Some features use AI. They are powered by <strong>Claude</strong>. {AI_IDENTIFIERS_LINE} The{" "}
-        <a href="/ai">AI notice</a> is the full version of that sentence. AI output can be
-        wrong; you (or the accountant who signs a draft) remain responsible for what you send a
-        client.
+        <a href="/ai">AI notice</a> is the full version of that sentence. AI output can be wrong;
+        you (or the accountant who signs a draft) remain responsible for what you send a client.
       </p>
 
       <h2>Acceptable use</h2>

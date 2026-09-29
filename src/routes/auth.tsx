@@ -25,7 +25,7 @@ import {
   stashPendingCheckout,
   stashResumeFirmBilling,
 } from "@/lib/pending-checkout";
-import { starterCheckoutIntent } from "@/lib/stripe-plans";
+import { firmSignupCheckoutIntent } from "@/lib/stripe-plans";
 import { accessTokenFromNext } from "@/lib/practice-access";
 import { AuthDivider, GoogleSignInButton } from "@/components/google-sign-in-button";
 import { stashAccountantGoogleSignup } from "@/lib/google-auth";
@@ -195,9 +195,9 @@ function AuthPage() {
           toast.error("Pick South Africa or the United States (and a state) first.");
           return;
         }
-        const starter = starterCheckoutIntent(market.country === "ZA" ? "za" : "us");
-        if (!peekPendingCheckout()) stashPendingCheckout(starter);
-        const pending = peekPendingCheckout() ?? starter;
+        const signupCheckout = firmSignupCheckoutIntent(market.country === "ZA" ? "za" : "us");
+        if (!peekPendingCheckout()) stashPendingCheckout(signupCheckout);
+        const pending = peekPendingCheckout() ?? signupCheckout;
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
@@ -291,7 +291,7 @@ function AuthPage() {
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Something went wrong";
       if (mode === "signup" && signupLooksAlreadyRegistered({ errorMessage: msg })) {
-        if (!peekPendingCheckout()) stashPendingCheckout(starterCheckoutIntent());
+        if (!peekPendingCheckout()) stashPendingCheckout(firmSignupCheckoutIntent());
         stashResumeFirmBilling();
         setMode("signin");
         toast.message(FIRM_BILLING_SIGNIN_MESSAGE);
@@ -384,7 +384,7 @@ function AuthPage() {
                         });
                         if (!peekPendingCheckout()) {
                           stashPendingCheckout(
-                            starterCheckoutIntent(market.country === "ZA" ? "za" : "us"),
+                            firmSignupCheckoutIntent(market.country === "ZA" ? "za" : "us"),
                           );
                         }
                         return true;

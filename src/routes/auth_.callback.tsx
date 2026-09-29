@@ -26,7 +26,12 @@ import {
   stashInviteHandoff,
   stashPendingOwnerInvite,
 } from "@/lib/invite-handoff";
-import { marketToJson, parseMarketSelection, readVisitorMarket, withMarketRpcFallback } from "@/lib/market";
+import {
+  marketToJson,
+  parseMarketSelection,
+  readVisitorMarket,
+  withMarketRpcFallback,
+} from "@/lib/market";
 import { OPS_UNLOCK_KEY } from "@/lib/owner-ops.functions";
 import { isOpsNext, lighthouseTabFromOpsNext } from "@/lib/client-note-link";
 import {
@@ -37,7 +42,7 @@ import {
   peekPendingCheckout,
   stashPendingCheckout,
 } from "@/lib/pending-checkout";
-import { starterCheckoutIntent } from "@/lib/stripe-plans";
+import { firmSignupCheckoutIntent } from "@/lib/stripe-plans";
 import { accessTokenFromNext } from "@/lib/practice-access";
 import { listUserFirms } from "@/lib/firm-brand";
 import {
@@ -212,9 +217,7 @@ function AuthCallbackPage() {
           displayName;
         const fullName =
           draft?.fullName ||
-          (typeof user.user_metadata?.full_name === "string"
-            ? user.user_metadata.full_name
-            : "") ||
+          (typeof user.user_metadata?.full_name === "string" ? user.user_metadata.full_name : "") ||
           (typeof user.user_metadata?.name === "string" ? user.user_metadata.name : "") ||
           displayName;
         const market =
@@ -275,12 +278,8 @@ function AuthCallbackPage() {
         parsePendingCheckoutFromSearch(window.location.search) ||
         pendingCheckoutFromNext(next) ||
         peekPendingCheckout();
-      if (
-        !pendingCheckout &&
-        intent === "accountant" &&
-        isFreshAuthUser(user.created_at)
-      ) {
-        pendingCheckout = starterCheckoutIntent(
+      if (!pendingCheckout && intent === "accountant" && isFreshAuthUser(user.created_at)) {
+        pendingCheckout = firmSignupCheckoutIntent(
           readVisitorMarket()?.country === "ZA" ? "za" : "us",
         );
       }

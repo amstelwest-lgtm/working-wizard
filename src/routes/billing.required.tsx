@@ -14,14 +14,15 @@ import {
 import {
   FIRM_BAND_CATALOG,
   firmUsdListPrice,
-  starterCheckoutIntent,
+  firmSignupCheckoutIntent,
+  FIRM_TRIAL_SENTENCE,
   type FirmCheckoutBand,
   type FirmInterval,
 } from "@/lib/stripe-plans";
 
 export const Route = createFileRoute("/billing/required")({
   validateSearch: (search: Record<string, unknown>): PendingCheckout => {
-    return parsePendingCheckout(search) ?? starterCheckoutIntent();
+    return parsePendingCheckout(search) ?? firmSignupCheckoutIntent();
   },
   component: BillingRequiredPage,
   head: () => ({
@@ -35,7 +36,6 @@ export const Route = createFileRoute("/billing/required")({
 function priceLabel(plan: FirmCheckoutBand, interval: FirmInterval): string {
   const amount = firmUsdListPrice(plan, interval);
   if (!amount) return FIRM_BAND_CATALOG[plan].name;
-  if (amount === "Free") return "Free";
   return interval === "year" ? `${amount}/yr` : `${amount}/mo`;
 }
 
@@ -84,9 +84,7 @@ function BillingRequiredPage() {
     return (
       <div className="grid min-h-screen place-items-center bg-[#0b1220] px-4 text-slate-200">
         <div className="w-full max-w-md rounded-2xl border border-white/10 bg-white/5 p-6">
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-400">
-            Billing
-          </p>
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-400">Billing</p>
           <h1 className="mt-2 text-xl font-semibold">Checking firm billing…</h1>
         </div>
       </div>
@@ -96,13 +94,13 @@ function BillingRequiredPage() {
   return (
     <div className="grid min-h-screen place-items-center bg-[#0b1220] px-4 text-slate-200">
       <div className="w-full max-w-md rounded-2xl border border-white/10 bg-white/5 p-6">
-        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-400">
-          Billing
-        </p>
+        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-400">Billing</p>
         <h1 className="mt-2 text-xl font-semibold">Finish firm billing to open your practice</h1>
         <p className="mt-2 text-sm text-slate-400">
           Complete Checkout for {planName} ({priceLabel(pending.plan, pending.interval)}) to open
-          the accountant workspace. Starter is $0 once Checkout finishes. Owner Spark stays free.
+          the accountant workspace. A card is required. A first subscription includes a{" "}
+          {FIRM_TRIAL_SENTENCE}. If a trial already ended, billing resumes on the paid band without
+          another trial. Owner Spark stays free.
         </p>
         <div className="mt-5 flex flex-wrap gap-2">
           <Link

@@ -9,7 +9,7 @@ import {
 } from "@/lib/pending-checkout";
 import { getFirmBillingEntitlement } from "@/lib/stripe-checkout.functions";
 import { isFirmProductPath } from "@/lib/stripe-entitlement";
-import { starterCheckoutIntent } from "@/lib/stripe-plans";
+import { firmSignupCheckoutIntent } from "@/lib/stripe-plans";
 import {
   shouldStayOnAccountantPortal,
   setPortalIntent,
@@ -72,7 +72,7 @@ function AuthGate() {
       } catch {
         if (cancelled) return;
       }
-      const pending = peekPendingCheckout() ?? starterCheckoutIntent();
+      const pending = peekPendingCheckout() ?? firmSignupCheckoutIntent();
       stashPendingCheckout(pending);
       navigate({
         to: "/billing/required",
@@ -87,9 +87,7 @@ function AuthGate() {
 
   if (loading) {
     return (
-      <div className="min-h-screen grid place-items-center text-muted-foreground">
-        Loading…
-      </div>
+      <div className="min-h-screen grid place-items-center text-muted-foreground">Loading…</div>
     );
   }
   if (!user) return null;

@@ -62,18 +62,18 @@ function FaqPage() {
 
       <Qa q="What does it cost?">
         <p className="mk-copy-za">
-          Spark is free during early access and does not ask for a card. Accounting firms subscribe
-          on USD client-count bands billed through Stripe Checkout — Starter is free (up to 3
-          active clients), Solo starts at {LIST_PRICES.za.firmSolo} a month, and Scale is{" "}
-          {LIST_PRICES.za.firmScale} a month. Annual billing is about 20% off.{" "}
+          Spark is free during early access and does not ask for a card. Accounting firms start with
+          a 14-day free trial · up to 3 clients (card on file), then subscribe on USD client-count
+          bands billed through Stripe Checkout — Solo starts at {LIST_PRICES.za.firmSolo} a month,
+          and Scale is {LIST_PRICES.za.firmScale} a month. Annual billing is about 20% off.{" "}
           {WATCHLIST_DEFINITION} {FOUNDING_CALLOUT} Enterprise is a custom quote. South African
           firms can pay ZAR at Checkout via Adaptive Pricing.
         </p>
         <p className="mk-copy-us">
-          Spark is free during early access and does not ask for a card. Accounting firms subscribe
-          on USD client-count bands billed through Stripe Checkout — Starter is free (up to 3
-          active clients), Solo starts at {LIST_PRICES.us.firmSolo} a month, and Scale is{" "}
-          {LIST_PRICES.us.firmScale} a month. Annual billing is about 20% off.{" "}
+          Spark is free during early access and does not ask for a card. Accounting firms start with
+          a 14-day free trial · up to 3 clients (card on file), then subscribe on USD client-count
+          bands billed through Stripe Checkout — Solo starts at {LIST_PRICES.us.firmSolo} a month,
+          and Scale is {LIST_PRICES.us.firmScale} a month. Annual billing is about 20% off.{" "}
           {WATCHLIST_DEFINITION} {FOUNDING_CALLOUT} Enterprise is a custom quote. South African
           firms can pay ZAR at Checkout via Adaptive Pricing.
         </p>
@@ -82,8 +82,8 @@ function FaqPage() {
       <Qa q="So what is the catch with free?">
         <p>
           You are early, and early users shape what gets built. Spark stays free during early
-          access. Accounting firms pay a flat USD band by active client count through Stripe
-          Checkout.
+          access. Accounting firms get a 14-day free trial · up to 3 clients, then pay a flat USD
+          band by active client count through Stripe Checkout.
         </p>
       </Qa>
 

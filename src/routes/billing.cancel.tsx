@@ -5,7 +5,7 @@ import {
   peekPendingCheckout,
   type PendingCheckout,
 } from "@/lib/pending-checkout";
-import { starterCheckoutIntent } from "@/lib/stripe-plans";
+import { firmSignupCheckoutIntent } from "@/lib/stripe-plans";
 
 export const Route = createFileRoute("/billing/cancel")({
   component: BillingCancelPage,
@@ -18,22 +18,20 @@ export const Route = createFileRoute("/billing/cancel")({
 });
 
 function BillingCancelPage() {
-  const [pending, setPending] = useState<PendingCheckout>(() => starterCheckoutIntent());
+  const [pending, setPending] = useState<PendingCheckout>(() => firmSignupCheckoutIntent());
 
   useEffect(() => {
-    setPending(peekPendingCheckout() ?? starterCheckoutIntent());
+    setPending(peekPendingCheckout() ?? firmSignupCheckoutIntent());
   }, []);
 
   return (
     <div className="grid min-h-screen place-items-center bg-[#0b1220] px-4 text-slate-200">
       <div className="w-full max-w-md rounded-2xl border border-white/10 bg-white/5 p-6">
-        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-400">
-          Billing
-        </p>
+        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-400">Billing</p>
         <h1 className="mt-2 text-xl font-semibold">Checkout cancelled</h1>
         <p className="mt-2 text-sm text-slate-400">
-          Nothing was charged. Finish firm billing to open your practice — skipped Checkout does
-          not unlock the accountant workspace. Owner Spark stays free.
+          Nothing was charged. Finish firm billing to open your practice — skipped Checkout does not
+          unlock the accountant workspace. Owner Spark stays free.
         </p>
         <div className="mt-5 flex flex-wrap gap-2">
           <Link

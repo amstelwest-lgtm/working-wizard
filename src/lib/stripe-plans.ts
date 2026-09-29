@@ -9,12 +9,20 @@
  *
  * Watchlist clients are free and are not Stripe line items.
  * Owner Spark stays free and does not create a Checkout Session.
+ *
+ * New firms do not get forever-free Starter. Signup Checkout is a paid band
+ * (default Solo monthly) with a 14-day trial and a card on file.
  */
 
 export const STRIPE_SAAS_BUSINESS_TAX_CODE = "txcd_10103001";
 
 export const FOUNDING_COUPON_ID = "FOUNDING50";
 export const FOUNDING_PROMO_CODE = "FOUNDING";
+
+/** Locked commercial sentence. Never rewrite as "3 free clients". */
+export const FIRM_TRIAL_DAYS = 14;
+export const FIRM_TRIAL_CLIENT_LIMIT = 3;
+export const FIRM_TRIAL_SENTENCE = "14-day free trial · up to 3 clients";
 
 export const FIRM_INTERVALS = ["month", "year"] as const;
 export type FirmInterval = (typeof FIRM_INTERVALS)[number];
@@ -32,9 +40,11 @@ export const FIRM_BAND_IDS = [
 ] as const;
 export type FirmBandId = (typeof FIRM_BAND_IDS)[number];
 
-/** Checkout-eligible bands (Enterprise is quotes-only). */
+/**
+ * Checkout-eligible bands (Enterprise is quotes-only).
+ * Starter $0 is archived for new signups — not a Checkout band.
+ */
 export const FIRM_CHECKOUT_BANDS = [
-  "starter",
   "solo",
   "small",
   "growing",
@@ -64,6 +74,7 @@ export const FIRM_BAND_CATALOG: Record<FirmBandId, FirmBand> = {
   starter: {
     id: "starter",
     name: "Starter",
+    /** Legacy $0 band. Not offered at Checkout. Live price should be active=false. */
     clientLimit: 3,
     monthlyUsdCents: 0,
     yearlyUsdCents: null,
@@ -171,10 +182,7 @@ export function isFoundingCode(value: string | null | undefined): boolean {
  * FOUNDING50 / FOUNDING is monthly-only. It must not stack with the ~20%
  * annual catalog discount.
  */
-export function assertFoundingMonthlyOnly(
-  interval: FirmInterval,
-  promo?: string | null,
-): void {
+export function assertFoundingMonthlyOnly(interval: FirmInterval, promo?: string | null): void {
   if (!isFoundingCode(promo)) return;
   if (interval === "year") {
     throw new Error(
@@ -207,7 +215,6 @@ export function firmUsdListPrice(band: FirmBandId, interval: FirmInterval): stri
   if (entry.customQuote) return null;
   const cents = interval === "year" ? entry.yearlyUsdCents : entry.monthlyUsdCents;
   if (cents == null) return null;
-  if (cents === 0) return "Free";
   return formatUsdFromCents(cents);
 }
 
@@ -217,13 +224,16 @@ export function firmClientLimitLabel(band: FirmBandId): string {
   return `Up to ${limit} active clients`;
 }
 
-/** Default firm Checkout after signup: $0 Starter monthly. */
-export function starterCheckoutIntent(market: StripePlanMarket = "us"): {
-  plan: "starter";
+/**
+ * Default firm Checkout after signup: paid Solo monthly, 14-day trial,
+ * card collected. Not Starter $0.
+ */
+export function firmSignupCheckoutIntent(market: StripePlanMarket = "us"): {
+  plan: "solo";
   interval: "month";
   market: StripePlanMarket;
 } {
-  return { plan: "starter", interval: "month", market };
+  return { plan: "solo", interval: "month", market };
 }
 
 /* ── Owner Spark remains free. Legacy Orbit/Constellation names are not billed. ── */

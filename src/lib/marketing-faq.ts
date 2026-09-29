@@ -22,9 +22,9 @@ export const AI_IDENTIFIERS_LINE =
 export const WATCHLIST_DEFINITION =
   "Watchlist clients stay on your radar at no charge — they don't count toward billed seats until you activate a full workspace.";
 
-/** Live Stripe promo FOUNDING / FOUNDING50. Monthly only; does not stack with annual. */
+/** Live Stripe promo FOUNDING / FOUNDING50. Monthly paid Solo+ after the trial; does not stack with annual. */
 export const FOUNDING_CALLOUT =
-  "FOUNDING is 50% off monthly firm bands and does not stack with annual billing.";
+  "FOUNDING is 50% off monthly paid Solo+ after the trial and does not stack with annual billing.";
 
 /** Short homepage set. Visible copy and FAQPage JSON-LD must stay in lockstep. */
 export const HOMEPAGE_FAQ_ITEMS: FaqItem[] = [
@@ -40,8 +40,7 @@ export const HOMEPAGE_FAQ_ITEMS: FaqItem[] = [
   },
   {
     question: "Is my financial data used to train AI models?",
-    answer:
-      `No, your client financial information is not used to train third-party AI models. ${AI_IDENTIFIERS_LINE} Client numbers are not used to train third-party models, while AI is used within MILŌN to prepare financial analysis for human accountant review.`,
+    answer: `No, your client financial information is not used to train third-party AI models. ${AI_IDENTIFIERS_LINE} Client numbers are not used to train third-party models, while AI is used within MILŌN to prepare financial analysis for human accountant review.`,
   },
   {
     question: "What does MILŌN do for my business?",
@@ -51,7 +50,7 @@ export const HOMEPAGE_FAQ_ITEMS: FaqItem[] = [
   {
     question: "How do I get started, and what does MILŌN cost?",
     answer:
-      "Accounting firms subscribe on USD bands by active client count (Starter free through Scale; Enterprise is a custom quote) through Stripe Checkout. South African firms can pay ZAR at Checkout via Adaptive Pricing. Business owners can start free with Spark during early access, with no card required.",
+      "Accounting firms start with a 14-day free trial · up to 3 clients (card on file), then a paid USD band by active client count (Solo through Scale; Enterprise is a custom quote) through Stripe Checkout. South African firms can pay ZAR at Checkout via Adaptive Pricing. Business owners can start free with Spark during early access, with no card required.",
   },
 ];
 
@@ -62,12 +61,12 @@ export function publicFaqUsItems(): FaqItem[] {
   return [
     {
       question: "What does it cost?",
-      answer: `Spark is free during early access and does not ask for a card. Accounting firms subscribe on USD client-count bands billed through Stripe Checkout — Starter is free (up to 3 active clients), Solo starts at ${LIST_PRICES.us.firmSolo} a month, and Scale is ${LIST_PRICES.us.firmScale} a month. Annual billing is about 20% off. ${WATCHLIST_DEFINITION} ${FOUNDING_CALLOUT} Enterprise is a custom quote. South African firms can pay ZAR at Checkout via Adaptive Pricing.`,
+      answer: `Spark is free during early access and does not ask for a card. Accounting firms start with a 14-day free trial · up to 3 clients (card on file), then subscribe on USD client-count bands billed through Stripe Checkout — Solo starts at ${LIST_PRICES.us.firmSolo} a month, and Scale is ${LIST_PRICES.us.firmScale} a month. Annual billing is about 20% off. ${WATCHLIST_DEFINITION} ${FOUNDING_CALLOUT} Enterprise is a custom quote. South African firms can pay ZAR at Checkout via Adaptive Pricing.`,
     },
     {
       question: "So what is the catch with free?",
       answer:
-        "You are early, and early users shape what gets built. Spark stays free during early access. Accounting firms pay a flat USD band by active client count through Stripe Checkout.",
+        "You are early, and early users shape what gets built. Spark stays free during early access. Accounting firms get a 14-day free trial · up to 3 clients, then pay a flat USD band by active client count through Stripe Checkout.",
     },
     {
       question: "What happens if I stop using it?",
@@ -86,12 +85,12 @@ export function publicFaqUsItems(): FaqItem[] {
     },
     {
       question: "What does the AI see?",
-      answer:
-        `We use AI. It is powered by Claude. ${AI_IDENTIFIERS_LINE} Where an AI drafts a report for an accountant, a human reads and signs it before a client ever sees it. The AI notice at https://milonfinance.com/ai is the public version of that sentence.`,
+      answer: `We use AI. It is powered by Claude. ${AI_IDENTIFIERS_LINE} Where an AI drafts a report for an accountant, a human reads and signs it before a client ever sees it. The AI notice at https://milonfinance.com/ai is the public version of that sentence.`,
     },
     {
       question: "Do you store card details?",
-      answer: "No. Card numbers are collected by Stripe Checkout. Milōn does not store card details.",
+      answer:
+        "No. Card numbers are collected by Stripe Checkout. Milōn does not store card details.",
     },
     {
       question: "Do you track how I use the product?",

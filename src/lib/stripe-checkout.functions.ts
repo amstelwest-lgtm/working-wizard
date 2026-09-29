@@ -11,7 +11,10 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { AuthCtx } from "@/lib/owner-ops.guard";
 import { getStripe, stripeConfigured } from "@/lib/stripe.server";
+import { eligibleForIntroTrial } from "@/lib/firm-client-cap";
+import { findEntitlingFirmSubscription } from "@/lib/firm-client-cap.server";
 import {
+  FIRM_CHECKOUT_BANDS,
   FOUNDING_PROMO_CODE,
   assertFoundingMonthlyOnly,
   isFoundingCode,
@@ -52,7 +55,10 @@ type BillingAuthCtx = AuthCtx & {
     };
     from: (table: string) => {
       select: (columns: string) => {
-        eq: (column: string, value: string) => {
+        eq: (
+          column: string,
+          value: string,
+        ) => {
           limit: (n: number) => Promise<{ data: Array<{ id?: string }> | null }>;
         };
       };
@@ -94,6 +100,11 @@ function cachedEntitlement(email: string): FirmBillingEntitlement | undefined {
   return hit.value;
 }
 
+function forgetEntitlement(email: string): void {
+  const key = email.trim().toLowerCase();
+  if (key) entitlementCache.delete(key);
+}
+
 function rememberEntitlement(email: string, value: FirmBillingEntitlement): void {
   const key = email.trim().toLowerCase();
   if (!key) return;
@@ -118,7 +129,11 @@ async function countFirmMemberships(
   userId: string,
 ): Promise<number> {
   if (!supabase) return 0;
-  const { data } = await supabase.from("firm_memberships").select("id").eq("user_id", userId).limit(1);
+  const { data } = await supabase
+    .from("firm_memberships")
+    .select("id")
+    .eq("user_id", userId)
+    .limit(1);
   return data?.length ?? 0;
 }
 
@@ -205,11 +220,27 @@ async function createPaidCheckoutSession(input: {
     return { url: await createPortalUrl(customerId, origin), kind: "portal" };
   }
 
-  const { price, lookupKey } = await resolveFirmCatalogPrice(
-    stripe,
-    input.plan,
-    input.interval,
-  );
+  let includeTrial = true;
+  if (customerId) {
+    const prior = await stripe.subscriptions.list({
+      customer: customerId,
+      status: "all",
+      limit: 20,
+    });
+    const needsPaymentOnExisting = prior.data.some(
+      (sub) =>
+        sub.status === "past_due" ||
+        sub.status === "unpaid" ||
+        sub.status === "incomplete" ||
+        sub.status === "paused",
+    );
+    if (needsPaymentOnExisting) {
+      return { url: await createPortalUrl(customerId, origin), kind: "portal" };
+    }
+    includeTrial = eligibleForIntroTrial(prior.data.length);
+  }
+
+  const { price, lookupKey } = await resolveFirmCatalogPrice(stripe, input.plan, input.interval);
   const promotionCodeId = await resolveFoundingPromotionCodeId(input.promo);
 
   const params = firmCheckoutSessionParams({
@@ -224,6 +255,7 @@ async function createPaidCheckoutSession(input: {
     market: input.market,
     promotionCodeId,
     integrationIdentifier: firmIntegrationIdentifier(input.plan, input.interval),
+    includeTrial,
   });
   assertNoManagedPaymentsOverride(params);
 
@@ -235,16 +267,7 @@ async function createPaidCheckoutSession(input: {
 }
 
 const checkoutInput = z.object({
-  plan: z.enum([
-    "starter",
-    "solo",
-    "small",
-    "growing",
-    "established",
-    "larger",
-    "advanced",
-    "scale",
-  ]),
+  plan: z.enum(FIRM_CHECKOUT_BANDS),
   interval: z.enum(["month", "year"]).default("month"),
   market: z.enum(["za", "us"]).default("us"),
   promo: z.string().trim().max(40).optional(),
@@ -299,12 +322,35 @@ export const getCheckoutSessionStatus = createServerFn({ method: "POST" })
     };
   });
 
+/**
+ * End a trialing firm subscription now so the card on file is billed and the
+ * paid band's client limit applies. Owner email only — staff cannot charge it.
+ */
+export const endFirmTrialNow = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    if (!stripeConfigured()) {
+      throw new Error("STRIPE_SECRET_KEY is not set on this deploy.");
+    }
+    const { email } = await checkoutActor(context);
+    const sub = await findEntitlingFirmSubscription(email);
+    if (!sub || sub.phase !== "trialing") {
+      throw new Error(
+        "No trial subscription to upgrade. Open Manage billing if the paid plan is already active.",
+      );
+    }
+    await getStripe().subscriptions.update(sub.id, {
+      trial_end: "now",
+      payment_behavior: "error_if_incomplete",
+    });
+    forgetEntitlement(email);
+    return { ok: true as const };
+  });
+
 /** Live Stripe entitlement for the accountant firm shell. */
 export const getFirmBillingEntitlement = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input) =>
-    z.object({ refresh: z.boolean().optional() }).parse(input ?? {}),
-  )
+  .inputValidator((input) => z.object({ refresh: z.boolean().optional() }).parse(input ?? {}))
   .handler(async ({ data, context }) => {
     return resolveFirmBillingEntitlement(context, Boolean(data?.refresh));
   });

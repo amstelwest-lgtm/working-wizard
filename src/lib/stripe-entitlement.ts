@@ -3,7 +3,10 @@
  * Stripe Dashboard is source of truth until a webhook writes a local row.
  *
  * Owner Spark and invited firm staff (non-owners) are not billed on their
- * own email. The firm owner must complete Checkout (Starter $0 counts).
+ * own email. The firm owner must complete Checkout. A trialing subscription
+ * (14-day card-on-file trial) entitles the firm product. When the trial ends
+ * unpaid or canceled, status is no longer active/trialing and the
+ * billing/required resume path applies.
  */
 
 export const ENTITLING_SUBSCRIPTION_STATUSES = ["active", "trialing"] as const;
@@ -43,7 +46,10 @@ export function subscriptionStatusEntitles(
   return status === "active" || status === "trialing";
 }
 
-/** Checkout success (including Starter $0 with no card). */
+/**
+ * Checkout success. A trial session completes with no_payment_required
+ * because the first invoice is $0; the card is still collected.
+ */
 export function checkoutSessionUnlocksFirm(session: {
   status?: string | null;
   paymentStatus?: string | null;

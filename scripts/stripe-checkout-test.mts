@@ -71,6 +71,7 @@ const monthly = firmCheckoutSessionParams({
   email: "firm@example.com",
   market: "za",
   integrationIdentifier: firmIntegrationIdentifier("solo", "month", "abcdefgh"),
+  includeTrial: true,
 });
 
 assert(monthly.adaptive_pricing?.enabled === true, "adaptive_pricing enabled on session create");
@@ -83,6 +84,8 @@ assert(!("managed_payments" in monthly) || monthly.managed_payments == null, "MP
 assert(!("automatic_tax" in monthly) || monthly.automatic_tax == null, "automatic_tax omitted");
 assert(monthly.billing_address_collection === "required", "billing address required");
 assert(monthly.allow_promotion_codes === true, "monthly paid allows FOUNDING box");
+assert(monthly.payment_method_collection === "always", "card on file at signup");
+assert(monthly.subscription_data?.trial_period_days === 14, "first subscription is a 14-day trial");
 assert(monthly.mode === "subscription", "subscription mode");
 assert(monthly.integration_identifier === "milon-solo-month-abcdefgh", "integration_identifier");
 assert(!("payment_method_types" in monthly), "dynamic payment methods");
@@ -97,23 +100,30 @@ const yearly = firmCheckoutSessionParams({
   email: "firm@example.com",
   market: "us",
   integrationIdentifier: firmIntegrationIdentifier("solo", "year", "abcdefgh"),
+  includeTrial: true,
 });
 assert(yearly.adaptive_pricing?.enabled === true, "adaptive_pricing on yearly too");
 assert(yearly.allow_promotion_codes !== true, "yearly Checkout hides promotion codes");
+assert(yearly.payment_method_collection === "always", "yearly trial still collects a card");
+assert(yearly.subscription_data?.trial_period_days === 14, "chosen yearly band also trials 14 days");
 
-const starter = firmCheckoutSessionParams({
-  priceId: "price_test_starter",
-  lookupKey: "milon_starter_monthly",
-  band: "starter",
+const resumed = firmCheckoutSessionParams({
+  priceId: "price_test_solo_month",
+  lookupKey: "milon_solo_monthly",
+  band: "solo",
   interval: "month",
   origin: "https://milonfinance.com",
   userId: "user_1",
   email: "firm@example.com",
   market: "us",
-  integrationIdentifier: firmIntegrationIdentifier("starter", "month", "abcdefgh"),
+  integrationIdentifier: firmIntegrationIdentifier("solo", "month", "abcdefgh"),
+  includeTrial: false,
 });
-assert(starter.payment_method_collection === "if_required", "Starter $0 does not require a card");
-assert(starter.allow_promotion_codes !== true, "Starter does not open the promo box");
+assert(resumed.payment_method_collection === "always", "resume after trial still collects a card");
+assert(
+  resumed.subscription_data?.trial_period_days == null,
+  "a prior subscription does not get another trial",
+);
 
 assert(
   parsePendingCheckout({ plan: "solo", interval: "year", market: "us" })?.plan === "solo",
@@ -139,8 +149,8 @@ assert(
   "start path",
 );
 assert(
-  checkoutCallbackPath({ plan: "starter", interval: "month", market: "us" }) ===
-    "/auth/callback?checkout=starter&interval=month&market=us",
+  checkoutCallbackPath({ plan: "solo", interval: "month", market: "us" }) ===
+    "/auth/callback?checkout=solo&interval=month&market=us",
   "email confirm uses allowlisted callback",
 );
 assert(
@@ -154,9 +164,12 @@ assert(
 assert(isBillingStartPath("/billing/start?plan=solo&interval=month&market=us"), "is billing start");
 assert(!isBillingStartPath("/app"), "app is not billing start");
 assert(
-  pendingCheckoutFromNext("/billing/start?plan=starter&interval=month&market=za")?.plan ===
-    "starter",
-  "next carries starter",
+  pendingCheckoutFromNext("/billing/start?plan=starter&interval=month&market=za")?.plan === "solo",
+  "archived starter query resumes as Solo",
+);
+assert(
+  parsePendingCheckout({ plan: "starter", interval: "year", market: "us" })?.interval === "month",
+  "archived starter does not keep a yearly interval",
 );
 assert(registerLabelForPlan("solo") === "Solo", "solo label");
 assert(paidPlanFromRegisterLabel("Solo") === "solo", "label back to plan");
@@ -187,6 +200,9 @@ const core = readFileSync(resolve("src/lib/stripe-checkout.core.ts"), "utf8");
 assert(core.includes("adaptive_pricing: { enabled: true }"), "core sets adaptive_pricing");
 assert(core.includes('billing_address_collection: "required"'), "core collects billing address");
 assert(core.includes("subscription_data"), "plan metadata lands on the subscription");
+assert(core.includes("trial_period_days: FIRM_TRIAL_DAYS"), "core sets a 14-day trial");
+assert(core.includes('payment_method_collection: "always"'), "core always collects a card");
+assert(!core.includes("if_required"), "core does not waive the card for Starter");
 assert(core.includes("integration_identifier"), "keep integration_identifier on session create");
 assert(!core.includes("automatic_tax:"), "do not enable automatic_tax without a tax registration");
 assert(!core.includes("payment_method_types"), "dynamic payment methods in core");
@@ -230,6 +246,9 @@ const heroCta = landing.slice(landing.indexOf("hero-cta"), landing.indexOf("dash
 assert(heroCta.includes("see MILŌN for my clients"), "hero secondary is the accountant path");
 assert(heroCta.includes("goToFirmSignup"), "hero secondary still routes to firm signup");
 assert(!heroCta.includes("__mq_start"), "hero secondary does not launch the quiz");
+assert(landing.includes("FIRM_TRIAL_SENTENCE"), "landing states the trial sentence");
+assert(!landing.includes("3 free clients"), "landing never says 3 free clients");
+assert(!landing.includes("Starter is free"), "landing does not offer free-forever Starter");
 
 const landingCss = readFileSync(resolve("src/styles/landing.css"), "utf8");
 assert(
@@ -261,7 +280,7 @@ const success = readFileSync(resolve("src/routes/billing.success.tsx"), "utf8");
 assert(!success.includes("waitlist"), "success page is not waitlist copy");
 assert(success.includes("subscription is active") || success.includes("Payment received"), "success tells the truth");
 assert(success.includes('to="/dashboard"'), "success returns to the practice portal");
-assert(success.includes("checkoutSessionUnlocksFirm"), "success treats Starter complete as unlock");
+assert(success.includes("checkoutSessionUnlocksFirm"), "success treats completed trial Checkout as unlock");
 
 const cancel = readFileSync(resolve("src/routes/billing.cancel.tsx"), "utf8");
 assert(!cancel.includes("Lighthouse"), "cancel is not a Lighthouse-only test page");
@@ -274,7 +293,7 @@ assert(
   callback.indexOf("pendingCheckout") < callback.indexOf("goOps"),
   "paid Checkout resume runs before generic /app landing",
 );
-assert(callback.includes("starterCheckoutIntent"), "fresh accountant Google signup starts Starter");
+assert(callback.includes("firmSignupCheckoutIntent"), "fresh accountant Google signup starts paid Solo trial");
 
 const settings = readFileSync(resolve("src/routes/_authenticated/settings.index.tsx"), "utf8");
 assert(settings.includes("createBillingPortalSession"), "practice settings can open Customer Portal");

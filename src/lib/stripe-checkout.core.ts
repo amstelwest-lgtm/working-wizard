@@ -6,6 +6,7 @@
 import type Stripe from "stripe";
 import {
   assertFoundingMonthlyOnly,
+  FIRM_TRIAL_DAYS,
   firmLookupKey,
   isFoundingCode,
   type FirmCheckoutBand,
@@ -55,9 +56,7 @@ export async function resolveFirmCatalogPrice(
   const price = await resolvePriceByLookupKey(stripe, lookupKey);
   const priceInterval = price.recurring?.interval;
   if (priceInterval && priceInterval !== interval) {
-    throw new Error(
-      `Stripe price ${lookupKey} is ${priceInterval}, expected ${interval}.`,
-    );
+    throw new Error(`Stripe price ${lookupKey} is ${priceInterval}, expected ${interval}.`);
   }
   return { price, lookupKey };
 }
@@ -79,10 +78,7 @@ export function firmIntegrationIdentifier(
   return `milon-${band}-${interval}-${suffix}`;
 }
 
-export function foundingRejectedOnYearly(
-  interval: FirmInterval,
-  promo?: string | null,
-): boolean {
+export function foundingRejectedOnYearly(interval: FirmInterval, promo?: string | null): boolean {
   try {
     assertFoundingMonthlyOnly(interval, promo);
     return false;
@@ -104,6 +100,11 @@ export type FirmCheckoutSessionInput = {
   /** Stripe promotion_code id (promo_…), already resolved. */
   promotionCodeId?: string | null;
   integrationIdentifier: string;
+  /**
+   * First firm subscription only. A customer with any prior subscription
+   * (canceled trial included) does not get another 14 days.
+   */
+  includeTrial: boolean;
 };
 
 /**
@@ -111,32 +112,45 @@ export type FirmCheckoutSessionInput = {
  * Adaptive Pricing is on so SA firms can pay ZAR against the USD catalog.
  * Managed Payments is left at the account default (do not force-disable).
  * automatic_tax is omitted unless registrations exist.
+ *
+ * Card is always collected. A first subscription starts a 14-day trial on the
+ * chosen paid band. FOUNDING applies to the paid invoices after that trial,
+ * not as a forever-free price.
  */
 export function firmCheckoutSessionParams(
   input: FirmCheckoutSessionInput,
 ): Stripe.Checkout.SessionCreateParams {
   const origin = input.origin.replace(/\/$/, "");
-  const paid = input.band !== "starter";
-  const monthlyPaid = paid && input.interval === "month";
-  const meta = {
+  const monthlyPaid = input.interval === "month";
+  const meta: Record<string, string> = {
     milon_plan: input.band,
     milon_interval: input.interval,
     milon_market: input.market,
     milon_user_id: input.userId,
     milon_lookup_key: input.lookupKey,
   };
+  if (input.includeTrial) meta.milon_trial_days = String(FIRM_TRIAL_DAYS);
 
   const params: Stripe.Checkout.SessionCreateParams = {
     mode: "subscription",
     adaptive_pricing: { enabled: true },
     billing_address_collection: "required",
     tax_id_collection: { enabled: true },
+    payment_method_collection: "always",
     line_items: [{ price: input.priceId, quantity: 1 }],
     success_url: `${origin}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${origin}/billing/cancel`,
     client_reference_id: input.userId,
     metadata: meta,
-    subscription_data: { metadata: meta },
+    subscription_data: input.includeTrial
+      ? {
+          metadata: meta,
+          trial_period_days: FIRM_TRIAL_DAYS,
+          trial_settings: {
+            end_behavior: { missing_payment_method: "cancel" },
+          },
+        }
+      : { metadata: meta },
     integration_identifier: input.integrationIdentifier,
   };
 
@@ -146,11 +160,8 @@ export function firmCheckoutSessionParams(
     params.customer_email = input.email;
   }
 
-  if (input.band === "starter") {
-    params.payment_method_collection = "if_required";
-  }
-
   // Promo box only on monthly paid Checkout so FOUNDING cannot be typed on yearly.
+  // The coupon discounts invoices after the trial. It does not zero the plan forever.
   if (monthlyPaid) {
     params.allow_promotion_codes = true;
   }
@@ -163,9 +174,7 @@ export function firmCheckoutSessionParams(
   return params;
 }
 
-export function assertNoManagedPaymentsOverride(
-  params: Stripe.Checkout.SessionCreateParams,
-): void {
+export function assertNoManagedPaymentsOverride(params: Stripe.Checkout.SessionCreateParams): void {
   if ("managed_payments" in params && params.managed_payments != null) {
     throw new Error("Firm Checkout must not override managed_payments; leave the account default.");
   }

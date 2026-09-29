@@ -5,6 +5,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { loadFirmClientCreateAllowance } from "@/lib/firm-client-cap.server";
 import { US_STATE_CODES } from "@/lib/market/types";
 import { assertMarketSelection, isMissingMarketSupport, marketToJson } from "@/lib/market";
 
@@ -39,7 +40,21 @@ export const createFirmClient = createServerFn({ method: "POST" })
       .parse(input),
   )
   .handler(async ({ data, context }) => {
-    const sb = context.supabase as unknown as RpcClient;
+    const actor = context as unknown as {
+      supabase: RpcClient;
+      userId: string;
+      claims?: { email?: string | null };
+    };
+    const allowance = await loadFirmClientCreateAllowance({
+      supabase: actor.supabase,
+      userId: actor.userId,
+      email: actor.claims?.email ?? "",
+      firmId: data.firmId ?? null,
+    });
+    if (!allowance.allowed) {
+      throw new Error(allowance.message);
+    }
+    const sb = actor.supabase;
 
     let p_market: { country: "ZA" | "US"; regionCode: string | null } | null = null;
     if (data.marketCountry) {
@@ -102,7 +117,27 @@ export const createFirmClient = createServerFn({ method: "POST" })
     };
   });
 
-/** Create (or return) the caller's practice firm so Add client is never blocked. */
+/** Whether Add client is open, or blocked on the trial / band cap. */
+export const getFirmClientCreateAllowance = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) =>
+    z.object({ firmId: z.string().uuid().nullable().optional() }).parse(input ?? {}),
+  )
+  .handler(async ({ data, context }) => {
+    const actor = context as unknown as {
+      supabase: unknown;
+      userId: string;
+      claims?: { email?: string | null };
+    };
+    return loadFirmClientCreateAllowance({
+      supabase: actor.supabase,
+      userId: actor.userId,
+      email: actor.claims?.email ?? "",
+      firmId: data.firmId ?? null,
+    });
+  });
+
+/** Create (or return) the caller's practice firm so Add client is not blocked on a missing firm. */
 export const ensurePracticeFirm = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input) =>
