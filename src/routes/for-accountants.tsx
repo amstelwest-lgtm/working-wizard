@@ -180,8 +180,8 @@ function ForAccountantsPage() {
       />
       <ul className="mk-list">
         <li>
-          <strong>Starter</strong> is free (up to 3 active clients) so every firm has a
-          subscription from day one.
+          <strong>14-day free trial · up to 3 clients.</strong> Card on file at signup. After day
+          14, paid Solo+ bills automatically.
         </li>
         <li>{FOUNDING_CALLOUT}</li>
         <li>

@@ -24,7 +24,7 @@ function assert(cond: boolean, msg: string) {
 }
 
 assert(subscriptionStatusEntitles("active"), "active entitles");
-assert(subscriptionStatusEntitles("trialing"), "trialing entitles (Starter / trials)");
+assert(subscriptionStatusEntitles("trialing"), "trialing entitles the 14-day trial");
 assert(!subscriptionStatusEntitles("incomplete"), "incomplete does not entitle");
 assert(!subscriptionStatusEntitles("past_due"), "past_due does not entitle");
 assert(!subscriptionStatusEntitles("canceled"), "canceled does not entitle");
@@ -34,7 +34,7 @@ assert(checkoutSessionUnlocksFirm({ status: "complete" }), "complete Checkout un
 assert(checkoutSessionUnlocksFirm({ paymentStatus: "paid" }), "paid Checkout unlocks");
 assert(
   checkoutSessionUnlocksFirm({ status: "complete", paymentStatus: "no_payment_required" }),
-  "Starter $0 no_payment_required unlocks",
+  "trial Checkout no_payment_required unlocks",
 );
 assert(
   !checkoutSessionUnlocksFirm({ status: "open", paymentStatus: "unpaid" }),
@@ -370,7 +370,7 @@ const start = readFileSync(resolve("src/routes/billing.start.tsx"), "utf8");
 assert(start.includes("createStripeCheckout"), "billing start still creates Checkout");
 
 const success = readFileSync(resolve("src/routes/billing.success.tsx"), "utf8");
-assert(success.includes("checkoutSessionUnlocksFirm"), "success treats Starter complete as unlock");
+assert(success.includes("checkoutSessionUnlocksFirm"), "success treats completed trial Checkout as unlock");
 assert(success.includes('to="/dashboard"'), "success opens the practice portal");
 assert(success.includes("refresh: true"), "success warms entitlement cache");
 

@@ -17,10 +17,7 @@ export const Route = createFileRoute("/billing/success")({
   },
   component: BillingSuccessPage,
   head: () => ({
-    meta: [
-      { title: "Payment received — Milōn" },
-      { name: "robots", content: "noindex, nofollow" },
-    ],
+    meta: [{ title: "Payment received — Milōn" }, { name: "robots", content: "noindex, nofollow" }],
   }),
 });
 
@@ -49,7 +46,7 @@ function BillingSuccessPage() {
         }
         if (checkoutSessionUnlocksFirm(result)) {
           setLabel(
-            "Stripe confirmed your firm subscription is active (Starter $0 counts once Checkout completes). Watchlist clients stay free. Owner Spark remains free.",
+            "Checkout is complete and your card is on file. A first firm subscription is a 14-day free trial · up to 3 clients, then the paid band bills automatically. Owner Spark stays free.",
           );
           setUnlocked(true);
           void refreshEntitlement({ data: { refresh: true } }).catch(() => undefined);
@@ -70,9 +67,7 @@ function BillingSuccessPage() {
   return (
     <div className="grid min-h-screen place-items-center bg-[#0b1220] px-4 text-slate-200">
       <div className="w-full max-w-md rounded-2xl border border-white/10 bg-white/5 p-6">
-        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-400">
-          Billing
-        </p>
+        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-400">Billing</p>
         <h1 className="mt-2 text-xl font-semibold">Payment received</h1>
         <p className="mt-2 text-sm text-slate-400">{label}</p>
         <Link

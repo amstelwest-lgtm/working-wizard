@@ -1,5 +1,11 @@
 import { FOUNDING_CALLOUT, WATCHLIST_DEFINITION } from "@/lib/marketing-faq";
-import { FIRM_BAND_TABLE, firmUsdListPrice, type FirmCheckoutBand, type FirmInterval } from "@/lib/stripe-plans";
+import {
+  FIRM_BAND_TABLE,
+  FIRM_TRIAL_SENTENCE,
+  firmUsdListPrice,
+  type FirmCheckoutBand,
+  type FirmInterval,
+} from "@/lib/stripe-plans";
 
 type Props = {
   interval: FirmInterval;
@@ -36,6 +42,9 @@ export function FirmBandPricingTable({
           </button>
         </div>
       ) : null}
+      <p className="firm-bands-trial">
+        {FIRM_TRIAL_SENTENCE}. Card required. After day 14, paid Solo+.
+      </p>
       <p className="firm-bands-founding">{FOUNDING_CALLOUT}</p>
       <p className="firm-bands-note">
         USD list prices. South African firms can pay in ZAR at Checkout (Adaptive Pricing).{" "}
@@ -52,26 +61,35 @@ export function FirmBandPricingTable({
             </tr>
           </thead>
           <tbody>
-            {FIRM_BAND_TABLE.map((band) => {
-              const price =
-                band.customQuote
-                  ? "Custom"
-                  : interval === "year" && band.yearlyUsdCents == null
-                    ? "Monthly only"
-                    : firmUsdListPrice(band.id, interval === "year" && band.yearlyUsdCents == null ? "month" : interval);
-              const checkoutBand = band.id !== "enterprise" && (interval === "month" || band.yearlyUsdCents != null);
+            {FIRM_BAND_TABLE.filter((band) => band.id !== "starter").map((band) => {
+              const price = band.customQuote
+                ? "Custom"
+                : interval === "year" && band.yearlyUsdCents == null
+                  ? "Monthly only"
+                  : firmUsdListPrice(
+                      band.id,
+                      interval === "year" && band.yearlyUsdCents == null ? "month" : interval,
+                    );
+              const checkoutBand =
+                band.id !== "enterprise" && (interval === "month" || band.yearlyUsdCents != null);
               return (
-                <tr key={band.id} className={band.id === "starter" ? "is-starter" : undefined} data-band={band.id}>
+                <tr
+                  key={band.id}
+                  className={band.id === "solo" ? "is-trial" : undefined}
+                  data-band={band.id}
+                >
                   <td className="firm-bands-name">
                     <strong>{band.name}</strong>
                   </td>
                   <td className="firm-bands-limit">
-                    {band.clientLimit == null
-                      ? "Unlimited"
-                      : `Up to ${band.clientLimit}`}
+                    {band.clientLimit == null ? "Unlimited" : `Up to ${band.clientLimit}`}
                   </td>
                   <td className="firm-bands-price">
-                    {price === "Free" ? "Free" : price === "Custom" || price === "Monthly only" ? price : interval === "year" ? `${price}/yr` : `${price}/mo`}
+                    {price === "Custom" || price === "Monthly only"
+                      ? price
+                      : interval === "year"
+                        ? `${price}/yr`
+                        : `${price}/mo`}
                   </td>
                   <td className="firm-bands-cta">
                     {band.customQuote ? (
@@ -81,7 +99,7 @@ export function FirmBandPricingTable({
                     ) : checkoutBand && onSelectBand ? (
                       <button
                         type="button"
-                        className={band.id === "starter" ? "btn btn-gold" : "btn btn-ghost"}
+                        className={band.id === "solo" ? "btn btn-gold" : "btn btn-ghost"}
                         onClick={() =>
                           onSelectBand(
                             band.id as FirmCheckoutBand,
@@ -89,7 +107,7 @@ export function FirmBandPricingTable({
                           )
                         }
                       >
-                        {band.id === "starter" ? "Start free" : `Start ${band.name}`}
+                        {band.id === "solo" ? "Start 14-day trial" : `Start ${band.name}`}
                       </button>
                     ) : (
                       <a className="btn btn-ghost" href="/auth">

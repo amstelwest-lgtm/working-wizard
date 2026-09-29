@@ -663,7 +663,8 @@ html[data-market="za"] .mk-copy-za {
   outline: 2px solid var(--gold-bright);
   outline-offset: 2px;
 }
-html .mk .firm-bands-founding {
+html .mk .firm-bands-founding,
+html .mk .firm-bands-trial {
   margin: 0 0 12px;
   padding: 10px 14px;
   border: 1px solid var(--gold);
@@ -721,7 +722,7 @@ html .mk .firm-bands-table td {
 .mk .firm-bands-table tbody tr:nth-child(even) td {
   background-color: color-mix(in srgb, var(--ink) 4%, var(--bg-2));
 }
-.mk .firm-bands-table tbody tr.is-starter td {
+.mk .firm-bands-table tbody tr.is-trial td {
   background-color: color-mix(in srgb, var(--gold) 10%, var(--bg-2));
 }
 .mk .firm-bands-table tbody tr:hover td {

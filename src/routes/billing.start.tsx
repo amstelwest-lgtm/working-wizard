@@ -13,6 +13,8 @@ import {
 } from "@/lib/pending-checkout";
 import {
   FIRM_BAND_CATALOG,
+  FIRM_TRIAL_SENTENCE,
+  firmSignupCheckoutIntent,
   firmUsdListPrice,
   type FirmCheckoutBand,
   type FirmInterval,
@@ -20,13 +22,7 @@ import {
 
 export const Route = createFileRoute("/billing/start")({
   validateSearch: (search: Record<string, unknown>): PendingCheckout => {
-    return (
-      parsePendingCheckout(search) ?? {
-        plan: "starter",
-        interval: "month",
-        market: "us",
-      }
-    );
+    return parsePendingCheckout(search) ?? firmSignupCheckoutIntent();
   },
   component: BillingStartPage,
   head: () => ({
@@ -40,7 +36,6 @@ export const Route = createFileRoute("/billing/start")({
 function priceLabel(plan: FirmCheckoutBand, interval: FirmInterval): string {
   const amount = firmUsdListPrice(plan, interval);
   if (!amount) return FIRM_BAND_CATALOG[plan].name;
-  if (amount === "Free") return "Free";
   return interval === "year" ? `${amount}/yr` : `${amount}/mo`;
 }
 
@@ -95,9 +90,7 @@ function BillingStartPage() {
           role="alert"
           className="w-full max-w-md rounded-2xl border border-white/10 bg-white/5 p-6"
         >
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-400">
-            Billing
-          </p>
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-400">Billing</p>
           <h1 className="mt-2 text-xl font-semibold">Could not start Checkout</h1>
           <p className="mt-2 text-sm text-slate-400">{error}</p>
           <div className="mt-5 flex flex-wrap gap-2">
@@ -126,16 +119,14 @@ function BillingStartPage() {
   return (
     <div className="grid min-h-screen place-items-center bg-[#0b1220] px-4 text-slate-200">
       <div className="w-full max-w-md rounded-2xl border border-white/10 bg-white/5 p-6">
-        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-400">
-          Billing
-        </p>
+        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-400">Billing</p>
         <h1 className="mt-2 text-xl font-semibold">
           {user ? `Starting ${planName}` : `Sign in to start ${planName}`}
         </h1>
         <p className="mt-2 text-sm text-slate-400">
           {user
-            ? `Redirecting to Stripe for ${planName} (${priceLabel(pending.plan, pending.interval)}). South African firms may be charged in ZAR via Adaptive Pricing.`
-            : `Create a firm account or sign in, then we will send you to Stripe for ${planName} (${priceLabel(pending.plan, pending.interval)}). Owner Spark stays free.`}
+            ? `Redirecting to Stripe for ${planName} (${priceLabel(pending.plan, pending.interval)}). Card required. ${FIRM_TRIAL_SENTENCE} on a first subscription, then the paid band. South African firms may be charged in ZAR via Adaptive Pricing.`
+            : `Create a firm account or sign in, then we will send you to Stripe for ${planName} (${priceLabel(pending.plan, pending.interval)}). Card required. ${FIRM_TRIAL_SENTENCE}. Owner Spark stays free.`}
         </p>
       </div>
     </div>

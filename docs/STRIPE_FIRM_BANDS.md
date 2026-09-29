@@ -16,7 +16,7 @@ Head office for Stripe Tax is Wilmington, DE.
 
 | Band | Active clients | Monthly | Annual (~20% off) | Lookup keys |
 | --- | --- | --- | --- | --- |
-| Starter | 3 | $0 | — | `milon_starter_monthly` |
+| Starter (archived — not for new signups) | 3 | $0 | — | `milon_starter_monthly` (`active=false` on Live) |
 | Solo | 15 | $99 | $950 | `milon_solo_monthly` / `milon_solo_yearly` |
 | Small | 25 | $149 | $1,430 | `milon_small_monthly` / `milon_small_yearly` |
 | Growing | 50 | $249 | $2,390 | `milon_growing_monthly` / `milon_growing_yearly` |
@@ -48,7 +48,8 @@ App constants: `src/lib/stripe-plans.ts`. Session builder: `src/lib/stripe-check
 - `billing_address_collection: "required"` and `tax_id_collection: { enabled: true }`
 - Omit `payment_method_types` (dynamic payment methods)
 - `integration_identifier`: `milon-{band}-{interval}-{8 random letters}`
-- Starter ($0): `payment_method_collection: "if_required"` so a firm can complete without a card
+- `payment_method_collection: "always"` — card on file at signup
+- First subscription: `subscription_data.trial_period_days: 14` on the chosen paid band (default Solo monthly). A customer with any prior subscription does not get a second trial.
 
 If the signed-in email already has an **active** Stripe subscription, Checkout create opens the **Customer Portal** instead of a second subscription.
 
@@ -62,9 +63,46 @@ If the signed-in email already has an **active** Stripe subscription, Checkout c
   2. Yearly Checkout does **not** set `allow_promotion_codes`, so the code box is absent
   3. Monthly paid Checkout sets `allow_promotion_codes: true`
 
-## Starter at firm signup
+## New firm signup — 14-day trial
 
-Every new firm is sent to Starter Checkout (`milon_starter_monthly`) after `/auth` signup (email confirm and Google included) so the firm has a Stripe subscription from day one.
+Every new firm is sent to Checkout on a **paid** band after `/auth` signup (email confirm and Google included). The default is Solo monthly (`milon_solo_monthly`). Starter $0 is not a new-signup path.
+
+- Copy: **14-day free trial · up to 3 clients**. Do not write “3 free clients” or “free forever.”
+- Card is required. The trial subscription status is `trialing`, which entitles `/dashboard` and the rest of the firm product.
+- During the trial the app blocks the 4th client until the subscription is `active` on a band that allows it. The firm owner can end the trial from Add client (“Upgrade to paid plan”), which sets `trial_end: now` and bills the card.
+- Paid Solo+ uses the catalog client limits (Solo 15, Small 25, …).
+- FOUNDING / FOUNDING50 applies to monthly paid Solo+ invoices after the trial. It is not a free-forever coupon.
+- When the trial ends unpaid or canceled (`past_due`, `unpaid`, `canceled`, `incomplete`), the firm is not entitled and resumes at `/billing/required`.
+
+## Trial cliff emails — later PR, not this one
+
+Growth owns the Resend sends. Do not add day-12 or day-14 mail in the Checkout / client-cap change. Locked copy for that follow-up:
+
+- Day 12: “2 days left — subscribe to keep your 3 clients’ Health + Action Plans live.”
+- Day 14: “Trial ended — subscribe now to reopen sign-off, or access stays read-only/archived.”
+
+## Starter price — archive, do not delete
+
+`milon_starter_monthly` stays in the catalog map so a legacy subscription still resolves to a 3-client band. New Checkout never requests it (`prices.list` uses `active: true`).
+
+### Stripe Live ops checklist (coordinator)
+
+Account: **Milon, Inc.** `acct_1UEXnwGXDN6PFbnz` (Live). This VM does not mutate Live Stripe. The app only resolves `lookup_key`s.
+
+1. Do **not** delete prices or products.
+2. Archive the Starter $0 price so it cannot be used for new Checkout:
+
+   ```bash
+   stripe prices list --lookup-keys milon_starter_monthly
+   stripe prices update price_XXX --active=false
+   ```
+
+   Dashboard: Product catalog → Starter price → Archive. `active=false`. Existing subscriptions on that price keep running.
+3. Leave paid band prices **active**: `milon_solo_monthly`, `milon_solo_yearly`, and the same pattern for small, growing, established, larger, advanced, scale.
+4. Leave `tax_behavior=exclusive` and Adaptive Pricing (SA ZAR) unchanged.
+5. Do not attach FOUNDING50 to the Starter price. FOUNDING stays 50% off **monthly paid** prices only. FOUNDING applies to monthly invoices after the trial.
+6. Customer Portal should allow the firm to update the subscription (change band / pay).
+7. The app sets `trial_period_days: 14` and `payment_method_collection: always` on Checkout. A Dashboard trial on the Solo price is optional; the app path does not depend on it. Do not put a trial on the archived Starter price.
 
 ## Customer Portal
 
@@ -102,8 +140,9 @@ workspace. Auth account creation can still happen before Checkout; after login,
 - **Gated:** `/dashboard`, `/clients/*`, `/reports*`, `/settings/team`,
   `/settings/brand` for accountant / firm **owners**.
 - **Entitled when:** Stripe customer for the signed-in email has a subscription
-  with status `active` or `trialing`. Starter $0 counts once Checkout completes
-  successfully (`complete` / `paid` / `no_payment_required`).
+  with status `active` or `trialing`. A 14-day trial counts (`trialing`).
+  Checkout success includes `complete` / `paid` / `no_payment_required`
+  (the trial’s first invoice is $0; the card is still collected).
 - **Not gated:** Owner Spark (`/app`), owner invite-accept, public/marketing,
   `/auth/callback` mid-checkout, `/billing/*` (start, success, cancel, required),
   Customer Portal start, shared `/settings` (so billing can be completed),
@@ -111,5 +150,6 @@ workspace. Auth account creation can still happen before Checkout; after login,
 - Live check: `customers.list` by email + `subscriptions.list` (same helpers as
   Checkout). Brief in-memory cache of **positive** results only. No local
   entitlement table until a webhook writes one.
-- Unpaid owners land on `/billing/required` (“Finish firm billing to open your
-  practice”) and can resume Checkout (pending band, default Starter monthly).
+- Unpaid owners, and owners whose trial ended without an `active` subscription,
+  land on `/billing/required` (“Finish firm billing to open your practice”) and
+  can resume Checkout (pending band, default Solo monthly, no second intro trial).

@@ -12,7 +12,6 @@ export const LIST_PRICES = {
   za: {
     orbit: "R699",
     constellation: "R1 299",
-    firmStarter: "Free",
     firmSolo: "$99",
     firmSmall: "$149",
     firmGrowing: "$249",
@@ -25,7 +24,6 @@ export const LIST_PRICES = {
   us: {
     orbit: "$39",
     constellation: "$75",
-    firmStarter: "Free",
     firmSolo: "$99",
     firmSmall: "$149",
     firmGrowing: "$249",

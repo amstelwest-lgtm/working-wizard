@@ -55,7 +55,8 @@ import { stashAccountantGoogleSignup } from "@/lib/google-auth";
 import { forcePortal, setPortalIntent } from "@/lib/user-roles";
 import { decidePostLoginBillingResume } from "@/lib/stripe-entitlement";
 import {
-  starterCheckoutIntent,
+  FIRM_TRIAL_SENTENCE,
+  firmSignupCheckoutIntent,
   type FirmCheckoutBand,
   type FirmInterval,
 } from "@/lib/stripe-plans";
@@ -254,7 +255,7 @@ function LandingPage() {
   const [regPassword, setRegPassword] = useState("");
   const [regBusiness, setRegBusiness] = useState("");
   const [regFirmName, setRegFirmName] = useState("");
-  const [regPlan, setRegPlan] = useState("Starter");
+  const [regPlan, setRegPlan] = useState("Solo");
   const [firmInterval, setFirmInterval] = useState<FirmInterval>("month");
   const [regBusy, setRegBusy] = useState(false);
   const [regError, setRegError] = useState("");
@@ -388,7 +389,7 @@ function LandingPage() {
           const { listUserFirms } = await import("@/lib/firm-brand");
           const firms = await listUserFirms(user.id);
           if (firms.some((f) => f.owner_user_id === user.id)) {
-            const pending = starterCheckoutIntent();
+            const pending = firmSignupCheckoutIntent();
             stashPendingCheckout(pending);
             if (!cancelled) {
               navigate({
@@ -1010,7 +1011,7 @@ function LandingPage() {
               resumeFirmBilling: true,
             });
             if (resume) {
-              const pending = starterCheckoutIntent(visitorCopyPack(draftMarket));
+              const pending = firmSignupCheckoutIntent(visitorCopyPack(draftMarket));
               stashPendingCheckout(pending);
               setPortalIntent("accountant");
               void navigate({
@@ -1211,9 +1212,9 @@ function LandingPage() {
       setRegBusy(true);
       try {
         setPortalIntent("accountant");
-        const starter = starterCheckoutIntent(market.country === "ZA" ? "za" : "us");
-        if (!peekPendingCheckout()) stashPendingCheckout(starter);
-        const pending = peekPendingCheckout() ?? starter;
+        const signupCheckout = firmSignupCheckoutIntent(market.country === "ZA" ? "za" : "us");
+        if (!peekPendingCheckout()) stashPendingCheckout(signupCheckout);
+        const pending = peekPendingCheckout() ?? signupCheckout;
         const { data, error } = await supabase.auth.signUp({
           email: regEmail,
           password: regPassword,
@@ -1363,7 +1364,7 @@ function LandingPage() {
     plan?: FirmCheckoutBand;
     scrollTo?: "register" | "pricing";
   }) => {
-    const plan = opts?.plan ?? "starter";
+    const plan = opts?.plan ?? "solo";
     const market = visitorCopyPack(draftMarket);
     stashPendingCheckout({ plan, interval: firmInterval, market });
     setRegPlan(registerLabelForPlan(plan));
@@ -2169,9 +2170,7 @@ function LandingPage() {
             <h1 className="h-anim d2">
               MILŌN.
               <br />
-              <span className="gold-text">
-                A full finance function in your pocket.
-              </span>
+              <span className="gold-text">A full finance function in your pocket.</span>
             </h1>
             <p className="hero-lede h-anim d3">
               MILŌN gives accountants an AI-powered finance function to run for their clients —
@@ -2850,8 +2849,8 @@ function LandingPage() {
               USD bands by client count. <span className="gold-text">ZAR at Checkout.</span>
             </h2>
             <p className="sub">
-              Accounting firms subscribe on a flat USD band by active client count. Starter is free
-              (up to 3 active clients). South African firms can pay ZAR at Checkout via Adaptive
+              Accounting firms start with a {FIRM_TRIAL_SENTENCE}, card on file, then a paid USD
+              band by active client count. South African firms can pay ZAR at Checkout via Adaptive
               Pricing. {WATCHLIST_DEFINITION} {FOUNDING_CALLOUT} AI prepares the analysis; the
               accountant reviews and signs off.
             </p>
@@ -2962,9 +2961,9 @@ function LandingPage() {
               <span className="gold-text">AI prepares; you sign off.</span>
             </h2>
             <p className="sub">
-              Set up your practice, pick a USD client-count band (Starter is free for up to 3 active
-              clients), and run the finance function across the book. Business owners can still
-              start on Spark below, free during early access.
+              Set up your practice and start a {FIRM_TRIAL_SENTENCE} (card required). After day 14
+              the paid band bills automatically. Business owners can still start on Spark below,
+              free during early access.
             </p>
           </div>
 
@@ -3114,8 +3113,8 @@ function LandingPage() {
                       <a href="/terms" style={{ color: "inherit" }}>
                         Terms
                       </a>
-                      . AI is powered by Claude; identifiers are stripped before model calls, amounts
-                      stay.{" "}
+                      . AI is powered by Claude; identifiers are stripped before model calls,
+                      amounts stay.{" "}
                       <a href="/privacy" style={{ color: "inherit" }}>
                         Privacy
                       </a>
@@ -3136,7 +3135,7 @@ function LandingPage() {
                         const value = e.target.value;
                         setRegRole(value);
                         if (value === "Accountant / Advisory firm") {
-                          goToFirmSignup({ plan: "starter", scrollTo: "register" });
+                          goToFirmSignup({ plan: "solo", scrollTo: "register" });
                         } else {
                           clearPendingCheckout();
                           setRegPlan("Spark — Free early access");
@@ -3164,7 +3163,7 @@ function LandingPage() {
                           disabled={regBusy || !isDraftComplete(draftMarket)}
                           next={billingStartPath(
                             peekPendingCheckout() ??
-                              starterCheckoutIntent(visitorCopyPack(draftMarket)),
+                              firmSignupCheckoutIntent(visitorCopyPack(draftMarket)),
                           )}
                           onBeforeStart={() => {
                             const market = draftToSelection(draftMarket);
@@ -3184,7 +3183,7 @@ function LandingPage() {
                             });
                             if (!peekPendingCheckout()) {
                               stashPendingCheckout(
-                                starterCheckoutIntent(market.country === "ZA" ? "za" : "us"),
+                                firmSignupCheckoutIntent(market.country === "ZA" ? "za" : "us"),
                               );
                             }
                             return true;
@@ -3242,8 +3241,8 @@ function LandingPage() {
                           }}
                         >
                           {paidPlanFromRegisterLabel(regPlan)
-                            ? `You will start on ${regPlan} after creating the firm account. Change band in Pricing if you need a different client count.`
-                            : "Starter is free (up to 3 active clients). Pick another band in Pricing if you already know your book size."}
+                            ? `You will start on ${regPlan} with a ${FIRM_TRIAL_SENTENCE}. A card is required. After day 14 the paid band bills automatically.`
+                            : `${FIRM_TRIAL_SENTENCE}. A card is required. Pick a band in Pricing if you already know your book size.`}
                         </p>
 
                         <button
