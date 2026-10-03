@@ -6,6 +6,7 @@
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sanitize } from "../ask-ai/sanitizer.ts";
 import { callClaudeRound, type ClaudeMessage, type ClaudeTool } from "./claude.ts";
+import { publicRun, runMilonbotObjective } from "./handler.ts";
 import {
   BOT_MAX_HISTORY,
   BOT_MAX_TOOL_ROUNDS,
@@ -45,7 +46,10 @@ function buildCorsHeaders(requestOrigin: string | null): Record<string, string> 
 function json(body: unknown, status = 200, corsHeaders?: Record<string, string>) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...(corsHeaders ?? { "Access-Control-Allow-Origin": "*" }), "Content-Type": "application/json" },
+    headers: {
+      ...(corsHeaders ?? { "Access-Control-Allow-Origin": "*" }),
+      "Content-Type": "application/json",
+    },
   });
 }
 
@@ -58,7 +62,8 @@ const TOOLS: ClaudeTool[] = [
   },
   {
     name: "list_blockers",
-    description: "List outstanding unanswered client_brain_questions for this client. Empty array if none.",
+    description:
+      "List outstanding unanswered client_brain_questions for this client. Empty array if none.",
     input_schema: { type: "object", properties: {}, additionalProperties: false },
   },
   {
@@ -210,7 +215,8 @@ async function runTool(
     brainSummary: clientRes.data?.brain_summary ?? null,
     financials: snap
       ? {
-          period_label: (snap.period_label as string | null) ?? (snap.period_date as string | null) ?? null,
+          period_label:
+            (snap.period_label as string | null) ?? (snap.period_date as string | null) ?? null,
           ratios: numericRatios(snap.ratios),
           cash_runway_weeks: cash,
         }
@@ -262,12 +268,17 @@ Deno.serve(async (req: Request) => {
   });
   const adminClient = createClient(supabaseUrl, serviceKey);
 
-  const { data: { user }, error: authErr } = await userClient.auth.getUser();
+  const {
+    data: { user },
+    error: authErr,
+  } = await userClient.auth.getUser();
   if (authErr || !user) return respond({ error: "Unauthorised" }, 401);
 
   let body: {
     clientId?: string;
     message?: string;
+    objective?: string;
+    mode?: string;
     history?: Array<{ role?: string; content?: string }>;
     audience?: string;
   };
@@ -278,14 +289,25 @@ Deno.serve(async (req: Request) => {
   }
 
   const clientId = body.clientId;
+  const agentMode = body.mode === "agent";
   const rawMessage = body.message;
-  if (!clientId || !rawMessage?.trim()) {
-    return respond({ error: "clientId and message are required" }, 400);
+  const rawObjective = typeof body.objective === "string" ? body.objective.trim() : "";
+  if (!clientId || (agentMode ? rawObjective.length < 8 : !rawMessage?.trim())) {
+    return respond(
+      {
+        error: agentMode
+          ? "clientId and an objective of at least 8 characters are required"
+          : "clientId and message are required",
+      },
+      400,
+    );
   }
   const audience = body.audience === "accountant" ? "accountant" : "owner";
 
-  const { data: hasAccess, error: accessErr } = await adminClient
-    .rpc("has_client_access", { _user_id: user.id, _client_id: clientId });
+  const { data: hasAccess, error: accessErr } = await adminClient.rpc("has_client_access", {
+    _user_id: user.id,
+    _client_id: clientId,
+  });
   if (accessErr) {
     console.error("has_client_access error:", accessErr.message);
     return respond({ error: "Access check failed" }, 500);
@@ -304,10 +326,62 @@ Deno.serve(async (req: Request) => {
   if (rlErr) {
     console.warn("ask_ai_record_request unavailable:", rlErr.message);
   } else if (allowed === false) {
-    return respond({ error: "Rate limit exceeded. You can ask the bot up to 30 times per hour." }, 429);
+    return respond(
+      { error: "Rate limit exceeded. You can ask the bot up to 30 times per hour." },
+      429,
+    );
   }
 
-  const message = sanitize(rawMessage);
+  if (agentMode) {
+    const objective = sanitize(rawObjective).slice(0, 500);
+    if (!Deno.env.get("ANTHROPIC_API_KEY")) {
+      return respond({
+        answer:
+          "AI is not configured (ANTHROPIC_API_KEY). Milonbot cannot work an objective until that secret is set.",
+        tools: [],
+        skippedReason: "ai_not_configured",
+        run: {
+          objective,
+          status: "insufficient_information",
+          outcomeLabel: "Not enough information",
+          summary: "AI is not configured. No tools were called.",
+          claimRejected: false,
+          escalationReason: null,
+          questions: [],
+          trace: [],
+        },
+      });
+    }
+    try {
+      const { run, inputTokens, outputTokens, latencyMs } = await runMilonbotObjective({
+        clientId,
+        userId: user.id,
+        token,
+        audience,
+        objective,
+        userClient,
+        adminClient,
+      });
+      adminClient
+        .from("ask_ai_log")
+        .update({ input_tokens: inputTokens, output_tokens: outputTokens, latency_ms: latencyMs })
+        .eq("user_id", user.id)
+        .eq("tier", "milon_bot")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .then(({ error: e }) => {
+          if (e) console.warn("Token count update failed:", e.message);
+        });
+      const view = publicRun(run);
+      return respond({ answer: view.summary, tools: run.tools, run: view });
+    } catch (e) {
+      const msg = (e as Error).message;
+      if (msg.startsWith("Rate limit")) return respond({ error: msg }, 429);
+      return respond({ error: msg }, 500);
+    }
+  }
+
+  const message = sanitize(rawMessage ?? "");
   const history = (body.history ?? [])
     .filter((m) => (m.role === "user" || m.role === "assistant") && typeof m.content === "string")
     .slice(-BOT_MAX_HISTORY)
@@ -332,7 +406,8 @@ Deno.serve(async (req: Request) => {
 
   if (!Deno.env.get("ANTHROPIC_API_KEY")) {
     return respond({
-      answer: "AI is not configured (ANTHROPIC_API_KEY). Milōn Bot cannot run until that secret is set.",
+      answer:
+        "AI is not configured (ANTHROPIC_API_KEY). Milōn Bot cannot run until that secret is set.",
       tools: [],
       skippedReason: "ai_not_configured",
     });

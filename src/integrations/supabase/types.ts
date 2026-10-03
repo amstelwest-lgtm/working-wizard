@@ -479,6 +479,56 @@ export type Database = {
           },
         ]
       }
+      milon_bot_runs: {
+        Row: {
+          id: string
+          client_id: string
+          user_id: string
+          audience: string
+          objective: string
+          status: string
+          summary: string
+          escalation_reason: string | null
+          outstanding_questions: Json
+          trace: Json
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          client_id: string
+          user_id: string
+          audience: string
+          objective: string
+          status: string
+          summary?: string
+          escalation_reason?: string | null
+          outstanding_questions?: Json
+          trace?: Json
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          client_id?: string
+          user_id?: string
+          audience?: string
+          objective?: string
+          status?: string
+          summary?: string
+          escalation_reason?: string | null
+          outstanding_questions?: Json
+          trace?: Json
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "milon_bot_runs_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       advisory_deliveries: {
         Row: {
           id: string
