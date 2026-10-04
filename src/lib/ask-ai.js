@@ -12,6 +12,7 @@ import {
   MILON_BOT_SUBTITLE,
   MILON_BOT_TITLE,
   deriveMilonBotEndpoint,
+  parseAgentObjective,
   routeMilonIntent,
 } from "./milon-bot-copy.ts";
 import { deliverableHandoff } from "./workflow-coach.ts";
@@ -192,6 +193,8 @@ export function mountAskAi(container, options) {
   let answer = "";
   let answerChips = [];
   let toolHints = [];
+  let agentRun = null;
+  let workingObjective = false;
   let errorMsg = "";
   let history = [];
 
@@ -301,6 +304,8 @@ export function mountAskAi(container, options) {
         answer = "";
         answerChips = [];
         toolHints = [];
+        agentRun = null;
+        workingObjective = false;
         pendingIntent = null;
         history = [];
         errorMsg = "";
@@ -314,8 +319,11 @@ export function mountAskAi(container, options) {
       if (loading) {
         const thinking = document.createElement("div");
         thinking.className = "ask-ai-thinking";
-        thinking.textContent =
-          pendingIntent === "milon-bot" ? "Checking what's on file…" : "Analysing your numbers…";
+        thinking.textContent = workingObjective
+          ? "Working the objective…"
+          : pendingIntent === "milon-bot"
+            ? "Checking what's on file…"
+            : "Analysing your numbers…";
         panel.appendChild(thinking);
       }
 
@@ -332,6 +340,10 @@ export function mountAskAi(container, options) {
         const answerEl = document.createElement("div");
         answerEl.className = "ask-ai-answer";
         answerEl.innerHTML = renderMarkdown(answer);
+
+        if (agentRun && agentRun.objective) {
+          answerEl.appendChild(renderAgentTrace(agentRun));
+        }
 
         if (toolHints.length > 0) {
           const hint = document.createElement("p");
@@ -395,14 +407,71 @@ export function mountAskAi(container, options) {
     container.appendChild(widget);
   }
 
+  function renderAgentTrace(run) {
+    const wrap = document.createElement("div");
+    wrap.className = "ask-ai-trace";
+
+    const objective = document.createElement("p");
+    objective.className = "ask-ai-trace-objective";
+    objective.textContent = `Objective — ${run.objective}`;
+    wrap.appendChild(objective);
+
+    const list = document.createElement("ol");
+    const steps = Array.isArray(run.trace) ? run.trace : [];
+    steps.forEach((step) => {
+      const li = document.createElement("li");
+      const verified =
+        step.verified === true
+          ? "verified"
+          : step.verified === false
+            ? "not verified"
+            : step.status;
+      const happened =
+        step.happened === true ? "happened" : step.happened === false ? "did not happen" : "";
+      const head = [step.label || step.tool || "Step", verified, happened]
+        .filter(Boolean)
+        .join(" — ");
+      li.textContent = step.detail ? `${head}. ${step.detail}` : head;
+      list.appendChild(li);
+    });
+    wrap.appendChild(list);
+
+    const outcome = document.createElement("p");
+    outcome.className = "ask-ai-trace-outcome";
+    const extra = run.escalationReason ? ` ${run.escalationReason}` : "";
+    outcome.textContent = `Outcome — ${run.outcomeLabel || run.status || "Stopped"}.${extra}`;
+    wrap.appendChild(outcome);
+
+    if (run.claimRejected) {
+      const note = document.createElement("p");
+      note.className = "ask-ai-trace-note";
+      note.textContent = "A completion claim was rejected because the action was not verified.";
+      wrap.appendChild(note);
+    }
+
+    const questions = Array.isArray(run.questions)
+      ? run.questions.filter((q) => typeof q === "string" && q)
+      : [];
+    if (questions.length) {
+      const waiting = document.createElement("p");
+      waiting.className = "ask-ai-trace-note";
+      waiting.textContent = `Waiting on — ${questions.join(" ")}`;
+      wrap.appendChild(waiting);
+    }
+    return wrap;
+  }
+
   async function submit() {
     const q = question.trim();
     if (!q || loading) return;
-    pendingIntent = routeMilonIntent(q);
+    const objective = parseAgentObjective(q);
+    workingObjective = Boolean(objective);
+    pendingIntent = objective ? "milon-bot" : routeMilonIntent(q);
     loading = true;
     answer = "";
     answerChips = [];
     toolHints = [];
+    agentRun = null;
     errorMsg = "";
     render();
 
@@ -418,7 +487,8 @@ export function mountAskAi(container, options) {
 
       if (!clientId) throw new Error("No client context found.");
 
-      const useBot = pendingIntent === "milon-bot" && botEndpoint;
+      const useAgent = Boolean(objective) && Boolean(botEndpoint);
+      const useBot = (useAgent || pendingIntent === "milon-bot") && botEndpoint;
       const url = useBot ? botEndpoint : endpoint;
       const res = await fetch(url, {
         method: "POST",
@@ -427,18 +497,25 @@ export function mountAskAi(container, options) {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(
-          useBot
+          useAgent
             ? {
                 clientId,
-                message: q,
-                history: history.slice(-8),
+                mode: "agent",
+                objective,
                 audience: accountant ? "accountant" : "owner",
               }
-            : {
-                clientId,
-                question: q,
-                ...(accountant ? { audience: "accountant" } : {}),
-              },
+            : useBot
+              ? {
+                  clientId,
+                  message: q,
+                  history: history.slice(-8),
+                  audience: accountant ? "accountant" : "owner",
+                }
+              : {
+                  clientId,
+                  question: q,
+                  ...(accountant ? { audience: "accountant" } : {}),
+                },
         ),
       });
 
@@ -450,6 +527,7 @@ export function mountAskAi(container, options) {
 
       answer = data.answer || "No answer returned.";
       answerChips = data.chips || [];
+      agentRun = data.run && typeof data.run === "object" ? data.run : null;
       toolHints = Array.isArray(data.tools)
         ? data.tools.map((t) => toolHint(t.name, t.status))
         : [];
@@ -460,6 +538,7 @@ export function mountAskAi(container, options) {
     } finally {
       loading = false;
       pendingIntent = null;
+      workingObjective = false;
       render();
     }
   }

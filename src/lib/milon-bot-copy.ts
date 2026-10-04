@@ -7,10 +7,10 @@ export const MILON_BOT_TITLE = "Milōn Bot";
 export const MILON_BOT_SUBTITLE = "powered by Claude";
 
 export const MILON_BOT_BLURB_ACCOUNTANT =
-  "Your client's numbers and Client Brain, in one chat. Ask anything grounded in what's already on file — health, cash, margins, what's blocking, invite status — and it can draft next steps or an advisory pack for you to review. It won't invent figures, mint invites, or send email.";
+  "Your client's numbers and Client Brain, in one chat. Ask anything grounded in what's already on file — health, cash, margins, what's blocking, invite status — and it can draft next steps or an advisory pack for you to review. Start a job with \"Objective:\" and Milonbot will investigate, act only where MILŌN allows, and stop when it needs you. It won't invent figures, mint invites, or send email.";
 
 export const MILON_BOT_BLURB_OWNER =
-  "Your numbers and Client Brain, in one chat. Ask anything grounded in what's already on file — health, cash, margins, what's still outstanding — and it can draft next steps for you to review. It won't invent figures, mint invites, or send email.";
+  "Your numbers and Client Brain, in one chat. Ask anything grounded in what's already on file — health, cash, margins, what's still outstanding — and it can draft next steps for you to review. Start a job with \"Objective:\" and Milonbot will investigate, act only where MILŌN allows, and stop when it needs you. It won't invent figures, mint invites, or send email.";
 
 export const MILON_BOT_ACCOUNTANT_CHIPS = [
   "What's the biggest drag on this client's score vs peers?",
@@ -18,6 +18,7 @@ export const MILON_BOT_ACCOUNTANT_CHIPS = [
   "What's still outstanding on the brain, and is the invite redeemed?",
   "Propose next steps from what's on file.",
   "Draft an advisory pack from the brain — don't send it.",
+  "Objective: find the cash pressure and what still needs a human decision.",
 ];
 
 export const MILON_BOT_OWNER_CHIPS = [
@@ -26,6 +27,7 @@ export const MILON_BOT_OWNER_CHIPS = [
   "Can I afford a hire based on what's on the board?",
   "What's still outstanding that my accountant needs from me?",
   "Propose next steps I can actually take this week.",
+  "Objective: see whether an approved move can become a task this week.",
 ];
 
 export type MilonBotIntent = "ask-ai" | "milon-bot";
@@ -56,6 +58,17 @@ export function routeMilonIntent(question: string): MilonBotIntent {
     return "milon-bot";
   }
   return "ask-ai";
+}
+
+/**
+ * "Objective: …" starts an agent run. A bare question stays on the chat path.
+ * The body must be long enough to be a real job, not a stray prefix.
+ */
+export function parseAgentObjective(question: string): string | null {
+  const match = question.match(/^\s*objective\s*:\s*(.+)$/i);
+  if (!match) return null;
+  const body = match[1].replace(/\s+/g, " ").trim();
+  return body.length >= 8 ? body.slice(0, 500) : null;
 }
 
 export function deriveMilonBotEndpoint(askAiEndpoint: string | undefined | null): string | null {

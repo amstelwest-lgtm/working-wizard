@@ -18,7 +18,7 @@
  * tab ids) or the accountant studio (`/clients/:id?tab=`), mirroring the tab
  * pairs in `notes-tabs.ts`.
  */
-import { ADVISORY_STATE_LABELS, type AdvisoryState } from "@/lib/advisory-state";
+import { ADVISORY_STATE_LABELS, type AdvisoryState } from "./advisory-state.ts";
 
 export const NEXT_STEP_AUDIENCES = ["owner", "accountant"] as const;
 export type NextStepAudience = (typeof NEXT_STEP_AUDIENCES)[number];

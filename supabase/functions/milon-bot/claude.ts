@@ -35,7 +35,11 @@ export async function callClaudeRound(
   system: string,
   messages: ClaudeMessage[],
   tools: ClaudeTool[],
-  opts?: { maxTokens?: number; temperature?: number },
+  opts?: {
+    maxTokens?: number;
+    temperature?: number;
+    toolChoice?: { type: "auto" | "any" } | { type: "tool"; name: string };
+  },
 ): Promise<ClaudeRound> {
   const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
   if (!apiKey) {
@@ -57,6 +61,7 @@ export async function callClaudeRound(
       system,
       messages,
       tools,
+      ...(opts?.toolChoice ? { tool_choice: opts.toolChoice } : {}),
       temperature: opts?.temperature ?? 0.2,
       max_tokens: opts?.maxTokens ?? 1024,
     }),
@@ -80,9 +85,10 @@ export async function callClaudeRound(
     .map((b) => ({
       id: String(b.id),
       name: String(b.name),
-      input: b.input && typeof b.input === "object" && !Array.isArray(b.input)
-        ? (b.input as Record<string, unknown>)
-        : {},
+      input:
+        b.input && typeof b.input === "object" && !Array.isArray(b.input)
+          ? (b.input as Record<string, unknown>)
+          : {},
     }));
   const usage = json?.usage ?? {};
 
