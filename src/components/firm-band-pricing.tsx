@@ -1,3 +1,4 @@
+import { ENTERPRISE_CONTACT_HREF, FIRM_SIGNUP_HREF } from "@/lib/firm-signup-copy";
 import { FOUNDING_CALLOUT, WATCHLIST_DEFINITION } from "@/lib/marketing-faq";
 import {
   FIRM_BAND_TABLE,
@@ -19,7 +20,7 @@ export function FirmBandPricingTable({
   interval,
   onIntervalChange,
   onSelectBand,
-  enterpriseHref = "/auth",
+  enterpriseHref = ENTERPRISE_CONTACT_HREF,
   compact = false,
 }: Props) {
   return (
@@ -110,7 +111,7 @@ export function FirmBandPricingTable({
                         {band.id === "solo" ? "Start 14-day trial" : `Start ${band.name}`}
                       </button>
                     ) : (
-                      <a className="btn btn-ghost" href="/auth">
+                      <a className="btn btn-ghost" href={FIRM_SIGNUP_HREF}>
                         Set up firm
                       </a>
                     )}

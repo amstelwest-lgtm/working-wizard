@@ -22,9 +22,11 @@ import {
   isBillingStartPath,
   pendingCheckoutFromNext,
   peekPendingCheckout,
+  registerLabelForPlan,
   stashPendingCheckout,
   stashResumeFirmBilling,
 } from "@/lib/pending-checkout";
+import { firmSignupTrialReminder } from "@/lib/firm-signup-copy";
 import { firmSignupCheckoutIntent } from "@/lib/stripe-plans";
 import { accessTokenFromNext } from "@/lib/practice-access";
 import { AuthDivider, GoogleSignInButton } from "@/components/google-sign-in-button";
@@ -338,6 +340,11 @@ function AuthPage() {
             <form onSubmit={handle} className={mode === "signin" ? "" : "mt-4"}>
               {mode === "signup" && (
                 <>
+                  <p className="auth-entry__trial">
+                    {firmSignupTrialReminder(
+                      registerLabelForPlan(peekPendingCheckout()?.plan ?? "solo"),
+                    )}
+                  </p>
                   <AuthEntryFieldLabel htmlFor="auth-full-name">Your name</AuthEntryFieldLabel>
                   <AuthEntryInput
                     id="auth-full-name"
@@ -358,6 +365,7 @@ function AuthPage() {
                       value={draftMarket}
                       onChange={setDraftMarket}
                       audience="practice"
+                      locationNoun="practice"
                     />
                   </div>
                   <div className="mt-5">

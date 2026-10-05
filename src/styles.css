@@ -941,6 +941,13 @@ html[data-theme="light"] .accountant-portal .crumb a:hover {
   color: #1b1300;
 }
 
+.auth-entry__trial {
+  margin: 0 0 1.25rem;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--brand-ink-muted);
+}
+
 .auth-entry__footnote {
   padding-top: 0.75rem;
   text-align: center;

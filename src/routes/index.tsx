@@ -12,6 +12,11 @@ import { registerLighthouseTrialVisit } from "@/lib/lighthouse.functions";
 import { AuthDivider, GoogleSignInButton } from "@/components/google-sign-in-button";
 import { GooglePreferredSourceButton } from "@/components/google-preferred-source-button";
 import { FirmBandPricingTable } from "@/components/firm-band-pricing";
+import {
+  DUAL_MARKET_BUILT,
+  DUAL_MARKET_TAGLINE,
+  firmSignupTrialReminder,
+} from "@/lib/firm-signup-copy";
 import { MarketPicker } from "@/components/market-picker";
 import { RegionCopy } from "@/components/marketing-shell";
 import {
@@ -2129,9 +2134,6 @@ function LandingPage() {
             >
               Create firm account
             </a>
-            <a href="#register" onClick={() => setMobileNavOpen(false)}>
-              Sign up
-            </a>
             <a href="#method" onClick={() => setMobileNavOpen(false)}>
               The MILŌN Method
             </a>
@@ -2446,13 +2448,7 @@ function LandingPage() {
               <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
               <path d="M16 3.13a4 4 0 0 1 0 7.75" />
             </svg>
-            <span>
-              <RegionCopy
-                pack={copyMarket.copyPack}
-                za="Built for SA SMEs"
-                us="Built for US SMBs"
-              />
-            </span>
+            <span>{DUAL_MARKET_BUILT}</span>
           </div>
           <div className="item">
             <svg
@@ -3127,7 +3123,9 @@ function LandingPage() {
                 ) : (
                   /* ── Standard signup form ── */
                   <>
-                    <label htmlFor="regRoleField">I am a</label>
+                    <label htmlFor="regRoleField">
+                      {regRole.startsWith("Accountant") ? "I am an" : "I am a"}
+                    </label>
                     <select
                       id="regRoleField"
                       value={regRole}
@@ -3241,7 +3239,7 @@ function LandingPage() {
                           }}
                         >
                           {paidPlanFromRegisterLabel(regPlan)
-                            ? `You will start on ${regPlan} with a ${FIRM_TRIAL_SENTENCE}. A card is required. After day 14 the paid band bills automatically.`
+                            ? firmSignupTrialReminder(regPlan)
                             : `${FIRM_TRIAL_SENTENCE}. A card is required. Pick a band in Pricing if you already know your book size.`}
                         </p>
 
@@ -3449,11 +3447,7 @@ function LandingPage() {
             <span style={{ fontSize: 12, color: "var(--ink-dim)" }}>
               The AI-powered finance function
               <br />
-              <RegionCopy
-                pack={copyMarket.copyPack}
-                za="for South African SMEs"
-                us="for US small businesses"
-              />
+              {DUAL_MARKET_TAGLINE}
             </span>
             <GooglePreferredSourceButton defaultTheme="dark" />
           </div>
@@ -3514,11 +3508,7 @@ function LandingPage() {
                 AI notice
               </a>
               {" · "}
-              <RegionCopy
-                pack={copyMarket.copyPack}
-                za="Built for South Africa · Powered by Claude AI"
-                us="Built for the United States · Powered by Claude AI"
-              />
+              {DUAL_MARKET_BUILT} · Powered by Claude AI
             </span>
           </div>
         </div>
