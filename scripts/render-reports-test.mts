@@ -628,6 +628,26 @@ const cases: TestCase[] = [
       });
     },
   },
+  {
+    name: "ActionPlan / draft items",
+    async build() {
+      const { ActionPlanPDF } = await import("../src/reports/action-plan.js");
+      return createElement(ActionPlanPDF, {
+        smeData: SME,
+        accountantProfile: { ...ACCOUNTANT, signatureDataUrl: null },
+        headline: "Health: 79/100 (Healthy)",
+        outcomeGoal: "Improve overview health from 79/100",
+        items: [
+          {
+            title: "Protect cash runway (4 weeks)",
+            status: "not_started",
+            dueDate: "2026-10-19",
+            outcomeWhy: "Overview runway is 4 weeks. Cash on file is $7,430.",
+          },
+        ],
+      });
+    },
+  },
 ];
 
 // ── Runner ───────────────────────────────────────────────────────────────────
