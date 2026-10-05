@@ -25,6 +25,7 @@ import {
 } from "./derive-ratios.ts";
 import { buildOverviewBrief, copyPackFromMarket } from "./overview-brief.ts";
 import { assessClientMetrics, runwayDisplayLabel } from "../../../src/lib/client-metrics.ts";
+import { peerMedian } from "../../../src/lib/ratios.ts";
 
 /**
  * Maps the application's stored business_type values to the benchmark category keys
@@ -258,12 +259,13 @@ export async function buildContext(
 
         for (const { camelKey, value } of entries) {
           const b = benchMap.get(camelKey);
+          const sharedMedian = peerMedian(camelKey);
           const row: RatioRow = {
             key: camelKey,
             value,
             format: inferFormat(camelKey),
             p25: b?.p25 ?? null,
-            p50: b?.p50 ?? null,
+            p50: sharedMedian ?? b?.p50 ?? null,
             p75: b?.p75 ?? null,
             higher_is_better: b?.higher_is_better ?? null,
           };

@@ -63,6 +63,13 @@ export function t(key: CopyKey, market: Pick<ResolvedMarket, "copyPack">): strin
   return (market.copyPack === "us" ? US : ZA)[key];
 }
 
+/** Health-input label. Reports say Labour for ZA; the inputs use the same spelling. */
+export function laborCostLabel(
+  market: Pick<ResolvedMarket, "copyPack"> | null | undefined,
+): string {
+  return market?.copyPack === "us" ? "Labor cost" : "Labour cost";
+}
+
 /** Firm spelling for the productivity report. One source for the card, the PDF, and the ZIP name. */
 export function laborProductivityTitle(
   market: Pick<ResolvedMarket, "copyPack"> | null | undefined,

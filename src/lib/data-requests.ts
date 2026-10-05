@@ -14,7 +14,7 @@
  */
 import type { Json } from "@/integrations/supabase/types";
 import type { AdvisoryState } from "@/lib/advisory-state";
-import { creditorDaysHealthyBand } from "@/lib/ratios";
+import { creditorDaysHealthyBand, peerMedian } from "@/lib/ratios";
 
 export const DATA_REQUEST_KINDS = [
   "bank_statement",
@@ -218,16 +218,16 @@ export type DataRequestDraft = {
 export const STALE_FIGURES_DAYS = 75;
 /**
  * Days above which statement totals stop being enough to act on.
- * Creditor days use the shared healthy maximum. Debtor days stay at 45:
- * that is the ageing-report ask, not debtorDays.healthyMax (18).
+ * Creditor days use the shared healthy maximum. Debtor days use the shared
+ * peer median (40), not the healthy band (18) and not a private 45.
  */
-export const DEBTOR_DAYS_AGEING_THRESHOLD = 45;
+export const DEBTOR_DAYS_AGEING_THRESHOLD = peerMedian("debtorDays") ?? 40;
 export const CREDITOR_DAYS_AGEING_THRESHOLD = creditorDaysHealthyBand().max;
 
 /**
  * The same debtor/creditor day signals as the Overview data-request cards.
  * What matters reads these so it cannot say nothing needs attention while a
- * card is flagging creditor days above 60 (or debtor days above 45).
+ * card is flagging creditor days above 60 (or debtor days above the peer median).
  */
 export function ratioAttentionSignals(
   ratios: Record<string, number> | null | undefined,

@@ -76,8 +76,11 @@ import {
   clientRunway,
   distributeForecastLine,
   forecastAnchorDate,
+  forecastInTheBlack,
   forecastIsCashGenerative,
   forecastMinimumCash,
+  forecastScenarioLabel,
+  runwayFromForecastNet,
   periodOperatingOutflows,
   persistedRunwayWeeks,
   plBankDisagreement,
@@ -748,15 +751,8 @@ export function CashForecastPanel({
         if (cf.revenue) setRevenue(cf.revenue);
         if (cf.expenses) setExpenses(cf.expenses);
         if (cf.other) setOther(cf.other);
-        if (cf.revAdj != null) setRevAdj(cf.revAdj);
-        if (cf.expAdj != null) setExpAdj(cf.expAdj);
-        if (cf.collectDelay != null) setCollectDelay(cf.collectDelay);
-        if (cf.headcountDelta != null) setHeadcountDelta(cf.headcountDelta);
-        if (cf.avgSalary != null) setAvgSalary(cf.avgSalary);
-        if (cf.fixedCostDelta != null) setFixedCostDelta(cf.fixedCostDelta);
-        if (cf.revGrowthPct != null) setRevGrowthPct(cf.revGrowthPct);
-        if (cf.capexAmount != null) setCapexAmount(cf.capexAmount);
-        if (cf.capexWeek != null) setCapexWeek(cf.capexWeek);
+        // Scenarios default off. A stored collection delay (including one
+        // written from debtor days) must not open the forecast already on.
       }
       setInputFinancials(
         (data?.financials as Record<string, string | number | null | undefined> | null) ?? null,
@@ -1137,13 +1133,8 @@ export function CashForecastPanel({
           accountantProfile: profile,
           market,
           minimumThreshold: minimumCash,
-          runwayLabel: runwayDisplayLabel(screenRunway),
-          cashGenerative:
-            screenRunway.kind === "cash_generative" &&
-            forecastIsCashGenerative(
-              calc.inflow.reduce((sum, n) => sum + n, 0),
-              calc.outflow.reduce((sum, n) => sum + n, 0),
-            ),
+          runwayLabel: runwayDisplayLabel(direction),
+          cashGenerative: seriesCashGenerative,
           assumptions,
           reviewSignoff: stampFromSignoff(forecastSignoff, forecastStale),
         }) as Parameters<typeof pdf>[0],
@@ -1268,12 +1259,26 @@ export function CashForecastPanel({
     </div>
   );
 
+  const totalInflow = calc.inflow.reduce((sum, n) => sum + n, 0);
+  const totalOutflow = calc.outflow.reduce((sum, n) => sum + n, 0);
+  const direction = runwayFromForecastNet({
+    base: screenRunway,
+    opening: calc.opening,
+    totalInflow,
+    totalOutflow,
+  });
+  const inTheBlack = forecastInTheBlack(totalInflow, totalOutflow, closingW13);
   const seriesCashGenerative =
-    screenRunway.kind === "cash_generative" &&
-    forecastIsCashGenerative(
-      calc.inflow.reduce((sum, n) => sum + n, 0),
-      calc.outflow.reduce((sum, n) => sum + n, 0),
-    );
+    direction.kind === "cash_generative" && forecastIsCashGenerative(totalInflow, totalOutflow);
+  const scenarioLabel = forecastScenarioLabel({
+    collectDelay,
+    revAdj,
+    expAdj,
+    headcountDelta,
+    capexAmount: parseFloat(capexAmount) || 0,
+    fixedCostDelta: parseFloat(fixedCostDelta) || 0,
+    revGrowthPct,
+  });
   const shortfall = lowestBal < 0;
   const timingDriver =
     collectDelay > 0 ||
@@ -1306,11 +1311,17 @@ export function CashForecastPanel({
       className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wide ${
         showShortfall
           ? "border-[#e05c5c] bg-[#e05c5c]/10 text-[#c0392b] dark:text-[#ef6b6b]"
-          : "border-[#4caf82] bg-[#4caf82]/10 text-[#3f9c72] dark:text-[#5cc492]"
+          : inTheBlack
+            ? "border-[#4caf82] bg-[#4caf82]/10 text-[#3f9c72] dark:text-[#5cc492]"
+            : "border-[#d4a550] bg-[#d4a550]/15 text-[#8a6a12] dark:text-[#e2b964]"
       }`}
     >
-      {showShortfall ? <AlertTriangle className="h-3 w-3" /> : <CheckCircle2 className="h-3 w-3" />}
-      {showShortfall ? `Shortfall W${lowestWeek}` : "In the black"}
+      {showShortfall || !inTheBlack ? (
+        <AlertTriangle className="h-3 w-3" />
+      ) : (
+        <CheckCircle2 className="h-3 w-3" />
+      )}
+      {showShortfall ? `Shortfall W${lowestWeek}` : inTheBlack ? "In the black" : "Net cash out"}
     </span>
   );
 
@@ -1393,6 +1404,9 @@ export function CashForecastPanel({
                   13-week closing balance
                   {horizonLabel ? ` · ${horizonLabel}` : ""} · opening {fmtR(calc.opening)}
                 </p>
+                {scenarioLabel ? (
+                  <p className="mt-1 text-[11px] font-semibold text-[#b8860b]">{scenarioLabel}</p>
+                ) : null}
                 {xeroBankNote ? (
                   <p
                     id="xero-bank-forecast-note"
@@ -1459,29 +1473,27 @@ export function CashForecastPanel({
                 value={
                   seriesCashGenerative
                     ? "Cash generative"
-                    : screenRunway.kind === "unknown"
-                      ? (runwayDisplayLabel(screenRunway) ?? "—")
-                      : screenRunway.kind === "zero"
+                    : direction.kind === "unknown"
+                      ? (runwayDisplayLabel(direction) ?? "—")
+                      : direction.kind === "zero"
                         ? "0 wk"
-                        : screenRunway.kind === "weeks"
-                          ? `${screenRunway.weeks} wk`
+                        : direction.kind === "weeks"
+                          ? `${direction.weeks} wk`
                           : "Net outflow"
                 }
                 tone={
                   seriesCashGenerative
                     ? "good"
-                    : screenRunway.kind === "cash_generative" ||
-                        screenRunway.kind === "zero" ||
-                        (screenRunway.weeks ?? 99) < 8
+                    : direction.kind === "zero" || (direction.weeks ?? 99) < 8
                       ? "bad"
                       : "neutral"
                 }
                 sub={
                   seriesCashGenerative
                     ? "Not burning cash"
-                    : screenRunway.kind === "cash_generative"
-                      ? "Forecast net flow is negative"
-                      : screenRunway.label === RUNWAY_INSUFFICIENT_LABEL
+                    : direction.kind === "weeks"
+                      ? "Forecast nets cash out"
+                      : direction.label === RUNWAY_INSUFFICIENT_LABEL
                         ? "No cash-flow or bank data"
                         : `Above ${fmtCompact(minimumCash)} floor`
                 }
@@ -1517,6 +1529,9 @@ export function CashForecastPanel({
                 Forecast every cent in and out of the bank
                 {horizonLabel ? ` · ${horizonLabel}` : ""} · catch a shortfall before it hits
               </p>
+              {scenarioLabel ? (
+                <p className="mt-1 text-[11px] font-semibold text-[#b8860b]">{scenarioLabel}</p>
+              ) : null}
             </div>
             <div className="flex items-center gap-2">
               {heroBadge}

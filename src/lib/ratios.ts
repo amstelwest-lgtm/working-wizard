@@ -36,6 +36,12 @@ export type MetricDirectionSpec = {
   healthyMax: number | null;
   /** Lower-is-better linear score hits 0 at this value (debtor days: 90). */
   zeroAt?: number;
+  /**
+   * Peer median in the metric's own units. Overview asks, ratio money
+   * sentences, and the Bot context read this — not a private 45.
+   * Distinct from the healthy band (debtor days still score healthy only to 18).
+   */
+  peerMedian?: number;
 };
 
 export const METRIC_DIRECTIONS: readonly MetricDirectionSpec[] = [
@@ -54,7 +60,7 @@ export const METRIC_DIRECTIONS: readonly MetricDirectionSpec[] = [
   { key: "revenueGrowth", name: "Revenue Growth", direction: "higher_is_better", healthyMin: 0.16, healthyMax: null },
   { key: "fixedCostRatio", name: "Fixed Cost Ratio", direction: "lower_is_better", healthyMin: null, healthyMax: 0.1, zeroAt: 0.5 },
   { key: "customerConcentration", name: "Top-5 Customer Share", direction: "lower_is_better", healthyMin: null, healthyMax: 0.16, zeroAt: 0.8 },
-  { key: "debtorDays", name: "Debtor Days", direction: "lower_is_better", healthyMin: null, healthyMax: 18, zeroAt: 90 },
+  { key: "debtorDays", name: "Debtor Days", direction: "lower_is_better", healthyMin: null, healthyMax: 18, zeroAt: 90, peerMedian: 40 },
   { key: "inventoryDays", name: "Inventory Days", direction: "lower_is_better", healthyMin: null, healthyMax: 18, zeroAt: 90 },
   { key: "wipDays", name: "WIP Days", direction: "lower_is_better", healthyMin: null, healthyMax: 18, zeroAt: 90 },
   { key: "workingCapitalDays", name: "Working Capital Days", direction: "lower_is_better", healthyMin: null, healthyMax: 18, zeroAt: 90 },
@@ -70,6 +76,12 @@ const METRIC_BY_NAME = new Map(METRIC_DIRECTIONS.map((spec) => [spec.name, spec]
 /** Direction row for a playbook key or a `computeRatios` name. */
 export function metricDirection(keyOrName: string): MetricDirectionSpec | null {
   return METRIC_BY_KEY.get(keyOrName) ?? METRIC_BY_NAME.get(keyOrName) ?? null;
+}
+
+/** Peer median from the shared direction table. Null when the metric has none. */
+export function peerMedian(keyOrName: string): number | null {
+  const n = metricDirection(keyOrName)?.peerMedian;
+  return n != null && Number.isFinite(n) ? n : null;
 }
 
 /** Distance outside the healthy band. Inside the band the distance is 0. */

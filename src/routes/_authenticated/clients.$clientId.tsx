@@ -33,6 +33,7 @@ import {
   formatDate,
   formatMoneyCompact,
   isUsCopy,
+  laborCostLabel,
   localizeCopy,
   parseMarketSelection,
   resolveMarket,
@@ -1221,6 +1222,7 @@ function ClientView() {
     profile: briefingProfile,
     hasFigures,
     ratios: ratios as Record<string, number>,
+    forecastNet: assessed.forecastNet,
   });
   const workflowCtx: WorkflowContext = {
     clientName: client?.name ?? "",
@@ -2922,7 +2924,9 @@ function ClientView() {
                               <label>
                                 {key === "equity" && financials[EQUITY_DERIVED_KEY] === "1"
                                   ? DERIVED_EQUITY_LABEL
-                                  : label}
+                                  : key === "laborCost"
+                                    ? laborCostLabel(clientMarket)
+                                    : label}
                               </label>
                               <input
                                 value={financials[key] ?? ""}

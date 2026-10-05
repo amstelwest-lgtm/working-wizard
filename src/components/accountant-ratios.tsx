@@ -29,6 +29,7 @@ import {
   formatMoney,
   industryBenchmarkCaption,
   isUsCopy,
+  laborCostLabel,
   localizeCopy,
   salesPerEmployeeBenchmarkLabel,
   salesPerEmployeeHealthy,
@@ -918,7 +919,9 @@ Your Milōn accountant`;
         <CardContent className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
           {FIELD_LABELS.map((f) => (
             <div key={f.key}>
-              <Label className="text-xs text-muted-foreground">{f.label}</Label>
+              <Label className="text-xs text-muted-foreground">
+                {f.key === "laborCost" ? laborCostLabel(market) : f.label}
+              </Label>
               <Input
                 type="number"
                 value={v[f.key]}

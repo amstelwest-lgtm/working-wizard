@@ -9,7 +9,7 @@ import type {
   BudgetCapexLine,
 } from "@/lib/budget.types";
 import { DEFAULT_VAT_RATE } from "@/lib/budget.types";
-import { fyMonths } from "@/lib/budget.months";
+import { alignBudgetToFirmFy, fyMonths } from "@/lib/budget.months";
 import { BUDGET_TEMPLATES, resolveTemplateId } from "@/lib/budget.templates";
 import { migrateLegacyQualification } from "@/lib/budget.taxonomy";
 import { formatMoney, type IndirectTaxProfile } from "@/lib/market";
@@ -339,7 +339,7 @@ export function normalizeBudgetDocument(raw: BudgetDocument): BudgetDocument {
           volumeUnit: qualification.volumeUnit,
         });
 
-  return {
+  return alignBudgetToFirmFy({
     ...raw,
     templateId,
     qualification,
@@ -357,5 +357,5 @@ export function normalizeBudgetDocument(raw: BudgetDocument): BudgetDocument {
       residual: c.residual ?? 0,
     })),
     notes: raw.notes ?? [],
-  };
+  });
 }

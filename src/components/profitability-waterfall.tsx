@@ -19,6 +19,7 @@ import {
 import type { ReportSignoffStamp } from "@/components/pdf/pdf-document";
 import { ScrollableTable } from "@/components/primitives/scrollable-table";
 import { profitStepBand } from "@/lib/health-score";
+import { estimatedTaxNote } from "@/lib/estimated-tax-note";
 
 export type { WaterfallFallback };
 
@@ -211,6 +212,7 @@ export function ProfitabilityWaterfall({
   const operatingProfit = grossProfit - fixedCosts;
   const ebt = operatingProfit - interest;
   const netProfit = ebt - tax;
+  const taxNote = estimatedTaxNote({ clientName, tax, operatingProfit });
 
   const steps: WfStep[] = [
     { label: "Revenue", delta: revenue, runningEnd: revenue, kind: "total", showStatus: false },
@@ -450,6 +452,11 @@ export function ProfitabilityWaterfall({
                         <span className="w-full truncate px-0.5 text-center text-[9px] font-bold uppercase tracking-wide text-[#1e293b] dark:text-[#e2e8f0] sm:text-[10px]">
                           {s.label}
                         </span>
+                        {isNet && taxNote ? (
+                          <span className="w-full px-0.5 text-center text-[8px] font-medium normal-case leading-tight tracking-normal text-[#64748b] dark:text-[#94a3b8]">
+                            {taxNote}
+                          </span>
+                        ) : null}
                         {status && (
                           <span
                             className="rounded border px-1 py-0.5 text-[8px] font-extrabold uppercase tracking-wide sm:px-1.5 sm:text-[9px]"

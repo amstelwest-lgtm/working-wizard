@@ -2,7 +2,7 @@
  * Budget bridges — seed from financials, push near-term into 13-week cash forecast.
  */
 
-import type { BudgetDocument } from "@/lib/budget.types";
+import type { BudgetActuals, BudgetDocument } from "@/lib/budget.types";
 import { fyMonths } from "@/lib/budget.months";
 import { computeBudgetMonths } from "@/lib/budget.compute";
 import { newId } from "@/lib/budget.templates";
@@ -94,6 +94,85 @@ function withCostAliases(
   return normalised;
 }
 
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+/**
+ * Monthly overhead buckets that sum to the P&L.
+ * Labour inside fixed costs is carved out. Labour at or above fixed costs
+ * was reported without payroll, so it is added on top. No labour line means
+ * the people share is part of fixed costs, not a second copy of them.
+ */
+export function splitOverheadMonthly(
+  fixedCosts: number | null,
+  laborCost: number | null,
+): { people: number; ops: number; premises: number; sales: number } | null {
+  const fixed = fixedCosts ?? 0;
+  const labor = laborCost ?? 0;
+  if (!(fixed > 0) && !(labor > 0)) return null;
+  let people: number;
+  let rest: number;
+  if (labor > 0 && fixed > 0 && labor < fixed) {
+    people = labor / 12;
+    rest = (fixed - labor) / 12;
+  } else if (labor > 0 && (fixed <= 0 || labor >= fixed)) {
+    people = labor / 12;
+    rest = fixed / 12;
+  } else {
+    people = (fixed * 0.55) / 12;
+    rest = fixed / 12 - people;
+  }
+  const peopleR = round2(people);
+  const ops = round2(rest * 0.5);
+  const premises = round2(rest * 0.3);
+  const target = round2(people + rest);
+  const sales = round2(target - peopleR - ops - premises);
+  return { people: peopleR, ops, premises, sales };
+}
+
+/** One month of a period statement, on the same annualise-then-÷12 pace as the seed. */
+export function statementMonthActuals(
+  periodFinancials: Record<string, unknown> | null | undefined,
+  label: string,
+): BudgetActuals | null {
+  if (!periodFinancials) return null;
+  const annual = annualiseBudgetFinancials(
+    withCostAliases(periodFinancials as Record<string, string | number | null | undefined>),
+  );
+  const month = (value: number | null) => (value == null ? 0 : round2(value / 12));
+  const actuals: BudgetActuals = {
+    label,
+    revenue: month(presentNumber(annual.revenue)),
+    cogs: month(presentNumber(annual.cogs)),
+    fixedCosts: month(presentNumber(annual.fixedCosts)),
+  };
+  if (!(actuals.revenue || actuals.cogs || actuals.fixedCosts)) return null;
+  return actuals;
+}
+
+/** A snapshot that omitted opex must not hide the live operating expenses. */
+export function mergeMonthActuals(
+  primary: BudgetActuals | null,
+  fallback: BudgetActuals | null,
+): BudgetActuals | null {
+  if (!primary) return fallback;
+  if (!fallback) return primary;
+  return {
+    label: primary.label,
+    revenue: primary.revenue || fallback.revenue,
+    cogs: primary.cogs || fallback.cogs,
+    fixedCosts: primary.fixedCosts || fallback.fixedCosts,
+  };
+}
+
+/** Variance-card badge. Statement pace is not "no actuals". */
+export function budgetActualsBadge(importedMonths: number, statementPace: boolean): string {
+  if (importedMonths > 0) return `${importedMonths} imported`;
+  if (statementPace) return "Statement pace";
+  return "No actuals yet";
+}
+
 function budgetYearTotals(doc: BudgetDocument): { revenue: number; cogs: number } {
   const rows = computeBudgetMonths(doc, doc.activeScenario);
   return {
@@ -174,32 +253,20 @@ export function seedBudgetFromFinancials(
     changes.push(`Primary revenue line seeded at ~${monthly}/month (volume 1 × price)`);
   }
 
-  if ((fixedCosts != null && fixedCosts > 0) || (laborCost != null && laborCost > 0)) {
-    const peopleMonthly = laborCost != null && laborCost > 0 ? laborCost / 12 : ((fixedCosts ?? 0) * 0.55) / 12;
-    // Fixed costs on a P&L (total operating expenses, the bank drafter's
-    // total_opex) already include payroll: carve labour out rather than add
-    // it on top, which double-counted people and pushed EBITDA negative.
-    // Labour >= fixed costs means fixed was reported without it.
-    const nonPeopleFixed =
-      laborCost != null && fixedCosts != null && laborCost > 0 && laborCost < fixedCosts
-        ? fixedCosts - laborCost
-        : (fixedCosts ?? 0);
-    const otherMonthly =
-      fixedCosts != null && fixedCosts > 0
-        ? Math.max(0, nonPeopleFixed / 12 - (laborCost != null && laborCost > 0 ? 0 : peopleMonthly * 0.2))
-        : 0;
+  const overheadSplit = splitOverheadMonthly(fixedCosts, laborCost);
+  if (overheadSplit) {
     next = {
       ...next,
       overheads: next.overheads.map((oh) => {
         const monthly =
           oh.bucket === "people"
-            ? Math.round(peopleMonthly * 100) / 100
+            ? overheadSplit.people
             : oh.bucket === "ops"
-              ? Math.round(otherMonthly * 0.5 * 100) / 100
+              ? overheadSplit.ops
               : oh.bucket === "premises"
-                ? Math.round(otherMonthly * 0.3 * 100) / 100
+                ? overheadSplit.premises
                 : oh.bucket === "sales"
-                  ? Math.round(otherMonthly * 0.2 * 100) / 100
+                  ? overheadSplit.sales
                   : 0;
         if (monthly <= 0) return oh;
         return {
@@ -226,10 +293,16 @@ export function seedBudgetFromFinancials(
   }
   next = { ...next, wc };
 
-  const ocf = num(financials.operatingCashflow);
-  if (ocf !== 0 && !(next.openingCash > 0)) {
-    // Soft hint only when opening cash empty — OCF is not a bank balance
-    changes.push("Opening cash left unchanged (set manually from bank balance)");
+  const cash = presentNumber(financials.cash);
+  if (cash != null && cash > 0 && !(next.openingCash > 0)) {
+    next = { ...next, openingCash: cash };
+    changes.push(`Opening cash set to ${cash} from the statement`);
+  } else {
+    const ocf = num(financials.operatingCashflow);
+    if (ocf !== 0 && !(next.openingCash > 0)) {
+      // Soft hint only when opening cash empty — OCF is not a bank balance
+      changes.push("Opening cash left unchanged (set manually from bank balance)");
+    }
   }
 
   return { doc: next, changes };
@@ -304,7 +377,9 @@ export function budgetToCashForecastPayload(doc: BudgetDocument): CashForecastPu
 
   const [y, m] = doc.fyStart.split("-").map(Number);
   const startDate = `${y}-${String(m).padStart(2, "0")}-01`;
-  const collectDelay = Math.min(8, Math.max(0, Math.round(doc.wc.debtorDays / 7)));
+  // Debtor days already lag budget cash. They must not turn a forecast
+  // scenario on — collection delay stays off until someone moves the slider.
+  const collectDelay = 0;
 
   return {
     startDate,

@@ -160,17 +160,30 @@ const quiet = whatMatters({
   healthStatus: "healthy",
   chips: buildVarianceChips({
     currentFinancials: { revenue: 50_000, cogs: 20_000, ebit: 8_000 },
-    currentRatios: { "Creditor Days": 73, "Debtor Days": 44 },
+    currentRatios: { "Creditor Days": 73, "Debtor Days": 39 },
     prior: null,
   }),
   cashRunwayWeeks: null,
   profile,
   hasFigures: true,
-  ratios: { "Creditor Days": 73, "Debtor Days": 44, "Gross Margin": 0.6 },
+  ratios: { "Creditor Days": 73, "Debtor Days": 39, "Gross Margin": 0.6 },
 })!;
 assert(!/no single metric demanding attention/.test(quiet), `must not dismiss the card: ${quiet}`);
 assert(/Creditor days are 73/.test(quiet) && /60-day mark/.test(quiet), `names the card signal: ${quiet}`);
-assert(!/Debtor days are 44/.test(quiet), "44 debtor days is under the 45-day card");
+assert(!/Debtor days are 39/.test(quiet), "39 debtor days is under the 40-day peer median");
+
+const cashOut = whatMatters({
+  healthScore: 84,
+  healthStatus: "healthy",
+  chips: [],
+  cashRunwayWeeks: 21,
+  profile,
+  hasFigures: true,
+  ratios: {},
+  forecastNet: -15200,
+})!;
+assert(!/no single metric demanding attention/.test(cashOut), `forecast net out is a cash point: ${cashOut}`);
+assert(/nets cash out/.test(cashOut), `names the forecast: ${cashOut}`);
 
 // ── capability catalogue ─────────────────────────────────────────────────────
 assert(MILON_CAPABILITIES.length >= 9, "catalogue covers the tabs");

@@ -124,10 +124,10 @@ const TIER_TEXT: Record<Tier, string> = {
 };
 
 const TIER_LABEL: Record<Tier, string> = {
-  healthy: healthBandLabel("healthy").toUpperCase(),
-  watch: healthBandLabel("at_risk").toUpperCase(),
-  critical: healthBandLabel("critical").toUpperCase(),
-  nodata: "NO DATA",
+  healthy: healthBandLabel("healthy"),
+  watch: healthBandLabel("at_risk"),
+  critical: healthBandLabel("critical"),
+  nodata: "No data",
 };
 
 const TIER_GLOW: Record<Tier, string> = {

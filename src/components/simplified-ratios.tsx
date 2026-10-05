@@ -21,7 +21,7 @@ interface SimplifiedRatiosProps {
 
 function statusLabel(health: number, status?: HealthTier): string {
   if (!isFinite(health)) return "NO DATA";
-  return healthBandLabel(status ?? scoreTier(health)).toUpperCase();
+  return healthBandLabel(status ?? scoreTier(health));
 }
 
 function statusColor(health: number, status?: HealthTier): string {

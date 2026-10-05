@@ -204,12 +204,27 @@ export function persistedRunwayWeeks(runway: ClientRunway): number | null {
  * Overview / Health / Bot / Forecast cash and runway from the blobs already
  * stored on the client. One call, same answer everywhere.
  */
+/** Scenario knobs stay off for the shared direction. The base lines are the forecast. */
+function baseScenarioCashflow(cf: Record<string, unknown>): Record<string, unknown> {
+  return {
+    ...cf,
+    collectDelay: 0,
+    revAdj: 100,
+    expAdj: 100,
+    headcountDelta: 0,
+    avgSalary: "0",
+    fixedCostDelta: "0",
+    revGrowthPct: 0,
+    capexAmount: "0",
+  };
+}
+
 export function assessClientMetrics(input: {
   financials?: Record<string, unknown> | null;
   cashflow?: unknown;
   financialsUpdatedAt?: string | null;
   priorFinancials?: Record<string, unknown> | null;
-}): { cash: ResolvedCash; runway: ClientRunway } {
+}): { cash: ResolvedCash; runway: ClientRunway; forecastNet: number | null } {
   const fin = asRecord(input.financials);
   const cf = asRecord(input.cashflow);
   const prior = asRecord(input.priorFinancials);
@@ -220,7 +235,7 @@ export function assessClientMetrics(input: {
     periodCash: finiteNum(fin?.cash),
     periodUpdatedAt: input.financialsUpdatedAt ?? null,
   });
-  const runway = clientRunway({
+  let runway = clientRunway({
     cash: cash.amount,
     priorCash: finiteNum(prior?.cash),
     netIncome: finiteNum(fin?.netIncome),
@@ -229,7 +244,20 @@ export function assessClientMetrics(input: {
     operatingCashflow: finiteNum(fin?.operatingCashflow),
     hasBankCashflow: Boolean(seededAt),
   });
-  return { cash, runway };
+  let forecastNet: number | null = null;
+  const rolled = cf ? rollForwardForecast(baseScenarioCashflow(cf)) : null;
+  if (rolled) {
+    const totalInflow = rolled.inflow.reduce((sum, n) => sum + n, 0);
+    const totalOutflow = rolled.outflow.reduce((sum, n) => sum + n, 0);
+    forecastNet = totalInflow - totalOutflow;
+    runway = runwayFromForecastNet({
+      base: runway,
+      opening: rolled.opening,
+      totalInflow,
+      totalOutflow,
+    });
+  }
+  return { cash, runway, forecastNet };
 }
 
 /**
@@ -306,6 +334,62 @@ export function scoreCreditorDays(val: number): number {
 export function forecastIsCashGenerative(totalInflow: number, totalOutflow: number): boolean {
   if (!Number.isFinite(totalInflow) || !Number.isFinite(totalOutflow)) return false;
   return totalInflow - totalOutflow > 0;
+}
+
+/**
+ * Weeks of cash at the forecast's own weekly net burn.
+ * A negative 13-week movement wins over a P&L that looks cash generative.
+ * Positive net leaves the P&L runway alone — a profitable series without
+ * cash-flow evidence is still not "Cash generative".
+ */
+export function runwayFromForecastNet(input: {
+  base: ClientRunway;
+  opening: number;
+  totalInflow: number;
+  totalOutflow: number;
+  horizonWeeks?: number;
+}): ClientRunway {
+  const net = input.totalInflow - input.totalOutflow;
+  if (!(net < 0)) return input.base;
+  const opening = input.opening;
+  if (!(opening > 0)) return { weeks: 0, kind: "zero", label: "0 weeks" };
+  const horizon = input.horizonWeeks ?? CASH_FORECAST_WEEK_COUNT;
+  const weeklyBurn = Math.abs(net) / horizon;
+  if (!(weeklyBurn > 0)) return input.base;
+  const weeks = Math.max(1, Math.round(opening / weeklyBurn));
+  return { weeks, kind: "weeks", label: `${weeks} ${weeks === 1 ? "week" : "weeks"}` };
+}
+
+/** In the black only when the horizon nets cash in and the last week stays non-negative. */
+export function forecastInTheBlack(
+  totalInflow: number,
+  totalOutflow: number,
+  closing: number,
+): boolean {
+  const net = totalInflow - totalOutflow;
+  return Number.isFinite(net) && Number.isFinite(closing) && net >= 0 && closing >= 0;
+}
+
+/** Visible name for a scenario that is actually on. Null on the base forecast. */
+export function forecastScenarioLabel(input: {
+  collectDelay?: number;
+  revAdj?: number;
+  expAdj?: number;
+  headcountDelta?: number;
+  capexAmount?: number;
+  fixedCostDelta?: number;
+  revGrowthPct?: number;
+}): string | null {
+  const parts: string[] = [];
+  const delay = input.collectDelay ?? 0;
+  if (delay > 0) parts.push(`collection delay +${delay}w`);
+  if ((input.revAdj ?? 100) !== 100) parts.push(`revenue ${input.revAdj}%`);
+  if ((input.expAdj ?? 100) !== 100) parts.push(`expenses ${input.expAdj}%`);
+  if ((input.headcountDelta ?? 0) !== 0) parts.push(`headcount ${input.headcountDelta}`);
+  if ((input.capexAmount ?? 0) > 0) parts.push("capex");
+  if ((input.fixedCostDelta ?? 0) !== 0) parts.push("fixed-cost change");
+  if ((input.revGrowthPct ?? 0) !== 0) parts.push(`growth ${input.revGrowthPct}%`);
+  return parts.length ? `Scenario: ${parts.join(", ")}` : null;
 }
 
 /**

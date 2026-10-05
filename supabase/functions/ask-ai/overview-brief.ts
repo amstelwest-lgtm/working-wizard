@@ -20,6 +20,7 @@ import {
   bandedPillarStatus,
   creditorDaysHealthyBand,
   healthBandLabel,
+  peerMedian,
   scoreTier,
 } from "../../../src/lib/ratios.ts";
 
@@ -309,7 +310,14 @@ export function overviewFactLines(brief: OverviewBrief): string[] {
   if (brief.grossMargin != null) lines.push(`Gross margin: ${pct(brief.grossMargin)}`);
   if (brief.operatingMargin != null) lines.push(`Operating margin: ${pct(brief.operatingMargin)}`);
   if (brief.netMargin != null) lines.push(`Net margin: ${pct(brief.netMargin)}`);
-  if (brief.debtorDays != null) lines.push(`Debtor days: ${days(brief.debtorDays)}`);
+  if (brief.debtorDays != null) {
+    const median = peerMedian("debtorDays");
+    lines.push(
+      median != null
+        ? `Debtor days: ${days(brief.debtorDays)} (peer median ${median} days)`
+        : `Debtor days: ${days(brief.debtorDays)}`,
+    );
+  }
   if (brief.creditorDays != null) {
     const band = creditorDaysHealthyBand();
     lines.push(
@@ -379,11 +387,12 @@ export function planActionsFromOverview(brief: OverviewBrief): PlannedAction[] {
       outcomeWhy: `Creditor days on the Overview are ${Math.round(brief.creditorDays)}, above the ${creditorMax}-day healthy band. Agree a payment stance with the client before the next review.`,
     });
   }
-  if (brief.debtorDays != null && brief.debtorDays >= 45) {
+  const debtorMedian = peerMedian("debtorDays");
+  if (brief.debtorDays != null && debtorMedian != null && brief.debtorDays > debtorMedian) {
     items.push({
       sourceMoveKey: "bot:debtor-days",
       title: `Collect debtor days (${Math.round(brief.debtorDays)})`,
-      outcomeWhy: `Debtor days on the Overview are ${Math.round(brief.debtorDays)}. Chase the slowest balances already on file.`,
+      outcomeWhy: `Debtor days on the Overview are ${Math.round(brief.debtorDays)}, above the ${debtorMedian}-day peer median. Chase the slowest balances already on file.`,
     });
   }
   if (items.length === 0 && brief.health != null) {
@@ -481,8 +490,11 @@ export function packContentFromOverview(
         key: "forecast",
         title: "Cash",
         body:
-          brief.cash != null || brief.runwayWeeks != null
-            ? `Cash on file ${brief.cash != null ? money(brief.cash, brief.copyPack) : "not on file"}. Runway ${brief.runwayWeeks != null ? `${brief.runwayWeeks} weeks` : "not on file"}.`
+          brief.cash != null || brief.runwayLabel || brief.runwayWeeks != null
+            ? `Cash on file ${brief.cash != null ? money(brief.cash, brief.copyPack) : "not on file"}. Runway ${
+                brief.runwayLabel ??
+                (brief.runwayWeeks != null ? `${brief.runwayWeeks} weeks` : "not on file")
+              }.`
             : "Cash and runway are not on the Overview.",
       },
       {

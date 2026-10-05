@@ -38,6 +38,7 @@ import {
   industryBenchmarkShortLabel,
   isMissingMarketSupport,
   isUsCopy,
+  laborCostLabel,
   currencySymbol,
   localizeCopy,
   marketToJson,
@@ -5748,14 +5749,24 @@ function Index() {
                     ).map(({ k, l }) => (
                       <div key={k} className="flex items-center gap-2 min-w-0">
                         <Label
-                          title={k === "equity" && v.equityDerived === "1" ? DERIVED_EQUITY_LABEL : l}
+                          title={
+                            k === "equity" && v.equityDerived === "1"
+                              ? DERIVED_EQUITY_LABEL
+                              : k === "laborCost"
+                                ? laborCostLabel(boardMarket)
+                                : l
+                          }
                           className={`shrink-0 text-xs text-slate-700 dark:text-slate-400 ${
                             k === "equity" && v.equityDerived === "1"
                               ? "w-44 whitespace-normal leading-tight"
                               : "w-36 truncate"
                           }`}
                         >
-                          {k === "equity" && v.equityDerived === "1" ? DERIVED_EQUITY_LABEL : l}
+                          {k === "equity" && v.equityDerived === "1"
+                            ? DERIVED_EQUITY_LABEL
+                            : k === "laborCost"
+                              ? laborCostLabel(boardMarket)
+                              : l}
                         </Label>
                         <Input
                           className="h-7 min-w-0 border-amber-900/15 bg-amber-50/40 text-slate-950 text-xs dark:border-slate-700 dark:bg-slate-950/60 dark:text-slate-100"

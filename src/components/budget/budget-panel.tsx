@@ -9,7 +9,12 @@ import { BudgetWorkspace } from "@/components/budget/budget-workspace";
 import { BudgetAdvancedPanel } from "@/components/budget/budget-advanced";
 import type { BudgetActuals, BudgetDocument, UnmappedDriver } from "@/lib/budget.types";
 import { budgetWindowStart, createBudgetDocument } from "@/lib/budget.months";
-import { budgetIsImplausible, seedBudgetFromFinancials } from "@/lib/budget.bridges";
+import {
+  budgetIsImplausible,
+  mergeMonthActuals,
+  seedBudgetFromFinancials,
+  statementMonthActuals,
+} from "@/lib/budget.bridges";
 import { normalizeBudgetDocument } from "@/lib/budget.compute";
 import { applyTemplateChange } from "@/lib/budget.model-change";
 import { BUDGET_TEMPLATES } from "@/lib/budget.templates";
@@ -194,13 +199,12 @@ export function BudgetPanel({
           setSnapshotActuals(null);
           return;
         }
-        const num = (k: string) => parseFloat(String(fin[k] ?? "0")) || 0;
-        setSnapshotActuals({
-          label: (data as { period_label?: string }).period_label || "Latest snapshot",
-          revenue: num("revenue"),
-          cogs: num("cogs"),
-          fixedCosts: num("fixedCosts"),
-        });
+        setSnapshotActuals(
+          statementMonthActuals(
+            fin,
+            (data as { period_label?: string }).period_label || "Latest snapshot",
+          ),
+        );
       });
   }, [clientId]);
 
@@ -244,20 +248,9 @@ export function BudgetPanel({
   }, [clientId, loaded, doc]);
 
   const liveActuals: BudgetActuals | null = financials
-    ? {
-        label: "Current financials",
-        revenue: parseFloat(financials.revenue || "0") || 0,
-        cogs: parseFloat(financials.cogs || "0") || 0,
-        fixedCosts: parseFloat(financials.fixedCosts || "0") || 0,
-      }
+    ? statementMonthActuals(financials, "Current financials")
     : null;
-  const actuals =
-    snapshotActuals &&
-    (snapshotActuals.revenue || snapshotActuals.cogs || snapshotActuals.fixedCosts)
-      ? snapshotActuals
-      : liveActuals && (liveActuals.revenue || liveActuals.cogs || liveActuals.fixedCosts)
-        ? liveActuals
-        : null;
+  const actuals = mergeMonthActuals(snapshotActuals, liveActuals);
 
   const startFresh = useCallback(
     (args: {

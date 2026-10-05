@@ -197,6 +197,8 @@ export type BriefingSignals = {
   hasFigures: boolean;
   /** Live ratios. Creditor/debtor attention uses the same thresholds as the Overview cards. */
   ratios?: Record<string, number> | null;
+  /** 13-week net (in minus out). A negative forecast is a cash point even when the score is healthy. */
+  forecastNet?: number | null;
 };
 
 function chip(chips: VarianceChip[], key: string): VarianceChip | undefined {
@@ -270,6 +272,11 @@ export function whatMatters(s: BriefingSignals): string | null {
   const attention = ratioAttentionSignals(s.ratios);
   if (attention.length) {
     return `${attention.join(" ")} That is what needs attention this month.`;
+  }
+  if (s.forecastNet != null && s.forecastNet < 0) {
+    return `The 13-week forecast nets cash out${
+      runway != null ? `, with about ${runwayText} of runway at that pace` : ""
+    }. That is the cash point to raise, even while the score looks healthy.`;
   }
   if (s.healthStatus === "healthy") {
     return `The business appears financially healthy${runway != null ? `, with ${runwayText} of cash runway` : ""} and no single metric demanding attention this month.`;
