@@ -10,6 +10,7 @@ import {
   PARTNER_ASSIGN_TOOLTIP,
   PRACTICE_ACCESS_AMENDMENT_MIGRATION,
   PRACTICE_CLIENT_ACCESS_CAP,
+  PRACTICE_OWNER_ACCESS_MIGRATION,
   accessTokenFromNext,
   canPractice,
   classAtMost,
@@ -152,5 +153,44 @@ const signoff = readFileSync(resolve("src/lib/review-signoffs.functions.ts"), "u
 assert(signoff.includes("can_sign_off_deliverable"), "sign-off calls the DB partner check");
 assert(signoff.includes("submitDeliverable"), "draft → ready");
 assert(signoff.includes("requestDeliverableChanges"), "ready → draft");
+
+const ownerAccess = readFileSync(
+  resolve(`supabase/migrations/${PRACTICE_OWNER_ACCESS_MIGRATION}`),
+  "utf8",
+);
+assert(ownerAccess.includes("grant_practice_principal_access"), "grants principal access");
+assert(ownerAccess.includes("is_practice_principal"), "owner and partner predicate");
+assert(ownerAccess.includes("fm.role = 'owner' OR fm.classification = 'partner'"), "role owner or partner class");
+assert(
+  ownerAccess.includes("AFTER INSERT OR UPDATE OF firm_id ON public.clients"),
+  "client insert and firm connect grant access",
+);
+assert(
+  ownerAccess.includes("AFTER INSERT OR UPDATE OF role, classification, firm_id ON public.firm_memberships"),
+  "new owner or partner membership grants access",
+);
+assert(ownerAccess.includes("WHERE NOT EXISTS"), "backfill does not duplicate an existing row");
+assert(ownerAccess.includes("a.status = 'pending'"), "pending principal rows can become active");
+assert(ownerAccess.includes("a.status IN ('revoked', 'declined')"), "revoked rows stay revoked");
+assert(!ownerAccess.includes("CREATE POLICY"), "does not add or weaken RLS policies");
+assert(!ownerAccess.includes("DROP POLICY"), "does not drop RLS policies");
+assert(ownerAccess.includes("accountant_approved_at"), "fills accountant approval");
+assert(ownerAccess.includes("requested_by"), "records who requested the grant");
+assert(ownerAccess.includes("practice_class_at_most"), "classification stays inside the team ceiling");
+assert(
+  ownerAccess.includes("CREATE OR REPLACE FUNCTION public.has_active_practice_assignment"),
+  "principal fallback lives on the assignment check",
+);
+assert(
+  !ownerAccess.includes("CREATE OR REPLACE FUNCTION public.trg_deliverable_state_caps"),
+  "deliverable trigger is not loosened",
+);
+assert(ownerAccess.includes("SECURITY DEFINER"), "grant runs as definer");
+assert(ownerAccess.includes("SET search_path = public"), "definer functions pin search_path");
+assert(ownerAccess.includes("list_client_practice_team"), "action plan can list firm members on the client");
+assert(
+  settings.includes("${a.clientId}:${a.userId}"),
+  "per-client access table keys rows by client and user",
+);
 
 console.log("practice-access-test: ok");

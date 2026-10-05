@@ -38,7 +38,8 @@ BEGIN
     (client_id, staff_id, firm_id, 'staff', 'active', now(), now(), now()),
     (client_id, manager_id, firm_id, 'manager', 'active', now(), now(), now()),
     (client_id, admin_staff_id, firm_id, 'staff', 'active', now(), now(), now()),
-    (client_id, owner_id, firm_id, 'partner', 'active', now(), now(), now());
+    (client_id, owner_id, firm_id, 'partner', 'active', now(), now(), now())
+  ON CONFLICT (client_id, user_id) DO NOTHING;
 
   -- 1. Staff rejected on sign-off
   IF public.can_sign_off_deliverable(staff_id, client_id) THEN
