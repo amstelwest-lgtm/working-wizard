@@ -44,6 +44,8 @@ import {
   creditorDaysPaysSlowly,
   metricDirection,
   SLOW_CREDITOR_DAYS_STEP,
+  interestBurdenRatio,
+  taxBurdenRatio,
 } from "@/lib/ratios";
 import { reportNumber } from "@/lib/report-catalog";
 import type { RatioInputs } from "@/lib/ratios";
@@ -98,18 +100,24 @@ import { ReviewSignoffButton } from "@/components/review-signoff";
 import "@/styles/accountant-portal.css";
 import type { ReportSignoffStamp } from "@/components/pdf/pdf-document";
 import { parseOperatingProfile, type ClientOperatingProfile } from "@/lib/client-profile";
-import { profileIndustryLabel, profilePriorityWeight } from "@/lib/profile-signals";
+import { clientIndustryLabel, profilePriorityWeight } from "@/lib/profile-signals";
 import { parseDebtSchedule, totalDebtFromSchedule } from "@/lib/debt-schedule";
 import { resolvePriorSnapshot, withPriorRatioScores } from "@/lib/prior-period";
-import { reportDataPeriodLabel, reportPeriodMonthYear } from "@/lib/statement-period";
+import { reportDataPeriodLabel, reportPeriodMonthYear, readStatementMeta } from "@/lib/statement-period";
+import {
+  presentReturn,
+  presentScorecardRatio,
+  priorFiguresAreCopy,
+} from "@/lib/report-coherence";
 import {
   coerceMarketSelection,
+  laborCostLabel,
   laborProductivityFileStem,
   laborProductivityTitle,
   localizeCopy,
   parseMarketSelection,
   resolveMarket,
-  salesPerEmployeeHealthy,
+  t,
   ZA_MARKET,
   type ResolvedMarket,
 } from "@/lib/market";
@@ -173,18 +181,6 @@ const INDUSTRIES = [
   { code: "ZA-331", name: "Repair of Machinery & Equipment" },
   { code: "ZA-101", name: "Processing of Meat & Food Products" },
 ];
-
-/** Friendly labels for industry_benchmarks.business_type keys. */
-const BENCHMARK_SECTOR_LABEL: Record<string, string> = {
-  retail: "Retail",
-  services: "Professional & business services",
-  saas: "SaaS / software",
-  hospitality: "Hospitality",
-  construction: "Construction",
-  manufacturing: "Manufacturing",
-  professional: "Professional services",
-  other: "General SME",
-};
 
 // ── Settings type ──────────────────────────────────────────────────────────
 
@@ -1224,21 +1220,41 @@ function pillarForRatio(name: string): "profit" | "assets" | "financing" | "cash
 function buildRatioResults(
   rawRatios: Record<string, number>,
   market: ResolvedMarket = ZA_MARKET,
+  context?: {
+    equity?: number | null;
+    periodMonths?: number | null;
+    partMonth?: boolean;
+  },
 ): RatioResult[] {
-  return Object.entries(rawRatios)
-    .filter(([, v]) => Number.isFinite(v))
-    .map(([name, val]) => {
-      const score = Math.round(scoreForRatio(name, val, market));
-      return {
-        ratio_key: name.toLowerCase().replace(/[^a-z0-9]/g, "_"),
-        ratio_name: name,
-        pillar: pillarForRatio(name),
-        current_value: val,
-        health_score: score,
-        health_tier: scoreTier(score),
-        formatted_value: fmtRatioVal(name, val),
-      };
+  const rows: RatioResult[] = [];
+  for (const [name, val] of Object.entries(rawRatios)) {
+    const presented = presentScorecardRatio({
+      name,
+      value: val,
+      equity: context?.equity,
+      currency: market.currency,
+      periodMonths: context?.periodMonths,
+      partMonth: context?.partMonth,
     });
+    if (!presented.include) continue;
+    const scoredValue = presented.scoredValue;
+    const score =
+      presented.unscored || scoredValue == null
+        ? 0
+        : Math.round(scoreForRatio(name, scoredValue, market));
+    rows.push({
+      ratio_key: name.toLowerCase().replace(/[^a-z0-9]/g, "_"),
+      ratio_name: name,
+      pillar: pillarForRatio(name),
+      current_value: scoredValue ?? (Number.isFinite(val) ? val : Number.NaN),
+      health_score: score,
+      health_tier: presented.unscored ? "at_risk" : scoreTier(score),
+      formatted_value: presented.text ?? fmtRatioVal(name, scoredValue ?? val),
+      annotation: presented.note,
+      unscored: presented.unscored || undefined,
+    });
+  }
+  return rows;
 }
 
 /**
@@ -1533,9 +1549,9 @@ function buildProfitabilityData(
   const gmPct = gp / revenue;
   const omPct = ebit / revenue;
   const ebtVal = Number.isFinite(ebt) ? ebt : ebit;
-  const ibPct = ebit > 0 ? Math.max(0, (ebit - ebtVal) / ebit) : 0;
+  const interestBurden = interestBurdenRatio(ebit, ebtVal);
+  const taxBurden = taxBurdenRatio(ebtVal, net);
   const tax = Math.max(0, ebtVal - net);
-  const tbPct = ebtVal > 0 ? tax / ebtVal : 0;
   const nmPct = net / revenue;
   const current = {
     revenue,
@@ -1548,11 +1564,15 @@ function buildProfitabilityData(
     operating_margin_score: Math.round(scoreForRatio("Operating Margin", omPct)),
     operating_margin_tier: scoreTier(Math.round(scoreForRatio("Operating Margin", omPct))),
     ebt: ebtVal,
-    interest_burden_pct: ibPct,
-    interest_burden_score: Math.round(scoreForRatio("Interest Burden", 1 - ibPct)),
+    interest_burden_pct: Number.isFinite(interestBurden) ? interestBurden : undefined,
+    interest_burden_score: Number.isFinite(interestBurden)
+      ? Math.round(scoreForRatio("Interest Burden", interestBurden))
+      : 0,
     tax,
-    tax_burden_pct: tbPct,
-    tax_burden_score: Math.round(Math.max(0, 100 - tbPct * 100)),
+    tax_burden_pct: Number.isFinite(taxBurden) ? taxBurden : undefined,
+    tax_burden_score: Number.isFinite(taxBurden)
+      ? Math.round(scoreForRatio("Tax Burden", taxBurden))
+      : 0,
     net_profit: net,
     net_margin_pct: nmPct,
     net_margin_score: Math.round(scoreForRatio("Net Margin", nmPct)),
@@ -1574,9 +1594,9 @@ function buildProfitabilityData(
     ) {
       const pGp = pRev - pCogs;
       const pEbtVal = Number.isFinite(pEbt) ? pEbt : pEbit;
-      const pIb = pEbit > 0 ? Math.max(0, (pEbit - pEbtVal) / pEbit) : 0;
+      const pInterest = interestBurdenRatio(pEbit, pEbtVal);
+      const pTaxBurden = taxBurdenRatio(pEbtVal, pNet);
       const pTax = Math.max(0, pEbtVal - pNet);
-      const pTb = pEbtVal > 0 ? pTax / pEbtVal : 0;
       prior_period = {
         revenue: pRev,
         gross_profit: pGp,
@@ -1590,17 +1610,31 @@ function buildProfitabilityData(
           Math.round(scoreForRatio("Operating Margin", pEbit / pRev)),
         ),
         ebt: pEbtVal,
-        interest_burden_pct: pIb,
-        interest_burden_score: Math.round(scoreForRatio("Interest Burden", 1 - pIb)),
+        interest_burden_pct: Number.isFinite(pInterest) ? pInterest : undefined,
+        interest_burden_score: Number.isFinite(pInterest)
+          ? Math.round(scoreForRatio("Interest Burden", pInterest))
+          : 0,
         tax: pTax,
-        tax_burden_pct: pTb,
-        tax_burden_score: Math.round(Math.max(0, 100 - pTb * 100)),
+        tax_burden_pct: Number.isFinite(pTaxBurden) ? pTaxBurden : undefined,
+        tax_burden_score: Number.isFinite(pTaxBurden)
+          ? Math.round(scoreForRatio("Tax Burden", pTaxBurden))
+          : 0,
         net_profit: pNet,
         net_margin_pct: pNet / pRev,
         net_margin_score: Math.round(scoreForRatio("Net Margin", pNet / pRev)),
         net_margin_tier: scoreTier(Math.round(scoreForRatio("Net Margin", pNet / pRev))),
       };
     }
+  }
+
+  if (
+    prior_period &&
+    priorFiguresAreCopy(
+      { revenue, netIncome: net },
+      { revenue: prior_period.revenue, netIncome: prior_period.net_profit },
+    )
+  ) {
+    prior_period = undefined;
   }
 
   return { ...current, prior_period };
@@ -1654,7 +1688,7 @@ function buildLeverageData(
       ? schedule.prior_equity
       : priorEquityFromSnapshot != null && Number.isFinite(priorEquityFromSnapshot)
         ? priorEquityFromSnapshot
-        : equity;
+        : null;
   const drawings =
     schedule.drawings_ytd != null && Number.isFinite(schedule.drawings_ytd)
       ? schedule.drawings_ytd
@@ -1687,22 +1721,49 @@ function buildLeverageData(
   };
 }
 
-function buildAssetData(rawRatios: Record<string, number>): AssetProductivityData | null {
+function buildAssetData(
+  rawRatios: Record<string, number>,
+  context?: {
+    equity?: number | null;
+    currency?: string | null;
+    periodMonths?: number | null;
+    partMonth?: boolean;
+  },
+): AssetProductivityData | null {
   const at = rawRatios["Asset Turnover"];
   const em = rawRatios["Equity Multiplier"];
   const nm = rawRatios["Net Margin"];
   if (!Number.isFinite(at) || !Number.isFinite(em) || !Number.isFinite(nm)) return null;
-  const roa = nm * at;
-  const roe = roa * em;
+  const roa = Number.isFinite(rawRatios["Return on Assets"]) ? rawRatios["Return on Assets"] : nm * at;
+  const roe = Number.isFinite(rawRatios["Return on Equity"]) ? rawRatios["Return on Equity"] : roa * em;
+  const roeView = presentReturn({
+    ratioName: "Return on Equity",
+    value: roe,
+    equity: context?.equity,
+    currency: context?.currency,
+    periodMonths: context?.periodMonths,
+    partMonth: context?.partMonth,
+  });
+  const roaView = presentReturn({
+    ratioName: "Return on Assets",
+    value: roa,
+    periodMonths: context?.periodMonths,
+    partMonth: context?.partMonth,
+  });
   return {
     roe,
+    roe_headline: roeView.headline,
+    roe_note: roeView.note,
+    roe_unscored: roeView.unscored,
+    roe_text: roeView.text,
+    roa_text: roaView.text,
     net_margin: nm,
     asset_turnover: at,
     equity_multiplier: em,
     capex_periods: [],
     health_scores: {
       assetTurnover: Math.round(scoreForRatio("Asset Turnover", at)),
-      roa: Math.round(scoreForRatio("Return on Assets", roa)),
+      roa: Number.isFinite(roa) ? Math.round(scoreForRatio("Return on Assets", roa)) : 0,
       // Capex / fixed-asset ratios need inputs we do not yet capture — never invent.
       fixedCapitalUtilization: null,
       assetReinvestmentRatio: null,
@@ -1710,7 +1771,7 @@ function buildAssetData(rawRatios: Record<string, number>): AssetProductivityDat
     },
     ratios: {
       assetTurnover: { value: `${at.toFixed(2)}×` },
-      roa: { value: `${(roa * 100).toFixed(1)}%` },
+      roa: { value: roaView.text },
       fixedCapitalUtilization: { value: "—" },
       assetReinvestmentRatio: { value: "—" },
       capexIntensity: { value: "—" },
@@ -1728,18 +1789,14 @@ function buildLaborData(
   const laborCost = getNum(fin, "laborCost");
   const employees = getNum(fin, "employees");
   const cogs = getNum(fin, "cogs");
-  if (
-    !Number.isFinite(revenue) ||
-    !Number.isFinite(employees) ||
-    !Number.isFinite(laborCost) ||
-    employees <= 0 ||
-    laborCost <= 0
-  )
-    return null;
-  const gpKnown = Number.isFinite(cogs);
+  const hasRevenue = Number.isFinite(revenue) && revenue > 0;
+  const hasEmployees = Number.isFinite(employees) && employees > 0;
+  const hasLabor = Number.isFinite(laborCost) && laborCost > 0;
+  if (!hasRevenue && !hasEmployees && !hasLabor) return null;
+  const gpKnown = hasRevenue && Number.isFinite(cogs);
   const gp = gpKnown ? revenue - cogs : 0;
-  const rpe = revenue / employees;
-  const gpPerLabor = gpKnown ? gp / laborCost : null;
+  const rpe = hasRevenue && hasEmployees ? revenue / employees : Number.NaN;
+  const gpPerLabor = gpKnown && hasLabor ? gp / laborCost : null;
 
   const priorRev = priorFin ? getNum(priorFin, "revenue") : NaN;
   const priorEmp = priorFin ? getNum(priorFin, "employees") : NaN;
@@ -1751,9 +1808,9 @@ function buildLaborData(
     Number.isFinite(priorRev) && priorRev > 0 ? (revenue - priorRev) / priorRev : null;
 
   return {
-    employee_count: Math.round(employees),
-    total_labor_cost: laborCost,
-    total_revenue: revenue,
+    employee_count: hasEmployees ? Math.round(employees) : 0,
+    total_labor_cost: hasLabor ? laborCost : 0,
+    total_revenue: hasRevenue ? revenue : 0,
     total_gp: gp,
     gp_known: gpKnown,
     revenue_per_employee: rpe,
@@ -1762,16 +1819,20 @@ function buildLaborData(
     revenue_growth: revenueGrowth,
     inflation_rate: null, // never invent CPI
     periods: [
-      { label: "Current Period", revenue, employees: Math.round(employees), labor_cost: laborCost },
+      {
+        label: "Current Period",
+        revenue: hasRevenue ? revenue : 0,
+        employees: hasEmployees ? Math.round(employees) : 0,
+        labor_cost: hasLabor ? laborCost : 0,
+      },
     ],
     health_scores: {
       gpToLabor:
-        gpPerLabor != null
-          ? Math.round(Math.min(100, Math.max(0, (gpPerLabor / 0.6) * 100)))
+        gpPerLabor != null ? Math.round(scoreForRatio("Gross Profit / Labor", gpPerLabor, market)) : null,
+      salesPerEmployee:
+        hasEmployees && Number.isFinite(rpe)
+          ? Math.round(scoreForRatio("Sales-per-Employee Ratio", rpe, market))
           : null,
-      salesPerEmployee: Math.round(
-        Math.min(100, Math.max(0, (rpe / salesPerEmployeeHealthy(market)) * 100)),
-      ),
       revenueGrowth:
         revenueGrowth != null
           ? Math.round(Math.min(100, Math.max(0, ((revenueGrowth + 0.05) / 0.25) * 100)))
@@ -2125,6 +2186,10 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
     periodMonths: fin["periodMonths"] ?? "",
   };
   const rawRatios = computeRatios(ratioInputs);
+  const statementMeta = readStatementMeta(rawFin);
+  const partMonth = Boolean(dataPeriodLabel?.includes("part month"));
+  const periodMonths = periodMonthsOf(rawFin as Record<string, unknown>);
+  const equityNow = getNum(fin, "equity");
   const snapshots: DatedSnapshot[] = (snapshotRes.data ?? []).map((s) => ({
     period_label: s.period_label,
     period_date: s.period_date as string,
@@ -2138,8 +2203,14 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
       financials: (s.financials as Record<string, unknown>) ?? null,
       ratios: (s.ratios as Record<string, number>) ?? null,
     })),
+    new Date(),
+    { periodEnd: statementMeta.periodEnd, financials: rawFin as Record<string, unknown> },
   );
-  let ratioResults = buildRatioResults(rawRatios, market);
+  let ratioResults = buildRatioResults(rawRatios, market, {
+    equity: equityNow,
+    periodMonths,
+    partMonth,
+  });
   ratioResults = withPriorRatioScores(ratioResults, priorSnap?.ratios ?? null);
 
   const priorEquityNum = (() => {
@@ -2204,7 +2275,12 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
     workingCapital: buildWorkingCapitalData(fin, rawRatios),
     profitability: buildProfitabilityData(fin, priorFinForProfit),
     leverage: buildLeverageData(fin, rawRatios, priorEquityNum),
-    assets: buildAssetData(rawRatios),
+    assets: buildAssetData(rawRatios, {
+      equity: equityNow,
+      currency: market.currency,
+      periodMonths,
+      partMonth,
+    }),
     labor: buildLaborData(fin, rawRatios, priorFinForProfit, market),
     movement: movementRows,
     movementPeriodLabels: movementLabels,
@@ -2283,10 +2359,9 @@ function resolveBenchmarkSector(
   if (!bt) return null;
   const sector = BUSINESS_TYPE_TO_BENCHMARK[bt];
   if (!sector) return null;
-  const fallback = BENCHMARK_SECTOR_LABEL[sector] ?? sector;
   return {
     code: `sector:${sector}`,
-    name: profileIndustryLabel(operatingProfile, fallback),
+    name: clientIndustryLabel(operatingProfile, bt),
   };
 }
 
@@ -2368,7 +2443,9 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
         );
       }
       const isDemo = !cd;
-      const ratioRows = isDemo ? MOCK_RATIOS : cd!.ratioResults;
+      const ratioRows = (isDemo ? MOCK_RATIOS : cd!.ratioResults).map((row) =>
+        row.unscored ? row : { ...row, health_tier: scoreTier(row.health_score) },
+      );
       return renderToBlob(HealthScorecardPDF, {
         smeData: makeSmeWithNote(s, isDemo, cd?.dataPeriodLabel),
         ratioResults: s.includePrior ? ratioRows : stripPriorFromRatios(ratioRows),
@@ -2496,8 +2573,7 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
         return renderToBlob(LaborProductivityPDF, {
           smeData: makeSmeWithNote(s, false, cd?.dataPeriodLabel),
           data: null,
-          unavailableReason:
-            "Labor productivity needs revenue, headcount, and labor cost on the file. Those inputs are missing, so no ratios were calculated.",
+          unavailableReason: `${laborProductivityTitle(market)} is not scored — revenue, headcount, and ${laborCostLabel(market).toLowerCase()} are all missing.`,
           accountantProfile: p,
           isDemo: false,
           reviewSignoff: financialsStamp,
@@ -2551,7 +2627,9 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
         industryCode: industry.code,
         industryName: cd?.benchmarkSector
           ? industry.name
-          : profileIndustryLabel(operatingProfile, industry.name),
+          : operatingProfile
+            ? clientIndustryLabel(operatingProfile, industry.name)
+            : industry.name,
         benchmarkRows: isDemo ? MOCK_BENCHMARK : cd!.benchmark,
         accountantProfile: p,
         isDemo,
@@ -2611,7 +2689,7 @@ const REPORTS: ReportMeta[] = [
     key: "scorecard",
     name: "Financial Health Scorecard",
     description:
-      "Overall score, 4-pillar breakdown, all 14 ratios with tier badges and movement arrows.",
+      "Overall score, four pillars, and every tracked ratio with tier badges and movement arrows.",
     pages: "2 pages",
     category: "essential",
     icon: <FileText className="h-4 w-4 text-blue-400" />,
@@ -2677,7 +2755,7 @@ const REPORTS: ReportMeta[] = [
     name: "Leverage & Solvency",
     description:
       "Debt breakdown table, 5-year maturity bar chart, equity bridge, and financing ratio analysis.",
-    pages: "2 pages",
+    pages: "1 page",
     category: "optional",
     icon: <ShieldCheck className="h-4 w-4 text-rose-400" />,
     iconBg: "bg-rose-500/15",
@@ -2919,12 +2997,14 @@ function SettingsPanel({
   onChange,
   profile,
   clientSector = null,
+  nameExample,
 }: {
   settings: Settings;
   onChange: (patch: Partial<Settings>) => void;
   profile: AccountantProfile;
   /** When set (live client with business type), Benchmark PDF uses this — picker is display-only. */
   clientSector?: { code: string; name: string } | null;
+  nameExample: string;
 }) {
   const inputCls =
     "w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-[#c9962b] focus:outline-none focus:ring-1 focus:ring-[#c9962b]/40";
@@ -2945,7 +3025,7 @@ function SettingsPanel({
           className={inputCls}
           value={settings.smeName}
           onChange={(e) => onChange({ smeName: e.target.value })}
-          placeholder="e.g. Acme Trading (Pty) Ltd"
+          placeholder={`e.g. ${nameExample}`}
         />
       </div>
 
@@ -3387,12 +3467,12 @@ export function ReportsStudio({
   onSearchCleared,
 }: ReportsStudioProps) {
   const navigate = useNavigate();
-  const { profile, firmId } = useAccountantProfile();
+  const { profile, firmId, brandLoading } = useAccountantProfile();
   const { user } = useAuth();
   const track = useTrack();
   const [isClient, setIsClient] = useState(false);
   const [settings, setSettings] = useState<Settings>({
-    smeName: clientParam ?? "Acme Trading (Pty) Ltd",
+    smeName: clientParam ?? "",
     periodMonth: MONTHS[new Date().getMonth()],
     periodYear: String(new Date().getFullYear()),
     industryCode: INDUSTRIES[0].code,
@@ -3424,9 +3504,72 @@ export function ReportsStudio({
       ? (REPORTS.find((r) => r.key === reportParam) ?? null)
       : null;
   const [deepLinkBusy, setDeepLinkBusy] = useState(() => Boolean(deepLinkReport));
+  const [firmClients, setFirmClients] = useState<Array<{ id: string; name: string }> | null>(null);
+  const [firmMarket, setFirmMarket] = useState<ResolvedMarket>(ZA_MARKET);
+  const needsClientPicker = !embedded;
+
+  useEffect(() => {
+    if (!needsClientPicker) return;
+    if (brandLoading) return;
+    if (!firmId) {
+      setFirmClients([]);
+      return;
+    }
+    let cancelled = false;
+    Promise.all([
+      supabase
+        .from("clients")
+        .select("id, name")
+        .eq("firm_id", firmId)
+        .order("created_at", { ascending: false }),
+      supabase.from("firms").select("market").eq("id", firmId).maybeSingle(),
+    ])
+      .then(([clientsRes, firmRes]) => {
+        if (cancelled) return;
+        setFirmMarket(resolveMarket(coerceMarketSelection(firmRes.data?.market)));
+        const rows = (clientsRes.data ?? []) as Array<{ id: string; name: string }>;
+        setFirmClients(rows);
+      })
+      .catch(() => {
+        if (!cancelled) setFirmClients([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [needsClientPicker, brandLoading, firmId]);
+
+  useEffect(() => {
+    if (!needsClientPicker || clientId || !firmClients?.length) return;
+    const first = firmClients[0];
+    void navigate({
+      to: "/reports",
+      search: {
+        clientId: first.id,
+        client: first.name,
+        report: undefined,
+        action: undefined,
+      },
+      replace: true,
+    });
+  }, [needsClientPicker, clientId, firmClients, navigate]);
+
+  const showIllustrativeDemo =
+    needsClientPicker && !clientId && firmClients !== null && firmClients.length === 0;
+  const resolvingClient =
+    needsClientPicker && !clientId && (firmClients === null || firmClients.length > 0);
+
+  useEffect(() => {
+    if (!showIllustrativeDemo) return;
+    setSettings((prev) =>
+      prev.smeName.trim()
+        ? prev
+        : { ...prev, smeName: t("entityExample", firmMarket) },
+    );
+  }, [showIllustrativeDemo, firmMarket]);
 
   /** Client-linked studio never ships mock figures — upload first. */
   const blockedForClient = Boolean(clientId) && !dataLoading && !clientData?.hasData;
+  const studioBusy = dataLoading || resolvingClient;
 
   const patchStudioSignoff = (scope: ReviewScope) => (next: ClientReviewSignoff | null) => {
     setClientData((cd) =>
@@ -3530,7 +3673,9 @@ export function ReportsStudio({
   const GEN = useMemo(() => buildGEN(clientData), [clientData]);
   const playbookRatios = useMemo(() => {
     // A linked client never shows the no-client demo scores (Creditor Days 75, …).
-    if (!clientId) return PLAYBOOK_RATIOS;
+    if (!clientId) {
+      return PLAYBOOK_RATIOS.map((row) => ({ ...row, health_tier: scoreTier(row.health_score) }));
+    }
     if (!clientData?.hasData) {
       return PLAYBOOK_RATIOS.map((row) => ({ ...row, health_score: 0, unscored: true }));
     }
@@ -3546,7 +3691,7 @@ export function ReportsStudio({
   }, [previewState]);
 
   function assertCanGenerate(): boolean {
-    if (!isClient || dataLoading) return false;
+    if (!isClient || studioBusy) return false;
     if (blockedForClient) {
       toast.error(
         "Upload financials for this client before generating reports. Demo figures are never shipped under a client name.",
@@ -3660,7 +3805,7 @@ export function ReportsStudio({
 
   // Deep-link from client gallery: /reports?clientId=&report=labor&action=preview|download
   useEffect(() => {
-    if (!isClient || dataLoading) return;
+    if (!isClient || studioBusy) return;
     if (!deepLinkReport) {
       setDeepLinkBusy(false);
       return;
@@ -3717,6 +3862,7 @@ export function ReportsStudio({
   }, [
     isClient,
     dataLoading,
+    studioBusy,
     reportParam,
     actionParam,
     clientId,
@@ -3842,7 +3988,7 @@ export function ReportsStudio({
               Financial Reports
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Board-ready PDFs, branded with this client&apos;s own logo and colours. Sign each
+              Board-ready PDFs, branded with your firm&apos;s logo and colours. Sign each
               report off so the stamp carries into the pack.
             </p>
             {/* Client data status badge */}
@@ -3870,12 +4016,54 @@ export function ReportsStudio({
                 )}
               </div>
             )}
-            {!clientId && (
+            {needsClientPicker && firmClients && firmClients.length > 0 && (
+              <div className="mt-3 max-w-xs">
+                <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  Client
+                </label>
+                <Select
+                  value={clientId ?? firmClients[0]?.id}
+                  onValueChange={(id) => {
+                    const chosen = firmClients.find((row) => row.id === id);
+                    void navigate({
+                      to: "/reports",
+                      search: {
+                        clientId: id,
+                        client: chosen?.name,
+                        report: undefined,
+                        action: undefined,
+                      },
+                    });
+                  }}
+                >
+                  <SelectTrigger className="h-9 border-input bg-background text-sm text-foreground">
+                    <SelectValue placeholder="Choose a client" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-popover border-border">
+                    {firmClients.map((row) => (
+                      <SelectItem
+                        key={row.id}
+                        value={row.id}
+                        className="text-popover-foreground focus:bg-muted"
+                      >
+                        {row.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            {resolvingClient && (
+              <div className="mt-2 flex items-center gap-1.5">
+                <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                <span className="text-[11px] text-muted-foreground">Choosing the latest client…</span>
+              </div>
+            )}
+            {showIllustrativeDemo && (
               <div className="mt-2 flex items-center gap-1.5">
                 <span className="inline-block h-1.5 w-1.5 rounded-full bg-amber-500" />
                 <span className="text-[11px] text-amber-700 dark:text-amber-400">
-                  No client linked — PDFs use illustrative demo data (watermarked). Open a client
-                  for live reports.
+                  No clients on this firm yet — PDFs use illustrative demo data (watermarked).
                 </span>
               </div>
             )}
@@ -3893,14 +4081,14 @@ export function ReportsStudio({
               <Button
                 className="gap-2 bg-[#c9962b] hover:bg-[#b8851f] font-semibold text-white"
                 onClick={handleGenerateAll}
-                disabled={!isClient || dataLoading || blockedForClient}
+                disabled={!isClient || studioBusy || blockedForClient}
                 title={
                   blockedForClient
                     ? "Upload financials before generating client reports"
                     : undefined
                 }
               >
-                {dataLoading ? (
+                {studioBusy ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
                     Loading client data…
@@ -3936,7 +4124,7 @@ export function ReportsStudio({
                     isGenerating={loadingKey === r.key}
                     isPreviewing={previewKey === r.key}
                     isClient={isClient}
-                    dataLoading={dataLoading}
+                    dataLoading={studioBusy}
                     blocked={blockedForClient}
                     highlight={reportParam === r.key}
                     onGenerate={() => handleGenerate(r)}
@@ -3964,7 +4152,7 @@ export function ReportsStudio({
                     isGenerating={loadingKey === r.key}
                     isPreviewing={previewKey === r.key}
                     isClient={isClient}
-                    dataLoading={dataLoading}
+                    dataLoading={studioBusy}
                     blocked={blockedForClient}
                     highlight={reportParam === r.key}
                     onGenerate={() => handleGenerate(r)}
@@ -4022,6 +4210,7 @@ export function ReportsStudio({
             onChange={(patch) => setSettings((prev) => ({ ...prev, ...patch }))}
             profile={profile}
             clientSector={clientData?.hasData ? clientData.benchmarkSector : null}
+            nameExample={t("entityExample", clientData?.market ?? firmMarket)}
           />
         </div>
       </div>

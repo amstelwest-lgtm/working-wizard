@@ -119,7 +119,7 @@ const S = StyleSheet.create({
   row: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 7.5,
+    paddingVertical: 4.5,
     paddingHorizontal: 12,
     borderBottomWidth: 0.5,
     borderBottomColor: C.hairline,

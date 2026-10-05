@@ -10,8 +10,9 @@
 import { View, Text, StyleSheet } from "@react-pdf/renderer";
 import type { AccountantProfile } from "@/contexts/accountant-profile";
 import { PDFDocument, type SmeData, type ReportSignoffStamp } from "@/components/pdf/pdf-document";
-import { C, TIER_META, tierForScore, scoreColor } from "@/components/pdf/theme";
-import { HEALTH_BAND_TABLE, healthBandLabel } from "@/lib/ratios";
+import { C, TIER_META, scoreColor } from "@/components/pdf/theme";
+import { HEALTH_BAND_TABLE, healthBandLabel, scoreTier } from "@/lib/ratios";
+import { pickPillarExtreme, scorecardCountCopy } from "@/lib/report-coherence";
 import { HealthScoreGauge } from "@/components/pdf/health-score-gauge";
 import { SectionHeader } from "@/components/pdf/section-header";
 import { RatioRow } from "@/components/pdf/ratio-row";
@@ -33,9 +34,13 @@ export type RatioResult = {
   current_value: number;
   health_score: number;
   health_tier: "critical" | "at_risk" | "healthy";
+  /** Missing inputs. Shown as Not scored and kept out of the pillar average. */
+  unscored?: boolean;
   prior_period_value?: number;
   prior_period_score?: number;
   formatted_value: string;
+  /** Annualised / part-month note, when the value column already includes it. */
+  annotation?: string | null;
 };
 
 export type HealthScorecardPDFProps = {
@@ -62,11 +67,12 @@ const PILLAR_LABEL: Record<string, string> = {
   cash: "Cash Flow",
 };
 
-const TIER_DESC: Record<string, string> = {
-  healthy: "The business is performing well across most financial indicators.",
-  at_risk: "Several areas need attention to prevent further deterioration.",
-  critical: "Immediate action required — key metrics indicate significant financial stress.",
-};
+function tierDescription(tier: "healthy" | "at_risk" | "critical"): string {
+  const band = healthBandLabel(tier);
+  if (tier === "healthy") return `The overall band is ${band}.`;
+  if (tier === "at_risk") return `The overall band is ${band}.`;
+  return `The overall band is ${band}.`;
+}
 
 function avg(nums: number[]): number | null {
   const finite = nums.filter((n) => Number.isFinite(n));
@@ -197,8 +203,9 @@ export function HealthScorecardPDF({
   cashRunwayWeeks,
   market,
 }: HealthScorecardPDFProps) {
+  const scoredForHealth = ratioResults.filter((r) => !r.unscored);
   const overall = computeOverallHealth({
-    scoredRatios: ratioResults.map((r) => ({
+    scoredRatios: scoredForHealth.map((r) => ({
       name: r.ratio_name,
       score: r.health_score,
       pillar: r.pillar as HealthPillarId,
@@ -212,11 +219,12 @@ export function HealthScorecardPDF({
   const pillarData = PILLARS.map((pillar) => {
     const fromOverall = overall.pillars.find((p) => p.id === pillar);
     const ratios = ratioResults.filter((r) => r.pillar === pillar);
-    const score = fromOverall?.score ?? avg(ratios.map((r) => r.health_score));
+    const scored = ratios.filter((r) => !r.unscored);
+    const score = fromOverall?.score ?? avg(scored.map((r) => r.health_score));
     const counts = {
-      critical: ratios.filter((r) => r.health_tier === "critical").length,
-      at_risk: ratios.filter((r) => r.health_tier === "at_risk").length,
-      healthy: ratios.filter((r) => r.health_tier === "healthy").length,
+      critical: scored.filter((r) => r.health_tier === "critical").length,
+      at_risk: scored.filter((r) => r.health_tier === "at_risk").length,
+      healthy: scored.filter((r) => r.health_tier === "healthy").length,
     };
     // Cash runway can push cash pillar critical without a ratio row
     if (pillar === "cash" && fromOverall?.status === "critical" && counts.critical === 0) {
@@ -254,13 +262,20 @@ export function HealthScorecardPDF({
     Number.isFinite(levers.assetTurnover) &&
     Number.isFinite(levers.equityMultiplier);
   const dupont = diagnoseDuPont(levers);
+  const roeRow = ratioResults.find((r) => r.ratio_name === "Return on Equity");
 
   // Executive summary figures — only pillars that actually have a score
   const scoredPillarData = pillarData.filter(
     (p): p is typeof p & { score: number } => p.score != null && Number.isFinite(p.score),
   );
-  const worstPillar = [...scoredPillarData].sort((a, b) => a.score - b.score)[0];
-  const bestPillar = [...scoredPillarData].sort((a, b) => b.score - a.score)[0];
+  const pillarChoices = scoredPillarData.map((p) => ({
+    id: p.pillar,
+    label: PILLAR_LABEL[p.pillar],
+    score: p.score,
+  }));
+  const bestPillar = pickPillarExtreme(pillarChoices, "strongest");
+  const worstPillar = pickPillarExtreme(pillarChoices, "weakest");
+  const counts = scorecardCountCopy(ratioResults.length);
   const priorAvg = ratioResults.some((r) => r.prior_period_score !== undefined)
     ? avg(ratioResults.map((r) => r.prior_period_score ?? r.health_score))
     : undefined;
@@ -284,33 +299,34 @@ export function HealthScorecardPDF({
       value: bestPillar ? `${Math.round(bestPillar.score)}` : "—",
       good: true,
       direction: "up",
-      note: bestPillar ? PILLAR_LABEL[bestPillar.pillar] : "no data",
+      note: bestPillar ? bestPillar.label : "no data",
     },
     {
       label: "Weakest Pillar",
       value: worstPillar ? `${Math.round(worstPillar.score)}` : "—",
-      good: worstPillar ? tierForScore(worstPillar.score) === "healthy" : undefined,
+      good: worstPillar ? scoreTier(worstPillar.score) === "healthy" : undefined,
       direction: worstPillar
-        ? tierForScore(worstPillar.score) === "healthy"
+        ? scoreTier(worstPillar.score) === "healthy"
           ? "up"
           : "down"
         : undefined,
-      note: worstPillar ? PILLAR_LABEL[worstPillar.pillar] : "no data",
+      note: worstPillar ? worstPillar.label : "no data",
     },
     {
       label: "Ratios in Critical",
-      value: `${ratioResults.filter((r) => r.health_tier === "critical").length}`,
-      good: ratioResults.every((r) => r.health_tier !== "critical"),
-      note: `of ${ratioResults.length} tracked`,
+      value: `${scoredForHealth.filter((r) => r.health_tier === "critical").length}`,
+      good: scoredForHealth.every((r) => r.health_tier !== "critical"),
+      note: counts.tracked,
     },
   ];
 
   const narrative = healthNarrative(
     overallScore ?? Number.NaN,
-    scoredPillarData.map((p) => ({ label: PILLAR_LABEL[p.pillar], score: p.score })),
+    pillarChoices,
     dupont,
     operatingProfile,
     market ?? ZA_MARKET,
+    overallTier,
   );
 
   return (
@@ -327,7 +343,7 @@ export function HealthScorecardPDF({
       <ReportTitle
         kicker={reportKicker("scorecard")}
         title="Financial Health Scorecard"
-        subtitle="One score, four pillars, fourteen ratios — the state of the business at a glance"
+        subtitle={counts.subtitle}
         isDemo={isDemo}
       />
 
@@ -360,7 +376,7 @@ export function HealthScorecardPDF({
             </Text>
             <Text style={styles.gaugeScaleText}>100</Text>
           </View>
-          <Text style={styles.tierDesc}>{TIER_DESC[overallTier]}</Text>
+          <Text style={styles.tierDesc}>{tierDescription(overallTier)}</Text>
         </View>
       </View>
 
@@ -377,7 +393,14 @@ export function HealthScorecardPDF({
       {/* DuPont pointer strip */}
       {hasDuPont && (
         <View style={{ marginTop: 6 }}>
-          <DuPontStrip levers={levers} diagnosis={dupont} />
+          <DuPontStrip
+            levers={levers}
+            diagnosis={dupont}
+            roeHeadline={
+              roeRow?.unscored ? "n/a" : roeRow?.formatted_value?.split(" · ")[0]
+            }
+            roeNote={roeRow?.unscored ? roeRow.formatted_value : roeRow?.annotation}
+          />
         </View>
       )}
 
@@ -385,7 +408,7 @@ export function HealthScorecardPDF({
       <View break>
         {pillarData.map(({ pillar, score, ratios }) => (
           <View key={pillar} style={styles.pillarSection}>
-            <SectionHeader title={PILLAR_LABEL[pillar]} score={score} />
+            <SectionHeader title={PILLAR_LABEL[pillar]} score={score ?? undefined} />
             {ratios.map((r, i) => (
               <RatioRow
                 key={r.ratio_key}
@@ -393,6 +416,7 @@ export function HealthScorecardPDF({
                 formattedValue={r.formatted_value}
                 healthScore={r.health_score}
                 healthTier={r.health_tier}
+                unscored={r.unscored}
                 priorScore={r.prior_period_score}
                 isAlternate={i % 2 === 1}
               />

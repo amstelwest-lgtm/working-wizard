@@ -7,6 +7,7 @@
 
 import { View, Text, StyleSheet } from "@react-pdf/renderer";
 import { C, TIER_META, type Tier } from "./theme";
+import { NOT_SCORED } from "@/lib/report-coherence";
 import { HealthScoreGauge } from "./health-score-gauge";
 import { Arrow, type ArrowDir } from "./glyphs";
 import { Sparkline } from "./sparkline";
@@ -16,6 +17,8 @@ type Props = {
   formattedValue: string;
   healthScore: number;
   healthTier: Tier;
+  /** Missing inputs — no gauge, no fake Critical score. */
+  unscored?: boolean;
   priorScore?: number;
   /** Optional historical values (oldest → newest) for a trend sparkline. */
   trend?: (number | null | undefined)[];
@@ -43,7 +46,7 @@ const styles = StyleSheet.create({
   sparkWrap: { width: 48, alignItems: "flex-end", marginRight: 8 },
   scoreNum: { width: 24, fontSize: 8.5, textAlign: "center", fontFamily: "Helvetica-Bold" },
   tierChip: {
-    width: 52,
+    width: 68,
     borderRadius: 3,
     paddingHorizontal: 4,
     paddingVertical: 2.5,
@@ -58,6 +61,7 @@ export function RatioRow({
   formattedValue,
   healthScore,
   healthTier,
+  unscored,
   priorScore,
   trend,
   isAlternate = false,
@@ -85,7 +89,7 @@ export function RatioRow({
       <Text style={styles.value}>{formattedValue}</Text>
 
       <View style={styles.gaugeWrap}>
-        <HealthScoreGauge score={healthScore} height={5} />
+        {unscored ? null : <HealthScoreGauge score={healthScore} height={5} />}
       </View>
 
       {trend && trend.filter((t) => t != null).length >= 2 ? (
@@ -94,10 +98,14 @@ export function RatioRow({
         </View>
       ) : null}
 
-      <Text style={[styles.scoreNum, { color: tier.color }]}>{rounded}</Text>
+      <Text style={[styles.scoreNum, { color: unscored ? C.faint : tier.color }]}>
+        {unscored ? "—" : rounded}
+      </Text>
 
-      <View style={[styles.tierChip, { backgroundColor: tier.soft }]}>
-        <Text style={[styles.tierText, { color: tier.deep }]}>{tier.label}</Text>
+      <View style={[styles.tierChip, { backgroundColor: unscored ? C.soft : tier.soft }]}>
+        <Text style={[styles.tierText, { color: unscored ? C.muted : tier.deep }]}>
+          {unscored ? NOT_SCORED : tier.label}
+        </Text>
       </View>
 
       {movement ? (

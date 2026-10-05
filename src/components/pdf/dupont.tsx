@@ -126,13 +126,19 @@ const D = StyleSheet.create({
 export function DuPontDiagram({
   levers,
   diagnosis,
+  roeHeadline,
+  roeNote,
 }: {
   levers: DuPontLevers;
   diagnosis: DuPontDiagnosis;
+  /** Short ROE figure. When set, replaces the raw percent (annualised label or n/a). */
+  roeHeadline?: string;
+  roeNote?: string | null;
 }) {
   const market = usePdfMarket();
   const cards = leverCards(levers, t("currencyWord", market));
-  const roeOk = Number.isFinite(levers.roe);
+  const roeOk = roeHeadline != null ? roeHeadline !== "n/a" && roeHeadline !== "—" : Number.isFinite(levers.roe);
+  const roeText = roeHeadline ?? (roeOk ? fmtPct(levers.roe) : "n/a");
 
   return (
     <View style={D.wrap}>
@@ -140,7 +146,12 @@ export function DuPontDiagram({
       <View style={D.roeRow}>
         <View style={D.roeBox}>
           <Text style={D.roeLabel}>Return on Equity</Text>
-          <Text style={D.roeValue}>{roeOk ? fmtPct(levers.roe) : "n/m"}</Text>
+          <Text style={D.roeValue}>{roeText}</Text>
+          {roeNote ? (
+            <Text style={{ fontSize: 7, color: C.white, fontFamily: "Helvetica", marginTop: 2, textAlign: "center" }}>
+              {roeNote}
+            </Text>
+          ) : null}
           <View style={D.goldUnderline} />
         </View>
       </View>
@@ -241,9 +252,13 @@ const S = StyleSheet.create({
 export function DuPontStrip({
   levers,
   diagnosis,
+  roeHeadline,
+  roeNote,
 }: {
   levers: DuPontLevers;
   diagnosis: DuPontDiagnosis;
+  roeHeadline?: string;
+  roeNote?: string | null;
 }) {
   const market = usePdfMarket();
   const cards = leverCards(levers, t("currencyWord", market));
@@ -259,7 +274,10 @@ export function DuPontStrip({
         <View style={S.row}>
           <View style={S.cell}>
             <Text style={S.label}>Return on Equity</Text>
-            <Text style={S.value}>{Number.isFinite(levers.roe) ? fmtPct(levers.roe) : "n/m"}</Text>
+            <Text style={S.value}>
+              {roeHeadline ?? (Number.isFinite(levers.roe) ? fmtPct(levers.roe) : "n/a")}
+            </Text>
+            {roeNote ? <Text style={[S.label, { textTransform: "none" }]}>{roeNote}</Text> : null}
           </View>
           <Text style={S.eq}>=</Text>
           {cards.map((card, i) => {
