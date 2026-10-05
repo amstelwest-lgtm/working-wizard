@@ -11,6 +11,7 @@ import {
 } from "../src/lib/health-score";
 import { CASH_RUNWAY_THRESHOLD_RAND } from "../src/lib/cash-runway";
 import { computeRatios, healthBandLabel, scoreTier, type RatioInputs } from "../src/lib/ratios";
+import { computeOverviewCaption } from "../src/lib/overview-insights";
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
@@ -237,6 +238,56 @@ const cappedCash = capped.pillars.find((p) => p.id === "cash");
 assert(cappedCash?.score === 80, `capped average rounds to 80, got ${cappedCash?.score}`);
 assert(cappedCash?.status === "at_risk", `pillar capped off Healthy, got ${cappedCash?.status}`);
 assert(healthBandLabel(cappedCash!.status) === "Watch", "capped pillar reads Watch");
+
+const scored69 = computeOverallHealth({
+  scoredRatios: [
+    { name: "Gross Margin", score: 69, pillar: "profit" },
+    { name: "Asset Turnover", score: 69, pillar: "assets" },
+    { name: "Debt-to-Equity", score: 69, pillar: "financing" },
+    { name: "Debtor Days", score: 69, pillar: "cash" },
+  ],
+});
+assert(scored69.overall === 69 && scored69.displayLabel === "Watch", `69 is Watch, got ${scored69.displayLabel}`);
+
+const runwayGone = computeOverallHealth({
+  scoredRatios: scored69.pillars
+    .filter((p) => p.score != null)
+    .map((p) => ({ name: p.label, score: p.score as number, pillar: p.id })),
+  cashRunwayWeeks: 0,
+  shortfallWeek: 1,
+});
+assert(runwayGone.displayStatus === "critical", `0 weeks + W1 is Critical, got ${runwayGone.displayStatus}`);
+assert(runwayGone.displayLabel === "Critical", `label ${runwayGone.displayLabel}`);
+assert(runwayGone.displayLabel !== "Healthy", "0 weeks must not read Healthy");
+
+const healthyPillars = [
+  { name: "Gross Margin", score: 90, pillar: "profit" as const },
+  { name: "Asset Turnover", score: 90, pillar: "assets" as const },
+  { name: "Debt-to-Equity", score: 90, pillar: "financing" as const },
+  { name: "Debtor Days", score: 90, pillar: "cash" as const },
+];
+const stillHealthy = computeOverallHealth({ scoredRatios: healthyPillars, cashRunwayWeeks: 20 });
+assert(stillHealthy.displayLabel === "Healthy", `runway 20 stays Healthy, got ${stillHealthy.displayLabel}`);
+const weekOneShort = computeOverallHealth({
+  scoredRatios: healthyPillars,
+  cashRunwayWeeks: 20,
+  shortfallWeek: 1,
+});
+assert(weekOneShort.displayStatus === "at_risk" && weekOneShort.displayLabel === "Watch", "W1 shortfall is not Healthy");
+const both = computeOverallHealth({
+  scoredRatios: healthyPillars,
+  cashRunwayWeeks: 0,
+  shortfallWeek: 1,
+});
+assert(both.displayLabel === "Critical", "0 weeks overrides a Healthy score to Critical");
+
+const caption = computeOverviewCaption({
+  hasRealFinancials: true,
+  avgHealth: 69,
+  cashHealth: 40,
+  displayStatus: "critical",
+});
+assert(caption?.startsWith("Critical") === true, caption ?? "missing caption");
 
 console.log("health-score-test: ok");
 console.log("sample overall", fromInputs.overall, fromInputs.displayLabel, fromInputs.pillars.map((p) => `${p.id}:${p.score}`).join(" "));

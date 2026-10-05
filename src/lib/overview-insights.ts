@@ -7,7 +7,7 @@
  * cash forecasts from P&L heuristics. Prefer null / empty + honest copy.
  */
 
-import { healthBandLabel, scoreTier } from "@/lib/ratios";
+import { healthBandLabel, scoreTier, type HealthTier } from "@/lib/ratios";
 
 export type WeekChange = {
   label: string;
@@ -103,15 +103,18 @@ export function computeOverviewCaption(input: {
   hasRealFinancials: boolean;
   avgHealth: number;
   cashHealth: number;
+  /** Runway / shortfall override. When set, the caption uses this instead of the raw score. */
+  displayStatus?: HealthTier;
 }): string | undefined {
   const { hasRealFinancials, avgHealth, cashHealth } = input;
   if (!hasRealFinancials || !isFinite(avgHealth)) return undefined;
-  const band = healthBandLabel(scoreTier(avgHealth));
+  const tier = input.displayStatus ?? scoreTier(avgHealth);
+  const band = healthBandLabel(tier);
   if (isFinite(cashHealth) && cashHealth < avgHealth - 5) {
     return `${band}. Cash conversion is holding the score back.`;
   }
-  if (scoreTier(avgHealth) === "healthy") return `${band}. Keep building momentum.`;
-  if (scoreTier(avgHealth) === "at_risk") return `${band}. Start with the priority below.`;
+  if (tier === "healthy") return `${band}. Keep building momentum.`;
+  if (tier === "at_risk") return `${band}. Start with the priority below.`;
   return `${band}. Start with the priority below.`;
 }
 

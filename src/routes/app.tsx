@@ -102,7 +102,7 @@ import {
 import { healthFromRatioInputs, healthMapFromRatios, scoreRatio } from "@/lib/health-score";
 import { ratioActualLine } from "@/lib/ratio-actuals";
 import { type SavedCashflowLike } from "@/lib/cash-runway";
-import { assessClientMetrics } from "@/lib/client-metrics";
+import { assessClientMetrics, resolveThirteenWeekForecast } from "@/lib/client-metrics";
 import { DERIVED_EQUITY_LABEL } from "@/lib/statement-financials";
 import { needsTrialBalanceRefresh } from "@/lib/trial-balance-refresh";
 import { TrialBalanceRefreshPrompt } from "@/components/trial-balance-refresh-prompt";
@@ -3602,7 +3602,19 @@ function Index() {
     ownerMetrics.runway.kind === "weeks" || ownerMetrics.runway.kind === "zero"
       ? ownerMetrics.runway.weeks
       : null;
-  const overallHealth = healthFromRatioInputs(v, effectiveRunway, boardMarket);
+  const ownerOutlook = resolveThirteenWeekForecast({
+    financials: v as unknown as Record<string, unknown>,
+    cashflow: clientMeta?.cashflow ?? null,
+    openingCash: ownerMetrics.cash.amount,
+    runway: ownerMetrics.runway,
+    timeZone: boardMarket.timezone,
+  });
+  const overallHealth = healthFromRatioInputs(
+    v,
+    effectiveRunway,
+    boardMarket,
+    ownerOutlook.shortfallWeek,
+  );
   const pillarById = Object.fromEntries(
     overallHealth.pillars.map((p) => [p.id, p.score ?? NaN]),
   ) as Record<"profit" | "assets" | "financing" | "cash", number>;
@@ -3712,6 +3724,7 @@ function Index() {
     hasRealFinancials: showScoredBoard,
     avgHealth,
     cashHealth: pillarHealths.cash,
+    displayStatus: overallHealth.displayStatus,
   });
   const nextMoveImpactLabel = computeNextMoveImpactLabel({
     topKey: nextSteps[0]?.key,

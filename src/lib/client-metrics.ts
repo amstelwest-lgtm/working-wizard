@@ -399,6 +399,11 @@ export type ThirteenWeekForecast = {
   /** When true, the screen must show `lines` instead of the stored forecast. */
   replaceStored: boolean;
   lines: { revenue: ForecastLineSeed[]; expenses: ForecastLineSeed[] };
+  /** Set when the series was built from the P&L because nothing was forecast yet. */
+  estimateLabel: string | null;
+  /** Set when week 1 moved to the current week and the opening was rolled or the gap labelled. */
+  anchorNote: string | null;
+  reanchored: boolean;
 };
 
 type StoredForecastLine = {
@@ -418,6 +423,33 @@ function formatISODate(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
+/** Calendar days from `fromIso` to `toIso`. Negative when `toIso` is earlier. */
+export function calendarDaysBetween(fromIso: string, toIso: string): number | null {
+  if (!/^\d{4}-\d{2}-\d{2}/.test(fromIso) || !/^\d{4}-\d{2}-\d{2}/.test(toIso)) return null;
+  const from = parseISODate(fromIso);
+  const to = parseISODate(toIso);
+  if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) return null;
+  return Math.round((to.getTime() - from.getTime()) / 86_400_000);
+}
+
+/** Today's calendar date in a firm timezone, as a local Y-M-D date (no UTC shift). */
+function calendarDate(now: Date, timeZone?: string | null): Date {
+  if (!timeZone) return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  try {
+    const formatted = new Intl.DateTimeFormat("en-CA", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(now);
+    const iso = formatted.slice(0, 10);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) return parseISODate(iso);
+  } catch {
+    // Unknown timezone — fall through to the runtime's local date.
+  }
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+}
+
 /** Parse YYYY-MM-DD as a local calendar date. `new Date("YYYY-MM-DD")` is UTC and shifts a day in the Americas. */
 export function parseISODate(iso: string): Date {
   const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
@@ -432,12 +464,16 @@ function addDays(d: Date, days: number): Date {
 }
 
 /**
- * First day of the forecast. The current week (Monday), or the day after
- * the latest statement period end when that is later.
+ * First day of the forecast. The current week (Monday of today in the firm's
+ * timezone), or the day after the latest statement period end when that is later.
  */
-export function forecastAnchorDate(input: { now?: Date; periodEnd?: string | null }): string {
+export function forecastAnchorDate(input: {
+  now?: Date;
+  periodEnd?: string | null;
+  timeZone?: string | null;
+}): string {
   const now = input.now ?? new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const today = calendarDate(now, input.timeZone);
   const mondayOffset = (today.getDay() + 6) % 7;
   let anchor = addDays(today, -mondayOffset);
   const endIso = input.periodEnd?.slice(0, 10) ?? "";
@@ -446,6 +482,147 @@ export function forecastAnchorDate(input: { now?: Date; periodEnd?: string | nul
     if (next.getTime() > anchor.getTime()) anchor = next;
   }
   return formatISODate(anchor);
+}
+
+const PL_ESTIMATE_LABEL = "Estimated from the P&L";
+
+function weeklyEquivalent(amount: number, frequency: string | null | undefined): number | null {
+  switch (frequency) {
+    case "weekly":
+    case "recurring-weekly":
+      return amount;
+    case "monthly":
+    case "recurring-monthly":
+      return amount * (12 / 52);
+    case "annual":
+      return amount / 52;
+    default:
+      return null;
+  }
+}
+
+function weeklyNetFromDraft(
+  lines: Array<{ amount: number; cadence: string; side: "inflow" | "outflow"; status: string }>,
+): number | null {
+  let net = 0;
+  let counted = 0;
+  for (const line of lines) {
+    if (line.status === "excluded") continue;
+    const weekly = weeklyEquivalent(line.amount, line.cadence);
+    if (weekly == null || weekly === 0) continue;
+    net += line.side === "outflow" ? -weekly : weekly;
+    counted += 1;
+  }
+  return counted > 0 ? net : null;
+}
+
+/**
+ * Move a bank closing balance from the statement date up to the forecast anchor.
+ * Gap days are the days after the statement and before week 1. Recurring lines
+ * supply the daily run-rate. With no recurring lines, the balance stays put and
+ * the note names the gap.
+ */
+export function rollBankDraftOpening(input: {
+  statementEnd: string | null;
+  anchor: string;
+  closing: number;
+  lines: Array<{ amount: number; cadence: string; side: "inflow" | "outflow"; status: string }>;
+}): { opening: number; note: string | null } {
+  const end = input.statementEnd?.slice(0, 10) ?? "";
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(end)) return { opening: input.closing, note: null };
+  const span = calendarDaysBetween(end, input.anchor);
+  const gapDays = span == null ? 0 : Math.max(0, span - 1);
+  if (gapDays <= 0) return { opening: input.closing, note: null };
+  const weeklyNet = weeklyNetFromDraft(input.lines);
+  if (weeklyNet == null) {
+    return {
+      opening: input.closing,
+      note: `${gapDays} days sit between the bank statement (${end}) and this week (${input.anchor}). Opening cash stays the bank closing balance — those days are not in the 13 weeks.`,
+    };
+  }
+  const opening = Math.round((input.closing + (weeklyNet / 7) * gapDays) * 100) / 100;
+  return {
+    opening,
+    note: `Opening cash was rolled forward ${gapDays} days from the bank closing balance on ${end} to this week (${input.anchor}).`,
+  };
+}
+
+function weeklyNetFromStored(cf: Record<string, unknown>): number | null {
+  let net = 0;
+  let counted = 0;
+  const take = (rows: unknown, sign: 1 | -1) => {
+    for (const line of asForecastLines(rows)) {
+      const amount = parseFloat(line.amount ?? "0") || 0;
+      const weekly = weeklyEquivalent(amount, line.frequency);
+      if (weekly == null || weekly === 0) continue;
+      net += sign * weekly;
+      counted += 1;
+    }
+  };
+  take(cf.revenue, 1);
+  take(cf.expenses, -1);
+  take(cf.other, -1);
+  return counted > 0 ? net : null;
+}
+
+export type PlBankDisagreement = {
+  plRevenueMonthly: number | null;
+  bankInflowMonthly: number;
+  plCostMonthly: number | null;
+  bankOutflowMonthly: number;
+};
+
+function materiallyDifferent(left: number | null, right: number): boolean {
+  if (left == null || !Number.isFinite(left) || !Number.isFinite(right)) return false;
+  const diff = Math.abs(left - right);
+  const base = Math.max(Math.abs(left), Math.abs(right), 1);
+  return diff >= 1000 && diff / base >= 0.2;
+}
+
+/**
+ * P&L monthly revenue and costs versus the bank forecast's monthly run-rate.
+ * Set only when a bank publish exists and at least one side differs materially.
+ */
+export function plBankDisagreement(input: {
+  financials?: Record<string, unknown> | null;
+  cashflow?: unknown;
+}): PlBankDisagreement | null {
+  const cf = asRecord(input.cashflow);
+  if (!cf || typeof cf.seededFromBanksAt !== "string" || cf.seededFromBanksAt.length === 0) {
+    return null;
+  }
+  const fin = asRecord(input.financials);
+  if (!fin) return null;
+  const months = periodMonthsOf(fin);
+  const revenue = finiteNum(fin.revenue);
+  const costs = periodOperatingOutflows(fin);
+  const plRevenueMonthly = revenue == null ? null : revenue / months;
+  const plCostMonthly = costs == null ? null : costs / months;
+
+  const weeks = CASH_FORECAST_WEEK_COUNT;
+  const inflow = new Array(weeks).fill(0);
+  const outflow = new Array(weeks).fill(0);
+  for (const line of asForecastLines(cf.revenue)) {
+    distributeForecastLine(line, weeks).forEach((n, i) => {
+      inflow[i] += n;
+    });
+  }
+  for (const line of [...asForecastLines(cf.expenses), ...asForecastLines(cf.other)]) {
+    distributeForecastLine(line, weeks).forEach((n, i) => {
+      outflow[i] += n;
+    });
+  }
+  const monthly = (xs: number[]) => (xs.reduce((sum, n) => sum + n, 0) / xs.length) * (52 / 12);
+  const bankInflowMonthly = monthly(inflow);
+  const bankOutflowMonthly = monthly(outflow);
+  if (bankInflowMonthly < 1 && bankOutflowMonthly < 1) return null;
+  if (
+    !materiallyDifferent(plRevenueMonthly, bankInflowMonthly) &&
+    !materiallyDifferent(plCostMonthly, bankOutflowMonthly)
+  ) {
+    return null;
+  }
+  return { plRevenueMonthly, bankInflowMonthly, plCostMonthly, bankOutflowMonthly };
 }
 
 export function weekDatesFrom(startIso: string, weeks = CASH_FORECAST_WEEK_COUNT): string[] {
@@ -718,12 +895,13 @@ export function resolveThirteenWeekForecast(input: {
   runway?: ClientRunway | null;
   now?: Date;
   periodEnd?: string | null;
+  timeZone?: string | null;
 }): ThirteenWeekForecast {
   const weeks = CASH_FORECAST_WEEK_COUNT;
   const fin = asRecord(input.financials);
   const periodEnd =
     input.periodEnd ?? (typeof fin?.periodEnd === "string" ? fin.periodEnd : null);
-  const anchor = forecastAnchorDate({ now: input.now, periodEnd });
+  const anchor = forecastAnchorDate({ now: input.now, periodEnd, timeZone: input.timeZone });
   const opening = finiteNum(input.openingCash) ?? finiteNum(fin?.cash) ?? 0;
   const runway = input.runway ?? { weeks: null, kind: "unknown" as const, label: "—" };
   const cf = asRecord(input.cashflow);
@@ -771,6 +949,10 @@ export function resolveThirteenWeekForecast(input: {
       cycleNote,
       replaceStored: true,
       lines: derivedLines(rate.weeklyInflow, rate.weeklyOutflow),
+      estimateLabel:
+        rate.weeklyInflow > 1 || rate.weeklyOutflow > 1 ? PL_ESTIMATE_LABEL : null,
+      anchorNote: null,
+      reanchored: false,
     };
   };
 
@@ -782,18 +964,30 @@ export function resolveThirteenWeekForecast(input: {
     storedOpening != null && Number.isFinite(opening) && Math.abs(storedOpening - opening) < 0.5;
   const timingNote = cf ? storedTimingNote(cf) : null;
 
+  const bankSeeded = typeof cf?.seededFromBanksAt === "string" && cf.seededFromBanksAt.length > 0;
+  const protectedLines = bankSeeded || cf?.forecastLinesSource === "xero-bank-summary";
+
   let storedCurrent = Boolean(rolled && startOk && openingOk);
-  if (storedCurrent && rolled && runway.kind === "cash_generative") {
+  if (storedCurrent && rolled && !protectedLines && runway.kind === "cash_generative") {
     const totals = seriesTotals(rolled.inflow, rolled.outflow, rolled.closing);
     if (totals.structural && !timingNote) storedCurrent = false;
   }
   // A timing note must not keep a series whose weekly payments are still the
   // old annual-as-monthly scale. The PDF floor is four weeks of these outflows.
-  if (storedCurrent && rolled && rate.weeklyOutflow > 0) {
+  // A published bank series is the cash record — a gap versus the P&L is flagged,
+  // not discarded.
+  if (storedCurrent && rolled && !protectedLines && rate.weeklyOutflow > 0) {
     const meanOut =
       rolled.outflow.reduce((sum, n) => sum + Math.max(0, n), 0) / rolled.outflow.length;
     if (meanOut > rate.weeklyOutflow * 3 + 1) storedCurrent = false;
   }
+
+  const blankSeries =
+    rolled != null &&
+    rolled.inflow.every((n) => Math.abs(n) < 0.5) &&
+    rolled.outflow.every((n) => Math.abs(n) < 0.5);
+  const plHasRate = rate.weeklyInflow > 1 || rate.weeklyOutflow > 1;
+  if (storedCurrent && blankSeries && plHasRate && !protectedLines) storedCurrent = false;
 
   if (storedCurrent && rolled) {
     const totals = seriesTotals(rolled.inflow, rolled.outflow, rolled.closing);
@@ -817,7 +1011,66 @@ export function resolveThirteenWeekForecast(input: {
       cycleNote,
       replaceStored: false,
       lines: { revenue: [], expenses: [] },
+      estimateLabel: cf?.forecastLinesSource === "pl-estimate" ? PL_ESTIMATE_LABEL : null,
+      anchorNote: null,
+      reanchored: false,
     };
+  }
+
+  // Week 1 is already in the past (the day after an older bank line). Keep the
+  // lines, move the start to this week, and roll the opening across the gap.
+  if (
+    rolled &&
+    cf &&
+    openingOk &&
+    !blankSeries &&
+    /^\d{4}-\d{2}-\d{2}$/.test(startRaw) &&
+    startRaw < anchor
+  ) {
+    const meanOut =
+      rolled.outflow.reduce((sum, n) => sum + Math.max(0, n), 0) / rolled.outflow.length;
+    const scaleBad =
+      !protectedLines && rate.weeklyOutflow > 0 && meanOut > rate.weeklyOutflow * 3 + 1;
+    if (!scaleBad) {
+      const gapDays = Math.max(0, calendarDaysBetween(startRaw, anchor) ?? 0);
+      const weeklyNet = weeklyNetFromStored(cf);
+      const opening =
+        weeklyNet == null
+          ? rolled.opening
+          : Math.round((rolled.opening + (weeklyNet / 7) * gapDays) * 100) / 100;
+      const closing = reclose(opening, rolled.inflow, rolled.outflow);
+      const totals = seriesTotals(rolled.inflow, rolled.outflow, closing);
+      const showShortfall =
+        totals.shortfall && (runway.kind !== "cash_generative" || Boolean(timingNote) || bankSeeded);
+      const anchorNote =
+        gapDays <= 0
+          ? null
+          : weeklyNet == null
+            ? `${gapDays} days sit between ${startRaw} and this week (${anchor}). Opening cash is still the balance on ${startRaw}.`
+            : `Opening cash was rolled forward ${gapDays} days from ${startRaw} to this week (${anchor}).`;
+      return {
+        source: "stored",
+        startDate: anchor,
+        weekDates: weekDatesFrom(anchor, weeks),
+        opening,
+        inflow: rolled.inflow,
+        outflow: rolled.outflow,
+        closing,
+        totalInflow: totals.totalInflow,
+        totalOutflow: totals.totalOutflow,
+        floor: totals.floor,
+        dipsBelowFloorWeek: totals.dipsBelowFloorWeek,
+        shortfall: showShortfall,
+        shortfallWeek: showShortfall ? totals.shortfallWeek : null,
+        timingNote: showShortfall ? timingNote : null,
+        cycleNote,
+        replaceStored: false,
+        lines: { revenue: [], expenses: [] },
+        estimateLabel: null,
+        anchorNote,
+        reanchored: gapDays > 0,
+      };
+    }
   }
 
   return buildDerived();

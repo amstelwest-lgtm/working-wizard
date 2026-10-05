@@ -30,7 +30,8 @@ export type ScoreMarket = Pick<ResolvedMarket, "country" | "copyPack">;
  *
  * Overall = equal average of available pillar scores.
  * Cash runway (when known) is one leg of the cash pillar — never a 55% override.
- * A client never shows a clean "Healthy" chip when any pillar is critical.
+ * A client never shows a clean "Healthy" chip when any pillar is critical,
+ * when runway is 0 weeks, or when week 1 of the forecast is already short.
  */
 
 export type FlatFinancials = Record<string, string | number | undefined | null> | null | undefined;
@@ -50,8 +51,8 @@ export type OverallHealth = {
   /** Tier from the overall number alone. */
   status: HealthTier;
   /**
-   * Display tier — same as `status`, except "healthy" is demoted to "at_risk"
-   * when any pillar is critical (the critical-pillar tell).
+   * Display tier. "healthy" is demoted to "at_risk" when any pillar is critical
+   * or week 1 is short. Zero weeks of runway forces "critical".
    */
   displayStatus: HealthTier;
   /** Short UI label for chips ("Healthy" / "Watch" / "Critical"). */
@@ -359,6 +360,11 @@ export type ComputeOverallHealthInput = {
     pillar?: HealthPillarId;
   }>;
   cashRunwayWeeks?: number | null;
+  /**
+   * First forecast week that closes below zero. Week 1 cannot display Healthy.
+   * Zero weeks of runway cannot display Healthy either — the chip is Critical.
+   */
+  shortfallWeek?: number | null;
   /** Sales-per-employee uses a market-specific healthy target. Defaults ZA. */
   market?: ScoreMarket;
 };
@@ -415,7 +421,9 @@ export function computeOverallHealth(input: ComputeOverallHealthInput): OverallH
   const overall = overallRaw == null ? null : Math.round(overallRaw);
   const status = scoreTier(overall);
   const hasCriticalPillar = scoredPillars.some((p) => p.status === "critical");
-  const displayStatus: HealthTier = hasCriticalPillar && status === "healthy" ? "at_risk" : status;
+  let displayStatus: HealthTier = hasCriticalPillar && status === "healthy" ? "at_risk" : status;
+  if (input.cashRunwayWeeks === 0) displayStatus = "critical";
+  else if (input.shortfallWeek === 1 && displayStatus === "healthy") displayStatus = "at_risk";
 
   const weakestPillar =
     scoredPillars.length === 0
@@ -477,11 +485,13 @@ export function healthFromRatioInputs(
   inputs: RatioInputs,
   cashRunwayWeeks?: number | null,
   market?: ScoreMarket,
+  shortfallWeek?: number | null,
 ): OverallHealth {
   return computeOverallHealth({
     ratios: computeRatios(inputs),
     cashRunwayWeeks,
     market,
+    shortfallWeek,
   });
 }
 

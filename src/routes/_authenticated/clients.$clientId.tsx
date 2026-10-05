@@ -39,6 +39,7 @@ import {
 } from "@/lib/market";
 import { PlaybookDrawer } from "@/components/playbook-drawer";
 import { computeOverviewCaption } from "@/lib/overview-insights";
+import { PlBankDisagreeNotice } from "@/components/pl-bank-disagree-notice";
 import type { ExtractionResult } from "@/lib/financialSchema";
 import {
   DERIVED_EQUITY_LABEL,
@@ -126,6 +127,7 @@ import {
 import {
   assessClientMetrics,
   persistedRunwayWeeks,
+  plBankDisagreement,
   resolveThirteenWeekForecast,
   runwayDisplayLabel,
 } from "@/lib/client-metrics";
@@ -1057,19 +1059,6 @@ function ClientView() {
     [financials, client?.cashflow, client?.financials_updated_at, priorSnapshot],
   );
   const metricRunway = assessed.runway;
-  const cashOutlook = useMemo(
-    () =>
-      resolveThirteenWeekForecast({
-        financials,
-        cashflow: client?.cashflow,
-        openingCash: assessed.cash.amount,
-        runway: assessed.runway,
-      }),
-    [financials, client?.cashflow, assessed],
-  );
-  /** Weeks blended into health. Cash-generative is omitted — it is not 0 weeks. */
-  const effectiveRunway =
-    metricRunway.kind === "weeks" || metricRunway.kind === "zero" ? metricRunway.weeks : null;
   const clientMarket = useMemo(
     () =>
       resolveMarket(
@@ -1077,10 +1066,29 @@ function ClientView() {
       ),
     [client?.market],
   );
+  const cashOutlook = useMemo(
+    () =>
+      resolveThirteenWeekForecast({
+        financials,
+        cashflow: client?.cashflow,
+        openingCash: assessed.cash.amount,
+        runway: assessed.runway,
+        timeZone: clientMarket.timezone,
+      }),
+    [financials, client?.cashflow, assessed, clientMarket.timezone],
+  );
+  /** Weeks blended into health. Cash-generative is omitted — it is not 0 weeks. */
+  const effectiveRunway =
+    metricRunway.kind === "weeks" || metricRunway.kind === "zero" ? metricRunway.weeks : null;
   const overallHealth: OverallHealth = healthFromRatioInputs(
     ratioInputs,
     effectiveRunway,
     clientMarket,
+    cashOutlook.shortfallWeek,
+  );
+  const plVersusBank = useMemo(
+    () => plBankDisagreement({ financials, cashflow: client?.cashflow }),
+    [financials, client?.cashflow],
   );
   const healthScoreRounded = overallHealth.overall ?? 0;
 
@@ -2420,6 +2428,10 @@ function ClientView() {
                 ) : null}
 
                 {/* ===== CLIENT BRIEFING — status → what matters → this month's workflow ===== */}
+                {plVersusBank ? (
+                  <PlBankDisagreeNotice disagreement={plVersusBank} market={clientMarket} />
+                ) : null}
+
                 <ClientBriefing
                   clientName={client.name}
                   clientCode={client.client_code}
@@ -2755,6 +2767,7 @@ function ClientView() {
                             hasRealFinancials: hasFigures,
                             avgHealth,
                             cashHealth: pillarHealths.cash ?? NaN,
+                            displayStatus: overallHealth.displayStatus,
                           })}
                           topPriority={(() => {
                             const worst = Object.entries(pillarHealths)

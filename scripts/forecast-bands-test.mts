@@ -5,10 +5,14 @@
 import { buildFinancialSnapshot } from "../src/lib/client-briefing";
 import {
   forecastAnchorDate,
+  plBankDisagreement,
   resolveThirteenWeekForecast,
+  rollBankDraftOpening,
   scoreCreditorDays,
   weeklyRunRate,
 } from "../src/lib/client-metrics";
+import { formatCalendarDay } from "../src/lib/market/format";
+import { openingCashReplaceNotice } from "../src/lib/cash-from-banks.publish";
 import { healthMapFromRatios, scorePlaybookRatio } from "../src/lib/health-score";
 import { HEALTH_BAND_TABLE, healthBandLabel, scoreTier } from "../src/lib/ratios";
 
@@ -30,6 +34,61 @@ assert(
 assert(
   forecastAnchorDate({ now: monday, periodEnd: "2025-07-31" }) === "2026-10-05",
   "an older period end does not pull the forecast back",
+);
+const sundayNightInNewYork = new Date("2026-10-05T02:30:00Z");
+assert(
+  forecastAnchorDate({ now: sundayNightInNewYork, timeZone: "America/New_York" }) === "2026-09-28",
+  "firm timezone: Sunday evening in New York is still the previous week",
+);
+assert(
+  forecastAnchorDate({ now: new Date("2026-10-05T15:00:00Z"), timeZone: "America/New_York" }) ===
+    "2026-10-05",
+  "firm timezone: Monday afternoon in New York is this week",
+);
+const oct5 = formatCalendarDay("2026-10-05", { locale: "en-US" }, { day: "numeric", month: "short" });
+const sep23 = formatCalendarDay("2026-09-23", { locale: "en-US" }, { day: "numeric", month: "short" });
+assert(oct5.includes("Oct") && /\b5\b/.test(oct5) && !/\b4\b/.test(oct5), `Oct 5 label shifted: ${oct5}`);
+assert(sep23.includes("Sep") && sep23.includes("23") && !sep23.includes("22"), `Sep 23 label shifted: ${sep23}`);
+
+const rolled = rollBankDraftOpening({
+  statementEnd: "2026-09-22",
+  anchor: "2026-10-05",
+  closing: -9150,
+  lines: [
+    { amount: 1000, cadence: "weekly", side: "inflow", status: "confirmed" },
+    { amount: 200, cadence: "weekly", side: "outflow", status: "confirmed" },
+  ],
+});
+assert(rolled.note?.includes("12 days") === true, `gap should be 12 days, got ${rolled.note}`);
+assert(
+  Math.abs(rolled.opening - (-9150 + (800 / 7) * 12)) < 0.02,
+  `rolled opening ${rolled.opening}`,
+);
+const labelledGap = rollBankDraftOpening({
+  statementEnd: "2026-09-22",
+  anchor: "2026-10-05",
+  closing: -9150,
+  lines: [{ amount: 5000, cadence: "once_off", side: "inflow", status: "confirmed" }],
+});
+assert(labelledGap.opening === -9150, "no recurring lines leaves the bank closing in place");
+assert(labelledGap.note?.includes("not in the 13 weeks") === true, labelledGap.note ?? "missing gap label");
+
+const replaceNotice = openingCashReplaceNotice({
+  currentOpening: 15000,
+  bankClosing: -9150,
+  bankDate: "2026-09-22",
+  currency: "USD",
+  locale: "en-US",
+});
+assert(
+  replaceNotice ===
+    "This replaces opening cash $15,000 → −$9,150 (bank closing balance on Sep 22, 2026)",
+  replaceNotice ?? "missing replace notice",
+);
+assert(
+  openingCashReplaceNotice({ currentOpening: 15000, bankClosing: 15000, bankDate: "2026-09-22" }) ===
+    null,
+  "matching opening cash needs no confirm",
 );
 
 const monthly = weeklyRunRate({
@@ -138,6 +197,57 @@ const kept = resolveThirteenWeekForecast({
 });
 assert(kept.source === "stored" && kept.replaceStored === false, "a current forecast is kept");
 assert(kept.timingNote == null || kept.shortfall === false, "a surplus needs no shortfall note");
+
+const blankWithRevenue = resolveThirteenWeekForecast({
+  financials: { revenue: 50000, cogs: 20000, fixedCosts: 22000, cash: 15000, periodMonths: "1" },
+  cashflow: {
+    startDate: "2026-10-05",
+    openingBalance: "15000",
+    revenue: [{ amount: "0", frequency: "recurring-weekly", startWeek: 1 }],
+    expenses: [{ amount: "0", frequency: "recurring-monthly", startWeek: 1 }],
+  },
+  openingCash: 15000,
+  now: monday,
+});
+assert(blankWithRevenue.source === "derived", "zero lines with P&L revenue are seeded");
+assert(blankWithRevenue.estimateLabel === "Estimated from the P&L", blankWithRevenue.estimateLabel ?? "missing estimate label");
+assert(parseFloat(blankWithRevenue.lines.revenue[0]?.amount ?? "0") > 0, "seeded inflow is the weekly run-rate");
+assert(blankWithRevenue.totalInflow > 0 && blankWithRevenue.totalOutflow > 0, "seeded series is not $0 in and $0 out");
+
+const pastBank = resolveThirteenWeekForecast({
+  financials: { revenue: 50000, cogs: 20000, cash: 15000, periodMonths: "1" },
+  cashflow: {
+    startDate: "2026-09-23",
+    openingBalance: "-9150",
+    seededFromBanksAt: "2026-10-01T00:00:00.000Z",
+    revenue: [{ amount: "7730.77", frequency: "recurring-weekly", startWeek: 1, name: "Receipts" }],
+    expenses: [{ amount: "9692.31", frequency: "recurring-weekly", startWeek: 1, name: "Payments" }],
+  },
+  openingCash: -9150,
+  now: monday,
+});
+assert(pastBank.source === "stored" && pastBank.replaceStored === false, "bank lines are kept");
+assert(pastBank.startDate === "2026-10-05", `bank week 1 should be this week, got ${pastBank.startDate}`);
+assert(pastBank.reanchored === true, "past bank start is reanchored");
+assert(pastBank.weekDates[0] === "2026-10-05", "reanchored week label date is the week start");
+assert(pastBank.opening !== -9150, "opening was rolled across the gap");
+assert(pastBank.anchorNote?.includes("12 days") === true, pastBank.anchorNote ?? "missing roll note");
+
+const disagree = plBankDisagreement({
+  financials: { revenue: 50000, cogs: 20000, fixedCosts: 0, periodMonths: "1" },
+  cashflow: pastBank.source === "stored"
+    ? {
+        seededFromBanksAt: "2026-10-01T00:00:00.000Z",
+        revenue: [{ amount: String((33500 * 12) / 52), frequency: "recurring-weekly", startWeek: 1 }],
+        expenses: [{ amount: String((42000 * 12) / 52), frequency: "recurring-weekly", startWeek: 1 }],
+      }
+    : null,
+});
+assert(disagree != null, "P&L and bank monthly figures disagree");
+assert(disagree?.plRevenueMonthly === 50000, `P&L revenue ${disagree?.plRevenueMonthly}`);
+assert(Math.round(disagree?.bankInflowMonthly ?? 0) === 33500, `bank receipts ${disagree?.bankInflowMonthly}`);
+assert(Math.round(disagree?.bankOutflowMonthly ?? 0) === 42000, `bank payments ${disagree?.bankOutflowMonthly}`);
+assert(disagree?.plCostMonthly === 20000, `P&L costs ${disagree?.plCostMonthly}`);
 
 const snap = buildFinancialSnapshot({
   chips: [],

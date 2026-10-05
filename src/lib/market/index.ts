@@ -43,6 +43,7 @@ export {
 export { ZA_VAT_RATE } from "./defaults";
 export {
   currencySymbol,
+  formatCalendarDay,
   formatDate,
   formatDateTime,
   formatMoney,

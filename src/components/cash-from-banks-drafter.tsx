@@ -15,7 +15,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { draftCashForecastFromBankStatements } from "@/lib/cash-from-banks.server";
-import { buildCashflowPublishPayload, type ExistingCashflow } from "@/lib/cash-from-banks.publish";
+import {
+  buildCashflowPublishPayload,
+  openingCashToConfirm,
+  type ExistingCashflow,
+} from "@/lib/cash-from-banks.publish";
 import type {
   CashForecastPublishPayload,
   CashFromBanksDraftResult,
@@ -40,6 +44,11 @@ interface Props {
   onClose: () => void;
   /** Existing published cashflow — drives replace/merge policy */
   existingCashflow?: ExistingCashflow | null;
+  /**
+   * Opening cash that a bank publish would replace. Period cash when the
+   * forecast has not been published from a bank yet.
+   */
+  currentOpening?: number | null;
   onPublish: (payload: CashForecastPublishPayload) => void | Promise<void>;
   /** Optional: persist working draft JSON (extract + lines) for resume */
   onSaveDraft?: (draft: CashFromBanksDraftResult) => void | Promise<void>;
@@ -56,6 +65,7 @@ export function CashFromBanksDrafter({
   open,
   onClose,
   existingCashflow = null,
+  currentOpening = null,
   onPublish,
   onSaveDraft,
   initialDraft = null,
@@ -324,6 +334,10 @@ export function CashFromBanksDrafter({
               transactions={result.extract.transactions}
               warnings={result.warnings}
               existingCashflow={existingCashflow}
+              currentOpening={
+                currentOpening ?? openingCashToConfirm(existingCashflow?.openingBalance, null)
+              }
+              bankDate={result.extract.period_end}
               publishing={publishing}
               onPublish={publish}
               onBack={() => {
