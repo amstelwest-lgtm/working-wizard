@@ -40,9 +40,10 @@ import { useServerFn } from "@tanstack/react-start";
 import { getQboStatuses } from "@/lib/qbo.functions";
 import { getXeroStatuses } from "@/lib/xero.functions";
 import { createFirmClient, getFirmClientCreateAllowance } from "@/lib/firm-clients.functions";
-import type { FirmClientCreateAllowance } from "@/lib/firm-client-cap";
+import { idleStarterTrialBanner, type FirmClientCreateAllowance } from "@/lib/firm-client-cap";
 import { browserAppOrigin } from "@/lib/app-origin";
 import { FirmBandUpgrade } from "@/components/firm-band-upgrade";
+import { FirmStarterTrialBanner } from "@/components/firm-starter-trial-banner";
 import {
   UPGRADE_CANCELLED_MESSAGE,
   UPGRADE_FAILED_MESSAGE,
@@ -306,7 +307,11 @@ function FirmClientCapNotice({
   return (
     <div role="alert">
       <p style={{ margin: "0 0 8px", fontSize: 15, fontWeight: 700, color: "var(--ink)" }}>
-        {cap.code === "trial_client_cap" ? "Trial client limit" : "Plan client limit"}
+        {cap.code === "starter_trial_ended"
+          ? "Your trial has ended, choose a plan"
+          : cap.code === "trial_client_cap"
+            ? "Trial client limit"
+            : "Plan client limit"}
       </p>
       <p style={{ margin: "0 0 16px", fontSize: 13, color: "var(--ink-dim)", lineHeight: 1.55 }}>
         {cap.message}
@@ -442,7 +447,7 @@ function AddClientDialog({
       return;
     }
     if (!firmId) {
-      setCap({ allowed: true, canEndTrial: false });
+      setCap({ allowed: true, canEndTrial: false, starterTrial: idleStarterTrialBanner() });
       return;
     }
     setCap(null);
@@ -452,7 +457,9 @@ function AddClientDialog({
         if (!cancelled) setCap(result);
       })
       .catch(() => {
-        if (!cancelled) setCap({ allowed: true, canEndTrial: false });
+        if (!cancelled) {
+          setCap({ allowed: true, canEndTrial: false, starterTrial: idleStarterTrialBanner() });
+        }
       });
     return () => {
       cancelled = true;
@@ -461,7 +468,7 @@ function AddClientDialog({
 
   const refreshCap = async () => {
     if (!firmId) {
-      setCap({ allowed: true, canEndTrial: false });
+      setCap({ allowed: true, canEndTrial: false, starterTrial: idleStarterTrialBanner() });
       return;
     }
     const result = await checkCap({ data: { firmId } });
@@ -528,18 +535,24 @@ function AddClientDialog({
       onClose();
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not add client";
+      const trialEnded = message.includes("Your trial has ended");
       const trialCap = message.includes("14-day free trial");
       const bandCap = message.includes("Upgrade to a larger band");
-      if (trialCap || bandCap) {
+      if (trialEnded || trialCap || bandCap) {
         try {
           await refreshCap();
         } catch {
           setCap({
             allowed: false,
-            code: trialCap ? "trial_client_cap" : "band_client_cap",
+            code: trialEnded
+              ? "starter_trial_ended"
+              : trialCap
+                ? "trial_client_cap"
+                : "band_client_cap",
             message,
             bandName: null,
             canEndTrial: false,
+            starterTrial: idleStarterTrialBanner(),
           });
         }
         setCap((current) =>
@@ -547,10 +560,15 @@ function AddClientDialog({
             ? current
             : {
                 allowed: false,
-                code: trialCap ? "trial_client_cap" : "band_client_cap",
+                code: trialEnded
+                  ? "starter_trial_ended"
+                  : trialCap
+                    ? "trial_client_cap"
+                    : "band_client_cap",
                 message,
                 bandName: null,
                 canEndTrial: false,
+                starterTrial: idleStarterTrialBanner(),
               },
         );
         return;
@@ -995,6 +1013,9 @@ function Dashboard() {
   const [searchQuery, setSearchQuery] = useState("");
   const [addOpen, setAddOpen] = useState(false);
   const finalizeUpgrade = useServerFn(finalizeFirmBandCheckout);
+  const loadTrialAllowance = useServerFn(getFirmClientCreateAllowance);
+  const [trialAllowance, setTrialAllowance] = useState<FirmClientCreateAllowance | null>(null);
+  const [trialNonce, setTrialNonce] = useState(0);
   const upgradeReturnHandled = useRef(false);
   useEffect(() => {
     if (!user || upgradeReturnHandled.current || typeof window === "undefined") return;
@@ -1029,14 +1050,35 @@ function Dashboard() {
         .catch((err: unknown) => {
           toast.error(err instanceof Error ? err.message : UPGRADE_FAILED_MESSAGE);
         })
-        .finally(openForm);
+        .finally(() => {
+          setTrialNonce((n) => n + 1);
+          openForm();
+        });
       return;
     }
     if (parsed.outcome === "success") {
       toast.success("Plan updated. You can add another client.");
+      setTrialNonce((n) => n + 1);
     }
     openForm();
   }, [user, finalizeUpgrade]);
+  useEffect(() => {
+    if (!portalReady || !firmId) {
+      setTrialAllowance(null);
+      return;
+    }
+    let cancelled = false;
+    void loadTrialAllowance({ data: { firmId } })
+      .then((next) => {
+        if (!cancelled) setTrialAllowance(next);
+      })
+      .catch(() => {
+        if (!cancelled) setTrialAllowance(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [portalReady, firmId, loadTrialAllowance, trialNonce]);
   const [firstClientOpen, setFirstClientOpen] = useState(false);
   const [inviteDraft, setInviteDraft] = useState<InviteDraftUi | null>(null);
   const [inviteSending, setInviteSending] = useState(false);
@@ -1823,6 +1865,15 @@ function Dashboard() {
           hideWhenClear
           className="mb-3"
         />
+
+        {trialAllowance?.starterTrial ? (
+          <FirmStarterTrialBanner
+            trial={trialAllowance.starterTrial}
+            upgrade={trialAllowance.upgrade}
+            firmId={firmId}
+            onUpgraded={() => setTrialNonce((n) => n + 1)}
+          />
+        ) : null}
 
         {/* ===== CLIENTS TABLE ===== */}
         <div className="clients-head" id="clients-table">

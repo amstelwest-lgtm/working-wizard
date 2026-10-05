@@ -141,59 +141,22 @@ export function assertUpgradeTarget(input: {
   }
 }
 
-export type FirmUpgradeRoute = "update_subscription" | "checkout";
-
-/** subscription.currency must equal the target price currency. Missing either side is not a match. */
-export function currenciesMatchForSubscriptionUpdate(
-  subscriptionCurrency: string | null | undefined,
-  targetPriceCurrency: string | null | undefined,
-): boolean {
-  const charged = (subscriptionCurrency ?? "").trim().toLowerCase();
-  const target = (targetPriceCurrency ?? "").trim().toLowerCase();
-  if (!charged || !target) return false;
-  return charged === target;
-}
+export type FirmUpgradeRoute = "update_subscription" | "setup_checkout" | "checkout";
 
 /**
- * Update the existing subscription only when a card is on file AND the
- * subscription's charge currency matches the target price. A ZAR-charged
- * Starter subscription cannot switch onto a USD band price, so that case
- * (and a missing payment method, and no entitling subscription) uses Checkout.
+ * An existing subscription is updated in place. A $0 Starter has no card, so
+ * that case collects one with Checkout in setup mode and then updates the
+ * same subscription. A new subscription Checkout is only used when there is
+ * no entitling subscription. Charge currency is not a route: Starter is USD,
+ * and Adaptive Pricing ZAR is presentment only.
  */
 export function decideFirmUpgradeRoute(input: {
   hasEntitlingSubscription: boolean;
   hasPaymentMethod: boolean;
-  /** subscription.currency — what Stripe charges. Not the price object's currency. */
-  subscriptionCurrency?: string | null;
-  /** Catalog price currency. Live band prices are USD. */
-  targetPriceCurrency?: string | null;
 }): FirmUpgradeRoute {
   if (!input.hasEntitlingSubscription) return "checkout";
-  if (!input.hasPaymentMethod) return "checkout";
-  if (
-    !currenciesMatchForSubscriptionUpdate(input.subscriptionCurrency, input.targetPriceCurrency)
-  ) {
-    return "checkout";
-  }
+  if (!input.hasPaymentMethod) return "setup_checkout";
   return "update_subscription";
-}
-
-/** Stripe rejects Checkout when an existing customer's currency cannot take the new price. */
-export function isStripeCurrencyConflict(err: unknown): boolean {
-  const message = err instanceof Error ? err.message : String(err ?? "");
-  const code =
-    err && typeof err === "object" && "code" in err
-      ? String((err as { code?: unknown }).code ?? "")
-      : "";
-  return /currency/i.test(message) || /currency/i.test(code);
-}
-
-/** Live band prices are USD. Use the price currency when Stripe sends one. */
-export function catalogPriceCurrency(
-  price: { currency?: string | null } | null | undefined,
-): string {
-  const code = price?.currency?.trim().toLowerCase();
-  return code || "usd";
 }
 
 export function idOfStripeRef(value: unknown): string | null {
@@ -226,9 +189,9 @@ export type SubscriptionPriceSnapshot = {
   /** Product metadata.band, when the Product is expanded. */
   productBand: string | null;
   unitAmount: number | null;
-  /** Price object currency. A $0 Starter price can be USD while the subscription is charged in ZAR. */
+  /** Price object currency. Live catalog prices, including $0 Starter, are USD. */
   currency: string | null;
-  /** subscription.currency — the charge currency Stripe locks. */
+  /** subscription.currency. Adaptive Pricing presentment is not this field. */
   chargeCurrency: string | null;
   interval: FirmInterval | null;
 };

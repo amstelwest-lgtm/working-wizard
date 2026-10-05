@@ -7,11 +7,13 @@ import { getSupabaseAdminOrNull } from "@/integrations/supabase/client.server";
 import {
   decideFirmClientCreate,
   formatFirmPlanStatus,
+  idleStarterTrialBanner,
   phaseFromSubscriptionStatus,
   type FirmClientCreateAllowance,
   type FirmPlanDisplay,
   type FirmSubscriptionPhase,
 } from "@/lib/firm-client-cap";
+import { starterTrialClock, type StarterTrialBanner } from "@/lib/firm-starter-trial";
 import {
   ASK_FIRM_OWNER_TO_UPGRADE,
   bandFromSubscriptionSnapshot,
@@ -37,6 +39,8 @@ export type EntitlingFirmSubscription = {
   band: FirmBandId | null;
   /** ISO timestamp when the subscription is trialing; otherwise null. */
   trialEnd: string | null;
+  /** ISO subscription start (start_date, else created). */
+  startedAt: string | null;
   interval: FirmInterval | null;
   /** Charge currency (subscription.currency), else the price currency. */
   currency: string | null;
@@ -47,7 +51,37 @@ export type EntitlingFirmSubscription = {
   hasDefaultPaymentMethod: boolean;
 };
 
-type FirmRow = { id?: string; owner_user_id?: string | null; market?: unknown };
+type FirmRow = {
+  id?: string;
+  owner_user_id?: string | null;
+  market?: unknown;
+  starter_trial_enforced?: boolean | null;
+};
+
+type LoadedFirm = {
+  id: string;
+  ownerUserId: string | null;
+  market: unknown;
+  /** False when the column is missing or the firm is exempt. */
+  starterTrialEnforced: boolean;
+};
+
+const FIRM_SELECT = "id, owner_user_id, market, starter_trial_enforced";
+const FIRM_SELECT_LEGACY = "id, owner_user_id, market";
+
+function isMissingTrialColumn(message: string): boolean {
+  return /starter_trial_enforced/i.test(message);
+}
+
+function toLoadedFirm(row: FirmRow, enforced: boolean): LoadedFirm | null {
+  if (!row.id) return null;
+  return {
+    id: row.id,
+    ownerUserId: row.owner_user_id ?? null,
+    market: row.market ?? null,
+    starterTrialEnforced: enforced,
+  };
+}
 
 type LooseQuery = {
   eq: (column: string, value: string) => LooseQuery;
@@ -148,7 +182,18 @@ export async function findEntitlingFirmSubscription(
   if (!hit) return null;
   const phase = phaseFromSubscriptionStatus(hit.status);
   if (phase === "none") return null;
-  const trialEndSeconds = (hit.raw as { trial_end?: number | null }).trial_end;
+  const rawTimes = hit.raw as {
+    trial_end?: number | null;
+    start_date?: number | null;
+    created?: number | null;
+  };
+  const trialEndSeconds = rawTimes.trial_end;
+  const startedSeconds =
+    typeof rawTimes.start_date === "number" && Number.isFinite(rawTimes.start_date)
+      ? rawTimes.start_date
+      : typeof rawTimes.created === "number" && Number.isFinite(rawTimes.created)
+        ? rawTimes.created
+        : hit.created || null;
   const defaultPaymentMethod = (hit.raw as { default_payment_method?: unknown })
     .default_payment_method;
   const defaultSource = (hit.raw as { default_source?: unknown }).default_source;
@@ -160,6 +205,10 @@ export async function findEntitlingFirmSubscription(
     trialEnd:
       typeof trialEndSeconds === "number" && Number.isFinite(trialEndSeconds)
         ? new Date(trialEndSeconds * 1000).toISOString()
+        : null,
+    startedAt:
+      typeof startedSeconds === "number" && startedSeconds > 0
+        ? new Date(startedSeconds * 1000).toISOString()
         : null,
     interval: hit.price.interval,
     chargeCurrency: hit.price.chargeCurrency,
@@ -174,27 +223,55 @@ async function loadFirm(
   db: CapDb,
   firmId: string | null,
   userId: string,
-): Promise<{ id: string; ownerUserId: string | null; market: unknown } | null> {
+): Promise<LoadedFirm | null> {
   if (firmId) {
-    const { data, error } = await db
-      .from("firms")
-      .select("id, owner_user_id, market")
-      .eq("id", firmId)
-      .maybeSingle();
-    if (error) throw new Error(error.message);
-    if (data?.id) {
-      return { id: data.id, ownerUserId: data.owner_user_id ?? null, market: data.market ?? null };
+    const selected = await db.from("firms").select(FIRM_SELECT).eq("id", firmId).maybeSingle();
+    if (selected.error && isMissingTrialColumn(selected.error.message)) {
+      const legacy = await db
+        .from("firms")
+        .select(FIRM_SELECT_LEGACY)
+        .eq("id", firmId)
+        .maybeSingle();
+      if (legacy.error) throw new Error(legacy.error.message);
+      return legacy.data ? toLoadedFirm(legacy.data, false) : null;
+    }
+    if (selected.error) throw new Error(selected.error.message);
+    if (selected.data?.id) {
+      return toLoadedFirm(selected.data, selected.data.starter_trial_enforced === true);
     }
   }
-  const listed = await db
-    .from("firms")
-    .select("id, owner_user_id, market")
-    .eq("owner_user_id", userId)
-    .limit(1);
+  const listed = await db.from("firms").select(FIRM_SELECT).eq("owner_user_id", userId).limit(1);
+  if (listed.error && isMissingTrialColumn(listed.error.message)) {
+    const legacy = await db
+      .from("firms")
+      .select(FIRM_SELECT_LEGACY)
+      .eq("owner_user_id", userId)
+      .limit(1);
+    if (legacy.error) throw new Error(legacy.error.message);
+    const row = legacy.data?.[0];
+    if (!row?.id) return null;
+    return toLoadedFirm({ ...row, owner_user_id: row.owner_user_id ?? userId }, false);
+  }
   if (listed.error) throw new Error(listed.error.message);
   const row = listed.data?.[0];
   if (!row?.id) return null;
-  return { id: row.id, ownerUserId: row.owner_user_id ?? userId, market: row.market ?? null };
+  return toLoadedFirm(
+    { ...row, owner_user_id: row.owner_user_id ?? userId },
+    row.starter_trial_enforced === true,
+  );
+}
+
+function trialBannerFor(
+  firm: LoadedFirm | null,
+  sub: EntitlingFirmSubscription | null,
+): StarterTrialBanner {
+  if (!firm) return idleStarterTrialBanner();
+  return starterTrialClock({
+    enforced: firm.starterTrialEnforced,
+    band: sub?.band ?? null,
+    stripeTrialEnd: sub?.trialEnd,
+    startedAt: sub?.startedAt,
+  });
 }
 
 async function loadMembershipRole(
@@ -271,7 +348,9 @@ export async function loadFirmClientCreateAllowance(input: {
   email: string;
   firmId: string | null;
 }): Promise<FirmClientCreateAllowance> {
-  if (!stripeConfigured()) return { allowed: true, canEndTrial: false };
+  if (!stripeConfigured()) {
+    return { allowed: true, canEndTrial: false, starterTrial: idleStarterTrialBanner() };
+  }
 
   const userDb = asCapDb(input.supabase);
   let email = input.email.trim();
@@ -283,7 +362,14 @@ export async function loadFirmClientCreateAllowance(input: {
   const admin = getSupabaseAdminOrNull();
   const db = admin ? asCapDb(admin) : userDb;
   const firm = await loadFirm(db, input.firmId, input.userId);
-  if (!firm) return { allowed: true, canEndTrial: false, upgrade: emptyFirmUpgradeSnapshot() };
+  if (!firm) {
+    return {
+      allowed: true,
+      canEndTrial: false,
+      upgrade: emptyFirmUpgradeSnapshot(),
+      starterTrial: idleStarterTrialBanner(),
+    };
+  }
 
   const [clientCount, billing, role] = await Promise.all([
     countFirmClients(db, firm.id),
@@ -298,18 +384,38 @@ export async function loadFirmClientCreateAllowance(input: {
     clientCount,
     sub,
   });
+  const starterTrial = trialBannerFor(firm, sub);
   const decision = decideFirmClientCreate({
     stripeConfigured: true,
     phase: sub?.phase ?? "none",
     band: sub?.band ?? null,
     clientCount,
+    starterTrialExpired: starterTrial.expired,
   });
-  if (decision.allowed) return { allowed: true, canEndTrial: false, upgrade };
+  if (decision.allowed) return { allowed: true, canEndTrial: false, upgrade, starterTrial };
   return {
     ...decision,
     canEndTrial: decision.code === "trial_client_cap" && billing.actorIsBillingCustomer,
     upgrade,
+    starterTrial,
   };
+}
+
+/**
+ * Block a new pack or brain deliverable after an enforced Starter trial.
+ * A client-count cap does not block existing-client work. Read access stays.
+ */
+export async function assertStarterTrialAllowsNewWork(input: {
+  supabase: unknown;
+  userId: string;
+  email: string;
+  firmId: string | null;
+}): Promise<void> {
+  if (!input.firmId) return;
+  const allowance = await loadFirmClientCreateAllowance(input);
+  if (!allowance.allowed && allowance.code === "starter_trial_ended") {
+    throw new Error(allowance.message);
+  }
 }
 
 /**
@@ -336,6 +442,7 @@ export async function loadFirmPlanDisplay(input: {
       priceCurrency: "USD",
       interval: "month",
       zarByBand: {},
+      starterTrial: idleStarterTrialBanner(),
     };
   }
 
@@ -361,6 +468,7 @@ export async function loadFirmPlanDisplay(input: {
       priceCurrency: empty.priceCurrency,
       interval: empty.interval,
       zarByBand: {},
+      starterTrial: idleStarterTrialBanner(),
     };
   }
 
@@ -391,6 +499,7 @@ export async function loadFirmPlanDisplay(input: {
     priceCurrency: upgrade.priceCurrency,
     interval: upgrade.interval,
     zarByBand: upgrade.zarByBand,
+    starterTrial: trialBannerFor(firm, sub),
   };
 }
 

@@ -32,22 +32,25 @@ import {
   assertNoManagedPaymentsOverride,
   firmCheckoutSessionParams,
   firmIntegrationIdentifier,
+  firmSetupCheckoutSessionParams,
   firmUpgradeCheckoutSessionParams,
+  readFirmSetupUpgrade,
   resolveFirmCatalogPrice,
 } from "@/lib/stripe-checkout.core";
 import {
   assertUpgradeTarget,
-  catalogPriceCurrency,
   decideFirmUpgradeRoute,
   firmSubscriptionUpgradeParams,
-  isStripeCurrencyConflict,
   readSubscriptionPrice,
   subscriptionHasCollectiblePaymentMethod,
   upgradeSuccessMessage,
   UPGRADE_FAILED_MESSAGE,
 } from "@/lib/firm-band-upgrade";
 import { requestAppOrigin } from "@/lib/app-origin";
-import { syncCheckoutSessionSubscription } from "@/lib/stripe-billing-sync.server";
+import {
+  completeFirmSetupUpgrade,
+  syncCheckoutSessionSubscription,
+} from "@/lib/stripe-billing-sync.server";
 import {
   checkoutSessionUnlocksFirm,
   customerHasEntitlingSubscription,
@@ -406,12 +409,11 @@ async function paymentMethodOnFile(
 
 /**
  * Move an existing firm onto a larger band that covers the current clients.
- * Update the subscription only when a card is on file and its charge currency
- * matches the target price. A ZAR-charged Starter subscription, a missing
- * card, or no entitling subscription uses Checkout. If Stripe rejects the
- * existing customer for a currency conflict, Checkout is retried without that
- * customer and still records the subscription to cancel on completion.
- * Owner or firm admin only.
+ * An existing subscription is updated in place. A subscription with no card
+ * (a $0 Starter) opens Checkout in setup mode, then that same subscription
+ * is updated once the card is saved. A new subscription Checkout is only
+ * used when there is no entitling subscription, and that path still cancels
+ * the subscription it replaces. Owner or firm admin only.
  */
 export const upgradeFirmBand = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -452,8 +454,6 @@ export const upgradeFirmBand = createServerFn({ method: "POST" })
     const route = decideFirmUpgradeRoute({
       hasEntitlingSubscription: Boolean(sub),
       hasPaymentMethod,
-      subscriptionCurrency: sub?.chargeCurrency,
-      targetPriceCurrency: catalogPriceCurrency(price),
     });
 
     let itemId = sub?.itemId ?? null;
@@ -489,10 +489,54 @@ export const upgradeFirmBand = createServerFn({ method: "POST" })
       };
     }
 
-    const customerId = sub?.customerId ?? (await findCustomerIdByEmail(billingEmail));
     const origin = appOrigin();
-    const market: StripePlanMarket = sub?.metadata.milon_market === "za" ? "za" : "us";
-    const checkoutInput = {
+    if (route === "setup_checkout" && sub) {
+      const params = firmSetupCheckoutSessionParams({
+        origin,
+        customerId: sub.customerId,
+        userId,
+        subscriptionId: sub.id,
+        lookupKey,
+        band,
+        interval,
+      });
+      assertNoManagedPaymentsOverride(params);
+      let session: { url: string | null };
+      try {
+        session = await stripe.checkout.sessions.create(params);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : UPGRADE_FAILED_MESSAGE;
+        throw new Error(message || UPGRADE_FAILED_MESSAGE);
+      }
+      if (!session.url) throw new Error("Stripe Checkout did not return a URL.");
+      return { kind: "checkout" as const, url: session.url };
+    }
+
+    if (route !== "checkout") {
+      throw new Error(UPGRADE_FAILED_MESSAGE);
+    }
+
+    const customerId = await findCustomerIdByEmail(billingEmail);
+    let replacesSubscriptionId: string | undefined;
+    if (customerId) {
+      try {
+        const listed = await stripe.subscriptions.list({
+          customer: customerId,
+          status: "all",
+          limit: 20,
+        });
+        replacesSubscriptionId = listed.data.find(
+          (row) => row.status !== "canceled" && row.status !== "incomplete_expired",
+        )?.id;
+      } catch (err) {
+        console.warn(
+          "[stripe] could not list subscriptions to replace",
+          err instanceof Error ? err.message : err,
+        );
+      }
+    }
+    const market: StripePlanMarket = "us";
+    const params = firmUpgradeCheckoutSessionParams({
       priceId: price.id,
       lookupKey,
       band,
@@ -500,29 +544,19 @@ export const upgradeFirmBand = createServerFn({ method: "POST" })
       origin,
       userId,
       email: billingEmail,
+      customerId,
       market,
       integrationIdentifier: firmIntegrationIdentifier(band, interval),
-      includeTrial: false as const,
-      replacesSubscriptionId: sub?.id,
-    };
-    const params = firmUpgradeCheckoutSessionParams({ ...checkoutInput, customerId });
+      includeTrial: false,
+      replacesSubscriptionId,
+    });
     assertNoManagedPaymentsOverride(params);
     let session: { url: string | null };
     try {
       session = await stripe.checkout.sessions.create(params);
     } catch (err) {
-      if (!params.customer || !isStripeCurrencyConflict(err)) {
-        const message = err instanceof Error ? err.message : UPGRADE_FAILED_MESSAGE;
-        throw new Error(message || UPGRADE_FAILED_MESSAGE);
-      }
-      const retry = firmUpgradeCheckoutSessionParams(checkoutInput);
-      assertNoManagedPaymentsOverride(retry);
-      try {
-        session = await stripe.checkout.sessions.create(retry);
-      } catch (retryErr) {
-        const message = retryErr instanceof Error ? retryErr.message : UPGRADE_FAILED_MESSAGE;
-        throw new Error(message || UPGRADE_FAILED_MESSAGE);
-      }
+      const message = err instanceof Error ? err.message : UPGRADE_FAILED_MESSAGE;
+      throw new Error(message || UPGRADE_FAILED_MESSAGE);
     }
     if (!session.url) throw new Error("Stripe Checkout did not return a URL.");
     return { kind: "checkout" as const, url: session.url };
@@ -542,7 +576,9 @@ export const finalizeFirmBandCheckout = createServerFn({ method: "POST" })
       return { ok: false as const, message: UPGRADE_FAILED_MESSAGE };
     }
     const { userId, email } = await checkoutActor(context);
-    const session = await getStripe().checkout.sessions.retrieve(data.sessionId);
+    const session = await getStripe().checkout.sessions.retrieve(data.sessionId, {
+      expand: ["setup_intent"],
+    });
     const ownerId = session.client_reference_id || session.metadata?.milon_user_id || "";
     if (ownerId && ownerId !== userId) {
       throw new Error("This checkout session belongs to a different account.");
@@ -551,6 +587,16 @@ export const finalizeFirmBandCheckout = createServerFn({ method: "POST" })
       !checkoutSessionUnlocksFirm({ status: session.status, paymentStatus: session.payment_status })
     ) {
       return { ok: false as const, message: UPGRADE_FAILED_MESSAGE };
+    }
+    if (readFirmSetupUpgrade(session.metadata)) {
+      const applied = await completeFirmSetupUpgrade(session);
+      forgetEntitlement(email);
+      const band = applied?.band ?? null;
+      const message =
+        band && isFirmCheckoutBand(band)
+          ? upgradeSuccessMessage(band)
+          : "Plan updated. You can add another client.";
+      return { ok: true as const, message, band };
     }
     const synced = await syncCheckoutSessionSubscription({
       mode: session.mode,

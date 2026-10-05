@@ -1,0 +1,86 @@
+import { useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
+import { toast } from "sonner";
+import { FirmBandUpgrade } from "@/components/firm-band-upgrade";
+import type { FirmUpgradeAllowance } from "@/lib/firm-client-cap";
+import { UPGRADE_FAILED_MESSAGE } from "@/lib/firm-band-upgrade";
+import {
+  STARTER_TRIAL_ENDED_MESSAGE,
+  firmStarterTrialCountdownCopy,
+  type StarterTrialBanner,
+} from "@/lib/firm-starter-trial";
+import type { FirmCheckoutBand, FirmInterval } from "@/lib/stripe-plans";
+import { upgradeFirmBand } from "@/lib/stripe-checkout.functions";
+
+/**
+ * Practice-dashboard trial notice. Countdown from day 10.
+ * After expiry, the band picker sits under the ended sentence.
+ * Hidden when the firm is exempt or the clock does not apply.
+ */
+export function FirmStarterTrialBanner({
+  trial,
+  upgrade,
+  firmId,
+  onUpgraded,
+}: {
+  trial: StarterTrialBanner;
+  upgrade?: FirmUpgradeAllowance;
+  firmId: string | null;
+  onUpgraded?: () => void;
+}) {
+  const upgradeBand = useServerFn(upgradeFirmBand);
+  const [upgrading, setUpgrading] = useState(false);
+  const countdown = firmStarterTrialCountdownCopy(trial);
+  if (!trial.expired && !countdown) return null;
+
+  const onUpgrade = (band: FirmCheckoutBand, interval: FirmInterval) => {
+    if (!firmId) return;
+    setUpgrading(true);
+    void upgradeBand({ data: { firmId, band, interval } })
+      .then((result) => {
+        if (result.kind === "checkout") {
+          window.location.href = result.url;
+          return;
+        }
+        toast.success(result.message);
+        onUpgraded?.();
+      })
+      .catch((err: unknown) => {
+        toast.error(err instanceof Error ? err.message : UPGRADE_FAILED_MESSAGE);
+      })
+      .finally(() => setUpgrading(false));
+  };
+
+  return (
+    <section
+      role="status"
+      aria-label="Trial"
+      style={{
+        margin: "0 0 16px",
+        padding: "14px 16px",
+        borderRadius: 16,
+        border: "1px solid var(--line, #e6e1d8)",
+        background: "var(--paper, #fff)",
+      }}
+    >
+      <p style={{ margin: 0, fontSize: 15, fontWeight: 700, color: "var(--ink)" }}>
+        {trial.expired ? STARTER_TRIAL_ENDED_MESSAGE : countdown}
+      </p>
+      {trial.expired && upgrade ? (
+        <div style={{ marginTop: 12 }}>
+          <FirmBandUpgrade
+            currentBand={upgrade.band}
+            interval={upgrade.interval}
+            priceCurrency={upgrade.priceCurrency}
+            zarByBand={upgrade.zarByBand}
+            canUpgrade={upgrade.canUpgrade}
+            clientCount={upgrade.clientCount}
+            usageLabel={upgrade.usageLabel}
+            upgrading={upgrading}
+            onUpgrade={onUpgrade}
+          />
+        </div>
+      ) : null}
+    </section>
+  );
+}

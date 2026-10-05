@@ -8,6 +8,8 @@ import type Stripe from "stripe";
 import {
   billedBandFromPrice,
   downgradeDropsBelowUsage,
+  firmSubscriptionUpgradeParams,
+  idOfStripeRef,
   metadataPatchForPrice,
   readSubscriptionPrice,
   shouldCancelReplacedSubscription,
@@ -15,6 +17,7 @@ import {
   zarCentsFromPrice,
   type ZarBandAmounts,
 } from "@/lib/firm-band-upgrade";
+import { readFirmSetupUpgrade, resolveFirmCatalogPrice } from "@/lib/stripe-checkout.core";
 import {
   ALL_FIRM_LOOKUP_KEYS,
   bandIdFromLookupKey,
@@ -35,7 +38,10 @@ type RetrievedSubscription = {
 type SubscriptionUpdateParams = {
   metadata?: Record<string, string>;
   items?: Array<{ id: string; price: string }>;
-  proration_behavior?: "none";
+  proration_behavior?: "none" | "create_prorations";
+  payment_behavior?: "error_if_incomplete";
+  trial_end?: "now";
+  default_payment_method?: string;
 };
 
 type StripeLike = {
@@ -45,14 +51,30 @@ type StripeLike = {
     cancel: (id: string) => Promise<unknown>;
   };
   prices: {
-    list: (params: { lookup_keys: string[]; limit: number; expand?: string[] }) => Promise<{
+    list: (params: {
+      lookup_keys: string[];
+      limit: number;
+      active?: boolean;
+      expand?: string[];
+    }) => Promise<{
       data: Array<{
+        id?: string;
         lookup_key?: string | null;
         currency?: string | null;
         unit_amount?: number | null;
+        recurring?: { interval?: string | null } | null;
         currency_options?: { zar?: { unit_amount?: number | null } | null } | null;
       }>;
     }>;
+  };
+  setupIntents?: {
+    retrieve: (id: string) => Promise<{ payment_method?: unknown; status?: string }>;
+  };
+  customers?: {
+    update: (
+      id: string,
+      params: { invoice_settings: { default_payment_method: string } },
+    ) => Promise<unknown>;
   };
 };
 
@@ -236,6 +258,78 @@ export async function syncFirmSubscriptionBand(
     ? (metadata.milon_plan ?? null)
     : ((patch ?? metadata).milon_plan ?? null);
   return { band, cancelledReplaced, downgradeBlocked };
+}
+
+/**
+ * Setup Checkout collected a card for an existing subscription. Attach it as
+ * the customer and subscription default, then move that same subscription
+ * onto the catalog price. Does not create or cancel a subscription.
+ */
+export async function completeFirmSetupUpgrade(
+  session: {
+    id?: string;
+    mode?: string | null;
+    customer?: unknown;
+    setup_intent?: unknown;
+    metadata?: Record<string, string> | null;
+  },
+  stripe: StripeLike = getStripe() as unknown as StripeLike,
+): Promise<{ band: string | null; updated: boolean } | null> {
+  if (session.mode && session.mode !== "setup") return null;
+  const intent = readFirmSetupUpgrade(session.metadata ?? null);
+  if (!intent) return null;
+  const customerId = idOfStripeRef(session.customer);
+  if (!customerId) throw new Error("Setup Checkout has no customer.");
+
+  let paymentMethod: string | null = null;
+  if (session.setup_intent && typeof session.setup_intent === "object") {
+    paymentMethod = idOfStripeRef(
+      (session.setup_intent as { payment_method?: unknown }).payment_method,
+    );
+  }
+  const setupIntentId = idOfStripeRef(session.setup_intent);
+  if (!paymentMethod && setupIntentId) {
+    if (!stripe.setupIntents) throw new Error("Setup Checkout did not collect a payment method.");
+    const retrieved = await stripe.setupIntents.retrieve(setupIntentId);
+    paymentMethod = idOfStripeRef(retrieved.payment_method);
+  }
+  if (!paymentMethod) throw new Error("Setup Checkout did not collect a payment method.");
+  if (!stripe.customers) throw new Error("Setup Checkout could not save the payment method.");
+
+  await stripe.customers.update(customerId, {
+    invoice_settings: { default_payment_method: paymentMethod },
+  });
+
+  const sub = await retrieveFirmSubscription(stripe, intent.subscriptionId);
+  const priceSnap = readSubscriptionPrice(sub as Parameters<typeof readSubscriptionPrice>[0]);
+  const { price, lookupKey } = await resolveFirmCatalogPrice(
+    stripe as unknown as Parameters<typeof resolveFirmCatalogPrice>[0],
+    intent.band,
+    intent.interval,
+  );
+  if (!priceSnap.itemId) throw new Error("Subscription has no item to update.");
+
+  const already = priceSnap.lookupKey === lookupKey;
+  if (!already) {
+    const params = firmSubscriptionUpgradeParams({
+      itemId: priceSnap.itemId,
+      priceId: price.id,
+      band: intent.band,
+      interval: intent.interval,
+      lookupKey,
+      metadata: sub.metadata,
+      endTrial: sub.status === "trialing",
+    });
+    await stripe.subscriptions.update(intent.subscriptionId, {
+      ...params,
+      default_payment_method: paymentMethod,
+    });
+  } else {
+    await stripe.subscriptions.update(intent.subscriptionId, {
+      default_payment_method: paymentMethod,
+    });
+  }
+  return { band: intent.band, updated: !already };
 }
 
 export async function syncCheckoutSessionSubscription(

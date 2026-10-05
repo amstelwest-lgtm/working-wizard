@@ -9,6 +9,7 @@ import {
   assertFoundingMonthlyOnly,
   FIRM_TRIAL_DAYS,
   firmLookupKey,
+  isFirmCheckoutBand,
   isFoundingCode,
   type FirmCheckoutBand,
   type FirmInterval,
@@ -199,6 +200,63 @@ export function firmUpgradeCheckoutSessionParams(
     }
   }
   return params;
+}
+
+export type FirmSetupUpgradeRequest = {
+  subscriptionId: string;
+  band: FirmCheckoutBand;
+  interval: FirmInterval;
+  lookupKey: string;
+  userId: string;
+};
+
+/**
+ * Collect a card for an existing subscription (a $0 Starter has none), then
+ * the server updates that same subscription. This is not a second subscription.
+ */
+export function firmSetupCheckoutSessionParams(input: {
+  origin: string;
+  customerId: string;
+  userId: string;
+  subscriptionId: string;
+  lookupKey: string;
+  band: FirmCheckoutBand;
+  interval: FirmInterval;
+}): Stripe.Checkout.SessionCreateParams {
+  const origin = appRedirectOrigin([input.origin]);
+  const metadata: Record<string, string> = {
+    milon_setup_upgrade: "1",
+    milon_subscription_id: input.subscriptionId,
+    milon_lookup_key: input.lookupKey,
+    milon_plan: input.band,
+    milon_interval: input.interval,
+    milon_user_id: input.userId,
+  };
+  return {
+    mode: "setup",
+    customer: input.customerId,
+    currency: "usd",
+    client_reference_id: input.userId,
+    success_url: `${origin}/dashboard?addClient=1&upgrade=success&session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${origin}/dashboard?addClient=1&upgrade=cancelled`,
+    metadata,
+    setup_intent_data: { metadata },
+  };
+}
+
+export function readFirmSetupUpgrade(
+  metadata: Record<string, string> | null | undefined,
+): FirmSetupUpgradeRequest | null {
+  if (!metadata || metadata.milon_setup_upgrade !== "1") return null;
+  const subscriptionId = metadata.milon_subscription_id?.trim() ?? "";
+  const band = metadata.milon_plan?.trim() ?? "";
+  const interval = metadata.milon_interval?.trim() ?? "";
+  const lookupKey = metadata.milon_lookup_key?.trim() ?? "";
+  const userId = metadata.milon_user_id?.trim() ?? "";
+  if (!subscriptionId || !lookupKey || !userId) return null;
+  if (!isFirmCheckoutBand(band)) return null;
+  if (interval !== "month" && interval !== "year") return null;
+  return { subscriptionId, band, interval, lookupKey, userId };
 }
 
 export function assertNoManagedPaymentsOverride(params: Stripe.Checkout.SessionCreateParams): void {

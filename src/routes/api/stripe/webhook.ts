@@ -7,7 +7,9 @@
  *
  * Verifies Stripe-Signature with STRIPE_WEBHOOK_SECRET, then writes
  * milon_plan from the catalog lookup_key and cancels a replaced subscription
- * once the new one is active or trialing. A price whose client limit is below
+ * once the new one is active or trialing. A setup-mode Checkout session
+ * (card collected for an existing subscription) updates that same
+ * subscription and does not cancel it. A price whose client limit is below
  * the firm's current client count is not applied: milon_downgrade_blocked is
  * set and, when the event includes the previous price, that price is restored.
  * The dashboard return path runs the same sync, so the client limit does not
@@ -19,7 +21,9 @@
 
 import { createFileRoute } from "@tanstack/react-router";
 import { previousPriceIdFromSubscriptionEvent } from "@/lib/firm-band-upgrade";
+import { readFirmSetupUpgrade } from "@/lib/stripe-checkout.core";
 import {
+  completeFirmSetupUpgrade,
   constructFirmBillingEvent,
   isFirmBillingWebhookEvent,
   stripeEventSubscriptionId,
@@ -53,6 +57,27 @@ export const Route = createFileRoute("/api/stripe/webhook")({
         }
         if (!isFirmBillingWebhookEvent(event.type)) {
           return Response.json({ received: true, ignored: event.type });
+        }
+        if (event.type === "checkout.session.completed") {
+          const session = event.data?.object as {
+            id?: string;
+            mode?: string | null;
+            customer?: unknown;
+            setup_intent?: unknown;
+            metadata?: Record<string, string> | null;
+          };
+          if (readFirmSetupUpgrade(session?.metadata)) {
+            try {
+              const result = await completeFirmSetupUpgrade(session);
+              return Response.json({ received: true, setupUpgrade: true, ...result });
+            } catch (err) {
+              console.error(
+                "[stripe-webhook] setup upgrade failed",
+                err instanceof Error ? err.message : err,
+              );
+              return Response.json({ error: "Sync failed" }, { status: 500 });
+            }
+          }
         }
         const subscriptionId = stripeEventSubscriptionId(event);
         if (!subscriptionId) {

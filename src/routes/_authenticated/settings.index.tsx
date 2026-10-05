@@ -17,6 +17,10 @@ import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { deleteOwnAccount } from "@/lib/account.functions";
 import type { FirmPlanDisplay } from "@/lib/firm-client-cap";
+import {
+  STARTER_TRIAL_ENDED_MESSAGE,
+  firmStarterTrialCountdownCopy,
+} from "@/lib/firm-starter-trial";
 import { FirmBandUpgrade } from "@/components/firm-band-upgrade";
 import { UPGRADE_FAILED_MESSAGE } from "@/lib/firm-band-upgrade";
 import {
@@ -325,6 +329,17 @@ function SettingsPage() {
               ) : (
                 <>
                   <p className="settings-value">{plan?.headline ?? "No active plan"}</p>
+                  {plan?.starterTrial?.expired ? (
+                    <p role="status" className="text-sm font-medium">
+                      {STARTER_TRIAL_ENDED_MESSAGE}
+                    </p>
+                  ) : plan?.starterTrial ? (
+                    firmStarterTrialCountdownCopy(plan.starterTrial) ? (
+                      <p role="status" className="text-sm">
+                        {firmStarterTrialCountdownCopy(plan.starterTrial)}
+                      </p>
+                    ) : null
+                  ) : null}
                   {plan?.detail ? (
                     <p className="text-xs text-[var(--ink-dim)]">{plan.detail}</p>
                   ) : null}

@@ -14,7 +14,6 @@ import {
   bandFromSubscriptionSnapshot,
   billedBandFromPrice,
   callerCanManageFirmBilling,
-  catalogPriceCurrency,
   decideFirmUpgradeRoute,
   DOWNGRADE_BELOW_USAGE_MESSAGE,
   downgradeDropsBelowUsage,
@@ -23,7 +22,6 @@ import {
   firmUpgradePriceCurrency,
   firmUpgradeReturnPath,
   formatFirmClientUsage,
-  isStripeCurrencyConflict,
   metadataPatchForPrice,
   MILON_DOWNGRADE_BLOCKED,
   nextBandUp,
@@ -38,7 +36,9 @@ import {
 } from "../src/lib/firm-band-upgrade";
 import {
   firmIntegrationIdentifier,
+  firmSetupCheckoutSessionParams,
   firmUpgradeCheckoutSessionParams,
+  readFirmSetupUpgrade,
 } from "../src/lib/stripe-checkout.core";
 import {
   CANONICAL_APP_ORIGIN,
@@ -50,6 +50,11 @@ import {
 } from "../supabase/functions/_shared/app-origin.ts";
 import { checkoutEmailRedirectTo } from "../src/lib/pending-checkout";
 import { FirmBandUpgrade } from "../src/components/firm-band-upgrade";
+import { decideFirmClientCreate } from "../src/lib/firm-client-cap";
+import {
+  STARTER_TRIAL_ENDED_MESSAGE,
+  starterTrialClock,
+} from "../src/lib/firm-starter-trial";
 import { FIRM_BAND_CATALOG, FIRM_CHECKOUT_BANDS } from "../src/lib/stripe-plans";
 
 function assert(cond: boolean, msg: string) {
@@ -132,54 +137,30 @@ assert(
   decideFirmUpgradeRoute({
     hasEntitlingSubscription: false,
     hasPaymentMethod: false,
-    subscriptionCurrency: "zar",
-    targetPriceCurrency: "usd",
   }) === "checkout",
-  "no subscription uses Checkout",
+  "no subscription uses a new Checkout subscription",
 );
 assert(
   decideFirmUpgradeRoute({
     hasEntitlingSubscription: true,
     hasPaymentMethod: false,
-    subscriptionCurrency: "usd",
-    targetPriceCurrency: "usd",
-  }) === "checkout",
-  "starter without a card uses Checkout",
+  }) === "setup_checkout",
+  "an existing subscription without a card collects one in setup mode",
 );
 assert(
   decideFirmUpgradeRoute({
     hasEntitlingSubscription: true,
     hasPaymentMethod: true,
-    subscriptionCurrency: "usd",
-    targetPriceCurrency: "usd",
   }) === "update_subscription",
-  "a matching currency and a card update the subscription",
+  "an existing subscription with a card is updated in place",
 );
 assert(
   decideFirmUpgradeRoute({
     hasEntitlingSubscription: true,
     hasPaymentMethod: true,
-    subscriptionCurrency: "zar",
-    targetPriceCurrency: "usd",
-  }) === "checkout",
-  "a ZAR-charged subscription cannot switch onto a USD price",
+  }) === "update_subscription",
+  "presentment currency does not change the route",
 );
-assert(
-  decideFirmUpgradeRoute({
-    hasEntitlingSubscription: true,
-    hasPaymentMethod: true,
-    subscriptionCurrency: null,
-    targetPriceCurrency: "usd",
-  }) === "checkout",
-  "a missing charge currency uses Checkout",
-);
-assert(catalogPriceCurrency({ currency: "USD" }) === "usd", "catalog currency is normalized");
-assert(catalogPriceCurrency({}) === "usd", "a price with no currency is treated as USD");
-assert(
-  isStripeCurrencyConflict(new Error("The customer's currency does not match the price")),
-  "a Stripe currency error is recognized",
-);
-assert(!isStripeCurrencyConflict(new Error("Your card was declined")), "a card decline is not a currency conflict");
 
 const zarStarter = readSubscriptionPrice({
   currency: "zar",
@@ -198,8 +179,11 @@ const zarStarter = readSubscriptionPrice({
     ],
   },
 });
-assert(zarStarter.currency === "usd", "the Starter price object can stay USD");
-assert(zarStarter.chargeCurrency === "zar", "the subscription charge currency is ZAR");
+assert(zarStarter.currency === "usd", "the Starter price object is USD");
+assert(
+  zarStarter.chargeCurrency === "zar",
+  "subscription.currency is read separately from Adaptive Pricing presentment",
+);
 assert(
   billedBandFromPrice({ lookupKey: null, productBand: "solo" }) === "solo",
   "product metadata.band is used when the lookup key is missing",
@@ -329,6 +313,37 @@ assert(
   !zaCheckout.success_url?.includes("milon.co.za") && !zaCheckout.cancel_url?.includes("milon.co.za"),
   "checkout URLs do not contain milon.co.za",
 );
+
+const setup = firmSetupCheckoutSessionParams({
+  origin: "https://www.milon.co.za",
+  customerId: "cus_starter",
+  userId: "user_1",
+  subscriptionId: "sub_starter",
+  lookupKey: "milon_solo_monthly",
+  band: "solo",
+  interval: "month",
+});
+assert(setup.mode === "setup", "a cardless subscription uses Checkout setup mode");
+assert(setup.customer === "cus_starter", "setup Checkout stays on the existing customer");
+assert(setup.currency === "usd", "setup Checkout collects a USD card");
+assert(!setup.line_items, "setup Checkout does not create a second subscription");
+assert(
+  setup.success_url?.startsWith(`${CANONICAL_APP_ORIGIN}/dashboard?addClient=1`),
+  "setup success returns to Add client on the canonical host",
+);
+assert(setup.metadata?.milon_setup_upgrade === "1", "setup session is marked as an upgrade");
+assert(setup.metadata?.milon_subscription_id === "sub_starter", "setup session names the subscription");
+assert(setup.metadata?.milon_lookup_key === "milon_solo_monthly", "setup session names the lookup key");
+assert(setup.metadata?.milon_plan === "solo", "setup session names the band");
+assert(setup.metadata?.milon_interval === "month", "setup session names the interval");
+assert(setup.metadata?.milon_user_id === "user_1", "setup session names the user");
+assert(
+  setup.setup_intent_data?.metadata?.milon_subscription_id === "sub_starter",
+  "the setup intent carries the subscription id",
+);
+const setupRequest = readFirmSetupUpgrade(setup.metadata as Record<string, string>);
+assert(setupRequest?.subscriptionId === "sub_starter" && setupRequest.band === "solo", "setup metadata parses");
+assert(readFirmSetupUpgrade({ milon_plan: "solo" }) === null, "a subscription checkout is not a setup upgrade");
 assert(
   appRedirectOrigin(["https://www.milonfinance.com"]) === "https://www.milonfinance.com",
   "www.milonfinance.com stays",
@@ -524,15 +539,17 @@ const fn = readFileSync(resolve("src/lib/stripe-checkout.functions.ts"), "utf8")
 assert(fn.includes("export const upgradeFirmBand"), "upgrade server function");
 assert(fn.includes("assertCallerCanUpgradeFirm"), "upgrade checks the firm owner on the server");
 assert(fn.includes("firmSubscriptionUpgradeParams"), "paid upgrades update the subscription");
-assert(fn.includes("firmUpgradeCheckoutSessionParams"), "no-card upgrades use Checkout");
+assert(fn.includes("firmUpgradeCheckoutSessionParams"), "no subscription uses a new Checkout subscription");
+assert(fn.includes("firmSetupCheckoutSessionParams"), "a subscription without a card uses setup Checkout");
+assert(fn.includes("setup_checkout"), "the no-card route is setup checkout");
 assert(fn.includes("requestAppOrigin"), "billing origin comes from the request allowlist");
 assert(fn.includes('return_url: `${origin.replace(/\\/$/, "")}/dashboard`') || fn.includes("/dashboard`"), "portal returns to the dashboard");
 assert(!fn.includes("SITE_URL"), "billing does not trust SITE_URL");
 assert(!fn.includes("/settings`"), "portal return is not /settings");
 assert(fn.includes("finalizeFirmBandCheckout"), "return path syncs the new band");
-assert(fn.includes("isStripeCurrencyConflict"), "a currency conflict retries Checkout");
-assert(fn.includes("subscriptionCurrency: sub?.chargeCurrency"), "the route uses the charge currency");
-assert(fn.includes("catalogPriceCurrency"), "the target price currency comes from the catalog price");
+assert(fn.includes("completeFirmSetupUpgrade"), "setup Checkout updates the same subscription");
+assert(!fn.includes("isStripeCurrencyConflict"), "currency mismatch is not a route");
+assert(!fn.includes("subscriptionCurrency"), "the upgrade route does not read charge currency");
 const upgradeBody = fn.slice(fn.indexOf("export const upgradeFirmBand"));
 assert(
   upgradeBody.indexOf("assertCallerCanUpgradeFirm") < upgradeBody.indexOf("subscriptions.update"),
@@ -543,9 +560,12 @@ assert(
   "the in-app upgrade passes the current client count",
 );
 assert(
-  upgradeBody.indexOf("isStripeCurrencyConflict") < upgradeBody.indexOf("finalizeFirmBandCheckout") ||
-    upgradeBody.includes("firmUpgradeCheckoutSessionParams(checkoutInput)"),
-  "currency retry builds Checkout without the existing customer",
+  upgradeBody.includes("replacesSubscriptionId"),
+  "a new Checkout subscription still records the subscription to cancel",
+);
+assert(
+  !upgradeBody.includes("firmUpgradeCheckoutSessionParams(checkoutInput)"),
+  "Checkout is not retried without the customer",
 );
 
 const webhook = readFileSync(resolve("src/routes/api/stripe/webhook.ts"), "utf8");
@@ -559,6 +579,7 @@ assert(
 );
 assert(!webhook.includes("prices.update"), "webhook does not change Stripe prices");
 assert(webhook.includes("milon_downgrade_blocked"), "webhook documents the downgrade flag");
+assert(webhook.includes("completeFirmSetupUpgrade"), "webhook applies a setup-mode card to the same subscription");
 
 const server = readFileSync(resolve("src/lib/firm-client-cap.server.ts"), "utf8");
 assert(
@@ -570,6 +591,13 @@ assert(
   "server rejects non-owners with the ask-owner message",
 );
 assert(server.includes("chargeCurrency"), "the cap reader keeps the subscription charge currency");
+assert(server.includes("startedAt"), "the cap reader keeps the subscription start");
+assert(server.includes("starter_trial_enforced"), "the cap reader loads the pilot flag");
+assert(server.includes("starterTrialExpired"), "an expired Starter blocks a new client");
+assert(
+  server.includes("isMissingTrialColumn"),
+  "a missing enforcement column fails open",
+);
 assert(
   server.includes("milon_downgrade_blocked"),
   "the cap reader honors a blocked downgrade",
@@ -579,6 +607,8 @@ const sync = readFileSync(resolve("src/lib/stripe-billing-sync.server.ts"), "utf
 assert(sync.includes("downgradeDropsBelowUsage"), "sync refuses a limit below usage");
 assert(sync.includes("milon_replaces_subscription"), "sync still cancels the replaced subscription");
 assert(sync.includes("shouldRevertBlockedDowngrade"), "sync restores a previous price when it has one");
+assert(sync.includes("completeFirmSetupUpgrade"), "setup completion updates the existing subscription");
+assert(sync.includes("default_payment_method"), "setup completion saves the card on the subscription");
 
 const panel = readFileSync(resolve("src/components/firm-band-upgrade.tsx"), "utf8");
 assert(panel.includes("downgradeDropsBelowUsage"), "the band list hides a limit below usage");
@@ -615,5 +645,97 @@ const nudge = readFileSync(resolve("supabase/functions/nudge-action-items/index.
 assert(taskLink.includes("appRedirectOrigin"), "task-link emails use the allowlisted origin");
 assert(nudge.includes("appRedirectOrigin"), "nudge emails use the allowlisted origin");
 assert(taskLink.includes("noreply@notify.milon.co.za"), "task-link keeps the notify mailbox");
+
+const now = new Date("2026-10-05T12:00:00.000Z");
+const day10 = starterTrialClock({
+  enforced: true,
+  band: "starter",
+  startedAt: "2026-09-26T12:00:00.000Z",
+  now,
+});
+assert(day10.dayOfTrial === 10 && day10.showCountdown && !day10.expired, "day 10 shows a countdown");
+assert(day10.daysLeft === 5, "day 10 has five days left");
+const day9 = starterTrialClock({
+  enforced: true,
+  band: "starter",
+  startedAt: "2026-09-27T12:00:00.000Z",
+  now,
+});
+assert(!day9.showCountdown && !day9.expired && day9.dayOfTrial === 9, "day 9 has no countdown");
+const ended = starterTrialClock({
+  enforced: true,
+  band: "starter",
+  startedAt: "2026-09-21T12:00:00.000Z",
+  now,
+});
+assert(ended.expired && !ended.showCountdown, "start plus 14 days is expired");
+const exempt = starterTrialClock({
+  enforced: false,
+  band: "starter",
+  startedAt: "2026-09-01T12:00:00.000Z",
+  now,
+});
+assert(!exempt.expired && !exempt.showCountdown && !exempt.enforced, "an exempt firm does not expire");
+const unknownStart = starterTrialClock({ enforced: true, band: "starter", now });
+assert(!unknownStart.expired, "an unknown start does not invent a block");
+const paid = starterTrialClock({
+  enforced: true,
+  band: "solo",
+  startedAt: "2026-09-01T12:00:00.000Z",
+  now,
+});
+assert(!paid.expired && !paid.enforced, "a paid band is not on the Starter clock");
+const storedEnd = starterTrialClock({
+  enforced: true,
+  band: "starter",
+  stripeTrialEnd: "2026-10-01T12:00:00.000Z",
+  now,
+});
+assert(storedEnd.expired, "a stored Stripe trial_end is the end");
+const endedCreate = decideFirmClientCreate({
+  stripeConfigured: true,
+  phase: "active",
+  band: "starter",
+  clientCount: 0,
+  starterTrialExpired: true,
+});
+assert(
+  !endedCreate.allowed &&
+    endedCreate.code === "starter_trial_ended" &&
+    endedCreate.message === STARTER_TRIAL_ENDED_MESSAGE,
+  "an expired Starter cannot add a client",
+);
+assert(
+  decideFirmClientCreate({
+    stripeConfigured: true,
+    phase: "active",
+    band: "starter",
+    clientCount: 1,
+  }).allowed,
+  "omitting the clock does not expire Starter",
+);
+
+assert(dashboard.includes("FirmStarterTrialBanner"), "the practice dashboard shows the trial banner");
+assert(
+  dashboard.includes("Your trial has ended, choose a plan"),
+  "the add-client panel uses the ended sentence",
+);
+const banner = readFileSync(resolve("src/components/firm-starter-trial-banner.tsx"), "utf8");
+assert(banner.includes("STARTER_TRIAL_ENDED_MESSAGE"), "the banner uses the ended sentence");
+assert(banner.includes("FirmBandUpgrade"), "the ended banner includes the band picker");
+const migration = readFileSync(
+  resolve("supabase/migrations/20261005190000_firm_starter_trial_enforced.sql"),
+  "utf8",
+);
+assert(migration.includes("starter_trial_enforced"), "migration adds the pilot flag");
+assert(migration.includes("SET DEFAULT true"), "new firms are enforced");
+assert(migration.includes("SET starter_trial_enforced = false"), "existing firms are exempt");
+const packs = readFileSync(resolve("src/lib/advisory-pack.functions.ts"), "utf8");
+assert(packs.includes("assertStarterTrialAllowsNewWork"), "new packs are blocked after the trial");
+const brain = readFileSync(resolve("src/components/client-brain-summary.tsx"), "utf8");
+assert(
+  brain.includes("assertFirmCanGenerateDeliverable"),
+  "a new brain deliverable checks the trial before the edge function",
+);
 
 console.log("firm-band-upgrade ok");
