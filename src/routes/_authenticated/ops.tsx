@@ -21,6 +21,7 @@ import {
   Target,
 } from "lucide-react";
 import { BackLink } from "@/components/back-link";
+import { TabErrorBoundary } from "@/components/lazy-panel";
 import { ScrollableTable } from "@/components/primitives/scrollable-table";
 import { useAuth } from "@/hooks/use-auth";
 import {
@@ -45,8 +46,16 @@ import { FunnelHealthPanel } from "@/components/funnel-health-panel";
 import { LIGHTHOUSE_IT_INBOX_PATH } from "@/lib/client-note-link";
 import "@/styles/ops-console.css";
 
+function LighthousePage() {
+  return (
+    <TabErrorBoundary label="Lighthouse">
+      <OwnerOpsPage />
+    </TabErrorBoundary>
+  );
+}
+
 export const Route = createFileRoute("/_authenticated/ops")({
-  component: OwnerOpsPage,
+  component: LighthousePage,
   validateSearch: (search: Record<string, unknown>): { tab?: string } => {
     const tab = parseOpsSearchTab(search.tab);
     return tab ? { tab } : {};
