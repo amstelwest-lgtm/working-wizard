@@ -50,8 +50,8 @@ function AboutPage() {
 
       <h2>Built around financial health</h2>
       <p>
-        MILŌN assesses a business across four pillars: <strong>profit, assets, financing, and
-        cash</strong>.
+        MILŌN assesses a business across four pillars:{" "}
+        <strong>profit, assets, financing, and cash</strong>.
       </p>
       <p>
         The assessment uses 19 financial ratios that provide a broad and technically meaningful view
@@ -80,9 +80,8 @@ function AboutPage() {
         actions with their clients.
       </p>
       <p>
-        AI, powered by Claude, drafts analysis and recommendations using the financial information
-        and context available in the workspace. A qualified accountant reviews and signs off before
-        advice is shown to a client.
+        QuickBooks Online and Xero, plug-and-play. Milōn Bot reads the numbers, diagnoses the
+        business, and drafts the advisory deliverables. The accountant reviews and signs off.
       </p>
       <p>MILŌN does not provide licensed financial advice.</p>
       <p>
@@ -113,37 +112,6 @@ function AboutPage() {
             part of the workflow.
           </p>
         </div>
-      </div>
-
-      <h2>Why we built it</h2>
-      <p>
-        MILŌN was built by a former EY auditor who worked on several large audits, including audits
-        of multiple companies within the S&amp;P 100.
-      </p>
-      <p>
-        His work included areas such as PPE and fixed assets, inventory, cost of sales, operating
-        expenses, working capital, financing, and cash, across large and complex financial reporting
-        environments.
-      </p>
-      <p>
-        He later worked with small businesses and saw a different problem. The financial data was
-        often there, but the level of technical analysis, financial understanding, and advisory
-        guidance available to those businesses was not.
-      </p>
-      <p>
-        MILŌN applies the analytical rigor and review discipline learned in that environment to
-        businesses that cannot afford to build an audit-grade finance team.
-      </p>
-      <p>
-        The goal is straightforward: take financial information that can otherwise feel technical,
-        fragmented, or difficult to interpret, and turn it into something a business owner can
-        understand and act on.
-      </p>
-
-      <div className="mk-note">
-        MILŌN is an independent company. It is not affiliated with, endorsed by, or connected to EY
-        or any other accounting network. References to prior professional experience describe the
-        founder&apos;s employment history only.
       </div>
     </MarketingShell>
   );
