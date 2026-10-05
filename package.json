@@ -44,6 +44,7 @@
     "test:lighthouse-resend-idempotency": "vite-node --config scripts/vite-test.config.ts scripts/lighthouse-resend-idempotency-test.mts",
     "test:lighthouse-accountant-v3": "vite-node --config scripts/vite-test.config.ts scripts/lighthouse-accountant-v3-test.mts",
     "test:lighthouse-from-lock": "vite-node --config scripts/vite-test.config.ts scripts/lighthouse-from-lock-test.mts",
+    "test:lighthouse-tabs": "vite-node --config scripts/vite-test.config.ts scripts/lighthouse-tabs-test.mts",
     "test:lighthouse-accountant-golden": "vite-node --config scripts/vite-test.config.ts scripts/lighthouse-accountant-golden-test.mts",
     "test:orb-contrast": "vite-node --config scripts/vite-test.config.ts scripts/orb-contrast-test.mts",
     "test:review-signoff": "vite-node --config scripts/vite-test.config.ts scripts/review-signoff-test.mts",
