@@ -155,6 +155,36 @@ const m3 = whatMatters({
 })!;
 assert(/operating loss/.test(m3) && /6 weeks/.test(m3), `loss + tight: ${m3}`);
 
+const quiet = whatMatters({
+  healthScore: 78,
+  healthStatus: "healthy",
+  chips: buildVarianceChips({
+    currentFinancials: { revenue: 50_000, cogs: 20_000, ebit: 8_000 },
+    currentRatios: { "Creditor Days": 73, "Debtor Days": 39 },
+    prior: null,
+  }),
+  cashRunwayWeeks: null,
+  profile,
+  hasFigures: true,
+  ratios: { "Creditor Days": 73, "Debtor Days": 39, "Gross Margin": 0.6 },
+})!;
+assert(!/no single metric demanding attention/.test(quiet), `must not dismiss the card: ${quiet}`);
+assert(/Creditor days are 73/.test(quiet) && /60-day mark/.test(quiet), `names the card signal: ${quiet}`);
+assert(!/Debtor days are 39/.test(quiet), "39 debtor days is under the 40-day peer median");
+
+const cashOut = whatMatters({
+  healthScore: 84,
+  healthStatus: "healthy",
+  chips: [],
+  cashRunwayWeeks: 21,
+  profile,
+  hasFigures: true,
+  ratios: {},
+  forecastNet: -15200,
+})!;
+assert(!/no single metric demanding attention/.test(cashOut), `forecast net out is a cash point: ${cashOut}`);
+assert(/nets cash out/.test(cashOut), `names the forecast: ${cashOut}`);
+
 // ── capability catalogue ─────────────────────────────────────────────────────
 assert(MILON_CAPABILITIES.length >= 9, "catalogue covers the tabs");
 const ctxText = milonCapabilityContext();

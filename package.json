@@ -45,6 +45,7 @@
     "test:lighthouse-accountant-v3": "vite-node --config scripts/vite-test.config.ts scripts/lighthouse-accountant-v3-test.mts",
     "test:lighthouse-from-lock": "vite-node --config scripts/vite-test.config.ts scripts/lighthouse-from-lock-test.mts",
     "test:lighthouse-tabs": "vite-node --config scripts/vite-test.config.ts scripts/lighthouse-tabs-test.mts",
+    "test:ops-route-state": "vite-node --config scripts/vite-test.config.ts scripts/ops-route-state-test.mts",
     "test:lighthouse-send-windows": "vite-node --config scripts/vite-test.config.ts scripts/lighthouse-send-windows-test.mts",
     "test:lighthouse-accountant-golden": "vite-node --config scripts/vite-test.config.ts scripts/lighthouse-accountant-golden-test.mts",
     "test:orb-contrast": "vite-node --config scripts/vite-test.config.ts scripts/orb-contrast-test.mts",
@@ -82,6 +83,7 @@
     "test:stripe-plans": "vite-node --config scripts/vite-test.config.ts scripts/stripe-plans-test.mts",
     "test:stripe-checkout": "vite-node --config scripts/vite-test.config.ts scripts/stripe-checkout-test.mts",
     "test:firm-billing-gate": "vite-node --config scripts/vite-test.config.ts scripts/firm-billing-gate-test.mts",
+    "test:firm-band-upgrade": "vite-node --config scripts/vite-test.config.ts scripts/firm-band-upgrade-test.mts",
     "test:ratio-briefing": "vite-node --config scripts/vite-test.config.ts scripts/ratio-briefing-test.mts",
     "test:ratio-queries": "vite-node --config scripts/vite-test.config.ts scripts/ratio-queries-test.mts",
     "test:seo-foundation": "vite-node --config scripts/vite-test.config.ts scripts/seo-foundation-test.mts",
@@ -106,7 +108,12 @@
     "test:qa-statement-fixes": "vite-node --config scripts/vite-test.config.ts scripts/qa-statement-fixes-test.mts",
     "test:accountant-qa-medium": "vite-node --config scripts/vite-test.config.ts scripts/accountant-qa-medium-test.mts",
     "test:accountant-qa-deliverables": "vite-node --config scripts/vite-test.config.ts scripts/accountant-qa-deliverables-test.mts",
-    "test:client-metrics": "vite-node --config scripts/vite-test.config.ts scripts/client-metrics-test.mts"
+    "test:health-score": "vite-node --config scripts/vite-test.config.ts scripts/health-score-test.mts",
+    "test:client-metrics": "vite-node --config scripts/vite-test.config.ts scripts/client-metrics-test.mts",
+    "test:client-route-search": "vite-node --config scripts/vite-test.config.ts scripts/client-route-search-test.mts",
+    "test:forecast-bands": "vite-node --config scripts/vite-test.config.ts scripts/forecast-bands-test.mts",
+    "test:report-direction": "vite-node --config scripts/vite-test.config.ts scripts/report-direction-test.mts",
+    "test:budget-qa-fixture": "vite-node --config scripts/vite-test.config.ts scripts/budget-qa-fixture-test.mts"
   },
   "dependencies": {
     "@cloudflare/vite-plugin": "^1.25.5",

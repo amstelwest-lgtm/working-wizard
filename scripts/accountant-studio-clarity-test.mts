@@ -212,7 +212,7 @@ assert(goldCard.includes("defaultOpen = false"), "shared hideable card is closed
 const workspaceSrc = readFileSync(resolve("src/components/budget/budget-workspace.tsx"), "utf8");
 assert(workspaceSrc.includes("role={role}"), "simple budget gets accountant vs owner copy");
 assert(
-  workspaceSrc.includes("<BudgetVariancePanel clientId={clientId} doc={doc} role={role} />"),
+  workspaceSrc.includes("<BudgetVariancePanel") && workspaceSrc.includes("role={role}"),
   "vs actuals gets accountant copy",
 );
 

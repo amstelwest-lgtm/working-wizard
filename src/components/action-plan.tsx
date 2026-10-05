@@ -12,6 +12,8 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { PanelSkeleton } from "@/components/primitives";
+import { browserAppUrl } from "@/lib/app-origin";
+import { HEALTH_BAND_TABLE } from "@/lib/ratios";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -811,7 +813,7 @@ export default function ActionPlanPanel({
     });
     const body = await res.json();
     if (!res.ok || body.error) throw new Error(body.error ?? "link_failed");
-    return `${window.location.origin}/t/${body.token}` as string;
+    return browserAppUrl(`/t/${body.token}`);
   };
 
   const sendAssignment = async (
@@ -1680,7 +1682,13 @@ function DriversStrip({
       {moves.map((m) => {
         const score = driverHealthLabel(m.health);
         const tone =
-          score == null ? "#94a3b8" : score >= 65 ? "#22c55e" : score >= 40 ? "#f5a524" : "#ef4444";
+          score == null
+            ? "#94a3b8"
+            : score >= HEALTH_BAND_TABLE.healthyMin
+              ? "#22c55e"
+              : score >= HEALTH_BAND_TABLE.watchMin
+                ? "#f5a524"
+                : "#ef4444";
         return (
           <button
             key={m.key}

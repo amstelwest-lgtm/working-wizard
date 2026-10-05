@@ -154,8 +154,8 @@ assert(
   "startGoogleSignIn stashes an in-flight owner invite across the OAuth hop",
 );
 assert(
-  googleSrc.includes("googleOAuthRedirectTo(window.location.origin, hop)"),
-  "Google OAuth redirectTo carries the invite or accountant join so an origin hop cannot drop it",
+  googleSrc.includes("googleOAuthRedirectTo(browserAppOrigin(), hop)"),
+  "Google OAuth redirectTo carries the invite or accountant join on an allowlisted origin",
 );
 
 // /auth (AuthPage) has no <Outlet />, so any route filed under auth.*.tsx never

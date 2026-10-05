@@ -5,17 +5,28 @@
  */
 
 import {
+  STARTER_TRIAL_ENDED_MESSAGE,
+  idleStarterTrialBanner,
+  type StarterTrialBanner,
+} from "@/lib/firm-starter-trial";
+import {
   FIRM_BAND_CATALOG,
   FIRM_TRIAL_CLIENT_LIMIT,
   FIRM_TRIAL_SENTENCE,
   firmClientLimitLabel,
   isFirmBandId,
   type FirmBandId,
+  type FirmInterval,
 } from "@/lib/stripe-plans";
 
 export type FirmSubscriptionPhase = "trialing" | "active" | "none";
 
-export type FirmClientCreateBlockCode = "trial_client_cap" | "band_client_cap";
+export type FirmClientCreateBlockCode =
+  | "trial_client_cap"
+  | "band_client_cap"
+  | "starter_trial_ended";
+
+export { idleStarterTrialBanner, type StarterTrialBanner };
 
 export type FirmClientCreateDecision =
   | { allowed: true }
@@ -26,9 +37,28 @@ export type FirmClientCreateDecision =
       bandName: string | null;
     };
 
+/** Band list payload for Add client. Kept here so the cap module does not import the upgrade module. */
+export type FirmUpgradeAllowance = {
+  canUpgrade: boolean;
+  band: FirmBandId | null;
+  phase: FirmSubscriptionPhase;
+  clientCount: number;
+  clientLimit: number | null;
+  usageLabel: string;
+  priceCurrency: "USD" | "ZAR";
+  interval: FirmInterval;
+  zarByBand: Partial<Record<FirmBandId, { month: number | null; year: number | null }>>;
+  /** Server-derived. False for every non-SA firm. */
+  saDiscount: boolean;
+};
+
 export type FirmClientCreateAllowance = FirmClientCreateDecision & {
   /** Actor's email is the Stripe customer, so they can end the trial now. */
   canEndTrial: boolean;
+  /** Present when the cap check loaded the firm. Absent on the unconfigured fallback. */
+  upgrade?: FirmUpgradeAllowance;
+  /** Idle when the firm is exempt, not on Starter, or Stripe is not configured. */
+  starterTrial: StarterTrialBanner;
 };
 
 export function phaseFromSubscriptionStatus(
@@ -61,8 +91,22 @@ export function decideFirmClientCreate(input: {
   phase: FirmSubscriptionPhase;
   band: FirmBandId | null;
   clientCount: number;
+  /**
+   * Enforced Starter past day 14. Omitted means the caller is not applying
+   * the clock (existing firms, paid bands, or a missing start).
+   */
+  starterTrialExpired?: boolean;
 }): FirmClientCreateDecision {
   if (!input.stripeConfigured) return { allowed: true };
+
+  if (input.starterTrialExpired) {
+    return {
+      allowed: false,
+      code: "starter_trial_ended",
+      bandName: input.band ? FIRM_BAND_CATALOG[input.band].name : "Starter",
+      message: STARTER_TRIAL_ENDED_MESSAGE,
+    };
+  }
 
   if (input.phase === "trialing") {
     if (input.clientCount >= FIRM_TRIAL_CLIENT_LIMIT) {
@@ -103,10 +147,23 @@ export type FirmPlanStatusCopy = {
 
 export type FirmPlanDisplay = FirmPlanStatusCopy & {
   configured: boolean;
+  clientCount: number | null;
+  clientLimit: number | null;
+  /** e.g. "3 of 3 clients". Null when the plan could not be loaded. */
+  usageLabel: string | null;
+  canUpgrade: boolean;
+  priceCurrency: "USD" | "ZAR";
+  interval: FirmInterval;
+  zarByBand: Partial<Record<FirmBandId, { month: number | null; year: number | null }>>;
+  starterTrial: StarterTrialBanner;
+  saDiscount: boolean;
 };
 
 /** Whole days until `trialEndIso`. 0 when the trial end is now or in the past. */
-export function trialDaysRemaining(trialEndIso: string | null | undefined, now = new Date()): number | null {
+export function trialDaysRemaining(
+  trialEndIso: string | null | undefined,
+  now = new Date(),
+): number | null {
   if (!trialEndIso) return null;
   const end = Date.parse(trialEndIso);
   if (!Number.isFinite(end)) return null;

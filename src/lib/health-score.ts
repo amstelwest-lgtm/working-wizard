@@ -1,5 +1,7 @@
 import {
+  bandedPillarStatus,
   computeRatios,
+  healthBandLabel,
   PERIOD_MONTHS_KEY,
   scoreTier,
   type HealthTier,
@@ -11,6 +13,7 @@ import {
   scoreCreditorDays,
   scoreLowerIsBetterDays,
   scoreWorkingCapitalDays,
+  scoreWorkingCapitalFunding,
 } from "@/lib/client-metrics";
 
 export type ScoreMarket = Pick<ResolvedMarket, "country" | "copyPack">;
@@ -27,7 +30,8 @@ export type ScoreMarket = Pick<ResolvedMarket, "country" | "copyPack">;
  *
  * Overall = equal average of available pillar scores.
  * Cash runway (when known) is one leg of the cash pillar — never a 55% override.
- * A client never shows a clean "Healthy" chip when any pillar is critical.
+ * A client never shows a clean "Healthy" chip when any pillar is critical,
+ * when runway is 0 weeks, or when week 1 of the forecast is already short.
  */
 
 export type FlatFinancials = Record<string, string | number | undefined | null> | null | undefined;
@@ -47,11 +51,11 @@ export type OverallHealth = {
   /** Tier from the overall number alone. */
   status: HealthTier;
   /**
-   * Display tier — same as `status`, except "healthy" is demoted to "at_risk"
-   * when any pillar is critical (the critical-pillar tell).
+   * Display tier. "healthy" is demoted to "at_risk" when any pillar is critical
+   * or week 1 is short. Zero weeks of runway forces "critical".
    */
   displayStatus: HealthTier;
-  /** Short UI label for chips ("Healthy" / "Watch" / "At risk"). */
+  /** Short UI label for chips ("Healthy" / "Watch" / "Critical"). */
   displayLabel: string;
   pillars: PillarScore[];
   weakestPillar: PillarScore | null;
@@ -103,6 +107,62 @@ export function healthMapFromRatios(
     if (key) map[key] = Math.round(scored);
   }
   return map;
+}
+
+/** Catalogue keys that share a scored ratio under another name. */
+const PLAYBOOK_RATIO_ALIAS: Record<string, string> = {
+  wipDays: "inventoryDays",
+};
+
+/** Chip and score line when a live client has no inputs for a catalogue ratio. */
+export const NOT_SCORED_LABEL = "Not scored";
+
+/**
+ * Playbook card score from the shared ratio map. Missing keys are unscored —
+ * callers show "Not scored" instead of a catalogue fixture such as Healthy 75.
+ */
+export function scorePlaybookRatio(
+  ratioKey: string,
+  healthMap: Record<string, number> | null | undefined,
+): { health_score: number; health_tier: HealthTier; unscored: boolean } | null {
+  if (!healthMap) return null;
+  const key = PLAYBOOK_RATIO_ALIAS[ratioKey] ?? ratioKey;
+  const score = healthMap[key];
+  if (score == null || !Number.isFinite(score)) {
+    return { health_score: 0, health_tier: "critical", unscored: true };
+  }
+  const health_score = Math.round(score);
+  return { health_score, health_tier: scoreTier(health_score), unscored: false };
+}
+
+/**
+ * Score a playbook catalogue from live ratios. Fixture scores on the rows are
+ * dropped. A key with no inputs (revenue per employee with no headcount) is
+ * "Not scored" — health_score 0 and unscored, never the demo 75 / 28 / 41.
+ */
+export function scorePlaybookCatalogue<T extends { ratio_key: string }>(
+  rows: readonly T[],
+  ratios: Record<string, number>,
+  market?: ScoreMarket,
+): Array<T & { health_score: number; health_tier: HealthTier; unscored: boolean }> {
+  const map = healthMapFromRatios(ratios, market);
+  const wcDays = ratios["Working Capital Days"];
+  if (Number.isFinite(wcDays)) {
+    const funded = scoreWorkingCapitalFunding(wcDays / 365);
+    if (Number.isFinite(funded)) map.workingCapitalFunding = Math.round(funded);
+  }
+  return rows.map((row) => {
+    const scored = scorePlaybookRatio(row.ratio_key, map);
+    if (!scored || scored.unscored) {
+      return { ...row, health_score: 0, health_tier: "at_risk" as const, unscored: true };
+    }
+    return {
+      ...row,
+      health_score: scored.health_score,
+      health_tier: scored.health_tier,
+      unscored: false,
+    };
+  });
 }
 
 /** Which ratios feed each pillar (human names from `computeRatios`). */
@@ -234,7 +294,8 @@ export function scoreRatio(name: string, val: number, market?: ScoreMarket): num
 
 /**
  * Cash runway → 0–100.
- * Aligns with scoreTier bands: ≥12 wk healthy, 4–12 watch, <4 critical.
+ * Aligns with HEALTH_BAND_TABLE: ≥12 wk (85) Healthy, 4–12 wk (45 and 65)
+ * Watch, <4 wk critical.
  */
 export function scoreCashRunway(weeks: number): number {
   if (!Number.isFinite(weeks)) return Number.NaN;
@@ -283,9 +344,19 @@ export function pillarForRatioName(name: string): HealthPillarId {
 }
 
 function chipLabel(status: HealthTier): string {
-  if (status === "healthy") return "Healthy";
-  if (status === "at_risk") return "Watch";
-  return "At risk";
+  return healthBandLabel(status);
+}
+
+/**
+ * Profitability step chip. Same score and label as the Profit pillar
+ * (`scoreRatio` + `HEALTH_BAND_TABLE`), not a private 10% / 20% scale.
+ */
+export function profitStepBand(
+  ratioName: string,
+  ratio: number,
+): { tier: HealthTier; label: string } {
+  const tier = scoreTier(scoreRatio(ratioName, ratio));
+  return { tier, label: healthBandLabel(tier).toUpperCase() };
 }
 
 export type ComputeOverallHealthInput = {
@@ -301,6 +372,11 @@ export type ComputeOverallHealthInput = {
     pillar?: HealthPillarId;
   }>;
   cashRunwayWeeks?: number | null;
+  /**
+   * First forecast week that closes below zero. Week 1 cannot display Healthy.
+   * Zero weeks of runway cannot display Healthy either — the chip is Critical.
+   */
+  shortfallWeek?: number | null;
   /** Sales-per-employee uses a market-specific healthy target. Defaults ZA. */
   market?: ScoreMarket;
 };
@@ -339,13 +415,14 @@ export function computeOverallHealth(input: ComputeOverallHealthInput): OverallH
   }
 
   const pillars: PillarScore[] = ALL_PILLARS.map((id) => {
-    const score = avg(bucket[id]);
+    const components = bucket[id];
+    const score = avg(components);
     const rounded = score == null ? null : Math.round(score);
     return {
       id,
       label: PILLAR_LABELS[id],
       score: rounded,
-      status: scoreTier(rounded),
+      status: bandedPillarStatus(rounded, components),
     };
   });
 
@@ -356,7 +433,9 @@ export function computeOverallHealth(input: ComputeOverallHealthInput): OverallH
   const overall = overallRaw == null ? null : Math.round(overallRaw);
   const status = scoreTier(overall);
   const hasCriticalPillar = scoredPillars.some((p) => p.status === "critical");
-  const displayStatus: HealthTier = hasCriticalPillar && status === "healthy" ? "at_risk" : status;
+  let displayStatus: HealthTier = hasCriticalPillar && status === "healthy" ? "at_risk" : status;
+  if (input.cashRunwayWeeks === 0) displayStatus = "critical";
+  else if (input.shortfallWeek === 1 && displayStatus === "healthy") displayStatus = "at_risk";
 
   const weakestPillar =
     scoredPillars.length === 0
@@ -418,11 +497,13 @@ export function healthFromRatioInputs(
   inputs: RatioInputs,
   cashRunwayWeeks?: number | null,
   market?: ScoreMarket,
+  shortfallWeek?: number | null,
 ): OverallHealth {
   return computeOverallHealth({
     ratios: computeRatios(inputs),
     cashRunwayWeeks,
     market,
+    shortfallWeek,
   });
 }
 

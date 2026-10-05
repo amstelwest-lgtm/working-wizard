@@ -15,6 +15,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { LooseSb } from "@/lib/advisory-state.functions";
+import { assertStarterTrialAllowsNewWork } from "@/lib/firm-client-cap.server";
 import {
   PACK_APP_ACTIONS,
   PACK_SECTION_KEYS,
@@ -50,6 +51,43 @@ async function assertClientAccess(sb: LooseSb, userId: string, clientId: string)
   if (error) throw new Error(error.message);
   if (!data) throw new Error("You do not have access to this client");
 }
+
+async function firmIdOfClient(sb: LooseSb, clientId: string): Promise<string | null> {
+  const { data, error } = await sb
+    .from("clients")
+    .select("firm_id")
+    .eq("id", clientId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  const firmId = (data as { firm_id?: string | null } | null)?.firm_id;
+  return firmId ?? null;
+}
+
+function actorEmail(context: unknown): string {
+  const claims = (context as { claims?: { email?: string | null } | null } | null)?.claims;
+  return claims?.email ?? "";
+}
+
+/**
+ * Server gate in front of a new pack or brain deliverable.
+ * The brain-deliverable-draft edge function is unchanged; a direct call to
+ * it does not pass through this check.
+ */
+export const assertFirmCanGenerateDeliverable = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) => z.object({ clientId: z.string().uuid() }).parse(input))
+  .handler(async ({ data, context }) => {
+    const sb = context.supabase as unknown as LooseSb;
+    await assertClientAccess(sb, context.userId, data.clientId);
+    const firmId = await firmIdOfClient(sb, data.clientId);
+    await assertStarterTrialAllowsNewWork({
+      supabase: context.supabase,
+      userId: context.userId,
+      email: actorEmail(context),
+      firmId,
+    });
+    return { ok: true as const };
+  });
 
 async function loadPackRows(
   sb: LooseSb,
@@ -257,6 +295,13 @@ export const generateAdvisoryPack = createServerFn({ method: "POST" })
   .handler(async ({ data, context }): Promise<GeneratePackResult> => {
     const sb = context.supabase as unknown as LooseSb;
     await assertClientAccess(sb, context.userId, data.clientId);
+    const firmId = await firmIdOfClient(sb, data.clientId);
+    await assertStarterTrialAllowsNewWork({
+      supabase: context.supabase,
+      userId: context.userId,
+      email: actorEmail(context),
+      firmId,
+    });
     const now = data.now ?? new Date().toISOString();
 
     const inputs = await gatherPackInputs(sb, data.clientId, now);

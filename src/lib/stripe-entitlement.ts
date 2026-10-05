@@ -7,6 +7,11 @@
  * (14-day card-on-file trial) entitles the firm product. When the trial ends
  * unpaid or canceled, status is no longer active/trialing and the
  * billing/required resume path applies.
+ *
+ * An active $0 Starter subscription (no Stripe trial_end) also entitles the
+ * product, so an expired Starter keeps read access. The 14-day work gate
+ * (no new clients, packs, or deliverables) is starterTrialClock plus
+ * firms.starter_trial_enforced, not this status check.
  */
 
 export const ENTITLING_SUBSCRIPTION_STATUSES = ["active", "trialing"] as const;

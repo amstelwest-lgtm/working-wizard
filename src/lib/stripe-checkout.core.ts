@@ -4,10 +4,15 @@
  */
 
 import type Stripe from "stripe";
+import { appRedirectOrigin } from "@/lib/app-origin";
+import { SA_FIRM_DISCOUNT_NOTE, saDiscountedUsdCents } from "@/lib/firm-sa-market";
 import {
   assertFoundingMonthlyOnly,
+  FIRM_BAND_CATALOG,
   FIRM_TRIAL_DAYS,
   firmLookupKey,
+  formatUsdFromCents,
+  isFirmCheckoutBand,
   isFoundingCode,
   type FirmCheckoutBand,
   type FirmInterval,
@@ -17,6 +22,7 @@ import {
 export type CatalogPrice = {
   id: string;
   lookup_key?: string | null;
+  currency?: string | null;
   recurring?: { interval?: string | null } | null;
   unit_amount?: number | null;
 };
@@ -99,6 +105,12 @@ export type FirmCheckoutSessionInput = {
   market: StripePlanMarket;
   /** Stripe promotion_code id (promo_…), already resolved. */
   promotionCodeId?: string | null;
+  /**
+   * SA firms only. Server passes STRIPE_ZA_COUPON_ID (default MILON_ZA_50).
+   * Not a client flag. When set, this replaces the promo box so the two
+   * cannot stack.
+   */
+  zaCouponId?: string | null;
   integrationIdentifier: string;
   /**
    * First firm subscription only. A customer with any prior subscription
@@ -120,7 +132,7 @@ export type FirmCheckoutSessionInput = {
 export function firmCheckoutSessionParams(
   input: FirmCheckoutSessionInput,
 ): Stripe.Checkout.SessionCreateParams {
-  const origin = input.origin.replace(/\/$/, "");
+  const origin = appRedirectOrigin([input.origin]);
   const monthlyPaid = input.interval === "month";
   const meta: Record<string, string> = {
     milon_plan: input.band,
@@ -166,12 +178,177 @@ export function firmCheckoutSessionParams(
     params.allow_promotion_codes = true;
   }
 
-  if (input.promotionCodeId) {
+  if (input.promotionCodeId && !input.zaCouponId?.trim()) {
     params.discounts = [{ promotion_code: input.promotionCodeId }];
     delete params.allow_promotion_codes;
   }
 
+  return withFirmZaCoupon(params, input.zaCouponId);
+}
+
+/**
+ * Attach the SA coupon once. Clears allow_promotion_codes and any promotion
+ * code so Checkout cannot stack a second discount. A second call is a no-op.
+ */
+export function withFirmZaCoupon<T extends Stripe.Checkout.SessionCreateParams>(
+  params: T,
+  couponId: string | null | undefined,
+): T {
+  const id = couponId?.trim() ?? "";
+  if (!id) return params;
+  const current = params.discounts ?? [];
+  const already = current.some((entry) => "coupon" in entry && entry.coupon === id);
+  params.discounts = already
+    ? current.filter((entry) => !("promotion_code" in entry))
+    : [...current.filter((entry) => !("promotion_code" in entry)), { coupon: id }];
+  delete params.allow_promotion_codes;
   return params;
+}
+
+/**
+ * Checkout for a firm that already exists but has no card (Starter $0) or no
+ * subscription. Does not send them to the Customer Portal. No second trial.
+ * Success reopens Add client on the dashboard.
+ */
+export function firmUpgradeCheckoutSessionParams(
+  input: FirmCheckoutSessionInput & { replacesSubscriptionId?: string | null },
+): Stripe.Checkout.SessionCreateParams {
+  const origin = appRedirectOrigin([input.origin]);
+  const params = firmCheckoutSessionParams({ ...input, includeTrial: false });
+  params.success_url = `${origin}/dashboard?addClient=1&upgrade=success&session_id={CHECKOUT_SESSION_ID}`;
+  params.cancel_url = `${origin}/dashboard?addClient=1&upgrade=cancelled`;
+  const replaced = input.replacesSubscriptionId?.trim();
+  if (replaced) {
+    params.metadata = { ...(params.metadata ?? {}), milon_replaces_subscription: replaced };
+    if (params.subscription_data) {
+      params.subscription_data.metadata = {
+        ...(params.subscription_data.metadata ?? {}),
+        milon_replaces_subscription: replaced,
+      };
+    }
+  }
+  return params;
+}
+
+export type FirmSetupUpgradeRequest = {
+  subscriptionId: string;
+  band: FirmCheckoutBand;
+  interval: FirmInterval;
+  lookupKey: string;
+  userId: string;
+};
+
+/** Stripe custom_text.submit.message and after_submit.message max length. */
+export const FIRM_SETUP_CHECKOUT_TEXT_MAX = 1200;
+
+/**
+ * Copy on the card-setup Checkout page. Amount, currency, and interval come
+ * from the resolved Stripe price. An SA firm sees half of that USD amount.
+ */
+export function firmSetupCheckoutMessage(input: {
+  bandName: string;
+  clientLimit: number;
+  unitAmount: number;
+  currency: string;
+  interval: FirmInterval;
+  saMarket: boolean;
+}): string {
+  const currency = input.currency.trim().toLowerCase();
+  const cents = input.saMarket ? saDiscountedUsdCents(input.unitAmount) : input.unitAmount;
+  const amount = formatUsdFromCents(cents);
+  const billed = currency === "usd" ? "USD" : currency.toUpperCase();
+  const priced = input.saMarket
+    ? `${amount}/${input.interval} (${SA_FIRM_DISCOUNT_NOTE})`
+    : `${amount}/${input.interval}`;
+  const message = `Saving this card moves you to MILŌN ${input.bandName} at ${priced} (${input.clientLimit} clients). Billed in ${billed}, cancel anytime.`;
+  return message.length <= FIRM_SETUP_CHECKOUT_TEXT_MAX
+    ? message
+    : message.slice(0, FIRM_SETUP_CHECKOUT_TEXT_MAX);
+}
+
+function setupPriceInterval(
+  priceInterval: string | null | undefined,
+  requested: FirmInterval,
+): FirmInterval {
+  if (priceInterval === "month" || priceInterval === "year") return priceInterval;
+  return requested;
+}
+
+/**
+ * Collect a card for an existing subscription (a $0 Starter has none), then
+ * the server updates that same subscription. This is not a second subscription.
+ *
+ * custom_text.submit and custom_text.after_submit are both allowed on a
+ * setup-mode Checkout Session. The create API only rejects custom_text when
+ * ui_mode is custom, which this hosted session is not.
+ */
+export function firmSetupCheckoutSessionParams(input: {
+  origin: string;
+  customerId: string;
+  userId: string;
+  subscriptionId: string;
+  lookupKey: string;
+  band: FirmCheckoutBand;
+  interval: FirmInterval;
+  price: {
+    unit_amount?: number | null;
+    currency?: string | null;
+    recurring?: { interval?: string | null } | null;
+  };
+  saMarket: boolean;
+}): Stripe.Checkout.SessionCreateParams {
+  const origin = appRedirectOrigin([input.origin]);
+  const metadata: Record<string, string> = {
+    milon_setup_upgrade: "1",
+    milon_subscription_id: input.subscriptionId,
+    milon_lookup_key: input.lookupKey,
+    milon_plan: input.band,
+    milon_interval: input.interval,
+    milon_user_id: input.userId,
+  };
+  const unitAmount = input.price.unit_amount;
+  const currency = input.price.currency?.trim() ?? "";
+  const band = FIRM_BAND_CATALOG[input.band];
+  if (typeof unitAmount !== "number" || !currency || band.clientLimit == null) {
+    throw new Error("Setup Checkout needs the resolved Stripe price amount.");
+  }
+  const message = firmSetupCheckoutMessage({
+    bandName: band.name,
+    clientLimit: band.clientLimit,
+    unitAmount,
+    currency,
+    interval: setupPriceInterval(input.price.recurring?.interval, input.interval),
+    saMarket: input.saMarket,
+  });
+  return {
+    mode: "setup",
+    customer: input.customerId,
+    currency: "usd",
+    client_reference_id: input.userId,
+    success_url: `${origin}/dashboard?addClient=1&upgrade=success&session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${origin}/dashboard?addClient=1&upgrade=cancelled`,
+    metadata,
+    setup_intent_data: { metadata },
+    custom_text: {
+      submit: { message },
+      after_submit: { message },
+    },
+  };
+}
+
+export function readFirmSetupUpgrade(
+  metadata: Record<string, string> | null | undefined,
+): FirmSetupUpgradeRequest | null {
+  if (!metadata || metadata.milon_setup_upgrade !== "1") return null;
+  const subscriptionId = metadata.milon_subscription_id?.trim() ?? "";
+  const band = metadata.milon_plan?.trim() ?? "";
+  const interval = metadata.milon_interval?.trim() ?? "";
+  const lookupKey = metadata.milon_lookup_key?.trim() ?? "";
+  const userId = metadata.milon_user_id?.trim() ?? "";
+  if (!subscriptionId || !lookupKey || !userId) return null;
+  if (!isFirmCheckoutBand(band)) return null;
+  if (interval !== "month" && interval !== "year") return null;
+  return { subscriptionId, band, interval, lookupKey, userId };
 }
 
 export function assertNoManagedPaymentsOverride(params: Stripe.Checkout.SessionCreateParams): void {

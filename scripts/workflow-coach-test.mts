@@ -106,7 +106,8 @@ assert(coachPageForTab("plan", null) === "actions", "action plan is the actions 
 assert(coachPageForTab("overview", null) === null, "overview is not a spine step");
 
 assert(pillarIsWeak(40) === true, "40 is a weak pillar");
-assert(pillarIsWeak(65) === false, "65 is healthy");
+assert(pillarIsWeak(65) === true, "65 is Watch, so the pillar is weak");
+assert(pillarIsWeak(80) === false, "80 is healthy");
 assert(pillarIsWeak(Number.NaN) === false, "missing pillar is not a false weak");
 const cashEvidence = evidenceForPillar("cash");
 assert(cashEvidence?.tab === "cash" && cashEvidence.coach === "liquidity", "liquidity → cash");

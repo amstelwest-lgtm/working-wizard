@@ -14,17 +14,17 @@ Head office for Stripe Tax is Wilmington, DE.
 
 ## Lookup keys (resolve via API — never hardcode `price_` IDs)
 
-| Band | Active clients | Monthly | Annual (~20% off) | Lookup keys |
-| --- | --- | --- | --- | --- |
-| Starter (archived — not for new signups) | 3 | $0 | — | `milon_starter_monthly` (`active=false` on Live) |
-| Solo | 15 | $99 | $950 | `milon_solo_monthly` / `milon_solo_yearly` |
-| Small | 25 | $149 | $1,430 | `milon_small_monthly` / `milon_small_yearly` |
-| Growing | 50 | $249 | $2,390 | `milon_growing_monthly` / `milon_growing_yearly` |
-| Established | 75 | $349 | $3,350 | `milon_established_monthly` / `milon_established_yearly` |
-| Larger | 125 | $499 | $4,790 | `milon_larger_monthly` / `milon_larger_yearly` |
-| Advanced | 200 | $649 | $6,230 | `milon_advanced_monthly` / `milon_advanced_yearly` |
-| Scale | 500 | $999 | $9,590 | `milon_scale_monthly` / `milon_scale_yearly` |
-| Enterprise | unlimited | custom Quotes | — | product only, no public prices |
+| Band                                     | Active clients | Monthly       | Annual (~20% off) | Lookup keys                                              |
+| ---------------------------------------- | -------------- | ------------- | ----------------- | -------------------------------------------------------- |
+| Starter (archived — not for new signups) | 3              | $0            | —                 | `milon_starter_monthly` (`active=false` on Live)         |
+| Solo                                     | 15             | $99           | $950              | `milon_solo_monthly` / `milon_solo_yearly`               |
+| Small                                    | 25             | $149          | $1,430            | `milon_small_monthly` / `milon_small_yearly`             |
+| Growing                                  | 50             | $249          | $2,390            | `milon_growing_monthly` / `milon_growing_yearly`         |
+| Established                              | 75             | $349          | $3,350            | `milon_established_monthly` / `milon_established_yearly` |
+| Larger                                   | 125            | $499          | $4,790            | `milon_larger_monthly` / `milon_larger_yearly`           |
+| Advanced                                 | 200            | $649          | $6,230            | `milon_advanced_monthly` / `milon_advanced_yearly`       |
+| Scale                                    | 500            | $999          | $9,590            | `milon_scale_monthly` / `milon_scale_yearly`             |
+| Enterprise                               | unlimited      | custom Quotes | —                 | product only, no public prices                           |
 
 Resolve:
 
@@ -98,6 +98,7 @@ Account: **Milon, Inc.** `acct_1UEXnwGXDN6PFbnz` (Live). This VM does not mutate
    ```
 
    Dashboard: Product catalog → Starter price → Archive. `active=false`. Existing subscriptions on that price keep running.
+
 3. Leave paid band prices **active**: `milon_solo_monthly`, `milon_solo_yearly`, and the same pattern for small, growing, established, larger, advanced, scale.
 4. Leave `tax_behavior=exclusive` and Adaptive Pricing (SA ZAR) unchanged.
 5. Do not attach FOUNDING50 to the Starter price. FOUNDING stays 50% off **monthly paid** prices only. FOUNDING applies to monthly invoices after the trial.
@@ -106,11 +107,27 @@ Account: **Milon, Inc.** `acct_1UEXnwGXDN6PFbnz` (Live). This VM does not mutate
 
 ## Customer Portal
 
-Dashboard Customer Portal is already configured for self-serve band / interval changes.
+Dashboard Customer Portal stays available for invoices and cancellation. Band changes do **not** depend on the portal `subscription_update` setting (it can stay off).
+
+Portal `return_url`, Checkout `success_url` / `cancel_url`, invite links, and auth `emailRedirectTo` / password-reset `redirectTo` all use `appRedirectOrigin` (`src/lib/app-origin.ts`). The request `Origin` is kept only for `www.milonfinance.com`, `milonfinance.com`, and `*.vercel.app`. Every other host, including `milon.co.za` and a stale `SITE_URL`, becomes `https://www.milonfinance.com`. The portal returns to `/dashboard`. An in-app upgrade returns to `/dashboard?addClient=1`, which reopens Add client.
 
 - Server: `createBillingPortalSession` in `src/lib/stripe-checkout.functions.ts`
-- UI: Practice **Settings → Manage billing**
+- UI: Practice **Settings → Manage billing** (firm owner or firm admin)
 - Looks up the Stripe Customer by the signed-in email (no local customer-id column)
+
+## In-app upgrade
+
+Practice owners and firm admins upgrade from the Add client limit panel and from **Settings → Plan**. The list uses `FIRM_BAND_CATALOG` (Solo 15 / $99, Small 25 / $149, … Scale 500 / $999). The current band is marked and the next band up is preselected.
+
+- Prices resolve by `lookup_key` (`milon_<band>_monthly` / `milon_<band>_yearly`), then product `metadata.band`. The app does not hardcode `price_` ids. Live band prices on `acct_1UEXnwGXDN6PFbnz` are USD only (Solo 15 / $99 and $950, Small 25 / $149 and $1,430, Growing 50 / $249 and $2,390, Established 75 / $349 and $3,350, Larger 125 / $499 and $4,790, Advanced 200 / $649 and $6,230, Scale 500 / $999 and $9,590). There is no active Starter price and no ZAR band price. The QA Starter subscription is USD (`milon_starter_monthly`, $0). “Charged in ZAR” is Adaptive Pricing presentment, not `subscription.currency`.
+- An existing subscription is updated with `subscriptions.update` (`proration_behavior: create_prorations`, `payment_behavior: error_if_incomplete`) regardless of presentment currency. A subscription with no card (a $0 Starter) opens Checkout in `mode: setup` on that customer. On completion the saved payment method becomes the customer and subscription default, and the same subscription is updated onto the catalog price. A new subscription Checkout (`mode: subscription`) is only used when there is no entitling subscription. No second trial. Success returns to `/dashboard?addClient=1&upgrade=success`. Cancel returns to `/dashboard?addClient=1&upgrade=cancelled` and charges nothing.
+- South African firms get 50% off those same USD prices with coupon `MILON_ZA_50` (env `STRIPE_ZA_COUPON_ID`, default that id). Coupon, not a ZAR price and not a second catalog. Checkout sends `discounts: [{ coupon }]` and does not set `allow_promotion_codes` on that session. A subscription update attaches the coupon once. `isSaMarketFirm` reads `firms.market`: country `ZA`, otherwise a stored currency `ZAR` or locale `en-ZA`. A missing market is not South Africa. The Checkout `market` field, request IP, and geo headers are not used. Only a signed-in SA firm sees “South Africa pricing: 50% off” and the halved USD amounts.
+- `checkout.session.completed` for a new subscription cancels `milon_replaces_subscription` once the new subscription is active or trialing, so an old $0 Starter does not stay active beside it. A setup-mode completion does not cancel the subscription it updates.
+- A target whose catalog client limit is below the firm’s current client count is rejected in the app. The same rule runs in the webhook: it does not write the lower `milon_plan`, sets `milon_downgrade_blocked`, leaves the replaced subscription in place, and restores the previous price when the event includes it. The cap keeps the metadata band while that flag is set, so usage is not left above the limit. An unknown client count does not invent a block.
+- Server rejects anyone who is not the firm owner or a firm admin. The UI says “Ask your firm owner to upgrade” and shows no button.
+- The client cap reads the subscription price lookup_key (product `metadata.band`, then subscription metadata, are the fallbacks) and, among active subscriptions, prefers the larger band so a leftover Starter subscription cannot keep the 3-client cap.
+- `POST /api/stripe/webhook` (`checkout.session.completed`, `customer.subscription.created`, `customer.subscription.updated`) runs the same sync as the dashboard return path. There is still no local band column. `firms.starter_trial_enforced` (migration `20261005190000_firm_starter_trial_enforced.sql`) gates the 14-day Starter work clock. Existing rows are `false`; new rows default to `true`. The app fails open if the column is missing. The clock uses Stripe `trial_end` when set, otherwise `start_date` (else `created`) plus 14 days. It does not write Stripe objects. After expiry the firm keeps read access and cannot add clients or generate packs or brain deliverables.
+- Prices in the app use one currency. USD catalog amounts are shown unless Stripe returns a ZAR `unit_amount` for every paid band. The live account has no ZAR band prices, so the list stays on the USD catalog. The UI does not append “Charged in ZAR” next to a dollar figure. Stripe prices are not changed.
 
 ## Owner Spark vs firm bands
 

@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { extractFinancialsFromPDF } from "@/lib/extractFinancials.server";
 import type { ExtractionResult, Money } from "@/lib/financialSchema";
+import { DERIVED_EQUITY_LABEL } from "@/lib/statement-financials";
 import type { ValidationIssue } from "@/lib/validateFinancials";
 import { UPLOAD_QUALITY_DISCLAIMER, preflightUploadFile } from "@/lib/upload-quality";
 import { UploadQualityDisclaimer } from "@/components/upload-quality-disclaimer";
@@ -533,10 +534,11 @@ export function UploadFinancials({
               }}
             />
             <Row
-              label="Total equity"
+              label={bs.equity_derived ? DERIVED_EQUITY_LABEL : "Total equity"}
               value={bs.equity.total}
               onChange={(v) => {
                 bs.equity.total = v;
+                bs.equity_derived = false;
                 setResult({ ...result });
               }}
             />

@@ -37,6 +37,14 @@ import {
   type OpsDashboard,
 } from "@/lib/owner-ops.functions";
 import { createOwnerStripeCheckout } from "@/lib/stripe-checkout.functions";
+import {
+  isOpsItPane,
+  opsConsoleView,
+  opsItOnly,
+  opsItPane,
+  opsNeedsDashboard,
+  opsRouteRenderDecision,
+} from "@/lib/ops-route-state";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { LighthousePanel, parseLighthouseTab } from "@/components/lighthouse-panel";
 import { pilotFlagWiring } from "@/lib/ops-pilot-flags";
@@ -82,15 +90,10 @@ export const Route = createFileRoute("/_authenticated/ops")({
 });
 
 const OPS_CONSOLE_TABS = ["it", "access", "pilot", "usage"] as const;
-const OPS_IT_PANES = ["it", "access", "pilot"] as const;
 
 function parseOpsSearchTab(raw: unknown): string | undefined {
   if (typeof raw === "string" && (OPS_CONSOLE_TABS as readonly string[]).includes(raw)) return raw;
   return parseLighthouseTab(raw);
-}
-
-function isOpsItPane(raw: string | undefined): raw is (typeof OPS_IT_PANES)[number] {
-  return Boolean(raw && (OPS_IT_PANES as readonly string[]).includes(raw));
 }
 
 const FLAG_LABELS: Record<string, string> = {
@@ -115,6 +118,8 @@ function OwnerOpsPage() {
   const [unlocked, setUnlocked] = useState(false);
   const [access, setAccess] = useState<OpsAccess | null>(null);
   const [accessChecked, setAccessChecked] = useState(false);
+  const [accessErr, setAccessErr] = useState("");
+  const [accessAttempt, setAccessAttempt] = useState(0);
   const [dash, setDash] = useState<OpsDashboard | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -175,17 +180,28 @@ function OwnerOpsPage() {
           ? "/ops?tab=usage"
           : "/ops";
 
+  const retryAccess = useCallback(() => {
+    setAccessErr("");
+    setAccessChecked(false);
+    setAccessAttempt((n) => n + 1);
+  }, []);
+
   useEffect(() => {
     if (authLoading || !user) return;
     let cancelled = false;
+    setAccessChecked(false);
     void loadAccess()
       .then((a) => {
         if (cancelled) return;
         setAccess(a);
+        setAccessErr("");
         if (a.allowed) markUnlocked();
       })
-      .catch(() => {
-        if (!cancelled) setAccess(null);
+      .catch((e: unknown) => {
+        if (cancelled) return;
+        setAccess(null);
+        const msg = e instanceof Error ? e.message.trim() : "";
+        setAccessErr(msg || "Could not check Lighthouse access");
       })
       .finally(() => {
         if (!cancelled) setAccessChecked(true);
@@ -193,7 +209,7 @@ function OwnerOpsPage() {
     return () => {
       cancelled = true;
     };
-  }, [authLoading, user, loadAccess, markUnlocked]);
+  }, [authLoading, user, loadAccess, markUnlocked, accessAttempt]);
 
   const submitUnlock = useCallback(
     async (e: FormEvent) => {
@@ -248,25 +264,19 @@ function OwnerOpsPage() {
   }, [authLoading, user, unlocked, err, loadEnvStatus]);
 
   const flagEntries = useMemo(() => Object.entries(flags), [flags]);
-  const itOnly = Boolean(access?.isItMember && !access?.isOwner);
-  const itSection = itOnly || isOpsItPane(tabSearch);
-  const view: "lighthouse" | "it" | "platform" = itSection
-    ? "it"
-    : tabSearch === "usage"
-      ? "platform"
-      : "lighthouse";
+  const itOnly = opsItOnly(access);
+  const view = opsConsoleView(tabSearch, itOnly);
   const lighthouseTab = parseLighthouseTab(tabSearch) ?? "agent";
-  const itPane: (typeof OPS_IT_PANES)[number] =
-    itOnly && tabSearch === "pilot" ? "it" : isOpsItPane(tabSearch) ? tabSearch : "it";
-  const needsOpsDash = !itOnly && (view === "platform" || (view === "it" && itPane === "pilot"));
-  const skipDash = itOnly || (view === "it" && itPane !== "pilot");
+  const itPane = opsItPane(tabSearch, itOnly);
+  const needsOpsDash = opsNeedsDashboard(itOnly, view, itPane);
 
   useEffect(() => {
-    if (authLoading || !user || !unlocked) return;
-    if (access?.isItMember && !access?.isOwner) return;
+    if (authLoading || !user || !unlocked || !accessChecked) return;
+    if (!access?.allowed) return;
+    if (access.isItMember && !access.isOwner) return;
     if (!needsOpsDash || dash) return;
     void refresh();
-  }, [authLoading, user, unlocked, access, needsOpsDash, dash, refresh]);
+  }, [authLoading, user, unlocked, accessChecked, access, needsOpsDash, dash, refresh]);
 
   useEffect(() => {
     if (!itOnly) return;
@@ -286,11 +296,21 @@ function OwnerOpsPage() {
     void navigate({ to: "/ops", search: {} });
   };
 
-  if (
-    authLoading ||
-    (user && !accessChecked && !unlocked) ||
-    (unlocked && needsOpsDash && busy && !dash && !err && !skipDash)
-  ) {
+  const accessFailed = Boolean(user && accessChecked && !access);
+  const consoleErr = accessFailed ? accessErr || "Could not check Lighthouse access" : err;
+  const decision = opsRouteRenderDecision({
+    authLoading,
+    signedIn: Boolean(user),
+    unlocked,
+    accessChecked,
+    access,
+    tab: tabSearch,
+    hasDash: Boolean(dash),
+    dashBusy: busy,
+    dashErr: Boolean(err),
+  });
+
+  if (decision === "loading") {
     return (
       <div className="milon-ops grid min-h-screen place-items-center text-[var(--ops-ink-dim)]">
         <div className="flex items-center gap-2 text-sm">
@@ -300,7 +320,7 @@ function OwnerOpsPage() {
     );
   }
 
-  if (accessChecked && access && !access.allowed && !unlocked) {
+  if (decision === "restricted") {
     return (
       <div className="milon-ops grid min-h-screen place-items-center px-4 text-[var(--ops-ink-soft)]">
         <div className="w-full max-w-md rounded-2xl border border-[var(--ops-line)] bg-[var(--ops-bg-elevated)] p-6">
@@ -332,7 +352,7 @@ function OwnerOpsPage() {
     );
   }
 
-  if (!unlocked) {
+  if (decision === "locked") {
     return (
       <div className="milon-ops grid min-h-screen place-items-center px-4 text-[var(--ops-ink-soft)]">
         <div className="w-full max-w-md rounded-2xl border border-[var(--ops-amber-border)] bg-[var(--ops-bg-elevated)] p-6 shadow-2xl">
@@ -387,14 +407,16 @@ function OwnerOpsPage() {
     );
   }
 
-  if (err && !dash && !skipDash) {
+  if (decision === "error") {
     return (
       <div className="milon-ops grid min-h-screen place-items-center px-4 text-[var(--ops-ink-soft)]">
         <div className="w-full max-w-lg rounded-2xl border border-[var(--ops-danger-border)] bg-[var(--ops-danger-bg)] p-6">
           <h1 className="text-lg font-semibold text-[var(--ops-danger-ink)]">
             Console cannot load
           </h1>
-          <p className="mt-2 text-sm text-[var(--ops-ink-soft)] whitespace-pre-wrap">{err}</p>
+          <p className="mt-2 text-sm text-[var(--ops-ink-soft)] whitespace-pre-wrap">
+            {consoleErr}
+          </p>
           {envDiag && (
             <div className="mt-4 rounded-xl border border-[var(--ops-line)] bg-[var(--ops-input)] p-3 text-[12px] text-[var(--ops-ink-dim)]">
               <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--ops-ink-dim)]">
@@ -497,7 +519,13 @@ function OwnerOpsPage() {
             <button
               type="button"
               className="text-xs font-semibold uppercase tracking-wider text-[var(--ops-amber)]"
-              onClick={() => void refresh()}
+              onClick={() => {
+                if (accessFailed) {
+                  retryAccess();
+                  return;
+                }
+                void refresh();
+              }}
             >
               Retry
             </button>
@@ -513,8 +541,6 @@ function OwnerOpsPage() {
       </div>
     );
   }
-
-  if (!dash && !skipDash) return null;
 
   return (
     <div className="milon-ops">

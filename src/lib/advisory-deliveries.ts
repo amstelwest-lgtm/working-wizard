@@ -3,6 +3,7 @@
  */
 
 import { toast } from "sonner";
+import { browserAppUrl } from "@/lib/app-origin";
 import { supabase } from "@/integrations/supabase/client";
 
 export type DeliveryChannel = "mailto" | "whatsapp" | "copy" | "pdf_download" | "email";
@@ -78,7 +79,7 @@ export function newAckToken(): string {
 
 export function ackUrlForToken(token: string): string {
   if (typeof window !== "undefined" && window.location?.origin) {
-    return `${window.location.origin}/ack/${token}`;
+    return browserAppUrl(`/ack/${token}`);
   }
   return `/ack/${token}`;
 }

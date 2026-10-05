@@ -32,6 +32,7 @@ import {
 import { recurringReviewLabel, reviewCashTotals } from "@/lib/cash-from-banks.pattern";
 import {
   existingCashflowIsMeaningful,
+  openingCashReplaceNotice,
   type ExistingCashflow,
   type PublishPolicy,
 } from "@/lib/cash-from-banks.publish";
@@ -64,6 +65,10 @@ type Props = {
   transactions?: CashStatementTransaction[];
   warnings?: string[];
   existingCashflow?: ExistingCashflow | null;
+  /** Hand-entered or current opening cash, before this bank closing replaces it. */
+  currentOpening?: number | null;
+  /** Statement period end — the date of the bank closing balance. */
+  bankDate?: string | null;
   publishing?: boolean;
   onPublish: (req: WorkspacePublishRequest) => void | Promise<void>;
   onBack?: () => void;
@@ -79,11 +84,13 @@ export function CashClassificationWorkspace({
   transactions = [],
   warnings = [],
   existingCashflow = null,
+  currentOpening = null,
+  bankDate = null,
   publishing = false,
   onPublish,
   onBack,
 }: Props) {
-  const { money: fmt } = useMarketFormat();
+  const { money: fmt, market } = useMarketFormat();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [dragId, setDragId] = useState<string | null>(null);
   const [policyOpen, setPolicyOpen] = useState(false);
@@ -92,6 +99,16 @@ export function CashClassificationWorkspace({
   const [filter, setFilter] = useState<"all" | "proposed" | "confirmed" | "excluded">("all");
 
   const needsPolicy = existingCashflowIsMeaningful(existingCashflow);
+  const replaceNotice =
+    adoptBalances
+      ? openingCashReplaceNotice({
+          currentOpening,
+          bankClosing: parseFloat(openingBalance) || 0,
+          bankDate,
+          currency: market.currency === "ZAR" ? "ZAR" : "USD",
+          locale: market.locale,
+        })
+      : null;
 
   const visible = useMemo(() => {
     if (filter === "all") return lines;
@@ -127,7 +144,7 @@ export function CashClassificationWorkspace({
   };
 
   const requestPublish = () => {
-    if (needsPolicy) {
+    if (needsPolicy || replaceNotice) {
       setPolicyOpen(true);
       return;
     }
@@ -446,12 +463,27 @@ export function CashClassificationWorkspace({
 
       {policyOpen && (
         <div className="rounded-xl border border-[#b7872a]/40 bg-[#fff8e8] p-3 dark:bg-[#1a1510]">
-          <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-            This client already has a cash forecast
-          </div>
-          <p className="mt-1 text-[11px] text-slate-600 dark:text-slate-400">
-            Choose how to apply the classified bank lines.
-          </p>
+          {needsPolicy ? (
+            <>
+              <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                This client already has a cash forecast
+              </div>
+              <p className="mt-1 text-[11px] text-slate-600 dark:text-slate-400">
+                Choose how to apply the classified bank lines.
+              </p>
+            </>
+          ) : (
+            <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+              Publish this forecast
+            </div>
+          )}
+          {replaceNotice ? (
+            <p className="mt-2 text-sm leading-relaxed text-slate-800 dark:text-slate-100">
+              {replaceNotice}
+            </p>
+          ) : null}
+          {needsPolicy ? (
+          <>
           <div className="mt-3 grid gap-2 sm:grid-cols-2">
             <button
               type="button"
@@ -490,6 +522,8 @@ export function CashClassificationWorkspace({
             />
             Also update opening balance &amp; start date from the bank draft
           </label>
+          </>
+          ) : null}
           <div className="mt-3 flex justify-end gap-2">
             <Button variant="outline" size="sm" onClick={() => setPolicyOpen(false)}>
               Cancel
@@ -498,13 +532,15 @@ export function CashClassificationWorkspace({
               size="sm"
               className="bg-[#b8860b] text-white hover:bg-[#9a7209]"
               disabled={publishing}
-              onClick={() => void doPublish(policy)}
+              onClick={() => void doPublish(needsPolicy ? policy : "replace")}
             >
               {publishing
                 ? "Publishing…"
-                : policy === "merge"
-                  ? "Merge & publish"
-                  : "Replace & publish"}
+                : !needsPolicy
+                  ? "Publish"
+                  : policy === "merge"
+                    ? "Merge & publish"
+                    : "Replace & publish"}
             </Button>
           </div>
         </div>

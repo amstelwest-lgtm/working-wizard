@@ -23,6 +23,7 @@ import { profileCashAssumptions } from "@/lib/profile-signals";
 import { CASH_RUNWAY_THRESHOLD_RAND } from "@/lib/cash-runway";
 import { ZA_MARKET, type ResolvedMarket } from "@/lib/market";
 import { reportKicker } from "@/lib/report-catalog";
+import { forecastIsCashGenerative, forecastRunwayHeadline } from "@/lib/client-metrics";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -357,19 +358,26 @@ export function CashForecastPDF({
   const startBalance = weeks[0]?.opening_balance ?? 0;
 
   const firstBreachWeek = firstBreach === -1 ? null : firstBreach + 1;
-  const runwayValue = cashGenerative
-    ? "Cash generative"
-    : runwayLabel
-      ? runwayLabel
-      : firstBreach === -1
-        ? `${weeks.length}+ wks`
-        : `${runwayWeeks} wks`;
+  const netFlow = totalReceipts - totalPayments;
+  const generative =
+    Boolean(cashGenerative) && forecastIsCashGenerative(totalReceipts, totalPayments);
+  const fromSeries = forecastRunwayHeadline({
+    totalInflow: totalReceipts,
+    totalOutflow: totalPayments,
+    cashGenerative: generative,
+    weeksUntilBreach: firstBreach === -1 ? null : runwayWeeks,
+    horizonWeeks: weeks.length,
+  });
+  const runwayValue =
+    generative || !runwayLabel || runwayLabel === "Cash generative" || firstBreach !== -1
+      ? fromSeries
+      : runwayLabel;
   const figures: HeadlineFigure[] = [
     {
       label: "Runway",
       value: runwayValue,
-      good: cashGenerative || weeksBelow === 0,
-      direction: cashGenerative || weeksBelow === 0 ? "up" : "down",
+      good: generative || weeksBelow === 0,
+      direction: generative || weeksBelow === 0 ? "up" : "down",
       note:
         weeksBelow === 0
           ? `above ${fmtRandCompact(minimumThreshold, m)} minimum`
@@ -391,15 +399,15 @@ export function CashForecastPDF({
     {
       label: "Net Flow",
       value: fmtRandCompact(totalReceipts - totalPayments, m),
-      good: totalReceipts >= totalPayments,
+      good: netFlow > 0,
       note: "over 13 weeks",
     },
   ];
 
   const narrative = cashForecastNarrative(
     {
-      runwayWeeks: cashGenerative ? null : runwayWeeks,
-      cashGenerative,
+      runwayWeeks: generative ? null : runwayWeeks,
+      cashGenerative: generative,
       minBalance,
       threshold: minimumThreshold,
       weeksBelow,

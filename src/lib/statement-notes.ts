@@ -4,7 +4,7 @@
  */
 
 import type { ExtractionResult, Money } from "@/lib/financialSchema";
-import { applyBalanceSheetTotals } from "@/lib/statement-financials";
+import { applyBalanceSheetTotals, DERIVED_EQUITY_LABEL } from "@/lib/statement-financials";
 
 export type StatementNoteSection = {
   title: string;
@@ -25,7 +25,11 @@ const UNITS_LABEL: Record<NonNullable<ExtractionResult["units"]>, string> = {
   millions: "in millions",
 };
 
-const KEY_FIGURES: Array<{ label: string; get: (r: ExtractionResult) => Money }> = [
+const KEY_FIGURES: Array<{
+  label: string;
+  get: (r: ExtractionResult) => Money;
+  labelFrom?: (r: ExtractionResult) => string;
+}> = [
   { label: "Revenue", get: (r) => r.current_period.figures.income_statement.revenue },
   { label: "Gross profit", get: (r) => r.current_period.figures.income_statement.gross_profit },
   {
@@ -37,7 +41,12 @@ const KEY_FIGURES: Array<{ label: string; get: (r: ExtractionResult) => Money }>
     get: (r) => r.current_period.figures.income_statement.profit_after_tax,
   },
   { label: "Total assets", get: (r) => r.current_period.figures.balance_sheet.total_assets },
-  { label: "Total equity", get: (r) => r.current_period.figures.balance_sheet.equity.total },
+  {
+    label: "Total equity",
+    labelFrom: (r) =>
+      r.current_period.figures.balance_sheet.equity_derived ? DERIVED_EQUITY_LABEL : "Total equity",
+    get: (r) => r.current_period.figures.balance_sheet.equity.total,
+  },
   {
     label: "Total liabilities",
     get: (r) => r.current_period.figures.balance_sheet.total_liabilities,
@@ -116,7 +125,9 @@ export function statementNoteSections(
   const figures: string[] = [];
   for (const field of KEY_FIGURES) {
     const value = field.get(result);
-    if (isMoney(value)) figures.push(`${field.label}: ${formatNumber(value)}`);
+    if (isMoney(value)) {
+      figures.push(`${field.labelFrom?.(result) ?? field.label}: ${formatNumber(value)}`);
+    }
   }
   if (figures.length) sections.push({ title: "Key figures", items: figures });
 

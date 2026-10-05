@@ -158,6 +158,8 @@ export function LighthousePanel({ initialTab }: { initialTab?: LighthouseTab }) 
     body: string;
     email: string;
     title: string;
+    preview?: boolean;
+    windowReason?: string | null;
   } | null>(null);
 
   const [addOpen, setAddOpen] = useState(false);
@@ -501,6 +503,28 @@ export function LighthousePanel({ initialTab }: { initialTab?: LighthouseTab }) 
                               Send now
                             </button>
                           )}
+                          {item.status === "approved" && window && !window.open && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const touch = lead?.touches.find((t) => t.id === item.touchId);
+                                if (!lead?.email || !touch) return;
+                                setConfirmSend({
+                                  touchId: item.touchId,
+                                  leadId: item.leadId,
+                                  subject: touch.subject ?? "",
+                                  body: touch.body ?? "",
+                                  email: lead.email,
+                                  title: item.title,
+                                  preview: true,
+                                  windowReason: window.reason,
+                                });
+                              }}
+                              className="rounded-full border border-[var(--ops-line)] px-3 py-1 text-[11px] font-semibold text-[var(--ops-ink-soft)]"
+                            >
+                              Preview send
+                            </button>
+                          )}
                         </div>
                         {item.status === "approved" && window && !window.open && (
                           <p className="mt-1 text-[11px] text-[var(--ops-ink-dim)]">
@@ -807,7 +831,7 @@ export function LighthousePanel({ initialTab }: { initialTab?: LighthouseTab }) 
             await landInReview(drafted.touchId);
             return drafted;
           }}
-          onRequestSend={(touchId, subject, body) => {
+          onRequestSend={(touchId, subject, body, opts) => {
             if (!openLead.email) return;
             setConfirmSend({
               touchId,
@@ -816,6 +840,9 @@ export function LighthousePanel({ initialTab }: { initialTab?: LighthouseTab }) 
               body,
               email: openLead.email,
               title: firmCardTitle(openLead),
+              ...(opts?.preview
+                ? { preview: true, windowReason: opts.windowReason ?? null }
+                : {}),
             });
           }}
           onReview={runReview}
@@ -865,10 +892,17 @@ export function LighthousePanel({ initialTab }: { initialTab?: LighthouseTab }) 
                 <dd>{dryRun ? "Dry-run — allowlist only" : "Live — outside the allowlist"}</dd>
               </div>
             </dl>
+            {confirmSend.preview && (
+              <p className="mt-3 rounded-lg border border-[var(--ops-amber-border)] bg-[var(--ops-amber-soft)] px-3 py-2 text-[12.5px] font-semibold text-[var(--ops-amber)]">
+                Preview only — send window closed: {confirmSend.windowReason}
+              </p>
+            )}
             <div className="mt-4 flex gap-2">
               <button
                 type="button"
+                disabled={Boolean(confirmSend.preview)}
                 onClick={() => {
+                  if (confirmSend.preview) return;
                   const pending = confirmSend;
                   setConfirmSend(null);
                   void sendTouch({
@@ -882,7 +916,7 @@ export function LighthousePanel({ initialTab }: { initialTab?: LighthouseTab }) 
                     })
                     .catch((e) => toast.error(e instanceof Error ? e.message : "Send failed"));
                 }}
-                className="inline-flex h-10 items-center rounded-xl bg-gradient-to-r from-[#ac8400] via-[#d4af37] to-[#fdee79] px-4 text-xs font-bold uppercase tracking-wider text-[#1b1300]"
+                className="inline-flex h-10 items-center rounded-xl bg-gradient-to-r from-[#ac8400] via-[#d4af37] to-[#fdee79] px-4 text-xs font-bold uppercase tracking-wider text-[#1b1300] disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Confirm send
               </button>
@@ -1565,7 +1599,12 @@ function LeadDrawer({
     theirMessage: string,
     intent: "answer" | "email" | "book" | "trial",
   ) => Promise<{ subject: string; body: string; touchId: string; stepNo: number }>;
-  onRequestSend: (touchId: string, subject: string, body: string) => void;
+  onRequestSend: (
+    touchId: string,
+    subject: string,
+    body: string,
+    opts?: { preview?: boolean; windowReason?: string | null },
+  ) => void;
   onReview: (
     touchId: string,
     action: "approve" | "reject",
@@ -2031,6 +2070,21 @@ function LeadDrawer({
             <Send className="h-3.5 w-3.5" />
             Send now
           </button>
+          {approved && !windowStatus.open && (
+            <button
+              type="button"
+              onClick={() => {
+                if (!touchId) return;
+                onRequestSend(touchId, subject, body, {
+                  preview: true,
+                  windowReason: windowStatus.reason,
+                });
+              }}
+              className="inline-flex h-10 items-center rounded-xl border border-[var(--ops-line-strong)] px-3 text-[11px] font-semibold text-[var(--ops-ink-soft)]"
+            >
+              Preview send
+            </button>
+          )}
           <select
             className={`${inputCls} max-w-[180px]`}
             defaultValue=""

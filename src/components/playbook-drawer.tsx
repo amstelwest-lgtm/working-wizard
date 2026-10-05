@@ -23,6 +23,7 @@ import {
 import { useMarket } from "@/contexts/market";
 import { useNotes } from "@/contexts/notes";
 import { noteBelongsToRatio } from "@/lib/ratio-queries";
+import { healthBandLabel } from "@/lib/ratios";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -50,7 +51,7 @@ const TIER_STYLES: Record<
   at_risk: {
     badge: "bg-amber-950/80 text-amber-200 border border-amber-700/80",
     stepDot: "bg-amber-600 text-white",
-    label: "At Risk",
+    label: healthBandLabel("at_risk"),
     border: "border-l-amber-500",
   },
   healthy: {

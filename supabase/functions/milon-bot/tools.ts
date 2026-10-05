@@ -18,6 +18,7 @@ import {
 import { DISPLAY_TO_CAMEL } from "../ask-ai/derive-ratios.ts";
 import { buildOverviewBrief, type OverviewCopyPack } from "../ask-ai/overview-brief.ts";
 import { rankNextSteps, summarizeCashForecast } from "../ask-ai/deliverable-summaries.ts";
+import type { ClientRunway } from "../../../src/lib/client-metrics.ts";
 import type { RatioRow } from "../ask-ai/types.ts";
 import type { SavedCashflow } from "../ask-ai/deliverable-summaries.ts";
 
@@ -173,10 +174,28 @@ export function shapeHealth(
   };
 }
 
-export function shapeCash(cashflow: unknown, storedRunway: number | null): Record<string, unknown> {
+export function shapeCash(
+  cashflow: unknown,
+  storedRunway: number | null,
+  context?: {
+    financials?: Record<string, unknown> | null;
+    openingCash?: number | null;
+    runway?: ClientRunway | null;
+    periodEnd?: string | null;
+  },
+): Record<string, unknown> {
   const summary = summarizeCashForecast(
     cashflow && typeof cashflow === "object" ? (cashflow as SavedCashflow) : null,
     storedRunway,
+    context
+      ? {
+          cashGenerative: context.runway?.kind === "cash_generative",
+          openingCash: context.openingCash,
+          financials: context.financials,
+          runway: context.runway,
+          periodEnd: context.periodEnd,
+        }
+      : undefined,
   );
   if (!summary) {
     if (storedRunway == null) return { empty: true };

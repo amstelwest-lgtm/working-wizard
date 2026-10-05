@@ -10,7 +10,7 @@ import {
   copyPackFromMarket,
   type OverviewBrief,
 } from "../ask-ai/overview-brief.ts";
-import { assessClientMetrics } from "../../../src/lib/client-metrics.ts";
+import { assessClientMetrics, runwayDisplayLabel } from "../../../src/lib/client-metrics.ts";
 
 export async function loadOverviewBrief(
   client: SupabaseClient,
@@ -54,7 +54,7 @@ export async function loadOverviewBrief(
     ratios: fallback,
     cash: metrics.cash.amount,
     runwayWeeks: metrics.runway.weeks,
-    runwayLabel: metrics.runway.kind === "unknown" ? null : metrics.runway.label,
+    runwayLabel: runwayDisplayLabel(metrics.runway),
     copyPack: copyPackFromMarket(row?.market),
     clientName: typeof row?.name === "string" ? row.name : null,
     periodLabel: (snapRes.data?.period_label as string | null) ?? null,

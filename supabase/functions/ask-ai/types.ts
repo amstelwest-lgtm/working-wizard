@@ -77,6 +77,8 @@ export interface CashForecastSummary {
   shortfall: boolean;
   lowestWeek: number | null;
   negativeWeeks: number;
+  /** Why a shortfall is a timing dip rather than a structural burn. */
+  timingNote?: string | null;
   trajectory: "up" | "down" | "flat" | null;
   closingVsOpening: "higher" | "lower" | "flat" | null;
 }

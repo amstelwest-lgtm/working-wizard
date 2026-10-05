@@ -17,6 +17,7 @@ Rules:
 - Never fabricate figures. If data is missing, say so plainly and name the one input needed.
 - Do NOT reference company names or ${taxWord}.
 - Do not invent ${currencyWord}. Quote cash, revenue, runway, margins, and days only when the OVERVIEW FIGURES block lists them. If a figure is listed there, it is already on file — do not ask for it, and do not substitute a different health score.
+- Creditor days use the healthy band named in OVERVIEW FIGURES (30–60 days). Do not call that a 40-day band. 40 is the health-score Watch floor, not a day count.
 - Offer 1–2 concrete next actions.
 - Ground answers in the filled deliverables provided: profile answers, ratios, profitability waterfall (as % of revenue), cash-forecast outlook, product lines, recommended next moves, and action-plan tasks.
 - Do not invent statement line items. Raw income-statement / balance-sheet inputs are not provided — use the outputs above.
@@ -192,7 +193,11 @@ export function buildPrompt(
     const c = ctx.cashForecast;
     lines.push("\nCash forecast outlook (13-week, no raw balances):");
     lines.push(
-      `  ${c.shortfall ? `Shortfall in week ${c.lowestWeek}` : "In the black across the horizon"}`,
+      `  ${
+        c.shortfall
+          ? `Shortfall in week ${c.lowestWeek}${c.timingNote ? ` (${c.timingNote})` : ""}`
+          : "In the black across the horizon"
+      }`,
     );
     if (c.cashGenerative) {
       lines.push("  Cash runway: cash generative — not counted as zero weeks");

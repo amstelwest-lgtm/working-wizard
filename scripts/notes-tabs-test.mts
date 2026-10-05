@@ -31,6 +31,10 @@ assert(!noteTabsMatch("ask", "today"), "Milōn Bot is not Health");
 
 assert(accountantWorkspaceTab("waterfall") === "profit", "deep link tab=waterfall opens Profit");
 assert(accountantWorkspaceTab("today") === "ratios", "deep link tab=today opens Health");
+assert(accountantWorkspaceTab("health") === "ratios", "?tab=health opens Health");
+assert(ownerWorkspaceTab("health") === "today", "?tab=health on the owner board is Health");
+assert(noteTabsMatch("health", "ratios"), "health is the Health deliverable");
+assert(noteTabLabel("health") === "Health", "health badge says Health");
 assert(accountantWorkspaceTab("today-complex") === "ratios", "today-complex opens Health");
 assert(accountantWorkspaceTab("tasks") === "plan", "old staff-tasks links open Action Plan");
 assert(accountantWorkspaceTab("actions") === "plan", "?tab=actions opens Action Plan");
