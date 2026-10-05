@@ -15,8 +15,9 @@ import { FirmBandPricingTable } from "@/components/firm-band-pricing";
 import {
   DUAL_MARKET_BUILT,
   DUAL_MARKET_TAGLINE,
-  firmSignupTrialReminder,
+  practiceLocationHint,
 } from "@/lib/firm-signup-copy";
+import { FirmSignupTerms } from "@/components/firm-signup-terms";
 import { MarketPicker } from "@/components/market-picker";
 import { RegionCopy } from "@/components/marketing-shell";
 import {
@@ -1217,9 +1218,14 @@ function LandingPage() {
       setRegBusy(true);
       try {
         setPortalIntent("accountant");
-        const signupCheckout = firmSignupCheckoutIntent(market.country === "ZA" ? "za" : "us");
-        if (!peekPendingCheckout()) stashPendingCheckout(signupCheckout);
-        const pending = peekPendingCheckout() ?? signupCheckout;
+        const promo = peekPendingCheckout()?.promo;
+        const pending = {
+          plan: paidPlanFromRegisterLabel(regPlan) ?? "solo",
+          interval: firmInterval,
+          market: visitorCopyPack(draftMarket),
+          ...(promo ? { promo } : {}),
+        };
+        stashPendingCheckout(pending);
         const { data, error } = await supabase.auth.signUp({
           email: regEmail,
           password: regPassword,
@@ -1362,7 +1368,7 @@ function LandingPage() {
       return;
     }
     toast.message(`Create your firm account to start ${registerLabelForPlan(plan)}.`);
-    void navigate({ to: "/auth", search: { signup: true } });
+    void navigate({ to: "/auth", search: { signup: true, plan, interval } });
   };
 
   const goToFirmSignup = (opts?: {
@@ -3146,6 +3152,20 @@ function LandingPage() {
 
                     {regRole === "Accountant / Advisory firm" ? (
                       <>
+                        <FirmSignupTerms
+                          variant="landing"
+                          showRole={false}
+                          plan={paidPlanFromRegisterLabel(regPlan) ?? "solo"}
+                          interval={firmInterval}
+                          onPlanChange={(nextPlan) => {
+                            setRegPlan(registerLabelForPlan(nextPlan));
+                            stashPendingCheckout({
+                              plan: nextPlan,
+                              interval: firmInterval,
+                              market: visitorCopyPack(draftMarket),
+                            });
+                          }}
+                        />
                         <div style={{ margin: "8px 0 18px" }}>
                           <MarketPicker
                             value={draftMarket}
@@ -3153,16 +3173,22 @@ function LandingPage() {
                             variant="landing"
                             audience="practice"
                           />
+                          {practiceLocationHint(draftMarket) ? (
+                            <p className="firm-signup-hint" role="status">
+                              {practiceLocationHint(draftMarket)}
+                            </p>
+                          ) : null}
                         </div>
                         <GoogleSignInButton
                           intent="accountant"
                           tone="landing"
                           label="Continue with Google"
                           disabled={regBusy || !isDraftComplete(draftMarket)}
-                          next={billingStartPath(
-                            peekPendingCheckout() ??
-                              firmSignupCheckoutIntent(visitorCopyPack(draftMarket)),
-                          )}
+                          next={billingStartPath({
+                            plan: paidPlanFromRegisterLabel(regPlan) ?? "solo",
+                            interval: firmInterval,
+                            market: visitorCopyPack(draftMarket),
+                          })}
                           onBeforeStart={() => {
                             const market = draftToSelection(draftMarket);
                             if (!market) {
@@ -3179,11 +3205,11 @@ function LandingPage() {
                               marketCountry: market.country,
                               marketRegion: market.regionCode,
                             });
-                            if (!peekPendingCheckout()) {
-                              stashPendingCheckout(
-                                firmSignupCheckoutIntent(market.country === "ZA" ? "za" : "us"),
-                              );
-                            }
+                            stashPendingCheckout({
+                              plan: paidPlanFromRegisterLabel(regPlan) ?? "solo",
+                              interval: firmInterval,
+                              market: market.country === "ZA" ? "za" : "us",
+                            });
                             return true;
                           }}
                           onError={(msg) => showRegisterError(msg)}
@@ -3228,20 +3254,17 @@ function LandingPage() {
                           minLength={6}
                           value={regPassword}
                           onChange={(e) => setRegPassword(e.target.value)}
+                          aria-describedby="register-password-hint"
                         />
-
-                        <p
-                          style={{
-                            marginTop: 18,
-                            color: "var(--ink-dim)",
-                            fontSize: 13,
-                            lineHeight: 1.6,
-                          }}
-                        >
-                          {paidPlanFromRegisterLabel(regPlan)
-                            ? firmSignupTrialReminder(regPlan)
-                            : `${FIRM_TRIAL_SENTENCE}. A card is required. Pick a band in Pricing if you already know your book size.`}
+                        <p id="register-password-hint" className="firm-signup-hint">
+                          At least 6 characters.
                         </p>
+
+                        {practiceLocationHint(draftMarket) ? (
+                          <p className="firm-signup-hint">
+                            Create firm account stays off until the practice location is filled in.
+                          </p>
+                        ) : null}
 
                         <button
                           type="submit"

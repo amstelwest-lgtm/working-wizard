@@ -941,8 +941,38 @@ html[data-theme="light"] .accountant-portal .crumb a:hover {
   color: #1b1300;
 }
 
+.auth-entry__terms {
+  margin-bottom: 0.25rem;
+}
+
+.auth-entry__role {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--brand-ink-muted);
+}
+
+.auth-entry__role strong {
+  color: var(--brand-ink);
+  font-weight: 650;
+}
+
+.auth-entry__hint {
+  margin: 0.75rem 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--brand-ink-muted);
+}
+
+.firm-signup-hint {
+  margin: 8px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-dim, var(--brand-ink-muted));
+}
+
 .auth-entry__trial {
-  margin: 0 0 1.25rem;
+  margin: 0.75rem 0 0;
   font-size: 13px;
   line-height: 1.6;
   color: var(--brand-ink-muted);

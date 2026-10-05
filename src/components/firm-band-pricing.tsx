@@ -1,9 +1,10 @@
-import { ENTERPRISE_CONTACT_HREF, FIRM_SIGNUP_HREF } from "@/lib/firm-signup-copy";
+import { ENTERPRISE_CONTACT_HREF, firmSignupHref } from "@/lib/firm-signup-copy";
 import { FOUNDING_CALLOUT, WATCHLIST_DEFINITION } from "@/lib/marketing-faq";
 import {
   FIRM_BAND_TABLE,
   FIRM_TRIAL_SENTENCE,
   firmUsdListPrice,
+  isFirmCheckoutBand,
   type FirmCheckoutBand,
   type FirmInterval,
 } from "@/lib/stripe-plans";
@@ -111,7 +112,19 @@ export function FirmBandPricingTable({
                         {band.id === "solo" ? "Start 14-day trial" : `Start ${band.name}`}
                       </button>
                     ) : (
-                      <a className="btn btn-ghost" href={FIRM_SIGNUP_HREF}>
+                      <a
+                        className="btn btn-ghost"
+                        href={
+                          isFirmCheckoutBand(band.id)
+                            ? firmSignupHref(
+                                band.id,
+                                interval === "year" && band.yearlyUsdCents == null
+                                  ? "month"
+                                  : interval,
+                              )
+                            : firmSignupHref()
+                        }
+                      >
                         Set up firm
                       </a>
                     )}

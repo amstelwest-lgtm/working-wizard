@@ -26,7 +26,10 @@ function ForAccountantsPage() {
   const startBand = (plan: FirmCheckoutBand, nextInterval: FirmInterval) => {
     const market = visitorCopyPack(readVisitorDraft());
     stashPendingCheckout({ plan, interval: nextInterval, market });
-    void navigate({ to: "/auth", search: { signup: true } });
+    void navigate({
+      to: "/auth",
+      search: { signup: true, plan, interval: nextInterval },
+    });
   };
 
   return (
