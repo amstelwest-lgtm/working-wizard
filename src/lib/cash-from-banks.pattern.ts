@@ -99,9 +99,24 @@ export function normalisePayeeLabel(raw: string): string {
   return kept.join(" ");
 }
 
+/**
+ * Recurrence key for the bank-statement → forecast draft.
+ * Month names, dates and reference numbers are stripped from the payee and,
+ * when that leaves nothing, from the narration. "Salaries July" and
+ * "Salaries September" are one payroll series, not three once-offs.
+ */
+function groupingLabel(txn: CashStatementTransaction): string {
+  const fromPayee = normalisePayeeLabel(txn.counterparty || "");
+  const fromNarration = normalisePayeeLabel(txn.description || "");
+  return fromPayee || fromNarration || "unknown";
+}
+
 function normalizeKey(txn: CashStatementTransaction): string {
-  const label = normalisePayeeLabel(txn.counterparty || txn.description || "") || "unknown";
-  return `${txn.direction}|${txn.ai_bucket}|${label}`;
+  return `${txn.direction}|${txn.ai_bucket}|${groupingLabel(txn)}`;
+}
+
+function titleCaseLabel(label: string): string {
+  return label.replace(/\b[a-z]/g, (ch) => ch.toUpperCase());
 }
 
 function prettyName(txn: CashStatementTransaction): string {
@@ -237,9 +252,14 @@ export function buildDraftLinesFromExtract(extract: CashBankExtract): CashForeca
       amountsSimilar(amounts),
     );
     const side = bucketToSide(bucket, sample.direction);
-    const name = prettyName(
-      txns.slice().sort((a, b) => (b.description?.length ?? 0) - (a.description?.length ?? 0))[0] ?? sample,
-    );
+    const stripped = groupingLabel(sample);
+    const name =
+      txns.length >= 2 && stripped !== "unknown"
+        ? titleCaseLabel(stripped).slice(0, 60)
+        : prettyName(
+            txns.slice().sort((a, b) => (b.description?.length ?? 0) - (a.description?.length ?? 0))[0] ??
+              sample,
+          );
 
     lines.push({
       id: newId(),
@@ -273,6 +293,38 @@ export function nextForecastStartDate(periodEnd: string | null): string {
   // Day after statement period
   base.setDate(base.getDate() + 1);
   return base.toISOString().slice(0, 10);
+}
+
+export type ReviewCashTotals = {
+  /** Both sides cover the uploaded statement, not one occurrence of a recurring line. */
+  basis: "statement period";
+  inflow: number;
+  outflow: number;
+};
+
+/**
+ * Bank-review footer totals. Every included line contributes amount × occurrences,
+ * so a monthly receipt and a payroll series are both the full statement window.
+ */
+export function reviewCashTotals(
+  lines: Array<
+    Pick<CashForecastDraftLine, "status" | "side" | "amount" | "txn_count">
+  >,
+): ReviewCashTotals {
+  let inflow = 0;
+  let outflow = 0;
+  for (const line of lines) {
+    if (line.status === "excluded") continue;
+    const occurrences = Math.max(1, line.txn_count || 1);
+    const period = Math.abs(line.amount) * occurrences;
+    if (line.side === "inflow") inflow += period;
+    else outflow += period;
+  }
+  return {
+    basis: "statement period",
+    inflow: Math.round(inflow * 100) / 100,
+    outflow: Math.round(outflow * 100) / 100,
+  };
 }
 
 export function resolveOpeningBalance(extract: CashBankExtract): number {

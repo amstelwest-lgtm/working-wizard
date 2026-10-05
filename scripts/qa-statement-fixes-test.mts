@@ -13,7 +13,10 @@ import {
   buildDraftLinesFromExtract,
   normalisePayeeLabel,
   recurringReviewLabel,
+  reviewCashTotals,
 } from "../src/lib/cash-from-banks.pattern";
+import { buildCashflowPublishPayload } from "../src/lib/cash-from-banks.publish";
+import { closingBalancesFromCashflow } from "../src/lib/cash-runway";
 import {
   INVITE_LINK_INVALID,
   inviteTokenShapeOk,
@@ -346,6 +349,136 @@ const xero = lines.find((line) => /xero/i.test(line.name));
 assert(xero?.cadence === "monthly" && xero.txn_count === 3, "Xero months group into one monthly line");
 const printing = lines.find((line) => /printing/i.test(line.name));
 assert(printing?.cadence === "once_off" && printing.txn_count === 1, "Printing stays a once-off");
+
+// QA fixture: Salaries July / August / September, $30k on the 5th, through
+// the bank-statement → forecast recurrence path (not only the payee string).
+function salaryTxn(
+  txn_date: string,
+  description: string,
+  counterparty: string | null,
+): CashStatementTransaction {
+  return {
+    txn_date,
+    amount: 30_000,
+    direction: "out",
+    description,
+    counterparty,
+    ai_bucket: "payroll",
+    excluded: false,
+  };
+}
+
+function assertSalaryForecast(counterparty: string | null, label: string) {
+  const extract: CashBankExtract = {
+    period_start: "2026-07-01",
+    period_end: "2026-09-30",
+    opening_balance: 40_000,
+    closing_balance: 10_000,
+    currency: "USD",
+    notes: null,
+    transactions: [
+      salaryTxn("2026-07-05", "Salaries July", counterparty),
+      salaryTxn("2026-08-05", "Salaries August", counterparty),
+      salaryTxn("2026-09-05", "Salaries September", counterparty),
+    ],
+  };
+  const drafted = buildDraftLinesFromExtract(extract);
+  const payroll = drafted.filter((line) => line.bucket === "payroll" && line.status !== "excluded");
+  assert(payroll.length === 1, `${label}: one payroll line, got ${payroll.length}`);
+  const line = payroll[0]!;
+  assert(line.amount === 30_000, `${label}: monthly amount is 30000, got ${line.amount}`);
+  assert(line.cadence === "monthly", `${label}: cadence monthly, got ${line.cadence}`);
+  assert(line.txn_count === 3, `${label}: three months on one line`);
+  assert(line.confidence >= 0.85, `${label}: high confidence, got ${line.confidence}`);
+  assert(recurringReviewLabel(line) === "Recurring · monthly", `${label}: review label`);
+  assert(!/july|august|september/i.test(line.name), `${label}: card name drops the month`);
+
+  const published = buildCashflowPublishPayload({
+    lines: drafted,
+    startDate: "2026-10-01",
+    openingBalance: 10_000,
+    policy: "replace",
+  });
+  const expense = published.expenses.filter((row) => parseFloat(row.amount) === 30_000);
+  assert(expense.length === 1, `${label}: one published payroll expense`);
+  assert(
+    expense[0]!.frequency === "recurring-monthly",
+    `${label}: published as recurring-monthly, got ${expense[0]!.frequency}`,
+  );
+
+  const closings = closingBalancesFromCashflow({
+    openingBalance: "0",
+    revenue: [],
+    expenses: expense,
+    other: [],
+  });
+  assert(closings?.length === 13, `${label}: 13-week horizon`);
+  const weekly = closings!.map((closing, index) => {
+    const prev = index === 0 ? 0 : closings![index - 1]!;
+    return Math.round(prev - closing);
+  });
+  assert(weekly[expense[0]!.startWeek - 1] === 30_000, `${label}: first payroll week is 30000 not 90000`);
+  assert(
+    weekly.filter((value) => value === 30_000).length >= 3,
+    `${label}: payroll repeats across the 13 weeks, got ${weekly.join(",")}`,
+  );
+  assert(!weekly.some((value) => value === 90_000), `${label}: week 1 does not take all three months`);
+  assert(
+    weekly.reduce((sum, value) => sum + value, 0) === 30_000 * weekly.filter((value) => value === 30_000).length,
+    `${label}: each hit is one month of payroll`,
+  );
+}
+
+assertSalaryForecast(null, "narration only");
+assertSalaryForecast("Salaries July", "payee keeps the month until stripped");
+// Distinct month payees, which is what the extractor returns for these narrations.
+{
+  const extract: CashBankExtract = {
+    period_start: "2026-07-01",
+    period_end: "2026-09-30",
+    opening_balance: null,
+    closing_balance: null,
+    currency: "USD",
+    notes: null,
+    transactions: [
+      salaryTxn("2026-07-05", "Salaries July", "Salaries July"),
+      salaryTxn("2026-08-05", "Salaries August", "Salaries August"),
+      salaryTxn("2026-09-05", "Salaries September", "Salaries September"),
+    ],
+  };
+  const drafted = buildDraftLinesFromExtract(extract);
+  assert(
+    drafted.filter((line) => line.bucket === "payroll").length === 1,
+    "month-specific payees still collapse to one payroll line",
+  );
+}
+
+// Review footer: one month of receipts must not sit beside every salary month.
+const ungroupedSalaries = [
+  { status: "proposed" as const, side: "inflow" as const, amount: 33_500, txn_count: 3 },
+  { status: "proposed" as const, side: "outflow" as const, amount: 16_950, txn_count: 3 },
+  { status: "proposed" as const, side: "outflow" as const, amount: 30_000, txn_count: 1 },
+  { status: "proposed" as const, side: "outflow" as const, amount: 30_000, txn_count: 1 },
+  { status: "proposed" as const, side: "outflow" as const, amount: 30_000, txn_count: 1 },
+];
+const occurrenceIn = 33_500;
+const occurrenceOut = 16_950 + 90_000;
+assert(occurrenceIn === 33_500 && occurrenceOut === 106_950, "the reported mismatch is 33500 beside 106950");
+const periodTotals = reviewCashTotals(ungroupedSalaries);
+assert(periodTotals.basis === "statement period", "footer names the statement-period basis");
+assert(periodTotals.inflow === 33_500 * 3, `statement inflows cover every month, got ${periodTotals.inflow}`);
+assert(
+  periodTotals.outflow === 16_950 * 3 + 90_000,
+  `statement outflows cover every cost month plus the salaries, got ${periodTotals.outflow}`,
+);
+assert(
+  periodTotals.inflow !== occurrenceIn || periodTotals.outflow !== occurrenceOut,
+  "footer no longer pairs one month of receipts with the full salary bill",
+);
+const workspace = read("src/components/cash-classification-workspace.tsx");
+assert(workspace.includes("Statement period · In"), "review footer labels In as the statement period");
+assert(workspace.includes("Out {fmt(reviewTotals.outflow)}"), "review footer labels Out on that same total");
+assert(workspace.includes("reviewCashTotals"), "footer uses the shared statement-period helper");
 
 // Bank ledger vs financial statement
 const bankCsv = [
