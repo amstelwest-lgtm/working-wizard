@@ -28,7 +28,10 @@ assert(
       clientSrc.indexOf('{ id: "ask", label: "Milōn Bot"'),
   "Overview sits above Client Brain, above Milōn Bot",
 );
-assert(clientSrc.includes('useState<ActiveTab>("overview")'), "studio lands on Overview");
+assert(
+  clientSrc.includes('resolveAccountantTab(search.tab) ?? "overview"'),
+  "studio lands on Overview unless a deep link names a tab",
+);
 assert(
   clientSrc.includes('setActiveTab("overview")'),
   "opening a client without a deep link lands on Overview",
