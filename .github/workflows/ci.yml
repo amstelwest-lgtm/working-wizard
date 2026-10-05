@@ -44,11 +44,12 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm test:ci
 
-  # Reporting only — always green. `tsc` carries ~30 long-standing typing
-  # errors (PostgREST builder / vite plugin typings) and `eslint .` a Prettier
-  # backlog, so neither can block yet. Counts land in the step summary and as
-  # warning annotations so the debt stays visible without a red badge. Once
-  # both are clean, turn the two `exit 0`s into real failures.
+  # Reporting for the existing typing and Prettier backlog, except undefined
+  # names. `tsc` still carries long-standing PostgREST / vite-plugin errors, and
+  # `eslint .` a Prettier backlog, so those stay non-blocking. TS2304 / TS2552
+  # (Cannot find name) fail the job — a missing const is a runtime ReferenceError
+  # and esbuild will still emit the bundle. Once the rest is clean, turn the
+  # remaining `exit 0` into a real failure.
   typecheck-and-lint:
     name: Typecheck + lint (report)
     runs-on: ubuntu-latest
@@ -64,9 +65,15 @@ jobs:
         run: |
           pnpm exec tsc --noEmit -p tsconfig.json > tsc.log 2>&1 || true
           n=$(grep -c "error TS" tsc.log || true)
-          echo "### tsc: $n error(s) (baseline 30)" >> "$GITHUB_STEP_SUMMARY"
+          undef=$(grep -Ec "error TS(2304|2552):" tsc.log || true)
+          echo "### tsc: $n error(s) (baseline 30); undefined names: $undef" >> "$GITHUB_STEP_SUMMARY"
           grep "error TS" tsc.log | sed -E 's/\([0-9]+,[0-9]+\)//' | sort | uniq -c | sort -rn | head -40 >> "$GITHUB_STEP_SUMMARY" || true
           if [ "$n" -gt 30 ]; then echo "::warning::tsc errors rose to $n (baseline 30) — see step summary"; fi
+          if [ "$undef" -gt 0 ]; then
+            echo "::error::tsc reported $undef undefined identifier(s) (TS2304/TS2552)"
+            grep -E "error TS(2304|2552):" tsc.log
+            exit 1
+          fi
           exit 0
       - name: eslint (non-formatting rules)
         run: |
