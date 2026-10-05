@@ -4,8 +4,10 @@
  * clock. This file does not call the billing API. Null (never written) and a
  * missing column fail open so a paying firm is not blocked before the first sync.
  */
-import { STARTER_TRIAL_ENDED_MESSAGE } from "../../../src/lib/firm-starter-trial.ts";
-import { STARTER_TRIAL_ENDED_CODE } from "../../../src/lib/starter-trial-generation.ts";
+import {
+  STARTER_TRIAL_ENDED_CODE,
+  STARTER_TRIAL_ENDED_MESSAGE,
+} from "../../../src/lib/starter-trial-constants.ts";
 
 export type PaidGenerationBlock = {
   code: typeof STARTER_TRIAL_ENDED_CODE;

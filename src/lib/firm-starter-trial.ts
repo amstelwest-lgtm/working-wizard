@@ -9,12 +9,12 @@
 
 import { FIRM_TRIAL_DAYS, type FirmBandId } from "./stripe-plans";
 
+export { STARTER_TRIAL_ENDED_MESSAGE } from "./starter-trial-constants.ts";
+
 const MS_DAY = 86_400_000;
 
 /** Countdown banner starts on this day of the trial (1-based). */
 export const STARTER_TRIAL_COUNTDOWN_FROM_DAY = 10;
-
-export const STARTER_TRIAL_ENDED_MESSAGE = "Your trial has ended, choose a plan";
 
 export type StarterTrialBanner = {
   /** True only when the flag is on and the billed band is Starter. */
