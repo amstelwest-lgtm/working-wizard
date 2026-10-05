@@ -11,6 +11,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import {
@@ -53,6 +54,7 @@ import {
   ACCOUNTANT_V1_SEQUENCE_KEY,
   sequenceUsesGoldenDefault,
 } from "@/lib/lighthouse-accountant-golden";
+import { isGenericLeadName } from "@/lib/lighthouse-due";
 
 const inputCls = "ops-input";
 
@@ -97,6 +99,7 @@ export function parseLighthouseTab(raw: unknown): LighthouseTab | undefined {
 }
 
 export function LighthousePanel({ initialTab }: { initialTab?: LighthouseTab }) {
+  const navigate = useNavigate();
   const load = useServerFn(getLighthouse);
   const saveLead = useServerFn(upsertLighthouseLead);
   const importLeads = useServerFn(importLighthouseLeads);
@@ -110,12 +113,8 @@ export function LighthousePanel({ initialTab }: { initialTab?: LighthouseTab }) 
   const [dash, setDash] = useState<LighthouseDashboard | null>(null);
   const [busy, setBusy] = useState(true);
   const [err, setErr] = useState("");
-  const [tab, setTab] = useState<LighthouseTab>(initialTab ?? "pipeline");
+  const tab: LighthouseTab = initialTab ?? "pipeline";
   const [openLeadId, setOpenLeadId] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (initialTab) setTab(initialTab);
-  }, [initialTab]);
 
   const [addOpen, setAddOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
@@ -150,7 +149,12 @@ export function LighthousePanel({ initialTab }: { initialTab?: LighthouseTab }) 
         <button
           key={t}
           type="button"
-          onClick={() => setTab(t)}
+          onClick={() => {
+            void navigate({
+              to: "/ops",
+              search: { tab: t },
+            });
+          }}
           className={`rounded-full px-4 py-1.5 text-xs font-semibold uppercase tracking-wider transition-colors ${
             tab === t
               ? "bg-[var(--ops-amber-soft)] text-[var(--ops-amber)]"
@@ -420,8 +424,9 @@ export function LighthousePanel({ initialTab }: { initialTab?: LighthouseTab }) 
             draftReply({ data: { leadId: openLead.id, theirMessage, intent } })
           }
           onSend={async (touchId, subject, body) => {
-            await sendTouch({ data: { touchId, subject, body } });
+            const result = await sendTouch({ data: { touchId, subject, body } });
             await refresh();
+            return result;
           }}
           onStage={async (stage) => {
             await saveLead({ data: { id: openLead.id, stage } });
@@ -506,7 +511,9 @@ function PipelineBoard({
                     {l.name || l.email || "Unnamed"}
                   </div>
                   <div className="truncate text-[11px] text-[var(--ops-ink-dim)]">
-                    {l.company || "—"} · {l.persona === "accountant" ? "practice" : "owner"}
+                    {l.company || "—"}
+                    {isGenericLeadName(l.name, l.email) && l.email ? ` · ${l.email}` : ""} ·{" "}
+                    {l.persona === "accountant" ? "practice" : "owner"}
                     {l.sequenceKey === ACCOUNTANT_ONESHOT_SEQUENCE_KEY ? " · one-shot" : ""}
                   </div>
                   {l.signal && (
@@ -1003,6 +1010,11 @@ function SettingsForm({
             value={bookingUrl}
             onChange={(e) => setBookingUrl(e.target.value)}
           />
+          <p className="text-[11px] text-[var(--ops-ink-dim)] sm:col-span-2">
+            {bookingUrl.trim()
+              ? "A calendar link is set, so the reply drafter can offer a call if you pick that intent. Leave this blank to keep every conversation on email."
+              : "Leave this blank. The pipeline is email correspondence — replies, questions, and the trial link — so it can run around a day job. Add Cal.com or Google Appointments later only if you want live calls."}
+          </p>
           <input
             className={`${inputCls} sm:col-span-2`}
             placeholder="Reply-to — hello@milonfinance.com"
@@ -1021,6 +1033,9 @@ function SettingsForm({
             value={sendWindow}
             onChange={(e) => setSendWindow(e.target.value)}
           />
+          <p className="text-[11px] text-[var(--ops-ink-dim)] sm:col-span-2">
+            Reminder only. Milōn doesn't enforce send times yet.
+          </p>
         </div>
         {!senderAddress.trim() && (
           <p className="mt-2 text-[11px] text-[var(--ops-amber)]/80">
@@ -1034,11 +1049,6 @@ function SettingsForm({
             watch.
           </p>
         )}
-        <p className="mt-1 text-[11px] text-[var(--ops-ink-dim)]">
-          {bookingUrl.trim()
-            ? "A calendar link is set, so the reply drafter can offer a call if you pick that intent. Leave this blank to keep every conversation on email."
-            : "Leave this blank. The pipeline is email correspondence — replies, questions, and the trial link — so it can run around a day job. Add Cal.com or Google Appointments later only if you want live calls."}
-        </p>
         <button
           disabled={busy}
           onClick={async () => {
@@ -1126,7 +1136,11 @@ function LeadDrawer({
     theirMessage: string,
     intent: "answer" | "email" | "book" | "trial",
   ) => Promise<{ subject: string; body: string; touchId: string; stepNo: number }>;
-  onSend: (touchId: string, subject: string, body: string) => Promise<void>;
+  onSend: (
+    touchId: string,
+    subject: string,
+    body: string,
+  ) => Promise<{ skipped?: boolean } | void>;
   onStage: (stage: LighthouseStage) => Promise<void>;
   onSequence: (sequenceKey: "accountant_v1" | "accountant_oneshot_v1") => Promise<void>;
   onOptOut: () => Promise<void>;
@@ -1179,7 +1193,9 @@ function LeadDrawer({
               {lead.name || lead.email || "Unnamed lead"}
             </h2>
             <p className="text-sm text-[var(--ops-ink-dim)]">
-              {lead.company || "—"} · {lead.persona === "accountant" ? "practice" : "owner"}
+              {lead.company || "—"}
+              {isGenericLeadName(lead.name, lead.email) && lead.email ? ` · ${lead.email}` : ""} ·{" "}
+              {lead.persona === "accountant" ? "practice" : "owner"}
               {isOneshot ? " · one-shot" : ""}
               {lead.city ? ` · ${lead.city}` : ""}
             </p>
@@ -1510,8 +1526,10 @@ function LeadDrawer({
             onClick={async () => {
               setSending(true);
               try {
-                await onSend(touchId, subject, body);
-                toast.success("Sent");
+                const result = await onSend(touchId, subject, body);
+                toast.success(
+                  result?.skipped ? "Already touched at this step — nothing sent" : "Sent",
+                );
               } catch (e) {
                 toast.error(e instanceof Error ? e.message : "Send failed");
               } finally {
