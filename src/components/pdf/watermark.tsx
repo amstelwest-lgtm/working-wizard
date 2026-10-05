@@ -40,11 +40,19 @@ export function DemoWatermark() {
   );
 }
 
-/** Unsigned budget — same placement as the illustrative watermark, labelled Draft. */
+/**
+ * Unsigned budget. Sits in the header band, small and light, so it does not
+ * cover the variance table.
+ */
 export function DraftWatermark() {
   return (
     <View style={styles.layer} fixed>
-      <Text style={[styles.diagonal, { opacity: 0.09, fontSize: 64, letterSpacing: 10 }]}>
+      <Text
+        style={[
+          styles.diagonal,
+          { top: 36, left: 80, width: 460, opacity: 0.045, fontSize: 22, letterSpacing: 6 },
+        ]}
+      >
         DRAFT
       </Text>
     </View>

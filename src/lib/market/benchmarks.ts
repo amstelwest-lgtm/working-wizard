@@ -75,7 +75,7 @@ export function industryBenchmarkCaption(
   market: Pick<ResolvedMarket, "country" | "copyPack"> | null | undefined,
 ): string {
   if (isUsBenchmarkMarket(market)) {
-    return "Global SME bands for days and percentages — not US industry medians. Money-denominated South African figures are hidden until we have US numbers.";
+    return "Days and percentages are set against global SME bands. Dollar amounts are not compared on this report.";
   }
   return "South African industry median";
 }

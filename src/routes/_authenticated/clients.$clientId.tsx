@@ -111,7 +111,7 @@ import {
   stampProfileProvenance,
   type ClientOperatingProfile,
 } from "@/lib/client-profile";
-import { profileIndustryLabel } from "@/lib/profile-signals";
+import { clientIndustryLabel } from "@/lib/profile-signals";
 import { NoteLayer } from "@/components/note-layer";
 import { useNotes } from "@/contexts/notes";
 import { accountantWorkspaceTab } from "@/lib/notes-tabs";
@@ -2442,7 +2442,7 @@ function ClientView() {
                 <ClientBriefing
                   clientName={client.name}
                   clientCode={client.client_code}
-                  industryLabel={profileIndustryLabel(briefingProfile, client.business_type ?? "—")}
+                  industryLabel={clientIndustryLabel(briefingProfile, client.business_type)}
                   ring={
                     <HealthRing
                       score={hasFigures ? overallHealth.overall : null}
@@ -3401,7 +3401,7 @@ function ClientView() {
                   <DeliverableTabHead
                     eyebrow="Reports Studio"
                     title="Board-ready PDFs"
-                    lede="Each report has its own sign-off. Stamp Business Health & Ratios, Profitability, the 13-week Cash Forecast, or the 12-month Budget so the signature carries into the PDF. You can brand packs with this client's own logo and colours."
+                    lede="Each report has its own sign-off. Stamp Business Health & Ratios, Profitability, the 13-week Cash Forecast, or the 12-month Budget so the signature carries into the PDF. Packs use your firm's logo and colours."
                   />
                   <DeliverableInputConfig
                     className="mb-5"

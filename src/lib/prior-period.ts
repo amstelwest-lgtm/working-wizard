@@ -21,20 +21,59 @@ function scorePriorRatio(name: string, val: number): number {
   return Number.isFinite(scored) ? scored : 50;
 }
 
+function numField(fin: Record<string, unknown> | null | undefined, key: string): number | null {
+  if (!fin) return null;
+  const v = fin[key];
+  if (v == null || v === "") return null;
+  const n = typeof v === "number" ? v : Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * The current statement saved as its own snapshot is not a prior period.
+ * Matching revenue and profit means the "prior" was copied from current.
+ */
+export function snapshotIsCurrentPeriod(
+  snapshot: SnapshotRow,
+  current?: {
+    periodEnd?: string | null;
+    financials?: Record<string, unknown> | null;
+  } | null,
+): boolean {
+  if (!current) return false;
+  const end = current.periodEnd?.slice(0, 10);
+  const snapDay = snapshot.period_date?.slice(0, 10);
+  if (end && snapDay && snapDay >= end) return true;
+  const fin = current.financials;
+  const prior = snapshot.financials;
+  if (!fin || !prior) return false;
+  const pairs = ["revenue", "netIncome"]
+    .map((key) => [numField(fin, key), numField(prior, key)] as const)
+    .filter((p): p is readonly [number, number] => p[0] != null && p[1] != null);
+  if (pairs.length < 2) return false;
+  return pairs.every(([a, b]) => Math.abs(a - b) <= Math.max(1, Math.abs(a) * 0.001));
+}
+
 /**
  * Pick the best prior snapshot relative to `asOf` (default today).
  * Prefers ~11–14 months back (YoY); else nearest older distinct period_date.
+ * A snapshot of the current statement is not a prior period.
  */
 export function resolvePriorSnapshot(
   snapshots: SnapshotRow[],
   asOf: Date = new Date(),
+  current?: {
+    periodEnd?: string | null;
+    financials?: Record<string, unknown> | null;
+  } | null,
 ): SnapshotRow | null {
   if (!snapshots.length) return null;
   const asOfMs = asOf.getTime();
   const older = snapshots
     .filter((s) => {
       const t = Date.parse(s.period_date);
-      return Number.isFinite(t) && t < asOfMs - 14 * 24 * 3600 * 1000;
+      if (!Number.isFinite(t) || !(t < asOfMs - 14 * 24 * 3600 * 1000)) return false;
+      return !snapshotIsCurrentPeriod(s, current);
     })
     .sort((a, b) => Date.parse(b.period_date) - Date.parse(a.period_date));
 
