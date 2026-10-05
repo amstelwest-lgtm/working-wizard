@@ -1,4 +1,5 @@
 import type { SpherePillar } from "@/components/sphere-hero";
+import { HEALTH_BAND_TABLE } from "@/lib/ratios";
 
 /**
  * Maps the existing app.tsx health data into SphereHero props.
@@ -36,8 +37,8 @@ const PILLAR_LABEL: Record<SpherePillar["id"], string> = {
 };
 
 function blurbFor(id: SpherePillar["id"], health: number): string {
-  const good = isFinite(health) && health >= 65;
-  const bad = isFinite(health) && health < 40;
+  const good = isFinite(health) && health >= HEALTH_BAND_TABLE.healthyMin;
+  const bad = isFinite(health) && health < HEALTH_BAND_TABLE.watchMin;
   switch (id) {
     case "profit":
       return bad ? "Your profitability needs attention." : good ? "Your profitability is strong." : "Your profitability is average.";

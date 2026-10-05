@@ -16,6 +16,7 @@ import {
   scoreLowerIsBetterDays,
   scoreWorkingCapitalDays,
 } from "../../../src/lib/client-metrics.ts";
+import { healthBandLabel, scoreTier } from "../../../src/lib/ratios.ts";
 
 export type OverviewCopyPack = "za" | "us";
 
@@ -33,7 +34,7 @@ export type OverviewBrief = {
   copyPack: OverviewCopyPack;
   health: number | null;
   healthStatus: "healthy" | "at_risk" | "critical" | null;
-  healthLabel: "Healthy" | "Watch" | "At risk" | null;
+  healthLabel: "Healthy" | "Watch" | "Critical" | null;
   pillars: OverviewPillar[];
   weakest: { id: string; label: string; score: number } | null;
   cash: number | null;
@@ -91,17 +92,8 @@ function asNumber(raw: unknown): number | null {
   return null;
 }
 
-function scoreTier(score: number | null): "healthy" | "at_risk" | "critical" {
-  if (score == null || !Number.isFinite(score)) return "at_risk";
-  if (score >= 65) return "healthy";
-  if (score >= 40) return "at_risk";
-  return "critical";
-}
-
-function chipLabel(status: "healthy" | "at_risk" | "critical"): "Healthy" | "Watch" | "At risk" {
-  if (status === "healthy") return "Healthy";
-  if (status === "at_risk") return "Watch";
-  return "At risk";
+function chipLabel(status: "healthy" | "at_risk" | "critical"): "Healthy" | "Watch" | "Critical" {
+  return healthBandLabel(status);
 }
 
 /** Same bands as `scoreCashRunway` in src/lib/health-score.ts. */

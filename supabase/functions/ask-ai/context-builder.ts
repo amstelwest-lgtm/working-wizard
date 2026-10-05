@@ -295,6 +295,9 @@ export async function buildContext(
       : summarizeCashForecast(cashflow, metrics?.runway.weeks ?? storedRunway, {
           cashGenerative: metrics?.runway.kind === "cash_generative",
           openingCash: metrics?.cash.amount ?? null,
+          financials,
+          runway: metrics?.runway ?? null,
+          periodEnd: typeof financials?.periodEnd === "string" ? financials.periodEnd : null,
         });
 
   // Rank next moves from the full ratio set (not the focused subset).

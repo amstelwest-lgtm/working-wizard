@@ -1,5 +1,6 @@
 import {
   computeRatios,
+  healthBandLabel,
   PERIOD_MONTHS_KEY,
   scoreTier,
   type HealthTier,
@@ -51,7 +52,7 @@ export type OverallHealth = {
    * when any pillar is critical (the critical-pillar tell).
    */
   displayStatus: HealthTier;
-  /** Short UI label for chips ("Healthy" / "Watch" / "At risk"). */
+  /** Short UI label for chips ("Healthy" / "Watch" / "Critical"). */
   displayLabel: string;
   pillars: PillarScore[];
   weakestPillar: PillarScore | null;
@@ -103,6 +104,29 @@ export function healthMapFromRatios(
     if (key) map[key] = Math.round(scored);
   }
   return map;
+}
+
+/** Catalogue keys that share a scored ratio under another name. */
+const PLAYBOOK_RATIO_ALIAS: Record<string, string> = {
+  wipDays: "inventoryDays",
+};
+
+/**
+ * Playbook card score from the shared ratio map. Missing keys are unscored —
+ * callers show "No data" instead of a catalogue fixture such as Healthy 75.
+ */
+export function scorePlaybookRatio(
+  ratioKey: string,
+  healthMap: Record<string, number> | null | undefined,
+): { health_score: number; health_tier: HealthTier; unscored: boolean } | null {
+  if (!healthMap) return null;
+  const key = PLAYBOOK_RATIO_ALIAS[ratioKey] ?? ratioKey;
+  const score = healthMap[key];
+  if (score == null || !Number.isFinite(score)) {
+    return { health_score: 0, health_tier: "critical", unscored: true };
+  }
+  const health_score = Math.round(score);
+  return { health_score, health_tier: scoreTier(health_score), unscored: false };
 }
 
 /** Which ratios feed each pillar (human names from `computeRatios`). */
@@ -234,7 +258,8 @@ export function scoreRatio(name: string, val: number, market?: ScoreMarket): num
 
 /**
  * Cash runway → 0–100.
- * Aligns with scoreTier bands: ≥12 wk healthy, 4–12 watch, <4 critical.
+ * Aligns with HEALTH_BAND_TABLE: ≥12 wk (85) Healthy, 4–12 wk (45 and 65)
+ * Watch, <4 wk critical.
  */
 export function scoreCashRunway(weeks: number): number {
   if (!Number.isFinite(weeks)) return Number.NaN;
@@ -283,9 +308,7 @@ export function pillarForRatioName(name: string): HealthPillarId {
 }
 
 function chipLabel(status: HealthTier): string {
-  if (status === "healthy") return "Healthy";
-  if (status === "at_risk") return "Watch";
-  return "At risk";
+  return healthBandLabel(status);
 }
 
 export type ComputeOverallHealthInput = {

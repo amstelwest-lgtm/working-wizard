@@ -34,15 +34,23 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Progress } from "@/components/ui/progress";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
 import type { AccountantProfile } from "@/contexts/accountant-profile";
-import { computeRatios, scoreTier, BUSINESS_TYPE_TO_BENCHMARK, periodMonthsOf } from "@/lib/ratios";
+import {
+  computeRatios,
+  healthBandLabel,
+  scoreTier,
+  BUSINESS_TYPE_TO_BENCHMARK,
+  periodMonthsOf,
+} from "@/lib/ratios";
 import { reportNumber } from "@/lib/report-catalog";
 import type { RatioInputs } from "@/lib/ratios";
-import { scoreRatio, pillarForRatioName } from "@/lib/health-score";
+import { healthMapFromRatios, scorePlaybookRatio, scoreRatio, pillarForRatioName } from "@/lib/health-score";
 import { CASH_RUNWAY_THRESHOLD_RAND } from "@/lib/cash-runway";
 import {
   assessClientMetrics,
   forecastMinimumCash,
+  resolveThirteenWeekForecast,
   scoreWorkingCapitalFunding,
+  type ClientRunway,
 } from "@/lib/client-metrics";
 import {
   hashFigures,
@@ -1730,11 +1738,11 @@ function buildLaborData(
   };
 }
 
-// ── Cash forecast from saved CashForecastPanel data ───────────────────────
+// ── Cash forecast ──────────────────────────────────────────────────────────
 //
-// Replicates the distribute() + computeScenario() logic in
-// src/components/cash-forecast.tsx so the PDF uses exactly the same
-// weekly figures the accountant configured in the panel.
+// Same resolver as the cash screen and the Bot. A stale stored forecast
+// (old dates, a mismatched opening, or a structural shortfall while the
+// runway is cash generative) is ignored.
 
 type CfFrequency =
   | "recurring-weekly"
@@ -1769,132 +1777,41 @@ type SavedCashflow = {
   capexWeek?: number;
 };
 
-const CF_WEEKS = 13;
-
-function cfDistribute(line: CfLineItem): number[] {
-  const out = new Array(CF_WEEKS).fill(0);
-  const amt = parseFloat(line.amount) || 0;
-  if (amt === 0) return out;
-  const start = Math.max(1, Math.min(CF_WEEKS, line.startWeek)) - 1;
-  switch (line.frequency) {
-    case "recurring-weekly":
-      for (let i = start; i < CF_WEEKS; i++) out[i] = amt;
-      break;
-    case "recurring-monthly":
-      for (let i = start; i < CF_WEEKS; i += 4) out[i] = amt;
-      break;
-    case "once-off":
-      out[start] = amt;
-      break;
-    case "split-weeks": {
-      const n = Math.max(1, line.splitCount);
-      const per = amt / n;
-      for (let i = start; i < Math.min(CF_WEEKS, start + n); i++) out[i] = per;
-      break;
-    }
-    case "split-months": {
-      const n = Math.max(1, line.splitCount);
-      const per = amt / n;
-      for (let i = 0; i < n; i++) {
-        const w = start + i * 4;
-        if (w < CF_WEEKS) out[w] = per;
-      }
-      break;
-    }
-  }
-  return out;
-}
-
 function buildCashForecastFromSavedCashflow(
   cf: SavedCashflow,
   openingCash: number | null,
+  financials: Record<string, unknown> | null,
+  runway: ClientRunway,
 ): CashForecastWeek[] | null {
-  const revenue = cf.revenue ?? [];
-  const expenses = cf.expenses ?? [];
-  const other = cf.other ?? [];
-
-  // Require at least one non-zero line item — empty panel = no real data
-  const hasAmount = [...revenue, ...expenses, ...other].some((l) => parseFloat(l.amount) > 0);
-  if (!hasAmount) return null;
-
-  const revAdj = (cf.revAdj ?? 100) / 100;
-  const expAdj = (cf.expAdj ?? 100) / 100;
-  const collectDelay = Math.max(0, Math.min(CF_WEEKS - 1, Math.round(cf.collectDelay ?? 0)));
-  const headDelta = cf.headcountDelta ?? 0;
-  const avgSal = parseFloat(cf.avgSalary ?? "0") || 0;
-  const fixedDelta = parseFloat(cf.fixedCostDelta ?? "0") || 0;
-  const revGrowth = cf.revGrowthPct ?? 0;
-  const capexAmt = parseFloat(cf.capexAmount ?? "0") || 0;
-  const capexWk = cf.capexWeek ?? 1;
-
-  const shiftVals = (vals: number[]) => {
-    if (!collectDelay) return vals;
-    const out = new Array(CF_WEEKS).fill(0);
-    for (let i = 0; i < CF_WEEKS; i++) {
-      const j = i + collectDelay;
-      if (j < CF_WEEKS) out[j] += vals[i];
-    }
-    return out;
-  };
-  const growthMul = (i: number) => Math.pow(1 + revGrowth / 100, i);
-
-  const inflow = new Array(CF_WEEKS).fill(0) as number[];
-  const outflow = new Array(CF_WEEKS).fill(0) as number[];
-
-  revenue.forEach((l) => {
-    shiftVals(cfDistribute(l).map((v) => v * revAdj)).forEach(
-      (v, i) => (inflow[i] += v * growthMul(i)),
-    );
+  const outlook = resolveThirteenWeekForecast({
+    financials,
+    cashflow: cf,
+    openingCash,
+    runway,
   });
-  [...expenses, ...other].forEach((l) => {
-    cfDistribute(l)
-      .map((v) => v * expAdj)
-      .forEach((v, i) => (outflow[i] += v));
-  });
-  // Scenario adjustments (mirrors CashForecastPanel.computeScenario)
-  if (headDelta !== 0) {
-    const weekly = (headDelta * avgSal) / 4.33;
-    for (let i = 0; i < CF_WEEKS; i++) outflow[i] += Math.abs(weekly);
-  }
-  if (fixedDelta !== 0) {
-    const weekly = fixedDelta / 4.33;
-    for (let i = 0; i < CF_WEEKS; i++) outflow[i] += weekly;
-  }
-  if (capexAmt !== 0) {
-    const w = Math.max(1, Math.min(CF_WEEKS, capexWk)) - 1;
-    outflow[w] += capexAmt;
-  }
-
-  const storedOpening = parseFloat(cf.openingBalance ?? "");
-  const opening =
-    openingCash != null &&
-    Number.isFinite(openingCash) &&
-    (!Number.isFinite(storedOpening) || Math.abs(storedOpening - openingCash) >= 0.5)
-      ? openingCash
-      : Number.isFinite(storedOpening)
-        ? storedOpening
-        : 0;
-  const weeks: CashForecastWeek[] = [];
-  let balance = opening;
-  for (let i = 0; i < CF_WEEKS; i++) {
-    const receipts = Math.round(inflow[i]);
-    const payments = Math.round(outflow[i]);
-    const net_movement = receipts - payments;
-    const closing = balance + net_movement;
-    weeks.push({
+  const empty =
+    outlook.opening === 0 &&
+    outlook.inflow.every((n) => n === 0) &&
+    outlook.outflow.every((n) => n === 0);
+  if (empty) return null;
+  return outlook.inflow.map((inflow, i) => {
+    const receipts = Math.round(inflow);
+    const payments = Math.round(outlook.outflow[i] ?? 0);
+    const opening = i === 0 ? outlook.opening : outlook.closing[i - 1];
+    const closing = outlook.closing[i];
+    return {
       period_label: `Week ${i + 1}`,
-      opening_balance: Math.round(balance),
+      opening_balance: Math.round(opening),
       total_receipts: receipts,
       total_payments: payments,
-      net_movement,
+      net_movement: receipts - payments,
       closing_balance: Math.round(closing),
-      scenario: "moderate",
+      scenario: "moderate" as const,
       runway_weeks: 0,
-    });
-    balance = closing;
-  }
-  return weeks;
+    };
+  });
 }
+
 
 // Build real interventions from the playbook-data.json filtered by the
 // client's actual at-risk/critical ratios (camelCase ratio_key format).
@@ -2187,6 +2104,8 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
   const cashForecast = buildCashForecastFromSavedCashflow(
     savedCashflow,
     assessed.cash.amount,
+    rawFin as Record<string, unknown>,
+    assessed.runway,
   );
   const configuredFloor = parseFloat(
     String(savedCashflow.minimumThreshold ?? savedCashflow.runwayThreshold ?? ""),
@@ -3124,6 +3043,8 @@ interface PlaybookRatio {
   pillar: PlaybookPillarKey;
   health_tier: "critical" | "at_risk" | "healthy";
   health_score: number;
+  /** Live client has no scored value for this catalogue ratio. */
+  unscored?: boolean;
 }
 
 const PLAYBOOK_RATIOS: PlaybookRatio[] = [
@@ -3298,24 +3219,24 @@ function PlaybookRatioCard({ ratio, onClick }: { ratio: PlaybookRatio; onClick: 
       <div className="flex items-start justify-between gap-2 mb-2">
         <p className="text-xs font-medium text-foreground leading-snug">{ratio.ratio_name}</p>
         <span
-          className={`flex-shrink-0 inline-flex items-center rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${TIER_CHIP[ratio.health_tier]}`}
+          className={`flex-shrink-0 inline-flex items-center rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${
+            ratio.unscored
+              ? "border border-border bg-muted text-muted-foreground"
+              : TIER_CHIP[ratio.health_tier]
+          }`}
         >
-          {ratio.health_tier === "at_risk"
-            ? "At Risk"
-            : ratio.health_tier === "critical"
-              ? "Critical"
-              : "Healthy"}
+          {ratio.unscored ? "No data" : healthBandLabel(ratio.health_tier)}
         </span>
       </div>
       {/* Score bar */}
       <div className="h-1 rounded-full bg-muted mb-2">
         <div
-          className={`h-1 rounded-full transition-all ${TIER_DOT[ratio.health_tier]}`}
-          style={{ width: `${ratio.health_score}%` }}
+          className={`h-1 rounded-full transition-all ${ratio.unscored ? "bg-slate-400" : TIER_DOT[ratio.health_tier]}`}
+          style={{ width: `${ratio.unscored ? 0 : ratio.health_score}%` }}
         />
       </div>
       <p className="text-[10px] text-muted-foreground group-hover:text-foreground transition-colors">
-        Score {ratio.health_score} · View steps →
+        {ratio.unscored ? "No score yet" : `Score ${ratio.health_score}`} · View steps →
       </p>
     </button>
   );
@@ -3494,6 +3415,20 @@ export function ReportsStudio({
 
   // Build the GEN map from real client data (or null = demo data)
   const GEN = useMemo(() => buildGEN(clientData), [clientData]);
+  const playbookRatios = useMemo(() => {
+    if (!clientData?.hasData) return PLAYBOOK_RATIOS;
+    const map = healthMapFromRatios(clientData.rawRatios, clientData.market);
+    return PLAYBOOK_RATIOS.map((row) => {
+      const scored = scorePlaybookRatio(row.ratio_key, map);
+      if (!scored || scored.unscored) return { ...row, unscored: true };
+      return {
+        ...row,
+        health_score: scored.health_score,
+        health_tier: scored.health_tier,
+        unscored: false,
+      };
+    });
+  }, [clientData]);
 
   // Clean up blob URL on close
   const closePreview = useCallback(() => {
@@ -3917,7 +3852,7 @@ export function ReportsStudio({
             <section>
               <div className="mb-3 flex items-center gap-2">
                 <span className="rounded-full bg-violet-900/40 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-violet-400">
-                  Playbooks — {PLAYBOOK_RATIOS.length} Action Plans
+                  Playbooks — {playbookRatios.length} Action Plans
                 </span>
                 <div className="flex-1 border-t border-border" />
               </div>
@@ -3927,7 +3862,7 @@ export function ReportsStudio({
               </p>
               <div className="space-y-5">
                 {PLAYBOOK_PILLARS.map((pillar) => {
-                  const ratios = PLAYBOOK_RATIOS.filter((r) => r.pillar === pillar.key);
+                  const ratios = playbookRatios.filter((r) => r.pillar === pillar.key);
                   if (!ratios.length) return null;
                   return (
                     <div key={pillar.key}>

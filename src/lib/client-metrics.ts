@@ -6,8 +6,9 @@
  * fixed R50,000 line". Zero weeks means cash is already gone.
  */
 
+import { applyWeekOverrides, type WeekOverrides } from "./cash-week-overrides.ts";
 import { CASH_RUNWAY_THRESHOLD_RAND } from "./cash-runway.ts";
-import { periodMonthsOf } from "./ratios.ts";
+import { computeRatios, periodMonthsOf, type RatioInputs } from "./ratios.ts";
 
 export type CashSource = "bank" | "period" | "none";
 
@@ -270,4 +271,471 @@ export function scoreWorkingCapitalFunding(fraction: number): number {
   if (!Number.isFinite(fraction) || fraction < -1 || fraction > 2) return 0;
   if (fraction < -0.25) return clampScore((1 + fraction) * 100);
   return clampScore((1 - fraction) * 100);
+}
+
+// ── 13-week cash forecast ────────────────────────────────────────────────────
+
+export const CASH_FORECAST_WEEK_COUNT = 13;
+
+export type ForecastLineFrequency =
+  | "recurring-weekly"
+  | "recurring-monthly"
+  | "once-off"
+  | "split-weeks"
+  | "split-months";
+
+export type ForecastLineSeed = {
+  id: string;
+  name: string;
+  amount: string;
+  frequency: ForecastLineFrequency;
+  startWeek: number;
+  splitCount: number;
+  weekOverrides?: WeekOverrides;
+};
+
+export type ThirteenWeekForecast = {
+  /** `derived` replaces a stale or inconsistent stored forecast. */
+  source: "stored" | "derived";
+  startDate: string;
+  /** Week-start dates, local calendar, length 13. */
+  weekDates: string[];
+  opening: number;
+  inflow: number[];
+  outflow: number[];
+  closing: number[];
+  totalInflow: number;
+  totalOutflow: number;
+  /** About four weeks of operating outflows. */
+  floor: number;
+  /** First week (1–13) whose closing is under the floor. */
+  dipsBelowFloorWeek: number | null;
+  shortfall: boolean;
+  shortfallWeek: number | null;
+  /**
+   * Set only when a typed timing knob (collection delay, capex, headcount,
+   * fixed-cost change) explains a dip. A cash-generative runway must not
+   * show a structural shortfall without this.
+   */
+  timingNote: string | null;
+  /** Cash-cycle context. Does not by itself authorise a shortfall badge. */
+  cycleNote: string | null;
+  /** When true, the screen must show `lines` instead of the stored forecast. */
+  replaceStored: boolean;
+  lines: { revenue: ForecastLineSeed[]; expenses: ForecastLineSeed[] };
+};
+
+type StoredForecastLine = {
+  id?: string;
+  name?: string;
+  amount?: string;
+  frequency?: string;
+  startWeek?: number;
+  splitCount?: number;
+  weekOverrides?: WeekOverrides;
+};
+
+function formatISODate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+/** Parse YYYY-MM-DD as a local calendar date. `new Date("YYYY-MM-DD")` is UTC and shifts a day in the Americas. */
+export function parseISODate(iso: string): Date {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  if (!match) return new Date(iso);
+  return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+}
+
+function addDays(d: Date, days: number): Date {
+  const next = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+/**
+ * First day of the forecast. The current week (Monday), or the day after
+ * the latest statement period end when that is later.
+ */
+export function forecastAnchorDate(input: { now?: Date; periodEnd?: string | null }): string {
+  const now = input.now ?? new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const mondayOffset = (today.getDay() + 6) % 7;
+  let anchor = addDays(today, -mondayOffset);
+  const endIso = input.periodEnd?.slice(0, 10) ?? "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(endIso)) {
+    const next = addDays(parseISODate(endIso), 1);
+    if (next.getTime() > anchor.getTime()) anchor = next;
+  }
+  return formatISODate(anchor);
+}
+
+export function weekDatesFrom(startIso: string, weeks = CASH_FORECAST_WEEK_COUNT): string[] {
+  const start = parseISODate(startIso);
+  return Array.from({ length: weeks }, (_, i) => formatISODate(addDays(start, i * 7)));
+}
+
+/**
+ * Period P&L → one week.
+ * Monthly rate = period total / periodMonths (12 when the length is missing).
+ * Weekly rate = monthly × 12/52. A one-month actual and the same business
+ * written as twelve months therefore produce the same week — the annual
+ * figure is not treated as a month, and the month is not treated as a week.
+ */
+export function weeklyRunRate(input: {
+  revenue?: number | null;
+  operatingOutflows?: number | null;
+  periodMonths?: number | null;
+}): { weeklyInflow: number; weeklyOutflow: number } {
+  const months =
+    input.periodMonths != null && input.periodMonths >= 1 && input.periodMonths <= 12
+      ? input.periodMonths
+      : 12;
+  const toWeek = (periodTotal: number) => (periodTotal / months) * (12 / 52);
+  return {
+    weeklyInflow: Math.max(0, toWeek(finiteNum(input.revenue) ?? 0)),
+    weeklyOutflow: Math.max(0, toWeek(finiteNum(input.operatingOutflows) ?? 0)),
+  };
+}
+
+/** Spread one forecast line across the horizon. Shared by the screen, the PDF, and the Bot. */
+export function distributeForecastLine(
+  line: StoredForecastLine,
+  weeks = CASH_FORECAST_WEEK_COUNT,
+): number[] {
+  const out = new Array(weeks).fill(0);
+  const amt = parseFloat(line.amount ?? "0") || 0;
+  if (amt === 0) return out;
+  const start = Math.max(1, Math.min(weeks, line.startWeek ?? 1)) - 1;
+  const freq = line.frequency ?? "recurring-monthly";
+  switch (freq) {
+    case "recurring-weekly":
+    case "weekly":
+      for (let i = start; i < weeks; i++) out[i] = amt;
+      break;
+    case "once-off":
+    case "once":
+      out[start] = amt;
+      break;
+    case "split-weeks":
+    case "split": {
+      const n = Math.max(1, line.splitCount ?? 3);
+      const per = amt / n;
+      for (let i = start; i < Math.min(weeks, start + n); i++) out[i] = per;
+      break;
+    }
+    case "split-months": {
+      const n = Math.max(1, line.splitCount ?? 3);
+      const per = amt / n;
+      for (let i = 0; i < n; i++) {
+        const w = start + i * 4;
+        if (w < weeks) out[w] = per;
+      }
+      break;
+    }
+    default:
+      for (let i = start; i < weeks; i += 4) out[i] = amt;
+  }
+  return applyWeekOverrides(out, line.weekOverrides);
+}
+
+function asForecastLines(value: unknown): StoredForecastLine[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((row) => row && typeof row === "object") as StoredForecastLine[];
+}
+
+function moneyString(n: number): string {
+  return String(Math.round(n * 100) / 100);
+}
+
+/**
+ * Roll a saved forecast forward. Same rules as the cash screen: monthly
+ * lines land every four weeks, collection delay shifts receipts, and a
+ * headcount change can reduce outflow.
+ */
+export function rollForwardForecast(
+  cf: Record<string, unknown> | null | undefined,
+  weeks = CASH_FORECAST_WEEK_COUNT,
+): { opening: number; inflow: number[]; outflow: number[]; closing: number[] } | null {
+  if (!cf) return null;
+  const revenue = asForecastLines(cf.revenue);
+  const expenses = asForecastLines(cf.expenses);
+  const other = asForecastLines(cf.other);
+  const hasAmount = [...revenue, ...expenses, ...other].some(
+    (line) => (parseFloat(line.amount ?? "0") || 0) !== 0,
+  );
+  if (!hasAmount) return null;
+
+  const revAdj = (finiteNum(cf.revAdj) ?? 100) / 100;
+  const expAdj = (finiteNum(cf.expAdj) ?? 100) / 100;
+  const collectDelay = Math.max(0, Math.min(weeks - 1, Math.round(finiteNum(cf.collectDelay) ?? 0)));
+  const headDelta = finiteNum(cf.headcountDelta) ?? 0;
+  const avgSal = finiteNum(cf.avgSalary) ?? 0;
+  const fixedDelta = finiteNum(cf.fixedCostDelta) ?? 0;
+  const revGrowth = finiteNum(cf.revGrowthPct) ?? 0;
+  const capexAmt = finiteNum(cf.capexAmount) ?? 0;
+  const capexWk = finiteNum(cf.capexWeek) ?? 1;
+
+  const shiftVals = (vals: number[]) => {
+    if (!collectDelay) return vals;
+    const shifted = new Array(weeks).fill(0);
+    for (let i = 0; i < weeks; i++) {
+      const j = i + collectDelay;
+      if (j < weeks) shifted[j] += vals[i];
+    }
+    return shifted;
+  };
+  const growthMul = (i: number) => Math.pow(1 + revGrowth / 100, i);
+
+  const inflow = new Array(weeks).fill(0);
+  const outflow = new Array(weeks).fill(0);
+  for (const line of revenue) {
+    shiftVals(distributeForecastLine(line, weeks).map((v) => v * revAdj)).forEach((v, i) => {
+      inflow[i] += v * growthMul(i);
+    });
+  }
+  for (const line of [...expenses, ...other]) {
+    distributeForecastLine(line, weeks)
+      .map((v) => v * expAdj)
+      .forEach((v, i) => {
+        outflow[i] += v;
+      });
+  }
+  if (headDelta !== 0) {
+    const weekly = (headDelta * avgSal) / (52 / 12);
+    for (let i = 0; i < weeks; i++) outflow[i] += weekly;
+  }
+  if (fixedDelta !== 0) {
+    const weekly = fixedDelta / (52 / 12);
+    for (let i = 0; i < weeks; i++) outflow[i] += weekly;
+  }
+  if (capexAmt !== 0) {
+    const w = Math.max(1, Math.min(weeks, capexWk)) - 1;
+    outflow[w] += capexAmt;
+  }
+
+  const opening = finiteNum(cf.openingBalance) ?? 0;
+  const closing: number[] = [];
+  let bal = opening;
+  for (let i = 0; i < weeks; i++) {
+    bal += inflow[i] - outflow[i];
+    closing.push(bal);
+  }
+  return { opening, inflow, outflow, closing };
+}
+
+function ratioInputsFromFinancials(fin: Record<string, unknown>): RatioInputs {
+  const text = (key: string) => {
+    const raw = fin[key];
+    if (raw == null || raw === "") return "";
+    return String(raw);
+  };
+  return {
+    revenue: text("revenue"),
+    cogs: text("cogs"),
+    ebit: text("ebit"),
+    ebt: text("ebt"),
+    netIncome: text("netIncome"),
+    ebitda: text("ebitda"),
+    operatingCashflow: text("operatingCashflow"),
+    totalAssets: text("totalAssets"),
+    equity: text("equity"),
+    receivables: text("receivables"),
+    inventory: text("inventory"),
+    payables: text("payables"),
+    fixedCosts: text("fixedCosts"),
+    variableCosts: text("variableCosts"),
+    top5Revenue: text("top5Revenue"),
+    laborCost: text("laborCost"),
+    employees: text("employees"),
+    founderHours: text("founderHours"),
+    periodMonths: text("periodMonths"),
+  };
+}
+
+function storedTimingNote(cf: Record<string, unknown>): string | null {
+  const parts: string[] = [];
+  const delay = finiteNum(cf.collectDelay) ?? 0;
+  if (delay > 0) parts.push(`collections delayed ${Math.round(delay)} weeks`);
+  const capex = finiteNum(cf.capexAmount) ?? 0;
+  if (capex > 0) parts.push(`capex in week ${Math.round(finiteNum(cf.capexWeek) ?? 1)}`);
+  const heads = finiteNum(cf.headcountDelta) ?? 0;
+  if (heads !== 0) parts.push(`headcount change of ${heads}`);
+  const fixed = finiteNum(cf.fixedCostDelta) ?? 0;
+  if (fixed !== 0) parts.push("a fixed-cost change");
+  return parts.length ? parts.join("; ") : null;
+}
+
+function seriesTotals(inflow: number[], outflow: number[], closing: number[]) {
+  const totalInflow = inflow.reduce((sum, n) => sum + n, 0);
+  const totalOutflow = outflow.reduce((sum, n) => sum + n, 0);
+  const floor = forecastMinimumCash({ weeklyOutflows: outflow });
+  let dipsBelowFloorWeek: number | null = null;
+  let shortfallWeek: number | null = null;
+  closing.forEach((balance, i) => {
+    if (dipsBelowFloorWeek == null && balance < floor) dipsBelowFloorWeek = i + 1;
+    if (shortfallWeek == null && balance < 0) shortfallWeek = i + 1;
+  });
+  const structural = totalOutflow > totalInflow + 1 && shortfallWeek != null;
+  return {
+    totalInflow,
+    totalOutflow,
+    floor,
+    dipsBelowFloorWeek,
+    shortfall: shortfallWeek != null,
+    shortfallWeek,
+    structural,
+  };
+}
+
+function reclose(opening: number, inflow: number[], outflow: number[]): number[] {
+  const closing: number[] = [];
+  let bal = opening;
+  for (let i = 0; i < inflow.length; i++) {
+    bal += inflow[i] - outflow[i];
+    closing.push(bal);
+  }
+  return closing;
+}
+
+function derivedLines(weeklyInflow: number, weeklyOutflow: number): {
+  revenue: ForecastLineSeed[];
+  expenses: ForecastLineSeed[];
+} {
+  return {
+    revenue: [
+      {
+        id: "derived-collections",
+        name: "Collections (monthly revenue)",
+        amount: moneyString(weeklyInflow),
+        frequency: "recurring-weekly",
+        startWeek: 1,
+        splitCount: 1,
+      },
+    ],
+    expenses: [
+      {
+        id: "derived-operating",
+        name: "Operating payments (monthly costs)",
+        amount: moneyString(weeklyOutflow),
+        frequency: "recurring-weekly",
+        startWeek: 1,
+        splitCount: 1,
+      },
+    ],
+  };
+}
+
+/**
+ * The 13-week forecast Overview, Cash, the PDF, and the Bot all read.
+ * A stored forecast is shown only when its start is on or after the anchor
+ * and its opening matches live cash. Anything else — 2025 dates, a stale
+ * opening, or a structural shortfall while runway is cash generative with
+ * no timing driver — is ignored and rebuilt from the monthly P&L.
+ */
+export function resolveThirteenWeekForecast(input: {
+  financials?: Record<string, unknown> | null;
+  cashflow?: unknown;
+  openingCash?: number | null;
+  runway?: ClientRunway | null;
+  now?: Date;
+  periodEnd?: string | null;
+}): ThirteenWeekForecast {
+  const weeks = CASH_FORECAST_WEEK_COUNT;
+  const fin = asRecord(input.financials);
+  const periodEnd =
+    input.periodEnd ?? (typeof fin?.periodEnd === "string" ? fin.periodEnd : null);
+  const anchor = forecastAnchorDate({ now: input.now, periodEnd });
+  const opening = finiteNum(input.openingCash) ?? finiteNum(fin?.cash) ?? 0;
+  const runway = input.runway ?? { weeks: null, kind: "unknown" as const, label: "—" };
+  const cf = asRecord(input.cashflow);
+
+  const months = fin ? periodMonthsOf(fin) : 12;
+  const operating = fin ? periodOperatingOutflows(fin) : null;
+  const rate = weeklyRunRate({
+    revenue: finiteNum(fin?.revenue),
+    operatingOutflows: operating,
+    periodMonths: months,
+  });
+  let cycleNote: string | null = null;
+  if (fin && (finiteNum(fin.revenue) != null || operating != null)) {
+    const ratios = computeRatios(ratioInputsFromFinancials(fin));
+    const creditorDays = ratios["Creditor Days"];
+    const debtorDays = ratios["Debtor Days"];
+    if (Number.isFinite(creditorDays) && creditorDays > 90) {
+      cycleNote = `Creditor days are ${Math.round(creditorDays)}. Weekly payments follow the scaled monthly run-rate, not a payoff of the payable balance inside 13 weeks.`;
+    } else if (Number.isFinite(debtorDays) && debtorDays > 0) {
+      cycleNote = `Debtor days are ${Math.round(debtorDays)}. Collections use the same monthly revenue run-rate.`;
+    }
+  }
+
+  const buildDerived = (): ThirteenWeekForecast => {
+    const inflow = new Array(weeks).fill(rate.weeklyInflow);
+    const outflow = new Array(weeks).fill(rate.weeklyOutflow);
+    const closing = reclose(opening, inflow, outflow);
+    const totals = seriesTotals(inflow, outflow, closing);
+    const suppress = runway.kind === "cash_generative" && totals.structural;
+    return {
+      source: "derived",
+      startDate: anchor,
+      weekDates: weekDatesFrom(anchor, weeks),
+      opening,
+      inflow,
+      outflow,
+      closing,
+      totalInflow: totals.totalInflow,
+      totalOutflow: totals.totalOutflow,
+      floor: totals.floor,
+      dipsBelowFloorWeek: totals.dipsBelowFloorWeek,
+      shortfall: suppress ? false : totals.shortfall,
+      shortfallWeek: suppress ? null : totals.shortfallWeek,
+      timingNote: null,
+      cycleNote,
+      replaceStored: true,
+      lines: derivedLines(rate.weeklyInflow, rate.weeklyOutflow),
+    };
+  };
+
+  const rolled = cf ? rollForwardForecast(cf, weeks) : null;
+  const startRaw = typeof cf?.startDate === "string" ? cf.startDate.slice(0, 10) : "";
+  const startOk = /^\d{4}-\d{2}-\d{2}$/.test(startRaw) && startRaw >= anchor;
+  const storedOpening = finiteNum(cf?.openingBalance);
+  const openingOk =
+    storedOpening != null && Number.isFinite(opening) && Math.abs(storedOpening - opening) < 0.5;
+  const timingNote = cf ? storedTimingNote(cf) : null;
+
+  let storedCurrent = Boolean(rolled && startOk && openingOk);
+  if (storedCurrent && rolled && runway.kind === "cash_generative") {
+    const totals = seriesTotals(rolled.inflow, rolled.outflow, rolled.closing);
+    if (totals.structural && !timingNote) storedCurrent = false;
+  }
+
+  if (storedCurrent && rolled) {
+    const totals = seriesTotals(rolled.inflow, rolled.outflow, rolled.closing);
+    const showShortfall =
+      totals.shortfall && (runway.kind !== "cash_generative" || Boolean(timingNote));
+    return {
+      source: "stored",
+      startDate: startRaw,
+      weekDates: weekDatesFrom(startRaw, weeks),
+      opening: rolled.opening,
+      inflow: rolled.inflow,
+      outflow: rolled.outflow,
+      closing: rolled.closing,
+      totalInflow: totals.totalInflow,
+      totalOutflow: totals.totalOutflow,
+      floor: totals.floor,
+      dipsBelowFloorWeek: totals.dipsBelowFloorWeek,
+      shortfall: showShortfall,
+      shortfallWeek: showShortfall ? totals.shortfallWeek : null,
+      timingNote: showShortfall ? timingNote : null,
+      cycleNote,
+      replaceStored: false,
+      lines: { revenue: [], expenses: [] },
+    };
+  }
+
+  return buildDerived();
 }

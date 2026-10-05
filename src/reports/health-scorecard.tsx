@@ -11,6 +11,7 @@ import { View, Text, StyleSheet } from "@react-pdf/renderer";
 import type { AccountantProfile } from "@/contexts/accountant-profile";
 import { PDFDocument, type SmeData, type ReportSignoffStamp } from "@/components/pdf/pdf-document";
 import { C, TIER_META, tierForScore, scoreColor } from "@/components/pdf/theme";
+import { HEALTH_BAND_TABLE, healthBandLabel } from "@/lib/ratios";
 import { HealthScoreGauge } from "@/components/pdf/health-score-gauge";
 import { SectionHeader } from "@/components/pdf/section-header";
 import { RatioRow } from "@/components/pdf/ratio-row";
@@ -348,9 +349,15 @@ export function HealthScorecardPDF({
             <HealthScoreGauge score={overallScore ?? 0} height={9} />
           </View>
           <View style={styles.gaugeScale}>
-            <Text style={styles.gaugeScaleText}>0 · CRITICAL</Text>
-            <Text style={styles.gaugeScaleText}>40 · WATCH</Text>
-            <Text style={styles.gaugeScaleText}>65 · HEALTHY</Text>
+            <Text style={styles.gaugeScaleText}>
+              0 · {healthBandLabel("critical").toUpperCase()}
+            </Text>
+            <Text style={styles.gaugeScaleText}>
+              {HEALTH_BAND_TABLE.watchMin} · {healthBandLabel("at_risk").toUpperCase()}
+            </Text>
+            <Text style={styles.gaugeScaleText}>
+              {HEALTH_BAND_TABLE.healthyMin} · {healthBandLabel("healthy").toUpperCase()}
+            </Text>
             <Text style={styles.gaugeScaleText}>100</Text>
           </View>
           <Text style={styles.tierDesc}>{TIER_DESC[overallTier]}</Text>

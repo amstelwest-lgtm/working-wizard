@@ -47,6 +47,7 @@ import {
   computeRatios,
   PERIOD_MONTH_OPTIONS,
   PERIOD_MONTHS_KEY,
+  healthBandLabel,
   periodMonthsOf,
   scoreTier,
 } from "@/lib/ratios";
@@ -112,7 +113,11 @@ import { XeroConnectCard } from "@/components/xero-connect";
 import { getXeroStatus, type XeroStatus } from "@/lib/xero.functions";
 import { getQboStatus, type QboStatus } from "@/lib/qbo.functions";
 import { preferStatementPeriod, readStatementMeta, statementYearLine } from "@/lib/statement-period";
-import { assessClientMetrics, persistedRunwayWeeks } from "@/lib/client-metrics";
+import {
+  assessClientMetrics,
+  persistedRunwayWeeks,
+  resolveThirteenWeekForecast,
+} from "@/lib/client-metrics";
 import { countOpenQueriesForClient } from "@/lib/open-queries";
 import { ProfileFunnel } from "@/components/profile/profile-funnel";
 import {
@@ -283,9 +288,9 @@ function tierToBand(tier: HealthTier): "ok" | "warn" | "risk" {
 }
 
 function bandLabel(band: "ok" | "warn" | "risk"): string {
-  if (band === "ok") return "Healthy";
-  if (band === "warn") return "At risk";
-  return "Critical";
+  if (band === "ok") return healthBandLabel("healthy");
+  if (band === "warn") return healthBandLabel("at_risk");
+  return healthBandLabel("critical");
 }
 
 function bandColor(band: "ok" | "warn" | "risk"): string {
@@ -1037,6 +1042,16 @@ function ClientView() {
     [financials, client?.cashflow, client?.financials_updated_at, priorSnapshot],
   );
   const metricRunway = assessed.runway;
+  const cashOutlook = useMemo(
+    () =>
+      resolveThirteenWeekForecast({
+        financials,
+        cashflow: client?.cashflow,
+        openingCash: assessed.cash.amount,
+        runway: assessed.runway,
+      }),
+    [financials, client?.cashflow, assessed],
+  );
   /** Weeks blended into health. Cash-generative is omitted — it is not 0 weeks. */
   const effectiveRunway =
     metricRunway.kind === "weeks" || metricRunway.kind === "zero" ? metricRunway.weeks : null;
@@ -1157,6 +1172,14 @@ function ClientView() {
     lastForecastAt: client?.last_forecast_at ?? null,
     priorLabel: priorSnapshot?.period_label ?? null,
     market: clientMarket,
+    cash:
+      assessed.cash.amount != null
+        ? {
+            amount: assessed.cash.amount,
+            floor: cashOutlook.floor,
+            dipsBelowFloorWeek: cashOutlook.dipsBelowFloorWeek,
+          }
+        : null,
   });
   const briefingAbout = describeBusiness(briefingProfile, client?.business_type ?? null);
   const briefingMatters = whatMatters({

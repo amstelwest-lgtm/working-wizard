@@ -71,10 +71,14 @@ import type {
 import { periodMonthsOf } from "@/lib/ratios";
 import {
   clientRunway,
+  distributeForecastLine,
+  forecastAnchorDate,
   forecastMinimumCash,
+  parseISODate,
   periodOperatingOutflows,
   persistedRunwayWeeks,
   resolveClientCash,
+  resolveThirteenWeekForecast,
   type ClientRunway,
 } from "@/lib/client-metrics";
 import {
@@ -151,37 +155,7 @@ const DEFAULT_EXPENSES: LineItem[] = EXPENSE_PRESETS.map((n) => makeLine(n));
 const DEFAULT_OTHER: LineItem[] = [makeLine("Other expenses")];
 
 function distribute(line: LineItem): number[] {
-  const out = new Array(WEEKS).fill(0);
-  const amt = parseFloat(line.amount) || 0;
-  if (amt === 0) return out;
-  const start = Math.max(1, Math.min(WEEKS, line.startWeek)) - 1;
-  switch (line.frequency) {
-    case "recurring-weekly":
-      for (let i = start; i < WEEKS; i++) out[i] = amt;
-      break;
-    case "recurring-monthly":
-      for (let i = start; i < WEEKS; i += 4) out[i] = amt;
-      break;
-    case "once-off":
-      out[start] = amt;
-      break;
-    case "split-weeks": {
-      const n = Math.max(1, line.splitCount);
-      const per = amt / n;
-      for (let i = start; i < Math.min(WEEKS, start + n); i++) out[i] = per;
-      break;
-    }
-    case "split-months": {
-      const n = Math.max(1, line.splitCount);
-      const per = amt / n;
-      for (let i = 0; i < n; i++) {
-        const w = start + i * 4;
-        if (w < WEEKS) out[w] = per;
-      }
-      break;
-    }
-  }
-  return out;
+  return distributeForecastLine(line, WEEKS);
 }
 
 // ── Brand palette (matches profitability waterfall / accountant reports) ─────
@@ -458,7 +432,7 @@ export function CashForecastPanel({
     signoffProp ?? null,
   );
   const [lastForecastAt, setLastForecastAt] = useState<string | null>(null);
-  const [startDate, setStartDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [startDate, setStartDate] = useState(() => forecastAnchorDate({ now: new Date() }));
   const [openingBalance, setOpeningBalance] = useState("0");
   const [revenue, setRevenue] = useState<LineItem[]>(DEFAULT_REVENUE);
   const [expenses, setExpenses] = useState<LineItem[]>(DEFAULT_EXPENSES);
@@ -493,6 +467,7 @@ export function CashForecastPanel({
   // otherwise merely opening the forecast bumps last_forecast_at and falsely
   // invalidates an accountant's sign-off with no real data change.
   const skipNextAutosave = useRef(false);
+  const [forecastCycleNote, setForecastCycleNote] = useState<string | null>(null);
   const [xeroBankNote, setXeroBankNote] = useState<string | null>(null);
   const xeroBankNoteRef = useRef<string | null>(null);
   const xeroCashMarkers = useRef<{
@@ -683,8 +658,43 @@ export function CashForecastPanel({
           })
           .eq("id", clientId);
       }
-      if (cf) {
-        if (cf.startDate) setStartDate(cf.startDate);
+      const outlook = resolveThirteenWeekForecast({
+        financials: finRecord,
+        cashflow: cf,
+        openingCash: resolvedCash.amount,
+        runway: runwayFromOpening(resolvedCash.amount ?? cf?.openingBalance, finRecord),
+        periodEnd: typeof finRecord?.periodEnd === "string" ? finRecord.periodEnd : null,
+      });
+      setForecastCycleNote(outlook.cycleNote);
+      setStartDate(outlook.startDate);
+      setOpeningBalance(String(Math.round(outlook.opening * 100) / 100));
+      if (outlook.replaceStored) {
+        setStartDate(outlook.startDate);
+        setOpeningBalance(String(Math.round(outlook.opening * 100) / 100));
+        setRevenue(outlook.lines.revenue);
+        setExpenses(outlook.lines.expenses);
+        setOther([
+          {
+            id: "derived-other",
+            name: "Other",
+            amount: "0",
+            frequency: "once-off",
+            startWeek: 1,
+            splitCount: 1,
+          },
+        ]);
+        setRevAdj(100);
+        setExpAdj(100);
+        setCollectDelay(0);
+        setHeadcountDelta(0);
+        setAvgSalary("0");
+        setFixedCostDelta("0");
+        setRevGrowthPct(0);
+        setCapexAmount("0");
+        setCapexWeek(1);
+        setXeroBankNote(null);
+        xeroBankNoteRef.current = null;
+      } else if (cf) {
         if (!seededOpening && cf.openingBalance != null) setOpeningBalance(cf.openingBalance);
         if (cf.revenue) setRevenue(cf.revenue);
         if (cf.expenses) setExpenses(cf.expenses);
@@ -814,10 +824,10 @@ export function CashForecastPanel({
   ]);
 
   const forecastDates = useMemo(() => {
-    const d = new Date(startDate);
+    const d = parseISODate(startDate);
     return Array.from({ length: WEEKS }, (_, i) => {
-      const w = new Date(d);
-      w.setDate(d.getDate() + i * 7);
+      const w = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+      w.setDate(w.getDate() + i * 7);
       return w;
     });
   }, [startDate]);
@@ -1198,6 +1208,22 @@ export function CashForecastPanel({
   );
 
   const shortfall = lowestBal < 0;
+  const timingDriver =
+    collectDelay > 0 ||
+    (parseFloat(capexAmount) || 0) > 0 ||
+    headcountDelta !== 0 ||
+    (parseFloat(fixedCostDelta) || 0) !== 0;
+  const showShortfall = shortfall && (screenRunway.kind !== "cash_generative" || timingDriver);
+  const shortfallExplain = showShortfall && timingDriver
+    ? [
+        collectDelay > 0 ? `collections delayed ${collectDelay} weeks` : null,
+        (parseFloat(capexAmount) || 0) > 0 ? `capex in week ${capexWeek}` : null,
+        headcountDelta !== 0 ? `headcount change of ${headcountDelta}` : null,
+        (parseFloat(fixedCostDelta) || 0) !== 0 ? "a fixed-cost change" : null,
+      ]
+        .filter(Boolean)
+        .join("; ")
+    : null;
   const forecastStale = computeIsStale(forecastSignoff, lastForecastAt);
   // Nothing entered yet: no opening balance and every line at zero. A flat
   // R0/$0 trajectory must not be badged "In the black".
@@ -1213,15 +1239,23 @@ export function CashForecastPanel({
   ) : (
     <span
       className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wide ${
-        shortfall
+        showShortfall
           ? "border-[#e05c5c] bg-[#e05c5c]/10 text-[#c0392b] dark:text-[#ef6b6b]"
           : "border-[#4caf82] bg-[#4caf82]/10 text-[#3f9c72] dark:text-[#5cc492]"
       }`}
     >
-      {shortfall ? <AlertTriangle className="h-3 w-3" /> : <CheckCircle2 className="h-3 w-3" />}
-      {shortfall ? `Shortfall W${lowestWeek}` : "In the black"}
+      {showShortfall ? <AlertTriangle className="h-3 w-3" /> : <CheckCircle2 className="h-3 w-3" />}
+      {showShortfall ? `Shortfall W${lowestWeek}` : "In the black"}
     </span>
   );
+
+  const forecastNotes =
+    !forecastEmpty && (shortfallExplain || forecastCycleNote) ? (
+      <p className="mb-4 text-xs leading-relaxed text-slate-600 dark:text-slate-400">
+        {shortfallExplain ? `Timing: ${shortfallExplain}. ` : ""}
+        {forecastCycleNote}
+      </p>
+    ) : null;
 
   const emptyNotice = forecastEmpty ? (
     <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#d4a550]/40 bg-[#d4a550]/10 px-4 py-3 text-sm text-slate-800 dark:text-slate-100">
@@ -1320,6 +1354,7 @@ export function CashForecastPanel({
               </div>
             )}
             {emptyNotice}
+            {forecastNotes}
             <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
               <Stat
                 label="Closing · Week 13"
@@ -1340,7 +1375,7 @@ export function CashForecastPanel({
               <Stat
                 label="Lowest balance"
                 value={fmtCompact(lowestBal)}
-                tone={shortfall ? "bad" : "good"}
+                tone={showShortfall ? "bad" : "good"}
                 sub={`Week ${lowestWeek} · ${weeks[lowestWeek - 1]}`}
               />
               <Stat
@@ -1435,6 +1470,7 @@ export function CashForecastPanel({
             </div>
           )}
           {emptyNotice}
+          {forecastNotes}
           <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Stat
               label="Opening balance"
@@ -1473,7 +1509,7 @@ export function CashForecastPanel({
             <Stat
               label="Lowest balance"
               value={fmtCompact(lowestBal)}
-              tone={shortfall ? "bad" : "good"}
+              tone={showShortfall ? "bad" : "good"}
               sub={`Week ${lowestWeek} · ${weeks[lowestWeek - 1]}`}
             />
             <Stat

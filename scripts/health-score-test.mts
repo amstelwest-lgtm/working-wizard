@@ -29,13 +29,13 @@ assert(scoreCashRunway(3) === 25, "3wk runway");
 // Critical pillar demotes Healthy display
 const mixed = computeOverallHealth({
   scoredRatios: [
-    { name: "Gross Margin", score: 90, pillar: "profit" },
-    { name: "Asset Turnover", score: 90, pillar: "assets" },
-    { name: "Equity Multiplier", score: 90, pillar: "financing" },
+    { name: "Gross Margin", score: 100, pillar: "profit" },
+    { name: "Asset Turnover", score: 100, pillar: "assets" },
+    { name: "Equity Multiplier", score: 100, pillar: "financing" },
     { name: "Debtor Days", score: 20, pillar: "cash" },
   ],
 });
-assert(mixed.overall != null && mixed.overall >= 65, `overall should be healthy-ish, got ${mixed.overall}`);
+assert(mixed.overall != null && mixed.overall >= 80, `overall should clear the healthy floor, got ${mixed.overall}`);
 assert(mixed.status === "healthy", `raw status healthy, got ${mixed.status}`);
 assert(mixed.hasCriticalPillar, "cash pillar critical");
 assert(mixed.displayStatus === "at_risk", `display demoted, got ${mixed.displayStatus}`);

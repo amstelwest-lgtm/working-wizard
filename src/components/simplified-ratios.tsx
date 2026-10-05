@@ -1,5 +1,5 @@
 import { Sparkline } from "@/components/sparkline";
-import { scoreTier } from "@/lib/ratios";
+import { healthBandLabel, scoreTier } from "@/lib/ratios";
 import { AddPastPeriodLink } from "@/components/add-past-period-link";
 import { evidenceForPillar, pillarIsWeak } from "@/lib/workflow-coach";
 
@@ -19,10 +19,7 @@ interface SimplifiedRatiosProps {
 
 function statusLabel(health: number): string {
   if (!isFinite(health)) return "NO DATA";
-  const tier = scoreTier(health);
-  if (tier === "healthy") return "HEALTHY";
-  if (tier === "at_risk") return "NEEDS WATCH";
-  return "HIGH RISK";
+  return healthBandLabel(scoreTier(health)).toUpperCase();
 }
 
 function statusColor(health: number): string {

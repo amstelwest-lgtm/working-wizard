@@ -192,7 +192,11 @@ export function buildPrompt(
     const c = ctx.cashForecast;
     lines.push("\nCash forecast outlook (13-week, no raw balances):");
     lines.push(
-      `  ${c.shortfall ? `Shortfall in week ${c.lowestWeek}` : "In the black across the horizon"}`,
+      `  ${
+        c.shortfall
+          ? `Shortfall in week ${c.lowestWeek}${c.timingNote ? ` (${c.timingNote})` : ""}`
+          : "In the black across the horizon"
+      }`,
     );
     if (c.cashGenerative) {
       lines.push("  Cash runway: cash generative — not counted as zero weeks");

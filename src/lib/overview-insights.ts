@@ -7,6 +7,8 @@
  * cash forecasts from P&L heuristics. Prefer null / empty + honest copy.
  */
 
+import { HEALTH_BAND_TABLE } from "@/lib/ratios";
+
 export type WeekChange = {
   label: string;
   value: string;
@@ -38,8 +40,8 @@ export function computeHealthBand(avgHealth: number): {
   if (!Number.isFinite(avgHealth)) return null;
   const score = Math.round(avgHealth);
   let label = "Needs attention";
-  if (score >= 65) label = "In good shape";
-  else if (score >= 40) label = "Needs monitoring";
+  if (score >= HEALTH_BAND_TABLE.healthyMin) label = "In good shape";
+  else if (score >= HEALTH_BAND_TABLE.watchMin) label = "Needs monitoring";
   return { score, label };
 }
 
@@ -110,8 +112,10 @@ export function computeOverviewCaption(input: {
   if (isFinite(cashHealth) && cashHealth < avgHealth - 5) {
     return "Your business is stable, but cash conversion is holding you back.";
   }
-  if (avgHealth >= 65) return "Your business is in good shape — keep building momentum.";
-  if (avgHealth >= 40) return "Your business needs some attention — start with the priority below.";
+  if (avgHealth >= HEALTH_BAND_TABLE.healthyMin)
+    return "Your business is in good shape — keep building momentum.";
+  if (avgHealth >= HEALTH_BAND_TABLE.watchMin)
+    return "Your business needs some attention — start with the priority below.";
   return "Your business needs urgent attention — start with the priority below.";
 }
 

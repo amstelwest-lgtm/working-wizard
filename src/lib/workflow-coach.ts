@@ -13,6 +13,8 @@
  * the sticky strip.
  */
 
+import { scoreTier } from "@/lib/ratios";
+
 export const COACH_STEPS = [
   { id: "data", label: "Data", tab: "summary" },
   { id: "health", label: "Health", tab: "ratios", focus: "health" },
@@ -150,7 +152,7 @@ export function isCoachStep(page: string): page is CoachStepId {
 
 /** A pillar score under the healthy cutoff (65) is where it hurts. */
 export function pillarIsWeak(score: number | null | undefined): boolean {
-  return score != null && Number.isFinite(score) && score < 65;
+  return score != null && Number.isFinite(score) && scoreTier(score) !== "healthy";
 }
 
 export type PillarEvidenceId = "profit" | "assets" | "financing" | "cash";

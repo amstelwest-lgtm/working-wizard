@@ -1,16 +1,44 @@
 export type HealthTier = "critical" | "at_risk" | "healthy";
 
+export type HealthBandLabel = "Critical" | "Watch" | "Healthy";
+
 /**
- * Single source of truth for score -> tier classification.
- * Thresholds match the playbook data ranges (critical 0-40, at_risk 40-65,
- * healthy 65-100) — previously several report files independently
- * hardcoded a >=70 healthy cutoff, which disagreed with the playbook data's
- * 65 cutoff and could show the wrong tier's interventions for scores 65-69.
+ * One band table for Overview, Health, the PDFs, the Bot, and the Scorecard
+ * legend. Do not hardcode 40 / 65 / 70 anywhere else.
+ *
+ * #272 scored cash runway as healthy only from 12 weeks (score 85), watch
+ * from 4 weeks (score 45) through 8 weeks (score 65), and critical below
+ * 4 weeks (score 25). A healthy floor of 65 labelled that 8-week runway,
+ * and this client's overall of 71, as Healthy on some surfaces and Watch
+ * on others. Healthy therefore starts at 80: 71 is Watch, a 12-week runway
+ * (85) stays Healthy, and critical remains below 40.
+ *
+ * Playbook step packs were written on the older 65 healthy floor. Tier
+ * selection uses this table, so a score of 65–79 opens the Watch pack.
  */
+export const HEALTH_BAND_TABLE = {
+  /** Scores below this are Critical. */
+  watchMin: 40,
+  /** Scores at or above this are Healthy. From watchMin up to here is Watch. */
+  healthyMin: 80,
+} as const;
+
+const HEALTH_BAND_LABEL: Record<HealthTier, HealthBandLabel> = {
+  critical: "Critical",
+  at_risk: "Watch",
+  healthy: "Healthy",
+};
+
+/** Chip / PDF / sphere label for a tier. Overview, Health, and the Bot share this. */
+export function healthBandLabel(tier: HealthTier): HealthBandLabel {
+  return HEALTH_BAND_LABEL[tier];
+}
+
+/** Score → tier. Null or non-finite scores are Watch, not a fake Healthy. */
 export function scoreTier(score?: number | null): HealthTier {
   if (score == null || !Number.isFinite(score)) return "at_risk";
-  if (score >= 65) return "healthy";
-  if (score >= 40) return "at_risk";
+  if (score >= HEALTH_BAND_TABLE.healthyMin) return "healthy";
+  if (score >= HEALTH_BAND_TABLE.watchMin) return "at_risk";
   return "critical";
 }
 

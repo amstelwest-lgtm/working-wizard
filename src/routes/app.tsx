@@ -93,9 +93,11 @@ import {
   annualiseFinancials,
   computeRatios,
   BUSINESS_TYPE_TO_BENCHMARK,
+  healthBandLabel,
   PERIOD_MONTH_OPTIONS,
   PERIOD_MONTHS_KEY,
   periodMonthsOf,
+  scoreTier,
 } from "@/lib/ratios";
 import { healthFromRatioInputs, healthMapFromRatios, scoreRatio } from "@/lib/health-score";
 import { ratioActualLine } from "@/lib/ratio-actuals";
@@ -5071,18 +5073,19 @@ function Index() {
                                         : fmt === "days"
                                           ? `${Math.round(rawVal)} d`
                                           : formatNumber(rawVal, boardMarket);
+                                  const healthTier = scoreTier(health);
                                   const hCls = !isFinite(health)
                                     ? "text-slate-400"
-                                    : health >= 65
+                                    : healthTier === "healthy"
                                       ? "text-emerald-400"
-                                      : health >= 40
+                                      : healthTier === "at_risk"
                                         ? "text-amber-400"
                                         : "text-rose-400";
                                   const hLabelCls = !isFinite(health)
                                     ? "text-slate-500/70"
-                                    : health >= 65
+                                    : healthTier === "healthy"
                                       ? "text-emerald-500/70"
-                                      : health >= 40
+                                      : healthTier === "at_risk"
                                         ? "text-amber-500/70"
                                         : "text-rose-500/70";
                                   const actual = ratioActualLine(k, v, (amt) =>
@@ -5167,13 +5170,7 @@ function Index() {
                                           {isFinite(health) ? `${Math.round(health)}%` : "—"}
                                         </div>
                                         <div className={`text-[10px] ${hLabelCls}`}>
-                                          {isFinite(health)
-                                            ? health >= 65
-                                              ? "Healthy"
-                                              : health >= 40
-                                                ? "Watch"
-                                                : "Action"
-                                            : "—"}
+                                          {isFinite(health) ? healthBandLabel(healthTier) : "—"}
                                         </div>
                                       </td>
                                     </tr>

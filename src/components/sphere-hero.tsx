@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePrefersReducedMotion } from "@/hooks/use-prefers-reduced-motion";
 import { ArrowLeft, ChevronRight, TrendingUp, Layers, Shield, Droplet, type LucideIcon } from "lucide-react";
+import { healthBandLabel, scoreTier } from "@/lib/ratios";
 
 /**
  * SphereHero — the morphing 3-level health drill-down.
@@ -77,7 +78,7 @@ export type SphereHeroProps = {
   queryCounts?: Record<string, number>;
 };
 
-// ── Tier helpers (aligned with scoreTier in @/lib/ratios: 65 / 40) ──────────
+// ── Tier helpers (HEALTH_BAND_TABLE via scoreTier) ──────────────────────────
 
 type Tier = "healthy" | "watch" | "critical" | "nodata";
 
@@ -92,8 +93,9 @@ function QueryBadge({ count }: { count: number }) {
 
 function tierOf(h: number): Tier {
   if (!isFinite(h)) return "nodata";
-  if (h >= 65) return "healthy";
-  if (h >= 40) return "watch";
+  const tier = scoreTier(h);
+  if (tier === "healthy") return "healthy";
+  if (tier === "at_risk") return "watch";
   return "critical";
 }
 
@@ -116,9 +118,9 @@ const TIER_TEXT: Record<Tier, string> = {
 };
 
 const TIER_LABEL: Record<Tier, string> = {
-  healthy: "GOOD",
-  watch: "FAIR",
-  critical: "NEEDS ATTENTION",
+  healthy: healthBandLabel("healthy").toUpperCase(),
+  watch: healthBandLabel("at_risk").toUpperCase(),
+  critical: healthBandLabel("critical").toUpperCase(),
   nodata: "NO DATA",
 };
 
@@ -214,6 +216,7 @@ function Sphere({
   icon: Icon,
   scoreClass,
   className,
+  tier: tierProp,
 }: {
   score: number;
   label?: string;
@@ -226,8 +229,10 @@ function Sphere({
   icon?: LucideIcon;
   scoreClass?: string;
   className?: string;
+  /** Overall orb follows displayStatus. Pillars fall back to the score table. */
+  tier?: Tier;
 }) {
-  const tier = tierOf(score);
+  const tier = tierProp ?? tierOf(score);
   return (
     <button
       type="button"
@@ -376,6 +381,7 @@ export function SphereHero({
           >
             <Sphere
               score={overallHealth}
+              tier={overallTier}
               label="Business Health Score"
               delta={overallDelta}
               size={orbSize}

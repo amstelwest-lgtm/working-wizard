@@ -16,7 +16,7 @@ import { formatDate, formatMoneyCompact, type ResolvedMarket, ZA_MARKET } from "
 // ── Financial snapshot ────────────────────────────────────────────────────────
 
 export type SnapshotMetric = {
-  key: "revenue" | "gm" | "om" | "runway" | "updated";
+  key: "revenue" | "gm" | "om" | "runway" | "cash" | "updated";
   label: string;
   value: string;
   /** Directional movement vs the prior period; omitted when there is none. */
@@ -53,6 +53,15 @@ export function buildFinancialSnapshot(input: {
   cashRunwayWeeks: number | null | undefined;
   /** Overrides the week count. Use "Cash generative" when the business is not burning. */
   runwayLabel?: string | null;
+  /**
+   * Current cash, the four-week floor, and whether the shared 13-week forecast
+   * stays above that floor. Omitted when cash is unknown.
+   */
+  cash?: {
+    amount: number;
+    floor: number;
+    dipsBelowFloorWeek: number | null;
+  } | null;
   financialsUpdatedAt?: string | null;
   lastForecastAt?: string | null;
   priorLabel?: string | null;
@@ -92,6 +101,21 @@ export function buildFinancialSnapshot(input: {
       key: "runway",
       label: "Cash runway",
       value: `${Number.isInteger(w) ? w : w.toFixed(1)} ${w === 1 ? "week" : "weeks"}`,
+    });
+  }
+  if (
+    input.cash &&
+    Number.isFinite(input.cash.amount) &&
+    Number.isFinite(input.cash.floor)
+  ) {
+    const position =
+      input.cash.dipsBelowFloorWeek == null
+        ? "stays above floor"
+        : `dips below floor in week ${input.cash.dipsBelowFloorWeek}`;
+    out.push({
+      key: "cash",
+      label: "Cash",
+      value: `${formatMoneyCompact(input.cash.amount, market)} · floor ${formatMoneyCompact(input.cash.floor, market)} · ${position}`,
     });
   }
   const updated = [input.financialsUpdatedAt, input.lastForecastAt]

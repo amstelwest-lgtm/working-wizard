@@ -8,6 +8,7 @@
 
 import type { AccountantProfile } from "@/contexts/accountant-profile";
 import { formatMoney, formatMoneyCompact, ZA_MARKET, type MoneyMarket } from "@/lib/market";
+import { healthBandLabel, scoreTier } from "@/lib/ratios";
 
 // ── Palette ────────────────────────────────────────────────────────────────
 
@@ -109,16 +110,29 @@ export type Tier = "critical" | "at_risk" | "healthy";
 
 export const TIER_META: Record<Tier, { label: string; color: string; soft: string; deep: string }> =
   {
-    healthy: { label: "HEALTHY", color: C.green, soft: C.greenSoft, deep: C.greenDeep },
-    at_risk: { label: "WATCH", color: C.amber, soft: C.amberSoft, deep: C.amberDeep },
-    critical: { label: "CRITICAL", color: C.red, soft: C.redSoft, deep: C.redDeep },
+    healthy: {
+      label: healthBandLabel("healthy").toUpperCase(),
+      color: C.green,
+      soft: C.greenSoft,
+      deep: C.greenDeep,
+    },
+    at_risk: {
+      label: healthBandLabel("at_risk").toUpperCase(),
+      color: C.amber,
+      soft: C.amberSoft,
+      deep: C.amberDeep,
+    },
+    critical: {
+      label: healthBandLabel("critical").toUpperCase(),
+      color: C.red,
+      soft: C.redSoft,
+      deep: C.redDeep,
+    },
   };
 
+/** Same bands as `scoreTier` / `HEALTH_BAND_TABLE`. */
 export function tierForScore(score?: number | null): Tier {
-  if (score == null || !Number.isFinite(score)) return "at_risk";
-  if (score >= 65) return "healthy";
-  if (score >= 40) return "at_risk";
-  return "critical";
+  return scoreTier(score);
 }
 
 export function scoreColor(score?: number | null): string {
