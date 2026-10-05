@@ -18,6 +18,7 @@ import { benchmarkNarrative } from "./narrative";
 import type { ClientOperatingProfile } from "@/lib/client-profile";
 import { industryBenchmarkCaption, isUsCopy, ZA_MARKET, type ResolvedMarket } from "@/lib/market";
 import { reportKicker } from "@/lib/report-catalog";
+import { benchmarkPosition, benchmarkTrack, type MetricDirection } from "@/lib/ratios";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -34,6 +35,10 @@ export type BenchmarkRow = {
   formatted_median: string;
   formatted_top_quartile: string;
   lower_is_better?: boolean;
+  /** From the shared direction table. Sweet-spot metrics are not monotone. */
+  direction?: MetricDirection;
+  healthy_min?: number | null;
+  healthy_max?: number | null;
 };
 
 export type BenchmarkReportPDFProps = {
@@ -53,13 +58,20 @@ export type BenchmarkReportPDFProps = {
 
 type Position = "top_quartile" | "above_median" | "below_median";
 
+function rowDirection(row: BenchmarkRow): MetricDirection {
+  if (row.direction) return row.direction;
+  return row.lower_is_better ? "lower_is_better" : "higher_is_better";
+}
+
 function getPosition(row: BenchmarkRow): Position {
-  const better = row.lower_is_better
-    ? (a: number, b: number) => a <= b
-    : (a: number, b: number) => a >= b;
-  if (better(row.current_value, row.sector_top_quartile)) return "top_quartile";
-  if (better(row.current_value, row.sector_median)) return "above_median";
-  return "below_median";
+  return benchmarkPosition({
+    value: row.current_value,
+    median: row.sector_median,
+    top: row.sector_top_quartile,
+    direction: rowDirection(row),
+    healthyMin: row.healthy_min,
+    healthyMax: row.healthy_max,
+  });
 }
 
 const POS_META: Record<Position, { label: string; fg: string; bg: string }> = {
@@ -75,23 +87,17 @@ const PILLAR_LABEL: Record<string, string> = {
   cash: "Cash Flow",
 };
 
-/** Normalise value, median, topQ onto a 0..1 track (direction-corrected). */
+/** Normalise value, median, topQ onto a 0..1 track (healthy end on the right). */
 function normalise(row: BenchmarkRow): { pos: number; bandStart: number; bandEnd: number } {
-  const vals = [row.current_value, row.sector_median, row.sector_top_quartile];
-  let lo = Math.min(...vals);
-  let hi = Math.max(...vals);
-  const pad = (hi - lo || Math.abs(hi) || 1) * 0.25;
-  lo -= pad;
-  hi += pad;
-  const span = hi - lo || 1;
-  const t = (v: number) => (v - lo) / span;
-  // For lower-is-better ratios, flip so "right" is always better.
-  const flip = (x: number) => (row.lower_is_better ? 1 - x : x);
-  return {
-    pos: flip(t(row.current_value)),
-    bandStart: flip(t(row.sector_median)),
-    bandEnd: flip(t(row.sector_top_quartile)),
-  };
+  return benchmarkTrack({
+    value: row.current_value,
+    median: row.sector_median,
+    top: row.sector_top_quartile,
+    direction: rowDirection(row),
+    lowerIsBetter: row.lower_is_better,
+    healthyMin: row.healthy_min,
+    healthyMax: row.healthy_max,
+  });
 }
 
 // ── Styles ─────────────────────────────────────────────────────────────────

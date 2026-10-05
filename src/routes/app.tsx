@@ -38,6 +38,7 @@ import {
   industryBenchmarkShortLabel,
   isMissingMarketSupport,
   isUsCopy,
+  laborCostLabel,
   currencySymbol,
   localizeCopy,
   marketToJson,
@@ -93,14 +94,17 @@ import {
   annualiseFinancials,
   computeRatios,
   BUSINESS_TYPE_TO_BENCHMARK,
+  healthBandLabel,
   PERIOD_MONTH_OPTIONS,
   PERIOD_MONTHS_KEY,
   periodMonthsOf,
+  scoreTier,
 } from "@/lib/ratios";
 import { healthFromRatioInputs, healthMapFromRatios, scoreRatio } from "@/lib/health-score";
 import { ratioActualLine } from "@/lib/ratio-actuals";
 import { type SavedCashflowLike } from "@/lib/cash-runway";
-import { assessClientMetrics } from "@/lib/client-metrics";
+import { assessClientMetrics, resolveThirteenWeekForecast } from "@/lib/client-metrics";
+import { DERIVED_EQUITY_LABEL } from "@/lib/statement-financials";
 import { needsTrialBalanceRefresh } from "@/lib/trial-balance-refresh";
 import { TrialBalanceRefreshPrompt } from "@/components/trial-balance-refresh-prompt";
 import {
@@ -327,6 +331,8 @@ type Inputs = {
   revenue: string;
   totalAssets: string;
   equity: string;
+  /** "1" when equity was plugged from assets − liabilities. */
+  equityDerived?: string;
   cogs: string;
   receivables: string;
   inventory: string;
@@ -3214,7 +3220,7 @@ function Index() {
   // Marks real financials so autosave and the scored view activate after first user edit
   const markRealFinancials = () => setHasRealFinancials(true);
   const set = (k: keyof Inputs) => (val: string) => {
-    setV((s) => ({ ...s, [k]: val }));
+    setV((s) => ({ ...s, [k]: val, ...(k === "equity" ? { equityDerived: "" } : {}) }));
     markRealFinancials();
   };
 
@@ -3597,7 +3603,19 @@ function Index() {
     ownerMetrics.runway.kind === "weeks" || ownerMetrics.runway.kind === "zero"
       ? ownerMetrics.runway.weeks
       : null;
-  const overallHealth = healthFromRatioInputs(v, effectiveRunway, boardMarket);
+  const ownerOutlook = resolveThirteenWeekForecast({
+    financials: v as unknown as Record<string, unknown>,
+    cashflow: clientMeta?.cashflow ?? null,
+    openingCash: ownerMetrics.cash.amount,
+    runway: ownerMetrics.runway,
+    timeZone: boardMarket.timezone,
+  });
+  const overallHealth = healthFromRatioInputs(
+    v,
+    effectiveRunway,
+    boardMarket,
+    ownerOutlook.shortfallWeek,
+  );
   const pillarById = Object.fromEntries(
     overallHealth.pillars.map((p) => [p.id, p.score ?? NaN]),
   ) as Record<"profit" | "assets" | "financing" | "cash", number>;
@@ -3606,6 +3624,12 @@ function Index() {
     assets: pillarById.assets,
     financing: pillarById.financing,
     cash: pillarById.cash,
+  };
+  const pillarStatus = {
+    profit: overallHealth.pillars.find((p) => p.id === "profit")?.status,
+    assets: overallHealth.pillars.find((p) => p.id === "assets")?.status,
+    financing: overallHealth.pillars.find((p) => p.id === "financing")?.status,
+    cash: overallHealth.pillars.find((p) => p.id === "cash")?.status,
   };
   const avgHealth = overallHealth.overall ?? NaN;
 
@@ -3646,6 +3670,7 @@ function Index() {
   const spherePillars = buildSpherePillars({
     overallHealth: avgHealth,
     pillarHealths,
+    pillarStatus,
     healthMap,
     ratioMeta: RATIO_META,
   });
@@ -3700,6 +3725,7 @@ function Index() {
     hasRealFinancials: showScoredBoard,
     avgHealth,
     cashHealth: pillarHealths.cash,
+    displayStatus: overallHealth.displayStatus,
   });
   const nextMoveImpactLabel = computeNextMoveImpactLabel({
     topKey: nextSteps[0]?.key,
@@ -5071,18 +5097,19 @@ function Index() {
                                         : fmt === "days"
                                           ? `${Math.round(rawVal)} d`
                                           : formatNumber(rawVal, boardMarket);
+                                  const healthTier = scoreTier(health);
                                   const hCls = !isFinite(health)
                                     ? "text-slate-400"
-                                    : health >= 65
+                                    : healthTier === "healthy"
                                       ? "text-emerald-400"
-                                      : health >= 40
+                                      : healthTier === "at_risk"
                                         ? "text-amber-400"
                                         : "text-rose-400";
                                   const hLabelCls = !isFinite(health)
                                     ? "text-slate-500/70"
-                                    : health >= 65
+                                    : healthTier === "healthy"
                                       ? "text-emerald-500/70"
-                                      : health >= 40
+                                      : healthTier === "at_risk"
                                         ? "text-amber-500/70"
                                         : "text-rose-500/70";
                                   const actual = ratioActualLine(k, v, (amt) =>
@@ -5167,13 +5194,7 @@ function Index() {
                                           {isFinite(health) ? `${Math.round(health)}%` : "—"}
                                         </div>
                                         <div className={`text-[10px] ${hLabelCls}`}>
-                                          {isFinite(health)
-                                            ? health >= 65
-                                              ? "Healthy"
-                                              : health >= 40
-                                                ? "Watch"
-                                                : "Action"
-                                            : "—"}
+                                          {isFinite(health) ? healthBandLabel(healthTier) : "—"}
                                         </div>
                                       </td>
                                     </tr>
@@ -5727,8 +5748,25 @@ function Index() {
                       ] as Array<{ k: keyof Inputs; l: string }>
                     ).map(({ k, l }) => (
                       <div key={k} className="flex items-center gap-2 min-w-0">
-                        <Label className="w-36 shrink-0 truncate text-xs text-slate-700 dark:text-slate-400">
-                          {l}
+                        <Label
+                          title={
+                            k === "equity" && v.equityDerived === "1"
+                              ? DERIVED_EQUITY_LABEL
+                              : k === "laborCost"
+                                ? laborCostLabel(boardMarket)
+                                : l
+                          }
+                          className={`shrink-0 text-xs text-slate-700 dark:text-slate-400 ${
+                            k === "equity" && v.equityDerived === "1"
+                              ? "w-44 whitespace-normal leading-tight"
+                              : "w-36 truncate"
+                          }`}
+                        >
+                          {k === "equity" && v.equityDerived === "1"
+                            ? DERIVED_EQUITY_LABEL
+                            : k === "laborCost"
+                              ? laborCostLabel(boardMarket)
+                              : l}
                         </Label>
                         <Input
                           className="h-7 min-w-0 border-amber-900/15 bg-amber-50/40 text-slate-950 text-xs dark:border-slate-700 dark:bg-slate-950/60 dark:text-slate-100"

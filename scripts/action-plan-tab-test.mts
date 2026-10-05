@@ -59,7 +59,10 @@ assert(clientSrc.includes('<TabErrorBoundary label="Action Plan">'), "client boa
 assert(!clientSrc.includes('label: "Staff tasks"'), "accountant portal no longer has a Staff tasks tab");
 assert(!clientSrc.includes("TasksPanel"), "accountant portal no longer mounts the staff tasks panel");
 assert(clientSrc.includes("accountantWorkspaceTab"), "owner and staff-tasks tab IDs open the matching studio tab");
-assert(clientSrc.includes('search.tab === "actions"'), "actions deep link redirects to the Action Plan");
+assert(
+  clientSrc.includes("normalizeAccountantClientTab"),
+  "actions and health aliases are applied in the client route search parser",
+);
 assert(readFileSync(resolve("src/components/action-plan.tsx"), "utf8").includes('id="action-plan-export-pdf"'), "Action Plan exports a PDF");
 assert(
   !clientSrc.includes('["today", "cash", "budget", "next"].includes(activeTab)'),

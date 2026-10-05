@@ -29,6 +29,7 @@ import {
   type VarianceTaxonomyKey,
 } from "@/lib/budget.variance";
 import { formatMoney, ZA_MARKET, type ResolvedMarket } from "@/lib/market";
+import { readStatementMeta } from "@/lib/statement-period";
 
 export type BudgetPdfActual = {
   month: string;
@@ -272,6 +273,53 @@ function headlineFor(
   const dir = (top.delta ?? 0) > 0 ? "over" : "under";
   const pct = formatVariancePct(top.deltaPct);
   return `${draftBit}${top.label} is ${dir} budget by ${money(Math.abs(top.delta ?? 0), market)} (${pct}).`;
+}
+
+function finiteField(fin: Record<string, unknown>, key: string): number | null {
+  const v = fin[key];
+  if (v == null || v === "") return null;
+  const n = typeof v === "number" ? v : parseFloat(String(v));
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * One month of actuals from the same statement figures the other reports use.
+ * Used when `budget_month_actuals` is empty so #11 does not say "No month actuals"
+ * while the scorecard is full of that period's revenue and costs.
+ */
+export function budgetActualFromFinancials(
+  fin: Record<string, unknown> | null | undefined,
+): BudgetPdfActual | null {
+  if (!fin) return null;
+  const meta = readStatementMeta(fin);
+  const month = meta.periodEnd?.slice(0, 7) ?? "";
+  if (!/^\d{4}-\d{2}$/.test(month)) return null;
+  const revenue = finiteField(fin, "revenue");
+  const cogs = finiteField(fin, "cogs");
+  const ebit = finiteField(fin, "ebit");
+  const fixed = finiteField(fin, "fixedCosts");
+  if (revenue == null && cogs == null && ebit == null) return null;
+  const rev = revenue ?? 0;
+  const cost = cogs ?? 0;
+  const overheads = fixed ?? 0;
+  const profit = ebit ?? rev - cost - overheads;
+  return {
+    month,
+    status: "confirmed",
+    totals: {
+      revenue: rev,
+      cogs: cost,
+      grossProfit: rev - cost,
+      overheadsPeople: 0,
+      overheadsPremises: 0,
+      overheadsOps: 0,
+      overheadsSales: 0,
+      overheadsOther: overheads,
+      overheadsTotal: overheads,
+      depreciation: 0,
+      ebit: profit,
+    },
+  };
 }
 
 export function buildBudgetPdfModel(

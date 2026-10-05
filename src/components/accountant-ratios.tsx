@@ -18,7 +18,7 @@ import { FileDown, Mail, MessageCircle, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { KpiTrendline, pctDelta } from "@/components/kpi-trendline";
 import { BenchmarkBar } from "@/components/benchmark-bar";
-import { computeRatios, BUSINESS_TYPE_TO_BENCHMARK, scoreTier } from "@/lib/ratios";
+import { computeRatios, BUSINESS_TYPE_TO_BENCHMARK, healthBandLabel, scoreTier } from "@/lib/ratios";
 import { PDFUploadZone } from "@/components/pdf-upload-zone";
 import { ExtractionReviewModal } from "@/components/extraction-review-modal";
 import type { MergedExtractionResult } from "@/lib/extraction-types";
@@ -29,6 +29,7 @@ import {
   formatMoney,
   industryBenchmarkCaption,
   isUsCopy,
+  laborCostLabel,
   localizeCopy,
   salesPerEmployeeBenchmarkLabel,
   salesPerEmployeeHealthy,
@@ -152,10 +153,7 @@ function healthCls(h: number) {
 }
 function healthLabel(h: number) {
   if (!isFinite(h)) return "No data";
-  const tier = scoreTier(h);
-  if (tier === "healthy") return "Healthy";
-  if (tier === "at_risk") return "Watch";
-  return "Action";
+  return healthBandLabel(scoreTier(h));
 }
 
 type Contact = { email: string; phone: string };
@@ -828,11 +826,7 @@ Your Milōn accountant`;
       const tableRows = rows.map((r) => {
         const health = !isFinite(r.health)
           ? "—"
-          : scoreTier(r.health) === "healthy"
-            ? "Healthy"
-            : scoreTier(r.health) === "at_risk"
-              ? "Watch"
-              : "Action";
+          : healthLabel(r.health);
         return [
           r.friendly,
           localizeCopy(r.technical, market),
@@ -925,7 +919,9 @@ Your Milōn accountant`;
         <CardContent className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
           {FIELD_LABELS.map((f) => (
             <div key={f.key}>
-              <Label className="text-xs text-muted-foreground">{f.label}</Label>
+              <Label className="text-xs text-muted-foreground">
+                {f.key === "laborCost" ? laborCostLabel(market) : f.label}
+              </Label>
               <Input
                 type="number"
                 value={v[f.key]}

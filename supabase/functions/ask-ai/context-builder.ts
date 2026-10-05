@@ -24,7 +24,8 @@ import {
   resolveRatioRecord,
 } from "./derive-ratios.ts";
 import { buildOverviewBrief, copyPackFromMarket } from "./overview-brief.ts";
-import { assessClientMetrics } from "../../../src/lib/client-metrics.ts";
+import { assessClientMetrics, runwayDisplayLabel } from "../../../src/lib/client-metrics.ts";
+import { peerMedian } from "../../../src/lib/ratios.ts";
 
 /**
  * Maps the application's stored business_type values to the benchmark category keys
@@ -258,12 +259,13 @@ export async function buildContext(
 
         for (const { camelKey, value } of entries) {
           const b = benchMap.get(camelKey);
+          const sharedMedian = peerMedian(camelKey);
           const row: RatioRow = {
             key: camelKey,
             value,
             format: inferFormat(camelKey),
             p25: b?.p25 ?? null,
-            p50: b?.p50 ?? null,
+            p50: sharedMedian ?? b?.p50 ?? null,
             p75: b?.p75 ?? null,
             higher_is_better: b?.higher_is_better ?? null,
           };
@@ -295,6 +297,9 @@ export async function buildContext(
       : summarizeCashForecast(cashflow, metrics?.runway.weeks ?? storedRunway, {
           cashGenerative: metrics?.runway.kind === "cash_generative",
           openingCash: metrics?.cash.amount ?? null,
+          financials,
+          runway: metrics?.runway ?? null,
+          periodEnd: typeof financials?.periodEnd === "string" ? financials.periodEnd : null,
         });
 
   // Rank next moves from the full ratio set (not the focused subset).
@@ -341,7 +346,7 @@ export async function buildContext(
           ratios: fallbackRatios,
           cash: metrics?.cash.amount ?? null,
           runwayWeeks: metrics?.runway.weeks ?? null,
-          runwayLabel: metrics && metrics.runway.kind !== "unknown" ? metrics.runway.label : null,
+          runwayLabel: metrics ? runwayDisplayLabel(metrics.runway) : null,
           copyPack,
           clientName,
           periodLabel: snapPeriod,

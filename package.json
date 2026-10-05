@@ -107,7 +107,12 @@
     "test:qbo-intuit-tid": "vite-node --config scripts/vite-test.config.ts scripts/qbo-intuit-tid-test.mts",
     "test:accountant-qa-medium": "vite-node --config scripts/vite-test.config.ts scripts/accountant-qa-medium-test.mts",
     "test:accountant-qa-deliverables": "vite-node --config scripts/vite-test.config.ts scripts/accountant-qa-deliverables-test.mts",
-    "test:client-metrics": "vite-node --config scripts/vite-test.config.ts scripts/client-metrics-test.mts"
+    "test:health-score": "vite-node --config scripts/vite-test.config.ts scripts/health-score-test.mts",
+    "test:client-metrics": "vite-node --config scripts/vite-test.config.ts scripts/client-metrics-test.mts",
+    "test:client-route-search": "vite-node --config scripts/vite-test.config.ts scripts/client-route-search-test.mts",
+    "test:forecast-bands": "vite-node --config scripts/vite-test.config.ts scripts/forecast-bands-test.mts",
+    "test:report-direction": "vite-node --config scripts/vite-test.config.ts scripts/report-direction-test.mts",
+    "test:budget-qa-fixture": "vite-node --config scripts/vite-test.config.ts scripts/budget-qa-fixture-test.mts"
   },
   "dependencies": {
     "@cloudflare/vite-plugin": "^1.25.5",

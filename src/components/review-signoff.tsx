@@ -407,15 +407,23 @@ export function ReviewSignoffButton({
   const [confirmRemove, setConfirmRemove] = useState(false);
   const [removing, setRemoving] = useState(false);
   const [workflow, setWorkflow] = useState<DeliverableWorkflow | null>(null);
+  const [workflowLoaded, setWorkflowLoaded] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
+    setWorkflowLoaded(false);
     void loadWorkflow({ data: { clientId, scope } })
       .then((w) => {
-        if (!cancelled) setWorkflow(w);
+        if (!cancelled) {
+          setWorkflow(w);
+          setWorkflowLoaded(true);
+        }
       })
       .catch(() => {
-        if (!cancelled) setWorkflow(null);
+        if (!cancelled) {
+          setWorkflow(null);
+          setWorkflowLoaded(true);
+        }
       });
     return () => {
       cancelled = true;
@@ -517,6 +525,14 @@ export function ReviewSignoffButton({
           placement={compact ? "compact" : "block"}
         />
       )}
+      {!workflowLoaded ? (
+        <div
+          className="h-8 w-40 animate-pulse rounded-md bg-slate-200/80 dark:bg-slate-800"
+          aria-busy="true"
+          aria-label="Loading review status"
+        />
+      ) : (
+        <>
       {workflow ? (
         <p className="text-[10px] uppercase tracking-[0.14em] text-slate-500">
           {cycleStatus === "ready_for_review" ? "Ready for review" : "Draft"}
@@ -545,15 +561,20 @@ export function ReviewSignoffButton({
             className="h-8 border-[#d4a550]/40 text-[11px] uppercase tracking-[0.12em]"
             disabled={saving}
             onClick={() => {
+              const previous = workflow;
+              setWorkflow({ ...previous, status: "ready_for_review", changeComment: null });
               setSaving(true);
+              toast.success("Sent for partner review");
               void doSubmit({ data: { clientId, scope } })
                 .then((r) => {
                   setWorkflow((w) =>
                     w ? { ...w, status: r.status, changeComment: null } : w,
                   );
-                  toast.success("Submitted for review");
                 })
-                .catch((e) => toast.error(e instanceof Error ? e.message : "Submit failed"))
+                .catch((e) => {
+                  setWorkflow(previous);
+                  toast.error(e instanceof Error ? e.message : "Submit failed");
+                })
                 .finally(() => setSaving(false));
             }}
           >
@@ -586,6 +607,8 @@ export function ReviewSignoffButton({
           </button>
         ) : null}
       </div>
+        </>
+      )}
       <Dialog open={askChanges} onOpenChange={setAskChanges}>
         <DialogContent className="border-[#d4a550]/25 bg-[#0d1117] text-slate-100">
           <DialogHeader>

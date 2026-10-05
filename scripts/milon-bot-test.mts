@@ -104,6 +104,8 @@ assert(BOT_SYSTEM.includes("not Lighthouse"), "not Lighthouse");
 assert(!BOT_SYSTEM.includes("You are not Ask AI"), "unified product — not a separate Ask AI");
 assert(!BOT_SYSTEM.includes("point them to Ask AI"), "does not send users to a separate Ask AI");
 assert(BOT_SYSTEM.includes("Do not send the user to a separate product"), "stays on one surface");
+assert(BOT_SYSTEM.includes("30–60 days"), "bot quotes the shared creditor band");
+assert(BOT_SYSTEM.includes("40-day band"), "bot is told not to invent a 40-day band");
 
 assert(summarizeToolArgs("answer_from_brain", { topic: "cash" }) === "answer_from_brain:cash", "args summary");
 assert(summarizeToolArgs("list_blockers", {}) === "list_blockers", "empty args summary");

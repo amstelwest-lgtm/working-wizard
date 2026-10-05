@@ -4,6 +4,11 @@
  * Keep Deno-free so scripts can import this file directly.
  */
 
+import {
+  rollForwardForecast,
+  resolveThirteenWeekForecast,
+  type ClientRunway,
+} from "../../../src/lib/client-metrics.ts";
 import type {
   ActionPlanSummary,
   ActionTaskSummary,
@@ -334,114 +339,63 @@ export type SavedCashflow = {
   capexWeek?: number;
 };
 
-function distributeLine(l: CashLine, weeks: number): number[] {
-  const out = new Array(weeks).fill(0);
-  const amt = parseFloat(l.amount ?? "0") || 0;
-  if (amt === 0) return out;
-  const start = Math.max(1, Math.min(weeks, l.startWeek ?? 1)) - 1;
-  const freq = l.frequency ?? "recurring-monthly";
-  switch (freq) {
-    case "recurring-weekly":
-    case "weekly":
-      for (let i = start; i < weeks; i++) out[i] = amt;
-      break;
-    case "once-off":
-    case "once":
-      out[start] = amt;
-      break;
-    case "split-weeks":
-    case "split": {
-      const n = Math.max(1, l.splitCount ?? 3);
-      const per = amt / n;
-      for (let i = start; i < Math.min(weeks, start + n); i++) out[i] = per;
-      break;
-    }
-    case "split-months": {
-      const n = Math.max(1, l.splitCount ?? 3);
-      const per = amt / n;
-      for (let i = 0; i < n; i++) {
-        const w = start + i * 4;
-        if (w < weeks) out[w] = per;
-      }
-      break;
-    }
-    default:
-      for (let i = start; i < weeks; i += 4) out[i] = amt;
-  }
-  return out;
-}
-
 export function closingBalancesFromCashflow(cf: SavedCashflow | null | undefined): number[] | null {
   if (!cf) return null;
-  const revenue = cf.revenue ?? [];
-  const expenses = cf.expenses ?? [];
-  const other = cf.other ?? [];
-  const hasAmount = [...revenue, ...expenses, ...other].some(
-    (l) => (parseFloat(l.amount ?? "0") || 0) !== 0,
-  );
-  if (!hasAmount) return null;
-
-  const revAdj = (cf.revAdj ?? 100) / 100;
-  const expAdj = (cf.expAdj ?? 100) / 100;
-  const collectDelay = Math.max(0, Math.min(HORIZON - 1, Math.round(cf.collectDelay ?? 0)));
-  const headDelta = cf.headcountDelta ?? 0;
-  const avgSal = parseFloat(cf.avgSalary ?? "0") || 0;
-  const fixedDelta = parseFloat(cf.fixedCostDelta ?? "0") || 0;
-  const revGrowth = cf.revGrowthPct ?? 0;
-  const capexAmt = parseFloat(cf.capexAmount ?? "0") || 0;
-  const capexWk = cf.capexWeek ?? 1;
-
-  const shiftVals = (vals: number[]) => {
-    if (!collectDelay) return vals;
-    const out = new Array(HORIZON).fill(0);
-    for (let i = 0; i < HORIZON; i++) {
-      const j = i + collectDelay;
-      if (j < HORIZON) out[j] += vals[i];
-    }
-    return out;
-  };
-  const growthMul = (i: number) => Math.pow(1 + revGrowth / 100, i);
-
-  const inflow = new Array(HORIZON).fill(0) as number[];
-  const outflow = new Array(HORIZON).fill(0) as number[];
-  revenue.forEach((l) => {
-    shiftVals(distributeLine(l, HORIZON).map((v) => v * revAdj)).forEach(
-      (v, i) => (inflow[i] += v * growthMul(i)),
-    );
-  });
-  [...expenses, ...other].forEach((l) => {
-    distributeLine(l, HORIZON)
-      .map((v) => v * expAdj)
-      .forEach((v, i) => (outflow[i] += v));
-  });
-  if (headDelta !== 0) {
-    const weekly = (headDelta * avgSal) / 4.33;
-    for (let i = 0; i < HORIZON; i++) outflow[i] += weekly;
-  }
-  if (fixedDelta !== 0) {
-    const weekly = fixedDelta / 4.33;
-    for (let i = 0; i < HORIZON; i++) outflow[i] += weekly;
-  }
-  if (capexAmt !== 0) {
-    const w = Math.max(1, Math.min(HORIZON, capexWk)) - 1;
-    outflow[w] += capexAmt;
-  }
-
-  const opening = parseFloat(cf.openingBalance ?? "0") || 0;
-  const closings: number[] = [];
-  let bal = opening;
-  for (let i = 0; i < HORIZON; i++) {
-    bal += inflow[i] - outflow[i];
-    closings.push(bal);
-  }
-  return closings;
+  return rollForwardForecast(cf as unknown as Record<string, unknown>, HORIZON)?.closing ?? null;
 }
 
 export function summarizeCashForecast(
   cf: SavedCashflow | null | undefined,
   storedRunway: number | null | undefined,
-  opts?: { cashGenerative?: boolean; openingCash?: number | null },
+  opts?: {
+    cashGenerative?: boolean;
+    openingCash?: number | null;
+    financials?: Record<string, unknown> | null;
+    runway?: ClientRunway | null;
+    now?: Date;
+    periodEnd?: string | null;
+  },
 ): CashForecastSummary | null {
+  if (opts?.financials || opts?.runway) {
+    const runway: ClientRunway =
+      opts.runway ??
+      (opts.cashGenerative
+        ? { weeks: null, kind: "cash_generative", label: "Cash generative" }
+        : { weeks: null, kind: "unknown", label: "—" });
+    const outlook = resolveThirteenWeekForecast({
+      financials: opts.financials,
+      cashflow: cf,
+      openingCash: opts.openingCash,
+      runway,
+      now: opts.now,
+      periodEnd: opts.periodEnd,
+    });
+    const hasFlow = outlook.totalInflow > 0 || outlook.totalOutflow > 0 || outlook.opening !== 0;
+    if (!hasFlow) return null;
+    const lowest = Math.min(...outlook.closing);
+    const lowestWeek = outlook.closing.indexOf(lowest) + 1;
+    const closing = outlook.closing[outlook.closing.length - 1] ?? outlook.opening;
+    const delta = closing - outlook.opening;
+    const traj = Math.abs(delta) < 1 ? "flat" : delta > 0 ? "up" : "down";
+    const breach = outlook.closing.findIndex((c) => c < RUNWAY_FLOOR);
+    const derivedRunway = breach === -1 ? HORIZON : breach;
+    const runwayWeeks =
+      storedRunway != null && Number.isFinite(Number(storedRunway))
+        ? Number(storedRunway)
+        : derivedRunway;
+    return {
+      hasData: true,
+      runwayWeeks: opts.cashGenerative || runway.kind === "cash_generative" ? null : runwayWeeks,
+      cashGenerative: opts.cashGenerative === true || runway.kind === "cash_generative",
+      horizonWeeks: HORIZON,
+      shortfall: outlook.shortfall,
+      lowestWeek: outlook.shortfall ? outlook.shortfallWeek : lowestWeek,
+      negativeWeeks: outlook.shortfall ? outlook.closing.filter((c) => c < 0).length : 0,
+      trajectory: traj,
+      closingVsOpening: traj === "up" ? "higher" : traj === "down" ? "lower" : "flat",
+      timingNote: outlook.timingNote,
+    };
+  }
   let source = cf;
   if (cf && opts?.openingCash != null && Number.isFinite(opts.openingCash)) {
     const opening = parseFloat(cf.openingBalance ?? "");

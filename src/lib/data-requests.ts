@@ -14,6 +14,7 @@
  */
 import type { Json } from "@/integrations/supabase/types";
 import type { AdvisoryState } from "@/lib/advisory-state";
+import { creditorDaysHealthyBand, peerMedian } from "@/lib/ratios";
 
 export const DATA_REQUEST_KINDS = [
   "bank_statement",
@@ -215,9 +216,46 @@ export type DataRequestDraft = {
 
 /** Figures older than this are treated as stale once the client is past data collection. */
 export const STALE_FIGURES_DAYS = 75;
-/** Debtor / creditor days above which statement totals stop being enough to act on. */
-export const DEBTOR_DAYS_AGEING_THRESHOLD = 45;
-export const CREDITOR_DAYS_AGEING_THRESHOLD = 60;
+/**
+ * Days above which statement totals stop being enough to act on.
+ * Creditor days use the shared healthy maximum. Debtor days use the shared
+ * peer median (40), not the healthy band (18) and not a private 45.
+ */
+export const DEBTOR_DAYS_AGEING_THRESHOLD = peerMedian("debtorDays") ?? 40;
+export const CREDITOR_DAYS_AGEING_THRESHOLD = creditorDaysHealthyBand().max;
+
+/**
+ * The same debtor/creditor day signals as the Overview data-request cards.
+ * What matters reads these so it cannot say nothing needs attention while a
+ * card is flagging creditor days above 60 (or debtor days above the peer median).
+ */
+export function ratioAttentionSignals(
+  ratios: Record<string, number> | null | undefined,
+): string[] {
+  const out: string[] = [];
+  const debtorDays = ratios?.["Debtor Days"];
+  if (
+    typeof debtorDays === "number" &&
+    Number.isFinite(debtorDays) &&
+    debtorDays > DEBTOR_DAYS_AGEING_THRESHOLD
+  ) {
+    out.push(
+      `Debtor days are ${Math.round(debtorDays)}, above the ${DEBTOR_DAYS_AGEING_THRESHOLD}-day mark.`,
+    );
+  }
+  const creditorDays = ratios?.["Creditor Days"];
+  if (
+    typeof creditorDays === "number" &&
+    Number.isFinite(creditorDays) &&
+    creditorDays > CREDITOR_DAYS_AGEING_THRESHOLD
+  ) {
+    out.push(
+      `Creditor days are ${Math.round(creditorDays)}, above the ${CREDITOR_DAYS_AGEING_THRESHOLD}-day mark.`,
+    );
+  }
+  return out;
+}
+
 /** A rule resolved by hand (fulfilled / waived) within this window is not re-asked. */
 export const RESOLVED_SUPPRESSION_DAYS = 90;
 

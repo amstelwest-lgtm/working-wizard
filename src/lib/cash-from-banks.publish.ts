@@ -10,6 +10,7 @@ import {
   type CashForecastPublishPayload,
   type ForecastFrequency,
 } from "@/lib/cash-from-banks.types";
+import { formatCalendarDay } from "@/lib/market/format";
 
 export type PublishPolicy = "replace" | "merge";
 
@@ -63,6 +64,54 @@ function hasMeaningfulExisting(existing: ExistingCashflow | null | undefined): b
 
 export function existingCashflowIsMeaningful(existing: ExistingCashflow | null | undefined): boolean {
   return hasMeaningfulExisting(existing);
+}
+
+function finiteAmount(raw: unknown): number | null {
+  if (typeof raw === "number" && Number.isFinite(raw)) return raw;
+  if (typeof raw === "string" && raw.trim() !== "") {
+    const n = parseFloat(raw);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
+/** Opening cash the publish would replace: period cash when it is on file, else the forecast opening. */
+export function openingCashToConfirm(forecastOpening: unknown, periodCash: unknown): number | null {
+  const period = finiteAmount(periodCash);
+  if (period != null) return period;
+  return finiteAmount(forecastOpening);
+}
+
+function signedMoney(n: number, currency: "USD" | "ZAR", locale: string): string {
+  const body = Math.abs(Math.round(n)).toLocaleString(locale);
+  const symbol = currency === "USD" ? "$" : "R";
+  return n < 0 ? `\u2212${symbol}${body}` : `${symbol}${body}`;
+}
+
+/**
+ * Confirm copy when publishing would overwrite hand-entered opening cash
+ * with the bank closing balance. Null when the two already agree.
+ */
+export function openingCashReplaceNotice(input: {
+  currentOpening: number | null | undefined;
+  bankClosing: number;
+  bankDate?: string | null;
+  currency?: "USD" | "ZAR";
+  locale?: "en-ZA" | "en-US";
+}): string | null {
+  if (input.currentOpening == null || !Number.isFinite(input.currentOpening)) return null;
+  if (!Number.isFinite(input.bankClosing)) return null;
+  if (Math.abs(input.currentOpening - input.bankClosing) < 0.5) return null;
+  const currency = input.currency === "ZAR" ? "ZAR" : "USD";
+  const locale = input.locale ?? "en-US";
+  const from = signedMoney(input.currentOpening, currency, locale);
+  const to = signedMoney(input.bankClosing, currency, locale);
+  const iso = input.bankDate?.slice(0, 10) ?? "";
+  const dated = /^\d{4}-\d{2}-\d{2}$/.test(iso)
+    ? formatCalendarDay(iso, { locale }, { day: "numeric", month: "short", year: "numeric" })
+    : "";
+  const onDate = dated && dated !== "—" ? ` on ${dated}` : "";
+  return `This replaces opening cash ${from} → ${to} (bank closing balance${onDate})`;
 }
 
 function remapId(id: string): string {

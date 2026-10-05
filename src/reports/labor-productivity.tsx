@@ -19,7 +19,7 @@ import { ExecSummary, type HeadlineFigure } from "@/components/pdf/exec-summary"
 import { C, fmtRand, fmtRandCompact, fmtPct, resolveTheme } from "@/components/pdf/theme";
 import { laborNarrative } from "./narrative";
 import type { ClientOperatingProfile } from "@/lib/client-profile";
-import { currencySymbol, t, ZA_MARKET, type ResolvedMarket } from "@/lib/market";
+import { currencySymbol, laborProductivityTitle, t, ZA_MARKET, type ResolvedMarket } from "@/lib/market";
 import { reportKicker } from "@/lib/report-catalog";
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -204,8 +204,8 @@ export function LaborProductivityPDF({
   if (!d || unavailableReason) {
     return (
       <PDFDocument
-        title={`Labor Productivity — ${smeData.name}`}
-        subject="Labor Productivity Report"
+        title={`${laborProductivityTitle(m)} — ${smeData.name}`}
+        subject={`${laborProductivityTitle(m)} Report`}
         smeData={smeData}
         accountantProfile={accountantProfile}
         isDemo={isDemo}
@@ -214,7 +214,7 @@ export function LaborProductivityPDF({
       >
         <ReportTitle
           kicker={reportKicker("labor")}
-          title="Labor Productivity"
+          title={laborProductivityTitle(m)}
           subtitle={`What each employee and each ${t("currencyWord", m)} of wages contributes to revenue and profit`}
           isDemo={isDemo}
         />
@@ -302,8 +302,8 @@ export function LaborProductivityPDF({
 
   return (
     <PDFDocument
-      title={`Labor Productivity — ${smeData.name}`}
-      subject="Labor Productivity Report"
+      title={`${laborProductivityTitle(m)} — ${smeData.name}`}
+      subject={`${laborProductivityTitle(m)} Report`}
       smeData={smeData}
       accountantProfile={accountantProfile}
       isDemo={isDemo}
@@ -313,7 +313,7 @@ export function LaborProductivityPDF({
       {/* ── PAGE 1 ── */}
       <ReportTitle
         kicker={reportKicker("labor")}
-        title="Labor Productivity"
+        title={laborProductivityTitle(m)}
         subtitle={`What each employee and each ${t("currencyWord", m)} of wages contributes to revenue and profit`}
         isDemo={isDemo}
       />

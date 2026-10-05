@@ -14,7 +14,7 @@ import { COLLAPSIBLE_GOLD_RULE } from "@/components/primitives/collapsible-gold-
 import { useNotes } from "@/contexts/notes";
 import { noteBelongsToRatio } from "@/lib/ratio-queries";
 import { getPlaybookSteps, type PlaybookStep } from "@/lib/playbook.functions";
-import { scoreTier } from "@/lib/ratios";
+import { healthBandLabel, scoreTier } from "@/lib/ratios";
 import type { RatioInputs } from "@/lib/ratios";
 import {
   fallbackMove,
@@ -63,21 +63,15 @@ type Props = {
 
 function MiniHealth({ health }: { health: number }) {
   const w = Number.isFinite(health) ? Math.max(2, Math.min(100, health)) : 0;
-  const tone =
-    !Number.isFinite(health)
-      ? "bg-slate-300"
-      : health >= 65
-        ? "bg-emerald-500"
-        : health >= 40
-          ? "bg-amber-400"
-          : "bg-rose-500";
-  const label = !Number.isFinite(health)
-    ? "—"
-    : health >= 65
-      ? "Healthy"
-      : health >= 40
-        ? "Watch"
-        : "Critical";
+  const tier = scoreTier(health);
+  const tone = !Number.isFinite(health)
+    ? "bg-slate-300"
+    : tier === "healthy"
+      ? "bg-emerald-500"
+      : tier === "at_risk"
+        ? "bg-amber-400"
+        : "bg-rose-500";
+  const label = !Number.isFinite(health) ? "—" : healthBandLabel(tier);
   return (
     <div>
       <div className="mb-1 flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-slate-500">

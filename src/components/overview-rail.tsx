@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { ArrowRight, ChevronRight } from "lucide-react";
+import { HEALTH_BAND_TABLE } from "@/lib/ratios";
 
 export type OverviewRailProps = {
   liveLabel?: string;
@@ -34,7 +35,12 @@ function sentimentClass(s: "good" | "bad" | "neutral") {
 
 function HealthMeter({ score }: { score: number }) {
   const pct = Math.max(0, Math.min(100, score));
-  const fill = pct >= 65 ? "bg-emerald-500" : pct >= 40 ? "bg-amber-500" : "bg-rose-500";
+  const fill =
+    pct >= HEALTH_BAND_TABLE.healthyMin
+      ? "bg-emerald-500"
+      : pct >= HEALTH_BAND_TABLE.watchMin
+        ? "bg-amber-500"
+        : "bg-rose-500";
   return (
     <div className="mt-2">
       <div className="h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">

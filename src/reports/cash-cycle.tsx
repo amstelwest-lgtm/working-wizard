@@ -20,7 +20,13 @@ import { ExecSummary, type HeadlineFigure } from "@/components/pdf/exec-summary"
 import { C, fmtRand, fmtRandCompact, fmtPct, resolveTheme } from "@/components/pdf/theme";
 import { usePdfMarket } from "@/components/pdf/pdf-market";
 import { cashCycleNarrative } from "./narrative";
-import { cycleTimelineAxis } from "@/lib/client-metrics";
+import {
+  cycleTimelineAxis,
+  scoreCreditorDays,
+  scoreLowerIsBetterDays,
+  scoreWorkingCapitalDays,
+  scoreWorkingCapitalFunding,
+} from "@/lib/client-metrics";
 import type { ClientOperatingProfile } from "@/lib/client-profile";
 import { t, ZA_MARKET, type ResolvedMarket } from "@/lib/market";
 import { reportKicker } from "@/lib/report-catalog";
@@ -67,12 +73,8 @@ export type CashCyclePDFProps = {
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-/** Fallback score if health_scores not provided */
-function daysScore(days: number, goodBelow: number): number {
-  if (days <= goodBelow) return 85;
-  if (days <= goodBelow * 1.5) return 60;
-  if (days <= goodBelow * 2) return 40;
-  return 20;
+function scored(explicit: number | undefined, fallback: number): number {
+  return explicit ?? Math.round(fallback);
 }
 
 // ── Timeline diagram ───────────────────────────────────────────────────────
@@ -345,37 +347,44 @@ export function CashCyclePDF({
     {
       name: dso,
       value: `${Math.round(d.debtor_days)} d`,
-      score: hs.debtor_days ?? daysScore(d.debtor_days, 40),
+      score: scored(hs.debtor_days, scoreLowerIsBetterDays(d.debtor_days)),
     },
     {
       name: "Inventory Days",
       value: `${Math.round(d.inventory_days)} d`,
-      score: hs.inventory_days ?? daysScore(d.inventory_days, 45),
+      score: scored(hs.inventory_days, scoreLowerIsBetterDays(d.inventory_days)),
     },
     ...(d.wip_days > 0
       ? [
           {
             name: "WIP Days",
             value: `${Math.round(d.wip_days)} d`,
-            score: hs.wip_days ?? daysScore(d.wip_days, 15),
+            score: scored(hs.wip_days, scoreLowerIsBetterDays(d.wip_days)),
           },
         ]
       : []),
-    { name: dpo, value: `${Math.round(d.creditor_days)} d`, score: hs.creditor_days ?? 70 },
+    {
+      name: dpo,
+      value: `${Math.round(d.creditor_days)} d`,
+      score: scored(hs.creditor_days, scoreCreditorDays(d.creditor_days)),
+    },
     {
       name: "Working Capital Days",
       value: `${Math.round(d.working_capital_days)} d`,
-      score: hs.working_capital_days ?? daysScore(d.working_capital_days, 60),
+      score: scored(hs.working_capital_days, scoreWorkingCapitalDays(d.working_capital_days)),
     },
     {
       name: "WC Funding Intensity",
       value: fmtPct(d.working_capital_funding),
-      score: hs.working_capital_funding ?? 50,
+      score: scored(hs.working_capital_funding, scoreWorkingCapitalFunding(d.working_capital_funding)),
     },
     {
       name: "WC Utilization",
       value: fmtPct(d.working_capital_utilization),
-      score: hs.working_capital_utilization ?? 60,
+      score: scored(
+        hs.working_capital_utilization,
+        scoreWorkingCapitalFunding(d.working_capital_utilization),
+      ),
     },
   ];
 

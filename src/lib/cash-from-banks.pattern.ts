@@ -11,6 +11,7 @@ import {
   type CashStatementTransaction,
   bucketToSide,
 } from "@/lib/cash-from-banks.types";
+import { forecastAnchorDate } from "@/lib/client-metrics";
 
 function newId(): string {
   return Math.random().toString(36).slice(2, 10);
@@ -197,13 +198,20 @@ export function buildDraftLinesFromExtract(extract: CashBankExtract): CashForeca
   });
 }
 
-export function nextForecastStartDate(periodEnd: string | null): string {
-  const base = periodEnd && Number.isFinite(Date.parse(periodEnd))
-    ? new Date(periodEnd)
-    : new Date();
-  // Day after statement period
-  base.setDate(base.getDate() + 1);
-  return base.toISOString().slice(0, 10);
+/**
+ * Week 1 of a bank draft. The current week in the firm's timezone, or the day
+ * after the statement when that day is still in the future. A past statement
+ * end must not leave the first weeks already behind.
+ */
+export function nextForecastStartDate(
+  periodEnd: string | null,
+  opts?: { now?: Date; timeZone?: string | null },
+): string {
+  return forecastAnchorDate({
+    now: opts?.now,
+    periodEnd,
+    timeZone: opts?.timeZone,
+  });
 }
 
 export function resolveOpeningBalance(extract: CashBankExtract): number {

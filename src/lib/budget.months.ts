@@ -46,29 +46,95 @@ export function monthKey(ref = new Date()): string {
 }
 
 /**
- * First month of the 12-month budget window.
+ * First month of the 12-month budget window: the firm financial year.
  *
- * The financial year still anchors reporting, but a budget only makes sense
- * from the first month there are actuals for — nobody should be asked to
- * budget retrospectively for months already closed with no figures. So the
- * window starts at the later of the current FY start and the first actuals
- * month (or this month when no actuals exist yet).
+ * A window that started at "this month" labelled itself "FY Mar–Feb" while
+ * the columns ran Oct–Sep. The caption and the columns are the same FY.
+ * `firstActualsMonth` is accepted so callers keep compiling; it does not
+ * slice the year.
  */
 export function budgetWindowStart(input: {
   fyStartMonth: number;
-  /** YYYY-MM of the earliest month with real figures, if known. */
+  /** Kept for callers. The window is the firm FY, not the first actuals month. */
   firstActualsMonth?: string | null;
   ref?: Date;
 }): string {
-  const ref = input.ref ?? new Date();
-  const fy = currentFyStart(input.fyStartMonth, ref);
-  const now = monthKey(ref);
-  const actuals =
-    input.firstActualsMonth && /^\d{4}-\d{2}$/.test(input.firstActualsMonth)
-      ? input.firstActualsMonth
-      : null;
-  const from = actuals && actuals <= now ? actuals : now;
-  return from > fy ? from : fy;
+  return currentFyStart(input.fyStartMonth, input.ref ?? new Date());
+}
+
+/** FY start (YYYY-MM) of the firm year that contains `ym`. */
+export function firmFyContaining(fyStartMonth: number, ym: string): string {
+  const [y, m] = ym.split("-").map(Number);
+  const startYear = m >= fyStartMonth ? y : y - 1;
+  return `${startYear}-${String(fyStartMonth).padStart(2, "0")}`;
+}
+
+function uniformCell(
+  keys: string[],
+  map: Record<string, BudgetMonthCell>,
+): BudgetMonthCell | null {
+  if (!keys.length) return null;
+  const first = map[keys[0]] ?? { volume: 0, price: 0 };
+  const same = keys.every((key) => {
+    const cell = map[key] ?? { volume: 0, price: 0 };
+    return cell.volume === first.volume && cell.price === first.price;
+  });
+  return same ? { volume: first.volume, price: first.price } : null;
+}
+
+function uniformAmount(keys: string[], map: Record<string, number>): number | null {
+  if (!keys.length) return null;
+  const first = map[keys[0]] ?? 0;
+  return keys.every((key) => (map[key] ?? 0) === first) ? first : null;
+}
+
+/**
+ * A saved budget whose first column is not the firm FY start (Oct→Sep under
+ * a March year) is moved onto that FY. A uniform monthly seed is copied
+ * across the new year so the full-year total stays a year.
+ */
+export function alignBudgetToFirmFy(doc: BudgetDocument): BudgetDocument {
+  if (!/^\d{4}-\d{2}$/.test(doc.fyStart) || !(doc.fyStartMonth >= 1 && doc.fyStartMonth <= 12)) {
+    return doc;
+  }
+  const startMonth = Number(doc.fyStart.slice(5, 7));
+  if (startMonth === doc.fyStartMonth) return doc;
+  const target = firmFyContaining(doc.fyStartMonth, doc.fyStart);
+  if (target === doc.fyStart) return doc;
+  const oldMonths = fyMonths(doc.fyStart);
+  const nextMonths = fyMonths(target);
+  return {
+    ...doc,
+    fyStart: target,
+    revenueLines: doc.revenueLines.map((line) => {
+      const fill = uniformCell(oldMonths, line.months);
+      return {
+        ...line,
+        months: Object.fromEntries(
+          nextMonths.map((month) => [
+            month,
+            line.months[month]
+              ? { ...line.months[month] }
+              : fill
+                ? { ...fill }
+                : { volume: 0, price: 0 },
+          ]),
+        ),
+      };
+    }),
+    overheads: doc.overheads.map((oh) => {
+      const fill = uniformAmount(oldMonths, oh.months);
+      return {
+        ...oh,
+        months: Object.fromEntries(
+          nextMonths.map((month) => [
+            month,
+            oh.months[month] != null ? oh.months[month] : fill != null ? fill : 0,
+          ]),
+        ),
+      };
+    }),
+  };
 }
 
 /** "FY Jan–Dec · from Sep 2026" style caption for a budget document. */
@@ -109,17 +175,23 @@ export function createBudgetDocument(input: {
   templateId: BudgetTemplateId;
   qualification: BudgetQualification;
   fyStartMonth?: number;
-  /** Explicit window start (YYYY-MM). Overrides firstActualsMonth. */
+  /** Explicit window start (YYYY-MM). Overrides the firm-FY default. */
   fyStart?: string;
-  /** Earliest month with real figures — the window never starts before it. */
+  /** Accepted for callers. The default window is the firm FY containing `ref`. */
   firstActualsMonth?: string | null;
+  /** Reference date for the firm FY. Defaults to today. */
+  ref?: Date;
   market?: ResolvedMarket;
 }): BudgetDocument {
   const market = input.market ?? ZA_MARKET;
   const fyStartMonth = input.fyStartMonth ?? market.fyStartMonthDefault;
   const fyStart =
     input.fyStart ??
-    budgetWindowStart({ fyStartMonth, firstActualsMonth: input.firstActualsMonth });
+    budgetWindowStart({
+      fyStartMonth,
+      firstActualsMonth: input.firstActualsMonth,
+      ref: input.ref,
+    });
   const months = fyMonths(fyStart);
   const tpl = BUDGET_TEMPLATES[input.templateId];
 
