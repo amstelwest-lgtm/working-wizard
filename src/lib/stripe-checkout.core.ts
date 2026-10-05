@@ -102,6 +102,12 @@ export type FirmCheckoutSessionInput = {
   market: StripePlanMarket;
   /** Stripe promotion_code id (promo_…), already resolved. */
   promotionCodeId?: string | null;
+  /**
+   * SA firms only. Server passes STRIPE_ZA_COUPON_ID (default MILON_ZA_50).
+   * Not a client flag. When set, this replaces the promo box so the two
+   * cannot stack.
+   */
+  zaCouponId?: string | null;
   integrationIdentifier: string;
   /**
    * First firm subscription only. A customer with any prior subscription
@@ -169,11 +175,30 @@ export function firmCheckoutSessionParams(
     params.allow_promotion_codes = true;
   }
 
-  if (input.promotionCodeId) {
+  if (input.promotionCodeId && !input.zaCouponId?.trim()) {
     params.discounts = [{ promotion_code: input.promotionCodeId }];
     delete params.allow_promotion_codes;
   }
 
+  return withFirmZaCoupon(params, input.zaCouponId);
+}
+
+/**
+ * Attach the SA coupon once. Clears allow_promotion_codes and any promotion
+ * code so Checkout cannot stack a second discount. A second call is a no-op.
+ */
+export function withFirmZaCoupon<T extends Stripe.Checkout.SessionCreateParams>(
+  params: T,
+  couponId: string | null | undefined,
+): T {
+  const id = couponId?.trim() ?? "";
+  if (!id) return params;
+  const current = params.discounts ?? [];
+  const already = current.some((entry) => "coupon" in entry && entry.coupon === id);
+  params.discounts = already
+    ? current.filter((entry) => !("promotion_code" in entry))
+    : [...current.filter((entry) => !("promotion_code" in entry)), { coupon: id }];
+  delete params.allow_promotion_codes;
   return params;
 }
 

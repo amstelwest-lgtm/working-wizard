@@ -35,11 +35,19 @@ import {
   upgradeSuccessMessage,
 } from "../src/lib/firm-band-upgrade";
 import {
+  firmCheckoutSessionParams,
   firmIntegrationIdentifier,
   firmSetupCheckoutSessionParams,
   firmUpgradeCheckoutSessionParams,
   readFirmSetupUpgrade,
+  withFirmZaCoupon,
 } from "../src/lib/stripe-checkout.core";
+import {
+  SA_FIRM_DISCOUNT_NOTE,
+  isSaMarketFirm,
+  stripeZaCouponId,
+  zaSubscriptionDiscounts,
+} from "../src/lib/firm-sa-market";
 import {
   CANONICAL_APP_ORIGIN,
   appRedirectOrigin,
@@ -645,6 +653,160 @@ const nudge = readFileSync(resolve("supabase/functions/nudge-action-items/index.
 assert(taskLink.includes("appRedirectOrigin"), "task-link emails use the allowlisted origin");
 assert(nudge.includes("appRedirectOrigin"), "nudge emails use the allowlisted origin");
 assert(taskLink.includes("noreply@notify.milon.co.za"), "task-link keeps the notify mailbox");
+
+assert(isSaMarketFirm({ market: { country: "ZA", regionCode: null } }), "country ZA is SA");
+assert(!isSaMarketFirm({ market: { country: "US", regionCode: "NY" } }), "country US is not SA");
+assert(!isSaMarketFirm({ market: null }), "a missing market is not SA");
+assert(!isSaMarketFirm(null), "a missing firm is not SA");
+assert(
+  isSaMarketFirm({ market: { country: "US", regionCode: "NY" }, currency: "ZAR" }),
+  "a stored ZAR currency is SA when country is not ZA",
+);
+assert(
+  isSaMarketFirm({ market: { locale: "en-ZA" } }),
+  "a stored en-ZA locale is SA when country is absent",
+);
+assert(
+  !isSaMarketFirm({ market: { country: "US", currency: "USD", locale: "en-US" } }),
+  "USD and en-US are not SA",
+);
+assert(stripeZaCouponId(undefined) === "MILON_ZA_50", "the coupon id defaults to MILON_ZA_50");
+assert(stripeZaCouponId("  ") === "MILON_ZA_50", "a blank env still uses the default coupon");
+assert(stripeZaCouponId("coupon_custom") === "coupon_custom", "STRIPE_ZA_COUPON_ID overrides the id");
+
+const checkoutBase = {
+  priceId: "price_test_solo",
+  lookupKey: "milon_solo_monthly",
+  band: "solo" as const,
+  interval: "month" as const,
+  origin: "https://www.milonfinance.com",
+  userId: "user_1",
+  email: "owner@firm.example",
+  market: "us" as const,
+  integrationIdentifier: "milon-solo-month-abcdefgh",
+  includeTrial: false,
+  promotionCodeId: "promo_founding",
+};
+const usCheckout = firmCheckoutSessionParams(checkoutBase);
+assert(usCheckout.allow_promotion_codes == null, "a promotion code replaces the promo box");
+assert(
+  usCheckout.discounts?.[0] && "promotion_code" in usCheckout.discounts[0],
+  "a US checkout can still carry FOUNDING",
+);
+assert(
+  !JSON.stringify(usCheckout.discounts ?? []).includes("MILON_ZA_50"),
+  "a US checkout does not include the SA coupon",
+);
+const saCheckout = firmCheckoutSessionParams({ ...checkoutBase, zaCouponId: "MILON_ZA_50" });
+assert(saCheckout.discounts?.length === 1, "SA checkout has one discount");
+assert(
+  saCheckout.discounts?.[0] &&
+    "coupon" in saCheckout.discounts[0] &&
+    saCheckout.discounts[0].coupon === "MILON_ZA_50",
+  "SA checkout attaches the coupon",
+);
+assert(saCheckout.allow_promotion_codes == null, "SA checkout does not open the promo box");
+assert(
+  !JSON.stringify(saCheckout.discounts).includes("promo_founding"),
+  "SA checkout does not stack FOUNDING",
+);
+const saAgain = withFirmZaCoupon(saCheckout, "MILON_ZA_50");
+assert(saAgain.discounts?.length === 1, "applying the SA coupon twice does not stack it");
+const saUpgrade = firmUpgradeCheckoutSessionParams({
+  ...checkoutBase,
+  zaCouponId: "MILON_ZA_50",
+  replacesSubscriptionId: "sub_starter",
+});
+assert(
+  saUpgrade.discounts?.[0] &&
+    "coupon" in saUpgrade.discounts[0] &&
+    saUpgrade.discounts[0].coupon === "MILON_ZA_50",
+  "replacing a Starter subscription still attaches the SA coupon",
+);
+
+const saUpdate = firmSubscriptionUpgradeParams({
+  itemId: "si_test",
+  priceId: "price_test_solo",
+  band: "solo",
+  interval: "month",
+  lookupKey: "milon_solo_monthly",
+  endTrial: false,
+  discounts: zaSubscriptionDiscounts({ couponId: "MILON_ZA_50", existing: [] }),
+});
+assert(saUpdate.discounts?.length === 1, "an SA subscription update attaches the coupon");
+assert(
+  zaSubscriptionDiscounts({
+    couponId: "MILON_ZA_50",
+    existing: [{ id: "di_za", couponId: "MILON_ZA_50" }],
+  }) === undefined,
+  "a subscription that already has the coupon is not updated twice",
+);
+const usUpdate = firmSubscriptionUpgradeParams({
+  itemId: "si_test",
+  priceId: "price_test_solo",
+  band: "solo",
+  interval: "month",
+  lookupKey: "milon_solo_monthly",
+  endTrial: false,
+  discounts: zaSubscriptionDiscounts({ couponId: null, existing: [] }),
+});
+assert(usUpdate.discounts == null, "a US subscription update has no SA coupon");
+assert(
+  firmBandPriceLabel("solo", "month", "USD", null, { saDiscount: true }) === "$49.50",
+  "SA Solo monthly is half of $99",
+);
+assert(
+  firmBandPriceLabel("solo", "year", "USD", null, { saDiscount: true }) === "$475",
+  "SA Solo yearly is half of $950",
+);
+assert(firmBandPriceLabel("solo", "month", "USD") === "$99", "US Solo monthly stays $99");
+
+const usPicker = renderToStaticMarkup(
+  createElement(FirmBandUpgrade, {
+    currentBand: "starter",
+    interval: "month",
+    priceCurrency: "USD",
+    canUpgrade: true,
+    clientCount: 1,
+    saDiscount: false,
+    onUpgrade: () => undefined,
+  }),
+);
+assert(usPicker.includes("$99"), "a US picker shows the full USD price");
+assert(!usPicker.includes("$49.50"), "a US picker does not show the halved price");
+assert(!usPicker.includes(SA_FIRM_DISCOUNT_NOTE), "a US picker has no SA pricing note");
+assert(!usPicker.includes("50% off"), "a US picker has no discount text");
+assert(!usPicker.includes("regional pricing"), "a US picker has no regional-pricing text");
+const saPicker = renderToStaticMarkup(
+  createElement(FirmBandUpgrade, {
+    currentBand: "starter",
+    interval: "month",
+    priceCurrency: "USD",
+    canUpgrade: true,
+    clientCount: 1,
+    saDiscount: true,
+    onUpgrade: () => undefined,
+  }),
+);
+assert(saPicker.includes("$49.50"), "an SA picker shows the discounted USD amount");
+assert(saPicker.includes(SA_FIRM_DISCOUNT_NOTE), "an SA picker names the South Africa price");
+
+for (const publicFile of [
+  "src/components/firm-band-pricing.tsx",
+  "src/routes/faq.tsx",
+  "src/routes/terms.tsx",
+  "src/routes/for-accountants.tsx",
+  "src/routes/for-owners.tsx",
+]) {
+  const text = readFileSync(resolve(publicFile), "utf8");
+  assert(!text.includes(SA_FIRM_DISCOUNT_NOTE), `${publicFile} does not advertise the SA discount`);
+  assert(!text.includes("regional pricing"), `${publicFile} does not mention regional pricing`);
+}
+
+assert(fn.includes("isSaMarketFirm"), "checkout decides SA from the firm record");
+assert(fn.includes("STRIPE_ZA_COUPON_ID"), "the coupon id is read from the env");
+assert(fn.includes("zaCouponIdForMarket"), "the client market flag is not the coupon switch");
+assert(sync.includes("zaSubscriptionDiscounts"), "setup completion attaches the coupon once");
 
 const now = new Date("2026-10-05T12:00:00.000Z");
 const day10 = starterTrialClock({

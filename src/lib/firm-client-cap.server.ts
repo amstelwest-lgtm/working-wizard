@@ -13,6 +13,11 @@ import {
   type FirmPlanDisplay,
   type FirmSubscriptionPhase,
 } from "@/lib/firm-client-cap";
+import {
+  isSaMarketFirm,
+  readSubscriptionDiscountRefs,
+  type StoredDiscountRef,
+} from "@/lib/firm-sa-market";
 import { starterTrialClock, type StarterTrialBanner } from "@/lib/firm-starter-trial";
 import {
   ASK_FIRM_OWNER_TO_UPGRADE,
@@ -49,6 +54,7 @@ export type EntitlingFirmSubscription = {
   itemId: string | null;
   metadata: Record<string, string>;
   hasDefaultPaymentMethod: boolean;
+  discounts: StoredDiscountRef[];
 };
 
 type FirmRow = {
@@ -216,6 +222,7 @@ export async function findEntitlingFirmSubscription(
     itemId: hit.price.itemId,
     metadata: hit.metadata,
     hasDefaultPaymentMethod: Boolean(defaultPaymentMethod || defaultSource),
+    discounts: readSubscriptionDiscountRefs(hit.raw as { discount?: unknown; discounts?: unknown }),
   };
 }
 
@@ -319,7 +326,7 @@ export async function assertCallerCanUpgradeFirm(input: {
   userId: string;
   email: string;
   firmId: string;
-}): Promise<{ billingEmail: string; clientCount: number }> {
+}): Promise<{ billingEmail: string; clientCount: number; market: unknown }> {
   const userDb = asCapDb(input.supabase);
   let email = input.email.trim();
   if (!email && userDb.auth) {
@@ -339,7 +346,18 @@ export async function assertCallerCanUpgradeFirm(input: {
   const billing = await billingEmailForFirm(input.userId, email, firm.ownerUserId);
   if (!billing.email) throw new Error("The firm owner has no billing email.");
   const clientCount = await countFirmClients(db, firm.id);
-  return { billingEmail: billing.email, clientCount };
+  return { billingEmail: billing.email, clientCount, market: firm.market };
+}
+
+/** Firm market JSON for the signed-in owner. Null when they have no firm row. */
+export async function loadCallerFirmMarket(input: {
+  supabase: unknown;
+  userId: string;
+}): Promise<unknown> {
+  const admin = getSupabaseAdminOrNull();
+  const db = admin ? asCapDb(admin) : asCapDb(input.supabase);
+  const firm = await loadFirm(db, null, input.userId);
+  return firm?.market ?? null;
 }
 
 export async function loadFirmClientCreateAllowance(input: {
@@ -443,6 +461,7 @@ export async function loadFirmPlanDisplay(input: {
       interval: "month",
       zarByBand: {},
       starterTrial: idleStarterTrialBanner(),
+      saDiscount: false,
     };
   }
 
@@ -469,6 +488,7 @@ export async function loadFirmPlanDisplay(input: {
       interval: empty.interval,
       zarByBand: {},
       starterTrial: idleStarterTrialBanner(),
+      saDiscount: false,
     };
   }
 
@@ -500,6 +520,7 @@ export async function loadFirmPlanDisplay(input: {
     interval: upgrade.interval,
     zarByBand: upgrade.zarByBand,
     starterTrial: trialBannerFor(firm, sub),
+    saDiscount: upgrade.saDiscount,
   };
 }
 
@@ -548,5 +569,6 @@ async function buildUpgradeSnapshot(input: {
     }),
     interval,
     zarByBand,
+    saDiscount: isSaMarketFirm({ market: input.market }),
   };
 }

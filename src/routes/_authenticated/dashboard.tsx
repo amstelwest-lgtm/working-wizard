@@ -354,6 +354,7 @@ function FirmClientCapNotice({
           canUpgrade={upgrade.canUpgrade}
           clientCount={upgrade.clientCount}
           usageLabel={upgrade.usageLabel}
+          saDiscount={upgrade.saDiscount}
           upgrading={upgrading}
           onUpgrade={onUpgradeBand}
         />

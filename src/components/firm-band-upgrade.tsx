@@ -8,6 +8,7 @@ import {
   type FirmPriceCurrency,
   type ZarBandAmounts,
 } from "@/lib/firm-band-upgrade";
+import { SA_FIRM_DISCOUNT_NOTE } from "@/lib/firm-sa-market";
 import {
   FIRM_BAND_TABLE,
   FIRM_BAND_IDS,
@@ -28,6 +29,8 @@ type Props = {
   clientCount?: number | null;
   usageLabel?: string | null;
   upgrading?: boolean;
+  /** Server says this signed-in firm is SA. Never set from a public page. */
+  saDiscount?: boolean;
   onUpgrade?: (band: FirmCheckoutBand, interval: FirmInterval) => void;
 };
 
@@ -38,11 +41,14 @@ function rowPrice(
   zarByBand: Partial<Record<FirmBandId, ZarBandAmounts>> | undefined,
   customQuote: boolean,
   yearlyUsdCents: number | null,
+  saDiscount: boolean,
 ): string {
   if (customQuote) return "Custom";
   const pricedInterval: FirmInterval =
     interval === "year" && yearlyUsdCents == null ? "month" : interval;
-  const label = firmBandPriceLabel(bandId, pricedInterval, currency, zarByBand);
+  const label = firmBandPriceLabel(bandId, pricedInterval, currency, zarByBand, {
+    saDiscount,
+  });
   if (!label) return "—";
   return pricedInterval === "year" ? `${label}/yr` : `${label}/mo`;
 }
@@ -56,6 +62,7 @@ export function FirmBandUpgrade({
   clientCount = null,
   usageLabel,
   upgrading = false,
+  saDiscount = false,
   onUpgrade,
 }: Props) {
   const [interval, setInterval] = useState<FirmInterval>(intervalFromPlan);
@@ -77,6 +84,11 @@ export function FirmBandUpgrade({
     <div>
       {usageLabel ? (
         <p style={{ margin: "0 0 12px", fontSize: 13, color: "var(--ink)" }}>{usageLabel}</p>
+      ) : null}
+      {saDiscount ? (
+        <p style={{ margin: "0 0 12px", fontSize: 12, color: "var(--ink-dim)" }}>
+          {SA_FIRM_DISCOUNT_NOTE}
+        </p>
       ) : null}
       {canUpgrade ? (
         <div
@@ -117,6 +129,7 @@ export function FirmBandUpgrade({
             zarByBand,
             band.customQuote,
             band.yearlyUsdCents,
+            saDiscount,
           );
           return (
             <label

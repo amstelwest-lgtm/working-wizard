@@ -19,6 +19,12 @@ import {
 } from "@/lib/firm-band-upgrade";
 import { readFirmSetupUpgrade, resolveFirmCatalogPrice } from "@/lib/stripe-checkout.core";
 import {
+  isSaMarketFirm,
+  readSubscriptionDiscountRefs,
+  stripeZaCouponId,
+  zaSubscriptionDiscounts,
+} from "@/lib/firm-sa-market";
+import {
   ALL_FIRM_LOOKUP_KEYS,
   bandIdFromLookupKey,
   intervalFromLookupKey,
@@ -32,6 +38,8 @@ type RetrievedSubscription = {
   currency?: string | null;
   metadata?: Record<string, string> | null;
   customer?: unknown;
+  discount?: unknown;
+  discounts?: unknown;
   items?: { data?: Array<{ id?: string; price?: unknown }> };
 };
 
@@ -42,6 +50,7 @@ type SubscriptionUpdateParams = {
   payment_behavior?: "error_if_incomplete";
   trial_end?: "now";
   default_payment_method?: string;
+  discounts?: Array<{ discount: string } | { coupon: string }>;
 };
 
 type StripeLike = {
@@ -260,6 +269,32 @@ export async function syncFirmSubscriptionBand(
   return { band, cancelledReplaced, downgradeBlocked };
 }
 
+/** Firm market JSON for the billing user. Null when the row cannot be read. */
+async function firmMarketForBillingUser(userId: string | null | undefined): Promise<unknown> {
+  const id = userId?.trim() ?? "";
+  if (!id) return null;
+  try {
+    const { getSupabaseAdminOrNull } = await import("@/integrations/supabase/client.server");
+    const admin = getSupabaseAdminOrNull();
+    if (!admin) return null;
+    const owned = await admin.from("firms").select("market").eq("owner_user_id", id).limit(1);
+    if (owned.data?.[0]) return (owned.data[0] as { market?: unknown }).market ?? null;
+    const membership = await admin
+      .from("firm_memberships")
+      .select("firm_id")
+      .eq("user_id", id)
+      .in("role", ["owner", "admin"])
+      .limit(1);
+    const firmId = membership.data?.[0]?.firm_id ? String(membership.data[0].firm_id) : "";
+    if (!firmId) return null;
+    const firm = await admin.from("firms").select("market").eq("id", firmId).maybeSingle();
+    return (firm.data as { market?: unknown } | null)?.market ?? null;
+  } catch (err) {
+    console.warn("[stripe] firm market unavailable", err instanceof Error ? err.message : err);
+    return null;
+  }
+}
+
 /**
  * Setup Checkout collected a card for an existing subscription. Attach it as
  * the customer and subscription default, then move that same subscription
@@ -309,6 +344,14 @@ export async function completeFirmSetupUpgrade(
   );
   if (!priceSnap.itemId) throw new Error("Subscription has no item to update.");
 
+  const firmMarket = await firmMarketForBillingUser(intent.userId);
+  const zaCouponId = isSaMarketFirm({ market: firmMarket })
+    ? stripeZaCouponId(process.env.STRIPE_ZA_COUPON_ID)
+    : null;
+  const discounts = zaSubscriptionDiscounts({
+    couponId: zaCouponId,
+    existing: readSubscriptionDiscountRefs(sub),
+  });
   const already = priceSnap.lookupKey === lookupKey;
   if (!already) {
     const params = firmSubscriptionUpgradeParams({
@@ -319,6 +362,7 @@ export async function completeFirmSetupUpgrade(
       lookupKey,
       metadata: sub.metadata,
       endTrial: sub.status === "trialing",
+      discounts,
     });
     await stripe.subscriptions.update(intent.subscriptionId, {
       ...params,
@@ -327,6 +371,7 @@ export async function completeFirmSetupUpgrade(
   } else {
     await stripe.subscriptions.update(intent.subscriptionId, {
       default_payment_method: paymentMethod,
+      ...(discounts ? { discounts } : {}),
     });
   }
   return { band: intent.band, updated: !already };

@@ -17,6 +17,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { deleteOwnAccount } from "@/lib/account.functions";
 import type { FirmPlanDisplay } from "@/lib/firm-client-cap";
+import { SA_FIRM_DISCOUNT_NOTE } from "@/lib/firm-sa-market";
 import {
   STARTER_TRIAL_ENDED_MESSAGE,
   firmStarterTrialCountdownCopy,
@@ -346,6 +347,9 @@ function SettingsPage() {
                   {plan?.usageLabel ? (
                     <p className="text-xs text-[var(--ink-dim)]">{plan.usageLabel}</p>
                   ) : null}
+                  {plan?.saDiscount ? (
+                    <p className="text-xs text-[var(--ink-dim)]">{SA_FIRM_DISCOUNT_NOTE}</p>
+                  ) : null}
                 </>
               )}
             </div>
@@ -358,6 +362,7 @@ function SettingsPage() {
                   zarByBand={plan.zarByBand ?? {}}
                   canUpgrade={plan.canUpgrade}
                   clientCount={plan.clientCount}
+                  saDiscount={plan.saDiscount}
                   upgrading={upgrading}
                   onUpgrade={(band, interval) => {
                     if (!firmId) return;

@@ -4,6 +4,7 @@
  * Do not invent ZAR list prices. Adaptive Pricing presents ZAR at Checkout.
  */
 
+import { saDiscountedUsdCents, type FirmCouponDiscount } from "@/lib/firm-sa-market";
 import {
   FIRM_BAND_CATALOG,
   FIRM_BAND_IDS,
@@ -51,6 +52,8 @@ export type FirmUpgradeSnapshot = {
   priceCurrency: FirmPriceCurrency;
   interval: FirmInterval;
   zarByBand: Partial<Record<FirmBandId, ZarBandAmounts>>;
+  /** Signed-in SA firm only. Public pages never set this. */
+  saDiscount: boolean;
 };
 
 export function emptyFirmUpgradeSnapshot(): FirmUpgradeSnapshot {
@@ -64,6 +67,7 @@ export function emptyFirmUpgradeSnapshot(): FirmUpgradeSnapshot {
     priceCurrency: "USD",
     interval: "month",
     zarByBand: {},
+    saDiscount: false,
   };
 }
 
@@ -370,9 +374,15 @@ export function firmBandPriceLabel(
   interval: FirmInterval,
   currency: FirmPriceCurrency,
   zarByBand?: Partial<Record<FirmBandId, ZarBandAmounts>> | null,
+  options?: { saDiscount?: boolean },
 ): string | null {
   const entry = FIRM_BAND_CATALOG[band];
   if (entry.customQuote) return null;
+  if (options?.saDiscount) {
+    const usd = interval === "year" ? entry.yearlyUsdCents : entry.monthlyUsdCents;
+    if (usd == null) return null;
+    return formatFirmPriceCents(saDiscountedUsdCents(usd), "USD");
+  }
   if (currency === "ZAR") {
     const slot = zarByBand?.[band];
     const zar = interval === "year" ? slot?.year : slot?.month;
@@ -402,6 +412,8 @@ export type FirmSubscriptionUpgradeParams = {
   payment_behavior: "error_if_incomplete";
   metadata: Record<string, string>;
   trial_end?: "now";
+  /** Present only when the SA coupon still needs attaching. */
+  discounts?: FirmCouponDiscount[];
 };
 
 export function firmSubscriptionUpgradeParams(input: {
@@ -413,6 +425,8 @@ export function firmSubscriptionUpgradeParams(input: {
   metadata?: Record<string, string> | null;
   /** Trial cap stays at 3 until the subscription is active. */
   endTrial: boolean;
+  /** Already-idempotent list from zaSubscriptionDiscounts. Omit when undefined. */
+  discounts?: FirmCouponDiscount[];
 }): FirmSubscriptionUpgradeParams {
   const metadata: Record<string, string> = {};
   for (const [key, value] of Object.entries(input.metadata ?? {})) {
@@ -428,6 +442,7 @@ export function firmSubscriptionUpgradeParams(input: {
     metadata,
   };
   if (input.endTrial) params.trial_end = "now";
+  if (input.discounts?.length) params.discounts = input.discounts;
   return params;
 }
 

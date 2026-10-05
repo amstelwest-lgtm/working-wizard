@@ -16,8 +16,15 @@ import { eligibleForIntroTrial } from "@/lib/firm-client-cap";
 import {
   assertCallerCanUpgradeFirm,
   findEntitlingFirmSubscription,
+  loadCallerFirmMarket,
   loadFirmPlanDisplay,
 } from "@/lib/firm-client-cap.server";
+import {
+  isSaMarketFirm,
+  readSubscriptionDiscountRefs,
+  stripeZaCouponId,
+  zaSubscriptionDiscounts,
+} from "@/lib/firm-sa-market";
 import {
   FIRM_CHECKOUT_BANDS,
   FOUNDING_PROMO_CODE,
@@ -218,6 +225,11 @@ async function createPortalUrl(customerId: string, origin: string): Promise<stri
   return session.url;
 }
 
+function zaCouponIdForMarket(market: unknown): string | null {
+  if (!isSaMarketFirm({ market })) return null;
+  return stripeZaCouponId(process.env.STRIPE_ZA_COUPON_ID);
+}
+
 async function createPaidCheckoutSession(input: {
   userId: string;
   email: string;
@@ -225,6 +237,8 @@ async function createPaidCheckoutSession(input: {
   interval: FirmInterval;
   market: StripePlanMarket;
   promo?: string | null;
+  /** From the firm row. Never the client market flag. */
+  zaCouponId?: string | null;
 }): Promise<{ url: string; kind: "checkout" | "portal" }> {
   if (!stripeConfigured()) {
     throw new Error("STRIPE_SECRET_KEY is not set on this deploy.");
@@ -274,6 +288,7 @@ async function createPaidCheckoutSession(input: {
     customerId,
     market: input.market,
     promotionCodeId,
+    zaCouponId: input.zaCouponId,
     integrationIdentifier: firmIntegrationIdentifier(input.plan, input.interval),
     includeTrial,
   });
@@ -298,7 +313,9 @@ export const createStripeCheckout = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input) => checkoutInput.parse(input))
   .handler(async ({ data, context }) => {
-    const { userId, email } = await checkoutActor(context);
+    const ctx = context as unknown as BillingAuthCtx;
+    const { userId, email } = await checkoutActor(ctx);
+    const firmMarket = await loadCallerFirmMarket({ supabase: ctx.supabase, userId });
     return createPaidCheckoutSession({
       userId,
       email,
@@ -306,6 +323,7 @@ export const createStripeCheckout = createServerFn({ method: "POST" })
       interval: data.interval as FirmInterval,
       market: data.market as StripePlanMarket,
       promo: data.promo,
+      zaCouponId: zaCouponIdForMarket(firmMarket),
     });
   });
 
@@ -432,12 +450,17 @@ export const upgradeFirmBand = createServerFn({ method: "POST" })
     }
     const ctx = context as unknown as BillingAuthCtx;
     const { userId, email } = await checkoutActor(ctx);
-    const { billingEmail, clientCount } = await assertCallerCanUpgradeFirm({
+    const {
+      billingEmail,
+      clientCount,
+      market: firmMarket,
+    } = await assertCallerCanUpgradeFirm({
       supabase: ctx.supabase,
       userId,
       email,
       firmId: data.firmId,
     });
+    const zaCouponId = zaCouponIdForMarket(firmMarket);
     const band = data.band as FirmCheckoutBand;
     const interval = data.interval as FirmInterval;
     const sub = await findEntitlingFirmSubscription(billingEmail);
@@ -457,11 +480,13 @@ export const upgradeFirmBand = createServerFn({ method: "POST" })
     });
 
     let itemId = sub?.itemId ?? null;
-    if (route === "update_subscription" && sub && !itemId) {
+    let existingDiscounts = sub?.discounts ?? [];
+    if (route === "update_subscription" && sub && (zaCouponId || !itemId)) {
       const fresh = await stripe.subscriptions.retrieve(sub.id, {
         expand: ["items.data.price"],
       });
-      itemId = readSubscriptionPrice(fresh).itemId;
+      if (!itemId) itemId = readSubscriptionPrice(fresh).itemId;
+      if (zaCouponId) existingDiscounts = readSubscriptionDiscountRefs(fresh);
     }
 
     if (route === "update_subscription" && sub && itemId) {
@@ -473,6 +498,7 @@ export const upgradeFirmBand = createServerFn({ method: "POST" })
         lookupKey,
         metadata: sub.metadata,
         endTrial: sub.phase === "trialing",
+        discounts: zaSubscriptionDiscounts({ couponId: zaCouponId, existing: existingDiscounts }),
       });
       try {
         await stripe.subscriptions.update(sub.id, params);
@@ -535,7 +561,7 @@ export const upgradeFirmBand = createServerFn({ method: "POST" })
         );
       }
     }
-    const market: StripePlanMarket = "us";
+    const checkoutMarket: StripePlanMarket = zaCouponId ? "za" : "us";
     const params = firmUpgradeCheckoutSessionParams({
       priceId: price.id,
       lookupKey,
@@ -545,10 +571,11 @@ export const upgradeFirmBand = createServerFn({ method: "POST" })
       userId,
       email: billingEmail,
       customerId,
-      market,
+      market: checkoutMarket,
       integrationIdentifier: firmIntegrationIdentifier(band, interval),
       includeTrial: false,
       replacesSubscriptionId,
+      zaCouponId,
     });
     assertNoManagedPaymentsOverride(params);
     let session: { url: string | null };

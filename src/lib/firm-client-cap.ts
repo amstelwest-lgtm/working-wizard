@@ -48,6 +48,8 @@ export type FirmUpgradeAllowance = {
   priceCurrency: "USD" | "ZAR";
   interval: FirmInterval;
   zarByBand: Partial<Record<FirmBandId, { month: number | null; year: number | null }>>;
+  /** Server-derived. False for every non-SA firm. */
+  saDiscount: boolean;
 };
 
 export type FirmClientCreateAllowance = FirmClientCreateDecision & {
@@ -154,6 +156,7 @@ export type FirmPlanDisplay = FirmPlanStatusCopy & {
   interval: FirmInterval;
   zarByBand: Partial<Record<FirmBandId, { month: number | null; year: number | null }>>;
   starterTrial: StarterTrialBanner;
+  saDiscount: boolean;
 };
 
 /** Whole days until `trialEndIso`. 0 when the trial end is now or in the past. */

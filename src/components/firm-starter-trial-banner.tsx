@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { FirmBandUpgrade } from "@/components/firm-band-upgrade";
 import type { FirmUpgradeAllowance } from "@/lib/firm-client-cap";
 import { UPGRADE_FAILED_MESSAGE } from "@/lib/firm-band-upgrade";
+import { SA_FIRM_DISCOUNT_NOTE } from "@/lib/firm-sa-market";
 import {
   STARTER_TRIAL_ENDED_MESSAGE,
   firmStarterTrialCountdownCopy,
@@ -66,6 +67,11 @@ export function FirmStarterTrialBanner({
       <p style={{ margin: 0, fontSize: 15, fontWeight: 700, color: "var(--ink)" }}>
         {trial.expired ? STARTER_TRIAL_ENDED_MESSAGE : countdown}
       </p>
+      {upgrade?.saDiscount ? (
+        <p style={{ margin: "8px 0 0", fontSize: 12, color: "var(--ink-dim)" }}>
+          {SA_FIRM_DISCOUNT_NOTE}
+        </p>
+      ) : null}
       {trial.expired && upgrade ? (
         <div style={{ marginTop: 12 }}>
           <FirmBandUpgrade
@@ -76,6 +82,7 @@ export function FirmStarterTrialBanner({
             canUpgrade={upgrade.canUpgrade}
             clientCount={upgrade.clientCount}
             usageLabel={upgrade.usageLabel}
+            saDiscount={upgrade.saDiscount}
             upgrading={upgrading}
             onUpgrade={onUpgrade}
           />
