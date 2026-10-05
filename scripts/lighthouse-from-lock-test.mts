@@ -9,6 +9,7 @@ import {
   lighthouseFromAddressOf,
   resolveLighthouseFromAddress,
 } from "../src/lib/lighthouse-from";
+import { LIGHTHOUSE_REPLY_TO, resolveLighthouseReplyTo } from "../src/lib/lighthouse-reply-to";
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
@@ -85,9 +86,31 @@ assert(
   "lighthouse send module has no RESEND_FROM_EMAIL string fallback",
 );
 
+assert(LIGHTHOUSE_REPLY_TO === "hello@milonfinance.com", "Reply-To lock is hello@");
+assert(
+  resolveLighthouseFromAddress("hello@milonfinance.com") === LIGHTHOUSE_FROM_EMAIL,
+  "hello@ is not cold From",
+);
+assert(
+  resolveLighthouseFromAddress("Milōn <hello@milonfinance.com>") === LIGHTHOUSE_FROM_EMAIL,
+  "angled hello@ is not cold From",
+);
+assert(
+  resolveLighthouseReplyTo("team@trymilon.com") === LIGHTHOUSE_REPLY_TO,
+  "cold From mailbox is not Reply-To",
+);
+assert(
+  resolveLighthouseReplyTo("noreply@milon.co.za") === LIGHTHOUSE_REPLY_TO,
+  "milon.co.za reply-to still retires to hello@",
+);
+
 const replyTo = readFileSync(resolve("src/lib/lighthouse-reply-to.ts"), "utf8");
-assert(replyTo.includes('export const LIGHTHOUSE_REPLY_TO = "team@trymilon.com"'), "Reply-To lock unchanged");
-assert(replyTo.includes("milonfinance.com"), "Reply-To still retires milonfinance.com");
+assert(
+  replyTo.includes('export const LIGHTHOUSE_REPLY_TO = "hello@milonfinance.com"'),
+  "Reply-To constant is hello@",
+);
+assert(!replyTo.includes('"milonfinance.com"'), "Reply-To does not retire the milonfinance.com host");
+assert(replyTo.includes('"milon.co.za"'), "Reply-To still retires milon.co.za");
 assert(!replyTo.includes("resolveLighthouseFromAddress"), "Reply-To helper does not own From");
 
 console.log("lighthouse-from-lock-test: ok");

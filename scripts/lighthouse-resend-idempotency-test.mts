@@ -15,9 +15,9 @@ const otherTouch = "22222222-2222-4222-8222-222222222222";
 
 function payload(overrides: { subject?: string; text?: string } = {}): string {
   return JSON.stringify({
-    from: "The Milōn Team <noreply@milon.co.za>",
+    from: "Milōn <team@trymilon.com>",
     to: ["theoamstel123@gmail.com"],
-    reply_to: "team@trymilon.com",
+    reply_to: "hello@milonfinance.com",
     subject: overrides.subject ?? "Day 0 note",
     text: overrides.text ?? "First draft body",
     tags: [

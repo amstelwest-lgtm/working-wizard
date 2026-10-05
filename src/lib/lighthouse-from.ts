@@ -5,7 +5,8 @@
  * settings sender_name at the call site. A missing RESEND_FROM_EMAIL, or
  * any mailbox that is not team@trymilon.com, is hard-rewritten here —
  * never noreply@milon.co.za, never *@milonfinance.com, never another host.
- * Reply-To is a separate lock (see lighthouse-reply-to.ts).
+ * Reply-To is hello@milonfinance.com (see lighthouse-reply-to.ts). This
+ * helper does not move cold From to that inbox.
  */
 
 export const LIGHTHOUSE_FROM_EMAIL = "team@trymilon.com";
