@@ -1,6 +1,6 @@
 # brain-deliverable-draft
 
-Self-contained edge function — deploy **`index.ts` only** (no sibling imports).
+Deploy with the shared trial gate at `supabase/functions/_shared/starter-trial-gate.ts` (imported by `index.ts`). The gate imports the app billing modules under `src/lib`. No sibling `logic.ts`. Set `STRIPE_SECRET_KEY` or `STRIPE_RESTRICTED_KEY` on the function or the trial check fails open and generation still runs.
 
 ```bash
 # Supabase CLI

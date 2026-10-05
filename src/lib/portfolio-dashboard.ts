@@ -326,6 +326,14 @@ export function buildPortfolioInsights(
   return insights.slice(0, 3);
 }
 
+/** "1 client needs attention." / "2 clients need attention." */
+export function attentionCountPhrase(count: number): string {
+  const n = Number.isFinite(count) ? Math.max(0, Math.trunc(count)) : 0;
+  const noun = n === 1 ? "client" : "clients";
+  const verb = n === 1 ? "needs" : "need";
+  return `${n} ${noun} ${verb} attention.`;
+}
+
 /** One short line under the practice-home greeting. KPIs carry the numbers. */
 export function portfolioSummaryLine(input: {
   clientCount: number;
@@ -335,7 +343,7 @@ export function portfolioSummaryLine(input: {
   const { clientCount, needAttention } = input;
   if (clientCount === 0) return "Add your first client.";
   if (needAttention === 0) return "Nothing urgent in the book.";
-  return `${needAttention} client${needAttention === 1 ? "" : "s"} need attention.`;
+  return attentionCountPhrase(needAttention);
 }
 
 /** Revenue figure for bubble sizing (null-safe). */

@@ -43,6 +43,7 @@ import { createFirmClient, getFirmClientCreateAllowance } from "@/lib/firm-clien
 import { idleStarterTrialBanner, type FirmClientCreateAllowance } from "@/lib/firm-client-cap";
 import { browserAppOrigin } from "@/lib/app-origin";
 import { FirmBandUpgrade } from "@/components/firm-band-upgrade";
+import { TrialEndedPlanBlock } from "@/components/trial-ended-plan-block";
 import { FirmStarterTrialBanner } from "@/components/firm-starter-trial-banner";
 import {
   UPGRADE_CANCELLED_MESSAGE,
@@ -288,6 +289,7 @@ function SparkSvg({
 
 function FirmClientCapNotice({
   cap,
+  firmId,
   upgrading,
   confirmUpgrade,
   onConfirm,
@@ -296,6 +298,7 @@ function FirmClientCapNotice({
   onUpgradeBand,
 }: {
   cap: Extract<FirmClientCreateAllowance, { allowed: false }>;
+  firmId: string | null;
   upgrading: boolean;
   confirmUpgrade: boolean;
   onConfirm: () => void;
@@ -303,15 +306,21 @@ function FirmClientCapNotice({
   onCancelConfirm: () => void;
   onUpgradeBand: (band: FirmCheckoutBand, interval: FirmInterval) => void;
 }) {
+  if (cap.code === "starter_trial_ended") {
+    return (
+      <TrialEndedPlanBlock
+        firmId={firmId}
+        upgrading={upgrading}
+        upgrade={cap.upgrade ?? null}
+        onUpgrade={onUpgradeBand}
+      />
+    );
+  }
   const upgrade = cap.upgrade;
   return (
     <div role="alert">
       <p style={{ margin: "0 0 8px", fontSize: 15, fontWeight: 700, color: "var(--ink)" }}>
-        {cap.code === "starter_trial_ended"
-          ? "Your trial has ended, choose a plan"
-          : cap.code === "trial_client_cap"
-            ? "Trial client limit"
-            : "Plan client limit"}
+        {cap.code === "trial_client_cap" ? "Trial client limit" : "Plan client limit"}
       </p>
       <p style={{ margin: "0 0 16px", fontSize: 13, color: "var(--ink-dim)", lineHeight: 1.55 }}>
         {cap.message}
@@ -597,6 +606,7 @@ function AddClientDialog({
           ) : cap && !cap.allowed ? (
             <FirmClientCapNotice
               cap={cap}
+              firmId={firmId}
               upgrading={upgrading}
               confirmUpgrade={confirmUpgrade}
               onConfirm={() => setConfirmUpgrade(true)}

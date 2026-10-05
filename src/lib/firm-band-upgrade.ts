@@ -4,7 +4,7 @@
  * Do not invent ZAR list prices. Adaptive Pricing presents ZAR at Checkout.
  */
 
-import { saDiscountedUsdCents, type FirmCouponDiscount } from "@/lib/firm-sa-market";
+import { saDiscountedUsdCents, type FirmCouponDiscount } from "./firm-sa-market";
 import {
   FIRM_BAND_CATALOG,
   FIRM_BAND_IDS,
@@ -18,8 +18,8 @@ import {
   type FirmBandId,
   type FirmCheckoutBand,
   type FirmInterval,
-} from "@/lib/stripe-plans";
-import { bandIdFromStripeMetadata, type FirmSubscriptionPhase } from "@/lib/firm-client-cap";
+} from "./stripe-plans";
+import { bandIdFromStripeMetadata, type FirmSubscriptionPhase } from "./firm-client-cap";
 
 export const ASK_FIRM_OWNER_TO_UPGRADE = "Ask your firm owner to upgrade";
 export const UPGRADE_CANCELLED_MESSAGE = "Checkout cancelled. Nothing was charged.";

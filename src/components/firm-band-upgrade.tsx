@@ -10,6 +10,7 @@ import {
 } from "@/lib/firm-band-upgrade";
 import { SA_FIRM_DISCOUNT_NOTE } from "@/lib/firm-sa-market";
 import {
+  FIRM_BAND_CATALOG,
   FIRM_BAND_TABLE,
   FIRM_BAND_IDS,
   firmClientLimitLabel,
@@ -44,6 +45,10 @@ function rowPrice(
   saDiscount: boolean,
 ): string {
   if (customQuote) return "Custom";
+  // Starter has no annual price. $0 on the annual toggle is $0/yr, not $0/mo.
+  if (interval === "year" && yearlyUsdCents == null && FIRM_BAND_CATALOG[bandId].monthlyUsdCents === 0) {
+    return currency === "ZAR" ? "R0/yr" : "$0/yr";
+  }
   const pricedInterval: FirmInterval =
     interval === "year" && yearlyUsdCents == null ? "month" : interval;
   const label = firmBandPriceLabel(bandId, pricedInterval, currency, zarByBand, {

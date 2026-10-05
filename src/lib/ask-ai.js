@@ -559,6 +559,9 @@ export function mountAskAi(container, options) {
       if (!res.ok) throw new Error(data.error || `Error ${res.status}`);
 
       answer = data.answer || "No answer returned.";
+      if (answer.includes("Your trial has ended, choose a plan")) {
+        window.dispatchEvent(new CustomEvent("milon-starter-trial-ended"));
+      }
       answerChips = data.chips || [];
       agentRun = data.run && typeof data.run === "object" ? data.run : null;
       toolHints = Array.isArray(data.tools)

@@ -1022,6 +1022,47 @@ button.auth-entry__link {
   color: var(--brand-gold-ui);
 }
 
+/* Trial-ended plan card. Scoped ink so the title and picker stay readable
+   on the dark practice portal and on the owner board. */
+.trial-ended-block {
+  --ink: #f2ecdc;
+  --ink-dim: #9b958a;
+  --line: rgba(212, 175, 55, 0.28);
+  --bg-2: #101018;
+  margin: 0 0 16px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: var(--bg-2);
+  color: var(--ink);
+}
+html[data-theme="light"] .trial-ended-block {
+  --ink: #1b1608;
+  --ink-dim: #6b6354;
+  --line: rgba(140, 110, 10, 0.22);
+  --bg-2: #ffffff;
+}
+.trial-ended-title {
+  margin: 0 0 12px;
+  font-size: 15px;
+  font-weight: 700;
+  color: inherit;
+}
+.trial-ended-note {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--ink-dim);
+}
+.trial-ended-action {
+  margin-top: 12px;
+}
+.trial-ended-error {
+  margin: 10px 0 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--risk, #e25c5c);
+}
+
 .auth-entry .milon-auth-divider {
   color: var(--brand-ink-muted);
 }

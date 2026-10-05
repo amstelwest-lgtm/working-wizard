@@ -170,6 +170,8 @@ import {
 } from "@/lib/first-run";
 import { markOnboardingDone, OWNER_TOUR_KEY } from "@/lib/onboarding";
 import { invokeBrainPropose } from "@/lib/brain-propose-client";
+import { TrialEndedPlanBlock } from "@/components/trial-ended-plan-block";
+import { isStarterTrialEndedMessage, messageFromUnknown } from "@/lib/starter-trial-generation";
 import {
   consumeInviteHandoffFlag,
   hasInviteHandoffFlag,
@@ -3237,6 +3239,7 @@ function Index() {
     [invitedOwnerEntry, hasRealFinancials, clientMeta?.financials_updated_at],
   );
   const [ownerFirstUploadHandled, setOwnerFirstUploadHandled] = useState(false);
+  const [generationTrialOpen, setGenerationTrialOpen] = useState(false);
   useEffect(() => {
     if (!effectiveClientId) {
       setOwnerFirstUploadHandled(false);
@@ -3274,9 +3277,18 @@ function Index() {
     try {
       await invokeBrainPropose(effectiveClientId);
     } catch (e) {
+      if (isStarterTrialEndedMessage(messageFromUnknown(e))) {
+        setGenerationTrialOpen(true);
+        return;
+      }
       console.warn("[owner first upload] brain propose failed:", e);
     }
   }, [actingClientId, effectiveClientId, invitedOwnerEntry, ownerFirstUploadHandled]);
+  useEffect(() => {
+    const onTrialEnded = () => setGenerationTrialOpen(true);
+    window.addEventListener("milon-starter-trial-ended", onTrialEnded);
+    return () => window.removeEventListener("milon-starter-trial-ended", onTrialEnded);
+  }, []);
   useEffect(() => {
     if (!skipInvitedSetupChrome) return;
     markOnboardingDone(OWNER_TOUR_KEY);
@@ -3804,6 +3816,11 @@ function Index() {
     <MarketProvider selection={workspaceMarket}>
       <FinancialInputsContext.Provider value={financialInputsCtxValue}>
         <main className="milon-page-enter min-h-screen overflow-x-hidden bg-slate-950 text-slate-100">
+          {generationTrialOpen ? (
+            <div className="mx-auto max-w-3xl px-4 pt-4">
+              <TrialEndedPlanBlock firmId={clientMeta?.firm_id ?? null} />
+            </div>
+          ) : null}
           {marketNeedsGate && effectiveClientId && (
             <MarketGate
               onSave={async (draft) => {
@@ -5266,6 +5283,7 @@ function Index() {
                   <AdvisoryPackPanel
                     className="mb-5"
                     clientId={effectiveClientId}
+                    firmId={clientMeta?.firm_id ?? null}
                     audience="owner"
                     canGenerate={hasRealFinancials}
                     hasFirm={Boolean(clientMeta?.firm_id)}
@@ -5292,6 +5310,7 @@ function Index() {
                   <RecommendationsPanel
                     className="mb-5"
                     clientId={effectiveClientId}
+                    firmId={clientMeta?.firm_id ?? null}
                     audience="owner"
                     canPropose={hasRealFinancials}
                     onChanged={() => setAdvisoryBump((n) => n + 1)}

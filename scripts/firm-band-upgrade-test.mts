@@ -777,6 +777,19 @@ assert(!usPicker.includes("$49.50"), "a US picker does not show the halved price
 assert(!usPicker.includes(SA_FIRM_DISCOUNT_NOTE), "a US picker has no SA pricing note");
 assert(!usPicker.includes("50% off"), "a US picker has no discount text");
 assert(!usPicker.includes("regional pricing"), "a US picker has no regional-pricing text");
+const annualStarter = renderToStaticMarkup(
+  createElement(FirmBandUpgrade, {
+    currentBand: "starter",
+    interval: "year",
+    priceCurrency: "USD",
+    canUpgrade: true,
+    clientCount: 1,
+    saDiscount: false,
+    onUpgrade: () => undefined,
+  }),
+);
+assert(annualStarter.includes("$0/yr"), "annual Starter reads $0/yr");
+assert(!annualStarter.includes("$0/mo"), "annual Starter is not labelled $0/mo");
 const saPicker = renderToStaticMarkup(
   createElement(FirmBandUpgrade, {
     currentBand: "starter",
@@ -878,13 +891,13 @@ assert(
 );
 
 assert(dashboard.includes("FirmStarterTrialBanner"), "the practice dashboard shows the trial banner");
-assert(
-  dashboard.includes("Your trial has ended, choose a plan"),
-  "the add-client panel uses the ended sentence",
-);
+assert(dashboard.includes("TrialEndedPlanBlock"), "the add-client panel uses the shared trial block");
+const trialBlock = readFileSync(resolve("src/components/trial-ended-plan-block.tsx"), "utf8");
+assert(trialBlock.includes("STARTER_TRIAL_ENDED_MESSAGE"), "the shared block uses the ended sentence");
+assert(trialBlock.includes("FirmBandUpgrade"), "the shared block embeds the band picker");
 const banner = readFileSync(resolve("src/components/firm-starter-trial-banner.tsx"), "utf8");
-assert(banner.includes("STARTER_TRIAL_ENDED_MESSAGE"), "the banner uses the ended sentence");
-assert(banner.includes("FirmBandUpgrade"), "the ended banner includes the band picker");
+assert(banner.includes("TrialEndedPlanBlock"), "the ended banner uses the shared block");
+assert(!banner.includes("FirmBandUpgrade"), "the banner does not mount a second picker");
 const migration = readFileSync(
   resolve("supabase/migrations/20261005190000_firm_starter_trial_enforced.sql"),
   "utf8",

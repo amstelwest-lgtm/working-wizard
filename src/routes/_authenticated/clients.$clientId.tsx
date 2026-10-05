@@ -145,6 +145,8 @@ import {
 } from "@/lib/workflow-coach";
 import { relatedTabForRatio } from "@/lib/ratio-briefing";
 import { RecommendationsPanel } from "@/components/recommendations-panel";
+import { TrialEndedPlanBlock } from "@/components/trial-ended-plan-block";
+import { isStarterTrialEndedMessage, messageFromUnknown } from "@/lib/starter-trial-generation";
 import { DataRequestsPanel } from "@/components/data-requests-panel";
 import { AdvisoryPackPanel } from "@/components/advisory-pack-panel";
 import { OutcomesPanel } from "@/components/outcomes-panel";
@@ -1182,6 +1184,7 @@ function ClientView() {
   const workflowHash = workflowInputsHash(workflowCtx);
   const [workflow, setWorkflow] = useState<BriefingWorkflow | null>(null);
   const [workflowLoading, setWorkflowLoading] = useState(false);
+  const [generationTrialOpen, setGenerationTrialOpen] = useState(false);
   const draftWorkflow = useServerFn(draftMilonWorkflow);
   const workflowCtxRef = useRef(workflowCtx);
   workflowCtxRef.current = workflowCtx;
@@ -1195,7 +1198,10 @@ function ClientView() {
         });
         setWorkflow(res);
       } catch (e) {
-        console.warn("[briefing] workflow draft failed:", (e as Error).message);
+        if (isStarterTrialEndedMessage(messageFromUnknown(e))) {
+          setGenerationTrialOpen(true);
+        }
+        console.warn("[briefing] workflow draft failed:", messageFromUnknown(e) || e);
       } finally {
         setWorkflowLoading(false);
       }
@@ -1219,6 +1225,11 @@ function ClientView() {
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId, workflowHash, loading, hasFigures, Boolean(client)]);
+  useEffect(() => {
+    const onTrialEnded = () => setGenerationTrialOpen(true);
+    window.addEventListener("milon-starter-trial-ended", onTrialEnded);
+    return () => window.removeEventListener("milon-starter-trial-ended", onTrialEnded);
+  }, []);
 
   const waterfallFallback = derivePeriodWaterfallFallback(financials);
 
@@ -2359,6 +2370,10 @@ function ClientView() {
                   <TrialBalanceRefreshPrompt onImport={() => setUploadOpen(true)} />
                 ) : null}
 
+                {generationTrialOpen ? (
+                  <TrialEndedPlanBlock firmId={client.firm_id ?? null} />
+                ) : null}
+
                 {/* ===== CLIENT BRIEFING — status → what matters → this month's workflow ===== */}
                 <ClientBriefing
                   clientName={client.name}
@@ -2615,6 +2630,7 @@ function ClientView() {
                       <ClientBrainSummary
                         clientId={client.id}
                         clientName={client.name}
+                        firmId={client.firm_id ?? null}
                         operatingProfile={client.operating_profile}
                         market={client.market}
                         businessType={client.business_type}
@@ -3419,6 +3435,7 @@ function ClientView() {
                   <AdvisoryPackPanel
                     className="mb-5"
                     clientId={client.id}
+                    firmId={client.firm_id ?? null}
                     audience="accountant"
                     canGenerate={hasFigures}
                     hasFirm={Boolean(client.firm_id)}
@@ -3429,6 +3446,7 @@ function ClientView() {
                   <RecommendationsPanel
                     className="mb-5"
                     clientId={client.id}
+                    firmId={client.firm_id ?? null}
                     audience="accountant"
                     canPropose={hasFigures}
                     onChanged={() => setAdvisoryBump((n) => n + 1)}

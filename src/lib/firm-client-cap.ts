@@ -8,7 +8,7 @@ import {
   STARTER_TRIAL_ENDED_MESSAGE,
   idleStarterTrialBanner,
   type StarterTrialBanner,
-} from "@/lib/firm-starter-trial";
+} from "./firm-starter-trial";
 import {
   FIRM_BAND_CATALOG,
   FIRM_TRIAL_CLIENT_LIMIT,
@@ -17,7 +17,7 @@ import {
   isFirmBandId,
   type FirmBandId,
   type FirmInterval,
-} from "@/lib/stripe-plans";
+} from "./stripe-plans";
 
 export type FirmSubscriptionPhase = "trialing" | "active" | "none";
 

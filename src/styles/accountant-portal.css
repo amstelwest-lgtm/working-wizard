@@ -233,6 +233,8 @@ html[data-theme="light"] .accountant-portal .doc{background:linear-gradient(170d
 /* ===== drawer (playbook detail) ===== */
 .veil{position:fixed;inset:0;z-index:70;background:rgba(3,3,6,.66);backdrop-filter:blur(6px);opacity:0;pointer-events:none;transition:opacity .35s}
 .veil.open{opacity:1;pointer-events:auto}
+/* The practice page animation traps the drawer under the root note button. */
+body:has(.veil.open) #wizard-notes-pin{visibility:hidden;pointer-events:none}
 .drawer{position:fixed;top:0;right:0;bottom:0;width:min(560px,94vw);z-index:71;background:var(--bg-2);border-left:1px solid var(--line);box-shadow:-30px 0 80px rgba(0,0,0,.5);transform:translateX(102%);transition:transform .45s var(--ease);display:flex;flex-direction:column}
 .drawer.open{transform:none}
 .drawer-head{padding:26px 30px 20px;border-bottom:1px solid var(--line-soft);position:relative}
