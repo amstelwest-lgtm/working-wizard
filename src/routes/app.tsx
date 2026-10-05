@@ -99,7 +99,8 @@ import {
 } from "@/lib/ratios";
 import { healthFromRatioInputs, healthMapFromRatios, scoreRatio } from "@/lib/health-score";
 import { ratioActualLine } from "@/lib/ratio-actuals";
-import { effectiveCashRunwayWeeks, type SavedCashflowLike } from "@/lib/cash-runway";
+import { type SavedCashflowLike } from "@/lib/cash-runway";
+import { assessClientMetrics } from "@/lib/client-metrics";
 import {
   FinancialInputsContext,
   type WeeklyInputs,
@@ -3579,10 +3580,15 @@ function Index() {
 
   // Overall + pillars — same computeOverallHealth as accountant dashboard / scorecard.
   // Local healthMap above stays for next-steps / sphere drivers; it must not drive the overall.
-  const effectiveRunway = effectiveCashRunwayWeeks(
-    clientMeta?.cash_runway_weeks,
-    clientMeta?.cashflow ?? null,
-  );
+  const ownerMetrics = assessClientMetrics({
+    financials: v as unknown as Record<string, unknown>,
+    cashflow: clientMeta?.cashflow ?? null,
+    financialsUpdatedAt: clientMeta?.financials_updated_at ?? null,
+  });
+  const effectiveRunway =
+    ownerMetrics.runway.kind === "weeks" || ownerMetrics.runway.kind === "zero"
+      ? ownerMetrics.runway.weeks
+      : null;
   const overallHealth = healthFromRatioInputs(v, effectiveRunway, boardMarket);
   const pillarById = Object.fromEntries(
     overallHealth.pillars.map((p) => [p.id, p.score ?? NaN]),

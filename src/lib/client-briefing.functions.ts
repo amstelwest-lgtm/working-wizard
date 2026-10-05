@@ -14,6 +14,7 @@ import { callClaudeMessages } from "@/lib/claude-messages";
 import {
   fallbackWorkflow,
   sanitizeWorkflowText,
+  workflowAgreesWithSnapshot,
   workflowInputsHash,
   workflowPrompt,
   type WorkflowContext,
@@ -146,7 +147,8 @@ export const draftMilonWorkflow = createServerFn({ method: "POST" })
         timeoutMs: 30_000,
       });
       const text = sanitizeWorkflowText(raw);
-      result = text
+      const agreed = text != null && workflowAgreesWithSnapshot(text, ctx);
+      result = text && agreed
         ? { text, source: "claude", generatedAt: new Date().toISOString(), inputsHash }
         : {
             text: fallbackWorkflow(ctx),

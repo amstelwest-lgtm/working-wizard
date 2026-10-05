@@ -34,14 +34,15 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Progress } from "@/components/ui/progress";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
 import type { AccountantProfile } from "@/contexts/accountant-profile";
-import { computeRatios, scoreTier, BUSINESS_TYPE_TO_BENCHMARK } from "@/lib/ratios";
+import { computeRatios, scoreTier, BUSINESS_TYPE_TO_BENCHMARK, periodMonthsOf } from "@/lib/ratios";
 import type { RatioInputs } from "@/lib/ratios";
 import { scoreRatio, pillarForRatioName } from "@/lib/health-score";
+import { CASH_RUNWAY_THRESHOLD_RAND } from "@/lib/cash-runway";
 import {
-  CASH_RUNWAY_THRESHOLD_RAND,
-  effectiveCashRunwayWeeks,
-  runwayWeeksFromClosings,
-} from "@/lib/cash-runway";
+  assessClientMetrics,
+  forecastMinimumCash,
+  scoreWorkingCapitalFunding,
+} from "@/lib/client-metrics";
 import {
   hashFigures,
   latestSnapshotId,
@@ -1082,6 +1083,9 @@ type ClientReportData = {
   hasData: boolean;
   clientName: string;
   cashRunwayWeeks: number | null;
+  runwayLabel: string | null;
+  cashGenerative: boolean;
+  forecastMinimum: number;
   financials: Record<string, string>;
   rawRatios: Record<string, number>;
   ratioResults: RatioResult[];
@@ -1132,6 +1136,9 @@ const EMPTY_CLIENT_DATA: ClientReportData = {
   hasData: false,
   clientName: "",
   cashRunwayWeeks: null,
+  runwayLabel: null,
+  cashGenerative: false,
+  forecastMinimum: CASH_RUNWAY_THRESHOLD_RAND,
   financials: {},
   rawRatios: {},
   ratioResults: [],
@@ -1422,6 +1429,8 @@ function buildWorkingCapitalData(
 ): WorkingCapitalData | null {
   const revenue = getNum(fin, "revenue");
   if (!Number.isFinite(revenue) || revenue <= 0) return null;
+  const months = periodMonthsOf(fin);
+  const annualRevenue = revenue * (12 / months);
   const dd = Number.isFinite(rawRatios["Debtor Days"]) ? rawRatios["Debtor Days"] : 0;
   const id = Number.isFinite(rawRatios["Inventory Days"]) ? rawRatios["Inventory Days"] : 0;
   const cd = Number.isFinite(rawRatios["Creditor Days"]) ? rawRatios["Creditor Days"] : 0;
@@ -1438,8 +1447,8 @@ function buildWorkingCapitalData(
     working_capital_funding: wcFunding,
     working_capital_utilization: Math.min(1, Math.max(0, wcFunding * 2)),
     working_capital_days: ccc,
-    annual_revenue: revenue,
-    cash_trapped_rands: revenue * Math.max(0, wcFunding),
+    annual_revenue: annualRevenue,
+    cash_trapped_rands: annualRevenue * Math.max(0, wcFunding),
     health_scores: {
       debtor_days: Math.round(scoreForRatio("Debtor Days", dd)),
       inventory_days: Math.round(scoreForRatio("Inventory Days", id)),
@@ -1447,8 +1456,12 @@ function buildWorkingCapitalData(
       // WIP not in financials — score 0 days honestly (not a soft-demo 68).
       wip_days: Math.round(scoreForRatio("Inventory Days", 0)),
       working_capital_days: Math.round(scoreForRatio("Working Capital Days", ccc)),
-      working_capital_funding: Math.round(Math.min(100, Math.max(0, (1 - wcFunding) * 100))),
-      working_capital_utilization: Math.round(Math.min(100, Math.max(0, (1 - wcFunding) * 90))),
+      working_capital_funding: Math.round(scoreWorkingCapitalFunding(wcFunding)),
+      working_capital_utilization: Math.round(
+        scoreWorkingCapitalFunding(wcFunding) === 0 && (wcFunding < -1 || wcFunding > 2)
+          ? 0
+          : Math.min(100, Math.max(0, (1 - Math.min(2, Math.max(-1, wcFunding))) * 90)),
+      ),
     },
   };
 }
@@ -1793,7 +1806,7 @@ function cfDistribute(line: CfLineItem): number[] {
 
 function buildCashForecastFromSavedCashflow(
   cf: SavedCashflow,
-  cashRunwayWeeks: number | null,
+  openingCash: number | null,
 ): CashForecastWeek[] | null {
   const revenue = cf.revenue ?? [];
   const expenses = cf.expenses ?? [];
@@ -1851,16 +1864,22 @@ function buildCashForecastFromSavedCashflow(
     outflow[w] += capexAmt;
   }
 
-  const opening = parseFloat(cf.openingBalance ?? "0") || 0;
+  const storedOpening = parseFloat(cf.openingBalance ?? "");
+  const opening =
+    openingCash != null &&
+    Number.isFinite(openingCash) &&
+    (!Number.isFinite(storedOpening) || Math.abs(storedOpening - openingCash) >= 0.5)
+      ? openingCash
+      : Number.isFinite(storedOpening)
+        ? storedOpening
+        : 0;
   const weeks: CashForecastWeek[] = [];
-  const closings: number[] = [];
   let balance = opening;
   for (let i = 0; i < CF_WEEKS; i++) {
     const receipts = Math.round(inflow[i]);
     const payments = Math.round(outflow[i]);
     const net_movement = receipts - payments;
     const closing = balance + net_movement;
-    closings.push(closing);
     weeks.push({
       period_label: `Week ${i + 1}`,
       opening_balance: Math.round(balance),
@@ -1869,15 +1888,9 @@ function buildCashForecastFromSavedCashflow(
       net_movement,
       closing_balance: Math.round(closing),
       scenario: "moderate",
-      runway_weeks: 0, // filled below after derived runway
+      runway_weeks: 0,
     });
     balance = closing;
-  }
-  // Prefer persisted runway; else derive from closings. Never pad with a fake 13.
-  const derived = runwayWeeksFromClosings(closings, CASH_RUNWAY_THRESHOLD_RAND);
-  const runway = cashRunwayWeeks ?? derived;
-  for (let i = 0; i < weeks.length; i++) {
-    weeks[i].runway_weeks = Math.max(0, runway - i);
   }
   return weeks;
 }
@@ -2044,10 +2057,18 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
   const businessTypeId = clientRow?.business_type ?? operatingProfile?.businessTypeId ?? null;
   const sectorBench = await loadSectorBenchmarks(businessTypeId);
   const benchmarkSector = resolveBenchmarkSector(businessTypeId, operatingProfile);
-  const effectiveRunway = effectiveCashRunwayWeeks(
-    clientRow?.cash_runway_weeks,
-    clientRow?.cashflow as Parameters<typeof effectiveCashRunwayWeeks>[1],
-  );
+  const preliminary = assessClientMetrics({
+    financials:
+      clientRow?.financials && typeof clientRow.financials === "object"
+        ? (clientRow.financials as Record<string, unknown>)
+        : null,
+    cashflow: clientRow?.cashflow,
+    financialsUpdatedAt: clientRow?.financials_updated_at ?? null,
+  });
+  const preliminaryWeeks =
+    preliminary.runway.kind === "weeks" || preliminary.runway.kind === "zero"
+      ? preliminary.runway.weeks
+      : null;
   const reviewSignoffs = {
     financials: (signoffRes.data ?? []).find((s) => s.scope === "financials") ?? null,
     cash_forecast: (signoffRes.data ?? []).find((s) => s.scope === "cash_forecast") ?? null,
@@ -2060,7 +2081,9 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
   const baseEmpty = {
     ...EMPTY_CLIENT_DATA,
     clientName: clientRow?.name ?? "",
-    cashRunwayWeeks: effectiveRunway,
+    cashRunwayWeeks: preliminaryWeeks,
+    runwayLabel: preliminary.runway.kind === "unknown" ? null : preliminary.runway.label,
+    cashGenerative: preliminary.runway.kind === "cash_generative",
     financialsUpdatedAt: clientRow?.financials_updated_at ?? null,
     lastForecastAt: clientRow?.last_forecast_at ?? null,
     reviewSignoffs,
@@ -2105,6 +2128,7 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
     laborCost: fin["laborCost"] ?? "",
     employees: fin["employees"] ?? "",
     founderHours: fin["founderHours"] ?? "",
+    periodMonths: fin["periodMonths"] ?? "",
   };
   const rawRatios = computeRatios(ratioInputs);
   const snapshots: DatedSnapshot[] = (snapshotRes.data ?? []).map((s) => ({
@@ -2145,10 +2169,39 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
     new Date(),
   );
 
+  const assessed = assessClientMetrics({
+    financials: rawFin as Record<string, unknown>,
+    cashflow: clientRow.cashflow,
+    financialsUpdatedAt: clientRow.financials_updated_at,
+    priorFinancials: priorSnap?.financials ?? null,
+  });
+  const healthWeeks =
+    assessed.runway.kind === "weeks" || assessed.runway.kind === "zero"
+      ? assessed.runway.weeks
+      : null;
+  const savedCashflow = (clientRow.cashflow ?? {}) as SavedCashflow & {
+    minimumThreshold?: number | string | null;
+    runwayThreshold?: number | string | null;
+  };
+  const cashForecast = buildCashForecastFromSavedCashflow(
+    savedCashflow,
+    assessed.cash.amount,
+  );
+  const configuredFloor = parseFloat(
+    String(savedCashflow.minimumThreshold ?? savedCashflow.runwayThreshold ?? ""),
+  );
+  const forecastMinimum = forecastMinimumCash({
+    configured: Number.isFinite(configuredFloor) ? configuredFloor : null,
+    weeklyOutflows: cashForecast?.map((w) => w.total_payments) ?? [],
+  });
+
   return {
     hasData: true,
     clientName: clientRow.name,
-    cashRunwayWeeks: effectiveRunway,
+    cashRunwayWeeks: healthWeeks,
+    runwayLabel: assessed.runway.kind === "unknown" ? null : assessed.runway.label,
+    cashGenerative: assessed.runway.kind === "cash_generative",
+    forecastMinimum,
     financials: fin,
     rawRatios,
     ratioResults,
@@ -2160,10 +2213,7 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
     movement: movementRows,
     movementPeriodLabels: movementLabels,
     benchmark: buildBenchmarkRows(rawRatios, ratioResults, sectorBench),
-    cashForecast: buildCashForecastFromSavedCashflow(
-      (clientRow as unknown as { cashflow: SavedCashflow | null }).cashflow ?? {},
-      effectiveRunway,
-    ),
+    cashForecast,
     financialsUpdatedAt: clientRow.financials_updated_at,
     lastForecastAt: clientRow.last_forecast_at,
     reviewSignoffs,
@@ -2359,6 +2409,9 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
         reviewSignoff: forecastStamp,
         operatingProfile,
         market,
+        minimumThreshold: isDemo ? undefined : cd?.forecastMinimum,
+        runwayLabel: isDemo ? null : cd?.runwayLabel,
+        cashGenerative: isDemo ? false : Boolean(cd?.cashGenerative),
       });
     },
     cycle: async (s, p) => {

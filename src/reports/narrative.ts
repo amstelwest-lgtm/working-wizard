@@ -162,22 +162,32 @@ export function profitabilityNarrative(
 
 export function cashForecastNarrative(
   d: {
-    runwayWeeks: number;
+    runwayWeeks: number | null;
+    /** True when the business is not burning cash. Never phrase that as 0 weeks. */
+    cashGenerative?: boolean;
     minBalance: number;
     threshold: number;
+    /** Count of weeks whose closing is under the minimum. */
     weeksBelow: number;
+    /** 1-based week of the first closing under the minimum. */
+    firstBreachWeek?: number | null;
   },
   profile?: NarrativeProfile,
   market: MoneyMarket = ZA_MARKET,
 ): string {
-  const runwayBit =
-    d.runwayWeeks >= 13
-      ? `Cash remains above the danger threshold across the full 13-week horizon`
-      : `Projected runway is ${d.runwayWeeks} weeks`;
+  const runwayBit = d.cashGenerative
+    ? `The business is cash generative, so runway is not counted down to zero`
+    : d.runwayWeeks == null
+      ? `Runway cannot be read from the figures yet`
+      : d.runwayWeeks >= 13
+        ? `Projected runway covers the full 13-week horizon`
+        : `Projected runway is ${d.runwayWeeks} week${d.runwayWeeks === 1 ? "" : "s"}`;
+  const floor = fmtRandCompact(d.threshold, market);
+  const trough = fmtRandCompact(d.minBalance, market);
   const lowBit =
-    d.weeksBelow > 0
-      ? ` The balance dips below the ${fmtRandCompact(d.threshold, market)} minimum in ${d.weeksBelow} week${d.weeksBelow > 1 ? "s" : ""}, bottoming out at ${fmtRandCompact(d.minBalance, market)} — the shaded danger zone on the chart marks where action is needed.`
-      : ` The lowest projected balance is ${fmtRandCompact(d.minBalance, market)}, comfortably above the ${fmtRandCompact(d.threshold, market)} minimum.`;
+    d.weeksBelow > 0 && d.firstBreachWeek != null
+      ? ` The balance first dips below the ${floor} minimum in week ${d.firstBreachWeek} and sits under that line for ${d.weeksBelow} week${d.weeksBelow === 1 ? "" : "s"}, bottoming out at ${trough}.`
+      : ` The lowest projected balance is ${trough}, above the ${floor} minimum across the horizon.`;
   return withCoda(`${runwayBit}.${lowBit}`, profile, "forecast", market);
 }
 
@@ -198,11 +208,13 @@ export function cashCycleNarrative(
         : ` — ${d.ccc - d.cccPrior} days slower than last period`
       : "";
   const verdict =
-    d.ccc <= 45
-      ? "an efficient cycle"
-      : d.ccc <= 75
-        ? "a moderate cycle with room to tighten"
-        : "a slow cycle that is starving the business of cash";
+    d.ccc < -120
+      ? "an unusually negative cycle — suppliers are funding the business well beyond normal terms, which is a risk if those terms tighten"
+      : d.ccc <= 45
+        ? "an efficient cycle"
+        : d.ccc <= 75
+          ? "a moderate cycle with room to tighten"
+          : "a slow cycle that is starving the business of cash";
   const unit1 = formatMoneyUnit(1, market);
   const base =
     `It takes ${d.ccc} days for ${unit1} spent to return as cash${trend} — ${verdict}. ` +

@@ -29,6 +29,7 @@ import {
   planActionsFromOverview,
 } from "../supabase/functions/ask-ai/overview-brief.ts";
 import { healthFromFlatFinancials } from "../src/lib/health-score.ts";
+import { assessClientMetrics } from "../src/lib/client-metrics.ts";
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
@@ -252,37 +253,47 @@ const yankees = {
   fixedCosts: "5356.5",
   periodMonths: "1",
 };
-const liveHealth = healthFromFlatFinancials(yankees, 4, { country: "US", copyPack: "us" });
+const yankeesMetrics = assessClientMetrics({ financials: yankees });
+const liveHealth = healthFromFlatFinancials(yankees, yankeesMetrics.runway.weeks, {
+  country: "US",
+  copyPack: "us",
+});
 const overview = buildOverviewBrief({
   financials: yankees,
-  runwayWeeks: 4,
+  cash: yankeesMetrics.cash.amount,
+  runwayWeeks: yankeesMetrics.runway.weeks,
+  runwayLabel: yankeesMetrics.runway.label,
   copyPack: "us",
   clientName: "Fixture Co",
 });
-assert(liveHealth.overall === 79 && liveHealth.displayLabel === "Healthy", `live overview is 79 Healthy, got ${liveHealth.overall} ${liveHealth.displayLabel}`);
+assert(
+  liveHealth.overall === 71 && liveHealth.displayLabel === "Watch",
+  `live overview is 71 Watch, got ${liveHealth.overall} ${liveHealth.displayLabel}`,
+);
 assert(overview.health === liveHealth.overall, `bot health ${overview.health} matches overview ${liveHealth.overall}`);
-assert(overview.healthLabel === "Healthy", "bot label matches Healthy");
+assert(overview.healthLabel === "Watch", "bot label matches Watch");
 assert(overview.cash != null && Math.round(overview.cash) === 7430, "cash on file");
 assert(overview.revenue != null && Math.round(overview.revenue) === 8634, "period revenue");
-assert(overview.runwayWeeks === 4, "runway weeks");
+assert(yankeesMetrics.runway.kind === "cash_generative" && overview.runwayWeeks == null, "profitable cash is not 0 or 4 weeks");
+assert(overview.runwayLabel === "Cash generative", "runway label");
 assert(overview.creditorDays != null && Math.round(overview.creditorDays) === 329, "creditor days");
 assert(overview.debtorDays != null && Math.round(overview.debtorDays) === 32, "debtor days");
 assert(overview.grossMargin != null && overview.grossMargin > 0.9, "gross margin on file");
 const grounded = formatOverviewForPrompt(overview, "accountant");
-assert(grounded.includes("79/100 (Healthy)"), "prompt quotes overview health");
+assert(grounded.includes("71/100 (Watch)"), "prompt quotes overview health");
 assert(grounded.includes("$7,430"), "prompt quotes cash");
 assert(grounded.includes("$8,634"), "prompt quotes revenue");
 assert(grounded.includes("329 days"), "prompt quotes creditor days");
-assert(grounded.includes("4 weeks"), "prompt quotes runway");
+assert(grounded.includes("Cash generative"), "prompt quotes runway");
 assert(/never ask/i.test(grounded), "prompt forbids asking for figures already on file");
 assert(!/you are the/i.test(grounded), "accountant voice");
 assert(!grounded.includes("86/100"), "stale score is not the overview");
 const withOverview = buildPrompt("How healthy is this client?", { ...ctx, overview, scores: { overall_score: 86 } }, "full", "accountant");
-assert(withOverview.user.includes("79/100 (Healthy)"), "ask-ai prompt uses live health over a stale score");
+assert(withOverview.user.includes("71/100 (Watch)"), "ask-ai prompt uses live health over a stale score");
 assert(!withOverview.user.includes("86/100"), "stale 86 is not shown once overview is loaded");
 assert(withOverview.user.includes("$7,430"), "ask-ai prompt includes cash");
 const moves = planActionsFromOverview(overview);
-assert(moves.some((m) => m.sourceMoveKey === "bot:cash-runway"), "runway becomes an action");
+assert(!moves.some((m) => m.sourceMoveKey === "bot:cash-runway"), "cash generative is not a zero-week action");
 assert(moves.some((m) => m.sourceMoveKey === "bot:creditor-days"), "creditor days become an action");
 
 console.log("ask-ai-context-test: all assertions passed");

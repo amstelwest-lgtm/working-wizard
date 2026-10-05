@@ -68,11 +68,15 @@ import type {
   CashForecastPublishPayload,
   CashFromBanksDraftResult,
 } from "@/lib/cash-from-banks.types";
+import { periodMonthsOf } from "@/lib/ratios";
 import {
-  CASH_RUNWAY_THRESHOLD_RAND,
-  runwayWeeksFromCashflow,
-  runwayWeeksFromClosings,
-} from "@/lib/cash-runway";
+  clientRunway,
+  forecastMinimumCash,
+  periodOperatingOutflows,
+  persistedRunwayWeeks,
+  resolveClientCash,
+  type ClientRunway,
+} from "@/lib/client-metrics";
 import {
   hashFigures,
   latestSnapshotId,
@@ -392,6 +396,24 @@ function LineEditor({
   );
 }
 
+function runwayFromOpening(
+  opening: string | number | null | undefined,
+  fin: Record<string, unknown> | null | undefined,
+): ClientRunway {
+  const cash = typeof opening === "number" ? opening : parseFloat(String(opening ?? ""));
+  const netRaw = fin?.netIncome;
+  const net =
+    typeof netRaw === "number"
+      ? netRaw
+      : parseFloat(String(netRaw ?? ""));
+  return clientRunway({
+    cash: Number.isFinite(cash) ? cash : null,
+    netIncome: Number.isFinite(net) ? net : null,
+    periodExpenses: periodOperatingOutflows(fin),
+    periodMonths: fin ? periodMonthsOf(fin) : null,
+  });
+}
+
 export function CashForecastPanel({
   clientId,
   clientName,
@@ -534,14 +556,14 @@ export function CashForecastPanel({
       return;
     }
     const forecastUpdatedAt = new Date().toISOString();
-    const runway = runwayWeeksFromCashflow(payload);
+    const runway = runwayFromOpening(payload.openingBalance, inputFinancials);
     const { error } = await supabase
       .from("clients")
       .update({
         cashflow: payload as never,
         cashflow_bank_draft: payload as never,
         last_forecast_at: forecastUpdatedAt,
-        ...(runway != null ? { cash_runway_weeks: runway } : {}),
+        cash_runway_weeks: persistedRunwayWeeks(runway),
       })
       .eq("id", clientId);
     if (error) {
@@ -550,7 +572,7 @@ export function CashForecastPanel({
         .update({
           cashflow: payload as never,
           last_forecast_at: forecastUpdatedAt,
-          ...(runway != null ? { cash_runway_weeks: runway } : {}),
+          cash_runway_weeks: persistedRunwayWeeks(runway),
         })
         .eq("id", clientId);
       if (retry.error) {
@@ -613,8 +635,24 @@ export function CashForecastPanel({
         capexAmount?: string;
         capexWeek?: number;
       } | null;
-      const finCash = (data?.financials as { cash?: string | number | null } | null)?.cash;
-      const seededOpening = forecastOpeningFromStored(cf?.openingBalance, finCash);
+      const finRecord = (data?.financials ?? null) as Record<string, unknown> | null;
+      const bankAt =
+        cf && typeof (cf as { seededFromBanksAt?: unknown }).seededFromBanksAt === "string"
+          ? (cf as { seededFromBanksAt: string }).seededFromBanksAt
+          : null;
+      const bankOpening = bankAt ? parseFloat(String(cf?.openingBalance ?? "")) : NaN;
+      const periodRaw = finRecord?.cash;
+      const periodCash =
+        typeof periodRaw === "number"
+          ? periodRaw
+          : parseFloat(String(periodRaw ?? ""));
+      const resolvedCash = resolveClientCash({
+        publishedBankBalance: Number.isFinite(bankOpening) ? bankOpening : null,
+        bankPublishedAt: bankAt,
+        periodCash: Number.isFinite(periodCash) ? periodCash : null,
+        periodUpdatedAt: (data?.financials_updated_at as string | null | undefined) ?? null,
+      });
+      const seededOpening = forecastOpeningFromStored(cf?.openingBalance, resolvedCash.amount);
       if (seededOpening) setOpeningBalance(seededOpening);
       const shownOpening =
         seededOpening ??
@@ -635,6 +673,16 @@ export function CashForecastPanel({
           : null;
       xeroBankNoteRef.current = bankNote;
       setXeroBankNote(bankNote);
+      if (seededOpening && cf && clientId) {
+        const corrected = runwayFromOpening(seededOpening, finRecord);
+        void supabase
+          .from("clients")
+          .update({
+            cashflow: { ...cf, openingBalance: seededOpening } as never,
+            cash_runway_weeks: persistedRunwayWeeks(corrected),
+          })
+          .eq("id", clientId);
+      }
       if (cf) {
         if (cf.startDate) setStartDate(cf.startDate);
         if (!seededOpening && cf.openingBalance != null) setOpeningBalance(cf.openingBalance);
@@ -678,7 +726,7 @@ export function CashForecastPanel({
     supabase
       .from("clients")
       .select(
-        "cashflow, last_forecast_at, cashflow_bank_draft, operating_profile, financials, budget",
+        "cashflow, last_forecast_at, cashflow_bank_draft, operating_profile, financials, financials_updated_at, budget",
       )
       .eq("id", clientId)
       .maybeSingle()
@@ -686,7 +734,7 @@ export function CashForecastPanel({
         if (error) {
           return supabase
             .from("clients")
-            .select("cashflow, last_forecast_at, operating_profile, financials")
+            .select("cashflow, last_forecast_at, operating_profile, financials, financials_updated_at")
             .eq("id", clientId)
             .maybeSingle()
             .then((retry) => applyRow((retry.data as Record<string, unknown> | null) ?? null));
@@ -732,13 +780,13 @@ export function CashForecastPanel({
           : {}),
       };
       const forecastUpdatedAt = new Date().toISOString();
-      const runway = runwayWeeksFromCashflow(payload);
+      const runway = runwayFromOpening(openingBalance, inputFinancials);
       const { error } = await supabase
         .from("clients")
         .update({
           cashflow: payload as never,
           last_forecast_at: forecastUpdatedAt,
-          ...(runway != null ? { cash_runway_weeks: runway } : {}),
+          cash_runway_weeks: persistedRunwayWeeks(runway),
         })
         .eq("id", clientId);
       if (error) toast.error(`Cash forecast save failed: ${error.message}`);
@@ -762,6 +810,7 @@ export function CashForecastPanel({
     revGrowthPct,
     capexAmount,
     capexWeek,
+    inputFinancials,
   ]);
 
   const forecastDates = useMemo(() => {
@@ -944,7 +993,14 @@ export function CashForecastPanel({
   const lowestWeek = calc.closing.indexOf(lowestBal) + 1;
   const closingW13 = calc.closing[WEEKS - 1];
   const trajectory = closingW13 - calc.opening;
-  const runwayWeeks = runwayWeeksFromClosings(calc.closing, CASH_RUNWAY_THRESHOLD_RAND);
+  const screenRunway = useMemo(
+    () => runwayFromOpening(openingBalance, inputFinancials),
+    [openingBalance, inputFinancials],
+  );
+  const minimumCash = useMemo(
+    () => forecastMinimumCash({ weeklyOutflows: calc.outflow }),
+    [calc.outflow],
+  );
   const scenarioActive =
     revAdj !== 100 ||
     expAdj !== 100 ||
@@ -974,7 +1030,7 @@ export function CashForecastPanel({
         import("@/reports/cash-forecast"),
       ]);
 
-      const derivedRunway = runwayWeeksFromClosings(calc.closing, CASH_RUNWAY_THRESHOLD_RAND);
+      const derivedRunway = screenRunway.weeks ?? 0;
       const forecastWeeks = weeks.map((_, i) => ({
         period_label: `Week ${i + 1}`,
         opening_balance: Math.round(i === 0 ? calc.opening : calc.closing[i - 1]),
@@ -1014,8 +1070,9 @@ export function CashForecastPanel({
           scenario: "moderate",
           accountantProfile: profile,
           market,
-          // Same R50k floor as on-screen runway — never 0 (that invents breaches).
-          minimumThreshold: CASH_RUNWAY_THRESHOLD_RAND,
+          minimumThreshold: minimumCash,
+          runwayLabel: screenRunway.kind === "unknown" ? null : screenRunway.label,
+          cashGenerative: screenRunway.kind === "cash_generative",
           assumptions,
           reviewSignoff: stampFromSignoff(forecastSignoff, forecastStale),
         }) as Parameters<typeof pdf>[0],
@@ -1043,7 +1100,7 @@ export function CashForecastPanel({
             opening: calc.opening,
             closings: calc.closing,
             runway: derivedRunway,
-            threshold: CASH_RUNWAY_THRESHOLD_RAND,
+            threshold: minimumCash,
           }),
           periodLabel: period,
           createdBy: user.id,
@@ -1288,9 +1345,27 @@ export function CashForecastPanel({
               />
               <Stat
                 label="Cash runway"
-                value={runwayWeeks >= WEEKS ? `${WEEKS}+ wk` : `${runwayWeeks} wk`}
-                tone={runwayWeeks < 8 ? "bad" : runwayWeeks < 13 ? "neutral" : "good"}
-                sub={`Above ${fmtCompact(CASH_RUNWAY_THRESHOLD_RAND)} floor`}
+                value={
+                  screenRunway.kind === "cash_generative"
+                    ? "Cash generative"
+                    : screenRunway.kind === "unknown"
+                      ? "—"
+                      : screenRunway.kind === "zero"
+                        ? "0 wk"
+                        : `${screenRunway.weeks} wk`
+                }
+                tone={
+                  screenRunway.kind === "cash_generative"
+                    ? "good"
+                    : screenRunway.kind === "zero" || (screenRunway.weeks ?? 99) < 8
+                      ? "bad"
+                      : "neutral"
+                }
+                sub={
+                  screenRunway.kind === "cash_generative"
+                    ? "Not burning cash"
+                    : `Above ${fmtCompact(minimumCash)} floor`
+                }
               />
               <Stat
                 label="Net cash · next 4 weeks"
@@ -1673,7 +1748,9 @@ export function CashForecastPanel({
                           symbol={cur}
                           value={v}
                           display={v ? `(${fmtR(v)})` : "—"}
-                          onCommit={(next) => commitWeekOverride(r.bucket, r.id, j, next)}
+                          onCommit={(next) => {
+                            if (r.bucket && r.id) commitWeekOverride(r.bucket, r.id, j, next);
+                          }}
                         />
                       ) : v ? (
                         `(${fmtR(v)})`

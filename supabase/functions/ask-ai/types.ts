@@ -71,6 +71,8 @@ export interface WaterfallSummary {
 export interface CashForecastSummary {
   hasData: boolean;
   runwayWeeks: number | null;
+  /** Set when the shared runway is cash-generative, so copy must not say 0 weeks. */
+  cashGenerative?: boolean;
   horizonWeeks: number;
   shortfall: boolean;
   lowestWeek: number | null;

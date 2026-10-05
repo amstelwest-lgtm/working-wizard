@@ -24,6 +24,7 @@ import {
   resolveRatioRecord,
 } from "./derive-ratios.ts";
 import { buildOverviewBrief, copyPackFromMarket } from "./overview-brief.ts";
+import { assessClientMetrics } from "../../../src/lib/client-metrics.ts";
 
 /**
  * Maps the application's stored business_type values to the benchmark category keys
@@ -112,13 +113,14 @@ export async function buildContext(
   let financials: Record<string, unknown> | null = null;
   let cashflow: SavedCashflow | null = null;
   let storedRunway: number | null = null;
+  let financialsUpdatedAt: string | null = null;
   let clientName: string | null = null;
   let brainSummary: unknown = null;
   if (tier !== "none") {
     let { data, error } = await supabase
       .from("clients")
       .select(
-        "id, name, business_type, financials, operating_profile, market, cashflow, cash_runway_weeks, brain_summary",
+        "id, name, business_type, financials, operating_profile, market, cashflow, cash_runway_weeks, financials_updated_at, brain_summary",
       )
       .eq("id", clientId)
       .maybeSingle();
@@ -144,6 +146,8 @@ export async function buildContext(
       cashflow = (data as { cashflow?: SavedCashflow | null }).cashflow ?? null;
       const rawStored = (data as { cash_runway_weeks?: number | null }).cash_runway_weeks;
       storedRunway = rawStored != null && Number.isFinite(Number(rawStored)) ? Number(rawStored) : null;
+      const rawUpdated = (data as { financials_updated_at?: string | null }).financials_updated_at;
+      financialsUpdatedAt = typeof rawUpdated === "string" ? rawUpdated : null;
       const rawRevenue = fin["annual_revenue"] ?? fin["revenue"];
       const op = (data.operating_profile ?? null) as Record<string, unknown> | null;
       profileQuestions = profileQuestionsFromOperating(op);
@@ -277,8 +281,21 @@ export async function buildContext(
       : summarizeWaterfall(extractWaterfallFigures(financials));
   const productLines =
     tier === "none" || !financials ? [] : summarizeProductLines(financials.productMix);
+  const metrics =
+    tier === "none"
+      ? null
+      : assessClientMetrics({
+          financials,
+          cashflow,
+          financialsUpdatedAt,
+        });
   const cashForecast =
-    tier === "none" ? null : summarizeCashForecast(cashflow, storedRunway);
+    tier === "none"
+      ? null
+      : summarizeCashForecast(cashflow, metrics?.runway.weeks ?? storedRunway, {
+          cashGenerative: metrics?.runway.kind === "cash_generative",
+          openingCash: metrics?.cash.amount ?? null,
+        });
 
   // Rank next moves from the full ratio set (not the focused subset).
   const nextSteps = tier === "none" ? [] : rankNextSteps(rankingRatios, 5);
@@ -322,7 +339,9 @@ export async function buildContext(
       : buildOverviewBrief({
           financials,
           ratios: fallbackRatios,
-          runwayWeeks: storedRunway,
+          cash: metrics?.cash.amount ?? null,
+          runwayWeeks: metrics?.runway.weeks ?? null,
+          runwayLabel: metrics && metrics.runway.kind !== "unknown" ? metrics.runway.label : null,
           copyPack,
           clientName,
           periodLabel: snapPeriod,

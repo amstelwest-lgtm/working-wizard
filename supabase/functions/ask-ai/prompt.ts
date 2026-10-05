@@ -194,9 +194,11 @@ export function buildPrompt(
     lines.push(
       `  ${c.shortfall ? `Shortfall in week ${c.lowestWeek}` : "In the black across the horizon"}`,
     );
-    if (c.runwayWeeks != null) {
+    if (c.cashGenerative) {
+      lines.push("  Cash runway: cash generative — not counted as zero weeks");
+    } else if (c.runwayWeeks != null) {
       lines.push(
-        `  Cash runway: ${c.runwayWeeks >= c.horizonWeeks ? `${c.horizonWeeks}+` : c.runwayWeeks} weeks above the floor`,
+        `  Cash runway: ${c.runwayWeeks >= c.horizonWeeks ? `${c.horizonWeeks}+` : c.runwayWeeks} weeks`,
       );
     }
     lines.push(`  Negative weeks: ${c.negativeWeeks}`);

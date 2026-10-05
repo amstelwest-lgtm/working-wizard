@@ -11,6 +11,11 @@
  */
 
 import { computeRatiosFromFinancials, DISPLAY_TO_CAMEL } from "./derive-ratios.ts";
+import {
+  scoreCreditorDays,
+  scoreLowerIsBetterDays,
+  scoreWorkingCapitalDays,
+} from "../../../src/lib/client-metrics.ts";
 
 export type OverviewCopyPack = "za" | "us";
 
@@ -34,6 +39,8 @@ export type OverviewBrief = {
   cash: number | null;
   revenue: number | null;
   runwayWeeks: number | null;
+  /** "Cash generative", "4 weeks", "0 weeks". Null when runway is unknown. */
+  runwayLabel: string | null;
   creditorDays: number | null;
   debtorDays: number | null;
   grossMargin: number | null;
@@ -132,10 +139,9 @@ export function scoreOverviewRatio(
   if (name === "Tax Burden") return clamp(val * 100);
   if (name === "Fixed Cost Ratio") return clamp(((0.5 - val) / 0.5) * 100);
   if (name === "Top-5 Customer Share") return clamp(((0.8 - val) / 0.8) * 100);
-  if (name === "Debtor Days") return clamp(((90 - val) / 90) * 100);
-  if (name === "Inventory Days") return clamp(((90 - val) / 90) * 100);
-  if (name === "Working Capital Days") return clamp(((90 - val) / 90) * 100);
-  if (name === "Creditor Days") return clamp((val / 60) * 100);
+  if (name === "Debtor Days" || name === "Inventory Days") return scoreLowerIsBetterDays(val);
+  if (name === "Working Capital Days") return scoreWorkingCapitalDays(val);
+  if (name === "Creditor Days") return scoreCreditorDays(val);
   if (name === "Equity Multiplier") return clamp(((4 - val) / 3) * 100);
   if (name === "Degree of Operating Leverage") {
     if (val <= 0) return 30;
@@ -203,6 +209,9 @@ export function buildOverviewBrief(input: {
   financials?: Record<string, unknown> | null;
   ratios?: Record<string, number> | null;
   runwayWeeks?: number | null;
+  runwayLabel?: string | null;
+  /** Resolved cash (bank, then period). When set, wins over financials.cash. */
+  cash?: number | null;
   copyPack?: OverviewCopyPack;
   clientName?: string | null;
   periodLabel?: string | null;
@@ -270,9 +279,15 @@ export function buildOverviewBrief(input: {
     weakest: weakest
       ? { id: weakest.id, label: weakest.label, score: weakest.score }
       : null,
-    cash: asNumber(financials?.cash),
+    cash: input.cash !== undefined ? input.cash : asNumber(financials?.cash),
     revenue: asNumber(financials?.revenue),
     runwayWeeks: runway,
+    runwayLabel:
+      input.runwayLabel !== undefined
+        ? input.runwayLabel
+        : runway != null
+          ? `${runway} ${runway === 1 ? "week" : "weeks"}`
+          : null,
     creditorDays: Number.isFinite(ratios["Creditor Days"]) ? ratios["Creditor Days"] : null,
     debtorDays: Number.isFinite(ratios["Debtor Days"]) ? ratios["Debtor Days"] : null,
     grossMargin: Number.isFinite(ratios["Gross Margin"]) ? ratios["Gross Margin"] : null,
@@ -292,7 +307,8 @@ export function overviewFactLines(brief: OverviewBrief): string[] {
   if (brief.revenue != null) {
     lines.push(`Revenue for the period on file: ${money(brief.revenue, brief.copyPack)}`);
   }
-  if (brief.runwayWeeks != null) lines.push(`Cash runway: ${brief.runwayWeeks} weeks`);
+  if (brief.runwayLabel) lines.push(`Cash runway: ${brief.runwayLabel}`);
+  else if (brief.runwayWeeks != null) lines.push(`Cash runway: ${brief.runwayWeeks} weeks`);
   if (brief.grossMargin != null) lines.push(`Gross margin: ${pct(brief.grossMargin)}`);
   if (brief.operatingMargin != null) lines.push(`Operating margin: ${pct(brief.operatingMargin)}`);
   if (brief.netMargin != null) lines.push(`Net margin: ${pct(brief.netMargin)}`);
