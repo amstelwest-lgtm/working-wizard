@@ -47,7 +47,7 @@ export function IndustryPulse({ industry, vertical }: { industry: string; vertic
             </h3>
           </div>
           <p className="mt-0.5 pl-4 text-[10px] text-slate-500">
-            {display.source === "ai" ? "Claude · Live" : "Sector baseline"} ·{" "}
+            {display.source === "ai" ? "Live" : "Sector baseline"} ·{" "}
             {lastRefresh ? date(lastRefresh) : "Updated today"}
           </p>
         </div>

@@ -13,6 +13,7 @@ import {
   MILON_BOT_TITLE,
   deriveMilonBotEndpoint,
   parseAgentObjective,
+  persistedCreateIntent,
   routeMilonIntent,
 } from "./milon-bot-copy.ts";
 import { deliverableHandoff } from "./workflow-coach.ts";
@@ -166,6 +167,7 @@ export function mountAskAi(container, options) {
     note = null,
     // Accountant studio: open the deliverable this answer is about, with coach intent.
     onOpenDeliverable = null,
+    onPersistedCreate = null,
   } = options || {};
   const studio = variant === "studio";
   const accountant = audience === "accountant";
@@ -195,6 +197,7 @@ export function mountAskAi(container, options) {
   let toolHints = [];
   let agentRun = null;
   let workingObjective = false;
+  let creatingDeliverable = false;
   let errorMsg = "";
   let history = [];
 
@@ -267,7 +270,9 @@ export function mountAskAi(container, options) {
         sendBtn.disabled = loading || !question.trim();
       });
       ta.addEventListener("keydown", (e) => {
-        if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) submit();
+        if (e.key !== "Enter" || e.shiftKey || e.isComposing) return;
+        e.preventDefault();
+        if (!loading && question.trim()) submit();
       });
       panel.appendChild(ta);
 
@@ -319,7 +324,9 @@ export function mountAskAi(container, options) {
       if (loading) {
         const thinking = document.createElement("div");
         thinking.className = "ask-ai-thinking";
-        thinking.textContent = workingObjective
+        thinking.textContent = creatingDeliverable
+          ? "Saving the draft…"
+          : workingObjective
           ? "Working the objective…"
           : pendingIntent === "milon-bot"
             ? "Checking what's on file…"
@@ -464,9 +471,11 @@ export function mountAskAi(container, options) {
   async function submit() {
     const q = question.trim();
     if (!q || loading) return;
-    const objective = parseAgentObjective(q);
-    workingObjective = Boolean(objective);
-    pendingIntent = objective ? "milon-bot" : routeMilonIntent(q);
+      const objective = parseAgentObjective(q);
+      const createIntent = persistedCreateIntent(q);
+      creatingDeliverable = Boolean(createIntent);
+      workingObjective = Boolean(objective) && !createIntent;
+      pendingIntent = createIntent || objective ? "milon-bot" : routeMilonIntent(q);
     loading = true;
     answer = "";
     answerChips = [];
@@ -487,8 +496,9 @@ export function mountAskAi(container, options) {
 
       if (!clientId) throw new Error("No client context found.");
 
-      const useAgent = Boolean(objective) && Boolean(botEndpoint);
-      const useBot = (useAgent || pendingIntent === "milon-bot") && botEndpoint;
+      const useAgent = Boolean(objective) && !createIntent && Boolean(botEndpoint);
+      const useCreate = Boolean(createIntent) && Boolean(botEndpoint);
+      const useBot = (useAgent || useCreate || pendingIntent === "milon-bot") && botEndpoint;
       const url = useBot ? botEndpoint : endpoint;
       const res = await fetch(url, {
         method: "POST",
@@ -497,7 +507,14 @@ export function mountAskAi(container, options) {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(
-          useAgent
+          useCreate
+            ? {
+                clientId,
+                mode: "create",
+                message: q,
+                audience: accountant ? "accountant" : "owner",
+              }
+            : useAgent
             ? {
                 clientId,
                 mode: "agent",
@@ -533,12 +550,16 @@ export function mountAskAi(container, options) {
         : [];
       history = [...history, { role: "user", content: q }, { role: "assistant", content: answer }];
       if (history.length > 16) history = history.slice(-16);
+      if (data.created && typeof onPersistedCreate === "function") {
+        onPersistedCreate({ question: q, created: data.created });
+      }
     } catch (e) {
       errorMsg = e.message || "Something went wrong.";
     } finally {
       loading = false;
       pendingIntent = null;
       workingObjective = false;
+      creatingDeliverable = false;
       render();
     }
   }

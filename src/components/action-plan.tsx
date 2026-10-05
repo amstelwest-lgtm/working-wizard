@@ -17,6 +17,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
+import { useAccountantProfile } from "@/contexts/accountant-profile";
+import { downloadActionPlanPdf } from "@/lib/action-plan-pdf";
 import { useServerFn } from "@tanstack/react-start";
 import { sendTransactionalEmail } from "@/lib/email/send";
 import { useMarketFormat } from "@/contexts/market";
@@ -37,6 +39,7 @@ import {
   ChevronRight,
   GripVertical,
   Lightbulb,
+  Download,
   Link as LinkIcon,
   Loader2,
   Mail,
@@ -358,7 +361,9 @@ export default function ActionPlanPanel({
   initialFilter,
 }: Props) {
   const { date } = useMarketFormat();
+  const { profile } = useAccountantProfile();
   const [plan, setPlan] = useState<Plan | null>(null);
+  const [exportingPdf, setExportingPdf] = useState(false);
   const [items, setItems] = useState<Item[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [milestones, setMilestones] = useState<Milestone[]>([]);
@@ -491,6 +496,36 @@ export default function ActionPlanPanel({
     setLoading(true);
     refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    const onRefresh = () => void refresh();
+    window.addEventListener("milon-action-plan-refresh", onRefresh);
+    return () => window.removeEventListener("milon-action-plan-refresh", onRefresh);
+  }, [refresh]);
+
+  const exportPdf = async () => {
+    setExportingPdf(true);
+    try {
+      await downloadActionPlanPdf({
+        clientName: clientName ?? "Client",
+        periodLabel: plan?.period_label,
+        outcomeGoal: plan?.outcome_goal,
+        items: items.map((item) => ({
+          title: item.title,
+          status: item.status,
+          dueDate: item.due_date,
+          outcomeWhy: item.outcome_why,
+          ownerName: item.owner_name,
+        })),
+        profile,
+      });
+      toast.success("Action Plan PDF downloaded");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "PDF export failed");
+    } finally {
+      setExportingPdf(false);
+    }
+  };
 
   // P0.7 — approved / edited recommendations not yet on the plan. Loaded
   // alongside items so the "Add from recommendations" path is the first thing
@@ -974,6 +1009,19 @@ export default function ActionPlanPanel({
                 progress
               </span>
             </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                id="action-plan-export-pdf"
+                type="button"
+                size="sm"
+                variant="outline"
+                className={`h-7 gap-1.5 px-2.5 text-[11px] ${INPUT_CLS}`}
+                disabled={exportingPdf}
+                onClick={() => void exportPdf()}
+              >
+                <Download className="h-3 w-3" />
+                {exportingPdf ? "Preparing…" : "Export PDF"}
+              </Button>
             {isOwner && (
               <div className="flex flex-wrap items-center gap-2">
                 {pendingRecs.length > 0 && (
@@ -1049,6 +1097,7 @@ export default function ActionPlanPanel({
                 )}
               </div>
             )}
+            </div>
           </div>
           {/* Filters */}
           <div className="mt-3 flex flex-wrap items-center gap-1.5">
