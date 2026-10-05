@@ -525,6 +525,8 @@ export const upgradeFirmBand = createServerFn({ method: "POST" })
         lookupKey,
         band,
         interval,
+        price,
+        saMarket: isSaMarketFirm({ market: firmMarket }),
       });
       assertNoManagedPaymentsOverride(params);
       let session: { url: string | null };
