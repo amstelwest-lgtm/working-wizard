@@ -70,8 +70,7 @@ function actorEmail(context: unknown): string {
 
 /**
  * Server gate in front of a new pack or brain deliverable.
- * The brain-deliverable-draft edge function is unchanged; a direct call to
- * it does not pass through this check.
+ * brain-deliverable-draft applies the same check itself.
  */
 export const assertFirmCanGenerateDeliverable = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])

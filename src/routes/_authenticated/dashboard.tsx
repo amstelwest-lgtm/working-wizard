@@ -43,6 +43,7 @@ import { createFirmClient, getFirmClientCreateAllowance } from "@/lib/firm-clien
 import { idleStarterTrialBanner, type FirmClientCreateAllowance } from "@/lib/firm-client-cap";
 import { browserAppOrigin } from "@/lib/app-origin";
 import { FirmBandUpgrade } from "@/components/firm-band-upgrade";
+import { TrialEndedPlanBlock } from "@/components/trial-ended-plan-block";
 import { FirmStarterTrialBanner } from "@/components/firm-starter-trial-banner";
 import {
   UPGRADE_CANCELLED_MESSAGE,
@@ -291,6 +292,7 @@ function SparkSvg({
 
 function FirmClientCapNotice({
   cap,
+  firmId,
   upgrading,
   confirmUpgrade,
   onConfirm,
@@ -299,6 +301,7 @@ function FirmClientCapNotice({
   onUpgradeBand,
 }: {
   cap: Extract<FirmClientCreateAllowance, { allowed: false }>;
+  firmId: string | null;
   upgrading: boolean;
   confirmUpgrade: boolean;
   onConfirm: () => void;
@@ -306,15 +309,21 @@ function FirmClientCapNotice({
   onCancelConfirm: () => void;
   onUpgradeBand: (band: FirmCheckoutBand, interval: FirmInterval) => void;
 }) {
+  if (cap.code === "starter_trial_ended") {
+    return (
+      <TrialEndedPlanBlock
+        firmId={firmId}
+        upgrading={upgrading}
+        upgrade={cap.upgrade ?? null}
+        onUpgrade={onUpgradeBand}
+      />
+    );
+  }
   const upgrade = cap.upgrade;
   return (
     <div role="alert">
       <p style={{ margin: "0 0 8px", fontSize: 15, fontWeight: 700, color: "var(--ink)" }}>
-        {cap.code === "starter_trial_ended"
-          ? "Your trial has ended, choose a plan"
-          : cap.code === "trial_client_cap"
-            ? "Trial client limit"
-            : "Plan client limit"}
+        {cap.code === "trial_client_cap" ? "Trial client limit" : "Plan client limit"}
       </p>
       <p style={{ margin: "0 0 16px", fontSize: 13, color: "var(--ink-dim)", lineHeight: 1.55 }}>
         {cap.message}
@@ -600,6 +609,7 @@ function AddClientDialog({
           ) : cap && !cap.allowed ? (
             <FirmClientCapNotice
               cap={cap}
+              firmId={firmId}
               upgrading={upgrading}
               confirmUpgrade={confirmUpgrade}
               onConfirm={() => setConfirmUpgrade(true)}
@@ -1026,20 +1036,26 @@ function Dashboard() {
     const parsed = parseFirmUpgradeReturn(window.location.search);
     if (!parsed.reopenAddClient && !parsed.outcome) return;
     upgradeReturnHandled.current = true;
+    const openForm = () => {
+      if (parsed.reopenAddClient) setAddOpen(true);
+    };
+    if (parsed.outcome === "cancelled") {
+      const params = new URLSearchParams(window.location.search);
+      params.set("addClient", "1");
+      params.set("upgrade", "cancelled");
+      params.delete("session_id");
+      const next = params.toString();
+      window.history.replaceState(null, "", `/dashboard?${next}`);
+      toast.message(UPGRADE_CANCELLED_MESSAGE);
+      openForm();
+      return;
+    }
     const params = new URLSearchParams(window.location.search);
     params.delete("addClient");
     params.delete("upgrade");
     params.delete("session_id");
     const next = params.toString();
     window.history.replaceState(null, "", next ? `/dashboard?${next}` : "/dashboard");
-    const openForm = () => {
-      if (parsed.reopenAddClient) setAddOpen(true);
-    };
-    if (parsed.outcome === "cancelled") {
-      toast.message(UPGRADE_CANCELLED_MESSAGE);
-      openForm();
-      return;
-    }
     if (parsed.outcome === "failed") {
       toast.error(UPGRADE_FAILED_MESSAGE);
       openForm();
@@ -1608,9 +1624,9 @@ function Dashboard() {
   if (!portalReady) {
     return (
       <div className="accountant-portal">
-        <div className="shell milon-page-enter">
+        <main className="shell milon-page-enter">
           <DashboardSkeleton className="min-h-screen py-8" />
-        </div>
+        </main>
       </div>
     );
   }
@@ -1629,7 +1645,7 @@ function Dashboard() {
         <div className="grid" />
       </div>
 
-      <div className="shell">
+      <main className="shell">
         {/* ===== TOP BAR ===== */}
         <div className="topbar">
           <span className="brand">
@@ -2291,7 +2307,7 @@ function Dashboard() {
         <div className="footer-note">
           MILŌN Practice Portal · <span className="serif gold-text">The passion to perform.</span>
         </div>
-      </div>
+      </main>
 
       {/* ===== ADD CLIENT DIALOG ===== */}
       {user && (

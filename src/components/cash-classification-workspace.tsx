@@ -29,7 +29,7 @@ import {
   reorderDraftLine,
   splitDraftLine,
 } from "@/lib/cash-from-banks.workspace";
-import { recurringReviewLabel } from "@/lib/cash-from-banks.pattern";
+import { recurringReviewLabel, reviewCashTotals } from "@/lib/cash-from-banks.pattern";
 import {
   existingCashflowIsMeaningful,
   openingCashReplaceNotice,
@@ -163,6 +163,7 @@ export function CashClassificationWorkspace({
   };
 
   const activeCount = lines.filter((l) => l.status !== "excluded").length;
+  const reviewTotals = reviewCashTotals(lines);
 
   return (
     <div className="space-y-4">
@@ -555,19 +556,9 @@ export function CashClassificationWorkspace({
         )}
         <div className="flex items-center gap-3">
           <span className="text-[11px] text-slate-500">
-            In{" "}
-            {fmt(
-              lines
-                .filter((l) => l.status !== "excluded" && l.side === "inflow")
-                .reduce((s, l) => s + l.amount, 0),
-            )}
+            Statement period · In {fmt(reviewTotals.inflow)}
             {" · "}
-            Out{" "}
-            {fmt(
-              lines
-                .filter((l) => l.status !== "excluded" && l.side === "outflow")
-                .reduce((s, l) => s + l.amount, 0),
-            )}
+            Out {fmt(reviewTotals.outflow)}
           </span>
           <Button
             disabled={publishing || activeCount === 0 || policyOpen}

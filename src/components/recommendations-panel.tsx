@@ -19,6 +19,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { ArrowRight, Check, Loader2, RefreshCw, Sparkles, X } from "lucide-react";
 import { toast } from "sonner";
 import { invokeBrainPropose } from "@/lib/brain-propose-client";
+import { TrialEndedActionNotice, useTrialEndedAction } from "@/components/trial-ended-plan-block";
 import {
   createActionFromRecommendation,
   decideRecommendation,
@@ -45,6 +46,8 @@ type Props = {
   onOpenActions?: () => void;
   /** Open the upload flow (empty state before figures). */
   onAddFigures?: () => void;
+  /** Firm that owns the client, so a trial block can open the plan picker. */
+  firmId?: string | null;
   className?: string;
 };
 
@@ -93,6 +96,7 @@ export function RecommendationsPanel({
   onChanged,
   onOpenActions,
   onAddFigures,
+  firmId = null,
   className,
 }: Props) {
   const copy = COPY[audience];
@@ -100,6 +104,7 @@ export function RecommendationsPanel({
   const list = useServerFn(listRecommendations);
   const decide = useServerFn(decideRecommendation);
   const toAction = useServerFn(createActionFromRecommendation);
+  const trialBlock = useTrialEndedAction();
 
   const [rows, setRows] = useState<Recommendation[]>([]);
   const [migrated, setMigrated] = useState(true);
@@ -193,6 +198,7 @@ export function RecommendationsPanel({
   const handlePropose = async () => {
     if (!clientId || proposing) return;
     setProposing(true);
+    trialBlock.reset();
     try {
       const res = await invokeBrainPropose(clientId);
       track("recommendations_proposed", {
@@ -219,7 +225,7 @@ export function RecommendationsPanel({
       }
       await afterWrite();
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Could not suggest moves.");
+      trialBlock.report(err, "Could not suggest moves.");
     } finally {
       setProposing(false);
     }
@@ -269,6 +275,8 @@ export function RecommendationsPanel({
           </button>
         </div>
       </div>
+
+      <TrialEndedActionNotice firmId={firmId} open={trialBlock.open} error={trialBlock.error} />
 
       {error ? (
         <div className="flex items-center justify-between gap-3 rounded-lg border border-rose-300/50 bg-rose-500/5 px-3 py-2 text-[12px] text-rose-700 dark:text-rose-300">

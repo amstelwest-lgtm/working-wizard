@@ -13,6 +13,7 @@ import {
   FileText,
   MessageCircle,
 } from "lucide-react";
+import { TrialEndedActionNotice, useTrialEndedAction } from "@/components/trial-ended-plan-block";
 import { draftAdvisory } from "@/lib/advisory.functions";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
 import { useAuth } from "@/hooks/use-auth";
@@ -72,6 +73,7 @@ export function AdvisoryDrafter({
   const { market } = useMarket();
   const usCopy = isUsCopy(market);
   const run = useServerFn(draftAdvisory);
+  const trialBlock = useTrialEndedAction();
 
   const [kind, setKind] = useState<Kind>("client_email");
   const [steer, setSteer] = useState("");
@@ -82,6 +84,7 @@ export function AdvisoryDrafter({
   const generate = async () => {
     setLoading(true);
     setResult(null);
+    trialBlock.reset();
     try {
       const res = (await run({
         data: {
@@ -95,7 +98,7 @@ export function AdvisoryDrafter({
       })) as DraftResult;
       setResult(res);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Could not draft advisory");
+      trialBlock.report(e, "Could not draft advisory");
     } finally {
       setLoading(false);
     }
@@ -215,6 +218,8 @@ export function AdvisoryDrafter({
           </>
         )}
       </button>
+
+      <TrialEndedActionNotice firmId={firmId} open={trialBlock.open} error={trialBlock.error} />
 
       {result && (
         <div className="mt-4 rounded-lg border border-slate-800 bg-slate-950/60 p-4">

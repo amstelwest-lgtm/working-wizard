@@ -1,6 +1,6 @@
 /**
  * Sticky reading-path coach for the accountant client shell.
- * Light surface, dark text — readable in light mode and on the dark portal.
+ * Dark uses portal ink. Light keeps the cream bar.
  * One Continue lives here. Deliverable pages do not repeat it.
  */
 import {

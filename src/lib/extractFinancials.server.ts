@@ -13,6 +13,7 @@ import { applyBalanceSheetTotals } from "@/lib/statement-financials";
 import { callClaudeMessages, parseClaudeJson } from "@/lib/claude-messages";
 import { isUsCopy, marketInputSchema, resolvePromptMarket } from "@/lib/market";
 import { assessPortalFigures, assertUsable } from "@/lib/upload-quality";
+import { BANK_LEDGER_MESSAGE, looksLikeBankLedger } from "@/lib/bank-ledger";
 import { INLINE_BASE64_MAX } from "@/lib/staged-upload";
 import { resolvePdfBase64 } from "@/lib/staged-upload.server";
 import { assertExtractionAllowed } from "@/lib/extraction-rate-limit.server";
@@ -173,6 +174,8 @@ export const extractFinancialsFromPDF = createServerFn({ method: "POST" })
       }
     } else if (!text || text.trim().length < 40) {
       throw new Error("That file has no readable figures in it.");
+    } else if (looksLikeBankLedger(text)) {
+      throw new Error(BANK_LEDGER_MESSAGE);
     }
 
     await assertExtractionAllowed(

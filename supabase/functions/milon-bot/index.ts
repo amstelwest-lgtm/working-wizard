@@ -361,10 +361,12 @@ Deno.serve(async (req: Request) => {
       const created = await persistAdvisoryCreate({
         clientId,
         userId: user.id,
+        email: user.email ?? "",
         token,
         audience,
         intent: createIntent,
         userClient,
+        adminClient,
       });
       return respond({
         answer: created.answer,

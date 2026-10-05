@@ -266,6 +266,19 @@ export async function syncFirmSubscriptionBand(
   const band = downgradeBlocked
     ? (metadata.milon_plan ?? null)
     : ((patch ?? metadata).milon_plan ?? null);
+  try {
+    const { syncStarterTrialMirrorForActor } = await import("@/lib/firm-client-cap.server");
+    await syncStarterTrialMirrorForActor({
+      supabase: null,
+      userId: typeof metadata.milon_user_id === "string" ? metadata.milon_user_id : "",
+      email: customerEmailOf(sub.customer) ?? "",
+    });
+  } catch (err) {
+    console.warn(
+      "[starter-trial] mirror sync skipped",
+      err instanceof Error ? err.message : err,
+    );
+  }
   return { band, cancelledReplaced, downgradeBlocked };
 }
 
@@ -373,6 +386,19 @@ export async function completeFirmSetupUpgrade(
       default_payment_method: paymentMethod,
       ...(discounts ? { discounts } : {}),
     });
+  }
+  try {
+    const { syncStarterTrialMirrorForActor } = await import("@/lib/firm-client-cap.server");
+    await syncStarterTrialMirrorForActor({
+      supabase: null,
+      userId: intent.userId,
+      email: customerEmailOf(session.customer) ?? "",
+    });
+  } catch (err) {
+    console.warn(
+      "[starter-trial] mirror sync skipped",
+      err instanceof Error ? err.message : err,
+    );
   }
   return { band: intent.band, updated: !already };
 }

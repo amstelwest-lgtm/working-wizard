@@ -1,6 +1,6 @@
 # brain-deliverable-draft
 
-Self-contained edge function — deploy **`index.ts` only** (no sibling imports).
+Deploy with the shared trial gate at `supabase/functions/_shared/starter-trial-gate.ts` (imported by `index.ts`). The gate reads `firms.starter_trial_generation_blocked`. It does not need a billing secret. No sibling `logic.ts`. Apply migration `20261005213000_firm_starter_trial_generation_blocked.sql` before relying on the block. Until a Vercel sync writes the column, the check fails open.
 
 ```bash
 # Supabase CLI
