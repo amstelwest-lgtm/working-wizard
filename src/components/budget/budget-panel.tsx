@@ -9,7 +9,7 @@ import { BudgetWorkspace } from "@/components/budget/budget-workspace";
 import { BudgetAdvancedPanel } from "@/components/budget/budget-advanced";
 import type { BudgetActuals, BudgetDocument, UnmappedDriver } from "@/lib/budget.types";
 import { budgetWindowStart, createBudgetDocument } from "@/lib/budget.months";
-import { seedBudgetFromFinancials } from "@/lib/budget.bridges";
+import { budgetIsImplausible, seedBudgetFromFinancials } from "@/lib/budget.bridges";
 import { normalizeBudgetDocument } from "@/lib/budget.compute";
 import { applyTemplateChange } from "@/lib/budget.model-change";
 import { BUDGET_TEMPLATES } from "@/lib/budget.templates";
@@ -299,6 +299,15 @@ export function BudgetPanel({
     });
   }, [loaded, doc, profile, fyDefault, startFresh]);
 
+  const rebuildFromActuals = () => {
+    if (!doc || !financials) return;
+    const seeded = seedBudgetFromFinancials(doc, financials);
+    setDoc(seeded.doc);
+    toast.success("Budget rebuilt from the latest actuals", {
+      description: seeded.changes[0],
+    });
+  };
+
   const beginModelChange = () => {
     if (onRetakeProfile) {
       onRetakeProfile();
@@ -412,9 +421,27 @@ export function BudgetPanel({
     );
   }
 
+  const implausible = budgetIsImplausible(doc, financials);
+
   return (
     <>
       {budgetInputConfig}
+      {implausible && (
+        <div className="mb-4 rounded-xl border border-amber-300/80 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-800/70 dark:bg-amber-950/30 dark:text-amber-50">
+          <p className="font-semibold">This budget does not line up with the latest actuals</p>
+          <p className="mt-1 text-[13px] leading-relaxed text-amber-900/90 dark:text-amber-100/80">
+            Cost of sales is zero while the period has a cost of sales, or a full year of revenue
+            is more than three times the annualised actual. Nothing is overwritten until you rebuild.
+          </p>
+          <Button
+            type="button"
+            className="mt-3 bg-[#d4a550] text-[#0a0e1a] hover:bg-[#c49a45]"
+            onClick={rebuildFromActuals}
+          >
+            Rebuild budget from latest actuals
+          </Button>
+        </div>
+      )}
       <div className="mb-3 flex justify-end">
         <BudgetPdfExportButton
           doc={doc}

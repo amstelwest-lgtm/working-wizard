@@ -17,13 +17,49 @@ import {
   formatMonthLabel as formatMonthLabelMarket,
 } from "@/lib/budget.months";
 import { computeBudgetMonths, fmtBudgetMoney, lowestCashTrough } from "@/lib/budget.compute";
-import { currencySymbol } from "@/lib/market";
+import { currencySymbol, formatMoney, type ResolvedMarket } from "@/lib/market";
 import { useMarket } from "@/contexts/market";
 
 const SCENARIOS: BudgetScenarioId[] = ["base", "upside", "downside"];
 
 function monthOverheadTotal(doc: BudgetDocument, month: string): number {
-  return doc.overheads.reduce((s, oh) => s + (oh.months[month] || 0), 0);
+  const sum = doc.overheads.reduce((s, oh) => s + (oh.months[month] || 0), 0);
+  return Math.round(sum * 100) / 100;
+}
+
+function MoneyField({
+  value,
+  onChange,
+  label,
+  market,
+  className,
+}: {
+  value: number;
+  onChange: (next: number) => void;
+  label: string;
+  market: ResolvedMarket;
+  className?: string;
+}) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const shown =
+    draft ??
+    formatMoney(value, market, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return (
+    <Input
+      type="text"
+      inputMode="decimal"
+      aria-label={label}
+      className={className}
+      value={shown}
+      onFocus={() => setDraft((Math.round(value * 100) / 100).toFixed(2))}
+      onBlur={() => setDraft(null)}
+      onChange={(e) => {
+        setDraft(e.target.value);
+        const n = parseFloat(e.target.value.replace(/[^0-9.-]/g, ""));
+        if (Number.isFinite(n)) onChange(Math.round(n * 100) / 100);
+      }}
+    />
+  );
 }
 
 /** Put a single overhead lump into the first bucket; clear others for that month. */
@@ -360,17 +396,13 @@ export function BudgetSimpleView({
             label="Fixed overheads"
             hint="Rent, salaries, keep-the-lights-on this month"
           >
-            <div className="flex items-center gap-1.5">
-              <span className="text-sm text-[#b8860b]">{symbol}</span>
-              <Input
-                type="number"
-                inputMode="decimal"
-                aria-label="Fixed overheads this month"
-                className="budget-driver-input h-10 w-28 border-0 bg-transparent px-0 text-right text-lg font-semibold tabular-nums shadow-none focus-visible:ring-0"
-                value={monthOverheadTotal(doc, focusMonth)}
-                onChange={(e) => setOverhead(parseFloat(e.target.value) || 0)}
-              />
-            </div>
+            <MoneyField
+              value={monthOverheadTotal(doc, focusMonth)}
+              onChange={setOverhead}
+              label="Fixed overheads this month"
+              market={market}
+              className="budget-driver-input h-10 w-36 border-0 bg-transparent px-0 text-right text-lg font-semibold tabular-nums shadow-none focus-visible:ring-0"
+            />
           </CascadeRow>
           <CascadeRow
             kicker="Leftover"

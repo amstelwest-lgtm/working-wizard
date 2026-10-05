@@ -8,7 +8,9 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { REPORT_CATALOG, reportKicker } from "../src/lib/report-catalog";
-import { seedBudgetFromFinancials } from "../src/lib/budget.bridges";
+import { budgetIsImplausible, seedBudgetFromFinancials } from "../src/lib/budget.bridges";
+import { laborProductivityFileStem, laborProductivityTitle } from "../src/lib/market/copy";
+import { formatDateTime } from "../src/lib/market/format";
 import { createBudgetDocument } from "../src/lib/budget.months";
 import { computeBudgetMonths } from "../src/lib/budget.compute";
 import { buildBudgetPdfModel } from "../src/lib/budget-pdf";
@@ -132,6 +134,104 @@ assert(Math.abs(fromOpex.doc.gpPct - 60) < 0.15, "cost_of_sales seeds GP%");
 assert(
   fromOpex.changes.some((change) => /Overheads seeded/.test(change)),
   "operating expenses seed overheads",
+);
+
+const yankeesPeriod = {
+  revenue: "8633.6",
+  cogs: "775.98",
+  fixedCosts: "5356.5",
+  periodMonths: "1",
+  periodStart: "2026-09-01",
+  periodEnd: "2026-09-21",
+};
+const shortPeriod = seedBudgetFromFinancials(budgetDoc(), yankeesPeriod);
+const shortRows = computeBudgetMonths(shortPeriod.doc, shortPeriod.doc.activeScenario);
+const shortRevenue = shortRows.reduce((sum, row) => sum + row.revenue, 0);
+const shortCogs = shortRows.reduce((sum, row) => sum + row.cogs, 0);
+assert(
+  Math.abs(shortRevenue - 150_060) < 50,
+  `a 21-day period annualises near $150k, got ${shortRevenue}`,
+);
+assert(shortCogs > 12_000 && shortCogs < 15_000, `COGS scales with the same days, got ${shortCogs}`);
+assert(Math.abs(shortPeriod.doc.gpPct - 91) < 0.2, `GP% from the same pair, got ${shortPeriod.doc.gpPct}`);
+assert(shortPeriod.doc.cogsMode === "gp_pct", "COGS and GP% share gp_pct mode");
+assert(
+  shortRows.every((row) => Math.abs(row.gpPct - shortPeriod.doc.gpPct) < 0.2),
+  "month engine GP% matches the seeded input",
+);
+assert(!budgetIsImplausible(shortPeriod.doc, yankeesPeriod), "a corrected seed is not flagged");
+
+const statedMonth = seedBudgetFromFinancials(budgetDoc(), {
+  revenue: "8633.6",
+  cogs: "775.98",
+  periodMonths: "1",
+});
+const statedMonthRevenue = computeBudgetMonths(statedMonth.doc, statedMonth.doc.activeScenario).reduce(
+  (sum, row) => sum + row.revenue,
+  0,
+);
+assert(
+  Math.abs(statedMonthRevenue - 8633.6 * 12) < 5,
+  `periodMonths 1 with no dates still scales by 12, got ${statedMonthRevenue}`,
+);
+
+const staleBudget = budgetDoc();
+staleBudget.gpPct = 70.9;
+staleBudget.cogsMode = "per_unit";
+staleBudget.revenueLines = staleBudget.revenueLines.map((line, index) =>
+  index === 0
+    ? {
+        ...line,
+        months: Object.fromEntries(
+          Object.keys(line.months).map((month) => [month, { volume: 1, price: 1_552_600 / 12 }]),
+        ),
+      }
+    : line,
+);
+assert(
+  budgetIsImplausible(staleBudget, yankeesPeriod),
+  "COGS 0 with actual COGS, or revenue about 15x the annualised period, is implausible",
+);
+
+const edited = seedBudgetFromFinancials(budgetDoc(), yankeesPeriod).doc;
+edited.revenueLines = edited.revenueLines.map((line, index) =>
+  index === 0
+    ? {
+        ...line,
+        months: Object.fromEntries(
+          Object.entries(line.months).map(([month, cell]) => [month, { ...cell, price: cell.price * 2 }]),
+        ),
+      }
+    : line,
+);
+assert(!budgetIsImplausible(edited, yankeesPeriod), "an edited budget under 3x is not replaced");
+
+const budgetPanel = read("src/components/budget/budget-panel.tsx");
+assert(
+  budgetPanel.includes("Rebuild budget from latest actuals"),
+  "implausible budgets offer a rebuild",
+);
+assert(
+  budgetPanel.includes("budgetIsImplausible"),
+  "a stored budget is checked instead of overwritten on load",
+);
+
+assert(laborProductivityTitle({ copyPack: "us" }) === "Labor Productivity", "US card title");
+assert(laborProductivityFileStem({ copyPack: "us" }) === "LaborProductivity", "US ZIP stem");
+assert(laborProductivityTitle({ copyPack: "za" }) === "Labour Productivity", "SA card title");
+assert(laborProductivityFileStem({ copyPack: "za" }) === "LabourProductivity", "SA ZIP stem");
+assert(read("src/reports/labor-productivity.tsx").includes("laborProductivityTitle"), "PDF title uses the locale helper");
+assert(reportsSrc.includes("laborProductivityFileStem"), "ZIP filename uses the locale helper");
+
+const nyTime = formatDateTime(
+  new Date("2026-10-05T19:06:00Z"),
+  { locale: "en-US", timezone: "America/New_York" },
+  { hour: "numeric", minute: "2-digit", timeZoneName: "shortGeneric" },
+);
+assert(nyTime.includes("3:06") && nyTime.includes("ET"), `New York time keeps a zone label, got ${nyTime}`);
+assert(
+  read("src/components/advisory-sent-history.tsx").includes('timeZoneName: "shortGeneric"'),
+  "delivery history shows the firm zone",
 );
 
 const messy = budgetDoc();

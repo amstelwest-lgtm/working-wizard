@@ -63,6 +63,19 @@ export function t(key: CopyKey, market: Pick<ResolvedMarket, "copyPack">): strin
   return (market.copyPack === "us" ? US : ZA)[key];
 }
 
+/** Firm spelling for the productivity report. One source for the card, the PDF, and the ZIP name. */
+export function laborProductivityTitle(
+  market: Pick<ResolvedMarket, "copyPack"> | null | undefined,
+): string {
+  return market?.copyPack === "us" ? "Labor Productivity" : "Labour Productivity";
+}
+
+export function laborProductivityFileStem(
+  market: Pick<ResolvedMarket, "copyPack"> | null | undefined,
+): string {
+  return market?.copyPack === "us" ? "LaborProductivity" : "LabourProductivity";
+}
+
 /**
  * Rewrite ZA-authored user copy for a US workspace. Safe no-op for ZA.
  * Longer phrases first so "Debtor Days" does not become "Receivable Days".

@@ -47,7 +47,6 @@ import { healthMapFromRatios, scorePlaybookRatio, scoreRatio, pillarForRatioName
 import { CASH_RUNWAY_THRESHOLD_RAND } from "@/lib/cash-runway";
 import {
   assessClientMetrics,
-  forecastMinimumCash,
   resolveThirteenWeekForecast,
   scoreWorkingCapitalFunding,
   type ClientRunway,
@@ -92,6 +91,8 @@ import { parseDebtSchedule, totalDebtFromSchedule } from "@/lib/debt-schedule";
 import { resolvePriorSnapshot, withPriorRatioScores } from "@/lib/prior-period";
 import {
   coerceMarketSelection,
+  laborProductivityFileStem,
+  laborProductivityTitle,
   localizeCopy,
   parseMarketSelection,
   resolveMarket,
@@ -1782,7 +1783,7 @@ function buildCashForecastFromSavedCashflow(
   openingCash: number | null,
   financials: Record<string, unknown> | null,
   runway: ClientRunway,
-): CashForecastWeek[] | null {
+): { weeks: CashForecastWeek[] | null; minimum: number } {
   const outlook = resolveThirteenWeekForecast({
     financials,
     cashflow: cf,
@@ -1793,8 +1794,8 @@ function buildCashForecastFromSavedCashflow(
     outlook.opening === 0 &&
     outlook.inflow.every((n) => n === 0) &&
     outlook.outflow.every((n) => n === 0);
-  if (empty) return null;
-  return outlook.inflow.map((inflow, i) => {
+  if (empty) return { weeks: null, minimum: outlook.floor };
+  const weeks = outlook.inflow.map((inflow, i) => {
     const receipts = Math.round(inflow);
     const payments = Math.round(outlook.outflow[i] ?? 0);
     const opening = i === 0 ? outlook.opening : outlook.closing[i - 1];
@@ -1810,6 +1811,7 @@ function buildCashForecastFromSavedCashflow(
       runway_weeks: 0,
     };
   });
+  return { weeks, minimum: outlook.floor };
 }
 
 
@@ -2097,23 +2099,17 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
     assessed.runway.kind === "weeks" || assessed.runway.kind === "zero"
       ? assessed.runway.weeks
       : null;
-  const savedCashflow = (clientRow.cashflow ?? {}) as SavedCashflow & {
-    minimumThreshold?: number | string | null;
-    runwayThreshold?: number | string | null;
-  };
-  const cashForecast = buildCashForecastFromSavedCashflow(
+  const savedCashflow = (clientRow.cashflow ?? {}) as SavedCashflow;
+  const cashOutlook = buildCashForecastFromSavedCashflow(
     savedCashflow,
     assessed.cash.amount,
     rawFin as Record<string, unknown>,
     assessed.runway,
   );
-  const configuredFloor = parseFloat(
-    String(savedCashflow.minimumThreshold ?? savedCashflow.runwayThreshold ?? ""),
-  );
-  const forecastMinimum = forecastMinimumCash({
-    configured: Number.isFinite(configuredFloor) ? configuredFloor : null,
-    weeklyOutflows: cashForecast?.map((w) => w.total_payments) ?? [],
-  });
+  const cashForecast = cashOutlook.weeks;
+  // Floor is four weeks of the resolved outflows. A stored threshold from the
+  // old annual-as-monthly series (about $170k) must not override that.
+  const forecastMinimum = cashOutlook.minimum;
 
   return {
     hasData: true,
@@ -2687,6 +2683,20 @@ type PreviewState = {
   loading: boolean;
 };
 
+/** Card title and ZIP stem. Labor/Labour comes from the firm locale, in one place. */
+function reportCopy(report: ReportMeta, market: ResolvedMarket = ZA_MARKET): {
+  name: string;
+  filename: string;
+} {
+  if (report.key === "labor") {
+    return {
+      name: laborProductivityTitle(market),
+      filename: laborProductivityFileStem(market),
+    };
+  }
+  return { name: localizeCopy(report.name, market), filename: report.filename };
+}
+
 // ── Report card ────────────────────────────────────────────────────────────
 
 function ReportCard({
@@ -2724,6 +2734,7 @@ function ReportCard({
 }) {
   const disabled = !isClient || dataLoading || blocked;
   const scope = REPORT_SIGNOFF_SCOPE[report.key];
+  const copy = reportCopy(report, market);
   return (
     <div
       id={`report-card-${report.key}`}
@@ -2752,7 +2763,7 @@ function ReportCard({
               <span className="text-[10px] text-muted-foreground">{report.pages}</span>
             </div>
             <h3 className="report-card__title">
-              {localizeCopy(report.name, market)}
+              {copy.name}
             </h3>
             <p className="mt-1.5 text-[12px] leading-relaxed text-muted-foreground">
               {localizeCopy(report.description, market)}
@@ -3375,7 +3386,12 @@ export function ReportsStudio({
     setPreviewState((prev) =>
       prev?.key === deepLinkReport.key
         ? prev
-        : { key: deepLinkReport.key, name: deepLinkReport.name, blobUrl: null, loading: true },
+        : {
+            key: deepLinkReport.key,
+            name: reportCopy(deepLinkReport).name,
+            blobUrl: null,
+            loading: true,
+          },
     );
     setDeepLinkBusy(true);
   }, [deepLinkReport, actionParam]);
@@ -3480,8 +3496,9 @@ export function ReportsStudio({
     setLoadingKey(report.key);
     try {
       const blob = await GEN[report.key](settings, profile);
-      triggerDownload(blob, makeSafeFilename(settings, report.filename));
-      toast.success(`${report.name} downloaded.`);
+      const copy = reportCopy(report, clientData?.market ?? ZA_MARKET);
+      triggerDownload(blob, makeSafeFilename(settings, copy.filename));
+      toast.success(`${copy.name} downloaded.`);
       track("report_downloaded", {
         surface: "reports",
         clientId,
@@ -3504,11 +3521,21 @@ export function ReportsStudio({
     if (!assertCanGenerate()) return false;
     if (previewState?.blobUrl) URL.revokeObjectURL(previewState.blobUrl);
     setPreviewKey(report.key);
-    setPreviewState({ key: report.key, name: report.name, blobUrl: null, loading: true });
+    setPreviewState({
+      key: report.key,
+      name: reportCopy(report, clientData?.market ?? ZA_MARKET).name,
+      blobUrl: null,
+      loading: true,
+    });
     try {
       const blob = await GEN[report.key](settings, profile);
       const url = URL.createObjectURL(blob);
-      setPreviewState({ key: report.key, name: report.name, blobUrl: url, loading: false });
+      setPreviewState({
+        key: report.key,
+        name: reportCopy(report, clientData?.market ?? ZA_MARKET).name,
+        blobUrl: url,
+        loading: false,
+      });
       track("report_previewed", {
         surface: "reports",
         clientId,
@@ -3619,7 +3646,8 @@ export function ReportsStudio({
         const report = REPORTS[i];
         try {
           const blob = await GEN[report.key](settings, profile);
-          zip.file(`${String(report.id).padStart(2, "0")}_${report.filename}.pdf`, blob);
+          const copy = reportCopy(report, clientData?.market ?? ZA_MARKET);
+          zip.file(`${String(report.id).padStart(2, "0")}_${copy.filename}.pdf`, blob);
         } catch (err) {
           console.warn(`Skipping ${report.name}:`, err);
         }
@@ -3657,7 +3685,9 @@ export function ReportsStudio({
           <p className="text-sm font-semibold text-foreground">
             {actionParam === "download" ? "Preparing download" : "Preparing preview"}
           </p>
-          <p className="mt-1 text-sm text-muted-foreground">{deepLinkReport.name}</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {reportCopy(deepLinkReport, clientData?.market ?? ZA_MARKET).name}
+          </p>
           {clientParam || clientData?.clientName ? (
             <p className="mt-3 text-[11px] text-muted-foreground">
               {clientData?.clientName ?? clientParam}
@@ -3675,7 +3705,10 @@ export function ReportsStudio({
             if (previewState?.blobUrl) {
               const a = document.createElement("a");
               a.href = previewState.blobUrl;
-              a.download = makeSafeFilename(settings, deepLinkReport.filename);
+              a.download = makeSafeFilename(
+                settings,
+                reportCopy(deepLinkReport, clientData?.market ?? ZA_MARKET).filename,
+              );
               a.click();
               return;
             }
@@ -3917,7 +3950,10 @@ export function ReportsStudio({
           if (!report) return;
           const a = document.createElement("a");
           a.href = previewState.blobUrl;
-          a.download = makeSafeFilename(settings, report.filename);
+          a.download = makeSafeFilename(
+            settings,
+            reportCopy(report, clientData?.market ?? ZA_MARKET).filename,
+          );
           a.click();
         }}
       />

@@ -105,6 +105,23 @@ const ignored = resolveThirteenWeekForecast({
 });
 assert(ignored.source === "derived" && ignored.shortfall === false, "structural shortfall is not shown");
 assert(ignored.totalOutflow < 40_000, "inflated current-dated lines are ignored");
+assert(ignored.floor < 20_000 && ignored.floor > 4_000, `floor is four corrected weeks, got ${ignored.floor}`);
+
+const inflatedWithTiming = resolveThirteenWeekForecast({
+  financials: yankees,
+  cashflow: { ...datedButInflated, collectDelay: 2 },
+  openingCash: 7430.22,
+  runway: cashGenerative,
+  now: monday,
+});
+assert(
+  inflatedWithTiming.source === "derived",
+  "a timing note does not keep outflows an order of magnitude above the run-rate",
+);
+assert(
+  inflatedWithTiming.floor < 20_000 && inflatedWithTiming.floor > 4_000,
+  `PDF floor follows corrected outflows, got ${inflatedWithTiming.floor}`,
+);
 
 const kept = resolveThirteenWeekForecast({
   financials: yankees,

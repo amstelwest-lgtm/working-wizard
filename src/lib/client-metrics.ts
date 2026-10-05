@@ -711,6 +711,13 @@ export function resolveThirteenWeekForecast(input: {
     const totals = seriesTotals(rolled.inflow, rolled.outflow, rolled.closing);
     if (totals.structural && !timingNote) storedCurrent = false;
   }
+  // A timing note must not keep a series whose weekly payments are still the
+  // old annual-as-monthly scale. The PDF floor is four weeks of these outflows.
+  if (storedCurrent && rolled && rate.weeklyOutflow > 0) {
+    const meanOut =
+      rolled.outflow.reduce((sum, n) => sum + Math.max(0, n), 0) / rolled.outflow.length;
+    if (meanOut > rate.weeklyOutflow * 3 + 1) storedCurrent = false;
+  }
 
   if (storedCurrent && rolled) {
     const totals = seriesTotals(rolled.inflow, rolled.outflow, rolled.closing);

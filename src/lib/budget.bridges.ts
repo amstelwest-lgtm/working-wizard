@@ -7,7 +7,7 @@ import { fyMonths } from "@/lib/budget.months";
 import { computeBudgetMonths } from "@/lib/budget.compute";
 import { newId } from "@/lib/budget.templates";
 import type { CashForecastPublishPayload } from "@/lib/cash-from-banks.types";
-import { annualiseFinancials } from "@/lib/ratios";
+import { annualiseFinancials, FLOW_FIELD_KEYS } from "@/lib/ratios";
 
 function num(v: string | number | null | undefined): number {
   if (v == null || v === "") return 0;
@@ -30,14 +30,57 @@ export type SeedFromFinancialsResult = {
   changes: string[];
 };
 
-/** Apply period financials into budget assumptions (does not invent volume history). */
-export function seedBudgetFromFinancials(
-  doc: BudgetDocument,
+/** Annual budget revenue above this multiple of the annualised actual is not credible. */
+export const BUDGET_IMPLAUSIBLE_REVENUE_MULTIPLE = 3;
+
+/** Inclusive day count of a statement span. Null when either date is missing. */
+export function inclusivePeriodDays(
+  start: string | number | null | undefined,
+  end: string | number | null | undefined,
+): number | null {
+  const fromIso = String(start ?? "").slice(0, 10);
+  const toIso = String(end ?? "").slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(fromIso) || !/^\d{4}-\d{2}-\d{2}$/.test(toIso)) return null;
+  const from = Date.parse(`${fromIso}T00:00:00Z`);
+  const to = Date.parse(`${toIso}T00:00:00Z`);
+  if (!Number.isFinite(from) || !Number.isFinite(to) || to < from) return null;
+  return Math.round((to - from) / 86_400_000) + 1;
+}
+
+function scaleFlowFields<T extends Record<string, unknown>>(fin: T, scale: number): T {
+  if (scale === 1) return fin;
+  const out: Record<string, unknown> = { ...fin };
+  for (const key of FLOW_FIELD_KEYS) {
+    const raw = fin[key];
+    if (raw === "" || raw == null) continue;
+    const n = typeof raw === "number" ? raw : parseFloat(String(raw));
+    if (!Number.isFinite(n)) continue;
+    const scaled = Math.round(n * scale * 100) / 100;
+    out[key] = typeof raw === "number" ? scaled : String(scaled);
+  }
+  return out as T;
+}
+
+/**
+ * Period P&L → a year, for the budget seed.
+ * A dated span shorter than a year uses 365 / inclusive days, so 1–21 Sep
+ * is not treated as one month or as a finished year. With no dates,
+ * `periodMonths` scales the same way the ratio layer does (missing → 12).
+ */
+export function annualiseBudgetFinancials<T extends Record<string, unknown>>(fin: T): T {
+  const days = inclusivePeriodDays(
+    fin.periodStart as string | null | undefined,
+    fin.periodEnd as string | null | undefined,
+  );
+  if (days != null && days > 0 && days < 360) {
+    return scaleFlowFields(fin, 365 / days);
+  }
+  return annualiseFinancials(fin);
+}
+
+function withCostAliases(
   periodFinancials: Record<string, string | number | null | undefined>,
-): SeedFromFinancialsResult {
-  const changes: string[] = [];
-  const months = fyMonths(doc.fyStart);
-  // A quarter of actuals must seed a full year, not a year at a quarter's pace.
+): Record<string, string | number | null | undefined> {
   const normalised: Record<string, string | number | null | undefined> = { ...periodFinancials };
   if (presentNumber(normalised.cogs) == null && presentNumber(normalised.cost_of_sales) != null) {
     normalised.cogs = normalised.cost_of_sales;
@@ -48,7 +91,51 @@ export function seedBudgetFromFinancials(
   if (presentNumber(normalised.laborCost) == null && presentNumber(normalised.labourCost) != null) {
     normalised.laborCost = normalised.labourCost;
   }
-  const financials = annualiseFinancials(normalised);
+  return normalised;
+}
+
+function budgetYearTotals(doc: BudgetDocument): { revenue: number; cogs: number } {
+  const rows = computeBudgetMonths(doc, doc.activeScenario);
+  return {
+    revenue: rows.reduce((sum, row) => sum + row.revenue, 0),
+    cogs: rows.reduce((sum, row) => sum + row.cogs, 0),
+  };
+}
+
+/**
+ * A stored budget that cannot be the same business as the latest actuals.
+ * COGS of 0 while the period has cost of sales, or a year of revenue more
+ * than about 3× the annualised actual. Callers prompt; they do not overwrite.
+ */
+export function budgetIsImplausible(
+  doc: BudgetDocument,
+  periodFinancials: Record<string, string | number | null | undefined> | null | undefined,
+): boolean {
+  if (!periodFinancials) return false;
+  const annual = annualiseBudgetFinancials(withCostAliases(periodFinancials));
+  const actualRevenue = presentNumber(annual.revenue);
+  const actualCogs = presentNumber(annual.cogs);
+  const budget = budgetYearTotals(doc);
+  if (actualCogs != null && actualCogs > 0 && budget.cogs <= 0.5) return true;
+  if (
+    actualRevenue != null &&
+    actualRevenue > 0 &&
+    budget.revenue > actualRevenue * BUDGET_IMPLAUSIBLE_REVENUE_MULTIPLE + 1
+  ) {
+    return true;
+  }
+  return false;
+}
+
+/** Apply period financials into budget assumptions (does not invent volume history). */
+export function seedBudgetFromFinancials(
+  doc: BudgetDocument,
+  periodFinancials: Record<string, string | number | null | undefined>,
+): SeedFromFinancialsResult {
+  const changes: string[] = [];
+  const months = fyMonths(doc.fyStart);
+  // A short period must seed a full year at the period's pace, not at a year's pace.
+  const financials = annualiseBudgetFinancials(withCostAliases(periodFinancials));
   const revenue = presentNumber(financials.revenue);
   const cogs = presentNumber(financials.cogs);
   const fixedCosts = presentNumber(financials.fixedCosts);
@@ -64,7 +151,9 @@ export function seedBudgetFromFinancials(
 
   if (revenue != null && revenue > 0 && cogs != null && cogs >= 0) {
     const gp = ((revenue - cogs) / revenue) * 100;
-    next = { ...next, gpPct: Math.round(gp * 10) / 10, cogsMode: "gp_pct" };
+    // One pair drives both the GP% field and the month engine. Leaving
+    // cogsMode on per-unit kept a typed GP% while months still booked COGS at 0.
+    next = { ...next, gpPct: Math.round(gp * 10) / 10, cogsMode: "gp_pct", cogsPerUnit: {} };
     changes.push(`GP% set to ${next.gpPct} from period revenue/COGS`);
   }
 
