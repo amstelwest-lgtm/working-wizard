@@ -15,6 +15,56 @@ export type PeriodFinancials = RatioInputs & { cash: string; equityDerived: stri
 /** Shown wherever a plugged equity total appears, so it is not read as reported equity. */
 export const DERIVED_EQUITY_LABEL = "Derived (assets − liabilities)";
 
+function finiteField(raw: unknown): number | null {
+  if (typeof raw === "number" && Number.isFinite(raw)) return raw;
+  if (typeof raw === "string" && raw.trim() !== "") {
+    const n = Number(raw.replace(/[,\s]/g, ""));
+    if (Number.isFinite(n)) return n;
+  }
+  return null;
+}
+
+/**
+ * Liabilities on a stored financials blob. A printed total wins. Otherwise
+ * current plus non-current. Payables are the only liability line on the grid,
+ * so they are the liability side when nothing else was stored.
+ */
+function liabilitySide(fields: Record<string, unknown>): number | null {
+  const total = finiteField(fields.totalLiabilities);
+  if (total != null) return total;
+  const current = finiteField(fields.currentLiabilities);
+  const nonCurrent = finiteField(fields.nonCurrentLiabilities);
+  if (current != null || nonCurrent != null) return (current ?? 0) + (nonCurrent ?? 0);
+  return finiteField(fields.payables);
+}
+
+/**
+ * Equity at read time. Import plugs a missing total, and a hand-entered
+ * figure (including zero) is left alone. A blob saved before that plug —
+ * assets and liabilities present, equity blank — gets the same plug here.
+ */
+export function readTimeEquity(fields: Record<string, unknown> | null | undefined): {
+  equity: string;
+  derived: boolean;
+} {
+  const source = fields ?? {};
+  const equity = source.equity == null ? "" : String(source.equity).trim();
+  const alreadyDerived = String(source[EQUITY_DERIVED_KEY] ?? "") === "1";
+  if (equity !== "") return { equity, derived: alreadyDerived };
+  const assets = finiteField(source.totalAssets);
+  const liabilities = liabilitySide(source);
+  if (assets == null || liabilities == null) return { equity: "", derived: false };
+  const plugged = Math.round((assets - liabilities) * 100) / 100;
+  return { equity: String(plugged), derived: true };
+}
+
+/** Grid scalars with blank equity filled. A typed equity, including zero, stays. */
+export function scalarsWithReadTimeEquity(scalars: Record<string, string>): Record<string, string> {
+  const resolved = readTimeEquity(scalars);
+  if (!resolved.derived) return scalars;
+  return { ...scalars, equity: resolved.equity, [EQUITY_DERIVED_KEY]: "1" };
+}
+
 /** Blob key. "1" means `equity` was plugged, not reported or typed. */
 export const EQUITY_DERIVED_KEY = "equityDerived";
 

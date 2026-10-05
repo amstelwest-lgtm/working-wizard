@@ -35,7 +35,7 @@ import {
   payablesPromptBlock,
   readPayablesSnapshot,
 } from "./payables.ts";
-import { effectiveCashRunwayWeeks } from "../../../src/lib/cash-runway.ts";
+import { assessClientMetrics, persistedRunwayWeeks } from "../../../src/lib/client-metrics.ts";
 
 function buildCorsHeaders(requestOrigin: string | null): Record<string, string> {
   const allowed = Deno.env.get("ALLOWED_ORIGINS");
@@ -151,7 +151,7 @@ Deno.serve(async (req: Request) => {
     userClient
       .from("clients")
       .select(
-        "name, business_type, firm_id, operating_profile, brain_summary, brain_summary_updated_at, cash_runway_weeks, cashflow",
+        "name, business_type, firm_id, operating_profile, brain_summary, brain_summary_updated_at, cashflow, financials, financials_updated_at",
       )
       .eq("id", clientId)
       .maybeSingle(),
@@ -339,19 +339,19 @@ Deno.serve(async (req: Request) => {
     readPayablesSnapshot(xeroApRes.data?.raw_data),
     readPayablesSnapshot(qboApRes.data?.raw_data),
   ]);
-  const rawRunway = client?.cash_runway_weeks;
-  const storedRunway =
-    typeof rawRunway === "number"
-      ? rawRunway
-      : typeof rawRunway === "string" && rawRunway.trim()
-        ? Number(rawRunway)
-        : null;
-  const runwayWeeks = effectiveCashRunwayWeeks(
-    storedRunway,
-    client?.cashflow && typeof client.cashflow === "object" && !Array.isArray(client.cashflow)
-      ? client.cashflow
-      : null,
-  );
+  const assessed = assessClientMetrics({
+    financials:
+      client?.financials && typeof client.financials === "object" && !Array.isArray(client.financials)
+        ? (client.financials as Record<string, unknown>)
+        : null,
+    cashflow:
+      client?.cashflow && typeof client.cashflow === "object" && !Array.isArray(client.cashflow)
+        ? client.cashflow
+        : null,
+    financialsUpdatedAt:
+      typeof client?.financials_updated_at === "string" ? client.financials_updated_at : null,
+  });
+  const runwayWeeks = persistedRunwayWeeks(assessed.runway);
   const payablesBlock = payablesPromptBlock(payablesSnap, runwayWeeks);
   if (payablesBlock) contextLines.push(payablesBlock);
 

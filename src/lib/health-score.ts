@@ -356,7 +356,7 @@ export function profitStepBand(
   ratio: number,
 ): { tier: HealthTier; label: string } {
   const tier = scoreTier(scoreRatio(ratioName, ratio));
-  return { tier, label: healthBandLabel(tier).toUpperCase() };
+  return { tier, label: healthBandLabel(tier) };
 }
 
 export type ComputeOverallHealthInput = {

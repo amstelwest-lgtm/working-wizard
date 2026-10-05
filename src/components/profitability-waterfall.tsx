@@ -33,6 +33,8 @@ type WfStep = {
   runningEnd: number;
   kind: StepKind;
   showStatus: boolean;
+  /** When set, the chip scores this ratio instead of the running margin. */
+  statusRatio?: string;
 };
 
 function pct(n: number, total: number) {
@@ -53,8 +55,8 @@ const BAND_CHIP: Record<string, { color: string; bg: string }> = {
 };
 
 /** Margin chip from the shared score and band table. 16% net margin is Healthy. */
-function getStatus(stepLabel: string, margin: number): { label: string; color: string; bg: string } {
-  const ratioName = STEP_RATIO[stepLabel] ?? "Net Margin";
+function getStatus(step: WfStep, margin: number): { label: string; color: string; bg: string } {
+  const ratioName = step.statusRatio ?? STEP_RATIO[step.label] ?? "Net Margin";
   const band = profitStepBand(ratioName, margin);
   return { label: band.label, ...BAND_CHIP[band.tier] };
 }
@@ -235,7 +237,8 @@ export function ProfitabilityWaterfall({
       delta: -fixedCosts,
       runningEnd: operatingProfit,
       kind: "decrease",
-      showStatus: false,
+      showStatus: true,
+      statusRatio: "Fixed Cost Ratio",
     },
     {
       label: "Operating Profit",
@@ -381,7 +384,14 @@ export function ProfitabilityWaterfall({
                   const value = isDec ? Math.abs(s.delta) : s.runningEnd;
                   const p = revenue ? value / revenue : 0;
                   const status = s.showStatus
-                    ? getStatus(s.label, revenue ? s.runningEnd / revenue : 0)
+                    ? getStatus(
+                        s,
+                        !revenue
+                          ? 0
+                          : s.statusRatio === "Fixed Cost Ratio"
+                            ? fixedCosts / revenue
+                            : s.runningEnd / revenue,
+                      )
                     : null;
 
                   // connector to next bar at this step's running-end level
@@ -459,7 +469,7 @@ export function ProfitabilityWaterfall({
                         ) : null}
                         {status && (
                           <span
-                            className="rounded border px-1 py-0.5 text-[8px] font-extrabold uppercase tracking-wide sm:px-1.5 sm:text-[9px]"
+                            className="rounded border px-1 py-0.5 text-[8px] font-extrabold tracking-wide sm:px-1.5 sm:text-[9px]"
                             style={{
                               color: status.color,
                               background: status.bg,
@@ -499,7 +509,14 @@ export function ProfitabilityWaterfall({
             {steps
               .filter((s) => s.showStatus)
               .map((s) => {
-                const status = getStatus(s.label, revenue ? s.runningEnd / revenue : 0);
+                const status = getStatus(
+                  s,
+                  !revenue
+                    ? 0
+                    : s.statusRatio === "Fixed Cost Ratio"
+                      ? fixedCosts / revenue
+                      : s.runningEnd / revenue,
+                );
                 return (
                   <div
                     key={s.label}
@@ -517,7 +534,7 @@ export function ProfitabilityWaterfall({
                       </div>
                     </div>
                     <span
-                      className="shrink-0 rounded border px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wide"
+                      className="shrink-0 rounded border px-1.5 py-0.5 text-[9px] font-extrabold tracking-wide"
                       style={{
                         color: status.color,
                         background: status.bg,

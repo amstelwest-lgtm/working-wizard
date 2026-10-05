@@ -45,6 +45,7 @@ import type { ExtractionResult } from "@/lib/financialSchema";
 import {
   DERIVED_EQUITY_LABEL,
   EQUITY_DERIVED_KEY,
+  scalarsWithReadTimeEquity,
   periodFinancialsFromExtraction,
   preserveHandEnteredEquity,
 } from "@/lib/statement-financials";
@@ -130,7 +131,6 @@ import {
   assessClientMetrics,
   persistedRunwayWeeks,
   plBankDisagreement,
-  resolveThirteenWeekForecast,
   runwayDisplayLabel,
 } from "@/lib/client-metrics";
 import { countOpenQueriesForClient } from "@/lib/open-queries";
@@ -1044,17 +1044,6 @@ function ClientView() {
   const ratios = computeRatios(ratioInputs);
   const ratioQueryCounts = useMemo(() => countOpenRatioQueries(clientNotes), [clientNotes]);
   const priorSnapshot = resolvePriorSnapshot(snapshots);
-  const assessed = useMemo(
-    () =>
-      assessClientMetrics({
-        financials,
-        cashflow: client?.cashflow,
-        financialsUpdatedAt: client?.financials_updated_at ?? null,
-        priorFinancials: priorSnapshot?.financials ?? null,
-      }),
-    [financials, client?.cashflow, client?.financials_updated_at, priorSnapshot],
-  );
-  const metricRunway = assessed.runway;
   const clientMarket = useMemo(
     () =>
       resolveMarket(
@@ -1062,17 +1051,19 @@ function ClientView() {
       ),
     [client?.market],
   );
-  const cashOutlook = useMemo(
+  const assessed = useMemo(
     () =>
-      resolveThirteenWeekForecast({
+      assessClientMetrics({
         financials,
         cashflow: client?.cashflow,
-        openingCash: assessed.cash.amount,
-        runway: assessed.runway,
+        financialsUpdatedAt: client?.financials_updated_at ?? null,
+        priorFinancials: priorSnapshot?.financials ?? null,
         timeZone: clientMarket.timezone,
       }),
-    [financials, client?.cashflow, assessed, clientMarket.timezone],
+    [financials, client?.cashflow, client?.financials_updated_at, priorSnapshot, clientMarket.timezone],
   );
+  const metricRunway = assessed.runway;
+  const cashOutlook = assessed.outlook;
   /** Weeks blended into health. Cash-generative is omitted — it is not 0 weeks. */
   const effectiveRunway =
     metricRunway.kind === "weeks" || metricRunway.kind === "zero" ? metricRunway.weeks : null;
@@ -1207,9 +1198,10 @@ function ClientView() {
     cash:
       assessed.cash.amount != null
         ? {
-            amount: assessed.cash.amount,
+            amount: cashOutlook.opening,
             floor: cashOutlook.floor,
             dipsBelowFloorWeek: cashOutlook.dipsBelowFloorWeek,
+            note: cashOutlook.anchorNote,
           }
         : null,
   });
@@ -1388,11 +1380,12 @@ function ClientView() {
                   weeklyInputs: weeks,
                   productMix: mix,
                 } = splitFinancialsBlob(fin as Record<string, unknown>);
-                setFinancials(scalars);
+                const shownScalars = scalarsWithReadTimeEquity(scalars);
+                setFinancials(shownScalars);
                 setDebtSchedule(ds);
                 setWeeklyInputs(weeks);
                 setProductMix(mix);
-                financialsRef.current = scalars;
+                financialsRef.current = shownScalars;
                 debtScheduleRef.current = ds;
                 weeklyInputsRef.current = weeks;
                 productMixRef.current = mix;
@@ -1409,11 +1402,12 @@ function ClientView() {
                 weeklyInputs: weeks,
                 productMix: mix,
               } = splitFinancialsBlob(fin as Record<string, unknown>);
-              setFinancials(scalars);
+              const shownScalars = scalarsWithReadTimeEquity(scalars);
+              setFinancials(shownScalars);
               setDebtSchedule(ds);
               setWeeklyInputs(weeks);
               setProductMix(mix);
-              financialsRef.current = scalars;
+              financialsRef.current = shownScalars;
               debtScheduleRef.current = ds;
               weeklyInputsRef.current = weeks;
               productMixRef.current = mix;
@@ -1431,11 +1425,12 @@ function ClientView() {
             weeklyInputs: weeks,
             productMix: mix,
           } = splitFinancialsBlob(fin as Record<string, unknown>);
-          setFinancials(scalars);
+          const shownScalars = scalarsWithReadTimeEquity(scalars);
+          setFinancials(shownScalars);
           setDebtSchedule(ds);
           setWeeklyInputs(weeks);
           setProductMix(mix);
-          financialsRef.current = scalars;
+          financialsRef.current = shownScalars;
           debtScheduleRef.current = ds;
           weeklyInputsRef.current = weeks;
           productMixRef.current = mix;
@@ -3500,6 +3495,11 @@ function ClientView() {
                     hasFirm={Boolean(client.firm_id)}
                     refreshKey={`${activeTab}|${snapshots.length}|${advisoryBump}`}
                     onChanged={() => setAdvisoryBump((n) => n + 1)}
+                    currentFigures={{
+                      runwayLabel: runwayDisplayLabel(metricRunway),
+                      cash: cashOutlook.opening,
+                      healthScore: overallHealth.overall,
+                    }}
                   />
                   {/* P0.5 — the recommendation object finally has a surface; Next Step routes review/decide here. */}
                   <RecommendationsPanel
@@ -3530,7 +3530,11 @@ function ClientView() {
                     clientName={client.name}
                     onLogged={() => setDeliveryRefresh((n) => n + 1)}
                   />
-                  <AdvisorySentHistory clientId={client.id} refreshToken={deliveryRefresh} />
+                  <AdvisorySentHistory
+                    clientId={client.id}
+                    refreshToken={deliveryRefresh}
+                    statementPeriodLabel={reportDataPeriodLabel(financials)}
+                  />
                 </div>
               </div>
             </div>

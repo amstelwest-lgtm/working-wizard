@@ -222,6 +222,12 @@ export const STALE_FIGURES_DAYS = 75;
  * peer median (40), not the healthy band (18) and not a private 45.
  */
 export const DEBTOR_DAYS_AGEING_THRESHOLD = peerMedian("debtorDays") ?? 40;
+
+/** Stored asks still say 45. The card shows the same benchmark What matters uses. */
+export function displayedDataRequestReason(reason: string): string {
+  const days = DEBTOR_DAYS_AGEING_THRESHOLD;
+  return reason.replace(/\b45-day benchmark\b/g, `${days}-day benchmark`);
+}
 export const CREDITOR_DAYS_AGEING_THRESHOLD = creditorDaysHealthyBand().max;
 
 /**

@@ -204,27 +204,19 @@ export function persistedRunwayWeeks(runway: ClientRunway): number | null {
  * Overview / Health / Bot / Forecast cash and runway from the blobs already
  * stored on the client. One call, same answer everywhere.
  */
-/** Scenario knobs stay off for the shared direction. The base lines are the forecast. */
-function baseScenarioCashflow(cf: Record<string, unknown>): Record<string, unknown> {
-  return {
-    ...cf,
-    collectDelay: 0,
-    revAdj: 100,
-    expAdj: 100,
-    headcountDelta: 0,
-    avgSalary: "0",
-    fixedCostDelta: "0",
-    revGrowthPct: 0,
-    capexAmount: "0",
-  };
-}
-
 export function assessClientMetrics(input: {
   financials?: Record<string, unknown> | null;
   cashflow?: unknown;
   financialsUpdatedAt?: string | null;
   priorFinancials?: Record<string, unknown> | null;
-}): { cash: ResolvedCash; runway: ClientRunway; forecastNet: number | null } {
+  now?: Date;
+  timeZone?: string | null;
+}): {
+  cash: ResolvedCash;
+  runway: ClientRunway;
+  forecastNet: number | null;
+  outlook: ThirteenWeekForecast;
+} {
   const fin = asRecord(input.financials);
   const cf = asRecord(input.cashflow);
   const prior = asRecord(input.priorFinancials);
@@ -244,20 +236,30 @@ export function assessClientMetrics(input: {
     operatingCashflow: finiteNum(fin?.operatingCashflow),
     hasBankCashflow: Boolean(seededAt),
   });
-  let forecastNet: number | null = null;
-  const rolled = cf ? rollForwardForecast(baseScenarioCashflow(cf)) : null;
-  if (rolled) {
-    const totalInflow = rolled.inflow.reduce((sum, n) => sum + n, 0);
-    const totalOutflow = rolled.outflow.reduce((sum, n) => sum + n, 0);
-    forecastNet = totalInflow - totalOutflow;
+  // The stored cashflow, including a collection delay that is actually on,
+  // is the series. Zeroing those knobs made Overview say cash generative
+  // while the forecast on file nets cash out.
+  const outlook = resolveThirteenWeekForecast({
+    financials: input.financials,
+    cashflow: input.cashflow,
+    openingCash: cash.amount,
+    runway,
+    now: input.now,
+    timeZone: input.timeZone,
+    periodEnd: typeof fin?.periodEnd === "string" ? fin.periodEnd : null,
+  });
+  const hasSeries =
+    outlook.totalInflow > 0.5 || outlook.totalOutflow > 0.5 || outlook.source === "stored";
+  const forecastNet = hasSeries ? outlook.totalInflow - outlook.totalOutflow : null;
+  if (hasSeries) {
     runway = runwayFromForecastNet({
       base: runway,
-      opening: rolled.opening,
-      totalInflow,
-      totalOutflow,
+      opening: outlook.opening,
+      totalInflow: outlook.totalInflow,
+      totalOutflow: outlook.totalOutflow,
     });
   }
-  return { cash, runway, forecastNet };
+  return { cash, runway, forecastNet, outlook };
 }
 
 /**
@@ -1117,6 +1119,35 @@ export function resolveThirteenWeekForecast(input: {
       !protectedLines && rate.weeklyOutflow > 0 && meanOut > rate.weeklyOutflow * 3 + 1;
     if (!scaleBad) {
       const gapDays = Math.max(0, calendarDaysBetween(startRaw, anchor) ?? 0);
+      // A few days inside the opening week is not a new forecast. Rolling it
+      // made Overview and the cash tab disagree by a few hundred rand and a week.
+      if (gapDays < 7) {
+        const totals = seriesTotals(rolled.inflow, rolled.outflow, rolled.closing);
+        const showShortfall =
+          totals.shortfall && (runway.kind !== "cash_generative" || Boolean(timingNote) || bankSeeded);
+        return {
+          source: "stored",
+          startDate: startRaw,
+          weekDates: weekDatesFrom(startRaw, weeks),
+          opening: rolled.opening,
+          inflow: rolled.inflow,
+          outflow: rolled.outflow,
+          closing: rolled.closing,
+          totalInflow: totals.totalInflow,
+          totalOutflow: totals.totalOutflow,
+          floor: totals.floor,
+          dipsBelowFloorWeek: totals.dipsBelowFloorWeek,
+          shortfall: showShortfall,
+          shortfallWeek: showShortfall ? totals.shortfallWeek : null,
+          timingNote: showShortfall ? timingNote : null,
+          cycleNote,
+          replaceStored: false,
+          lines: { revenue: [], expenses: [] },
+          estimateLabel: null,
+          anchorNote: null,
+          reanchored: false,
+        };
+      }
       const weeklyNet = weeklyNetFromStored(cf);
       const opening =
         weeklyNet == null
@@ -1153,6 +1184,42 @@ export function resolveThirteenWeekForecast(input: {
         estimateLabel: null,
         anchorNote,
         reanchored: gapDays > 0,
+      };
+    }
+  }
+
+  // Lines with no start date are still the forecast on file. Rebuilding them
+  // from the P&L dropped a real cash-out series and left runway as "not enough data".
+  if (rolled && openingOk && !blankSeries && !/^\d{4}-\d{2}-\d{2}$/.test(startRaw)) {
+    const meanOut =
+      rolled.outflow.reduce((sum, n) => sum + Math.max(0, n), 0) / rolled.outflow.length;
+    const scaleBad =
+      !protectedLines && rate.weeklyOutflow > 0 && meanOut > rate.weeklyOutflow * 3 + 1;
+    if (!scaleBad) {
+      const totals = seriesTotals(rolled.inflow, rolled.outflow, rolled.closing);
+      const showShortfall =
+        totals.shortfall && (runway.kind !== "cash_generative" || Boolean(timingNote) || bankSeeded);
+      return {
+        source: "stored",
+        startDate: anchor,
+        weekDates: weekDatesFrom(anchor, weeks),
+        opening: rolled.opening,
+        inflow: rolled.inflow,
+        outflow: rolled.outflow,
+        closing: rolled.closing,
+        totalInflow: totals.totalInflow,
+        totalOutflow: totals.totalOutflow,
+        floor: totals.floor,
+        dipsBelowFloorWeek: totals.dipsBelowFloorWeek,
+        shortfall: showShortfall,
+        shortfallWeek: showShortfall ? totals.shortfallWeek : null,
+        timingNote: showShortfall ? timingNote : null,
+        cycleNote,
+        replaceStored: false,
+        lines: { revenue: [], expenses: [] },
+        estimateLabel: null,
+        anchorNote: null,
+        reanchored: false,
       };
     }
   }

@@ -386,7 +386,7 @@ const rail = readFileSync(resolve("src/routes/_authenticated/clients.$clientId.t
 assert(rail.includes('label: "Payables"'), "payables is a deliverable rail item");
 const propose = readFileSync(resolve("supabase/functions/brain-propose/index.ts"), "utf8");
 assert(propose.includes("buildPayablesDraft"), "propose files a payables draft from the cache");
-assert(propose.includes("cash_runway_weeks"), "propose reads the runway already on the client");
+assert(propose.includes("persistedRunwayWeeks"), "propose uses the shared runway, not the stored column");
 assert(propose.includes('source: "ai", data_depth: "statement"'), "statement drafts stay statement depth");
 assert(propose.includes("dropOverclaimingSteps(payload.next_steps)"), "ungrounded invoice claims are still dropped");
 

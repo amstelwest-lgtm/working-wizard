@@ -112,7 +112,8 @@
     "test:client-route-search": "vite-node --config scripts/vite-test.config.ts scripts/client-route-search-test.mts",
     "test:forecast-bands": "vite-node --config scripts/vite-test.config.ts scripts/forecast-bands-test.mts",
     "test:report-direction": "vite-node --config scripts/vite-test.config.ts scripts/report-direction-test.mts",
-    "test:budget-qa-fixture": "vite-node --config scripts/vite-test.config.ts scripts/budget-qa-fixture-test.mts"
+    "test:budget-qa-fixture": "vite-node --config scripts/vite-test.config.ts scripts/budget-qa-fixture-test.mts",
+    "test:prod-retest-stored-paths": "vite-node --config scripts/vite-test.config.ts scripts/prod-retest-stored-paths-test.mts"
   },
   "dependencies": {
     "@cloudflare/vite-plugin": "^1.25.5",

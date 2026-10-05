@@ -29,11 +29,8 @@ import {
   type PackReview,
   type PackSection,
 } from "@/lib/advisory-pack";
-import {
-  closingBalancesFromCashflow,
-  effectiveCashRunwayWeeks,
-  type SavedCashflowLike,
-} from "@/lib/cash-runway";
+import type { SavedCashflowLike } from "@/lib/cash-runway";
+import { assessClientMetrics, persistedRunwayWeeks, runwayDisplayLabel } from "@/lib/client-metrics";
 import { parseDataRequestRow, type DataRequest } from "@/lib/data-requests";
 import { computeOverallHealth } from "@/lib/health-score";
 import { outcomeStories } from "@/lib/outcomes";
@@ -174,7 +171,7 @@ export async function gatherPackInputs(
     await Promise.all([
       sb
         .from("clients")
-        .select("name, firm_id, cashflow, cash_runway_weeks, financials_updated_at")
+        .select("name, firm_id, cashflow, financials, financials_updated_at")
         .eq("id", clientId)
         .maybeSingle(),
       sb
@@ -218,7 +215,7 @@ export async function gatherPackInputs(
     name: string;
     firm_id: string | null;
     cashflow: SavedCashflowLike | null;
-    cash_runway_weeks: number | null;
+    financials: Record<string, unknown> | null;
     financials_updated_at: string | null;
   } | null;
   if (!client) throw new Error("Client not found");
@@ -243,13 +240,14 @@ export async function gatherPackInputs(
     firmName = (firm as { name?: string } | null)?.name ?? null;
   }
 
-  const cashRunwayWeeks = effectiveCashRunwayWeeks(client.cash_runway_weeks, client.cashflow);
-  const closings = closingBalancesFromCashflow(client.cashflow);
-  const openingRaw = client.cashflow?.openingBalance;
-  const opening =
-    openingRaw !== undefined && openingRaw !== null && String(openingRaw).trim() !== ""
-      ? Number(String(openingRaw).replace(/[,\s]/g, ""))
-      : null;
+  const assessed = assessClientMetrics({
+    financials: client.financials,
+    cashflow: client.cashflow,
+    financialsUpdatedAt: client.financials_updated_at,
+  });
+  const cashRunwayWeeks = persistedRunwayWeeks(assessed.runway);
+  const closings = assessed.outlook.closing;
+  const opening = assessed.outlook.opening;
 
   const recommendations: Recommendation[] = (recsRes.error ? [] : (recsRes.data ?? [])).map(
     (r: Record<string, unknown>) => parseRecommendationRow(r),
@@ -275,6 +273,7 @@ export async function gatherPackInputs(
     openingBalance: opening !== null && Number.isFinite(opening) ? opening : null,
     closings,
     cashRunwayWeeks,
+    runwayLabel: runwayDisplayLabel(assessed.runway),
     recommendations,
     dataRequests,
     openActions: openRes.error ? 0 : (openRes.count ?? 0),

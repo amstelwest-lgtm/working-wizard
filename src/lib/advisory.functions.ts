@@ -24,7 +24,7 @@ import { assertClientScope } from "@/lib/assert-client-scope";
 import { CLAUDE_MODEL } from "@/lib/claude-config";
 import { parseOperatingProfile } from "@/lib/client-profile";
 import { profileAiContext } from "@/lib/profile-signals";
-import { effectiveCashRunwayWeeks } from "@/lib/cash-runway";
+import { assessClientMetrics, runwayDisplayLabel } from "@/lib/client-metrics";
 
 type RatioMap = Record<string, number | string | null>;
 
@@ -158,7 +158,7 @@ export const draftAdvisory = createServerFn({ method: "POST" })
 
     const { data: client } = await context.supabase
       .from("clients")
-      .select("id, name, business_type, cash_runway_weeks, cashflow, operating_profile")
+      .select("id, name, business_type, cashflow, financials, operating_profile")
       .eq("id", data.clientId)
       .maybeSingle();
     if (!client) throw new Error("Client not accessible");
@@ -167,10 +167,11 @@ export const draftAdvisory = createServerFn({ method: "POST" })
       (client as { operating_profile?: unknown }).operating_profile,
     );
     const operatingContext = profileAiContext(operatingProfile);
-    const cashRunwayWeeks = effectiveCashRunwayWeeks(
-      (client as { cash_runway_weeks?: number | null }).cash_runway_weeks,
-      (client as { cashflow?: unknown }).cashflow as Parameters<typeof effectiveCashRunwayWeeks>[1],
-    );
+    const assessed = assessClientMetrics({
+      financials: (client as { financials?: Record<string, unknown> | null }).financials ?? null,
+      cashflow: (client as { cashflow?: unknown }).cashflow,
+    });
+    const runwayLabel = runwayDisplayLabel(assessed.runway);
 
     // Last two snapshots (RLS-scoped) for the movement brief.
     const { data: snaps } = await context.supabase
@@ -246,7 +247,7 @@ ${KIND_INSTRUCTION[data.kind]}${data.steer ? `\n\nADDITIONAL STEER FROM THE ACCO
 ${operatingContext ? `BUSINESS PROFILE: ${operatingContext}` : ""}
 CURRENT PERIOD: ${current.period_label}
 ${hasPrior ? `PRIOR PERIOD: ${prior!.period_label}` : "PRIOR PERIOD: none — this is the first snapshot, so frame as a baseline, not a comparison."}
-${cashRunwayWeeks != null ? `CASH RUNWAY: ${cashRunwayWeeks} weeks` : ""}
+${runwayLabel ? `CASH RUNWAY: ${runwayLabel}` : ""}
 
 WHAT MOVED (most significant first):
 ${movementLines.length ? movementLines.map((l) => `- ${l}`).join("\n") : "- No material movement to report this period."}
