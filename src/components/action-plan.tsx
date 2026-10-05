@@ -114,7 +114,7 @@ type Item = {
   recommendation_amount?: number | null;
 };
 
-type Employee = { id: string; name: string; email: string | null; role: string | null };
+type Employee = ActionPlanEmployee;
 type Milestone = {
   id: string;
   action_item_id: string;
@@ -241,6 +241,73 @@ export function allocateActionSeqs(existing: { seq: number }[], count: number): 
   if (count <= 0) return [];
   const start = existing.reduce((m, i) => Math.max(m, i.seq), 0) + 1;
   return Array.from({ length: count }, (_, i) => start + i);
+}
+
+export type ActionPlanEmployee = {
+  id: string;
+  name: string;
+  email: string | null;
+  role: string | null;
+  /** Set when this row is a firm member with access on the client. */
+  practiceUserId?: string | null;
+};
+
+export type PracticeTeamRow = {
+  id: string;
+  name: string;
+  email: string | null;
+  role: string | null;
+  user_id: string;
+};
+
+/** Rows from list_client_practice_team, ignoring a missing migration or a bad payload. */
+export function practiceTeamRows(data: unknown): PracticeTeamRow[] {
+  if (!Array.isArray(data)) return [];
+  const rows: PracticeTeamRow[] = [];
+  for (const raw of data) {
+    if (!raw || typeof raw !== "object") continue;
+    const row = raw as Record<string, unknown>;
+    const id = typeof row.id === "string" ? row.id : "";
+    const userId = typeof row.user_id === "string" ? row.user_id : "";
+    if (!id || !userId) continue;
+    rows.push({
+      id,
+      name: typeof row.name === "string" ? row.name : "",
+      email: typeof row.email === "string" ? row.email : null,
+      role: typeof row.role === "string" ? row.role : null,
+      user_id: userId,
+    });
+  }
+  return rows;
+}
+
+/**
+ * Union client employees with firm members who have access on this client.
+ * Practice people win on the same id so the owner picker is not an empty
+ * client_employees list when the only person is the practice owner.
+ */
+export function mergeActionPlanTeam(
+  employees: ActionPlanEmployee[],
+  practice: PracticeTeamRow[],
+): ActionPlanEmployee[] {
+  const merged = new Map<string, ActionPlanEmployee>();
+  for (const employee of employees) merged.set(employee.id, { ...employee });
+  for (const person of practice) {
+    const prev = merged.get(person.id);
+    merged.set(person.id, {
+      id: person.id,
+      name: (person.name || prev?.name || "Practice member").trim(),
+      email: person.email ?? prev?.email ?? null,
+      role: person.role ?? prev?.role ?? null,
+      practiceUserId: person.user_id,
+    });
+  }
+  return [...merged.values()].sort((a, b) => {
+    const rank = (employee: ActionPlanEmployee) => (employee.practiceUserId ? 0 : 1);
+    const byKind = rank(a) - rank(b);
+    if (byKind !== 0) return byKind;
+    return (a.name ?? "").localeCompare(b.name ?? "");
+  });
 }
 
 export type ActionPlanFilter = "all" | "overdue" | "at_risk" | "blocked" | "done";
@@ -445,9 +512,22 @@ export default function ActionPlanPanel({
           .eq("client_id", clientId)
           .order("name"),
       ]);
+      // client_employees is the SME assignee list and is empty on a new firm
+      // client. Firm members live on client_practice_access (deny-all RLS), so
+      // the owner picker reads them through list_client_practice_team.
+      let practice: PracticeTeamRow[] = [];
+      try {
+        const { data: practiceData, error: practiceErr } = await supabase.rpc(
+          "list_client_practice_team" as never,
+          { _client_id: clientId } as never,
+        );
+        if (!practiceErr) practice = practiceTeamRows(practiceData);
+      } catch {
+        practice = [];
+      }
       const list = (its ?? []) as Item[];
       setItems(list);
-      setEmployees((emps ?? []) as Employee[]);
+      setEmployees(mergeActionPlanTeam((emps ?? []) as Employee[], practice));
       if (list.length) {
         const ids = list.map((i) => i.id);
         const [{ data: ms }, { data: emails }] = await Promise.all([
@@ -696,6 +776,10 @@ export default function ActionPlanPanel({
   };
 
   const removeEmployee = async (id: string) => {
+    if (employees.some((employee) => employee.id === id && employee.practiceUserId)) {
+      toast.error("Practice access is managed in Team settings.");
+      return;
+    }
     if (!confirm("Remove this team member? Tasks they own stay on the plan, unassigned.")) return;
     const { error } = await supabase.from("client_employees").delete().eq("id", id);
     if (error) {
@@ -1953,6 +2037,11 @@ function OwnerPicker({
                 onClick={() => onPick(e.id, e.name)}
               >
                 <span className="font-semibold text-slate-800 dark:text-slate-200">{e.name}</span>
+                {e.practiceUserId && e.role ? (
+                  <span className="ml-1 text-[10px] uppercase tracking-wide text-slate-400">
+                    {e.role.replaceAll("_", " ")}
+                  </span>
+                ) : null}
                 {!e.email && <span className="ml-1 text-[10px] text-amber-600">no email</span>}
               </button>
             ))}
@@ -2334,7 +2423,7 @@ function TeamPanel({
           <div>
             <h3 className="text-base font-bold text-slate-950 dark:text-white">Team members</h3>
             <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
-              Names and emails used when assigning Action Plan work.
+              Practice owners and anyone with access on this client, plus people you add here.
             </p>
           </div>
           <button type="button" onClick={onClose} aria-label="Close">
@@ -2391,6 +2480,7 @@ function TeamPanel({
                     type="button"
                     className="min-w-0 flex-1 text-left"
                     onClick={() => {
+                      if (e.practiceUserId) return;
                       setEditId(e.id);
                       setEditName(e.name);
                       setEditEmail(e.email ?? "");
@@ -2401,16 +2491,23 @@ function TeamPanel({
                     </span>
                     <span className="block truncate text-[11px] text-slate-500 dark:text-slate-400">
                       {e.email || <span className="text-amber-600">no email</span>}
+                      {e.practiceUserId ? (
+                        <span className="ml-1 uppercase tracking-wide text-slate-400">
+                          · Practice {e.role ? e.role.replaceAll("_", " ") : "member"}
+                        </span>
+                      ) : null}
                     </span>
                   </button>
-                  <button
-                    type="button"
-                    className="shrink-0 rounded p-1 text-slate-400 hover:bg-amber-900/5 hover:text-[#ef4444] dark:hover:bg-slate-800"
-                    aria-label={`Remove ${e.name}`}
-                    onClick={() => onRemove(e.id)}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
+                  {e.practiceUserId ? null : (
+                    <button
+                      type="button"
+                      className="shrink-0 rounded p-1 text-slate-400 hover:bg-amber-900/5 hover:text-[#ef4444] dark:hover:bg-slate-800"
+                      aria-label={`Remove ${e.name}`}
+                      onClick={() => onRemove(e.id)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  )}
                 </>
               )}
             </div>

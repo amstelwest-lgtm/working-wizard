@@ -11,7 +11,9 @@ import ActionPlan, {
   chaseableItems,
   driverHealthLabel,
   healthMeta,
+  mergeActionPlanTeam,
   parseActionPlanFilter,
+  practiceTeamRows,
   toActionItemWrite,
 } from "../src/components/action-plan";
 import { lazyPanel, TabErrorBoundary } from "../src/components/lazy-panel";
@@ -179,5 +181,33 @@ assert(planSrc.includes("Chase {overdueChaseReady.length} overdue"), "batch chas
 assert(planSrc.includes("Chase overdue"), "per-item overdue chase label");
 assert(planSrc.includes("Send nudge"), "per-item nudge label");
 assert(planSrc.includes("initialFilter"), "Action Plan accepts dashboard filter deep-link");
+assert(planSrc.includes("list_client_practice_team"), "owner picker loads firm members with client access");
+assert(planSrc.includes("mergeActionPlanTeam"), "practice members are merged into the team list");
+assert(planSrc.includes("Practice access is managed in Team settings."), "practice owners are not removed as employees");
+
+const practiceOwner = practiceTeamRows([
+  {
+    id: "emp-owner",
+    name: "James Fleming",
+    email: "team@trymilon.co.za",
+    role: "partner",
+    user_id: "d55084b0-43fe-417b-970b-37f22cee84f3",
+  },
+  { id: "", name: "Dropped", email: null, role: null, user_id: "nope" },
+]);
+assert(practiceOwner.length === 1, "ignores practice rows without an employee id");
+const merged = mergeActionPlanTeam(
+  [{ id: "emp-staff", name: "Asha", email: "asha@client.test", role: "bookkeeper" }],
+  practiceOwner,
+);
+assert(merged.length === 2, "keeps client employees and adds the practice owner");
+assert(merged[0].id === "emp-owner" && merged[0].practiceUserId?.startsWith("d55084b0"), "practice owner is listed first");
+assert(merged[1].id === "emp-staff" && !merged[1].practiceUserId, "SME employee stays on the list");
+const again = mergeActionPlanTeam(merged, practiceOwner);
+assert(again.length === 2, "merging the same practice owner does not duplicate");
+assert(
+  mergeActionPlanTeam([], []).length === 0,
+  "empty client employees and no access still shows no team",
+);
 
 console.log("action-plan-tab-test: ok");

@@ -4,6 +4,8 @@ export const PRACTICE_CLIENT_ACCESS_CAP = 12;
 export const PRACTICE_ACCESS_MIGRATION = "20260901160000_practice_client_access.sql";
 export const PRACTICE_ACCESS_AMENDMENT_MIGRATION =
   "20260913120000_team_access_amendment.sql";
+export const PRACTICE_OWNER_ACCESS_MIGRATION =
+  "20261005183000_firm_owner_practice_access.sql";
 export const PARTNER_ASSIGN_TOOLTIP = "Only a partner can assign partner status.";
 
 export const MEMBERSHIP_ROLES = ["owner", "admin", "member"] as const;
