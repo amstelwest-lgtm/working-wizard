@@ -25,9 +25,12 @@ function kindLabel(kind: AdvisoryDelivery["kind"]): string {
 export function AdvisorySentHistory({
   clientId,
   refreshToken = 0,
+  statementPeriodLabel = null,
 }: {
   clientId: string;
   refreshToken?: number;
+  /** Statement span. Shown in place of a calendar month stored on the row. */
+  statementPeriodLabel?: string | null;
 }) {
   const { dateTime, market } = useMarketFormat();
   const [rows, setRows] = useState<AdvisoryDelivery[]>([]);
@@ -134,7 +137,9 @@ export function AdvisorySentHistory({
                     minute: "2-digit",
                     timeZoneName: "shortGeneric",
                   })}
-                  {r.period_label ? ` · figures ${r.period_label}` : ""}
+                  {statementPeriodLabel?.trim() || r.period_label
+                    ? ` · figures ${statementPeriodLabel?.trim() || r.period_label}`
+                    : ""}
                   {r.figures_hash ? ` · hash ${r.figures_hash}` : ""}
                   {r.recipient_email ? ` · ${r.recipient_email}` : ""}
                   {r.pdf_storage_path ? " · PDF archived" : ""}

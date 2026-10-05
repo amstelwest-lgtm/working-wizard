@@ -379,10 +379,16 @@ export function summarizeCashForecast(
     const traj = Math.abs(delta) < 1 ? "flat" : delta > 0 ? "up" : "down";
     const breach = outlook.closing.findIndex((c) => c < RUNWAY_FLOOR);
     const derivedRunway = breach === -1 ? HORIZON : breach;
+    const sharedWeeks =
+      opts.runway && (opts.runway.kind === "weeks" || opts.runway.kind === "zero")
+        ? opts.runway.weeks
+        : null;
     const runwayWeeks =
-      storedRunway != null && Number.isFinite(Number(storedRunway))
-        ? Number(storedRunway)
-        : derivedRunway;
+      opts.runway != null
+        ? sharedWeeks
+        : storedRunway != null && Number.isFinite(Number(storedRunway))
+          ? Number(storedRunway)
+          : derivedRunway;
     return {
       hasData: true,
       runwayWeeks: opts.cashGenerative || runway.kind === "cash_generative" ? null : runwayWeeks,

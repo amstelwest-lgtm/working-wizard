@@ -1885,12 +1885,14 @@ function buildCashForecastFromSavedCashflow(
   openingCash: number | null,
   financials: Record<string, unknown> | null,
   runway: ClientRunway,
+  timeZone?: string | null,
 ): { weeks: CashForecastWeek[] | null; minimum: number } {
   const outlook = resolveThirteenWeekForecast({
     financials,
     cashflow: cf,
     openingCash,
     runway,
+    timeZone,
   });
   const empty =
     outlook.opening === 0 &&
@@ -2103,6 +2105,7 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
         : null,
     cashflow: clientRow?.cashflow,
     financialsUpdatedAt: clientRow?.financials_updated_at ?? null,
+    timeZone: market.timezone,
   });
   const preliminaryWeeks =
     preliminary.runway.kind === "weeks" || preliminary.runway.kind === "zero"
@@ -2239,6 +2242,7 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
     cashflow: clientRow.cashflow,
     financialsUpdatedAt: clientRow.financials_updated_at,
     priorFinancials: priorSnap?.financials ?? null,
+    timeZone: market.timezone,
   });
   const healthWeeks =
     assessed.runway.kind === "weeks" || assessed.runway.kind === "zero"
@@ -2250,6 +2254,7 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
     assessed.cash.amount,
     rawFin as Record<string, unknown>,
     assessed.runway,
+    market.timezone,
   );
   const cashForecast = cashOutlook.weeks;
   // Floor is four weeks of the resolved outflows. A stored threshold from the
@@ -2997,6 +3002,7 @@ function SettingsPanel({
   onChange,
   profile,
   clientSector = null,
+  statementPeriod = null,
   nameExample,
 }: {
   settings: Settings;
@@ -3004,6 +3010,8 @@ function SettingsPanel({
   profile: AccountantProfile;
   /** When set (live client with business type), Benchmark PDF uses this — picker is display-only. */
   clientSector?: { code: string; name: string } | null;
+  /** Statement span. Wins over the calendar month the studio opens on. */
+  statementPeriod?: string | null;
   nameExample: string;
 }) {
   const inputCls =
@@ -3034,6 +3042,9 @@ function SettingsPanel({
         <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
           Reporting Period
         </label>
+        {statementPeriod ? (
+          <p className="mb-2 text-sm font-semibold text-foreground">{statementPeriod}</p>
+        ) : null}
         <div className="grid grid-cols-2 gap-2">
           <Select value={settings.periodMonth} onValueChange={(v) => onChange({ periodMonth: v })}>
             <SelectTrigger className="border-input bg-background text-foreground text-sm h-9">
@@ -3648,7 +3659,7 @@ export function ReportsStudio({
         if (cancelled) return;
         setClientData(data);
         // Keep smeName in sync with the client's real name if it differs
-        if (data.clientName || data.periodMonth) {
+        if (data.clientName || data.periodMonth || data.dataPeriodLabel) {
           setSettings((prev) => ({
             ...prev,
             ...(data.clientName ? { smeName: data.clientName } : {}),
@@ -4210,6 +4221,7 @@ export function ReportsStudio({
             onChange={(patch) => setSettings((prev) => ({ ...prev, ...patch }))}
             profile={profile}
             clientSector={clientData?.hasData ? clientData.benchmarkSector : null}
+            statementPeriod={clientData?.dataPeriodLabel ?? null}
             nameExample={t("entityExample", clientData?.market ?? firmMarket)}
           />
         </div>

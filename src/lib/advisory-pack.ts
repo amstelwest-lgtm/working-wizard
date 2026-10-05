@@ -405,6 +405,46 @@ function fmtDate(iso: string | null): string {
   return `${d.getUTCDate()} ${months[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
 }
 
+export const ADVISORY_PACK_STALE_NOTE =
+  "Figures have changed since this pack was generated, regenerate";
+
+/**
+ * An already-generated pack keeps its text. This is true when that text no
+ * longer matches the runway, cash, or health the screens show now.
+ */
+export function advisoryPackFiguresChanged(
+  content: {
+    health?: { overall?: number | null } | null;
+    forecast?: { openingBalance?: number | null } | null;
+    sections?: Array<{ key?: string; body?: string }>;
+  } | null | undefined,
+  current: { runwayLabel: string | null; cash: number | null; healthScore: number | null },
+): boolean {
+  if (!content) return false;
+  const body = content.sections?.find((section) => section.key === "forecast")?.body ?? "";
+  if (current.runwayLabel && !body.includes(current.runwayLabel)) return true;
+  const packed = content.health?.overall;
+  if (
+    current.healthScore != null &&
+    packed != null &&
+    Number.isFinite(packed) &&
+    Math.round(packed) !== Math.round(current.healthScore)
+  ) {
+    return true;
+  }
+  const opening = content.forecast?.openingBalance;
+  if (
+    current.cash != null &&
+    opening != null &&
+    Number.isFinite(opening) &&
+    Number.isFinite(current.cash) &&
+    Math.abs(opening - current.cash) > 1
+  ) {
+    return true;
+  }
+  return false;
+}
+
 // ── Builder ──────────────────────────────────────────────────────────────────
 
 export type PackInputs = {
@@ -421,6 +461,8 @@ export type PackInputs = {
   /** Weekly closing balances from the saved 13-week forecast; null = no forecast. */
   closings: number[] | null;
   cashRunwayWeeks: number | null;
+  /** Same label Overview prints. Weeks are null when the business is cash generative. */
+  runwayLabel?: string | null;
   recommendations: Recommendation[];
   dataRequests: DataRequest[];
   openActions: number;
@@ -623,9 +665,11 @@ export function buildAdvisoryPack(input: PackInputs): AdvisoryPackContent {
           forecast.lowestClosing ?? 0,
           cur,
         )} in week ${forecast.lowestWeek} of ${forecast.horizonWeeks}${
-          forecast.runwayWeeks !== null && forecast.runwayWeeks < forecast.horizonWeeks
-            ? `; runway ${forecast.runwayWeeks} week${forecast.runwayWeeks === 1 ? "" : "s"} before the comfort line`
-            : ""
+          input.runwayLabel
+            ? `. Runway ${input.runwayLabel}`
+            : forecast.runwayWeeks !== null && forecast.runwayWeeks < forecast.horizonWeeks
+              ? `; runway ${forecast.runwayWeeks} week${forecast.runwayWeeks === 1 ? "" : "s"} before the comfort line`
+              : ""
         }. The forecast uses the saved assumptions; change them in the cash tab and regenerate.`;
 
   const recBullets = recs.map(

@@ -73,6 +73,17 @@ function withInputVat(exVat: number, vatMode: BudgetDocument["vatMode"], rate: n
   return withOutputVat(exVat, vatMode, rate);
 }
 
+/**
+ * GP% drives COGS when that mode is on, and also when the screen shows a GP%
+ * next to per-unit costs that are all zero. Otherwise the year books 100% GP
+ * beside a 70.9 input.
+ */
+export function budgetCogsFollowsGpPct(doc: BudgetDocument): boolean {
+  if (doc.cogsMode === "gp_pct") return true;
+  if (!(doc.gpPct > 0)) return false;
+  return !Object.values(doc.cogsPerUnit ?? {}).some((n) => Number(n) > 0);
+}
+
 export function computeBudgetMonths(
   doc: BudgetDocument,
   scenario: BudgetScenarioId = doc.activeScenario,
@@ -109,20 +120,19 @@ export function computeBudgetMonths(
       const price = (cell.price || 0) * f.priceFactor;
       const lineRev = vol * price;
       revenueEntered += lineRev;
-      if (doc.cogsMode === "per_unit") {
+      if (!budgetCogsFollowsGpPct(doc)) {
         cogsEntered += vol * (doc.cogsPerUnit[line.id] || 0);
       }
     }
-    if (doc.cogsMode === "gp_pct") {
+    if (budgetCogsFollowsGpPct(doc)) {
       const gp = Math.min(100, Math.max(0, doc.gpPct)) / 100;
       cogsEntered = revenueEntered * (1 - gp);
     }
 
     const revenue = toExVat(revenueEntered, vatMode, rate);
-    const cogs =
-      doc.cogsMode === "gp_pct"
-        ? revenue * (1 - Math.min(100, Math.max(0, doc.gpPct)) / 100)
-        : toExVat(cogsEntered, vatMode, rate);
+    const cogs = budgetCogsFollowsGpPct(doc)
+      ? revenue * (1 - Math.min(100, Math.max(0, doc.gpPct)) / 100)
+      : toExVat(cogsEntered, vatMode, rate);
 
     let overheads = 0;
     for (const oh of doc.overheads) {

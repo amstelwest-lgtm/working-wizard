@@ -62,6 +62,8 @@ export function buildFinancialSnapshot(input: {
     amount: number;
     floor: number;
     dipsBelowFloorWeek: number | null;
+    /** Why the opening differs from the statement cash line, when it does. */
+    note?: string | null;
   } | null;
   financialsUpdatedAt?: string | null;
   lastForecastAt?: string | null;
@@ -117,6 +119,7 @@ export function buildFinancialSnapshot(input: {
       key: "cash",
       label: "Cash",
       value: `${formatMoneyCompact(input.cash.amount, market)} · floor ${formatMoneyCompact(input.cash.floor, market)} · ${position}`,
+      hint: input.cash.note?.trim() || undefined,
     });
   }
   const updated = [input.financialsUpdatedAt, input.lastForecastAt]

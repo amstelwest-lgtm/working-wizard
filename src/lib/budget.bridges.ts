@@ -4,7 +4,7 @@
 
 import type { BudgetActuals, BudgetDocument } from "@/lib/budget.types";
 import { fyMonths } from "@/lib/budget.months";
-import { computeBudgetMonths } from "@/lib/budget.compute";
+import { computeBudgetMonths, normalizeBudgetDocument } from "@/lib/budget.compute";
 import { newId } from "@/lib/budget.templates";
 import type { CashForecastPublishPayload } from "@/lib/cash-from-banks.types";
 import { annualiseFinancials, FLOW_FIELD_KEYS } from "@/lib/ratios";
@@ -418,4 +418,27 @@ export function budgetToCashForecastPayload(doc: BudgetDocument): CashForecastPu
     capexWeek: 1,
     seededFromBanksAt: new Date().toISOString(),
   };
+}
+
+/**
+ * A budget the funnel wrote and nobody edited. A note, or a real confirm
+ * time, means leave the months alone and keep the rebuild prompt.
+ */
+export function budgetSeedIsUntouched(doc: BudgetDocument): boolean {
+  if ((doc.notes ?? []).some((note) => note.text?.trim())) return false;
+  return (doc.qualification?.confirmedAt ?? "").startsWith("1970-01-01");
+}
+
+/**
+ * Opening cash and overhead buckets for an untouched seed. New budgets
+ * already get this from seedBudgetFromFinancials; a stored seed was left
+ * at opening 0 and the old double-counted overheads.
+ */
+export function repairUntouchedSeededBudget(
+  doc: BudgetDocument,
+  periodFinancials: Record<string, string | number | null | undefined> | null | undefined,
+): BudgetDocument {
+  const normalized = normalizeBudgetDocument(doc);
+  if (!periodFinancials || !budgetSeedIsUntouched(normalized)) return normalized;
+  return normalizeBudgetDocument(seedBudgetFromFinancials(normalized, periodFinancials).doc);
 }

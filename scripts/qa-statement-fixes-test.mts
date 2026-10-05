@@ -7,7 +7,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { isClean, validateFigures } from "../src/lib/validateFinancials";
 import { balanceSheetCheck, currentPeriodProfit } from "../src/lib/statement-balance";
-import { fillBalanceSheetTotals } from "../src/lib/statement-financials";
+import { fillBalanceSheetTotals, readTimeEquity } from "../src/lib/statement-financials";
 import { BANK_LEDGER_MESSAGE, looksLikeBankLedger } from "../src/lib/bank-ledger";
 import {
   buildDraftLinesFromExtract,
@@ -173,6 +173,15 @@ const pluggedCheck = balanceSheetCheck(pluggedFigures);
 assert(pluggedCheck.currentPeriodProfit == null, "derived equity is not increased by current-period profit");
 assert(pluggedCheck.gap === 0, `derived equity already balances, got ${pluggedCheck.gap}`);
 assert(isClean(validateFigures(pluggedFigures)), "a derived sheet passes without counting profit twice");
+
+const readPlug = readTimeEquity({
+  totalAssets: "43000",
+  totalLiabilities: "9000",
+  equity: "",
+  netIncome: "30100",
+});
+assert(readPlug.derived && readPlug.equity === "34000", `read-time equity ${readPlug.equity} must be assets minus liabilities`);
+assert(readPlug.equity !== "64100", "read-time equity does not add current-period profit on top of the plug");
 
 const unbalanced = figures(
   sheet({

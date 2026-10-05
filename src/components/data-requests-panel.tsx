@@ -17,6 +17,7 @@ import { useTrack } from "@/hooks/use-track";
 import {
   DATA_REQUEST_KINDS,
   DATA_REQUEST_KIND_LABELS,
+  displayedDataRequestReason,
   severityLabel,
   type DataRequest,
   type DataRequestKind,
@@ -317,7 +318,7 @@ export function DataRequestsPanel({
                     </p>
                     {r.reason ? (
                       <p className="mt-0.5 text-[12px] leading-relaxed text-slate-700 dark:text-slate-200/85">
-                        {r.reason}
+                        {displayedDataRequestReason(r.reason)}
                       </p>
                     ) : null}
                     <p className="mt-1 text-[11px] leading-snug text-slate-500 dark:text-slate-400/85">

@@ -42,6 +42,7 @@ import {
   getLatestAdvisoryPack,
   reviewAdvisoryPack,
 } from "@/lib/advisory-pack.functions";
+import { ADVISORY_PACK_STALE_NOTE, advisoryPackFiguresChanged } from "@/lib/advisory-pack";
 
 type Props = {
   clientId: string | null;
@@ -55,6 +56,12 @@ type Props = {
   /** Firm that owns the client, so a trial block can open the plan picker. */
   firmId?: string | null;
   className?: string;
+  /** Live Overview figures. A stored pack that disagrees shows a regenerate note. */
+  currentFigures?: {
+    runwayLabel: string | null;
+    cash: number | null;
+    healthScore: number | null;
+  } | null;
 };
 
 const STATUS_CLASS: Record<AdvisoryPack["status"], string> = {
@@ -98,6 +105,7 @@ export function AdvisoryPackPanel({
   refreshKey,
   firmId = null,
   className,
+  currentFigures = null,
 }: Props) {
   const track = useTrack();
   const fetchLatest = useServerFn(getLatestAdvisoryPack);
@@ -347,6 +355,15 @@ export function AdvisoryPackPanel({
                 >
                   {packStatusLabel(pack.status, pack.requires_review)}
                 </span>
+                {advisoryPackFiguresChanged(pack.content, {
+                  runwayLabel: currentFigures?.runwayLabel ?? null,
+                  cash: currentFigures?.cash ?? null,
+                  healthScore: currentFigures?.healthScore ?? null,
+                }) ? (
+                  <span className="text-[12px] font-semibold normal-case tracking-normal text-amber-700 dark:text-amber-300">
+                    {ADVISORY_PACK_STALE_NOTE}
+                  </span>
+                ) : null}
               </>
             ) : (
               "No pack yet"

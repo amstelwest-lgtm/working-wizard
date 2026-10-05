@@ -405,10 +405,27 @@ function defaultPeriodLabel() {
   const now = new Date();
   return `Q${Math.floor(now.getMonth() / 3) + 1} ${now.getFullYear()}`;
 }
-function defaultTargetDate() {
-  const now = new Date();
+function isoDay(d: Date) {
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${m}-${day}`;
+}
+
+/** Quarter end, moved forward when that day is today or already past. */
+export function defaultTargetDate(now = new Date()) {
   const q = Math.floor(now.getMonth() / 3);
-  return new Date(now.getFullYear(), q * 3 + 3, 0).toISOString().slice(0, 10);
+  let end = new Date(now.getFullYear(), q * 3 + 3, 0);
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  if (end.getTime() <= today.getTime()) {
+    end = new Date(now.getFullYear(), q * 3 + 6, 0);
+  }
+  return isoDay(end);
+}
+
+export function planTargetIsOverdue(targetDate: string, now = new Date()): boolean {
+  const day = targetDate.slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return false;
+  return day < isoDay(now);
 }
 function itemScore(it: Item): number {
   const h = deriveHealth(it);
@@ -1503,6 +1520,9 @@ function GoalHeader({
                     month: "long",
                     year: "numeric",
                   })}
+                  {planTargetIsOverdue(plan.target_date) ? (
+                    <span className="ml-2 font-semibold text-rose-600 dark:text-rose-400">Overdue</span>
+                  ) : null}
                 </p>
               </>
             ) : (

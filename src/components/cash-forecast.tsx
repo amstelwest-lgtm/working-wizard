@@ -73,6 +73,7 @@ import { formatCalendarDay } from "@/lib/market/format";
 import { openingCashToConfirm } from "@/lib/cash-from-banks.publish";
 import { PlBankDisagreeNotice } from "@/components/pl-bank-disagree-notice";
 import {
+  assessClientMetrics,
   clientRunway,
   distributeForecastLine,
   forecastAnchorDate,
@@ -751,8 +752,18 @@ export function CashForecastPanel({
         if (cf.revenue) setRevenue(cf.revenue);
         if (cf.expenses) setExpenses(cf.expenses);
         if (cf.other) setOther(cf.other);
-        // Scenarios default off. A stored collection delay (including one
-        // written from debtor days) must not open the forecast already on.
+        // The stored knobs are the series Overview already scored. Leaving
+        // the collection delay off made this tab print a different net.
+        if (cf.revAdj != null) setRevAdj(cf.revAdj);
+        if (cf.expAdj != null) setExpAdj(cf.expAdj);
+        const storedCollectDelay = cf.collectDelay;
+        if (storedCollectDelay != null) setCollectDelay(Math.max(0, Math.round(storedCollectDelay)));
+        if (cf.headcountDelta != null) setHeadcountDelta(cf.headcountDelta);
+        if (cf.avgSalary != null) setAvgSalary(String(cf.avgSalary));
+        if (cf.fixedCostDelta != null) setFixedCostDelta(String(cf.fixedCostDelta));
+        if (cf.revGrowthPct != null) setRevGrowthPct(cf.revGrowthPct);
+        if (cf.capexAmount != null) setCapexAmount(String(cf.capexAmount));
+        if (cf.capexWeek != null) setCapexWeek(cf.capexWeek);
       }
       setInputFinancials(
         (data?.financials as Record<string, string | number | null | undefined> | null) ?? null,
@@ -840,15 +851,17 @@ export function CashForecastPanel({
             : {}),
       };
       const forecastUpdatedAt = new Date().toISOString();
-      const runway = runwayFromOpening(openingBalance, inputFinancials, {
-        hasBankCashflow: inputHasBankDraft,
+      const assessed = assessClientMetrics({
+        financials: inputFinancials,
+        cashflow: payload,
+        timeZone: market.timezone,
       });
       const { error } = await supabase
         .from("clients")
         .update({
           cashflow: payload as never,
           last_forecast_at: forecastUpdatedAt,
-          cash_runway_weeks: persistedRunwayWeeks(runway),
+          cash_runway_weeks: persistedRunwayWeeks(assessed.runway),
         })
         .eq("id", clientId);
       if (error) toast.error(`Cash forecast save failed: ${error.message}`);
@@ -874,6 +887,7 @@ export function CashForecastPanel({
     capexWeek,
     inputFinancials,
     inputHasBankDraft,
+    market.timezone,
   ]);
 
   const weekIsos = useMemo(() => weekDatesFrom(startDate, WEEKS), [startDate]);

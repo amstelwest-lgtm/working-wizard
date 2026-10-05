@@ -10,6 +10,7 @@ import { publicRun, runMilonbotObjective } from "./handler.ts";
 import { loadOverviewBrief } from "./load-overview.ts";
 import { persistAdvisoryCreate, type CreateIntent } from "./persist.ts";
 import { persistedCreateIntent } from "../../../src/lib/milon-bot-copy.ts";
+import { assessClientMetrics, persistedRunwayWeeks } from "../../../src/lib/client-metrics.ts";
 import { formatOverviewForPrompt } from "../ask-ai/overview-brief.ts";
 import {
   BOT_MAX_HISTORY,
@@ -191,7 +192,7 @@ async function runTool(
       .limit(30),
     ctx.userClient
       .from("clients")
-      .select("brain_summary, cash_runway_weeks")
+      .select("brain_summary, financials, cashflow, financials_updated_at")
       .eq("id", ctx.clientId)
       .maybeSingle(),
     ctx.userClient
@@ -212,8 +213,15 @@ async function runTool(
     if (filtered.length) facts = filtered;
   }
   const snap = snapRes.data;
-  const cash =
-    typeof clientRes.data?.cash_runway_weeks === "number" ? clientRes.data.cash_runway_weeks : null;
+  const brainMetrics = assessClientMetrics({
+    financials:
+      clientRes.data?.financials && typeof clientRes.data.financials === "object"
+        ? (clientRes.data.financials as Record<string, unknown>)
+        : null,
+    cashflow: clientRes.data?.cashflow,
+    financialsUpdatedAt: (clientRes.data?.financials_updated_at as string | null) ?? null,
+  });
+  const cash = persistedRunwayWeeks(brainMetrics.runway);
   return buildBrainAnswer({
     facts,
     brainSummary: clientRes.data?.brain_summary ?? null,

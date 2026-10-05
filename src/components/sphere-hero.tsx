@@ -263,7 +263,7 @@ function Sphere({
 
       {Icon && <Icon className={`mb-1 h-[12%] w-[12%] min-h-4 min-w-4 ${TIER_TEXT[tier]}`} />}
       {label && (
-        <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-200" style={{ fontSize: Math.max(9, size * 0.052) }}>
+        <span className="text-[10px] font-semibold tracking-[0.04em] text-slate-200" style={{ fontSize: Math.max(9, size * 0.052) }}>
           {label}
         </span>
       )}
@@ -443,7 +443,7 @@ export function SphereHero({
                 <span className={`flex items-center justify-center rounded-full border border-amber-500/30 bg-[#d4a550]/10 ${compact ? "h-7 w-7" : "h-9 w-9"}`}>
                   <Icon className={`${compact ? "h-3.5 w-3.5" : "h-4 w-4"} text-amber-600 dark:text-amber-400`} />
                 </span>
-                <span className="text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
+                <span className="text-[9px] font-semibold tracking-[0.04em] text-slate-500 dark:text-slate-400">
                   {p.label}
                 </span>
                 <QueryBadge count={q} />
@@ -525,7 +525,7 @@ export function SphereHero({
             />
           </div>
 
-          <p className="mb-3 mt-5 text-[11px] font-semibold uppercase tracking-[0.3em] text-amber-400/90">
+          <p className="mb-3 mt-5 text-[11px] font-semibold tracking-[0.04em] text-amber-400/90">
             {activePillar.label} drivers
           </p>
 

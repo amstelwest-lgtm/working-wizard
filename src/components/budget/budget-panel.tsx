@@ -12,6 +12,7 @@ import { budgetWindowStart, createBudgetDocument } from "@/lib/budget.months";
 import {
   budgetIsImplausible,
   mergeMonthActuals,
+  repairUntouchedSeededBudget,
   seedBudgetFromFinancials,
   statementMonthActuals,
 } from "@/lib/budget.bridges";
@@ -125,7 +126,7 @@ export function BudgetPanel({
     let cancelled = false;
     supabase
       .from("clients")
-      .select("budget, budget_updated_at, financial_year_start_month, operating_profile")
+      .select("budget, budget_updated_at, financial_year_start_month, operating_profile, financials")
       .eq("id", clientId)
       .maybeSingle()
       .then(({ data, error }) => {
@@ -137,14 +138,18 @@ export function BudgetPanel({
           budget?: BudgetDocument | null;
           budget_updated_at?: string | null;
           operating_profile?: unknown;
+          financials?: Record<string, string | number | null> | null;
         } | null;
         const budget = row?.budget ?? null;
         setBudgetUpdatedAt(row?.budget_updated_at ?? null);
         const fromDb = parseOperatingProfile(row?.operating_profile);
         if (fromDb) setProfile(fromDb);
         if (budget && budget.version === 1) {
-          skipAutosave.current = true;
-          setDoc(normalizeBudgetDocument(budget));
+          const repaired = repairUntouchedSeededBudget(budget, row?.financials ?? null);
+          const unchanged =
+            JSON.stringify(repaired) === JSON.stringify(normalizeBudgetDocument(budget));
+          skipAutosave.current = unchanged;
+          setDoc(repaired);
         } else {
           setDoc(null);
         }

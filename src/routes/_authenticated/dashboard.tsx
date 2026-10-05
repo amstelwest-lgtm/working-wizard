@@ -57,7 +57,7 @@ import {
   upgradeFirmBand,
 } from "@/lib/stripe-checkout.functions";
 import { inviteClientOwner, sendDraftedOwnerInvite } from "@/lib/client-invite.functions";
-import { assessClientMetrics } from "@/lib/client-metrics";
+import { assessClientMetrics, runwayDisplayLabel } from "@/lib/client-metrics";
 import { parseOperatingProfile } from "@/lib/client-profile";
 import { clientIndustryLabel } from "@/lib/profile-signals";
 import { countOpenQueriesByClient } from "@/lib/open-queries";
@@ -135,6 +135,8 @@ type ClientRow = Client & {
   trendDelta: number | null;
   /** Resolved runway (persisted or derived from cashflow). */
   runwayWeeks: number | null;
+  /** Same label Overview prints, including Cash generative. */
+  runwayLabel: string | null;
   /** Unresolved notes count. */
   openQueries: number;
   /** Open (not done) action-plan items. */
@@ -1278,6 +1280,7 @@ function Dashboard() {
         assessed.runway.kind === "weeks" || assessed.runway.kind === "zero"
           ? assessed.runway.weeks
           : null;
+      const runwayLabel = runwayDisplayLabel(assessed.runway);
       const clientMarket = resolveMarket(
         parseMarketSelection(c.market) ?? coerceMarketSelection(c.market),
       );
@@ -1309,6 +1312,7 @@ function Dashboard() {
         trend,
         trendDelta,
         runwayWeeks,
+        runwayLabel,
         openQueries,
         openActions,
         overdueActions,
@@ -1608,9 +1612,8 @@ function Dashboard() {
   }
 
   function runwayStr(c: ClientRow): string {
+    if (c.runwayLabel) return c.runwayLabel;
     if (c.runwayWeeks == null) return "—";
-    const months = c.runwayWeeks / 4.345;
-    if (months >= 1) return `${months.toFixed(1)} months`;
     return `${c.runwayWeeks} wk`;
   }
 

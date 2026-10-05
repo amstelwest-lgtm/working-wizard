@@ -162,7 +162,7 @@ assert(
 );
 
 const forecastSrc = read("src/components/cash-forecast.tsx");
-assert(!forecastSrc.includes("if (cf.collectDelay != null) setCollectDelay"), "scenarios do not reload as on");
+assert(forecastSrc.includes("storedCollectDelay"), "a stored collection delay reloads with the series");
 assert(forecastSrc.includes("forecastInTheBlack"), "the badge uses the shared in-the-black test");
 assert(forecastSrc.includes("scenarioLabel"), "an active scenario is labelled on the forecast");
 const sphere = read("src/components/sphere-hero.tsx");

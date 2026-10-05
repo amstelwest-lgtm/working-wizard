@@ -104,8 +104,8 @@ import {
 import { healthFromRatioInputs, healthMapFromRatios, scoreRatio } from "@/lib/health-score";
 import { ratioActualLine } from "@/lib/ratio-actuals";
 import { type SavedCashflowLike } from "@/lib/cash-runway";
-import { assessClientMetrics, resolveThirteenWeekForecast } from "@/lib/client-metrics";
-import { DERIVED_EQUITY_LABEL } from "@/lib/statement-financials";
+import { assessClientMetrics, runwayDisplayLabel } from "@/lib/client-metrics";
+import { DERIVED_EQUITY_LABEL, readTimeEquity } from "@/lib/statement-financials";
 import { needsTrialBalanceRefresh } from "@/lib/trial-balance-refresh";
 import { TrialBalanceRefreshPrompt } from "@/components/trial-balance-refresh-prompt";
 import {
@@ -2984,7 +2984,12 @@ function Index() {
             skipNextFinancialsAutosave.current = true;
           }
           if (hasRealKeys) {
-            setV({ ...defaults, ...fin });
+            const plugged = readTimeEquity(fin as Record<string, unknown>);
+            setV({
+              ...defaults,
+              ...fin,
+              ...(plugged.derived ? { equity: plugged.equity, equityDerived: "1" } : {}),
+            });
             setHasRealFinancials(true);
             // Only arm the skip flag when hydration actually populated real data —
             // that's the only case where the autosave effect will run right after
@@ -3622,18 +3627,13 @@ function Index() {
     financials: v as unknown as Record<string, unknown>,
     cashflow: clientMeta?.cashflow ?? null,
     financialsUpdatedAt: clientMeta?.financials_updated_at ?? null,
+    timeZone: boardMarket.timezone,
   });
   const effectiveRunway =
     ownerMetrics.runway.kind === "weeks" || ownerMetrics.runway.kind === "zero"
       ? ownerMetrics.runway.weeks
       : null;
-  const ownerOutlook = resolveThirteenWeekForecast({
-    financials: v as unknown as Record<string, unknown>,
-    cashflow: clientMeta?.cashflow ?? null,
-    openingCash: ownerMetrics.cash.amount,
-    runway: ownerMetrics.runway,
-    timeZone: boardMarket.timezone,
-  });
+  const ownerOutlook = ownerMetrics.outlook;
   const overallHealth = healthFromRatioInputs(
     v,
     effectiveRunway,
@@ -5322,6 +5322,11 @@ function Index() {
                     hasFirm={Boolean(clientMeta?.firm_id)}
                     refreshKey={`${activeTab}|${advisoryBump}`}
                     onChanged={() => setAdvisoryBump((n) => n + 1)}
+                    currentFigures={{
+                      runwayLabel: runwayDisplayLabel(ownerMetrics.runway),
+                      cash: ownerOutlook.opening,
+                      healthScore: overallHealth.overall,
+                    }}
                   />
                 ) : null}
                 {/* P3 — owner-only clients can ask a listed firm to review the pack; hidden once a firm is attached. */}

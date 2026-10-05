@@ -26,7 +26,11 @@ import {
   shapeTasks,
 } from "./tools.ts";
 import type { AdvisoryFacts } from "../../../src/lib/advisory-state.ts";
-import { assessClientMetrics } from "../../../src/lib/client-metrics.ts";
+import {
+  assessClientMetrics,
+  persistedRunwayWeeks,
+  runwayDisplayLabel,
+} from "../../../src/lib/client-metrics.ts";
 import type { NextStepFacts } from "../../../src/lib/next-step.ts";
 
 type Ctx = {
@@ -354,7 +358,9 @@ export async function executeAgentTool(
     const [clientRes, peopleRes] = await Promise.all([
       ctx.userClient
         .from("clients")
-        .select("name, business_type, advisory_state, firm_id, cash_runway_weeks")
+        .select(
+          "name, business_type, advisory_state, firm_id, financials, cashflow, financials_updated_at",
+        )
         .eq("id", ctx.clientId)
         .maybeSingle(),
       ctx.userClient
@@ -366,13 +372,20 @@ export async function executeAgentTool(
         .limit(20),
     ]);
     const client = clientRes.data;
+    const companyMetrics = assessClientMetrics({
+      financials:
+        client?.financials && typeof client.financials === "object"
+          ? (client.financials as Record<string, unknown>)
+          : null,
+      cashflow: client?.cashflow,
+      financialsUpdatedAt: (client?.financials_updated_at as string | null) ?? null,
+    });
     return shapeCompany({
       name: (client?.name as string | null) ?? null,
       businessType: (client?.business_type as string | null) ?? null,
       advisoryState: (client?.advisory_state as string | null) ?? null,
       hasFirm: Boolean(client?.firm_id),
-      cashRunwayWeeks:
-        typeof client?.cash_runway_weeks === "number" ? client.cash_runway_weeks : null,
+      cashRunwayWeeks: persistedRunwayWeeks(companyMetrics.runway),
       people: (peopleRes.data ?? []) as Array<{ id: string; name: string; role: string | null }>,
     });
   }
@@ -388,22 +401,21 @@ export async function executeAgentTool(
         .maybeSingle(),
       ctx.userClient
         .from("clients")
-        .select("name, market, cash_runway_weeks, financials, brain_summary")
+        .select("name, market, financials, cashflow, financials_updated_at, brain_summary")
         .eq("id", ctx.clientId)
         .maybeSingle(),
     ]);
     const snap = snapRes.data;
-    const runway =
-      typeof clientRes.data?.cash_runway_weeks === "number"
-        ? clientRes.data.cash_runway_weeks
-        : clientRes.data?.cash_runway_weeks != null &&
-            Number.isFinite(Number(clientRes.data.cash_runway_weeks))
-          ? Number(clientRes.data.cash_runway_weeks)
-          : null;
     const liveFinancials =
       clientRes.data?.financials && typeof clientRes.data.financials === "object"
         ? (clientRes.data.financials as Record<string, unknown>)
         : null;
+    const healthMetrics = assessClientMetrics({
+      financials: liveFinancials,
+      cashflow: clientRes.data?.cashflow,
+      financialsUpdatedAt: (clientRes.data?.financials_updated_at as string | null) ?? null,
+    });
+    const runway = persistedRunwayWeeks(healthMetrics.runway);
     if (name === "get_health") {
       const resolved = resolveRatioRecord(
         (snap?.ratios ?? null) as Record<string, unknown> | null,
@@ -414,6 +426,8 @@ export async function executeAgentTool(
         financials: liveFinancials,
         ratios: resolved,
         runwayWeeks: runway,
+        runwayLabel: runwayDisplayLabel(healthMetrics.runway),
+        cash: healthMetrics.cash.amount,
         copyPack,
         clientName: typeof clientRes.data?.name === "string" ? clientRes.data.name : null,
         brainSummary: clientRes.data?.brain_summary ?? null,
@@ -452,14 +466,13 @@ export async function executeAgentTool(
       .select("cashflow, cash_runway_weeks, financials, financials_updated_at")
       .eq("id", ctx.clientId)
       .maybeSingle();
-    const runway = typeof data?.cash_runway_weeks === "number" ? data.cash_runway_weeks : null;
     const financials = (data?.financials ?? null) as Record<string, unknown> | null;
     const metrics = assessClientMetrics({
       financials,
       cashflow: data?.cashflow,
       financialsUpdatedAt: (data?.financials_updated_at as string | null) ?? null,
     });
-    return shapeCash(data?.cashflow, metrics.runway.weeks ?? runway, {
+    return shapeCash(data?.cashflow, persistedRunwayWeeks(metrics.runway), {
       financials,
       openingCash: metrics.cash.amount,
       runway: metrics.runway,
@@ -598,7 +611,7 @@ export async function executeAgentTool(
         .limit(30),
       ctx.userClient
         .from("clients")
-        .select("brain_summary, cash_runway_weeks")
+        .select("brain_summary, financials, cashflow, financials_updated_at")
         .eq("id", ctx.clientId)
         .maybeSingle(),
       ctx.userClient
@@ -619,10 +632,15 @@ export async function executeAgentTool(
       if (filtered.length) facts = filtered;
     }
     const snap = snapRes.data;
-    const cash =
-      typeof clientRes.data?.cash_runway_weeks === "number"
-        ? clientRes.data.cash_runway_weeks
-        : null;
+    const brainMetrics = assessClientMetrics({
+      financials:
+        clientRes.data?.financials && typeof clientRes.data.financials === "object"
+          ? (clientRes.data.financials as Record<string, unknown>)
+          : null,
+      cashflow: clientRes.data?.cashflow,
+      financialsUpdatedAt: (clientRes.data?.financials_updated_at as string | null) ?? null,
+    });
+    const cash = persistedRunwayWeeks(brainMetrics.runway);
     return buildBrainAnswer({
       facts,
       brainSummary: clientRes.data?.brain_summary ?? null,

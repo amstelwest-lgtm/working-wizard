@@ -20,7 +20,7 @@ interface SimplifiedRatiosProps {
 }
 
 function statusLabel(health: number, status?: HealthTier): string {
-  if (!isFinite(health)) return "NO DATA";
+  if (!isFinite(health)) return "No data";
   return healthBandLabel(status ?? scoreTier(health));
 }
 
@@ -59,14 +59,14 @@ export function SimplifiedRatios({
             key={card.id}
             className="flex flex-col gap-1 rounded-2xl border border-white/8 bg-white/[0.04] px-4 pb-3 pt-4"
           >
-            <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">
+            <span className="text-[10px] font-bold tracking-[0.12em] text-slate-400">
               {card.label}
             </span>
             <span className="text-[28px] font-bold leading-none text-white">
               {displayHealth}
             </span>
             <span
-              className="text-[10px] font-semibold uppercase tracking-[0.08em]"
+              className="text-[10px] font-semibold tracking-[0.08em]"
               style={{ color }}
             >
               {statusLabel(card.health, card.status)}
