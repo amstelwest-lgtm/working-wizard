@@ -21,9 +21,9 @@ import {
 } from "./deliverable-summaries.ts";
 import {
   DISPLAY_TO_CAMEL,
-  pillarBreakdownFromRatios,
   resolveRatioRecord,
 } from "./derive-ratios.ts";
+import { buildOverviewBrief, copyPackFromMarket } from "./overview-brief.ts";
 
 /**
  * Maps the application's stored business_type values to the benchmark category keys
@@ -86,14 +86,6 @@ function inferFormat(camelKey: string): string {
  */
 const MONETARY_DERIVED_KEYS = new Set(["salesPerEmployee", "gpToLabor"]);
 
-function copyPackFromMarket(raw: unknown): "za" | "us" {
-  if (raw && typeof raw === "object" && "country" in raw) {
-    const country = (raw as { country?: unknown }).country;
-    if (country === "US") return "us";
-  }
-  return "za";
-}
-
 const PILLAR_RATIO_KEYS: Record<string, string[]> = {
   cash: ["debtorDays", "creditorDays", "inventoryDays", "workingCapitalDays", "ocfToEbitda"],
   profit: ["grossMargin", "operatingMargin", "netMargin", "fixedCostRatio", "dol"],
@@ -120,11 +112,13 @@ export async function buildContext(
   let financials: Record<string, unknown> | null = null;
   let cashflow: SavedCashflow | null = null;
   let storedRunway: number | null = null;
+  let clientName: string | null = null;
+  let brainSummary: unknown = null;
   if (tier !== "none") {
     let { data, error } = await supabase
       .from("clients")
       .select(
-        "id, business_type, financials, operating_profile, market, cashflow, cash_runway_weeks",
+        "id, name, business_type, financials, operating_profile, market, cashflow, cash_runway_weeks, brain_summary",
       )
       .eq("id", clientId)
       .maybeSingle();
@@ -143,6 +137,8 @@ export async function buildContext(
 
     if (data) {
       copyPack = copyPackFromMarket((data as { market?: unknown }).market);
+      clientName = typeof (data as { name?: unknown }).name === "string" ? (data as { name: string }).name : null;
+      brainSummary = (data as { brain_summary?: unknown }).brain_summary ?? null;
       const fin = (data.financials ?? {}) as Record<string, unknown>;
       financials = fin && typeof fin === "object" && !Array.isArray(fin) ? fin : null;
       cashflow = (data as { cashflow?: SavedCashflow | null }).cashflow ?? null;
@@ -187,17 +183,9 @@ export async function buildContext(
   }
 
   // ── Scores ────────────────────────────────────────────────────────────────
+  // Live Overview health (financials + runway). client_score_history can lag
+  // the figures the accountant is looking at, so it is not the score source.
   let scores: ScoreRow | null = null;
-  if (tier !== "none") {
-    const { data } = await supabase
-      .from("client_score_history")
-      .select("score")
-      .eq("client_id", clientId)
-      .order("period_date", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (data) scores = { overall_score: data.score };
-  }
 
   // ── Ratios ────────────────────────────────────────────────────────────────
   // client_financial_snapshots.ratios stores a flat Record<string, number>
@@ -207,20 +195,26 @@ export async function buildContext(
   // We translate via DISPLAY_TO_CAMEL before the benchmark join.
   let ratios: RatioRow[] = [];
   let rankingRatios: RatioRow[] = [];
+  let snapPeriod: string | null = null;
+  let snapDate: string | null = null;
+  let fallbackRatios: Record<string, number> | null = null;
   if (tier !== "none") {
     const { data: snap } = await supabase
       .from("client_financial_snapshots")
-      .select("ratios")
+      .select("ratios, period_label, period_date")
       .eq("client_id", clientId)
       .order("period_date", { ascending: false })
       .limit(1)
       .maybeSingle();
+    snapPeriod = (snap?.period_label as string | null) ?? null;
+    snapDate = (snap?.period_date as string | null) ?? null;
 
     const snapRatios =
       snap?.ratios && typeof snap.ratios === "object" && !Array.isArray(snap.ratios)
         ? (snap.ratios as Record<string, unknown>)
         : null;
     const rawRatios = resolveRatioRecord(snapRatios, financials);
+    fallbackRatios = rawRatios;
 
     if (Object.keys(rawRatios).length > 0) {
       // Focused questions still see one pillar in the ratio list; next-step
@@ -244,9 +238,6 @@ export async function buildContext(
         if (!isFinite(Number(rawVal))) continue;
         entries.push({ displayKey, camelKey, value: Number(rawVal) });
       }
-
-      if (!scores) scores = { overall_score: null };
-      scores.pillars = pillarBreakdownFromRatios(rawRatios);
 
       if (entries.length > 0) {
         const camelKeys = entries.map((e) => e.camelKey);
@@ -325,6 +316,26 @@ export async function buildContext(
       if (row?.scope) signedScopes.add(String(row.scope));
     }
   }
+  const overview =
+    tier === "none"
+      ? null
+      : buildOverviewBrief({
+          financials,
+          ratios: fallbackRatios,
+          runwayWeeks: storedRunway,
+          copyPack,
+          clientName,
+          periodLabel: snapPeriod,
+          figuresAsOf: snapDate,
+          brainSummary,
+        });
+  if (overview && (overview.health != null || overview.pillars.some((p) => p.score != null))) {
+    scores = {
+      overall_score: overview.health,
+      pillars: overview.pillars.map((p) => ({ id: p.id, label: p.label, score: p.score })),
+    };
+  }
+
   const deliverables =
     tier === "none"
       ? []
@@ -352,5 +363,6 @@ export async function buildContext(
     nextSteps,
     actionPlan,
     deliverables,
+    overview,
   };
 }

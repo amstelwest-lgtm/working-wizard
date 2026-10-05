@@ -6,6 +6,11 @@
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import type { AgentAudience, AgentToolName } from "./agent.ts";
 import { resolveRatioRecord } from "../ask-ai/derive-ratios.ts";
+import {
+  buildOverviewBrief,
+  copyPackFromMarket,
+  overviewFactLines,
+} from "../ask-ai/overview-brief.ts";
 import { buildBlockers, buildBrainAnswer, buildInviteStatus, numericRatios } from "./logic.ts";
 import {
   coerceAdvisoryState,
@@ -382,7 +387,7 @@ export async function executeAgentTool(
         .maybeSingle(),
       ctx.userClient
         .from("clients")
-        .select("cash_runway_weeks, financials")
+        .select("name, market, cash_runway_weeks, financials, brain_summary")
         .eq("id", ctx.clientId)
         .maybeSingle(),
     ]);
@@ -390,13 +395,46 @@ export async function executeAgentTool(
     const runway =
       typeof clientRes.data?.cash_runway_weeks === "number"
         ? clientRes.data.cash_runway_weeks
+        : clientRes.data?.cash_runway_weeks != null &&
+            Number.isFinite(Number(clientRes.data.cash_runway_weeks))
+          ? Number(clientRes.data.cash_runway_weeks)
+          : null;
+    const liveFinancials =
+      clientRes.data?.financials && typeof clientRes.data.financials === "object"
+        ? (clientRes.data.financials as Record<string, unknown>)
         : null;
     if (name === "get_health") {
       const resolved = resolveRatioRecord(
         (snap?.ratios ?? null) as Record<string, unknown> | null,
-        (snap?.financials ?? clientRes.data?.financials ?? null) as Record<string, unknown> | null,
+        (snap?.financials ?? liveFinancials) as Record<string, unknown> | null,
       );
-      return shapeHealth(resolved, runway);
+      const copyPack = copyPackFromMarket(clientRes.data?.market);
+      const brief = buildOverviewBrief({
+        financials: liveFinancials,
+        ratios: resolved,
+        runwayWeeks: runway,
+        copyPack,
+        clientName: typeof clientRes.data?.name === "string" ? clientRes.data.name : null,
+        brainSummary: clientRes.data?.brain_summary ?? null,
+        periodLabel: (snap?.period_label as string | null) ?? null,
+        figuresAsOf: (snap?.period_date as string | null) ?? null,
+      });
+      const shaped = shapeHealth(resolved, runway, copyPack);
+      return {
+        ...shaped,
+        overall: brief.health,
+        health_label: brief.healthLabel,
+        pillars: brief.pillars.map((p) => ({ id: p.id, label: p.label, score: p.score })),
+        weakest: brief.weakest,
+        cash_on_file: brief.cash,
+        revenue: brief.revenue,
+        creditor_days: brief.creditorDays,
+        debtor_days: brief.debtorDays,
+        gross_margin: brief.grossMargin,
+        operating_margin: brief.operatingMargin,
+        net_margin: brief.netMargin,
+        overview_lines: overviewFactLines(brief),
+      };
     }
     return shapeSnapshot({
       periodLabel: (snap?.period_label as string | null) ?? null,
