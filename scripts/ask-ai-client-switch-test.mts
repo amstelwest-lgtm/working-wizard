@@ -422,14 +422,44 @@ await test("Scenario 4b: brain-tool chips POST to milon-bot with message + histo
     getToken: async () => "test-token",
   });
 
-  fillAndSend(container, "Draft an advisory pack from the brain — don't send it.");
+  fillAndSend(container, "What's still outstanding on the brain, and is the invite redeemed?");
   await new Promise((r) => setTimeout(r, 0));
 
   assert(calls.length === 1, `expected 1 fetch call, got ${calls.length}`);
   assert(String(calls[0].url).includes("/milon-bot"), `brain tools should hit milon-bot, got ${calls[0].url}`);
-  assert(calls[0].body.message === "Draft an advisory pack from the brain — don't send it.", "bot uses message");
+  assert(
+    calls[0].body.message === "What's still outstanding on the brain, and is the invite redeemed?",
+    "bot uses message",
+  );
   assert(calls[0].body.audience === "accountant", "bot POST keeps accountant audience");
   assert(Array.isArray(calls[0].body.history), "bot POST includes history");
+  assert(calls[0].body.mode !== "create", "a brain question is not a create");
+});
+
+await test("Scenario 4c: draft chip persists instead of chatting", async () => {
+  const { mockFetch, calls } = makeMockFetch();
+  (globalThis as Record<string, unknown>).fetch = mockFetch;
+
+  const container = makeContainer("route-client");
+  mountAskAi(container, {
+    endpoint: "https://example.com/functions/v1/ask-ai",
+    botEndpoint: "https://example.com/functions/v1/milon-bot",
+    audience: "accountant",
+    variant: "studio",
+    getToken: async () => "test-token",
+  });
+
+  fillAndSend(container, "Draft an advisory pack from the brain — don't send it.");
+  await new Promise((r) => setTimeout(r, 0));
+
+  assert(calls.length === 1, `expected 1 fetch call, got ${calls.length}`);
+  assert(String(calls[0].url).includes("/milon-bot"), `create should hit milon-bot, got ${calls[0].url}`);
+  assert(calls[0].body.mode === "create", "draft chip posts mode create");
+  assert(
+    calls[0].body.message === "Draft an advisory pack from the brain — don't send it.",
+    "create still sends the question",
+  );
+  assert(calls[0].body.audience === "accountant", "create keeps accountant audience");
 });
 
 // ── Summary ───────────────────────────────────────────────────────────────────
