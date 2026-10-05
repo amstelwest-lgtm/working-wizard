@@ -114,6 +114,31 @@ assert(
 const fns = readFileSync(resolve("src/lib/lighthouse.functions.ts"), "utf8");
 assert(fns.includes("next.auto_send = false"), "auto_send stays false");
 assert(fns.includes("sendBlockedReason"), "the send path enforces the window");
+assert(
+  fns.includes("if (windowBlock) throw new Error(windowBlock)"),
+  "server-side sendBlockedReason check still throws before send",
+);
 assert(fns.includes(LIGHTHOUSE_SENDER_NAME) || fns.includes("LIGHTHOUSE_SENDER_NAME"), "send module keeps the team signer");
+
+const panel = readFileSync(resolve("src/components/lighthouse-panel.tsx"), "utf8");
+assert((panel.match(/preview: true/g) ?? []).length >= 2, "preview flag exists in inbox and drawer");
+assert(panel.includes("Preview send"), "Preview send is offered when the window is closed");
+assert(
+  panel.includes("Preview only — send window closed:"),
+  "preview dialog names the closed-window reason",
+);
+assert(
+  /disabled=\{Boolean\(confirmSend\.preview\)\}[\s\S]{0,1600}Confirm send/.test(panel),
+  "Confirm send is disabled when preview",
+);
+assert(
+  /if \(confirmSend\.preview\) return;[\s\S]{0,800}sendTouch\(/.test(panel),
+  "preview onClick returns before sendTouch",
+);
+assert(panel.includes("disabled={!window?.open}"), "inbox Send now stays disabled outside the window");
+assert(
+  panel.includes("disabled={sending || !approved || !windowStatus.open || lead.doNotContact}"),
+  "drawer Send now stays disabled outside the window",
+);
 
 console.log("lighthouse send windows ok");
