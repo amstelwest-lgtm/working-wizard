@@ -37,6 +37,7 @@ import {
 import {
   firmCheckoutSessionParams,
   firmIntegrationIdentifier,
+  firmSetupCheckoutMessage,
   firmSetupCheckoutSessionParams,
   firmUpgradeCheckoutSessionParams,
   readFirmSetupUpgrade,
@@ -330,6 +331,8 @@ const setup = firmSetupCheckoutSessionParams({
   lookupKey: "milon_solo_monthly",
   band: "solo",
   interval: "month",
+  price: { unit_amount: 9_900, currency: "usd", recurring: { interval: "month" } },
+  saMarket: false,
 });
 assert(setup.mode === "setup", "a cardless subscription uses Checkout setup mode");
 assert(setup.customer === "cus_starter", "setup Checkout stays on the existing customer");
@@ -345,6 +348,72 @@ assert(setup.metadata?.milon_lookup_key === "milon_solo_monthly", "setup session
 assert(setup.metadata?.milon_plan === "solo", "setup session names the band");
 assert(setup.metadata?.milon_interval === "month", "setup session names the interval");
 assert(setup.metadata?.milon_user_id === "user_1", "setup session names the user");
+assert(
+  setup.custom_text?.submit?.message ===
+    "Saving this card moves you to MILŌN Solo at $99/month (15 clients). Billed in USD, cancel anytime.",
+  "setup Checkout names the plan and the resolved price",
+);
+assert(
+  setup.custom_text?.after_submit?.message === setup.custom_text?.submit?.message,
+  "setup Checkout repeats the plan on after_submit",
+);
+assert(
+  !setup.custom_text?.submit?.message?.includes("South Africa") &&
+    !setup.custom_text?.submit?.message?.includes("50% off"),
+  "a US setup Checkout has no discount text",
+);
+
+const usMonthly = firmSetupCheckoutMessage({
+  bandName: "Solo",
+  clientLimit: 15,
+  unitAmount: 9_900,
+  currency: "usd",
+  interval: "month",
+  saMarket: false,
+});
+const usYearly = firmSetupCheckoutMessage({
+  bandName: "Solo",
+  clientLimit: 15,
+  unitAmount: 95_000,
+  currency: "usd",
+  interval: "year",
+  saMarket: false,
+});
+const saMonthly = firmSetupCheckoutMessage({
+  bandName: "Solo",
+  clientLimit: 15,
+  unitAmount: 9_900,
+  currency: "usd",
+  interval: "month",
+  saMarket: true,
+});
+assert(
+  usMonthly ===
+    "Saving this card moves you to MILŌN Solo at $99/month (15 clients). Billed in USD, cancel anytime.",
+  "US monthly setup copy uses the price amount",
+);
+assert(
+  usYearly ===
+    "Saving this card moves you to MILŌN Solo at $950/year (15 clients). Billed in USD, cancel anytime.",
+  "US yearly setup copy uses the price amount",
+);
+assert(
+  saMonthly ===
+    "Saving this card moves you to MILŌN Solo at $49.50/month (South Africa pricing: 50% off) (15 clients). Billed in USD, cancel anytime.",
+  "SA monthly setup copy shows the discounted charge",
+);
+assert(!usMonthly.includes("50% off") && !usYearly.includes("South Africa"), "US copy has no discount text");
+assert(
+  firmSetupCheckoutMessage({
+    bandName: "Solo",
+    clientLimit: 15,
+    unitAmount: 10_900,
+    currency: "usd",
+    interval: "month",
+    saMarket: false,
+  }).includes("$109/month"),
+  "the amount is the resolved price, not a hardcoded catalog figure",
+);
 assert(
   setup.setup_intent_data?.metadata?.milon_subscription_id === "sub_starter",
   "the setup intent carries the subscription id",
