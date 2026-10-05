@@ -66,9 +66,11 @@ html.dark .mk {
 }
 
 .mk-wrap {
+  width: min(820px, 100%);
   max-width: 820px;
   margin: 0 auto;
   padding: 0 24px;
+  min-width: 0;
 }
 
 /* ── Header ─────────────────────────────────────────────────────────────── */
@@ -77,8 +79,9 @@ html.dark .mk {
   top: 0;
   z-index: 20;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 14px;
+  gap: 10px 14px;
   padding: 15px 24px;
   background: color-mix(in srgb, var(--bg) 88%, transparent);
   backdrop-filter: blur(14px);
@@ -152,7 +155,8 @@ html.dark .mk .mk-top-cta {
 .mk .mk-hero::before {
   content: "";
   position: absolute;
-  inset: -60px -40% 0;
+  /* Stay inside the hero box. A negative horizontal inset overflowed the page near 1280px. */
+  inset: -60px 0 0;
   background: var(--halo);
   pointer-events: none;
   z-index: -1;
@@ -212,6 +216,10 @@ html .mk .mk-lead {
   line-height: 1.6;
   color: var(--ink-soft) !important;
   max-width: 62ch;
+}
+
+.mk .mk-hero-cta {
+  margin-top: 22px;
 }
 
 html .mk .mk-hero-plain {
@@ -684,6 +692,7 @@ html .mk .firm-bands-note {
   margin: 0 0 16px;
 }
 .mk .firm-bands-table-wrap {
+  max-width: 100%;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   border-radius: 16px;

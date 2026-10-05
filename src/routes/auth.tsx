@@ -16,6 +16,7 @@ import {
 } from "@/lib/user-roles";
 import { isOpsNext, lighthouseTabFromOpsNext } from "@/lib/client-note-link";
 import {
+  billingStartPath,
   billingStartSearch,
   checkoutEmailRedirectTo,
   FIRM_BILLING_SIGNIN_MESSAGE,
@@ -24,8 +25,16 @@ import {
   peekPendingCheckout,
   stashPendingCheckout,
   stashResumeFirmBilling,
+  type PendingCheckout,
 } from "@/lib/pending-checkout";
-import { firmSignupCheckoutIntent } from "@/lib/stripe-plans";
+import { practiceLocationHint } from "@/lib/firm-signup-copy";
+import { FirmSignupTerms } from "@/components/firm-signup-terms";
+import {
+  isFirmCheckoutBand,
+  isFirmInterval,
+  type FirmCheckoutBand,
+  type FirmInterval,
+} from "@/lib/stripe-plans";
 import { accessTokenFromNext } from "@/lib/practice-access";
 import { AuthDivider, GoogleSignInButton } from "@/components/google-sign-in-button";
 import { stashAccountantGoogleSignup } from "@/lib/google-auth";
@@ -55,24 +64,55 @@ import {
 
 import { pageHead, SEO_PAGES } from "@/lib/seo";
 
+type AuthSearch = {
+  next?: string;
+  signup?: boolean;
+  plan?: FirmCheckoutBand;
+  interval?: FirmInterval;
+};
+
 export const Route = createFileRoute("/auth")({
   component: AuthPage,
-  validateSearch: (search: Record<string, unknown>): { next?: string; signup?: boolean } => ({
-    next: typeof search.next === "string" && search.next.startsWith("/") ? search.next : undefined,
-    signup:
-      search.signup === true || search.signup === "1" || search.signup === "true"
-        ? true
-        : undefined,
-  }),
+  validateSearch: (search: Record<string, unknown>): AuthSearch => {
+    const next =
+      typeof search.next === "string" && search.next.startsWith("/") ? search.next : undefined;
+    const plan =
+      typeof search.plan === "string" && isFirmCheckoutBand(search.plan) ? search.plan : undefined;
+    const interval =
+      typeof search.interval === "string" && isFirmInterval(search.interval)
+        ? search.interval
+        : undefined;
+    const signupFlag =
+      search.signup === true || search.signup === "1" || search.signup === "true" || plan != null;
+    return {
+      ...(next ? { next } : {}),
+      ...(signupFlag ? { signup: true } : {}),
+      ...(plan ? { plan } : {}),
+      ...(interval ? { interval } : {}),
+    };
+  },
   head: () => pageHead(SEO_PAGES.auth),
 });
 
 function AuthPage() {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
-  const { next, signup } = Route.useSearch();
+  const { next, signup, plan, interval } = Route.useSearch();
   const ensurePractice = useServerFn(ensurePracticePortalAccess);
-  const [mode, setMode] = useState<"signin" | "signup">(signup ? "signup" : "signin");
+  // URL owns the tab. signup=true (or a plan query) opens Create Firm even if
+  // state was initialized on Sign in. A tab click sets an override, then rewrites the URL.
+  const [tabOverride, setTabOverride] = useState<"signin" | "signup" | null>(null);
+  const signupOn = Boolean(signup);
+  const [syncedSignup, setSyncedSignup] = useState(signupOn);
+  if (syncedSignup !== signupOn) {
+    setSyncedSignup(signupOn);
+    setTabOverride(null);
+  }
+  const mode: "signin" | "signup" = tabOverride ?? (signupOn ? "signup" : "signin");
+  const [storedBand, setStoredBand] = useState<{
+    plan: FirmCheckoutBand;
+    interval: FirmInterval;
+  } | null>(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
@@ -86,10 +126,45 @@ function AuthPage() {
   useEffect(() => {
     setMounted(true);
     setDraftMarket(readVisitorDraft());
+    const pending = peekPendingCheckout();
+    if (pending) setStoredBand({ plan: pending.plan, interval: pending.interval });
   }, []);
+  const selectedPlan = plan ?? storedBand?.plan ?? "solo";
+  const selectedInterval = interval ?? storedBand?.interval ?? "month";
+  const practiceHint = practiceLocationHint(draftMarket);
+
+  const pendingForSignup = (country: "ZA" | "US" | null): PendingCheckout => {
+    const existing = peekPendingCheckout();
+    const market = country === "ZA" ? "za" : country === "US" ? "us" : (existing?.market ?? "us");
+    return {
+      plan: selectedPlan,
+      interval: selectedInterval,
+      market,
+      ...(existing?.promo ? { promo: existing.promo } : {}),
+    };
+  };
+
+  const openSignIn = (pending?: PendingCheckout) => {
+    setTabOverride("signin");
+    void navigate({
+      to: "/auth",
+      search: pending ? { next: billingStartPath(pending) } : next ? { next } : {},
+      replace: true,
+    });
+  };
+
   useEffect(() => {
-    if (signup) setMode("signup");
-  }, [signup]);
+    if (mode !== "signup") return;
+    const existing = peekPendingCheckout();
+    // A bare /auth?signup=true must not wipe a band already stashed by pricing.
+    if (!plan && !interval && existing) return;
+    stashPendingCheckout({
+      plan: plan ?? existing?.plan ?? "solo",
+      interval: interval ?? existing?.interval ?? "month",
+      market: existing?.market ?? "us",
+      ...(existing?.promo ? { promo: existing.promo } : {}),
+    });
+  }, [mode, plan, interval]);
 
   useEffect(() => {
     if (!mounted) return;
@@ -195,9 +270,8 @@ function AuthPage() {
           toast.error("Pick South Africa or the United States (and a state) first.");
           return;
         }
-        const signupCheckout = firmSignupCheckoutIntent(market.country === "ZA" ? "za" : "us");
-        if (!peekPendingCheckout()) stashPendingCheckout(signupCheckout);
-        const pending = peekPendingCheckout() ?? signupCheckout;
+        const pending = pendingForSignup(market.country);
+        stashPendingCheckout(pending);
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
@@ -214,9 +288,9 @@ function AuthPage() {
           },
         });
         if (signupLooksAlreadyRegistered({ errorMessage: error?.message, user: data?.user })) {
-          if (!peekPendingCheckout()) stashPendingCheckout(pending);
+          stashPendingCheckout(pending);
           stashResumeFirmBilling();
-          setMode("signin");
+          openSignIn(pending);
           toast.message(FIRM_BILLING_SIGNIN_MESSAGE);
           return;
         }
@@ -291,9 +365,10 @@ function AuthPage() {
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Something went wrong";
       if (mode === "signup" && signupLooksAlreadyRegistered({ errorMessage: msg })) {
-        if (!peekPendingCheckout()) stashPendingCheckout(firmSignupCheckoutIntent());
+        const pending = pendingForSignup(draftToSelection(draftMarket)?.country ?? null);
+        stashPendingCheckout(pending);
         stashResumeFirmBilling();
-        setMode("signin");
+        openSignIn(pending);
         toast.message(FIRM_BILLING_SIGNIN_MESSAGE);
         return;
       }
@@ -314,12 +389,49 @@ function AuthPage() {
       <AuthEntryCard className="mt-6">
         <AuthEntryTabs
           value={mode}
-          onChange={(v) => setMode(v as typeof mode)}
+          onChange={(v) => {
+            if (v === "signin") {
+              openSignIn();
+              return;
+            }
+            setTabOverride("signup");
+            void navigate({
+              to: "/auth",
+              search: {
+                ...(next ? { next } : {}),
+                signup: true,
+                plan: selectedPlan,
+                interval: selectedInterval,
+              },
+              replace: true,
+            });
+          }}
           options={[
             { value: "signin", label: "Sign in" },
             { value: "signup", label: "Create firm" },
           ]}
         />
+
+        {mode === "signup" && (
+          <FirmSignupTerms
+            variant="auth"
+            plan={selectedPlan}
+            interval={selectedInterval}
+            onPlanChange={(nextPlan) => {
+              setTabOverride("signup");
+              void navigate({
+                to: "/auth",
+                search: {
+                  ...(next ? { next } : {}),
+                  signup: true,
+                  plan: nextPlan,
+                  interval: selectedInterval,
+                },
+                replace: true,
+              });
+            }}
+          />
+        )}
 
         {mounted && (
           <>
@@ -358,7 +470,13 @@ function AuthPage() {
                       value={draftMarket}
                       onChange={setDraftMarket}
                       audience="practice"
+                      locationNoun="practice"
                     />
+                    {practiceHint ? (
+                      <p id="practice-missing" className="firm-signup-hint" role="status">
+                        {practiceHint}
+                      </p>
+                    ) : null}
                   </div>
                   <div className="mt-5">
                     <GoogleSignInButton
@@ -382,11 +500,7 @@ function AuthPage() {
                           marketCountry: market.country,
                           marketRegion: market.regionCode,
                         });
-                        if (!peekPendingCheckout()) {
-                          stashPendingCheckout(
-                            firmSignupCheckoutIntent(market.country === "ZA" ? "za" : "us"),
-                          );
-                        }
+                        stashPendingCheckout(pendingForSignup(market.country));
                         return true;
                       }}
                       onError={(msg) => toast.error(msg)}
@@ -411,11 +525,25 @@ function AuthPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 minLength={8}
                 required
+                aria-describedby={mode === "signup" ? "auth-password-hint" : undefined}
               />
+              {mode === "signup" ? (
+                <p id="auth-password-hint" className="firm-signup-hint">
+                  At least 8 characters.
+                </p>
+              ) : null}
+              {mode === "signup" && practiceHint ? (
+                <p className="firm-signup-hint">
+                  Create firm account stays off until the practice location is filled in.
+                </p>
+              ) : null}
               <AuthEntryPrimaryButton
                 type="submit"
                 className="mt-6"
                 disabled={busy || (mode === "signup" && !isDraftComplete(draftMarket))}
+                aria-describedby={
+                  mode === "signup" && practiceHint ? "practice-missing" : undefined
+                }
               >
                 {busy ? "Please wait…" : mode === "signin" ? "Sign in" : "Create firm account"}
               </AuthEntryPrimaryButton>

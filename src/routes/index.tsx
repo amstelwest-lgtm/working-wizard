@@ -12,6 +12,12 @@ import { registerLighthouseTrialVisit } from "@/lib/lighthouse.functions";
 import { AuthDivider, GoogleSignInButton } from "@/components/google-sign-in-button";
 import { GooglePreferredSourceButton } from "@/components/google-preferred-source-button";
 import { FirmBandPricingTable } from "@/components/firm-band-pricing";
+import {
+  DUAL_MARKET_BUILT,
+  DUAL_MARKET_TAGLINE,
+  practiceLocationHint,
+} from "@/lib/firm-signup-copy";
+import { FirmSignupTerms } from "@/components/firm-signup-terms";
 import { MarketPicker } from "@/components/market-picker";
 import { RegionCopy } from "@/components/marketing-shell";
 import {
@@ -1212,9 +1218,14 @@ function LandingPage() {
       setRegBusy(true);
       try {
         setPortalIntent("accountant");
-        const signupCheckout = firmSignupCheckoutIntent(market.country === "ZA" ? "za" : "us");
-        if (!peekPendingCheckout()) stashPendingCheckout(signupCheckout);
-        const pending = peekPendingCheckout() ?? signupCheckout;
+        const promo = peekPendingCheckout()?.promo;
+        const pending = {
+          plan: paidPlanFromRegisterLabel(regPlan) ?? "solo",
+          interval: firmInterval,
+          market: visitorCopyPack(draftMarket),
+          ...(promo ? { promo } : {}),
+        };
+        stashPendingCheckout(pending);
         const { data, error } = await supabase.auth.signUp({
           email: regEmail,
           password: regPassword,
@@ -1357,7 +1368,7 @@ function LandingPage() {
       return;
     }
     toast.message(`Create your firm account to start ${registerLabelForPlan(plan)}.`);
-    void navigate({ to: "/auth", search: { signup: true } });
+    void navigate({ to: "/auth", search: { signup: true, plan, interval } });
   };
 
   const goToFirmSignup = (opts?: {
@@ -2129,9 +2140,6 @@ function LandingPage() {
             >
               Create firm account
             </a>
-            <a href="#register" onClick={() => setMobileNavOpen(false)}>
-              Sign up
-            </a>
             <a href="#method" onClick={() => setMobileNavOpen(false)}>
               The MILŌN Method
             </a>
@@ -2446,13 +2454,7 @@ function LandingPage() {
               <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
               <path d="M16 3.13a4 4 0 0 1 0 7.75" />
             </svg>
-            <span>
-              <RegionCopy
-                pack={copyMarket.copyPack}
-                za="Built for SA SMEs"
-                us="Built for US SMBs"
-              />
-            </span>
+            <span>{DUAL_MARKET_BUILT}</span>
           </div>
           <div className="item">
             <svg
@@ -3127,7 +3129,9 @@ function LandingPage() {
                 ) : (
                   /* ── Standard signup form ── */
                   <>
-                    <label htmlFor="regRoleField">I am a</label>
+                    <label htmlFor="regRoleField">
+                      {regRole.startsWith("Accountant") ? "I am an" : "I am a"}
+                    </label>
                     <select
                       id="regRoleField"
                       value={regRole}
@@ -3148,6 +3152,20 @@ function LandingPage() {
 
                     {regRole === "Accountant / Advisory firm" ? (
                       <>
+                        <FirmSignupTerms
+                          variant="landing"
+                          showRole={false}
+                          plan={paidPlanFromRegisterLabel(regPlan) ?? "solo"}
+                          interval={firmInterval}
+                          onPlanChange={(nextPlan) => {
+                            setRegPlan(registerLabelForPlan(nextPlan));
+                            stashPendingCheckout({
+                              plan: nextPlan,
+                              interval: firmInterval,
+                              market: visitorCopyPack(draftMarket),
+                            });
+                          }}
+                        />
                         <div style={{ margin: "8px 0 18px" }}>
                           <MarketPicker
                             value={draftMarket}
@@ -3155,16 +3173,22 @@ function LandingPage() {
                             variant="landing"
                             audience="practice"
                           />
+                          {practiceLocationHint(draftMarket) ? (
+                            <p className="firm-signup-hint" role="status">
+                              {practiceLocationHint(draftMarket)}
+                            </p>
+                          ) : null}
                         </div>
                         <GoogleSignInButton
                           intent="accountant"
                           tone="landing"
                           label="Continue with Google"
                           disabled={regBusy || !isDraftComplete(draftMarket)}
-                          next={billingStartPath(
-                            peekPendingCheckout() ??
-                              firmSignupCheckoutIntent(visitorCopyPack(draftMarket)),
-                          )}
+                          next={billingStartPath({
+                            plan: paidPlanFromRegisterLabel(regPlan) ?? "solo",
+                            interval: firmInterval,
+                            market: visitorCopyPack(draftMarket),
+                          })}
                           onBeforeStart={() => {
                             const market = draftToSelection(draftMarket);
                             if (!market) {
@@ -3181,11 +3205,11 @@ function LandingPage() {
                               marketCountry: market.country,
                               marketRegion: market.regionCode,
                             });
-                            if (!peekPendingCheckout()) {
-                              stashPendingCheckout(
-                                firmSignupCheckoutIntent(market.country === "ZA" ? "za" : "us"),
-                              );
-                            }
+                            stashPendingCheckout({
+                              plan: paidPlanFromRegisterLabel(regPlan) ?? "solo",
+                              interval: firmInterval,
+                              market: market.country === "ZA" ? "za" : "us",
+                            });
                             return true;
                           }}
                           onError={(msg) => showRegisterError(msg)}
@@ -3230,20 +3254,17 @@ function LandingPage() {
                           minLength={6}
                           value={regPassword}
                           onChange={(e) => setRegPassword(e.target.value)}
+                          aria-describedby="register-password-hint"
                         />
-
-                        <p
-                          style={{
-                            marginTop: 18,
-                            color: "var(--ink-dim)",
-                            fontSize: 13,
-                            lineHeight: 1.6,
-                          }}
-                        >
-                          {paidPlanFromRegisterLabel(regPlan)
-                            ? `You will start on ${regPlan} with a ${FIRM_TRIAL_SENTENCE}. A card is required. After day 14 the paid band bills automatically.`
-                            : `${FIRM_TRIAL_SENTENCE}. A card is required. Pick a band in Pricing if you already know your book size.`}
+                        <p id="register-password-hint" className="firm-signup-hint">
+                          At least 6 characters.
                         </p>
+
+                        {practiceLocationHint(draftMarket) ? (
+                          <p className="firm-signup-hint">
+                            Create firm account stays off until the practice location is filled in.
+                          </p>
+                        ) : null}
 
                         <button
                           type="submit"
@@ -3449,11 +3470,7 @@ function LandingPage() {
             <span style={{ fontSize: 12, color: "var(--ink-dim)" }}>
               The AI-powered finance function
               <br />
-              <RegionCopy
-                pack={copyMarket.copyPack}
-                za="for South African SMEs"
-                us="for US small businesses"
-              />
+              {DUAL_MARKET_TAGLINE}
             </span>
             <GooglePreferredSourceButton defaultTheme="dark" />
           </div>
@@ -3514,11 +3531,7 @@ function LandingPage() {
                 AI notice
               </a>
               {" · "}
-              <RegionCopy
-                pack={copyMarket.copyPack}
-                za="Built for South Africa · Powered by Claude AI"
-                us="Built for the United States · Powered by Claude AI"
-              />
+              {DUAL_MARKET_BUILT} · Powered by Claude AI
             </span>
           </div>
         </div>

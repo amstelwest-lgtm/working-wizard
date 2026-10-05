@@ -343,9 +343,41 @@ assert(
   authPage.includes("FIRM_BILLING_SIGNIN_MESSAGE"),
   "accountant /auth already-registered mentions finishing billing",
 );
+// Tab is URL-owned: already-registered must call openSignIn (clears ?signup=true).
+// A leftover setMode("signin") would snap back to Create Firm while signup=true.
+const authAlready = authPage.slice(
+  authPage.indexOf(
+    "if (signupLooksAlreadyRegistered({ errorMessage: error?.message, user: data?.user }))",
+  ),
+  authPage.indexOf("if (!data.session)"),
+);
 assert(
-  authPage.includes('setMode("signin")'),
+  authAlready.includes("openSignIn("),
   "accountant /auth switches to sign-in instead of check-your-email",
+);
+assert(
+  !authAlready.includes("check your email"),
+  "already-registered firm signup does not stop on check-your-email",
+);
+const authConfirm = authPage.slice(
+  authPage.indexOf("if (!data.session)"),
+  authPage.indexOf("if (data.user)"),
+);
+assert(
+  authConfirm.includes("Account created — check your email to confirm before signing in."),
+  "new firm signup without a session still asks to check email",
+);
+assert(
+  !authConfirm.includes("openSignIn("),
+  "new firm signup does not switch to sign-in before email confirmation",
+);
+const authCatch = authPage.slice(
+  authPage.indexOf('if (mode === "signup" && signupLooksAlreadyRegistered({ errorMessage: msg }))'),
+  authPage.indexOf("toast.error(msg)"),
+);
+assert(
+  authCatch.includes("openSignIn("),
+  "thrown already-registered on /auth also switches to sign-in",
 );
 
 const layout = readFileSync(resolve("src/routes/_authenticated.tsx"), "utf8");

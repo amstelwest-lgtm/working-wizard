@@ -8,6 +8,7 @@
 
 import { useEffect, type ReactNode } from "react";
 import { GooglePreferredSourceButton } from "@/components/google-preferred-source-button";
+import { DUAL_MARKET_FOOTER } from "@/lib/firm-signup-copy";
 import {
   applyVisitorMarketToDocument,
   readVisitorDraft,
@@ -59,6 +60,9 @@ export function MarketingShell({
   ctaBody,
   ctaLabel = "Start free ✦",
   ctaHref = "/#register",
+  navCtaLabel = "Start free",
+  navCtaHref = "/#register",
+  heroCta,
   heroTone = "default",
 }: {
   eyebrow: string;
@@ -69,6 +73,11 @@ export function MarketingShell({
   ctaBody: ReactNode;
   ctaLabel?: string;
   ctaHref?: string;
+  /** Top-bar pill. Owner pages stay on "Start free"; firm pages pass a trial label. */
+  navCtaLabel?: string;
+  navCtaHref?: string;
+  /** Optional primary button under the hero lead. */
+  heroCta?: { label: string; href: string };
   /** Quiet heading for legal notices that should not read as marketing. */
   heroTone?: "default" | "plain";
 }) {
@@ -95,8 +104,8 @@ export function MarketingShell({
         <a className="mk-top-link" href="/faq">
           Questions
         </a>
-        <a className="mk-top-cta" href="/#register">
-          Start free
+        <a className="mk-top-cta" href={navCtaHref}>
+          {navCtaLabel}
         </a>
       </header>
 
@@ -105,6 +114,13 @@ export function MarketingShell({
           <span className="mk-eyebrow">{eyebrow}</span>
           <h1>{title}</h1>
           <p className="mk-lead">{lead}</p>
+          {heroCta ? (
+            <div className="mk-hero-cta">
+              <a className="mk-btn" href={heroCta.href}>
+                {heroCta.label}
+              </a>
+            </div>
+          ) : null}
         </section>
 
         {children}
@@ -123,12 +139,7 @@ export function MarketingShell({
         </section>
 
         <footer className="mk-foot">
-          <span>
-            <MarketCopy
-              za="Milōn — financial health for South African businesses."
-              us="MILŌN — the AI-automated finance function for accounting firms and the businesses they serve."
-            />
-          </span>
+          <span>{DUAL_MARKET_FOOTER}</span>
           <span>Works with QuickBooks Online and Xero.</span>
           <a href="/">milonfinance.com</a>
           <a href="/about">About</a>

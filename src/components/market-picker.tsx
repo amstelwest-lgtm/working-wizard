@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { BUSINESS_LOCATION_PROMPT, PRACTICE_LOCATION_PROMPT } from "@/lib/firm-signup-copy";
 import { US_STATES, type DraftMarket, type MarketId, type UsStateCode } from "@/lib/market";
 
 const CARD =
@@ -112,6 +113,7 @@ export function MarketPicker({
   variant = "app",
   disabled,
   audience = "owner",
+  locationNoun,
 }: {
   value: DraftMarket;
   onChange: (next: DraftMarket) => void;
@@ -119,7 +121,15 @@ export function MarketPicker({
   disabled?: boolean;
   /** Owners see "change later in Settings"; practices see the per-client note. */
   audience?: "owner" | "practice";
+  /**
+   * Question subject. Firm signup passes "practice". Client setup leaves this
+   * unset so the app variant still asks where the business is.
+   */
+  locationNoun?: "business" | "practice";
 }) {
+  const noun =
+    locationNoun ?? (variant === "landing" && audience === "practice" ? "practice" : "business");
+  const locationPrompt = noun === "practice" ? PRACTICE_LOCATION_PROMPT : BUSINESS_LOCATION_PROMPT;
   const stateHelp =
     audience === "practice"
       ? "Required for sales tax. You can set a different state per client later."
@@ -134,9 +144,7 @@ export function MarketPicker({
   if (variant === "landing") {
     return (
       <div className="milon-market">
-        <p className="milon-market-label">
-          {audience === "practice" ? "Where is this practice?" : "Where is this business?"}
-        </p>
+        <p className="milon-market-label">{locationPrompt}</p>
         <div className="milon-market-choices">
           <button
             type="button"
@@ -178,7 +186,7 @@ export function MarketPicker({
 
   return (
     <div className="space-y-3">
-      <p className={labelCls}>Where is this business?</p>
+      <p className={labelCls}>{locationPrompt}</p>
       <div className="grid grid-cols-2 gap-2">
         <button
           type="button"

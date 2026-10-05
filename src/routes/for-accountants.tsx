@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { MarketingShell } from "@/components/marketing-shell";
 import { FirmBandPricingTable } from "@/components/firm-band-pricing";
+import { FIRM_SIGNUP_HREF, FIRM_TRIAL_CTA_LABEL } from "@/lib/firm-signup-copy";
 import { VISITOR_MARKET_BOOT_SCRIPT, visitorCopyPack, readVisitorDraft } from "@/lib/market";
 import { stashPendingCheckout } from "@/lib/pending-checkout";
 import { type FirmCheckoutBand, type FirmInterval } from "@/lib/stripe-plans";
@@ -25,7 +26,10 @@ function ForAccountantsPage() {
   const startBand = (plan: FirmCheckoutBand, nextInterval: FirmInterval) => {
     const market = visitorCopyPack(readVisitorDraft());
     stashPendingCheckout({ plan, interval: nextInterval, market });
-    void navigate({ to: "/auth", search: { signup: true } });
+    void navigate({
+      to: "/auth",
+      search: { signup: true, plan, interval: nextInterval },
+    });
   };
 
   return (
@@ -41,9 +45,12 @@ function ForAccountantsPage() {
         <>
           Every practice knows which clients need a real conversation. The problem is that finding
           out takes a morning per client, so it only happens at year-end, and by then the advice is
-          history rather than help.
+          history rather than help. Built for firms in South Africa and the United States.
         </>
       }
+      heroCta={{ label: FIRM_TRIAL_CTA_LABEL, href: FIRM_SIGNUP_HREF }}
+      navCtaLabel={FIRM_TRIAL_CTA_LABEL}
+      navCtaHref={FIRM_SIGNUP_HREF}
       ctaTitle={<>Run it over your own client book</>}
       ctaBody={
         <>
@@ -52,7 +59,7 @@ function ForAccountantsPage() {
         </>
       }
       ctaLabel="Set up your firm account ✦"
-      ctaHref="/auth"
+      ctaHref={FIRM_SIGNUP_HREF}
     >
       <h2>Works with QuickBooks Online and Xero</h2>
       <p>
