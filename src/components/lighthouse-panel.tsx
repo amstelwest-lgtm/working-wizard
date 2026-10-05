@@ -2074,19 +2074,8 @@ function LeadDrawer({
           not eat into the word budget and cannot be edited away by accident.
         </p>
 
-        {/* Opt-out */}
         {lead.optOutLink && !lead.doNotContact && (
-          <div className="mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-[var(--ops-line)] bg-[var(--ops-card)] px-3 py-2.5">
-            <code className="flex-1 truncate text-[11px] text-[var(--ops-ink-dim)]">{lead.optOutLink}</code>
-            <button
-              onClick={() => {
-                void navigator.clipboard?.writeText(lead.optOutLink ?? "");
-                toast.success("Opt-out link copied");
-              }}
-              className="inline-flex h-8 items-center gap-1 rounded-lg border border-[var(--ops-line-strong)] px-2.5 text-[11px] text-[var(--ops-ink-dim)] hover:border-[var(--ops-amber-border)]"
-            >
-              <Copy className="h-3 w-3" /> Copy
-            </button>
+          <div className="mt-4">
             <button
               onClick={async () => {
                 if (

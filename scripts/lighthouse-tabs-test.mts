@@ -70,6 +70,8 @@ assert(src.includes("LIGHTHOUSE_SENDER_NAME"), "the Team signer is shown");
 assert(src.includes("auto_send off"), "auto_send is shown locked off");
 assert(!src.includes("setSenderName"), "founder signer name is not editable");
 assert(!src.includes("Open in mail"), "mailto bypass is gone");
+assert(!src.includes("Opt-out link copied"), "unsubscribe copy control is gone");
+assert(!src.includes("writeText(lead.optOutLink"), "the drawer does not copy the unsubscribe URL");
 assert(!src.includes("Draft with Claude"), "the console does not brand drafts as Claude");
 assert(src.includes("Send windows enforced"), "E17 windows are enforced, not a reminder");
 
