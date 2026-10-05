@@ -20,6 +20,7 @@ import { ExecSummary, type HeadlineFigure } from "@/components/pdf/exec-summary"
 import { C, fmtRand, fmtRandCompact, fmtPct, resolveTheme } from "@/components/pdf/theme";
 import { usePdfMarket } from "@/components/pdf/pdf-market";
 import { cashCycleNarrative } from "./narrative";
+import { cycleTimelineAxis } from "@/lib/client-metrics";
 import type { ClientOperatingProfile } from "@/lib/client-profile";
 import { t, ZA_MARKET, type ResolvedMarket } from "@/lib/market";
 
@@ -159,13 +160,10 @@ function CycleTimeline({ d, accent }: { d: WorkingCapitalData; accent: string })
   const receivables = t("receivables", market);
   const payables = t("payables", market);
   const opDays = d.inventory_days + d.wip_days + d.debtor_days; // operating cycle length
-  const total = Math.max(opDays, d.creditor_days, 1);
-  const x = (days: number) => (days / total) * TL_W;
-
-  // Axis ticks every ~15/30 days depending on scale
-  const step = total > 120 ? 30 : 15;
-  const ticks: number[] = [];
-  for (let t = 0; t <= total; t += step) ticks.push(t);
+  const axis = cycleTimelineAxis(opDays, d.creditor_days);
+  const total = axis.total;
+  const x = (days: number) => (Math.min(Math.max(days, 0), total) / total) * TL_W;
+  const ticks = axis.ticks;
 
   const ccc = Math.max(0, d.cash_conversion_cycle);
   const segs = [
@@ -263,6 +261,9 @@ function CycleTimeline({ d, accent }: { d: WorkingCapitalData; accent: string })
         Cash leaves the business on day 0 (stock purchased) and only returns once debtors pay on day{" "}
         {Math.round(opDays)}. Suppliers are paid on day {Math.round(d.creditor_days)} — the red band
         is the gap the business must finance from its own cash or borrowings.
+        {axis.capped
+          ? ` Axis capped at ${Math.round(total)} days so the labels stay readable — creditor days of ${Math.round(d.creditor_days)} run past the chart.`
+          : ""}
       </Text>
     </View>
   );

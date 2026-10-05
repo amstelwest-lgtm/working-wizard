@@ -43,7 +43,7 @@ import { createFirmClient, getFirmClientCreateAllowance } from "@/lib/firm-clien
 import type { FirmClientCreateAllowance } from "@/lib/firm-client-cap";
 import { createBillingPortalSession, endFirmTrialNow } from "@/lib/stripe-checkout.functions";
 import { inviteClientOwner, sendDraftedOwnerInvite } from "@/lib/client-invite.functions";
-import { effectiveCashRunwayWeeks } from "@/lib/cash-runway";
+import { assessClientMetrics } from "@/lib/client-metrics";
 import { countOpenQueriesByClient } from "@/lib/open-queries";
 import "@/styles/accountant-portal.css";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -1126,10 +1126,14 @@ function Dashboard() {
     // Compute per-client enriched rows
     const openQueriesMap = await countOpenQueriesByClient(rawClients.map((c) => c.id));
     const rows: ClientRow[] = rawClients.map((c) => {
-      const runwayWeeks = effectiveCashRunwayWeeks(
-        c.cash_runway_weeks,
-        c.cashflow as Parameters<typeof effectiveCashRunwayWeeks>[1],
-      );
+      const assessed = assessClientMetrics({
+        financials: c.financials,
+        cashflow: c.cashflow,
+      });
+      const runwayWeeks =
+        assessed.runway.kind === "weeks" || assessed.runway.kind === "zero"
+          ? assessed.runway.weeks
+          : null;
       const clientMarket = resolveMarket(
         parseMarketSelection(c.market) ?? coerceMarketSelection(c.market),
       );

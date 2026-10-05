@@ -279,19 +279,21 @@ export function seedXeroBankForecastLines(
 }
 
 /**
- * When the saved forecast opening is still empty, use the cash figure already
- * on the financials blob (Xero sync or a statement upload).
- * Returns null when the forecast already has its own opening.
+ * Opening the forecast should show.
+ * Returns the live cash string when the saved opening is empty or disagrees
+ * with the cash Overview is using. Returns null when they already match.
+ * A stale non-zero opening (an old snapshot) is replaced, not kept.
  */
 export function forecastOpeningFromStored(
   openingBalance: string | number | null | undefined,
   financialsCash: string | number | null | undefined,
 ): string | null {
-  const opening =
-    typeof openingBalance === "number" ? openingBalance : parseFloat(String(openingBalance ?? ""));
-  if (Number.isFinite(opening) && opening !== 0) return null;
   const cash =
     typeof financialsCash === "number" ? financialsCash : parseFloat(String(financialsCash ?? ""));
-  if (!Number.isFinite(cash) || cash === 0) return null;
-  return String(Math.round(cash * 100) / 100);
+  if (!Number.isFinite(cash)) return null;
+  const opening =
+    typeof openingBalance === "number" ? openingBalance : parseFloat(String(openingBalance ?? ""));
+  const live = String(Math.round(cash * 100) / 100);
+  if (Number.isFinite(opening) && Math.abs(opening - cash) < 0.5) return null;
+  return live;
 }

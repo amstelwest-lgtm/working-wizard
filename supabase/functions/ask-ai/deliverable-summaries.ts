@@ -440,10 +440,18 @@ export function closingBalancesFromCashflow(cf: SavedCashflow | null | undefined
 export function summarizeCashForecast(
   cf: SavedCashflow | null | undefined,
   storedRunway: number | null | undefined,
+  opts?: { cashGenerative?: boolean; openingCash?: number | null },
 ): CashForecastSummary | null {
-  const closings = closingBalancesFromCashflow(cf);
+  let source = cf;
+  if (cf && opts?.openingCash != null && Number.isFinite(opts.openingCash)) {
+    const opening = parseFloat(cf.openingBalance ?? "");
+    if (!Number.isFinite(opening) || Math.abs(opening - opts.openingCash) >= 0.5) {
+      source = { ...cf, openingBalance: String(opts.openingCash) };
+    }
+  }
+  const closings = closingBalancesFromCashflow(source);
   if (!closings) return null;
-  const opening = parseFloat(cf?.openingBalance ?? "0") || 0;
+  const opening = parseFloat(source?.openingBalance ?? "0") || 0;
   const lowest = Math.min(...closings);
   const lowestWeek = closings.indexOf(lowest) + 1;
   const negativeWeeks = closings.filter((c) => c < 0).length;
@@ -458,7 +466,8 @@ export function summarizeCashForecast(
   const traj = Math.abs(delta) < 1 ? "flat" : delta > 0 ? "up" : "down";
   return {
     hasData: true,
-    runwayWeeks: runway,
+    runwayWeeks: opts?.cashGenerative ? null : runway,
+    cashGenerative: opts?.cashGenerative === true,
     horizonWeeks: HORIZON,
     shortfall: lowest < 0,
     lowestWeek,

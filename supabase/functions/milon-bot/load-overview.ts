@@ -10,6 +10,7 @@ import {
   copyPackFromMarket,
   type OverviewBrief,
 } from "../ask-ai/overview-brief.ts";
+import { assessClientMetrics } from "../../../src/lib/client-metrics.ts";
 
 export async function loadOverviewBrief(
   client: SupabaseClient,
@@ -18,7 +19,7 @@ export async function loadOverviewBrief(
   const [clientRes, snapRes] = await Promise.all([
     client
       .from("clients")
-      .select("name, market, financials, cash_runway_weeks, brain_summary")
+      .select("name, market, financials, cashflow, cash_runway_weeks, financials_updated_at, brain_summary")
       .eq("id", clientId)
       .maybeSingle(),
     client
@@ -42,16 +43,18 @@ export async function loadOverviewBrief(
       ? (snapRes.data.ratios as Record<string, unknown>)
       : null;
   const fallback = resolveRatioRecord(snapRatios, financials);
-  const runway =
-    typeof row?.cash_runway_weeks === "number"
-      ? row.cash_runway_weeks
-      : row?.cash_runway_weeks != null && Number.isFinite(Number(row.cash_runway_weeks))
-        ? Number(row.cash_runway_weeks)
-        : null;
+  const metrics = assessClientMetrics({
+    financials,
+    cashflow: (row as { cashflow?: unknown } | null)?.cashflow,
+    financialsUpdatedAt:
+      (row as { financials_updated_at?: string | null } | null)?.financials_updated_at ?? null,
+  });
   return buildOverviewBrief({
     financials,
     ratios: fallback,
-    runwayWeeks: runway,
+    cash: metrics.cash.amount,
+    runwayWeeks: metrics.runway.weeks,
+    runwayLabel: metrics.runway.kind === "unknown" ? null : metrics.runway.label,
     copyPack: copyPackFromMarket(row?.market),
     clientName: typeof row?.name === "string" ? row.name : null,
     periodLabel: (snapRes.data?.period_label as string | null) ?? null,

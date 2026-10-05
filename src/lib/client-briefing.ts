@@ -51,6 +51,8 @@ function deltaFor(chip: VarianceChip | undefined): SnapshotMetric["delta"] | und
 export function buildFinancialSnapshot(input: {
   chips: VarianceChip[];
   cashRunwayWeeks: number | null | undefined;
+  /** Overrides the week count. Use "Cash generative" when the business is not burning. */
+  runwayLabel?: string | null;
   financialsUpdatedAt?: string | null;
   lastForecastAt?: string | null;
   priorLabel?: string | null;
@@ -82,7 +84,9 @@ export function buildFinancialSnapshot(input: {
       delta: deltaFor(om),
     });
   }
-  if (input.cashRunwayWeeks != null && Number.isFinite(input.cashRunwayWeeks)) {
+  if (input.runwayLabel) {
+    out.push({ key: "runway", label: "Cash runway", value: input.runwayLabel });
+  } else if (input.cashRunwayWeeks != null && Number.isFinite(input.cashRunwayWeeks)) {
     const w = input.cashRunwayWeeks;
     out.push({
       key: "runway",
@@ -408,11 +412,38 @@ RULES:
 - Only recommend actions Milōn can actually perform from the list above. Never imply capabilities that do not exist (no integrations, no automation, no tax work, no payroll).
 - Sound like professional guidance from a senior colleague, not AI commentary. Do not say "I", "AI", "model", "Claude", "Milonbot", "Milōn thinks", or anything about pricing, plans or how this text was produced.
 - Be specific to these numbers. Do not overstate: if the position is healthy, say what to build on rather than inventing a risk.
+- If you cite gross margin or operating margin, copy the percentage from the snapshot exactly. 62.5% is not 5%. Do not call a gross margin of 40% or more a collections or timing problem.
 - British/South African spelling. Plain text only, no bullet points, no headings, no quotes.`;
 }
 
 const FORBIDDEN =
   /\b(claude|anthropic|milonbot|milōnbot|model|token|subscription|pricing|as an ai|i think|i recommend)\b/i;
+
+/**
+ * Sentence boundaries are . ! ? followed by whitespace or the end.
+ * A decimal point inside a number (62.5%) is not a boundary, and text before
+ * the first real sentence is kept — otherwise "62.5%" is sliced to "5%".
+ */
+export function splitWorkflowSentences(text: string): string[] {
+  const masked = text.replace(/(\d)\.(\d)/g, "$1\u0000$2");
+  const parts: string[] = [];
+  let buf = "";
+  for (let i = 0; i < masked.length; i++) {
+    const ch = masked[i];
+    buf += ch;
+    const boundary =
+      (ch === "." || ch === "!" || ch === "?") &&
+      (i === masked.length - 1 || /\s/.test(masked[i + 1] ?? ""));
+    if (!boundary) continue;
+    const sentence = buf.replace(/\u0000/g, ".").trim();
+    if (sentence) parts.push(sentence);
+    buf = "";
+    while (i + 1 < masked.length && /\s/.test(masked[i + 1] ?? "")) i++;
+  }
+  const tail = buf.replace(/\u0000/g, ".").trim();
+  if (tail) parts.push(tail);
+  return parts;
+}
 
 /** Trim to two sentences and refuse anything that leaks the machinery. */
 export function sanitizeWorkflowText(raw: string): string | null {
@@ -422,10 +453,54 @@ export function sanitizeWorkflowText(raw: string): string | null {
     .replace(/\s+/g, " ")
     .trim();
   if (!text || FORBIDDEN.test(text)) return null;
-  const sentences = text.match(/[^.!?]+[.!?]+(\s|$)/g) ?? [text];
-  const out = sentences.slice(0, 2).join("").trim();
+  const sentences = splitWorkflowSentences(text);
+  const out = sentences.slice(0, 2).join(" ").trim();
   if (out.split(/\s+/).length > 80) return null;
   return out;
+}
+
+function citedPercent(text: string, subject: RegExp): number | null {
+  const after = new RegExp(
+    `${subject.source}[^\\d%]{0,40}(\\d+(?:\\.\\d+)?)\\s*%`,
+    "i",
+  );
+  const before = new RegExp(
+    `(\\d+(?:\\.\\d+)?)\\s*%[^\\n.]{0,40}${subject.source}`,
+    "i",
+  );
+  const match = text.match(before) ?? text.match(after);
+  if (!match) return null;
+  const n = parseFloat(match[1]);
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * Reject a drafted line whose cited margin does not match the snapshot, or
+ * that diagnoses a healthy gross margin as a collections / timing problem.
+ */
+export function workflowAgreesWithSnapshot(text: string, ctx: WorkflowContext): boolean {
+  const checks: Array<{ key: "gm" | "om"; subject: RegExp }> = [
+    { key: "gm", subject: /gross margin/ },
+    { key: "om", subject: /operating margin/ },
+  ];
+  for (const check of checks) {
+    const metric = ctx.snapshot.find((m) => m.key === check.key);
+    if (!metric) continue;
+    const expected = parseFloat(metric.value.replace(/[^\d.]/g, ""));
+    if (!Number.isFinite(expected)) continue;
+    const cited = citedPercent(text, check.subject);
+    if (cited != null && Math.abs(cited - expected) > 0.6) return false;
+    if (
+      check.key === "gm" &&
+      expected >= 40 &&
+      /gross margin[^.]{0,80}(collection|timing)|((collection|timing)[^.]{0,80}gross margin)/i.test(
+        text,
+      )
+    ) {
+      return false;
+    }
+  }
+  return true;
 }
 
 /** Deterministic recommendation used when Claude is unavailable. */

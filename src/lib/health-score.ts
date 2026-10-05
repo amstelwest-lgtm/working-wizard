@@ -7,6 +7,11 @@ import {
 } from "@/lib/ratios";
 import { salesPerEmployeeHealthy } from "@/lib/market/benchmarks";
 import type { ResolvedMarket } from "@/lib/market/types";
+import {
+  scoreCreditorDays,
+  scoreLowerIsBetterDays,
+  scoreWorkingCapitalDays,
+} from "@/lib/client-metrics";
 
 export type ScoreMarket = Pick<ResolvedMarket, "country" | "copyPack">;
 
@@ -201,11 +206,11 @@ export function scoreRatio(name: string, val: number, market?: ScoreMarket): num
   if (name === "Fixed Cost Ratio") return clamp(((0.5 - val) / 0.5) * 100);
   if (name === "Top-5 Customer Share") return clamp(((0.8 - val) / 0.8) * 100);
 
-  // Days — lower usually better (except creditors, where longer payment terms help cash)
-  if (name === "Debtor Days") return clamp(((90 - val) / 90) * 100);
-  if (name === "Inventory Days") return clamp(((90 - val) / 90) * 100);
-  if (name === "Working Capital Days") return clamp(((90 - val) / 90) * 100);
-  if (name === "Creditor Days") return clamp((val / 60) * 100);
+  // Days. Creditors have a 30–60 day sweet spot; past that, longer is a risk.
+  // Values beyond ±1000 days score 0 — they are not a healthy extreme.
+  if (name === "Debtor Days" || name === "Inventory Days") return scoreLowerIsBetterDays(val);
+  if (name === "Working Capital Days") return scoreWorkingCapitalDays(val);
+  if (name === "Creditor Days") return scoreCreditorDays(val);
 
   // Structure / leverage
   if (name === "Equity Multiplier") return clamp(((4 - val) / 3) * 100);

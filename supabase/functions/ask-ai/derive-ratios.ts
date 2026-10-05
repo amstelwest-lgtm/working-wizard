@@ -4,6 +4,12 @@
  * and PILLAR_RATIO_NAMES in src/lib.
  */
 
+import {
+  scoreCreditorDays,
+  scoreLowerIsBetterDays,
+  scoreWorkingCapitalDays,
+} from "../../../src/lib/client-metrics.ts";
+
 export const DISPLAY_TO_CAMEL: Record<string, string> = {
   "Net Margin": "netMargin",
   "Operating Margin": "operatingMargin",
@@ -165,10 +171,9 @@ export function scoreDisplayRatio(name: string, val: number): number {
   }
   if (name === "Fixed Cost Ratio") return clamp(((0.5 - val) / 0.5) * 100);
   if (name === "Top-5 Customer Share") return clamp(((0.8 - val) / 0.8) * 100);
-  if (name === "Debtor Days" || name === "Inventory Days" || name === "Working Capital Days") {
-    return clamp(((90 - val) / 90) * 100);
-  }
-  if (name === "Creditor Days") return clamp((val / 60) * 100);
+  if (name === "Debtor Days" || name === "Inventory Days") return scoreLowerIsBetterDays(val);
+  if (name === "Working Capital Days") return scoreWorkingCapitalDays(val);
+  if (name === "Creditor Days") return scoreCreditorDays(val);
   if (name === "Equity Multiplier") return clamp(((4 - val) / 3) * 100);
   if (name === "Degree of Operating Leverage") {
     if (val <= 0) return 30;

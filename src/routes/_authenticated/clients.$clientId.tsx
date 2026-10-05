@@ -40,6 +40,7 @@ import {
 import { PlaybookDrawer } from "@/components/playbook-drawer";
 import { computeOverviewCaption } from "@/lib/overview-insights";
 import type { ExtractionResult } from "@/lib/financialSchema";
+import { periodFinancialsFromExtraction } from "@/lib/statement-financials";
 import {
   computeRatios,
   PERIOD_MONTH_OPTIONS,
@@ -109,7 +110,7 @@ import { XeroConnectCard } from "@/components/xero-connect";
 import { getXeroStatus, type XeroStatus } from "@/lib/xero.functions";
 import { getQboStatus, type QboStatus } from "@/lib/qbo.functions";
 import { preferStatementPeriod, readStatementMeta, statementYearLine } from "@/lib/statement-period";
-import { effectiveCashRunwayWeeks, runwayWeeksFromCashflow } from "@/lib/cash-runway";
+import { assessClientMetrics, persistedRunwayWeeks } from "@/lib/client-metrics";
 import { countOpenQueriesForClient } from "@/lib/open-queries";
 import { ProfileFunnel } from "@/components/profile/profile-funnel";
 import {
@@ -235,35 +236,8 @@ async function recordReportIssued(clientId: string) {
   if (error) console.error("increment reports_issued_count error:", error);
 }
 
-function extractionToRatioInputs(r: ExtractionResult): RatioInputs {
-  const is = r.current_period.figures.income_statement;
-  const bs = r.current_period.figures.balance_sheet;
-  const cf = r.current_period.figures.cash_flow;
-  const str = (v: number | null | undefined) => (v != null ? String(v) : "");
-  const ebitda =
-    is.operating_profit != null && is.depreciation_amortisation != null
-      ? String(is.operating_profit + is.depreciation_amortisation)
-      : str(is.operating_profit);
-  return {
-    revenue: str(is.revenue),
-    cogs: str(is.cost_of_sales),
-    ebit: str(is.operating_profit),
-    ebt: str(is.profit_before_tax),
-    netIncome: str(is.profit_after_tax),
-    ebitda,
-    operatingCashflow: str(cf?.cash_from_operating),
-    totalAssets: str(bs.total_assets),
-    equity: str(bs.equity.total),
-    receivables: str(bs.current_assets.trade_and_other_receivables),
-    inventory: str(bs.current_assets.inventories),
-    payables: str(bs.current_liabilities.trade_and_other_payables),
-    fixedCosts: "",
-    variableCosts: "",
-    top5Revenue: "",
-    laborCost: "",
-    employees: "",
-    founderHours: "",
-  };
+function extractionToRatioInputs(r: ExtractionResult): RatioInputs & { cash: string } {
+  return periodFinancialsFromExtraction(r);
 }
 
 // Financial input field labels
@@ -286,6 +260,7 @@ const FIELD_LABELS: { key: string; label: string }[] = [
   { key: "laborCost", label: "Labor cost" },
   { key: "employees", label: "Employees" },
   { key: "founderHours", label: "Founder hours / yr" },
+  { key: "cash", label: "Cash" },
 ];
 
 /** Waterfall-critical fields shown on the Profit tab data-input card. */
@@ -998,10 +973,21 @@ function ClientView() {
   }, []);
   const ratios = computeRatios(ratioInputs);
   const ratioQueryCounts = useMemo(() => countOpenRatioQueries(clientNotes), [clientNotes]);
-  const effectiveRunway = effectiveCashRunwayWeeks(
-    client?.cash_runway_weeks,
-    client?.cashflow as Parameters<typeof effectiveCashRunwayWeeks>[1],
+  const priorSnapshot = resolvePriorSnapshot(snapshots);
+  const assessed = useMemo(
+    () =>
+      assessClientMetrics({
+        financials,
+        cashflow: client?.cashflow,
+        financialsUpdatedAt: client?.financials_updated_at ?? null,
+        priorFinancials: priorSnapshot?.financials ?? null,
+      }),
+    [financials, client?.cashflow, client?.financials_updated_at, priorSnapshot],
   );
+  const metricRunway = assessed.runway;
+  /** Weeks blended into health. Cash-generative is omitted — it is not 0 weeks. */
+  const effectiveRunway =
+    metricRunway.kind === "weeks" || metricRunway.kind === "zero" ? metricRunway.weeks : null;
   const clientMarket = useMemo(
     () =>
       resolveMarket(
@@ -1072,7 +1058,6 @@ function ClientView() {
     },
   ];
 
-  const priorSnapshot = resolvePriorSnapshot(snapshots);
   const varianceChips = buildVarianceChips({
     currentFinancials: financials,
     currentRatios: ratios,
@@ -1115,6 +1100,7 @@ function ClientView() {
   const briefingSnapshot = buildFinancialSnapshot({
     chips: varianceChips,
     cashRunwayWeeks: effectiveRunway,
+    runwayLabel: metricRunway.kind === "unknown" ? null : metricRunway.label,
     financialsUpdatedAt: client?.financials_updated_at ?? null,
     lastForecastAt: client?.last_forecast_at ?? null,
     priorLabel: priorSnapshot?.period_label ?? null,
@@ -1936,7 +1922,7 @@ function ClientView() {
     if (!client) return;
     const score = healthScoreRounded;
     const tierLabel = overallHealth.displayLabel;
-    const runway = effectiveRunway != null ? `${effectiveRunway} weeks` : "—";
+    const runway = metricRunway.kind === "unknown" ? "—" : metricRunway.label;
     const weak =
       overallHealth.weakestPillar != null
         ? `\nWeakest pillar: ${overallHealth.weakestPillar.label} (${overallHealth.weakestPillar.score})\n`
@@ -1978,6 +1964,7 @@ function ClientView() {
     overallHealth,
     profile,
     effectiveRunway,
+    metricRunway.label,
     openQueriesCount,
     user,
     financials,
@@ -1992,7 +1979,7 @@ function ClientView() {
     const text =
       `${client.name} Financial Health Update\n` +
       `Health Score: ${score}/100 (${tierLabel})\n` +
-      `Cash Runway: ${effectiveRunway != null ? `${effectiveRunway} wk` : "—"}\n` +
+      `Cash Runway: ${metricRunway.kind === "unknown" ? "—" : metricRunway.label}\n` +
       `Open Queries: ${openQueriesCount}\n` +
       `Prepared by ${profile.firmName || "your accountant"} via MILŌN Portal.`;
     let shareText = text;
@@ -2020,6 +2007,7 @@ function ClientView() {
     overallHealth,
     profile,
     effectiveRunway,
+    metricRunway.label,
     openQueriesCount,
     user,
     financials,
@@ -3155,14 +3143,18 @@ function ClientView() {
                       initialBankDraft={bankCashDraft}
                       onBankPublish={(payload) => {
                         setBankCashDraft(null);
-                        const runway = runwayWeeksFromCashflow(payload);
+                        const published = assessClientMetrics({
+                          financials,
+                          cashflow: payload,
+                          financialsUpdatedAt: client?.financials_updated_at ?? null,
+                        });
                         setClient((c) =>
                           c
                             ? {
                                 ...c,
                                 cashflow: payload,
                                 last_forecast_at: new Date().toISOString(),
-                                ...(runway != null ? { cash_runway_weeks: runway } : {}),
+                                cash_runway_weeks: persistedRunwayWeeks(published.runway),
                               }
                             : c,
                         );
@@ -3202,7 +3194,7 @@ function ClientView() {
                   <PayablesPanel
                     clientId={client.id}
                     market={clientMarket}
-                    runwayWeeks={effectiveCashRunwayWeeks(client.cash_runway_weeks, client.cashflow)}
+                    runwayWeeks={effectiveRunway}
                     onOpenDrafts={() => setActiveTab("advisory")}
                     onOpenActions={() => setActiveTab("plan")}
                   />

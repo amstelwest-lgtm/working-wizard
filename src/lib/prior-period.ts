@@ -2,6 +2,7 @@
  * Prior-period helpers — resolve a comparable snapshot and build variance chips.
  */
 
+import { scoreRatio } from "@/lib/health-score";
 import { scoreTier } from "@/lib/ratios";
 
 export type SnapshotRow = {
@@ -12,24 +13,11 @@ export type SnapshotRow = {
   ratios?: Record<string, number> | null;
 };
 
-/** Lightweight per-ratio score (aligned with reports.index scoreForRatio). */
+/** Same scorer as the live health engine, so a prior period cannot rate 329 creditor days as healthy. */
 function scorePriorRatio(name: string, val: number): number {
   if (!Number.isFinite(val)) return 50;
-  const clamp = (n: number) => Math.min(100, Math.max(0, n));
-  if (name === "Net Margin") return clamp((val / 0.15) * 100);
-  if (name === "Operating Margin") return clamp((val / 0.2) * 100);
-  if (name === "Gross Margin") return clamp((val / 0.4) * 100);
-  if (name === "Return on Assets") return clamp((val / 0.12) * 100);
-  if (name === "Return on Equity") return clamp((val / 0.2) * 100);
-  if (name === "Asset Turnover") return clamp((val / 1.5) * 100);
-  if (name === "Debtor Days") return clamp(((90 - val) / 90) * 100);
-  if (name === "Inventory Days") return clamp(((90 - val) / 90) * 100);
-  if (name === "Creditor Days") return clamp((val / 60) * 100);
-  if (name === "Working Capital Days") return clamp(((90 - val) / 90) * 100);
-  if (name === "OCF / EBITDA") return clamp(val * 100);
-  if (name === "Interest Burden") return clamp(val * 100);
-  if (name === "Equity Multiplier") return clamp(((4 - val) / 3) * 100);
-  return 50;
+  const scored = scoreRatio(name, val);
+  return Number.isFinite(scored) ? scored : 50;
 }
 
 /**

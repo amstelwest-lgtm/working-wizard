@@ -44,6 +44,9 @@ export type CashForecastPDFProps = {
   scenario: "critical" | "moderate" | "growth";
   accountantProfile: AccountantProfile;
   minimumThreshold?: number;
+  /** Shared runway label ("Cash generative", "6 weeks"). Wins over the floor index. */
+  runwayLabel?: string | null;
+  cashGenerative?: boolean;
   assumptions?: string[];
   isDemo?: boolean;
   reviewSignoff?: ReportSignoffStamp | null;
@@ -328,6 +331,8 @@ export function CashForecastPDF({
   scenario,
   accountantProfile,
   minimumThreshold = DEFAULT_THRESHOLD,
+  runwayLabel = null,
+  cashGenerative = false,
   assumptions = DEFAULT_ASSUMPTIONS,
   isDemo,
   reviewSignoff,
@@ -350,13 +355,24 @@ export function CashForecastPDF({
   const endBalance = weeks[weeks.length - 1]?.closing_balance ?? 0;
   const startBalance = weeks[0]?.opening_balance ?? 0;
 
+  const firstBreachWeek = firstBreach === -1 ? null : firstBreach + 1;
+  const runwayValue = cashGenerative
+    ? "Cash generative"
+    : runwayLabel
+      ? runwayLabel
+      : firstBreach === -1
+        ? `${weeks.length}+ wks`
+        : `${runwayWeeks} wks`;
   const figures: HeadlineFigure[] = [
     {
       label: "Runway",
-      value: firstBreach === -1 ? `${weeks.length}+ wks` : `${runwayWeeks} wks`,
-      good: firstBreach === -1,
-      direction: firstBreach === -1 ? "up" : "down",
-      note: `above ${fmtRandCompact(minimumThreshold, m)} minimum`,
+      value: runwayValue,
+      good: cashGenerative || weeksBelow === 0,
+      direction: cashGenerative || weeksBelow === 0 ? "up" : "down",
+      note:
+        weeksBelow === 0
+          ? `above ${fmtRandCompact(minimumThreshold, m)} minimum`
+          : `first dip in week ${firstBreachWeek}`,
     },
     {
       label: "Lowest Balance",
@@ -381,10 +397,12 @@ export function CashForecastPDF({
 
   const narrative = cashForecastNarrative(
     {
-      runwayWeeks,
+      runwayWeeks: cashGenerative ? null : runwayWeeks,
+      cashGenerative,
       minBalance,
       threshold: minimumThreshold,
       weeksBelow,
+      firstBreachWeek,
     },
     operatingProfile,
     m,

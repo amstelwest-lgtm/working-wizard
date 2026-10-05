@@ -792,7 +792,9 @@ assert(
   "a missing Bank Summary does not invent lines",
 );
 assert(forecastOpeningFromStored("0", "83500") === "83500", "screen uses financials cash when opening is zero");
-assert(forecastOpeningFromStored("10", "83500") === null, "screen keeps a non-zero opening");
+assert(forecastOpeningFromStored("10", "83500") === "83500", "stale non-zero opening is replaced by live cash");
+assert(forecastOpeningFromStored("83500", "83500") === null, "matching opening is kept");
+assert(forecastOpeningFromStored("150877.6", "7430.22") === "7430.22", "stale forecast opening yields to Overview cash");
 
 const coverage = coverageFromXeroCache([
   { data_type: "bs", raw_data: { asOf: "2026-09-21", cash: 85000 } },
