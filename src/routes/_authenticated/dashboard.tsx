@@ -346,6 +346,7 @@ function FirmClientCapNotice({
           priceCurrency={upgrade.priceCurrency}
           zarByBand={upgrade.zarByBand}
           canUpgrade={upgrade.canUpgrade}
+          clientCount={upgrade.clientCount}
           usageLabel={upgrade.usageLabel}
           upgrading={upgrading}
           onUpgrade={onUpgradeBand}

@@ -38,7 +38,10 @@ export type EntitlingFirmSubscription = {
   /** ISO timestamp when the subscription is trialing; otherwise null. */
   trialEnd: string | null;
   interval: FirmInterval | null;
+  /** Charge currency (subscription.currency), else the price currency. */
   currency: string | null;
+  /** subscription.currency only. Null when Stripe did not send a charge currency. */
+  chargeCurrency: string | null;
   itemId: string | null;
   metadata: Record<string, string>;
   hasDefaultPaymentMethod: boolean;
@@ -133,7 +136,9 @@ export async function findEntitlingFirmSubscription(
       created: typeof sub.created === "number" ? sub.created : 0,
       band: bandFromSubscriptionSnapshot({
         lookupKey: price.lookupKey,
+        productBand: price.productBand,
         metadataPlan: metadata.milon_plan,
+        downgradeBlocked: metadata.milon_downgrade_blocked,
       }),
       price,
       metadata,
@@ -157,7 +162,8 @@ export async function findEntitlingFirmSubscription(
         ? new Date(trialEndSeconds * 1000).toISOString()
         : null,
     interval: hit.price.interval,
-    currency: hit.price.currency,
+    chargeCurrency: hit.price.chargeCurrency,
+    currency: hit.price.chargeCurrency ?? hit.price.currency,
     itemId: hit.price.itemId,
     metadata: hit.metadata,
     hasDefaultPaymentMethod: Boolean(defaultPaymentMethod || defaultSource),
@@ -236,7 +242,7 @@ export async function assertCallerCanUpgradeFirm(input: {
   userId: string;
   email: string;
   firmId: string;
-}): Promise<{ billingEmail: string }> {
+}): Promise<{ billingEmail: string; clientCount: number }> {
   const userDb = asCapDb(input.supabase);
   let email = input.email.trim();
   if (!email && userDb.auth) {
@@ -255,7 +261,8 @@ export async function assertCallerCanUpgradeFirm(input: {
   if (!allowed) throw new Error(ASK_FIRM_OWNER_TO_UPGRADE);
   const billing = await billingEmailForFirm(input.userId, email, firm.ownerUserId);
   if (!billing.email) throw new Error("The firm owner has no billing email.");
-  return { billingEmail: billing.email };
+  const clientCount = await countFirmClients(db, firm.id);
+  return { billingEmail: billing.email, clientCount };
 }
 
 export async function loadFirmClientCreateAllowance(input: {

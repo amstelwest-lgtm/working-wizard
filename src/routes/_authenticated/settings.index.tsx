@@ -342,6 +342,7 @@ function SettingsPage() {
                   priceCurrency={plan.priceCurrency ?? "USD"}
                   zarByBand={plan.zarByBand ?? {}}
                   canUpgrade={plan.canUpgrade}
+                  clientCount={plan.clientCount}
                   upgrading={upgrading}
                   onUpgrade={(band, interval) => {
                     if (!firmId) return;

@@ -37,8 +37,10 @@ import {
 } from "@/lib/stripe-checkout.core";
 import {
   assertUpgradeTarget,
+  catalogPriceCurrency,
   decideFirmUpgradeRoute,
   firmSubscriptionUpgradeParams,
+  isStripeCurrencyConflict,
   readSubscriptionPrice,
   subscriptionHasCollectiblePaymentMethod,
   upgradeSuccessMessage,
@@ -406,9 +408,12 @@ async function paymentMethodOnFile(
 }
 
 /**
- * Move an existing firm onto a larger band.
- * Card on file: update that subscription (prorated).
- * Starter $0 / no card / no subscription: Checkout, then return to Add client.
+ * Move an existing firm onto a larger band that covers the current clients.
+ * Update the subscription only when a card is on file and its charge currency
+ * matches the target price. A ZAR-charged Starter subscription, a missing
+ * card, or no entitling subscription uses Checkout. If Stripe rejects the
+ * existing customer for a currency conflict, Checkout is retried without that
+ * customer and still records the subscription to cancel on completion.
  * Owner or firm admin only.
  */
 export const upgradeFirmBand = createServerFn({ method: "POST" })
@@ -428,7 +433,7 @@ export const upgradeFirmBand = createServerFn({ method: "POST" })
     }
     const ctx = context as unknown as BillingAuthCtx;
     const { userId, email } = await checkoutActor(ctx);
-    const { billingEmail } = await assertCallerCanUpgradeFirm({
+    const { billingEmail, clientCount } = await assertCallerCanUpgradeFirm({
       supabase: ctx.supabase,
       userId,
       email,
@@ -437,7 +442,12 @@ export const upgradeFirmBand = createServerFn({ method: "POST" })
     const band = data.band as FirmCheckoutBand;
     const interval = data.interval as FirmInterval;
     const sub = await findEntitlingFirmSubscription(billingEmail);
-    assertUpgradeTarget({ phase: sub?.phase ?? "none", current: sub?.band ?? null, target: band });
+    assertUpgradeTarget({
+      phase: sub?.phase ?? "none",
+      current: sub?.band ?? null,
+      target: band,
+      clientCount,
+    });
 
     const stripe = getStripe();
     const { price, lookupKey } = await resolveFirmCatalogPrice(stripe, band, interval);
@@ -445,6 +455,8 @@ export const upgradeFirmBand = createServerFn({ method: "POST" })
     const route = decideFirmUpgradeRoute({
       hasEntitlingSubscription: Boolean(sub),
       hasPaymentMethod,
+      subscriptionCurrency: sub?.chargeCurrency,
+      targetPriceCurrency: catalogPriceCurrency(price),
     });
 
     let itemId = sub?.itemId ?? null;
@@ -483,7 +495,7 @@ export const upgradeFirmBand = createServerFn({ method: "POST" })
     const customerId = sub?.customerId ?? (await findCustomerIdByEmail(billingEmail));
     const origin = appOrigin();
     const market: StripePlanMarket = sub?.metadata.milon_market === "za" ? "za" : "us";
-    const params = firmUpgradeCheckoutSessionParams({
+    const checkoutInput = {
       priceId: price.id,
       lookupKey,
       band,
@@ -491,14 +503,30 @@ export const upgradeFirmBand = createServerFn({ method: "POST" })
       origin,
       userId,
       email: billingEmail,
-      customerId,
       market,
       integrationIdentifier: firmIntegrationIdentifier(band, interval),
-      includeTrial: false,
+      includeTrial: false as const,
       replacesSubscriptionId: sub?.id,
-    });
+    };
+    const params = firmUpgradeCheckoutSessionParams({ ...checkoutInput, customerId });
     assertNoManagedPaymentsOverride(params);
-    const session = await stripe.checkout.sessions.create(params);
+    let session: { url: string | null };
+    try {
+      session = await stripe.checkout.sessions.create(params);
+    } catch (err) {
+      if (!params.customer || !isStripeCurrencyConflict(err)) {
+        const message = err instanceof Error ? err.message : UPGRADE_FAILED_MESSAGE;
+        throw new Error(message || UPGRADE_FAILED_MESSAGE);
+      }
+      const retry = firmUpgradeCheckoutSessionParams(checkoutInput);
+      assertNoManagedPaymentsOverride(retry);
+      try {
+        session = await stripe.checkout.sessions.create(retry);
+      } catch (retryErr) {
+        const message = retryErr instanceof Error ? retryErr.message : UPGRADE_FAILED_MESSAGE;
+        throw new Error(message || UPGRADE_FAILED_MESSAGE);
+      }
+    }
     if (!session.url) throw new Error("Stripe Checkout did not return a URL.");
     return { kind: "checkout" as const, url: session.url };
   });

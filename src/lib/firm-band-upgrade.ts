@@ -23,6 +23,11 @@ import { bandIdFromStripeMetadata, type FirmSubscriptionPhase } from "@/lib/firm
 export const ASK_FIRM_OWNER_TO_UPGRADE = "Ask your firm owner to upgrade";
 export const UPGRADE_CANCELLED_MESSAGE = "Checkout cancelled. Nothing was charged.";
 export const UPGRADE_FAILED_MESSAGE = "Upgrade did not finish. Your plan was not changed.";
+export const DOWNGRADE_BELOW_USAGE_MESSAGE =
+  "This practice has more clients than that band allows. Choose a band that covers the current clients.";
+
+/** Set on the subscription when a lower price would drop the client limit under usage. */
+export const MILON_DOWNGRADE_BLOCKED = "milon_downgrade_blocked";
 
 /**
  * Same proration Stripe applies when the field is omitted (end-trial update).
@@ -85,12 +90,33 @@ export function formatFirmClientUsage(count: number, limit: number | null): stri
   return `${count} of ${limit} clients`;
 }
 
-/** Next self-serve band above the current one. Scale has none (Enterprise is a quote). */
-export function nextBandUp(current: FirmBandId | null): FirmCheckoutBand | null {
+/**
+ * True when the band's catalog limit is a number strictly below the current
+ * client count. Equal is allowed. Unlimited (null) is allowed. An unknown
+ * count is not treated as a block.
+ */
+export function downgradeDropsBelowUsage(
+  band: FirmBandId | null,
+  clientCount: number | null | undefined,
+): boolean {
+  if (clientCount == null || !Number.isFinite(clientCount)) return false;
+  if (!band) return false;
+  const limit = FIRM_BAND_CATALOG[band].clientLimit;
+  if (limit == null) return false;
+  return limit < clientCount;
+}
+
+/** Next self-serve band above the current one that still covers current clients. */
+export function nextBandUp(
+  current: FirmBandId | null,
+  clientCount?: number | null,
+): FirmCheckoutBand | null {
   const start = current ? FIRM_BAND_IDS.indexOf(current) + 1 : FIRM_BAND_IDS.indexOf("solo");
   for (let i = Math.max(start, 0); i < FIRM_BAND_IDS.length; i += 1) {
     const id = FIRM_BAND_IDS[i];
-    if (isFirmCheckoutBand(id)) return id;
+    if (!isFirmCheckoutBand(id)) continue;
+    if (downgradeDropsBelowUsage(id, clientCount)) continue;
+    return id;
   }
   return null;
 }
@@ -104,7 +130,11 @@ export function assertUpgradeTarget(input: {
   phase: FirmSubscriptionPhase;
   current: FirmBandId | null;
   target: FirmCheckoutBand;
+  clientCount?: number | null;
 }): void {
+  if (downgradeDropsBelowUsage(input.target, input.clientCount)) {
+    throw new Error(DOWNGRADE_BELOW_USAGE_MESSAGE);
+  }
   if (input.phase === "trialing" && input.current === input.target) return;
   if (!isUpgradeTarget(input.current, input.target)) {
     throw new Error("Choose a larger band to upgrade.");
@@ -113,18 +143,57 @@ export function assertUpgradeTarget(input: {
 
 export type FirmUpgradeRoute = "update_subscription" | "checkout";
 
+/** subscription.currency must equal the target price currency. Missing either side is not a match. */
+export function currenciesMatchForSubscriptionUpdate(
+  subscriptionCurrency: string | null | undefined,
+  targetPriceCurrency: string | null | undefined,
+): boolean {
+  const charged = (subscriptionCurrency ?? "").trim().toLowerCase();
+  const target = (targetPriceCurrency ?? "").trim().toLowerCase();
+  if (!charged || !target) return false;
+  return charged === target;
+}
+
 /**
- * Update the existing subscription when a card is on file.
- * Starter at $0 has no payment method, so it goes to Checkout.
- * No entitling subscription also goes to Checkout (signup-style, no second trial).
+ * Update the existing subscription only when a card is on file AND the
+ * subscription's charge currency matches the target price. A ZAR-charged
+ * Starter subscription cannot switch onto a USD band price, so that case
+ * (and a missing payment method, and no entitling subscription) uses Checkout.
  */
 export function decideFirmUpgradeRoute(input: {
   hasEntitlingSubscription: boolean;
   hasPaymentMethod: boolean;
+  /** subscription.currency — what Stripe charges. Not the price object's currency. */
+  subscriptionCurrency?: string | null;
+  /** Catalog price currency. Live band prices are USD. */
+  targetPriceCurrency?: string | null;
 }): FirmUpgradeRoute {
   if (!input.hasEntitlingSubscription) return "checkout";
   if (!input.hasPaymentMethod) return "checkout";
+  if (
+    !currenciesMatchForSubscriptionUpdate(input.subscriptionCurrency, input.targetPriceCurrency)
+  ) {
+    return "checkout";
+  }
   return "update_subscription";
+}
+
+/** Stripe rejects Checkout when an existing customer's currency cannot take the new price. */
+export function isStripeCurrencyConflict(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err ?? "");
+  const code =
+    err && typeof err === "object" && "code" in err
+      ? String((err as { code?: unknown }).code ?? "")
+      : "";
+  return /currency/i.test(message) || /currency/i.test(code);
+}
+
+/** Live band prices are USD. Use the price currency when Stripe sends one. */
+export function catalogPriceCurrency(
+  price: { currency?: string | null } | null | undefined,
+): string {
+  const code = price?.currency?.trim().toLowerCase();
+  return code || "usd";
 }
 
 export function idOfStripeRef(value: unknown): string | null {
@@ -154,8 +223,13 @@ export type SubscriptionPriceSnapshot = {
   itemId: string | null;
   priceId: string | null;
   lookupKey: string | null;
+  /** Product metadata.band, when the Product is expanded. */
+  productBand: string | null;
   unitAmount: number | null;
+  /** Price object currency. A $0 Starter price can be USD while the subscription is charged in ZAR. */
   currency: string | null;
+  /** subscription.currency — the charge currency Stripe locks. */
+  chargeCurrency: string | null;
   interval: FirmInterval | null;
 };
 
@@ -168,14 +242,25 @@ type PriceLike =
       currency?: string | null;
       recurring?: { interval?: string | null } | null;
       currency_options?: { zar?: { unit_amount?: number | null } | null } | null;
+      product?: unknown;
     }
   | null
   | undefined;
+
+function productBandOf(price: Exclude<PriceLike, string | null | undefined>): string | null {
+  const product = price.product;
+  if (!product || typeof product !== "object") return null;
+  const metadata = (product as { metadata?: unknown }).metadata;
+  if (!metadata || typeof metadata !== "object") return null;
+  const band = (metadata as { band?: unknown }).band;
+  return typeof band === "string" && band.trim() ? band.trim() : null;
+}
 
 export function readSubscriptionPrice(sub: {
   currency?: string | null;
   items?: { data?: Array<{ id?: string; price?: PriceLike }> } | null;
 }): SubscriptionPriceSnapshot {
+  const chargeCurrency = sub.currency?.trim() ? sub.currency : null;
   const item = sub.items?.data?.[0];
   const price = item?.price;
   if (!price || typeof price === "string") {
@@ -183,8 +268,10 @@ export function readSubscriptionPrice(sub: {
       itemId: item?.id ?? null,
       priceId: typeof price === "string" ? price : null,
       lookupKey: null,
+      productBand: null,
       unitAmount: null,
-      currency: sub.currency ?? null,
+      currency: chargeCurrency,
+      chargeCurrency,
       interval: null,
     };
   }
@@ -197,21 +284,41 @@ export function readSubscriptionPrice(sub: {
     itemId: item?.id ?? null,
     priceId: price.id ?? null,
     lookupKey: price.lookup_key ?? null,
+    productBand: productBandOf(price),
     unitAmount: typeof price.unit_amount === "number" ? price.unit_amount : null,
-    currency: price.currency ?? sub.currency ?? null,
+    currency: price.currency ?? chargeCurrency,
+    chargeCurrency,
     interval,
   };
 }
 
-/** The price lookup_key is what Stripe bills. Metadata is the fallback. */
-export function bandFromSubscriptionSnapshot(input: {
+/** lookup_key first, then product metadata.band. Never a hardcoded price id. */
+export function billedBandFromPrice(input: {
   lookupKey?: string | null;
-  metadataPlan?: string | null;
+  productBand?: string | null;
 }): FirmBandId | null {
   return (
     bandIdFromLookupKey(input.lookupKey) ??
-    bandIdFromStripeMetadata({ milon_plan: input.metadataPlan })
+    bandIdFromStripeMetadata({ milon_plan: input.productBand })
   );
+}
+
+/**
+ * The price lookup_key is what Stripe bills. Product metadata.band is next.
+ * Subscription metadata is the fallback. A flagged downgrade keeps the
+ * metadata band so the client limit does not fall below usage.
+ */
+export function bandFromSubscriptionSnapshot(input: {
+  lookupKey?: string | null;
+  productBand?: string | null;
+  metadataPlan?: string | null;
+  downgradeBlocked?: boolean | string | null;
+}): FirmBandId | null {
+  const fromPrice = billedBandFromPrice(input);
+  const fromMeta = bandIdFromStripeMetadata({ milon_plan: input.metadataPlan });
+  const blocked = input.downgradeBlocked === true || input.downgradeBlocked === "1";
+  if (blocked && fromMeta) return fromMeta;
+  return fromPrice ?? fromMeta;
 }
 
 export type RankedSubscription = {
@@ -361,28 +468,90 @@ export function firmSubscriptionUpgradeParams(input: {
   return params;
 }
 
+function copyStringMetadata(metadata?: Record<string, string> | null): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(metadata ?? {})) {
+    if (typeof value === "string") out[key] = value;
+  }
+  return out;
+}
+
+/**
+ * Align milon_plan with the billed band. When that band's limit is below the
+ * firm's client count, leave milon_plan where it is and set
+ * milon_downgrade_blocked instead of lowering the cap.
+ * An unknown client count does not block.
+ */
 export function metadataPatchForPrice(input: {
   lookupKey: string | null;
+  productBand?: string | null;
   metadata?: Record<string, string> | null;
+  clientCount?: number | null;
 }): Record<string, string> | null {
-  const band = bandIdFromLookupKey(input.lookupKey);
-  if (!band || !input.lookupKey) return null;
+  const band = billedBandFromPrice({
+    lookupKey: input.lookupKey,
+    productBand: input.productBand,
+  });
+  if (!band) return null;
   const interval = intervalFromLookupKey(input.lookupKey) ?? "month";
-  const metadata: Record<string, string> = {};
-  for (const [key, value] of Object.entries(input.metadata ?? {})) {
-    if (typeof value === "string") metadata[key] = value;
+  const metadata = copyStringMetadata(input.metadata);
+  const lookupKey = input.lookupKey?.trim() ?? "";
+
+  if (downgradeDropsBelowUsage(band, input.clientCount)) {
+    if (
+      metadata[MILON_DOWNGRADE_BLOCKED] === "1" &&
+      metadata.milon_downgrade_blocked_band === band
+    ) {
+      return null;
+    }
+    metadata[MILON_DOWNGRADE_BLOCKED] = "1";
+    metadata.milon_downgrade_blocked_band = band;
+    return metadata;
   }
-  if (
+
+  const unchanged =
     metadata.milon_plan === band &&
     metadata.milon_interval === interval &&
-    metadata.milon_lookup_key === input.lookupKey
-  ) {
-    return null;
-  }
+    (lookupKey ? metadata.milon_lookup_key === lookupKey : true) &&
+    metadata[MILON_DOWNGRADE_BLOCKED] !== "1";
+  if (unchanged) return null;
   metadata.milon_plan = band;
   metadata.milon_interval = interval;
-  metadata.milon_lookup_key = input.lookupKey;
+  if (lookupKey) metadata.milon_lookup_key = lookupKey;
+  if (metadata[MILON_DOWNGRADE_BLOCKED] === "1") metadata[MILON_DOWNGRADE_BLOCKED] = "0";
   return metadata;
+}
+
+/** Restore the previous price when a portal or API change would under-cover usage. */
+export function shouldRevertBlockedDowngrade(input: {
+  blocked: boolean;
+  currentPriceId: string | null | undefined;
+  previousPriceId: string | null | undefined;
+  itemId: string | null | undefined;
+}): boolean {
+  if (!input.blocked) return false;
+  if (!input.itemId?.trim()) return false;
+  const previous = input.previousPriceId?.trim() ?? "";
+  const current = input.currentPriceId?.trim() ?? "";
+  if (!previous || !current || previous === current) return false;
+  return true;
+}
+
+export function previousPriceIdFromSubscriptionEvent(event: {
+  type?: string;
+  data?: { previous_attributes?: unknown };
+}): string | null {
+  if (event.type !== "customer.subscription.updated") return null;
+  const prev = event.data?.previous_attributes;
+  if (!prev || typeof prev !== "object") return null;
+  const items = (prev as { items?: { data?: Array<{ price?: unknown }> } }).items;
+  const price = items?.data?.[0]?.price;
+  if (typeof price === "string" && price.trim()) return price.trim();
+  if (price && typeof price === "object" && "id" in price) {
+    const id = (price as { id?: unknown }).id;
+    if (typeof id === "string" && id.trim()) return id.trim();
+  }
+  return null;
 }
 
 export function shouldCancelReplacedSubscription(input: {

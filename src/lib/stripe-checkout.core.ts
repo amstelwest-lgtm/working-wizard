@@ -17,6 +17,7 @@ import {
 export type CatalogPrice = {
   id: string;
   lookup_key?: string | null;
+  currency?: string | null;
   recurring?: { interval?: string | null } | null;
   unit_amount?: number | null;
 };

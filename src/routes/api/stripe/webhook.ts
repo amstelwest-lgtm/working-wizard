@@ -7,14 +7,18 @@
  *
  * Verifies Stripe-Signature with STRIPE_WEBHOOK_SECRET, then writes
  * milon_plan from the catalog lookup_key and cancels a replaced subscription
- * once the new one is active or trialing. The dashboard return path runs the
- * same sync, so the client limit does not wait on this webhook.
+ * once the new one is active or trialing. A price whose client limit is below
+ * the firm's current client count is not applied: milon_downgrade_blocked is
+ * set and, when the event includes the previous price, that price is restored.
+ * The dashboard return path runs the same sync, so the client limit does not
+ * wait on this webhook.
  *
  * Dashboard → Developers → Webhooks → https://milonfinance.com/api/stripe/webhook
  * Do not change prices or the Customer Portal from this route.
  */
 
 import { createFileRoute } from "@tanstack/react-router";
+import { previousPriceIdFromSubscriptionEvent } from "@/lib/firm-band-upgrade";
 import {
   constructFirmBillingEvent,
   isFirmBillingWebhookEvent,
@@ -55,7 +59,9 @@ export const Route = createFileRoute("/api/stripe/webhook")({
           return Response.json({ received: true, synced: false });
         }
         try {
-          const result = await syncFirmSubscriptionBand(subscriptionId);
+          const result = await syncFirmSubscriptionBand(subscriptionId, undefined, {
+            previousPriceId: previousPriceIdFromSubscriptionEvent(event),
+          });
           return Response.json({ received: true, ...result });
         } catch (err) {
           console.error("[stripe-webhook] sync failed", err instanceof Error ? err.message : err);

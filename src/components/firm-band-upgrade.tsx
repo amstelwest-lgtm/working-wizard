@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   ASK_FIRM_OWNER_TO_UPGRADE,
+  downgradeDropsBelowUsage,
   firmBandPriceLabel,
   nextBandUp,
   upgradeButtonLabel,
@@ -23,6 +24,8 @@ type Props = {
   priceCurrency: FirmPriceCurrency;
   zarByBand?: Partial<Record<FirmBandId, ZarBandAmounts>>;
   canUpgrade: boolean;
+  /** Active clients. Bands whose limit is below this count are not offered. */
+  clientCount?: number | null;
   usageLabel?: string | null;
   upgrading?: boolean;
   onUpgrade?: (band: FirmCheckoutBand, interval: FirmInterval) => void;
@@ -50,20 +53,23 @@ export function FirmBandUpgrade({
   priceCurrency,
   zarByBand,
   canUpgrade,
+  clientCount = null,
   usageLabel,
   upgrading = false,
   onUpgrade,
 }: Props) {
   const [interval, setInterval] = useState<FirmInterval>(intervalFromPlan);
-  const [selected, setSelected] = useState<FirmCheckoutBand | null>(() => nextBandUp(currentBand));
+  const [selected, setSelected] = useState<FirmCheckoutBand | null>(() =>
+    nextBandUp(currentBand, clientCount),
+  );
 
   useEffect(() => {
     setInterval(intervalFromPlan);
   }, [intervalFromPlan]);
 
   useEffect(() => {
-    setSelected(nextBandUp(currentBand));
-  }, [currentBand]);
+    setSelected(nextBandUp(currentBand, clientCount));
+  }, [currentBand, clientCount]);
 
   const currentIdx = currentBand ? FIRM_BAND_IDS.indexOf(currentBand) : -1;
 
@@ -102,7 +108,8 @@ export function FirmBandUpgrade({
           const selectable =
             canUpgrade &&
             isFirmCheckoutBand(band.id) &&
-            FIRM_BAND_IDS.indexOf(band.id) > currentIdx;
+            FIRM_BAND_IDS.indexOf(band.id) > currentIdx &&
+            !downgradeDropsBelowUsage(band.id, clientCount);
           const price = rowPrice(
             band.id,
             interval,

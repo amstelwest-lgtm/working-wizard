@@ -4,24 +4,35 @@
  */
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import {
   ASK_FIRM_OWNER_TO_UPGRADE,
   UPGRADE_CANCELLED_MESSAGE,
   UPGRADE_FAILED_MESSAGE,
   assertUpgradeTarget,
   bandFromSubscriptionSnapshot,
+  billedBandFromPrice,
   callerCanManageFirmBilling,
+  catalogPriceCurrency,
   decideFirmUpgradeRoute,
+  DOWNGRADE_BELOW_USAGE_MESSAGE,
+  downgradeDropsBelowUsage,
   firmBandPriceLabel,
   firmSubscriptionUpgradeParams,
   firmUpgradePriceCurrency,
   firmUpgradeReturnPath,
   formatFirmClientUsage,
+  isStripeCurrencyConflict,
   metadataPatchForPrice,
+  MILON_DOWNGRADE_BLOCKED,
   nextBandUp,
   parseFirmUpgradeReturn,
   pickEntitlingFirmSubscription,
+  previousPriceIdFromSubscriptionEvent,
+  readSubscriptionPrice,
   shouldCancelReplacedSubscription,
+  shouldRevertBlockedDowngrade,
   upgradeButtonLabel,
   upgradeSuccessMessage,
 } from "../src/lib/firm-band-upgrade";
@@ -29,6 +40,7 @@ import {
   firmIntegrationIdentifier,
   firmUpgradeCheckoutSessionParams,
 } from "../src/lib/stripe-checkout.core";
+import { FirmBandUpgrade } from "../src/components/firm-band-upgrade";
 import { FIRM_BAND_CATALOG, FIRM_CHECKOUT_BANDS } from "../src/lib/stripe-plans";
 
 function assert(cond: boolean, msg: string) {
@@ -39,6 +51,10 @@ assert(nextBandUp("starter") === "solo", "starter's next band is Solo");
 assert(nextBandUp("solo") === "small", "solo's next band is Small");
 assert(nextBandUp("scale") === null, "scale has no self-serve band above it");
 assert(nextBandUp(null) === "solo", "no band preselects Solo");
+assert(
+  nextBandUp("starter", 20) === "small",
+  "a starter practice with 20 clients skips Solo 15",
+);
 
 assert(firmBandPriceLabel("starter", "month", "USD") === "$0", "starter stays $0");
 assert(firmBandPriceLabel("solo", "month", "USD") === "$99", "solo monthly is the catalog $99");
@@ -104,19 +120,80 @@ assert(
 );
 
 assert(
-  decideFirmUpgradeRoute({ hasEntitlingSubscription: false, hasPaymentMethod: false }) ===
-    "checkout",
+  decideFirmUpgradeRoute({
+    hasEntitlingSubscription: false,
+    hasPaymentMethod: false,
+    subscriptionCurrency: "zar",
+    targetPriceCurrency: "usd",
+  }) === "checkout",
   "no subscription uses Checkout",
 );
 assert(
-  decideFirmUpgradeRoute({ hasEntitlingSubscription: true, hasPaymentMethod: false }) ===
-    "checkout",
+  decideFirmUpgradeRoute({
+    hasEntitlingSubscription: true,
+    hasPaymentMethod: false,
+    subscriptionCurrency: "usd",
+    targetPriceCurrency: "usd",
+  }) === "checkout",
   "starter without a card uses Checkout",
 );
 assert(
-  decideFirmUpgradeRoute({ hasEntitlingSubscription: true, hasPaymentMethod: true }) ===
-    "update_subscription",
-  "card on file updates the subscription",
+  decideFirmUpgradeRoute({
+    hasEntitlingSubscription: true,
+    hasPaymentMethod: true,
+    subscriptionCurrency: "usd",
+    targetPriceCurrency: "usd",
+  }) === "update_subscription",
+  "a matching currency and a card update the subscription",
+);
+assert(
+  decideFirmUpgradeRoute({
+    hasEntitlingSubscription: true,
+    hasPaymentMethod: true,
+    subscriptionCurrency: "zar",
+    targetPriceCurrency: "usd",
+  }) === "checkout",
+  "a ZAR-charged subscription cannot switch onto a USD price",
+);
+assert(
+  decideFirmUpgradeRoute({
+    hasEntitlingSubscription: true,
+    hasPaymentMethod: true,
+    subscriptionCurrency: null,
+    targetPriceCurrency: "usd",
+  }) === "checkout",
+  "a missing charge currency uses Checkout",
+);
+assert(catalogPriceCurrency({ currency: "USD" }) === "usd", "catalog currency is normalized");
+assert(catalogPriceCurrency({}) === "usd", "a price with no currency is treated as USD");
+assert(
+  isStripeCurrencyConflict(new Error("The customer's currency does not match the price")),
+  "a Stripe currency error is recognized",
+);
+assert(!isStripeCurrencyConflict(new Error("Your card was declined")), "a card decline is not a currency conflict");
+
+const zarStarter = readSubscriptionPrice({
+  currency: "zar",
+  items: {
+    data: [
+      {
+        id: "si_starter",
+        price: {
+          id: "price_starter",
+          lookup_key: "milon_starter_monthly",
+          currency: "usd",
+          unit_amount: 0,
+          recurring: { interval: "month" },
+        },
+      },
+    ],
+  },
+});
+assert(zarStarter.currency === "usd", "the Starter price object can stay USD");
+assert(zarStarter.chargeCurrency === "zar", "the subscription charge currency is ZAR");
+assert(
+  billedBandFromPrice({ lookupKey: null, productBand: "solo" }) === "solo",
+  "product metadata.band is used when the lookup key is missing",
 );
 
 let downgradeBlocked = false;
@@ -126,8 +203,21 @@ try {
   downgradeBlocked = true;
 }
 assert(downgradeBlocked, "active firms cannot move to a smaller band");
-assertUpgradeTarget({ phase: "active", current: "starter", target: "solo" });
-assertUpgradeTarget({ phase: "trialing", current: "solo", target: "solo" });
+assertUpgradeTarget({ phase: "active", current: "starter", target: "solo", clientCount: 3 });
+assertUpgradeTarget({ phase: "trialing", current: "solo", target: "solo", clientCount: 3 });
+assert(
+  !downgradeDropsBelowUsage("solo", 15),
+  "a band that matches the current client count is allowed",
+);
+assert(downgradeDropsBelowUsage("solo", 16), "solo cannot cover 16 clients");
+assert(!downgradeDropsBelowUsage("scale", null), "an unknown client count is not a block");
+let usageBlocked = false;
+try {
+  assertUpgradeTarget({ phase: "active", current: "starter", target: "solo", clientCount: 20 });
+} catch (err) {
+  usageBlocked = err instanceof Error && err.message === DOWNGRADE_BELOW_USAGE_MESSAGE;
+}
+assert(usageBlocked, "in-app upgrade rejects a band below the current client count");
 
 const update = firmSubscriptionUpgradeParams({
   itemId: "si_test",
@@ -215,6 +305,14 @@ assert(
   bandFromSubscriptionSnapshot({ lookupKey: null, metadataPlan: "small" }) === "small",
   "metadata is the fallback when the price is not expanded",
 );
+assert(
+  bandFromSubscriptionSnapshot({
+    lookupKey: "milon_solo_monthly",
+    metadataPlan: "small",
+    downgradeBlocked: "1",
+  }) === "small",
+  "a flagged downgrade keeps the metadata band that still covers usage",
+);
 
 const picked = pickEntitlingFirmSubscription([
   { id: "sub_starter", status: "active", created: 1, band: "starter" as const },
@@ -243,8 +341,63 @@ assert(
   metadataPatchForPrice({
     lookupKey: "milon_small_monthly",
     metadata: patch ?? {},
+    clientCount: 3,
   }) === null,
   "sync does not rewrite metadata that already matches",
+);
+const blockedPatch = metadataPatchForPrice({
+  lookupKey: "milon_solo_monthly",
+  metadata: { milon_plan: "small", milon_interval: "month", milon_lookup_key: "milon_small_monthly" },
+  clientCount: 20,
+});
+assert(blockedPatch?.milon_plan === "small", "a downgrade below usage does not rewrite milon_plan");
+assert(
+  blockedPatch?.[MILON_DOWNGRADE_BLOCKED] === "1",
+  "a downgrade below usage is flagged",
+);
+assert(
+  blockedPatch?.milon_downgrade_blocked_band === "solo",
+  "the flag names the band that was refused",
+);
+assert(
+  metadataPatchForPrice({
+    lookupKey: "milon_solo_monthly",
+    metadata: blockedPatch ?? {},
+    clientCount: 20,
+  }) === null,
+  "a repeated blocked downgrade does not rewrite the flag",
+);
+const cleared = metadataPatchForPrice({
+  lookupKey: "milon_small_monthly",
+  metadata: blockedPatch ?? {},
+  clientCount: 20,
+});
+assert(cleared?.milon_plan === "small", "a covering price restores milon_plan");
+assert(cleared?.[MILON_DOWNGRADE_BLOCKED] === "0", "a covering price clears the downgrade flag");
+assert(
+  shouldRevertBlockedDowngrade({
+    blocked: true,
+    currentPriceId: "price_solo",
+    previousPriceId: "price_small",
+    itemId: "si_1",
+  }),
+  "a blocked downgrade restores the previous price when the event has it",
+);
+assert(
+  !shouldRevertBlockedDowngrade({
+    blocked: true,
+    currentPriceId: "price_solo",
+    previousPriceId: null,
+    itemId: "si_1",
+  }),
+  "without a previous price the webhook flags and does not guess an id",
+);
+assert(
+  previousPriceIdFromSubscriptionEvent({
+    type: "customer.subscription.updated",
+    data: { previous_attributes: { items: { data: [{ price: "price_small" }] } } },
+  }) === "price_small",
+  "the webhook reads the previous price from the subscription event",
 );
 assert(
   shouldCancelReplacedSubscription({
@@ -309,10 +462,22 @@ assert(fn.includes("assertCallerCanUpgradeFirm"), "upgrade checks the firm owner
 assert(fn.includes("firmSubscriptionUpgradeParams"), "paid upgrades update the subscription");
 assert(fn.includes("firmUpgradeCheckoutSessionParams"), "no-card upgrades use Checkout");
 assert(fn.includes("finalizeFirmBandCheckout"), "return path syncs the new band");
+assert(fn.includes("isStripeCurrencyConflict"), "a currency conflict retries Checkout");
+assert(fn.includes("subscriptionCurrency: sub?.chargeCurrency"), "the route uses the charge currency");
+assert(fn.includes("catalogPriceCurrency"), "the target price currency comes from the catalog price");
 const upgradeBody = fn.slice(fn.indexOf("export const upgradeFirmBand"));
 assert(
   upgradeBody.indexOf("assertCallerCanUpgradeFirm") < upgradeBody.indexOf("subscriptions.update"),
   "authorization runs before the subscription update",
+);
+assert(
+  upgradeBody.includes("clientCount"),
+  "the in-app upgrade passes the current client count",
+);
+assert(
+  upgradeBody.indexOf("isStripeCurrencyConflict") < upgradeBody.indexOf("finalizeFirmBandCheckout") ||
+    upgradeBody.includes("firmUpgradeCheckoutSessionParams(checkoutInput)"),
+  "currency retry builds Checkout without the existing customer",
 );
 
 const webhook = readFileSync(resolve("src/routes/api/stripe/webhook.ts"), "utf8");
@@ -320,7 +485,12 @@ assert(webhook.includes("constructFirmBillingEvent"), "webhook verifies the Stri
 assert(webhook.includes("STRIPE_WEBHOOK_SECRET"), "webhook requires the signing secret");
 assert(webhook.includes("checkout.session.completed"), "webhook documents checkout completion");
 assert(webhook.includes("syncFirmSubscriptionBand"), "webhook syncs the firm band");
+assert(
+  webhook.includes("previousPriceIdFromSubscriptionEvent"),
+  "webhook can restore the price from the event",
+);
 assert(!webhook.includes("prices.update"), "webhook does not change Stripe prices");
+assert(webhook.includes("milon_downgrade_blocked"), "webhook documents the downgrade flag");
 
 const server = readFileSync(resolve("src/lib/firm-client-cap.server.ts"), "utf8");
 assert(
@@ -331,5 +501,33 @@ assert(
   server.includes("ASK_FIRM_OWNER_TO_UPGRADE"),
   "server rejects non-owners with the ask-owner message",
 );
+assert(server.includes("chargeCurrency"), "the cap reader keeps the subscription charge currency");
+assert(
+  server.includes("milon_downgrade_blocked"),
+  "the cap reader honors a blocked downgrade",
+);
+
+const sync = readFileSync(resolve("src/lib/stripe-billing-sync.server.ts"), "utf8");
+assert(sync.includes("downgradeDropsBelowUsage"), "sync refuses a limit below usage");
+assert(sync.includes("milon_replaces_subscription"), "sync still cancels the replaced subscription");
+assert(sync.includes("shouldRevertBlockedDowngrade"), "sync restores a previous price when it has one");
+
+const panel = readFileSync(resolve("src/components/firm-band-upgrade.tsx"), "utf8");
+assert(panel.includes("downgradeDropsBelowUsage"), "the band list hides a limit below usage");
+assert(panel.includes("clientCount"), "the band list receives the client count");
+
+const overSolo = renderToStaticMarkup(
+  createElement(FirmBandUpgrade, {
+    currentBand: "starter",
+    interval: "month",
+    priceCurrency: "USD",
+    canUpgrade: true,
+    clientCount: 20,
+    onUpgrade: () => undefined,
+  }),
+);
+assert(!overSolo.includes('value="solo"'), "Solo is not selectable when the firm already has 20 clients");
+assert(overSolo.includes('value="small"'), "Small stays selectable because 25 covers 20 clients");
+assert(overSolo.includes("$99"), "the list still shows the USD catalog price");
 
 console.log("firm-band-upgrade ok");
