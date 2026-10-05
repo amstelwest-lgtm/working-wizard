@@ -9,6 +9,7 @@ import { getRequest } from "@tanstack/react-start/server";
 import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { assertStarterTrialAllowsNewWork } from "@/lib/firm-client-cap.server";
 import type { Database } from "@/integrations/supabase/types";
 import { callClaudeMessages } from "@/lib/claude-messages";
 import {
@@ -138,6 +139,18 @@ export const draftMilonWorkflow = createServerFn({ method: "POST" })
       const cached = parseBriefingWorkflow(row?.briefing_workflow);
       if (workflowCacheFresh(cached, inputsHash)) return cached!;
     }
+
+    const { data: firmRow } = await sb
+      .from("clients")
+      .select("firm_id")
+      .eq("id", data.clientId)
+      .maybeSingle();
+    await assertStarterTrialAllowsNewWork({
+      supabase: sb,
+      userId: userData.user.id,
+      email: userData.user.email ?? "",
+      firmId: (firmRow as { firm_id?: string | null } | null)?.firm_id ?? null,
+    });
 
     let result: BriefingWorkflow;
     try {

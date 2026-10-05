@@ -17,6 +17,7 @@ import { coerceMarketSelection, usState } from "@/lib/market";
 import { useFinancialInputs } from "@/contexts/financial-inputs";
 import { invokeBrainPropose } from "@/lib/brain-propose-client";
 import { invokeBrainDeliverableDraft } from "@/lib/brain-deliverable-client";
+import { TrialEndedActionNotice, useTrialEndedAction } from "@/components/trial-ended-plan-block";
 import { ClientBrainDrafts } from "@/components/client-brain-drafts";
 import { SharedDocumentsList } from "@/components/shared-documents-list";
 import { PanelSkeleton } from "@/components/primitives";
@@ -121,6 +122,7 @@ function AnswerButton({ onClick, label = "Answer" }: { onClick: () => void; labe
 export function ClientBrainSummary({
   clientId,
   clientName,
+  firmId = null,
   operatingProfile,
   market: marketRaw,
   businessType,
@@ -130,6 +132,7 @@ export function ClientBrainSummary({
 }: {
   clientId: string;
   clientName: string;
+  firmId?: string | null;
   operatingProfile?: unknown;
   market?: unknown;
   businessType?: string | null;
@@ -139,6 +142,7 @@ export function ClientBrainSummary({
 }) {
   const { user } = useAuth();
   const assertDeliverable = useServerFn(assertFirmCanGenerateDeliverable);
+  const trialBlock = useTrialEndedAction();
   const { dateTime } = useMarketFormat();
   const { productMix, weeklyInputs } = useFinancialInputs();
 
@@ -284,6 +288,7 @@ export function ClientBrainSummary({
 
   const proposeFromBrain = async () => {
     setProposing(true);
+    trialBlock.reset();
     try {
       const result = await invokeBrainPropose(
         clientId,
@@ -307,7 +312,7 @@ export function ClientBrainSummary({
       }
       await load();
     } catch (e) {
-      toast.error((e as Error).message || "Could not propose from brain");
+      trialBlock.report(e, "Could not propose from brain");
     } finally {
       setProposing(false);
     }
@@ -451,6 +456,7 @@ export function ClientBrainSummary({
 
   const draftAdvisoryFromBrain = async () => {
     setDrafting(true);
+    trialBlock.reset();
     try {
       await assertDeliverable({ data: { clientId } });
       const result = await invokeBrainDeliverableDraft(clientId);
@@ -467,7 +473,7 @@ export function ClientBrainSummary({
       }
       await load();
     } catch (e) {
-      toast.error((e as Error).message || "Could not draft advisory from brain");
+      trialBlock.report(e, "Could not draft advisory from brain");
     } finally {
       setDrafting(false);
     }
@@ -518,6 +524,7 @@ export function ClientBrainSummary({
           this file. Draft advisory writes a pack that lands under Deliverable drafts — nothing is
           sent until you sign it off.
         </p>
+        <TrialEndedActionNotice firmId={firmId} open={trialBlock.open} error={trialBlock.error} />
       </div>
 
       {loading ? (

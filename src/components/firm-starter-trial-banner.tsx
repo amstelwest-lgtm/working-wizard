@@ -1,12 +1,11 @@
 import { useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { FirmBandUpgrade } from "@/components/firm-band-upgrade";
+import { TrialEndedPlanBlock } from "@/components/trial-ended-plan-block";
 import type { FirmUpgradeAllowance } from "@/lib/firm-client-cap";
 import { UPGRADE_FAILED_MESSAGE } from "@/lib/firm-band-upgrade";
 import { SA_FIRM_DISCOUNT_NOTE } from "@/lib/firm-sa-market";
 import {
-  STARTER_TRIAL_ENDED_MESSAGE,
   firmStarterTrialCountdownCopy,
   type StarterTrialBanner,
 } from "@/lib/firm-starter-trial";
@@ -52,41 +51,36 @@ export function FirmStarterTrialBanner({
       .finally(() => setUpgrading(false));
   };
 
+  if (trial.expired) {
+    return (
+      <TrialEndedPlanBlock
+        firmId={firmId}
+        upgrading={upgrading}
+        upgrade={
+          upgrade
+            ? {
+                band: upgrade.band,
+                interval: upgrade.interval,
+                priceCurrency: upgrade.priceCurrency,
+                zarByBand: upgrade.zarByBand,
+                canUpgrade: upgrade.canUpgrade,
+                clientCount: upgrade.clientCount,
+                usageLabel: upgrade.usageLabel,
+                saDiscount: upgrade.saDiscount,
+              }
+            : null
+        }
+        onUpgrade={onUpgrade}
+        onUpgraded={onUpgraded}
+      />
+    );
+  }
+
   return (
-    <section
-      role="status"
-      aria-label="Trial"
-      style={{
-        margin: "0 0 16px",
-        padding: "14px 16px",
-        borderRadius: 16,
-        border: "1px solid var(--line, #e6e1d8)",
-        background: "var(--paper, #fff)",
-      }}
-    >
-      <p style={{ margin: 0, fontSize: 15, fontWeight: 700, color: "var(--ink)" }}>
-        {trial.expired ? STARTER_TRIAL_ENDED_MESSAGE : countdown}
-      </p>
+    <section className="trial-ended-block bg-card text-foreground" role="status" aria-label="Trial">
+      <p className="trial-ended-title text-foreground">{countdown}</p>
       {upgrade?.saDiscount ? (
-        <p style={{ margin: "8px 0 0", fontSize: 12, color: "var(--ink-dim)" }}>
-          {SA_FIRM_DISCOUNT_NOTE}
-        </p>
-      ) : null}
-      {trial.expired && upgrade ? (
-        <div style={{ marginTop: 12 }}>
-          <FirmBandUpgrade
-            currentBand={upgrade.band}
-            interval={upgrade.interval}
-            priceCurrency={upgrade.priceCurrency}
-            zarByBand={upgrade.zarByBand}
-            canUpgrade={upgrade.canUpgrade}
-            clientCount={upgrade.clientCount}
-            usageLabel={upgrade.usageLabel}
-            saDiscount={upgrade.saDiscount}
-            upgrading={upgrading}
-            onUpgrade={onUpgrade}
-          />
-        </div>
+        <p className="trial-ended-note text-muted-foreground">{SA_FIRM_DISCOUNT_NOTE}</p>
       ) : null}
     </section>
   );

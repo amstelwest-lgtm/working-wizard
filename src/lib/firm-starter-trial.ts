@@ -7,7 +7,7 @@
  * does not invent a block. This module does not write Stripe objects.
  */
 
-import { FIRM_TRIAL_DAYS, type FirmBandId } from "@/lib/stripe-plans";
+import { FIRM_TRIAL_DAYS, type FirmBandId } from "./stripe-plans";
 
 const MS_DAY = 86_400_000;
 

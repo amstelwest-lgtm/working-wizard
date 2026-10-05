@@ -36,6 +36,7 @@ import { parseMarketSelection } from "@/lib/market/parse";
 import type { FirmBandId, FirmInterval } from "@/lib/stripe-plans";
 import { findCustomerIdByEmail } from "@/lib/stripe-entitlement";
 import { getStripe, stripeConfigured } from "@/lib/stripe.server";
+import { writeStarterTrialGenerationBlock } from "@/lib/starter-trial-mirror.server";
 
 export type EntitlingFirmSubscription = {
   id: string;
@@ -403,6 +404,7 @@ export async function loadFirmClientCreateAllowance(input: {
     sub,
   });
   const starterTrial = trialBannerFor(firm, sub);
+  await writeStarterTrialGenerationBlock(firm.id, starterTrial.expired);
   const decision = decideFirmClientCreate({
     stripeConfigured: true,
     phase: sub?.phase ?? "none",
@@ -505,6 +507,8 @@ export async function loadFirmPlanDisplay(input: {
     clientCount,
     sub,
   });
+  const starterTrial = trialBannerFor(firm, sub);
+  await writeStarterTrialGenerationBlock(firm.id, starterTrial.expired);
   return {
     configured: true,
     ...formatFirmPlanStatus({
@@ -519,9 +523,53 @@ export async function loadFirmPlanDisplay(input: {
     priceCurrency: upgrade.priceCurrency,
     interval: upgrade.interval,
     zarByBand: upgrade.zarByBand,
-    starterTrial: trialBannerFor(firm, sub),
+    starterTrial,
     saDiscount: upgrade.saDiscount,
   };
+}
+
+/**
+ * Refresh the edge mirror from the live entitling subscription.
+ * Checkout return, the billing webhook, and entitlement resolve call this.
+ * A failed lookup does not write, so an unsynced firm stays fail-open.
+ */
+export async function syncStarterTrialMirrorForActor(input: {
+  supabase: unknown;
+  userId: string;
+  email: string;
+}): Promise<void> {
+  if (!stripeConfigured()) return;
+  try {
+    const admin = getSupabaseAdminOrNull();
+    const db = admin ? asCapDb(admin) : asCapDb(input.supabase);
+    let userId = input.userId.trim();
+    let email = input.email.trim();
+    if (!userId && email && admin) {
+      const { data } = await admin.from("profiles").select("id").ilike("email", email).maybeSingle();
+      userId = data?.id ? String(data.id) : "";
+    }
+    if (!userId) return;
+    let firm = await loadFirm(db, null, userId);
+    if (!firm && admin) {
+      const membership = await admin
+        .from("firm_memberships")
+        .select("firm_id")
+        .eq("user_id", userId)
+        .limit(1);
+      const firmId = membership.data?.[0]?.firm_id ? String(membership.data[0].firm_id) : "";
+      if (firmId) firm = await loadFirm(db, firmId, userId);
+    }
+    if (!firm) return;
+    const billing = await billingEmailForFirm(userId, email, firm.ownerUserId);
+    const sub = billing.email ? await findEntitlingFirmSubscription(billing.email) : null;
+    const trial = trialBannerFor(firm, sub);
+    await writeStarterTrialGenerationBlock(firm.id, trial.expired);
+  } catch (err) {
+    console.warn(
+      "[starter-trial] mirror sync skipped",
+      err instanceof Error ? err.message : err,
+    );
+  }
 }
 
 async function buildUpgradeSnapshot(input: {

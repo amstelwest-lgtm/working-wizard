@@ -18,6 +18,7 @@ import {
   findEntitlingFirmSubscription,
   loadCallerFirmMarket,
   loadFirmPlanDisplay,
+  syncStarterTrialMirrorForActor,
 } from "@/lib/firm-client-cap.server";
 import {
   isSaMarketFirm,
@@ -190,6 +191,7 @@ async function resolveFirmBillingEntitlement(
       isFirmMember: memberships > 0,
     });
     rememberEntitlement(email, result);
+    await syncStarterTrialMirrorForActor({ supabase: ctx.supabase, userId, email });
     return result;
   } catch (err) {
     console.warn(

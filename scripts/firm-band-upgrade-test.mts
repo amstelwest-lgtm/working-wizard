@@ -342,21 +342,33 @@ assert(
   setup.success_url?.startsWith(`${CANONICAL_APP_ORIGIN}/dashboard?addClient=1`),
   "setup success returns to Add client on the canonical host",
 );
+assert(
+  setup.cancel_url === `${CANONICAL_APP_ORIGIN}${firmUpgradeReturnPath("cancelled")}`,
+  "setup Checkout cancel matches the upgrade cancel url",
+);
+assert(
+  setup.custom_text?.submit?.message ===
+    "Saving this card moves you to MILŌN Solo at $99/month (15 clients). Billed in USD, cancel anytime.",
+  "setup Checkout names the plan once, above Save",
+);
+assert(!setup.custom_text?.after_submit, "setup Checkout does not repeat the plan under Save");
+assert(
+  firmSetupCheckoutMessage({
+    bandName: "Solo",
+    clientLimit: 15,
+    unitAmount: 9_900,
+    currency: "usd",
+    interval: "month",
+    saMarket: true,
+  }).includes("50% off"),
+  "SA setup copy still shows the discount",
+);
 assert(setup.metadata?.milon_setup_upgrade === "1", "setup session is marked as an upgrade");
 assert(setup.metadata?.milon_subscription_id === "sub_starter", "setup session names the subscription");
 assert(setup.metadata?.milon_lookup_key === "milon_solo_monthly", "setup session names the lookup key");
 assert(setup.metadata?.milon_plan === "solo", "setup session names the band");
 assert(setup.metadata?.milon_interval === "month", "setup session names the interval");
 assert(setup.metadata?.milon_user_id === "user_1", "setup session names the user");
-assert(
-  setup.custom_text?.submit?.message ===
-    "Saving this card moves you to MILŌN Solo at $99/month (15 clients). Billed in USD, cancel anytime.",
-  "setup Checkout names the plan and the resolved price",
-);
-assert(
-  setup.custom_text?.after_submit?.message === setup.custom_text?.submit?.message,
-  "setup Checkout repeats the plan on after_submit",
-);
 assert(
   !setup.custom_text?.submit?.message?.includes("South Africa") &&
     !setup.custom_text?.submit?.message?.includes("50% off"),
@@ -600,6 +612,12 @@ assert(
 assert(dashboard.includes("upgradeFirmBand"), "the panel calls the existing billing upgrade");
 assert(dashboard.includes("parseFirmUpgradeReturn"), "dashboard reopens add client after checkout");
 assert(dashboard.includes("UPGRADE_CANCELLED_MESSAGE"), "dashboard shows the cancel message");
+assert(
+  dashboard.includes('params.set("addClient", "1")') &&
+    dashboard.includes('params.set("upgrade", "cancelled")'),
+  "a cancel return keeps addClient and upgrade on the dashboard url",
+);
+assert(dashboard.includes("<main"), "the dashboard has a main landmark");
 assert(dashboard.includes("UPGRADE_FAILED_MESSAGE"), "dashboard shows the failure message");
 assert(
   !dashboard.includes("createBillingPortalSession"),
@@ -846,6 +864,19 @@ assert(!usPicker.includes("$49.50"), "a US picker does not show the halved price
 assert(!usPicker.includes(SA_FIRM_DISCOUNT_NOTE), "a US picker has no SA pricing note");
 assert(!usPicker.includes("50% off"), "a US picker has no discount text");
 assert(!usPicker.includes("regional pricing"), "a US picker has no regional-pricing text");
+const annualStarter = renderToStaticMarkup(
+  createElement(FirmBandUpgrade, {
+    currentBand: "starter",
+    interval: "year",
+    priceCurrency: "USD",
+    canUpgrade: true,
+    clientCount: 1,
+    saDiscount: false,
+    onUpgrade: () => undefined,
+  }),
+);
+assert(annualStarter.includes("$0/yr"), "annual Starter reads $0/yr");
+assert(!annualStarter.includes("$0/mo"), "annual Starter is not labelled $0/mo");
 const saPicker = renderToStaticMarkup(
   createElement(FirmBandUpgrade, {
     currentBand: "starter",
@@ -947,13 +978,13 @@ assert(
 );
 
 assert(dashboard.includes("FirmStarterTrialBanner"), "the practice dashboard shows the trial banner");
-assert(
-  dashboard.includes("Your trial has ended, choose a plan"),
-  "the add-client panel uses the ended sentence",
-);
+assert(dashboard.includes("TrialEndedPlanBlock"), "the add-client panel uses the shared trial block");
+const trialBlock = readFileSync(resolve("src/components/trial-ended-plan-block.tsx"), "utf8");
+assert(trialBlock.includes("STARTER_TRIAL_ENDED_MESSAGE"), "the shared block uses the ended sentence");
+assert(trialBlock.includes("FirmBandUpgrade"), "the shared block embeds the band picker");
 const banner = readFileSync(resolve("src/components/firm-starter-trial-banner.tsx"), "utf8");
-assert(banner.includes("STARTER_TRIAL_ENDED_MESSAGE"), "the banner uses the ended sentence");
-assert(banner.includes("FirmBandUpgrade"), "the ended banner includes the band picker");
+assert(banner.includes("TrialEndedPlanBlock"), "the ended banner uses the shared block");
+assert(!banner.includes("FirmBandUpgrade"), "the banner does not mount a second picker");
 const migration = readFileSync(
   resolve("supabase/migrations/20261005190000_firm_starter_trial_enforced.sql"),
   "utf8",
