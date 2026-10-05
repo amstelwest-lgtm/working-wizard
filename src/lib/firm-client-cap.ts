@@ -8,6 +8,7 @@ import {
   FIRM_BAND_CATALOG,
   FIRM_TRIAL_CLIENT_LIMIT,
   FIRM_TRIAL_SENTENCE,
+  firmClientLimitLabel,
   isFirmBandId,
   type FirmBandId,
 } from "@/lib/stripe-plans";
@@ -89,4 +90,65 @@ export function decideFirmClientCreate(input: {
   }
 
   return { allowed: true };
+}
+
+export type FirmPlanStatusCopy = {
+  phase: FirmSubscriptionPhase;
+  band: FirmBandId | null;
+  /** Primary line, e.g. "Trial — 9 days left" or "Solo". Null when Stripe is not configured. */
+  headline: string | null;
+  /** Secondary line. Trial uses the trial client cap, not the paid band's limit. */
+  detail: string | null;
+};
+
+export type FirmPlanDisplay = FirmPlanStatusCopy & {
+  configured: boolean;
+};
+
+/** Whole days until `trialEndIso`. 0 when the trial end is now or in the past. */
+export function trialDaysRemaining(trialEndIso: string | null | undefined, now = new Date()): number | null {
+  if (!trialEndIso) return null;
+  const end = Date.parse(trialEndIso);
+  if (!Number.isFinite(end)) return null;
+  const diff = end - now.getTime();
+  if (diff <= 0) return 0;
+  return Math.ceil(diff / 86_400_000);
+}
+
+/**
+ * Read-only plan line for Settings. Trial copy uses `FIRM_TRIAL_CLIENT_LIMIT`
+ * (the cap the billing gate enforces), not the paid band's larger limit.
+ */
+export function formatFirmPlanStatus(input: {
+  phase: FirmSubscriptionPhase;
+  band: FirmBandId | null;
+  trialEndIso?: string | null;
+  now?: Date;
+}): FirmPlanStatusCopy {
+  const band = input.band && isFirmBandId(input.band) ? input.band : null;
+  const bandName = band ? FIRM_BAND_CATALOG[band].name : null;
+
+  if (input.phase === "trialing") {
+    const days = trialDaysRemaining(input.trialEndIso, input.now);
+    const headline =
+      days == null
+        ? "Trial"
+        : days <= 0
+          ? "Trial — ends today"
+          : `Trial — ${days} day${days === 1 ? "" : "s"} left`;
+    const cap = `Up to ${FIRM_TRIAL_CLIENT_LIMIT} clients`;
+    const detail = bandName ? `${cap} · ${bandName} after the trial` : cap;
+    return { phase: "trialing", band, headline, detail };
+  }
+
+  if (input.phase === "active") {
+    return {
+      phase: "active",
+      band,
+      headline: bandName ?? "Paid plan",
+      detail: band ? firmClientLimitLabel(band) : null,
+    };
+  }
+
+  return { phase: "none", band: null, headline: "No active plan", detail: null };
 }

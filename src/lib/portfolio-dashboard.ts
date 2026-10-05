@@ -146,6 +146,46 @@ export function derivePriority(signals: PortfolioClientSignals): {
   return { level: "none", label: "—" };
 }
 
+export type PortfolioAttentionSummary = {
+  /** Clients whose priority badge is not "—". */
+  needAttention: number;
+  /** Priority badge "Review now". */
+  reviewNow: number;
+  /** Priority badges "Watch" and "Monitor". */
+  watching: number;
+};
+
+/**
+ * Attention tile counts. Uses `derivePriority` — the same function that
+ * labels each client row — so the summary cannot say "All clear" while a
+ * row says "Review now".
+ */
+export function summarizePortfolioAttention(
+  rows: PortfolioClientSignals[],
+): PortfolioAttentionSummary {
+  let reviewNow = 0;
+  let watching = 0;
+  for (const row of rows) {
+    const level = derivePriority(row).level;
+    if (level === "critical") reviewNow += 1;
+    else if (level === "high" || level === "medium") watching += 1;
+  }
+  return { needAttention: reviewNow + watching, reviewNow, watching };
+}
+
+/** Footnote under the Need attention tile. "All clear" only when every badge is "—". */
+export function attentionFootnote(summary: PortfolioAttentionSummary): string {
+  if (summary.needAttention === 0) return "All clear";
+  const parts: string[] = [];
+  if (summary.reviewNow > 0) {
+    parts.push(`${summary.reviewNow} review now`);
+  }
+  if (summary.watching > 0) {
+    parts.push(`${summary.watching} watching`);
+  }
+  return parts.join(" · ");
+}
+
 function pillarLabel(id: string | undefined): string {
   switch (id) {
     case "profit":

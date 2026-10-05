@@ -6,7 +6,8 @@ import { Users, Building2, LogOut, Palette, RotateCcw, Scale, Trash2, User, Cred
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { deleteOwnAccount } from "@/lib/account.functions";
-import { createBillingPortalSession } from "@/lib/stripe-checkout.functions";
+import type { FirmPlanDisplay } from "@/lib/firm-client-cap";
+import { createBillingPortalSession, getFirmPlanDisplay } from "@/lib/stripe-checkout.functions";
 import { resetOnboardingTours } from "@/lib/onboarding";
 import { BackLink } from "@/components/back-link";
 import { Button } from "@/components/ui/button";
@@ -53,7 +54,10 @@ function SettingsPage() {
   const navigate = useNavigate();
   const doDelete = useServerFn(deleteOwnAccount);
   const startBillingPortal = useServerFn(createBillingPortalSession);
+  const loadPlan = useServerFn(getFirmPlanDisplay);
   const { firmId } = useAccountantProfile();
+  const [plan, setPlan] = useState<FirmPlanDisplay | null>(null);
+  const [planLoading, setPlanLoading] = useState(false);
 
   const [view, setView] = useState<SettingsView>("owner");
   const [hasPractice, setHasPractice] = useState(false);
@@ -121,6 +125,28 @@ function SettingsPage() {
         });
     }
   }, [user, isPractice, firmId]);
+
+  useEffect(() => {
+    if (!isPractice) {
+      setPlan(null);
+      return;
+    }
+    let cancelled = false;
+    setPlanLoading(true);
+    void loadPlan({ data: { firmId } })
+      .then((next) => {
+        if (!cancelled) setPlan(next);
+      })
+      .catch(() => {
+        if (!cancelled) setPlan(null);
+      })
+      .finally(() => {
+        if (!cancelled) setPlanLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isPractice, firmId, loadPlan]);
 
   const backTo = settingsBackPath(view);
 
@@ -271,6 +297,21 @@ function SettingsPage() {
           }
         >
           <div className="space-y-2">
+            <div className="mb-3">
+              <span className="settings-label">Plan</span>
+              {planLoading ? (
+                <p className="settings-value">Loading plan…</p>
+              ) : plan?.configured === false ? (
+                <p className="settings-value">Plan status unavailable</p>
+              ) : (
+                <>
+                  <p className="settings-value">{plan?.headline ?? "No active plan"}</p>
+                  {plan?.detail ? (
+                    <p className="text-xs text-[var(--ink-dim)]">{plan.detail}</p>
+                  ) : null}
+                </>
+              )}
+            </div>
             <Link to="/settings/team" className="settings-row">
               <Users className="h-4 w-4" />
               Team & client access

@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   getPracticeAccessBoard,
+  getPracticeTeamRoster,
   inviteFirmStaff,
   removeFirmMember,
   revokeClientAccess,
@@ -86,15 +87,18 @@ function ClassificationSelect({
 function TeamAccessPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const load = useServerFn(getPracticeAccessBoard);
+  const loadRoster = useServerFn(getPracticeTeamRoster);
+  const loadBoard = useServerFn(getPracticeAccessBoard);
   const invite = useServerFn(inviteFirmStaff);
   const updateMember = useServerFn(updateFirmMember);
   const removeMember = useServerFn(removeFirmMember);
   const saveAssignments = useServerFn(saveClientAssignments);
   const revokeAccess = useServerFn(revokeClientAccess);
 
+  const [roster, setRoster] = useState<PracticeAccessBoard | null>(null);
   const [board, setBoard] = useState<PracticeAccessBoard | null>(null);
-  const [busy, setBusy] = useState(true);
+  const [rosterBusy, setRosterBusy] = useState(true);
+  const [accessBusy, setAccessBusy] = useState(true);
   const [err, setErr] = useState("");
 
   const [invEmail, setInvEmail] = useState("");
@@ -109,16 +113,28 @@ function TeamAccessPage() {
   const [savingGrants, setSavingGrants] = useState(false);
 
   const refresh = useCallback(async () => {
-    setBusy(true);
+    setRosterBusy(true);
+    setAccessBusy(true);
     setErr("");
-    try {
-      setBoard(await load());
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : "Could not load team access");
-    } finally {
-      setBusy(false);
-    }
-  }, [load]);
+    const rosterTask = loadRoster()
+      .then((next) => {
+        setRoster(next);
+      })
+      .catch((e: unknown) => {
+        setErr(e instanceof Error ? e.message : "Could not load the team");
+      })
+      .finally(() => setRosterBusy(false));
+    const boardTask = loadBoard()
+      .then((next) => {
+        setBoard(next);
+        setErr("");
+      })
+      .catch((e: unknown) => {
+        setErr(e instanceof Error ? e.message : "Could not load client access");
+      })
+      .finally(() => setAccessBusy(false));
+    await Promise.all([rosterTask, boardTask]);
+  }, [loadRoster, loadBoard]);
 
   useEffect(() => {
     if (!user) return;
@@ -131,9 +147,10 @@ function TeamAccessPage() {
     return map;
   }, [board]);
 
+  const view = board ?? roster;
   const selectedMember = board?.members.find((m) => m.userId === grantUser) ?? null;
   const teamCeiling = selectedMember?.classification ?? "staff";
-  const actorIsPartner = Boolean(board?.actorIsPartner);
+  const actorIsPartner = Boolean(view?.actorIsPartner);
 
   useEffect(() => {
     if (!board || !grantUser) {
@@ -202,7 +219,7 @@ function TeamAccessPage() {
         meta={<ThemeToggle />}
       />
 
-        {busy && !board ? (
+        {!view && (rosterBusy || accessBusy) ? (
           <p className="flex items-center gap-2 text-sm text-slate-400">
             <Loader2 className="h-4 w-4 animate-spin text-[#d4a550]" /> Loading…
           </p>
@@ -212,26 +229,26 @@ function TeamAccessPage() {
             {err}
           </div>
         ) : null}
-        {board?.migrationHint ? (
+        {view?.migrationHint ? (
           <div className="mb-4 rounded-xl border border-amber-800/50 bg-amber-950/30 px-4 py-3 text-sm text-amber-200">
-            {board.migrationHint}
+            {view.migrationHint}
           </div>
         ) : null}
 
-        {board && !board.firmId && !board.migrationHint ? (
+        {view && !view.firmId && !view.migrationHint ? (
           <p className="text-sm text-slate-400">No practice firm on this login.</p>
         ) : null}
 
-        {board?.firmId ? (
+        {view && view.firmId ? (
           <>
             <section className="mb-6 rounded-2xl border border-slate-800 bg-slate-900/60 p-5 sm:p-6">
               <div className="mb-4 flex items-center gap-2">
                 <UserPlus className="h-4 w-4 text-[#d4a550]" />
                 <h2 className="text-sm font-semibold uppercase tracking-[0.14em] text-[#d4a550]">
-                  {board.firmName} · team
+                  {view.firmName} · team
                 </h2>
               </div>
-              {board.canManage ? (
+              {view.canManage ? (
                 <div className="mb-5 grid gap-3 sm:grid-cols-2">
                   <div>
                     <Label className="text-xs text-slate-400">Name</Label>
@@ -314,7 +331,7 @@ function TeamAccessPage() {
               )}
 
               <ul className="space-y-2">
-                {board.members.map((m) => (
+                {view.members.map((m) => (
                   <li
                     key={m.userId}
                     className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-800 px-3 py-3"
@@ -324,7 +341,7 @@ function TeamAccessPage() {
                       <div className="text-xs text-slate-500">{m.email}</div>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
-                      {board.canManage && !m.isFirmOwner ? (
+                      {view.canManage && !m.isFirmOwner ? (
                         <>
                           <select
                             className="h-9 rounded-md border border-slate-700 bg-[var(--bg)] px-2 text-xs"
@@ -385,9 +402,9 @@ function TeamAccessPage() {
                   </li>
                 ))}
               </ul>
-              {board.invites.length > 0 && (
+              {(board?.invites.length ?? 0) > 0 && (
                 <div className="mt-4 text-xs text-slate-500">
-                  Pending invites: {board.invites.map((i) => i.email).join(", ")}
+                  Pending invites: {board?.invites.map((i) => i.email).join(", ")}
                 </div>
               )}
             </section>
@@ -399,7 +416,17 @@ function TeamAccessPage() {
                   Per-client access
                 </h2>
               </div>
-              {board.canManage ? (
+              {!board ? (
+                <p className="flex items-center gap-2 text-sm text-slate-400">
+                  {accessBusy ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin text-[#d4a550]" /> Loading client access…
+                    </>
+                  ) : (
+                    "Client assignments could not be loaded."
+                  )}
+                </p>
+              ) : board.canManage ? (
                 <div className="mb-5 space-y-3">
                   <select
                     className="h-10 w-full rounded-md border border-slate-700 bg-[var(--bg)] px-3 text-sm"
@@ -517,6 +544,7 @@ function TeamAccessPage() {
                 </div>
               ) : null}
 
+              {board ? (
               <ScrollableTable cardRows>
                 <table className="milon-data-table w-full min-w-[640px] text-left text-sm">
                   <thead className="text-[10px] uppercase tracking-[0.14em] text-slate-500">
@@ -568,6 +596,7 @@ function TeamAccessPage() {
                   </tbody>
                 </table>
               </ScrollableTable>
+              ) : null}
             </section>
           </>
         ) : null}

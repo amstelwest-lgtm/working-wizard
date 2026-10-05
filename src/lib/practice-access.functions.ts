@@ -142,20 +142,29 @@ async function resolveFirm(
   userId: string,
   preferredFirmId?: string | null,
 ): Promise<{ id: string; name: string; ownerUserId: string } | null> {
-  const { data: owned } = await admin
-    .from("firms")
-    .select("id, name, owner_user_id")
-    .eq("owner_user_id", userId)
-    .order("created_at", { ascending: true });
-  const { data: mems } = await admin.from("firm_memberships").select("firm_id").eq("user_id", userId);
+  const [ownedRes, memRes] = await Promise.all([
+    admin
+      .from("firms")
+      .select("id, name, owner_user_id")
+      .eq("owner_user_id", userId)
+      .order("created_at", { ascending: true }),
+    admin.from("firm_memberships").select("firm_id").eq("user_id", userId),
+  ]);
+  const owned = (ownedRes.data ?? []) as Array<{ id: string; name?: string; owner_user_id?: string }>;
+  const mems = (memRes.data ?? []) as Array<{ firm_id: string }>;
   const ids = [
-    ...new Set([
-      ...(owned ?? []).map((f: { id: string }) => f.id),
-      ...(mems ?? []).map((m: { firm_id: string }) => m.firm_id),
-    ]),
+    ...new Set([...owned.map((f) => f.id), ...mems.map((m) => m.firm_id)]),
   ];
   if (ids.length === 0) return null;
   const pick = preferredFirmId && ids.includes(preferredFirmId) ? preferredFirmId : ids[0];
+  const cached = owned.find((f) => f.id === pick);
+  if (cached) {
+    return {
+      id: String(cached.id),
+      name: String(cached.name ?? "Practice"),
+      ownerUserId: String(cached.owner_user_id ?? ""),
+    };
+  }
   const { data: firm } = await admin
     .from("firms")
     .select("id, name, owner_user_id")
@@ -163,6 +172,54 @@ async function resolveFirm(
     .maybeSingle();
   if (!firm) return null;
   return { id: String(firm.id), name: String(firm.name ?? "Practice"), ownerUserId: String(firm.owner_user_id) };
+}
+
+type ProfileName = { email: string; name: string };
+
+/** One profiles read, then auth-admin lookups only for rows still missing an email — in parallel. */
+async function profilesByIds(admin: LooseAdmin, userIds: string[]): Promise<Map<string, ProfileName>> {
+  const ids = [...new Set(userIds.filter(Boolean))];
+  const out = new Map<string, ProfileName>();
+  if (ids.length === 0) return out;
+  const { data } = await admin.from("profiles").select("id, email, full_name").in("id", ids);
+  const rows = (data ?? []) as Array<{ id?: string; email?: string | null; full_name?: string | null }>;
+  const byId = new Map(rows.map((row) => [String(row.id ?? ""), row]));
+  const missing: string[] = [];
+  for (const id of ids) {
+    const row = byId.get(id);
+    const email = String(row?.email ?? "").trim().toLowerCase();
+    const name = String(row?.full_name ?? "").trim();
+    if (email) out.set(id, { email, name: name || email.split("@")[0] });
+    else missing.push(id);
+  }
+  if (missing.length) {
+    await Promise.all(
+      missing.map(async (id) => {
+        const name = String(byId.get(id)?.full_name ?? "").trim();
+        try {
+          const { data: auth } = await admin.auth.admin.getUserById(id);
+          const authEmail = (auth.user?.email ?? "").trim().toLowerCase();
+          out.set(id, { email: authEmail, name: name || authEmail.split("@")[0] || "User" });
+        } catch {
+          out.set(id, { email: "", name: name || "User" });
+        }
+      }),
+    );
+  }
+  return out;
+}
+
+function membershipView(
+  ownerUserId: string,
+  userId: string,
+  mem: { role?: unknown; classification?: unknown } | undefined,
+): { role: MembershipRole; classification: PracticeClassification; isOwner: boolean } {
+  const isOwner = ownerUserId === userId;
+  return {
+    role: isOwner ? "owner" : parseMembershipRole(mem?.role),
+    classification: parseClassification(mem?.classification),
+    isOwner,
+  };
 }
 
 async function membershipOf(
@@ -352,145 +409,218 @@ function emptyBoard(hint: string | null): PracticeAccessBoard {
   };
 }
 
+type MemRow = { user_id?: string; role?: unknown; classification?: unknown };
+
+async function loadPracticeAccess(
+  admin: LooseAdmin,
+  userId: string,
+  scope: "roster" | "full",
+): Promise<PracticeAccessBoard> {
+  const firm = await resolveFirm(admin, userId);
+  if (!firm) return emptyBoard(null);
+
+  const { data: memRows, error: memErr } = await admin
+    .from("firm_memberships")
+    .select("user_id, role, classification")
+    .eq("firm_id", firm.id);
+  if (memErr) throw memErr;
+
+  const membershipByUser = new Map<string, MemRow>();
+  const memberIds = new Set<string>(firm.ownerUserId ? [firm.ownerUserId] : []);
+  for (const row of (memRows ?? []) as MemRow[]) {
+    const uid = String(row.user_id ?? "");
+    if (!uid) continue;
+    memberIds.add(uid);
+    membershipByUser.set(uid, row);
+  }
+
+  const mine = membershipView(firm.ownerUserId, userId, membershipByUser.get(userId));
+  const manage = canManage(mine.role, mine.isOwner);
+
+  if (scope === "roster") {
+    const profiles = await profilesByIds(admin, [...memberIds]);
+    const members = [...memberIds].map((uid) => {
+      const m = membershipView(firm.ownerUserId, uid, membershipByUser.get(uid));
+      const profile = profiles.get(uid) ?? { email: "", name: "User" };
+      return {
+        userId: uid,
+        email: profile.email,
+        name: profile.name,
+        membershipRole: m.role,
+        classification: teamClassOf(m),
+        isFirmOwner: m.isOwner,
+      };
+    });
+    members.sort((a, b) => Number(b.isFirmOwner) - Number(a.isFirmOwner) || a.name.localeCompare(b.name));
+    return {
+      firmId: firm.id,
+      firmName: firm.name,
+      canManage: manage,
+      membershipRole: mine.role,
+      myClassification: teamClassOf(mine),
+      actorIsPartner: teamClassOf(mine) === "partner",
+      cap: PRACTICE_CLIENT_ACCESS_CAP,
+      members,
+      clients: [],
+      assignments: [],
+      invites: [],
+      migrationHint: null,
+    };
+  }
+
+  const clientQuery = admin
+    .from("clients")
+    .select("id, name, client_code, owner_user_id, contact_email")
+    .eq("firm_id", firm.id)
+    .order("name");
+  const assignQuery = admin
+    .from("client_practice_access")
+    .select(
+      "id, client_id, user_id, classification, status, accountant_approved_at, owner_approved_at, created_at",
+    )
+    .eq("firm_id", firm.id);
+  const inviteQuery = manage
+    ? admin
+        .from("firm_staff_invites")
+        .select("id, email, name, membership_role, classification, created_at, expires_at, accepted_at")
+        .eq("firm_id", firm.id)
+        .is("accepted_at", null)
+        .order("created_at", { ascending: false })
+    : Promise.resolve({ data: [] as Record<string, unknown>[], error: null });
+
+  const [clientRes, assignRes, inviteRes] = await Promise.all([clientQuery, assignQuery, inviteQuery]);
+  if (clientRes.error) throw clientRes.error;
+  if (assignRes.error) throw assignRes.error;
+
+  const clientRows = (clientRes.data ?? []) as Array<{
+    id: string;
+    name?: string | null;
+    client_code?: string | null;
+    owner_user_id?: string | null;
+    contact_email?: string | null;
+  }>;
+  const ownerIds = clientRows.map((c) => (c.owner_user_id ? String(c.owner_user_id) : "")).filter(Boolean);
+  const profiles = await profilesByIds(admin, [...memberIds, ...ownerIds]);
+
+  const members = [...memberIds].map((uid) => {
+    const m = membershipView(firm.ownerUserId, uid, membershipByUser.get(uid));
+    const profile = profiles.get(uid) ?? { email: "", name: "User" };
+    return {
+      userId: uid,
+      email: profile.email,
+      name: profile.name,
+      membershipRole: m.role,
+      classification: teamClassOf(m),
+      isFirmOwner: m.isOwner,
+    };
+  });
+  members.sort((a, b) => Number(b.isFirmOwner) - Number(a.isFirmOwner) || a.name.localeCompare(b.name));
+
+  const assignments: PracticeAssignment[] = ((assignRes.data ?? []) as Record<string, unknown>[]).map((row) => ({
+    id: String(row.id),
+    clientId: String(row.client_id),
+    userId: String(row.user_id),
+    classification: parseClassification(row.classification),
+    status: (row.status as PracticeAccessStatus) ?? "pending",
+    accountantApproved: Boolean(row.accountant_approved_at),
+    ownerApproved: Boolean(row.owner_approved_at),
+    grantedAt:
+      (row.owner_approved_at as string | null) ??
+      (row.accountant_approved_at as string | null) ??
+      (row.created_at as string | null) ??
+      null,
+  }));
+
+  const countByClient = new Map<string, number>();
+  for (const a of assignments) {
+    if (a.status === "active" || a.status === "pending") {
+      countByClient.set(a.clientId, (countByClient.get(a.clientId) ?? 0) + 1);
+    }
+  }
+
+  const clients: PracticeClientRow[] = clientRows.map((c) => {
+    const ownerId = c.owner_user_id ? String(c.owner_user_id) : "";
+    const owner = ownerId ? profiles.get(ownerId) : undefined;
+    return {
+      id: String(c.id),
+      name: String(c.name ?? "Client"),
+      code: c.client_code ?? null,
+      ownerEmail: owner?.email || c.contact_email || null,
+      ownerUserId: c.owner_user_id ?? null,
+      assignedCount: countByClient.get(String(c.id)) ?? 0,
+    };
+  });
+
+  const invites: PracticeInviteRow[] = ((inviteRes.data ?? []) as Record<string, unknown>[]).map((row) => ({
+    id: String(row.id),
+    email: String(row.email ?? ""),
+    name: String(row.name ?? ""),
+    membershipRole: parseMembershipRole(row.membership_role),
+    classification: parseClassification(row.classification),
+    createdAt: String(row.created_at ?? ""),
+    expiresAt: String(row.expires_at ?? ""),
+  }));
+
+  const visibleClients = manage
+    ? clients
+    : clients.filter((c) =>
+        assignments.some((a) => a.clientId === c.id && a.userId === userId && a.status === "active"),
+      );
+
+  return {
+    firmId: firm.id,
+    firmName: firm.name,
+    canManage: manage,
+    membershipRole: mine.role,
+    myClassification: teamClassOf(mine),
+    actorIsPartner: teamClassOf(mine) === "partner",
+    cap: PRACTICE_CLIENT_ACCESS_CAP,
+    members,
+    clients: visibleClients,
+    assignments: manage ? assignments : assignments.filter((a) => a.userId === userId),
+    invites: manage ? invites : [],
+    migrationHint: null,
+  };
+}
+
+function boardOrMigrationHint(e: unknown): PracticeAccessBoard | null {
+  const msg = e instanceof Error ? e.message : String(e);
+  if (!missingRelation(msg)) return null;
+  return emptyBoard(
+    migrationHintFor(
+      msg.includes("audit_log") || msg.includes("firm_connected") || msg.includes("deliverable")
+        ? PRACTICE_ACCESS_AMENDMENT_MIGRATION
+        : PRACTICE_ACCESS_MIGRATION,
+    ),
+  );
+}
+
+/** Members only — the team page paints this without waiting on client assignments. */
+export const getPracticeTeamRoster = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }): Promise<PracticeAccessBoard> => {
+    const ctx = context as AuthCtx;
+    const admin = adminLoose();
+    try {
+      return await loadPracticeAccess(admin, ctx.userId, "roster");
+    } catch (e) {
+      const hinted = boardOrMigrationHint(e);
+      if (hinted) return hinted;
+      throw e instanceof Error ? e : new Error(String(e));
+    }
+  });
+
 export const getPracticeAccessBoard = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }): Promise<PracticeAccessBoard> => {
     const ctx = context as AuthCtx;
     const admin = adminLoose();
     try {
-      const firm = await resolveFirm(admin, ctx.userId);
-      if (!firm) return emptyBoard(null);
-      const mine = await membershipOf(admin, firm.id, ctx.userId);
-      const manage = canManage(mine.role, mine.isOwner);
-
-      const { data: memRows, error: memErr } = await admin
-        .from("firm_memberships")
-        .select("user_id, role, classification")
-        .eq("firm_id", firm.id);
-      if (memErr) throw memErr;
-
-      const memberIds = new Set<string>([firm.ownerUserId]);
-      for (const row of memRows ?? []) memberIds.add(String(row.user_id));
-
-      const members: PracticeMember[] = [];
-      for (const uid of memberIds) {
-        const profile = await profileById(admin, uid);
-        const m = await membershipOf(admin, firm.id, uid);
-        members.push({
-          userId: uid,
-          email: profile.email,
-          name: profile.name,
-          membershipRole: m.role,
-          classification: teamClassOf(m),
-          isFirmOwner: m.isOwner,
-        });
-      }
-      members.sort((a, b) => Number(b.isFirmOwner) - Number(a.isFirmOwner) || a.name.localeCompare(b.name));
-
-      const { data: clientRows, error: cErr } = await admin
-        .from("clients")
-        .select("id, name, client_code, owner_user_id, contact_email")
-        .eq("firm_id", firm.id)
-        .order("name");
-      if (cErr) throw cErr;
-
-      const { data: assignRows, error: aErr } = await admin
-        .from("client_practice_access")
-        .select(
-          "id, client_id, user_id, classification, status, accountant_approved_at, owner_approved_at, created_at",
-        )
-        .eq("firm_id", firm.id);
-      if (aErr) throw aErr;
-
-      const assignments: PracticeAssignment[] = (assignRows ?? []).map((row: Record<string, unknown>) => ({
-        id: String(row.id),
-        clientId: String(row.client_id),
-        userId: String(row.user_id),
-        classification: parseClassification(row.classification),
-        status: (row.status as PracticeAccessStatus) ?? "pending",
-        accountantApproved: Boolean(row.accountant_approved_at),
-        ownerApproved: Boolean(row.owner_approved_at),
-        grantedAt:
-          (row.owner_approved_at as string | null) ??
-          (row.accountant_approved_at as string | null) ??
-          (row.created_at as string | null) ??
-          null,
-      }));
-
-      const countByClient = new Map<string, number>();
-      for (const a of assignments) {
-        if (a.status === "active" || a.status === "pending") {
-          countByClient.set(a.clientId, (countByClient.get(a.clientId) ?? 0) + 1);
-        }
-      }
-
-      const clients: PracticeClientRow[] = [];
-      for (const c of clientRows ?? []) {
-        const owner =
-          c.owner_user_id != null ? await profileById(admin, String(c.owner_user_id)) : { email: "", name: "" };
-        clients.push({
-          id: String(c.id),
-          name: String(c.name ?? "Client"),
-          code: (c.client_code as string | null) ?? null,
-          ownerEmail: owner.email || (c.contact_email as string | null),
-          ownerUserId: (c.owner_user_id as string | null) ?? null,
-          assignedCount: countByClient.get(String(c.id)) ?? 0,
-        });
-      }
-
-      let invites: PracticeInviteRow[] = [];
-      if (manage) {
-        const { data: inv } = await admin
-          .from("firm_staff_invites")
-          .select("id, email, name, membership_role, classification, created_at, expires_at, accepted_at")
-          .eq("firm_id", firm.id)
-          .is("accepted_at", null)
-          .order("created_at", { ascending: false });
-        invites = (inv ?? []).map((row: Record<string, unknown>) => ({
-          id: String(row.id),
-          email: String(row.email ?? ""),
-          name: String(row.name ?? ""),
-          membershipRole: parseMembershipRole(row.membership_role),
-          classification: parseClassification(row.classification),
-          createdAt: String(row.created_at ?? ""),
-          expiresAt: String(row.expires_at ?? ""),
-        }));
-      }
-
-      const visibleClients = manage
-        ? clients
-        : clients.filter((c) =>
-            assignments.some((a) => a.clientId === c.id && a.userId === ctx.userId && a.status === "active"),
-          );
-
-      return {
-        firmId: firm.id,
-        firmName: firm.name,
-        canManage: manage,
-        membershipRole: mine.role,
-        myClassification: teamClassOf(mine),
-        actorIsPartner: teamClassOf(mine) === "partner",
-        cap: PRACTICE_CLIENT_ACCESS_CAP,
-        members,
-        clients: visibleClients,
-        assignments: manage
-          ? assignments
-          : assignments.filter((a) => a.userId === ctx.userId),
-        invites,
-        migrationHint: null,
-      };
+      return await loadPracticeAccess(admin, ctx.userId, "full");
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      if (missingRelation(msg)) {
-        return emptyBoard(
-          migrationHintFor(
-            msg.includes("audit_log") || msg.includes("firm_connected") || msg.includes("deliverable")
-              ? PRACTICE_ACCESS_AMENDMENT_MIGRATION
-              : PRACTICE_ACCESS_MIGRATION,
-          ),
-        );
-      }
-      throw e instanceof Error ? e : new Error(msg);
+      const hinted = boardOrMigrationHint(e);
+      if (hinted) return hinted;
+      throw e instanceof Error ? e : new Error(String(e));
     }
   });
 
