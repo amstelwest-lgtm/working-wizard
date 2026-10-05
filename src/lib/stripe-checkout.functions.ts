@@ -46,6 +46,7 @@ import {
   upgradeSuccessMessage,
   UPGRADE_FAILED_MESSAGE,
 } from "@/lib/firm-band-upgrade";
+import { requestAppOrigin } from "@/lib/app-origin";
 import { syncCheckoutSessionSubscription } from "@/lib/stripe-billing-sync.server";
 import {
   checkoutSessionUnlocksFirm,
@@ -57,14 +58,10 @@ import {
 } from "@/lib/stripe-entitlement";
 
 function appOrigin(): string {
-  const fromEnv = (process.env.SITE_URL || process.env.VITE_APP_URL || "")
-    .trim()
-    .replace(/\/$/, "");
-  if (fromEnv) return fromEnv;
   try {
-    return new URL(getRequest().url).origin;
+    return requestAppOrigin(getRequest());
   } catch {
-    return "https://milonfinance.com";
+    return requestAppOrigin(null);
   }
 }
 
@@ -210,7 +207,7 @@ async function resolveFoundingPromotionCodeId(promo?: string | null): Promise<st
 async function createPortalUrl(customerId: string, origin: string): Promise<string> {
   const session = await getStripe().billingPortal.sessions.create({
     customer: customerId,
-    return_url: `${origin.replace(/\/$/, "")}/settings`,
+    return_url: `${origin.replace(/\/$/, "")}/dashboard`,
   });
   if (!session.url) {
     throw new Error("Stripe Customer Portal did not return a URL.");

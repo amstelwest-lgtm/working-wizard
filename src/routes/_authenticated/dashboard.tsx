@@ -41,6 +41,7 @@ import { getQboStatuses } from "@/lib/qbo.functions";
 import { getXeroStatuses } from "@/lib/xero.functions";
 import { createFirmClient, getFirmClientCreateAllowance } from "@/lib/firm-clients.functions";
 import type { FirmClientCreateAllowance } from "@/lib/firm-client-cap";
+import { browserAppOrigin } from "@/lib/app-origin";
 import { FirmBandUpgrade } from "@/components/firm-band-upgrade";
 import {
   UPGRADE_CANCELLED_MESSAGE,
@@ -1058,7 +1059,7 @@ function Dashboard() {
   // trigger a hydration mismatch.
   const [origin, setOrigin] = useState("");
   useEffect(() => {
-    setOrigin(window.location.origin);
+    setOrigin(browserAppOrigin());
   }, []);
 
   const getStatuses = useServerFn(getQboStatuses);

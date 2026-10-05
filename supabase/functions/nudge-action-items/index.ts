@@ -9,6 +9,7 @@
  * Auth: service role key as Bearer token.
  */
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { appRedirectOrigin } from "../_shared/app-origin.ts";
 
 const RESEND_API_URL = "https://api.resend.com/emails";
 const FROM_DOMAIN = "milon.co.za";
@@ -217,11 +218,10 @@ Deno.serve(async (req) => {
   }
 
   const resendApiKey = Deno.env.get("RESEND_API_KEY");
-  const siteUrl = Deno.env.get("SITE_URL") ?? "";
+  const siteUrl = appRedirectOrigin([Deno.env.get("SITE_URL")]);
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
   if (!resendApiKey) return json({ error: "RESEND_API_KEY not configured" }, 500);
-  if (!siteUrl) return json({ error: "SITE_URL not configured" }, 500);
 
   const db = createClient(
     Deno.env.get("SUPABASE_URL")!,

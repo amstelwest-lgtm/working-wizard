@@ -3,6 +3,8 @@
  * sent via Resend. Always returns a paste-ready message for Outlook/Gmail.
  */
 
+import { getRequest } from "@tanstack/react-start/server";
+import { appRedirectOrigin } from "@/lib/app-origin";
 import { callClaudeMessages, parseClaudeJson } from "@/lib/claude-messages";
 import { inviteDraftPrompt, resolvePromptMarket } from "@/lib/market";
 
@@ -23,10 +25,16 @@ export type InviteDraft = {
 };
 
 export function inviteSiteUrl(): string {
-  return (process.env.SITE_URL || process.env.VITE_APP_URL || "https://milon.co.za").replace(
-    /\/$/,
-    "",
-  );
+  const candidates: Array<string | null | undefined> = [];
+  try {
+    const req = getRequest();
+    candidates.push(req.headers.get("origin"));
+    candidates.push(new URL(req.url).origin);
+  } catch {
+    // Cron and scripts have no request. Env is used only when it is allowlisted.
+  }
+  candidates.push(process.env.SITE_URL, process.env.VITE_APP_URL);
+  return appRedirectOrigin(candidates);
 }
 
 export function invitePasteText(subject: string, body: string): string {

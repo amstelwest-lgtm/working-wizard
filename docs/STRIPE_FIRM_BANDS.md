@@ -109,6 +109,8 @@ Account: **Milon, Inc.** `acct_1UEXnwGXDN6PFbnz` (Live). This VM does not mutate
 
 Dashboard Customer Portal stays available for invoices and cancellation. Band changes do **not** depend on the portal `subscription_update` setting (it can stay off).
 
+Portal `return_url`, Checkout `success_url` / `cancel_url`, invite links, and auth `emailRedirectTo` / password-reset `redirectTo` all use `appRedirectOrigin` (`src/lib/app-origin.ts`). The request `Origin` is kept only for `www.milonfinance.com`, `milonfinance.com`, and `*.vercel.app`. Every other host, including `milon.co.za` and a stale `SITE_URL`, becomes `https://www.milonfinance.com`. The portal returns to `/dashboard`. An in-app upgrade returns to `/dashboard?addClient=1`, which reopens Add client.
+
 - Server: `createBillingPortalSession` in `src/lib/stripe-checkout.functions.ts`
 - UI: Practice **Settings → Manage billing** (firm owner or firm admin)
 - Looks up the Stripe Customer by the signed-in email (no local customer-id column)

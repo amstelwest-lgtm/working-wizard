@@ -40,6 +40,15 @@ import {
   firmIntegrationIdentifier,
   firmUpgradeCheckoutSessionParams,
 } from "../src/lib/stripe-checkout.core";
+import {
+  CANONICAL_APP_ORIGIN,
+  appRedirectOrigin,
+} from "../src/lib/app-origin";
+import {
+  CANONICAL_APP_ORIGIN as EDGE_CANONICAL,
+  appRedirectOrigin as edgeAppRedirectOrigin,
+} from "../supabase/functions/_shared/app-origin.ts";
+import { checkoutEmailRedirectTo } from "../src/lib/pending-checkout";
 import { FirmBandUpgrade } from "../src/components/firm-band-upgrade";
 import { FIRM_BAND_CATALOG, FIRM_CHECKOUT_BANDS } from "../src/lib/stripe-plans";
 
@@ -296,6 +305,61 @@ assert(
 );
 assert(firmUpgradeReturnPath("cancelled").includes("upgrade=cancelled"), "cancel path helper");
 
+const zaCheckout = firmUpgradeCheckoutSessionParams({
+  priceId: "price_test_solo",
+  lookupKey: "milon_solo_monthly",
+  band: "solo",
+  interval: "month",
+  origin: "https://www.milon.co.za",
+  userId: "user_1",
+  email: "owner@firm.example",
+  market: "za",
+  integrationIdentifier: firmIntegrationIdentifier("solo", "month", "abcdefgh"),
+  includeTrial: false,
+});
+assert(
+  zaCheckout.success_url?.startsWith(`${CANONICAL_APP_ORIGIN}/dashboard?addClient=1`),
+  "a milon.co.za checkout origin is rewritten and reopens Add client",
+);
+assert(
+  zaCheckout.cancel_url === `${CANONICAL_APP_ORIGIN}/dashboard?addClient=1&upgrade=cancelled`,
+  "checkout cancel never returns to milon.co.za",
+);
+assert(
+  !zaCheckout.success_url?.includes("milon.co.za") && !zaCheckout.cancel_url?.includes("milon.co.za"),
+  "checkout URLs do not contain milon.co.za",
+);
+assert(
+  appRedirectOrigin(["https://www.milonfinance.com"]) === "https://www.milonfinance.com",
+  "www.milonfinance.com stays",
+);
+assert(
+  appRedirectOrigin(["https://milonfinance.com/settings"]) === "https://milonfinance.com",
+  "apex milonfinance.com stays",
+);
+assert(
+  appRedirectOrigin(["https://working-wizard-git-preview.vercel.app"]) ===
+    "https://working-wizard-git-preview.vercel.app",
+  "a Vercel preview host stays",
+);
+assert(
+  appRedirectOrigin(["https://www.milon.co.za", "https://app.milon.co.za"]) === CANONICAL_APP_ORIGIN,
+  "milon.co.za is never an app redirect",
+);
+assert(
+  appRedirectOrigin(["http://www.milonfinance.com"]) === CANONICAL_APP_ORIGIN,
+  "a non-https host is not used",
+);
+assert(edgeAppRedirectOrigin(["https://www.milon.co.za"]) === EDGE_CANONICAL, "edge helper matches");
+assert(
+  checkoutEmailRedirectTo("https://www.milon.co.za/", {
+    plan: "solo",
+    interval: "month",
+    market: "za",
+  }) === `${CANONICAL_APP_ORIGIN}/auth/callback?checkout=solo&interval=month&market=za`,
+  "signup emailRedirectTo leaves milon.co.za",
+);
+
 assert(
   bandFromSubscriptionSnapshot({ lookupKey: "milon_solo_monthly", metadataPlan: "starter" }) ===
     "solo",
@@ -461,6 +525,10 @@ assert(fn.includes("export const upgradeFirmBand"), "upgrade server function");
 assert(fn.includes("assertCallerCanUpgradeFirm"), "upgrade checks the firm owner on the server");
 assert(fn.includes("firmSubscriptionUpgradeParams"), "paid upgrades update the subscription");
 assert(fn.includes("firmUpgradeCheckoutSessionParams"), "no-card upgrades use Checkout");
+assert(fn.includes("requestAppOrigin"), "billing origin comes from the request allowlist");
+assert(fn.includes('return_url: `${origin.replace(/\\/$/, "")}/dashboard`') || fn.includes("/dashboard`"), "portal returns to the dashboard");
+assert(!fn.includes("SITE_URL"), "billing does not trust SITE_URL");
+assert(!fn.includes("/settings`"), "portal return is not /settings");
 assert(fn.includes("finalizeFirmBandCheckout"), "return path syncs the new band");
 assert(fn.includes("isStripeCurrencyConflict"), "a currency conflict retries Checkout");
 assert(fn.includes("subscriptionCurrency: sub?.chargeCurrency"), "the route uses the charge currency");
@@ -529,5 +597,23 @@ const overSolo = renderToStaticMarkup(
 assert(!overSolo.includes('value="solo"'), "Solo is not selectable when the firm already has 20 clients");
 assert(overSolo.includes('value="small"'), "Small stays selectable because 25 covers 20 clients");
 assert(overSolo.includes("$99"), "the list still shows the USD catalog price");
+
+const inviteEmail = readFileSync(resolve("src/lib/client-invite-email.ts"), "utf8");
+assert(inviteEmail.includes("appRedirectOrigin"), "owner invite links use the app origin helper");
+assert(!inviteEmail.includes("https://milon.co.za"), "owner invite links do not default to milon.co.za");
+
+const reset = readFileSync(resolve("src/components/password-reset-request.tsx"), "utf8");
+assert(reset.includes("browserAppUrl(\"/reset-password\")"), "password reset uses the allowlisted origin");
+const landing = readFileSync(resolve("src/routes/index.tsx"), "utf8");
+assert(landing.includes("browserAppUrl(\"/reset-password\")"), "landing password reset uses the allowlisted origin");
+assert(landing.includes("browserAppUrl(\"/app\")"), "owner signup redirect uses the allowlisted origin");
+const google = readFileSync(resolve("src/lib/google-auth.ts"), "utf8");
+assert(google.includes("browserAppOrigin()"), "Google redirectTo uses the allowlisted origin");
+
+const taskLink = readFileSync(resolve("supabase/functions/task-link/index.ts"), "utf8");
+const nudge = readFileSync(resolve("supabase/functions/nudge-action-items/index.ts"), "utf8");
+assert(taskLink.includes("appRedirectOrigin"), "task-link emails use the allowlisted origin");
+assert(nudge.includes("appRedirectOrigin"), "nudge emails use the allowlisted origin");
+assert(taskLink.includes("noreply@notify.milon.co.za"), "task-link keeps the notify mailbox");
 
 console.log("firm-band-upgrade ok");

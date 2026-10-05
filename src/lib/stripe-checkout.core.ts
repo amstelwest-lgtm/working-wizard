@@ -4,6 +4,7 @@
  */
 
 import type Stripe from "stripe";
+import { appRedirectOrigin } from "@/lib/app-origin";
 import {
   assertFoundingMonthlyOnly,
   FIRM_TRIAL_DAYS,
@@ -121,7 +122,7 @@ export type FirmCheckoutSessionInput = {
 export function firmCheckoutSessionParams(
   input: FirmCheckoutSessionInput,
 ): Stripe.Checkout.SessionCreateParams {
-  const origin = input.origin.replace(/\/$/, "");
+  const origin = appRedirectOrigin([input.origin]);
   const monthlyPaid = input.interval === "month";
   const meta: Record<string, string> = {
     milon_plan: input.band,
@@ -183,7 +184,7 @@ export function firmCheckoutSessionParams(
 export function firmUpgradeCheckoutSessionParams(
   input: FirmCheckoutSessionInput & { replacesSubscriptionId?: string | null },
 ): Stripe.Checkout.SessionCreateParams {
-  const origin = input.origin.replace(/\/$/, "");
+  const origin = appRedirectOrigin([input.origin]);
   const params = firmCheckoutSessionParams({ ...input, includeTrial: false });
   params.success_url = `${origin}/dashboard?addClient=1&upgrade=success&session_id={CHECKOUT_SESSION_ID}`;
   params.cancel_url = `${origin}/dashboard?addClient=1&upgrade=cancelled`;

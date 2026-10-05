@@ -12,6 +12,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { PanelSkeleton } from "@/components/primitives";
+import { browserAppUrl } from "@/lib/app-origin";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -811,7 +812,7 @@ export default function ActionPlanPanel({
     });
     const body = await res.json();
     if (!res.ok || body.error) throw new Error(body.error ?? "link_failed");
-    return `${window.location.origin}/t/${body.token}` as string;
+    return browserAppUrl(`/t/${body.token}`);
   };
 
   const sendAssignment = async (
