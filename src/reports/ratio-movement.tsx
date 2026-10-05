@@ -18,6 +18,12 @@ import { movementNarrative } from "./narrative";
 import type { ClientOperatingProfile } from "@/lib/client-profile";
 import { ZA_MARKET, type ResolvedMarket } from "@/lib/market";
 import { reportKicker } from "@/lib/report-catalog";
+import {
+  movementVerdict,
+  MOVEMENT_VERDICT_LABEL,
+  NO_HISTORY_YET,
+  type MovementVerdict,
+} from "@/lib/report-coherence";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -60,32 +66,22 @@ function fmt(value: number | null, unit: string): string {
   return value.toFixed(2);
 }
 
-type Verdict = "improving" | "stable" | "declining_most" | "declining_all";
-
-function classify(row: RatioMovementRow): Verdict {
-  const series = [row.twelve_months, row.six_months, row.three_months, row.current].filter(
-    (v): v is number => v != null && Number.isFinite(v),
-  );
-  if (series.length < 2) return "stable";
-  const dirGood = (a: number, b: number) => (row.lower_is_better ? b < a : b > a);
-  let good = 0;
-  let bad = 0;
-  for (let i = 1; i < series.length; i++) {
-    if (series[i] === series[i - 1]) continue;
-    if (dirGood(series[i - 1], series[i])) good++;
-    else bad++;
-  }
-  if (bad === 0 && good > 0) return "improving";
-  if (good === 0 && bad >= 2) return "declining_all";
-  if (bad > good) return "declining_most";
-  return "stable";
+function classify(row: RatioMovementRow): MovementVerdict {
+  return movementVerdict({
+    current: row.current,
+    three_months: row.three_months,
+    six_months: row.six_months,
+    twelve_months: row.twelve_months,
+    lower_is_better: row.lower_is_better,
+  });
 }
 
-const VERDICT_META: Record<Verdict, { label: string; fg: string; bg: string }> = {
-  improving: { label: "IMPROVING", fg: C.greenDeep, bg: C.greenSoft },
-  stable: { label: "STABLE", fg: C.muted, bg: C.soft },
-  declining_most: { label: "SLIPPING", fg: C.amberDeep, bg: C.amberSoft },
-  declining_all: { label: "DECLINING", fg: C.redDeep, bg: C.redSoft },
+const VERDICT_META: Record<MovementVerdict, { label: string; fg: string; bg: string }> = {
+  improving: { label: MOVEMENT_VERDICT_LABEL.improving, fg: C.greenDeep, bg: C.greenSoft },
+  stable: { label: MOVEMENT_VERDICT_LABEL.stable, fg: C.muted, bg: C.soft },
+  declining_most: { label: MOVEMENT_VERDICT_LABEL.declining_most, fg: C.amberDeep, bg: C.amberSoft },
+  declining_all: { label: MOVEMENT_VERDICT_LABEL.declining_all, fg: C.redDeep, bg: C.redSoft },
+  no_history: { label: MOVEMENT_VERDICT_LABEL.no_history, fg: C.muted, bg: C.soft },
 };
 
 const PILLAR_LABEL: Record<string, string> = {
@@ -164,23 +160,28 @@ export function RatioMovementPDF({
     total: ratios.length,
   };
 
-  const figures: HeadlineFigure[] = [
-    { label: "Ratios Tracked", value: `${counts.total}` },
-    { label: "Improving", value: `${counts.improving}`, direction: "up", good: true },
-    {
-      label: "Slipping",
-      value: `${counts.decliningMost}`,
-      direction: counts.decliningMost > 0 ? "down" : "flat",
-      good: counts.decliningMost === 0,
-    },
-    {
-      label: "Sustained Decline",
-      value: `${counts.decliningAll}`,
-      direction: counts.decliningAll > 0 ? "down" : "flat",
-      good: counts.decliningAll === 0,
-      note: "declining every period",
-    },
-  ];
+  const figures: HeadlineFigure[] = hasHistory
+    ? [
+        { label: "Ratios Tracked", value: `${counts.total}` },
+        { label: "Improving", value: `${counts.improving}`, direction: "up", good: true },
+        {
+          label: "Slipping",
+          value: `${counts.decliningMost}`,
+          direction: counts.decliningMost > 0 ? "down" : "flat",
+          good: counts.decliningMost === 0,
+        },
+        {
+          label: "Sustained Decline",
+          value: `${counts.decliningAll}`,
+          direction: counts.decliningAll > 0 ? "down" : "flat",
+          good: counts.decliningAll === 0,
+          note: "declining every period",
+        },
+      ]
+    : [
+        { label: "Ratios Tracked", value: `${counts.total}` },
+        { label: "History", value: "n/a", note: NO_HISTORY_YET },
+      ];
 
   const pillars = (["profit", "assets", "financing", "cash"] as const).filter((p) =>
     ratios.some((r) => r.pillar === p),
@@ -294,9 +295,9 @@ export function RatioMovementPDF({
           lineHeight: 1.5,
         }}
       >
-        Comparison columns show the closest uploaded snapshot to each target date. A dash means no
-        snapshot was available for that window — trends will fill in automatically as more periods
-        are uploaded.
+        {hasHistory
+          ? "Comparison columns show the closest uploaded snapshot to each target date. A dash means no snapshot was available for that window."
+          : `${NO_HISTORY_YET}. Comparison columns stay blank until a prior period is on file.`}
       </Text>
     </PDFDocument>
   );

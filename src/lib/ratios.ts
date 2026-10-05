@@ -177,6 +177,59 @@ export function benchmarkTrack(input: {
   return { pos: t(input.value), bandStart: t(input.median), bandEnd: t(input.top) };
 }
 
+/**
+ * Equity below this cannot support a meaningful ROE. A one-month profit on a
+ * few thousand dollars of equity annualises into a triple-digit return that
+ * is not a performance signal. One floor per currency, shared by the
+ * scorecard and the asset report.
+ */
+export const ROE_EQUITY_FLOOR = { USD: 10_000, ZAR: 150_000 } as const;
+
+export function roeEquityFloor(currency: string | null | undefined): number {
+  return currency === "USD" ? ROE_EQUITY_FLOOR.USD : ROE_EQUITY_FLOOR.ZAR;
+}
+
+/** True when equity is large enough for ROE to be shown and scored. */
+export function roeIsMeaningful(
+  equity: number,
+  currency: string | null | undefined,
+): boolean {
+  return Number.isFinite(equity) && equity >= roeEquityFloor(currency);
+}
+
+/**
+ * DuPont interest burden: EBT ÷ EBIT. 1 means no interest cost.
+ * A non-positive EBIT is not scored — never a fake 0% or 100%.
+ */
+export function interestBurdenRatio(ebit: number, ebt: number): number {
+  if (!Number.isFinite(ebit) || !Number.isFinite(ebt) || ebit <= 0) return NaN;
+  return ebt / ebit;
+}
+
+/**
+ * DuPont tax burden: net income ÷ EBT. 1 means no tax.
+ * A non-positive EBT is not scored.
+ */
+export function taxBurdenRatio(ebt: number, netIncome: number): number {
+  if (!Number.isFinite(ebt) || !Number.isFinite(netIncome) || ebt <= 0) return NaN;
+  return netIncome / ebt;
+}
+
+/**
+ * Operating cash flow ÷ EBITDA. Missing cash-flow or EBITDA inputs, and a
+ * zero EBITDA base, are not a 0.00× result.
+ */
+export function ocfToEbitdaRatio(operatingCashflow: number, ebitda: number): number {
+  if (!Number.isFinite(operatingCashflow) || !Number.isFinite(ebitda) || ebitda === 0) return NaN;
+  return operatingCashflow / ebitda;
+}
+
+/** Assets ÷ equity. The only equity-multiplier definition reports may show. */
+export function equityMultiplierRatio(totalAssets: number, equity: number): number {
+  if (!Number.isFinite(totalAssets) || !Number.isFinite(equity) || equity === 0) return NaN;
+  return totalAssets / equity;
+}
+
 /** Creditor-days healthy band from the shared table (30–60). Not the score Watch floor. */
 export function creditorDaysHealthyBand(): { min: number; max: number } {
   const spec = metricDirection("creditorDays");
@@ -371,7 +424,7 @@ export function computeRatios(v: RatioInputs): Record<string, number> {
   const netMargin = safe(n.netIncome, n.revenue);
   const grossMargin = safe(n.revenue - n.cogs, n.revenue);
   const assetTurnover = safe(n.revenue, n.totalAssets);
-  const equityMultiplier = safe(n.totalAssets, n.equity);
+  const equityMultiplier = equityMultiplierRatio(n.totalAssets, n.equity);
   const roa = netMargin * assetTurnover;
   // ROE, Interest Burden, and Tax Burden are only meaningful when their
   // base (equity / EBIT / EBT) is positive. A negative base can cancel a
@@ -389,9 +442,9 @@ export function computeRatios(v: RatioInputs): Record<string, number> {
   const cc = safe(n.top5Revenue, n.revenue);
   const gpToLabor = safe(n.revenue - n.cogs, n.laborCost);
   const spe = safe(n.revenue, n.employees);
-  const ocfEbitda = safe(n.operatingCashflow, n.ebitda);
-  const interestBurden = n.ebit > 0 ? safe(n.ebt, n.ebit) : NaN;
-  const taxBurden = n.ebt > 0 ? safe(n.netIncome, n.ebt) : NaN;
+  const ocfEbitda = ocfToEbitdaRatio(n.operatingCashflow, n.ebitda);
+  const interestBurden = interestBurdenRatio(n.ebit, n.ebt);
+  const taxBurden = taxBurdenRatio(n.ebt, n.netIncome);
 
   return {
     "Net Margin": netMargin,

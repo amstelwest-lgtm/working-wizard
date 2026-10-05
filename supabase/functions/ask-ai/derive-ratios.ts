@@ -111,7 +111,10 @@ export function computeRatiosFromFinancials(
   const netMargin = safe(n.netIncome, n.revenue);
   const grossMargin = safe((n.revenue ?? NaN) - (n.cogs ?? NaN), n.revenue);
   const assetTurnover = safe(n.revenue, n.totalAssets);
-  const equityMultiplier = safe(n.totalAssets, n.equity);
+  const equityMultiplier =
+    Number.isFinite(n.totalAssets) && Number.isFinite(n.equity) && n.equity !== 0
+      ? n.totalAssets / n.equity
+      : NaN;
   const roa = netMargin * assetTurnover;
   const roe = n.equity > 0 ? roa * equityMultiplier : NaN;
   const debtorDays = safe(n.receivables, n.revenue) * 365;
@@ -124,7 +127,10 @@ export function computeRatiosFromFinancials(
   const cc = safe(n.top5Revenue, n.revenue);
   const gpToLabor = safe((n.revenue ?? NaN) - (n.cogs ?? NaN), n.laborCost);
   const spe = safe(n.revenue, n.employees);
-  const ocfEbitda = safe(n.operatingCashflow, n.ebitda);
+  const ocfEbitda =
+    Number.isFinite(n.operatingCashflow) && Number.isFinite(n.ebitda) && n.ebitda !== 0
+      ? n.operatingCashflow / n.ebitda
+      : NaN;
   const interestBurden = n.ebit > 0 ? safe(n.ebt, n.ebit) : NaN;
   const taxBurden = n.ebt > 0 ? safe(n.netIncome, n.ebt) : NaN;
 

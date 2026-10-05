@@ -157,6 +157,46 @@ export function profileIndustryLabel(
   return TEMPLATE_INDUSTRY_LABEL[profile.templateId] ?? fallback;
 }
 
+/** Friendly names for the legacy `business_type` id. Never the raw id. */
+const BUSINESS_TYPE_LABEL: Record<string, string> = {
+  service: "Service business",
+  product: "Product business",
+  saas: "SaaS & software",
+  marketplace: "Marketplaces & platforms",
+  asset_heavy: "Asset-based business",
+  distribution: "Wholesale & distribution",
+  retail: "Retail",
+  manufacturing: "Manufacturing",
+  project: "Project-based services",
+  franchise: "Franchise",
+  subscription: "Subscription business",
+  agency: "Agency",
+  logistics: "Transport & logistics",
+  hospitality: "Hospitality",
+  healthcare: "Healthcare practices",
+  construction: "Construction & contracting",
+  hybrid: "Mixed model",
+  professional: "Professional services",
+  other: "General SME",
+};
+
+/**
+ * One industry label for the dashboard list, the client page, and reports.
+ * The operating-profile template wins (Labour & staffing). A bare business-type
+ * id such as "service" never surfaces as SERVICE.
+ */
+export function clientIndustryLabel(
+  profile: { templateId?: string | null; businessTypeId?: string | null } | null | undefined,
+  businessType?: string | null,
+): string {
+  const template = profile?.templateId ? TEMPLATE_INDUSTRY_LABEL[profile.templateId] : undefined;
+  if (template) return template;
+  const raw = (businessType ?? profile?.businessTypeId ?? "").trim().toLowerCase();
+  if (raw && BUSINESS_TYPE_LABEL[raw]) return BUSINESS_TYPE_LABEL[raw];
+  if (profile) return profileIndustryLabel(profile as ClientOperatingProfile, "General SME");
+  return "—";
+}
+
 const CONCENTRATION_LABEL: Record<ClientOperatingProfile["customerConcentration"], string> = {
   diverse: "Spread wide — no customer is critical",
   moderate: "Top few are meaningful (~25% of sales)",
