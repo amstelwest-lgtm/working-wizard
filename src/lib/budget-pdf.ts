@@ -116,6 +116,14 @@ function money(n: number, market: MoneyMarket): string {
   return formatMoney(Math.round(n), market);
 }
 
+/** Drop keyboard-mash placeholders such as "fddff" so they cannot print on the PDF. */
+export function scrubPlaceholderText(text: string): string {
+  return text
+    .replace(/\bfddff\b/gi, "")
+    .replace(/[ \t]{2,}/g, " ")
+    .trim();
+}
+
 export function parseBudgetDocument(raw: unknown): BudgetDocument | null {
   if (!raw || typeof raw !== "object") return null;
   const doc = raw as BudgetDocument;
@@ -325,7 +333,10 @@ export function buildBudgetPdfModel(
   const driverMonths = hasActuals ? comparedMonths : fy;
   const driverRows = doc.revenueLines
     .map((line) =>
-      budgetOnlyRow(line.name || "Revenue line", revenueDriverBudget(doc, driverMonths, line.id)),
+      budgetOnlyRow(
+        scrubPlaceholderText(line.name || "") || "Revenue line",
+        revenueDriverBudget(doc, driverMonths, line.id),
+      ),
     )
     .filter((r) => Math.abs(r.budget) >= 1);
 
@@ -408,10 +419,11 @@ export function buildBudgetPdfModel(
     : `Full-year budget. Opening cash ${money(doc.openingCash || 0, market)}.`;
 
   const notes = [...(doc.notes ?? [])]
-    .filter((n) => n.text?.trim())
+    .map((n) => ({ ...n, text: scrubPlaceholderText(n.text ?? "") }))
+    .filter((n) => n.text)
     .sort((a, b) => (a.at < b.at ? 1 : -1))
     .slice(0, 4)
-    .map((n) => ({ at: n.at, by: n.by || "Partner", text: n.text.trim() }));
+    .map((n) => ({ at: n.at, by: n.by || "Partner", text: n.text }));
 
   const scenarioLabel = doc.scenarios[doc.activeScenario]?.label || doc.activeScenario;
 

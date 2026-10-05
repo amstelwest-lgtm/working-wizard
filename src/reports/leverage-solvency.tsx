@@ -20,6 +20,7 @@ import { usePdfMarket } from "@/components/pdf/pdf-market";
 import { leverageNarrative } from "./narrative";
 import type { ClientOperatingProfile } from "@/lib/client-profile";
 import { ZA_MARKET, type ResolvedMarket } from "@/lib/market";
+import { reportKicker } from "@/lib/report-catalog";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -304,7 +305,7 @@ export function LeverageSolvencyPDF({
     >
       {/* ── PAGE 1 ── */}
       <ReportTitle
-        kicker="Advisory Report 06"
+        kicker={reportKicker("leverage")}
         title="Leverage & Solvency"
         subtitle="How the business is funded, what the debt costs, and whether the structure is sustainable"
         isDemo={isDemo}

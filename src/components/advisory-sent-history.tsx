@@ -1,5 +1,5 @@
 /**
- * Sent history — advisory / PDF / share events for a client.
+ * Delivery history — advisory / PDF / share events for a client.
  */
 
 import { useEffect, useState } from "react";
@@ -90,7 +90,7 @@ export function AdvisorySentHistory({
           color: "var(--ink-dim)",
         }}
       >
-        Sent history
+        Delivery history
       </div>
       <p style={{ margin: "6px 0 12px", fontSize: 13, color: "var(--ink-dim)" }}>
         Logged shares and PDF downloads with stamped figures.{" "}

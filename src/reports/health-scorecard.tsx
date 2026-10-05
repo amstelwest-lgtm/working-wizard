@@ -21,6 +21,7 @@ import { computeOverallHealth, type HealthPillarId } from "@/lib/health-score";
 import type { ClientOperatingProfile } from "@/lib/client-profile";
 import { diagnoseDuPont, healthNarrative } from "./narrative";
 import { ZA_MARKET, type ResolvedMarket } from "@/lib/market";
+import { reportKicker } from "@/lib/report-catalog";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -323,7 +324,7 @@ export function HealthScorecardPDF({
     >
       {/* ── PAGE 1 ── */}
       <ReportTitle
-        kicker="Advisory Report 01"
+        kicker={reportKicker("scorecard")}
         title="Financial Health Scorecard"
         subtitle="One score, four pillars, fourteen ratios — the state of the business at a glance"
         isDemo={isDemo}

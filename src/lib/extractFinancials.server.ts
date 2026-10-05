@@ -9,6 +9,7 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { type ExtractionResult } from "@/lib/financialSchema";
 import { validateFigures, isClean } from "@/lib/validateFinancials";
+import { applyBalanceSheetTotals } from "@/lib/statement-financials";
 import { callClaudeMessages, parseClaudeJson } from "@/lib/claude-messages";
 import { isUsCopy, marketInputSchema, resolvePromptMarket } from "@/lib/market";
 import { assessPortalFigures, assertUsable } from "@/lib/upload-quality";
@@ -221,6 +222,7 @@ export const extractFinancialsFromPDF = createServerFn({ method: "POST" })
       );
     }
 
+    extracted = applyBalanceSheetTotals(extracted);
     const issues = validateFigures(extracted.current_period.figures);
     assertUsable(assessPortalFigures(extracted.current_period.figures));
 

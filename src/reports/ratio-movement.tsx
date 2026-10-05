@@ -17,6 +17,7 @@ import { C, resolveTheme } from "@/components/pdf/theme";
 import { movementNarrative } from "./narrative";
 import type { ClientOperatingProfile } from "@/lib/client-profile";
 import { ZA_MARKET, type ResolvedMarket } from "@/lib/market";
+import { reportKicker } from "@/lib/report-catalog";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -196,7 +197,7 @@ export function RatioMovementPDF({
       market={market ?? ZA_MARKET}
     >
       <ReportTitle
-        kicker="Advisory Report 09"
+        kicker={reportKicker("movement")}
         title="Ratio Movement"
         subtitle="Direction of travel across every tracked ratio — 12 months, 6 months, 3 months, today"
         isDemo={isDemo}

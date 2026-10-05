@@ -29,6 +29,7 @@ import {
   reorderDraftLine,
   splitDraftLine,
 } from "@/lib/cash-from-banks.workspace";
+import { recurringReviewLabel } from "@/lib/cash-from-banks.pattern";
 import {
   existingCashflowIsMeaningful,
   type ExistingCashflow,
@@ -366,6 +367,11 @@ export function CashClassificationWorkspace({
                           />
                         </div>
                         <div className="flex flex-wrap items-center gap-2 text-[10px] text-slate-500">
+                          {recurringReviewLabel(line) ? (
+                            <span className="rounded bg-amber-100 px-1.5 py-0.5 font-semibold text-amber-900 dark:bg-amber-900/40 dark:text-amber-100">
+                              {recurringReviewLabel(line)}
+                            </span>
+                          ) : null}
                           <label className="flex items-center gap-1">
                             Wk
                             <Input

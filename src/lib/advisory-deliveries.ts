@@ -337,8 +337,8 @@ export async function acknowledgeDelivery(
 
 export function channelHonestyLabel(channel: DeliveryChannel, acknowledged: boolean): string {
   if (acknowledged) return "Acknowledged by client";
-  if (channel === "email") return "Sent via email";
-  if (channel === "pdf_download") return "PDF downloaded";
+  if (channel === "email") return "Sent";
+  if (channel === "pdf_download") return "Downloaded";
   if (channel === "copy") return "Copied · not confirmed delivered";
   if (channel === "mailto" || channel === "whatsapp") return "Opened share · not confirmed delivered";
   return "Logged";

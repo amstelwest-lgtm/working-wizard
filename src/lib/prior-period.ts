@@ -11,6 +11,7 @@ export type SnapshotRow = {
   period_date: string;
   financials?: Record<string, unknown> | null;
   ratios?: Record<string, number> | null;
+  source?: string | null;
 };
 
 /** Same scorer as the live health engine, so a prior period cannot rate 329 creditor days as healthy. */

@@ -35,6 +35,7 @@ import { Progress } from "@/components/ui/progress";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
 import type { AccountantProfile } from "@/contexts/accountant-profile";
 import { computeRatios, scoreTier, BUSINESS_TYPE_TO_BENCHMARK, periodMonthsOf } from "@/lib/ratios";
+import { reportNumber } from "@/lib/report-catalog";
 import type { RatioInputs } from "@/lib/ratios";
 import { scoreRatio, pillarForRatioName } from "@/lib/health-score";
 import { CASH_RUNWAY_THRESHOLD_RAND } from "@/lib/cash-runway";
@@ -2483,11 +2484,23 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
     },
     labor: async (s, p) => {
       const { LaborProductivityPDF } = await import("@/reports/labor-productivity");
-      const { isDemo, data } = liveOrDemo(
-        cd?.labor,
-        "Labor productivity needs revenue, headcount, and labor cost.",
-      );
-      const laborData = isDemo ? MOCK_LABOR : data!;
+      // A live client without headcount or labor cost still gets the file.
+      // The ZIP used to skip it when liveOrDemo threw.
+      if (cd && !cd.labor) {
+        return renderToBlob(LaborProductivityPDF, {
+          smeData: makeSmeWithNote(s, false),
+          data: null,
+          unavailableReason:
+            "Labor productivity needs revenue, headcount, and labor cost on the file. Those inputs are missing, so no ratios were calculated.",
+          accountantProfile: p,
+          isDemo: false,
+          reviewSignoff: financialsStamp,
+          operatingProfile,
+          market,
+        });
+      }
+      const isDemo = !cd;
+      const laborData = isDemo ? MOCK_LABOR : cd!.labor!;
       return renderToBlob(LaborProductivityPDF, {
         smeData: makeSmeWithNote(s, isDemo),
         data: s.includePrior ? laborData : withoutPriorLabor(laborData),
@@ -2588,7 +2601,7 @@ type ReportMeta = {
 
 const REPORTS: ReportMeta[] = [
   {
-    id: 1,
+    id: reportNumber("scorecard"),
     key: "scorecard",
     name: "Financial Health Scorecard",
     description:
@@ -2601,7 +2614,7 @@ const REPORTS: ReportMeta[] = [
     filename: "HealthScorecard",
   },
   {
-    id: 2,
+    id: reportNumber("intervention"),
     key: "intervention",
     name: "Priority Intervention Plan",
     description:
@@ -2614,7 +2627,7 @@ const REPORTS: ReportMeta[] = [
     filename: "InterventionPlan",
   },
   {
-    id: 3,
+    id: reportNumber("forecast"),
     key: "forecast",
     name: "13-Week Cash Flow Forecast",
     description:
@@ -2627,7 +2640,7 @@ const REPORTS: ReportMeta[] = [
     filename: "CashForecast",
   },
   {
-    id: 4,
+    id: reportNumber("cycle"),
     key: "cycle",
     name: "Cash Flow Cycle Report",
     description:
@@ -2640,7 +2653,7 @@ const REPORTS: ReportMeta[] = [
     filename: "CashCycleReport",
   },
   {
-    id: 5,
+    id: reportNumber("waterfall"),
     key: "waterfall",
     name: "Profitability Waterfall",
     description:
@@ -2653,7 +2666,7 @@ const REPORTS: ReportMeta[] = [
     filename: "ProfitabilityWaterfall",
   },
   {
-    id: 6,
+    id: reportNumber("leverage"),
     key: "leverage",
     name: "Leverage & Solvency",
     description:
@@ -2666,7 +2679,7 @@ const REPORTS: ReportMeta[] = [
     filename: "LeverageSolvency",
   },
   {
-    id: 7,
+    id: reportNumber("assets"),
     key: "assets",
     name: "Asset Productivity",
     description:
@@ -2679,7 +2692,7 @@ const REPORTS: ReportMeta[] = [
     filename: "AssetProductivity",
   },
   {
-    id: 8,
+    id: reportNumber("labor"),
     key: "labor",
     name: "Labour Productivity",
     description:
@@ -2692,7 +2705,7 @@ const REPORTS: ReportMeta[] = [
     filename: "LabourProductivity",
   },
   {
-    id: 9,
+    id: reportNumber("movement"),
     key: "movement",
     name: "Ratio Movement",
     description:
@@ -2705,7 +2718,7 @@ const REPORTS: ReportMeta[] = [
     filename: "RatioMovement",
   },
   {
-    id: 10,
+    id: reportNumber("benchmark"),
     key: "benchmark",
     name: "Industry Benchmark Report",
     description:
@@ -2718,7 +2731,7 @@ const REPORTS: ReportMeta[] = [
     filename: "BenchmarkReport",
   },
   {
-    id: 11,
+    id: reportNumber("budget"),
     key: "budget",
     name: "Budget & Variance",
     description:

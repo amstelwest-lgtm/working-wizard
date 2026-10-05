@@ -23,6 +23,7 @@ import { cashCycleNarrative } from "./narrative";
 import { cycleTimelineAxis } from "@/lib/client-metrics";
 import type { ClientOperatingProfile } from "@/lib/client-profile";
 import { t, ZA_MARKET, type ResolvedMarket } from "@/lib/market";
+import { reportKicker } from "@/lib/report-catalog";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -390,7 +391,7 @@ export function CashCyclePDF({
     >
       {/* ── PAGE 1 ── */}
       <ReportTitle
-        kicker="Advisory Report 04"
+        kicker={reportKicker("cycle")}
         title="Cash Flow Cycle"
         subtitle={`How long each ${t("currencyWord", m)} is trapped between paying suppliers and collecting from customers`}
         isDemo={isDemo}

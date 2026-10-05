@@ -15,6 +15,16 @@ function num(v: string | number | null | undefined): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+/** Blank or missing P&L lines stay absent. They must not become a zero that forces 100% GP. */
+function presentNumber(...values: Array<string | number | null | undefined>): number | null {
+  for (const v of values) {
+    if (v == null || v === "") continue;
+    const n = typeof v === "number" ? v : parseFloat(String(v).replace(/[^0-9.-]/g, ""));
+    if (Number.isFinite(n)) return n;
+  }
+  return null;
+}
+
 export type SeedFromFinancialsResult = {
   doc: BudgetDocument;
   changes: string[];
@@ -28,11 +38,21 @@ export function seedBudgetFromFinancials(
   const changes: string[] = [];
   const months = fyMonths(doc.fyStart);
   // A quarter of actuals must seed a full year, not a year at a quarter's pace.
-  const financials = annualiseFinancials(periodFinancials);
-  const revenue = num(financials.revenue);
-  const cogs = num(financials.cogs);
-  const fixedCosts = num(financials.fixedCosts);
-  const laborCost = num(financials.laborCost);
+  const normalised: Record<string, string | number | null | undefined> = { ...periodFinancials };
+  if (presentNumber(normalised.cogs) == null && presentNumber(normalised.cost_of_sales) != null) {
+    normalised.cogs = normalised.cost_of_sales;
+  }
+  if (presentNumber(normalised.fixedCosts) == null && presentNumber(normalised.operating_expenses) != null) {
+    normalised.fixedCosts = normalised.operating_expenses;
+  }
+  if (presentNumber(normalised.laborCost) == null && presentNumber(normalised.labourCost) != null) {
+    normalised.laborCost = normalised.labourCost;
+  }
+  const financials = annualiseFinancials(normalised);
+  const revenue = presentNumber(financials.revenue);
+  const cogs = presentNumber(financials.cogs);
+  const fixedCosts = presentNumber(financials.fixedCosts);
+  const laborCost = presentNumber(financials.laborCost);
   const receivables = num(financials.receivables);
   const payables = num(financials.payables);
   const inventory = num(financials.inventory);
@@ -42,13 +62,13 @@ export function seedBudgetFromFinancials(
     updatedAt: new Date().toISOString(),
   };
 
-  if (revenue > 0 && cogs >= 0) {
+  if (revenue != null && revenue > 0 && cogs != null && cogs >= 0) {
     const gp = ((revenue - cogs) / revenue) * 100;
     next = { ...next, gpPct: Math.round(gp * 10) / 10, cogsMode: "gp_pct" };
     changes.push(`GP% set to ${next.gpPct} from period revenue/COGS`);
   }
 
-  if (revenue > 0 && next.revenueLines[0]) {
+  if (revenue != null && revenue > 0 && next.revenueLines[0]) {
     const monthly = Math.round((revenue / 12) * 100) / 100;
     const line = next.revenueLines[0];
     const monthsMap = { ...line.months };
@@ -65,17 +85,19 @@ export function seedBudgetFromFinancials(
     changes.push(`Primary revenue line seeded at ~${monthly}/month (volume 1 × price)`);
   }
 
-  if (fixedCosts > 0 || laborCost > 0) {
-    const peopleMonthly = laborCost > 0 ? laborCost / 12 : (fixedCosts * 0.55) / 12;
+  if ((fixedCosts != null && fixedCosts > 0) || (laborCost != null && laborCost > 0)) {
+    const peopleMonthly = laborCost != null && laborCost > 0 ? laborCost / 12 : ((fixedCosts ?? 0) * 0.55) / 12;
     // Fixed costs on a P&L (total operating expenses, the bank drafter's
     // total_opex) already include payroll: carve labour out rather than add
     // it on top, which double-counted people and pushed EBITDA negative.
     // Labour >= fixed costs means fixed was reported without it.
     const nonPeopleFixed =
-      laborCost > 0 && laborCost < fixedCosts ? fixedCosts - laborCost : fixedCosts;
+      laborCost != null && fixedCosts != null && laborCost > 0 && laborCost < fixedCosts
+        ? fixedCosts - laborCost
+        : (fixedCosts ?? 0);
     const otherMonthly =
-      fixedCosts > 0
-        ? Math.max(0, nonPeopleFixed / 12 - (laborCost > 0 ? 0 : peopleMonthly * 0.2))
+      fixedCosts != null && fixedCosts > 0
+        ? Math.max(0, nonPeopleFixed / 12 - (laborCost != null && laborCost > 0 ? 0 : peopleMonthly * 0.2))
         : 0;
     next = {
       ...next,
@@ -101,15 +123,15 @@ export function seedBudgetFromFinancials(
   }
 
   const wc = { ...next.wc };
-  if (revenue > 0 && receivables > 0) {
+  if (revenue != null && revenue > 0 && receivables > 0) {
     wc.debtorDays = Math.round((receivables / revenue) * 365);
     changes.push(`Debtor days ≈ ${wc.debtorDays} from receivables/revenue`);
   }
-  if (cogs > 0 && payables > 0) {
+  if (cogs != null && cogs > 0 && payables > 0) {
     wc.creditorDays = Math.round((payables / cogs) * 365);
     changes.push(`Creditor days ≈ ${wc.creditorDays} from payables/COGS`);
   }
-  if (next.showInventoryDays && cogs > 0 && inventory > 0) {
+  if (next.showInventoryDays && cogs != null && cogs > 0 && inventory > 0) {
     wc.inventoryDays = Math.round((inventory / cogs) * 365);
     changes.push(`Inventory days ≈ ${wc.inventoryDays}`);
   }
