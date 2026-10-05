@@ -54,6 +54,14 @@ import {
   watchVideoCtaBrief,
 } from "@/lib/lighthouse-draft-cta";
 import { lighthouseResendIdempotencyKey } from "@/lib/lighthouse-resend-idempotency.server";
+import {
+  dedupeDueToday,
+  dedupeLeadsById,
+  emailAlreadyTouchedAtStep,
+  lighthouseLeadChipLabel,
+  normalizeLeadEmail,
+} from "@/lib/lighthouse-due";
+import { lighthouseTrialSiteUrl } from "@/lib/lighthouse-trial-site";
 
 const MIGRATION = "20260820100000_milon_lighthouse.sql";
 const ENGAGEMENT_MIGRATION = "20260822210000_lighthouse_engagement.sql";
@@ -229,10 +237,10 @@ const DEFAULT_SETTINGS: LighthouseSettings = {
 };
 
 function siteUrl(): string {
-  return (process.env.SITE_URL || process.env.VITE_APP_URL || "https://milon.co.za").replace(
-    /\/$/,
-    "",
-  );
+  return lighthouseTrialSiteUrl({
+    SITE_URL: process.env.SITE_URL,
+    VITE_APP_URL: process.env.VITE_APP_URL,
+  });
 }
 
 export function trialLinkFor(token: string | null): string | null {
@@ -308,6 +316,51 @@ async function countSentToday(admin: ReturnType<typeof adminLoose>): Promise<num
     throw new Error(`Could not check today's send count: ${error.message}`);
   }
   return count ?? 0;
+}
+
+/**
+ * Sent touches for this address at this step, including another lead row
+ * that stores the same email. Throws if the check cannot be completed so
+ * the caller does not send.
+ */
+async function sentTouchesForEmailAtStep(
+  admin: ReturnType<typeof adminLoose>,
+  email: string,
+  stepNo: number,
+): Promise<Array<{ email: string; stepNo: number }>> {
+  const key = normalizeLeadEmail(email);
+  const { data: leadRows, error: leadErr } = await admin
+    .from("milon_ops_leads")
+    .select("id, email")
+    .ilike("email", email.trim())
+    .limit(50);
+  if (leadErr) {
+    throw new Error(
+      "Could not check whether this email was already touched at this step, so nothing was sent.",
+    );
+  }
+  const matches = ((leadRows ?? []) as Array<{ id?: string; email?: string | null }>).filter(
+    (row) => normalizeLeadEmail(row.email) === key && row.id,
+  );
+  const ids = matches.map((row) => String(row.id));
+  if (!ids.length) return [];
+  const { data: touchRows, error: touchErr } = await admin
+    .from("lighthouse_touches")
+    .select("lead_id, step_no")
+    .in("lead_id", ids)
+    .eq("step_no", stepNo)
+    .eq("status", "sent")
+    .limit(20);
+  if (touchErr) {
+    throw new Error(
+      "Could not check whether this email was already touched at this step, so nothing was sent.",
+    );
+  }
+  const emailById = new Map(matches.map((row) => [String(row.id), String(row.email ?? "")]));
+  return ((touchRows ?? []) as Array<{ lead_id?: string; step_no?: number }>).map((row) => ({
+    email: emailById.get(String(row.lead_id ?? "")) ?? email,
+    stepNo: Number(row.step_no ?? stepNo),
+  }));
 }
 
 function parseDraftJson(raw: string): { subject: string; body: string } | null {
@@ -528,7 +581,9 @@ export const getLighthouse = createServerFn({ method: "GET" })
       }
     }
 
-    const leads = rows.map((r) => mapLead(r, touchesByLead.get(String(r.id)) ?? []));
+    const leads = dedupeLeadsById(
+      rows.map((r) => mapLead(r, touchesByLead.get(String(r.id)) ?? [])),
+    );
 
     if (ids.length) {
       const { data: inboundRows, error: inboundErr } = await admin
@@ -634,19 +689,22 @@ export const getLighthouse = createServerFn({ method: "GET" })
     }
 
     const today = new Date().toISOString().slice(0, 10);
-    const dueToday = leads
-      .filter(
-        (l) =>
-          !l.doNotContact &&
-          l.nextTouchOn != null &&
-          l.nextTouchOn <= today &&
-          !["won", "lost", "trial", "activated"].includes(l.stage),
-      )
-      .map((l) => ({
-        leadId: l.id,
-        leadName: l.name || l.company || l.email || "Unnamed",
-        stepNo: Math.min(l.sequenceStep + 1, 5),
-      }));
+    const dueToday = dedupeDueToday(
+      leads
+        .filter(
+          (l) =>
+            !l.doNotContact &&
+            l.nextTouchOn != null &&
+            l.nextTouchOn <= today &&
+            !["won", "lost", "trial", "activated"].includes(l.stage),
+        )
+        .map((l) => ({
+          leadId: l.id,
+          email: l.email,
+          leadName: lighthouseLeadChipLabel(l),
+          stepNo: Math.min(l.sequenceStep + 1, 5),
+        })),
+    ).map(({ leadId, leadName, stepNo }) => ({ leadId, leadName, stepNo }));
 
     let sentToday = 0;
     try {
@@ -1176,6 +1234,14 @@ export const sendLighthouseTouch = createServerFn({ method: "POST" })
       throw new Error("This address is on the suppression list — nothing was sent.");
     }
 
+    // Same email already sent at this step (this row or a duplicate lead):
+    // do not call Resend and do not advance the sequence.
+    const stepAlready = Number(touch.step_no ?? 1);
+    const alreadySent = await sentTouchesForEmailAtStep(admin, to, stepAlready);
+    if (emailAlreadyTouchedAtStep(alreadySent, to, stepAlready)) {
+      return { ok: true as const, skipped: true as const };
+    }
+
     // Every cold send carries a sender identity and a working way out.
     let optOutToken = String(lead?.optout_token ?? "").trim();
     if (!optOutToken) {
@@ -1193,7 +1259,10 @@ export const sendLighthouseTouch = createServerFn({ method: "POST" })
       .eq("key", "lighthouse")
       .maybeSingle();
     const sendSettings = (sendSetRow as { value?: Record<string, unknown> } | null)?.value ?? {};
-    const senderName = resolveLighthouseSenderName(sendSettings.sender_name, sendSettings.senderName);
+    const senderName = resolveLighthouseSenderName(
+      sendSettings.sender_name,
+      sendSettings.senderName,
+    );
     const senderAddress = String(sendSettings.sender_address ?? "");
     const replyTo = resolveLighthouseReplyTo(String(sendSettings.reply_to ?? ""));
     const dailyCap = Number(sendSettings.daily_send_cap ?? DEFAULT_SETTINGS.dailySendCap);
@@ -1336,7 +1405,7 @@ export const sendLighthouseTouch = createServerFn({ method: "POST" })
       })
       .eq("id", String(touch.lead_id));
 
-    return { ok: true as const, sentAt: now.toISOString() };
+    return { ok: true as const, skipped: false as const, sentAt: now.toISOString() };
   });
 
 export const upsertLighthouseAsset = createServerFn({ method: "POST" })
