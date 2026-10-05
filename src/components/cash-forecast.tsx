@@ -77,6 +77,8 @@ import {
   parseISODate,
   periodOperatingOutflows,
   persistedRunwayWeeks,
+  runwayDisplayLabel,
+  RUNWAY_INSUFFICIENT_LABEL,
   resolveClientCash,
   resolveThirteenWeekForecast,
   type ClientRunway,
@@ -373,6 +375,7 @@ function LineEditor({
 function runwayFromOpening(
   opening: string | number | null | undefined,
   fin: Record<string, unknown> | null | undefined,
+  opts?: { hasBankCashflow?: boolean },
 ): ClientRunway {
   const cash = typeof opening === "number" ? opening : parseFloat(String(opening ?? ""));
   const netRaw = fin?.netIncome;
@@ -380,11 +383,15 @@ function runwayFromOpening(
     typeof netRaw === "number"
       ? netRaw
       : parseFloat(String(netRaw ?? ""));
+  const ocfRaw = fin?.operatingCashflow;
+  const ocf = typeof ocfRaw === "number" ? ocfRaw : parseFloat(String(ocfRaw ?? ""));
   return clientRunway({
     cash: Number.isFinite(cash) ? cash : null,
     netIncome: Number.isFinite(net) ? net : null,
     periodExpenses: periodOperatingOutflows(fin),
     periodMonths: fin ? periodMonthsOf(fin) : null,
+    operatingCashflow: Number.isFinite(ocf) ? ocf : null,
+    hasBankCashflow: opts?.hasBankCashflow,
   });
 }
 
@@ -531,7 +538,9 @@ export function CashForecastPanel({
       return;
     }
     const forecastUpdatedAt = new Date().toISOString();
-    const runway = runwayFromOpening(payload.openingBalance, inputFinancials);
+    const runway = runwayFromOpening(payload.openingBalance, inputFinancials, {
+      hasBankCashflow: true,
+    });
     const { error } = await supabase
       .from("clients")
       .update({
@@ -649,7 +658,9 @@ export function CashForecastPanel({
       xeroBankNoteRef.current = bankNote;
       setXeroBankNote(bankNote);
       if (seededOpening && cf && clientId) {
-        const corrected = runwayFromOpening(seededOpening, finRecord);
+        const corrected = runwayFromOpening(seededOpening, finRecord, {
+          hasBankCashflow: Boolean(bankAt),
+        });
         void supabase
           .from("clients")
           .update({
@@ -662,7 +673,9 @@ export function CashForecastPanel({
         financials: finRecord,
         cashflow: cf,
         openingCash: resolvedCash.amount,
-        runway: runwayFromOpening(resolvedCash.amount ?? cf?.openingBalance, finRecord),
+        runway: runwayFromOpening(resolvedCash.amount ?? cf?.openingBalance, finRecord, {
+          hasBankCashflow: Boolean(bankAt),
+        }),
         periodEnd: typeof finRecord?.periodEnd === "string" ? finRecord.periodEnd : null,
       });
       setForecastCycleNote(outlook.cycleNote);
@@ -790,7 +803,9 @@ export function CashForecastPanel({
           : {}),
       };
       const forecastUpdatedAt = new Date().toISOString();
-      const runway = runwayFromOpening(openingBalance, inputFinancials);
+      const runway = runwayFromOpening(openingBalance, inputFinancials, {
+        hasBankCashflow: inputHasBankDraft,
+      });
       const { error } = await supabase
         .from("clients")
         .update({
@@ -821,6 +836,7 @@ export function CashForecastPanel({
     capexAmount,
     capexWeek,
     inputFinancials,
+    inputHasBankDraft,
   ]);
 
   const forecastDates = useMemo(() => {
@@ -1004,8 +1020,11 @@ export function CashForecastPanel({
   const closingW13 = calc.closing[WEEKS - 1];
   const trajectory = closingW13 - calc.opening;
   const screenRunway = useMemo(
-    () => runwayFromOpening(openingBalance, inputFinancials),
-    [openingBalance, inputFinancials],
+    () =>
+      runwayFromOpening(openingBalance, inputFinancials, {
+        hasBankCashflow: inputHasBankDraft,
+      }),
+    [openingBalance, inputFinancials, inputHasBankDraft],
   );
   const minimumCash = useMemo(
     () => forecastMinimumCash({ weeklyOutflows: calc.outflow }),
@@ -1081,7 +1100,7 @@ export function CashForecastPanel({
           accountantProfile: profile,
           market,
           minimumThreshold: minimumCash,
-          runwayLabel: screenRunway.kind === "unknown" ? null : screenRunway.label,
+          runwayLabel: runwayDisplayLabel(screenRunway),
           cashGenerative: screenRunway.kind === "cash_generative",
           assumptions,
           reviewSignoff: stampFromSignoff(forecastSignoff, forecastStale),
@@ -1384,7 +1403,7 @@ export function CashForecastPanel({
                   screenRunway.kind === "cash_generative"
                     ? "Cash generative"
                     : screenRunway.kind === "unknown"
-                      ? "—"
+                      ? (runwayDisplayLabel(screenRunway) ?? "—")
                       : screenRunway.kind === "zero"
                         ? "0 wk"
                         : `${screenRunway.weeks} wk`
@@ -1399,7 +1418,9 @@ export function CashForecastPanel({
                 sub={
                   screenRunway.kind === "cash_generative"
                     ? "Not burning cash"
-                    : `Above ${fmtCompact(minimumCash)} floor`
+                    : screenRunway.label === RUNWAY_INSUFFICIENT_LABEL
+                      ? "No cash-flow or bank data"
+                      : `Above ${fmtCompact(minimumCash)} floor`
                 }
               />
               <Stat

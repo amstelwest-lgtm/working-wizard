@@ -1,5 +1,5 @@
 import { Sparkline } from "@/components/sparkline";
-import { healthBandLabel, scoreTier } from "@/lib/ratios";
+import { healthBandLabel, scoreTier, type HealthTier } from "@/lib/ratios";
 import { AddPastPeriodLink } from "@/components/add-past-period-link";
 import { evidenceForPillar, pillarIsWeak } from "@/lib/workflow-coach";
 
@@ -8,6 +8,8 @@ interface SectionCard {
   label: string;
   health: number;
   series: number[];
+  /** Capped pillar band from computeOverallHealth. Falls back to the score table. */
+  status?: HealthTier;
 }
 
 interface SimplifiedRatiosProps {
@@ -17,14 +19,14 @@ interface SimplifiedRatiosProps {
   onOpenEvidence?: (pillarId: string) => void;
 }
 
-function statusLabel(health: number): string {
+function statusLabel(health: number, status?: HealthTier): string {
   if (!isFinite(health)) return "NO DATA";
-  return healthBandLabel(scoreTier(health)).toUpperCase();
+  return healthBandLabel(status ?? scoreTier(health)).toUpperCase();
 }
 
-function statusColor(health: number): string {
+function statusColor(health: number, status?: HealthTier): string {
   if (!isFinite(health)) return "rgb(100 116 139)";
-  const tier = scoreTier(health);
+  const tier = status ?? scoreTier(health);
   if (tier === "healthy") return "#4CAF82";
   if (tier === "at_risk") return "#f59e0b";
   return "#e05c5c";
@@ -46,7 +48,7 @@ export function SimplifiedRatios({
   return (
     <div className="grid grid-cols-2 gap-3 p-1" id="coach-pillars">
       {sections.map((card) => {
-        const color = statusColor(card.health);
+        const color = statusColor(card.health, card.status);
         const trend = trendDir(card.series);
         const displayHealth = isFinite(card.health) ? `${Math.round(card.health)}%` : "—";
         const evidence =
@@ -67,7 +69,7 @@ export function SimplifiedRatios({
               className="text-[10px] font-semibold uppercase tracking-[0.08em]"
               style={{ color }}
             >
-              {statusLabel(card.health)}
+              {statusLabel(card.health, card.status)}
             </span>
             {card.series.length >= 2 ? (
               <Sparkline data={card.series} trend={trend} width={110} height={36} />

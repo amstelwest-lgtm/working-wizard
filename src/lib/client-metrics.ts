@@ -28,6 +28,9 @@ export type ResolveCashInput = {
 
 export type RunwayKind = "unknown" | "zero" | "cash_generative" | "weeks";
 
+/** Shown when cash is on file but there is no cash-flow statement, bank publish, or prior cash movement. */
+export const RUNWAY_INSUFFICIENT_LABEL = "Not enough data";
+
 export type ClientRunway = {
   /** Null when unknown or cash-generative. Do not score those as 0 weeks. */
   weeks: number | null;
@@ -128,11 +131,16 @@ function weeksFromBurn(cash: number, weeklyBurn: number): ClientRunway {
 
 /**
  * Runway from cash and burn.
- * - No cash figure → unknown.
+ * - No cash figure → unknown ("—").
  * - Cash ≤ 0 → 0 weeks.
- * - Cash not falling (prior period) or a single period that is not loss-making
- *   → "Cash generative". Never 0.
+ * - A P&L snapshot with cash, and no operating cash flow, published bank
+ *   balance, or prior cash movement, is "Not enough data". Profit on the
+ *   P&L is not evidence the business is cash generative.
+ * - A loss with no flow evidence still estimates weeks from period expenses.
+ * - Cash not falling (prior period), or a period with cash-flow or bank
+ *   evidence that is not loss-making → "Cash generative". Never 0.
  * - Burning → cash ÷ weekly burn. One period uses that period's expenses.
+ *   A negative operating cash flow is the burn when it is on file.
  */
 export function clientRunway(input: {
   cash: number | null | undefined;
@@ -140,6 +148,10 @@ export function clientRunway(input: {
   netIncome?: number | null;
   periodExpenses?: number | null;
   periodMonths?: number | null;
+  /** Operating cash flow. Absent (not zero) means no cash-flow statement. */
+  operatingCashflow?: number | null;
+  /** True when a bank balance was published (`seededFromBanksAt`). */
+  hasBankCashflow?: boolean;
 }): ClientRunway {
   const cash = finiteNum(input.cash);
   if (cash == null) return { weeks: null, kind: "unknown", label: "—" };
@@ -153,11 +165,29 @@ export function clientRunway(input: {
     return weeksFromBurn(cash, decrease / span);
   }
 
+  const ocf = finiteNum(input.operatingCashflow);
   const net = finiteNum(input.netIncome);
+  const hasFlow = ocf != null || input.hasBankCashflow === true;
+  if (!hasFlow) {
+    if (net != null && net < 0) {
+      const expenses = finiteNum(input.periodExpenses);
+      const burn = expenses != null && expenses > 0 ? expenses : Math.abs(net);
+      return weeksFromBurn(cash, burn / span);
+    }
+    return { weeks: null, kind: "unknown", label: RUNWAY_INSUFFICIENT_LABEL };
+  }
+
+  if (ocf != null && ocf < 0) return weeksFromBurn(cash, Math.abs(ocf) / span);
   if (net == null || net >= 0) return cashGenerative();
   const expenses = finiteNum(input.periodExpenses);
   const burn = expenses != null && expenses > 0 ? expenses : Math.abs(net);
   return weeksFromBurn(cash, burn / span);
+}
+
+/** Label for Overview, the forecast, and the Bot. A blank cash line stays hidden. */
+export function runwayDisplayLabel(runway: ClientRunway): string | null {
+  if (runway.kind === "unknown" && runway.label === "—") return null;
+  return runway.label;
 }
 
 /** Column value. Cash-generative and unknown clear a stale 0 rather than storing it. */
@@ -191,6 +221,8 @@ export function assessClientMetrics(input: {
     netIncome: finiteNum(fin?.netIncome),
     periodExpenses: periodOperatingOutflows(fin),
     periodMonths: fin ? periodMonthsOf(fin) : null,
+    operatingCashflow: finiteNum(fin?.operatingCashflow),
+    hasBankCashflow: Boolean(seededAt),
   });
   return { cash, runway };
 }

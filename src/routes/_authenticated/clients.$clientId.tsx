@@ -122,6 +122,7 @@ import {
   assessClientMetrics,
   persistedRunwayWeeks,
   resolveThirteenWeekForecast,
+  runwayDisplayLabel,
 } from "@/lib/client-metrics";
 import { countOpenQueriesForClient } from "@/lib/open-queries";
 import { ProfileFunnel } from "@/components/profile/profile-funnel";
@@ -348,17 +349,19 @@ function HealthRing({
   size = 46,
   strokeWidth = 4,
 }: {
-  score: number;
+  score: number | null;
   /** When set, drives ring colour (critical-pillar tell). */
   status?: HealthTier;
   size?: number;
   strokeWidth?: number;
 }) {
+  const hasScore = score != null && Number.isFinite(score);
+  const shown = hasScore ? score : 0;
   const r = (size - strokeWidth) / 2;
   const c = 2 * Math.PI * r;
-  const band = tierToBand(status ?? scoreTier(score));
+  const band = tierToBand(status ?? (hasScore ? scoreTier(shown) : "at_risk"));
   const color = bandColor(band);
-  const off = c * (1 - score / 100);
+  const off = c * (1 - shown / 100);
   return (
     <div className="ring" style={{ width: size, height: size }}>
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
@@ -370,19 +373,21 @@ function HealthRing({
           fill="none"
           strokeWidth={strokeWidth}
         />
-        <circle
-          className="fl"
-          cx={size / 2}
-          cy={size / 2}
-          r={r}
-          fill="none"
-          strokeWidth={strokeWidth}
-          stroke={color}
-          strokeDasharray={`${c.toFixed(1)}`}
-          strokeDashoffset={`${off.toFixed(1)}`}
-        />
+        {hasScore ? (
+          <circle
+            className="fl"
+            cx={size / 2}
+            cy={size / 2}
+            r={r}
+            fill="none"
+            strokeWidth={strokeWidth}
+            stroke={color}
+            strokeDasharray={`${c.toFixed(1)}`}
+            strokeDashoffset={`${off.toFixed(1)}`}
+          />
+        ) : null}
       </svg>
-      <b>{score}</b>
+      <b>{hasScore ? Math.round(shown) : "—"}</b>
     </div>
   );
 }
@@ -1080,6 +1085,9 @@ function ClientView() {
   const pillarById = Object.fromEntries(
     overallHealth.pillars.map((p) => [p.id, p.score ?? NaN]),
   ) as Record<"profit" | "assets" | "financing" | "cash", number>;
+  const pillarStatus = Object.fromEntries(
+    overallHealth.pillars.map((p) => [p.id, p.status]),
+  ) as Record<"profit" | "assets" | "financing" | "cash", HealthTier>;
 
   const pillarHealths = {
     profit: pillarById.profit,
@@ -1104,28 +1112,38 @@ function ClientView() {
   const spherePillars = buildSpherePillars({
     overallHealth: avgHealth,
     pillarHealths,
+    pillarStatus,
     healthMap,
     ratioMeta: sphereRatioMeta,
   });
 
   const simplifiedSections = [
-    { id: "profit", label: "Profitability", health: pillarHealths.profit, series: [] as number[] },
+    {
+      id: "profit",
+      label: "Profitability",
+      health: pillarHealths.profit,
+      status: pillarStatus.profit,
+      series: [] as number[],
+    },
     {
       id: "assets",
       label: "Asset Efficiency",
       health: pillarHealths.assets,
+      status: pillarStatus.assets,
       series: [] as number[],
     },
     {
       id: "financing",
       label: "Financing",
       health: pillarHealths.financing,
+      status: pillarStatus.financing,
       series: [] as number[],
     },
     {
       id: "cash",
       label: "Cash & Working Capital",
       health: pillarHealths.cash,
+      status: pillarStatus.cash,
       series: [] as number[],
     },
   ];
@@ -1172,7 +1190,7 @@ function ClientView() {
   const briefingSnapshot = buildFinancialSnapshot({
     chips: varianceChips,
     cashRunwayWeeks: effectiveRunway,
-    runwayLabel: metricRunway.kind === "unknown" ? null : metricRunway.label,
+    runwayLabel: runwayDisplayLabel(metricRunway),
     financialsUpdatedAt: client?.financials_updated_at ?? null,
     lastForecastAt: client?.last_forecast_at ?? null,
     priorLabel: priorSnapshot?.period_label ?? null,
@@ -1194,6 +1212,7 @@ function ClientView() {
     cashRunwayWeeks: effectiveRunway,
     profile: briefingProfile,
     hasFigures,
+    ratios: ratios as Record<string, number>,
   });
   const workflowCtx: WorkflowContext = {
     clientName: client?.name ?? "",
@@ -2009,7 +2028,7 @@ function ClientView() {
     if (!client) return;
     const score = healthScoreRounded;
     const tierLabel = overallHealth.displayLabel;
-    const runway = metricRunway.kind === "unknown" ? "—" : metricRunway.label;
+    const runway = runwayDisplayLabel(metricRunway) ?? "—";
     const weak =
       overallHealth.weakestPillar != null
         ? `\nWeakest pillar: ${overallHealth.weakestPillar.label} (${overallHealth.weakestPillar.score})\n`
@@ -2066,7 +2085,7 @@ function ClientView() {
     const text =
       `${client.name} Financial Health Update\n` +
       `Health Score: ${score}/100 (${tierLabel})\n` +
-      `Cash Runway: ${metricRunway.kind === "unknown" ? "—" : metricRunway.label}\n` +
+      `Cash Runway: ${runwayDisplayLabel(metricRunway) ?? "—"}\n` +
       `Open Queries: ${openQueriesCount}\n` +
       `Prepared by ${profile.firmName || "your accountant"} via MILŌN Portal.`;
     let shareText = text;
@@ -2399,8 +2418,8 @@ function ClientView() {
                   industryLabel={profileIndustryLabel(briefingProfile, client.business_type ?? "—")}
                   ring={
                     <HealthRing
-                      score={healthScoreRounded}
-                      status={overallHealth.displayStatus}
+                      score={hasFigures ? overallHealth.overall : null}
+                      status={hasFigures ? overallHealth.displayStatus : undefined}
                       size={74}
                       strokeWidth={5}
                     />

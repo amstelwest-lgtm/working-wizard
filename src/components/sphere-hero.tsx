@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePrefersReducedMotion } from "@/hooks/use-prefers-reduced-motion";
 import { ArrowLeft, ChevronRight, TrendingUp, Layers, Shield, Droplet, type LucideIcon } from "lucide-react";
-import { healthBandLabel, scoreTier } from "@/lib/ratios";
+import { healthBandLabel, scoreTier, type HealthTier } from "@/lib/ratios";
 
 /**
  * SphereHero — the morphing 3-level health drill-down.
@@ -37,6 +37,12 @@ export type SpherePillar = {
   label: string;
   /** 0–100 health score; NaN = no data */
   health: number;
+  /**
+   * Capped pillar band from computeOverallHealth. When set, the label follows
+   * this instead of re-scoring the average (an average must not read Healthy
+   * when every component ratio is Watch or Critical).
+   */
+  status?: HealthTier;
   /** Period-over-period change in score, e.g. +8 / -5. Omit to hide. */
   delta?: number;
   /** One-line blurb shown on the pillar card at level 2. */
@@ -91,9 +97,9 @@ function QueryBadge({ count }: { count: number }) {
   );
 }
 
-function tierOf(h: number): Tier {
+function tierOf(h: number, status?: HealthTier | null): Tier {
   if (!isFinite(h)) return "nodata";
-  const tier = scoreTier(h);
+  const tier = status ?? scoreTier(h);
   if (tier === "healthy") return "healthy";
   if (tier === "at_risk") return "watch";
   return "critical";
@@ -406,11 +412,11 @@ export function SphereHero({
               {caption
                 ? caption
                 : overallTier === "healthy"
-                  ? "Your business is in good shape — keep building momentum."
+                  ? `${healthBandLabel("healthy")}. Keep building momentum.`
                   : overallTier === "watch"
-                    ? "Your business is stable, but cash conversion is holding you back."
+                    ? `${healthBandLabel("at_risk")}. Start with the priority below.`
                     : overallTier === "critical"
-                      ? "Your business needs urgent attention — start with the priority below."
+                      ? `${healthBandLabel("critical")}. Start with the priority below.`
                       : "Add your first numbers to see your health score."}
             </span>
           </p>
@@ -422,7 +428,7 @@ export function SphereHero({
         <div className={`${compact ? "mt-3" : "mt-5"} grid w-full max-w-xl grid-cols-2 gap-2 sm:grid-cols-4`}>
           {pillars.map((p) => {
             const Icon = PILLAR_ICON[p.id];
-            const t = tierOf(p.health);
+            const t = tierOf(p.health, p.status);
             const delta = typeof p.delta === "number" ? p.delta : null;
             const q = p.drivers.reduce((n, d) => n + (queryCounts?.[d.key] ?? 0), 0);
             return (
@@ -471,7 +477,7 @@ export function SphereHero({
           </p>
           <div className="grid w-full max-w-md grid-cols-2 gap-3">
             {pillars.map((p, i) => {
-              const t = tierOf(p.health);
+              const t = tierOf(p.health, p.status);
               return (
                 <div
                   key={p.id}
@@ -480,6 +486,7 @@ export function SphereHero({
                 >
                   <Sphere
                     score={p.health}
+                    tier={t}
                     label={p.label}
                     delta={p.delta}
                     size={132}
@@ -507,11 +514,12 @@ export function SphereHero({
           <div className="animate-in fade-in zoom-in-90 duration-500" style={{ animationFillMode: "both" }}>
             <Sphere
               score={activePillar.health}
+              tier={tierOf(activePillar.health, activePillar.status)}
               label={activePillar.label}
               delta={activePillar.delta}
               size={210}
-              glowRgb={TIER_GLOW[tierOf(activePillar.health)]}
-              numberClass={TIER_TEXT[tierOf(activePillar.health)]}
+              glowRgb={TIER_GLOW[tierOf(activePillar.health, activePillar.status)]}
+              numberClass={TIER_TEXT[tierOf(activePillar.health, activePillar.status)]}
               icon={PILLAR_ICON[activePillar.id]}
               onClick={() => go(2)}
             />

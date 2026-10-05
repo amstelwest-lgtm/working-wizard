@@ -10,7 +10,7 @@ import {
   scoreFromFlatFinancials,
 } from "../src/lib/health-score";
 import { CASH_RUNWAY_THRESHOLD_RAND } from "../src/lib/cash-runway";
-import { computeRatios, type RatioInputs } from "../src/lib/ratios";
+import { computeRatios, healthBandLabel, scoreTier, type RatioInputs } from "../src/lib/ratios";
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
@@ -193,6 +193,50 @@ assert(
   pillarScore(serviceHealth, "assets") === 83,
   `service assets = AT only (83), not diluted by invented inventory days, got ${pillarScore(serviceHealth, "assets")}`,
 );
+
+// Hand-entered US client: Rev 50k, COGS 20k, EBIT 8k, AR 6k, AP 4k.
+// GM 60%, DSO ~44, DPO 73, overall 78. Cash pillar must not read Healthy
+// when both of its ratios are Watch.
+const handEntered = healthFromRatioInputs({
+  ...emptyInputs,
+  revenue: "50000",
+  cogs: "20000",
+  ebit: "8000",
+  receivables: "6000",
+  payables: "4000",
+});
+const handRatios = computeRatios({
+  ...emptyInputs,
+  revenue: "50000",
+  cogs: "20000",
+  ebit: "8000",
+  receivables: "6000",
+  payables: "4000",
+});
+assert(Math.round(handRatios["Gross Margin"] * 100) === 60, `GM 60%, got ${handRatios["Gross Margin"]}`);
+assert(Math.round(handRatios["Debtor Days"]) === 44, `DSO 44, got ${handRatios["Debtor Days"]}`);
+assert(Math.round(handRatios["Creditor Days"]) === 73, `DPO 73, got ${handRatios["Creditor Days"]}`);
+assert(scoreTier(scoreRatio("Debtor Days", handRatios["Debtor Days"])) === "at_risk", "DSO 44 is Watch");
+assert(scoreTier(scoreRatio("Creditor Days", handRatios["Creditor Days"])) === "at_risk", "DPO 73 is Watch");
+const handCash = handEntered.pillars.find((p) => p.id === "cash");
+assert(handCash?.score === 65, `cash pillar 65, got ${handCash?.score}`);
+assert(handCash?.status === "at_risk", `cash pillar Watch, got ${handCash?.status}`);
+assert(healthBandLabel(handCash!.status) === "Watch", "cash pillar label is Watch, not Healthy");
+assert(handEntered.overall === 78, `overall 78, got ${handEntered.overall}`);
+assert(handEntered.displayLabel === "Watch", `overall Watch, got ${handEntered.displayLabel}`);
+assert(handEntered.displayLabel === healthBandLabel(handEntered.displayStatus), "one label for the score");
+
+// Rounded average can clear 80 while every component is still under the floor.
+const capped = computeOverallHealth({
+  scoredRatios: [
+    { name: "Debtor Days", score: 79.6, pillar: "cash" },
+    { name: "Creditor Days", score: 79.6, pillar: "cash" },
+  ],
+});
+const cappedCash = capped.pillars.find((p) => p.id === "cash");
+assert(cappedCash?.score === 80, `capped average rounds to 80, got ${cappedCash?.score}`);
+assert(cappedCash?.status === "at_risk", `pillar capped off Healthy, got ${cappedCash?.status}`);
+assert(healthBandLabel(cappedCash!.status) === "Watch", "capped pillar reads Watch");
 
 console.log("health-score-test: ok");
 console.log("sample overall", fromInputs.overall, fromInputs.displayLabel, fromInputs.pillars.map((p) => `${p.id}:${p.score}`).join(" "));

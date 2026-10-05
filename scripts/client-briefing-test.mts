@@ -155,6 +155,23 @@ const m3 = whatMatters({
 })!;
 assert(/operating loss/.test(m3) && /6 weeks/.test(m3), `loss + tight: ${m3}`);
 
+const quiet = whatMatters({
+  healthScore: 78,
+  healthStatus: "healthy",
+  chips: buildVarianceChips({
+    currentFinancials: { revenue: 50_000, cogs: 20_000, ebit: 8_000 },
+    currentRatios: { "Creditor Days": 73, "Debtor Days": 44 },
+    prior: null,
+  }),
+  cashRunwayWeeks: null,
+  profile,
+  hasFigures: true,
+  ratios: { "Creditor Days": 73, "Debtor Days": 44, "Gross Margin": 0.6 },
+})!;
+assert(!/no single metric demanding attention/.test(quiet), `must not dismiss the card: ${quiet}`);
+assert(/Creditor days are 73/.test(quiet) && /60-day mark/.test(quiet), `names the card signal: ${quiet}`);
+assert(!/Debtor days are 44/.test(quiet), "44 debtor days is under the 45-day card");
+
 // ── capability catalogue ─────────────────────────────────────────────────────
 assert(MILON_CAPABILITIES.length >= 9, "catalogue covers the tabs");
 const ctxText = milonCapabilityContext();

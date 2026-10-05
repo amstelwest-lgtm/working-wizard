@@ -16,7 +16,7 @@ import {
   scoreLowerIsBetterDays,
   scoreWorkingCapitalDays,
 } from "../../../src/lib/client-metrics.ts";
-import { healthBandLabel, scoreTier } from "../../../src/lib/ratios.ts";
+import { bandedPillarStatus, healthBandLabel, scoreTier } from "../../../src/lib/ratios.ts";
 
 export type OverviewCopyPack = "za" | "us";
 
@@ -239,7 +239,7 @@ export function buildOverviewBrief(input: {
     const nums = bucket[id];
     const score =
       nums.length === 0 ? null : Math.round(nums.reduce((s, n) => s + n, 0) / nums.length);
-    return { id, label: PILLAR_LABELS[id], score, status: scoreTier(score) };
+    return { id, label: PILLAR_LABELS[id], score, status: bandedPillarStatus(score, nums) };
   });
   const scored = pillars.filter((p) => p.score != null) as Array<OverviewPillar & { score: number }>;
   const overallRaw =

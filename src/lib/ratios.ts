@@ -42,6 +42,26 @@ export function scoreTier(score?: number | null): HealthTier {
   return "critical";
 }
 
+/**
+ * Pillar band from `HEALTH_BAND_TABLE`, then capped.
+ * A rounded average can cross the healthy floor while every component
+ * score is still Watch or Critical (79.6 and 79.6 round to 80). The pillar
+ * must not read Healthy in that case. Overview, Health, and the Bot share this.
+ */
+export function bandedPillarStatus(
+  score: number | null,
+  componentScores: readonly number[],
+): HealthTier {
+  const fromScore = scoreTier(score);
+  const tiers = componentScores
+    .filter((n) => Number.isFinite(n))
+    .map((n) => scoreTier(n));
+  if (fromScore === "healthy" && tiers.length > 0 && tiers.every((t) => t !== "healthy")) {
+    return "at_risk";
+  }
+  return fromScore;
+}
+
 export type RatioInputs = {
   netIncome: string;
   ebt: string;

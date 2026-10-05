@@ -1,4 +1,5 @@
 import {
+  bandedPillarStatus,
   computeRatios,
   healthBandLabel,
   PERIOD_MONTHS_KEY,
@@ -362,13 +363,14 @@ export function computeOverallHealth(input: ComputeOverallHealthInput): OverallH
   }
 
   const pillars: PillarScore[] = ALL_PILLARS.map((id) => {
-    const score = avg(bucket[id]);
+    const components = bucket[id];
+    const score = avg(components);
     const rounded = score == null ? null : Math.round(score);
     return {
       id,
       label: PILLAR_LABELS[id],
       score: rounded,
-      status: scoreTier(rounded),
+      status: bandedPillarStatus(rounded, components),
     };
   });
 

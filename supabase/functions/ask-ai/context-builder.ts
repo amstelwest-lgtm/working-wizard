@@ -24,7 +24,7 @@ import {
   resolveRatioRecord,
 } from "./derive-ratios.ts";
 import { buildOverviewBrief, copyPackFromMarket } from "./overview-brief.ts";
-import { assessClientMetrics } from "../../../src/lib/client-metrics.ts";
+import { assessClientMetrics, runwayDisplayLabel } from "../../../src/lib/client-metrics.ts";
 
 /**
  * Maps the application's stored business_type values to the benchmark category keys
@@ -344,7 +344,7 @@ export async function buildContext(
           ratios: fallbackRatios,
           cash: metrics?.cash.amount ?? null,
           runwayWeeks: metrics?.runway.weeks ?? null,
-          runwayLabel: metrics && metrics.runway.kind !== "unknown" ? metrics.runway.label : null,
+          runwayLabel: metrics ? runwayDisplayLabel(metrics.runway) : null,
           copyPack,
           clientName,
           periodLabel: snapPeriod,

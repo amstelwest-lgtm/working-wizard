@@ -3612,6 +3612,12 @@ function Index() {
     financing: pillarById.financing,
     cash: pillarById.cash,
   };
+  const pillarStatus = {
+    profit: overallHealth.pillars.find((p) => p.id === "profit")?.status,
+    assets: overallHealth.pillars.find((p) => p.id === "assets")?.status,
+    financing: overallHealth.pillars.find((p) => p.id === "financing")?.status,
+    cash: overallHealth.pillars.find((p) => p.id === "cash")?.status,
+  };
   const avgHealth = overallHealth.overall ?? NaN;
 
   const valueMap: Record<RatioKey, { value: number; format: "x" | "pct" | "days" | "money" }> = {
@@ -3651,6 +3657,7 @@ function Index() {
   const spherePillars = buildSpherePillars({
     overallHealth: avgHealth,
     pillarHealths,
+    pillarStatus,
     healthMap,
     ratioMeta: RATIO_META,
   });

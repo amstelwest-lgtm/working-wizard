@@ -120,7 +120,10 @@ assert(operatingProfit === 33_000, `operating profit 33k, got ${operatingProfit}
 
 const onFile = assessClientMetrics({ financials: mapped });
 assert(onFile.cash.amount === 25_000 && onFile.cash.source === "period", "TB cash is the cash source");
-assert(onFile.runway.kind === "cash_generative", `runway kind ${onFile.runway.kind}`);
+assert(
+  onFile.runway.kind === "unknown" && onFile.runway.label === "Not enough data",
+  `P&L cash without a cash-flow line is not cash generative, got ${onFile.runway.kind} ${onFile.runway.label}`,
+);
 assert(onFile.runway.weeks !== 0 && onFile.runway.label !== "0 weeks", "positive cash is not 0 weeks");
 
 const bankOnly = assessClientMetrics({
@@ -150,7 +153,10 @@ const staleForecast = assessClientMetrics({
   cashflow: { openingBalance: "150877.6", startDate: "2025-08-01" },
 });
 assert(staleForecast.cash.amount === 7430.22, "stale forecast opening is not Overview cash");
-assert(staleForecast.runway.kind === "cash_generative", "profitable cash is cash generative");
+assert(
+  staleForecast.runway.kind === "unknown" && staleForecast.runway.label === "Not enough data",
+  "a stale forecast opening is not cash-flow evidence",
+);
 
 const burning = assessClientMetrics({
   financials: {
@@ -297,7 +303,22 @@ const yankeesBrief = buildOverviewBrief({
   runwayLabel: yankeesMetrics.runway.label,
   copyPack: "us",
 });
-assert(yankeesMetrics.runway.kind === "cash_generative", "Yankees is cash generative");
+assert(yankeesMetrics.runway.kind === "cash_generative", "Yankees operating cash flow keeps cash generative");
+
+const plOnly = assessClientMetrics({
+  financials: {
+    revenue: "50000",
+    cogs: "20000",
+    ebit: "8000",
+    receivables: "6000",
+    payables: "4000",
+    cash: "15000",
+  },
+});
+assert(
+  plOnly.runway.kind === "unknown" && plOnly.runway.label === "Not enough data",
+  `hand-entered P&L is not cash generative, got ${plOnly.runway.label}`,
+);
 assert(yankeesHealth.overall === 71 && yankeesHealth.displayLabel === "Watch", `Yankees health ${yankeesHealth.overall} ${yankeesHealth.displayLabel}`);
 assert(yankeesBrief.health === 71 && yankeesBrief.healthLabel === "Watch", "bot brief matches Overview");
 assert(Math.round(yankeesBrief.creditorDays ?? 0) === 329, "bot creditor days stay annualised");

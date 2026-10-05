@@ -11,6 +11,7 @@ import type { ClientOperatingProfile } from "@/lib/client-profile";
 import { GOAL_TO_PRESSURE } from "@/lib/client-profile";
 import { profileIndustryLabel, profileAiContext } from "@/lib/profile-signals";
 import type { VarianceChip } from "@/lib/prior-period";
+import { ratioAttentionSignals } from "@/lib/data-requests";
 import { formatDate, formatMoneyCompact, type ResolvedMarket, ZA_MARKET } from "@/lib/market";
 
 // ── Financial snapshot ────────────────────────────────────────────────────────
@@ -194,6 +195,8 @@ export type BriefingSignals = {
   cashRunwayWeeks: number | null | undefined;
   profile: ClientOperatingProfile | null | undefined;
   hasFigures: boolean;
+  /** Live ratios. Creditor/debtor attention uses the same thresholds as the Overview cards. */
+  ratios?: Record<string, number> | null;
 };
 
 function chip(chips: VarianceChip[], key: string): VarianceChip | undefined {
@@ -263,6 +266,10 @@ export function whatMatters(s: BriefingSignals): string | null {
   }
   if (revUp && (marginsUp || strongGm)) {
     return `Revenue and margins are improving and there is no immediate cash-flow concern${runway != null ? ` (runway ${runwayText})` : ""}. A good month to talk about the next step, not the next fire.`;
+  }
+  const attention = ratioAttentionSignals(s.ratios);
+  if (attention.length) {
+    return `${attention.join(" ")} That is what needs attention this month.`;
   }
   if (s.healthStatus === "healthy") {
     return `The business appears financially healthy${runway != null ? `, with ${runwayText} of cash runway` : ""} and no single metric demanding attention this month.`;

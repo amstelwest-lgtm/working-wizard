@@ -48,6 +48,7 @@ import { CASH_RUNWAY_THRESHOLD_RAND } from "@/lib/cash-runway";
 import {
   assessClientMetrics,
   resolveThirteenWeekForecast,
+  runwayDisplayLabel,
   scoreWorkingCapitalFunding,
   type ClientRunway,
 } from "@/lib/client-metrics";
@@ -2002,7 +2003,7 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
     ...EMPTY_CLIENT_DATA,
     clientName: clientRow?.name ?? "",
     cashRunwayWeeks: preliminaryWeeks,
-    runwayLabel: preliminary.runway.kind === "unknown" ? null : preliminary.runway.label,
+    runwayLabel: runwayDisplayLabel(preliminary.runway),
     cashGenerative: preliminary.runway.kind === "cash_generative",
     financialsUpdatedAt: clientRow?.financials_updated_at ?? null,
     lastForecastAt: clientRow?.last_forecast_at ?? null,
@@ -2115,7 +2116,7 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
     hasData: true,
     clientName: clientRow.name,
     cashRunwayWeeks: healthWeeks,
-    runwayLabel: assessed.runway.kind === "unknown" ? null : assessed.runway.label,
+    runwayLabel: runwayDisplayLabel(assessed.runway),
     cashGenerative: assessed.runway.kind === "cash_generative",
     forecastMinimum,
     financials: fin,
