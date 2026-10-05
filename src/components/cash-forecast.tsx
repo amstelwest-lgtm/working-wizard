@@ -124,6 +124,7 @@ type LineItem = {
 };
 
 const WEEKS = 13;
+const WEEK_DAY_LABEL = { day: "2-digit", month: "short" } as const;
 
 const FREQ_LABEL: Record<Frequency, string> = {
   "recurring-weekly": "Recurring (weekly)",
@@ -882,9 +883,12 @@ export function CashForecastPanel({
   const weekIsos = useMemo(() => weekDatesFrom(startDate, WEEKS), [startDate]);
 
   const weeks = useMemo(
-    () => weekIsos.map((iso) => formatCalendarDay(iso, market, { day: "2-digit", month: "short" })),
+    () => weekIsos.map((iso) => formatCalendarDay(iso, market, WEEK_DAY_LABEL)),
     [weekIsos, market],
   );
+  // Same formatter as the week axis, so the start cannot read as an ISO date
+  // beside a timezone-shifted week label.
+  const startLabel = weeks[0] ?? formatCalendarDay(startDate, market, WEEK_DAY_LABEL);
 
   const horizonLabel =
     weekIsos.length >= WEEKS
@@ -1105,7 +1109,7 @@ export function CashForecastPanel({
       }));
 
       const assumptions = [
-        `Forecast starts ${startDate} with an opening bank balance of ${fmtR(calc.opening)}.`,
+        `Forecast starts ${startLabel} with an opening bank balance of ${fmtR(calc.opening)}.`,
         `Revenue assumed at ${revAdj}% of entered amounts${revGrowthPct !== 0 ? `, growing ${revGrowthPct > 0 ? "+" : ""}${revGrowthPct}% per week (compounding)` : ""}.`,
         `Expenses assumed at ${expAdj}% of entered amounts.`,
         collectDelay > 0
@@ -1556,7 +1560,7 @@ export function CashForecastPanel({
             <Stat
               label="Opening balance"
               value={fmtCompact(calc.opening)}
-              sub={`Start ${startDate}`}
+              sub={`Start ${startLabel}`}
             />
             <Stat
               label="Closing · Week 13"

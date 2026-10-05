@@ -16,7 +16,12 @@ import {
   scoreLowerIsBetterDays,
   scoreWorkingCapitalDays,
 } from "../../../src/lib/client-metrics.ts";
-import { bandedPillarStatus, healthBandLabel, scoreTier } from "../../../src/lib/ratios.ts";
+import {
+  bandedPillarStatus,
+  creditorDaysHealthyBand,
+  healthBandLabel,
+  scoreTier,
+} from "../../../src/lib/ratios.ts";
 
 export type OverviewCopyPack = "za" | "us";
 
@@ -305,7 +310,12 @@ export function overviewFactLines(brief: OverviewBrief): string[] {
   if (brief.operatingMargin != null) lines.push(`Operating margin: ${pct(brief.operatingMargin)}`);
   if (brief.netMargin != null) lines.push(`Net margin: ${pct(brief.netMargin)}`);
   if (brief.debtorDays != null) lines.push(`Debtor days: ${days(brief.debtorDays)}`);
-  if (brief.creditorDays != null) lines.push(`Creditor days: ${days(brief.creditorDays)}`);
+  if (brief.creditorDays != null) {
+    const band = creditorDaysHealthyBand();
+    lines.push(
+      `Creditor days: ${days(brief.creditorDays)} (healthy band ${band.min}–${band.max} days)`,
+    );
+  }
   for (const pillar of brief.pillars) {
     if (pillar.score == null) continue;
     lines.push(`${pillar.label}: ${pillar.score}/100`);
@@ -361,11 +371,12 @@ export function planActionsFromOverview(brief: OverviewBrief): PlannedAction[] {
       outcomeWhy: `Overview runway is ${brief.runwayWeeks} weeks.${cash} Agree how this client covers the next month before treating the forecast as comfortable.`,
     });
   }
-  if (brief.creditorDays != null && brief.creditorDays >= 60) {
+  const creditorMax = creditorDaysHealthyBand().max;
+  if (brief.creditorDays != null && brief.creditorDays > creditorMax) {
     items.push({
       sourceMoveKey: "bot:creditor-days",
       title: `Review creditor days (${Math.round(brief.creditorDays)})`,
-      outcomeWhy: `Creditor days on the Overview are ${Math.round(brief.creditorDays)}. Agree a payment stance with the client before the next review.`,
+      outcomeWhy: `Creditor days on the Overview are ${Math.round(brief.creditorDays)}, above the ${creditorMax}-day healthy band. Agree a payment stance with the client before the next review.`,
     });
   }
   if (brief.debtorDays != null && brief.debtorDays >= 45) {

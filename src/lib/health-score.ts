@@ -347,6 +347,18 @@ function chipLabel(status: HealthTier): string {
   return healthBandLabel(status);
 }
 
+/**
+ * Profitability step chip. Same score and label as the Profit pillar
+ * (`scoreRatio` + `HEALTH_BAND_TABLE`), not a private 10% / 20% scale.
+ */
+export function profitStepBand(
+  ratioName: string,
+  ratio: number,
+): { tier: HealthTier; label: string } {
+  const tier = scoreTier(scoreRatio(ratioName, ratio));
+  return { tier, label: healthBandLabel(tier).toUpperCase() };
+}
+
 export type ComputeOverallHealthInput = {
   /** Human-named ratio values from `computeRatios` (or equivalent). */
   ratios?: Record<string, number | null | undefined>;

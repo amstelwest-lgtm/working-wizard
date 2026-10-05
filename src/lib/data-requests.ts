@@ -14,6 +14,7 @@
  */
 import type { Json } from "@/integrations/supabase/types";
 import type { AdvisoryState } from "@/lib/advisory-state";
+import { creditorDaysHealthyBand } from "@/lib/ratios";
 
 export const DATA_REQUEST_KINDS = [
   "bank_statement",
@@ -215,9 +216,13 @@ export type DataRequestDraft = {
 
 /** Figures older than this are treated as stale once the client is past data collection. */
 export const STALE_FIGURES_DAYS = 75;
-/** Debtor / creditor days above which statement totals stop being enough to act on. */
+/**
+ * Days above which statement totals stop being enough to act on.
+ * Creditor days use the shared healthy maximum. Debtor days stay at 45:
+ * that is the ageing-report ask, not debtorDays.healthyMax (18).
+ */
 export const DEBTOR_DAYS_AGEING_THRESHOLD = 45;
-export const CREDITOR_DAYS_AGEING_THRESHOLD = 60;
+export const CREDITOR_DAYS_AGEING_THRESHOLD = creditorDaysHealthyBand().max;
 
 /**
  * The same debtor/creditor day signals as the Overview data-request cards.

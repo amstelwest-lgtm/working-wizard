@@ -11,7 +11,7 @@ import { Fragment } from "react";
 import { View, Text, StyleSheet } from "@react-pdf/renderer";
 import type { AccountantProfile } from "@/contexts/accountant-profile";
 import { PDFDocument, type SmeData, type ReportSignoffStamp } from "@/components/pdf/pdf-document";
-import { scoreTier } from "@/lib/ratios";
+import { metricDirection, scoreTier } from "@/lib/ratios";
 import { C, fmtRand, fmtRandCompact, fmtPct, resolveTheme } from "@/components/pdf/theme";
 import { usePdfMarket } from "@/components/pdf/pdf-market";
 import { currencySymbol, t, ZA_MARKET, type ResolvedMarket } from "@/lib/market";
@@ -526,11 +526,15 @@ export function ProfitabilityWaterfallPDF({
           ? `${revChange >= 0 ? "+" : ""}${revChange.toFixed(1)}% vs prior`
           : undefined,
     },
-    { label: "Gross Margin", value: fmtPct(d.gross_margin_pct), good: d.gross_margin_pct >= 0.3 },
+    {
+      label: "Gross Margin",
+      value: fmtPct(d.gross_margin_pct),
+      good: d.gross_margin_pct >= (metricDirection("Gross Margin")?.healthyMin ?? 0.32),
+    },
     {
       label: "Operating Margin",
       value: fmtPct(d.operating_margin_pct),
-      good: d.operating_margin_pct >= 0.1,
+      good: d.operating_margin_pct >= (metricDirection("Operating Margin")?.healthyMin ?? 0.16),
     },
     {
       label: "Net Profit",

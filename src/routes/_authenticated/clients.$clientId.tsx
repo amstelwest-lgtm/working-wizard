@@ -113,6 +113,7 @@ import { profileIndustryLabel } from "@/lib/profile-signals";
 import { NoteLayer } from "@/components/note-layer";
 import { useNotes } from "@/contexts/notes";
 import { accountantWorkspaceTab } from "@/lib/notes-tabs";
+import { normalizeAccountantClientTab } from "@/lib/client-route-search";
 import { useTrack } from "@/hooks/use-track";
 import { QboConnectCard } from "@/components/qbo-connect";
 import { XeroConnectCard } from "@/components/xero-connect";
@@ -438,7 +439,7 @@ export const Route = createFileRoute("/_authenticated/clients/$clientId")({
     if (typeof search.reason === "string") out.reason = search.reason;
     if (typeof search.onboard === "string") out.onboard = search.onboard;
     if (typeof search.note === "string") out.note = search.note;
-    if (typeof search.tab === "string") out.tab = search.tab;
+    if (typeof search.tab === "string") out.tab = normalizeAccountantClientTab(search.tab);
     if (typeof search.queries === "string") out.queries = search.queries;
     if (typeof search.coach === "string" && search.coach.length <= 32) out.coach = search.coach;
     if (typeof search.why === "string" && search.why.trim()) out.why = search.why.slice(0, 180);
@@ -711,7 +712,9 @@ function ClientView() {
 
   const [client, setClient] = useState<Client | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<ActiveTab>("overview");
+  const [activeTab, setActiveTab] = useState<ActiveTab>(
+    () => resolveAccountantTab(search.tab) ?? "overview",
+  );
   const [healthSeen, setHealthSeen] = useState(false);
   const [pillarsSeen, setPillarsSeen] = useState(false);
   const openFromBotRef = useRef<(handoff: CoachDestination & { why?: string }) => void>(() => {});
@@ -798,20 +801,12 @@ function ClientView() {
     action?: "preview" | "download";
   }>({});
   useEffect(() => {
-    // ?tab=actions is the Action Plan. The real pane id is plan.
-    if (search.tab === "actions") {
-      navigate({
-        to: "/clients/$clientId",
-        params: { clientId },
-        search: (prev) => ({ ...prev, tab: "plan" }),
-        replace: true,
-      });
-    }
+    // ?tab=actions and ?tab=health are rewritten in validateSearch.
     const next = resolveAccountantTab(search.tab);
     if (next) setActiveTab(next);
     if (search.note) requestOpenNote(search.note);
     if (search.queries === "open") openArchive("open");
-  }, [search.note, search.tab, search.queries, requestOpenNote, openArchive, clientId, navigate]);
+  }, [search.note, search.tab, search.queries, requestOpenNote, openArchive]);
   useEffect(() => {
     if (activeTab !== "ratios") return;
     if (search.focus === "pillars") setPillarsSeen(true);

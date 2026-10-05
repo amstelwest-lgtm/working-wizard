@@ -165,10 +165,15 @@ export function benchmarkTrack(input: {
   return { pos: t(input.value), bandStart: t(input.median), bandEnd: t(input.top) };
 }
 
+/** Creditor-days healthy band from the shared table (30–60). Not the score Watch floor. */
+export function creditorDaysHealthyBand(): { min: number; max: number } {
+  const spec = metricDirection("creditorDays");
+  return { min: spec?.healthyMin ?? 30, max: spec?.healthyMax ?? 60 };
+}
+
 /** True when creditor days are past the healthy band — paying slowly, not early. */
 export function creditorDaysPaysSlowly(days: number): boolean {
-  const spec = metricDirection("creditorDays");
-  const max = spec?.healthyMax ?? 60;
+  const max = creditorDaysHealthyBand().max;
   return Number.isFinite(days) && days > max;
 }
 

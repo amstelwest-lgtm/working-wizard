@@ -4,6 +4,7 @@
  */
 import {
   computeOverallHealth,
+  profitStepBand,
   scoreRatio,
   scoreCashRunway,
   healthFromRatioInputs,
@@ -19,6 +20,10 @@ function assert(cond: boolean, msg: string) {
 
 // Per-ratio scoring still matches prior heuristics for core ratios
 assert(Math.round(scoreRatio("Operating Margin", 0.2)) === 100, "OM 20% → 100");
+const net16 = profitStepBand("Net Margin", 0.16);
+assert(net16.tier === "healthy" && net16.label === "HEALTHY", `16% net margin is Healthy, got ${net16.label}`);
+const net9 = profitStepBand("Net Margin", 0.09);
+assert(net9.tier === "at_risk" && net9.label === "WATCH", `9% net margin is Watch, got ${net9.label}`);
 assert(Math.round(scoreRatio("Debtor Days", 0)) === 100, "DD 0 → 100");
 assert(Math.round(scoreRatio("Debtor Days", 90)) === 0, "DD 90 → 0");
 

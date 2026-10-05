@@ -18,6 +18,7 @@ import {
 } from "@/lib/advisory-deliveries";
 import type { ReportSignoffStamp } from "@/components/pdf/pdf-document";
 import { ScrollableTable } from "@/components/primitives/scrollable-table";
+import { profitStepBand } from "@/lib/health-score";
 
 export type { WaterfallFallback };
 
@@ -38,10 +39,23 @@ function pct(n: number, total: number) {
   return `${((n / total) * 100).toFixed(1)}%`;
 }
 
-function getStatus(p: number): { label: string; color: string; bg: string } {
-  if (p >= 0.2) return { label: "HEALTHY", color: "#4caf82", bg: "rgba(76,175,130,0.15)" };
-  if (p >= 0.1) return { label: "AT RISK", color: "#d4a550", bg: "rgba(212,165,80,0.15)" };
-  return { label: "CRITICAL", color: "#e05c5c", bg: "rgba(224,92,92,0.15)" };
+const STEP_RATIO: Record<string, string> = {
+  "Gross Profit": "Gross Margin",
+  "Operating Profit": "Operating Margin",
+  "Net Profit": "Net Margin",
+};
+
+const BAND_CHIP: Record<string, { color: string; bg: string }> = {
+  healthy: { color: "#4caf82", bg: "rgba(76,175,130,0.15)" },
+  at_risk: { color: "#d4a550", bg: "rgba(212,165,80,0.15)" },
+  critical: { color: "#e05c5c", bg: "rgba(224,92,92,0.15)" },
+};
+
+/** Margin chip from the shared score and band table. 16% net margin is Healthy. */
+function getStatus(stepLabel: string, margin: number): { label: string; color: string; bg: string } {
+  const ratioName = STEP_RATIO[stepLabel] ?? "Net Margin";
+  const band = profitStepBand(ratioName, margin);
+  return { label: band.label, ...BAND_CHIP[band.tier] };
 }
 
 // Colours per step kind
@@ -365,7 +379,7 @@ export function ProfitabilityWaterfall({
                   const value = isDec ? Math.abs(s.delta) : s.runningEnd;
                   const p = revenue ? value / revenue : 0;
                   const status = s.showStatus
-                    ? getStatus(revenue ? s.runningEnd / revenue : 0)
+                    ? getStatus(s.label, revenue ? s.runningEnd / revenue : 0)
                     : null;
 
                   // connector to next bar at this step's running-end level
@@ -478,7 +492,7 @@ export function ProfitabilityWaterfall({
             {steps
               .filter((s) => s.showStatus)
               .map((s) => {
-                const status = getStatus(revenue ? s.runningEnd / revenue : 0);
+                const status = getStatus(s.label, revenue ? s.runningEnd / revenue : 0);
                 return (
                   <div
                     key={s.label}
