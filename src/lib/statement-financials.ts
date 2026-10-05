@@ -10,7 +10,19 @@
 import type { BalanceSheet, ExtractionResult, IncomeStatement, Money } from "./financialSchema.ts";
 import type { RatioInputs } from "./ratios.ts";
 
-export type PeriodFinancials = RatioInputs & { cash: string };
+export type PeriodFinancials = RatioInputs & { cash: string; equityDerived: string };
+
+/** Shown wherever a plugged equity total appears, so it is not read as reported equity. */
+export const DERIVED_EQUITY_LABEL = "Derived (assets − liabilities)";
+
+/** Blob key. "1" means `equity` was plugged, not reported or typed. */
+export const EQUITY_DERIVED_KEY = "equityDerived";
+
+const EQUITY_LINE_KEYS = ["share_capital", "retained_earnings", "other_reserves"] as const;
+
+function hasEquityLines(equity: BalanceSheet["equity"]): boolean {
+  return EQUITY_LINE_KEYS.some((key) => finiteMoney(equity[key]) != null);
+}
 
 function money(v: number | null | undefined): string {
   return v != null && Number.isFinite(v) ? String(v) : "";
@@ -48,7 +60,9 @@ export type FilledBalanceSheet = {
 /**
  * Trial-balance lines often arrive without printed totals because the reader
  * is told not to calculate. Fill equity, liability, and asset totals from the
- * lines that are present. A printed total is left as printed.
+ * lines that are present. A printed total is left as printed. When the sheet
+ * has asset and liability totals and no equity lines at all, total equity is
+ * assets minus liabilities and marked derived — never written over a typed total.
  */
 export function fillBalanceSheetTotals(balance: BalanceSheet): FilledBalanceSheet {
   const nonCurrentAssets = withComponentTotal(balance.non_current_assets, [
@@ -64,7 +78,7 @@ export function fillBalanceSheetTotals(balance: BalanceSheet): FilledBalanceShee
     "cash_and_cash_equivalents",
     "other",
   ]);
-  const equity = withComponentTotal(balance.equity, [
+  let equity = withComponentTotal(balance.equity, [
     "share_capital",
     "retained_earnings",
     "other_reserves",
@@ -92,6 +106,18 @@ export function fillBalanceSheetTotals(balance: BalanceSheet): FilledBalanceShee
     const summed = sumPresent([nonCurrentLiabilities.total, currentLiabilities.total]);
     if (summed != null) totalLiabilities = summed;
   }
+  // No equity lines at all: plug total equity from the two sides. A printed
+  // total, a typed total, or any equity line (including zero) is left alone.
+  let equityDerived = false;
+  if (!hasEquityLines(balance.equity)) {
+    const assets = finiteMoney(totalAssets);
+    const liabilities = finiteMoney(totalLiabilities);
+    const reportedTotal = finiteMoney(equity.total);
+    if (assets != null && liabilities != null && (reportedTotal == null || balance.equity_derived === true)) {
+      equity = { ...equity, total: assets - liabilities };
+      equityDerived = true;
+    }
+  }
   let totalEquityAndLiabilities = balance.total_equity_and_liabilities;
   if (finiteMoney(totalEquityAndLiabilities) == null) {
     const equityTotal = finiteMoney(equity.total);
@@ -110,6 +136,7 @@ export function fillBalanceSheetTotals(balance: BalanceSheet): FilledBalanceShee
     current_liabilities: currentLiabilities,
     total_liabilities: totalLiabilities,
     total_equity_and_liabilities: totalEquityAndLiabilities,
+    ...(equityDerived ? { equity_derived: true } : {}),
   };
 
   const filled =
@@ -206,6 +233,7 @@ export function periodFinancialsFromExtraction(result: ExtractionResult): Period
     operatingCashflow: money(cashFlow?.cash_from_operating),
     totalAssets: money(balance.total_assets),
     equity: money(balance.equity.total),
+    equityDerived: balance.equity_derived === true ? "1" : "",
     receivables: money(balance.current_assets.trade_and_other_receivables),
     inventory: money(balance.current_assets.inventories),
     payables: money(balance.current_liabilities.trade_and_other_payables),
@@ -217,4 +245,22 @@ export function periodFinancialsFromExtraction(result: ExtractionResult): Period
     founderHours: "",
     cash: money(cash),
   };
+}
+
+/**
+ * A trial balance with no equity lines must not replace a figure someone
+ * typed. A previous plug (equityDerived "1") can be replaced by a new plug
+ * or by equity that was actually on the sheet.
+ */
+export function preserveHandEnteredEquity(
+  current: Record<string, string | undefined> | null | undefined,
+  imported: { equity: string; equityDerived?: string },
+): { equity: string; equityDerived: string } {
+  const importedDerived = imported.equityDerived === "1";
+  const currentEquity = String(current?.equity ?? "").trim();
+  const currentDerived = String(current?.[EQUITY_DERIVED_KEY] ?? "") === "1";
+  if (importedDerived && currentEquity !== "" && !currentDerived) {
+    return { equity: String(current?.equity ?? ""), equityDerived: "" };
+  }
+  return { equity: imported.equity, equityDerived: importedDerived ? "1" : "" };
 }

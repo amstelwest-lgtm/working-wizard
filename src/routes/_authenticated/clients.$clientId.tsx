@@ -33,20 +33,28 @@ import {
   formatDate,
   formatMoneyCompact,
   isUsCopy,
+  laborCostLabel,
   localizeCopy,
   parseMarketSelection,
   resolveMarket,
 } from "@/lib/market";
 import { PlaybookDrawer } from "@/components/playbook-drawer";
 import { computeOverviewCaption } from "@/lib/overview-insights";
+import { PlBankDisagreeNotice } from "@/components/pl-bank-disagree-notice";
 import type { ExtractionResult } from "@/lib/financialSchema";
-import { periodFinancialsFromExtraction } from "@/lib/statement-financials";
+import {
+  DERIVED_EQUITY_LABEL,
+  EQUITY_DERIVED_KEY,
+  periodFinancialsFromExtraction,
+  preserveHandEnteredEquity,
+} from "@/lib/statement-financials";
 import { needsTrialBalanceRefresh } from "@/lib/trial-balance-refresh";
 import { TrialBalanceRefreshPrompt } from "@/components/trial-balance-refresh-prompt";
 import {
   computeRatios,
   PERIOD_MONTH_OPTIONS,
   PERIOD_MONTHS_KEY,
+  healthBandLabel,
   periodMonthsOf,
   scoreTier,
 } from "@/lib/ratios";
@@ -106,13 +114,25 @@ import { profileIndustryLabel } from "@/lib/profile-signals";
 import { NoteLayer } from "@/components/note-layer";
 import { useNotes } from "@/contexts/notes";
 import { accountantWorkspaceTab } from "@/lib/notes-tabs";
+import { normalizeAccountantClientTab } from "@/lib/client-route-search";
 import { useTrack } from "@/hooks/use-track";
 import { QboConnectCard } from "@/components/qbo-connect";
 import { XeroConnectCard } from "@/components/xero-connect";
 import { getXeroStatus, type XeroStatus } from "@/lib/xero.functions";
 import { getQboStatus, type QboStatus } from "@/lib/qbo.functions";
-import { preferStatementPeriod, readStatementMeta, statementYearLine } from "@/lib/statement-period";
-import { assessClientMetrics, persistedRunwayWeeks } from "@/lib/client-metrics";
+import {
+  preferStatementPeriod,
+  readStatementMeta,
+  reportDataPeriodLabel,
+  statementYearLine,
+} from "@/lib/statement-period";
+import {
+  assessClientMetrics,
+  persistedRunwayWeeks,
+  plBankDisagreement,
+  resolveThirteenWeekForecast,
+  runwayDisplayLabel,
+} from "@/lib/client-metrics";
 import { countOpenQueriesForClient } from "@/lib/open-queries";
 import { ProfileFunnel } from "@/components/profile/profile-funnel";
 import {
@@ -285,9 +305,9 @@ function tierToBand(tier: HealthTier): "ok" | "warn" | "risk" {
 }
 
 function bandLabel(band: "ok" | "warn" | "risk"): string {
-  if (band === "ok") return "Healthy";
-  if (band === "warn") return "At risk";
-  return "Critical";
+  if (band === "ok") return healthBandLabel("healthy");
+  if (band === "warn") return healthBandLabel("at_risk");
+  return healthBandLabel("critical");
 }
 
 function bandColor(band: "ok" | "warn" | "risk"): string {
@@ -340,17 +360,19 @@ function HealthRing({
   size = 46,
   strokeWidth = 4,
 }: {
-  score: number;
+  score: number | null;
   /** When set, drives ring colour (critical-pillar tell). */
   status?: HealthTier;
   size?: number;
   strokeWidth?: number;
 }) {
+  const hasScore = score != null && Number.isFinite(score);
+  const shown = hasScore ? score : 0;
   const r = (size - strokeWidth) / 2;
   const c = 2 * Math.PI * r;
-  const band = tierToBand(status ?? scoreTier(score));
+  const band = tierToBand(status ?? (hasScore ? scoreTier(shown) : "at_risk"));
   const color = bandColor(band);
-  const off = c * (1 - score / 100);
+  const off = c * (1 - shown / 100);
   return (
     <div className="ring" style={{ width: size, height: size }}>
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
@@ -362,19 +384,21 @@ function HealthRing({
           fill="none"
           strokeWidth={strokeWidth}
         />
-        <circle
-          className="fl"
-          cx={size / 2}
-          cy={size / 2}
-          r={r}
-          fill="none"
-          strokeWidth={strokeWidth}
-          stroke={color}
-          strokeDasharray={`${c.toFixed(1)}`}
-          strokeDashoffset={`${off.toFixed(1)}`}
-        />
+        {hasScore ? (
+          <circle
+            className="fl"
+            cx={size / 2}
+            cy={size / 2}
+            r={r}
+            fill="none"
+            strokeWidth={strokeWidth}
+            stroke={color}
+            strokeDasharray={`${c.toFixed(1)}`}
+            strokeDashoffset={`${off.toFixed(1)}`}
+          />
+        ) : null}
       </svg>
-      <b>{score}</b>
+      <b>{hasScore ? Math.round(shown) : "—"}</b>
     </div>
   );
 }
@@ -418,7 +442,7 @@ export const Route = createFileRoute("/_authenticated/clients/$clientId")({
     if (typeof search.reason === "string") out.reason = search.reason;
     if (typeof search.onboard === "string") out.onboard = search.onboard;
     if (typeof search.note === "string") out.note = search.note;
-    if (typeof search.tab === "string") out.tab = search.tab;
+    if (typeof search.tab === "string") out.tab = normalizeAccountantClientTab(search.tab);
     if (typeof search.queries === "string") out.queries = search.queries;
     if (typeof search.coach === "string" && search.coach.length <= 32) out.coach = search.coach;
     if (typeof search.why === "string" && search.why.trim()) out.why = search.why.slice(0, 180);
@@ -691,7 +715,9 @@ function ClientView() {
 
   const [client, setClient] = useState<Client | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<ActiveTab>("overview");
+  const [activeTab, setActiveTab] = useState<ActiveTab>(
+    () => resolveAccountantTab(search.tab) ?? "overview",
+  );
   const [healthSeen, setHealthSeen] = useState(false);
   const [pillarsSeen, setPillarsSeen] = useState(false);
   const openFromBotRef = useRef<(handoff: CoachDestination & { why?: string }) => void>(() => {});
@@ -778,20 +804,12 @@ function ClientView() {
     action?: "preview" | "download";
   }>({});
   useEffect(() => {
-    // ?tab=actions is the Action Plan. The real pane id is plan.
-    if (search.tab === "actions") {
-      navigate({
-        to: "/clients/$clientId",
-        params: { clientId },
-        search: (prev) => ({ ...prev, tab: "plan" }),
-        replace: true,
-      });
-    }
+    // ?tab=actions and ?tab=health are rewritten in validateSearch.
     const next = resolveAccountantTab(search.tab);
     if (next) setActiveTab(next);
     if (search.note) requestOpenNote(search.note);
     if (search.queries === "open") openArchive("open");
-  }, [search.note, search.tab, search.queries, requestOpenNote, openArchive, clientId, navigate]);
+  }, [search.note, search.tab, search.queries, requestOpenNote, openArchive]);
   useEffect(() => {
     if (activeTab !== "ratios") return;
     if (search.focus === "pillars") setPillarsSeen(true);
@@ -1039,9 +1057,6 @@ function ClientView() {
     [financials, client?.cashflow, client?.financials_updated_at, priorSnapshot],
   );
   const metricRunway = assessed.runway;
-  /** Weeks blended into health. Cash-generative is omitted — it is not 0 weeks. */
-  const effectiveRunway =
-    metricRunway.kind === "weeks" || metricRunway.kind === "zero" ? metricRunway.weeks : null;
   const clientMarket = useMemo(
     () =>
       resolveMarket(
@@ -1049,10 +1064,29 @@ function ClientView() {
       ),
     [client?.market],
   );
+  const cashOutlook = useMemo(
+    () =>
+      resolveThirteenWeekForecast({
+        financials,
+        cashflow: client?.cashflow,
+        openingCash: assessed.cash.amount,
+        runway: assessed.runway,
+        timeZone: clientMarket.timezone,
+      }),
+    [financials, client?.cashflow, assessed, clientMarket.timezone],
+  );
+  /** Weeks blended into health. Cash-generative is omitted — it is not 0 weeks. */
+  const effectiveRunway =
+    metricRunway.kind === "weeks" || metricRunway.kind === "zero" ? metricRunway.weeks : null;
   const overallHealth: OverallHealth = healthFromRatioInputs(
     ratioInputs,
     effectiveRunway,
     clientMarket,
+    cashOutlook.shortfallWeek,
+  );
+  const plVersusBank = useMemo(
+    () => plBankDisagreement({ financials, cashflow: client?.cashflow }),
+    [financials, client?.cashflow],
   );
   const healthScoreRounded = overallHealth.overall ?? 0;
 
@@ -1062,6 +1096,9 @@ function ClientView() {
   const pillarById = Object.fromEntries(
     overallHealth.pillars.map((p) => [p.id, p.score ?? NaN]),
   ) as Record<"profit" | "assets" | "financing" | "cash", number>;
+  const pillarStatus = Object.fromEntries(
+    overallHealth.pillars.map((p) => [p.id, p.status]),
+  ) as Record<"profit" | "assets" | "financing" | "cash", HealthTier>;
 
   const pillarHealths = {
     profit: pillarById.profit,
@@ -1086,28 +1123,38 @@ function ClientView() {
   const spherePillars = buildSpherePillars({
     overallHealth: avgHealth,
     pillarHealths,
+    pillarStatus,
     healthMap,
     ratioMeta: sphereRatioMeta,
   });
 
   const simplifiedSections = [
-    { id: "profit", label: "Profitability", health: pillarHealths.profit, series: [] as number[] },
+    {
+      id: "profit",
+      label: "Profitability",
+      health: pillarHealths.profit,
+      status: pillarStatus.profit,
+      series: [] as number[],
+    },
     {
       id: "assets",
       label: "Asset Efficiency",
       health: pillarHealths.assets,
+      status: pillarStatus.assets,
       series: [] as number[],
     },
     {
       id: "financing",
       label: "Financing",
       health: pillarHealths.financing,
+      status: pillarStatus.financing,
       series: [] as number[],
     },
     {
       id: "cash",
       label: "Cash & Working Capital",
       health: pillarHealths.cash,
+      status: pillarStatus.cash,
       series: [] as number[],
     },
   ];
@@ -1154,11 +1201,19 @@ function ClientView() {
   const briefingSnapshot = buildFinancialSnapshot({
     chips: varianceChips,
     cashRunwayWeeks: effectiveRunway,
-    runwayLabel: metricRunway.kind === "unknown" ? null : metricRunway.label,
+    runwayLabel: runwayDisplayLabel(metricRunway),
     financialsUpdatedAt: client?.financials_updated_at ?? null,
     lastForecastAt: client?.last_forecast_at ?? null,
     priorLabel: priorSnapshot?.period_label ?? null,
     market: clientMarket,
+    cash:
+      assessed.cash.amount != null
+        ? {
+            amount: assessed.cash.amount,
+            floor: cashOutlook.floor,
+            dipsBelowFloorWeek: cashOutlook.dipsBelowFloorWeek,
+          }
+        : null,
   });
   const briefingAbout = describeBusiness(briefingProfile, client?.business_type ?? null);
   const briefingMatters = whatMatters({
@@ -1168,6 +1223,8 @@ function ClientView() {
     cashRunwayWeeks: effectiveRunway,
     profile: briefingProfile,
     hasFigures,
+    ratios: ratios as Record<string, number>,
+    forecastNet: assessed.forecastNet,
   });
   const workflowCtx: WorkflowContext = {
     clientName: client?.name ?? "",
@@ -1532,6 +1589,7 @@ function ClientView() {
     (key: string, value: string) => {
       setFinancials((prev) => {
         const next = { ...prev, [key]: value };
+        if (key === "equity") next[EQUITY_DERIVED_KEY] = "";
         financialsRef.current = next;
         return next;
       });
@@ -1662,7 +1720,11 @@ function ClientView() {
       autoPopulate?: AutoPopulatePrefs,
       period?: { periodEnd: string; periodLabel: string },
     ) => {
-      const inputs = extractionToRatioInputs(result);
+      const extracted = extractionToRatioInputs(result);
+      const inputs = {
+        ...extracted,
+        ...preserveHandEnteredEquity(financialsRef.current, extracted),
+      };
       const ratiosOut = computeRatios(inputs);
       const periodDate = period?.periodEnd?.trim() ?? "";
       const periodLabel = period?.periodLabel?.trim() ?? "";
@@ -1901,10 +1963,12 @@ function ClientView() {
     try {
       const { HealthScorecardPDF } = await import("@/reports/health-scorecard");
       const { pdf } = await import("@react-pdf/renderer");
-      const periodLabel = new Date().toLocaleString("en-US", {
-        month: "long",
-        year: "numeric",
-      });
+      const periodLabel =
+        reportDataPeriodLabel(financials) ??
+        new Date().toLocaleString("en-US", {
+          month: "long",
+          year: "numeric",
+        });
       // Build ratio results from computed ratios (shared scoring + pillars)
       const ratioEntries = Object.entries(ratios)
         .filter(([, val]) => Number.isFinite(val as number))
@@ -1942,7 +2006,8 @@ function ClientView() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${client.name.replace(/\s+/g, "_")}_Health_Scorecard.pdf`;
+      const periodSlug = periodLabel.replace(/[–—]/g, "-").replace(/[^a-zA-Z0-9]+/g, "_");
+      a.download = `${client.name.replace(/\s+/g, "_")}_${periodSlug}_Health_Scorecard.pdf`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -1987,7 +2052,7 @@ function ClientView() {
     if (!client) return;
     const score = healthScoreRounded;
     const tierLabel = overallHealth.displayLabel;
-    const runway = metricRunway.kind === "unknown" ? "—" : metricRunway.label;
+    const runway = runwayDisplayLabel(metricRunway) ?? "—";
     const weak =
       overallHealth.weakestPillar != null
         ? `\nWeakest pillar: ${overallHealth.weakestPillar.label} (${overallHealth.weakestPillar.score})\n`
@@ -2044,7 +2109,7 @@ function ClientView() {
     const text =
       `${client.name} Financial Health Update\n` +
       `Health Score: ${score}/100 (${tierLabel})\n` +
-      `Cash Runway: ${metricRunway.kind === "unknown" ? "—" : metricRunway.label}\n` +
+      `Cash Runway: ${runwayDisplayLabel(metricRunway) ?? "—"}\n` +
       `Open Queries: ${openQueriesCount}\n` +
       `Prepared by ${profile.firmName || "your accountant"} via MILŌN Portal.`;
     let shareText = text;
@@ -2375,14 +2440,18 @@ function ClientView() {
                 ) : null}
 
                 {/* ===== CLIENT BRIEFING — status → what matters → this month's workflow ===== */}
+                {plVersusBank ? (
+                  <PlBankDisagreeNotice disagreement={plVersusBank} market={clientMarket} />
+                ) : null}
+
                 <ClientBriefing
                   clientName={client.name}
                   clientCode={client.client_code}
                   industryLabel={profileIndustryLabel(briefingProfile, client.business_type ?? "—")}
                   ring={
                     <HealthRing
-                      score={healthScoreRounded}
-                      status={overallHealth.displayStatus}
+                      score={hasFigures ? overallHealth.overall : null}
+                      status={hasFigures ? overallHealth.displayStatus : undefined}
                       size={74}
                       strokeWidth={5}
                     />
@@ -2711,6 +2780,7 @@ function ClientView() {
                             hasRealFinancials: hasFigures,
                             avgHealth,
                             cashHealth: pillarHealths.cash ?? NaN,
+                            displayStatus: overallHealth.displayStatus,
                           })}
                           topPriority={(() => {
                             const worst = Object.entries(pillarHealths)
@@ -2867,7 +2937,13 @@ function ClientView() {
                         <div className="fin-grid">
                           {FIELD_LABELS.map(({ key, label }) => (
                             <div key={key}>
-                              <label>{label}</label>
+                              <label>
+                                {key === "equity" && financials[EQUITY_DERIVED_KEY] === "1"
+                                  ? DERIVED_EQUITY_LABEL
+                                  : key === "laborCost"
+                                    ? laborCostLabel(clientMarket)
+                                    : label}
+                              </label>
                               <input
                                 value={financials[key] ?? ""}
                                 onChange={(e) => handleFinancialChange(key, e.target.value)}
@@ -3590,6 +3666,10 @@ function ClientView() {
                 <UploadFinancials
                   onConfirm={(result, prefs, period) => {
                     void handleConfirmFinancials(result, prefs, period);
+                  }}
+                  onOpenBankUpload={() => {
+                    setUploadOpen(false);
+                    setShowBankDrafter(true);
                   }}
                   autoPopulate={
                     autoPopulateState ? { ...autoPopulateState, role: "accountant" } : null

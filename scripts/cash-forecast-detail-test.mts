@@ -33,6 +33,9 @@ assert(cashSrc.includes("Double-click a figure to edit"), "edit affordance in th
 assert(cashSrc.includes("milon-forecast-amount"), "hover underline hint without restyle");
 assert(cashSrc.includes("applyWeekOverrides"), "grid uses persisted week overrides");
 assert(cashSrc.includes("{symbol}"), "currency symbol stays while editing");
+assert(cashSrc.includes("const startLabel = weeks[0]"), "forecast start uses the week-axis label");
+assert(!cashSrc.includes("`Start ${startDate}`"), "opening stat does not print the raw ISO start");
+assert(!cashSrc.includes("`Forecast starts ${startDate}"), "PDF assumption does not print the raw ISO start");
 
 const studio = readFileSync(
   resolve("src/routes/_authenticated/clients.$clientId.tsx"),
@@ -44,5 +47,7 @@ assert(!studio.includes('id="wizard-profit-walk" style={{ colorScheme: "dark" }}
 const wf = readFileSync(resolve("src/components/profitability-waterfall.tsx"), "utf8");
 assert(wf.includes("text-[#0f172a]"), "waterfall values use ink that survives light-mode overrides");
 assert(wf.includes("bg-[#fffdf8]/90"), "value labels sit on a readable chip");
+assert(wf.includes("profitStepBand"), "waterfall chips use the shared score band");
+assert(!wf.includes('"AT RISK"'), "waterfall does not keep a private AT RISK label");
 
 console.log("cash-forecast-detail-test: all assertions passed");

@@ -8,7 +8,9 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { REPORT_CATALOG, reportKicker } from "../src/lib/report-catalog";
-import { seedBudgetFromFinancials } from "../src/lib/budget.bridges";
+import { budgetIsImplausible, seedBudgetFromFinancials } from "../src/lib/budget.bridges";
+import { laborProductivityFileStem, laborProductivityTitle } from "../src/lib/market/copy";
+import { formatDateTime } from "../src/lib/market/format";
 import { createBudgetDocument } from "../src/lib/budget.months";
 import { computeBudgetMonths } from "../src/lib/budget.compute";
 import { buildBudgetPdfModel } from "../src/lib/budget-pdf";
@@ -23,7 +25,9 @@ import type { CashBankExtract } from "../src/lib/cash-from-banks.types";
 import type { ExtractionResult } from "../src/lib/financialSchema";
 import {
   applyBalanceSheetTotals,
+  DERIVED_EQUITY_LABEL,
   periodFinancialsFromExtraction,
+  preserveHandEnteredEquity,
 } from "../src/lib/statement-financials";
 import { statementNoteSections } from "../src/lib/statement-notes";
 import {
@@ -130,6 +134,104 @@ assert(Math.abs(fromOpex.doc.gpPct - 60) < 0.15, "cost_of_sales seeds GP%");
 assert(
   fromOpex.changes.some((change) => /Overheads seeded/.test(change)),
   "operating expenses seed overheads",
+);
+
+const yankeesPeriod = {
+  revenue: "8633.6",
+  cogs: "775.98",
+  fixedCosts: "5356.5",
+  periodMonths: "1",
+  periodStart: "2026-09-01",
+  periodEnd: "2026-09-21",
+};
+const shortPeriod = seedBudgetFromFinancials(budgetDoc(), yankeesPeriod);
+const shortRows = computeBudgetMonths(shortPeriod.doc, shortPeriod.doc.activeScenario);
+const shortRevenue = shortRows.reduce((sum, row) => sum + row.revenue, 0);
+const shortCogs = shortRows.reduce((sum, row) => sum + row.cogs, 0);
+assert(
+  Math.abs(shortRevenue - 150_060) < 50,
+  `a 21-day period annualises near $150k, got ${shortRevenue}`,
+);
+assert(shortCogs > 12_000 && shortCogs < 15_000, `COGS scales with the same days, got ${shortCogs}`);
+assert(Math.abs(shortPeriod.doc.gpPct - 91) < 0.2, `GP% from the same pair, got ${shortPeriod.doc.gpPct}`);
+assert(shortPeriod.doc.cogsMode === "gp_pct", "COGS and GP% share gp_pct mode");
+assert(
+  shortRows.every((row) => Math.abs(row.gpPct - shortPeriod.doc.gpPct) < 0.2),
+  "month engine GP% matches the seeded input",
+);
+assert(!budgetIsImplausible(shortPeriod.doc, yankeesPeriod), "a corrected seed is not flagged");
+
+const statedMonth = seedBudgetFromFinancials(budgetDoc(), {
+  revenue: "8633.6",
+  cogs: "775.98",
+  periodMonths: "1",
+});
+const statedMonthRevenue = computeBudgetMonths(statedMonth.doc, statedMonth.doc.activeScenario).reduce(
+  (sum, row) => sum + row.revenue,
+  0,
+);
+assert(
+  Math.abs(statedMonthRevenue - 8633.6 * 12) < 5,
+  `periodMonths 1 with no dates still scales by 12, got ${statedMonthRevenue}`,
+);
+
+const staleBudget = budgetDoc();
+staleBudget.gpPct = 70.9;
+staleBudget.cogsMode = "per_unit";
+staleBudget.revenueLines = staleBudget.revenueLines.map((line, index) =>
+  index === 0
+    ? {
+        ...line,
+        months: Object.fromEntries(
+          Object.keys(line.months).map((month) => [month, { volume: 1, price: 1_552_600 / 12 }]),
+        ),
+      }
+    : line,
+);
+assert(
+  budgetIsImplausible(staleBudget, yankeesPeriod),
+  "COGS 0 with actual COGS, or revenue about 15x the annualised period, is implausible",
+);
+
+const edited = seedBudgetFromFinancials(budgetDoc(), yankeesPeriod).doc;
+edited.revenueLines = edited.revenueLines.map((line, index) =>
+  index === 0
+    ? {
+        ...line,
+        months: Object.fromEntries(
+          Object.entries(line.months).map(([month, cell]) => [month, { ...cell, price: cell.price * 2 }]),
+        ),
+      }
+    : line,
+);
+assert(!budgetIsImplausible(edited, yankeesPeriod), "an edited budget under 3x is not replaced");
+
+const budgetPanel = read("src/components/budget/budget-panel.tsx");
+assert(
+  budgetPanel.includes("Rebuild budget from latest actuals"),
+  "implausible budgets offer a rebuild",
+);
+assert(
+  budgetPanel.includes("budgetIsImplausible"),
+  "a stored budget is checked instead of overwritten on load",
+);
+
+assert(laborProductivityTitle({ copyPack: "us" }) === "Labor Productivity", "US card title");
+assert(laborProductivityFileStem({ copyPack: "us" }) === "LaborProductivity", "US ZIP stem");
+assert(laborProductivityTitle({ copyPack: "za" }) === "Labour Productivity", "SA card title");
+assert(laborProductivityFileStem({ copyPack: "za" }) === "LabourProductivity", "SA ZIP stem");
+assert(read("src/reports/labor-productivity.tsx").includes("laborProductivityTitle"), "PDF title uses the locale helper");
+assert(reportsSrc.includes("laborProductivityFileStem"), "ZIP filename uses the locale helper");
+
+const nyTime = formatDateTime(
+  new Date("2026-10-05T19:06:00Z"),
+  { locale: "en-US", timezone: "America/New_York" },
+  { hour: "numeric", minute: "2-digit", timeZoneName: "shortGeneric" },
+);
+assert(nyTime.includes("3:06") && nyTime.includes("ET"), `New York time keeps a zone label, got ${nyTime}`);
+assert(
+  read("src/components/advisory-sent-history.tsx").includes('timeZoneName: "shortGeneric"'),
+  "delivery history shows the firm zone",
 );
 
 const messy = budgetDoc();
@@ -349,6 +451,128 @@ assert(
   printedTotal.current_period.figures.balance_sheet.equity.total === 9_999,
   "a printed equity total is not overwritten",
 );
+assert(
+  printedTotal.current_period.figures.balance_sheet.equity_derived !== true,
+  "a printed equity total is not labelled derived",
+);
+
+const noEquityLines = applyBalanceSheetTotals({
+  ...tb,
+  current_period: {
+    period_end: null,
+    figures: {
+      ...tb.current_period.figures,
+      balance_sheet: {
+        ...sheet(),
+        total_assets: 43_000,
+        total_liabilities: 10_000,
+        equity: { share_capital: null, retained_earnings: null, other_reserves: null, total: null },
+      },
+    },
+  },
+});
+const plugged = noEquityLines.current_period.figures.balance_sheet;
+assert(plugged.equity.total === 33_000, `assets 43k minus liabilities 10k is 33k, got ${plugged.equity.total}`);
+assert(plugged.equity_derived === true, "plugged equity is marked derived");
+assert(plugged.equity.share_capital == null, "no equity lines were invented");
+const pluggedFigures = periodFinancialsFromExtraction({
+  ...tb,
+  current_period: noEquityLines.current_period,
+});
+assert(pluggedFigures.equity === "33000", `period equity ${pluggedFigures.equity}`);
+assert(pluggedFigures.equityDerived === "1", "period financials flag the plug");
+const pluggedNotes = statementNoteSections(
+  { ...tb, current_period: noEquityLines.current_period },
+  (n) => n.toLocaleString("en-US"),
+);
+const pluggedKeyFigures = pluggedNotes.find((section) => section.title === "Key figures")?.items.join("\n") ?? "";
+assert(
+  pluggedKeyFigures.includes(`${DERIVED_EQUITY_LABEL}: 33,000`),
+  `notes label the plug, got ${pluggedKeyFigures}`,
+);
+assert(!pluggedKeyFigures.includes("Total equity"), "notes do not call the plug reported equity");
+
+const fromLines = applyBalanceSheetTotals({
+  ...tb,
+  current_period: {
+    period_end: null,
+    figures: {
+      ...tb.current_period.figures,
+      balance_sheet: {
+        ...sheet(),
+        non_current_assets: { ...sheet().non_current_assets, property_plant_equipment: 43_000 },
+        current_liabilities: { ...sheet().current_liabilities, trade_and_other_payables: 10_000 },
+        equity: { share_capital: null, retained_earnings: null, other_reserves: null, total: null },
+      },
+    },
+  },
+});
+assert(
+  fromLines.current_period.figures.balance_sheet.equity.total === 33_000,
+  "component asset and liability lines still plug equity",
+);
+assert(fromLines.current_period.figures.balance_sheet.equity_derived === true, "line-built plug is derived");
+
+const zeroEquityLine = applyBalanceSheetTotals({
+  ...tb,
+  current_period: {
+    period_end: null,
+    figures: {
+      ...tb.current_period.figures,
+      balance_sheet: {
+        ...sheet(),
+        total_assets: 43_000,
+        total_liabilities: 10_000,
+        equity: { share_capital: 0, retained_earnings: null, other_reserves: null, total: null },
+      },
+    },
+  },
+});
+assert(
+  zeroEquityLine.current_period.figures.balance_sheet.equity.total === 0,
+  "a zero equity line is real and is not replaced by the plug",
+);
+assert(
+  zeroEquityLine.current_period.figures.balance_sheet.equity_derived !== true,
+  "a real equity line is not labelled derived",
+);
+
+const typedTotal = applyBalanceSheetTotals({
+  ...tb,
+  current_period: {
+    period_end: null,
+    figures: {
+      ...tb.current_period.figures,
+      balance_sheet: {
+        ...sheet(),
+        total_assets: 43_000,
+        total_liabilities: 10_000,
+        equity: { share_capital: null, retained_earnings: null, other_reserves: null, total: 12_000 },
+      },
+    },
+  },
+});
+assert(
+  typedTotal.current_period.figures.balance_sheet.equity.total === 12_000,
+  "a typed equity total is not replaced by the plug",
+);
+assert(typedTotal.current_period.figures.balance_sheet.equity_derived !== true, "a typed total stays unlabelled");
+
+const keptHand = preserveHandEnteredEquity(
+  { equity: "12000" },
+  { equity: "33000", equityDerived: "1" },
+);
+assert(keptHand.equity === "12000" && keptHand.equityDerived === "", "a hand-entered equity survives a plug import");
+const refreshedPlug = preserveHandEnteredEquity(
+  { equity: "33000", equityDerived: "1" },
+  { equity: "40000", equityDerived: "1" },
+);
+assert(refreshedPlug.equity === "40000" && refreshedPlug.equityDerived === "1", "a previous plug can be refreshed");
+const reportedWins = preserveHandEnteredEquity(
+  { equity: "12000" },
+  { equity: "5000", equityDerived: "" },
+);
+assert(reportedWins.equity === "5000" && reportedWins.equityDerived === "", "reported equity replaces a hand figure");
 
 const notes = statementNoteSections(tb, (n) => n.toLocaleString("en-US"));
 const figures = notes.find((section) => section.title === "Key figures")?.items.join("\n") ?? "";

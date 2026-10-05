@@ -11,12 +11,13 @@ import type { ClientOperatingProfile } from "@/lib/client-profile";
 import { GOAL_TO_PRESSURE } from "@/lib/client-profile";
 import { profileIndustryLabel, profileAiContext } from "@/lib/profile-signals";
 import type { VarianceChip } from "@/lib/prior-period";
+import { ratioAttentionSignals } from "@/lib/data-requests";
 import { formatDate, formatMoneyCompact, type ResolvedMarket, ZA_MARKET } from "@/lib/market";
 
 // ── Financial snapshot ────────────────────────────────────────────────────────
 
 export type SnapshotMetric = {
-  key: "revenue" | "gm" | "om" | "runway" | "updated";
+  key: "revenue" | "gm" | "om" | "runway" | "cash" | "updated";
   label: string;
   value: string;
   /** Directional movement vs the prior period; omitted when there is none. */
@@ -53,6 +54,15 @@ export function buildFinancialSnapshot(input: {
   cashRunwayWeeks: number | null | undefined;
   /** Overrides the week count. Use "Cash generative" when the business is not burning. */
   runwayLabel?: string | null;
+  /**
+   * Current cash, the four-week floor, and whether the shared 13-week forecast
+   * stays above that floor. Omitted when cash is unknown.
+   */
+  cash?: {
+    amount: number;
+    floor: number;
+    dipsBelowFloorWeek: number | null;
+  } | null;
   financialsUpdatedAt?: string | null;
   lastForecastAt?: string | null;
   priorLabel?: string | null;
@@ -92,6 +102,21 @@ export function buildFinancialSnapshot(input: {
       key: "runway",
       label: "Cash runway",
       value: `${Number.isInteger(w) ? w : w.toFixed(1)} ${w === 1 ? "week" : "weeks"}`,
+    });
+  }
+  if (
+    input.cash &&
+    Number.isFinite(input.cash.amount) &&
+    Number.isFinite(input.cash.floor)
+  ) {
+    const position =
+      input.cash.dipsBelowFloorWeek == null
+        ? "stays above floor"
+        : `dips below floor in week ${input.cash.dipsBelowFloorWeek}`;
+    out.push({
+      key: "cash",
+      label: "Cash",
+      value: `${formatMoneyCompact(input.cash.amount, market)} · floor ${formatMoneyCompact(input.cash.floor, market)} · ${position}`,
     });
   }
   const updated = [input.financialsUpdatedAt, input.lastForecastAt]
@@ -170,6 +195,10 @@ export type BriefingSignals = {
   cashRunwayWeeks: number | null | undefined;
   profile: ClientOperatingProfile | null | undefined;
   hasFigures: boolean;
+  /** Live ratios. Creditor/debtor attention uses the same thresholds as the Overview cards. */
+  ratios?: Record<string, number> | null;
+  /** 13-week net (in minus out). A negative forecast is a cash point even when the score is healthy. */
+  forecastNet?: number | null;
 };
 
 function chip(chips: VarianceChip[], key: string): VarianceChip | undefined {
@@ -239,6 +268,15 @@ export function whatMatters(s: BriefingSignals): string | null {
   }
   if (revUp && (marginsUp || strongGm)) {
     return `Revenue and margins are improving and there is no immediate cash-flow concern${runway != null ? ` (runway ${runwayText})` : ""}. A good month to talk about the next step, not the next fire.`;
+  }
+  const attention = ratioAttentionSignals(s.ratios);
+  if (attention.length) {
+    return `${attention.join(" ")} That is what needs attention this month.`;
+  }
+  if (s.forecastNet != null && s.forecastNet < 0) {
+    return `The 13-week forecast nets cash out${
+      runway != null ? `, with about ${runwayText} of runway at that pace` : ""
+    }. That is the cash point to raise, even while the score looks healthy.`;
   }
   if (s.healthStatus === "healthy") {
     return `The business appears financially healthy${runway != null ? `, with ${runwayText} of cash runway` : ""} and no single metric demanding attention this month.`;

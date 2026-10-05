@@ -26,6 +26,7 @@ import {
   shapeTasks,
 } from "./tools.ts";
 import type { AdvisoryFacts } from "../../../src/lib/advisory-state.ts";
+import { assessClientMetrics } from "../../../src/lib/client-metrics.ts";
 import type { NextStepFacts } from "../../../src/lib/next-step.ts";
 
 type Ctx = {
@@ -448,11 +449,22 @@ export async function executeAgentTool(
   if (name === "get_cash_flow") {
     const { data } = await ctx.userClient
       .from("clients")
-      .select("cashflow, cash_runway_weeks")
+      .select("cashflow, cash_runway_weeks, financials, financials_updated_at")
       .eq("id", ctx.clientId)
       .maybeSingle();
     const runway = typeof data?.cash_runway_weeks === "number" ? data.cash_runway_weeks : null;
-    return shapeCash(data?.cashflow, runway);
+    const financials = (data?.financials ?? null) as Record<string, unknown> | null;
+    const metrics = assessClientMetrics({
+      financials,
+      cashflow: data?.cashflow,
+      financialsUpdatedAt: (data?.financials_updated_at as string | null) ?? null,
+    });
+    return shapeCash(data?.cashflow, metrics.runway.weeks ?? runway, {
+      financials,
+      openingCash: metrics.cash.amount,
+      runway: metrics.runway,
+      periodEnd: typeof financials?.periodEnd === "string" ? financials.periodEnd : null,
+    });
   }
 
   if (name === "get_statement_history") {

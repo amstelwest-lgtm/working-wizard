@@ -1,11 +1,12 @@
 /**
  * HealthScoreGauge — slim score bar with tier colouring and subtle
- * tier-threshold notches at 40 and 65.
+ * tier-threshold notches from HEALTH_BAND_TABLE.
  *
  * SSR safety: react-pdf primitives — only import via dynamic import().
  */
 
 import { View, StyleSheet } from "@react-pdf/renderer";
+import { HEALTH_BAND_TABLE } from "@/lib/ratios";
 import { C, scoreColor } from "./theme";
 
 type Props = {
@@ -40,8 +41,8 @@ export function HealthScoreGauge({ score, height = 6 }: Props) {
         style={[styles.fill, { width: `${pct}%`, height, backgroundColor: scoreColor(pct) }]}
       />
       {/* Tier threshold notches */}
-      <View style={[styles.notch, { left: "40%" }]} />
-      <View style={[styles.notch, { left: "65%" }]} />
+      <View style={[styles.notch, { left: `${HEALTH_BAND_TABLE.watchMin}%` }]} />
+      <View style={[styles.notch, { left: `${HEALTH_BAND_TABLE.healthyMin}%` }]} />
     </View>
   );
 }

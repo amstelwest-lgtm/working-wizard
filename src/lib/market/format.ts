@@ -67,6 +67,25 @@ export function formatMoneyCompact(n: number, market: MoneyMarket = ZA_MARKET): 
   return `${sign}${sym}${gap}${Math.round(abs).toLocaleString(market.locale)}`;
 }
 
+/**
+ * Format a calendar day (YYYY-MM-DD) without the firm timezone.
+ * `formatDate` applies `market.timezone` to a local or UTC midnight Date,
+ * which prints the previous day in the Americas (Oct 5 → Oct 4).
+ */
+export function formatCalendarDay(
+  iso: string,
+  market: Pick<ResolvedMarket, "locale"> = ZA_MARKET,
+  opts?: Intl.DateTimeFormatOptions,
+): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  if (!match) return "—";
+  const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 12));
+  return date.toLocaleDateString(market.locale, {
+    timeZone: "UTC",
+    ...opts,
+  });
+}
+
 export function formatDate(
   d: Date | string | number,
   market: Pick<ResolvedMarket, "locale" | "timezone"> = ZA_MARKET,

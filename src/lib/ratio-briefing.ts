@@ -1,7 +1,7 @@
 import { t, formatMoneyCompact, localizeCopy, type ResolvedMarket } from "./market";
 import { playbookKeyForUiKey } from "./playbook-key";
 import { ratioActualLine } from "./ratio-actuals";
-import type { RatioInputs } from "./ratios";
+import { peerMedian, type RatioInputs } from "./ratios";
 
 export type BriefingMarket = Pick<ResolvedMarket, "copyPack" | "currency" | "locale">;
 
@@ -33,7 +33,7 @@ export type RatioRelatedTab = {
 };
 
 const DAYS_IN_YEAR = 365;
-const DEFAULT_DEBTOR_DAYS = 45;
+const DEFAULT_DEBTOR_DAYS = peerMedian("debtorDays") ?? 40;
 const DEFAULT_INVENTORY_DAYS = 45;
 const DEFAULT_WC_DAYS = 40;
 

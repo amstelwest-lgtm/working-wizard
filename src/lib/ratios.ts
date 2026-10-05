@@ -1,17 +1,247 @@
 export type HealthTier = "critical" | "at_risk" | "healthy";
 
+export type HealthBandLabel = "Critical" | "Watch" | "Healthy";
+
 /**
- * Single source of truth for score -> tier classification.
- * Thresholds match the playbook data ranges (critical 0-40, at_risk 40-65,
- * healthy 65-100) — previously several report files independently
- * hardcoded a >=70 healthy cutoff, which disagreed with the playbook data's
- * 65 cutoff and could show the wrong tier's interventions for scores 65-69.
+ * One band table for Overview, Health, the PDFs, the Bot, and the Scorecard
+ * legend. Do not hardcode 40 / 65 / 70 anywhere else.
+ *
+ * #272 scored cash runway as healthy only from 12 weeks (score 85), watch
+ * from 4 weeks (score 45) through 8 weeks (score 65), and critical below
+ * 4 weeks (score 25). A healthy floor of 65 labelled that 8-week runway,
+ * and this client's overall of 71, as Healthy on some surfaces and Watch
+ * on others. Healthy therefore starts at 80: 71 is Watch, a 12-week runway
+ * (85) stays Healthy, and critical remains below 40.
+ *
+ * Playbook step packs were written on the older 65 healthy floor. Tier
+ * selection uses this table, so a score of 65–79 opens the Watch pack.
  */
+/**
+ * How a metric moves when the business gets healthier, plus the native-unit
+ * range that scores as the healthy band. Reports, the scorecard, and
+ * Playbooks read this — they do not keep a private higher-is-better flag.
+ *
+ * `sweet_spot` is not monotone: creditor days of 30–60 score 100, and a
+ * figure past the top of that range (329 days) is paying slowly.
+ */
+export type MetricDirection = "higher_is_better" | "lower_is_better" | "sweet_spot";
+
+export type MetricDirectionSpec = {
+  key: string;
+  /** `computeRatios` name, when the metric has one. */
+  name: string;
+  direction: MetricDirection;
+  /** Inclusive native-unit healthy band. A null side is open. */
+  healthyMin: number | null;
+  healthyMax: number | null;
+  /** Lower-is-better linear score hits 0 at this value (debtor days: 90). */
+  zeroAt?: number;
+  /**
+   * Peer median in the metric's own units. Overview asks, ratio money
+   * sentences, and the Bot context read this — not a private 45.
+   * Distinct from the healthy band (debtor days still score healthy only to 18).
+   */
+  peerMedian?: number;
+};
+
+export const METRIC_DIRECTIONS: readonly MetricDirectionSpec[] = [
+  { key: "grossMargin", name: "Gross Margin", direction: "higher_is_better", healthyMin: 0.32, healthyMax: null },
+  { key: "operatingMargin", name: "Operating Margin", direction: "higher_is_better", healthyMin: 0.16, healthyMax: null },
+  { key: "netMargin", name: "Net Margin", direction: "higher_is_better", healthyMin: 0.12, healthyMax: null },
+  { key: "roa", name: "Return on Assets", direction: "higher_is_better", healthyMin: 0.096, healthyMax: null },
+  { key: "roe", name: "Return on Equity", direction: "higher_is_better", healthyMin: 0.16, healthyMax: null },
+  { key: "assetTurnover", name: "Asset Turnover", direction: "higher_is_better", healthyMin: 1.2, healthyMax: null },
+  { key: "gpToLabor", name: "Gross Profit / Labor", direction: "higher_is_better", healthyMin: 0.48, healthyMax: null },
+  { key: "salesPerEmployee", name: "Sales-per-Employee Ratio", direction: "higher_is_better", healthyMin: null, healthyMax: null },
+  { key: "ocfToEbitda", name: "OCF / EBITDA", direction: "higher_is_better", healthyMin: 0.8, healthyMax: null },
+  { key: "interestBurden", name: "Interest Burden", direction: "higher_is_better", healthyMin: 0.8, healthyMax: null },
+  { key: "taxBurden", name: "Tax Burden", direction: "higher_is_better", healthyMin: 0.8, healthyMax: null },
+  { key: "currentRatio", name: "Current Ratio", direction: "higher_is_better", healthyMin: 1.6, healthyMax: null },
+  { key: "revenueGrowth", name: "Revenue Growth", direction: "higher_is_better", healthyMin: 0.16, healthyMax: null },
+  { key: "fixedCostRatio", name: "Fixed Cost Ratio", direction: "lower_is_better", healthyMin: null, healthyMax: 0.1, zeroAt: 0.5 },
+  { key: "customerConcentration", name: "Top-5 Customer Share", direction: "lower_is_better", healthyMin: null, healthyMax: 0.16, zeroAt: 0.8 },
+  { key: "debtorDays", name: "Debtor Days", direction: "lower_is_better", healthyMin: null, healthyMax: 18, zeroAt: 90, peerMedian: 40 },
+  { key: "inventoryDays", name: "Inventory Days", direction: "lower_is_better", healthyMin: null, healthyMax: 18, zeroAt: 90 },
+  { key: "wipDays", name: "WIP Days", direction: "lower_is_better", healthyMin: null, healthyMax: 18, zeroAt: 90 },
+  { key: "workingCapitalDays", name: "Working Capital Days", direction: "lower_is_better", healthyMin: null, healthyMax: 18, zeroAt: 90 },
+  { key: "equityMultiplier", name: "Equity Multiplier", direction: "lower_is_better", healthyMin: null, healthyMax: 1.6 },
+  { key: "debtToEquity", name: "Debt-to-Equity", direction: "lower_is_better", healthyMin: null, healthyMax: 0.4 },
+  { key: "debtToAssets", name: "Debt-to-Assets", direction: "lower_is_better", healthyMin: null, healthyMax: 0.14 },
+  { key: "creditorDays", name: "Creditor Days", direction: "sweet_spot", healthyMin: 30, healthyMax: 60 },
+];
+
+const METRIC_BY_KEY = new Map(METRIC_DIRECTIONS.map((spec) => [spec.key, spec]));
+const METRIC_BY_NAME = new Map(METRIC_DIRECTIONS.map((spec) => [spec.name, spec]));
+
+/** Direction row for a playbook key or a `computeRatios` name. */
+export function metricDirection(keyOrName: string): MetricDirectionSpec | null {
+  return METRIC_BY_KEY.get(keyOrName) ?? METRIC_BY_NAME.get(keyOrName) ?? null;
+}
+
+/** Peer median from the shared direction table. Null when the metric has none. */
+export function peerMedian(keyOrName: string): number | null {
+  const n = metricDirection(keyOrName)?.peerMedian;
+  return n != null && Number.isFinite(n) ? n : null;
+}
+
+/** Distance outside the healthy band. Inside the band the distance is 0. */
+export function outsideHealthyBand(
+  value: number,
+  healthyMin: number | null,
+  healthyMax: number | null,
+): number {
+  if (!Number.isFinite(value)) return Number.POSITIVE_INFINITY;
+  if (healthyMin != null && value < healthyMin) return healthyMin - value;
+  if (healthyMax != null && value > healthyMax) return value - healthyMax;
+  return 0;
+}
+
+/**
+ * The peer percentile that is the healthy end of the band.
+ * Higher-is-better uses p75. Lower-is-better uses p25 — p75 is the worse tail
+ * (debtor days 60 vs a median of 40, fixed costs 60% vs 45%). A sweet spot
+ * uses whichever percentile sits closer to the healthy range.
+ */
+export function benchmarkHealthyEnd(
+  spec: MetricDirectionSpec,
+  p25: number,
+  p75: number,
+): { top: number; lowerIsBetter: boolean } {
+  if (spec.direction === "lower_is_better") return { top: p25, lowerIsBetter: true };
+  if (spec.direction === "higher_is_better") return { top: p75, lowerIsBetter: false };
+  const d25 = outsideHealthyBand(p25, spec.healthyMin, spec.healthyMax);
+  const d75 = outsideHealthyBand(p75, spec.healthyMin, spec.healthyMax);
+  if (d25 < d75) return { top: p25, lowerIsBetter: true };
+  return { top: p75, lowerIsBetter: false };
+}
+
+export type BenchmarkPosition = "top_quartile" | "above_median" | "below_median";
+
+/** Where a value sits versus the median and the healthy-end quartile. */
+export function benchmarkPosition(input: {
+  value: number;
+  median: number;
+  top: number;
+  direction: MetricDirection;
+  healthyMin?: number | null;
+  healthyMax?: number | null;
+}): BenchmarkPosition {
+  if (input.direction === "sweet_spot") {
+    const dist = (v: number) =>
+      outsideHealthyBand(v, input.healthyMin ?? null, input.healthyMax ?? null);
+    const valueDist = dist(input.value);
+    const medianDist = dist(input.median);
+    const topDist = dist(input.top);
+    if (valueDist <= topDist && valueDist <= medianDist) return "top_quartile";
+    if (valueDist <= medianDist) return "above_median";
+    return "below_median";
+  }
+  const better =
+    input.direction === "lower_is_better"
+      ? (a: number, b: number) => a <= b
+      : (a: number, b: number) => a >= b;
+  if (better(input.value, input.top)) return "top_quartile";
+  if (better(input.value, input.median)) return "above_median";
+  return "below_median";
+}
+
+/**
+ * Bar track, 0–1, with the right-hand side always the healthier end.
+ * Sweet-spot metrics use distance from the healthy range, so 329 creditor
+ * days sits to the left of a 30-day median.
+ */
+export function benchmarkTrack(input: {
+  value: number;
+  median: number;
+  top: number;
+  direction: MetricDirection;
+  lowerIsBetter?: boolean;
+  healthyMin?: number | null;
+  healthyMax?: number | null;
+}): { pos: number; bandStart: number; bandEnd: number } {
+  const goodness = (v: number) => {
+    if (input.direction === "sweet_spot") {
+      return -outsideHealthyBand(v, input.healthyMin ?? null, input.healthyMax ?? null);
+    }
+    const lower = input.direction === "lower_is_better" || input.lowerIsBetter === true;
+    return lower ? -v : v;
+  };
+  const vals = [goodness(input.value), goodness(input.median), goodness(input.top)];
+  let lo = Math.min(...vals);
+  let hi = Math.max(...vals);
+  const pad = (hi - lo || Math.abs(hi) || 1) * 0.25;
+  lo -= pad;
+  hi += pad;
+  const span = hi - lo || 1;
+  const t = (v: number) => (goodness(v) - lo) / span;
+  return { pos: t(input.value), bandStart: t(input.median), bandEnd: t(input.top) };
+}
+
+/** Creditor-days healthy band from the shared table (30–60). Not the score Watch floor. */
+export function creditorDaysHealthyBand(): { min: number; max: number } {
+  const spec = metricDirection("creditorDays");
+  return { min: spec?.healthyMin ?? 30, max: spec?.healthyMax ?? 60 };
+}
+
+/** True when creditor days are past the healthy band — paying slowly, not early. */
+export function creditorDaysPaysSlowly(days: number): boolean {
+  const max = creditorDaysHealthyBand().max;
+  return Number.isFinite(days) && days > max;
+}
+
+/** Step 1 copy for #02 when creditor days are above the healthy band. */
+export const SLOW_CREDITOR_DAYS_STEP = {
+  step_title: "High creditor days — suppliers are being paid slowly",
+  step_description:
+    "Creditor days this high mean the business is paying suppliers slowly. That is a supplier-relationship and arrears risk: invoices are outstanding past a normal term. Separate agreed terms from overdue balances, agree a catch-up with the suppliers that can stop supply, and do not stretch payment any further.",
+} as const;
+
+export const HEALTH_BAND_TABLE = {
+  /** Scores below this are Critical. */
+  watchMin: 40 as const,
+  /** Scores at or above this are Healthy. From watchMin up to here is Watch. */
+  healthyMin: 80 as const,
+  /** Per-metric direction and native healthy range. Same table as the score bands. */
+  metrics: METRIC_DIRECTIONS,
+};
+
+const HEALTH_BAND_LABEL: Record<HealthTier, HealthBandLabel> = {
+  critical: "Critical",
+  at_risk: "Watch",
+  healthy: "Healthy",
+};
+
+/** Chip / PDF / sphere label for a tier. Overview, Health, and the Bot share this. */
+export function healthBandLabel(tier: HealthTier): HealthBandLabel {
+  return HEALTH_BAND_LABEL[tier];
+}
+
+/** Score → tier. Null or non-finite scores are Watch, not a fake Healthy. */
 export function scoreTier(score?: number | null): HealthTier {
   if (score == null || !Number.isFinite(score)) return "at_risk";
-  if (score >= 65) return "healthy";
-  if (score >= 40) return "at_risk";
+  if (score >= HEALTH_BAND_TABLE.healthyMin) return "healthy";
+  if (score >= HEALTH_BAND_TABLE.watchMin) return "at_risk";
   return "critical";
+}
+
+/**
+ * Pillar band from `HEALTH_BAND_TABLE`, then capped.
+ * A rounded average can cross the healthy floor while every component
+ * score is still Watch or Critical (79.6 and 79.6 round to 80). The pillar
+ * must not read Healthy in that case. Overview, Health, and the Bot share this.
+ */
+export function bandedPillarStatus(
+  score: number | null,
+  componentScores: readonly number[],
+): HealthTier {
+  const fromScore = scoreTier(score);
+  const tiers = componentScores
+    .filter((n) => Number.isFinite(n))
+    .map((n) => scoreTier(n));
+  if (fromScore === "healthy" && tiers.length > 0 && tiers.every((t) => t !== "healthy")) {
+    return "at_risk";
+  }
+  return fromScore;
 }
 
 export type RatioInputs = {

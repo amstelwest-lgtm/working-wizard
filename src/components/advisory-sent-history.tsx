@@ -130,8 +130,9 @@ export function AdvisorySentHistory({
                     day: "numeric",
                     month: "short",
                     year: "numeric",
-                    hour: "2-digit",
+                    hour: "numeric",
                     minute: "2-digit",
+                    timeZoneName: "shortGeneric",
                   })}
                   {r.period_label ? ` · figures ${r.period_label}` : ""}
                   {r.figures_hash ? ` · hash ${r.figures_hash}` : ""}

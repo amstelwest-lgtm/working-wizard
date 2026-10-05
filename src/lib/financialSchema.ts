@@ -58,6 +58,11 @@ export interface BalanceSheet {
   };
   total_liabilities: Money;
   total_equity_and_liabilities: Money;
+  /**
+   * True only when `equity.total` was plugged from assets − liabilities
+   * because the sheet had no equity lines. Absent on reported or typed equity.
+   */
+  equity_derived?: boolean;
 }
 
 export interface CashFlow {

@@ -27,6 +27,7 @@ import {
   type DataGapFacts,
 } from "../src/lib/data-requests";
 import { resolveNextStep, type NextStepFacts } from "../src/lib/next-step";
+import { creditorDaysHealthyBand } from "../src/lib/ratios";
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
@@ -133,6 +134,22 @@ function gap(over: Partial<DataGapFacts> = {}): DataGapFacts {
     detectDataGaps(gap({ ratios: { "Debtor Days": DEBTOR_DAYS_AGEING_THRESHOLD } })).length,
     0,
     "at benchmark → no ask",
+  );
+
+  eq(
+    CREDITOR_DAYS_AGEING_THRESHOLD,
+    creditorDaysHealthyBand().max,
+    "creditor ageing mark is the shared healthy maximum",
+  );
+  eq(
+    detectDataGaps(gap({ ratios: { "Creditor Days": creditorDaysHealthyBand().max } })).length,
+    0,
+    "creditor days on the healthy maximum do not ask for ageing",
+  );
+  eq(
+    detectDataGaps(gap({ ratios: { "Creditor Days": creditorDaysHealthyBand().max + 1 } }))[0]?.kind,
+    "aged_creditors",
+    "one day past the shared band asks for the creditor ageing",
   );
 
   const cred = detectDataGaps(

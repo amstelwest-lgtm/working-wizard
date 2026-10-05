@@ -23,6 +23,7 @@ import { preflightUploadFile } from "@/lib/upload-quality";
 import { pdfTransport, unstage, type PdfTransport } from "@/lib/staged-upload-browser";
 import { UploadQualityDisclaimer } from "@/components/upload-quality-disclaimer";
 import { ScrollableTable } from "@/components/primitives/scrollable-table";
+import { budgetActualsBadge } from "@/lib/budget.bridges";
 import { fyMonths, formatMonthLabel } from "@/lib/budget.months";
 import { computeBudgetMonths, fmtBudgetMoney } from "@/lib/budget.compute";
 import { useMarket } from "@/contexts/market";
@@ -55,10 +56,13 @@ export function BudgetVariancePanel({
   clientId,
   doc,
   role = "owner",
+  statementPace = false,
 }: {
   clientId?: string;
   doc: BudgetDocument;
   role?: "owner" | "accountant";
+  /** The month tiles already compare a pro-rated statement. Don't say there are no actuals. */
+  statementPace?: boolean;
 }) {
   const { market, selection } = useMarket();
   const money = (n: number) => fmtBudgetMoney(n, market);
@@ -261,8 +265,9 @@ export function BudgetVariancePanel({
   }
 
   const imported = rows.length;
-  const accountantEmpty =
-    "The monthly scorecard against the plan above. Closed until you have a month’s management accounts to upload — until then there is nothing to compare, and that is expected.";
+  const accountantEmpty = statementPace
+    ? "The month tiles above already use this statement’s monthly pace. This card is the month-true scorecard — upload a month’s management accounts when you have them."
+    : "The monthly scorecard against the plan above. Closed until you have a month’s management accounts to upload — until then there is nothing to compare, and that is expected.";
   const accountantLoaded = `${imported} month${imported === 1 ? "" : "s"} of management accounts on file. Open to see where the plan is off.`;
 
   return (
@@ -282,7 +287,7 @@ export function BudgetVariancePanel({
       defaultOpen={false}
       headerRight={
         <span className="hidden rounded-full border border-amber-900/15 bg-white/60 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500 sm:inline dark:border-slate-700 dark:bg-slate-900/60">
-          {imported ? `${imported} imported` : "No actuals yet"}
+          {budgetActualsBadge(imported, statementPace)}
         </span>
       }
     >

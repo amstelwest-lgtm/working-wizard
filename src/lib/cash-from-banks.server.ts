@@ -22,6 +22,7 @@ import {
   nextForecastStartDate,
   resolveOpeningBalance,
 } from "@/lib/cash-from-banks.pattern";
+import { rollBankDraftOpening } from "@/lib/client-metrics";
 import type {
   CashBankExtract,
   CashFromBanksDraftResult,
@@ -248,11 +249,22 @@ export const draftCashForecastFromBankStatements = createServerFn({ method: "POS
       );
     }
 
+    const startDate = nextForecastStartDate(extract.period_end, {
+      timeZone: market.timezone,
+    });
+    const rolledOpening = rollBankDraftOpening({
+      statementEnd: extract.period_end,
+      anchor: startDate,
+      closing: resolveOpeningBalance(extract),
+      lines,
+    });
+    if (rolledOpening.note) warnings.push(rolledOpening.note);
+
     return {
       extract,
       lines,
-      startDate: nextForecastStartDate(extract.period_end),
-      openingBalance: resolveOpeningBalance(extract),
+      startDate,
+      openingBalance: rolledOpening.opening,
       warnings,
       movements,
     };

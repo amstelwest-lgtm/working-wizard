@@ -4,7 +4,7 @@
  * visibility, and “show on page” must treat those pairs as one page.
  *
  * Pairs:
- *   Health        today | today-complex | ratios
+ *   Health        today | today-complex | ratios | health (?tab=health)
  *   Profit        waterfall | profit
  *   Action plan   tasks | plan | actions (?tab=actions aliases the studio plan)
  *   Cash          cash
@@ -45,7 +45,7 @@ export const ACCOUNTANT_NOTE_TABS = [
 
 /** Same-deliverable aliases. First owner-native id, then accountant-native id. */
 const TAB_GROUPS: readonly (readonly string[])[] = [
-  ["today", "today-complex", "ratios"],
+  ["today", "today-complex", "ratios", "health"],
   ["waterfall", "profit"],
   ["tasks", "plan", "actions"],
   ["cash"],
@@ -69,6 +69,7 @@ export const NOTE_TAB_LABELS: Record<string, string> = {
   today: "Health",
   "today-complex": "Health",
   ratios: "Health",
+  health: "Health",
   waterfall: "Profit",
   profit: "Profit",
   next: "Next moves",

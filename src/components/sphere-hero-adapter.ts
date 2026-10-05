@@ -1,4 +1,5 @@
 import type { SpherePillar } from "@/components/sphere-hero";
+import { HEALTH_BAND_TABLE, type HealthTier } from "@/lib/ratios";
 
 /**
  * Maps the existing app.tsx health data into SphereHero props.
@@ -36,8 +37,8 @@ const PILLAR_LABEL: Record<SpherePillar["id"], string> = {
 };
 
 function blurbFor(id: SpherePillar["id"], health: number): string {
-  const good = isFinite(health) && health >= 65;
-  const bad = isFinite(health) && health < 40;
+  const good = isFinite(health) && health >= HEALTH_BAND_TABLE.healthyMin;
+  const bad = isFinite(health) && health < HEALTH_BAND_TABLE.watchMin;
   switch (id) {
     case "profit":
       return bad ? "Your profitability needs attention." : good ? "Your profitability is strong." : "Your profitability is average.";
@@ -56,6 +57,8 @@ export type BuildSphereArgs = {
   overallDelta?: number;
   /** pillarHealths object from app.tsx */
   pillarHealths: Record<SpherePillar["id"], number>;
+  /** Capped pillar bands from computeOverallHealth. */
+  pillarStatus?: Partial<Record<SpherePillar["id"], HealthTier>>;
   /** per-pillar deltas, if you track them; otherwise omit */
   pillarDeltas?: Partial<Record<SpherePillar["id"], number>>;
   /** healthMap from app.tsx: ratioKey -> 0..100 */
@@ -65,7 +68,7 @@ export type BuildSphereArgs = {
 };
 
 export function buildSpherePillars(args: BuildSphereArgs): SpherePillar[] {
-  const { pillarHealths, pillarDeltas, healthMap, ratioMeta } = args;
+  const { pillarHealths, pillarDeltas, healthMap, ratioMeta, pillarStatus } = args;
   return (Object.keys(PILLAR_DRIVER_KEYS) as SpherePillar["id"][]).map((id) => {
     const drivers = PILLAR_DRIVER_KEYS[id].map((k) => ({
       key: k,
@@ -80,6 +83,7 @@ export function buildSpherePillars(args: BuildSphereArgs): SpherePillar[] {
       id,
       label: PILLAR_LABEL[id],
       health,
+      status: pillarStatus?.[id],
       delta: pillarDeltas?.[id],
       blurb: blurbFor(id, health),
       drivers,

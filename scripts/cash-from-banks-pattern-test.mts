@@ -90,7 +90,19 @@ const capex = lines.find((l) => l.bucket === "capex");
 assert(capex?.cadence === "once_off", "capex once-off");
 
 assert(resolveOpeningBalance(extract) === 72500, "prefer closing balance");
-assert(nextForecastStartDate("2026-07-31") === "2026-08-01", "start day after period end");
+const monday = new Date(2026, 9, 5);
+assert(
+  nextForecastStartDate("2026-07-31", { now: monday }) === "2026-10-05",
+  "a past statement anchors week 1 to the current week",
+);
+assert(
+  nextForecastStartDate("2026-09-22", { now: monday }) === "2026-10-05",
+  "Sep 22 statement does not start the forecast on Sep 23",
+);
+assert(
+  nextForecastStartDate("2026-10-31", { now: monday }) === "2026-11-01",
+  "a future period end still starts the day after",
+);
 
 const payload = buildCashflowPublishPayload({
   lines,

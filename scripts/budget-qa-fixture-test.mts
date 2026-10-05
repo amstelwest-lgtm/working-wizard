@@ -1,0 +1,175 @@
+/**
+ * QA Test Co (SA): revenue R120k, GM 62.5%, opex R42k, operating profit R33k, cash R25k.
+ * The budget year, the cash line, and the month comparison have to tell the same story.
+ * Run: pnpm test:budget-qa-fixture
+ */
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { ZA_MARKET, laborCostLabel } from "../src/lib/market";
+import {
+  alignBudgetToFirmFy,
+  budgetWindowLabel,
+  createBudgetDocument,
+  fyMonths,
+} from "../src/lib/budget.months";
+import { computeBudgetMonths, normalizeBudgetDocument } from "../src/lib/budget.compute";
+import {
+  budgetActualsBadge,
+  budgetToCashForecastPayload,
+  mergeMonthActuals,
+  seedBudgetFromFinancials,
+  statementMonthActuals,
+} from "../src/lib/budget.bridges";
+import {
+  assessClientMetrics,
+  forecastInTheBlack,
+  forecastScenarioLabel,
+  runwayFromForecastNet,
+} from "../src/lib/client-metrics";
+import { DEBTOR_DAYS_AGEING_THRESHOLD } from "../src/lib/data-requests";
+import { peerMedian } from "../src/lib/ratios";
+import { estimatedTaxNote } from "../src/lib/estimated-tax-note";
+import type { BudgetQualification } from "../src/lib/budget.types";
+
+function assert(cond: boolean, msg: string) {
+  if (!cond) throw new Error(msg);
+}
+
+const read = (path: string) => readFileSync(resolve(path), "utf8");
+
+const REF = new Date("2026-10-05T12:00:00Z");
+const QA = {
+  revenue: "120000",
+  cogs: "45000",
+  fixedCosts: "42000",
+  ebit: "33000",
+  netIncome: "33000",
+  cash: "25000",
+};
+
+const qualification: BudgetQualification = {
+  payMotion: "mix",
+  volumeUnit: "units_sku",
+  driverKind: "units_price",
+  costShape: "balanced",
+  debtorDaysDefault: 30,
+  capexMode: "none",
+  confirmedAt: "2026-10-05T00:00:00.000Z",
+};
+
+const fresh = createBudgetDocument({
+  templateId: "hybrid_primary",
+  qualification,
+  fyStartMonth: 3,
+  ref: REF,
+  market: ZA_MARKET,
+});
+assert(fresh.fyStart === "2026-03", `new budget starts on the firm FY, got ${fresh.fyStart}`);
+assert(
+  fyMonths(fresh.fyStart)[0] === "2026-03" && fyMonths(fresh.fyStart)[11] === "2027-02",
+  "months run Mar→Feb",
+);
+
+const sliced = createBudgetDocument({
+  templateId: "hybrid_primary",
+  qualification,
+  fyStartMonth: 3,
+  fyStart: "2026-10",
+  market: ZA_MARKET,
+});
+const seededSlice = seedBudgetFromFinancials(sliced, QA);
+const aligned = normalizeBudgetDocument(seededSlice.doc);
+assert(aligned.fyStart === "2026-03", `stored Oct start realigns to March, got ${aligned.fyStart}`);
+const label = budgetWindowLabel(aligned, ZA_MARKET);
+assert(label.startsWith("FY Mar"), `label names the firm FY: ${label}`);
+assert(!/Oct/.test(label), `label does not say the year starts in October: ${label}`);
+assert(alignBudgetToFirmFy(aligned).fyStart === "2026-03", "an aligned year stays put");
+
+const seeded = seedBudgetFromFinancials(fresh, QA);
+assert(seeded.doc.openingCash === 25000, `opening cash seeds the cash line, got ${seeded.doc.openingCash}`);
+const rows = computeBudgetMonths(seeded.doc, "base");
+assert(rows[0].month === "2026-03", `first month is March, got ${rows[0].month}`);
+assert(
+  Math.abs(rows[0].closingCash - (25000 + rows[0].netCash)) < 0.02,
+  "month-end cash starts from opening cash",
+);
+const october = rows.find((row) => row.month === "2026-10");
+assert(october != null && october.closingCash > 0, `October cash stays positive, got ${october?.closingCash}`);
+const ebit = rows.reduce((sum, row) => sum + row.ebit, 0);
+const overheads = rows.reduce((sum, row) => sum + row.overheads, 0);
+assert(Math.abs(overheads - 42000) < 1, `FY overheads match opex, got ${overheads}`);
+assert(Math.abs(ebit - 33000) < 1, `FY EBIT matches operating profit, got ${ebit}`);
+assert(Math.abs(rows[0].revenue - 10000) < 0.02, `monthly revenue ${rows[0].revenue}`);
+assert(Math.abs(rows[0].cogs - 3750) < 0.02, `monthly COGS ${rows[0].cogs}`);
+
+const month = statementMonthActuals(
+  { revenue: "120000", cogs: "45000", operating_expenses: "42000" },
+  "TB",
+);
+assert(month != null, "statement has a monthly pace");
+assert(month!.revenue === 10000 && month!.cogs === 3750 && month!.fixedCosts === 3500, `monthly actuals ${JSON.stringify(month)}`);
+const hiddenOpex = mergeMonthActuals(
+  { label: "Snapshot", revenue: 10000, cogs: 3750, fixedCosts: 0 },
+  { label: "Live", revenue: 10000, cogs: 3750, fixedCosts: 3500 },
+);
+assert(hiddenOpex?.fixedCosts === 3500, "a snapshot with no opex does not zero the live overheads");
+assert(budgetActualsBadge(0, true) === "Statement pace", "statement pace is not 'no actuals'");
+assert(budgetActualsBadge(0, false) === "No actuals yet", "empty variance card still says so");
+
+const pushed = budgetToCashForecastPayload({ ...seeded.doc, wc: { ...seeded.doc.wc, debtorDays: 56 } });
+assert(pushed.collectDelay === 0, `budget push leaves the collection scenario off, got ${pushed.collectDelay}`);
+
+const base = { weeks: null, kind: "cash_generative" as const, label: "Cash generative" };
+const direction = runwayFromForecastNet({
+  base,
+  opening: 25000,
+  totalInflow: 0,
+  totalOutflow: 15200,
+});
+assert(direction.kind === "weeks" && direction.weeks === 21, `shared runway is 21 weeks, got ${direction.label}`);
+assert(forecastInTheBlack(0, 15200, 9800) === false, "negative net is not in the black");
+assert(
+  forecastScenarioLabel({ collectDelay: 8 }) === "Scenario: collection delay +8w",
+  "an on scenario is named",
+);
+assert(forecastScenarioLabel({ collectDelay: 0 }) === null, "the base forecast has no scenario label");
+
+const assessed = assessClientMetrics({
+  financials: QA,
+  cashflow: {
+    openingBalance: "25000",
+    revenue: [],
+    expenses: [{ amount: "15200", frequency: "once-off", startWeek: 1 }],
+    collectDelay: 8,
+  },
+});
+assert(assessed.runway.label === "21 weeks", `overview runway follows the forecast, got ${assessed.runway.label}`);
+assert(assessed.forecastNet != null && assessed.forecastNet < 0, "forecast net is cash out");
+assert(assessed.runway.kind !== "cash_generative", "a negative forecast is not cash generative");
+
+assert(peerMedian("debtorDays") === 40, "debtor peer median is 40");
+assert(DEBTOR_DAYS_AGEING_THRESHOLD === 40, "overview debtor benchmark uses the shared median");
+assert(laborCostLabel(ZA_MARKET) === "Labour cost", "ZA health input says Labour");
+assert(laborCostLabel({ copyPack: "us" }) === "Labor cost", "US health input says Labor");
+assert(
+  estimatedTaxNote({ clientName: "QA Test Co (Pty) Ltd", tax: 0, operatingProfit: 33000 }) ===
+    "estimated tax not included",
+  "zero tax on a (Pty) company is labelled",
+);
+assert(
+  estimatedTaxNote({ clientName: "QA Test Co", tax: 0, operatingProfit: 33000 }) === null,
+  "the note is for a (Pty) company",
+);
+
+const forecastSrc = read("src/components/cash-forecast.tsx");
+assert(!forecastSrc.includes("if (cf.collectDelay != null) setCollectDelay"), "scenarios do not reload as on");
+assert(forecastSrc.includes("forecastInTheBlack"), "the badge uses the shared in-the-black test");
+assert(forecastSrc.includes("scenarioLabel"), "an active scenario is labelled on the forecast");
+const sphere = read("src/components/sphere-hero.tsx");
+assert(sphere.includes('healthy: healthBandLabel("healthy")'), "health orb uses the shared band label");
+assert(!sphere.includes("GOOD"), "health orb does not say GOOD");
+const brief = read("supabase/functions/ask-ai/overview-brief.ts");
+assert(brief.includes("brief.runwayLabel"), "advisory quotes the shared runway label");
+assert(!brief.includes("brief.debtorDays >= 45"), "bot debtor move is not a private 45");
+
+console.log("budget qa fixture ok");

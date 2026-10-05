@@ -572,6 +572,8 @@ export function mountAskAi(container, options) {
       if (data.created && typeof onPersistedCreate === "function") {
         onPersistedCreate({ question: q, created: data.created });
       }
+      // Drop the draft once the send succeeds so the box is ready for the next question.
+      question = "";
     } catch (e) {
       errorMsg = e.message || "Something went wrong.";
     } finally {

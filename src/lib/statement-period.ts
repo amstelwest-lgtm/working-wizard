@@ -61,6 +61,20 @@ export function resolveSnapshotPeriodLabel(
 }
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const FULL_MONTHS = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
 
 function utcDate(iso: string): Date | null {
   if (!/^\d{4}-\d{2}-\d{2}/.test(iso)) return null;
@@ -129,6 +143,44 @@ export function formatIsoDateUTC(iso: string | null | undefined): string {
   const d = utcDate(iso);
   if (!d) return iso;
   return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+}
+
+/**
+ * Period printed on a report and its file name. Uses the statement dates,
+ * never the calendar month the PDF happens to be generated in.
+ * A full calendar month is "September 2026". A shorter span in that month
+ * is "1–21 Sep 2026 (part month)".
+ */
+export function reportDataPeriodLabel(fields: object | null | undefined): string | null {
+  const meta = readStatementMeta(fields);
+  const from = meta.periodStart ? utcDate(meta.periodStart) : null;
+  const to = meta.periodEnd ? utcDate(meta.periodEnd) : null;
+  if (from && to) {
+    const sameMonth =
+      from.getUTCFullYear() === to.getUTCFullYear() && from.getUTCMonth() === to.getUTCMonth();
+    const lastDay = new Date(Date.UTC(to.getUTCFullYear(), to.getUTCMonth() + 1, 0)).getUTCDate();
+    if (sameMonth && from.getUTCDate() === 1 && to.getUTCDate() === lastDay) {
+      return `${FULL_MONTHS[to.getUTCMonth()]} ${to.getUTCFullYear()}`;
+    }
+    if (sameMonth) {
+      return `${from.getUTCDate()}\u2013${to.getUTCDate()} ${MONTHS[to.getUTCMonth()]} ${to.getUTCFullYear()} (part month)`;
+    }
+    const range = formatStatementPeriodLabel(meta.periodStart!, meta.periodEnd!);
+    return range || null;
+  }
+  if (to) return `${FULL_MONTHS[to.getUTCMonth()]} ${to.getUTCFullYear()}`;
+  const explicit = meta.periodLabel?.trim();
+  return explicit || null;
+}
+
+/** Studio month dropdown values ("September" / "2026") taken from the period end. */
+export function reportPeriodMonthYear(
+  fields: object | null | undefined,
+): { month: string; year: string } | null {
+  const meta = readStatementMeta(fields);
+  const end = meta.periodEnd ? utcDate(meta.periodEnd) : null;
+  if (!end) return null;
+  return { month: FULL_MONTHS[end.getUTCMonth()], year: String(end.getUTCFullYear()) };
 }
 
 /** Short month stamp used by older snapshots (`Sep 2026`), UTC so it matches the report month. */

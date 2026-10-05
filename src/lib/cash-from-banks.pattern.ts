@@ -11,6 +11,7 @@ import {
   type CashStatementTransaction,
   bucketToSide,
 } from "@/lib/cash-from-banks.types";
+import { forecastAnchorDate } from "@/lib/client-metrics";
 
 function newId(): string {
   return Math.random().toString(36).slice(2, 10);
@@ -23,16 +24,100 @@ function median(nums: number[]): number {
   return s.length % 2 ? s[mid]! : (s[mid - 1]! + s[mid]!) / 2;
 }
 
-function normalizeKey(txn: CashStatementTransaction): string {
-  const raw = (txn.counterparty || txn.description || "unknown")
+/** Month names and short forms, English plus Afrikaans. Whole tokens only. */
+const MONTH_TOKENS = new Set([
+  "january",
+  "february",
+  "march",
+  "april",
+  "may",
+  "june",
+  "july",
+  "august",
+  "september",
+  "october",
+  "november",
+  "december",
+  "jan",
+  "feb",
+  "mar",
+  "apr",
+  "jun",
+  "jul",
+  "aug",
+  "sep",
+  "sept",
+  "oct",
+  "nov",
+  "dec",
+  "januarie",
+  "februarie",
+  "maart",
+  "mei",
+  "junie",
+  "julie",
+  "augustus",
+  "oktober",
+  "desember",
+  "mrt",
+  "okt",
+  "des",
+]);
+
+const REF_WORDS = new Set([
+  "inv",
+  "invoice",
+  "ref",
+  "reference",
+  "txn",
+  "trans",
+  "doc",
+  "pmt",
+  "payment",
+]);
+
+/**
+ * Payee key for recurring grouping. Strips months, dates, years, standalone
+ * numbers and reference / invoice numbers, then collapses case and whitespace.
+ */
+export function normalisePayeeLabel(raw: string): string {
+  const text = raw
     .toLowerCase()
     .replace(/[^a-z0-9\s]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
-  // Keep first 3 meaningful tokens so "ABSA LOAN 123" ≈ "ABSA LOAN 456"
-  const tokens = raw.split(" ").filter((t) => t.length > 1 && !/^\d+$/.test(t)).slice(0, 3);
-  const label = tokens.join(" ") || raw.slice(0, 24) || "unknown";
-  return `${txn.direction}|${txn.ai_bucket}|${label}`;
+  const tokens = text.split(" ").filter((token) => {
+    if (token.length <= 1) return false;
+    if (/^\d+$/.test(token)) return false;
+    if (/^\d{1,2}(?:st|nd|rd|th)$/.test(token)) return false;
+    if (/^(?:19|20)\d{2}$/.test(token)) return false;
+    if (MONTH_TOKENS.has(token)) return false;
+    if (/^(?:inv|invoice|ref|reference|txn|trans|doc|pmt|payment)\d+$/.test(token)) return false;
+    return true;
+  });
+  const withoutRefs = tokens.filter((token) => !REF_WORDS.has(token));
+  const kept = (withoutRefs.length ? withoutRefs : tokens).slice(0, 3);
+  return kept.join(" ");
+}
+
+/**
+ * Recurrence key for the bank-statement → forecast draft.
+ * Month names, dates and reference numbers are stripped from the payee and,
+ * when that leaves nothing, from the narration. "Salaries July" and
+ * "Salaries September" are one payroll series, not three once-offs.
+ */
+function groupingLabel(txn: CashStatementTransaction): string {
+  const fromPayee = normalisePayeeLabel(txn.counterparty || "");
+  const fromNarration = normalisePayeeLabel(txn.description || "");
+  return fromPayee || fromNarration || "unknown";
+}
+
+function normalizeKey(txn: CashStatementTransaction): string {
+  return `${txn.direction}|${txn.ai_bucket}|${groupingLabel(txn)}`;
+}
+
+function titleCaseLabel(label: string): string {
+  return label.replace(/\b[a-z]/g, (ch) => ch.toUpperCase());
 }
 
 function prettyName(txn: CashStatementTransaction): string {
@@ -168,9 +253,14 @@ export function buildDraftLinesFromExtract(extract: CashBankExtract): CashForeca
       amountsSimilar(amounts),
     );
     const side = bucketToSide(bucket, sample.direction);
-    const name = prettyName(
-      txns.slice().sort((a, b) => (b.description?.length ?? 0) - (a.description?.length ?? 0))[0] ?? sample,
-    );
+    const stripped = groupingLabel(sample);
+    const name =
+      txns.length >= 2 && stripped !== "unknown"
+        ? titleCaseLabel(stripped).slice(0, 60)
+        : prettyName(
+            txns.slice().sort((a, b) => (b.description?.length ?? 0) - (a.description?.length ?? 0))[0] ??
+              sample,
+          );
 
     lines.push({
       id: newId(),
@@ -197,13 +287,52 @@ export function buildDraftLinesFromExtract(extract: CashBankExtract): CashForeca
   });
 }
 
-export function nextForecastStartDate(periodEnd: string | null): string {
-  const base = periodEnd && Number.isFinite(Date.parse(periodEnd))
-    ? new Date(periodEnd)
-    : new Date();
-  // Day after statement period
-  base.setDate(base.getDate() + 1);
-  return base.toISOString().slice(0, 10);
+/**
+ * Week 1 of a bank draft. The current week in the firm's timezone, or the day
+ * after the statement when that day is still in the future. A past statement
+ * end must not leave the first weeks already behind.
+ */
+export function nextForecastStartDate(
+  periodEnd: string | null,
+  opts?: { now?: Date; timeZone?: string | null },
+): string {
+  return forecastAnchorDate({
+    now: opts?.now,
+    periodEnd,
+    timeZone: opts?.timeZone,
+  });
+}
+
+export type ReviewCashTotals = {
+  /** Both sides cover the uploaded statement, not one occurrence of a recurring line. */
+  basis: "statement period";
+  inflow: number;
+  outflow: number;
+};
+
+/**
+ * Bank-review footer totals. Every included line contributes amount × occurrences,
+ * so a monthly receipt and a payroll series are both the full statement window.
+ */
+export function reviewCashTotals(
+  lines: Array<
+    Pick<CashForecastDraftLine, "status" | "side" | "amount" | "txn_count">
+  >,
+): ReviewCashTotals {
+  let inflow = 0;
+  let outflow = 0;
+  for (const line of lines) {
+    if (line.status === "excluded") continue;
+    const occurrences = Math.max(1, line.txn_count || 1);
+    const period = Math.abs(line.amount) * occurrences;
+    if (line.side === "inflow") inflow += period;
+    else outflow += period;
+  }
+  return {
+    basis: "statement period",
+    inflow: Math.round(inflow * 100) / 100,
+    outflow: Math.round(outflow * 100) / 100,
+  };
 }
 
 export function resolveOpeningBalance(extract: CashBankExtract): number {

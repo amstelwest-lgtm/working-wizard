@@ -7,6 +7,8 @@
  * cash forecasts from P&L heuristics. Prefer null / empty + honest copy.
  */
 
+import { healthBandLabel, scoreTier, type HealthTier } from "@/lib/ratios";
+
 export type WeekChange = {
   label: string;
   value: string;
@@ -37,10 +39,7 @@ export function computeHealthBand(avgHealth: number): {
 } | null {
   if (!Number.isFinite(avgHealth)) return null;
   const score = Math.round(avgHealth);
-  let label = "Needs attention";
-  if (score >= 65) label = "In good shape";
-  else if (score >= 40) label = "Needs monitoring";
-  return { score, label };
+  return { score, label: healthBandLabel(scoreTier(score)) };
 }
 
 /**
@@ -104,15 +103,19 @@ export function computeOverviewCaption(input: {
   hasRealFinancials: boolean;
   avgHealth: number;
   cashHealth: number;
+  /** Runway / shortfall override. When set, the caption uses this instead of the raw score. */
+  displayStatus?: HealthTier;
 }): string | undefined {
   const { hasRealFinancials, avgHealth, cashHealth } = input;
   if (!hasRealFinancials || !isFinite(avgHealth)) return undefined;
+  const tier = input.displayStatus ?? scoreTier(avgHealth);
+  const band = healthBandLabel(tier);
   if (isFinite(cashHealth) && cashHealth < avgHealth - 5) {
-    return "Your business is stable, but cash conversion is holding you back.";
+    return `${band}. Cash conversion is holding the score back.`;
   }
-  if (avgHealth >= 65) return "Your business is in good shape — keep building momentum.";
-  if (avgHealth >= 40) return "Your business needs some attention — start with the priority below.";
-  return "Your business needs urgent attention — start with the priority below.";
+  if (tier === "healthy") return `${band}. Keep building momentum.`;
+  if (tier === "at_risk") return `${band}. Start with the priority below.`;
+  return `${band}. Start with the priority below.`;
 }
 
 export function computeNextMoveImpactLabel(input: {

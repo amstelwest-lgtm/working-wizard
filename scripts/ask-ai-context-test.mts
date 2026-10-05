@@ -295,5 +295,15 @@ assert(withOverview.user.includes("$7,430"), "ask-ai prompt includes cash");
 const moves = planActionsFromOverview(overview);
 assert(!moves.some((m) => m.sourceMoveKey === "bot:cash-runway"), "cash generative is not a zero-week action");
 assert(moves.some((m) => m.sourceMoveKey === "bot:creditor-days"), "creditor days become an action");
+assert(grounded.includes("healthy band 30–60 days"), "prompt quotes the shared creditor band");
+assert(!grounded.includes("40-day"), "prompt does not call the creditor band 40 days");
+assert(
+  !planActionsFromOverview({ ...overview, creditorDays: 60 }).some((m) => m.sourceMoveKey === "bot:creditor-days"),
+  "60 creditor days is inside the healthy band",
+);
+assert(
+  planActionsFromOverview({ ...overview, creditorDays: 61 }).some((m) => m.sourceMoveKey === "bot:creditor-days"),
+  "61 creditor days is outside the shared band",
+);
 
 console.log("ask-ai-context-test: all assertions passed");

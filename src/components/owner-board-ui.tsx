@@ -4,6 +4,7 @@
  */
 
 import { formatMoneyCompact, ZA_MARKET, type MoneyMarket } from "@/lib/market";
+import { healthBandLabel, scoreTier } from "@/lib/ratios";
 
 export function pct(x: number) {
   if (!isFinite(x)) return "—";
@@ -29,26 +30,20 @@ export function clampN(x: number, lo: number, hi: number) {
 export function tierColor(h: number) {
   if (!isFinite(h))
     return { bar: "bg-slate-500", text: "text-slate-300", border: "border-slate-600", glow: "" };
-  if (h >= 80)
+  const tier = scoreTier(h);
+  if (tier === "healthy")
     return {
       bar: "bg-gradient-to-r from-emerald-500 to-emerald-400",
       text: "text-emerald-300",
       border: "border-emerald-500/50",
       glow: "shadow-[0_0_20px_-5px_rgb(16,185,129,0.6)]",
     };
-  if (h >= 60)
+  if (tier === "at_risk")
     return {
       bar: "bg-gradient-to-r from-yellow-500 to-yellow-400",
       text: "text-yellow-300",
       border: "border-yellow-500/50",
       glow: "shadow-[0_0_20px_-5px_rgb(234,179,8,0.5)]",
-    };
-  if (h >= 35)
-    return {
-      bar: "bg-gradient-to-r from-orange-500 to-orange-400",
-      text: "text-orange-300",
-      border: "border-orange-500/50",
-      glow: "shadow-[0_0_20px_-5px_rgb(249,115,22,0.5)]",
     };
   return {
     bar: "bg-gradient-to-r from-red-600 to-red-500",
@@ -58,12 +53,10 @@ export function tierColor(h: number) {
   };
 }
 
+/** Same words as Overview and Health: Healthy / Watch / Critical. */
 export function tierLabel(h: number) {
   if (!isFinite(h)) return "—";
-  if (h >= 80) return "Healthy";
-  if (h >= 60) return "Average";
-  if (h >= 35) return "High Risk";
-  return "Danger";
+  return healthBandLabel(scoreTier(h));
 }
 
 export function HealthBar({ health }: { health: number }) {

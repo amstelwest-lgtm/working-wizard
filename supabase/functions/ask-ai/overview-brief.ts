@@ -16,6 +16,13 @@ import {
   scoreLowerIsBetterDays,
   scoreWorkingCapitalDays,
 } from "../../../src/lib/client-metrics.ts";
+import {
+  bandedPillarStatus,
+  creditorDaysHealthyBand,
+  healthBandLabel,
+  peerMedian,
+  scoreTier,
+} from "../../../src/lib/ratios.ts";
 
 export type OverviewCopyPack = "za" | "us";
 
@@ -33,7 +40,7 @@ export type OverviewBrief = {
   copyPack: OverviewCopyPack;
   health: number | null;
   healthStatus: "healthy" | "at_risk" | "critical" | null;
-  healthLabel: "Healthy" | "Watch" | "At risk" | null;
+  healthLabel: "Healthy" | "Watch" | "Critical" | null;
   pillars: OverviewPillar[];
   weakest: { id: string; label: string; score: number } | null;
   cash: number | null;
@@ -91,17 +98,8 @@ function asNumber(raw: unknown): number | null {
   return null;
 }
 
-function scoreTier(score: number | null): "healthy" | "at_risk" | "critical" {
-  if (score == null || !Number.isFinite(score)) return "at_risk";
-  if (score >= 65) return "healthy";
-  if (score >= 40) return "at_risk";
-  return "critical";
-}
-
-function chipLabel(status: "healthy" | "at_risk" | "critical"): "Healthy" | "Watch" | "At risk" {
-  if (status === "healthy") return "Healthy";
-  if (status === "at_risk") return "Watch";
-  return "At risk";
+function chipLabel(status: "healthy" | "at_risk" | "critical"): "Healthy" | "Watch" | "Critical" {
+  return healthBandLabel(status);
 }
 
 /** Same bands as `scoreCashRunway` in src/lib/health-score.ts. */
@@ -247,7 +245,7 @@ export function buildOverviewBrief(input: {
     const nums = bucket[id];
     const score =
       nums.length === 0 ? null : Math.round(nums.reduce((s, n) => s + n, 0) / nums.length);
-    return { id, label: PILLAR_LABELS[id], score, status: scoreTier(score) };
+    return { id, label: PILLAR_LABELS[id], score, status: bandedPillarStatus(score, nums) };
   });
   const scored = pillars.filter((p) => p.score != null) as Array<OverviewPillar & { score: number }>;
   const overallRaw =
@@ -312,8 +310,20 @@ export function overviewFactLines(brief: OverviewBrief): string[] {
   if (brief.grossMargin != null) lines.push(`Gross margin: ${pct(brief.grossMargin)}`);
   if (brief.operatingMargin != null) lines.push(`Operating margin: ${pct(brief.operatingMargin)}`);
   if (brief.netMargin != null) lines.push(`Net margin: ${pct(brief.netMargin)}`);
-  if (brief.debtorDays != null) lines.push(`Debtor days: ${days(brief.debtorDays)}`);
-  if (brief.creditorDays != null) lines.push(`Creditor days: ${days(brief.creditorDays)}`);
+  if (brief.debtorDays != null) {
+    const median = peerMedian("debtorDays");
+    lines.push(
+      median != null
+        ? `Debtor days: ${days(brief.debtorDays)} (peer median ${median} days)`
+        : `Debtor days: ${days(brief.debtorDays)}`,
+    );
+  }
+  if (brief.creditorDays != null) {
+    const band = creditorDaysHealthyBand();
+    lines.push(
+      `Creditor days: ${days(brief.creditorDays)} (healthy band ${band.min}–${band.max} days)`,
+    );
+  }
   for (const pillar of brief.pillars) {
     if (pillar.score == null) continue;
     lines.push(`${pillar.label}: ${pillar.score}/100`);
@@ -369,18 +379,20 @@ export function planActionsFromOverview(brief: OverviewBrief): PlannedAction[] {
       outcomeWhy: `Overview runway is ${brief.runwayWeeks} weeks.${cash} Agree how this client covers the next month before treating the forecast as comfortable.`,
     });
   }
-  if (brief.creditorDays != null && brief.creditorDays >= 60) {
+  const creditorMax = creditorDaysHealthyBand().max;
+  if (brief.creditorDays != null && brief.creditorDays > creditorMax) {
     items.push({
       sourceMoveKey: "bot:creditor-days",
       title: `Review creditor days (${Math.round(brief.creditorDays)})`,
-      outcomeWhy: `Creditor days on the Overview are ${Math.round(brief.creditorDays)}. Agree a payment stance with the client before the next review.`,
+      outcomeWhy: `Creditor days on the Overview are ${Math.round(brief.creditorDays)}, above the ${creditorMax}-day healthy band. Agree a payment stance with the client before the next review.`,
     });
   }
-  if (brief.debtorDays != null && brief.debtorDays >= 45) {
+  const debtorMedian = peerMedian("debtorDays");
+  if (brief.debtorDays != null && debtorMedian != null && brief.debtorDays > debtorMedian) {
     items.push({
       sourceMoveKey: "bot:debtor-days",
       title: `Collect debtor days (${Math.round(brief.debtorDays)})`,
-      outcomeWhy: `Debtor days on the Overview are ${Math.round(brief.debtorDays)}. Chase the slowest balances already on file.`,
+      outcomeWhy: `Debtor days on the Overview are ${Math.round(brief.debtorDays)}, above the ${debtorMedian}-day peer median. Chase the slowest balances already on file.`,
     });
   }
   if (items.length === 0 && brief.health != null) {
@@ -478,8 +490,11 @@ export function packContentFromOverview(
         key: "forecast",
         title: "Cash",
         body:
-          brief.cash != null || brief.runwayWeeks != null
-            ? `Cash on file ${brief.cash != null ? money(brief.cash, brief.copyPack) : "not on file"}. Runway ${brief.runwayWeeks != null ? `${brief.runwayWeeks} weeks` : "not on file"}.`
+          brief.cash != null || brief.runwayLabel || brief.runwayWeeks != null
+            ? `Cash on file ${brief.cash != null ? money(brief.cash, brief.copyPack) : "not on file"}. Runway ${
+                brief.runwayLabel ??
+                (brief.runwayWeeks != null ? `${brief.runwayWeeks} weeks` : "not on file")
+              }.`
             : "Cash and runway are not on the Overview.",
       },
       {
