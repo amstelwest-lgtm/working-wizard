@@ -273,14 +273,58 @@ assert(
   "sitemap.xml route",
 );
 
+assert(
+  SEO_PAGES.about.title === "About MILŌN — Financial health for owners and their accountants",
+  "about title is product-forward",
+);
+assert(
+  SEO_PAGES.about.description ===
+    "MILŌN turns a P&L and balance sheet into a health score, a cash forecast, and accountant-reviewed next steps.",
+  "about description is product-forward",
+);
+assert(
+  SEO_PAGES.about.imageAlt === "About MILŌN — financial health for owners and their accountants",
+  "about image alt has no founder story",
+);
+assert(SEO_PAGES.about.description.length <= 170, "about meta description stays snippet-length");
+const aboutSeo = `${SEO_PAGES.about.title}\n${SEO_PAGES.about.description}\n${SEO_PAGES.about.imageAlt}`;
+assert(
+  !/\bEY\b|Big 4|S&P|\bauditor\b|\bfounder\b|Outsourced CFO|\bOCFO\b/i.test(aboutSeo),
+  "about SEO has no employer or founder-career claims",
+);
+
 const about = readFileSync(resolve("src/routes/about.tsx"), "utf8");
+const aboutText = about.replace(/\s+/g, " ");
 assert(about.includes("SEO_PAGES.about"), "about page uses spec meta");
 assert(!about.includes("linkedin.com/company/milonfinance"), "about does not hardcode a dead LinkedIn URL");
 assert(!about.includes("x.com/milonfinance"), "about does not hardcode a dead X URL");
-assert(about.includes("not affiliated with, endorsed by, or connected to EY"), "about has EY disclaimer");
-assert(!about.includes("QuickBooks"), "about does not claim QuickBooks");
+assert(!about.includes("EY"), "about does not name EY");
+assert(!about.includes("Big 4"), "about does not name Big 4");
+assert(!about.includes("S&P"), "about does not name S&P");
+assert(!about.includes("not affiliated"), "about does not carry the employer disclaimer");
+assert(!about.includes("employment history"), "about does not describe employment history");
+assert(!about.includes("former auditor"), "about does not describe a former auditor");
+assert(!/Outsourced CFO|\bOCFO\b/.test(about), "about does not name an employer");
+assert(!about.includes("founder"), "about has no founder career line");
+assert(
+  aboutText.includes("QuickBooks Online and Xero, plug-and-play."),
+  "about weaves the approved ledger wedge",
+);
+assert(
+  (aboutText.match(/QuickBooks Online and Xero, plug-and-play\./g) ?? []).length === 1,
+  "about states the ledger wedge once",
+);
+assert(
+  aboutText.includes(
+    "Milōn Bot reads the numbers, diagnoses the business, and drafts the advisory deliverables.",
+  ),
+  "about keeps the Milōn Bot diagnosis line",
+);
+assert(aboutText.includes("The accountant reviews and signs off."), "about keeps accountant sign-off");
+assert(about.includes("19 financial ratios"), "about keeps the ratio claim");
+assert(about.includes("DuPont analysis"), "about keeps DuPont");
+assert(about.includes("13-week cash forecast"), "about keeps the cash forecast");
 assert(!about.includes("Delaware"), "about does not invent a US legal entity");
-assert(!about.includes("Xero"), "about does not claim Xero");
 
 const faq = readFileSync(resolve("src/routes/faq.tsx"), "utf8");
 assert(faq.includes("faqPageJson"), "faq emits FAQPage JSON-LD");

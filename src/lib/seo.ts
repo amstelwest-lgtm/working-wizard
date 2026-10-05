@@ -46,10 +46,10 @@ export const SEO_PAGES = {
   },
   about: {
     path: "/about",
-    title: "About MILŌN — Built by a Big 4-Trained Auditor",
+    title: "About MILŌN — Financial health for owners and their accountants",
     description:
-      "MILŌN was built by a Big 4-trained auditor who saw the same thing in every set of books: the numbers existed, the guidance didn't.",
-    imageAlt: "About MILŌN — founder story and why the product exists",
+      "MILŌN turns a P&L and balance sheet into a health score, a cash forecast, and accountant-reviewed next steps.",
+    imageAlt: "About MILŌN — financial health for owners and their accountants",
   },
   privacy: {
     path: "/privacy",
