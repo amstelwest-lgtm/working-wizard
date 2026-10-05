@@ -38,11 +38,15 @@ export function TrialEndedPlanCard({
   onUpgrade?: (band: FirmCheckoutBand, interval: FirmInterval) => void;
 }) {
   return (
-    <section className="trial-ended-block" role="region" aria-label={STARTER_TRIAL_ENDED_MESSAGE}>
-      <p className="trial-ended-title">{STARTER_TRIAL_ENDED_MESSAGE}</p>
-      {loading ? <p className="trial-ended-note">Loading plans…</p> : null}
+    <section
+      className="trial-ended-block bg-card text-foreground"
+      role="region"
+      aria-label={STARTER_TRIAL_ENDED_MESSAGE}
+    >
+      <p className="trial-ended-title text-foreground">{STARTER_TRIAL_ENDED_MESSAGE}</p>
+      {loading ? <p className="trial-ended-note text-muted-foreground">Loading plans…</p> : null}
       {!loading && !upgrade ? (
-        <p className="trial-ended-note" role="alert">
+        <p className="trial-ended-note text-muted-foreground" role="alert">
           Plans could not be loaded. Refresh and try again.
         </p>
       ) : null}

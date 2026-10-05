@@ -5,10 +5,14 @@
 
 import type Stripe from "stripe";
 import { appRedirectOrigin } from "@/lib/app-origin";
+import { firmUpgradeReturnPath } from "@/lib/firm-band-upgrade";
+import { SA_FIRM_DISCOUNT_NOTE, saDiscountedUsdCents } from "@/lib/firm-sa-market";
 import {
   assertFoundingMonthlyOnly,
+  FIRM_BAND_CATALOG,
   FIRM_TRIAL_DAYS,
   firmLookupKey,
+  formatUsdFromCents,
   isFirmCheckoutBand,
   isFoundingCode,
   type FirmCheckoutBand,
@@ -212,8 +216,8 @@ export function firmUpgradeCheckoutSessionParams(
 ): Stripe.Checkout.SessionCreateParams {
   const origin = appRedirectOrigin([input.origin]);
   const params = firmCheckoutSessionParams({ ...input, includeTrial: false });
-  params.success_url = `${origin}/dashboard?addClient=1&upgrade=success&session_id={CHECKOUT_SESSION_ID}`;
-  params.cancel_url = `${origin}/dashboard?addClient=1&upgrade=cancelled`;
+  params.success_url = `${origin}${firmUpgradeReturnPath("success")}`;
+  params.cancel_url = `${origin}${firmUpgradeReturnPath("cancelled")}`;
   const replaced = input.replacesSubscriptionId?.trim();
   if (replaced) {
     params.metadata = { ...(params.metadata ?? {}), milon_replaces_subscription: replaced };
@@ -235,9 +239,47 @@ export type FirmSetupUpgradeRequest = {
   userId: string;
 };
 
+/** Stripe custom_text.submit.message max length. */
+export const FIRM_SETUP_CHECKOUT_TEXT_MAX = 1200;
+
+/**
+ * Copy on the card-setup Checkout page, shown once above Save.
+ * Amount, currency, and interval come from the resolved Stripe price.
+ * An SA firm sees half of that USD amount.
+ */
+export function firmSetupCheckoutMessage(input: {
+  bandName: string;
+  clientLimit: number;
+  unitAmount: number;
+  currency: string;
+  interval: FirmInterval;
+  saMarket: boolean;
+}): string {
+  const currency = input.currency.trim().toLowerCase();
+  const cents = input.saMarket ? saDiscountedUsdCents(input.unitAmount) : input.unitAmount;
+  const amount = formatUsdFromCents(cents);
+  const billed = currency === "usd" ? "USD" : currency.toUpperCase();
+  const priced = input.saMarket
+    ? `${amount}/${input.interval} (${SA_FIRM_DISCOUNT_NOTE})`
+    : `${amount}/${input.interval}`;
+  const message = `Saving this card moves you to MILŌN ${input.bandName} at ${priced} (${input.clientLimit} clients). Billed in ${billed}, cancel anytime.`;
+  return message.length <= FIRM_SETUP_CHECKOUT_TEXT_MAX
+    ? message
+    : message.slice(0, FIRM_SETUP_CHECKOUT_TEXT_MAX);
+}
+
+function setupPriceInterval(
+  priceInterval: string | null | undefined,
+  requested: FirmInterval,
+): FirmInterval {
+  if (priceInterval === "month" || priceInterval === "year") return priceInterval;
+  return requested;
+}
+
 /**
  * Collect a card for an existing subscription (a $0 Starter has none), then
  * the server updates that same subscription. This is not a second subscription.
+ * The plan line is custom_text.submit only. after_submit repeated it under Save.
  */
 export function firmSetupCheckoutSessionParams(input: {
   origin: string;
@@ -247,6 +289,12 @@ export function firmSetupCheckoutSessionParams(input: {
   lookupKey: string;
   band: FirmCheckoutBand;
   interval: FirmInterval;
+  price: {
+    unit_amount?: number | null;
+    currency?: string | null;
+    recurring?: { interval?: string | null } | null;
+  };
+  saMarket: boolean;
 }): Stripe.Checkout.SessionCreateParams {
   const origin = appRedirectOrigin([input.origin]);
   const metadata: Record<string, string> = {
@@ -257,15 +305,32 @@ export function firmSetupCheckoutSessionParams(input: {
     milon_interval: input.interval,
     milon_user_id: input.userId,
   };
+  const unitAmount = input.price.unit_amount;
+  const currency = input.price.currency?.trim() ?? "";
+  const band = FIRM_BAND_CATALOG[input.band];
+  if (typeof unitAmount !== "number" || !currency || band.clientLimit == null) {
+    throw new Error("Setup Checkout needs the resolved Stripe price amount.");
+  }
+  const message = firmSetupCheckoutMessage({
+    bandName: band.name,
+    clientLimit: band.clientLimit,
+    unitAmount,
+    currency,
+    interval: setupPriceInterval(input.price.recurring?.interval, input.interval),
+    saMarket: input.saMarket,
+  });
   return {
     mode: "setup",
     customer: input.customerId,
     currency: "usd",
     client_reference_id: input.userId,
-    success_url: `${origin}/dashboard?addClient=1&upgrade=success&session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${origin}/dashboard?addClient=1&upgrade=cancelled`,
+    success_url: `${origin}${firmUpgradeReturnPath("success")}`,
+    cancel_url: `${origin}${firmUpgradeReturnPath("cancelled")}`,
     metadata,
     setup_intent_data: { metadata },
+    custom_text: {
+      submit: { message },
+    },
   };
 }
 

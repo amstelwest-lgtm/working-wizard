@@ -1033,20 +1033,26 @@ function Dashboard() {
     const parsed = parseFirmUpgradeReturn(window.location.search);
     if (!parsed.reopenAddClient && !parsed.outcome) return;
     upgradeReturnHandled.current = true;
+    const openForm = () => {
+      if (parsed.reopenAddClient) setAddOpen(true);
+    };
+    if (parsed.outcome === "cancelled") {
+      const params = new URLSearchParams(window.location.search);
+      params.set("addClient", "1");
+      params.set("upgrade", "cancelled");
+      params.delete("session_id");
+      const next = params.toString();
+      window.history.replaceState(null, "", `/dashboard?${next}`);
+      toast.message(UPGRADE_CANCELLED_MESSAGE);
+      openForm();
+      return;
+    }
     const params = new URLSearchParams(window.location.search);
     params.delete("addClient");
     params.delete("upgrade");
     params.delete("session_id");
     const next = params.toString();
     window.history.replaceState(null, "", next ? `/dashboard?${next}` : "/dashboard");
-    const openForm = () => {
-      if (parsed.reopenAddClient) setAddOpen(true);
-    };
-    if (parsed.outcome === "cancelled") {
-      toast.message(UPGRADE_CANCELLED_MESSAGE);
-      openForm();
-      return;
-    }
     if (parsed.outcome === "failed") {
       toast.error(UPGRADE_FAILED_MESSAGE);
       openForm();
@@ -1615,9 +1621,9 @@ function Dashboard() {
   if (!portalReady) {
     return (
       <div className="accountant-portal">
-        <div className="shell milon-page-enter">
+        <main className="shell milon-page-enter">
           <DashboardSkeleton className="min-h-screen py-8" />
-        </div>
+        </main>
       </div>
     );
   }
@@ -1636,7 +1642,7 @@ function Dashboard() {
         <div className="grid" />
       </div>
 
-      <div className="shell">
+      <main className="shell">
         {/* ===== TOP BAR ===== */}
         <div className="topbar">
           <span className="brand">
@@ -2288,7 +2294,7 @@ function Dashboard() {
         <div className="footer-note">
           MILŌN Practice Portal · <span className="serif gold-text">The passion to perform.</span>
         </div>
-      </div>
+      </main>
 
       {/* ===== ADD CLIENT DIALOG ===== */}
       {user && (

@@ -77,9 +77,11 @@ export function FirmStarterTrialBanner({
   }
 
   return (
-    <section className="trial-ended-block" role="status" aria-label="Trial">
-      <p className="trial-ended-title">{countdown}</p>
-      {upgrade?.saDiscount ? <p className="trial-ended-note">{SA_FIRM_DISCOUNT_NOTE}</p> : null}
+    <section className="trial-ended-block bg-card text-foreground" role="status" aria-label="Trial">
+      <p className="trial-ended-title text-foreground">{countdown}</p>
+      {upgrade?.saDiscount ? (
+        <p className="trial-ended-note text-muted-foreground">{SA_FIRM_DISCOUNT_NOTE}</p>
+      ) : null}
     </section>
   );
 }

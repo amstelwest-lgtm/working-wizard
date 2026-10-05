@@ -88,10 +88,12 @@ export function FirmBandUpgrade({
   return (
     <div>
       {usageLabel ? (
-        <p style={{ margin: "0 0 12px", fontSize: 13, color: "var(--ink)" }}>{usageLabel}</p>
+        <p className="text-foreground" style={{ margin: "0 0 12px", fontSize: 13 }}>
+          {usageLabel}
+        </p>
       ) : null}
       {saDiscount ? (
-        <p style={{ margin: "0 0 12px", fontSize: 12, color: "var(--ink-dim)" }}>
+        <p className="text-muted-foreground" style={{ margin: "0 0 12px", fontSize: 12 }}>
           {SA_FIRM_DISCOUNT_NOTE}
         </p>
       ) : null}
@@ -140,15 +142,15 @@ export function FirmBandUpgrade({
             <label
               key={band.id}
               aria-current={isCurrent ? "true" : undefined}
+              className="text-foreground"
               style={{
                 display: "grid",
                 gridTemplateColumns: selectable ? "20px 1fr auto" : "1fr auto",
                 gap: 8,
                 alignItems: "center",
                 padding: "8px 0",
-                borderTop: "1px solid var(--line, rgba(0,0,0,.08))",
+                borderTop: "1px solid var(--border, var(--line, rgba(0,0,0,.08)))",
                 fontSize: 13,
-                color: "var(--ink)",
               }}
             >
               {selectable ? (
@@ -177,7 +179,7 @@ export function FirmBandUpgrade({
                     Current
                   </span>
                 ) : null}
-                <span style={{ display: "block", color: "var(--ink-dim)", fontSize: 12 }}>
+                <span className="text-muted-foreground" style={{ display: "block", fontSize: 12 }}>
                   {band.clientLimit == null
                     ? "Unlimited active clients"
                     : firmClientLimitLabel(band.id)}
@@ -200,12 +202,15 @@ export function FirmBandUpgrade({
         </button>
       ) : null}
       {canUpgrade && !selected ? (
-        <p style={{ margin: "12px 0 0", fontSize: 13, color: "var(--ink-dim)" }}>
+        <p className="text-muted-foreground" style={{ margin: "12px 0 0", fontSize: 13 }}>
           You are on the largest self-serve band. Enterprise is a custom quote.
         </p>
       ) : null}
       {!canUpgrade ? (
-        <p style={{ margin: "12px 0 0", fontSize: 13, color: "var(--ink-dim)", lineHeight: 1.55 }}>
+        <p
+          className="text-muted-foreground"
+          style={{ margin: "12px 0 0", fontSize: 13, lineHeight: 1.55 }}
+        >
           {ASK_FIRM_OWNER_TO_UPGRADE}
         </p>
       ) : null}

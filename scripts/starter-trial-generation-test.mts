@@ -296,6 +296,9 @@ const upgrade = {
 };
 const usCard = renderToStaticMarkup(createElement(TrialEndedPlanCard, { upgrade, onUpgrade: () => undefined }));
 assert(usCard.includes(STARTER_TRIAL_ENDED_MESSAGE), "the card states that the trial has ended");
+assert(usCard.includes("bg-card"), "the card uses the card surface token");
+assert(usCard.includes("text-foreground"), "the card title and prices use foreground text");
+assert(usCard.includes("text-muted-foreground"), "the limit lines use muted text");
 assert(
   (usCard.match(/trial-ended-title/g) ?? []).length === 1,
   "the ended title is shown once",

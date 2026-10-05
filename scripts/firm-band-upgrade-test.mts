@@ -37,6 +37,7 @@ import {
 import {
   firmCheckoutSessionParams,
   firmIntegrationIdentifier,
+  firmSetupCheckoutMessage,
   firmSetupCheckoutSessionParams,
   firmUpgradeCheckoutSessionParams,
   readFirmSetupUpgrade,
@@ -330,6 +331,8 @@ const setup = firmSetupCheckoutSessionParams({
   lookupKey: "milon_solo_monthly",
   band: "solo",
   interval: "month",
+  price: { unit_amount: 9_900, currency: "usd", recurring: { interval: "month" } },
+  saMarket: false,
 });
 assert(setup.mode === "setup", "a cardless subscription uses Checkout setup mode");
 assert(setup.customer === "cus_starter", "setup Checkout stays on the existing customer");
@@ -338,6 +341,27 @@ assert(!setup.line_items, "setup Checkout does not create a second subscription"
 assert(
   setup.success_url?.startsWith(`${CANONICAL_APP_ORIGIN}/dashboard?addClient=1`),
   "setup success returns to Add client on the canonical host",
+);
+assert(
+  setup.cancel_url === `${CANONICAL_APP_ORIGIN}${firmUpgradeReturnPath("cancelled")}`,
+  "setup Checkout cancel matches the upgrade cancel url",
+);
+assert(
+  setup.custom_text?.submit?.message ===
+    "Saving this card moves you to MILŌN Solo at $99/month (15 clients). Billed in USD, cancel anytime.",
+  "setup Checkout names the plan once, above Save",
+);
+assert(!setup.custom_text?.after_submit, "setup Checkout does not repeat the plan under Save");
+assert(
+  firmSetupCheckoutMessage({
+    bandName: "Solo",
+    clientLimit: 15,
+    unitAmount: 9_900,
+    currency: "usd",
+    interval: "month",
+    saMarket: true,
+  }).includes("50% off"),
+  "SA setup copy still shows the discount",
 );
 assert(setup.metadata?.milon_setup_upgrade === "1", "setup session is marked as an upgrade");
 assert(setup.metadata?.milon_subscription_id === "sub_starter", "setup session names the subscription");
@@ -531,6 +555,12 @@ assert(
 assert(dashboard.includes("upgradeFirmBand"), "the panel calls the existing billing upgrade");
 assert(dashboard.includes("parseFirmUpgradeReturn"), "dashboard reopens add client after checkout");
 assert(dashboard.includes("UPGRADE_CANCELLED_MESSAGE"), "dashboard shows the cancel message");
+assert(
+  dashboard.includes('params.set("addClient", "1")') &&
+    dashboard.includes('params.set("upgrade", "cancelled")'),
+  "a cancel return keeps addClient and upgrade on the dashboard url",
+);
+assert(dashboard.includes("<main"), "the dashboard has a main landmark");
 assert(dashboard.includes("UPGRADE_FAILED_MESSAGE"), "dashboard shows the failure message");
 assert(
   !dashboard.includes("createBillingPortalSession"),
