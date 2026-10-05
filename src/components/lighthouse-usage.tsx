@@ -15,6 +15,7 @@ import {
   type FeatureStat,
   type UsagePersona,
 } from "@/lib/product-usage";
+import { formatOpsCount, formatUsageMetric } from "@/lib/lighthouse-agent";
 
 const WINDOWS = [7, 30, 90] as const;
 
@@ -54,8 +55,7 @@ function FeatureBars({
             />
           </div>
           <div className="w-16 text-right text-[11px] tabular-nums text-[var(--ops-ink-dim)]">
-            {f.events}
-            <span className="ml-1 text-[10px]">{f.uniqueUsers}u</span>
+            {formatUsageMetric(f.events, f.uniqueUsers)}
           </div>
         </div>
       ))}
@@ -77,7 +77,7 @@ function PersonaCard({
       <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--ops-ink-dim)]">
         {PERSONA_LABELS[persona]}
       </div>
-      <div className="mt-1 text-xl font-bold tabular-nums text-[var(--ops-ink)]">{users}</div>
+      <div className="mt-1 text-xl font-bold tabular-nums text-[var(--ops-ink)]">{formatOpsCount(users)}</div>
       <div className="text-[11px] text-[var(--ops-ink-dim)]">{events} events</div>
     </div>
   );
@@ -169,7 +169,7 @@ export function LighthouseUsagePanel() {
             Events
           </div>
           <div className="mt-1 text-xl font-bold tabular-nums text-[var(--ops-amber)]">
-            {report.totals.events}
+            {formatOpsCount(report.totals.events)}
           </div>
         </div>
         <div className="rounded-2xl border border-[var(--ops-line)] bg-[var(--ops-card)] px-3 py-3">
@@ -177,7 +177,7 @@ export function LighthouseUsagePanel() {
             People
           </div>
           <div className="mt-1 text-xl font-bold tabular-nums text-[var(--ops-ink)]">
-            {report.totals.uniqueUsers}
+            {formatOpsCount(report.totals.uniqueUsers)}
           </div>
         </div>
         <PersonaCard persona="firm" events={p.firm.events} users={p.firm.uniqueUsers} />

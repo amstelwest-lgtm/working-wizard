@@ -34,9 +34,15 @@ assert(
 );
 
 assert(
-  LIGHTHOUSE_TABS.join(",") === "pipeline,playbook,assets,settings",
-  "sales console tabs are pipeline, playbook, assets, settings",
+  LIGHTHOUSE_TABS.join(",") === "agent,firms,system",
+  "sales console tabs are agent, firms, system",
 );
+assert(!LIGHTHOUSE_TABS.includes("playbook" as never), "Playbook is not a top-level tab");
+assert(!LIGHTHOUSE_TABS.includes("assets" as never), "Assets is not a top-level tab");
+assert(parseLighthouseTab("pipeline") === "firms", "?tab=pipeline redirects to firms");
+assert(parseLighthouseTab("settings") === "system", "?tab=settings redirects to system");
+assert(parseLighthouseTab("playbook") === "agent", "?tab=playbook redirects to agent");
+assert(parseLighthouseTab("assets") === "agent", "?tab=assets redirects to agent");
 
 const html = renderToStaticMarkup(
   createElement(
@@ -57,25 +63,20 @@ assert(src.includes("search: { tab: t }"), "tab clicks navigate with search { ta
 assert(src.includes('to: "/ops"'), "tab clicks stay on /ops");
 assert(!src.includes("setTab("), "the open tab comes from the URL, not local state");
 assert(
-  src.includes('initialTab ?? "pipeline"') || src.includes("initialTab ?? 'pipeline'"),
-  "missing ?tab= still opens the pipeline",
+  src.includes('initialTab ?? "agent"') || src.includes("initialTab ?? 'agent'"),
+  "missing ?tab= opens the agent tab",
 );
+assert(src.includes("LIGHTHOUSE_SENDER_NAME"), "the Team signer is shown");
+assert(src.includes("auto_send off"), "auto_send is shown locked off");
+assert(!src.includes("setSenderName"), "founder signer name is not editable");
+assert(!src.includes("Open in mail"), "mailto bypass is gone");
+assert(!src.includes("Opt-out link copied"), "unsubscribe copy control is gone");
+assert(!src.includes("writeText(lead.optOutLink"), "the drawer does not copy the unsubscribe URL");
+assert(!src.includes("Draft with Claude"), "the console does not brand drafts as Claude");
+assert(src.includes("Send windows enforced"), "E17 windows are enforced, not a reminder");
 
-const settings = src.slice(
-  src.indexOf("function SettingsForm"),
-  src.indexOf("function LeadDrawer"),
-);
-const bookingIdx = settings.indexOf("Optional calendar link");
-const leaveIdx = settings.indexOf("Leave this blank.");
-const windowIdx = settings.indexOf("Send window (reminder only");
-const reminderIdx = settings.indexOf("Reminder only. Milōn doesn't enforce send times yet.");
-assert(bookingIdx > 0 && leaveIdx > bookingIdx, "booking helper follows the calendar field");
-assert(leaveIdx < windowIdx, "booking helper is not under the send window");
-assert(reminderIdx > windowIdx, "send window has its own reminder helper");
-assert(
-  settings.indexOf("Leave this blank.", leaveIdx + 1) === -1,
-  "booking helper is not repeated under the send window",
-);
+const ops = readFileSync(resolve(process.cwd(), "src/routes/_authenticated/ops.tsx"), "utf8");
+assert(ops.includes('?? "agent"'), "ops defaults a missing sales tab to agent");
 
 const fns = readFileSync(resolve(process.cwd(), "src/lib/lighthouse.functions.ts"), "utf8");
 assert(fns.includes("lighthouseTrialSiteUrl"), "trial links use the milonfinance resolver");
@@ -92,7 +93,13 @@ assert(fns.includes("lighthouseLeadChipLabel"), "due today chips use the disting
 const sendSlice = fns.slice(fns.indexOf("export const sendLighthouseTouch"));
 const resendCall = sendSlice.indexOf('fetch("https://api.resend.com/emails"');
 const skipCall = sendSlice.indexOf("emailAlreadyTouchedAtStep");
+const windowCall = sendSlice.indexOf("sendBlockedReason");
+const approveCall = sendSlice.indexOf('!== "approved"');
 assert(skipCall > 0 && resendCall > skipCall, "the already-touched guard runs before Resend");
+assert(windowCall > skipCall && resendCall > windowCall, "send is blocked outside the window before Resend");
+assert(approveCall > 0 && resendCall > approveCall, "send requires an approved draft");
+assert(fns.includes("next.auto_send = false"), "settings save hardcodes auto_send false");
+assert(!fns.includes("next.auto_send = data.autoSend"), "the client cannot turn auto_send on");
 
 assert(
   lighthouseTrialSiteUrl({}) === LIGHTHOUSE_TRIAL_SITE_URL,

@@ -4,7 +4,7 @@
  */
 
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import {
@@ -39,10 +39,28 @@ import {
 import { createOwnerStripeCheckout } from "@/lib/stripe-checkout.functions";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { LighthousePanel, parseLighthouseTab } from "@/components/lighthouse-panel";
-import { LighthouseItPanel } from "@/components/lighthouse-it";
-import { LighthouseAccessPanel } from "@/components/lighthouse-access";
-import { LighthouseUsagePanel } from "@/components/lighthouse-usage";
-import { FunnelHealthPanel } from "@/components/funnel-health-panel";
+import { pilotFlagWiring } from "@/lib/ops-pilot-flags";
+
+const LighthouseItPanel = lazy(() =>
+  import("@/components/lighthouse-it").then((m) => ({ default: m.LighthouseItPanel })),
+);
+const LighthouseAccessPanel = lazy(() =>
+  import("@/components/lighthouse-access").then((m) => ({ default: m.LighthouseAccessPanel })),
+);
+const LighthouseUsagePanel = lazy(() =>
+  import("@/components/lighthouse-usage").then((m) => ({ default: m.LighthouseUsagePanel })),
+);
+const FunnelHealthPanel = lazy(() =>
+  import("@/components/funnel-health-panel").then((m) => ({ default: m.FunnelHealthPanel })),
+);
+
+function PaneFallback({ label }: { label: string }) {
+  return (
+    <div className="flex items-center gap-2 py-10 text-sm text-[var(--ops-ink-dim)]">
+      <Loader2 className="h-4 w-4 animate-spin text-[var(--ops-amber)]" /> {label}
+    </div>
+  );
+}
 import { LIGHTHOUSE_IT_INBOX_PATH } from "@/lib/client-note-link";
 import "@/styles/ops-console.css";
 
@@ -98,7 +116,7 @@ function OwnerOpsPage() {
   const [access, setAccess] = useState<OpsAccess | null>(null);
   const [accessChecked, setAccessChecked] = useState(false);
   const [dash, setDash] = useState<OpsDashboard | null>(null);
-  const [busy, setBusy] = useState(true);
+  const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [notes, setNotes] = useState("");
   const [flags, setFlags] = useState<Record<string, boolean>>({});
@@ -220,9 +238,7 @@ function OwnerOpsPage() {
       return;
     }
     if (!unlocked) return;
-    if (access?.isItMember && !access?.isOwner) return;
-    void refresh();
-  }, [authLoading, user, unlocked, access, navigate, refresh]);
+  }, [authLoading, user, unlocked, navigate]);
 
   useEffect(() => {
     if (authLoading || !user || !unlocked || !err) return;
@@ -239,10 +255,18 @@ function OwnerOpsPage() {
     : tabSearch === "usage"
       ? "platform"
       : "lighthouse";
-  const lighthouseTab = parseLighthouseTab(tabSearch) ?? "pipeline";
+  const lighthouseTab = parseLighthouseTab(tabSearch) ?? "agent";
   const itPane: (typeof OPS_IT_PANES)[number] =
     itOnly && tabSearch === "pilot" ? "it" : isOpsItPane(tabSearch) ? tabSearch : "it";
+  const needsOpsDash = !itOnly && (view === "platform" || (view === "it" && itPane === "pilot"));
   const skipDash = itOnly || (view === "it" && itPane !== "pilot");
+
+  useEffect(() => {
+    if (authLoading || !user || !unlocked) return;
+    if (access?.isItMember && !access?.isOwner) return;
+    if (!needsOpsDash || dash) return;
+    void refresh();
+  }, [authLoading, user, unlocked, access, needsOpsDash, dash, refresh]);
 
   useEffect(() => {
     if (!itOnly) return;
@@ -265,7 +289,7 @@ function OwnerOpsPage() {
   if (
     authLoading ||
     (user && !accessChecked && !unlocked) ||
-    (unlocked && busy && !dash && !err && !skipDash)
+    (unlocked && needsOpsDash && busy && !dash && !err && !skipDash)
   ) {
     return (
       <div className="milon-ops grid min-h-screen place-items-center text-[var(--ops-ink-dim)]">
@@ -597,7 +621,9 @@ function OwnerOpsPage() {
               ))}
             </div>
             {itPane === "access" ? (
-              <LighthouseAccessPanel />
+              <Suspense fallback={<PaneFallback label="Loading access…" />}>
+                <LighthouseAccessPanel />
+              </Suspense>
             ) : itPane === "pilot" && !itOnly ? (
               dash ? (
                 <PilotKnobs
@@ -616,7 +642,9 @@ function OwnerOpsPage() {
                 </div>
               )
             ) : (
-              <LighthouseItPanel />
+              <Suspense fallback={<PaneFallback label="Loading queries…" />}>
+                <LighthouseItPanel />
+              </Suspense>
             )}
           </>
         )}
@@ -633,14 +661,18 @@ function OwnerOpsPage() {
               <h2 className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-[var(--ops-ink-dim)]">
                 <Target className="h-3.5 w-3.5 text-[var(--ops-amber)]" /> Funnel health
               </h2>
-              <FunnelHealthPanel />
+              <Suspense fallback={<PaneFallback label="Loading funnel…" />}>
+                <FunnelHealthPanel />
+              </Suspense>
             </section>
 
             <section className="mb-8">
               <h2 className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-[var(--ops-ink-dim)]">
                 <Activity className="h-3.5 w-3.5 text-[var(--ops-amber)]" /> Product usage
               </h2>
-              <LighthouseUsagePanel />
+              <Suspense fallback={<PaneFallback label="Loading usage…" />}>
+                <LighthouseUsagePanel />
+              </Suspense>
             </section>
 
             {/* Signups */}
@@ -920,8 +952,9 @@ function PilotKnobs({
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="rounded-2xl border border-[var(--ops-line)] bg-[var(--ops-card)] p-4">
           <p className="mb-3 text-xs text-[var(--ops-ink-dim)]">
-            Stored in <code className="text-[var(--ops-amber)]/80">milon_ops_settings</code>. Wire
-            these into product gates next — toggles save immediately.
+            Stored in <code className="text-[var(--ops-amber)]/80">milon_ops_settings</code>. Each
+            switch is marked Live when product code reads it, or Not wired yet when it only saves
+            here. Toggles save immediately.
           </p>
           <div className="space-y-2">
             {flagEntries.map(([key, on]) => (
@@ -932,6 +965,9 @@ function PilotKnobs({
               >
                 <span className="text-sm text-[var(--ops-ink-soft)]">
                   {FLAG_LABELS[key] ?? key.replaceAll("_", " ")}
+                  <span className="ml-2 text-[10px] font-semibold uppercase tracking-wider text-[var(--ops-ink-dim)]">
+                    {pilotFlagWiring(key)}
+                  </span>
                 </span>
                 <button
                   type="button"

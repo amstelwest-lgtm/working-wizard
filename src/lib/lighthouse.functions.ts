@@ -62,6 +62,8 @@ import {
   normalizeLeadEmail,
 } from "@/lib/lighthouse-due";
 import { lighthouseTrialSiteUrl } from "@/lib/lighthouse-trial-site";
+import { trafficTagOf } from "@/lib/lighthouse-agent";
+import { sendBlockedReason } from "@/lib/lighthouse-send-windows";
 
 const MIGRATION = "20260820100000_milon_lighthouse.sql";
 const ENGAGEMENT_MIGRATION = "20260822210000_lighthouse_engagement.sql";
@@ -124,6 +126,18 @@ export type LighthouseLead = {
   inbound: LighthouseInbound[];
   createdAt: string;
   touches: LighthouseTouch[];
+  /** US / SA / OTHER when known. Empty Phase 1 firms overlay this. */
+  country: string | null;
+  region: string | null;
+  timezone: string | null;
+  trafficTag: "warmup" | "campaign" | null;
+  stack: string | null;
+  /** E16 next_follow_up_at when a contact row exists. */
+  nextFollowUpAt: string | null;
+  /** E16 last_delivery_status when a contact row exists. */
+  lastDeliveryStatus: string | null;
+  /** E16 last_engagement when a contact row exists. */
+  lastEngagement: string | null;
 };
 
 export type LighthouseInbound = {
@@ -495,6 +509,14 @@ function mapLead(row: Record<string, unknown>, touches: LighthouseTouch[]): Ligh
     inbound: [],
     createdAt: String(row.created_at ?? ""),
     touches,
+    country: (row.country as string | null) ?? null,
+    region: (row.region as string | null) ?? (row.state as string | null) ?? null,
+    timezone: (row.timezone as string | null) ?? null,
+    trafficTag: trafficTagOf(row.traffic_tag),
+    stack: (row.stack as string | null) ?? null,
+    nextFollowUpAt: (row.next_follow_up_at as string | null) ?? null,
+    lastDeliveryStatus: (row.last_delivery_status as string | null) ?? null,
+    lastEngagement: (row.last_engagement as string | null) ?? null,
   };
 }
 
@@ -547,37 +569,68 @@ export const getLighthouse = createServerFn({ method: "GET" })
 
     const rows = (leadRows ?? []) as Array<Record<string, unknown>>;
     const ids = rows.map((r) => String(r.id));
+    const idSet = new Set(ids);
+
+    const touchQuery = admin
+      .from("lighthouse_touches")
+      .select("*")
+      .order("step_no", { ascending: true })
+      .limit(2000);
+    const inboundQuery = admin
+      .from("lighthouse_inbound")
+      .select("id, lead_id, from_email, subject, body, received_at")
+      .order("received_at", { ascending: false })
+      .limit(400);
+    const seqQuery = admin.from("lighthouse_sequences").select("*");
+    const assetQuery = admin.from("lighthouse_assets").select("*").order("used_in_step", { ascending: true });
+    const settingsQuery = admin.from("milon_ops_settings").select("key, value").eq("key", "lighthouse").maybeSingle();
+    const firmsQuery = admin
+      .from("lighthouse_firms")
+      .select("legacy_lead_id, name, country, stack, campaign_tags, suppress_reason")
+      .limit(500);
+    const contactsQuery = admin
+      .from("lighthouse_contacts")
+      .select(
+        "legacy_lead_id, last_touch_at, last_delivery_status, last_engagement, next_follow_up_at, suppress",
+      )
+      .limit(500);
+
+    const [touchRes, inboundRes, seqRes, assetRes, setRes, firmsRes, contactsRes, sentToday] =
+      await Promise.all([
+        ids.length ? touchQuery : Promise.resolve({ data: [], error: null }),
+        ids.length ? inboundQuery : Promise.resolve({ data: [], error: null }),
+        seqQuery,
+        assetQuery,
+        settingsQuery,
+        firmsQuery,
+        contactsQuery,
+        countSentToday(admin).catch(() => 0),
+      ]);
 
     const touchesByLead = new Map<string, LighthouseTouch[]>();
     let migrationHint: string | null = null;
-    if (ids.length) {
-      const { data: touchRows, error: touchErr } = await admin
-        .from("lighthouse_touches")
-        .select("*")
-        .order("step_no", { ascending: true })
-        .limit(2000);
-      if (touchErr && missingRelation(touchErr.message ?? "")) {
-        migrationHint = migrationHintFor(MIGRATION);
-      } else if (touchRows) {
-        for (const t of touchRows as Array<Record<string, unknown>>) {
-          const leadId = String(t.lead_id);
-          const list = touchesByLead.get(leadId) ?? [];
-          list.push({
-            id: String(t.id),
-            stepNo: Number(t.step_no ?? 1),
-            angle: (t.angle as string | null) ?? null,
-            subject: (t.subject as string | null) ?? null,
-            body: (t.body as string | null) ?? null,
-            status: String(t.status ?? "draft"),
-            scheduledFor: (t.scheduled_for as string | null) ?? null,
-            sentAt: (t.sent_at as string | null) ?? null,
-            deliveredAt: (t.delivered_at as string | null) ?? null,
-            clickedAt: (t.clicked_at as string | null) ?? null,
-            lastClickedUrl: (t.last_clicked_url as string | null) ?? null,
-            error: (t.error as string | null) ?? null,
-          });
-          touchesByLead.set(leadId, list);
-        }
+    if (touchRes.error && missingRelation(touchRes.error.message ?? "")) {
+      migrationHint = migrationHintFor(MIGRATION);
+    } else if (touchRes.data) {
+      for (const t of touchRes.data as Array<Record<string, unknown>>) {
+        const leadId = String(t.lead_id);
+        if (!idSet.has(leadId)) continue;
+        const list = touchesByLead.get(leadId) ?? [];
+        list.push({
+          id: String(t.id),
+          stepNo: Number(t.step_no ?? 1),
+          angle: (t.angle as string | null) ?? null,
+          subject: (t.subject as string | null) ?? null,
+          body: (t.body as string | null) ?? null,
+          status: String(t.status ?? "draft"),
+          scheduledFor: (t.scheduled_for as string | null) ?? null,
+          sentAt: (t.sent_at as string | null) ?? null,
+          deliveredAt: (t.delivered_at as string | null) ?? null,
+          clickedAt: (t.clicked_at as string | null) ?? null,
+          lastClickedUrl: (t.last_clicked_url as string | null) ?? null,
+          error: (t.error as string | null) ?? null,
+        });
+        touchesByLead.set(leadId, list);
       }
     }
 
@@ -585,31 +638,56 @@ export const getLighthouse = createServerFn({ method: "GET" })
       rows.map((r) => mapLead(r, touchesByLead.get(String(r.id)) ?? [])),
     );
 
-    if (ids.length) {
-      const { data: inboundRows, error: inboundErr } = await admin
-        .from("lighthouse_inbound")
-        .select("id, lead_id, from_email, subject, body, received_at")
-        .order("received_at", { ascending: false })
-        .limit(400);
-      if (inboundErr && missingRelation(inboundErr.message ?? "")) {
-        migrationHint = migrationHint ?? migrationHintFor(ENGAGEMENT_MIGRATION);
-      } else if (inboundRows) {
-        const inboundByLead = new Map<string, LighthouseInbound[]>();
-        for (const row of inboundRows as Array<Record<string, unknown>>) {
-          const leadId = String(row.lead_id ?? "");
-          const list = inboundByLead.get(leadId) ?? [];
-          list.push({
-            id: String(row.id),
-            fromEmail: String(row.from_email ?? ""),
-            subject: (row.subject as string | null) ?? null,
-            body: (row.body as string | null) ?? null,
-            receivedAt: String(row.received_at ?? ""),
-          });
-          inboundByLead.set(leadId, list);
-        }
-        for (const lead of leads) {
-          lead.inbound = inboundByLead.get(lead.id) ?? [];
-        }
+    if (inboundRes.error && missingRelation(inboundRes.error.message ?? "")) {
+      migrationHint = migrationHint ?? migrationHintFor(ENGAGEMENT_MIGRATION);
+    } else if (inboundRes.data) {
+      const inboundByLead = new Map<string, LighthouseInbound[]>();
+      for (const row of inboundRes.data as Array<Record<string, unknown>>) {
+        const leadId = String(row.lead_id ?? "");
+        const list = inboundByLead.get(leadId) ?? [];
+        list.push({
+          id: String(row.id),
+          fromEmail: String(row.from_email ?? ""),
+          subject: (row.subject as string | null) ?? null,
+          body: (row.body as string | null) ?? null,
+          receivedAt: String(row.received_at ?? ""),
+        });
+        inboundByLead.set(leadId, list);
+      }
+      for (const lead of leads) {
+        lead.inbound = inboundByLead.get(lead.id) ?? [];
+      }
+    }
+
+    if (!firmsRes.error && firmsRes.data) {
+      const byLead = new Map(
+        (firmsRes.data as Array<Record<string, unknown>>)
+          .filter((f) => f.legacy_lead_id)
+          .map((f) => [String(f.legacy_lead_id), f]),
+      );
+      for (const lead of leads) {
+        const firm = byLead.get(lead.id);
+        if (!firm) continue;
+        if (!lead.country && firm.country) lead.country = String(firm.country);
+        if (!lead.stack && firm.stack) lead.stack = String(firm.stack);
+        if (!lead.trafficTag) lead.trafficTag = trafficTagOf(firm.campaign_tags);
+        if (firm.suppress_reason) lead.doNotContact = true;
+      }
+    }
+    if (!contactsRes.error && contactsRes.data) {
+      const byLead = new Map(
+        (contactsRes.data as Array<Record<string, unknown>>)
+          .filter((c) => c.legacy_lead_id)
+          .map((c) => [String(c.legacy_lead_id), c]),
+      );
+      for (const lead of leads) {
+        const contact = byLead.get(lead.id);
+        if (!contact) continue;
+        if (contact.last_touch_at) lead.lastTouchAt = String(contact.last_touch_at);
+        if (contact.last_delivery_status) lead.lastDeliveryStatus = String(contact.last_delivery_status);
+        if (contact.last_engagement) lead.lastEngagement = String(contact.last_engagement);
+        if (contact.next_follow_up_at) lead.nextFollowUpAt = String(contact.next_follow_up_at);
+        if (contact.suppress) lead.doNotContact = true;
       }
     }
 
@@ -626,7 +704,7 @@ export const getLighthouse = createServerFn({ method: "GET" })
     const trialPlus = leads.filter((l) => ["trial", "activated", "won"].includes(l.stage)).length;
 
     let sequences: LighthouseSequence[] = [];
-    const { data: seqRows } = await admin.from("lighthouse_sequences").select("*");
+    const seqRows = seqRes.data;
     if (seqRows) {
       sequences = (seqRows as Array<Record<string, unknown>>).map((s) => ({
         key: String(s.key),
@@ -649,10 +727,7 @@ export const getLighthouse = createServerFn({ method: "GET" })
     }
 
     let assets: LighthouseAsset[] = [];
-    const { data: assetRows } = await admin
-      .from("lighthouse_assets")
-      .select("*")
-      .order("used_in_step", { ascending: true });
+    const assetRows = assetRes.data;
     if (assetRows) {
       assets = (assetRows as Array<Record<string, unknown>>).map((a) => ({
         key: String(a.key),
@@ -667,22 +742,18 @@ export const getLighthouse = createServerFn({ method: "GET" })
       }));
     }
 
-    let settings = { ...DEFAULT_SETTINGS };
-    const { data: setRows } = await admin
-      .from("milon_ops_settings")
-      .select("key, value")
-      .eq("key", "lighthouse")
-      .maybeSingle();
+    let settings = { ...DEFAULT_SETTINGS, senderName: LIGHTHOUSE_SENDER_NAME, senderTitle: "", autoSend: false };
+    const setRows = setRes.data;
     const raw = (setRows as { value?: Record<string, unknown> } | null)?.value;
     if (raw && typeof raw === "object") {
       settings = {
-        senderName: resolveLighthouseSenderName(raw.sender_name, raw.senderName),
-        senderTitle: resolveLighthouseSenderTitle(raw.sender_title, raw.senderTitle),
+        senderName: LIGHTHOUSE_SENDER_NAME,
+        senderTitle: "",
         trialDays: Number(raw.trial_days ?? settings.trialDays),
         dailySendCap: Number(raw.daily_send_cap ?? settings.dailySendCap),
         bookingUrl: String(raw.booking_url ?? ""),
         sendWindow: String(raw.send_window ?? settings.sendWindow),
-        autoSend: Boolean(raw.auto_send ?? false),
+        autoSend: false,
         senderAddress: String(raw.sender_address ?? ""),
         replyTo: resolveLighthouseReplyTo(String(raw.reply_to ?? "")),
       };
@@ -705,13 +776,6 @@ export const getLighthouse = createServerFn({ method: "GET" })
           stepNo: Math.min(l.sequenceStep + 1, 5),
         })),
     ).map(({ leadId, leadName, stepNo }) => ({ leadId, leadName, stepNo }));
-
-    let sentToday = 0;
-    try {
-      sentToday = await countSentToday(admin);
-    } catch {
-      sentToday = 0;
-    }
 
     const dash: LighthouseDashboard = {
       leads,
@@ -1177,6 +1241,76 @@ The body must be plain text with line breaks, already signed off, ready to send.
     return { subject, body, touchId: String((inserted as { id?: string } | null)?.id ?? "") };
   });
 
+export const reviewLighthouseTouch = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) =>
+    z
+      .object({
+        touchId: z.string().uuid(),
+        action: z.enum(["approve", "reject"]),
+        subject: z.string().max(300).optional(),
+        body: z.string().max(20000).optional(),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    await assertPlatformOwner(context as AuthCtx);
+    const admin = adminLoose();
+    const { data: touchRow, error: tErr } = await admin
+      .from("lighthouse_touches")
+      .select("id, status, sent_at")
+      .eq("id", data.touchId)
+      .maybeSingle();
+    if (tErr) throw new Error(tErr.message);
+    if (!touchRow) throw new Error("Touch not found");
+    const touch = touchRow as { status?: string; sent_at?: string | null };
+    if (touch.sent_at || touch.status === "sent") {
+      throw new Error("This touch was already sent.");
+    }
+    if (data.action === "reject") {
+      const { error } = await admin
+        .from("lighthouse_touches")
+        .update({ status: "skipped", error: "Rejected in review." })
+        .eq("id", data.touchId);
+      if (error) throw new Error(error.message);
+      return { ok: true as const, status: "skipped" as const };
+    }
+    const subject = (data.subject ?? "").trim();
+    const body = (data.body ?? "").trim();
+    if (!subject || !body) throw new Error("A draft needs a subject and a body before it can be approved.");
+    const { error } = await admin
+      .from("lighthouse_touches")
+      .update({ subject, body, status: "approved", error: null })
+      .eq("id", data.touchId);
+    if (error) throw new Error(error.message);
+    return { ok: true as const, status: "approved" as const };
+  });
+
+async function recipientPlaceForSend(
+  admin: ReturnType<typeof adminLoose>,
+  lead: Record<string, unknown> | null,
+  email: string,
+) {
+  const place = {
+    country: (lead?.country as string | null) ?? null,
+    state: ((lead?.region as string | null) ?? (lead?.state as string | null) ?? null) as string | null,
+    timezone: (lead?.timezone as string | null) ?? null,
+    city: (lead?.city as string | null) ?? null,
+    email,
+  };
+  const id = String(lead?.id ?? "");
+  if (!id || place.country || place.timezone) return place;
+  const { data, error } = await admin
+    .from("lighthouse_firms")
+    .select("country")
+    .eq("legacy_lead_id", id)
+    .maybeSingle();
+  if (!error && data && (data as { country?: string | null }).country) {
+    place.country = String((data as { country: string }).country);
+  }
+  return place;
+}
+
 export const sendLighthouseTouch = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input) =>
@@ -1241,6 +1375,13 @@ export const sendLighthouseTouch = createServerFn({ method: "POST" })
     if (emailAlreadyTouchedAtStep(alreadySent, to, stepAlready)) {
       return { ok: true as const, skipped: true as const };
     }
+
+    if (String(touch.status ?? "") !== "approved") {
+      throw new Error("Approve the draft in the review inbox before sending.");
+    }
+
+    const windowBlock = sendBlockedReason(await recipientPlaceForSend(admin, lead, to), new Date());
+    if (windowBlock) throw new Error(windowBlock);
 
     // Every cold send carries a sender identity and a working way out.
     let optOutToken = String(lead?.optout_token ?? "").trim();
@@ -1522,7 +1663,8 @@ export const upsertLighthouseSettings = createServerFn({ method: "POST" })
     if (data.dailySendCap !== undefined) next.daily_send_cap = data.dailySendCap;
     if (data.bookingUrl !== undefined) next.booking_url = data.bookingUrl;
     if (data.sendWindow !== undefined) next.send_window = data.sendWindow;
-    if (data.autoSend !== undefined) next.auto_send = data.autoSend;
+    // Hard lock. The console cannot turn auto-send on.
+    next.auto_send = false;
     if (data.senderAddress !== undefined) next.sender_address = data.senderAddress;
     if (data.replyTo !== undefined) next.reply_to = resolveLighthouseReplyTo(data.replyTo);
 
