@@ -5,9 +5,12 @@
  * call sites must follow. Milōn Bot Q&A stays open.
  */
 
-import { STARTER_TRIAL_ENDED_MESSAGE } from "./firm-starter-trial";
+import {
+  STARTER_TRIAL_ENDED_CODE,
+  STARTER_TRIAL_ENDED_MESSAGE,
+} from "./starter-trial-constants.ts";
 
-export const STARTER_TRIAL_ENDED_CODE = "starter_trial_ended";
+export { STARTER_TRIAL_ENDED_CODE, STARTER_TRIAL_ENDED_MESSAGE };
 
 export type GenerationEntry = {
   id: string;
