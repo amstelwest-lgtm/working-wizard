@@ -19,14 +19,17 @@ import {
   billingStartPath,
   billingStartSearch,
   checkoutEmailRedirectTo,
+  clearPendingCheckout,
   FIRM_BILLING_SIGNIN_MESSAGE,
   isBillingStartPath,
-  pendingCheckoutFromNext,
   peekPendingCheckout,
   stashPendingCheckout,
   stashResumeFirmBilling,
   type PendingCheckout,
 } from "@/lib/pending-checkout";
+import { decideAccountantAuthLanding, safeAccountantRedirect } from "@/lib/auth-landing";
+import { listUserFirms } from "@/lib/firm-brand";
+import { getFirmBillingEntitlement } from "@/lib/stripe-checkout.functions";
 import { practiceLocationHint } from "@/lib/firm-signup-copy";
 import { FirmSignupTerms } from "@/components/firm-signup-terms";
 import {
@@ -99,6 +102,7 @@ function AuthPage() {
   const navigate = useNavigate();
   const { next, signup, plan, interval } = Route.useSearch();
   const ensurePractice = useServerFn(ensurePracticePortalAccess);
+  const checkEntitlement = useServerFn(getFirmBillingEntitlement);
   // URL owns the tab. signup=true (or a plan query) opens Create Firm even if
   // state was initialized on Sign in. A tab click sets an override, then rewrites the URL.
   const [tabOverride, setTabOverride] = useState<"signin" | "signup" | null>(null);
@@ -146,9 +150,21 @@ function AuthPage() {
 
   const openSignIn = (pending?: PendingCheckout) => {
     setTabOverride("signin");
+    if (pending) {
+      stashPendingCheckout(pending);
+      void navigate({
+        to: "/auth",
+        search: { next: billingStartPath(pending) },
+        replace: true,
+      });
+      return;
+    }
+    // Plain Sign in drops a plan left behind by the Create firm tab.
+    clearPendingCheckout();
+    const safe = safeAccountantRedirect(next);
     void navigate({
       to: "/auth",
-      search: pending ? { next: billingStartPath(pending) } : next ? { next } : {},
+      search: safe ? { next: safe } : {},
       replace: true,
     });
   };
@@ -180,6 +196,8 @@ function AuthPage() {
     isOpsNext(next) || next?.startsWith("/access/") || isBillingStartPath(next) ? next : undefined;
   const landedPathRef = useRef<string | null>(null);
   const landInflightRef = useRef<Promise<string> | null>(null);
+  /** While Create firm is provisioning, don't let the session effect steal the landing. */
+  const signupLandingRef = useRef(false);
 
   // Stamp the accountant door as soon as this page is shown — before submit —
   // so a dual-role session cannot be claimed by the founder landing redirect.
@@ -187,7 +205,11 @@ function AuthPage() {
     setPortalIntent("accountant");
   }, []);
 
-  const landAfterAccountantAuth = async (userId: string) => {
+  const landAfterAccountantAuth = async (
+    userId: string,
+    flow: "signin" | "signup",
+    hadFirmBefore?: boolean,
+  ) => {
     if (landedPathRef.current) return landedPathRef.current;
     if (landInflightRef.current) return landInflightRef.current;
     const run = (async () => {
@@ -204,16 +226,40 @@ function AuthPage() {
         navigate({ to: "/ops", search: tab ? { tab } : {} });
         return "/ops";
       }
-      const pendingCheckout = pendingCheckoutFromNext(next) ?? peekPendingCheckout();
-      if (pendingCheckout) {
-        const path = `/billing/start?plan=${pendingCheckout.plan}&interval=${pendingCheckout.interval}&market=${pendingCheckout.market}`;
+      const firmsKnown =
+        hadFirmBefore !== undefined ? hadFirmBefore : (await listUserFirms(userId)).length > 0;
+      const pending = peekPendingCheckout();
+      const explicitBilling = isBillingStartPath(next);
+      const mightBill =
+        !firmsKnown &&
+        ((flow === "signup" && Boolean(pending || explicitBilling)) ||
+          (flow === "signin" && explicitBilling));
+      let hasLiveEntitlement = false;
+      if (mightBill) {
+        try {
+          const ent = await checkEntitlement({ data: {} });
+          hasLiveEntitlement = ent.reason === "active_subscription" || ent.reason === "firm_member";
+        } catch {
+          hasLiveEntitlement = false;
+        }
+      }
+      const decision = decideAccountantAuthLanding({
+        flow,
+        hadFirmBefore: firmsKnown,
+        hasLiveEntitlement,
+        pending,
+        next,
+      });
+      if (decision.kind === "billing") {
+        const path = billingStartPath(decision.pending);
         landedPathRef.current = path;
         navigate({
           to: "/billing/start",
-          search: billingStartSearch(pendingCheckout),
+          search: billingStartSearch(decision.pending),
         });
         return path;
       }
+      clearPendingCheckout();
       if (await shouldOpenItInbox(userId)) {
         landedPathRef.current = "/ops";
         navigate({ to: "/ops", search: { tab: "it" } });
@@ -247,14 +293,15 @@ function AuthPage() {
     if (loading || !user) return;
     let cancelled = false;
     void (async () => {
-      await landAfterAccountantAuth(user.id);
+      if (signupLandingRef.current) return;
+      await landAfterAccountantAuth(user.id, mode);
       if (cancelled) return;
     })();
     return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, loading, navigate, ensurePractice, next]);
+  }, [user, loading, navigate, ensurePractice, checkEntitlement, next, mode]);
 
   const handle = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -300,7 +347,10 @@ function AuthPage() {
           toast.success("Account created — check your email to confirm before signing in.");
           return;
         }
+        signupLandingRef.current = true;
+        let hadFirmBefore = false;
         if (data.user) {
+          hadFirmBefore = (await listUserFirms(data.user.id)).length > 0;
           // One provisioning path (firm + membership + firm_admin), serialised
           // per user in the database so a concurrent profile hydrate cannot
           // mint a second firm. Carries the market picked above.
@@ -313,9 +363,10 @@ function AuthPage() {
         forcePortal("accountant");
         await ensurePractice().catch(() => undefined);
         toast.success("Account created");
-        if (data.user) await landAfterAccountantAuth(data.user.id);
+        if (data.user) await landAfterAccountantAuth(data.user.id, "signup", hadFirmBefore);
         else navigate({ to: afterAuthPath as "/dashboard" });
       } else {
+        if (!isBillingStartPath(next)) clearPendingCheckout();
         const { error, data: signInData } = await supabase.auth.signInWithPassword({
           email,
           password,
@@ -356,7 +407,7 @@ function AuthPage() {
           // provisioning failure is non-fatal — user proceeds to dashboard regardless
         }
         const path = signInData.user
-          ? await landAfterAccountantAuth(signInData.user.id)
+          ? await landAfterAccountantAuth(signInData.user.id, "signin")
           : afterAuthPath;
         if (path === "/dashboard" || path === "/ops") {
           toast.success("Welcome back");
@@ -374,6 +425,7 @@ function AuthPage() {
       }
       toast.error(msg);
     } finally {
+      signupLandingRef.current = false;
       setBusy(false);
     }
   };

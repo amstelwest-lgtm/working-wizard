@@ -30,6 +30,11 @@ import {
   type FinderClient,
 } from "../src/lib/feature-finder-clients.ts";
 import { firmClientOrFilter } from "../src/lib/firm-client-list.ts";
+import {
+  createFeatureFinderHotkeyBus,
+  toggleFinderOpen,
+  type FeatureFinderHotkeyEvent,
+} from "../src/lib/feature-finder-hotkey.ts";
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
@@ -287,6 +292,78 @@ assert(
   "selecting a client opens the dashboard client route",
 );
 assert(!finderSrc.includes("No matching features"), "empty copy is not features-only");
+assert(
+  finderSrc.includes("subscribeFeatureFinderHotkey"),
+  "palette uses the shared hotkey subscription",
+);
+assert(
+  !finderSrc.includes("addEventListener"),
+  "palette does not register its own keydown listener",
+);
+assert(finderSrc.includes("allowSelect"), "a row is not activated until the user selects it");
+
+function ctrlK(repeat = false): FeatureFinderHotkeyEvent {
+  return {
+    key: "k",
+    metaKey: false,
+    ctrlKey: true,
+    altKey: false,
+    shiftKey: false,
+    repeat,
+    preventDefault() {
+      this.defaultPrevented = true;
+    },
+    stopPropagation() {
+      this.stopped = true;
+    },
+    defaultPrevented: false,
+    stopped: false,
+  };
+}
+
+const hotkeyAdds: Array<(event: FeatureFinderHotkeyEvent) => void> = [];
+const hotkeyBus = createFeatureFinderHotkeyBus(
+  {
+    addEventListener(_type, listener) {
+      hotkeyAdds.push(listener);
+    },
+    removeEventListener(_type, listener) {
+      const index = hotkeyAdds.indexOf(listener);
+      if (index >= 0) hotkeyAdds.splice(index, 1);
+    },
+  },
+  () => "Linux x86_64",
+  () => "",
+);
+let firstPalette = 0;
+let secondPalette = 0;
+const unsubFirst = hotkeyBus.subscribe(() => {
+  firstPalette += 1;
+});
+const unsubSecond = hotkeyBus.subscribe(() => {
+  secondPalette += 1;
+});
+assert(hotkeyBus.listenerCount === 1, "two palettes share one keydown listener");
+assert(hotkeyAdds.length === 1, "the listener is registered once");
+const press = ctrlK();
+hotkeyBus.dispatch(press);
+assert(press.defaultPrevented === true, "Ctrl+K calls preventDefault");
+assert(press.stopped === true, "Ctrl+K does not reach cmdk");
+assert(firstPalette + secondPalette === 1, "one listener fires per keypress");
+assert(secondPalette === 1 && firstPalette === 0, "only the visible palette handles the shortcut");
+hotkeyBus.dispatch(ctrlK(true));
+assert(firstPalette + secondPalette === 1, "a repeated keydown does not fire again");
+const openState = { current: false };
+assert(toggleFinderOpen(openState) === true, "first shortcut opens");
+assert(
+  toggleFinderOpen(openState) === false,
+  "the next real shortcut closes from the current state",
+);
+unsubFirst();
+assert(hotkeyBus.listenerCount === 1, "one remaining palette keeps the listener");
+unsubSecond();
+assert(hotkeyBus.listenerCount === 0, "cleanup removes the listener");
+assert(hotkeyAdds.length === 0, "cleanup detaches the window listener");
 
 const listSrc = readFileSync(new URL("../src/lib/firm-client-list.ts", import.meta.url), "utf8");
 assert(
