@@ -103,6 +103,7 @@ import { healthFromRatioInputs, healthMapFromRatios, scoreRatio } from "@/lib/he
 import { ratioActualLine } from "@/lib/ratio-actuals";
 import { type SavedCashflowLike } from "@/lib/cash-runway";
 import { assessClientMetrics } from "@/lib/client-metrics";
+import { DERIVED_EQUITY_LABEL } from "@/lib/statement-financials";
 import { needsTrialBalanceRefresh } from "@/lib/trial-balance-refresh";
 import { TrialBalanceRefreshPrompt } from "@/components/trial-balance-refresh-prompt";
 import {
@@ -329,6 +330,8 @@ type Inputs = {
   revenue: string;
   totalAssets: string;
   equity: string;
+  /** "1" when equity was plugged from assets − liabilities. */
+  equityDerived?: string;
   cogs: string;
   receivables: string;
   inventory: string;
@@ -3216,7 +3219,7 @@ function Index() {
   // Marks real financials so autosave and the scored view activate after first user edit
   const markRealFinancials = () => setHasRealFinancials(true);
   const set = (k: keyof Inputs) => (val: string) => {
-    setV((s) => ({ ...s, [k]: val }));
+    setV((s) => ({ ...s, [k]: val, ...(k === "equity" ? { equityDerived: "" } : {}) }));
     markRealFinancials();
   };
 
@@ -5724,8 +5727,15 @@ function Index() {
                       ] as Array<{ k: keyof Inputs; l: string }>
                     ).map(({ k, l }) => (
                       <div key={k} className="flex items-center gap-2 min-w-0">
-                        <Label className="w-36 shrink-0 truncate text-xs text-slate-700 dark:text-slate-400">
-                          {l}
+                        <Label
+                          title={k === "equity" && v.equityDerived === "1" ? DERIVED_EQUITY_LABEL : l}
+                          className={`shrink-0 text-xs text-slate-700 dark:text-slate-400 ${
+                            k === "equity" && v.equityDerived === "1"
+                              ? "w-44 whitespace-normal leading-tight"
+                              : "w-36 truncate"
+                          }`}
+                        >
+                          {k === "equity" && v.equityDerived === "1" ? DERIVED_EQUITY_LABEL : l}
                         </Label>
                         <Input
                           className="h-7 min-w-0 border-amber-900/15 bg-amber-50/40 text-slate-950 text-xs dark:border-slate-700 dark:bg-slate-950/60 dark:text-slate-100"

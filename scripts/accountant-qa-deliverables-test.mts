@@ -23,7 +23,9 @@ import type { CashBankExtract } from "../src/lib/cash-from-banks.types";
 import type { ExtractionResult } from "../src/lib/financialSchema";
 import {
   applyBalanceSheetTotals,
+  DERIVED_EQUITY_LABEL,
   periodFinancialsFromExtraction,
+  preserveHandEnteredEquity,
 } from "../src/lib/statement-financials";
 import { statementNoteSections } from "../src/lib/statement-notes";
 import {
@@ -349,6 +351,128 @@ assert(
   printedTotal.current_period.figures.balance_sheet.equity.total === 9_999,
   "a printed equity total is not overwritten",
 );
+assert(
+  printedTotal.current_period.figures.balance_sheet.equity_derived !== true,
+  "a printed equity total is not labelled derived",
+);
+
+const noEquityLines = applyBalanceSheetTotals({
+  ...tb,
+  current_period: {
+    period_end: null,
+    figures: {
+      ...tb.current_period.figures,
+      balance_sheet: {
+        ...sheet(),
+        total_assets: 43_000,
+        total_liabilities: 10_000,
+        equity: { share_capital: null, retained_earnings: null, other_reserves: null, total: null },
+      },
+    },
+  },
+});
+const plugged = noEquityLines.current_period.figures.balance_sheet;
+assert(plugged.equity.total === 33_000, `assets 43k minus liabilities 10k is 33k, got ${plugged.equity.total}`);
+assert(plugged.equity_derived === true, "plugged equity is marked derived");
+assert(plugged.equity.share_capital == null, "no equity lines were invented");
+const pluggedFigures = periodFinancialsFromExtraction({
+  ...tb,
+  current_period: noEquityLines.current_period,
+});
+assert(pluggedFigures.equity === "33000", `period equity ${pluggedFigures.equity}`);
+assert(pluggedFigures.equityDerived === "1", "period financials flag the plug");
+const pluggedNotes = statementNoteSections(
+  { ...tb, current_period: noEquityLines.current_period },
+  (n) => n.toLocaleString("en-US"),
+);
+const pluggedKeyFigures = pluggedNotes.find((section) => section.title === "Key figures")?.items.join("\n") ?? "";
+assert(
+  pluggedKeyFigures.includes(`${DERIVED_EQUITY_LABEL}: 33,000`),
+  `notes label the plug, got ${pluggedKeyFigures}`,
+);
+assert(!pluggedKeyFigures.includes("Total equity"), "notes do not call the plug reported equity");
+
+const fromLines = applyBalanceSheetTotals({
+  ...tb,
+  current_period: {
+    period_end: null,
+    figures: {
+      ...tb.current_period.figures,
+      balance_sheet: {
+        ...sheet(),
+        non_current_assets: { ...sheet().non_current_assets, property_plant_equipment: 43_000 },
+        current_liabilities: { ...sheet().current_liabilities, trade_and_other_payables: 10_000 },
+        equity: { share_capital: null, retained_earnings: null, other_reserves: null, total: null },
+      },
+    },
+  },
+});
+assert(
+  fromLines.current_period.figures.balance_sheet.equity.total === 33_000,
+  "component asset and liability lines still plug equity",
+);
+assert(fromLines.current_period.figures.balance_sheet.equity_derived === true, "line-built plug is derived");
+
+const zeroEquityLine = applyBalanceSheetTotals({
+  ...tb,
+  current_period: {
+    period_end: null,
+    figures: {
+      ...tb.current_period.figures,
+      balance_sheet: {
+        ...sheet(),
+        total_assets: 43_000,
+        total_liabilities: 10_000,
+        equity: { share_capital: 0, retained_earnings: null, other_reserves: null, total: null },
+      },
+    },
+  },
+});
+assert(
+  zeroEquityLine.current_period.figures.balance_sheet.equity.total === 0,
+  "a zero equity line is real and is not replaced by the plug",
+);
+assert(
+  zeroEquityLine.current_period.figures.balance_sheet.equity_derived !== true,
+  "a real equity line is not labelled derived",
+);
+
+const typedTotal = applyBalanceSheetTotals({
+  ...tb,
+  current_period: {
+    period_end: null,
+    figures: {
+      ...tb.current_period.figures,
+      balance_sheet: {
+        ...sheet(),
+        total_assets: 43_000,
+        total_liabilities: 10_000,
+        equity: { share_capital: null, retained_earnings: null, other_reserves: null, total: 12_000 },
+      },
+    },
+  },
+});
+assert(
+  typedTotal.current_period.figures.balance_sheet.equity.total === 12_000,
+  "a typed equity total is not replaced by the plug",
+);
+assert(typedTotal.current_period.figures.balance_sheet.equity_derived !== true, "a typed total stays unlabelled");
+
+const keptHand = preserveHandEnteredEquity(
+  { equity: "12000" },
+  { equity: "33000", equityDerived: "1" },
+);
+assert(keptHand.equity === "12000" && keptHand.equityDerived === "", "a hand-entered equity survives a plug import");
+const refreshedPlug = preserveHandEnteredEquity(
+  { equity: "33000", equityDerived: "1" },
+  { equity: "40000", equityDerived: "1" },
+);
+assert(refreshedPlug.equity === "40000" && refreshedPlug.equityDerived === "1", "a previous plug can be refreshed");
+const reportedWins = preserveHandEnteredEquity(
+  { equity: "12000" },
+  { equity: "5000", equityDerived: "" },
+);
+assert(reportedWins.equity === "5000" && reportedWins.equityDerived === "", "reported equity replaces a hand figure");
 
 const notes = statementNoteSections(tb, (n) => n.toLocaleString("en-US"));
 const figures = notes.find((section) => section.title === "Key figures")?.items.join("\n") ?? "";

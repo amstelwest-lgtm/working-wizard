@@ -40,7 +40,12 @@ import {
 import { PlaybookDrawer } from "@/components/playbook-drawer";
 import { computeOverviewCaption } from "@/lib/overview-insights";
 import type { ExtractionResult } from "@/lib/financialSchema";
-import { periodFinancialsFromExtraction } from "@/lib/statement-financials";
+import {
+  DERIVED_EQUITY_LABEL,
+  EQUITY_DERIVED_KEY,
+  periodFinancialsFromExtraction,
+  preserveHandEnteredEquity,
+} from "@/lib/statement-financials";
 import { needsTrialBalanceRefresh } from "@/lib/trial-balance-refresh";
 import { TrialBalanceRefreshPrompt } from "@/components/trial-balance-refresh-prompt";
 import {
@@ -1544,6 +1549,7 @@ function ClientView() {
     (key: string, value: string) => {
       setFinancials((prev) => {
         const next = { ...prev, [key]: value };
+        if (key === "equity") next[EQUITY_DERIVED_KEY] = "";
         financialsRef.current = next;
         return next;
       });
@@ -1674,7 +1680,11 @@ function ClientView() {
       autoPopulate?: AutoPopulatePrefs,
       period?: { periodEnd: string; periodLabel: string },
     ) => {
-      const inputs = extractionToRatioInputs(result);
+      const extracted = extractionToRatioInputs(result);
+      const inputs = {
+        ...extracted,
+        ...preserveHandEnteredEquity(financialsRef.current, extracted),
+      };
       const ratiosOut = computeRatios(inputs);
       const periodDate = period?.periodEnd?.trim() ?? "";
       const periodLabel = period?.periodLabel?.trim() ?? "";
@@ -2874,7 +2884,11 @@ function ClientView() {
                         <div className="fin-grid">
                           {FIELD_LABELS.map(({ key, label }) => (
                             <div key={key}>
-                              <label>{label}</label>
+                              <label>
+                                {key === "equity" && financials[EQUITY_DERIVED_KEY] === "1"
+                                  ? DERIVED_EQUITY_LABEL
+                                  : label}
+                              </label>
                               <input
                                 value={financials[key] ?? ""}
                                 onChange={(e) => handleFinancialChange(key, e.target.value)}
