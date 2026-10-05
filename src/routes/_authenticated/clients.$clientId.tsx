@@ -117,7 +117,12 @@ import { QboConnectCard } from "@/components/qbo-connect";
 import { XeroConnectCard } from "@/components/xero-connect";
 import { getXeroStatus, type XeroStatus } from "@/lib/xero.functions";
 import { getQboStatus, type QboStatus } from "@/lib/qbo.functions";
-import { preferStatementPeriod, readStatementMeta, statementYearLine } from "@/lib/statement-period";
+import {
+  preferStatementPeriod,
+  readStatementMeta,
+  reportDataPeriodLabel,
+  statementYearLine,
+} from "@/lib/statement-period";
 import {
   assessClientMetrics,
   persistedRunwayWeeks,
@@ -1942,10 +1947,12 @@ function ClientView() {
     try {
       const { HealthScorecardPDF } = await import("@/reports/health-scorecard");
       const { pdf } = await import("@react-pdf/renderer");
-      const periodLabel = new Date().toLocaleString("en-US", {
-        month: "long",
-        year: "numeric",
-      });
+      const periodLabel =
+        reportDataPeriodLabel(financials) ??
+        new Date().toLocaleString("en-US", {
+          month: "long",
+          year: "numeric",
+        });
       // Build ratio results from computed ratios (shared scoring + pillars)
       const ratioEntries = Object.entries(ratios)
         .filter(([, val]) => Number.isFinite(val as number))
@@ -1983,7 +1990,8 @@ function ClientView() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${client.name.replace(/\s+/g, "_")}_Health_Scorecard.pdf`;
+      const periodSlug = periodLabel.replace(/[–—]/g, "-").replace(/[^a-zA-Z0-9]+/g, "_");
+      a.download = `${client.name.replace(/\s+/g, "_")}_${periodSlug}_Health_Scorecard.pdf`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);

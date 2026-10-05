@@ -13,6 +13,7 @@ import {
   scoreCreditorDays,
   scoreLowerIsBetterDays,
   scoreWorkingCapitalDays,
+  scoreWorkingCapitalFunding,
 } from "@/lib/client-metrics";
 
 export type ScoreMarket = Pick<ResolvedMarket, "country" | "copyPack">;
@@ -112,9 +113,12 @@ const PLAYBOOK_RATIO_ALIAS: Record<string, string> = {
   wipDays: "inventoryDays",
 };
 
+/** Chip and score line when a live client has no inputs for a catalogue ratio. */
+export const NOT_SCORED_LABEL = "Not scored";
+
 /**
  * Playbook card score from the shared ratio map. Missing keys are unscored —
- * callers show "No data" instead of a catalogue fixture such as Healthy 75.
+ * callers show "Not scored" instead of a catalogue fixture such as Healthy 75.
  */
 export function scorePlaybookRatio(
   ratioKey: string,
@@ -128,6 +132,36 @@ export function scorePlaybookRatio(
   }
   const health_score = Math.round(score);
   return { health_score, health_tier: scoreTier(health_score), unscored: false };
+}
+
+/**
+ * Score a playbook catalogue from live ratios. Fixture scores on the rows are
+ * dropped. A key with no inputs (revenue per employee with no headcount) is
+ * "Not scored" — health_score 0 and unscored, never the demo 75 / 28 / 41.
+ */
+export function scorePlaybookCatalogue<T extends { ratio_key: string }>(
+  rows: readonly T[],
+  ratios: Record<string, number>,
+  market?: ScoreMarket,
+): Array<T & { health_score: number; health_tier: HealthTier; unscored: boolean }> {
+  const map = healthMapFromRatios(ratios, market);
+  const wcDays = ratios["Working Capital Days"];
+  if (Number.isFinite(wcDays)) {
+    const funded = scoreWorkingCapitalFunding(wcDays / 365);
+    if (Number.isFinite(funded)) map.workingCapitalFunding = Math.round(funded);
+  }
+  return rows.map((row) => {
+    const scored = scorePlaybookRatio(row.ratio_key, map);
+    if (!scored || scored.unscored) {
+      return { ...row, health_score: 0, health_tier: "at_risk" as const, unscored: true };
+    }
+    return {
+      ...row,
+      health_score: scored.health_score,
+      health_tier: scored.health_tier,
+      unscored: false,
+    };
+  });
 }
 
 /** Which ratios feed each pillar (human names from `computeRatios`). */

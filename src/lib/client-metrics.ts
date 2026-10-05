@@ -8,7 +8,12 @@
 
 import { applyWeekOverrides, type WeekOverrides } from "./cash-week-overrides.ts";
 import { CASH_RUNWAY_THRESHOLD_RAND } from "./cash-runway.ts";
-import { computeRatios, periodMonthsOf, type RatioInputs } from "./ratios.ts";
+import {
+  computeRatios,
+  metricDirection,
+  periodMonthsOf,
+  type RatioInputs,
+} from "./ratios.ts";
 
 export type CashSource = "bank" | "period" | "none";
 
@@ -273,19 +278,58 @@ export function cycleTimelineAxis(
 /** Debtor / inventory days. Absurd values (> 1000 days either way) score 0. */
 export function scoreLowerIsBetterDays(val: number): number {
   if (!Number.isFinite(val) || Math.abs(val) > 1000) return 0;
-  return clampScore(((90 - val) / 90) * 100);
+  const zeroAt = metricDirection("debtorDays")?.zeroAt ?? 90;
+  return clampScore(((zeroAt - val) / zeroAt) * 100);
 }
 
 /**
- * Creditor days. ~30–60 is the sweet spot. Past 60 the score falls so
- * 81 is about 65, 90 about 50, and 120 or more (including 329) is 0.
+ * Creditor days. The healthy band is METRIC_DIRECTIONS (30–60). Past the top
+ * of that band the score falls, and 120 or more (including 329) is 0.
+ * High days are paying slowly — not a reward for stretching suppliers.
  */
 export function scoreCreditorDays(val: number): number {
   if (!Number.isFinite(val) || val < 0 || val > 1000) return 0;
-  if (val <= 30) return clampScore(70 + (val / 30) * 30);
-  if (val <= 60) return 100;
-  if (val <= 120) return clampScore(100 - ((val - 60) / 60) * 100);
+  const spec = metricDirection("creditorDays");
+  const lo = spec?.healthyMin ?? 30;
+  const hi = spec?.healthyMax ?? 60;
+  if (val <= lo) return clampScore(70 + (val / lo) * 30);
+  if (val <= hi) return 100;
+  if (val <= hi * 2) return clampScore(100 - ((val - hi) / hi) * 100);
   return 0;
+}
+
+/**
+ * "Cash generative" only when the forecast itself nets cash in.
+ * A positive P&L or a runway label does not override a negative 13-week flow.
+ * Currency-agnostic: the test is the sign of receipts minus payments.
+ */
+export function forecastIsCashGenerative(totalInflow: number, totalOutflow: number): boolean {
+  if (!Number.isFinite(totalInflow) || !Number.isFinite(totalOutflow)) return false;
+  return totalInflow - totalOutflow > 0;
+}
+
+/**
+ * Runway headline on the cash-forecast report. Agrees with the series:
+ * "Cash generative" only when the caller already has cash-flow evidence and
+ * the forecast net flow is positive. Otherwise the weeks until the first dip.
+ */
+export function forecastRunwayHeadline(input: {
+  totalInflow: number;
+  totalOutflow: number;
+  /** Runway layer already decided the business is not burning. */
+  cashGenerative: boolean;
+  /** Weeks until the first closing under the minimum. Null when none dip. */
+  weeksUntilBreach: number | null;
+  horizonWeeks: number;
+}): string {
+  if (
+    input.cashGenerative &&
+    forecastIsCashGenerative(input.totalInflow, input.totalOutflow)
+  ) {
+    return "Cash generative";
+  }
+  if (input.weeksUntilBreach == null) return `${input.horizonWeeks}+ wks`;
+  return `${input.weeksUntilBreach} wks`;
 }
 
 /** Working-capital days. A deeply negative cycle is a stretched-creditor risk, not a perfect score. */

@@ -73,6 +73,7 @@ import {
   clientRunway,
   distributeForecastLine,
   forecastAnchorDate,
+  forecastIsCashGenerative,
   forecastMinimumCash,
   parseISODate,
   periodOperatingOutflows,
@@ -1101,7 +1102,12 @@ export function CashForecastPanel({
           market,
           minimumThreshold: minimumCash,
           runwayLabel: runwayDisplayLabel(screenRunway),
-          cashGenerative: screenRunway.kind === "cash_generative",
+          cashGenerative:
+            screenRunway.kind === "cash_generative" &&
+            forecastIsCashGenerative(
+              calc.inflow.reduce((sum, n) => sum + n, 0),
+              calc.outflow.reduce((sum, n) => sum + n, 0),
+            ),
           assumptions,
           reviewSignoff: stampFromSignoff(forecastSignoff, forecastStale),
         }) as Parameters<typeof pdf>[0],
@@ -1226,13 +1232,19 @@ export function CashForecastPanel({
     </div>
   );
 
+  const seriesCashGenerative =
+    screenRunway.kind === "cash_generative" &&
+    forecastIsCashGenerative(
+      calc.inflow.reduce((sum, n) => sum + n, 0),
+      calc.outflow.reduce((sum, n) => sum + n, 0),
+    );
   const shortfall = lowestBal < 0;
   const timingDriver =
     collectDelay > 0 ||
     (parseFloat(capexAmount) || 0) > 0 ||
     headcountDelta !== 0 ||
     (parseFloat(fixedCostDelta) || 0) !== 0;
-  const showShortfall = shortfall && (screenRunway.kind !== "cash_generative" || timingDriver);
+  const showShortfall = shortfall && (!seriesCashGenerative || timingDriver);
   const shortfallExplain = showShortfall && timingDriver
     ? [
         collectDelay > 0 ? `collections delayed ${collectDelay} weeks` : null,
@@ -1400,27 +1412,33 @@ export function CashForecastPanel({
               <Stat
                 label="Cash runway"
                 value={
-                  screenRunway.kind === "cash_generative"
+                  seriesCashGenerative
                     ? "Cash generative"
                     : screenRunway.kind === "unknown"
                       ? (runwayDisplayLabel(screenRunway) ?? "—")
                       : screenRunway.kind === "zero"
                         ? "0 wk"
-                        : `${screenRunway.weeks} wk`
+                        : screenRunway.kind === "weeks"
+                          ? `${screenRunway.weeks} wk`
+                          : "Net outflow"
                 }
                 tone={
-                  screenRunway.kind === "cash_generative"
+                  seriesCashGenerative
                     ? "good"
-                    : screenRunway.kind === "zero" || (screenRunway.weeks ?? 99) < 8
+                    : screenRunway.kind === "cash_generative" ||
+                        screenRunway.kind === "zero" ||
+                        (screenRunway.weeks ?? 99) < 8
                       ? "bad"
                       : "neutral"
                 }
                 sub={
-                  screenRunway.kind === "cash_generative"
+                  seriesCashGenerative
                     ? "Not burning cash"
-                    : screenRunway.label === RUNWAY_INSUFFICIENT_LABEL
-                      ? "No cash-flow or bank data"
-                      : `Above ${fmtCompact(minimumCash)} floor`
+                    : screenRunway.kind === "cash_generative"
+                      ? "Forecast net flow is negative"
+                      : screenRunway.label === RUNWAY_INSUFFICIENT_LABEL
+                        ? "No cash-flow or bank data"
+                        : `Above ${fmtCompact(minimumCash)} floor`
                 }
               />
               <Stat

@@ -16,12 +16,177 @@ export type HealthBandLabel = "Critical" | "Watch" | "Healthy";
  * Playbook step packs were written on the older 65 healthy floor. Tier
  * selection uses this table, so a score of 65–79 opens the Watch pack.
  */
+/**
+ * How a metric moves when the business gets healthier, plus the native-unit
+ * range that scores as the healthy band. Reports, the scorecard, and
+ * Playbooks read this — they do not keep a private higher-is-better flag.
+ *
+ * `sweet_spot` is not monotone: creditor days of 30–60 score 100, and a
+ * figure past the top of that range (329 days) is paying slowly.
+ */
+export type MetricDirection = "higher_is_better" | "lower_is_better" | "sweet_spot";
+
+export type MetricDirectionSpec = {
+  key: string;
+  /** `computeRatios` name, when the metric has one. */
+  name: string;
+  direction: MetricDirection;
+  /** Inclusive native-unit healthy band. A null side is open. */
+  healthyMin: number | null;
+  healthyMax: number | null;
+  /** Lower-is-better linear score hits 0 at this value (debtor days: 90). */
+  zeroAt?: number;
+};
+
+export const METRIC_DIRECTIONS: readonly MetricDirectionSpec[] = [
+  { key: "grossMargin", name: "Gross Margin", direction: "higher_is_better", healthyMin: 0.32, healthyMax: null },
+  { key: "operatingMargin", name: "Operating Margin", direction: "higher_is_better", healthyMin: 0.16, healthyMax: null },
+  { key: "netMargin", name: "Net Margin", direction: "higher_is_better", healthyMin: 0.12, healthyMax: null },
+  { key: "roa", name: "Return on Assets", direction: "higher_is_better", healthyMin: 0.096, healthyMax: null },
+  { key: "roe", name: "Return on Equity", direction: "higher_is_better", healthyMin: 0.16, healthyMax: null },
+  { key: "assetTurnover", name: "Asset Turnover", direction: "higher_is_better", healthyMin: 1.2, healthyMax: null },
+  { key: "gpToLabor", name: "Gross Profit / Labor", direction: "higher_is_better", healthyMin: 0.48, healthyMax: null },
+  { key: "salesPerEmployee", name: "Sales-per-Employee Ratio", direction: "higher_is_better", healthyMin: null, healthyMax: null },
+  { key: "ocfToEbitda", name: "OCF / EBITDA", direction: "higher_is_better", healthyMin: 0.8, healthyMax: null },
+  { key: "interestBurden", name: "Interest Burden", direction: "higher_is_better", healthyMin: 0.8, healthyMax: null },
+  { key: "taxBurden", name: "Tax Burden", direction: "higher_is_better", healthyMin: 0.8, healthyMax: null },
+  { key: "currentRatio", name: "Current Ratio", direction: "higher_is_better", healthyMin: 1.6, healthyMax: null },
+  { key: "revenueGrowth", name: "Revenue Growth", direction: "higher_is_better", healthyMin: 0.16, healthyMax: null },
+  { key: "fixedCostRatio", name: "Fixed Cost Ratio", direction: "lower_is_better", healthyMin: null, healthyMax: 0.1, zeroAt: 0.5 },
+  { key: "customerConcentration", name: "Top-5 Customer Share", direction: "lower_is_better", healthyMin: null, healthyMax: 0.16, zeroAt: 0.8 },
+  { key: "debtorDays", name: "Debtor Days", direction: "lower_is_better", healthyMin: null, healthyMax: 18, zeroAt: 90 },
+  { key: "inventoryDays", name: "Inventory Days", direction: "lower_is_better", healthyMin: null, healthyMax: 18, zeroAt: 90 },
+  { key: "wipDays", name: "WIP Days", direction: "lower_is_better", healthyMin: null, healthyMax: 18, zeroAt: 90 },
+  { key: "workingCapitalDays", name: "Working Capital Days", direction: "lower_is_better", healthyMin: null, healthyMax: 18, zeroAt: 90 },
+  { key: "equityMultiplier", name: "Equity Multiplier", direction: "lower_is_better", healthyMin: null, healthyMax: 1.6 },
+  { key: "debtToEquity", name: "Debt-to-Equity", direction: "lower_is_better", healthyMin: null, healthyMax: 0.4 },
+  { key: "debtToAssets", name: "Debt-to-Assets", direction: "lower_is_better", healthyMin: null, healthyMax: 0.14 },
+  { key: "creditorDays", name: "Creditor Days", direction: "sweet_spot", healthyMin: 30, healthyMax: 60 },
+];
+
+const METRIC_BY_KEY = new Map(METRIC_DIRECTIONS.map((spec) => [spec.key, spec]));
+const METRIC_BY_NAME = new Map(METRIC_DIRECTIONS.map((spec) => [spec.name, spec]));
+
+/** Direction row for a playbook key or a `computeRatios` name. */
+export function metricDirection(keyOrName: string): MetricDirectionSpec | null {
+  return METRIC_BY_KEY.get(keyOrName) ?? METRIC_BY_NAME.get(keyOrName) ?? null;
+}
+
+/** Distance outside the healthy band. Inside the band the distance is 0. */
+export function outsideHealthyBand(
+  value: number,
+  healthyMin: number | null,
+  healthyMax: number | null,
+): number {
+  if (!Number.isFinite(value)) return Number.POSITIVE_INFINITY;
+  if (healthyMin != null && value < healthyMin) return healthyMin - value;
+  if (healthyMax != null && value > healthyMax) return value - healthyMax;
+  return 0;
+}
+
+/**
+ * The peer percentile that is the healthy end of the band.
+ * Higher-is-better uses p75. Lower-is-better uses p25 — p75 is the worse tail
+ * (debtor days 60 vs a median of 40, fixed costs 60% vs 45%). A sweet spot
+ * uses whichever percentile sits closer to the healthy range.
+ */
+export function benchmarkHealthyEnd(
+  spec: MetricDirectionSpec,
+  p25: number,
+  p75: number,
+): { top: number; lowerIsBetter: boolean } {
+  if (spec.direction === "lower_is_better") return { top: p25, lowerIsBetter: true };
+  if (spec.direction === "higher_is_better") return { top: p75, lowerIsBetter: false };
+  const d25 = outsideHealthyBand(p25, spec.healthyMin, spec.healthyMax);
+  const d75 = outsideHealthyBand(p75, spec.healthyMin, spec.healthyMax);
+  if (d25 < d75) return { top: p25, lowerIsBetter: true };
+  return { top: p75, lowerIsBetter: false };
+}
+
+export type BenchmarkPosition = "top_quartile" | "above_median" | "below_median";
+
+/** Where a value sits versus the median and the healthy-end quartile. */
+export function benchmarkPosition(input: {
+  value: number;
+  median: number;
+  top: number;
+  direction: MetricDirection;
+  healthyMin?: number | null;
+  healthyMax?: number | null;
+}): BenchmarkPosition {
+  if (input.direction === "sweet_spot") {
+    const dist = (v: number) =>
+      outsideHealthyBand(v, input.healthyMin ?? null, input.healthyMax ?? null);
+    const valueDist = dist(input.value);
+    const medianDist = dist(input.median);
+    const topDist = dist(input.top);
+    if (valueDist <= topDist && valueDist <= medianDist) return "top_quartile";
+    if (valueDist <= medianDist) return "above_median";
+    return "below_median";
+  }
+  const better =
+    input.direction === "lower_is_better"
+      ? (a: number, b: number) => a <= b
+      : (a: number, b: number) => a >= b;
+  if (better(input.value, input.top)) return "top_quartile";
+  if (better(input.value, input.median)) return "above_median";
+  return "below_median";
+}
+
+/**
+ * Bar track, 0–1, with the right-hand side always the healthier end.
+ * Sweet-spot metrics use distance from the healthy range, so 329 creditor
+ * days sits to the left of a 30-day median.
+ */
+export function benchmarkTrack(input: {
+  value: number;
+  median: number;
+  top: number;
+  direction: MetricDirection;
+  lowerIsBetter?: boolean;
+  healthyMin?: number | null;
+  healthyMax?: number | null;
+}): { pos: number; bandStart: number; bandEnd: number } {
+  const goodness = (v: number) => {
+    if (input.direction === "sweet_spot") {
+      return -outsideHealthyBand(v, input.healthyMin ?? null, input.healthyMax ?? null);
+    }
+    const lower = input.direction === "lower_is_better" || input.lowerIsBetter === true;
+    return lower ? -v : v;
+  };
+  const vals = [goodness(input.value), goodness(input.median), goodness(input.top)];
+  let lo = Math.min(...vals);
+  let hi = Math.max(...vals);
+  const pad = (hi - lo || Math.abs(hi) || 1) * 0.25;
+  lo -= pad;
+  hi += pad;
+  const span = hi - lo || 1;
+  const t = (v: number) => (goodness(v) - lo) / span;
+  return { pos: t(input.value), bandStart: t(input.median), bandEnd: t(input.top) };
+}
+
+/** True when creditor days are past the healthy band — paying slowly, not early. */
+export function creditorDaysPaysSlowly(days: number): boolean {
+  const spec = metricDirection("creditorDays");
+  const max = spec?.healthyMax ?? 60;
+  return Number.isFinite(days) && days > max;
+}
+
+/** Step 1 copy for #02 when creditor days are above the healthy band. */
+export const SLOW_CREDITOR_DAYS_STEP = {
+  step_title: "High creditor days — suppliers are being paid slowly",
+  step_description:
+    "Creditor days this high mean the business is paying suppliers slowly. That is a supplier-relationship and arrears risk: invoices are outstanding past a normal term. Separate agreed terms from overdue balances, agree a catch-up with the suppliers that can stop supply, and do not stretch payment any further.",
+} as const;
+
 export const HEALTH_BAND_TABLE = {
   /** Scores below this are Critical. */
-  watchMin: 40,
+  watchMin: 40 as const,
   /** Scores at or above this are Healthy. From watchMin up to here is Watch. */
-  healthyMin: 80,
-} as const;
+  healthyMin: 80 as const,
+  /** Per-metric direction and native healthy range. Same table as the score bands. */
+  metrics: METRIC_DIRECTIONS,
+};
 
 const HEALTH_BAND_LABEL: Record<HealthTier, HealthBandLabel> = {
   critical: "Critical",

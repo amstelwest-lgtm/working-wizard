@@ -40,13 +40,23 @@ import {
   scoreTier,
   BUSINESS_TYPE_TO_BENCHMARK,
   periodMonthsOf,
+  benchmarkHealthyEnd,
+  creditorDaysPaysSlowly,
+  metricDirection,
+  SLOW_CREDITOR_DAYS_STEP,
 } from "@/lib/ratios";
 import { reportNumber } from "@/lib/report-catalog";
 import type { RatioInputs } from "@/lib/ratios";
-import { healthMapFromRatios, scorePlaybookRatio, scoreRatio, pillarForRatioName } from "@/lib/health-score";
+import {
+  NOT_SCORED_LABEL,
+  scorePlaybookCatalogue,
+  scoreRatio,
+  pillarForRatioName,
+} from "@/lib/health-score";
 import { CASH_RUNWAY_THRESHOLD_RAND } from "@/lib/cash-runway";
 import {
   assessClientMetrics,
+  forecastIsCashGenerative,
   resolveThirteenWeekForecast,
   runwayDisplayLabel,
   scoreWorkingCapitalFunding,
@@ -76,6 +86,7 @@ import type { LaborProductivityData } from "@/reports/labor-productivity";
 import type { RatioMovementRow } from "@/reports/ratio-movement";
 import type { BenchmarkRow } from "@/reports/benchmark-report";
 import {
+  budgetActualFromFinancials,
   buildBudgetPdfModel,
   illustrativeBudgetPack,
   parseBudgetDocument,
@@ -90,6 +101,7 @@ import { parseOperatingProfile, type ClientOperatingProfile } from "@/lib/client
 import { profileIndustryLabel, profilePriorityWeight } from "@/lib/profile-signals";
 import { parseDebtSchedule, totalDebtFromSchedule } from "@/lib/debt-schedule";
 import { resolvePriorSnapshot, withPriorRatioScores } from "@/lib/prior-period";
+import { reportDataPeriodLabel, reportPeriodMonthYear } from "@/lib/statement-period";
 import {
   coerceMarketSelection,
   laborProductivityFileStem,
@@ -1134,6 +1146,11 @@ type ClientReportData = {
    */
   benchmarkSector: { code: string; name: string } | null;
   market: ResolvedMarket;
+  /** Statement period, e.g. "September 2026" or "1–21 Sep 2026 (part month)". */
+  dataPeriodLabel: string | null;
+  /** Month name matching the studio dropdown, from the statement period end. */
+  periodMonth: string | null;
+  periodYear: string | null;
 };
 
 const DEFAULT_MOVEMENT_LABELS = {
@@ -1171,6 +1188,9 @@ const EMPTY_CLIENT_DATA: ClientReportData = {
   operatingProfile: null,
   benchmarkSector: null,
   market: ZA_MARKET,
+  dataPeriodLabel: null,
+  periodMonth: null,
+  periodYear: null,
 };
 
 // ── Data-builder helpers ────────────────────────────────────────────────────
@@ -1252,23 +1272,38 @@ type SectorBenchProps = {
   lower: boolean;
   unit: "%" | "×" | "d";
   pillar: "profit" | "assets" | "financing" | "cash";
+  direction?: "higher_is_better" | "lower_is_better" | "sweet_spot";
+  healthyMin?: number | null;
+  healthyMax?: number | null;
 };
 
 /** DB stores pct as 0–100; ratio space (and PDF fmt) uses 0–1. */
 function normalizeBenchProps(
+  metricName: string,
   unit: string,
+  p25: number,
   p50: number,
   p75: number,
   higherIsBetter: boolean,
   meta: { unit: "%" | "×" | "d"; pillar: "profit" | "assets" | "financing" | "cash" },
 ): SectorBenchProps {
   const scale = unit === "pct" ? 0.01 : 1;
+  const spec = metricDirection(metricName);
+  const bound = spec
+    ? benchmarkHealthyEnd(spec, p25 * scale, p75 * scale)
+    : {
+        top: (higherIsBetter ? p75 : p25) * scale,
+        lowerIsBetter: !higherIsBetter,
+      };
   return {
     median: p50 * scale,
-    top: p75 * scale,
-    lower: !higherIsBetter,
+    top: bound.top,
+    lower: bound.lowerIsBetter,
     unit: meta.unit,
     pillar: meta.pillar,
+    direction: spec?.direction,
+    healthyMin: spec?.healthyMin ?? null,
+    healthyMax: spec?.healthyMax ?? null,
   };
 }
 
@@ -1279,7 +1314,7 @@ async function loadSectorBenchmarks(
   if (!sector) return {};
   const { data, error } = await supabase
     .from("industry_benchmarks")
-    .select("metric_key, p50, p75, unit, higher_is_better")
+    .select("metric_key, p25, p50, p75, unit, higher_is_better")
     .eq("business_type", sector);
   if (error || !data) return {};
   const out: Record<string, SectorBenchProps> = {};
@@ -1287,7 +1322,9 @@ async function loadSectorBenchmarks(
     const meta = METRIC_KEY_TO_RATIO[row.metric_key];
     if (!meta) continue;
     out[meta.name] = normalizeBenchProps(
+      meta.name,
       row.unit,
+      Number(row.p25),
       Number(row.p50),
       Number(row.p75),
       Boolean(row.higher_is_better),
@@ -1327,6 +1364,9 @@ function buildBenchmarkRows(
         formatted_median: fmtBenchVal(b.median, b.unit),
         formatted_top_quartile: fmtBenchVal(b.top, b.unit),
         lower_is_better: b.lower,
+        direction: b.direction,
+        healthy_min: b.healthyMin ?? null,
+        healthy_max: b.healthyMax ?? null,
       } as BenchmarkRow;
     });
 }
@@ -1855,7 +1895,24 @@ async function buildInterventions(
     const steps = allSteps.filter(
       (s) => s.ratio_key === playbookKey && s.health_tier === rr.health_tier,
     );
-    // Only include step 1 per ratio to keep the report concise
+    // Only include step 1 per ratio to keep the report concise.
+    // Creditor days past the healthy band are slow payment (arrears), not early settlement.
+    if (playbookKey === "creditorDays" && creditorDaysPaysSlowly(rr.current_value)) {
+      const base = steps[0];
+      result.push({
+        ratio_key: playbookKey,
+        ratio_name: rr.ratio_name,
+        health_tier: rr.health_tier,
+        step_number: 1,
+        step_title: SLOW_CREDITOR_DAYS_STEP.step_title,
+        step_description: SLOW_CREDITOR_DAYS_STEP.step_description,
+        timeframe: base?.timeframe ?? "immediate",
+        effort: base?.effort ?? "low",
+        impact: base?.impact ?? "high",
+        category: base?.category ?? "cash",
+      });
+      continue;
+    }
     if (steps.length > 0) {
       result.push({ ...steps[0], ratio_name: rr.ratio_name, health_tier: rr.health_tier });
     }
@@ -1998,7 +2055,20 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
   };
   const budget = parseBudgetDocument(clientRow?.budget);
   const budgetUpdatedAt = clientRow?.budget_updated_at ?? budget?.updatedAt ?? null;
-  const budgetActuals = await loadBudgetActualsForPdf(clientId);
+  const uploadedBudgetActuals = await loadBudgetActualsForPdf(clientId);
+  const rawFinancials =
+    clientRow?.financials && typeof clientRow.financials === "object"
+      ? (clientRow.financials as Record<string, unknown>)
+      : null;
+  const statementActual = budgetActualFromFinancials(rawFinancials);
+  const budgetActuals =
+    uploadedBudgetActuals.length > 0
+      ? uploadedBudgetActuals
+      : statementActual
+        ? [statementActual]
+        : [];
+  const periodParts = reportPeriodMonthYear(rawFinancials);
+  const dataPeriodLabel = reportDataPeriodLabel(rawFinancials);
   const baseEmpty = {
     ...EMPTY_CLIENT_DATA,
     clientName: clientRow?.name ?? "",
@@ -2014,6 +2084,9 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
     budget,
     budgetActuals,
     budgetUpdatedAt,
+    dataPeriodLabel,
+    periodMonth: periodParts?.month ?? null,
+    periodYear: periodParts?.year ?? null,
   };
   if (!clientRow?.financials) return baseEmpty;
 
@@ -2111,13 +2184,19 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
   // Floor is four weeks of the resolved outflows. A stored threshold from the
   // old annual-as-monthly series (about $170k) must not override that.
   const forecastMinimum = cashOutlook.minimum;
+  const forecastReceipts = cashForecast?.reduce((sum, week) => sum + week.total_receipts, 0) ?? 0;
+  const forecastPayments = cashForecast?.reduce((sum, week) => sum + week.total_payments, 0) ?? 0;
+  const cashGenerative =
+    assessed.runway.kind === "cash_generative" &&
+    cashForecast != null &&
+    forecastIsCashGenerative(forecastReceipts, forecastPayments);
 
   return {
     hasData: true,
     clientName: clientRow.name,
     cashRunwayWeeks: healthWeeks,
     runwayLabel: runwayDisplayLabel(assessed.runway),
-    cashGenerative: assessed.runway.kind === "cash_generative",
+    cashGenerative,
     forecastMinimum,
     financials: fin,
     rawRatios,
@@ -2140,6 +2219,9 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
     budget,
     budgetActuals,
     budgetUpdatedAt,
+    dataPeriodLabel,
+    periodMonth: periodParts?.month ?? null,
+    periodYear: periodParts?.year ?? null,
   };
 }
 
@@ -2227,13 +2309,16 @@ async function renderToBlob(Component: unknown, props: unknown): Promise<Blob> {
   return pdf(element as Parameters<typeof pdf>[0]).toBlob();
 }
 
-function makeSme(s: Settings) {
-  return { name: s.smeName || "Demo Client", period: `${s.periodMonth} ${s.periodYear}` };
+function periodFileSlug(label: string): string {
+  return label
+    .replace(/[–—]/g, "-")
+    .replace(/[^a-zA-Z0-9]+/g, "_")
+    .replace(/^_|_$/g, "");
 }
 
-function makeSafeFilename(s: Settings, reportName: string): string {
+function makeSafeFilename(s: Settings, reportName: string, periodLabel?: string | null): string {
   const sme = (s.smeName || "Client").replace(/[^a-zA-Z0-9]+/g, "_").replace(/^_|_$/g, "");
-  const period = `${s.periodMonth}_${s.periodYear}`;
+  const period = periodFileSlug(periodLabel?.trim() || `${s.periodMonth} ${s.periodYear}`);
   return `${sme}_${period}_${reportName}.pdf`;
 }
 
@@ -2242,12 +2327,17 @@ function makeSafeFilename(s: Settings, reportName: string): string {
 type GenFn = (s: Settings, profile: AccountantProfile) => Promise<Blob>;
 
 /** Period label with a "Demo Data" suffix when real figures are unavailable. */
-function makeSmeWithNote(s: Settings, isDemo: boolean): { name: string; period: string } {
+function makeSmeWithNote(
+  s: Settings,
+  isDemo: boolean,
+  dataPeriod?: string | null,
+): { name: string; period: string } {
+  const live = dataPeriod?.trim() || `${s.periodMonth} ${s.periodYear}`;
   return {
     name: s.smeName || "Demo Client",
     period: isDemo
       ? `${s.periodMonth} ${s.periodYear} · Demo Data — upload financials for real figures`
-      : `${s.periodMonth} ${s.periodYear}`,
+      : live,
   };
 }
 
@@ -2280,7 +2370,7 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
       const isDemo = !cd;
       const ratioRows = isDemo ? MOCK_RATIOS : cd!.ratioResults;
       return renderToBlob(HealthScorecardPDF, {
-        smeData: makeSmeWithNote(s, isDemo),
+        smeData: makeSmeWithNote(s, isDemo, cd?.dataPeriodLabel),
         ratioResults: s.includePrior ? ratioRows : stripPriorFromRatios(ratioRows),
         accountantProfile: p,
         isDemo,
@@ -2302,7 +2392,7 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
         ? MOCK_INTERVENTIONS
         : await buildInterventions(cd!.ratioResults, operatingProfile);
       return renderToBlob(InterventionPriorityPDF, {
-        smeData: makeSmeWithNote(s, isDemo),
+        smeData: makeSmeWithNote(s, isDemo, cd?.dataPeriodLabel),
         interventions,
         accountantProfile: p,
         isDemo,
@@ -2318,7 +2408,7 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
         "No cash forecast saved for this client — configure the Cash tab before generating.",
       );
       return renderToBlob(CashForecastPDF, {
-        smeData: makeSmeWithNote(s, isDemo),
+        smeData: makeSmeWithNote(s, isDemo, cd?.dataPeriodLabel),
         cashForecast: isDemo ? MOCK_FORECAST : data!,
         scenario: "moderate",
         accountantProfile: p,
@@ -2338,7 +2428,7 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
         "Working-capital report needs debtor/inventory days — add receivables and inventory.",
       );
       return renderToBlob(CashCyclePDF, {
-        smeData: makeSmeWithNote(s, isDemo),
+        smeData: makeSmeWithNote(s, isDemo, cd?.dataPeriodLabel),
         workingCapitalData: isDemo ? MOCK_WC : data!,
         accountantProfile: p,
         isDemo,
@@ -2354,7 +2444,7 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
         "Profitability waterfall needs revenue, COGS, EBIT, and net income — never invents gross profit.",
       );
       return renderToBlob(ProfitabilityWaterfallPDF, {
-        smeData: makeSmeWithNote(s, isDemo),
+        smeData: makeSmeWithNote(s, isDemo, cd?.dataPeriodLabel),
         profitabilityData: (() => {
           const d = isDemo ? MOCK_PROFIT : data!;
           return s.includePrior ? d : withoutPriorProfit(d);
@@ -2373,7 +2463,7 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
         "Leverage report needs equity and total assets.",
       );
       return renderToBlob(LeverageSolvencyPDF, {
-        smeData: makeSmeWithNote(s, isDemo),
+        smeData: makeSmeWithNote(s, isDemo, cd?.dataPeriodLabel),
         data: isDemo ? MOCK_LEVERAGE : data!,
         accountantProfile: p,
         isDemo,
@@ -2389,7 +2479,7 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
         "Asset productivity needs asset turnover, equity multiplier, and net margin.",
       );
       return renderToBlob(AssetProductivityPDF, {
-        smeData: makeSmeWithNote(s, isDemo),
+        smeData: makeSmeWithNote(s, isDemo, cd?.dataPeriodLabel),
         data: isDemo ? MOCK_ASSETS : data!,
         accountantProfile: p,
         isDemo,
@@ -2404,7 +2494,7 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
       // The ZIP used to skip it when liveOrDemo threw.
       if (cd && !cd.labor) {
         return renderToBlob(LaborProductivityPDF, {
-          smeData: makeSmeWithNote(s, false),
+          smeData: makeSmeWithNote(s, false, cd?.dataPeriodLabel),
           data: null,
           unavailableReason:
             "Labor productivity needs revenue, headcount, and labor cost on the file. Those inputs are missing, so no ratios were calculated.",
@@ -2418,7 +2508,7 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
       const isDemo = !cd;
       const laborData = isDemo ? MOCK_LABOR : cd!.labor!;
       return renderToBlob(LaborProductivityPDF, {
-        smeData: makeSmeWithNote(s, isDemo),
+        smeData: makeSmeWithNote(s, isDemo, cd?.dataPeriodLabel),
         data: s.includePrior ? laborData : withoutPriorLabor(laborData),
         accountantProfile: p,
         isDemo,
@@ -2433,7 +2523,7 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
       // renders its own "first period on record" state instead of erroring.
       const isDemo = !cd;
       return renderToBlob(RatioMovementPDF, {
-        smeData: makeSmeWithNote(s, isDemo),
+        smeData: makeSmeWithNote(s, isDemo, cd?.dataPeriodLabel),
         ratios: isDemo ? MOCK_MOVEMENT : cd!.movement,
         periodLabels: isDemo ? undefined : cd!.movementPeriodLabels,
         accountantProfile: p,
@@ -2457,7 +2547,7 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
       }
       const isDemo = !cd;
       return renderToBlob(BenchmarkReportPDF, {
-        smeData: makeSmeWithNote(s, isDemo),
+        smeData: makeSmeWithNote(s, isDemo, cd?.dataPeriodLabel),
         industryCode: industry.code,
         industryName: cd?.benchmarkSector
           ? industry.name
@@ -2487,7 +2577,7 @@ function buildGEN(clientData: ClientReportData | null): Record<string, GenFn> {
           name: isDemo ? s.smeName || "Demo Client" : cd!.clientName,
           period: isDemo
             ? `${model.periodLabel} · Demo Data — illustrative figures`
-            : model.periodLabel,
+            : cd?.dataPeriodLabel || model.periodLabel,
         },
         model,
         accountantProfile: p,
@@ -3237,7 +3327,7 @@ function PlaybookRatioCard({ ratio, onClick }: { ratio: PlaybookRatio; onClick: 
               : TIER_CHIP[ratio.health_tier]
           }`}
         >
-          {ratio.unscored ? "No data" : healthBandLabel(ratio.health_tier)}
+          {ratio.unscored ? NOT_SCORED_LABEL : healthBandLabel(ratio.health_tier)}
         </span>
       </div>
       {/* Score bar */}
@@ -3248,7 +3338,7 @@ function PlaybookRatioCard({ ratio, onClick }: { ratio: PlaybookRatio; onClick: 
         />
       </div>
       <p className="text-[10px] text-muted-foreground group-hover:text-foreground transition-colors">
-        {ratio.unscored ? "No score yet" : `Score ${ratio.health_score}`} · View steps →
+        {ratio.unscored ? NOT_SCORED_LABEL : `Score ${ratio.health_score}`} · View steps →
       </p>
     </button>
   );
@@ -3415,8 +3505,14 @@ export function ReportsStudio({
         if (cancelled) return;
         setClientData(data);
         // Keep smeName in sync with the client's real name if it differs
-        if (data.clientName) {
-          setSettings((prev) => ({ ...prev, smeName: data.clientName }));
+        if (data.clientName || data.periodMonth) {
+          setSettings((prev) => ({
+            ...prev,
+            ...(data.clientName ? { smeName: data.clientName } : {}),
+            ...(data.periodMonth && data.periodYear
+              ? { periodMonth: data.periodMonth, periodYear: data.periodYear }
+              : {}),
+          }));
         }
       })
       .catch((err) => {
@@ -3433,19 +3529,13 @@ export function ReportsStudio({
   // Build the GEN map from real client data (or null = demo data)
   const GEN = useMemo(() => buildGEN(clientData), [clientData]);
   const playbookRatios = useMemo(() => {
-    if (!clientData?.hasData) return PLAYBOOK_RATIOS;
-    const map = healthMapFromRatios(clientData.rawRatios, clientData.market);
-    return PLAYBOOK_RATIOS.map((row) => {
-      const scored = scorePlaybookRatio(row.ratio_key, map);
-      if (!scored || scored.unscored) return { ...row, unscored: true };
-      return {
-        ...row,
-        health_score: scored.health_score,
-        health_tier: scored.health_tier,
-        unscored: false,
-      };
-    });
-  }, [clientData]);
+    // A linked client never shows the no-client demo scores (Creditor Days 75, …).
+    if (!clientId) return PLAYBOOK_RATIOS;
+    if (!clientData?.hasData) {
+      return PLAYBOOK_RATIOS.map((row) => ({ ...row, health_score: 0, unscored: true }));
+    }
+    return scorePlaybookCatalogue(PLAYBOOK_RATIOS, clientData.rawRatios, clientData.market);
+  }, [clientId, clientData]);
 
   // Clean up blob URL on close
   const closePreview = useCallback(() => {
@@ -3481,7 +3571,7 @@ export function ReportsStudio({
         runway: clientData?.cashRunwayWeeks ?? null,
         reportKey,
       }),
-      periodLabel: `${settings.periodMonth} ${settings.periodYear}`,
+      periodLabel: clientData?.dataPeriodLabel || `${settings.periodMonth} ${settings.periodYear}`,
       createdBy: user.id,
       // ZIP is not a single PDF artifact — skip blob archive for zip_all.
       pdfBlob: reportKey === "zip_all" ? null : (pdfBlob ?? null),
@@ -3498,7 +3588,7 @@ export function ReportsStudio({
     try {
       const blob = await GEN[report.key](settings, profile);
       const copy = reportCopy(report, clientData?.market ?? ZA_MARKET);
-      triggerDownload(blob, makeSafeFilename(settings, copy.filename));
+      triggerDownload(blob, makeSafeFilename(settings, copy.filename, clientData?.dataPeriodLabel));
       toast.success(`${copy.name} downloaded.`);
       track("report_downloaded", {
         surface: "reports",
@@ -3659,7 +3749,10 @@ export function ReportsStudio({
       const sme = (settings.smeName || "Client")
         .replace(/[^a-zA-Z0-9]+/g, "_")
         .replace(/^_|_$/g, "");
-      triggerDownload(zipBlob, `${sme}_${settings.periodMonth}_${settings.periodYear}_Reports.zip`);
+      const zipPeriod = periodFileSlug(
+        clientData?.dataPeriodLabel || `${settings.periodMonth} ${settings.periodYear}`,
+      );
+      triggerDownload(zipBlob, `${sme}_${zipPeriod}_Reports.zip`);
       toast.success("All reports downloaded as ZIP.");
       await recordReportIssued(clientId);
       await logReportDelivery("zip_all");
@@ -3709,6 +3802,7 @@ export function ReportsStudio({
               a.download = makeSafeFilename(
                 settings,
                 reportCopy(deepLinkReport, clientData?.market ?? ZA_MARKET).filename,
+                clientData?.dataPeriodLabel,
               );
               a.click();
               return;
@@ -3954,6 +4048,7 @@ export function ReportsStudio({
           a.download = makeSafeFilename(
             settings,
             reportCopy(report, clientData?.market ?? ZA_MARKET).filename,
+            clientData?.dataPeriodLabel,
           );
           a.click();
         }}
