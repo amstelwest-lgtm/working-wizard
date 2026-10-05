@@ -372,3 +372,8 @@ export function useAccountantProfile(): AccountantProfileContextValue {
   }
   return ctx;
 }
+
+/** Null outside the provider (tests, or a shell that has not mounted it). */
+export function useOptionalAccountantProfile(): AccountantProfileContextValue | null {
+  return useContext(AccountantProfileContext);
+}

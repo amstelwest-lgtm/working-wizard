@@ -10,6 +10,7 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { useFirmClients } from "@/hooks/use-firm-clients";
 import {
   featureFinderShortcutLabel,
   isFeatureFinderShortcut,
@@ -19,6 +20,12 @@ import {
   type FeatureDestination,
   type FeatureResult,
 } from "@/lib/feature-finder";
+import {
+  CLIENTS_GROUP,
+  includeClientGroup,
+  paletteEmptyCopy,
+  searchClients,
+} from "@/lib/feature-finder-clients";
 import { openOwnerSettings, openPracticeSettings } from "@/lib/user-roles";
 import { cn } from "@/lib/utils";
 import "@/styles/feature-finder.css";
@@ -49,6 +56,15 @@ export function FeatureFinder({ audience, clientId = null, chrome = "portal" }: 
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [mac, setMac] = useState(false);
+  const [listEpoch, setListEpoch] = useState(0);
+  const showClients = includeClientGroup(audience);
+  // Warm the firm list on mount, then refresh when the palette opens.
+  // Typing filters that list in memory.
+  const { clients, loading: clientsLoading } = useFirmClients(showClients, listEpoch);
+
+  useEffect(() => {
+    if (open) setListEpoch((n) => n + 1);
+  }, [open]);
 
   useEffect(() => {
     setMac(isMacPlatform(navigator.platform, navigator.userAgent));
@@ -69,8 +85,19 @@ export function FeatureFinder({ audience, clientId = null, chrome = "portal" }: 
     [query, audience, clientId],
   );
   const groups = useMemo(() => groupResults(match.results), [match.results]);
+  const clientHits = useMemo(
+    () => (showClients ? searchClients(query, clients) : []),
+    [showClients, query, clients],
+  );
   const shortcut = featureFinderShortcutLabel(mac);
   const showClientHint = audience === "accountant" && !clientId?.trim();
+  const emptyCopy = paletteEmptyCopy({
+    needsClient: match.needsClient,
+    featureCount: match.results.length,
+    clientCount: clientHits.length,
+    clientsLoading: showClients && clientsLoading,
+  });
+  const searchLabel = showClients ? "features and clients" : "features";
 
   const onOpenChange = (next: boolean) => {
     setOpen(next);
@@ -100,6 +127,15 @@ export function FeatureFinder({ audience, clientId = null, chrome = "portal" }: 
     void navigate({ to: "/settings" });
   };
 
+  const openClientFile = (id: string) => {
+    onOpenChange(false);
+    void navigate({
+      to: "/clients/$clientId",
+      params: { clientId: id },
+      search: {},
+    });
+  };
+
   return (
     <>
       <button
@@ -109,7 +145,7 @@ export function FeatureFinder({ audience, clientId = null, chrome = "portal" }: 
             ? "inline-flex h-7 shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50/80 px-2.5 text-[11px] font-semibold text-slate-700 transition-colors hover:border-[#b7872a]/50 hover:bg-[#d4a550]/10 dark:border-slate-700/80 dark:bg-slate-900/70 dark:text-slate-200"
             : "feature-finder-trigger",
         )}
-        aria-label={`Search features (${shortcut})`}
+        aria-label={`Search ${searchLabel} (${shortcut})`}
         aria-keyshortcuts={mac ? "Meta+K" : "Control+K"}
         aria-haspopup="dialog"
         aria-expanded={open}
@@ -136,24 +172,22 @@ export function FeatureFinder({ audience, clientId = null, chrome = "portal" }: 
 
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="feature-finder feature-finder-dialog top-[14vh] w-[calc(100vw-1.5rem)] translate-y-0 gap-0 overflow-hidden p-0 sm:max-w-[36rem] sm:rounded-2xl sm:p-0">
-          <DialogTitle className="sr-only">Search features</DialogTitle>
+          <DialogTitle className="sr-only">Search {searchLabel}</DialogTitle>
           <DialogDescription className="sr-only">
-            Jump to Health, Cash, Collections, and other product functions.
+            {showClients
+              ? "Jump to a client, or to Health, Cash, Collections, and other product functions."
+              : "Jump to Health, Cash, Collections, and other product functions."}
           </DialogDescription>
           <Command shouldFilter={false} className="bg-transparent text-inherit">
             <CommandInput
               autoFocus
               value={query}
               onValueChange={setQuery}
-              placeholder="Search features…"
+              placeholder={showClients ? "Search features and clients…" : "Search features…"}
               className="h-12 pr-8"
             />
             <CommandList className="max-h-[min(360px,50vh)] px-1 pb-1">
-              <CommandEmpty className="feature-finder-empty">
-                {match.needsClient
-                  ? "Open a client to jump to Health, Cash, Collections, and the rest."
-                  : "No matching features."}
-              </CommandEmpty>
+              <CommandEmpty className="feature-finder-empty">{emptyCopy}</CommandEmpty>
               {groups.map((group) => (
                 <CommandGroup key={group.group} heading={group.group}>
                   {group.items.map((item) => (
@@ -169,10 +203,31 @@ export function FeatureFinder({ audience, clientId = null, chrome = "portal" }: 
                   ))}
                 </CommandGroup>
               ))}
+              {clientHits.length > 0 ? (
+                <CommandGroup heading={CLIENTS_GROUP}>
+                  {clientHits.map((item) => (
+                    <CommandItem
+                      key={item.id}
+                      value={item.id}
+                      onSelect={() => openClientFile(item.clientId)}
+                      className="gap-3 px-3 py-2.5"
+                    >
+                      <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                      <span className="feature-finder-hint shrink-0">{item.hint}</span>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              ) : null}
             </CommandList>
           </Command>
           <div className="feature-finder-foot">
-            <span>{showClientHint ? "Open a client for the studio pages." : "Features"}</span>
+            <span>
+              {showClientHint
+                ? "Open a client for the studio pages, or search the firm."
+                : showClients
+                  ? "Features and clients"
+                  : "Features"}
+            </span>
             <span>↑↓ · Enter · Esc</span>
           </div>
         </DialogContent>
