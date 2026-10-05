@@ -24,11 +24,13 @@ import {
   buildFollowUpQueue,
   buildPortfolioInsights,
   clientsAddedThisMonth,
+  attentionFootnote,
   dataAsOfLabel,
   derivePriority,
   firstNameOf,
   portfolioSummaryLine,
   revenueOf,
+  summarizePortfolioAttention,
   timeGreeting,
   trendDelta30d,
   type PriorityLevel,
@@ -52,6 +54,7 @@ import { useAccountantProfile } from "@/contexts/accountant-profile";
 import { WalkthroughWizard } from "@/components/walkthrough-wizard";
 import { MarketPicker } from "@/components/market-picker";
 import {
+  clientMarketDraftFromFirm,
   coerceMarketSelection,
   draftToSelection,
   formatMoney,
@@ -341,6 +344,7 @@ function AddClientDialog({
   onClose,
   onAdded,
   firmId,
+  firmMarket,
   brandLoading = false,
   defaultName = "",
   heading = "Add a client",
@@ -357,6 +361,8 @@ function AddClientDialog({
     contact_email?: string | null;
   }) => void;
   firmId: string | null;
+  /** Saved practice market. When set, the country/currency starts there (ZAR for ZA). */
+  firmMarket?: unknown;
   brandLoading?: boolean;
   defaultName?: string;
   heading?: string;
@@ -368,7 +374,9 @@ function AddClientDialog({
   const [newType, setNewType] = useState("");
   const [ownerEmail, setOwnerEmail] = useState("");
   const [saving, setSaving] = useState(false);
-  const [draftMarket, setDraftMarket] = useState<DraftMarket>({ country: "ZA", regionCode: null });
+  const [draftMarket, setDraftMarket] = useState<DraftMarket>(() =>
+    clientMarketDraftFromFirm(firmMarket),
+  );
   const inputRef = useRef<HTMLInputElement>(null);
   const createClient = useServerFn(createFirmClient);
   const inviteOwner = useServerFn(inviteClientOwner);
@@ -380,27 +388,32 @@ function AddClientDialog({
   const [upgrading, setUpgrading] = useState(false);
 
   useEffect(() => {
-    if (open) {
-      setNewName(defaultName);
-      setNewType("");
-      setOwnerEmail("");
-      setDraftMarket({ country: "ZA", regionCode: null });
-      if (firmId) {
-        void supabase
-          .from("firms")
-          .select("market")
-          .eq("id", firmId)
-          .maybeSingle()
-          .then(({ data }) => {
-            const sel =
-              parseMarketSelection((data as { market?: unknown } | null)?.market) ??
-              coerceMarketSelection(null);
-            setDraftMarket({ country: sel.country, regionCode: sel.regionCode });
-          });
-      }
-      setTimeout(() => inputRef.current?.focus(), 50);
+    if (!open) return;
+    let cancelled = false;
+    setNewName(defaultName);
+    setNewType("");
+    setOwnerEmail("");
+    setDraftMarket(clientMarketDraftFromFirm(firmMarket));
+    // Firm row already carries market. Fetch only when that value was not loaded.
+    if (firmMarket == null && firmId) {
+      void supabase
+        .from("firms")
+        .select("market")
+        .eq("id", firmId)
+        .maybeSingle()
+        .then(({ data }) => {
+          if (cancelled) return;
+          setDraftMarket(
+            clientMarketDraftFromFirm((data as { market?: unknown } | null)?.market),
+          );
+        });
     }
-  }, [open, defaultName, firmId]);
+    const focus = setTimeout(() => inputRef.current?.focus(), 50);
+    return () => {
+      cancelled = true;
+      clearTimeout(focus);
+    };
+  }, [open, defaultName, firmId, firmMarket]);
 
   useEffect(() => {
     if (!open) {
@@ -660,6 +673,11 @@ function AddClientDialog({
                   variant="app"
                   audience="practice"
                 />
+                <p style={{ margin: "8px 0 0", fontSize: 12, color: "var(--ink-dim)", lineHeight: 1.45 }}>
+                  {draftMarket.country === "US"
+                    ? "Currency: US dollars (USD). Change the country if this client is not in the United States."
+                    : "Currency: rand (ZAR). Change the country if this client is not in South Africa."}
+                </p>
               </div>
               <div style={{ marginBottom: 24 }}>
                 <label
@@ -1303,21 +1321,20 @@ function Dashboard() {
   const avgHealth = scoredRows.length
     ? Math.round(scoredRows.reduce((s, c) => s + (c.score as number), 0) / scoredRows.length)
     : null;
-  // "Needs attention" = display status (includes critical-pillar demotion to Watch).
-  const atRiskCount = clientRows.filter(
-    (c) => c.health.overall != null && c.health.displayStatus !== "healthy",
-  ).length;
-  const criticalCount = clientRows.filter((c) => c.health.displayStatus === "critical").length;
   const openQueriesTotal = clientRows.reduce((s, c) => s + c.openQueries, 0);
   const addedThisMonth = clientsAddedThisMonth(clientRows);
   const healthDelta = avgHealthDelta(clientRows);
   const greetName = firstNameOf(profile.accountantName || user?.email?.split("@")[0]);
   const greeting = `${timeGreeting()}, ${greetName}.`;
-  const summaryLine = portfolioSummaryLine({
-    clientCount: clientRows.length,
-    needAttention: atRiskCount,
-    avgHealth,
-  });
+  const bookLoading = loading || brandLoading;
+  const attention = summarizePortfolioAttention(clientRows);
+  const summaryLine = bookLoading
+    ? "Loading your clients…"
+    : portfolioSummaryLine({
+        clientCount: clientRows.length,
+        needAttention: attention.needAttention,
+        avgHealth,
+      });
   const asOf = dataAsOfLabel();
 
   const attentionItems = useMemo(
@@ -1595,7 +1612,7 @@ function Dashboard() {
 
         {/* ===== STATS STRIP ===== */}
         <div className="stats-strip" id="wizard-practice-board">
-          {loading ? (
+          {bookLoading ? (
             <>
               {Array.from({ length: 4 }).map((_, i) => (
                 <SkeletonTile key={i} className="min-h-[72px]" />
@@ -1657,14 +1674,10 @@ function Dashboard() {
                     <path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0zM12 9v4M12 17h.01" />
                   </svg>
                 }
-                value={atRiskCount}
-                valueClassName={atRiskCount ? "text-[var(--risk)]" : "text-[var(--ok)]"}
+                value={attention.needAttention}
+                valueClassName={attention.needAttention ? "text-[var(--risk)]" : "text-[var(--ok)]"}
                 footnote={
-                  <div className="warn">
-                    {atRiskCount === 0
-                      ? "All clear"
-                      : `${criticalCount} critical · ${Math.max(0, atRiskCount - criticalCount)} declining`}
-                  </div>
+                  <div className="warn">{attentionFootnote(attention)}</div>
                 }
               />
 
@@ -1688,7 +1701,7 @@ function Dashboard() {
         </div>
 
         {/* Thin strip only when something is actually urgent. No empty celebration. */}
-        {!loading && attentionItems.length > 0 ? (
+        {!bookLoading && attentionItems.length > 0 ? (
           <section className="attn-strip" id="needs-attention" aria-label="Needs attention">
             <h2>Needs attention</h2>
             <ul>
@@ -1757,7 +1770,7 @@ function Dashboard() {
           </button>
         </div>
 
-        {loading ? (
+        {bookLoading ? (
           <SkeletonBlock className="h-72 w-full rounded-[20px]" aria-label="Loading clients" />
         ) : filteredRows.length === 0 ? (
           clientRows.length === 0 ? (
@@ -2161,6 +2174,7 @@ function Dashboard() {
             }
           }}
           firmId={firm?.id ?? firmId}
+          firmMarket={firms.find((f) => f.id === (firm?.id ?? firmId))?.market ?? null}
           brandLoading={brandLoading}
           heading={firstClientOpen ? "Add your first client" : "Add a client"}
           blurb={

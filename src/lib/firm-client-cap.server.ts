@@ -7,8 +7,10 @@ import { getSupabaseAdminOrNull } from "@/integrations/supabase/client.server";
 import {
   bandIdFromStripeMetadata,
   decideFirmClientCreate,
+  formatFirmPlanStatus,
   phaseFromSubscriptionStatus,
   type FirmClientCreateAllowance,
+  type FirmPlanDisplay,
   type FirmSubscriptionPhase,
 } from "@/lib/firm-client-cap";
 import type { FirmBandId } from "@/lib/stripe-plans";
@@ -19,6 +21,8 @@ export type EntitlingFirmSubscription = {
   id: string;
   phase: Exclude<FirmSubscriptionPhase, "none">;
   band: FirmBandId | null;
+  /** ISO timestamp when the subscription is trialing; otherwise null. */
+  trialEnd: string | null;
 };
 
 type FirmRow = { id?: string; owner_user_id?: string | null };
@@ -73,10 +77,15 @@ export async function findEntitlingFirmSubscription(
   if (!hit) return null;
   const phase = phaseFromSubscriptionStatus(hit.status);
   if (phase === "none") return null;
+  const trialEndSeconds = (hit as { trial_end?: number | null }).trial_end;
   return {
     id: hit.id,
     phase,
     band: bandIdFromStripeMetadata({ milon_plan: hit.metadata?.milon_plan }),
+    trialEnd:
+      typeof trialEndSeconds === "number" && Number.isFinite(trialEndSeconds)
+        ? new Date(trialEndSeconds * 1000).toISOString()
+        : null,
   };
 }
 
@@ -165,5 +174,48 @@ export async function loadFirmClientCreateAllowance(input: {
   return {
     ...decision,
     canEndTrial: decision.code === "trial_client_cap" && billing.actorIsBillingCustomer,
+  };
+}
+
+/**
+ * Read-only plan/trial line. Reuses the subscription lookup the client-cap
+ * gate already performs. Does not create Stripe customers, subscriptions, or prices.
+ */
+export async function loadFirmPlanDisplay(input: {
+  supabase: unknown;
+  userId: string;
+  email: string;
+  firmId: string | null;
+}): Promise<FirmPlanDisplay> {
+  if (!stripeConfigured()) {
+    return { configured: false, phase: "none", band: null, headline: null, detail: null };
+  }
+
+  const userDb = asCapDb(input.supabase);
+  let email = input.email.trim();
+  if (!email && userDb.auth) {
+    const { data } = await userDb.auth.getUser();
+    email = data.user?.email?.trim() ?? "";
+  }
+
+  const admin = getSupabaseAdminOrNull();
+  const db = admin ? asCapDb(admin) : userDb;
+  const firm = await loadFirm(db, input.firmId, input.userId);
+  if (!firm) {
+    return {
+      configured: true,
+      ...formatFirmPlanStatus({ phase: "none", band: null }),
+    };
+  }
+
+  const billing = await billingEmailForFirm(input.userId, email, firm.ownerUserId);
+  const sub = billing.email ? await findEntitlingFirmSubscription(billing.email) : null;
+  return {
+    configured: true,
+    ...formatFirmPlanStatus({
+      phase: sub?.phase ?? "none",
+      band: sub?.band ?? null,
+      trialEndIso: sub?.trialEnd ?? null,
+    }),
   };
 }

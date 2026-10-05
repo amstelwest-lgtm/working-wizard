@@ -24,7 +24,7 @@ const DEFAULT_BRAND: FirmBrandProfile = {
 };
 
 const FIRM_SELECT =
-  "id, name, owner_user_id, referral_code, logo_url, accent_color, primary_color, secondary_color, tagline, brand_contact_name, brand_contact_email, brand_updated_at";
+  "id, name, owner_user_id, referral_code, logo_url, accent_color, primary_color, secondary_color, tagline, brand_contact_name, brand_contact_email, brand_updated_at, market";
 
 export type FirmBrandRow = {
   id: string;
@@ -39,6 +39,8 @@ export type FirmBrandRow = {
   brand_contact_name: string | null;
   brand_contact_email: string | null;
   brand_updated_at: string | null;
+  /** Practice home market `{country, regionCode}`. Null until the firm picks one. */
+  market?: unknown | null;
 };
 
 function activeFirmStorageKey(userId: string): string {

@@ -1607,13 +1607,19 @@ function ClientView() {
   // ── Upload confirm ────────────────────────────────────────────────────────
 
   const handleConfirmFinancials = useCallback(
-    async (result: ExtractionResult, autoPopulate?: AutoPopulatePrefs) => {
+    async (
+      result: ExtractionResult,
+      autoPopulate?: AutoPopulatePrefs,
+      period?: { periodEnd: string; periodLabel: string },
+    ) => {
       const inputs = extractionToRatioInputs(result);
       const ratiosOut = computeRatios(inputs);
-      const rawDate = result.current_period.period_end;
-      const periodDate = rawDate ?? new Date().toISOString().slice(0, 10);
-      const d = new Date(periodDate);
-      const periodLabel = d.toLocaleString("en-US", { month: "short", year: "numeric" });
+      const periodDate = period?.periodEnd?.trim() ?? "";
+      const periodLabel = period?.periodLabel?.trim() ?? "";
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(periodDate) || !periodLabel) {
+        toast.error("Choose the statement period before importing.");
+        return;
+      }
 
       const { data: existing } = await supabase
         .from("client_financial_snapshots")
@@ -3511,8 +3517,8 @@ function ClientView() {
                   information you upload.
                 </p>
                 <UploadFinancials
-                  onConfirm={(result, prefs) => {
-                    void handleConfirmFinancials(result, prefs);
+                  onConfirm={(result, prefs, period) => {
+                    void handleConfirmFinancials(result, prefs, period);
                   }}
                   autoPopulate={
                     autoPopulateState ? { ...autoPopulateState, role: "accountant" } : null

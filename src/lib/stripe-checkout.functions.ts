@@ -12,7 +12,10 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { AuthCtx } from "@/lib/owner-ops.guard";
 import { getStripe, stripeConfigured } from "@/lib/stripe.server";
 import { eligibleForIntroTrial } from "@/lib/firm-client-cap";
-import { findEntitlingFirmSubscription } from "@/lib/firm-client-cap.server";
+import {
+  findEntitlingFirmSubscription,
+  loadFirmPlanDisplay,
+} from "@/lib/firm-client-cap.server";
 import {
   FIRM_CHECKOUT_BANDS,
   FOUNDING_PROMO_CODE,
@@ -345,6 +348,26 @@ export const endFirmTrialNow = createServerFn({ method: "POST" })
     });
     forgetEntitlement(email);
     return { ok: true as const };
+  });
+
+/**
+ * Read-only plan and trial line for practice Settings.
+ * Uses the same subscription lookup as the billing gate. Does not create Stripe objects.
+ */
+export const getFirmPlanDisplay = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) =>
+    z.object({ firmId: z.string().uuid().nullable().optional() }).parse(input ?? {}),
+  )
+  .handler(async ({ data, context }) => {
+    const ctx = context as unknown as BillingAuthCtx;
+    const { userId, email } = await checkoutActor(ctx);
+    return loadFirmPlanDisplay({
+      supabase: ctx.supabase,
+      userId,
+      email,
+      firmId: data.firmId ?? null,
+    });
   });
 
 /** Live Stripe entitlement for the accountant firm shell. */

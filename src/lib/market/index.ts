@@ -55,6 +55,7 @@ export {
 export type { MoneyMarket } from "./format";
 export {
   assertMarketSelection,
+  clientMarketDraftFromFirm,
   coerceMarketSelection,
   draftToSelection,
   isDraftComplete,

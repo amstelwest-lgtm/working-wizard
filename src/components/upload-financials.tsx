@@ -33,6 +33,12 @@ import {
 } from "@/lib/spreadsheet-text";
 import { pdfTransport, unstage, type PdfTransport } from "@/lib/staged-upload-browser";
 import { statementNoteSections } from "@/lib/statement-notes";
+import {
+  detectImportPeriod,
+  importMonthNames,
+  importPeriodFromParts,
+  type ConfirmedImportPeriod,
+} from "@/lib/import-period";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -119,7 +125,11 @@ function IssueList({ issues }: { issues: ValidationIssue[] }) {
 // ─── main component ───────────────────────────────────────────────────────────
 
 export type UploadFinancialsProps = {
-  onConfirm?: (result: ExtractionResult, autoPopulate: AutoPopulatePrefs) => void;
+  onConfirm?: (
+    result: ExtractionResult,
+    autoPopulate: AutoPopulatePrefs,
+    period: ConfirmedImportPeriod,
+  ) => void;
   /** Per-client auto-populate state; undefined → first upload. */
   autoPopulate?: AutoPopulateDialogState | null;
 };
@@ -132,11 +142,20 @@ export function UploadFinancials({ onConfirm, autoPopulate }: UploadFinancialsPr
   const [issues, setIssues] = useState<ValidationIssue[]>([]);
   const [autoSafe, setAutoSafe] = useState(false);
   const [acceptedQuality, setAcceptedQuality] = useState(false);
+  const [periodMonth, setPeriodMonth] = useState("");
+  const [periodYear, setPeriodYear] = useState("");
   const [autoPrefs, setAutoPrefs] = useState<AutoPopulatePrefs>(
     autoPopulate?.prefs ?? defaultAutoPopulatePrefs(),
   );
 
   const extract = useServerFn(extractFinancialsFromPDF);
+  const monthNames = importMonthNames();
+
+  function seedPeriod(periodEnd: string | null | undefined) {
+    const detected = detectImportPeriod(periodEnd);
+    setPeriodMonth(detected ? String(detected.month) : "");
+    setPeriodYear(detected ? String(detected.year) : "");
+  }
 
   async function handleFile(file: File) {
     const pdf = isPdfFile(file);
@@ -173,6 +192,7 @@ export function UploadFinancials({ onConfirm, autoPopulate }: UploadFinancialsPr
       setResult(res.data);
       setIssues(res.issues);
       setAutoSafe(res.autoImportSafe);
+      seedPeriod(res.data.current_period.period_end);
       setStatus("review");
     } catch (e) {
       toast.error((e as Error).message ?? "Extraction failed.");
@@ -190,6 +210,8 @@ export function UploadFinancials({ onConfirm, autoPopulate }: UploadFinancialsPr
     setIssues([]);
     setAutoSafe(false);
     setAcceptedQuality(false);
+    setPeriodMonth("");
+    setPeriodYear("");
     if (inputRef.current) inputRef.current.value = "";
   }
 
@@ -274,6 +296,11 @@ export function UploadFinancials({ onConfirm, autoPopulate }: UploadFinancialsPr
   if (!result) return null;
   const is = result.current_period.figures.income_statement;
   const bs = result.current_period.figures.balance_sheet;
+  const chosenPeriod = importPeriodFromParts(periodYear, periodMonth);
+  const periodDetected = detectImportPeriod(result.current_period.period_end) != null;
+  const confirmLabel = chosenPeriod
+    ? `I have reviewed these figures and confirm they should be imported for ${chosenPeriod.periodLabel}. ${UPLOAD_QUALITY_DISCLAIMER}`
+    : `I have reviewed these figures and confirm they should be imported for the period I select. ${UPLOAD_QUALITY_DISCLAIMER}`;
 
   return (
     <div className="space-y-5">
@@ -300,11 +327,11 @@ export function UploadFinancials({ onConfirm, autoPopulate }: UploadFinancialsPr
                 {result.statement_basis.replace(/_/g, " ")}
               </Badge>
             )}
-            {result.current_period.period_end && (
-              <Badge variant="outline" className="text-xs">
-                Period end: {result.current_period.period_end}
-              </Badge>
-            )}
+            <Badge variant="outline" className="text-xs">
+              {periodDetected && result.current_period.period_end
+                ? `Extracted period end: ${result.current_period.period_end}`
+                : "Extracted period: Unknown"}
+            </Badge>
           </div>
         </div>
         <div
@@ -580,20 +607,85 @@ export function UploadFinancials({ onConfirm, autoPopulate }: UploadFinancialsPr
       )}
 
       {/* Actions */}
+      <div className="rounded-lg border border-white/10 bg-black/20 px-3 py-3">
+        <p className="text-xs font-semibold uppercase tracking-wider text-[var(--ink,#e7e5e4)]">
+          Statement period
+        </p>
+        <p className="mt-1 text-xs leading-relaxed text-[var(--ink-dim,#a8a29e)]">
+          {periodDetected
+            ? "We read a period from the file. Check it, and change the month or year if it is wrong."
+            : "Period not detected. Choose the month and year these figures belong to before importing. We will not assume the current month."}
+        </p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <label className="text-xs text-[var(--ink,#e7e5e4)]" htmlFor="import-period-month">
+            Month
+            <select
+              id="import-period-month"
+              className="mt-1 block h-9 min-w-[9rem] rounded-md border border-white/15 bg-black/30 px-2 text-sm text-[var(--ink,#e7e5e4)]"
+              value={periodMonth}
+              onChange={(e) => setPeriodMonth(e.target.value)}
+            >
+              <option value="">Select month</option>
+              {monthNames.map((name, index) => (
+                <option key={name} value={String(index + 1)}>
+                  {name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="text-xs text-[var(--ink,#e7e5e4)]" htmlFor="import-period-year">
+            Year
+            <Input
+              id="import-period-year"
+              inputMode="numeric"
+              placeholder="Year"
+              value={periodYear}
+              onChange={(e) => setPeriodYear(e.target.value.replace(/[^\d]/g, "").slice(0, 4))}
+              className="mt-1 h-9 w-28 bg-black/30 border-white/15 text-[var(--ink,#e7e5e4)]"
+              aria-label="Statement year"
+            />
+          </label>
+        </div>
+        {chosenPeriod ? (
+          <p className="mt-2 text-xs text-[var(--ink,#e7e5e4)]">
+            Importing as {chosenPeriod.periodLabel} (period end {chosenPeriod.periodEnd}).
+          </p>
+        ) : (
+          <p className="mt-2 text-xs text-amber-300">Choose a month and year to continue.</p>
+        )}
+      </div>
+
       <AutoPopulateOptions
         firstUpload={autoPopulate?.firstUpload ?? true}
         value={autoPrefs}
         onChange={setAutoPrefs}
         role={autoPopulate?.role ?? "accountant"}
       />
-      <UploadQualityDisclaimer accepted={acceptedQuality} onChange={setAcceptedQuality} />
+      <UploadQualityDisclaimer
+        inputId="confirm-import-figures"
+        accepted={acceptedQuality}
+        onChange={setAcceptedQuality}
+        label={confirmLabel}
+        className="text-sm text-[var(--ink,#f4f1ea)]"
+      />
       <div className="flex items-center gap-3 pt-2">
         <Button
           onClick={() => {
-            onConfirm?.(result, autoPrefs);
-            toast.success("Financials imported successfully.");
+            if (!chosenPeriod) {
+              toast.error("Choose the statement period before importing.");
+              return;
+            }
+            const stamped: ExtractionResult = {
+              ...result,
+              current_period: {
+                ...result.current_period,
+                period_end: chosenPeriod.periodEnd,
+              },
+            };
+            onConfirm?.(stamped, autoPrefs, chosenPeriod);
+            toast.success(`Financials imported for ${chosenPeriod.periodLabel}.`);
           }}
-          disabled={!acceptedQuality}
+          disabled={!acceptedQuality || !chosenPeriod}
           className="bg-amber-500 hover:bg-amber-400 text-black font-semibold disabled:opacity-50"
         >
           <CheckCircle2 className="h-4 w-4 mr-1.5" />

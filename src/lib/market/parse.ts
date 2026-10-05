@@ -58,6 +58,16 @@ export function coerceMarketSelection(raw: unknown): MarketSelection {
   return parseMarketSelection(raw) ?? ZA_SELECTION;
 }
 
+/**
+ * Add-client country/currency. Uses the practice's saved market when it
+ * parses. Unknown or missing firm market is South Africa (ZAR), never a
+ * visitor or marketing default of the United States.
+ */
+export function clientMarketDraftFromFirm(firmMarket: unknown): DraftMarket {
+  const sel = parseMarketSelection(firmMarket) ?? ZA_SELECTION;
+  return { country: sel.country, regionCode: sel.regionCode };
+}
+
 export function marketToJson(sel: MarketSelection): {
   country: MarketId;
   regionCode: UsStateCode | null;
