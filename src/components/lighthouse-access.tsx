@@ -198,7 +198,7 @@ export function LighthouseAccessPanel() {
               <option value="">Firm…</option>
               {board.firms.map((f) => (
                 <option key={f.id} value={f.id}>
-                  {f.name}
+                  {f.label}
                 </option>
               ))}
             </select>
@@ -238,8 +238,7 @@ export function LighthouseAccessPanel() {
               <option value="">Client…</option>
               {board.clients.map((c) => (
                 <option key={c.id} value={c.id}>
-                  {c.name}
-                  {c.firmName ? ` · ${c.firmName}` : ""}
+                  {c.label}
                 </option>
               ))}
             </select>

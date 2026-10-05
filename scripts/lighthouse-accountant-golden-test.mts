@@ -205,7 +205,8 @@ assert(fns.includes("noCallInstruction"), "call instruction is sequence-scoped")
 const panel = readFileSync(resolve("src/components/lighthouse-panel.tsx"), "utf8");
 assert(panel.includes("Load golden"), "ops primary accountant action is Load golden");
 assert(panel.includes("Rewrite"), "ops exposes Rewrite");
-assert(panel.includes("Draft with Claude"), "owner path keeps Draft with Claude");
+assert(panel.includes("Agent draft"), "owner path drafts with the agent");
+assert(!panel.includes("Claude"), "sales console has no Claude branding");
 assert(panel.includes("mode: \"rewrite\""), "Rewrite passes rewrite mode");
 assert(panel.includes("mode: \"default\""), "Load golden / owner draft pass default mode");
 assert(panel.includes("ACCOUNTANT_ONESHOT_SEQUENCE_KEY"), "playbook shows oneshot sequence");
