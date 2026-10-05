@@ -1,6 +1,6 @@
 # brain-deliverable-draft
 
-Deploy with the shared trial gate at `supabase/functions/_shared/starter-trial-gate.ts` (imported by `index.ts`). The gate imports the app billing modules under `src/lib`. No sibling `logic.ts`. Set `STRIPE_SECRET_KEY` or `STRIPE_RESTRICTED_KEY` on the function or the trial check fails open and generation still runs.
+Deploy with the shared trial gate at `supabase/functions/_shared/starter-trial-gate.ts` (imported by `index.ts`). The gate reads `firms.starter_trial_generation_blocked`. It does not need a billing secret. No sibling `logic.ts`. Apply migration `20261005213000_firm_starter_trial_generation_blocked.sql` before relying on the block. Until a Vercel sync writes the column, the check fails open.
 
 ```bash
 # Supabase CLI

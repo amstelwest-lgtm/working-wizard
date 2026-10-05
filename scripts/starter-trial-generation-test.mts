@@ -17,10 +17,7 @@ import {
   messageFromUnknown,
   starterTrialBlocksGeneration,
 } from "../src/lib/starter-trial-generation";
-import {
-  paidGenerationTrialBlock,
-  trialBannerFromStripeList,
-} from "../supabase/functions/_shared/starter-trial-gate.ts";
+import { paidGenerationTrialBlock } from "../supabase/functions/_shared/starter-trial-gate.ts";
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
@@ -79,51 +76,6 @@ assert(isStarterTrialEndedMessage(STARTER_TRIAL_ENDED_MESSAGE), "the ended sente
 assert(isStarterTrialEndedMessage("blocked: starter_trial_ended"), "the ended code is recognised");
 assert(!isStarterTrialEndedMessage("Could not draft advisory"), "other errors are not the trial");
 
-const now = new Date("2026-10-05T12:00:00.000Z");
-const started = Math.floor(Date.parse("2026-09-01T12:00:00.000Z") / 1000);
-const trialEnd = Math.floor(Date.parse("2026-09-15T12:00:00.000Z") / 1000);
-
-function price(lookup: string) {
-  return {
-    id: `price_${lookup}`,
-    lookup_key: lookup,
-    unit_amount: lookup.includes("starter") ? 0 : 9900,
-    currency: "usd",
-    recurring: { interval: "month" },
-  };
-}
-
-function subscription(id: string, lookup: string, status: string) {
-  return {
-    id,
-    status,
-    created: started,
-    start_date: started,
-    trial_end: lookup.includes("starter") ? trialEnd : null,
-    metadata: { milon_plan: lookup.includes("starter") ? "starter" : "solo" },
-    items: { data: [{ id: `si_${id}`, price: price(lookup) }] },
-  };
-}
-
-const expired = trialBannerFromStripeList({
-  enforced: true,
-  subscriptions: [subscription("sub_starter", "milon_starter_monthly", "active")],
-  now,
-});
-assert(expired.expired, "an enforced Starter past trial_end is expired");
-const paidBand = trialBannerFromStripeList({
-  enforced: true,
-  subscriptions: [subscription("sub_solo", "milon_solo_monthly", "active")],
-  now,
-});
-assert(!paidBand.expired, "a paid band is not an ended Starter trial");
-const exempt = trialBannerFromStripeList({
-  enforced: false,
-  subscriptions: [subscription("sub_starter", "milon_starter_monthly", "active")],
-  now,
-});
-assert(!exempt.expired, "an exempt firm is not expired");
-
 type Row = Record<string, unknown>;
 
 function fakeDb(rows: Record<string, { data: Row | null; error: string | null }>) {
@@ -150,108 +102,100 @@ function fakeDb(rows: Record<string, { data: Row | null; error: string | null }>
   };
 }
 
-const calls: string[] = [];
-const fetchImpl = (async (url: string) => {
-  calls.push(url);
-  if (String(url).includes("/customers?")) {
-    return { ok: true, status: 200, json: async () => ({ data: [{ id: "cus_qa" }] }) };
-  }
-  if (String(url).includes("/subscriptions?")) {
-    return {
-      ok: true,
-      status: 200,
-      json: async () => ({
-        data: [subscription("sub_starter", "milon_starter_monthly", "active")],
-      }),
-    };
-  }
-  return { ok: false, status: 500, json: async () => ({ error: { message: "nope" } }) };
-}) as typeof fetch;
-
-const enforcedFirm = fakeDb({
-  clients: { data: { firm_id: "firm_qa" }, error: null },
-  firms: {
-    data: { id: "firm_qa", owner_user_id: "user_1", starter_trial_enforced: true },
-    error: null,
-  },
-});
-
 const blocked = await paidGenerationTrialBlock({
-  db: enforcedFirm,
-  userId: "user_1",
-  email: "owner@qa.test",
-  clientId: "client_1",
-  now,
-  stripeSecret: "sk_test_gate",
-  fetchImpl,
-});
-assert(blocked?.code === "starter_trial_ended", "the edge gate blocks an ended enforced trial");
-assert(blocked?.message === STARTER_TRIAL_ENDED_MESSAGE, "the edge gate uses the ended sentence");
-assert(calls.length === 2, "the edge gate looks up the customer and the subscriptions");
-
-calls.length = 0;
-const openFirm = await paidGenerationTrialBlock({
   db: fakeDb({
-    clients: { data: { firm_id: "firm_old" }, error: null },
+    clients: { data: { firm_id: "firm_qa" }, error: null },
     firms: {
-      data: { id: "firm_old", owner_user_id: "user_1", starter_trial_enforced: false },
+      data: {
+        id: "firm_qa",
+        starter_trial_enforced: true,
+        starter_trial_generation_blocked: true,
+      },
       error: null,
     },
   }),
   userId: "user_1",
   email: "owner@qa.test",
   clientId: "client_1",
-  now,
-  stripeSecret: "sk_test_gate",
-  fetchImpl,
 });
-assert(openFirm == null, "an exempt firm is not blocked");
-assert(calls.length === 0, "an exempt firm does not call billing");
+assert(blocked?.code === "starter_trial_ended", "the edge gate blocks when the mirror says the trial ended");
+assert(blocked?.message === STARTER_TRIAL_ENDED_MESSAGE, "the edge gate uses the ended sentence");
 
-const noSecret = await paidGenerationTrialBlock({
-  db: enforcedFirm,
+const unsynced = await paidGenerationTrialBlock({
+  db: fakeDb({
+    clients: { data: { firm_id: "firm_qa" }, error: null },
+    firms: {
+      data: {
+        id: "firm_qa",
+        starter_trial_enforced: true,
+        starter_trial_generation_blocked: null,
+      },
+      error: null,
+    },
+  }),
   userId: "user_1",
-  email: "owner@qa.test",
   clientId: "client_1",
-  now,
-  stripeSecret: "",
-  fetchImpl,
 });
-assert(noSecret == null, "a missing billing secret fails open");
+assert(unsynced == null, "a mirror that has never been written fails open");
+
+const paying = await paidGenerationTrialBlock({
+  db: fakeDb({
+    clients: { data: { firm_id: "firm_paid" }, error: null },
+    firms: {
+      data: {
+        id: "firm_paid",
+        starter_trial_enforced: true,
+        starter_trial_generation_blocked: false,
+      },
+      error: null,
+    },
+  }),
+  userId: "user_1",
+  clientId: "client_1",
+});
+assert(paying == null, "a synced paying firm is not blocked");
+
+const exempt = await paidGenerationTrialBlock({
+  db: fakeDb({
+    clients: { data: { firm_id: "firm_old" }, error: null },
+    firms: {
+      data: {
+        id: "firm_old",
+        starter_trial_enforced: false,
+        starter_trial_generation_blocked: true,
+      },
+      error: null,
+    },
+  }),
+  userId: "user_1",
+  clientId: "client_1",
+});
+assert(exempt == null, "an exempt firm is not blocked");
 
 let threw = false;
 try {
   await paidGenerationTrialBlock({
-    db: enforcedFirm,
+    db: fakeDb({
+      clients: { data: null, error: "database unavailable" },
+      firms: { data: null, error: null },
+    }),
     userId: "user_1",
-    email: "owner@qa.test",
     clientId: "client_1",
-    now,
-    stripeSecret: "sk_test_gate",
-    fetchImpl: (async () => ({
-      ok: false,
-      status: 500,
-      json: async () => ({ error: { message: "billing down" } }),
-    })) as typeof fetch,
   });
 } catch (err) {
-  threw = messageFromUnknown(err).includes("billing down");
+  threw = messageFromUnknown(err).includes("database unavailable");
 }
-assert(threw, "a failed billing lookup does not generate");
+assert(threw, "a failed firm read does not generate");
 
 const missingColumn = await paidGenerationTrialBlock({
   db: fakeDb({
     clients: { data: { firm_id: "firm_qa" }, error: null },
-    firms: { data: null, error: "column starter_trial_enforced does not exist" },
+    firms: { data: null, error: "column starter_trial_generation_blocked does not exist" },
   }),
   userId: "user_1",
-  email: "owner@qa.test",
   clientId: "client_1",
-  now,
-  stripeSecret: "sk_test_gate",
-  fetchImpl,
 });
-assert(missingColumn == null, "a missing trial column fails open");
+assert(missingColumn == null, "a missing mirror column fails open");
 
 function read(path: string): string {
   return readFileSync(resolve(path), "utf8");
@@ -311,6 +255,36 @@ assert(
   !read("src/routes/_authenticated/settings.index.tsx").includes("SA_FIRM_DISCOUNT_NOTE"),
   "Settings → Plan does not repeat the South Africa note",
 );
+const gateSrc = read("supabase/functions/_shared/starter-trial-gate.ts");
+assert(!gateSrc.toLowerCase().includes("stripe"), "the edge gate does not call billing");
+assert(
+  gateSrc.includes("starter_trial_generation_blocked"),
+  "the edge gate reads the generation mirror",
+);
+assert(
+  read("src/lib/stripe-checkout.functions.ts").includes("syncStarterTrialMirrorForActor"),
+  "entitlement resolve writes the mirror",
+);
+assert(
+  read("src/lib/stripe-billing-sync.server.ts").includes("syncStarterTrialMirrorForActor"),
+  "checkout return and the webhook write the mirror",
+);
+assert(
+  read("src/lib/firm-client-cap.server.ts").includes("writeStarterTrialGenerationBlock"),
+  "the live Stripe check also writes the mirror",
+);
+assert(
+  read("src/lib/advisory.functions.ts").includes("assertStarterTrialAllowsNewWork"),
+  "server-side drafter keeps the Stripe check",
+);
+const mirrorMigration = read(
+  "supabase/migrations/20261005213000_firm_starter_trial_generation_blocked.sql",
+);
+assert(
+  mirrorMigration.includes("starter_trial_generation_blocked"),
+  "migration adds the generation mirror",
+);
+assert(!/UPDATE\s+public\.firms/i.test(mirrorMigration), "the mirror is not backfilled");
 
 const upgrade = {
   band: "starter" as const,

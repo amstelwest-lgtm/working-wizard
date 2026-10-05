@@ -1,7 +1,7 @@
 /**
  * Client Brain — first step of the reading path.
  * Confirms Xero, QuickBooks, or an upload before Health.
- * Cream surface, dark text, so the block stays readable in light mode.
+ * Dark uses portal ink. Light keeps the cream card.
  */
 import { QboConnectCard } from "@/components/qbo-connect";
 import { XeroConnectCard } from "@/components/xero-connect";

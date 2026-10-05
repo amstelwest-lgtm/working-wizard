@@ -1042,6 +1042,21 @@ html[data-theme="light"] .trial-ended-block {
   --line: rgba(140, 110, 10, 0.22);
   --bg-2: #ffffff;
 }
+/* Practice dashboard banner only. Settings and the add-client picker are not
+   this card, and they already read in dark. Pin title and prices so they
+   cannot inherit a dim grey on the dark page. */
+html:not([data-theme="light"]) .accountant-portal .trial-ended-block {
+  --ink: #f7f1e4;
+  --ink-dim: #e4dccb;
+  --bg-2: #101018;
+  background: #101018;
+  color: #f7f1e4;
+  color-scheme: dark;
+}
+html:not([data-theme="light"]) .accountant-portal .trial-ended-block .trial-ended-title {
+  color: #f7f1e4;
+  -webkit-text-fill-color: #f7f1e4;
+}
 .trial-ended-title {
   margin: 0 0 12px;
   font-size: 15px;
