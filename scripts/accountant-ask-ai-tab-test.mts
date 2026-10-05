@@ -80,7 +80,8 @@ assert(widgetSrc.includes('variant === "studio"'), "widget supports studio varia
 assert(widgetSrc.includes("MILON_BOT_ACCOUNTANT_CHIPS"), "accountant suggestion chips");
 assert(widgetSrc.includes('audience: "accountant"'), "studio POST includes audience");
 assert(widgetSrc.includes("Milōn Bot"), "widget brands as Milōn Bot");
-assert(copySrc.includes("powered by Claude"), "subtitle copy");
+assert(copySrc.includes("Grounded in this client's file"), "subtitle stays professional");
+assert(!copySrc.includes("powered by Claude"), "bot subtitle does not name the model");
 assert(copySrc.includes("won't invent figures"), "blurb keeps the no-invention promise");
 
 assert(cssSrc.includes(".ask-ai-studio .ask-ai-textarea"), "studio textarea is oversized");

@@ -4,7 +4,7 @@
  */
 
 export const MILON_BOT_TITLE = "Milōn Bot";
-export const MILON_BOT_SUBTITLE = "powered by Claude";
+export const MILON_BOT_SUBTITLE = "Grounded in this client's file";
 
 export const MILON_BOT_BLURB_ACCOUNTANT =
   "Your client's numbers and Client Brain, in one chat. Ask anything grounded in what's already on file — health, cash, margins, what's blocking, invite status — and it can draft next steps or an advisory pack for you to review. Start a job with \"Objective:\" and Milonbot will investigate, act only where MILŌN allows, and stop when it needs you. It won't invent figures, mint invites, or send email.";
@@ -64,6 +64,28 @@ export function routeMilonIntent(question: string): MilonBotIntent {
  * "Objective: …" starts an agent run. A bare question stays on the chat path.
  * The body must be long enough to be a real job, not a stray prefix.
  */
+export type PersistedCreateIntent = {
+  draft: boolean;
+  actions: boolean;
+  pdf: boolean;
+};
+
+/**
+ * Questions that must write a draft and/or Action Plan rows, not only chat.
+ * "create an advisory deliverable / action plan PDF" is the product case.
+ */
+export function persistedCreateIntent(question: string): PersistedCreateIntent | null {
+  const q = question.toLowerCase().replace(/\s+/g, " ").trim();
+  if (!q) return null;
+  const verb = /\b(create|draft|generate|build|write|make|prepare|produce)\b/.test(q);
+  if (!verb) return null;
+  const pdf = /\bpdf\b/.test(q);
+  const draft = pdf || /\b(advisory|deliverable|pack)\b/.test(q);
+  const actions = /\b(action plan|actions|tasks)\b/.test(q);
+  if (!draft && !actions) return null;
+  return { draft, actions, pdf };
+}
+
 export function parseAgentObjective(question: string): string | null {
   const match = question.match(/^\s*objective\s*:\s*(.+)$/i);
   if (!match) return null;

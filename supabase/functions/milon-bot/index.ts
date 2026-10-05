@@ -7,6 +7,10 @@ import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supa
 import { sanitize } from "../ask-ai/sanitizer.ts";
 import { callClaudeRound, type ClaudeMessage, type ClaudeTool } from "./claude.ts";
 import { publicRun, runMilonbotObjective } from "./handler.ts";
+import { loadOverviewBrief } from "./load-overview.ts";
+import { persistAdvisoryCreate, type CreateIntent } from "./persist.ts";
+import { persistedCreateIntent } from "../../../src/lib/milon-bot-copy.ts";
+import { formatOverviewForPrompt } from "../ask-ai/overview-brief.ts";
 import {
   BOT_MAX_HISTORY,
   BOT_MAX_TOOL_ROUNDS,
@@ -292,7 +296,17 @@ Deno.serve(async (req: Request) => {
   const agentMode = body.mode === "agent";
   const rawMessage = body.message;
   const rawObjective = typeof body.objective === "string" ? body.objective.trim() : "";
-  if (!clientId || (agentMode ? rawObjective.length < 8 : !rawMessage?.trim())) {
+  const createText = (typeof rawMessage === "string" ? rawMessage : rawObjective).trim();
+  const parsedCreate = persistedCreateIntent(createText);
+  const explicitCreate = body.mode === "create";
+  const createIntent: CreateIntent | null = explicitCreate
+    ? parsedCreate ?? {
+        draft: true,
+        actions: true,
+        pdf: /\bpdf\b/i.test(createText),
+      }
+    : parsedCreate;
+  if (!clientId || (!createIntent && (agentMode ? rawObjective.length < 8 : !rawMessage?.trim()))) {
     return respond(
       {
         error: agentMode
@@ -332,6 +346,36 @@ Deno.serve(async (req: Request) => {
     );
   }
 
+  let overviewBlock = "";
+  if (!createIntent) {
+    try {
+      const brief = await loadOverviewBrief(userClient, clientId);
+      if (brief) overviewBlock = formatOverviewForPrompt(brief, audience);
+    } catch (e) {
+      console.warn("overview brief:", (e as Error).message);
+    }
+  }
+
+  if (createIntent) {
+    try {
+      const created = await persistAdvisoryCreate({
+        clientId,
+        userId: user.id,
+        token,
+        audience,
+        intent: createIntent,
+        userClient,
+      });
+      return respond({
+        answer: created.answer,
+        tools: created.tools,
+        created: created.created,
+      });
+    } catch (e) {
+      return respond({ error: (e as Error).message || "Could not save the deliverable" }, 500);
+    }
+  }
+
   if (agentMode) {
     const objective = sanitize(rawObjective).slice(0, 500);
     if (!Deno.env.get("ANTHROPIC_API_KEY")) {
@@ -361,6 +405,7 @@ Deno.serve(async (req: Request) => {
         objective,
         userClient,
         adminClient,
+        overviewBlock,
       });
       adminClient
         .from("ask_ai_log")
@@ -415,7 +460,8 @@ Deno.serve(async (req: Request) => {
 
   try {
     for (let round = 0; round < BOT_MAX_TOOL_ROUNDS; round++) {
-      const claude = await callClaudeRound(BOT_SYSTEM, messages, TOOLS);
+      const system = overviewBlock ? `${BOT_SYSTEM}\n\n${overviewBlock}` : BOT_SYSTEM;
+      const claude = await callClaudeRound(system, messages, TOOLS);
       inputTokens += claude.inputTokens;
       outputTokens += claude.outputTokens;
       latencyMs += claude.latencyMs;
