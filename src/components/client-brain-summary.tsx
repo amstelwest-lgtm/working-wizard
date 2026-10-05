@@ -4,7 +4,9 @@
  */
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
+import { assertFirmCanGenerateDeliverable } from "@/lib/advisory-pack.functions";
 import { supabase } from "@/integrations/supabase/client";
 import type { Json } from "@/integrations/supabase/types";
 import { useAuth } from "@/hooks/use-auth";
@@ -136,6 +138,7 @@ export function ClientBrainSummary({
   onAnswerProfile?: () => void;
 }) {
   const { user } = useAuth();
+  const assertDeliverable = useServerFn(assertFirmCanGenerateDeliverable);
   const { dateTime } = useMarketFormat();
   const { productMix, weeklyInputs } = useFinancialInputs();
 
@@ -449,6 +452,7 @@ export function ClientBrainSummary({
   const draftAdvisoryFromBrain = async () => {
     setDrafting(true);
     try {
+      await assertDeliverable({ data: { clientId } });
       const result = await invokeBrainDeliverableDraft(clientId);
       if (result.skippedReason === "ai_not_configured") {
         toast.message("AI is not configured. No draft was created.");

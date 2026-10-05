@@ -3,6 +3,7 @@
 // POST /task-link/:token  → apply an update (status / progress / milestones / note)
 // A GET must NEVER change data. Outlook Safe Links & Gmail proxies prefetch URLs.
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { appRedirectOrigin } from "../_shared/app-origin.ts";
 
 const RESEND_API_URL = "https://api.resend.com/emails";
 const FROM_ADDRESS = "MILŌN <noreply@notify.milon.co.za>";
@@ -342,7 +343,7 @@ Deno.serve(async (req) => {
 
     // Notify the client owner — fire-and-forget (never blocks the success response).
     const resendApiKey = Deno.env.get("RESEND_API_KEY") ?? "";
-    const siteUrl = Deno.env.get("SITE_URL") ?? "";
+    const siteUrl = appRedirectOrigin([Deno.env.get("SITE_URL")]);
     const newStatus = (patch.status as string) ?? itemRow.status;
     const noteText = typeof body.note === "string" && body.note.trim() ? body.note.trim() : null;
     let ownerNotified = false;

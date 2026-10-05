@@ -1,11 +1,11 @@
 import { useState, useEffect } from "react";
+import { appRedirectOrigin } from "@/lib/app-origin";
 import { SHARE_TEXT, SHARE_TITLE } from "@/lib/share-copy";
 
 function resolveAppUrl(): string {
   const fromEnv = import.meta.env.VITE_APP_URL as string | undefined;
-  if (fromEnv) return fromEnv;
-  if (typeof window !== "undefined") return window.location.origin;
-  return "";
+  const fromWindow = typeof window !== "undefined" ? window.location.origin : null;
+  return appRedirectOrigin([fromWindow, fromEnv]);
 }
 
 interface UseShareOptions {

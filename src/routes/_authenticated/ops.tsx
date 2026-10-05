@@ -4,7 +4,7 @@
  */
 
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import {
@@ -37,12 +37,38 @@ import {
   type OpsDashboard,
 } from "@/lib/owner-ops.functions";
 import { createOwnerStripeCheckout } from "@/lib/stripe-checkout.functions";
+import {
+  isOpsItPane,
+  opsConsoleView,
+  opsItOnly,
+  opsItPane,
+  opsNeedsDashboard,
+  opsRouteRenderDecision,
+} from "@/lib/ops-route-state";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { LighthousePanel, parseLighthouseTab } from "@/components/lighthouse-panel";
-import { LighthouseItPanel } from "@/components/lighthouse-it";
-import { LighthouseAccessPanel } from "@/components/lighthouse-access";
-import { LighthouseUsagePanel } from "@/components/lighthouse-usage";
-import { FunnelHealthPanel } from "@/components/funnel-health-panel";
+import { pilotFlagWiring } from "@/lib/ops-pilot-flags";
+
+const LighthouseItPanel = lazy(() =>
+  import("@/components/lighthouse-it").then((m) => ({ default: m.LighthouseItPanel })),
+);
+const LighthouseAccessPanel = lazy(() =>
+  import("@/components/lighthouse-access").then((m) => ({ default: m.LighthouseAccessPanel })),
+);
+const LighthouseUsagePanel = lazy(() =>
+  import("@/components/lighthouse-usage").then((m) => ({ default: m.LighthouseUsagePanel })),
+);
+const FunnelHealthPanel = lazy(() =>
+  import("@/components/funnel-health-panel").then((m) => ({ default: m.FunnelHealthPanel })),
+);
+
+function PaneFallback({ label }: { label: string }) {
+  return (
+    <div className="flex items-center gap-2 py-10 text-sm text-[var(--ops-ink-dim)]">
+      <Loader2 className="h-4 w-4 animate-spin text-[var(--ops-amber)]" /> {label}
+    </div>
+  );
+}
 import { LIGHTHOUSE_IT_INBOX_PATH } from "@/lib/client-note-link";
 import "@/styles/ops-console.css";
 
@@ -64,15 +90,10 @@ export const Route = createFileRoute("/_authenticated/ops")({
 });
 
 const OPS_CONSOLE_TABS = ["it", "access", "pilot", "usage"] as const;
-const OPS_IT_PANES = ["it", "access", "pilot"] as const;
 
 function parseOpsSearchTab(raw: unknown): string | undefined {
   if (typeof raw === "string" && (OPS_CONSOLE_TABS as readonly string[]).includes(raw)) return raw;
   return parseLighthouseTab(raw);
-}
-
-function isOpsItPane(raw: string | undefined): raw is (typeof OPS_IT_PANES)[number] {
-  return Boolean(raw && (OPS_IT_PANES as readonly string[]).includes(raw));
 }
 
 const FLAG_LABELS: Record<string, string> = {
@@ -97,8 +118,10 @@ function OwnerOpsPage() {
   const [unlocked, setUnlocked] = useState(false);
   const [access, setAccess] = useState<OpsAccess | null>(null);
   const [accessChecked, setAccessChecked] = useState(false);
+  const [accessErr, setAccessErr] = useState("");
+  const [accessAttempt, setAccessAttempt] = useState(0);
   const [dash, setDash] = useState<OpsDashboard | null>(null);
-  const [busy, setBusy] = useState(true);
+  const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [notes, setNotes] = useState("");
   const [flags, setFlags] = useState<Record<string, boolean>>({});
@@ -157,17 +180,28 @@ function OwnerOpsPage() {
           ? "/ops?tab=usage"
           : "/ops";
 
+  const retryAccess = useCallback(() => {
+    setAccessErr("");
+    setAccessChecked(false);
+    setAccessAttempt((n) => n + 1);
+  }, []);
+
   useEffect(() => {
     if (authLoading || !user) return;
     let cancelled = false;
+    setAccessChecked(false);
     void loadAccess()
       .then((a) => {
         if (cancelled) return;
         setAccess(a);
+        setAccessErr("");
         if (a.allowed) markUnlocked();
       })
-      .catch(() => {
-        if (!cancelled) setAccess(null);
+      .catch((e: unknown) => {
+        if (cancelled) return;
+        setAccess(null);
+        const msg = e instanceof Error ? e.message.trim() : "";
+        setAccessErr(msg || "Could not check Lighthouse access");
       })
       .finally(() => {
         if (!cancelled) setAccessChecked(true);
@@ -175,7 +209,7 @@ function OwnerOpsPage() {
     return () => {
       cancelled = true;
     };
-  }, [authLoading, user, loadAccess, markUnlocked]);
+  }, [authLoading, user, loadAccess, markUnlocked, accessAttempt]);
 
   const submitUnlock = useCallback(
     async (e: FormEvent) => {
@@ -220,9 +254,7 @@ function OwnerOpsPage() {
       return;
     }
     if (!unlocked) return;
-    if (access?.isItMember && !access?.isOwner) return;
-    void refresh();
-  }, [authLoading, user, unlocked, access, navigate, refresh]);
+  }, [authLoading, user, unlocked, navigate]);
 
   useEffect(() => {
     if (authLoading || !user || !unlocked || !err) return;
@@ -232,17 +264,19 @@ function OwnerOpsPage() {
   }, [authLoading, user, unlocked, err, loadEnvStatus]);
 
   const flagEntries = useMemo(() => Object.entries(flags), [flags]);
-  const itOnly = Boolean(access?.isItMember && !access?.isOwner);
-  const itSection = itOnly || isOpsItPane(tabSearch);
-  const view: "lighthouse" | "it" | "platform" = itSection
-    ? "it"
-    : tabSearch === "usage"
-      ? "platform"
-      : "lighthouse";
-  const lighthouseTab = parseLighthouseTab(tabSearch) ?? "pipeline";
-  const itPane: (typeof OPS_IT_PANES)[number] =
-    itOnly && tabSearch === "pilot" ? "it" : isOpsItPane(tabSearch) ? tabSearch : "it";
-  const skipDash = itOnly || (view === "it" && itPane !== "pilot");
+  const itOnly = opsItOnly(access);
+  const view = opsConsoleView(tabSearch, itOnly);
+  const lighthouseTab = parseLighthouseTab(tabSearch) ?? "agent";
+  const itPane = opsItPane(tabSearch, itOnly);
+  const needsOpsDash = opsNeedsDashboard(itOnly, view, itPane);
+
+  useEffect(() => {
+    if (authLoading || !user || !unlocked || !accessChecked) return;
+    if (!access?.allowed) return;
+    if (access.isItMember && !access.isOwner) return;
+    if (!needsOpsDash || dash) return;
+    void refresh();
+  }, [authLoading, user, unlocked, accessChecked, access, needsOpsDash, dash, refresh]);
 
   useEffect(() => {
     if (!itOnly) return;
@@ -262,11 +296,21 @@ function OwnerOpsPage() {
     void navigate({ to: "/ops", search: {} });
   };
 
-  if (
-    authLoading ||
-    (user && !accessChecked && !unlocked) ||
-    (unlocked && busy && !dash && !err && !skipDash)
-  ) {
+  const accessFailed = Boolean(user && accessChecked && !access);
+  const consoleErr = accessFailed ? accessErr || "Could not check Lighthouse access" : err;
+  const decision = opsRouteRenderDecision({
+    authLoading,
+    signedIn: Boolean(user),
+    unlocked,
+    accessChecked,
+    access,
+    tab: tabSearch,
+    hasDash: Boolean(dash),
+    dashBusy: busy,
+    dashErr: Boolean(err),
+  });
+
+  if (decision === "loading") {
     return (
       <div className="milon-ops grid min-h-screen place-items-center text-[var(--ops-ink-dim)]">
         <div className="flex items-center gap-2 text-sm">
@@ -276,7 +320,7 @@ function OwnerOpsPage() {
     );
   }
 
-  if (accessChecked && access && !access.allowed && !unlocked) {
+  if (decision === "restricted") {
     return (
       <div className="milon-ops grid min-h-screen place-items-center px-4 text-[var(--ops-ink-soft)]">
         <div className="w-full max-w-md rounded-2xl border border-[var(--ops-line)] bg-[var(--ops-bg-elevated)] p-6">
@@ -308,7 +352,7 @@ function OwnerOpsPage() {
     );
   }
 
-  if (!unlocked) {
+  if (decision === "locked") {
     return (
       <div className="milon-ops grid min-h-screen place-items-center px-4 text-[var(--ops-ink-soft)]">
         <div className="w-full max-w-md rounded-2xl border border-[var(--ops-amber-border)] bg-[var(--ops-bg-elevated)] p-6 shadow-2xl">
@@ -363,14 +407,16 @@ function OwnerOpsPage() {
     );
   }
 
-  if (err && !dash && !skipDash) {
+  if (decision === "error") {
     return (
       <div className="milon-ops grid min-h-screen place-items-center px-4 text-[var(--ops-ink-soft)]">
         <div className="w-full max-w-lg rounded-2xl border border-[var(--ops-danger-border)] bg-[var(--ops-danger-bg)] p-6">
           <h1 className="text-lg font-semibold text-[var(--ops-danger-ink)]">
             Console cannot load
           </h1>
-          <p className="mt-2 text-sm text-[var(--ops-ink-soft)] whitespace-pre-wrap">{err}</p>
+          <p className="mt-2 text-sm text-[var(--ops-ink-soft)] whitespace-pre-wrap">
+            {consoleErr}
+          </p>
           {envDiag && (
             <div className="mt-4 rounded-xl border border-[var(--ops-line)] bg-[var(--ops-input)] p-3 text-[12px] text-[var(--ops-ink-dim)]">
               <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--ops-ink-dim)]">
@@ -473,7 +519,13 @@ function OwnerOpsPage() {
             <button
               type="button"
               className="text-xs font-semibold uppercase tracking-wider text-[var(--ops-amber)]"
-              onClick={() => void refresh()}
+              onClick={() => {
+                if (accessFailed) {
+                  retryAccess();
+                  return;
+                }
+                void refresh();
+              }}
             >
               Retry
             </button>
@@ -489,8 +541,6 @@ function OwnerOpsPage() {
       </div>
     );
   }
-
-  if (!dash && !skipDash) return null;
 
   return (
     <div className="milon-ops">
@@ -597,7 +647,9 @@ function OwnerOpsPage() {
               ))}
             </div>
             {itPane === "access" ? (
-              <LighthouseAccessPanel />
+              <Suspense fallback={<PaneFallback label="Loading access…" />}>
+                <LighthouseAccessPanel />
+              </Suspense>
             ) : itPane === "pilot" && !itOnly ? (
               dash ? (
                 <PilotKnobs
@@ -616,7 +668,9 @@ function OwnerOpsPage() {
                 </div>
               )
             ) : (
-              <LighthouseItPanel />
+              <Suspense fallback={<PaneFallback label="Loading queries…" />}>
+                <LighthouseItPanel />
+              </Suspense>
             )}
           </>
         )}
@@ -633,14 +687,18 @@ function OwnerOpsPage() {
               <h2 className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-[var(--ops-ink-dim)]">
                 <Target className="h-3.5 w-3.5 text-[var(--ops-amber)]" /> Funnel health
               </h2>
-              <FunnelHealthPanel />
+              <Suspense fallback={<PaneFallback label="Loading funnel…" />}>
+                <FunnelHealthPanel />
+              </Suspense>
             </section>
 
             <section className="mb-8">
               <h2 className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-[var(--ops-ink-dim)]">
                 <Activity className="h-3.5 w-3.5 text-[var(--ops-amber)]" /> Product usage
               </h2>
-              <LighthouseUsagePanel />
+              <Suspense fallback={<PaneFallback label="Loading usage…" />}>
+                <LighthouseUsagePanel />
+              </Suspense>
             </section>
 
             {/* Signups */}
@@ -920,8 +978,9 @@ function PilotKnobs({
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="rounded-2xl border border-[var(--ops-line)] bg-[var(--ops-card)] p-4">
           <p className="mb-3 text-xs text-[var(--ops-ink-dim)]">
-            Stored in <code className="text-[var(--ops-amber)]/80">milon_ops_settings</code>. Wire
-            these into product gates next — toggles save immediately.
+            Stored in <code className="text-[var(--ops-amber)]/80">milon_ops_settings</code>. Each
+            switch is marked Live when product code reads it, or Not wired yet when it only saves
+            here. Toggles save immediately.
           </p>
           <div className="space-y-2">
             {flagEntries.map(([key, on]) => (
@@ -932,6 +991,9 @@ function PilotKnobs({
               >
                 <span className="text-sm text-[var(--ops-ink-soft)]">
                   {FLAG_LABELS[key] ?? key.replaceAll("_", " ")}
+                  <span className="ml-2 text-[10px] font-semibold uppercase tracking-wider text-[var(--ops-ink-dim)]">
+                    {pilotFlagWiring(key)}
+                  </span>
                 </span>
                 <button
                   type="button"

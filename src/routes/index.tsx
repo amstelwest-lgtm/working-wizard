@@ -42,6 +42,7 @@ import {
   pendingInviteTokenFromSearch,
   signupLooksAlreadyRegistered,
 } from "@/lib/invite-handoff";
+import { browserAppUrl } from "@/lib/app-origin";
 import {
   billingStartPath,
   billingStartSearch,
@@ -71,6 +72,8 @@ import { faqPageJson, pageHead, SEO_PAGES } from "@/lib/seo";
 import { OwnerInviteShell } from "@/components/owner-invite-shell";
 import { OwnerInviteSignupPanel } from "@/components/owner-invite-signup-panel";
 import { OwnerInviteSigninOverlay } from "@/components/owner-invite-signin-overlay";
+import { PasswordSignInAlert } from "@/components/password-sign-in-alert";
+import { explainPasswordSignInFailure } from "@/lib/password-sign-in";
 
 export const Route = createFileRoute("/")({
   component: LandingPage,
@@ -217,6 +220,7 @@ function LandingPage() {
   const [siPassword, setSiPassword] = useState("");
   const [siBusy, setSiBusy] = useState(false);
   const [siError, setSiError] = useState("");
+  const siSubmitLock = useRef(false);
 
   /* Secret owner-ops unlock (obscurity layer — real gate is email allowlist on /ops) */
   const [opsGateOpen, setOpsGateOpen] = useState(false);
@@ -328,7 +332,7 @@ function LandingPage() {
     const pending = peekPendingCheckout();
     return pending
       ? checkoutEmailRedirectTo(window.location.origin, pending)
-      : `${window.location.origin}/app`;
+      : browserAppUrl("/app");
   };
 
   const resendConfirmationTo = async (email: string) => {
@@ -870,18 +874,37 @@ function LandingPage() {
     };
   }, []);
 
+  const clearOwnerSignInError = () => {
+    setSiError("");
+    setSiUnconfirmed(false);
+  };
+
+  const openForgotPassword = () => {
+    setFpEmail(siEmail);
+    setFpMode(true);
+    setFpDone(false);
+    clearOwnerSignInError();
+  };
+
   /* ── forgot-password handler ── */
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setFpBusy(true);
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(fpEmail, {
-        redirectTo: `${window.location.origin}/reset-password`,
+        redirectTo: browserAppUrl("/reset-password"),
       });
       if (error) throw error;
       setFpDone(true);
     } catch (err: unknown) {
-      setSiError(err instanceof Error ? err.message : "Could not send reset email");
+      const failure = explainPasswordSignInFailure(err);
+      setSiError(
+        failure.kind === "other"
+          ? err instanceof Error
+            ? err.message
+            : "Could not send reset email"
+          : failure.message,
+      );
     } finally {
       setFpBusy(false);
     }
@@ -890,7 +913,9 @@ function LandingPage() {
   /* ── sign-in handler ── */
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSiError("");
+    if (siSubmitLock.current) return;
+    siSubmitLock.current = true;
+    clearOwnerSignInError();
     setSiBusy(true);
     try {
       // Secret operator handles unlock the Lighthouse console door
@@ -923,23 +948,16 @@ function LandingPage() {
         throw new Error("Enter a valid email address.");
       }
 
-      const { error } = await supabase.auth.signInWithPassword({
+      const granted = await supabase.auth.signInWithPassword({
         email: siEmail,
         password: siPassword,
       });
-      if (error) {
-        if (/not confirmed/i.test(error.message)) {
-          setSiUnconfirmed(true);
-          throw new Error(
-            "Your email isn't confirmed yet. Open the link we sent you, or resend it below.",
-          );
-        }
-        if (/invalid login credentials/i.test(error.message)) {
-          throw new Error(
-            "Email or password didn't match. Check for typos, or use “Forgot password?”.",
-          );
-        }
-        throw error;
+      // Returned `{ error }`, not a throw. Leave it on the form.
+      if (granted.error) {
+        const failure = explainPasswordSignInFailure(granted.error);
+        setSiUnconfirmed(failure.kind === "email_not_confirmed");
+        setSiError(failure.message);
+        return;
       }
       setSiUnconfirmed(false);
       const { waitForAuthSession, stashInviteHandoff, clearInviteQueryFromUrl } =
@@ -1040,8 +1058,17 @@ function LandingPage() {
         void navigate({ to: "/app", replace: true });
       }
     } catch (err: unknown) {
-      setSiError(err instanceof Error ? err.message : "Sign in failed");
+      const failure = explainPasswordSignInFailure(err);
+      setSiUnconfirmed(failure.kind === "email_not_confirmed");
+      setSiError(
+        failure.kind === "other"
+          ? err instanceof Error
+            ? err.message
+            : "Sign in failed"
+          : failure.message,
+      );
     } finally {
+      siSubmitLock.current = false;
       setSiBusy(false);
     }
   };
@@ -1606,9 +1633,15 @@ function LandingPage() {
           inviteToken={activeInviteToken!}
           regClientCode={regClientCode}
           siEmail={siEmail}
-          onSiEmailChange={setSiEmail}
+          onSiEmailChange={(value) => {
+            setSiEmail(value);
+            clearOwnerSignInError();
+          }}
           siPassword={siPassword}
-          onSiPasswordChange={setSiPassword}
+          onSiPasswordChange={(value) => {
+            setSiPassword(value);
+            clearOwnerSignInError();
+          }}
           siBusy={siBusy}
           siError={siError}
           onSubmit={handleSignIn}
@@ -1972,7 +2005,10 @@ function LandingPage() {
                       required
                       placeholder={t("emailExample", copyMarket)}
                       value={siEmail}
-                      onChange={(e) => setSiEmail(e.target.value)}
+                      onChange={(e) => {
+                        setSiEmail(e.target.value);
+                        clearOwnerSignInError();
+                      }}
                     />
                   </div>
                   <div className="field">
@@ -1982,15 +2018,14 @@ function LandingPage() {
                       required
                       placeholder="••••••••"
                       value={siPassword}
-                      onChange={(e) => setSiPassword(e.target.value)}
+                      onChange={(e) => {
+                        setSiPassword(e.target.value);
+                        clearOwnerSignInError();
+                      }}
                     />
                     <button
                       type="button"
-                      onClick={() => {
-                        setFpEmail(siEmail);
-                        setFpMode(true);
-                        setSiError("");
-                      }}
+                      onClick={openForgotPassword}
                       style={{
                         display: "block",
                         marginTop: 6,
@@ -2008,9 +2043,20 @@ function LandingPage() {
                       Forgot password?
                     </button>
                   </div>
-                  {siError && (
-                    <p style={{ fontSize: 13, color: "var(--risk)", margin: "8px 0" }}>{siError}</p>
-                  )}
+                  <button
+                    type="submit"
+                    className="btn btn-gold"
+                    disabled={siBusy}
+                    aria-busy={siBusy}
+                    style={{ width: "100%", justifyContent: "center", marginTop: 18 }}
+                  >
+                    {siBusy ? "Signing in…" : "Sign in ✦"}
+                  </button>
+                  <PasswordSignInAlert
+                    message={siError}
+                    onForgotPassword={openForgotPassword}
+                    tone="landing"
+                  />
                   {siUnconfirmed && (
                     <button
                       type="button"
@@ -2035,14 +2081,6 @@ function LandingPage() {
                           : "Resend confirmation email"}
                     </button>
                   )}
-                  <button
-                    type="submit"
-                    className="btn btn-gold"
-                    disabled={siBusy}
-                    style={{ width: "100%", justifyContent: "center", marginTop: 18 }}
-                  >
-                    {siBusy ? "Signing in…" : "Sign in ✦"}
-                  </button>
                 </form>
                 <p
                   style={{

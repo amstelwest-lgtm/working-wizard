@@ -1,3 +1,5 @@
+import { CANONICAL_APP_ORIGIN } from "@/lib/app-origin";
+
 /** Deep link from Lighthouse / email into a pinned note on the customer profile. */
 
 export const LIGHTHOUSE_IT_INBOX_PATH = "/ops?tab=it";
@@ -14,12 +16,12 @@ export function clientNoteProfileUrl(
   noteId: string,
   tab?: string,
 ): string {
-  const base = origin.replace(/\/$/, "") || "https://milon.co.za";
+  const base = origin.replace(/\/$/, "") || CANONICAL_APP_ORIGIN;
   return `${base}${clientNoteProfilePath(clientId, noteId, tab)}`;
 }
 
 export function lighthouseItInboxUrl(origin: string): string {
-  const base = origin.replace(/\/$/, "") || "https://milon.co.za";
+  const base = origin.replace(/\/$/, "") || CANONICAL_APP_ORIGIN;
   return `${base}${LIGHTHOUSE_IT_INBOX_PATH}`;
 }
 

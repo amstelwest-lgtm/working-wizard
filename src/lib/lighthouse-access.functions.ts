@@ -32,10 +32,24 @@ export type LighthouseAccessUser = {
 
 export type LighthouseAccessBoard = {
   users: LighthouseAccessUser[];
-  firms: Array<{ id: string; name: string }>;
-  clients: Array<{ id: string; name: string; firmName: string | null }>;
+  firms: Array<{ id: string; name: string; label: string }>;
+  clients: Array<{ id: string; name: string; firmName: string | null; label: string }>;
   itEmails: string[];
 };
+
+/** Dropdown label. Same display name gets the owner email, created date, and a short id. */
+export function disambiguateGrantLabel(input: {
+  name: string;
+  ownerEmail?: string | null;
+  createdAt?: string | null;
+  id: string;
+}): string {
+  const name = input.name.trim() || "Untitled";
+  const owner = (input.ownerEmail ?? "").trim();
+  const created = String(input.createdAt ?? "").slice(0, 10);
+  const short = input.id.replace(/-/g, "").slice(0, 6);
+  return [name, owner, created, short].filter(Boolean).join(" · ");
+}
 
 async function rowsOrEmpty(
   admin: LooseAdmin,
@@ -60,21 +74,21 @@ export const getLighthouseAccessBoard = createServerFn({ method: "GET" })
     await assertOpsConsoleAccess(context as AuthCtx);
     const admin = adminLoose();
 
-    const { data: profiles, error: pErr } = await admin
-      .from("profiles")
-      .select("id, email, full_name")
-      .order("created_at", { ascending: false })
-      .limit(500);
-    if (pErr) throw new Error(pErr.message);
-
-    const [roleRows, memRows, firms, clients, clientMems, itMembers] = await Promise.all([
+    const [profilesRes, roleRows, memRows, firms, clients, clientMems, itMembers] = await Promise.all([
+      admin
+        .from("profiles")
+        .select("id, email, full_name")
+        .order("created_at", { ascending: false })
+        .limit(500),
       rowsOrEmpty(admin, "user_roles", "user_id, role"),
       rowsOrEmpty(admin, "firm_memberships", "id, user_id, firm_id, role"),
-      rowsOrEmpty(admin, "firms", "id, name, owner_user_id"),
-      rowsOrEmpty(admin, "clients", "id, name, firm_id, owner_user_id"),
+      rowsOrEmpty(admin, "firms", "id, name, owner_user_id, created_at"),
+      rowsOrEmpty(admin, "clients", "id, name, firm_id, owner_user_id, created_at"),
       rowsOrEmpty(admin, "client_memberships", "id, client_id, user_id, role"),
       rowsOrEmpty(admin, "milon_it_members", "email"),
     ]);
+    if (profilesRes.error) throw new Error(profilesRes.error.message);
+    const profiles = profilesRes.data;
 
     const firmName = new Map(firms.map((f) => [String(f.id), String(f.name ?? "Firm")]));
     const clientName = new Map(clients.map((c) => [String(c.id), String(c.name ?? "Client")]));
@@ -150,14 +164,42 @@ export const getLighthouseAccessBoard = createServerFn({ method: "GET" })
       },
     );
 
+    const emailByUser = new Map<string, string>();
+    for (const p of (profiles ?? []) as Array<{ id: string; email: string | null }>) {
+      emailByUser.set(String(p.id), String(p.email ?? ""));
+    }
     return {
       users,
-      firms: firms.map((f) => ({ id: String(f.id), name: String(f.name ?? "Firm") })),
-      clients: clients.map((c) => ({
-        id: String(c.id),
-        name: String(c.name ?? "Client"),
-        firmName: c.firm_id ? firmName.get(String(c.firm_id)) ?? null : null,
-      })),
+      firms: firms.map((f) => {
+        const id = String(f.id);
+        const name = String(f.name ?? "Firm");
+        return {
+          id,
+          name,
+          label: disambiguateGrantLabel({
+            name,
+            ownerEmail: emailByUser.get(String(f.owner_user_id ?? "")) ?? null,
+            createdAt: typeof f.created_at === "string" ? f.created_at : null,
+            id,
+          }),
+        };
+      }),
+      clients: clients.map((c) => {
+        const id = String(c.id);
+        const name = String(c.name ?? "Client");
+        const firm = c.firm_id ? firmName.get(String(c.firm_id)) ?? null : null;
+        return {
+          id,
+          name,
+          firmName: firm,
+          label: disambiguateGrantLabel({
+            name: firm ? `${name} · ${firm}` : name,
+            ownerEmail: emailByUser.get(String(c.owner_user_id ?? "")) ?? null,
+            createdAt: typeof c.created_at === "string" ? c.created_at : null,
+            id,
+          }),
+        };
+      }),
       itEmails,
     };
   });

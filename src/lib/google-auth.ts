@@ -1,3 +1,4 @@
+import { browserAppOrigin } from "@/lib/app-origin";
 import { supabase } from "@/integrations/supabase/client";
 import { setPortalIntent, type PortalIntent } from "@/lib/user-roles";
 
@@ -296,7 +297,7 @@ export async function startGoogleSignIn(opts: {
   const { error } = await supabase.auth.signInWithOAuth({
     provider: "google",
     options: {
-      redirectTo: googleOAuthRedirectTo(window.location.origin, hop),
+      redirectTo: googleOAuthRedirectTo(browserAppOrigin(), hop),
       queryParams: {
         access_type: "offline",
         prompt: "select_account",

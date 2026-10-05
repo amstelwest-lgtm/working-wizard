@@ -42,6 +42,13 @@ import { accessTokenFromNext } from "@/lib/practice-access";
 import { AuthDivider, GoogleSignInButton } from "@/components/google-sign-in-button";
 import { stashAccountantGoogleSignup } from "@/lib/google-auth";
 import { signupLooksAlreadyRegistered } from "@/lib/invite-handoff";
+import {
+  explainPasswordSignInFailure,
+  passwordGrantFailure,
+  type PasswordSignInFailure,
+} from "@/lib/password-sign-in";
+import { PasswordSignInAlert } from "@/components/password-sign-in-alert";
+import { PasswordResetRequest } from "@/components/password-reset-request";
 import { MarketPicker } from "@/components/market-picker";
 import {
   AuthEntryCard,
@@ -122,6 +129,10 @@ function AuthPage() {
   const [fullName, setFullName] = useState("");
   const [firmName, setFirmName] = useState("");
   const [busy, setBusy] = useState(false);
+  const [signInFailure, setSignInFailure] = useState<PasswordSignInFailure | null>(null);
+  const [resetOpen, setResetOpen] = useState(false);
+  const [resetEmail, setResetEmail] = useState("");
+  const submitLock = useRef(false);
   const [draftMarket, setDraftMarket] = useState<DraftMarket>({ country: null, regionCode: null });
 
   /* Client-only form gate — browser password managers (LastPass etc.) inject
@@ -148,8 +159,15 @@ function AuthPage() {
     };
   };
 
+  const openPasswordReset = () => {
+    setResetEmail(email.trim());
+    setResetOpen(true);
+  };
+
   const openSignIn = (pending?: PendingCheckout) => {
     setTabOverride("signin");
+    setSignInFailure(null);
+    setResetOpen(false);
     if (pending) {
       stashPendingCheckout(pending);
       void navigate({
@@ -305,11 +323,14 @@ function AuthPage() {
 
   const handle = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitLock.current) return;
     const market = mode === "signup" ? draftToSelection(draftMarket) : null;
     if (mode === "signup" && !market) {
       toast.error("Pick South Africa or the United States (and a state) first.");
       return;
     }
+    submitLock.current = true;
+    if (mode === "signin") setSignInFailure(null);
     setBusy(true);
     try {
       if (mode === "signup") {
@@ -367,11 +388,23 @@ function AuthPage() {
         else navigate({ to: afterAuthPath as "/dashboard" });
       } else {
         if (!isBillingStartPath(next)) clearPendingCheckout();
-        const { error, data: signInData } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
-        if (error) throw error;
+        // `{ error }` is the failure channel. A 400 invalid_credentials does not throw.
+        let signInData: Awaited<ReturnType<typeof supabase.auth.signInWithPassword>>["data"];
+        try {
+          const granted = await supabase.auth.signInWithPassword({
+            email,
+            password,
+          });
+          const failure = passwordGrantFailure(granted);
+          if (failure) {
+            setSignInFailure(failure);
+            return;
+          }
+          signInData = granted.data;
+        } catch (err: unknown) {
+          setSignInFailure(explainPasswordSignInFailure(err));
+          return;
+        }
         // Lazy firm provisioning — runs in a separate try/catch so any failure
         // here never blocks the user from signing in.
         try {
@@ -414,6 +447,15 @@ function AuthPage() {
         }
       }
     } catch (err: unknown) {
+      if (mode === "signin") {
+        const failure = explainPasswordSignInFailure(err);
+        if (failure.kind !== "other") {
+          setSignInFailure(failure);
+          return;
+        }
+        toast.error(err instanceof Error ? err.message : "Something went wrong");
+        return;
+      }
       const msg = err instanceof Error ? err.message : "Something went wrong";
       if (mode === "signup" && signupLooksAlreadyRegistered({ errorMessage: msg })) {
         const pending = pendingForSignup(draftToSelection(draftMarket)?.country ?? null);
@@ -426,6 +468,7 @@ function AuthPage() {
       toast.error(msg);
     } finally {
       signupLandingRef.current = false;
+      submitLock.current = false;
       setBusy(false);
     }
   };
@@ -446,6 +489,8 @@ function AuthPage() {
               openSignIn();
               return;
             }
+            setSignInFailure(null);
+            setResetOpen(false);
             setTabOverride("signup");
             void navigate({
               to: "/auth",
@@ -485,7 +530,14 @@ function AuthPage() {
           />
         )}
 
-        {mounted && (
+        {mounted && resetOpen && mode === "signin" ? (
+          <PasswordResetRequest
+            key={resetEmail}
+            initialEmail={resetEmail}
+            variant="entry"
+            onBack={() => setResetOpen(false)}
+          />
+        ) : mounted ? (
           <>
             {mode === "signin" && (
               <div>
@@ -566,7 +618,11 @@ function AuthPage() {
                 id="auth-email"
                 type="email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                autoComplete="username"
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  if (mode === "signin") setSignInFailure(null);
+                }}
                 required
               />
               <AuthEntryFieldLabel htmlFor="auth-password">Password</AuthEntryFieldLabel>
@@ -574,7 +630,11 @@ function AuthPage() {
                 id="auth-password"
                 type="password"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="current-password"
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  if (mode === "signin") setSignInFailure(null);
+                }}
                 minLength={8}
                 required
                 aria-describedby={mode === "signup" ? "auth-password-hint" : undefined}
@@ -593,12 +653,40 @@ function AuthPage() {
                 type="submit"
                 className="mt-6"
                 disabled={busy || (mode === "signup" && !isDraftComplete(draftMarket))}
+                aria-busy={busy}
                 aria-describedby={
-                  mode === "signup" && practiceHint ? "practice-missing" : undefined
+                  mode === "signin" && signInFailure
+                    ? "auth-signin-error"
+                    : mode === "signup" && practiceHint
+                      ? "practice-missing"
+                      : undefined
                 }
               >
-                {busy ? "Please wait…" : mode === "signin" ? "Sign in" : "Create firm account"}
+                {busy ? (
+                  mode === "signin" ? (
+                    <span className="inline-flex items-center justify-center gap-2">
+                      <span
+                        className="auth-entry__spinner inline-block h-3.5 w-3.5 animate-spin rounded-full border-2"
+                        aria-hidden
+                      />
+                      Signing in…
+                    </span>
+                  ) : (
+                    "Please wait…"
+                  )
+                ) : mode === "signin" ? (
+                  "Sign in"
+                ) : (
+                  "Create firm account"
+                )}
               </AuthEntryPrimaryButton>
+              {mode === "signin" ? (
+                <PasswordSignInAlert
+                  message={signInFailure?.message ?? ""}
+                  onForgotPassword={openPasswordReset}
+                  tone="entry"
+                />
+              ) : null}
               {mode === "signup" && (
                 <AuthEntryFootnote>
                   By creating a firm account you agree to the{" "}
@@ -617,7 +705,7 @@ function AuthPage() {
               )}
             </form>
           </>
-        )}
+        ) : null}
       </AuthEntryCard>
 
       <p className="auth-entry__muted mt-6 text-center text-sm">
