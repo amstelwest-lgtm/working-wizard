@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { Search } from "lucide-react";
 import {
@@ -26,6 +26,7 @@ import {
   paletteEmptyCopy,
   searchClients,
 } from "@/lib/feature-finder-clients";
+import { subscribeFeatureFinderHotkey, toggleFinderOpen } from "@/lib/feature-finder-hotkey";
 import { openOwnerSettings, openPracticeSettings } from "@/lib/user-roles";
 import { cn } from "@/lib/utils";
 import "@/styles/feature-finder.css";
@@ -57,6 +58,9 @@ export function FeatureFinder({ audience, clientId = null, chrome = "portal" }: 
   const [query, setQuery] = useState("");
   const [mac, setMac] = useState(false);
   const [listEpoch, setListEpoch] = useState(0);
+  const openRef = useRef(false);
+  /** Cmdk can select the first row as the palette mounts. Ignore that until a real gesture. */
+  const allowSelect = useRef(false);
   const showClients = includeClientGroup(audience);
   // Warm the firm list on mount, then refresh when the palette opens.
   // Typing filters that list in memory.
@@ -71,13 +75,12 @@ export function FeatureFinder({ audience, clientId = null, chrome = "portal" }: 
   }, []);
 
   useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (!isFeatureFinderShortcut(event, navigator.platform, navigator.userAgent)) return;
-      event.preventDefault();
-      setOpen((current) => !current);
-    };
-    window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
+    return subscribeFeatureFinderHotkey(() => {
+      const next = toggleFinderOpen(openRef);
+      setOpen(next);
+      if (!next) setQuery("");
+      allowSelect.current = false;
+    });
   }, []);
 
   const match = useMemo(
@@ -100,8 +103,20 @@ export function FeatureFinder({ audience, clientId = null, chrome = "portal" }: 
   const searchLabel = showClients ? "features and clients" : "features";
 
   const onOpenChange = (next: boolean) => {
+    openRef.current = next;
     setOpen(next);
+    allowSelect.current = false;
     if (!next) setQuery("");
+  };
+
+  const armSelect = () => {
+    allowSelect.current = true;
+  };
+
+  const runSelection = (action: () => void) => {
+    if (!allowSelect.current) return;
+    allowSelect.current = false;
+    action();
   };
 
   const go = (dest: FeatureDestination) => {
@@ -149,7 +164,7 @@ export function FeatureFinder({ audience, clientId = null, chrome = "portal" }: 
         aria-keyshortcuts={mac ? "Meta+K" : "Control+K"}
         aria-haspopup="dialog"
         aria-expanded={open}
-        onClick={() => setOpen(true)}
+        onClick={() => onOpenChange(true)}
       >
         <Search
           className={chrome === "owner" ? "h-3 w-3 shrink-0" : undefined}
@@ -178,7 +193,15 @@ export function FeatureFinder({ audience, clientId = null, chrome = "portal" }: 
               ? "Jump to a client, or to Health, Cash, Collections, and other product functions."
               : "Jump to Health, Cash, Collections, and other product functions."}
           </DialogDescription>
-          <Command shouldFilter={false} className="bg-transparent text-inherit">
+          <Command
+            shouldFilter={false}
+            className="bg-transparent text-inherit"
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === "ArrowDown" || event.key === "ArrowUp") {
+                armSelect();
+              }
+            }}
+          >
             <CommandInput
               autoFocus
               value={query}
@@ -186,7 +209,7 @@ export function FeatureFinder({ audience, clientId = null, chrome = "portal" }: 
               placeholder={showClients ? "Search features and clients…" : "Search features…"}
               className="h-12 pr-8"
             />
-            <CommandList className="max-h-[min(360px,50vh)] px-1 pb-1">
+            <CommandList className="max-h-[min(360px,50vh)] px-1 pb-1" onPointerDown={armSelect}>
               <CommandEmpty className="feature-finder-empty">{emptyCopy}</CommandEmpty>
               {groups.map((group) => (
                 <CommandGroup key={group.group} heading={group.group}>
@@ -194,7 +217,7 @@ export function FeatureFinder({ audience, clientId = null, chrome = "portal" }: 
                     <CommandItem
                       key={item.id}
                       value={item.id}
-                      onSelect={() => go(item.destination)}
+                      onSelect={() => runSelection(() => go(item.destination))}
                       className="gap-3 px-3 py-2.5"
                     >
                       <span className="min-w-0 flex-1 truncate">{item.label}</span>
@@ -209,7 +232,7 @@ export function FeatureFinder({ audience, clientId = null, chrome = "portal" }: 
                     <CommandItem
                       key={item.id}
                       value={item.id}
-                      onSelect={() => openClientFile(item.clientId)}
+                      onSelect={() => runSelection(() => openClientFile(item.clientId))}
                       className="gap-3 px-3 py-2.5"
                     >
                       <span className="min-w-0 flex-1 truncate">{item.label}</span>

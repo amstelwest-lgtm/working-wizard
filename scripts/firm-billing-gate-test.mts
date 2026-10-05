@@ -4,6 +4,7 @@
  */
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { decideAccountantAuthLanding, safeAccountantRedirect } from "../src/lib/auth-landing";
 import {
   checkoutSessionUnlocksFirm,
   customerHasEntitlingSubscription,
@@ -402,7 +403,10 @@ const start = readFileSync(resolve("src/routes/billing.start.tsx"), "utf8");
 assert(start.includes("createStripeCheckout"), "billing start still creates Checkout");
 
 const success = readFileSync(resolve("src/routes/billing.success.tsx"), "utf8");
-assert(success.includes("checkoutSessionUnlocksFirm"), "success treats completed trial Checkout as unlock");
+assert(
+  success.includes("checkoutSessionUnlocksFirm"),
+  "success treats completed trial Checkout as unlock",
+);
 assert(success.includes('to="/dashboard"'), "success opens the practice portal");
 assert(success.includes("refresh: true"), "success warms entitlement cache");
 
@@ -423,5 +427,79 @@ assert(docs.includes("/billing/required"), "docs name the resume page");
 assert(docs.includes("Owner Spark"), "docs keep Spark ungated");
 
 assert(existsSync(resolve("src/routes/billing.required.tsx")), "billing required route file");
+
+const solo = { plan: "solo" as const, interval: "month" as const, market: "us" as const };
+const stashed = decideAccountantAuthLanding({
+  flow: "signin",
+  hadFirmBefore: true,
+  hasLiveEntitlement: true,
+  pending: solo,
+  next: undefined,
+});
+assert(stashed.kind === "app", "plain sign-in with a firm ignores a stashed Create firm plan");
+const billingNext = decideAccountantAuthLanding({
+  flow: "signin",
+  hadFirmBefore: true,
+  hasLiveEntitlement: false,
+  pending: solo,
+  next: "/billing/start?plan=solo&interval=month&market=us",
+});
+assert(
+  billingNext.kind === "app",
+  "an existing firm is not sent to Stripe even if next is billing start",
+);
+const subscribed = decideAccountantAuthLanding({
+  flow: "signin",
+  hadFirmBefore: false,
+  hasLiveEntitlement: true,
+  pending: solo,
+  next: "/billing/start?plan=solo&interval=month&market=us",
+});
+assert(subscribed.kind === "app", "a live subscription is not sent to Checkout or the portal");
+const freshSignup = decideAccountantAuthLanding({
+  flow: "signup",
+  hadFirmBefore: false,
+  hasLiveEntitlement: false,
+  pending: solo,
+  next: undefined,
+});
+assert(
+  freshSignup.kind === "billing" && freshSignup.pending.plan === "solo",
+  "Create firm signup still honours the plan",
+);
+const resume = decideAccountantAuthLanding({
+  flow: "signin",
+  hadFirmBefore: false,
+  hasLiveEntitlement: false,
+  pending: null,
+  next: "/billing/start?plan=solo&interval=month&market=us",
+});
+assert(
+  resume.kind === "billing",
+  "sign-in to finish billing still continues when there is no firm yet",
+);
+assert(safeAccountantRedirect("/dashboard") === "/dashboard", "dashboard next is safe");
+assert(
+  safeAccountantRedirect("/billing/start?plan=solo") === null,
+  "billing next is not a safe sign-in redirect",
+);
+assert(
+  safeAccountantRedirect("https://billing.stripe.com/p/session") === null,
+  "Stripe portal URL is rejected",
+);
+assert(
+  safeAccountantRedirect("//billing.stripe.com") === null,
+  "protocol-relative redirect is rejected",
+);
+
+assert(authPage.includes("clearPendingCheckout"), "plain sign-in clears a stashed plan");
+assert(
+  authPage.includes("decideAccountantAuthLanding"),
+  "auth landing uses the plan-intent decision",
+);
+assert(
+  authPage.includes('landAfterAccountantAuth(signInData.user.id, "signin")'),
+  "password sign-in does not reuse the Create firm landing",
+);
 
 console.log("firm-billing-gate ok");
