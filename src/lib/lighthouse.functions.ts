@@ -32,6 +32,11 @@ import {
 import { resolveLighthouseFromAddress } from "@/lib/lighthouse-from";
 import { LIGHTHOUSE_REPLY_TO, resolveLighthouseReplyTo } from "@/lib/lighthouse-reply-to";
 import {
+  LIGHTHOUSE_SENDER_NAME,
+  resolveLighthouseSenderName,
+  resolveLighthouseSenderTitle,
+} from "@/lib/lighthouse-sender";
+import {
   ACCOUNTANT_ONESHOT_SEQUENCE,
   ACCOUNTANT_ONESHOT_SEQUENCE_KEY,
   ACCOUNTANT_ONESHOT_STEP,
@@ -212,8 +217,8 @@ export type LighthouseDashboard = {
 };
 
 const DEFAULT_SETTINGS: LighthouseSettings = {
-  senderName: "Theo van der Westhuizen",
-  senderTitle: "Founder, Milōn",
+  senderName: LIGHTHOUSE_SENDER_NAME,
+  senderTitle: "",
   trialDays: 14,
   dailySendCap: 25,
   bookingUrl: "",
@@ -616,8 +621,8 @@ export const getLighthouse = createServerFn({ method: "GET" })
     const raw = (setRows as { value?: Record<string, unknown> } | null)?.value;
     if (raw && typeof raw === "object") {
       settings = {
-        senderName: String(raw.sender_name ?? settings.senderName),
-        senderTitle: String(raw.sender_title ?? settings.senderTitle),
+        senderName: resolveLighthouseSenderName(raw.sender_name, raw.senderName),
+        senderTitle: resolveLighthouseSenderTitle(raw.sender_title, raw.senderTitle),
         trialDays: Number(raw.trial_days ?? settings.trialDays),
         dailySendCap: Number(raw.daily_send_cap ?? settings.dailySendCap),
         bookingUrl: String(raw.booking_url ?? ""),
@@ -803,6 +808,7 @@ Non-negotiable rules:
 - Never say "just following up" or "circling back" with nothing new.
 - Sound like a small specialist team writing to one person, not a marketing department.
 - Subject lines: lowercase or sentence case, under 6 words, no clickbait, no "Re:" fakery.
+- From display name is The MILŌN Team. Do not sign with a personal name or a Founder title.
 - From is team@trymilon.com. Reply-to is hello@milonfinance.com. Do not invent other mailboxes.
 - Day 0: capacity-ceiling observation and a soft ask. No URLs at all.
 - Day 4: must include BOTH https://youtu.be/J4vJki7HcIs and https://youtu.be/k3aRM4toTvU. No trial link.
@@ -820,8 +826,11 @@ Non-negotiable rules:
 - South African English and context (SARS, VAT, load-shedding, ZAR) when relevant.
 - One clear ask per email. No stacked CTAs.
 - Never say "just following up" or "circling back" with nothing new.
-- Sound like one founder writing to one person, not a marketing department.
+- Sound like The MILŌN Team writing to one person, not a marketing department.
+- Sign off as The MILŌN Team. Do not use a personal name or a Founder title.
 - Subject lines: lowercase or sentence case, under 6 words, no clickbait, no "Re:" fakery.
+- From display name is The MILŌN Team.
+- From is team@trymilon.com. Reply-to is hello@milonfinance.com. Do not invent other mailboxes.
 - The sales motion is email correspondence, not calendar booking. Do not propose a call, a meeting, a Zoom, or a booking link unless a booking URL is explicitly provided in this prompt. Prefer they reply in writing or start the free trial.`;
 
 const ONESHOT_SYSTEM_RULES = `You write as The Milōn Team — a South African financial-health platform for SMEs and their accountants. Be direct. No fluff. Never write in founder first-person as Theo.
@@ -835,6 +844,7 @@ Non-negotiable rules:
 - Keep BOTH one-pager URLs exactly: https://www.milonfinance.com/lighthouse/milon-one-pager-accountants.pdf and https://www.milonfinance.com/lighthouse/milon-one-pager-owners.pdf.
 - KEEP the line that we will call shortly after they have looked through the videos and one-pagers. Do not strip the call, and do not replace it with a trial-only ask.
 - Sign off as The Milōn Team.
+- From display name is The MILŌN Team. Do not sign with a personal name or a Founder title.
 - From is team@trymilon.com. Reply-to is hello@milonfinance.com. Do not invent other mailboxes.`;
 
 function systemRulesFor(seqKey: string): string {
@@ -843,9 +853,12 @@ function systemRulesFor(seqKey: string): string {
 }
 
 function signOffLine(seqKey: string, senderName: string, senderTitle: string): string {
-  return seqKey === ACCOUNTANT_V1_SEQUENCE_KEY || seqKey === ACCOUNTANT_ONESHOT_SEQUENCE_KEY
-    ? `SIGN OFF as ${LIGHTHOUSE_TEAM_VOICE}.`
-    : `SIGN OFF as ${senderName}, ${senderTitle}.`;
+  if (seqKey === ACCOUNTANT_V1_SEQUENCE_KEY || seqKey === ACCOUNTANT_ONESHOT_SEQUENCE_KEY) {
+    return `SIGN OFF as ${LIGHTHOUSE_TEAM_VOICE}.`;
+  }
+  const name = resolveLighthouseSenderName(senderName);
+  const title = resolveLighthouseSenderTitle(senderTitle);
+  return title ? `SIGN OFF as ${name}, ${title}.` : `SIGN OFF as ${name}.`;
 }
 
 function noCallInstruction(seqKey: string): string {
@@ -918,8 +931,11 @@ export const draftLighthouseTouch = createServerFn({ method: "POST" })
       .eq("key", "lighthouse")
       .maybeSingle();
     const settingsRaw = (setRow as { value?: Record<string, unknown> } | null)?.value ?? {};
-    const senderName = String(settingsRaw.sender_name ?? DEFAULT_SETTINGS.senderName);
-    const senderTitle = String(settingsRaw.sender_title ?? DEFAULT_SETTINGS.senderTitle);
+    const senderName = resolveLighthouseSenderName(settingsRaw.sender_name, settingsRaw.senderName);
+    const senderTitle = resolveLighthouseSenderTitle(
+      settingsRaw.sender_title,
+      settingsRaw.senderTitle,
+    );
     const trialDays = Number(settingsRaw.trial_days ?? DEFAULT_SETTINGS.trialDays);
 
     const trialLink = trialLinkFor((lead.trial_token as string | null) ?? null);
@@ -1177,7 +1193,7 @@ export const sendLighthouseTouch = createServerFn({ method: "POST" })
       .eq("key", "lighthouse")
       .maybeSingle();
     const sendSettings = (sendSetRow as { value?: Record<string, unknown> } | null)?.value ?? {};
-    const senderName = String(sendSettings.sender_name ?? DEFAULT_SETTINGS.senderName);
+    const senderName = resolveLighthouseSenderName(sendSettings.sender_name, sendSettings.senderName);
     const senderAddress = String(sendSettings.sender_address ?? "");
     const replyTo = resolveLighthouseReplyTo(String(sendSettings.reply_to ?? ""));
     const dailyCap = Number(sendSettings.daily_send_cap ?? DEFAULT_SETTINGS.dailySendCap);
@@ -1416,8 +1432,23 @@ export const upsertLighthouseSettings = createServerFn({ method: "POST" })
     >;
 
     const next: Record<string, unknown> = { ...prev };
-    if (data.senderName !== undefined) next.sender_name = data.senderName;
-    if (data.senderTitle !== undefined) next.sender_title = data.senderTitle;
+    // CamelCase leftovers are not read. Drop them so a save cannot keep a founder name beside sender_name.
+    delete next.senderName;
+    delete next.senderTitle;
+    if (data.senderName !== undefined) {
+      next.sender_name = resolveLighthouseSenderName(data.senderName);
+    } else {
+      next.sender_name = resolveLighthouseSenderName(next.sender_name);
+    }
+    if (data.senderTitle !== undefined) {
+      const title = resolveLighthouseSenderTitle(data.senderTitle);
+      if (title) next.sender_title = title;
+      else delete next.sender_title;
+    } else {
+      const title = resolveLighthouseSenderTitle(next.sender_title);
+      if (title) next.sender_title = title;
+      else delete next.sender_title;
+    }
     if (data.trialDays !== undefined) next.trial_days = data.trialDays;
     if (data.dailySendCap !== undefined) next.daily_send_cap = data.dailySendCap;
     if (data.bookingUrl !== undefined) next.booking_url = data.bookingUrl;
@@ -1492,8 +1523,11 @@ export const draftLighthouseReply = createServerFn({ method: "POST" })
       .eq("key", "lighthouse")
       .maybeSingle();
     const settingsRaw = (setRow as { value?: Record<string, unknown> } | null)?.value ?? {};
-    const senderName = String(settingsRaw.sender_name ?? DEFAULT_SETTINGS.senderName);
-    const senderTitle = String(settingsRaw.sender_title ?? DEFAULT_SETTINGS.senderTitle);
+    const senderName = resolveLighthouseSenderName(settingsRaw.sender_name, settingsRaw.senderName);
+    const senderTitle = resolveLighthouseSenderTitle(
+      settingsRaw.sender_title,
+      settingsRaw.senderTitle,
+    );
     const trialDays = Number(settingsRaw.trial_days ?? DEFAULT_SETTINGS.trialDays);
     const bookingUrl = await resolveBookingUrl(admin, settingsRaw);
 

@@ -10,6 +10,11 @@ import {
   resolveLighthouseFromAddress,
 } from "../src/lib/lighthouse-from";
 import { LIGHTHOUSE_REPLY_TO, resolveLighthouseReplyTo } from "../src/lib/lighthouse-reply-to";
+import {
+  LIGHTHOUSE_SENDER_NAME,
+  resolveLighthouseSenderName,
+  resolveLighthouseSenderTitle,
+} from "../src/lib/lighthouse-sender";
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
@@ -112,5 +117,61 @@ assert(
 assert(!replyTo.includes('"milonfinance.com"'), "Reply-To does not retire the milonfinance.com host");
 assert(replyTo.includes('"milon.co.za"'), "Reply-To still retires milon.co.za");
 assert(!replyTo.includes("resolveLighthouseFromAddress"), "Reply-To helper does not own From");
+
+assert(LIGHTHOUSE_SENDER_NAME === "The MILŌN Team", "display name is The MILŌN Team");
+assert(resolveLighthouseSenderName() === LIGHTHOUSE_SENDER_NAME, "empty sender → team");
+assert(resolveLighthouseSenderName("") === LIGHTHOUSE_SENDER_NAME, "blank sender → team");
+assert(resolveLighthouseSenderName(null, undefined) === LIGHTHOUSE_SENDER_NAME, "null sender → team");
+assert(
+  resolveLighthouseSenderName("Theo van der Westhuizen") === LIGHTHOUSE_SENDER_NAME,
+  "founder name is not the display name",
+);
+assert(
+  resolveLighthouseSenderName("Theo van der Westhuizen", "Theo van der Westhuizen") ===
+    LIGHTHOUSE_SENDER_NAME,
+  "camelCase founder name is not the display name",
+);
+assert(
+  resolveLighthouseSenderName("Theo van der Westhuizen", "Ops desk") === "Ops desk",
+  "a non-founder camelCase name can still win when snake_case is retired",
+);
+assert(resolveLighthouseSenderName("Ops desk") === "Ops desk", "custom display name is kept");
+assert(resolveLighthouseSenderTitle() === "", "empty title stays empty");
+assert(resolveLighthouseSenderTitle("Founder, Milōn") === "", "founder title is dropped");
+assert(resolveLighthouseSenderTitle("Founder") === "", "Founder title is dropped");
+assert(
+  resolveLighthouseSenderTitle("Founder, Milōn", "Advisor") === "Advisor",
+  "a non-founder title is kept",
+);
+
+assert(fns.includes("resolveLighthouseSenderName"), "send and settings resolve the display name");
+assert(fns.includes("senderName: LIGHTHOUSE_SENDER_NAME"), "code default is the team display name");
+assert(fns.includes('senderTitle: ""'), "code default has no founder title");
+assert(!fns.includes("Theo van der Westhuizen"), "lighthouse send module does not name Theo as sender");
+assert(!fns.includes("Founder, Milōn"), "lighthouse send module does not seed a Founder title");
+assert(!fns.includes("Sound like one founder"), "owner rules do not write as a founder");
+
+const seed = readFileSync(resolve("supabase/migrations/20260820100000_milon_lighthouse.sql"), "utf8");
+assert(seed.includes('"sender_name": "The MILŌN Team"'), "settings seed display name is the team");
+assert(!seed.includes("Theo van der Westhuizen"), "settings seed does not name Theo");
+assert(!seed.includes("Founder, Mil"), "settings seed does not include a Founder title");
+
+const senderMigration = readFileSync(
+  resolve("supabase/migrations/20261005143000_lighthouse_sender_milon_team.sql"),
+  "utf8",
+);
+assert(senderMigration.includes("The MILŌN Team"), "sender migration writes the team display name");
+assert(senderMigration.includes("sender_name"), "sender migration sets sender_name");
+assert(senderMigration.includes("senderName"), "sender migration covers the camelCase path");
+assert(senderMigration.includes("sender_title"), "sender migration clears founder sender_title");
+assert(senderMigration.includes("senderTitle"), "sender migration clears founder senderTitle");
+const senderSql = senderMigration
+  .split("\n")
+  .filter((line) => !line.trim().startsWith("--"))
+  .join("\n");
+assert(!senderSql.includes("reply_to"), "sender migration does not move Reply-To");
+assert(!senderSql.includes("auto_send"), "sender migration does not enable auto_send");
+assert(!senderSql.includes("team@trymilon.com"), "sender migration does not move From");
+assert(!senderSql.includes("hello@milonfinance.com"), "sender migration does not rewrite Reply-To");
 
 console.log("lighthouse-from-lock-test: ok");

@@ -108,11 +108,11 @@ The email body is not in the database. Accountant golden copy lives in
 
 ### `public.milon_ops_settings` key `lighthouse`
 
-JSON knobs, not a campaign row: `sender_name`, `sender_title`, `trial_days`,
+JSON knobs, not a campaign row: `sender_name` (`The MILŌN Team`; founder name
+is not the display name), `sender_title` (founder title is not seeded), `trial_days`,
 `daily_send_cap` (default 25), `booking_url`, `send_window`
 (`Tue-Thu 07:00-09:00 SAST`), `auto_send` (seeded `false`), `reply_to`
-(locked toward `team@trymilon.com` by `20260912170000_lighthouse_reply_to_trymilon.sql`
-and `resolveLighthouseReplyTo`), `sender_address` (read by the console, not in the
+(`hello@milonfinance.com` via `resolveLighthouseReplyTo`), `sender_address` (read by the console, not in the
 original seed).
 
 ### Nearby tables that are not the CRM
@@ -228,7 +228,7 @@ Target: templates the agent chooses; `signing_rule` `theo_us` \| `team_only`.
 | --- | --- | --- |
 | One row per step | Object inside `lighthouse_sequences.steps` | **partial** |
 | Template the agent chooses | `goal`, `angle`, `max_words`, `cta`, `asset` | **partial** — instructions and asset keys. Subject/body templates are code (golden) or generated at draft time. |
-| `signing_rule` | Settings `sender_name` = `Theo van der Westhuizen`. Accountant v3 comment says voice “The Milōn Team”. Reply-To resolves to `team@trymilon.com`. | **missing**. No per-step rule. |
+| `signing_rule` | Settings `sender_name` is `The MILŌN Team`. Founder name and Founder title are not the sender. Accountant v3 voice is “The Milōn Team”. From is `team@trymilon.com`. Reply-To resolves to `hello@milonfinance.com`. | **missing**. No per-step rule. |
 
 ### Stages
 
@@ -514,12 +514,10 @@ Defer playbook editing, asset management, and the global daily cap. They already
   `milon_bot_runs` rows for prospects, no auto-pick of cadence templates.
 - **Night-1 / unattended send.** `auto_send` stays false. Do not add a cron that walks
   `next_touch_on`. Do not lift `LIGHTHOUSE_DRY_RUN` or `LIGHTHOUSE_SEND_ALLOWLIST`.
-- **Cold From domain.** Reply-To is already forced to `team@trymilon.com` in code and in
-  `20260912170000_lighthouse_reply_to_trymilon.sql`. From is still
-  `process.env.RESEND_FROM_EMAIL`, with a code fallback of `noreply@milon.co.za`
-  (`sendLighthouseTouch`). Day-0 docs still allow a verified `milonfinance.com` From
-  until `trymilon.com` is verified in Resend. Fixing that is an env and send-path change,
-  separate from this schema. The future `lighthouse_campaigns.from_address` CHECK only
+- **Cold From domain.** Cold From is hard-locked to `team@trymilon.com`
+  (`resolveLighthouseFromAddress`). Reply-To stays `hello@milonfinance.com`
+  (`resolveLighthouseReplyTo`). The From display name is `The MILŌN Team`.
+  The future `lighthouse_campaigns.from_address` CHECK only
   accepts `team@trymilon.com`. Do not store `hello@milonfinance.com`,
   `team@milonfinance.com`, or `noreply@milon.co.za` as a cold From.
 - **`public.firms` and `public.clients`.** Product tenants. Market country stays `ZA`|`US`.

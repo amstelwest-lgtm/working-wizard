@@ -168,10 +168,12 @@ INSERT INTO public.lighthouse_assets (key, kind, title, purpose, used_in_step, p
 ON CONFLICT (key) DO NOTHING;
 
 -- ── 7. Lighthouse settings defaults ─────────────────────────────────────────
+-- Cold From display name is The MILŌN Team. Databases that already applied
+-- an earlier copy of this seed are updated by
+-- 20261005143000_lighthouse_sender_milon_team.sql.
 INSERT INTO public.milon_ops_settings (key, value) VALUES
   ('lighthouse', '{
-    "sender_name": "Theo van der Westhuizen",
-    "sender_title": "Founder, Milōn",
+    "sender_name": "The MILŌN Team",
     "trial_days": 14,
     "daily_send_cap": 25,
     "booking_url": "",

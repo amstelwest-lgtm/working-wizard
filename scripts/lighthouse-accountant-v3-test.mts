@@ -158,6 +158,10 @@ assert(fns.includes("readyAssetsByKeys"), "drafter loads primary and fallback to
 assert(fns.includes("lighthouseOnePagerAttachments"), "send path can attach the one-pager");
 assert(fns.includes("replyTo: LIGHTHOUSE_REPLY_TO"), "DEFAULT_SETTINGS.replyTo is locked");
 assert(fns.includes("You write as The Milōn Team"), "SYSTEM_RULES voice is The Milōn Team");
+assert(fns.includes("From display name is The MILŌN Team."), "SYSTEM_RULES display name is the team");
+assert(!fns.includes("Theo van der Westhuizen"), "SYSTEM_RULES does not name Theo as sender");
+assert(!fns.includes("Founder, Milōn"), "SYSTEM_RULES does not seed a Founder title");
+assert(!fns.includes("Sound like one founder"), "owner rules do not write as a founder");
 assert(!fns.includes("You write as Theo, founder of MILŌN"), "SYSTEM_RULES is not Theo first-person");
 assert(fns.includes("Never write in founder first-person as Theo"), "SYSTEM_RULES forbids Theo voice");
 assert(fns.includes(ACCOUNTANT_TEASER_PRACTICE), "SYSTEM_RULES has practice teaser");
