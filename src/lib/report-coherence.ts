@@ -185,13 +185,19 @@ export function cashCycleStory(input: {
   const daily = Number.isFinite(input.dailyRevenue) ? Math.max(0, input.dailyRevenue) : 0;
   if (ccc < 0) {
     const days = Math.abs(Math.round(ccc));
+    const tier = scoreTier(scoreRatio("Working Capital Days", ccc));
+    const band = healthBandLabel(tier);
+    const extreme =
+      tier === "critical"
+        ? ` That is beyond normal terms — the band is ${band}, and those supplier terms are a risk if they tighten.`
+        : ` The cycle is ${band}.`;
     return {
       supplierFunded: true,
       trapped: 0,
       dayRelease: null,
       sentence:
         `Suppliers fund this business: cash comes back ${days} days before suppliers are paid, ` +
-        `so there is no financing gap and no cash trapped in the cycle.`,
+        `so there is no financing gap and no cash trapped in the cycle.${extreme}`,
     };
   }
   const trapped = daily * ccc;

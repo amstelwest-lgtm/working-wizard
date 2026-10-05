@@ -594,7 +594,8 @@ assert(wizardSrc.includes("Got it — add my first client"), "empty practice tou
 
   const dash = stepsBlock("ACCOUNTANT_DASH_STEPS");
   assert(/The Queries column/.test(dash), "practice-board tour covers the Queries column");
-  assert(/client's own logo/.test(dash), "practice reports step sells client branding");
+  assert(/firm's logo and colours/.test(dash), "practice reports step says packs use the firm's branding");
+  assert(!/client's own logo/.test(dash), "practice reports step does not sell client branding");
   assert(!/That loop is the practice/.test(dash), "practice add-client step dropped the slop closer");
 }
 

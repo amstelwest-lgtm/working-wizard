@@ -144,7 +144,16 @@ const negativeCycle = cashCycleStory({
 assert(negativeCycle.supplierFunded, "a negative cycle is supplier-funded");
 assert(negativeCycle.trapped === 0 && negativeCycle.dayRelease === null, "nothing is trapped and no day is released");
 assert(/no financing gap/i.test(negativeCycle.sentence), "the sentence says there is no financing gap");
+assert(/beyond normal terms/i.test(negativeCycle.sentence), "a critical negative cycle is beyond normal terms");
 assert(!negativeCycle.sentence.includes("$284"), "a negative cycle must not quote daily revenue as cash released");
+const mildNegative = cashCycleStory({
+  ccc: -10,
+  dailyRevenue: 284,
+  formatMoney: (n) => `$${Math.round(n)}`,
+  formatUnit: (n) => `$${n}`,
+});
+assert(mildNegative.supplierFunded && mildNegative.dayRelease === null, "a short negative cycle is still supplier-funded");
+assert(!/beyond normal terms/i.test(mildNegative.sentence), "a healthy negative cycle is not called extreme");
 
 const positiveCycle = cashCycleStory({
   ccc: 10,
