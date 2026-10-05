@@ -265,23 +265,33 @@ export const getLighthouseUsage = createServerFn({ method: "GET" })
       migrationHint: null,
     };
 
-    const { data: rows, error } = await admin
-      .from("lighthouse_product_usage")
-      .select(
-        "occurred_at, user_id, persona, surface, event_name, feature_key, firm_id, client_id",
-      )
-      .gte("occurred_at", fromIso)
-      .order("occurred_at", { ascending: false })
-      .limit(8000);
-
-    if (error) {
-      if (missingRelation(error.message ?? "")) {
-        return { ...base, migrationHint: migrationHintFor(USAGE_MIGRATION) };
+    const pageSize = 1000;
+    const rows: Array<Record<string, unknown>> = [];
+    let exactCount: number | null = null;
+    for (let page = 0; page < 40; page++) {
+      const from = page * pageSize;
+      const { data, error, count } = await admin
+        .from("lighthouse_product_usage")
+        .select(
+          "occurred_at, user_id, persona, surface, event_name, feature_key, firm_id, client_id",
+          { count: "exact" },
+        )
+        .gte("occurred_at", fromIso)
+        .order("occurred_at", { ascending: false })
+        .range(from, from + pageSize - 1);
+      if (error) {
+        if (missingRelation(error.message ?? "")) {
+          return { ...base, migrationHint: migrationHintFor(USAGE_MIGRATION) };
+        }
+        throw new Error(error.message);
       }
-      throw new Error(error.message);
+      if (typeof count === "number") exactCount = count;
+      const batch = (data ?? []) as Array<Record<string, unknown>>;
+      rows.push(...batch);
+      if (batch.length < pageSize) break;
     }
 
-    const mapped: UsageEventRow[] = ((rows ?? []) as Array<Record<string, unknown>>).map((r) => ({
+    const mapped: UsageEventRow[] = rows.map((r) => ({
       occurredAt: String(r.occurred_at ?? ""),
       userId: String(r.user_id ?? ""),
       persona: (["firm", "founder", "customer"].includes(String(r.persona))
@@ -322,7 +332,25 @@ export const getLighthouseUsage = createServerFn({ method: "GET" })
       }
     }
 
+    const userIds = [...new Set(mapped.map((r) => r.userId).filter(Boolean))].slice(0, 200);
+    if (userIds.length) {
+      const { data: profiles } = await admin
+        .from("profiles")
+        .select("id, full_name, email")
+        .in("id", userIds);
+      for (const profile of (profiles ?? []) as Array<{
+        id: string;
+        full_name: string | null;
+        email: string | null;
+      }>) {
+        const name = (profile.full_name ?? "").trim() || (profile.email ?? "").trim();
+        if (!name) continue;
+        entityLabels[`user:${profile.id}`] = name;
+      }
+    }
+
     const rollup = rollupUsage(mapped, { fromIso, toIso, entityLabels });
+    if (exactCount != null) rollup.totals.events = exactCount;
     const recent = mapped.slice(0, 25).map((r) => ({
       at: r.occurredAt,
       persona: r.persona,

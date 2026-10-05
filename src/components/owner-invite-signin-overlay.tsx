@@ -1,4 +1,7 @@
+import { useState } from "react";
 import { AuthDivider, GoogleSignInButton } from "@/components/google-sign-in-button";
+import { PasswordResetRequest } from "@/components/password-reset-request";
+import { PasswordSignInAlert } from "@/components/password-sign-in-alert";
 import {
   OwnerInviteCard,
   OwnerInviteFieldLabel,
@@ -38,6 +41,8 @@ export function OwnerInviteSigninOverlay({
   onGoogleError,
   copyMarket,
 }: Props) {
+  const [resetOpen, setResetOpen] = useState(false);
+  if (!open && resetOpen) setResetOpen(false);
   if (!open) return null;
 
   return (
@@ -55,7 +60,10 @@ export function OwnerInviteSigninOverlay({
               <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-[#8a938c]">
                 Existing account
               </p>
-              <h2 id="owner-invite-signin-title" className="mt-1 text-lg font-semibold text-[#e8ede9]">
+              <h2
+                id="owner-invite-signin-title"
+                className="mt-1 text-lg font-semibold text-[#e8ede9]"
+              >
                 Sign in to accept
               </h2>
             </div>
@@ -69,50 +77,68 @@ export function OwnerInviteSigninOverlay({
             </button>
           </div>
 
-          <GoogleSignInButton
-            intent="owner"
-            tone="portal"
-            label="Continue with Google"
-            disabled={siBusy}
-            ownerInvite={{
-              token: inviteToken,
-              clientCode: regClientCode.trim() || null,
-            }}
-            next={`/?invite=${encodeURIComponent(inviteToken)}&mode=signup`}
-            onError={onGoogleError}
-          />
-          <AuthDivider label="or use email" />
-
-          <form onSubmit={onSubmit}>
-            <OwnerInviteFieldLabel htmlFor="ownerInviteSiEmail">Email</OwnerInviteFieldLabel>
-            <OwnerInviteInput
-              id="ownerInviteSiEmail"
-              type="email"
-              required
-              autoFocus
-              placeholder={t("emailExample", copyMarket)}
-              value={siEmail}
-              onChange={(e) => onSiEmailChange(e.target.value)}
+          {resetOpen ? (
+            <PasswordResetRequest
+              key={siEmail}
+              initialEmail={siEmail}
+              variant="overlay"
+              onBack={() => setResetOpen(false)}
             />
+          ) : (
+            <>
+              <GoogleSignInButton
+                intent="owner"
+                tone="portal"
+                label="Continue with Google"
+                disabled={siBusy}
+                ownerInvite={{
+                  token: inviteToken,
+                  clientCode: regClientCode.trim() || null,
+                }}
+                next={`/?invite=${encodeURIComponent(inviteToken)}&mode=signup`}
+                onError={onGoogleError}
+              />
+              <AuthDivider label="or use email" />
 
-            <OwnerInviteFieldLabel htmlFor="ownerInviteSiPassword">Password</OwnerInviteFieldLabel>
-            <OwnerInviteInput
-              id="ownerInviteSiPassword"
-              type="password"
-              required
-              placeholder="••••••••"
-              value={siPassword}
-              onChange={(e) => onSiPasswordChange(e.target.value)}
-            />
+              <form onSubmit={onSubmit}>
+                <OwnerInviteFieldLabel htmlFor="ownerInviteSiEmail">Email</OwnerInviteFieldLabel>
+                <OwnerInviteInput
+                  id="ownerInviteSiEmail"
+                  type="email"
+                  required
+                  autoFocus
+                  autoComplete="username"
+                  placeholder={t("emailExample", copyMarket)}
+                  value={siEmail}
+                  onChange={(e) => onSiEmailChange(e.target.value)}
+                />
 
-            {siError ? <p className="mt-3 text-sm text-rose-300">{siError}</p> : null}
+                <OwnerInviteFieldLabel htmlFor="ownerInviteSiPassword">
+                  Password
+                </OwnerInviteFieldLabel>
+                <OwnerInviteInput
+                  id="ownerInviteSiPassword"
+                  type="password"
+                  required
+                  autoComplete="current-password"
+                  placeholder="••••••••"
+                  value={siPassword}
+                  onChange={(e) => onSiPasswordChange(e.target.value)}
+                />
 
-            <div className="mt-5">
-              <OwnerInvitePrimaryButton type="submit" disabled={siBusy}>
-                {siBusy ? "Signing in…" : "Sign in and accept"}
-              </OwnerInvitePrimaryButton>
-            </div>
-          </form>
+                <div className="mt-5">
+                  <OwnerInvitePrimaryButton type="submit" disabled={siBusy} aria-busy={siBusy}>
+                    {siBusy ? "Signing in…" : "Sign in and accept"}
+                  </OwnerInvitePrimaryButton>
+                </div>
+                <PasswordSignInAlert
+                  message={siError}
+                  onForgotPassword={() => setResetOpen(true)}
+                  tone="overlay"
+                />
+              </form>
+            </>
+          )}
         </OwnerInviteCard>
       </div>
     </div>
