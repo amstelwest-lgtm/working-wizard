@@ -208,7 +208,11 @@ assert(drafter.includes("autoPopulate: autoPrefs"), "bank drafter returns chosen
 const review = read("src/components/extraction-review-modal.tsx");
 assert(review.includes("<AutoPopulateOptions") && review.includes("onConfirm(mapped, autoPrefs)"), "owner statement modal wired");
 const upload = read("src/components/upload-financials.tsx");
-assert(upload.includes("<AutoPopulateOptions") && upload.includes("onConfirm?.(result, autoPrefs)"), "accountant statement upload wired");
+assert(
+  upload.includes("<AutoPopulateOptions") &&
+    upload.includes("onConfirm?.(stamped, autoPrefs, chosenPeriod)"),
+  "accountant statement upload wired",
+);
 const owner = read("src/routes/app.tsx");
 assert((owner.match(/runAutoPopulate\(/g) ?? []).length >= 2, "owner: bank + statement paths run auto-populate");
 assert(!owner.includes("setShowCashFromBanks(true), 400"), "owner: no second cash dialog after bank apply");
