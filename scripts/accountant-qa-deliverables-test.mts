@@ -26,6 +26,10 @@ import {
   periodFinancialsFromExtraction,
 } from "../src/lib/statement-financials";
 import { statementNoteSections } from "../src/lib/statement-notes";
+import {
+  needsTrialBalanceRefresh,
+  TRIAL_BALANCE_REFRESH_COPY,
+} from "../src/lib/trial-balance-refresh";
 
 function assert(cond: unknown, msg: string) {
   if (!cond) throw new Error(msg);
@@ -356,5 +360,77 @@ assert(!/not computed/i.test(gaps), "statement notes do not repeat that totals w
 const extractServer = read("src/lib/extractFinancials.server.ts");
 assert(extractServer.includes("applyBalanceSheetTotals"), "import fills totals before validation");
 assert(extractServer.includes("short bullets"), "extraction prompt still asks for short bullets");
+
+const qaLive = { revenue: "1550000", cogs: "451000", fixedCosts: "", cash: "" };
+const qaSnapshot = {
+  source: "pdf_upload",
+  period_date: "2026-10-31",
+  financials: { revenue: "1550000", cogs: "451000", fixedCosts: "", cash: "" },
+};
+assert(
+  needsTrialBalanceRefresh({ live: qaLive, snapshots: [qaSnapshot] }),
+  "a pre-metric trial balance with blank opex and cash asks for a re-import",
+);
+assert(
+  !needsTrialBalanceRefresh({
+    live: { ...qaLive, fixedCosts: "620000", cash: "25000" },
+    snapshots: [qaSnapshot],
+  }),
+  "hand-entered opex and cash are left alone",
+);
+assert(
+  !needsTrialBalanceRefresh({
+    live: qaLive,
+    snapshots: [{ ...qaSnapshot, source: "manual" }],
+  }),
+  "a hand-saved snapshot is not treated as a trial-balance import",
+);
+assert(
+  !needsTrialBalanceRefresh({
+    live: { revenue: "1550000", cogs: "451000", fixedCosts: "620000", cash: "25000" },
+    snapshots: [
+      {
+        source: "pdf_upload",
+        period_date: "2026-10-31",
+        financials: { revenue: "1550000", fixedCosts: "620000", cash: "25000" },
+      },
+    ],
+  }),
+  "an import that already has opex and cash does not ask again",
+);
+assert(
+  !needsTrialBalanceRefresh({
+    live: { revenue: "1550000", fixedCosts: "620000", cash: "25000" },
+    snapshots: [
+      qaSnapshot,
+      {
+        source: "pdf_upload",
+        period_date: "2026-11-30",
+        financials: { revenue: "1550000", fixedCosts: "620000", cash: "25000" },
+      },
+    ],
+  }),
+  "the latest statement import wins over an older incomplete snapshot",
+);
+assert(
+  TRIAL_BALANCE_REFRESH_COPY ===
+    "Re-import the trial balance to refresh operating profit and runway",
+  "refresh copy is the agreed sentence",
+);
+const refreshUi = read("src/components/trial-balance-refresh-prompt.tsx");
+assert(refreshUi.includes("TRIAL_BALANCE_REFRESH_COPY"), "prompt uses the shared sentence");
+assert(refreshUi.includes("Re-import trial balance"), "prompt has an import button");
+assert(clientSrc.includes("needsTrialBalanceRefresh"), "client file detects a stale trial balance");
+assert(
+  (clientSrc.match(/TrialBalanceRefreshPrompt/g) ?? []).length >= 3,
+  "Overview and Health both offer the re-import",
+);
+const ownerSrc = read("src/routes/app.tsx");
+assert(ownerSrc.includes("needsTrialBalanceRefresh"), "owner health detects a stale trial balance");
+assert(ownerSrc.includes('setFirstRunStep("first-data")'), "owner re-import opens the statement upload");
+assert(
+  !read("src/lib/trial-balance-refresh.ts").includes("apply_migration"),
+  "stale imports are not rewritten from missing lines",
+);
 
 console.log("accountant-qa-deliverables-test: ok");

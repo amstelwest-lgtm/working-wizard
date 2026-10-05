@@ -41,6 +41,8 @@ import { PlaybookDrawer } from "@/components/playbook-drawer";
 import { computeOverviewCaption } from "@/lib/overview-insights";
 import type { ExtractionResult } from "@/lib/financialSchema";
 import { periodFinancialsFromExtraction } from "@/lib/statement-financials";
+import { needsTrialBalanceRefresh } from "@/lib/trial-balance-refresh";
+import { TrialBalanceRefreshPrompt } from "@/components/trial-balance-refresh-prompt";
 import {
   computeRatios,
   PERIOD_MONTH_OPTIONS,
@@ -1394,7 +1396,7 @@ function ClientView() {
     if (!clientId) return;
     supabase
       .from("client_financial_snapshots")
-      .select("id, period_label, period_date, financials, ratios")
+      .select("id, period_label, period_date, financials, ratios, source")
       .eq("client_id", clientId)
       .order("period_date", { ascending: false })
       .limit(24)
@@ -1406,6 +1408,7 @@ function ClientView() {
             period_date: s.period_date as string,
             financials: (s.financials as Record<string, unknown>) ?? null,
             ratios: (s.ratios as Record<string, number>) ?? null,
+            source: (s.source as string | null) ?? null,
           })),
         );
       });
@@ -1694,7 +1697,7 @@ function ClientView() {
         setUploadOpen(false);
         const { data } = await supabase
           .from("client_financial_snapshots")
-          .select("id, period_label, period_date, financials, ratios")
+          .select("id, period_label, period_date, financials, ratios, source")
           .eq("client_id", clientId)
           .order("period_date", { ascending: false })
           .limit(24);
@@ -1705,6 +1708,7 @@ function ClientView() {
             period_date: s.period_date as string,
             financials: (s.financials as Record<string, unknown>) ?? null,
             ratios: (s.ratios as Record<string, number>) ?? null,
+            source: (s.source as string | null) ?? null,
           })),
         );
         return;
@@ -2351,6 +2355,10 @@ function ClientView() {
                   onChanged={() => setAdvisoryBump((n) => n + 1)}
                 />
 
+                {needsTrialBalanceRefresh({ live: financials, snapshots }) ? (
+                  <TrialBalanceRefreshPrompt onImport={() => setUploadOpen(true)} />
+                ) : null}
+
                 {/* ===== CLIENT BRIEFING — status → what matters → this month's workflow ===== */}
                 <ClientBriefing
                   clientName={client.name}
@@ -2650,6 +2658,9 @@ function ClientView() {
                       />
                     }
                   />
+                  {needsTrialBalanceRefresh({ live: financials, snapshots }) ? (
+                    <TrialBalanceRefreshPrompt onImport={() => setUploadOpen(true)} />
+                  ) : null}
                   <DeliverableInputConfig
                     className="mb-5"
                     clientId={clientId}

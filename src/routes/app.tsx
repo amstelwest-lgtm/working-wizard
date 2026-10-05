@@ -101,6 +101,8 @@ import { healthFromRatioInputs, healthMapFromRatios, scoreRatio } from "@/lib/he
 import { ratioActualLine } from "@/lib/ratio-actuals";
 import { type SavedCashflowLike } from "@/lib/cash-runway";
 import { assessClientMetrics } from "@/lib/client-metrics";
+import { needsTrialBalanceRefresh } from "@/lib/trial-balance-refresh";
+import { TrialBalanceRefreshPrompt } from "@/components/trial-balance-refresh-prompt";
 import {
   FinancialInputsContext,
   type WeeklyInputs,
@@ -2306,7 +2308,13 @@ function Index() {
   // True only when the DB returned non-null financials — prevents demo defaults from masquerading as real data
   const [hasRealFinancials, setHasRealFinancials] = useState(false);
   const [history, setHistory] = useState<
-    Array<{ period_label: string; period_date: string; ratios: Record<string, number> }>
+    Array<{
+      period_label: string;
+      period_date: string;
+      ratios: Record<string, number>;
+      source?: string | null;
+      financials?: Record<string, unknown> | null;
+    }>
   >([]);
 
   const [effectiveClientId, setEffectiveClientId] = useState<string | null>(null);
@@ -2580,7 +2588,7 @@ function Index() {
     }
     supabase
       .from("client_financial_snapshots")
-      .select("period_label, period_date, ratios")
+      .select("period_label, period_date, ratios, source, financials")
       .eq("client_id", effectiveClientId)
       .order("period_date", { ascending: true })
       .limit(24)
@@ -4441,6 +4449,12 @@ function Index() {
 
               <TabsContent value="today" className="mt-0">
                 <TabErrorBoundary label="Business Health">
+                  {needsTrialBalanceRefresh({
+                    live: v as unknown as Record<string, unknown>,
+                    snapshots: history,
+                  }) ? (
+                    <TrialBalanceRefreshPrompt onImport={() => setFirstRunStep("first-data")} />
+                  ) : null}
                   {viewMode === "simplified" ? (
                     <div className="pb-6">
                       {/* Page header — aligned with rail top */}
@@ -5909,7 +5923,7 @@ function Index() {
                     );
                     void supabase
                       .from("client_financial_snapshots")
-                      .select("period_label, period_date, ratios")
+                      .select("period_label, period_date, ratios, source, financials")
                       .eq("client_id", effectiveClientId)
                       .order("period_date", { ascending: true })
                       .limit(24)
