@@ -14,17 +14,17 @@ Head office for Stripe Tax is Wilmington, DE.
 
 ## Lookup keys (resolve via API — never hardcode `price_` IDs)
 
-| Band | Active clients | Monthly | Annual (~20% off) | Lookup keys |
-| --- | --- | --- | --- | --- |
-| Starter (archived — not for new signups) | 3 | $0 | — | `milon_starter_monthly` (`active=false` on Live) |
-| Solo | 15 | $99 | $950 | `milon_solo_monthly` / `milon_solo_yearly` |
-| Small | 25 | $149 | $1,430 | `milon_small_monthly` / `milon_small_yearly` |
-| Growing | 50 | $249 | $2,390 | `milon_growing_monthly` / `milon_growing_yearly` |
-| Established | 75 | $349 | $3,350 | `milon_established_monthly` / `milon_established_yearly` |
-| Larger | 125 | $499 | $4,790 | `milon_larger_monthly` / `milon_larger_yearly` |
-| Advanced | 200 | $649 | $6,230 | `milon_advanced_monthly` / `milon_advanced_yearly` |
-| Scale | 500 | $999 | $9,590 | `milon_scale_monthly` / `milon_scale_yearly` |
-| Enterprise | unlimited | custom Quotes | — | product only, no public prices |
+| Band                                     | Active clients | Monthly       | Annual (~20% off) | Lookup keys                                              |
+| ---------------------------------------- | -------------- | ------------- | ----------------- | -------------------------------------------------------- |
+| Starter (archived — not for new signups) | 3              | $0            | —                 | `milon_starter_monthly` (`active=false` on Live)         |
+| Solo                                     | 15             | $99           | $950              | `milon_solo_monthly` / `milon_solo_yearly`               |
+| Small                                    | 25             | $149          | $1,430            | `milon_small_monthly` / `milon_small_yearly`             |
+| Growing                                  | 50             | $249          | $2,390            | `milon_growing_monthly` / `milon_growing_yearly`         |
+| Established                              | 75             | $349          | $3,350            | `milon_established_monthly` / `milon_established_yearly` |
+| Larger                                   | 125            | $499          | $4,790            | `milon_larger_monthly` / `milon_larger_yearly`           |
+| Advanced                                 | 200            | $649          | $6,230            | `milon_advanced_monthly` / `milon_advanced_yearly`       |
+| Scale                                    | 500            | $999          | $9,590            | `milon_scale_monthly` / `milon_scale_yearly`             |
+| Enterprise                               | unlimited      | custom Quotes | —                 | product only, no public prices                           |
 
 Resolve:
 
@@ -98,6 +98,7 @@ Account: **Milon, Inc.** `acct_1UEXnwGXDN6PFbnz` (Live). This VM does not mutate
    ```
 
    Dashboard: Product catalog → Starter price → Archive. `active=false`. Existing subscriptions on that price keep running.
+
 3. Leave paid band prices **active**: `milon_solo_monthly`, `milon_solo_yearly`, and the same pattern for small, growing, established, larger, advanced, scale.
 4. Leave `tax_behavior=exclusive` and Adaptive Pricing (SA ZAR) unchanged.
 5. Do not attach FOUNDING50 to the Starter price. FOUNDING stays 50% off **monthly paid** prices only. FOUNDING applies to monthly invoices after the trial.
@@ -106,11 +107,22 @@ Account: **Milon, Inc.** `acct_1UEXnwGXDN6PFbnz` (Live). This VM does not mutate
 
 ## Customer Portal
 
-Dashboard Customer Portal is already configured for self-serve band / interval changes.
+Dashboard Customer Portal stays available for invoices and cancellation. Band changes do **not** depend on the portal `subscription_update` setting (it can stay off).
 
 - Server: `createBillingPortalSession` in `src/lib/stripe-checkout.functions.ts`
-- UI: Practice **Settings → Manage billing**
+- UI: Practice **Settings → Manage billing** (firm owner or firm admin)
 - Looks up the Stripe Customer by the signed-in email (no local customer-id column)
+
+## In-app upgrade
+
+Practice owners and firm admins upgrade from the Add client limit panel and from **Settings → Plan**. The list uses `FIRM_BAND_CATALOG` (Solo 15 / $99, Small 25 / $149, … Scale 500 / $999). The current band is marked and the next band up is preselected.
+
+- Existing subscription with a card: `subscriptions.update` on that subscription, `proration_behavior: create_prorations` (Stripe’s default, same as omitting the field). Metadata `milon_plan` is set to the new band in the same call.
+- No entitling subscription, or no payment method (Starter $0): Checkout Session. No second trial. Success returns to `/dashboard?addClient=1&upgrade=success`. Cancel returns to `/dashboard?addClient=1&upgrade=cancelled` and charges nothing.
+- Server rejects anyone who is not the firm owner or a firm admin. The UI says “Ask your firm owner to upgrade” and shows no button.
+- The client cap reads the subscription price lookup_key (metadata is the fallback) and, among active subscriptions, prefers the larger band so a leftover Starter subscription cannot keep the 3-client cap.
+- `POST /api/stripe/webhook` (`checkout.session.completed`, `customer.subscription.created`, `customer.subscription.updated`) runs the same sync: write `milon_plan` from the lookup_key and cancel the replaced subscription once the new one is active or trialing. The dashboard return path runs it too, so the limit lifts without a manual refresh. No local band column and no migration.
+- Prices in the app use one currency. USD catalog amounts are shown unless Stripe returns a ZAR `unit_amount` for every paid band. The UI does not append “Charged in ZAR” next to a dollar figure. Stripe prices are not changed.
 
 ## Owner Spark vs firm bands
 

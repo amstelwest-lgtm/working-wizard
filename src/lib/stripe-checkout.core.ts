@@ -174,6 +174,31 @@ export function firmCheckoutSessionParams(
   return params;
 }
 
+/**
+ * Checkout for a firm that already exists but has no card (Starter $0) or no
+ * subscription. Does not send them to the Customer Portal. No second trial.
+ * Success reopens Add client on the dashboard.
+ */
+export function firmUpgradeCheckoutSessionParams(
+  input: FirmCheckoutSessionInput & { replacesSubscriptionId?: string | null },
+): Stripe.Checkout.SessionCreateParams {
+  const origin = input.origin.replace(/\/$/, "");
+  const params = firmCheckoutSessionParams({ ...input, includeTrial: false });
+  params.success_url = `${origin}/dashboard?addClient=1&upgrade=success&session_id={CHECKOUT_SESSION_ID}`;
+  params.cancel_url = `${origin}/dashboard?addClient=1&upgrade=cancelled`;
+  const replaced = input.replacesSubscriptionId?.trim();
+  if (replaced) {
+    params.metadata = { ...(params.metadata ?? {}), milon_replaces_subscription: replaced };
+    if (params.subscription_data) {
+      params.subscription_data.metadata = {
+        ...(params.subscription_data.metadata ?? {}),
+        milon_replaces_subscription: replaced,
+      };
+    }
+  }
+  return params;
+}
+
 export function assertNoManagedPaymentsOverride(params: Stripe.Checkout.SessionCreateParams): void {
   if ("managed_payments" in params && params.managed_payments != null) {
     throw new Error("Firm Checkout must not override managed_payments; leave the account default.");

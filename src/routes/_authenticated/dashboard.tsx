@@ -41,7 +41,18 @@ import { getQboStatuses } from "@/lib/qbo.functions";
 import { getXeroStatuses } from "@/lib/xero.functions";
 import { createFirmClient, getFirmClientCreateAllowance } from "@/lib/firm-clients.functions";
 import type { FirmClientCreateAllowance } from "@/lib/firm-client-cap";
-import { createBillingPortalSession, endFirmTrialNow } from "@/lib/stripe-checkout.functions";
+import { FirmBandUpgrade } from "@/components/firm-band-upgrade";
+import {
+  UPGRADE_CANCELLED_MESSAGE,
+  UPGRADE_FAILED_MESSAGE,
+  parseFirmUpgradeReturn,
+} from "@/lib/firm-band-upgrade";
+import type { FirmCheckoutBand, FirmInterval } from "@/lib/stripe-plans";
+import {
+  endFirmTrialNow,
+  finalizeFirmBandCheckout,
+  upgradeFirmBand,
+} from "@/lib/stripe-checkout.functions";
 import { inviteClientOwner, sendDraftedOwnerInvite } from "@/lib/client-invite.functions";
 import { assessClientMetrics } from "@/lib/client-metrics";
 import { countOpenQueriesByClient } from "@/lib/open-queries";
@@ -278,18 +289,19 @@ function FirmClientCapNotice({
   upgrading,
   confirmUpgrade,
   onConfirm,
-  onUpgrade,
+  onEndTrial,
   onCancelConfirm,
-  onManage,
+  onUpgradeBand,
 }: {
   cap: Extract<FirmClientCreateAllowance, { allowed: false }>;
   upgrading: boolean;
   confirmUpgrade: boolean;
   onConfirm: () => void;
-  onUpgrade: () => void;
+  onEndTrial: () => void;
   onCancelConfirm: () => void;
-  onManage: () => void;
+  onUpgradeBand: (band: FirmCheckoutBand, interval: FirmInterval) => void;
 }) {
+  const upgrade = cap.upgrade;
   return (
     <div role="alert">
       <p style={{ margin: "0 0 8px", fontSize: 15, fontWeight: 700, color: "var(--ink)" }}>
@@ -304,16 +316,11 @@ function FirmClientCapNotice({
           limit applies after that.
         </p>
       ) : null}
-      {!cap.canEndTrial ? (
-        <p style={{ margin: "0 0 16px", fontSize: 13, color: "var(--ink-dim)", lineHeight: 1.55 }}>
-          The firm owner can upgrade from Settings → Manage billing.
-        </p>
-      ) : null}
-      <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-        {cap.canEndTrial ? (
-          confirmUpgrade ? (
+      {cap.canEndTrial ? (
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
+          {confirmUpgrade ? (
             <>
-              <button className="btn gold" type="button" onClick={onUpgrade} disabled={upgrading}>
+              <button className="btn gold" type="button" onClick={onEndTrial} disabled={upgrading}>
                 {upgrading ? "Starting paid plan…" : "Start paid plan now"}
               </button>
               <button
@@ -326,15 +333,28 @@ function FirmClientCapNotice({
               </button>
             </>
           ) : (
-            <button className="btn gold" type="button" onClick={onConfirm}>
+            <button className="btn gold" type="button" onClick={onConfirm} disabled={upgrading}>
               Upgrade to paid plan
             </button>
-          )
-        ) : null}
-        <button className="btn ghost" type="button" onClick={onManage} disabled={upgrading}>
-          Manage billing
-        </button>
-      </div>
+          )}
+        </div>
+      ) : null}
+      {upgrade ? (
+        <FirmBandUpgrade
+          currentBand={upgrade.band}
+          interval={upgrade.interval}
+          priceCurrency={upgrade.priceCurrency}
+          zarByBand={upgrade.zarByBand}
+          canUpgrade={upgrade.canUpgrade}
+          usageLabel={upgrade.usageLabel}
+          upgrading={upgrading}
+          onUpgrade={onUpgradeBand}
+        />
+      ) : !cap.canEndTrial ? (
+        <p style={{ margin: 0, fontSize: 13, color: "var(--ink-dim)", lineHeight: 1.55 }}>
+          Ask your firm owner to upgrade
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -382,7 +402,7 @@ function AddClientDialog({
   const inviteOwner = useServerFn(inviteClientOwner);
   const checkCap = useServerFn(getFirmClientCreateAllowance);
   const endTrial = useServerFn(endFirmTrialNow);
-  const openPortal = useServerFn(createBillingPortalSession);
+  const upgradeBand = useServerFn(upgradeFirmBand);
   const [cap, setCap] = useState<FirmClientCreateAllowance | null>(null);
   const [confirmUpgrade, setConfirmUpgrade] = useState(false);
   const [upgrading, setUpgrading] = useState(false);
@@ -403,9 +423,7 @@ function AddClientDialog({
         .maybeSingle()
         .then(({ data }) => {
           if (cancelled) return;
-          setDraftMarket(
-            clientMarketDraftFromFirm((data as { market?: unknown } | null)?.market),
-          );
+          setDraftMarket(clientMarketDraftFromFirm((data as { market?: unknown } | null)?.market));
         });
     }
     const focus = setTimeout(() => inputRef.current?.focus(), 50);
@@ -562,7 +580,7 @@ function AddClientDialog({
               confirmUpgrade={confirmUpgrade}
               onConfirm={() => setConfirmUpgrade(true)}
               onCancelConfirm={() => setConfirmUpgrade(false)}
-              onUpgrade={() => {
+              onEndTrial={() => {
                 setUpgrading(true);
                 void endTrial()
                   .then(async () => {
@@ -577,20 +595,32 @@ function AddClientDialog({
                   })
                   .finally(() => setUpgrading(false));
               }}
-              onManage={() => {
-                void openPortal()
-                  .then(({ url }) => {
-                    window.location.href = url;
+              onUpgradeBand={(band, interval) => {
+                if (!firmId) return;
+                setUpgrading(true);
+                void upgradeBand({ data: { firmId, band, interval } })
+                  .then(async (result) => {
+                    if (result.kind === "checkout") {
+                      window.location.href = result.url;
+                      return;
+                    }
+                    toast.success(result.message);
+                    setConfirmUpgrade(false);
+                    await refreshCap();
                   })
                   .catch((err: unknown) => {
-                    toast.error(
-                      err instanceof Error ? err.message : "Could not open Stripe billing.",
-                    );
-                  });
+                    toast.error(err instanceof Error ? err.message : UPGRADE_FAILED_MESSAGE);
+                  })
+                  .finally(() => setUpgrading(false));
               }}
             />
           ) : (
             <>
+              {cap?.upgrade?.usageLabel ? (
+                <p style={{ margin: "0 0 16px", fontSize: 13, color: "var(--ink-dim)" }}>
+                  {cap.upgrade.usageLabel}
+                </p>
+              ) : null}
               {blurb && (
                 <p
                   style={{
@@ -673,7 +703,14 @@ function AddClientDialog({
                   variant="app"
                   audience="practice"
                 />
-                <p style={{ margin: "8px 0 0", fontSize: 12, color: "var(--ink-dim)", lineHeight: 1.45 }}>
+                <p
+                  style={{
+                    margin: "8px 0 0",
+                    fontSize: 12,
+                    color: "var(--ink-dim)",
+                    lineHeight: 1.45,
+                  }}
+                >
                   {draftMarket.country === "US"
                     ? "Currency: US dollars (USD). Change the country if this client is not in the United States."
                     : "Currency: rand (ZAR). Change the country if this client is not in South Africa."}
@@ -955,6 +992,49 @@ function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [addOpen, setAddOpen] = useState(false);
+  const finalizeUpgrade = useServerFn(finalizeFirmBandCheckout);
+  const upgradeReturnHandled = useRef(false);
+  useEffect(() => {
+    if (!user || upgradeReturnHandled.current || typeof window === "undefined") return;
+    const parsed = parseFirmUpgradeReturn(window.location.search);
+    if (!parsed.reopenAddClient && !parsed.outcome) return;
+    upgradeReturnHandled.current = true;
+    const params = new URLSearchParams(window.location.search);
+    params.delete("addClient");
+    params.delete("upgrade");
+    params.delete("session_id");
+    const next = params.toString();
+    window.history.replaceState(null, "", next ? `/dashboard?${next}` : "/dashboard");
+    const openForm = () => {
+      if (parsed.reopenAddClient) setAddOpen(true);
+    };
+    if (parsed.outcome === "cancelled") {
+      toast.message(UPGRADE_CANCELLED_MESSAGE);
+      openForm();
+      return;
+    }
+    if (parsed.outcome === "failed") {
+      toast.error(UPGRADE_FAILED_MESSAGE);
+      openForm();
+      return;
+    }
+    if (parsed.outcome === "success" && parsed.sessionId) {
+      void finalizeUpgrade({ data: { sessionId: parsed.sessionId } })
+        .then((result) => {
+          if (result.ok) toast.success(result.message);
+          else toast.error(result.message);
+        })
+        .catch((err: unknown) => {
+          toast.error(err instanceof Error ? err.message : UPGRADE_FAILED_MESSAGE);
+        })
+        .finally(openForm);
+      return;
+    }
+    if (parsed.outcome === "success") {
+      toast.success("Plan updated. You can add another client.");
+    }
+    openForm();
+  }, [user, finalizeUpgrade]);
   const [firstClientOpen, setFirstClientOpen] = useState(false);
   const [inviteDraft, setInviteDraft] = useState<InviteDraftUi | null>(null);
   const [inviteSending, setInviteSending] = useState(false);
@@ -1680,9 +1760,7 @@ function Dashboard() {
                 }
                 value={attention.needAttention}
                 valueClassName={attention.needAttention ? "text-[var(--risk)]" : "text-[var(--ok)]"}
-                footnote={
-                  <div className="warn">{attentionFootnote(attention)}</div>
-                }
+                footnote={<div className="warn">{attentionFootnote(attention)}</div>}
               />
 
               <MetricTile

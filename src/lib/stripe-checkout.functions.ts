@@ -2,7 +2,8 @@
  * Stripe Checkout + Customer Portal for firm-band billing.
  * Catalog prices are resolved by lookup_key. Spark (owner) stays free.
  *
- * Optional later: STRIPE_WEBHOOK_SECRET for checkout.session.completed.
+ * In-app upgrades update the existing subscription or open Checkout.
+ * STRIPE_WEBHOOK_SECRET verifies POST /api/stripe/webhook, which syncs milon_plan.
  */
 
 import { createServerFn } from "@tanstack/react-start";
@@ -13,6 +14,7 @@ import type { AuthCtx } from "@/lib/owner-ops.guard";
 import { getStripe, stripeConfigured } from "@/lib/stripe.server";
 import { eligibleForIntroTrial } from "@/lib/firm-client-cap";
 import {
+  assertCallerCanUpgradeFirm,
   findEntitlingFirmSubscription,
   loadFirmPlanDisplay,
 } from "@/lib/firm-client-cap.server";
@@ -20,6 +22,7 @@ import {
   FIRM_CHECKOUT_BANDS,
   FOUNDING_PROMO_CODE,
   assertFoundingMonthlyOnly,
+  isFirmCheckoutBand,
   isFoundingCode,
   type FirmCheckoutBand,
   type FirmInterval,
@@ -29,9 +32,21 @@ import {
   assertNoManagedPaymentsOverride,
   firmCheckoutSessionParams,
   firmIntegrationIdentifier,
+  firmUpgradeCheckoutSessionParams,
   resolveFirmCatalogPrice,
 } from "@/lib/stripe-checkout.core";
 import {
+  assertUpgradeTarget,
+  decideFirmUpgradeRoute,
+  firmSubscriptionUpgradeParams,
+  readSubscriptionPrice,
+  subscriptionHasCollectiblePaymentMethod,
+  upgradeSuccessMessage,
+  UPGRADE_FAILED_MESSAGE,
+} from "@/lib/firm-band-upgrade";
+import { syncCheckoutSessionSubscription } from "@/lib/stripe-billing-sync.server";
+import {
+  checkoutSessionUnlocksFirm,
   customerHasEntitlingSubscription,
   decideFirmBillingEntitlement,
   emailHasEntitlingSubscription,
@@ -368,6 +383,163 @@ export const getFirmPlanDisplay = createServerFn({ method: "POST" })
       email,
       firmId: data.firmId ?? null,
     });
+  });
+
+async function paymentMethodOnFile(
+  customerId: string,
+  subscription: {
+    hasDefaultPaymentMethod: boolean;
+  },
+): Promise<boolean> {
+  if (subscription.hasDefaultPaymentMethod) return true;
+  const stripe = getStripe();
+  const customer = await stripe.customers.retrieve(customerId);
+  if (customer.deleted) return false;
+  const listed = await stripe.paymentMethods.list({ customer: customerId, limit: 1 });
+  return subscriptionHasCollectiblePaymentMethod({
+    subscriptionPaymentMethod: null,
+    subscriptionSource: null,
+    customerPaymentMethod: customer.invoice_settings?.default_payment_method,
+    customerSource: customer.default_source,
+    attachedPaymentMethodCount: listed.data.length,
+  });
+}
+
+/**
+ * Move an existing firm onto a larger band.
+ * Card on file: update that subscription (prorated).
+ * Starter $0 / no card / no subscription: Checkout, then return to Add client.
+ * Owner or firm admin only.
+ */
+export const upgradeFirmBand = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) =>
+    z
+      .object({
+        firmId: z.string().uuid(),
+        band: z.enum(FIRM_CHECKOUT_BANDS),
+        interval: z.enum(["month", "year"]).default("month"),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    if (!stripeConfigured()) {
+      throw new Error("STRIPE_SECRET_KEY is not set on this deploy.");
+    }
+    const ctx = context as unknown as BillingAuthCtx;
+    const { userId, email } = await checkoutActor(ctx);
+    const { billingEmail } = await assertCallerCanUpgradeFirm({
+      supabase: ctx.supabase,
+      userId,
+      email,
+      firmId: data.firmId,
+    });
+    const band = data.band as FirmCheckoutBand;
+    const interval = data.interval as FirmInterval;
+    const sub = await findEntitlingFirmSubscription(billingEmail);
+    assertUpgradeTarget({ phase: sub?.phase ?? "none", current: sub?.band ?? null, target: band });
+
+    const stripe = getStripe();
+    const { price, lookupKey } = await resolveFirmCatalogPrice(stripe, band, interval);
+    const hasPaymentMethod = sub ? await paymentMethodOnFile(sub.customerId, sub) : false;
+    const route = decideFirmUpgradeRoute({
+      hasEntitlingSubscription: Boolean(sub),
+      hasPaymentMethod,
+    });
+
+    let itemId = sub?.itemId ?? null;
+    if (route === "update_subscription" && sub && !itemId) {
+      const fresh = await stripe.subscriptions.retrieve(sub.id, {
+        expand: ["items.data.price"],
+      });
+      itemId = readSubscriptionPrice(fresh).itemId;
+    }
+
+    if (route === "update_subscription" && sub && itemId) {
+      const params = firmSubscriptionUpgradeParams({
+        itemId,
+        priceId: price.id,
+        band,
+        interval,
+        lookupKey,
+        metadata: sub.metadata,
+        endTrial: sub.phase === "trialing",
+      });
+      try {
+        await stripe.subscriptions.update(sub.id, params);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : UPGRADE_FAILED_MESSAGE;
+        throw new Error(message || UPGRADE_FAILED_MESSAGE);
+      }
+      forgetEntitlement(billingEmail);
+      forgetEntitlement(email);
+      return {
+        kind: "updated" as const,
+        band,
+        message: upgradeSuccessMessage(band),
+      };
+    }
+
+    const customerId = sub?.customerId ?? (await findCustomerIdByEmail(billingEmail));
+    const origin = appOrigin();
+    const market: StripePlanMarket = sub?.metadata.milon_market === "za" ? "za" : "us";
+    const params = firmUpgradeCheckoutSessionParams({
+      priceId: price.id,
+      lookupKey,
+      band,
+      interval,
+      origin,
+      userId,
+      email: billingEmail,
+      customerId,
+      market,
+      integrationIdentifier: firmIntegrationIdentifier(band, interval),
+      includeTrial: false,
+      replacesSubscriptionId: sub?.id,
+    });
+    assertNoManagedPaymentsOverride(params);
+    const session = await stripe.checkout.sessions.create(params);
+    if (!session.url) throw new Error("Stripe Checkout did not return a URL.");
+    return { kind: "checkout" as const, url: session.url };
+  });
+
+/**
+ * After Checkout returns to the dashboard, align milon_plan with the price
+ * and cancel the replaced subscription so the client cap sees the new band.
+ */
+export const finalizeFirmBandCheckout = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) =>
+    z.object({ sessionId: z.string().regex(/^cs_[a-zA-Z0-9_]+/) }).parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    if (!stripeConfigured()) {
+      return { ok: false as const, message: UPGRADE_FAILED_MESSAGE };
+    }
+    const { userId, email } = await checkoutActor(context);
+    const session = await getStripe().checkout.sessions.retrieve(data.sessionId);
+    const ownerId = session.client_reference_id || session.metadata?.milon_user_id || "";
+    if (ownerId && ownerId !== userId) {
+      throw new Error("This checkout session belongs to a different account.");
+    }
+    if (
+      !checkoutSessionUnlocksFirm({ status: session.status, paymentStatus: session.payment_status })
+    ) {
+      return { ok: false as const, message: UPGRADE_FAILED_MESSAGE };
+    }
+    const synced = await syncCheckoutSessionSubscription({
+      mode: session.mode,
+      subscription:
+        typeof session.subscription === "string" ? session.subscription : session.subscription?.id,
+      metadata: session.metadata ?? undefined,
+    });
+    forgetEntitlement(email);
+    const band = synced?.band ?? null;
+    const message =
+      band && isFirmCheckoutBand(band)
+        ? upgradeSuccessMessage(band)
+        : "Plan updated. You can add another client.";
+    return { ok: true as const, message, band };
   });
 
 /** Live Stripe entitlement for the accountant firm shell. */

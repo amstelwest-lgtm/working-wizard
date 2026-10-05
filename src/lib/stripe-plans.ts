@@ -202,6 +202,26 @@ export function firmLookupKey(band: FirmCheckoutBand, interval: FirmInterval): s
   return key;
 }
 
+/** Catalog band for a Stripe price lookup_key. Unknown keys return null. */
+export function bandIdFromLookupKey(lookupKey: string | null | undefined): FirmBandId | null {
+  const key = lookupKey?.trim();
+  if (!key) return null;
+  for (const band of FIRM_BAND_TABLE) {
+    if (band.lookup.month === key || band.lookup.year === key) return band.id;
+  }
+  return null;
+}
+
+export function intervalFromLookupKey(lookupKey: string | null | undefined): FirmInterval | null {
+  const key = lookupKey?.trim();
+  if (!key) return null;
+  for (const band of FIRM_BAND_TABLE) {
+    if (band.lookup.month === key) return "month";
+    if (band.lookup.year === key) return "year";
+  }
+  return null;
+}
+
 export function formatUsdFromCents(cents: number): string {
   const dollars = cents / 100;
   if (Number.isInteger(dollars)) {

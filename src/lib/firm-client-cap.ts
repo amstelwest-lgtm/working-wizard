@@ -11,6 +11,7 @@ import {
   firmClientLimitLabel,
   isFirmBandId,
   type FirmBandId,
+  type FirmInterval,
 } from "@/lib/stripe-plans";
 
 export type FirmSubscriptionPhase = "trialing" | "active" | "none";
@@ -26,9 +27,24 @@ export type FirmClientCreateDecision =
       bandName: string | null;
     };
 
+/** Band list payload for Add client. Kept here so the cap module does not import the upgrade module. */
+export type FirmUpgradeAllowance = {
+  canUpgrade: boolean;
+  band: FirmBandId | null;
+  phase: FirmSubscriptionPhase;
+  clientCount: number;
+  clientLimit: number | null;
+  usageLabel: string;
+  priceCurrency: "USD" | "ZAR";
+  interval: FirmInterval;
+  zarByBand: Partial<Record<FirmBandId, { month: number | null; year: number | null }>>;
+};
+
 export type FirmClientCreateAllowance = FirmClientCreateDecision & {
   /** Actor's email is the Stripe customer, so they can end the trial now. */
   canEndTrial: boolean;
+  /** Present when the cap check loaded the firm. Absent on the unconfigured fallback. */
+  upgrade?: FirmUpgradeAllowance;
 };
 
 export function phaseFromSubscriptionStatus(
@@ -103,10 +119,21 @@ export type FirmPlanStatusCopy = {
 
 export type FirmPlanDisplay = FirmPlanStatusCopy & {
   configured: boolean;
+  clientCount: number | null;
+  clientLimit: number | null;
+  /** e.g. "3 of 3 clients". Null when the plan could not be loaded. */
+  usageLabel: string | null;
+  canUpgrade: boolean;
+  priceCurrency: "USD" | "ZAR";
+  interval: FirmInterval;
+  zarByBand: Partial<Record<FirmBandId, { month: number | null; year: number | null }>>;
 };
 
 /** Whole days until `trialEndIso`. 0 when the trial end is now or in the past. */
-export function trialDaysRemaining(trialEndIso: string | null | undefined, now = new Date()): number | null {
+export function trialDaysRemaining(
+  trialEndIso: string | null | undefined,
+  now = new Date(),
+): number | null {
   if (!trialEndIso) return null;
   const end = Date.parse(trialEndIso);
   if (!Number.isFinite(end)) return null;

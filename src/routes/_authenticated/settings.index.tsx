@@ -2,12 +2,28 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { Users, Building2, LogOut, Palette, RotateCcw, Scale, Trash2, User, CreditCard } from "lucide-react";
+import {
+  Users,
+  Building2,
+  LogOut,
+  Palette,
+  RotateCcw,
+  Scale,
+  Trash2,
+  User,
+  CreditCard,
+} from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { deleteOwnAccount } from "@/lib/account.functions";
 import type { FirmPlanDisplay } from "@/lib/firm-client-cap";
-import { createBillingPortalSession, getFirmPlanDisplay } from "@/lib/stripe-checkout.functions";
+import { FirmBandUpgrade } from "@/components/firm-band-upgrade";
+import { UPGRADE_FAILED_MESSAGE } from "@/lib/firm-band-upgrade";
+import {
+  createBillingPortalSession,
+  getFirmPlanDisplay,
+  upgradeFirmBand,
+} from "@/lib/stripe-checkout.functions";
 import { resetOnboardingTours } from "@/lib/onboarding";
 import { BackLink } from "@/components/back-link";
 import { Button } from "@/components/ui/button";
@@ -55,9 +71,12 @@ function SettingsPage() {
   const doDelete = useServerFn(deleteOwnAccount);
   const startBillingPortal = useServerFn(createBillingPortalSession);
   const loadPlan = useServerFn(getFirmPlanDisplay);
+  const upgradeBand = useServerFn(upgradeFirmBand);
   const { firmId } = useAccountantProfile();
   const [plan, setPlan] = useState<FirmPlanDisplay | null>(null);
   const [planLoading, setPlanLoading] = useState(false);
+  const [upgrading, setUpgrading] = useState(false);
+  const [upgradeError, setUpgradeError] = useState<string | null>(null);
 
   const [view, setView] = useState<SettingsView>("owner");
   const [hasPractice, setHasPractice] = useState(false);
@@ -309,9 +328,50 @@ function SettingsPage() {
                   {plan?.detail ? (
                     <p className="text-xs text-[var(--ink-dim)]">{plan.detail}</p>
                   ) : null}
+                  {plan?.usageLabel ? (
+                    <p className="text-xs text-[var(--ink-dim)]">{plan.usageLabel}</p>
+                  ) : null}
                 </>
               )}
             </div>
+            {plan && plan.configured !== false ? (
+              <div className="mb-3">
+                <FirmBandUpgrade
+                  currentBand={plan.band}
+                  interval={plan.interval ?? "month"}
+                  priceCurrency={plan.priceCurrency ?? "USD"}
+                  zarByBand={plan.zarByBand ?? {}}
+                  canUpgrade={plan.canUpgrade}
+                  upgrading={upgrading}
+                  onUpgrade={(band, interval) => {
+                    if (!firmId) return;
+                    setUpgrading(true);
+                    setUpgradeError(null);
+                    void upgradeBand({ data: { firmId, band, interval } })
+                      .then(async (result) => {
+                        if (result.kind === "checkout") {
+                          window.location.href = result.url;
+                          return;
+                        }
+                        toast.success(result.message);
+                        const next = await loadPlan({ data: { firmId } });
+                        setPlan(next);
+                      })
+                      .catch((ex: unknown) => {
+                        const message = ex instanceof Error ? ex.message : UPGRADE_FAILED_MESSAGE;
+                        setUpgradeError(message);
+                        toast.error(message);
+                      })
+                      .finally(() => setUpgrading(false));
+                  }}
+                />
+                {upgradeError ? (
+                  <p role="alert" className="mt-2 text-xs text-[var(--risk,#9b2c2c)]">
+                    {upgradeError}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
             <Link to="/settings/team" className="settings-row">
               <Users className="h-4 w-4" />
               Team & client access
@@ -324,24 +384,26 @@ function SettingsPage() {
               <Building2 className="h-4 w-4" />
               Firm dashboard & clients
             </Link>
-            <button
-              type="button"
-              className="settings-row"
-              onClick={() => {
-                void startBillingPortal()
-                  .then(({ url }) => {
-                    window.location.href = url;
-                  })
-                  .catch((ex: unknown) => {
-                    toast.error(
-                      ex instanceof Error ? ex.message : "Could not open Stripe billing portal.",
-                    );
-                  });
-              }}
-            >
-              <CreditCard className="h-4 w-4" />
-              Manage billing
-            </button>
+            {plan == null || plan.canUpgrade ? (
+              <button
+                type="button"
+                className="settings-row"
+                onClick={() => {
+                  void startBillingPortal()
+                    .then(({ url }) => {
+                      window.location.href = url;
+                    })
+                    .catch((ex: unknown) => {
+                      toast.error(
+                        ex instanceof Error ? ex.message : "Could not open Stripe billing portal.",
+                      );
+                    });
+                }}
+              >
+                <CreditCard className="h-4 w-4" />
+                Manage billing
+              </button>
+            ) : null}
           </div>
         </SectionCard>
       )}
