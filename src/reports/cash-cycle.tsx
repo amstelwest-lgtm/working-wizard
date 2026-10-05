@@ -28,7 +28,8 @@ import {
   scoreWorkingCapitalFunding,
 } from "@/lib/client-metrics";
 import type { ClientOperatingProfile } from "@/lib/client-profile";
-import { t, ZA_MARKET, type ResolvedMarket } from "@/lib/market";
+import { formatMoneyUnit, t, ZA_MARKET, type ResolvedMarket } from "@/lib/market";
+import { cashCycleStory } from "@/lib/report-coherence";
 import { reportKicker } from "@/lib/report-catalog";
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -237,33 +238,49 @@ function CycleTimeline({ d, accent }: { d: WorkingCapitalData; accent: string })
         ) : null}
       </View>
 
-      {/* Funding gap = CCC */}
+      {/* Funding gap = CCC. A negative cycle has no gap, so the label is not squeezed into a sliver. */}
       <View style={tl.cccRow}>
-        <View style={[tl.gapLine, { left: x(d.creditor_days) }]} />
-        <View style={[tl.gapLine, { left: x(opDays) }]} />
-        <View
-          style={[
-            tl.cccBar,
-            {
-              left: x(Math.min(d.creditor_days, opDays)),
-              width: Math.max(4, x(ccc)),
-              backgroundColor: ccc > 0 ? C.red : C.green,
-            },
-          ]}
-        >
-          <Text
-            style={tl.cccText}
-          >{`Funding gap · ${Math.round(d.cash_conversion_cycle)} days`}</Text>
-        </View>
-        <Text style={[tl.cccCaption, { left: x(Math.min(d.creditor_days, opDays)) }]}>
-          Cash Conversion Cycle — days the business must fund itself
-        </Text>
+        {d.cash_conversion_cycle < 0 ? (
+          <Text style={[tl.cccCaption, { left: 0, color: C.greenDeep, top: 8 }]}>
+            Supplier-funded — no financing gap
+          </Text>
+        ) : (
+          <>
+            <View style={[tl.gapLine, { left: x(d.creditor_days) }]} />
+            <View style={[tl.gapLine, { left: x(opDays) }]} />
+            <View
+              style={[
+                tl.cccBar,
+                {
+                  left: x(Math.min(d.creditor_days, opDays)),
+                  width: Math.max(4, x(ccc)),
+                  backgroundColor: C.red,
+                },
+              ]}
+            >
+              {x(ccc) > 120 ? (
+                <Text style={tl.cccText}>{`Funding gap · ${Math.round(d.cash_conversion_cycle)} days`}</Text>
+              ) : null}
+            </View>
+            {x(ccc) <= 120 ? (
+              <Text
+                style={[tl.cccCaption, { left: x(Math.min(d.creditor_days, opDays)) + x(ccc) + 4, top: 8 }]}
+              >
+                {`Funding gap · ${Math.round(d.cash_conversion_cycle)} days`}
+              </Text>
+            ) : (
+              <Text style={[tl.cccCaption, { left: x(Math.min(d.creditor_days, opDays)) }]}>
+                Cash conversion cycle — days the business must finance
+              </Text>
+            )}
+          </>
+        )}
       </View>
 
       <Text style={tl.legendNote}>
-        Cash leaves the business on day 0 (stock purchased) and only returns once debtors pay on day{" "}
-        {Math.round(opDays)}. Suppliers are paid on day {Math.round(d.creditor_days)} — the red band
-        is the gap the business must finance from its own cash or borrowings.
+        {d.cash_conversion_cycle < 0
+          ? `Suppliers are paid on day ${Math.round(d.creditor_days)}, after cash has already returned. There is no red financing gap and no cash trapped in the cycle.`
+          : `Cash leaves the business on day 0 and returns once customers pay on day ${Math.round(opDays)}. Suppliers are paid on day ${Math.round(d.creditor_days)} — the red band is the gap the business must finance.`}
         {axis.capped
           ? ` Axis capped at ${Math.round(total)} days so the labels stay readable — creditor days of ${Math.round(d.creditor_days)} run past the chart.`
           : ""}
@@ -289,6 +306,12 @@ export function CashCyclePDF({
   const dpo = t("dpo", m);
   const hs = d.health_scores ?? {};
   const dailyRevenue = d.annual_revenue / 365;
+  const story = cashCycleStory({
+    ccc: d.cash_conversion_cycle,
+    dailyRevenue,
+    formatMoney: (n) => fmtRandCompact(n, m),
+    formatUnit: (n) => formatMoneyUnit(n, m),
+  });
 
   const cccDelta = d.ccc_prior !== undefined ? d.cash_conversion_cycle - d.ccc_prior : undefined;
 
@@ -306,9 +329,9 @@ export function CashCyclePDF({
     },
     {
       label: "Cash Trapped",
-      value: fmtRandCompact(d.cash_trapped_rands, m),
-      good: false,
-      note: "locked in working capital",
+      value: story.supplierFunded ? "None" : fmtRandCompact(story.trapped, m),
+      good: story.supplierFunded,
+      note: story.supplierFunded ? "supplier-funded" : "locked in working capital",
     },
     {
       label: dso,
@@ -326,9 +349,9 @@ export function CashCyclePDF({
     },
     {
       label: "1-Day Improvement",
-      value: fmtRandCompact(dailyRevenue, m),
-      good: true,
-      note: "cash released per day saved",
+      value: story.dayRelease == null ? "—" : fmtRandCompact(story.dayRelease, m),
+      good: story.dayRelease != null,
+      note: story.dayRelease == null ? "no financing gap" : "cash released per day saved",
     },
   ];
 
@@ -480,12 +503,12 @@ export function CashCyclePDF({
               marginBottom: 4,
             }}
           >
-            {fmtRand(d.cash_trapped_rands, m)}
+            {story.supplierFunded ? "None" : fmtRand(story.trapped, m)}
           </Text>
           <Text style={{ fontSize: 8.5, fontFamily: "Helvetica", color: C.body, lineHeight: 1.55 }}>
-            is currently locked up funding the {Math.round(d.cash_conversion_cycle)}-day gap between
-            paying suppliers and collecting from customers. Shortening the cycle by just one day
-            releases approximately {fmtRand(dailyRevenue, m)} of cash back into the business.
+            {story.supplierFunded
+              ? "Nothing is trapped in the cycle. Suppliers fund the business, so there is no gap to shorten and no cash to release."
+              : `is locked up funding the ${Math.round(d.cash_conversion_cycle)}-day gap. Shortening the cycle by one day releases ${fmtRand(story.dayRelease ?? 0, m)}.`}
           </Text>
         </View>
 

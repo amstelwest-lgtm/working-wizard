@@ -20,6 +20,8 @@ import { SectionHeader } from "@/components/pdf/section-header";
 import { ExecSummary, type HeadlineFigure } from "@/components/pdf/exec-summary";
 import { DuPontDiagram } from "@/components/pdf/dupont";
 import { assetNarrative, diagnoseDuPont } from "./narrative";
+import { leverBand } from "@/lib/report-coherence";
+import { healthBandLabel } from "@/lib/ratios";
 import type { ClientOperatingProfile } from "@/lib/client-profile";
 import { ZA_MARKET, type ResolvedMarket } from "@/lib/market";
 import { reportKicker } from "@/lib/report-catalog";
@@ -34,6 +36,13 @@ export type CapexPeriod = {
 
 export type AssetProductivityData = {
   roe: number;
+  /** Headline percent, or "n/a" when equity is too small. */
+  roe_headline?: string;
+  roe_note?: string | null;
+  roe_unscored?: boolean;
+  /** Full value-column text, including the annualised label. */
+  roe_text?: string;
+  roa_text?: string;
   net_margin: number;
   asset_turnover: number;
   equity_multiplier: number;
@@ -232,7 +241,7 @@ export function AssetProductivityPDF({
 
   const ratioRows = [
     { name: "Asset Turnover", value: data.ratios.assetTurnover.value, score: hs.assetTurnover },
-    { name: "Return on Assets (ROA)", value: data.ratios.roa.value, score: hs.roa },
+    { name: "Return on Assets (ROA)", value: data.roa_text ?? data.ratios.roa.value, score: hs.roa },
     {
       name: "Fixed Capital Utilization",
       value: data.ratios.fixedCapitalUtilization.value,
@@ -250,28 +259,35 @@ export function AssetProductivityPDF({
     },
   ].filter((r) => r.score != null) as Array<{ name: string; value: string; score: number }>;
 
+  const roeUnscored = Boolean(data.roe_unscored);
+  const roeTier = roeUnscored ? null : leverBand("Return on Equity", data.roe);
+  const marginTier = leverBand("Net Margin", data.net_margin);
+  const turnoverTier = leverBand("Asset Turnover", data.asset_turnover);
+  const multiplierTier = leverBand("Equity Multiplier", data.equity_multiplier);
   const figures: HeadlineFigure[] = [
     {
       label: "Return on Equity",
-      value: Number.isFinite(data.roe) ? fmtPct(data.roe) : "n/m",
-      good: Number.isFinite(data.roe) ? data.roe >= 0.15 : undefined,
-      direction: Number.isFinite(data.roe) ? (data.roe >= 0.15 ? "up" : "down") : undefined,
+      value: data.roe_text ?? data.roe_headline ?? (Number.isFinite(data.roe) ? fmtPct(data.roe) : "n/a"),
+      good: roeTier == null ? undefined : roeTier === "healthy",
+      note: data.roe_note ?? (roeTier ? healthBandLabel(roeTier) : undefined),
     },
     {
       label: "Net Margin",
       value: fmtPct(data.net_margin),
-      good: data.net_margin >= 0.1,
+      good: marginTier == null ? undefined : marginTier === "healthy",
+      note: marginTier ? healthBandLabel(marginTier) : undefined,
     },
     {
       label: "Asset Turnover",
       value: `${data.asset_turnover.toFixed(2)}×`,
-      good: data.asset_turnover >= 1,
+      good: turnoverTier == null ? undefined : turnoverTier === "healthy",
+      note: turnoverTier ? healthBandLabel(turnoverTier) : undefined,
     },
     {
       label: "Equity Multiplier",
       value: `${data.equity_multiplier.toFixed(2)}×`,
-      good: data.equity_multiplier <= 2.5,
-      note: "leverage",
+      good: multiplierTier == null ? undefined : multiplierTier === "healthy",
+      note: multiplierTier ? `${healthBandLabel(multiplierTier)} · assets ÷ equity` : "assets ÷ equity",
     },
   ];
 
@@ -295,11 +311,19 @@ export function AssetProductivityPDF({
 
       <ExecSummary
         figures={figures}
-        narrative={assetNarrative(levers, dupont, operatingProfile, market ?? ZA_MARKET)}
+        narrative={assetNarrative(levers, dupont, operatingProfile, market ?? ZA_MARKET, {
+          text: data.roe_text ?? data.roe_headline ?? fmtPct(data.roe),
+          unscored: roeUnscored,
+        })}
       />
 
       <SectionHeader title="DuPont Decomposition — ROE Driver Analysis" color={theme.accent} />
-      <DuPontDiagram levers={levers} diagnosis={dupont} />
+      <DuPontDiagram
+        levers={levers}
+        diagnosis={dupont}
+        roeHeadline={data.roe_headline}
+        roeNote={roeUnscored ? data.roe_text : data.roe_note}
+      />
 
       <SectionHeader title="Asset Ratio Analysis" color={theme.accent} />
       {ratioRows.map((r, i) => (

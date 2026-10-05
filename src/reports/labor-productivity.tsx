@@ -19,7 +19,13 @@ import { ExecSummary, type HeadlineFigure } from "@/components/pdf/exec-summary"
 import { C, fmtRand, fmtRandCompact, fmtPct, resolveTheme } from "@/components/pdf/theme";
 import { laborNarrative } from "./narrative";
 import type { ClientOperatingProfile } from "@/lib/client-profile";
-import { currencySymbol, laborProductivityTitle, t, ZA_MARKET, type ResolvedMarket } from "@/lib/market";
+import {
+  laborCostLabel,
+  laborProductivityTitle,
+  t,
+  ZA_MARKET,
+  type ResolvedMarket,
+} from "@/lib/market";
 import { reportKicker } from "@/lib/report-catalog";
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -49,7 +55,8 @@ export type LaborProductivityData = {
   periods: LaborPeriod[];
   health_scores: {
     gpToLabor: number | null;
-    salesPerEmployee: number;
+    /** Null when headcount is missing — the same "Not scored" as the playbook card. */
+    salesPerEmployee: number | null;
     revenueGrowth: number | null;
   };
 };
@@ -114,12 +121,20 @@ const ch = StyleSheet.create({
   },
 });
 
-function LaborTrend({ periods, accent }: { periods: LaborPeriod[]; accent: string }) {
+function LaborTrend({
+  periods,
+  accent,
+  wageLabel,
+}: {
+  periods: LaborPeriod[];
+  accent: string;
+  wageLabel: string;
+}) {
   if (periods.length < 2) {
     return (
       <View style={ch.empty}>
         <Text style={ch.emptyText}>
-          The revenue-vs-labor-cost trend appears once at least two periods are uploaded.
+          The revenue-versus-wages trend appears once at least two periods are uploaded.
         </Text>
       </View>
     );
@@ -180,7 +195,7 @@ function LaborTrend({ periods, accent }: { periods: LaborPeriod[]; accent: strin
         </View>
         <View style={ch.legendItem}>
           <View style={[ch.legendDot, { backgroundColor: C.blueLight }]} />
-          <Text style={ch.legendText}>Labor cost</Text>
+          <Text style={ch.legendText}>{wageLabel}</Text>
         </View>
       </View>
     </View>
@@ -201,7 +216,8 @@ export function LaborProductivityPDF({
 }: LaborProductivityPDFProps) {
   const theme = resolveTheme(accountantProfile);
   const m = market ?? ZA_MARKET;
-  if (!d || unavailableReason) {
+  const wageLabel = laborCostLabel(m);
+  if (!d) {
     return (
       <PDFDocument
         title={`${laborProductivityTitle(m)} — ${smeData.name}`}
@@ -221,14 +237,14 @@ export function LaborProductivityPDF({
         <View style={ch.empty}>
           <Text style={ch.emptyText}>
             {unavailableReason ||
-              "Labor productivity needs revenue, headcount, and labor cost on the file. Those inputs are missing, so no ratios were calculated."}
+              `${laborProductivityTitle(m)} needs revenue on the file. Nothing is on file yet, so no ratios were calculated.`}
           </Text>
         </View>
       </PDFDocument>
     );
   }
-  const sym = currencySymbol(m);
   const hs = d.health_scores;
+  const headcountKnown = d.employee_count > 0 && Number.isFinite(d.revenue_per_employee);
   const realGrowth =
     d.revenue_growth != null && d.inflation_rate != null
       ? d.revenue_growth - d.inflation_rate
@@ -243,24 +259,29 @@ export function LaborProductivityPDF({
   const figures: HeadlineFigure[] = [
     {
       label: "Revenue / Employee",
-      value: fmtRandCompact(d.revenue_per_employee, m),
-      direction: rpeChange === undefined ? undefined : rpeChange >= 0 ? "up" : "down",
-      good: rpeChange === undefined ? undefined : rpeChange >= 0,
-      note:
-        rpeChange !== undefined
+      value: headcountKnown ? fmtRandCompact(d.revenue_per_employee, m) : "—",
+      direction: !headcountKnown || rpeChange === undefined ? undefined : rpeChange >= 0 ? "up" : "down",
+      good: !headcountKnown || rpeChange === undefined ? undefined : rpeChange >= 0,
+      note: !headcountKnown
+        ? "Not scored"
+        : rpeChange !== undefined
           ? `${rpeChange >= 0 ? "+" : ""}${rpeChange.toFixed(1)}% vs prior`
           : "No prior period",
     },
     {
-      label: `GP per ${sym}1 of Wages`,
-      value: gpPerLabor != null ? `${sym}${gpPerLabor.toFixed(2)}` : "—",
-      good: gpPerLabor != null ? gpPerLabor >= 0.5 : undefined,
+      label: `GP per ${fmtRand(1, m)} of wages`,
+      value: gpPerLabor != null ? fmtRand(gpPerLabor, m) : "—",
+      good: hs.gpToLabor != null ? scoreTier(hs.gpToLabor) === "healthy" : undefined,
       note: d.gp_known ? undefined : "COGS required",
     },
     {
       label: "Headcount",
-      value: `${d.employee_count}`,
-      note: `${fmtPct(laborShare)} of revenue on wages`,
+      value: headcountKnown ? `${d.employee_count}` : "—",
+      note: !headcountKnown
+        ? "Not scored"
+        : Number.isFinite(laborShare)
+          ? `${fmtPct(laborShare)} of revenue on wages`
+          : undefined,
     },
     {
       label: "Real Growth",
@@ -275,30 +296,31 @@ export function LaborProductivityPDF({
   const narrative = laborNarrative(
     {
       revenuePerEmployee: d.revenue_per_employee,
-      gpPerLaborRand: gpPerLabor ?? 0,
-      realGrowth: realGrowth ?? 0,
+      gpPerLaborRand: gpPerLabor ?? NaN,
+      realGrowth,
+      headcountKnown,
     },
     operatingProfile,
     m,
   );
 
-  const ratioRows = [
+  const ratioRows: Array<{ name: string; value: string; score: number | null }> = [
     {
-      name: "GP-to-Labor Ratio",
-      value: gpPerLabor != null ? `${sym}${gpPerLabor.toFixed(2)} / ${sym}1` : "—",
+      name: m.copyPack === "us" ? "GP-to-Labor Ratio" : "GP-to-Labour Ratio",
+      value: gpPerLabor != null ? `${fmtRand(gpPerLabor, m)} / ${fmtRand(1, m)}` : "—",
       score: hs.gpToLabor,
     },
     {
       name: "Sales per Employee",
-      value: fmtRandCompact(d.revenue_per_employee, m),
-      score: hs.salesPerEmployee,
+      value: headcountKnown ? fmtRandCompact(d.revenue_per_employee, m) : "—",
+      score: headcountKnown ? hs.salesPerEmployee : null,
     },
     {
       name: "Real Revenue Growth",
       value: realGrowth != null ? fmtPct(realGrowth) : "—",
       score: hs.revenueGrowth,
     },
-  ].filter((r) => r.score != null) as Array<{ name: string; value: string; score: number }>;
+  ];
 
   return (
     <PDFDocument
@@ -327,7 +349,7 @@ export function LaborProductivityPDF({
           accentColor={theme.accent}
         />
         <MetricBox
-          label="Total Labor Cost"
+          label={wageLabel}
           value={fmtRand(d.total_labor_cost, m)}
           accentColor={C.blue}
           note={fmtPct(laborShare) + " of revenue"}
@@ -340,8 +362,8 @@ export function LaborProductivityPDF({
         />
       </View>
 
-      <SectionHeader title="Revenue vs Labor Cost Trend" color={theme.accent} />
-      <LaborTrend periods={d.periods} accent={theme.accent} />
+      <SectionHeader title={`Revenue vs ${wageLabel}`} color={theme.accent} />
+      <LaborTrend periods={d.periods} accent={theme.accent} wageLabel={wageLabel} />
 
       {/* ── PAGE 2 ── */}
       <View break>
@@ -363,7 +385,7 @@ export function LaborProductivityPDF({
               backgroundColor: theme.accent,
             }}
           >
-            {["Period", "Revenue", "Employees", "Labor Cost", "Rev / Employee"].map((h, i) => (
+            {["Period", "Revenue", "Employees", wageLabel, "Rev / Employee"].map((h, i) => (
               <Text
                 key={h}
                 style={{
@@ -443,14 +465,15 @@ export function LaborProductivityPDF({
           ))}
         </View>
 
-        <SectionHeader title="Labor Ratio Analysis" color={theme.accent} />
+        <SectionHeader title={`${laborProductivityTitle(m)} ratios`} color={theme.accent} />
         {ratioRows.map((r, i) => (
           <RatioRow
             key={r.name}
             ratioName={r.name}
             formattedValue={r.value}
-            healthScore={r.score}
+            healthScore={r.score ?? 0}
             healthTier={scoreTier(r.score)}
+            unscored={r.score == null}
             isAlternate={i % 2 === 1}
           />
         ))}

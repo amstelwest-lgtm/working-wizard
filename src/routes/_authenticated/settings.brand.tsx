@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Save } from "lucide-react";
 import { BackLink } from "@/components/back-link";
@@ -11,6 +11,9 @@ import { PageHeader, SectionCard } from "@/components/primitives";
 import { SettingsShell } from "@/components/settings-shell";
 import { LogoUploader } from "@/components/logo-uploader";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
+import { supabase } from "@/integrations/supabase/client";
+import { coerceMarketSelection, resolveMarket, t, ZA_MARKET, type ResolvedMarket } from "@/lib/market";
+import { reportDataPeriodLabel, reportPeriodMonthYear } from "@/lib/statement-period";
 
 export const Route = createFileRoute("/_authenticated/settings/brand")({
   component: BrandSettingsPage,
@@ -60,9 +63,58 @@ function ColorSwatch({
 }
 
 function HeaderPreview() {
-  const { profile } = useAccountantProfile();
+  const { profile, firmId } = useAccountantProfile();
   const accent = profile.accentColor || "#0f3460";
   const primary = profile.primaryColor || "#1a1a2e";
+  const [previewName, setPreviewName] = useState("Client");
+  const [previewPeriod, setPreviewPeriod] = useState("");
+
+  useEffect(() => {
+    const now = new Date();
+    const fallbackPeriod = `${now.toLocaleString("en-GB", { month: "long", timeZone: "UTC" })} ${now.getUTCFullYear()}`;
+    if (!firmId) {
+      setPreviewName(t("entityExample", ZA_MARKET));
+      setPreviewPeriod(fallbackPeriod);
+      return;
+    }
+    let cancelled = false;
+    Promise.all([
+      supabase.from("firms").select("market").eq("id", firmId).maybeSingle(),
+      supabase
+        .from("clients")
+        .select("name, financials, created_at")
+        .eq("firm_id", firmId)
+        .order("created_at", { ascending: false })
+        .limit(1),
+    ]).then(([firmRes, clientRes]) => {
+      if (cancelled) return;
+      let market: ResolvedMarket = ZA_MARKET;
+      try {
+        market = resolveMarket(coerceMarketSelection(firmRes.data?.market));
+      } catch {
+        market = ZA_MARKET;
+      }
+      const row = clientRes.data?.[0] as
+        | { name?: string; financials?: object | null }
+        | undefined;
+      if (row?.name) {
+        setPreviewName(row.name);
+        const fromStatement =
+          reportDataPeriodLabel(row.financials) ??
+          (() => {
+            const parts = reportPeriodMonthYear(row.financials);
+            return parts ? `${parts.month} ${parts.year}` : null;
+          })();
+        setPreviewPeriod(fromStatement ?? fallbackPeriod);
+      } else {
+        setPreviewName(t("entityExample", market));
+        setPreviewPeriod(fallbackPeriod);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [firmId]);
 
   return (
     <div
@@ -99,10 +151,10 @@ function HeaderPreview() {
             Prepared for:
           </span>
           <span className="text-[13px] font-bold" style={{ color: primary }}>
-            Acme (Pty) Ltd
+            {previewName}
           </span>
           <span className="text-[9px] opacity-65" style={{ color: primary }}>
-            Period: June 2025
+            Period: {previewPeriod || "Current period"}
           </span>
           {profile.accountantEmail && (
             <span className="text-[8.5px] mt-1 opacity-50" style={{ color: primary }}>
@@ -119,7 +171,7 @@ function HeaderPreview() {
         style={{ backgroundColor: "#f9f9f9" }}
       >
         <span className="text-[8px] text-gray-400">
-          Powered by <span className="font-semibold text-gray-500">Milōn</span>
+          Prepared with <span className="font-semibold text-gray-500">Milōn</span>
         </span>
         <span className="text-[8px] text-gray-400">Page 1 of 1</span>
         <span className="text-[8px] text-gray-400">{profile.firmName || "Your Firm"}</span>

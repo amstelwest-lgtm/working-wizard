@@ -58,6 +58,8 @@ import {
 } from "@/lib/stripe-checkout.functions";
 import { inviteClientOwner, sendDraftedOwnerInvite } from "@/lib/client-invite.functions";
 import { assessClientMetrics } from "@/lib/client-metrics";
+import { parseOperatingProfile } from "@/lib/client-profile";
+import { clientIndustryLabel } from "@/lib/profile-signals";
 import { countOpenQueriesByClient } from "@/lib/open-queries";
 import "@/styles/accountant-portal.css";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -110,6 +112,7 @@ type Client = {
   id: string;
   name: string;
   business_type: string | null;
+  operating_profile?: unknown;
   client_code?: string | null;
   contact_email?: string | null;
   cash_runway_weeks: number | null;
@@ -1979,21 +1982,31 @@ function Dashboard() {
                       <td>
                         <div className="cname">{c.name}</div>
                         <div className="ctype">
-                          {c.client_code ? (
-                            <>
-                              <span
-                                style={{
-                                  fontFamily: "ui-monospace, monospace",
-                                  letterSpacing: "0.04em",
-                                }}
-                              >
-                                {c.client_code}
+                          {(() => {
+                            const industry = clientIndustryLabel(
+                              parseOperatingProfile(c.operating_profile),
+                              c.business_type,
+                            );
+                            return c.client_code ? (
+                              <>
+                                <span
+                                  style={{
+                                    fontFamily: "ui-monospace, monospace",
+                                    letterSpacing: "0.04em",
+                                  }}
+                                >
+                                  {c.client_code}
+                                </span>
+                                <span style={{ textTransform: "none", letterSpacing: "normal" }}>
+                                  {` · ${industry}`}
+                                </span>
+                              </>
+                            ) : (
+                              <span style={{ textTransform: "none", letterSpacing: "normal" }}>
+                                {industry}
                               </span>
-                              {c.business_type ? ` · ${c.business_type}` : ""}
-                            </>
-                          ) : (
-                            (c.business_type ?? "—")
-                          )}
+                            );
+                          })()}
                         </div>
                       </td>
                       <td data-label="Health">

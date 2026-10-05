@@ -11,7 +11,9 @@ import { Fragment } from "react";
 import { View, Text, StyleSheet } from "@react-pdf/renderer";
 import type { AccountantProfile } from "@/contexts/accountant-profile";
 import { PDFDocument, type SmeData, type ReportSignoffStamp } from "@/components/pdf/pdf-document";
-import { metricDirection, scoreTier } from "@/lib/ratios";
+import { scoreRatio } from "@/lib/health-score";
+import { interestBurdenRatio, metricDirection, scoreTier, taxBurdenRatio } from "@/lib/ratios";
+import { NO_PRIOR_PERIOD, priorMarginsDiffer } from "@/lib/report-coherence";
 import { C, fmtRand, fmtRandCompact, fmtPct, resolveTheme } from "@/components/pdf/theme";
 import { usePdfMarket } from "@/components/pdf/pdf-market";
 import { currencySymbol, t, ZA_MARKET, type ResolvedMarket } from "@/lib/market";
@@ -441,43 +443,48 @@ export function ProfitabilityWaterfallPDF({
   const theme = resolveTheme(accountantProfile);
   const m = market ?? ZA_MARKET;
   const p = d.prior_period;
-  const interest = d.operating_profit - d.ebt;
+  const interestBurden = interestBurdenRatio(d.operating_profit, d.ebt);
+  const taxBurden = taxBurdenRatio(d.ebt, d.net_profit);
+  const priorInterest = p ? interestBurdenRatio(p.operating_profit, p.ebt) : NaN;
+  const priorTax = p ? taxBurdenRatio(p.ebt, p.net_profit) : NaN;
+  const comparablePrior = p != null && priorMarginsDiffer(d.net_margin_pct, p.net_margin_pct);
+  const prior = comparablePrior ? p : undefined;
 
   const compRows: CompRow[] = [
     {
       metric: "Revenue",
       curVal: d.revenue,
       curPct: 1,
-      priorVal: p?.revenue,
-      priorPct: p ? 1 : undefined,
+      priorVal: prior?.revenue,
+      priorPct: prior ? 1 : undefined,
     },
     {
       metric: "Gross Profit",
       curVal: d.gross_profit,
       curPct: d.gross_margin_pct,
-      priorVal: p?.gross_profit,
-      priorPct: p?.gross_margin_pct,
+      priorVal: prior?.gross_profit,
+      priorPct: prior?.gross_margin_pct,
     },
     {
       metric: "Operating Profit",
       curVal: d.operating_profit,
       curPct: d.operating_margin_pct,
-      priorVal: p?.operating_profit,
-      priorPct: p?.operating_margin_pct,
+      priorVal: prior?.operating_profit,
+      priorPct: prior?.operating_margin_pct,
     },
     {
       metric: "EBT",
       curVal: d.ebt,
       curPct: d.ebt / d.revenue,
-      priorVal: p?.ebt,
-      priorPct: p ? p.ebt / p.revenue : undefined,
+      priorVal: prior?.ebt,
+      priorPct: prior ? prior.ebt / prior.revenue : undefined,
     },
     {
       metric: "Net Profit",
       curVal: d.net_profit,
       curPct: d.net_margin_pct,
-      priorVal: p?.net_profit,
-      priorPct: p?.net_margin_pct,
+      priorVal: prior?.net_profit,
+      priorPct: prior?.net_margin_pct,
     },
   ];
 
@@ -486,35 +493,40 @@ export function ProfitabilityWaterfallPDF({
       name: "Gross Margin",
       value: fmtPct(d.gross_margin_pct),
       score: d.gross_margin_score ?? 60,
-      prior: p?.gross_margin_score,
+      prior: prior?.gross_margin_score,
     },
     {
       name: "Operating Margin",
       value: fmtPct(d.operating_margin_pct),
       score: d.operating_margin_score ?? 65,
-      prior: p?.operating_margin_score,
+      prior: prior?.operating_margin_score,
     },
     {
       name: "Net Margin",
       value: fmtPct(d.net_margin_pct),
       score: d.net_margin_score ?? 62,
-      prior: p?.net_margin_score,
+      prior: prior?.net_margin_score,
     },
     {
       name: "Interest Burden",
-      value: fmtPct(d.interest_burden_pct ?? interest / d.revenue),
-      score: d.interest_burden_score ?? 70,
-      prior: p?.interest_burden_score,
+      value: Number.isFinite(interestBurden) ? fmtPct(interestBurden) : "—",
+      score: Number.isFinite(interestBurden)
+        ? Math.round(scoreRatio("Interest Burden", interestBurden))
+        : null,
+      prior: prior && Number.isFinite(priorInterest) ? Math.round(scoreRatio("Interest Burden", priorInterest)) : undefined,
+      unscored: !Number.isFinite(interestBurden),
     },
     {
       name: "Tax Burden",
-      value: fmtPct(d.tax_burden_pct ?? d.tax / d.revenue),
-      score: d.tax_burden_score ?? 75,
-      prior: p?.tax_burden_score,
+      value: Number.isFinite(taxBurden) ? fmtPct(taxBurden) : "—",
+      score: Number.isFinite(taxBurden) ? Math.round(scoreRatio("Tax Burden", taxBurden)) : null,
+      prior: prior && Number.isFinite(priorTax) ? Math.round(scoreRatio("Tax Burden", priorTax)) : undefined,
+      unscored: !Number.isFinite(taxBurden),
     },
   ];
 
-  const revChange = p && p.revenue !== 0 ? ((d.revenue - p.revenue) / p.revenue) * 100 : undefined;
+  const revChange =
+    prior && prior.revenue !== 0 ? ((d.revenue - prior.revenue) / prior.revenue) * 100 : undefined;
   const figures: HeadlineFigure[] = [
     {
       label: "Revenue",
@@ -539,8 +551,8 @@ export function ProfitabilityWaterfallPDF({
     {
       label: "Net Profit",
       value: fmtRandCompact(d.net_profit, m),
-      direction: p ? (d.net_profit >= p.net_profit ? "up" : "down") : undefined,
-      good: d.net_profit >= 0 && (!p || d.net_profit >= p.net_profit),
+      direction: prior ? (d.net_profit >= prior.net_profit ? "up" : "down") : undefined,
+      good: d.net_profit >= 0 && (!prior || d.net_profit >= prior.net_profit),
       note: `${fmtPct(d.net_margin_pct)} of revenue`,
     },
   ];
@@ -551,7 +563,7 @@ export function ProfitabilityWaterfallPDF({
       net_profit: d.net_profit,
       gross_margin_pct: d.gross_margin_pct,
       net_margin_pct: d.net_margin_pct,
-      priorNetMargin: p?.net_margin_pct,
+      priorNetMargin: prior?.net_margin_pct,
     },
     operatingProfile,
     m,
@@ -586,15 +598,12 @@ export function ProfitabilityWaterfallPDF({
       {/* ── PAGE 2: Comparison + ratios ── */}
       <View break>
         <SectionHeader title="Current vs Prior Period" color={theme.accent} />
-        {p ? (
+        {prior ? (
           <ComparisonTable rows={compRows} accent={theme.accent} />
         ) : (
-          <>
-            <ComparisonTable rows={compRows} accent={theme.accent} />
-            <Text style={{ fontSize: 7, fontFamily: "Helvetica", color: C.faint, marginBottom: 8 }}>
-              Prior-period columns will populate automatically once a second period is uploaded.
-            </Text>
-          </>
+          <Text style={{ fontSize: 8, fontFamily: "Helvetica", color: C.muted, marginBottom: 10 }}>
+            {NO_PRIOR_PERIOD}. Comparative claims are left off until a different period is on file.
+          </Text>
         )}
 
         <SectionHeader title="Profit Pillar Ratio Analysis" color={theme.accent} />
@@ -603,8 +612,9 @@ export function ProfitabilityWaterfallPDF({
             key={r.name}
             ratioName={r.name}
             formattedValue={r.value}
-            healthScore={r.score}
+            healthScore={r.score ?? 0}
             healthTier={scoreTier(r.score)}
+            unscored={"unscored" in r && Boolean(r.unscored)}
             priorScore={r.prior}
             isAlternate={i % 2 === 1}
           />

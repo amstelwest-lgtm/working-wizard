@@ -180,7 +180,7 @@ const ACCOUNTANT_DASH_STEPS: Step[] = [
     targetId: "wizard-dash-reports",
     section: "Reports",
     title: "Reports you can brand",
-    body: "Reports Studio is where you assemble board-ready PDFs. You can brand them with the client's own logo and colours — not only the firm's.",
+    body: "Reports Studio is where you assemble board-ready PDFs. They carry your firm's logo and colours.",
   },
   {
     targetId: "wizard-add-client",

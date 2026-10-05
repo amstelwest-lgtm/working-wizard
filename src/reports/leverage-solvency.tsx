@@ -9,7 +9,8 @@
 import { View, Text, StyleSheet } from "@react-pdf/renderer";
 import type { AccountantProfile } from "@/contexts/accountant-profile";
 import { PDFDocument, type SmeData, type ReportSignoffStamp } from "@/components/pdf/pdf-document";
-import { scoreTier } from "@/lib/ratios";
+import { equityMultiplierRatio, scoreTier } from "@/lib/ratios";
+import { equityRollForward, NO_PRIOR_PERIOD } from "@/lib/report-coherence";
 import { MetricBox } from "@/components/pdf/metric-box";
 import { RatioRow } from "@/components/pdf/ratio-row";
 import { ReportTitle } from "@/components/pdf/report-title";
@@ -40,7 +41,8 @@ export type LeverageSolvencyData = {
   debt_facilities_captured: boolean;
   net_profit: number;
   drawings: number;
-  prior_equity: number;
+  /** Opening equity from a real prior snapshot or an entered opening balance. Null when unknown. */
+  prior_equity: number | null;
   debt_lines: DebtLine[];
   health_scores: {
     fundingStructure: number | null;
@@ -216,13 +218,18 @@ export function LeverageSolvencyPDF({
   const totalAssets = d.total_assets > 0 ? d.total_assets : d.total_debt + d.total_equity;
   const debtToEquity = hasDebt && d.total_equity !== 0 ? d.total_debt / d.total_equity : NaN;
   const debtToAssets = hasDebt && totalAssets !== 0 ? d.total_debt / totalAssets : NaN;
-  const equityMultiplier = d.total_equity !== 0 ? totalAssets / d.total_equity : NaN;
+  const equityMultiplier = equityMultiplierRatio(totalAssets, d.total_equity);
+  const roll = equityRollForward({
+    closingEquity: d.total_equity,
+    periodProfit: d.net_profit,
+    drawings: d.drawings,
+    priorEquity: d.prior_equity,
+  });
   const weightedRate =
     hasDebt && d.debt_lines.length > 0 && d.total_debt > 0
       ? d.debt_lines.reduce((s, l) => s + l.amount * l.annual_rate_pct, 0) / d.total_debt
       : NaN;
-  const equityMovement = d.total_equity - d.prior_equity;
-  const retained = d.net_profit - d.drawings;
+  const retained = roll.retained;
 
   const figures: HeadlineFigure[] = [
     {
@@ -243,9 +250,11 @@ export function LeverageSolvencyPDF({
     {
       label: "Total Equity",
       value: fmtRandCompact(d.total_equity, m),
-      direction: equityMovement >= 0 ? "up" : "down",
-      good: equityMovement >= 0,
-      note: `${equityMovement >= 0 ? "+" : ""}${fmtRandCompact(equityMovement, m)} this period`,
+      direction: roll.movement == null ? undefined : roll.movement >= 0 ? "up" : "down",
+      good: roll.movement == null ? undefined : roll.movement >= 0,
+      note: roll.hasPrior
+        ? `${roll.movement! >= 0 ? "+" : ""}${fmtRandCompact(roll.movement!, m)} this period`
+        : NO_PRIOR_PERIOD,
     },
     {
       label: "Retained This Period",
@@ -257,9 +266,11 @@ export function LeverageSolvencyPDF({
 
   const narrative = leverageNarrative(
     {
-      debtToEquity: Number.isFinite(debtToEquity) ? debtToEquity : 0,
+      equityMultiplier,
+      debtToEquity: Number.isFinite(debtToEquity) ? debtToEquity : null,
       totalDebt: hasDebt ? d.total_debt : 0,
       totalEquity: d.total_equity,
+      debtCaptured: hasDebt,
     },
     operatingProfile,
     m,
@@ -273,7 +284,7 @@ export function LeverageSolvencyPDF({
     },
     {
       name: "Equity Multiplier",
-      value: Number.isFinite(equityMultiplier) ? `${equityMultiplier.toFixed(2)}×` : "n/m",
+      value: Number.isFinite(equityMultiplier) ? `${equityMultiplier.toFixed(2)}×` : "n/a",
       score: hs.equityMultiplier,
     },
     {
@@ -335,9 +346,7 @@ export function LeverageSolvencyPDF({
         />
       ))}
 
-      {/* ── PAGE 2 ── */}
-      <View break>
-        <SectionHeader title="Debt Facility Breakdown" color={theme.accent} />
+      <SectionHeader title="Debt Facility Breakdown" color={theme.accent} />
         {d.debt_lines.length > 0 ? (
           <DebtTable lines={d.debt_lines} accent={theme.accent} />
         ) : (
@@ -359,26 +368,39 @@ export function LeverageSolvencyPDF({
         )}
 
         <SectionHeader title="Equity Movement" color={theme.accent} />
-        <View style={{ flexDirection: "row", gap: 10 }}>
+        <Text style={{ fontSize: 7.5, fontFamily: "Helvetica", color: C.muted, marginBottom: 6 }}>
+          Closing equity = opening + period profit − drawings ± other movements.
+        </Text>
+        <View style={{ flexDirection: "row", gap: 8 }}>
           <MetricBox
             label="Opening Equity"
-            value={fmtRand(d.prior_equity, m)}
+            value={roll.hasPrior ? fmtRand(roll.opening ?? 0, m) : NO_PRIOR_PERIOD}
             accentColor={theme.accent}
           />
-          <MetricBox label="Net Profit" value={fmtRand(d.net_profit, m)} accentColor={C.green} />
+          <MetricBox label="Net Profit" value={fmtRand(roll.profit, m)} accentColor={C.green} />
           <MetricBox
             label="Drawings"
-            value={`(${fmtRand(Math.abs(d.drawings), m)})`}
+            value={`(${fmtRand(Math.abs(roll.drawings), m)})`}
             accentColor={C.red}
           />
+          {roll.hasPrior && Math.abs(roll.other) >= 1 ? (
+            <MetricBox
+              label="Other Movements"
+              value={fmtRand(roll.other, m)}
+              accentColor={C.blue}
+            />
+          ) : null}
           <MetricBox
             label="Closing Equity"
-            value={fmtRand(d.total_equity, m)}
-            accentColor={equityMovement >= 0 ? C.green : C.red}
-            note={`${equityMovement >= 0 ? "+" : ""}${fmtRandCompact(equityMovement, m)} movement`}
+            value={fmtRand(roll.closing, m)}
+            accentColor={roll.movement == null || roll.movement >= 0 ? C.green : C.red}
+            note={
+              roll.hasPrior
+                ? `${roll.movement! >= 0 ? "+" : ""}${fmtRandCompact(roll.movement!, m)} movement`
+                : NO_PRIOR_PERIOD
+            }
           />
         </View>
-      </View>
     </PDFDocument>
   );
 }
