@@ -23,6 +23,12 @@ import {
 } from "../supabase/functions/ask-ai/deliverable-summaries.ts";
 import { buildPrompt } from "../supabase/functions/ask-ai/prompt.ts";
 import type { AskAiContext, RatioRow } from "../supabase/functions/ask-ai/types.ts";
+import {
+  buildOverviewBrief,
+  formatOverviewForPrompt,
+  planActionsFromOverview,
+} from "../supabase/functions/ask-ai/overview-brief.ts";
+import { healthFromFlatFinancials } from "../src/lib/health-score.ts";
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
@@ -44,7 +50,8 @@ assert(builderSrc.includes("summarizeCashForecast"), "builds cash outlook");
 assert(builderSrc.includes("summarizeProductLines"), "builds product lines");
 assert(builderSrc.includes("rankNextSteps"), "builds next moves");
 assert(builderSrc.includes("resolveRatioRecord"), "falls back to live financials when snapshot empty");
-assert(builderSrc.includes("pillarBreakdownFromRatios"), "builds category scores for Claude");
+assert(builderSrc.includes("buildOverviewBrief"), "scores from the live Overview, not a second engine");
+assert(!builderSrc.includes('.from("client_score_history")'), "does not query stale score history");
 assert(!builderSrc.includes("JSON.stringify(financials)"), "does not dump raw financials JSON");
 assert(promptSrc.includes("Profitability waterfall"), "prompt has waterfall section");
 assert(promptSrc.includes("Score breakdown by category"), "prompt includes pillar scores");
@@ -228,5 +235,54 @@ assert(
   accountantPrompt.system.includes("this client"),
   "accountant audience talks about the client, not the owner as you",
 );
+
+const yankees = {
+  cash: "7430.22",
+  revenue: "8633.6",
+  cogs: "775.98",
+  ebit: "2501.12",
+  ebt: "2501.12",
+  netIncome: "2501.12",
+  ebitda: "2501.12",
+  operatingCashflow: "0",
+  totalAssets: "21323.01",
+  equity: "8266.73",
+  payables: "8386.76",
+  receivables: "9194.51",
+  fixedCosts: "5356.5",
+  periodMonths: "1",
+};
+const liveHealth = healthFromFlatFinancials(yankees, 4, { country: "US", copyPack: "us" });
+const overview = buildOverviewBrief({
+  financials: yankees,
+  runwayWeeks: 4,
+  copyPack: "us",
+  clientName: "Fixture Co",
+});
+assert(liveHealth.overall === 79 && liveHealth.displayLabel === "Healthy", `live overview is 79 Healthy, got ${liveHealth.overall} ${liveHealth.displayLabel}`);
+assert(overview.health === liveHealth.overall, `bot health ${overview.health} matches overview ${liveHealth.overall}`);
+assert(overview.healthLabel === "Healthy", "bot label matches Healthy");
+assert(overview.cash != null && Math.round(overview.cash) === 7430, "cash on file");
+assert(overview.revenue != null && Math.round(overview.revenue) === 8634, "period revenue");
+assert(overview.runwayWeeks === 4, "runway weeks");
+assert(overview.creditorDays != null && Math.round(overview.creditorDays) === 329, "creditor days");
+assert(overview.debtorDays != null && Math.round(overview.debtorDays) === 32, "debtor days");
+assert(overview.grossMargin != null && overview.grossMargin > 0.9, "gross margin on file");
+const grounded = formatOverviewForPrompt(overview, "accountant");
+assert(grounded.includes("79/100 (Healthy)"), "prompt quotes overview health");
+assert(grounded.includes("$7,430"), "prompt quotes cash");
+assert(grounded.includes("$8,634"), "prompt quotes revenue");
+assert(grounded.includes("329 days"), "prompt quotes creditor days");
+assert(grounded.includes("4 weeks"), "prompt quotes runway");
+assert(/never ask/i.test(grounded), "prompt forbids asking for figures already on file");
+assert(!/you are the/i.test(grounded), "accountant voice");
+assert(!grounded.includes("86/100"), "stale score is not the overview");
+const withOverview = buildPrompt("How healthy is this client?", { ...ctx, overview, scores: { overall_score: 86 } }, "full", "accountant");
+assert(withOverview.user.includes("79/100 (Healthy)"), "ask-ai prompt uses live health over a stale score");
+assert(!withOverview.user.includes("86/100"), "stale 86 is not shown once overview is loaded");
+assert(withOverview.user.includes("$7,430"), "ask-ai prompt includes cash");
+const moves = planActionsFromOverview(overview);
+assert(moves.some((m) => m.sourceMoveKey === "bot:cash-runway"), "runway becomes an action");
+assert(moves.some((m) => m.sourceMoveKey === "bot:creditor-days"), "creditor days become an action");
 
 console.log("ask-ai-context-test: all assertions passed");

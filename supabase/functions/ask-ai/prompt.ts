@@ -1,5 +1,6 @@
 import type { AskAiContext, DisclosureTier } from "./types.ts";
 import { fmtPct } from "./deliverable-summaries.ts";
+import { formatOverviewForPrompt } from "./overview-brief.ts";
 
 /** Duplicated from src/lib/market/prompt.ts — Deno edge cannot import @/lib. */
 function askAiSystemBase(copyPack: "za" | "us"): string {
@@ -14,9 +15,9 @@ Rules:
 - Answer in 3–6 short sentences or a tight bullet list.
 - Be specific and grounded in the numbers provided.
 - Never fabricate figures. If data is missing, say so plainly and name the one input needed.
-- Do NOT reference company names, ${taxWord}, or raw ${currencyWord} — refer to them as "your revenue", "your margin" etc.
-- Currency references: use "your local currency" not specific amounts.
-- Offer 1–2 concrete next actions the owner can take today.
+- Do NOT reference company names or ${taxWord}.
+- Do not invent ${currencyWord}. Quote cash, revenue, runway, margins, and days only when the OVERVIEW FIGURES block lists them. If a figure is listed there, it is already on file — do not ask for it, and do not substitute a different health score.
+- Offer 1–2 concrete next actions.
 - Ground answers in the filled deliverables provided: profile answers, ratios, profitability waterfall (as % of revenue), cash-forecast outlook, product lines, recommended next moves, and action-plan tasks.
 - Do not invent statement line items. Raw income-statement / balance-sheet inputs are not provided — use the outputs above.
 ${locale}`;
@@ -90,6 +91,8 @@ export function buildPrompt(
   const profileQuestions = ctx.profileQuestions ?? [];
   const productLines = ctx.productLines ?? [];
   const nextSteps = ctx.nextSteps ?? [];
+  const overviewBlock = ctx.overview ? formatOverviewForPrompt(ctx.overview, audience) : "";
+  if (overviewBlock) lines.push(overviewBlock);
 
   if (deliverables.length > 0) {
     const filled = deliverables.filter((d) => d.filled);
@@ -147,7 +150,11 @@ export function buildPrompt(
     lines.push(`Revenue band: ${bucket}`);
   }
 
-  if (ctx.scores?.overall_score !== null && ctx.scores?.overall_score !== undefined) {
+  if (
+    !overviewBlock &&
+    ctx.scores?.overall_score !== null &&
+    ctx.scores?.overall_score !== undefined
+  ) {
     lines.push(`Overall health score: ${ctx.scores.overall_score.toFixed(0)}/100`);
   }
 

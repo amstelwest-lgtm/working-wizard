@@ -33,6 +33,7 @@ assert(accountantWorkspaceTab("waterfall") === "profit", "deep link tab=waterfal
 assert(accountantWorkspaceTab("today") === "ratios", "deep link tab=today opens Health");
 assert(accountantWorkspaceTab("today-complex") === "ratios", "today-complex opens Health");
 assert(accountantWorkspaceTab("tasks") === "plan", "old staff-tasks links open Action Plan");
+assert(accountantWorkspaceTab("actions") === "plan", "?tab=actions opens Action Plan");
 assert(accountantWorkspaceTab("cash") === "cash", "Cash stays Cash");
 assert(accountantWorkspaceTab("next") === null, "Next moves has no accountant page");
 assert(accountantWorkspaceTab("ask") === "ask", "Milōn Bot stays on the studio");

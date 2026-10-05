@@ -1,3 +1,5 @@
+import type { OverviewBrief } from "./overview-brief.ts";
+
 export type DisclosureTier = "none" | "summary" | "focused" | "full";
 
 export interface RatioRow {
@@ -125,6 +127,8 @@ export interface AskAiContext {
   nextSteps: NextStepSummary[];
   actionPlan: ActionPlanSummary | null;
   deliverables: DeliverableFill[];
+  /** Live Overview health, cash, revenue, runway, and days. Not score history. */
+  overview?: OverviewBrief | null;
 }
 
 export interface AskAiRequest {

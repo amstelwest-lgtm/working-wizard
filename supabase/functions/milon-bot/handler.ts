@@ -26,18 +26,23 @@ export async function runMilonbotObjective(input: {
   objective: string;
   userClient: SupabaseClient;
   adminClient: AdminClient;
+  /** Live Overview figures. Appended to the system prompt so the loop cannot invent a score. */
+  overviewBlock?: string;
 }): Promise<{ run: AgentRun; inputTokens: number; outputTokens: number; latencyMs: number }> {
   let inputTokens = 0;
   let outputTokens = 0;
   let latencyMs = 0;
   const tools = agentClaudeTools();
+  const system = input.overviewBlock
+    ? `${AGENT_SYSTEM}\n\n${input.overviewBlock}`
+    : AGENT_SYSTEM;
 
   const run = await runAgentLoop({
     objective: input.objective,
     audience: input.audience,
     reason: async (ctx) => {
       const round = await callClaudeRound(
-        AGENT_SYSTEM,
+        system,
         [{ role: "user", content: formatAgentPrompt(ctx) }],
         tools,
         { toolChoice: { type: "any" }, maxTokens: 700 },

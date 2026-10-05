@@ -445,7 +445,7 @@ assert(
 assert(typeof position.reason === "string", "resolver reason is present");
 
 const health = shapeHealth({ debtorDays: 75, grossMargin: 0.22 }, 5);
-assert(health.scorer === "ask-ai-pillar-breakdown", "health reuses the edge scorer");
+assert(health.scorer === "overview-health", "health uses the Overview scorer");
 assert(health.empty === false && health.overall != null, "health scores the ratios");
 assert(
   Array.isArray(health.priority_moves) && (health.priority_moves as unknown[]).length > 0,

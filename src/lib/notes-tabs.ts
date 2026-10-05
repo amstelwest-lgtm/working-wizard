@@ -6,7 +6,7 @@
  * Pairs:
  *   Health        today | today-complex | ratios
  *   Profit        waterfall | profit
- *   Action plan   tasks | plan
+ *   Action plan   tasks | plan | actions (?tab=actions aliases the studio plan)
  *   Cash          cash
  *   Collections   collections (accountant only)
  *   Payables      payables (accountant only)
@@ -47,7 +47,7 @@ export const ACCOUNTANT_NOTE_TABS = [
 const TAB_GROUPS: readonly (readonly string[])[] = [
   ["today", "today-complex", "ratios"],
   ["waterfall", "profit"],
-  ["tasks", "plan"],
+  ["tasks", "plan", "actions"],
   ["cash"],
   ["collections"],
   ["payables"],
@@ -78,6 +78,7 @@ export const NOTE_TAB_LABELS: Record<string, string> = {
   budget: "Budget",
   tasks: "Action plan",
   plan: "Action plan",
+  actions: "Action plan",
   reports: "Reports",
   advisory: "Advisory",
   overview: "Overview",

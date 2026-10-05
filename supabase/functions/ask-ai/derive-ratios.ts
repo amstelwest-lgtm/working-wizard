@@ -81,7 +81,11 @@ function annualise(fin: Record<string, unknown>): Record<string, number> {
   for (const [k, v] of Object.entries(fin)) {
     const n = num(v);
     if (!Number.isFinite(n)) continue;
-    out[k] = (FLOW_KEYS as readonly string[]).includes(k) ? n * scale : n;
+    const scaled = (FLOW_KEYS as readonly string[]).includes(k) ? n * scale : n;
+    // Match annualiseFinancials(): flow figures round to cents before ratios.
+    out[k] = (FLOW_KEYS as readonly string[]).includes(k)
+      ? Math.round(scaled * 100) / 100
+      : scaled;
   }
   return out;
 }

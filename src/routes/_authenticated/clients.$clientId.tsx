@@ -6,6 +6,7 @@ import { lazyPanel, TabErrorBoundary } from "@/components/lazy-panel";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
+import { downloadActionPlanPdf } from "@/lib/action-plan-pdf";
 import { AdvisoryDrafter } from "@/components/advisory-drafter";
 import { CashForecastPanel } from "@/components/cash-forecast";
 import { CollectionsPanel } from "@/components/collections-panel";
@@ -715,16 +716,53 @@ function ClientView() {
   const [healthSeen, setHealthSeen] = useState(false);
   const [pillarsSeen, setPillarsSeen] = useState(false);
   const openFromBotRef = useRef<(handoff: CoachDestination & { why?: string }) => void>(() => {});
+  const persistedCreateRef = useRef<
+    (payload: {
+      question: string;
+      created: {
+        pdf?: boolean;
+        items?: Array<{ title: string; outcomeWhy?: string }>;
+        overview?: { facts?: string[] };
+      };
+    }) => void
+  >(() => {});
+  persistedCreateRef.current = (payload) => {
+    window.dispatchEvent(new CustomEvent("milon-action-plan-refresh"));
+    const wantsPdf = payload.created?.pdf === true || /\bpdf\b/i.test(payload.question);
+    if (!wantsPdf || !client) return;
+    const facts = payload.created.overview?.facts ?? [];
+    void downloadActionPlanPdf({
+      clientName: client.name,
+      headline: facts.length ? facts.join(" · ") : null,
+      items: (payload.created.items ?? []).map((item) => ({
+        title: item.title,
+        outcomeWhy: item.outcomeWhy,
+        status: "not_started",
+      })),
+      profile,
+    })
+      .then(() => toast.success("Action Plan PDF downloaded"))
+      .catch((e: unknown) => toast.error(e instanceof Error ? e.message : "PDF export failed"));
+  };
   const [studioDeepLink, setStudioDeepLink] = useState<{
     report?: string;
     action?: "preview" | "download";
   }>({});
   useEffect(() => {
+    // ?tab=actions is the Action Plan. The real pane id is plan.
+    if (search.tab === "actions") {
+      navigate({
+        to: "/clients/$clientId",
+        params: { clientId },
+        search: (prev) => ({ ...prev, tab: "plan" }),
+        replace: true,
+      });
+    }
     const next = resolveAccountantTab(search.tab);
     if (next) setActiveTab(next);
     if (search.note) requestOpenNote(search.note);
     if (search.queries === "open") openArchive("open");
-  }, [search.note, search.tab, search.queries, requestOpenNote, openArchive]);
+  }, [search.note, search.tab, search.queries, requestOpenNote, openArchive, clientId, navigate]);
   useEffect(() => {
     if (activeTab !== "ratios") return;
     if (search.focus === "pillars") setPillarsSeen(true);
@@ -1177,6 +1215,14 @@ function ClientView() {
           audience: "accountant",
           onOpenDeliverable: (handoff: CoachDestination & { why?: string }) =>
             openFromBotRef.current(handoff),
+          onPersistedCreate: (payload: {
+            question: string;
+            created: {
+              pdf?: boolean;
+              items?: Array<{ title: string; outcomeWhy?: string }>;
+              overview?: { facts?: string[] };
+            };
+          }) => persistedCreateRef.current(payload),
           note: hasFigures
             ? null
             : "Answers get more relevant once this client's figures are in — upload a statement, draft from bank statements, or type them into Financials.",

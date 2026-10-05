@@ -24,6 +24,7 @@ import {
   MILON_BOT_SUBTITLE,
   MILON_BOT_TITLE,
   deriveMilonBotEndpoint,
+  persistedCreateIntent,
   routeMilonIntent,
 } from "../src/lib/milon-bot-copy.ts";
 
@@ -74,6 +75,10 @@ assert(fnSrc.includes("from(\"invite_tokens\")"), "invite status from existing t
 assert(fnSrc.includes("client_brain_questions"), "lists outstanding questions");
 assert(fnSrc.includes("context_facts"), "reads context_facts");
 assert(fnSrc.includes("brain_summary"), "reads brain_summary");
+assert(fnSrc.includes("loadOverviewBrief"), "loads the Overview brief for this client");
+assert(fnSrc.includes("formatOverviewForPrompt"), "injects overview figures into the prompt");
+assert(fnSrc.includes("persistAdvisoryCreate"), "create intent writes a real deliverable");
+assert(fnSrc.includes('mode === "create"') || fnSrc.includes("createIntent"), "create mode is handled");
 assert(fnSrc.includes("client_financial_snapshots"), "reads financials summaries");
 assert(fnSrc.includes("bot_tool_calls"), "writes tool-call audit");
 assert(!fnSrc.includes("mint_owner_invite"), "does not mint invites");
@@ -182,6 +187,11 @@ assert(clientSrc.includes("/functions/v1/milon-bot"), "client posts to milon-bot
 assert(!appSrc.toLowerCase().includes("agent api"), "no public Agent API");
 
 assert(widgetSrc.includes("routeMilonIntent"), "widget routes by intent");
+assert(widgetSrc.includes("persistedCreateIntent"), "widget routes create requests to persistence");
+assert(widgetSrc.includes('mode: "create"'), "create posts mode create");
+assert(widgetSrc.includes("e.shiftKey"), "Shift+Enter keeps a newline");
+assert(widgetSrc.includes('e.key !== "Enter"'), "Enter sends");
+assert(!widgetSrc.includes("e.metaKey || e.ctrlKey"), "Enter no longer needs a modifier");
 assert(widgetSrc.includes("botEndpoint"), "widget accepts milon-bot endpoint");
 assert(copySrc.includes(MILON_BOT_TITLE), "shared title copy");
 assert(copySrc.includes(MILON_BOT_SUBTITLE), "powered by Claude subtitle");
@@ -208,5 +218,12 @@ assert(
     "https://x.supabase.co/functions/v1/milon-bot",
   "derive milon-bot URL from ask-ai",
 );
+const created = persistedCreateIntent(
+  "create an advisory deliverable / action plan PDF",
+);
+assert(created?.draft === true && created.actions === true && created.pdf === true, "create deliverable and action plan PDF");
+assert(persistedCreateIntent("What's the health score?") === null, "health questions stay on the grounded Q&A path");
+assert(persistedCreateIntent("Draft an advisory pack from the brain — don't send it.")?.draft === true, "draft chip persists a pack");
+assert(persistedCreateIntent("Draft an advisory pack from the brain — don't send it.")?.actions === false, "draft chip does not invent action items");
 
 console.log("milon-bot-test: all assertions passed");

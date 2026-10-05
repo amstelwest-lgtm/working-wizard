@@ -1,8 +1,8 @@
 /**
  * Shapes tool payloads from data MILŌN already stores.
- * Health uses ask-ai's edge pillar breakdown (the Deno-safe scorer kept in
- * lockstep with computeRatios). Cash uses summarizeCashForecast, which omits
- * balances. The advisory position is resolveNextStep — not a second workflow.
+ * Health uses the Overview scorer (same pillar average and runway blend as
+ * the client page). Cash uses summarizeCashForecast, which omits balances.
+ * The advisory position is resolveNextStep — not a second workflow.
  */
 import {
   ADVISORY_STATES,
@@ -15,7 +15,8 @@ import {
   type NextStepAudience,
   type NextStepFacts,
 } from "../../../src/lib/next-step.ts";
-import { DISPLAY_TO_CAMEL, pillarBreakdownFromRatios } from "../ask-ai/derive-ratios.ts";
+import { DISPLAY_TO_CAMEL } from "../ask-ai/derive-ratios.ts";
+import { buildOverviewBrief, type OverviewCopyPack } from "../ask-ai/overview-brief.ts";
 import { rankNextSteps, summarizeCashForecast } from "../ask-ai/deliverable-summaries.ts";
 import type { RatioRow } from "../ask-ai/types.ts";
 import type { SavedCashflow } from "../ask-ai/deliverable-summaries.ts";
@@ -126,23 +127,21 @@ export function shapeSnapshot(input: {
 export function shapeHealth(
   rawRatios: Record<string, number>,
   runwayWeeks: number | null,
+  copyPack: OverviewCopyPack = "za",
 ): Record<string, unknown> {
   const display = toDisplayRatios(rawRatios);
-  const pillars = pillarBreakdownFromRatios(display).map((p) => ({
+  const brief = buildOverviewBrief({
+    ratios: display,
+    runwayWeeks,
+    copyPack,
+  });
+  const pillars = brief.pillars.map((p) => ({
     id: p.id,
     label: p.label,
     score: p.score,
   }));
-  const scored = pillars.filter((p) => p.score != null) as Array<{
-    id: string;
-    label: string;
-    score: number;
-  }>;
-  const overall =
-    scored.length === 0
-      ? null
-      : Math.round(scored.reduce((sum, p) => sum + p.score, 0) / scored.length);
-  const weakest = scored.slice().sort((a, b) => a.score - b.score)[0] ?? null;
+  const overall = brief.health;
+  const weakest = brief.weakest;
   const rows: RatioRow[] = [];
   for (const [key, val] of Object.entries(rawRatios)) {
     const camel = toCamelKey(key);
@@ -167,9 +166,10 @@ export function shapeHealth(
     overall,
     pillars,
     weakest: weakest ? { id: weakest.id, label: weakest.label, score: weakest.score } : null,
+    health_label: brief.healthLabel,
     cash_runway_weeks: runwayWeeks,
     priority_moves: moves,
-    scorer: "ask-ai-pillar-breakdown",
+    scorer: "overview-health",
   };
 }
 
