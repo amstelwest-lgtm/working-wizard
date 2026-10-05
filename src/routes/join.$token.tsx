@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
@@ -22,6 +22,13 @@ import {
 } from "@/components/owner-invite-shell";
 import { AuthDivider, GoogleSignInButton } from "@/components/google-sign-in-button";
 import { stashAccountantGoogleSignup } from "@/lib/google-auth";
+import {
+  explainPasswordSignInFailure,
+  passwordGrantFailure,
+  type PasswordSignInFailure,
+} from "@/lib/password-sign-in";
+import { PasswordResetRequest } from "@/components/password-reset-request";
+import { PasswordSignInAlert } from "@/components/password-sign-in-alert";
 
 export const Route = createFileRoute("/join/$token")({
   component: AccountantJoinPage,
@@ -47,6 +54,9 @@ function AccountantJoinPage() {
   const [firmName, setFirmName] = useState("");
   const [busy, setBusy] = useState(false);
   const [signInMode, setSignInMode] = useState(false);
+  const [signInFailure, setSignInFailure] = useState<PasswordSignInFailure | null>(null);
+  const [resetOpen, setResetOpen] = useState(false);
+  const submitLock = useRef(false);
 
   useEffect(() => {
     let alive = true;
@@ -81,6 +91,9 @@ function AccountantJoinPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitLock.current) return;
+    submitLock.current = true;
+    setSignInFailure(null);
     setBusy(true);
     try {
       forcePortal("accountant");
@@ -89,11 +102,15 @@ function AccountantJoinPage() {
 
       if (signInMode || sameAccount) {
         if (!sameAccount) {
-          const { error } = await supabase.auth.signInWithPassword({
+          const granted = await supabase.auth.signInWithPassword({
             email: email.trim(),
             password,
           });
-          if (error) throw error;
+          const failure = passwordGrantFailure(granted);
+          if (failure) {
+            setSignInFailure(failure);
+            return;
+          }
           await waitForAuthSession();
         }
         await doAccept({ data: { token, firmName: firmName.trim() || null } });
@@ -131,12 +148,20 @@ function AccountantJoinPage() {
         password,
       });
       if (siErr) {
-        if (needsExistingAccept && /invalid login credentials/i.test(siErr.message)) {
+        if (
+          needsExistingAccept &&
+          passwordGrantFailure({ error: siErr })?.kind === "invalid_credentials"
+        ) {
           throw new Error(
             "This email already has a Milōn account. Sign in with your existing password to accept.",
           );
         }
-        throw siErr;
+        const failure = explainPasswordSignInFailure(siErr);
+        if (signInMode) {
+          setSignInFailure(failure);
+          return;
+        }
+        throw new Error(failure.message);
       }
       await waitForAuthSession();
 
@@ -145,8 +170,16 @@ function AccountantJoinPage() {
       }
       await finish();
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Could not accept the invite.");
+      const failure = explainPasswordSignInFailure(err);
+      if (signInMode && failure.kind !== "other") {
+        setSignInFailure(failure);
+        return;
+      }
+      const msg = err instanceof Error ? err.message : "Could not accept the invite.";
+      setSignInFailure({ kind: "other", message: msg });
+      toast.error(msg);
     } finally {
+      submitLock.current = false;
       setBusy(false);
     }
   };
@@ -173,8 +206,8 @@ function AccountantJoinPage() {
         <OwnerInviteCard className="mt-6">
           {user?.email ? (
             <OwnerInviteNote>
-              Signed in as <span className="text-[#e8ede9]">{user.email}</span>. Accepting opens
-              the accountant portal for this client.
+              Signed in as <span className="text-[#e8ede9]">{user.email}</span>. Accepting opens the
+              accountant portal for this client.
             </OwnerInviteNote>
           ) : invitedEmail ? (
             <OwnerInviteNote>
@@ -182,99 +215,138 @@ function AccountantJoinPage() {
               was sent to.
             </OwnerInviteNote>
           ) : (
-            <OwnerInviteNote>Create a practice login, or sign in if you already have one.</OwnerInviteNote>
+            <OwnerInviteNote>
+              Create a practice login, or sign in if you already have one.
+            </OwnerInviteNote>
           )}
 
-          {!sameAccount ? (
-            <div className="mb-1">
-              <GoogleSignInButton
-                intent="accountant"
-                tone="portal"
-                label={signInMode ? "Sign in with Google" : "Continue with Google"}
-                disabled={busy}
-                accountantJoin={{ token }}
-                next={`/join/${encodeURIComponent(token)}`}
-                onBeforeStart={() => {
-                  stashAccountantGoogleSignup({
-                    firmName: firmName.trim(),
-                    fullName: name.trim() || undefined,
-                  });
-                  return true;
-                }}
-                onError={(msg) => toast.error(msg)}
-              />
-              <AuthDivider label="or use email" />
-            </div>
-          ) : null}
-
-          <form onSubmit={(e) => void handleSubmit(e)} className="space-y-0">
-            {!sameAccount && !signInMode ? (
-              <>
-                <OwnerInviteFieldLabel htmlFor="accInviteName">Full name</OwnerInviteFieldLabel>
-                <OwnerInviteInput
-                  id="accInviteName"
-                  type="text"
-                  required
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Your name"
-                />
-              </>
-            ) : null}
-
-            <OwnerInviteFieldLabel htmlFor="accInviteEmail">Work email</OwnerInviteFieldLabel>
-            <OwnerInviteInput
-              id="accInviteEmail"
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@practice.com"
+          {signInMode && resetOpen ? (
+            <PasswordResetRequest
+              key={email}
+              initialEmail={email}
+              variant="overlay"
+              onBack={() => setResetOpen(false)}
             />
+          ) : (
+            <>
+              {!sameAccount ? (
+                <div className="mb-1">
+                  <GoogleSignInButton
+                    intent="accountant"
+                    tone="portal"
+                    label={signInMode ? "Sign in with Google" : "Continue with Google"}
+                    disabled={busy}
+                    accountantJoin={{ token }}
+                    next={`/join/${encodeURIComponent(token)}`}
+                    onBeforeStart={() => {
+                      stashAccountantGoogleSignup({
+                        firmName: firmName.trim(),
+                        fullName: name.trim() || undefined,
+                      });
+                      return true;
+                    }}
+                    onError={(msg) => toast.error(msg)}
+                  />
+                  <AuthDivider label="or use email" />
+                </div>
+              ) : null}
 
-            {!sameAccount ? (
-              <>
-                <OwnerInviteFieldLabel htmlFor="accInvitePassword">Password</OwnerInviteFieldLabel>
+              <form onSubmit={(e) => void handleSubmit(e)} className="space-y-0">
+                {!sameAccount && !signInMode ? (
+                  <>
+                    <OwnerInviteFieldLabel htmlFor="accInviteName">Full name</OwnerInviteFieldLabel>
+                    <OwnerInviteInput
+                      id="accInviteName"
+                      type="text"
+                      required
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder="Your name"
+                    />
+                  </>
+                ) : null}
+
+                <OwnerInviteFieldLabel htmlFor="accInviteEmail">Work email</OwnerInviteFieldLabel>
                 <OwnerInviteInput
-                  id="accInvitePassword"
-                  type="password"
+                  id="accInviteEmail"
+                  type="email"
                   required
-                  minLength={6}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="At least 6 characters"
+                  value={email}
+                  autoComplete="username"
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    setSignInFailure(null);
+                  }}
+                  placeholder="you@practice.com"
                 />
-              </>
-            ) : null}
 
-            {!signInMode ? (
-              <>
-                <OwnerInviteFieldLabel htmlFor="accInviteFirm">
-                  Practice name <span className="normal-case tracking-normal text-[#8a938c]">(optional)</span>
-                </OwnerInviteFieldLabel>
-                <OwnerInviteInput
-                  id="accInviteFirm"
-                  type="text"
-                  value={firmName}
-                  onChange={(e) => setFirmName(e.target.value)}
-                  placeholder="Your firm"
+                {!sameAccount ? (
+                  <>
+                    <OwnerInviteFieldLabel htmlFor="accInvitePassword">
+                      Password
+                    </OwnerInviteFieldLabel>
+                    <OwnerInviteInput
+                      id="accInvitePassword"
+                      type="password"
+                      required
+                      minLength={6}
+                      value={password}
+                      autoComplete={signInMode ? "current-password" : "new-password"}
+                      onChange={(e) => {
+                        setPassword(e.target.value);
+                        setSignInFailure(null);
+                      }}
+                      placeholder="At least 6 characters"
+                    />
+                  </>
+                ) : null}
+
+                {!signInMode ? (
+                  <>
+                    <OwnerInviteFieldLabel htmlFor="accInviteFirm">
+                      Practice name{" "}
+                      <span className="normal-case tracking-normal text-[#8a938c]">(optional)</span>
+                    </OwnerInviteFieldLabel>
+                    <OwnerInviteInput
+                      id="accInviteFirm"
+                      type="text"
+                      value={firmName}
+                      onChange={(e) => setFirmName(e.target.value)}
+                      placeholder="Your firm"
+                    />
+                  </>
+                ) : null}
+
+                <div className="mt-6">
+                  <OwnerInvitePrimaryButton type="submit" disabled={busy} aria-busy={busy}>
+                    {busy
+                      ? signInMode
+                        ? "Signing in…"
+                        : "Accepting…"
+                      : signInMode
+                        ? "Sign in"
+                        : "Accept as accountant"}
+                  </OwnerInvitePrimaryButton>
+                </div>
+                <PasswordSignInAlert
+                  message={signInFailure?.message ?? ""}
+                  onForgotPassword={signInMode ? () => setResetOpen(true) : undefined}
+                  tone="overlay"
                 />
-              </>
-            ) : null}
-
-            <div className="mt-6">
-              <OwnerInvitePrimaryButton type="submit" disabled={busy}>
-                {busy ? "Accepting…" : "Accept as accountant"}
-              </OwnerInvitePrimaryButton>
-            </div>
-          </form>
+              </form>
+            </>
+          )}
 
           {!user ? (
             <p className="mt-5 text-center text-xs text-[#8a938c]">
               {signInMode ? "Need a new practice login? " : "Already have a Milōn account? "}
               <button
                 type="button"
-                onClick={() => setSignInMode((v) => !v)}
+                onClick={() => {
+                  setSignInMode((v) => !v);
+                  setSignInFailure(null);
+                  setResetOpen(false);
+                }}
                 className="font-medium text-[#d4a550] underline underline-offset-2"
               >
                 {signInMode ? "Create one" : "Sign in"}
