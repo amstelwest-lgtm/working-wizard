@@ -46,6 +46,7 @@ import { Route as AuthenticatedSettingsIndexRouteImport } from './routes/_authen
 import { Route as AuthenticatedReportsIndexRouteImport } from './routes/_authenticated/reports.index'
 import { Route as LovableEmailSuppressionRouteImport } from './routes/lovable/email/suppression'
 import { Route as ApiResendWebhookRouteImport } from './routes/api/resend/webhook'
+import { Route as ApiStripeWebhookRouteImport } from './routes/api/stripe/webhook'
 import { Route as ApiQboCallbackRouteImport } from './routes/api/qbo/callback'
 import { Route as ApiXeroCallbackRouteImport } from './routes/api/xero/callback'
 import { Route as AuthenticatedSettingsTeamRouteImport } from './routes/_authenticated/settings.team'
@@ -243,6 +244,11 @@ const ApiResendWebhookRoute = ApiResendWebhookRouteImport.update({
   path: '/api/resend/webhook',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiStripeWebhookRoute = ApiStripeWebhookRouteImport.update({
+  id: '/api/stripe/webhook',
+  path: '/api/stripe/webhook',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiQboCallbackRoute = ApiQboCallbackRouteImport.update({
   id: '/api/qbo/callback',
   path: '/api/qbo/callback',
@@ -343,6 +349,7 @@ export interface FileRoutesByFullPath {
   '/api/qbo/callback': typeof ApiQboCallbackRoute
   '/api/xero/callback': typeof ApiXeroCallbackRoute
   '/api/resend/webhook': typeof ApiResendWebhookRoute
+  '/api/stripe/webhook': typeof ApiStripeWebhookRoute
   '/lovable/email/suppression': typeof LovableEmailSuppressionRoute
   '/reports/': typeof AuthenticatedReportsIndexRoute
   '/settings/': typeof AuthenticatedSettingsIndexRoute
@@ -391,6 +398,7 @@ export interface FileRoutesByTo {
   '/api/qbo/callback': typeof ApiQboCallbackRoute
   '/api/xero/callback': typeof ApiXeroCallbackRoute
   '/api/resend/webhook': typeof ApiResendWebhookRoute
+  '/api/stripe/webhook': typeof ApiStripeWebhookRoute
   '/lovable/email/suppression': typeof LovableEmailSuppressionRoute
   '/reports': typeof AuthenticatedReportsIndexRoute
   '/settings': typeof AuthenticatedSettingsIndexRoute
@@ -441,6 +449,7 @@ export interface FileRoutesById {
   '/api/qbo/callback': typeof ApiQboCallbackRoute
   '/api/xero/callback': typeof ApiXeroCallbackRoute
   '/api/resend/webhook': typeof ApiResendWebhookRoute
+  '/api/stripe/webhook': typeof ApiStripeWebhookRoute
   '/lovable/email/suppression': typeof LovableEmailSuppressionRoute
   '/_authenticated/reports/': typeof AuthenticatedReportsIndexRoute
   '/_authenticated/settings/': typeof AuthenticatedSettingsIndexRoute
@@ -491,6 +500,7 @@ export interface FileRouteTypes {
     | '/api/qbo/callback'
     | '/api/xero/callback'
     | '/api/resend/webhook'
+    | '/api/stripe/webhook'
     | '/lovable/email/suppression'
     | '/reports/'
     | '/settings/'
@@ -539,6 +549,7 @@ export interface FileRouteTypes {
     | '/api/qbo/callback'
     | '/api/xero/callback'
     | '/api/resend/webhook'
+    | '/api/stripe/webhook'
     | '/lovable/email/suppression'
     | '/reports'
     | '/settings'
@@ -588,6 +599,7 @@ export interface FileRouteTypes {
     | '/api/qbo/callback'
     | '/api/xero/callback'
     | '/api/resend/webhook'
+    | '/api/stripe/webhook'
     | '/lovable/email/suppression'
     | '/_authenticated/reports/'
     | '/_authenticated/settings/'
@@ -631,6 +643,7 @@ export interface RootRouteChildren {
   ApiQboCallbackRoute: typeof ApiQboCallbackRoute
   ApiXeroCallbackRoute: typeof ApiXeroCallbackRoute
   ApiResendWebhookRoute: typeof ApiResendWebhookRoute
+  ApiStripeWebhookRoute: typeof ApiStripeWebhookRoute
   LovableEmailSuppressionRoute: typeof LovableEmailSuppressionRoute
   LovableEmailQueueProcessRoute: typeof LovableEmailQueueProcessRoute
   LovableEmailTransactionalPreviewRoute: typeof LovableEmailTransactionalPreviewRoute
@@ -898,6 +911,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiResendWebhookRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/stripe/webhook': {
+      id: '/api/stripe/webhook'
+      path: '/api/stripe/webhook'
+      fullPath: '/api/stripe/webhook'
+      preLoaderRoute: typeof ApiStripeWebhookRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/qbo/callback': {
       id: '/api/qbo/callback'
       path: '/api/qbo/callback'
@@ -1034,6 +1054,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiQboCallbackRoute: ApiQboCallbackRoute,
   ApiXeroCallbackRoute: ApiXeroCallbackRoute,
   ApiResendWebhookRoute: ApiResendWebhookRoute,
+  ApiStripeWebhookRoute: ApiStripeWebhookRoute,
   LovableEmailSuppressionRoute: LovableEmailSuppressionRoute,
   LovableEmailQueueProcessRoute: LovableEmailQueueProcessRoute,
   LovableEmailTransactionalPreviewRoute: LovableEmailTransactionalPreviewRoute,

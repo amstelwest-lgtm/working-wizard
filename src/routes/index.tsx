@@ -42,6 +42,7 @@ import {
   pendingInviteTokenFromSearch,
   signupLooksAlreadyRegistered,
 } from "@/lib/invite-handoff";
+import { browserAppUrl } from "@/lib/app-origin";
 import {
   billingStartPath,
   billingStartSearch,
@@ -331,7 +332,7 @@ function LandingPage() {
     const pending = peekPendingCheckout();
     return pending
       ? checkoutEmailRedirectTo(window.location.origin, pending)
-      : `${window.location.origin}/app`;
+      : browserAppUrl("/app");
   };
 
   const resendConfirmationTo = async (email: string) => {
@@ -891,7 +892,7 @@ function LandingPage() {
     setFpBusy(true);
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(fpEmail, {
-        redirectTo: `${window.location.origin}/reset-password`,
+        redirectTo: browserAppUrl("/reset-password"),
       });
       if (error) throw error;
       setFpDone(true);
