@@ -26,6 +26,7 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
+import { TrialEndedActionNotice, useTrialEndedAction } from "@/components/trial-ended-plan-block";
 import { useTrack } from "@/hooks/use-track";
 import {
   HIGH_EDIT_RATE,
@@ -52,6 +53,8 @@ type Props = {
   hasFirm: boolean;
   onChanged?: () => void;
   refreshKey?: string | number;
+  /** Firm that owns the client, so a trial block can open the plan picker. */
+  firmId?: string | null;
   className?: string;
   /** Live Overview figures. A stored pack that disagrees shows a regenerate note. */
   currentFigures?: {
@@ -100,6 +103,7 @@ export function AdvisoryPackPanel({
   hasFirm,
   onChanged,
   refreshKey,
+  firmId = null,
   className,
   currentFigures = null,
 }: Props) {
@@ -107,6 +111,7 @@ export function AdvisoryPackPanel({
   const fetchLatest = useServerFn(getLatestAdvisoryPack);
   const generate = useServerFn(generateAdvisoryPack);
   const review = useServerFn(reviewAdvisoryPack);
+  const trialBlock = useTrialEndedAction();
 
   const [pack, setPack] = useState<AdvisoryPack | null>(null);
   const [reviews, setReviews] = useState<PackReview[]>([]);
@@ -197,6 +202,7 @@ export function AdvisoryPackPanel({
   ) => {
     if (busy) return;
     setBusy(label);
+    if (label === "generate") trialBlock.reset();
     try {
       const res = await fn();
       if (res) {
@@ -206,7 +212,11 @@ export function AdvisoryPackPanel({
       if (done) toast.success(done);
       onChanged?.();
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Something went wrong.");
+      if (label === "generate") {
+        trialBlock.report(err, "Something went wrong.");
+      } else {
+        toast.error(err instanceof Error ? err.message : "Something went wrong.");
+      }
     } finally {
       setBusy(null);
     }
@@ -425,6 +435,8 @@ export function AdvisoryPackPanel({
           ) : null}
         </div>
       </div>
+
+      <TrialEndedActionNotice firmId={firmId} open={trialBlock.open} error={trialBlock.error} />
 
       {pack && liveStats && liveStats.edit_rate >= HIGH_EDIT_RATE && audience === "accountant" ? (
         <p

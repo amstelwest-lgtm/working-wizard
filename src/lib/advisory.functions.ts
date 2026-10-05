@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { assertClientScope } from "@/lib/assert-client-scope";
+import { assertStarterTrialAllowsNewWork } from "@/lib/firm-client-cap.server";
 
 /**
  * Advisory Drafter
@@ -158,10 +159,18 @@ export const draftAdvisory = createServerFn({ method: "POST" })
 
     const { data: client } = await context.supabase
       .from("clients")
-      .select("id, name, business_type, cashflow, financials, operating_profile")
+      .select("id, name, firm_id, business_type, cashflow, financials, operating_profile")
       .eq("id", data.clientId)
       .maybeSingle();
     if (!client) throw new Error("Client not accessible");
+
+    const claims = context.claims as { email?: string | null };
+    await assertStarterTrialAllowsNewWork({
+      supabase: context.supabase,
+      userId: context.userId,
+      email: claims.email ?? "",
+      firmId: (client as { firm_id?: string | null }).firm_id ?? null,
+    });
 
     const operatingProfile = parseOperatingProfile(
       (client as { operating_profile?: unknown }).operating_profile,

@@ -39,9 +39,10 @@ function liabilitySide(fields: Record<string, unknown>): number | null {
 }
 
 /**
- * Equity at read time. Import plugs a missing total, and a hand-entered
- * figure (including zero) is left alone. A blob saved before that plug —
- * assets and liabilities present, equity blank — gets the same plug here.
+ * Equity at read time. Same plug as fillBalanceSheetTotals: assets minus
+ * liabilities, flagged derived. That residual already includes unclosed
+ * profit, so nothing here adds net income again. A hand-entered figure
+ * (including zero) is left alone.
  */
 export function readTimeEquity(fields: Record<string, unknown> | null | undefined): {
   equity: string;

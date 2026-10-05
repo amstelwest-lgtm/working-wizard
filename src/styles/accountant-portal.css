@@ -233,6 +233,9 @@ html[data-theme="light"] .accountant-portal .doc{background:linear-gradient(170d
 /* ===== drawer (playbook detail) ===== */
 .veil{position:fixed;inset:0;z-index:70;background:rgba(3,3,6,.66);backdrop-filter:blur(6px);opacity:0;pointer-events:none;transition:opacity .35s}
 .veil.open{opacity:1;pointer-events:auto}
+/* The practice page animation traps the drawer under the root note button. */
+body:has(.veil.open) #wizard-notes-pin,
+body:has(.trial-ended-block) #wizard-notes-pin{visibility:hidden;pointer-events:none}
 .drawer{position:fixed;top:0;right:0;bottom:0;width:min(560px,94vw);z-index:71;background:var(--bg-2);border-left:1px solid var(--line);box-shadow:-30px 0 80px rgba(0,0,0,.5);transform:translateX(102%);transition:transform .45s var(--ease);display:flex;flex-direction:column}
 .drawer.open{transform:none}
 .drawer-head{padding:26px 30px 20px;border-bottom:1px solid var(--line-soft);position:relative}
@@ -739,7 +742,7 @@ html[data-theme="light"] .accountant-portal .budget-month-engine{
   .accountant-portal .topbar-menu-btn{width:36px;height:36px}
 }
 
-/* ===== Reading-path coach — light surface, dark text in both themes ===== */
+/* ===== Reading-path coach. Dark uses portal ink. Light keeps the cream card. ===== */
 .accountant-portal .workflow-coach{
   position:sticky;
   top:78px;
@@ -751,6 +754,12 @@ html[data-theme="light"] .accountant-portal .budget-month-engine{
   margin:0 0 16px;
   padding:8px 10px 8px 14px;
   border-radius:14px;
+  border:1px solid var(--line);
+  background:var(--bg-2);
+  color:var(--ink);
+  box-shadow:0 8px 24px rgba(0,0,0,.28);
+}
+html[data-theme="light"] .accountant-portal .workflow-coach{
   border:1px solid #e4d7b0;
   background:#fffdf6;
   color:#1b1608;
@@ -762,8 +771,9 @@ html[data-theme="light"] .accountant-portal .budget-month-engine{
   font-weight:700;
   letter-spacing:.16em;
   text-transform:uppercase;
-  color:#8a6508;
+  color:var(--gold);
 }
+html[data-theme="light"] .accountant-portal .workflow-coach__kicker{color:#8a6508}
 .accountant-portal .workflow-coach__steps{
   display:flex;
   gap:4px;
@@ -777,7 +787,7 @@ html[data-theme="light"] .accountant-portal .budget-month-engine{
 .accountant-portal .workflow-coach__step{
   border:none;
   background:transparent;
-  color:#3d3420;
+  color:var(--ink);
   font-size:12px;
   font-weight:700;
   letter-spacing:.01em;
@@ -785,12 +795,21 @@ html[data-theme="light"] .accountant-portal .budget-month-engine{
   border-radius:999px;
   white-space:nowrap;
 }
-.accountant-portal .workflow-coach__step:hover{background:#f3ead2}
+html[data-theme="light"] .accountant-portal .workflow-coach__step{color:#3d3420}
+.accountant-portal .workflow-coach__step:hover{background:color-mix(in srgb,var(--gold) 14%,transparent)}
+html[data-theme="light"] .accountant-portal .workflow-coach__step:hover{background:#f3ead2}
 .accountant-portal .workflow-coach__step[data-current="true"]{
+  background:var(--gold);
+  color:#1b1300;
+}
+html[data-theme="light"] .accountant-portal .workflow-coach__step[data-current="true"]{
   background:#1b1608;
   color:#fffdf6;
 }
 .accountant-portal .workflow-coach__step[data-done="true"]:not([data-current="true"]){
+  color:var(--ink-dim);
+}
+html[data-theme="light"] .accountant-portal .workflow-coach__step[data-done="true"]:not([data-current="true"]){
   color:#6b6354;
 }
 .accountant-portal .workflow-coach__go,
@@ -813,6 +832,11 @@ html[data-theme="light"] .accountant-portal .budget-month-engine{
   margin:0 0 18px;
   padding:16px 16px 14px;
   border-radius:16px;
+  border:1px solid var(--line);
+  background:var(--bg-2);
+  color:var(--ink);
+}
+html[data-theme="light"] .accountant-portal .data-fresh{
   border:1px solid #e4d7b0;
   background:#fffdf6;
   color:#1b1608;
@@ -824,22 +848,26 @@ html[data-theme="light"] .accountant-portal .budget-month-engine{
   font-weight:700;
   letter-spacing:.16em;
   text-transform:uppercase;
-  color:#8a6508;
+  color:var(--gold);
 }
+html[data-theme="light"] .accountant-portal .data-fresh__kicker{color:#8a6508}
 .accountant-portal .data-fresh__title{
   margin:0 0 6px;
   font-size:22px;
   font-weight:700;
-  color:#1b1608;
+  color:var(--ink);
 }
+html[data-theme="light"] .accountant-portal .data-fresh__title{color:#1b1608}
 .accountant-portal .data-fresh__lede,
 .accountant-portal .data-fresh__line{
   margin:0;
   max-width:68ch;
   font-size:14px;
   line-height:1.5;
-  color:#1b1608;
+  color:var(--ink);
 }
+html[data-theme="light"] .accountant-portal .data-fresh__lede,
+html[data-theme="light"] .accountant-portal .data-fresh__line{color:#1b1608}
 .accountant-portal .data-fresh__line{margin-top:6px;font-weight:700}
 .accountant-portal .data-fresh__ledgers{
   display:grid;
@@ -862,17 +890,78 @@ html[data-theme="light"] .accountant-portal .budget-month-engine{
 .accountant-portal .pillar-evidence{
   align-self:flex-start;
   margin-top:8px;
-  border:none;
+  border:1px solid var(--line);
   border-radius:999px;
-  background:#fffdf6;
-  color:#1b1608;
+  background:var(--bg-3);
+  color:var(--ink);
   font-size:11px;
   font-weight:700;
   letter-spacing:.01em;
   padding:5px 10px;
   cursor:pointer;
 }
-.accountant-portal .pillar-evidence:hover{background:#f3ead2}
+html[data-theme="light"] .accountant-portal .pillar-evidence{
+  border:none;
+  background:#fffdf6;
+  color:#1b1608;
+}
+.accountant-portal .pillar-evidence:hover{background:color-mix(in srgb,var(--gold) 16%,var(--bg-2))}
+html[data-theme="light"] .accountant-portal .pillar-evidence:hover{background:#f3ead2}
+html:not([data-theme="light"]) .accountant-portal .data-fresh .ledger-connect__stat-value,
+html:not([data-theme="light"]) .accountant-portal .data-fresh .ledger-connect__name{
+  color:var(--ink);
+}
+html:not([data-theme="light"]) .accountant-portal .data-fresh .ledger-connect__stat-label,
+html:not([data-theme="light"]) .accountant-portal .data-fresh .ledger-connect__kicker,
+html:not([data-theme="light"]) .accountant-portal .data-fresh .ledger-connect__meta,
+html:not([data-theme="light"]) .accountant-portal .data-fresh .ledger-connect__hint,
+html:not([data-theme="light"]) .accountant-portal .data-fresh .ledger-connect__body{
+  color:#d9d2c3;
+}
+html:not([data-theme="light"]) .accountant-portal .data-fresh .ledger-connect--xero,
+html:not([data-theme="light"]) .accountant-portal .data-fresh .ledger-connect--ok,
+html:not([data-theme="light"]) .accountant-portal .data-fresh .ledger-connect--panel{
+  background:var(--bg-3);
+  border-color:var(--line);
+}
+html:not([data-theme="light"]) .accountant-portal .data-fresh .ledger-connect__disconnect{
+  color:#ffd0d0;
+  background:rgba(226,92,92,.22);
+  border-color:rgba(255,180,180,.55);
+}
+html:not([data-theme="light"]) .accountant-portal .brain-hero.hero-card{
+  background:linear-gradient(160deg,rgba(212,175,55,.12),#101018 62%) padding-box,linear-gradient(150deg,rgba(253,238,121,.55),rgba(212,175,55,.18) 45%,rgba(253,238,121,.28)) border-box;
+  --ink-dim:#f3efe4;
+}
+html:not([data-theme="light"]) .accountant-portal .brain-hero .sub,
+html:not([data-theme="light"]) .accountant-portal .brain-hero .brain-purpose,
+html:not([data-theme="light"]) .accountant-portal .brain-hero .brain-row-meta,
+html:not([data-theme="light"]) .accountant-portal .brain-hero .brain-profile-meta,
+html:not([data-theme="light"]) .accountant-portal .brain-hero .brain-meta,
+html:not([data-theme="light"]) .accountant-portal .brain-hero .brain-chat-line{
+  color:#f3efe4;
+}
+html:not([data-theme="light"]) .accountant-portal input[type="radio"]{
+  appearance:none;
+  width:16px;
+  height:16px;
+  margin:0;
+  border:1.5px solid #d9d2c3;
+  border-radius:50%;
+  background:transparent;
+  display:grid;
+  place-items:center;
+}
+html:not([data-theme="light"]) .accountant-portal input[type="radio"]:checked{
+  border-color:var(--gold);
+}
+html:not([data-theme="light"]) .accountant-portal input[type="radio"]:checked::after{
+  content:"";
+  width:8px;
+  height:8px;
+  border-radius:50%;
+  background:var(--gold);
+}
 #coach-pillars,#action-plan-work,#data-up-to-date{scroll-margin-top:150px}
 @media(max-width:860px){
   .accountant-portal .workflow-coach{top:8px}

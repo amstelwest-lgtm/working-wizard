@@ -36,6 +36,7 @@ import {
   readPayablesSnapshot,
 } from "./payables.ts";
 import { assessClientMetrics, persistedRunwayWeeks } from "../../../src/lib/client-metrics.ts";
+import { paidGenerationTrialBlock } from "../_shared/starter-trial-gate.ts";
 
 function buildCorsHeaders(requestOrigin: string | null): Record<string, string> {
   const allowed = Deno.env.get("ALLOWED_ORIGINS");
@@ -130,6 +131,19 @@ Deno.serve(async (req: Request) => {
     return respond({ error: "Access check failed" }, 500);
   }
   if (!hasAccess) return respond({ error: "Client not accessible" }, 403);
+
+  try {
+    const trialBlock = await paidGenerationTrialBlock({
+      db: adminClient,
+      userId: user.id,
+      email: user.email ?? "",
+      clientId,
+    });
+    if (trialBlock) return respond({ error: trialBlock.message, code: trialBlock.code }, 403);
+  } catch (err) {
+    console.error("plan check failed", err instanceof Error ? err.message : err);
+    return respond({ error: "Could not check the plan. Nothing was generated." }, 503);
+  }
 
   const { data: allowed, error: rlErr } = await adminClient.rpc("ask_ai_record_request", {
     p_user_id: user.id,

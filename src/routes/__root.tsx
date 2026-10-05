@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   Outlet,
@@ -21,8 +22,12 @@ import { reportClientError } from "@/lib/monitoring";
 
 import appCss from "../styles.css?url";
 import { organizationGraphJson, pageHead, SEO_PAGES } from "@/lib/seo";
+import { applyPortalTheme, resolvePortalTheme } from "@/lib/portal-theme";
 
 function NotFoundComponent() {
+  useEffect(() => {
+    applyPortalTheme(resolvePortalTheme());
+  }, []);
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">

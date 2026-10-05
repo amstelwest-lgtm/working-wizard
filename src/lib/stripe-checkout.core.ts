@@ -5,6 +5,7 @@
 
 import type Stripe from "stripe";
 import { appRedirectOrigin } from "@/lib/app-origin";
+import { firmUpgradeReturnPath } from "@/lib/firm-band-upgrade";
 import { SA_FIRM_DISCOUNT_NOTE, saDiscountedUsdCents } from "@/lib/firm-sa-market";
 import {
   assertFoundingMonthlyOnly,
@@ -215,8 +216,8 @@ export function firmUpgradeCheckoutSessionParams(
 ): Stripe.Checkout.SessionCreateParams {
   const origin = appRedirectOrigin([input.origin]);
   const params = firmCheckoutSessionParams({ ...input, includeTrial: false });
-  params.success_url = `${origin}/dashboard?addClient=1&upgrade=success&session_id={CHECKOUT_SESSION_ID}`;
-  params.cancel_url = `${origin}/dashboard?addClient=1&upgrade=cancelled`;
+  params.success_url = `${origin}${firmUpgradeReturnPath("success")}`;
+  params.cancel_url = `${origin}${firmUpgradeReturnPath("cancelled")}`;
   const replaced = input.replacesSubscriptionId?.trim();
   if (replaced) {
     params.metadata = { ...(params.metadata ?? {}), milon_replaces_subscription: replaced };
@@ -238,12 +239,13 @@ export type FirmSetupUpgradeRequest = {
   userId: string;
 };
 
-/** Stripe custom_text.submit.message and after_submit.message max length. */
+/** Stripe custom_text.submit.message max length. */
 export const FIRM_SETUP_CHECKOUT_TEXT_MAX = 1200;
 
 /**
- * Copy on the card-setup Checkout page. Amount, currency, and interval come
- * from the resolved Stripe price. An SA firm sees half of that USD amount.
+ * Copy on the card-setup Checkout page, shown once above Save.
+ * Amount, currency, and interval come from the resolved Stripe price.
+ * An SA firm sees half of that USD amount.
  */
 export function firmSetupCheckoutMessage(input: {
   bandName: string;
@@ -277,10 +279,7 @@ function setupPriceInterval(
 /**
  * Collect a card for an existing subscription (a $0 Starter has none), then
  * the server updates that same subscription. This is not a second subscription.
- *
- * custom_text.submit and custom_text.after_submit are both allowed on a
- * setup-mode Checkout Session. The create API only rejects custom_text when
- * ui_mode is custom, which this hosted session is not.
+ * The plan line is custom_text.submit only. after_submit repeated it under Save.
  */
 export function firmSetupCheckoutSessionParams(input: {
   origin: string;
@@ -325,13 +324,12 @@ export function firmSetupCheckoutSessionParams(input: {
     customer: input.customerId,
     currency: "usd",
     client_reference_id: input.userId,
-    success_url: `${origin}/dashboard?addClient=1&upgrade=success&session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${origin}/dashboard?addClient=1&upgrade=cancelled`,
+    success_url: `${origin}${firmUpgradeReturnPath("success")}`,
+    cancel_url: `${origin}${firmUpgradeReturnPath("cancelled")}`,
     metadata,
     setup_intent_data: { metadata },
     custom_text: {
       submit: { message },
-      after_submit: { message },
     },
   };
 }

@@ -15,6 +15,8 @@ import {
   type PlannedAction,
 } from "../ask-ai/overview-brief.ts";
 import { loadOverviewBrief } from "./load-overview.ts";
+import { paidGenerationTrialBlock } from "../_shared/starter-trial-gate.ts";
+import { isStarterTrialEndedMessage } from "../../../src/lib/starter-trial-generation.ts";
 
 export type CreateIntent = {
   draft: boolean;
@@ -209,10 +211,12 @@ export function summarizeCreate(input: {
 export async function persistAdvisoryCreate(input: {
   clientId: string;
   userId: string;
+  email: string;
   token: string;
   audience: "owner" | "accountant";
   intent: CreateIntent;
   userClient: SupabaseClient;
+  adminClient: SupabaseClient;
 }): Promise<{ answer: string; created: CreatedPayload; tools: Array<{ name: string; status: "ok" | "empty" | "error" }> }> {
   const brief = await loadOverviewBrief(input.userClient, input.clientId);
   const emptyBrief = !brief || overviewFactLines(brief).length === 0;
@@ -248,8 +252,32 @@ export async function persistAdvisoryCreate(input: {
     };
   }
 
+  const trialBlock = await paidGenerationTrialBlock({
+    db: input.adminClient,
+    userId: input.userId,
+    email: input.email,
+    clientId: input.clientId,
+  });
+  if (trialBlock) {
+    created.errors.push(trialBlock.message);
+    return {
+      answer: trialBlock.message,
+      created,
+      tools: [{ name: "draft_deliverable", status: "error" }],
+    };
+  }
+
   if (input.intent.draft) {
     const remote = await invokeDraft(input.token, input.clientId);
+    if (isStarterTrialEndedMessage(remote.error ?? "")) {
+      const message = remote.error ?? "Your trial has ended, choose a plan";
+      created.errors.push(message);
+      return {
+        answer: message,
+        created,
+        tools: [{ name: "draft_deliverable", status: "error" }],
+      };
+    }
     if (remote.draftInserted) {
       created.draftInserted = true;
       created.draftId = await latestDraftId(input.userClient, input.clientId);

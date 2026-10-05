@@ -8,6 +8,7 @@
  * deliverable_drafts. Writes status=draft only. Never ready / sent / discarded.
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { paidGenerationTrialBlock } from "../_shared/starter-trial-gate.ts";
 
 // --- logic (sync with src/lib/client-brain-deliverable.ts) ---
 
@@ -293,6 +294,19 @@ Deno.serve(async (req: Request) => {
     return respond({ error: "Access check failed" }, 500);
   }
   if (!hasAccess) return respond({ error: "Client not accessible" }, 403);
+
+  try {
+    const trialBlock = await paidGenerationTrialBlock({
+      db: adminClient,
+      userId: user.id,
+      email: user.email ?? "",
+      clientId,
+    });
+    if (trialBlock) return respond({ error: trialBlock.message, code: trialBlock.code }, 403);
+  } catch (err) {
+    console.error("plan check failed", err instanceof Error ? err.message : err);
+    return respond({ error: "Could not check the plan. Nothing was generated." }, 503);
+  }
 
   const { data: allowed, error: rlErr } = await adminClient.rpc("ask_ai_record_request", {
     p_user_id: user.id,
