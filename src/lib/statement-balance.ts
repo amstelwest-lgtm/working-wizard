@@ -83,6 +83,11 @@ export function balanceSheetCheck(figures: FinancialFigures): BalanceSheetCheck 
   }
   const tol = Math.max(Math.abs(assets) * 0.005, 1);
   const raw = equity + liab - assets;
+  // Plugged equity is already assets − liabilities. That residual includes
+  // unclosed profit, so the profit must not be added a second time.
+  if (bs.equity_derived === true) {
+    return { currentPeriodProfit: null, gap: round2(raw) };
+  }
   const adjusted = raw + (profit ?? 0);
   const include =
     profit != null &&

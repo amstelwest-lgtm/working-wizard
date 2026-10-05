@@ -159,6 +159,21 @@ const filledFigures = figures(filled.sheet, {
 });
 assert(isClean(validateFigures(filledFigures)), "filled balanced TB passes validation");
 
+// No equity lines: #278 plugs equity as assets − liabilities. That residual
+// already contains current-period profit, so the profit check must not add it again.
+const plugged = fillBalanceSheetTotals(sheet({ assets: 43_000, liabilities: 9_000 }));
+assert(plugged.sheet.equity_derived === true, "a sheet with no equity lines is marked derived");
+assert(plugged.sheet.equity.total === 34_000, "derived equity is assets minus liabilities");
+const pluggedFigures = figures(plugged.sheet, {
+  revenue: 120_000,
+  cost_of_sales: 48_000,
+  operating_expenses: 41_900,
+});
+const pluggedCheck = balanceSheetCheck(pluggedFigures);
+assert(pluggedCheck.currentPeriodProfit == null, "derived equity is not increased by current-period profit");
+assert(pluggedCheck.gap === 0, `derived equity already balances, got ${pluggedCheck.gap}`);
+assert(isClean(validateFigures(pluggedFigures)), "a derived sheet passes without counting profit twice");
+
 const unbalanced = figures(
   sheet({
     assets: 50_000,
