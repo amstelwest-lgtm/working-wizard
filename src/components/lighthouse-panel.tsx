@@ -973,13 +973,13 @@ function SettingsForm({
         <div className="grid gap-2 sm:grid-cols-2">
           <input
             className={inputCls}
-            placeholder="Sender name"
+            placeholder="The MILŌN Team"
             value={senderName}
             onChange={(e) => setSenderName(e.target.value)}
           />
           <input
             className={inputCls}
-            placeholder="Sender title"
+            placeholder="Title — leave blank"
             value={senderTitle}
             onChange={(e) => setSenderTitle(e.target.value)}
           />
