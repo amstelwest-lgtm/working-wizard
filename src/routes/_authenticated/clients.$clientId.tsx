@@ -3649,6 +3649,10 @@ function ClientView() {
                   onConfirm={(result, prefs, period) => {
                     void handleConfirmFinancials(result, prefs, period);
                   }}
+                  onOpenBankUpload={() => {
+                    setUploadOpen(false);
+                    setShowBankDrafter(true);
+                  }}
                   autoPopulate={
                     autoPopulateState ? { ...autoPopulateState, role: "accountant" } : null
                   }

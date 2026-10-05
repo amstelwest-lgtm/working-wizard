@@ -21,6 +21,7 @@ import type {
   CashFlowStatement,
 } from "@/lib/extraction-types";
 import { assessFlatExtraction, assessMergedExtraction, assertUsable } from "@/lib/upload-quality";
+import { BANK_LEDGER_MESSAGE, looksLikeBankLedger } from "@/lib/bank-ledger";
 import {
   financialExtractionPrompt,
   marketInputSchema,
@@ -430,6 +431,7 @@ export const extractFinancials = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     if (!data.text?.trim()) throw new Error("No usable content provided");
+    if (looksLikeBankLedger(data.text)) throw new Error(BANK_LEDGER_MESSAGE);
     const docText = data.text.slice(0, 120_000);
     const aiResult = await aiExtractText(docText, data.fileName, resolvePromptMarket(data.market));
     const patternResult = patternExtract(docText);

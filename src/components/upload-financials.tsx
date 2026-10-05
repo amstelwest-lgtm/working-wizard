@@ -40,6 +40,8 @@ import {
   importPeriodFromParts,
   type ConfirmedImportPeriod,
 } from "@/lib/import-period";
+import { balanceSheetCheck } from "@/lib/statement-balance";
+import { BANK_LEDGER_MESSAGE, looksLikeBankLedger } from "@/lib/bank-ledger";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -133,12 +135,20 @@ export type UploadFinancialsProps = {
   ) => void;
   /** Per-client auto-populate state; undefined → first upload. */
   autoPopulate?: AutoPopulateDialogState | null;
+  /** A bank-transaction file was dropped here. Open the bank upload instead. */
+  onOpenBankUpload?: () => void;
 };
 
-export function UploadFinancials({ onConfirm, autoPopulate }: UploadFinancialsProps) {
+export function UploadFinancials({
+  onConfirm,
+  autoPopulate,
+  onOpenBankUpload,
+}: UploadFinancialsProps) {
   const { number, selection } = useMarketFormat();
   const inputRef = useRef<HTMLInputElement>(null);
-  const [status, setStatus] = useState<"idle" | "uploading" | "reading" | "review">("idle");
+  const [status, setStatus] = useState<"idle" | "uploading" | "reading" | "review" | "bank">(
+    "idle",
+  );
   const [result, setResult] = useState<ExtractionResult | null>(null);
   const [issues, setIssues] = useState<ValidationIssue[]>([]);
   const [autoSafe, setAutoSafe] = useState(false);
@@ -187,6 +197,10 @@ export function UploadFinancials({ onConfirm, autoPopulate }: UploadFinancialsPr
         });
       } else {
         const text = await fileToText(file);
+        if (looksLikeBankLedger(text)) {
+          setStatus("bank");
+          return;
+        }
         setStatus("reading");
         res = await extract({ data: { text, fileName: file.name, market } });
       }
@@ -216,26 +230,40 @@ export function UploadFinancials({ onConfirm, autoPopulate }: UploadFinancialsPr
     if (inputRef.current) inputRef.current.value = "";
   }
 
-  // Live balance check
-  const liveBalance = useMemo(() => {
-    if (!result) return null;
-    const bs = result.current_period.figures.balance_sheet;
-    const eq = bs.equity.total;
-    const liab = bs.total_liabilities;
-    const assets = bs.total_assets;
-    if (eq == null || liab == null || assets == null) return null;
-    return Math.round((eq + liab - assets) * 100) / 100;
-  }, [
-    result?.current_period.figures.balance_sheet.equity.total,
-    result?.current_period.figures.balance_sheet.total_liabilities,
-    result?.current_period.figures.balance_sheet.total_assets,
-  ]);
+  // Live balance check. Unclosed trial-balance profit is added to equity.
+  const balanceCheck = useMemo(
+    () => (result ? balanceSheetCheck(result.current_period.figures) : null),
+    [result],
+  );
+  const liveBalance = balanceCheck?.gap ?? null;
 
   function onDrop(e: DragEvent<HTMLButtonElement>) {
     e.preventDefault();
     if (status === "uploading" || status === "reading") return;
     const f = e.dataTransfer.files?.[0];
     if (f) void handleFile(f);
+  }
+
+  if (status === "bank") {
+    return (
+      <div className="space-y-4 rounded-xl border border-amber-700/40 bg-amber-950/30 px-4 py-5">
+        <p className="text-sm leading-relaxed text-amber-100">{BANK_LEDGER_MESSAGE}</p>
+        <div className="flex flex-wrap gap-2">
+          {onOpenBankUpload ? (
+            <Button
+              type="button"
+              onClick={onOpenBankUpload}
+              className="bg-amber-500 hover:bg-amber-400 text-black font-semibold"
+            >
+              Go to bank statement upload
+            </Button>
+          ) : null}
+          <Button type="button" variant="outline" size="sm" onClick={reset}>
+            Choose a different file
+          </Button>
+        </div>
+      </div>
+    );
   }
 
   // ── idle / loading ──────────────────────────────────────────────────────────
@@ -514,6 +542,14 @@ export function UploadFinancials({ onConfirm, autoPopulate }: UploadFinancialsPr
                 setResult({ ...result });
               }}
             />
+            {balanceCheck?.currentPeriodProfit != null && (
+              <div className="flex items-center gap-3 py-1.5 border-b border-white/5 last:border-0">
+                <Label className="flex-1 text-xs text-foreground">Current period profit</Label>
+                <span className="w-44 text-right text-sm font-mono text-foreground">
+                  {fmt(balanceCheck.currentPeriodProfit, number)}
+                </span>
+              </div>
+            )}
             <Row
               label="Trade payables"
               value={bs.current_liabilities.trade_and_other_payables}
