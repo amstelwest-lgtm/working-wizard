@@ -40,11 +40,12 @@ During dry-run, **every other address fails closed** at send time.
 2. **Resend API key** — `RESEND_API_KEY=re_...` in Vercel Production. Without it, drafts save as
    `approved` but nothing sends (implicit guard only — still set the key for dry-run).
 
-3. **From domain** — Lighthouse reply-to is locked to `team@trymilon.com`. Set
+3. **From domain** — Lighthouse cold From is hard-locked to `team@trymilon.com`.
+   A missing or wrong `RESEND_FROM_EMAIL` is rewritten on the send path; it will
+   not send as `noreply@milon.co.za` or `*@milonfinance.com`. Set
    `RESEND_FROM_EMAIL=Milōn <team@trymilon.com>` after `trymilon.com` shows **Verified** in
-   Resend → Domains (SPF/DKIM/DMARC green). Until then, From can stay on the already-verified
-   `milonfinance.com` sender; replies still land on `team@trymilon.com`. Product / auth URLs stay
-   on `milonfinance.com`.
+   Resend → Domains (SPF/DKIM/DMARC green). Reply-To stays `team@trymilon.com`.
+   Product / auth URLs stay on `milonfinance.com`.
 
 4. **SITE_URL** — `SITE_URL=https://www.milonfinance.com` (or canonical production URL). Drives:
    - Trial links (`/?lh=<token>#register`)

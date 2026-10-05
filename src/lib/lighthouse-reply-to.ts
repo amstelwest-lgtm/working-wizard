@@ -1,9 +1,9 @@
 /**
  * Lighthouse Reply-To lock.
  *
- * From stays RESEND_FROM_EMAIL (set to Milōn <team@trymilon.com> once
- * trymilon.com is verified in Resend). Replies must land on team@trymilon.com
- * — not milon.co.za and not milonfinance.com (those domains stay off Lighthouse).
+ * Replies must land on team@trymilon.com — not milon.co.za and not
+ * milonfinance.com (those domains stay off Lighthouse). Cold From is a
+ * separate lock (see lighthouse-from.ts); this helper does not touch it.
  */
 
 export const LIGHTHOUSE_REPLY_TO = "team@trymilon.com";

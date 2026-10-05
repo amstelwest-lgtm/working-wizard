@@ -29,6 +29,7 @@ import {
   lighthouseSendAllowlist,
   lighthouseSendAllowlistEnforced,
 } from "@/lib/lighthouse-send-allowlist";
+import { resolveLighthouseFromAddress } from "@/lib/lighthouse-from";
 import { LIGHTHOUSE_REPLY_TO, resolveLighthouseReplyTo } from "@/lib/lighthouse-reply-to";
 import {
   ACCOUNTANT_ONESHOT_SEQUENCE,
@@ -1200,10 +1201,10 @@ export const sendLighthouseTouch = createServerFn({ method: "POST" })
     );
 
     const apiKey = process.env.RESEND_API_KEY;
-    const fromRaw = process.env.RESEND_FROM_EMAIL || "noreply@milon.co.za";
-    const fromAddr = fromRaw.includes("<")
-      ? fromRaw.replace(/^.*<([^>]+)>.*$/, "$1").trim()
-      : fromRaw.trim();
+    // Hard-rewrite to team@trymilon.com. A missing or wrong RESEND_FROM_EMAIL
+    // must not leave on a retired domain. Display name stays sender_name.
+    // Reply-To is resolved separately above.
+    const fromAddr = resolveLighthouseFromAddress(process.env.RESEND_FROM_EMAIL);
 
     if (!apiKey) {
       await admin

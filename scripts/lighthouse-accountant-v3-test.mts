@@ -160,7 +160,9 @@ assert(fns.includes("Day 9: only CTA is the free-trial link"), "SYSTEM_RULES day
 assert(fns.includes("Day 17: unusual-question bait"), "SYSTEM_RULES day17");
 assert(fns.includes("Day 28: capacity close"), "SYSTEM_RULES day28");
 assert(fns.includes("Prefer under 120 words"), "SYSTEM_RULES length");
-assert(fns.includes("from: `${senderName} <${fromAddr}>`"), "From stays RESEND_FROM_EMAIL");
+assert(fns.includes("from: `${senderName} <${fromAddr}>`"), "From display name stays sender_name");
+assert(fns.includes("resolveLighthouseFromAddress"), "send path locks From to team@trymilon.com");
+assert(!fns.includes("noreply@milon.co.za"), "send path has no noreply@milon.co.za From fallback");
 assert(fns.includes("From and reply-to are team@trymilon.com"), "SYSTEM_RULES mailbox is team@trymilon.com");
 assert(!fns.includes("Reply-to is hello@milonfinance.com"), "SYSTEM_RULES no longer uses hello@milonfinance.com");
 assert(!fns.includes("From and reply-to are team@milonfinance.com"), "SYSTEM_RULES no longer uses team@milonfinance.com");
@@ -176,7 +178,10 @@ assert(fns.includes("ONESHOT_SYSTEM_RULES"), "oneshot rewrite has its own rule b
 const sendSlice = fns.slice(fns.indexOf("export const sendLighthouseTouch"));
 const resendBody = sendSlice.slice(0, sendSlice.indexOf("export const upsertLighthouseAsset"));
 assert(resendBody.includes("resolveLighthouseReplyTo"), "send path resolves reply_to");
+assert(resendBody.includes("resolveLighthouseFromAddress"), "send path resolves From");
 assert(!resendBody.includes("hello@milon.co.za"), "send path never uses hello@milon.co.za");
+assert(!resendBody.includes("noreply@milon.co.za"), "send path never falls back to noreply@milon.co.za");
+assert(!resendBody.includes("milonfinance.com"), "send path never Froms milonfinance.com");
 assert(resendBody.includes("attachments"), "send path wires Resend attachments");
 
 const migration = readFileSync(
