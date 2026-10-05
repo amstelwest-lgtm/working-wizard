@@ -86,6 +86,8 @@ const ACCOUNTANT_STEP_HINT: Record<number, string> = {
 const ACCOUNTANT_ONESHOT_HINT =
   "One-shot · advisory banger — videos + both one-pagers, then a call. Both PDFs attach on send.";
 
+export const LIGHTHOUSE_TABS = ["pipeline", "playbook", "assets", "settings"] as const;
+
 export type LighthouseTab = (typeof LIGHTHOUSE_TABS)[number];
 
 export function parseLighthouseTab(raw: unknown): LighthouseTab | undefined {
