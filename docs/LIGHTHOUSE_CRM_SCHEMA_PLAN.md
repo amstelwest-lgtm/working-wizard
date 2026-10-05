@@ -1,7 +1,9 @@
 # LH-A1 — Lighthouse CRM schema audit
 
-Plan only. This document does not change the database, the send path, or the agent.
-Live Lighthouse data stays on the tables it already uses.
+Phase 1 empty tables are in `supabase/migrations/20261005150000_lighthouse_crm_phase1.sql`.
+That migration is not applied to live Supabase by the pull request that adds it. No
+backfill. The send path, `auto_send`, and the legacy Lighthouse tables are unchanged.
+Live data stays on the tables it already uses.
 
 Audit date: 2026-10-05. Source of truth is the SQL in `supabase/migrations/` plus the
 writers in `src/lib/lighthouse.functions.ts`, `src/lib/lighthouse-delivery.server.ts`,
@@ -9,20 +11,23 @@ writers in `src/lib/lighthouse.functions.ts`, `src/lib/lighthouse-delivery.serve
 
 ## Decision
 
-Ship no migration in this change.
+Phase 1 shipped as empty `lighthouse_firms` / `lighthouse_contacts` /
+`lighthouse_activities` / `lighthouse_campaigns` / `lighthouse_cadence_steps` with
+deny-all RLS. Spec E16 adds four nullable cadence columns on Contact:
+`last_touch_at` (timestamptz), `last_delivery_status` (text, no enum),
+`last_engagement` (text status/signal, not a timestamp), and `next_follow_up_at`
+(timestamptz). `lighthouse_cadence_steps.signing_rule` is `NOT NULL DEFAULT
+'team_only'`. Do not assign `theo_us` without an explicit US campaign.
 
-A safe additive migration would be empty `lighthouse_firms` / `lighthouse_contacts` /
-`lighthouse_activities` / `lighthouse_campaigns` / `lighthouse_cadence_steps` tables with
-deny-all RLS. That is low-risk to apply and high-risk to leave unused: the app would keep
-writing `milon_ops_leads`, and two CRM shapes would drift before Night-1. The stage CHECK
-on `milon_ops_leads` cannot be swapped in place. Existing rows and the running console
-(`LIGHTHOUSE_STAGES` in `src/lib/lighthouse.functions.ts`) still use the old vocabulary.
-Replacing that CHECK, or backfilling firms from free-text `company`, is a data migration
-with a dedupe rule Theo has to accept first.
+The tables stay empty on purpose. The app still writes `milon_ops_leads`. Copying
+rows before the stage map is accepted would let two CRM shapes drift. The stage
+CHECK on `milon_ops_leads` cannot be swapped in place. Existing rows and the running
+console (`LIGHTHOUSE_STAGES` in `src/lib/lighthouse.functions.ts`) still use the old
+vocabulary. Replacing that CHECK, or backfilling firms from free-text `company`, is
+a data migration with a dedupe rule Theo has to accept first.
 
-The next schema PR should be the Phase 1 script in [Migration approach](#migration-approach),
-applied only when the admin UI in [CRM admin UI, first surface](#crm-admin-ui-first-surface)
-is ready to read the new tables. Until then the live writer stays `milon_ops_leads`.
+The admin UI in [CRM admin UI, first surface](#crm-admin-ui-first-surface) is still
+later. Until cutover the live writer stays `milon_ops_leads`.
 
 ## What exists today
 
@@ -190,6 +195,11 @@ Target: `firm_id`, `name`, `email`, `role`, `bounce_status`, `suppress`.
 Also on the lead, with no target column yet: `phone`, `trial_token`, `optout_token`.
 Keep them on the legacy row. See [Leave these alone](#leave-these-alone).
 
+Spec E16 cadence columns live only on `lighthouse_contacts` in the Phase 1
+migration, all nullable, with no copy from the lead: `last_touch_at`,
+`last_delivery_status` (free text), `last_engagement` (text status/signal),
+`next_follow_up_at`.
+
 ### Activity
 
 Target: `type` `email_out` \| `email_in` \| `call` \| `note` \| `meeting` \| `signup` \|
@@ -272,8 +282,8 @@ Additive, dual-read, then backfill. No `DROP TABLE`, no `TRUNCATE`, no in-place 
 `lighthouse_assets`, no rewrite of their CHECK constraints, no change to ON DELETE CASCADE
 on the legacy foreign keys.
 
-Suggested later filename (do not add it until Phase 1 is approved):
-`supabase/migrations/20261006120000_lighthouse_crm_shape.sql`.
+Shipped as `supabase/migrations/20261005150000_lighthouse_crm_phase1.sql`
+(empty tables, deny-all RLS, no copy). Not applied to live Supabase in that change.
 
 ### Phase 1 — empty shape, no copy
 
@@ -318,6 +328,9 @@ Existing leads are not inserted. The console keeps reading `milon_ops_leads`.
 - `name text`, `email text`, `role text`
 - `bounce_status text` CHECK (`none`, `soft`, `hard`) default `none`
 - `suppress boolean` default false
+- Spec E16, all nullable: `last_touch_at timestamptz`, `last_delivery_status text`
+  (no enum), `last_engagement text` (status/signal, not a timestamp),
+  `next_follow_up_at timestamptz`
 - `created_at`, `updated_at`
 
 No unique constraint on `email` in Phase 1. Live leads can repeat an address.
@@ -363,7 +376,8 @@ armed. Phase 1 does not read or write `RESEND_FROM_EMAIL`.
 - `day_offset integer`
 - `template_subject text` NULL
 - `template_body text` NULL
-- `signing_rule text` CHECK (`theo_us`, `team_only`)
+- `signing_rule text` NOT NULL DEFAULT `team_only` CHECK (`theo_us`, `team_only`).
+  New steps default to `team_only`. Do not assign `theo_us` without an explicit US campaign.
 - `asset_key text` NULL — copied from the step’s `asset`, still resolved against
   `lighthouse_assets`
 - UNIQUE (`campaign_id`, `step_no`)
@@ -552,7 +566,10 @@ Defer playbook editing, asset management, and the global daily cap. They already
 
 1. Theo confirms the stage map, especially `activated`+`won` → `customer` with
    `legacy_stage` preserved, and bounce/`lost` → `suppressed`.
-2. Phase 1 empty tables (deny-all RLS only).
+2. Phase 1 empty tables (deny-all RLS only). **Shipped** in
+   `20261005150000_lighthouse_crm_phase1.sql`, including Spec E16 cadence columns
+   on Contact. `signing_rule` defaults to `team_only`. Not applied to live Supabase
+   in that change. No backfill.
 3. Phase 2 idempotent backfill, then a read-only firm list against a copy of production
    or a restored snapshot — row counts: firms = contacts = leads, sent touches = `email_out`
    activities, inbound rows = `email_in` activities.
