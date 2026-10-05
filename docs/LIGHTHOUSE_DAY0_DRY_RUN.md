@@ -10,8 +10,8 @@ the recipient gate until Growth/Theo explicitly flip production send GO.
 |-------|------|
 | `amstel.west@gmail.com` | Founder / default owner gate |
 | `team@milon.co.za` | Milōn ZA ops |
-| `team@milonfinance.com` | Leftover finance-domain test inbox (not the Lighthouse mailbox) |
-| `team@trymilon.com` | Lighthouse mailbox — reply-to lock |
+| `team@milonfinance.com` | Leftover finance-domain test inbox (not Reply-To) |
+| `team@trymilon.com` | Lighthouse cold From |
 | `theoamstel123@gmail.com` | Secondary founder test |
 
 During dry-run, **every other address fails closed** at send time.
@@ -40,11 +40,15 @@ During dry-run, **every other address fails closed** at send time.
 2. **Resend API key** — `RESEND_API_KEY=re_...` in Vercel Production. Without it, drafts save as
    `approved` but nothing sends (implicit guard only — still set the key for dry-run).
 
-3. **From domain** — Lighthouse reply-to is locked to `team@trymilon.com`. Set
+3. **From domain** — Lighthouse cold From is hard-locked to `team@trymilon.com`.
+   A missing or wrong `RESEND_FROM_EMAIL` is rewritten on the send path; it will
+   not send as `noreply@milon.co.za` or `*@milonfinance.com`. Set
    `RESEND_FROM_EMAIL=Milōn <team@trymilon.com>` after `trymilon.com` shows **Verified** in
-   Resend → Domains (SPF/DKIM/DMARC green). Until then, From can stay on the already-verified
-   `milonfinance.com` sender; replies still land on `team@trymilon.com`. Product / auth URLs stay
-   on `milonfinance.com`.
+   Resend → Domains (SPF/DKIM/DMARC green). Reply-To is `hello@milonfinance.com`
+   (not the cold From). After merge, set `milon_ops_settings.lighthouse.reply_to`
+   to `hello@milonfinance.com` — Eng applies that on prod. Until the row is
+   updated, the send path still rewrites empty, `*@milon.co.za`, and leftover
+   `team@` to `hello@milonfinance.com`. Product / auth URLs stay on `milonfinance.com`.
 
 4. **SITE_URL** — `SITE_URL=https://www.milonfinance.com` (or canonical production URL). Drives:
    - Trial links (`/?lh=<token>#register`)
@@ -72,7 +76,7 @@ During dry-run, **every other address fails closed** at send time.
    - `20260822210000_lighthouse_engagement.sql` — click / inbound tracking
    - `20260910190000_lighthouse_one_pager_assets_ready.sql` — one-pager PDF asset URLs
    - `20260910200000_lighthouse_teaser_videos.sql` — locked `teaser_owner` / `teaser_accountant` YouTube links
-   - `20260912170000_lighthouse_reply_to_trymilon.sql` — reply-to lock → `team@trymilon.com`
+   - `20260912170000_lighthouse_reply_to_trymilon.sql` — historical reply-to write to `team@trymilon.com` (runtime now resolves Reply-To to `hello@milonfinance.com`)
 
 ## Manual dry-run steps (Growth / Theo)
 

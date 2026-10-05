@@ -21,43 +21,51 @@ function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
 }
 
-assert(LIGHTHOUSE_REPLY_TO === "team@trymilon.com", "locked mailbox");
+assert(LIGHTHOUSE_REPLY_TO === "hello@milonfinance.com", "locked reply mailbox");
 assert(LIGHTHOUSE_TEAM_VOICE === "The Milōn Team", "team voice label");
-assert(resolveLighthouseReplyTo("") === LIGHTHOUSE_REPLY_TO, "empty → team@trymilon.com");
-assert(resolveLighthouseReplyTo("   ") === LIGHTHOUSE_REPLY_TO, "whitespace → team@trymilon.com");
-assert(resolveLighthouseReplyTo(null) === LIGHTHOUSE_REPLY_TO, "null → team@trymilon.com");
-assert(resolveLighthouseReplyTo(undefined) === LIGHTHOUSE_REPLY_TO, "undefined → team@trymilon.com");
+assert(resolveLighthouseReplyTo("") === LIGHTHOUSE_REPLY_TO, "empty → hello@milonfinance.com");
+assert(resolveLighthouseReplyTo("   ") === LIGHTHOUSE_REPLY_TO, "whitespace → hello@milonfinance.com");
+assert(resolveLighthouseReplyTo(null) === LIGHTHOUSE_REPLY_TO, "null → hello@milonfinance.com");
+assert(resolveLighthouseReplyTo(undefined) === LIGHTHOUSE_REPLY_TO, "undefined → hello@milonfinance.com");
 assert(
   resolveLighthouseReplyTo("hello@milon.co.za") === LIGHTHOUSE_REPLY_TO,
-  "hello@milon.co.za → team@trymilon.com",
+  "hello@milon.co.za → hello@milonfinance.com",
 );
 assert(
   resolveLighthouseReplyTo("HELLO@MILON.CO.ZA") === LIGHTHOUSE_REPLY_TO,
-  "hello@ case-insensitive",
+  "milon.co.za reply-to is case-insensitive",
 );
 assert(
   resolveLighthouseReplyTo("ops@milon.co.za") === LIGHTHOUSE_REPLY_TO,
-  "any @milon.co.za → team@trymilon.com",
+  "any @milon.co.za → hello@milonfinance.com",
 );
 assert(
   resolveLighthouseReplyTo("team@milonfinance.com") === LIGHTHOUSE_REPLY_TO,
-  "team@ finance remaps to team@trymilon.com",
+  "leftover team@ finance remaps to hello@",
 );
 assert(
   resolveLighthouseReplyTo("TEAM@MILONFINANCE.COM") === LIGHTHOUSE_REPLY_TO,
-  "team@ finance case-insensitive",
+  "leftover team@ finance is case-insensitive",
 );
 assert(
   resolveLighthouseReplyTo("hello@milonfinance.com") === LIGHTHOUSE_REPLY_TO,
-  "hello@ finance remaps to team@trymilon.com",
+  "hello@ finance stays",
 );
 assert(
-  resolveLighthouseReplyTo("ops@milonfinance.com") === LIGHTHOUSE_REPLY_TO,
-  "any @milonfinance.com remaps",
+  resolveLighthouseReplyTo("  Hello@MilonFinance.com  ") === LIGHTHOUSE_REPLY_TO,
+  "hello@ finance normalizes",
+);
+assert(
+  resolveLighthouseReplyTo("ops@milonfinance.com") === "ops@milonfinance.com",
+  "other @milonfinance.com is not host-retired",
 );
 assert(
   resolveLighthouseReplyTo("team@trymilon.com") === LIGHTHOUSE_REPLY_TO,
-  "already locked stays",
+  "leftover team@trymilon.com remaps to hello@",
+);
+assert(
+  resolveLighthouseReplyTo("TEAM@TRYMILON.COM") === LIGHTHOUSE_REPLY_TO,
+  "leftover team@trymilon.com is case-insensitive",
 );
 assert(
   resolveLighthouseReplyTo("  amstel.west@gmail.com  ") === "amstel.west@gmail.com",
@@ -160,9 +168,16 @@ assert(fns.includes("Day 9: only CTA is the free-trial link"), "SYSTEM_RULES day
 assert(fns.includes("Day 17: unusual-question bait"), "SYSTEM_RULES day17");
 assert(fns.includes("Day 28: capacity close"), "SYSTEM_RULES day28");
 assert(fns.includes("Prefer under 120 words"), "SYSTEM_RULES length");
-assert(fns.includes("from: `${senderName} <${fromAddr}>`"), "From stays RESEND_FROM_EMAIL");
-assert(fns.includes("From and reply-to are team@trymilon.com"), "SYSTEM_RULES mailbox is team@trymilon.com");
-assert(!fns.includes("Reply-to is hello@milonfinance.com"), "SYSTEM_RULES no longer uses hello@milonfinance.com");
+assert(fns.includes("from: `${senderName} <${fromAddr}>`"), "From display name stays sender_name");
+assert(fns.includes("resolveLighthouseFromAddress"), "send path locks From to team@trymilon.com");
+assert(!fns.includes("noreply@milon.co.za"), "send path has no noreply@milon.co.za From fallback");
+assert(
+  fns.includes("From is team@trymilon.com. Reply-to is hello@milonfinance.com."),
+  "SYSTEM_RULES splits From and Reply-To",
+);
+assert(!fns.includes("From and reply-to are team@trymilon.com"), "SYSTEM_RULES no longer pairs both on team@");
+assert(!fns.includes("Reply-to is team@trymilon.com"), "SYSTEM_RULES reply-to is not team@");
+assert(!fns.includes("From is hello@milonfinance.com"), "SYSTEM_RULES does not move From to hello@");
 assert(!fns.includes("From and reply-to are team@milonfinance.com"), "SYSTEM_RULES no longer uses team@milonfinance.com");
 assert(fns.includes("reply_to: replyTo"), "Resend payload always sets reply_to");
 assert(
@@ -176,7 +191,11 @@ assert(fns.includes("ONESHOT_SYSTEM_RULES"), "oneshot rewrite has its own rule b
 const sendSlice = fns.slice(fns.indexOf("export const sendLighthouseTouch"));
 const resendBody = sendSlice.slice(0, sendSlice.indexOf("export const upsertLighthouseAsset"));
 assert(resendBody.includes("resolveLighthouseReplyTo"), "send path resolves reply_to");
+assert(resendBody.includes("resolveLighthouseFromAddress"), "send path resolves From");
 assert(!resendBody.includes("hello@milon.co.za"), "send path never uses hello@milon.co.za");
+assert(!resendBody.includes("noreply@milon.co.za"), "send path never falls back to noreply@milon.co.za");
+assert(!resendBody.includes("milonfinance.com"), "send function does not hardcode a milonfinance.com From");
+assert(!resendBody.includes("hello@milonfinance.com"), "send function does not hardcode hello@ as From");
 assert(resendBody.includes("attachments"), "send path wires Resend attachments");
 
 const migration = readFileSync(
@@ -226,7 +245,8 @@ assert(!/jsonb_set\([^)]*from/i.test(trymilonMigration), "trymilon migration doe
 const panel = readFileSync(resolve("src/components/lighthouse-panel.tsx"), "utf8");
 assert(panel.includes("Day 4 · both teaser videos"), "ops drawer shows accountant v3 day 4");
 assert(panel.includes("Day 28 · capacity close"), "ops drawer shows accountant v3 day 28");
-assert(panel.includes("Reply-to — team@trymilon.com"), "ops drawer placeholder is team@trymilon.com");
+assert(panel.includes("Reply-to — hello@milonfinance.com"), "ops drawer placeholder is hello@milonfinance.com");
+assert(!panel.includes("Reply-to — team@trymilon.com"), "ops drawer no longer placeholders team@ as Reply-To");
 assert(panel.includes("Load golden"), "accountant primary action is Load golden");
 assert(panel.includes("Rewrite"), "accountant Claude path is Rewrite");
 
