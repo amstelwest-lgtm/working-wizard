@@ -22,6 +22,7 @@ import { DuPontDiagram } from "@/components/pdf/dupont";
 import { assetNarrative, diagnoseDuPont } from "./narrative";
 import type { ClientOperatingProfile } from "@/lib/client-profile";
 import { ZA_MARKET, type ResolvedMarket } from "@/lib/market";
+import { reportKicker } from "@/lib/report-catalog";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -286,7 +287,7 @@ export function AssetProductivityPDF({
     >
       {/* ── PAGE 1 ── */}
       <ReportTitle
-        kicker="Advisory Report 07"
+        kicker={reportKicker("assets")}
         title="Asset Productivity"
         subtitle="DuPont decomposition, capital efficiency, and reinvestment patterns"
         isDemo={isDemo}

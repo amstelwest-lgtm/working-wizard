@@ -16,6 +16,7 @@ import { C, resolveTheme } from "@/components/pdf/theme";
 import { interventionNarrative } from "./narrative";
 import type { ClientOperatingProfile } from "@/lib/client-profile";
 import { ZA_MARKET, type ResolvedMarket } from "@/lib/market";
+import { reportKicker } from "@/lib/report-catalog";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -148,7 +149,7 @@ export function InterventionPriorityPDF({
       market={market ?? ZA_MARKET}
     >
       <ReportTitle
-        kicker="Advisory Report 05"
+        kicker={reportKicker("intervention")}
         title="Intervention Roadmap"
         subtitle="The prioritized action plan — what to fix first, what it takes, and what it's worth"
         isDemo={isDemo}

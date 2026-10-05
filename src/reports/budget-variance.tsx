@@ -16,6 +16,7 @@ import { C, fmtRand, resolveTheme } from "@/components/pdf/theme";
 import { formatVariancePct } from "@/lib/budget.variance";
 import type { BudgetPdfModel, BudgetPdfRow } from "@/lib/budget-pdf";
 import { formatDate, ZA_MARKET, type ResolvedMarket } from "@/lib/market";
+import { reportKicker } from "@/lib/report-catalog";
 
 export type BudgetVariancePDFProps = {
   smeData: SmeData;
@@ -212,7 +213,7 @@ export function BudgetVariancePDF({
       market={market}
     >
       <ReportTitle
-        kicker="Advisory Report · Budget"
+        kicker={reportKicker("budget")}
         title="Budget & Variance"
         subtitle={subtitle}
         isDemo={isDemo}

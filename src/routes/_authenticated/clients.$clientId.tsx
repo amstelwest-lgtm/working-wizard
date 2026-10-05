@@ -6,7 +6,7 @@ import { lazyPanel, TabErrorBoundary } from "@/components/lazy-panel";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
-import { downloadActionPlanPdf } from "@/lib/action-plan-pdf";
+import { completeDeliverablePdfItems, downloadActionPlanPdf } from "@/lib/action-plan-pdf";
 import { AdvisoryDrafter } from "@/components/advisory-drafter";
 import { CashForecastPanel } from "@/components/cash-forecast";
 import { CollectionsPanel } from "@/components/collections-panel";
@@ -706,16 +706,66 @@ function ClientView() {
     const wantsPdf = payload.created?.pdf === true || /\bpdf\b/i.test(payload.question);
     if (!wantsPdf || !client) return;
     const facts = payload.created.overview?.facts ?? [];
-    void downloadActionPlanPdf({
-      clientName: client.name,
-      headline: facts.length ? facts.join(" · ") : null,
-      items: (payload.created.items ?? []).map((item) => ({
-        title: item.title,
-        outcomeWhy: item.outcomeWhy,
-        status: "not_started",
-      })),
-      profile,
-    })
+    const created = payload.created.items ?? [];
+    const clientName = client.name;
+    const planClientId = client.id;
+    void (async () => {
+      let periodLabel: string | null = null;
+      let outcomeGoal: string | null = null;
+      let planItems: Array<{
+        title: string;
+        status?: string | null;
+        dueDate?: string | null;
+        outcomeWhy?: string | null;
+        ownerName?: string | null;
+      }> = [];
+      try {
+        const { data: plans } = await supabase
+          .from("action_plans")
+          .select("id, period_label, outcome_goal")
+          .eq("client_id", planClientId)
+          .eq("is_active", true)
+          .order("created_at", { ascending: false })
+          .limit(1);
+        const plan = (plans?.[0] ?? null) as {
+          id: string;
+          period_label?: string | null;
+          outcome_goal?: string | null;
+        } | null;
+        if (plan) {
+          periodLabel = plan.period_label ?? null;
+          outcomeGoal = plan.outcome_goal ?? null;
+          const { data: rows } = await supabase
+            .from("action_items_v")
+            .select("title, status, due_date, outcome_why, owner_name")
+            .eq("plan_id", plan.id)
+            .order("seq");
+          planItems = ((rows ?? []) as Array<Record<string, string | null>>).flatMap((row) => {
+            const title = row.title?.trim();
+            if (!title) return [];
+            return [
+              {
+                title,
+                status: row.status,
+                dueDate: row.due_date,
+                outcomeWhy: row.outcome_why,
+                ownerName: row.owner_name,
+              },
+            ];
+          });
+        }
+      } catch {
+        planItems = [];
+      }
+      await downloadActionPlanPdf({
+        clientName,
+        periodLabel,
+        outcomeGoal,
+        headline: facts.length ? facts.join(" · ") : null,
+        items: completeDeliverablePdfItems(planItems, created),
+        profile,
+      });
+    })()
       .then(() => toast.success("Action Plan PDF downloaded"))
       .catch((e: unknown) => toast.error(e instanceof Error ? e.message : "PDF export failed"));
   };

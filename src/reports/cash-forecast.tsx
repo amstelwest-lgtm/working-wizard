@@ -22,6 +22,7 @@ import type { ClientOperatingProfile } from "@/lib/client-profile";
 import { profileCashAssumptions } from "@/lib/profile-signals";
 import { CASH_RUNWAY_THRESHOLD_RAND } from "@/lib/cash-runway";
 import { ZA_MARKET, type ResolvedMarket } from "@/lib/market";
+import { reportKicker } from "@/lib/report-catalog";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -420,7 +421,7 @@ export function CashForecastPDF({
     >
       {/* ── PAGE 1 ── */}
       <ReportTitle
-        kicker={`Advisory Report 03 · ${scenarioMeta.label}`}
+        kicker={reportKicker("forecast", scenarioMeta.label)}
         title="13-Week Cash Forecast"
         subtitle="Projected cash position, runway, and the danger threshold that triggers action"
         isDemo={isDemo}

@@ -21,6 +21,7 @@ import { SectionHeader } from "@/components/pdf/section-header";
 import { ExecSummary, type HeadlineFigure } from "@/components/pdf/exec-summary";
 import { profitabilityNarrative } from "./narrative";
 import type { ClientOperatingProfile } from "@/lib/client-profile";
+import { reportKicker } from "@/lib/report-catalog";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -564,7 +565,7 @@ export function ProfitabilityWaterfallPDF({
     >
       {/* ── PAGE 1: Bridge ── */}
       <ReportTitle
-        kicker="Advisory Report 02"
+        kicker={reportKicker("waterfall")}
         title="Profitability Waterfall"
         subtitle={`How each ${t("currencyWord", m)} of revenue becomes profit — and where it leaks away`}
         isDemo={isDemo}

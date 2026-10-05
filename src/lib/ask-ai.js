@@ -269,10 +269,26 @@ export function mountAskAi(container, options) {
         question = e.target.value;
         sendBtn.disabled = loading || !question.trim();
       });
+      // compositionstart/end is the reliable IME signal. Chrome sets
+      // KeyboardEvent.isComposing on Enter keydown even when the user is not
+      // composing, which dropped the send intermittently. keyCode 229 is the
+      // IME commit key and must not send. Shift+Enter still inserts a newline.
+      let composing = false;
+      ta.addEventListener("compositionstart", () => {
+        composing = true;
+      });
+      ta.addEventListener("compositionend", (e) => {
+        composing = false;
+        question = e.target.value;
+        sendBtn.disabled = loading || !question.trim();
+      });
       ta.addEventListener("keydown", (e) => {
-        if (e.key !== "Enter" || e.shiftKey || e.isComposing) return;
+        if (e.key !== "Enter" || e.shiftKey) return;
+        if (composing || e.keyCode === 229) return;
+        question = ta.value;
+        if (loading || !question.trim()) return;
         e.preventDefault();
-        if (!loading && question.trim()) submit();
+        submit();
       });
       panel.appendChild(ta);
 

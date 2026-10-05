@@ -4,6 +4,7 @@
  */
 
 import type { ExtractionResult, Money } from "@/lib/financialSchema";
+import { applyBalanceSheetTotals } from "@/lib/statement-financials";
 
 export type StatementNoteSection = {
   title: string;
@@ -86,6 +87,7 @@ export function statementNoteSections(
   result: ExtractionResult,
   formatNumber: (n: number) => string,
 ): StatementNoteSection[] {
+  result = applyBalanceSheetTotals(result);
   const is = result.current_period.figures.income_statement;
   const bs = result.current_period.figures.balance_sheet;
   const cf = result.current_period.figures.cash_flow;

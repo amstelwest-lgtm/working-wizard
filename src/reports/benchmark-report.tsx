@@ -17,6 +17,7 @@ import { C, resolveTheme } from "@/components/pdf/theme";
 import { benchmarkNarrative } from "./narrative";
 import type { ClientOperatingProfile } from "@/lib/client-profile";
 import { industryBenchmarkCaption, isUsCopy, ZA_MARKET, type ResolvedMarket } from "@/lib/market";
+import { reportKicker } from "@/lib/report-catalog";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -198,7 +199,7 @@ export function BenchmarkReportPDF({
       market={market ?? ZA_MARKET}
     >
       <ReportTitle
-        kicker={`Advisory Report 10 · ${industryName}`}
+        kicker={reportKicker("benchmark", industryName)}
         title="Industry Benchmark"
         subtitle={
           isUsCopy(market ?? ZA_MARKET)

@@ -20,6 +20,7 @@ import { C, fmtRand, fmtRandCompact, fmtPct, resolveTheme } from "@/components/p
 import { laborNarrative } from "./narrative";
 import type { ClientOperatingProfile } from "@/lib/client-profile";
 import { currencySymbol, t, ZA_MARKET, type ResolvedMarket } from "@/lib/market";
+import { reportKicker } from "@/lib/report-catalog";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -57,11 +58,13 @@ export type LaborProductivityPDFProps = {
   /** Owner operating profile — shapes narrative wording only. */
   operatingProfile?: ClientOperatingProfile | null;
   smeData: SmeData;
-  data: LaborProductivityData;
+  data: LaborProductivityData | null;
   accountantProfile: AccountantProfile;
   isDemo?: boolean;
   reviewSignoff?: ReportSignoffStamp | null;
   market?: ResolvedMarket;
+  /** Live client missing headcount or labor cost. The ZIP still includes the report. */
+  unavailableReason?: string | null;
 };
 
 // ── Trend chart (grouped bars: revenue vs labor cost) ─────────────────────
@@ -194,9 +197,36 @@ export function LaborProductivityPDF({
   reviewSignoff,
   operatingProfile,
   market,
+  unavailableReason,
 }: LaborProductivityPDFProps) {
   const theme = resolveTheme(accountantProfile);
   const m = market ?? ZA_MARKET;
+  if (!d || unavailableReason) {
+    return (
+      <PDFDocument
+        title={`Labor Productivity — ${smeData.name}`}
+        subject="Labor Productivity Report"
+        smeData={smeData}
+        accountantProfile={accountantProfile}
+        isDemo={isDemo}
+        reviewSignoff={reviewSignoff}
+        market={m}
+      >
+        <ReportTitle
+          kicker={reportKicker("labor")}
+          title="Labor Productivity"
+          subtitle={`What each employee and each ${t("currencyWord", m)} of wages contributes to revenue and profit`}
+          isDemo={isDemo}
+        />
+        <View style={ch.empty}>
+          <Text style={ch.emptyText}>
+            {unavailableReason ||
+              "Labor productivity needs revenue, headcount, and labor cost on the file. Those inputs are missing, so no ratios were calculated."}
+          </Text>
+        </View>
+      </PDFDocument>
+    );
+  }
   const sym = currencySymbol(m);
   const hs = d.health_scores;
   const realGrowth =
@@ -282,7 +312,7 @@ export function LaborProductivityPDF({
     >
       {/* ── PAGE 1 ── */}
       <ReportTitle
-        kicker="Advisory Report 08"
+        kicker={reportKicker("labor")}
         title="Labor Productivity"
         subtitle={`What each employee and each ${t("currencyWord", m)} of wages contributes to revenue and profit`}
         isDemo={isDemo}

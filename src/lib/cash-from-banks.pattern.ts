@@ -53,7 +53,20 @@ function dayGaps(dates: string[]): number[] {
   return gaps;
 }
 
-function inferCadence(txnCount: number, gaps: number[], bucket: CashBucket): {
+/** Same payee with a similar amount: within 15% of the median, or R1, whichever is larger. */
+export function amountsSimilar(amounts: number[]): boolean {
+  if (amounts.length < 2) return true;
+  const med = median(amounts.map((n) => Math.abs(n)));
+  const tol = Math.max(Math.abs(med) * 0.15, 1);
+  return amounts.every((amount) => Math.abs(Math.abs(amount) - med) <= tol);
+}
+
+function inferCadence(
+  txnCount: number,
+  gaps: number[],
+  bucket: CashBucket,
+  similar: boolean,
+): {
   cadence: CashCadence;
   confidence: number;
 } {
@@ -62,6 +75,10 @@ function inferCadence(txnCount: number, gaps: number[], bucket: CashBucket): {
     if (bucket === "capex") return { cadence: "once_off", confidence: 0.55 };
     return { cadence: "once_off", confidence: 0.5 };
   }
+
+  // A repeated payee is recurring only when the amount is similar and the gap
+  // is actually weekly or monthly. Two unrelated hits are not a subscription.
+  if (!similar) return { cadence: "once_off", confidence: 0.4 };
 
   const medGap = median(gaps);
   if (medGap >= 5 && medGap <= 9 && txnCount >= 3) {
@@ -76,10 +93,15 @@ function inferCadence(txnCount: number, gaps: number[], bucket: CashBucket): {
   if (txnCount >= 3 && medGap > 9 && medGap < 25) {
     return { cadence: "split_weeks", confidence: 0.45 };
   }
-  if (txnCount >= 2) {
-    return { cadence: "monthly", confidence: 0.4 };
-  }
   return { cadence: "once_off", confidence: 0.45 };
+}
+
+/** Label shown where classified bank lines are reviewed. */
+export function recurringReviewLabel(line: { cadence: string; txn_count: number }): string | null {
+  if (line.txn_count < 2) return null;
+  if (line.cadence === "weekly") return "Recurring · weekly";
+  if (line.cadence === "monthly") return "Recurring · monthly";
+  return null;
 }
 
 function defaultStartWeek(
@@ -139,7 +161,12 @@ export function buildDraftLinesFromExtract(extract: CashBankExtract): CashForeca
     const amounts = txns.map((t) => Math.abs(t.amount));
     const dates = txns.map((t) => t.txn_date).filter(Boolean);
     const gaps = dayGaps(dates);
-    const { cadence, confidence } = inferCadence(txns.length, gaps, bucket);
+    const { cadence, confidence } = inferCadence(
+      txns.length,
+      gaps,
+      bucket,
+      amountsSimilar(amounts),
+    );
     const side = bucketToSide(bucket, sample.direction);
     const name = prettyName(
       txns.slice().sort((a, b) => (b.description?.length ?? 0) - (a.description?.length ?? 0))[0] ?? sample,
