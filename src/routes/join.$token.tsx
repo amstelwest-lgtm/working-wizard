@@ -13,7 +13,6 @@ import { isEmailAlreadyRegistered, waitForAuthSession } from "@/lib/invite-hando
 import { forcePortal } from "@/lib/user-roles";
 import {
   OwnerInviteCard,
-  OwnerInviteEyebrow,
   OwnerInviteFieldLabel,
   OwnerInviteInput,
   OwnerInviteNote,
@@ -22,6 +21,11 @@ import {
 } from "@/components/owner-invite-shell";
 import { AuthDivider, GoogleSignInButton } from "@/components/google-sign-in-button";
 import { stashAccountantGoogleSignup } from "@/lib/google-auth";
+import {
+  INVITE_LINK_INVALID,
+  inviteTokenShapeOk,
+  sanitizeInviteError,
+} from "@/lib/invite-link-error";
 
 export const Route = createFileRoute("/join/$token")({
   component: AccountantJoinPage,
@@ -48,8 +52,24 @@ function AccountantJoinPage() {
   const [busy, setBusy] = useState(false);
   const [signInMode, setSignInMode] = useState(false);
 
+  // This page is a dark canvas. Force the dark class so light-mode heading
+  // overrides (html:not(.dark) h1 { color }) cannot paint dark text on it.
+  useEffect(() => {
+    const el = document.documentElement;
+    const hadDark = el.classList.contains("dark");
+    el.classList.add("dark");
+    return () => {
+      if (!hadDark) el.classList.remove("dark");
+    };
+  }, []);
+
   useEffect(() => {
     let alive = true;
+    if (!inviteTokenShapeOk(token)) {
+      setPreviewError(INVITE_LINK_INVALID);
+      setPreviewLoading(false);
+      return;
+    }
     void doPreview({ data: { token } })
       .then((p) => {
         if (!alive) return;
@@ -59,7 +79,8 @@ function AccountantJoinPage() {
       })
       .catch((err: unknown) => {
         if (!alive) return;
-        setPreviewError(err instanceof Error ? err.message : "This invite link is invalid.");
+        const raw = err instanceof Error ? err.message : "";
+        setPreviewError(sanitizeInviteError(raw));
       })
       .finally(() => {
         if (alive) setPreviewLoading(false);
@@ -145,7 +166,8 @@ function AccountantJoinPage() {
       }
       await finish();
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Could not accept the invite.");
+      const raw = err instanceof Error ? err.message : "";
+      toast.error(sanitizeInviteError(raw, "Could not accept the invite."));
     } finally {
       setBusy(false);
     }
@@ -156,8 +178,10 @@ function AccountantJoinPage() {
 
   return (
     <OwnerInviteShell businessName={clientName} loading={previewLoading || authLoading}>
-      <OwnerInviteEyebrow>Accountant invitation</OwnerInviteEyebrow>
-      <h1 className="mt-2 text-[22px] font-semibold leading-tight tracking-tight text-[#e8ede9]">
+      <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-foreground">
+        Accountant invitation
+      </p>
+      <h1 className="mt-2 text-[22px] font-semibold leading-tight tracking-tight text-foreground">
         {clientName ? `Join ${clientName}` : "Join a shared workspace"}
       </h1>
       <p className="mt-3 text-sm leading-relaxed text-[#8a938c]">
@@ -167,7 +191,7 @@ function AccountantJoinPage() {
 
       {previewError ? (
         <div className="mt-5 rounded-xl border border-rose-400/30 bg-rose-400/10 px-4 py-3 text-sm text-rose-200">
-          {previewError}
+          {sanitizeInviteError(previewError)}
         </div>
       ) : (
         <OwnerInviteCard className="mt-6">

@@ -67,6 +67,7 @@ import { BankStatementDrafter } from "@/components/bank-statement-drafter";
 import { CashFromBanksDrafter } from "@/components/cash-from-banks-drafter";
 import type { MergedExtractionResult } from "@/lib/extraction-types";
 import { preflightUploadFile, UPLOAD_QUALITY_DISCLAIMER } from "@/lib/upload-quality";
+import { BANK_LEDGER_MESSAGE, looksLikeBankLedger } from "@/lib/bank-ledger";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -2175,6 +2176,7 @@ function Index() {
   const [weeklyInputs, setWeeklyInputs] = useState<WeeklyInputs>({ weeks: {} });
   const [productMix, setProductMix] = useState<ProductMix>(emptyProductMix);
   const [showFinData, setShowFinData] = useState(false);
+  const [bankLedgerBlocked, setBankLedgerBlocked] = useState(false);
   // Per-upload visibility the owner picks in the Financial Data dialog. Every
   // owner upload path (statement, bank pack, cash pack) starts from it, and
   // the drafters keep it in sync when the owner changes it inside them.
@@ -2202,6 +2204,16 @@ function Index() {
 
   const handleStatementUpload = useCallback(
     async (file: File) => {
+      // A bank ledger must be stopped before the size gate and before review,
+      // so a short CSV is not waved through as a financial statement.
+      const spreadsheetText =
+        isTextFile(file) || isSpreadsheetFile(file) ? await fileToText(file) : null;
+      if (spreadsheetText != null && looksLikeBankLedger(spreadsheetText)) {
+        setShowFinData(false);
+        setBankLedgerBlocked(true);
+        if (uploadRef.current) uploadRef.current.value = "";
+        return;
+      }
       const pre = preflightUploadFile(file);
       if (pre) {
         toast.error(pre);
@@ -2212,8 +2224,8 @@ function Index() {
       try {
         let payload: { fileName: string; mimeType?: string; text?: string; base64?: string };
 
-        if (isTextFile(file) || isSpreadsheetFile(file)) {
-          payload = { fileName: file.name, text: await fileToText(file) };
+        if (spreadsheetText != null) {
+          payload = { fileName: file.name, text: spreadsheetText };
         } else if (isPdfFile(file)) {
           staged = await pdfTransport(file);
           const extraction = (await doExtractPdf({
@@ -5739,6 +5751,31 @@ function Index() {
                     ))}
                   </div>
                 )}
+              </div>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog open={bankLedgerBlocked} onOpenChange={setBankLedgerBlocked}>
+            <DialogContent className="max-w-md border border-amber-900/20 bg-white text-slate-950 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-50">
+              <DialogHeader>
+                <DialogTitle>This is a bank statement</DialogTitle>
+                <DialogDescription className="text-slate-600 dark:text-slate-300">
+                  {BANK_LEDGER_MESSAGE}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  onClick={() => {
+                    setBankLedgerBlocked(false);
+                    setShowBankDrafter(true);
+                  }}
+                >
+                  Go to bank statement upload
+                </Button>
+                <Button type="button" variant="outline" onClick={() => setBankLedgerBlocked(false)}>
+                  Close
+                </Button>
               </div>
             </DialogContent>
           </Dialog>

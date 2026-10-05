@@ -101,6 +101,7 @@
     "test:qbo-state": "vite-node --config scripts/vite-test.config.ts scripts/qbo-state-test.mts",
     "test:qbo-mapper": "vite-node --config scripts/vite-test.config.ts scripts/qbo-mapper-test.mts",
     "test:qbo-intuit-tid": "vite-node --config scripts/vite-test.config.ts scripts/qbo-intuit-tid-test.mts",
+    "test:qa-statement-fixes": "vite-node --config scripts/vite-test.config.ts scripts/qa-statement-fixes-test.mts",
     "test:accountant-qa-medium": "vite-node --config scripts/vite-test.config.ts scripts/accountant-qa-medium-test.mts",
     "test:accountant-qa-deliverables": "vite-node --config scripts/vite-test.config.ts scripts/accountant-qa-deliverables-test.mts",
     "test:client-metrics": "vite-node --config scripts/vite-test.config.ts scripts/client-metrics-test.mts"

@@ -4,6 +4,7 @@
 // the model — it re-checks the arithmetic that must hold in any real statement.
 
 import type { FinancialFigures, Money } from "./financialSchema";
+import { balanceSheetCheck } from "./statement-balance";
 
 export type Severity = "error" | "warning" | "info";
 
@@ -48,9 +49,13 @@ export function validateFigures(figures: FinancialFigures): ValidationIssue[] {
   const tol = toleranceFor(totalAssets);
 
   // 1. The balance sheet must balance: Equity + Liabilities = Assets.
+  // Unclosed trial-balance profit sits on the P&L, so it is added to equity
+  // for this check only. It is not written into retained earnings.
+  const sheetCheck = balanceSheetCheck(figures);
+  const unclosedProfit = sheetCheck.currentPeriodProfit ?? 0;
   const equityPlusLiab =
     num(bs.equity.total) !== null && num(bs.total_liabilities) !== null
-      ? (bs.equity.total as number) + (bs.total_liabilities as number)
+      ? (bs.equity.total as number) + unclosedProfit + (bs.total_liabilities as number)
       : null;
   push(
     issues,
@@ -99,13 +104,23 @@ export function validateFigures(figures: FinancialFigures): ValidationIssue[] {
   );
 
   // 4. Total equity and liabilities line = total assets.
+  // A filled TB total is equity + liabilities without unclosed profit. Add that
+  // profit only when it moves the total closer to assets.
+  const tel = num(bs.total_equity_and_liabilities);
+  const telWithProfit = tel != null ? tel + unclosedProfit : null;
+  const telCompared =
+    tel == null || telWithProfit == null || totalAssets == null
+      ? tel
+      : Math.abs(telWithProfit - totalAssets) < Math.abs(tel - totalAssets)
+        ? telWithProfit
+        : tel;
   push(
     issues,
     compare(
       "equity_and_liabilities_total",
       "Total equity and liabilities should equal Total assets.",
       totalAssets,
-      num(bs.total_equity_and_liabilities),
+      telCompared,
       tol,
       "error"
     )

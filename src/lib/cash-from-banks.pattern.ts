@@ -23,15 +23,84 @@ function median(nums: number[]): number {
   return s.length % 2 ? s[mid]! : (s[mid - 1]! + s[mid]!) / 2;
 }
 
-function normalizeKey(txn: CashStatementTransaction): string {
-  const raw = (txn.counterparty || txn.description || "unknown")
+/** Month names and short forms, English plus Afrikaans. Whole tokens only. */
+const MONTH_TOKENS = new Set([
+  "january",
+  "february",
+  "march",
+  "april",
+  "may",
+  "june",
+  "july",
+  "august",
+  "september",
+  "october",
+  "november",
+  "december",
+  "jan",
+  "feb",
+  "mar",
+  "apr",
+  "jun",
+  "jul",
+  "aug",
+  "sep",
+  "sept",
+  "oct",
+  "nov",
+  "dec",
+  "januarie",
+  "februarie",
+  "maart",
+  "mei",
+  "junie",
+  "julie",
+  "augustus",
+  "oktober",
+  "desember",
+  "mrt",
+  "okt",
+  "des",
+]);
+
+const REF_WORDS = new Set([
+  "inv",
+  "invoice",
+  "ref",
+  "reference",
+  "txn",
+  "trans",
+  "doc",
+  "pmt",
+  "payment",
+]);
+
+/**
+ * Payee key for recurring grouping. Strips months, dates, years, standalone
+ * numbers and reference / invoice numbers, then collapses case and whitespace.
+ */
+export function normalisePayeeLabel(raw: string): string {
+  const text = raw
     .toLowerCase()
     .replace(/[^a-z0-9\s]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
-  // Keep first 3 meaningful tokens so "ABSA LOAN 123" ≈ "ABSA LOAN 456"
-  const tokens = raw.split(" ").filter((t) => t.length > 1 && !/^\d+$/.test(t)).slice(0, 3);
-  const label = tokens.join(" ") || raw.slice(0, 24) || "unknown";
+  const tokens = text.split(" ").filter((token) => {
+    if (token.length <= 1) return false;
+    if (/^\d+$/.test(token)) return false;
+    if (/^\d{1,2}(?:st|nd|rd|th)$/.test(token)) return false;
+    if (/^(?:19|20)\d{2}$/.test(token)) return false;
+    if (MONTH_TOKENS.has(token)) return false;
+    if (/^(?:inv|invoice|ref|reference|txn|trans|doc|pmt|payment)\d+$/.test(token)) return false;
+    return true;
+  });
+  const withoutRefs = tokens.filter((token) => !REF_WORDS.has(token));
+  const kept = (withoutRefs.length ? withoutRefs : tokens).slice(0, 3);
+  return kept.join(" ");
+}
+
+function normalizeKey(txn: CashStatementTransaction): string {
+  const label = normalisePayeeLabel(txn.counterparty || txn.description || "") || "unknown";
   return `${txn.direction}|${txn.ai_bucket}|${label}`;
 }
 

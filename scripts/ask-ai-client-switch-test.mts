@@ -72,7 +72,14 @@ class FakeElement {
 
   /** Simulate Enter+Ctrl / Enter+Meta keydown */
   keydownSubmit() {
-    for (const fn of this._handlers["keydown"] ?? []) fn({ key: "Enter", ctrlKey: true });
+    for (const fn of this._handlers["keydown"] ?? []) fn({ key: "Enter", ctrlKey: true, preventDefault() {} });
+  }
+
+  /** Simulate Enter-to-send (Shift+Enter is a newline and must not send). */
+  pressEnter() {
+    for (const fn of this._handlers["keydown"] ?? []) {
+      fn({ key: "Enter", shiftKey: false, keyCode: 13, preventDefault() {} });
+    }
   }
 
   focus() { /* no-op in test */ }
@@ -460,6 +467,68 @@ await test("Scenario 4c: draft chip persists instead of chatting", async () => {
     "create still sends the question",
   );
   assert(calls[0].body.audience === "accountant", "create keeps accountant audience");
+});
+
+await test("Scenario 5: composer clears after a successful send", async () => {
+  const { mockFetch } = makeMockFetch();
+  (globalThis as Record<string, unknown>).fetch = mockFetch;
+
+  const container = makeContainer("route-client");
+  mountAskAi(container, {
+    endpoint: "https://example.com/functions/v1/ask-ai",
+    getToken: async () => "test-token",
+  });
+
+  openWidget(container);
+  fillAndSend(container, "What is my runway?");
+  await new Promise((r) => setTimeout(r, 0));
+
+  const ta = container.find((el) => el.className.includes("ask-ai-textarea"));
+  assert(ta?.value === "", `composer should be empty after send, got "${ta?.value}"`);
+});
+
+await test("Scenario 5b: Enter-to-send clears the composer", async () => {
+  const { mockFetch, calls } = makeMockFetch();
+  (globalThis as Record<string, unknown>).fetch = mockFetch;
+
+  const container = makeContainer("route-client");
+  mountAskAi(container, {
+    endpoint: "https://example.com/functions/v1/ask-ai",
+    variant: "studio",
+    getToken: async () => "test-token",
+  });
+
+  const before = container.find((el) => el.className.includes("ask-ai-textarea"));
+  if (!before) throw new Error("textarea missing");
+  before.input("Enter should send this");
+  before.pressEnter();
+  await new Promise((r) => setTimeout(r, 0));
+
+  assert(calls.length === 1, "Enter sends");
+  assert(calls[0].body.question === "Enter should send this", "Enter posts the typed text");
+  const after = container.find((el) => el.className.includes("ask-ai-textarea"));
+  assert(after?.value === "", "Enter-to-send clears the composer");
+});
+
+await test("Scenario 5c: a failed send keeps the draft", async () => {
+  (globalThis as Record<string, unknown>).fetch = async () => ({
+    ok: false,
+    status: 500,
+    json: async () => ({ error: "nope" }),
+  });
+
+  const container = makeContainer("route-client");
+  mountAskAi(container, {
+    endpoint: "https://example.com/functions/v1/ask-ai",
+    variant: "studio",
+    getToken: async () => "test-token",
+  });
+
+  fillAndSend(container, "Keep this if it fails");
+  await new Promise((r) => setTimeout(r, 0));
+
+  const ta = container.find((el) => el.className.includes("ask-ai-textarea"));
+  assert(ta?.value === "Keep this if it fails", "a failed send leaves the draft in the box");
 });
 
 // ── Summary ───────────────────────────────────────────────────────────────────
