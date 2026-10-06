@@ -48,7 +48,8 @@ export const TRUST_IDENTIFIERS =
   "The in-app assistant filters tax IDs and account numbers from questions; amounts stay so the workings are real";
 /** VERIFY-4: confirmed. Cite the /ai notice (SEO_PAGES.ai plus the public page). */
 export const TRUST_TRAINING = "Client data isn't used to train third-party AI models";
-export const TRUST_SIGNOFF = "Every sign-off logged with name, firm and time";
+/** firm_name is nullable on the sign-off history row, so the strip does not claim it. */
+export const TRUST_SIGNOFF = "Every sign-off logged with name and time";
 
 export const TRUST_ITEMS = [
   TRUST_BOOKS,
