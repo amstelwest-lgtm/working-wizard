@@ -14,11 +14,9 @@ import {
   Plus,
   RefreshCw,
   Shield,
-  Sparkles,
   Users,
   Wallet,
   Activity,
-  Target,
 } from "lucide-react";
 import { BackLink } from "@/components/back-link";
 import { TabErrorBoundary } from "@/components/lazy-panel";
@@ -47,7 +45,7 @@ import {
 } from "@/lib/ops-route-state";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { LighthousePanel, parseLighthouseTab } from "@/components/lighthouse-panel";
-import { pilotFlagWiring } from "@/lib/ops-pilot-flags";
+import { isPilotFlagVisible } from "@/lib/ops-pilot-flags";
 
 const LighthouseItPanel = lazy(() =>
   import("@/components/lighthouse-it").then((m) => ({ default: m.LighthouseItPanel })),
@@ -57,9 +55,6 @@ const LighthouseAccessPanel = lazy(() =>
 );
 const LighthouseUsagePanel = lazy(() =>
   import("@/components/lighthouse-usage").then((m) => ({ default: m.LighthouseUsagePanel })),
-);
-const FunnelHealthPanel = lazy(() =>
-  import("@/components/funnel-health-panel").then((m) => ({ default: m.FunnelHealthPanel })),
 );
 
 function PaneFallback({ label }: { label: string }) {
@@ -685,15 +680,6 @@ function OwnerOpsPage() {
 
             <section className="mb-8">
               <h2 className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-[var(--ops-ink-dim)]">
-                <Target className="h-3.5 w-3.5 text-[var(--ops-amber)]" /> Funnel health
-              </h2>
-              <Suspense fallback={<PaneFallback label="Loading funnel…" />}>
-                <FunnelHealthPanel />
-              </Suspense>
-            </section>
-
-            <section className="mb-8">
-              <h2 className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-[var(--ops-ink-dim)]">
                 <Activity className="h-3.5 w-3.5 text-[var(--ops-amber)]" /> Product usage
               </h2>
               <Suspense fallback={<PaneFallback label="Loading usage…" />}>
@@ -721,7 +707,6 @@ function OwnerOpsPage() {
                 <Stat label="Staff members" value={String(dash.signups.clientMembers)} />
                 <Stat label="Firms" value={String(dash.signups.firms)} />
                 <Stat label="Clients" value={String(dash.signups.clients)} />
-                <Stat label="Owned clients" value={String(dash.signups.clientsWithOwner)} />
                 <Stat
                   label="New (7d)"
                   value={
@@ -754,32 +739,32 @@ function OwnerOpsPage() {
                 {dash.stripe.publishablePresent ? "present" : "missing"}. Log off-platform cash here
                 as well.
               </p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  disabled={checkoutBusy || !dash.stripe.secretPresent}
-                  onClick={async () => {
-                    setCheckoutBusy(true);
-                    try {
-                      const { url } = await startStripeCheckout({
-                        data: { plan: "solo", interval: "month", market: "za" },
-                      });
-                      window.location.href = url;
-                    } catch (ex) {
-                      toast.error(
-                        ex instanceof Error ? ex.message : "Could not start Stripe Checkout",
-                      );
-                      setCheckoutBusy(false);
-                    }
-                  }}
-                  className="inline-flex h-9 items-center rounded-full border border-amber-500/40 px-4 text-xs font-semibold uppercase tracking-wider text-[var(--ops-amber)] hover:bg-amber-500/10 disabled:opacity-50"
-                >
-                  {checkoutBusy ? (
-                    <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
-                  ) : null}
-                  Test Solo checkout (Adaptive Pricing)
-                </button>
-              </div>
+              {import.meta.env.PROD ? null : (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    disabled={checkoutBusy || !dash.stripe.secretPresent}
+                    onClick={async () => {
+                      setCheckoutBusy(true);
+                      try {
+                        const { url } = await startStripeCheckout({
+                          data: { plan: "solo", interval: "month", market: "za" },
+                        });
+                        window.location.href = url;
+                      } catch (ex) {
+                        toast.error(
+                          ex instanceof Error ? ex.message : "Could not start Stripe Checkout",
+                        );
+                        setCheckoutBusy(false);
+                      }
+                    }}
+                    className="inline-flex h-9 items-center rounded-full border border-amber-500/40 px-4 text-xs font-semibold uppercase tracking-wider text-[var(--ops-amber)] hover:bg-amber-500/10 disabled:opacity-50"
+                  >
+                    {checkoutBusy ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : null}
+                    Test Solo checkout (Adaptive Pricing)
+                  </button>
+                </div>
+              )}
 
               <form
                 className="mt-4 grid gap-2 rounded-2xl border border-[var(--ops-line)] bg-[var(--ops-card)] p-4 sm:grid-cols-6"
@@ -926,22 +911,6 @@ function OwnerOpsPage() {
               </ScrollableTable>
             </section>
 
-            <section className="mb-10 rounded-2xl border border-[var(--ops-line)] bg-[var(--ops-card)] p-5">
-              <h2 className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-[var(--ops-ink-dim)]">
-                <Sparkles className="h-3.5 w-3.5 text-[var(--ops-amber)]" /> Sales engine
-              </h2>
-              <p className="max-w-2xl text-sm text-[var(--ops-ink-dim)]">
-                Lead generation, AI-drafted sequences, and the tracked free-trial funnel now live in
-                the Lighthouse — sales section above.
-              </p>
-              <button
-                type="button"
-                onClick={() => openSection("lighthouse")}
-                className="mt-3 inline-flex h-9 items-center rounded-full border border-amber-500/40 px-4 text-xs font-semibold uppercase tracking-wider text-[var(--ops-amber)] hover:bg-amber-500/10"
-              >
-                Open Lighthouse
-              </button>
-            </section>
           </>
         )}
 
@@ -978,12 +947,16 @@ function PilotKnobs({
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="rounded-2xl border border-[var(--ops-line)] bg-[var(--ops-card)] p-4">
           <p className="mb-3 text-xs text-[var(--ops-ink-dim)]">
-            Stored in <code className="text-[var(--ops-amber)]/80">milon_ops_settings</code>. Each
-            switch is marked Live when product code reads it, or Not wired yet when it only saves
-            here. Toggles save immediately.
+            Stored in <code className="text-[var(--ops-amber)]/80">milon_ops_settings</code>. A
+            switch shows up here only after product code reads it. Saved values stay as they are.
           </p>
           <div className="space-y-2">
-            {flagEntries.map(([key, on]) => (
+            {flagEntries.filter(([key]) => isPilotFlagVisible(key)).length === 0 ? (
+              <p className="text-xs text-[var(--ops-ink-dim)]">
+                No wired switches yet. Saved settings are unchanged.
+              </p>
+            ) : null}
+            {flagEntries.filter(([key]) => isPilotFlagVisible(key)).map(([key, on]) => (
               <label
                 key={key}
                 className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border px-3 py-2.5 hover:border-amber-500/40"
@@ -991,9 +964,6 @@ function PilotKnobs({
               >
                 <span className="text-sm text-[var(--ops-ink-soft)]">
                   {FLAG_LABELS[key] ?? key.replaceAll("_", " ")}
-                  <span className="ml-2 text-[10px] font-semibold uppercase tracking-wider text-[var(--ops-ink-dim)]">
-                    {pilotFlagWiring(key)}
-                  </span>
                 </span>
                 <button
                   type="button"

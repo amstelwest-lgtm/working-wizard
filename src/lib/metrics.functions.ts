@@ -31,10 +31,18 @@ import {
   type RetentionRow,
 } from "@/lib/metrics/digest";
 import { sendFounderDigest } from "@/lib/metrics/digest-mail";
+import { buildReviewInbox, zoneClocks, type AgentLead } from "@/lib/lighthouse-agent";
+import {
+  isExcludedFromInstrument,
+  mergeInternalEmails,
+  type ExclusionContext,
+} from "@/lib/metrics/internal-exclusion";
+import { countRecentSignups, type BrainFunnelCounts } from "@/lib/metrics/glance";
 import {
   adminLoose,
   assertPlatformOwner,
   missingRelation,
+  moneyZar,
   ownerEmailAllowlist,
   type AuthCtx,
   type LooseAdmin,
@@ -266,18 +274,234 @@ type ExperimentRow = {
   decided_at?: string | null;
 };
 
+type CommitmentView = {
+  practice_id: string | null;
+  practice_name: string | null;
+  highest_rung: string | null;
+  points: number | null;
+  is_founding_practice: boolean;
+  is_internal: boolean;
+  is_test: boolean;
+  owner_email: string | null;
+};
+
+function strOrNull(value: unknown): string | null {
+  return typeof value === "string" && value ? value : null;
+}
+
+function practiceRowExcluded(row: object, ctx: ExclusionContext): boolean {
+  const bag = row as Record<string, unknown>;
+  return isExcludedFromInstrument(
+    {
+      name: strOrNull(bag.practice_name) ?? strOrNull(bag.name),
+      ownerEmail: strOrNull(bag.owner_email),
+      isInternal: Boolean(bag.is_internal),
+      isTest: Boolean(bag.is_test),
+      isDemo: Boolean(bag.is_demo),
+    },
+    ctx,
+  );
+}
+
+function toCommitmentView(row: Record<string, unknown>): CommitmentView {
+  return {
+    practice_id: strOrNull(row.practice_id),
+    practice_name: strOrNull(row.practice_name),
+    highest_rung: strOrNull(row.highest_rung),
+    points: row.points == null || !Number.isFinite(Number(row.points)) ? null : Number(row.points),
+    is_founding_practice: Boolean(row.is_founding_practice),
+    is_internal: Boolean(row.is_internal),
+    is_test: Boolean(row.is_test),
+    owner_email: strOrNull(row.owner_email),
+  };
+}
+
+async function loadItEmails(): Promise<string[]> {
+  try {
+    const admin = analyticsAdmin();
+    const { data, error } = await admin.from("milon_it_members").select("email");
+    if (error || !Array.isArray(data)) return [];
+    return data.map((row) => String((row as { email?: string }).email ?? ""));
+  } catch {
+    return [];
+  }
+}
+
+async function loadGlanceBookkeeping(): Promise<{
+  signups7d: number | null;
+  revenueLabel: string;
+  internalEmails: string[];
+}> {
+  const empty = { signups7d: null as number | null, revenueLabel: "—", internalEmails: [] as string[] };
+  try {
+    const admin = analyticsAdmin();
+    const now = new Date();
+    const [listed, payRes, itEmails] = await Promise.all([
+      admin.auth.admin.listUsers({ page: 1, perPage: 1000 }).catch(() => null),
+      admin.from("milon_ops_payments").select("amount_cents, status, paid_at").limit(200),
+      loadItEmails(),
+    ]);
+    const internalEmails = mergeInternalEmails(ownerEmailAllowlist(), itEmails);
+    const users =
+      (
+        listed as {
+          data?: {
+            users?: Array<{
+              created_at?: string;
+              email?: string;
+              user_metadata?: { full_name?: string };
+            }>;
+          };
+        } | null
+      )?.data?.users ?? null;
+    const signups7d = users
+      ? countRecentSignups(
+          users.map((user) => ({
+            createdAt: user.created_at,
+            email: user.email,
+            name: user.user_metadata?.full_name,
+          })),
+          now.getTime(),
+          { internalEmails },
+        )
+      : null;
+    let cents = 0;
+    if (!payRes.error && Array.isArray(payRes.data)) {
+      for (const row of payRes.data as Array<Record<string, unknown>>) {
+        if (String(row.status ?? "") !== "received") continue;
+        const paidAt = String(row.paid_at ?? "");
+        const d = paidAt ? new Date(paidAt.length <= 10 ? `${paidAt}T12:00:00` : paidAt) : null;
+        if (d && d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth()) {
+          cents += Number(row.amount_cents ?? 0);
+        }
+      }
+    }
+    return { signups7d, revenueLabel: moneyZar(cents), internalEmails };
+  } catch {
+    return empty;
+  }
+}
+
+async function loadBrainCounts(): Promise<BrainFunnelCounts | null> {
+  try {
+    const admin = analyticsAdmin();
+    const { data, error } = await admin.rpc("analytics_client_brain_funnel_counts", { p_days: 7 });
+    if (error || !data || typeof data !== "object" || Array.isArray(data)) return null;
+    const bag = data as Record<string, unknown>;
+    const raw =
+      bag.counts && typeof bag.counts === "object" && !Array.isArray(bag.counts)
+        ? (bag.counts as Record<string, unknown>)
+        : {};
+    const num = (key: string) => {
+      const n = Number(raw[key] ?? 0);
+      return Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0;
+    };
+    return {
+      "owner.invite.redeemed": num("owner.invite.redeemed"),
+      "seat.accepted": num("seat.accepted"),
+      "brain.proposed": num("brain.proposed"),
+      "brain.step.approved": num("brain.step.approved"),
+      "report.sent": num("report.sent"),
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function loadReviewPulse(): Promise<{ inbox: number; dueNow: number }> {
+  const empty = { inbox: 0, dueNow: 0 };
+  try {
+    const admin = analyticsAdmin();
+    const { data: leadRows, error } = await admin
+      .from("milon_ops_leads")
+      .select(
+        "id, name, company, email, stage, do_not_contact, next_touch_on, next_follow_up_at, timezone, country, region",
+      )
+      .limit(400);
+    if (error || !Array.isArray(leadRows)) return empty;
+    const ids = leadRows.map((row) => String((row as { id?: string }).id ?? "")).filter(Boolean);
+    let touchRows: Array<Record<string, unknown>> = [];
+    if (ids.length) {
+      const touchRes = await admin
+        .from("lighthouse_touches")
+        .select("id, lead_id, status, sent_at, step_no, angle, subject")
+        .in("lead_id", ids)
+        .limit(2000);
+      if (!touchRes.error && Array.isArray(touchRes.data)) {
+        touchRows = touchRes.data as Array<Record<string, unknown>>;
+      }
+    }
+    const touchesByLead = new Map<string, AgentLead["touches"]>();
+    for (const touch of touchRows) {
+      const leadId = String(touch.lead_id ?? "");
+      const list = touchesByLead.get(leadId) ?? [];
+      list.push({
+        id: String(touch.id ?? ""),
+        stepNo: Number(touch.step_no ?? 1),
+        angle: (touch.angle as string | null) ?? null,
+        subject: (touch.subject as string | null) ?? null,
+        body: null,
+        status: String(touch.status ?? ""),
+        sentAt: (touch.sent_at as string | null) ?? null,
+        deliveredAt: null,
+      });
+      touchesByLead.set(leadId, list);
+    }
+    const leads: AgentLead[] = leadRows.map((row) => {
+      const lead = row as Record<string, unknown>;
+      const id = String(lead.id ?? "");
+      return {
+        id,
+        name: (lead.name as string | null) ?? null,
+        company: (lead.company as string | null) ?? null,
+        email: (lead.email as string | null) ?? null,
+        stage: String(lead.stage ?? "sourced"),
+        doNotContact: Boolean(lead.do_not_contact),
+        nextTouchOn: (lead.next_touch_on as string | null) ?? null,
+        nextFollowUpAt: (lead.next_follow_up_at as string | null) ?? null,
+        lastTouchAt: null,
+        sequenceStep: 0,
+        timezone: (lead.timezone as string | null) ?? null,
+        country: (lead.country as string | null) ?? null,
+        region: (lead.region as string | null) ?? null,
+        touches: touchesByLead.get(id) ?? [],
+      };
+    });
+    return {
+      inbox: buildReviewInbox(leads).length,
+      dueNow: zoneClocks(leads).reduce((sum, clock) => sum + clock.dueNow, 0),
+    };
+  } catch {
+    return empty;
+  }
+}
+
 async function loadDerivedBundle() {
-  const bag = await fetchFounderBag();
+  const [bag, conversations, review, books, brain] = await Promise.all([
+    fetchFounderBag(),
+    loadConversationPulse(),
+    loadReviewPulse(),
+    loadGlanceBookkeeping(),
+    loadBrainCounts(),
+  ]);
   const activation = asRows<ActivationRow>(bag.activation);
   const loop = asRows<LoopRow>(bag.loop);
   const adoption = asRows<AdoptionRow>(bag.adoption);
   const expansion = asRows<ExpansionRow>(bag.expansion);
   const retention = asRows<RetentionRow>(bag.retention);
-  const commitment = asRows(bag.commitment);
-  const queue = asRows<QueueRow>(bag.queue);
+  const founderEmails = asRows<{ email: string }>(bag.founder_emails);
+  const internalEmails = mergeInternalEmails(
+    ownerEmailAllowlist(),
+    books.internalEmails,
+    founderEmails.map((row) => row.email),
+  );
+  const ctx = { internalEmails };
+  const commitment = asRows<Record<string, unknown>>(bag.commitment)
+    .filter((row) => !practiceRowExcluded(row, ctx))
+    .map(toCommitmentView);
+  const queue = asRows<QueueRow>(bag.queue).filter((row) => !practiceRowExcluded(row, ctx));
   const signals = asRows<SignalRow>(bag.signals);
   const experiments = asRows<ExperimentRow>(bag.experiments);
-  const founderEmails = asRows<{ email: string }>(bag.founder_emails);
 
   const openQueue = queue
     .filter((row) => (row.status ?? "open") === "open")
@@ -300,8 +524,6 @@ async function loadDerivedBundle() {
     queue: openQueue,
   });
 
-  const conversations = await loadConversationPulse();
-
   return {
     activation,
     loop,
@@ -313,7 +535,12 @@ async function loadDerivedBundle() {
     signals: realSignals,
     experiments: experiments.sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at)),
     founderEmails,
+    internalEmails,
     conversations,
+    review,
+    brain,
+    signups7d: books.signups7d,
+    revenueLabel: books.revenueLabel,
     instrument,
     catalog: {
       hypotheses: HYPOTHESES,

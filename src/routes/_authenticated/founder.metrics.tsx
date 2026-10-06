@@ -1,7 +1,6 @@
 /**
  * Founder validated-learning instrument. Platform owner only — not Milōn IT.
- * Order: what to do → the number → five readings → calls → loop + activation
- * → commitment → conversations → hypotheses → signals → experiments.
+ * Glance first: one window, one funnel, one next call.
  */
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
@@ -21,24 +20,14 @@ import {
 } from "@/lib/metrics.functions";
 import { METRICS, PIVOT_TYPES, SITUATION_MIN_CHARS } from "@/lib/metrics/definitions";
 import {
-  HYPOTHESIS_PLAIN,
-  MOVEMENT_INVENTORY,
-  buildActivationPath,
-  buildFunnel,
-  buildNextMove,
-  buildScorecard,
-  formatValue,
-  headlineTitle,
-  latestUnaffiliatedActivation,
-  mapCommitment,
-  pickLoopReading,
-  readingsFromBundle,
-  stallTitle,
-  stallWho,
-  stallWhy,
-  trafficWord,
-  worstPlain,
-} from "@/lib/metrics/instrument-view";
+  buildGlance,
+  cohortRowsForDisplay,
+  compactHypothesisLabels,
+  dedupePracticeCalls,
+  nextCallCopy,
+  pickNextCall,
+} from "@/lib/metrics/glance";
+import { HYPOTHESIS_PLAIN, formatValue, stallTitle, stallWho, stallWhy } from "@/lib/metrics/instrument-view";
 import { ThemeToggle } from "@/components/theme-toggle";
 import "@/styles/ops-console.css";
 import "@/styles/founder-metrics.css";
@@ -51,13 +40,6 @@ export const Route = createFileRoute("/_authenticated/founder/metrics")({
 });
 
 type Bundle = Awaited<ReturnType<typeof getFounderInstrument>>;
-
-function cellClass(value: number | null | undefined, healthy: number, watch: number): string {
-  if (value == null) return "";
-  if (value >= healthy) return "fm-traffic-healthy";
-  if (value >= watch) return "fm-traffic-watch";
-  return "fm-traffic-bad";
-}
 
 function FounderMetricsPage() {
   const { user, loading: authLoading } = useAuth();
@@ -72,7 +54,8 @@ function FounderMetricsPage() {
   const [bundle, setBundle] = useState<Bundle | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [notes, setNotes] = useState<Record<number, string>>({});
+  const [notes, setNotes] = useState<Record<string, string>>({});
+  const [experimentsOpen, setExperimentsOpen] = useState(false);
 
   const reload = useCallback(async () => {
     setBusy(true);
@@ -91,47 +74,47 @@ function FounderMetricsPage() {
     if (!authLoading && user) void reload();
   }, [authLoading, user, reload]);
 
-  const instrument = bundle?.instrument;
-  const readings = useMemo(
-    () =>
-      bundle
-        ? readingsFromBundle({
-            activation: bundle.activation,
-            loop: bundle.loop,
-            adoption: bundle.adoption,
-            expansion: bundle.expansion,
-            retention: bundle.retention,
-            queue: bundle.queue,
-          })
-        : null,
+  const exclusion = useMemo(
+    () => ({ internalEmails: bundle?.internalEmails ?? [] }),
     [bundle],
   );
-  const scorecard = readings ? buildScorecard(readings) : [];
-  const funnel = instrument ? buildFunnel(instrument.loopTotals) : [];
-  const loopReading = instrument
-    ? pickLoopReading(instrument.loopTotals, readings?.adoptionPct ?? null)
-    : null;
-  const activationPath = buildActivationPath(
-    readings?.activationRow ?? latestUnaffiliatedActivation(bundle?.activation ?? []),
-  );
-  const next = instrument ? buildNextMove(bundle?.queue ?? [], instrument) : null;
-  const commitment = mapCommitment(bundle?.commitment ?? []);
-  const conversations = bundle?.conversations;
-
-  const activationRows = useMemo(
+  const glance = useMemo(() => {
+    if (!bundle) return null;
+    const loop = (bundle.loop ?? []).reduce(
+      (acc, row) => ({
+        assigned: acc.assigned + Number(row.tasks_assigned || 0),
+        completed: acc.completed + Number(row.completed || 0),
+      }),
+      { assigned: 0, completed: 0 },
+    );
+    return buildGlance({
+      activation: bundle.activation,
+      loop,
+      brain: bundle.brain,
+      contacted: bundle.conversations?.contacted ?? 0,
+      replied: bundle.conversations?.replied ?? 0,
+      signups7d: bundle.signups7d,
+      revenueLabel: bundle.revenueLabel,
+      reviewInbox: bundle.review?.inbox ?? 0,
+      reviewDueNow: bundle.review?.dueNow ?? 0,
+    });
+  }, [bundle]);
+  const calls = useMemo(
     () =>
-      [...(bundle?.activation ?? [])].sort(
-        (a, b) => Date.parse(String(b.cohort_week)) - Date.parse(String(a.cohort_week)),
-      ),
-    [bundle],
+      dedupePracticeCalls(bundle?.queue ?? [], bundle?.commitment ?? [], exclusion),
+    [bundle, exclusion],
   );
-  const loopRows = useMemo(
-    () =>
-      [...(bundle?.loop ?? [])].sort(
-        (a, b) => Date.parse(String(b.cohort_week)) - Date.parse(String(a.cohort_week)),
-      ),
-    [bundle],
+  const nextCard = pickNextCall(calls, exclusion);
+  const next = nextCallCopy(nextCard);
+  const hypotheses = compactHypothesisLabels(
+    (bundle?.instrument.hypotheses ?? []).map((card) => ({
+      id: card.id,
+      status: card.status,
+      title: HYPOTHESIS_PLAIN[card.id]?.title ?? card.id,
+    })),
+    glance?.reports.n ?? 0,
   );
+  const cohorts = cohortRowsForDisplay(bundle?.activation ?? []);
 
   if (authLoading || (user && !bundle && !err)) {
     return (
@@ -157,8 +140,6 @@ function FounderMetricsPage() {
     );
   }
 
-  const headline = instrument?.headline;
-
   return (
     <div className="milon-ops founder-metrics">
       <div className="ops-glow" />
@@ -166,7 +147,7 @@ function FounderMetricsPage() {
         <header className="mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-[var(--ops-line)] pb-4">
           <div>
             <p className="fm-kicker">Founder only · what people actually did</p>
-            <h1 className="fm-title mt-1">This week&apos;s learning</h1>
+            <h1 className="fm-title mt-1">This week</h1>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <ThemeToggle />
@@ -203,83 +184,112 @@ function FounderMetricsPage() {
           </div>
         </header>
 
-        {next && (
-          <section className="ops-panel fm-now mb-6 p-5">
-            <p className="fm-kicker">Do this next</p>
-            <h2 className="mt-1 text-lg font-semibold text-[var(--ops-ink)]">{next.title}</h2>
-            <p className="mt-1 text-sm text-[var(--ops-ink-soft)]">{next.body}</p>
-            {next.question ? (
-              <p className="mt-3 text-sm text-[var(--ops-ink)]">Ask: {next.question}</p>
-            ) : null}
-          </section>
-        )}
+        {glance ? (
+          <section className="fm-glance mb-6">
+            <article className="ops-panel fm-span p-4">
+              <p className="fm-kicker">Rolling 14 days</p>
+              <p className="mt-1 text-sm font-semibold text-[var(--ops-ink)]">
+                Practices that sent a real report
+              </p>
+              <p
+                className={`fm-number mt-2 ${
+                  glance.reports.n < 5 ? "text-[var(--ops-ink)]" : `fm-traffic-${glance.reports.traffic}`
+                }`}
+              >
+                {glance.reports.valueLabel}
+              </p>
+              <p className="mt-2 text-xs text-[var(--ops-ink-dim)]">{glance.reports.verdict}</p>
+            </article>
 
-        <section className="ops-panel mb-6 p-5">
-          <p className="fm-kicker">{trafficWord(headline?.traffic ?? "empty")}</p>
-          <p className="mt-2 text-lg font-semibold text-[var(--ops-ink)]">
-            {headline ? headlineTitle(headline) : "No closed cohort yet"}
-          </p>
-          <p
-            className={`fm-number mt-3 ${headline ? `fm-traffic-${headline.traffic}` : "fm-traffic-empty"}`}
-          >
-            {headline?.value == null
-              ? "—"
-              : `${headline.value}${headline.unit === "percent" ? "%" : ""}`}
-          </p>
-          <p className="mt-2 text-sm text-[var(--ops-ink-soft)]">{headline?.question}</p>
-          <p className="mt-1 text-xs text-[var(--ops-ink-dim)]">{headline?.cohortLabel}</p>
-          {instrument?.worstLine ? (
-            <p className="mt-4 text-sm text-[var(--ops-ink)]">
-              Weakest line: {worstPlain(instrument.worstLine)}
-            </p>
+            <article className="ops-panel fm-span p-4">
+              <p className="fm-kicker">Activation · {glance.funnelWindowLabel}</p>
+              <div className="fm-funnel mt-3">
+                {glance.funnel.map((step) => (
+                  <div key={step.key}>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--ops-ink-dim)]">
+                      {step.label}
+                    </p>
+                    <p className="mt-1 text-xl font-semibold tabular-nums text-[var(--ops-ink)]">{step.count}</p>
+                  </div>
+                ))}
+              </div>
+            </article>
+
+            <article className="ops-panel p-4">
+              <p className="fm-kicker">Outbound</p>
+              <p className="mt-1 text-sm font-semibold text-[var(--ops-ink)]">Contacted → replied</p>
+              <p className="fm-number mt-2 text-[1.8rem] text-[var(--ops-ink)]">
+                {glance.outbound.contacted}
+                <span className="text-base font-medium text-[var(--ops-ink-dim)]">
+                  {" "}
+                  → {glance.outbound.replied}
+                </span>
+              </p>
+              <p className="mt-2 text-xs text-[var(--ops-ink-dim)]">
+                Reply rate {glance.outbound.replyRateLabel}
+              </p>
+            </article>
+
+            <article className="ops-panel p-4">
+              <p className="fm-kicker">New signups · 7d</p>
+              <p className="fm-number mt-2 text-[var(--ops-ink)]">{glance.signupsLabel}</p>
+            </article>
+
+            <article className="ops-panel p-4">
+              <p className="fm-kicker">Received this month</p>
+              <p className="fm-number mt-2 text-[1.8rem] text-[var(--ops-ink)]">{glance.revenueLabel}</p>
+            </article>
+
+            <a href={glance.review.href} className="ops-panel block p-4 hover:border-[var(--ops-amber-border)]">
+              <p className="fm-kicker">Review inbox</p>
+              <p className="fm-number mt-2 text-[var(--ops-ink)]">{glance.review.inbox}</p>
+              <p className="mt-2 text-xs text-[var(--ops-ink-dim)]">{glance.review.dueNow} due now</p>
+            </a>
+          </section>
+        ) : null}
+
+        <section className="ops-panel fm-now mb-4 p-5">
+          <p className="fm-kicker">Do this next</p>
+          <h2 className="mt-1 text-lg font-semibold text-[var(--ops-ink)]">{next.title}</h2>
+          <p className="mt-1 text-sm text-[var(--ops-ink-soft)]">{next.body}</p>
+          {next.question ? <p className="mt-3 text-sm text-[var(--ops-ink)]">Ask: {next.question}</p> : null}
+          {glance && glance.review.inbox + glance.review.dueNow > 0 ? (
+            <Link
+              to="/ops"
+              search={{ tab: "agent" }}
+              className="mt-4 inline-flex h-9 items-center rounded-full border border-[var(--ops-line-strong)] px-3 text-xs font-semibold uppercase tracking-wider text-[var(--ops-ink-soft)]"
+            >
+              Clear review inbox
+            </Link>
           ) : null}
         </section>
 
         <section className="mb-8">
-          <h2 className="fm-section">Five readings · accountant vs owner</h2>
-          <div className="fm-score">
-            {scorecard.map((item) => (
-              <article key={item.key} className="ops-panel">
-                <p className="fm-who">{item.who}</p>
-                <p className="mt-1 text-sm font-semibold text-[var(--ops-ink)]">{item.shortLabel}</p>
-                <p className={`fm-score-val mt-2 fm-traffic-${item.traffic}`}>
-                  {formatValue(item.value, item.unit)}
-                </p>
-                <p className="mt-2 text-[11px] leading-relaxed text-[var(--ops-ink-dim)]">{item.meaning}</p>
-                <p className="mt-1 text-[10px] text-[var(--ops-ink-faint)]">
-                  Need {item.healthy}
-                  {item.unit === "percent" ? "%" : ""}
-                </p>
-              </article>
-            ))}
-          </div>
-        </section>
-
-        <section className="mb-8">
-          <h2 className="fm-section">Call these people</h2>
-          {bundle?.queue.length ? (
+          <h2 className="fm-section">Practices to call</h2>
+          {calls.length ? (
             <div className="space-y-3">
-              {bundle.queue.map((q) => (
-                <article key={q.id} className="ops-panel p-4">
+              {calls.map((card) => (
+                <article key={card.key} className="ops-panel p-4">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className={`fm-pill ${q.severity === "high" ? "fm-pill-bad" : ""}`}>
-                      {q.severity}
+                    <span className={`fm-pill ${card.severity === "high" ? "fm-pill-bad" : ""}`}>
+                      {card.severity}
                     </span>
-                    <span className="fm-who">{stallWho(q.stall_type)}</span>
-                    {q.is_founding_practice ? <span className="fm-pill">Founding</span> : null}
+                    <span className="fm-who">{stallWho(card.stallType)}</span>
+                    {card.founding ? <span className="fm-pill">Founding</span> : null}
                   </div>
-                  <p className="mt-2 text-base font-semibold text-[var(--ops-ink)]">
-                    {q.practice_name || "Unnamed practice"}
-                  </p>
-                  <p className="text-sm text-[var(--ops-ink-soft)]">{stallTitle(q.stall_type)}</p>
-                  <p className="mt-1 text-[11px] text-[var(--ops-ink-dim)]">{stallWhy(q.stall_type)}</p>
-                  <p className="mt-3 text-sm text-[var(--ops-ink)]">Ask: {q.suggested_question}</p>
+                  <p className="mt-2 text-base font-semibold text-[var(--ops-ink)]">{card.name}</p>
+                  <p className="text-sm text-[var(--ops-ink)]">Furthest: {card.furthestLabel}</p>
+                  <p className="text-sm text-[var(--ops-ink-soft)]">{stallTitle(card.stallType)}</p>
+                  <p className="mt-1 text-[11px] text-[var(--ops-ink-dim)]">{stallWhy(card.stallType)}</p>
+                  {card.question ? (
+                    <p className="mt-3 text-sm text-[var(--ops-ink)]">Ask: {card.question}</p>
+                  ) : null}
                   <textarea
                     className="ops-input mt-3"
                     rows={2}
                     placeholder="What they actually did last time — not whether they liked it"
-                    value={notes[q.id] ?? ""}
-                    onChange={(e) => setNotes((n) => ({ ...n, [q.id]: e.target.value }))}
+                    value={notes[card.key] ?? ""}
+                    onChange={(e) => setNotes((n) => ({ ...n, [card.key]: e.target.value }))}
                   />
                   <div className="mt-2 flex flex-wrap gap-2">
                     {(["contacted", "answered", "dismissed"] as const).map((status) => (
@@ -288,9 +298,13 @@ function FounderMetricsPage() {
                         type="button"
                         className="rounded-full border border-[var(--ops-line-strong)] px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-[var(--ops-ink-soft)]"
                         onClick={() =>
-                          void updateQueue({
-                            data: { id: q.id, status, outcomeNotes: notes[q.id] },
-                          })
+                          void Promise.all(
+                            card.queueIds.map((id) =>
+                              updateQueue({
+                                data: { id, status, outcomeNotes: notes[card.key] },
+                              }),
+                            ),
+                          )
                             .then(() => reload())
                             .catch((e) => toast.error(String(e)))
                         }
@@ -307,283 +321,46 @@ function FounderMetricsPage() {
               ))}
             </div>
           ) : (
-            <p className="text-sm text-[var(--ops-ink-dim)]">
-              No open stalls. That is not a win if the funnel is empty — refresh after SQL 4.
-            </p>
+            <p className="text-sm text-[var(--ops-ink-dim)]">No open stalls on real practices.</p>
           )}
         </section>
 
-        <section className="mb-8 grid gap-4 lg:grid-cols-2">
-          <div className="ops-panel p-4">
-            <h2 className="fm-section">The loop</h2>
-            <p className="mb-4 text-xs text-[var(--ops-ink-dim)]">
-              Accountant assigns. Owner or staff must finish. GET on a magic link is not engagement.
-            </p>
-            <div className="space-y-3">
-              {funnel.map((step) => (
-                <div key={step.key}>
-                  <div className="mb-1 flex items-baseline justify-between gap-2 text-xs">
-                    <span className="font-medium text-[var(--ops-ink)]">{step.label}</span>
-                    <span className="text-[var(--ops-ink-dim)]">
-                      {step.count} · {step.who}
-                    </span>
-                  </div>
-                  <div className={`fm-bar ${step.key === "completed" ? "is-ok" : ""}`}>
-                    <span style={{ width: `${Math.max(4, Math.min(100, step.pctOfFirst))}%` }} />
-                  </div>
-                </div>
-              ))}
-            </div>
-            {loopReading ? (
-              <p className="mt-4 text-sm text-[var(--ops-ink)]">
-                {loopReading.reading}. {loopReading.meaning}
-              </p>
-            ) : instrument?.loopTotals.assigned ? (
-              <p className="mt-4 text-sm text-[var(--ops-ink-dim)]">
-                Not enough drop-off to call a reading yet.
-              </p>
-            ) : (
-              <p className="mt-4 text-sm text-[var(--ops-ink-dim)]">
-                No tasks assigned yet. The loop cannot be proven — high assignment + low completion
-                is theatre.
-              </p>
-            )}
-          </div>
-          <div className="ops-panel p-4">
-            <h2 className="fm-section">How a practice activates</h2>
-            <p className="mb-4 text-xs text-[var(--ops-ink-dim)]">
-              Latest unaffiliated signup week. Each bar is a share of those practices.
-            </p>
-            {activationPath.length ? (
-              <div className="space-y-3">
-                {activationPath.map((step) => {
-                  const pct = step.of ? Math.round((step.count / step.of) * 100) : 0;
-                  return (
-                    <div key={step.key}>
-                      <div className="mb-1 flex items-baseline justify-between gap-2 text-xs">
-                        <span className="font-medium text-[var(--ops-ink)]">{step.label}</span>
-                        <span className="text-[var(--ops-ink-dim)]">
-                          {step.count} of {step.of}
-                        </span>
-                      </div>
-                      <div className="fm-bar">
-                        <span style={{ width: `${Math.max(4, Math.min(100, pct))}%` }} />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <p className="text-sm text-[var(--ops-ink-dim)]">No unaffiliated activation cohort yet.</p>
-            )}
-          </div>
-        </section>
-
-        <section className="mb-8">
-          <h2 className="fm-section">How far each practice has gone</h2>
-          {commitment.length ? (
-            <div className="grid gap-2 md:grid-cols-2">
-              {commitment.map((c) => (
-                <article
-                  key={c.practiceId}
-                  className={`ops-panel p-3 ${c.founding ? "fm-founding" : ""}`}
-                >
-                  <p className="text-sm font-semibold text-[var(--ops-ink)]">{c.name}</p>
-                  <p className="mt-0.5 text-xs text-[var(--ops-ink-soft)]">{c.rungLabel}</p>
-                  <p className="mt-1 text-[11px] text-[var(--ops-ink-dim)]">{c.note}</p>
-                </article>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-[var(--ops-ink-dim)]">
-              Commitment ladder is empty until you refresh a snapshot.
-            </p>
-          )}
-        </section>
-
-        <section className="mb-8">
-          <h2 className="fm-section">Conversations · Lighthouse</h2>
-          <p className="mb-3 text-xs text-[var(--ops-ink-dim)]">
-            Mom Test lives in replies, not in compliments. These numbers are from outbound — they
-            do not move the headline.
-          </p>
-          {conversations?.available ? (
-            <div className="fm-score">
-              {(
-                [
-                  ["Sourced", conversations.sourced],
-                  ["Contacted", conversations.contacted],
-                  ["Replied", conversations.replied],
-                  ["Met", conversations.meeting],
-                  ["Trial", conversations.trial],
-                  ["Won", conversations.won],
-                ] as const
-              ).map(([label, n]) => (
-                <article key={label} className="ops-panel">
-                  <p className="fm-who">Prospect</p>
-                  <p className="mt-1 text-sm font-semibold text-[var(--ops-ink)]">{label}</p>
-                  <p className="fm-score-val mt-2">{n}</p>
-                </article>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-[var(--ops-ink-dim)]">Lighthouse lead table is not readable here.</p>
-          )}
-          {conversations?.replyRatePct != null ? (
-            <p className="mt-3 text-sm text-[var(--ops-ink-soft)]">
-              Reply rate {conversations.replyRatePct}% of contacted. A reply is a conversation. A
-              send is not.
-            </p>
-          ) : null}
-        </section>
-
-        <section className="mb-8">
-          <h2 className="fm-section">Cohorts</h2>
-          <p className="mb-3 text-xs text-[var(--ops-ink-dim)]">
-            Gold bar = founding practice. Never blended into the headline.
-          </p>
-          <div className="ops-panel mb-4 overflow-x-auto p-2">
-            <table className="min-w-full">
-              <thead>
-                <tr>
-                  <th>Signup week</th>
-                  <th>Split</th>
-                  <th>n</th>
-                  <th>Activation 14d</th>
-                </tr>
-              </thead>
-              <tbody>
-                {activationRows.map((row) => (
-                  <tr
-                    key={`${row.cohort_week}-${row.is_founding_practice}`}
-                    className={row.is_founding_practice ? "fm-founding" : ""}
-                  >
-                    <td>{String(row.cohort_week).slice(0, 10)}</td>
-                    <td>{row.is_founding_practice ? "Founding" : "Unaffiliated"}</td>
-                    <td>{row.practices}</td>
-                    <td
-                      className={cellClass(
-                        row.activation_14d_pct,
-                        METRICS.ACTIVATION_RATE.healthy,
-                        METRICS.ACTIVATION_RATE.watch,
-                      )}
-                    >
-                      {formatValue(row.activation_14d_pct, "percent")}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div className="ops-panel overflow-x-auto p-2">
-            <table className="min-w-full">
-              <thead>
-                <tr>
-                  <th>Assign week</th>
-                  <th>Assigned</th>
-                  <th>Emailed</th>
-                  <th>Opened</th>
-                  <th>Done 14d</th>
-                </tr>
-              </thead>
-              <tbody>
-                {loopRows.map((row) => (
-                  <tr key={row.cohort_week}>
-                    <td>{String(row.cohort_week).slice(0, 10)}</td>
-                    <td>{row.tasks_assigned}</td>
-                    <td>{row.emails_dispatched}</td>
-                    <td>{row.links_engaged_by_human}</td>
-                    <td
-                      className={cellClass(
-                        row.completion_14d_pct,
-                        METRICS.LOOP_COMPLETION_RATE.healthy,
-                        METRICS.LOOP_COMPLETION_RATE.watch,
-                      )}
-                    >
-                      {formatValue(row.completion_14d_pct, "percent")}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-
-        <section className="mb-8">
+        <section className="ops-panel mb-8 p-4">
           <h2 className="fm-section">Hypotheses</h2>
-          <div className="grid gap-3 md:grid-cols-2">
-            {(instrument?.hypotheses ?? []).map((h) => {
-              const plain = HYPOTHESIS_PLAIN[h.id];
-              return (
-                <article
-                  key={h.id}
-                  className={`ops-panel p-4 ${h.status === "blocked" ? "fm-status-blocked" : ""}`}
-                >
-                  <p className="fm-who">
-                    {h.id} · {h.status}
-                  </p>
-                  <p className="mt-1 text-sm font-semibold text-[var(--ops-ink)]">
-                    {plain?.title ?? h.id}
-                  </p>
-                  <p className="mt-1 text-sm text-[var(--ops-ink-soft)]">
-                    {plain?.inOneLine ?? h.statement}
-                  </p>
-                  {h.blockedReason ? (
-                    <p className="mt-2 text-xs text-[var(--ops-danger-ink)]">{h.blockedReason}</p>
-                  ) : (
-                    <ul className="mt-2 list-disc pl-4 text-xs text-[var(--ops-ink-dim)]">
-                      {h.evidence.map((e) => (
-                        <li key={e}>{e}</li>
-                      ))}
-                    </ul>
-                  )}
-                </article>
-              );
-            })}
+          <div className="fm-hyp">
+            {hypotheses.map((item) => (
+              <p key={item.id} className="text-sm text-[var(--ops-ink)]" title={item.title}>
+                <span className="fm-who">{item.id}</span> {item.label}
+              </p>
+            ))}
           </div>
         </section>
 
-        <section className="mb-8">
-          <h2 className="fm-section">What we watch — and what we still cannot</h2>
-          <div className="grid gap-3 md:grid-cols-2">
-            <article className="ops-panel p-4">
-              <p className="text-sm font-semibold text-[var(--ops-ink)]">In the number</p>
-              <ul className="mt-2 space-y-1 text-xs text-[var(--ops-ink-soft)]">
-                {MOVEMENT_INVENTORY.shown.map((row) => (
-                  <li key={row.event}>
-                    <span className="fm-who">{row.who}</span> — {row.means}
-                  </li>
-                ))}
-              </ul>
-            </article>
-            <article className="ops-panel p-4">
-              <p className="text-sm font-semibold text-[var(--ops-ink)]">Tracked, not the headline</p>
-              <ul className="mt-2 space-y-1 text-xs text-[var(--ops-ink-soft)]">
-                {MOVEMENT_INVENTORY.trackedHidden.map((row) => (
-                  <li key={row.event}>
-                    <span className="fm-who">{row.who}</span> — {row.means}
-                  </li>
-                ))}
-              </ul>
-            </article>
-            <article className="ops-panel p-4">
-              <p className="text-sm font-semibold text-[var(--ops-ink)]">Conversations</p>
-              <ul className="mt-2 space-y-1 text-xs text-[var(--ops-ink-soft)]">
-                {MOVEMENT_INVENTORY.conversations.map((row) => (
-                  <li key={row.event}>{row.means}</li>
-                ))}
-              </ul>
-            </article>
-            <article className="ops-panel p-4">
-              <p className="text-sm font-semibold text-[var(--ops-ink)]">Still missing</p>
-              <ul className="mt-2 space-y-1 text-xs text-[var(--ops-ink-soft)]">
-                {MOVEMENT_INVENTORY.missing.map((row) => (
-                  <li key={row.event}>{row.means}</li>
-                ))}
-              </ul>
-            </article>
-          </div>
-        </section>
+        {cohorts.length ? (
+          <section className="mb-8">
+            <h2 className="fm-section">Cohorts · n at least 5</h2>
+            <div className="ops-panel overflow-x-auto p-2">
+              <table className="min-w-full">
+                <thead>
+                  <tr>
+                    <th>Signup week</th>
+                    <th>n</th>
+                    <th>Activation 14d</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {cohorts.map((row) => (
+                    <tr key={String(row.cohort_week)}>
+                      <td>{String(row.cohort_week).slice(0, 10)}</td>
+                      <td>{row.practices}</td>
+                      <td>{formatValue(row.activation_14d_pct, "percent")}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        ) : null}
 
         <SignalForm
           onSave={(data) =>
@@ -597,22 +374,31 @@ function FounderMetricsPage() {
           rows={bundle?.signals ?? []}
         />
 
-        <ExperimentForm
-          rows={bundle?.experiments ?? []}
-          onCreate={(data) =>
-            addExperiment({ data })
-              .then(() => {
-                toast.success("Prediction locked");
-                return reload();
-              })
-              .catch((e) => toast.error(String(e)))
-          }
-          onDecide={(data) =>
-            closeExperiment({ data })
-              .then(() => reload())
-              .catch((e) => toast.error(String(e)))
-          }
-        />
+        <details
+          className="mb-12"
+          onToggle={(event) => setExperimentsOpen((event.currentTarget as HTMLDetailsElement).open)}
+        >
+          <summary className="fm-section cursor-pointer">Experiments</summary>
+          {experimentsOpen ? (
+            <ExperimentForm
+              rows={bundle?.experiments ?? []}
+              onCreate={(data) =>
+                addExperiment({ data })
+                  .then(() => {
+                    toast.success("Prediction locked");
+                    return reload();
+                  })
+                  .catch((e) => toast.error(String(e)))
+              }
+              onDecide={(data) =>
+                closeExperiment({ data })
+                  .then(() => reload())
+                  .catch((e) => toast.error(String(e)))
+              }
+            />
+          ) : null}
+        </details>
+
       </div>
     </div>
   );
@@ -659,7 +445,8 @@ function SignalForm({
   }
 
   return (
-    <section className="mb-8">
+    <section id="conversation-signal" className="mb-8 scroll-mt-24">
+      <p className="fm-kicker">Log a conversation signal</p>
       <h2 className="fm-section">Signals from conversations</h2>
       <form className="ops-panel mb-4 space-y-3 p-4" onSubmit={submit}>
         <p className="text-xs text-[var(--ops-ink-dim)]">
@@ -779,8 +566,7 @@ function ExperimentForm({
   }
 
   return (
-    <section className="mb-12">
-      <h2 className="fm-section">Experiments</h2>
+    <div className="mt-4">
       <form className="ops-panel mb-4 space-y-3 p-4" onSubmit={submit}>
         <input
           className="ops-input"
@@ -892,6 +678,6 @@ function ExperimentForm({
           </li>
         ))}
       </ul>
-    </section>
+    </div>
   );
 }

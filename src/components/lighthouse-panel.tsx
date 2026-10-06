@@ -68,6 +68,7 @@ import { LIGHTHOUSE_FROM_EMAIL } from "@/lib/lighthouse-from";
 import { LIGHTHOUSE_REPLY_TO } from "@/lib/lighthouse-reply-to";
 import { LIGHTHOUSE_SENDER_NAME } from "@/lib/lighthouse-sender";
 import { sendWindowStatus } from "@/lib/lighthouse-send-windows";
+import { FunnelHealthPanel } from "@/components/funnel-health-panel";
 
 const inputCls = "ops-input";
 
@@ -767,6 +768,7 @@ export function LighthousePanel({ initialTab }: { initialTab?: LighthouseTab }) 
 
       {tab === "system" && (
         <>
+          <FunnelHealthPanel />
           <SystemForm
             dash={dash}
             onSave={async (payload) => {

@@ -19,17 +19,6 @@ import { formatOpsCount, formatUsageMetric } from "@/lib/lighthouse-agent";
 
 const WINDOWS = [7, 30, 90] as const;
 
-function fmtTime(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString("en-ZA", {
-    day: "2-digit",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
 function FeatureBars({
   items,
   empty,
@@ -85,7 +74,8 @@ function PersonaCard({
 
 export function LighthouseUsagePanel() {
   const load = useServerFn(getLighthouseUsage);
-  const [days, setDays] = useState<(typeof WINDOWS)[number]>(30);
+  const [days, setDays] = useState<(typeof WINDOWS)[number]>(7);
+  const [breakdownOpen, setBreakdownOpen] = useState(false);
   const [report, setReport] = useState<LighthouseUsageReport | null>(null);
   const [busy, setBusy] = useState(true);
   const [err, setErr] = useState("");
@@ -180,89 +170,97 @@ export function LighthouseUsagePanel() {
             {formatOpsCount(report.totals.uniqueUsers)}
           </div>
         </div>
-        <PersonaCard persona="firm" events={p.firm.events} users={p.firm.uniqueUsers} />
+        <PersonaCard persona="firm" events={p.firm.events} users={report.firmCount} />
         <PersonaCard persona="founder" events={p.founder.events} users={p.founder.uniqueUsers} />
         <PersonaCard persona="customer" events={p.customer.events} users={p.customer.uniqueUsers} />
       </div>
 
-      {report.daily.some((d) => d.events > 0) && (
-        <div>
-          <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--ops-ink-dim)]">
-            Daily movement
-          </div>
-          <div className="flex h-16 items-end gap-px">
-            {report.daily.map((d) => (
-              <div
-                key={d.date}
-                title={`${d.date}: ${d.events} events · ${d.users} people`}
-                className="flex-1 rounded-t bg-[var(--ops-amber)]/80"
-                style={{ height: `${Math.max(4, (d.events / maxDay) * 100)}%` }}
-              />
-            ))}
-          </div>
-        </div>
-      )}
-
-      <div className="grid gap-6 lg:grid-cols-2">
-        <div className="rounded-2xl border border-[var(--ops-line)] bg-[var(--ops-card)] p-4">
-          <div className="mb-3 text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--ops-ink-dim)]">
-            Most used
-          </div>
-          <FeatureBars items={report.mostUsed} empty="No events in this window yet." />
-        </div>
-        <div className="rounded-2xl border border-[var(--ops-line)] bg-[var(--ops-card)] p-4">
-          <div className="mb-3 text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--ops-ink-dim)]">
-            Least used
-          </div>
-          <FeatureBars
-            items={report.leastUsed}
-            empty="Catalog is empty — run the usage migration."
-          />
-        </div>
-      </div>
-
-      {report.unused.length > 0 && report.totals.events > 0 && (
-        <div className="rounded-2xl border border-[var(--ops-line)] bg-[var(--ops-card)] p-4">
-          <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--ops-ink-dim)]">
-            Untouched this window
-          </div>
-          <p className="mb-2 text-xs text-[var(--ops-ink-dim)]">
-            {report.unused.length} catalog {report.unused.length === 1 ? "feature" : "features"} had
-            no events.
-          </p>
-          <div className="flex flex-wrap gap-1.5">
-            {report.unused.map((f) => (
-              <span
-                key={f.key}
-                className="rounded-full border border-[var(--ops-line)] px-2.5 py-0.5 text-[11px] text-[var(--ops-ink-soft)]"
-              >
-                {f.label}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {(["firm", "founder", "customer"] as const).map((persona) => {
-        const ranked = report.features
-          .filter((f) => f.byPersona[persona].events > 0)
-          .sort((a, b) => b.byPersona[persona].events - a.byPersona[persona].events)
-          .slice(0, 6)
-          .map((f) => ({
-            ...f,
-            events: f.byPersona[persona].events,
-            uniqueUsers: f.byPersona[persona].uniqueUsers,
-          }));
-        if (!ranked.length) return null;
-        return (
-          <div key={persona} className="rounded-2xl border border-[var(--ops-line)] bg-[var(--ops-card)] p-4">
-            <div className="mb-3 text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--ops-ink-dim)]">
-              {PERSONA_LABELS[persona]} — top features
+      <details
+        onToggle={(event) => setBreakdownOpen((event.currentTarget as HTMLDetailsElement).open)}
+      >
+        <summary className="cursor-pointer text-[11px] font-semibold uppercase tracking-wider text-[var(--ops-ink-dim)]">
+          Product usage · {days}d · most, least, untouched
+        </summary>
+        {breakdownOpen ? (
+          <div className="mt-4 space-y-6">
+            {report.daily.some((d) => d.events > 0) && (
+              <div>
+                <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--ops-ink-dim)]">
+                  Daily
+                </div>
+                <div className="flex h-16 items-end gap-px">
+                  {report.daily.map((d) => (
+                    <div
+                      key={d.date}
+                      title={`${d.date}: ${d.events} events · ${d.users} people`}
+                      className="flex-1 rounded-t bg-[var(--ops-amber)]/80"
+                      style={{ height: `${Math.max(4, (d.events / maxDay) * 100)}%` }}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+            <div className="grid gap-6 lg:grid-cols-2">
+              <div className="rounded-2xl border border-[var(--ops-line)] bg-[var(--ops-card)] p-4">
+                <div className="mb-3 text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--ops-ink-dim)]">
+                  Most used
+                </div>
+                <FeatureBars items={report.mostUsed} empty="No events in this window yet." />
+              </div>
+              <div className="rounded-2xl border border-[var(--ops-line)] bg-[var(--ops-card)] p-4">
+                <div className="mb-3 text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--ops-ink-dim)]">
+                  Least used
+                </div>
+                <FeatureBars
+                  items={report.leastUsed}
+                  empty="Catalog is empty — run the usage migration."
+                />
+              </div>
             </div>
-            <FeatureBars items={ranked} empty="" />
+            {report.unused.length > 0 && report.totals.events > 0 && (
+              <div className="rounded-2xl border border-[var(--ops-line)] bg-[var(--ops-card)] p-4">
+                <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--ops-ink-dim)]">
+                  Untouched this window
+                </div>
+                <p className="mb-2 text-xs text-[var(--ops-ink-dim)]">
+                  {report.unused.length} catalog {report.unused.length === 1 ? "feature" : "features"} had
+                  no events.
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {report.unused.map((f) => (
+                    <span
+                      key={f.key}
+                      className="rounded-full border border-[var(--ops-line)] px-2.5 py-0.5 text-[11px] text-[var(--ops-ink-soft)]"
+                    >
+                      {f.label}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+            {(["firm", "founder", "customer"] as const).map((persona) => {
+              const ranked = report.features
+                .filter((f) => f.byPersona[persona].events > 0)
+                .sort((a, b) => b.byPersona[persona].events - a.byPersona[persona].events)
+                .slice(0, 6)
+                .map((f) => ({
+                  ...f,
+                  events: f.byPersona[persona].events,
+                  uniqueUsers: f.byPersona[persona].uniqueUsers,
+                }));
+              if (!ranked.length) return null;
+              return (
+                <div key={persona} className="rounded-2xl border border-[var(--ops-line)] bg-[var(--ops-card)] p-4">
+                  <div className="mb-3 text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--ops-ink-dim)]">
+                    {PERSONA_LABELS[persona]} — top features
+                  </div>
+                  <FeatureBars items={ranked} empty="" />
+                </div>
+              );
+            })}
           </div>
-        );
-      })}
+        ) : null}
+      </details>
 
       {report.entities.length > 0 && (
         <div className="rounded-2xl border border-[var(--ops-line)] bg-[var(--ops-card)] p-4">
@@ -283,22 +281,6 @@ export function LighthouseUsagePanel() {
         </div>
       )}
 
-      {report.recent.length > 0 && (
-        <div className="rounded-2xl border border-[var(--ops-line)] bg-[var(--ops-card)] p-4">
-          <div className="mb-3 text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--ops-ink-dim)]">
-            Recent movement
-          </div>
-          <div className="divide-y divide-[var(--ops-line)]">
-            {report.recent.map((r, i) => (
-              <div key={`${r.at}-${i}`} className="flex gap-3 py-1.5 text-[11px]">
-                <span className="w-28 shrink-0 text-[var(--ops-ink-dim)]">{fmtTime(r.at)}</span>
-                <span className="w-16 shrink-0 text-[var(--ops-amber)]">{r.personaLabel}</span>
-                <span className="flex-1 text-[var(--ops-ink-soft)]">{r.featureLabel}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

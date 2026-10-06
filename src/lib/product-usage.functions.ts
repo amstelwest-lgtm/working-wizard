@@ -9,10 +9,16 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import {
+  isExcludedFromInstrument,
+  mergeInternalEmails,
+  realFirmCount,
+} from "@/lib/metrics/internal-exclusion";
+import {
   adminLoose,
   assertPlatformOwner,
   migrationHintFor,
   missingRelation,
+  ownerEmailAllowlist,
   type AuthCtx,
 } from "@/lib/owner-ops.guard";
 import {
@@ -235,6 +241,8 @@ export type LighthouseUsageReport = UsageRollup & {
     eventName: string;
   }>;
   migrationHint: string | null;
+  /** Same countable-firm definition as Platform signups. */
+  firmCount: number;
 };
 
 export const getLighthouseUsage = createServerFn({ method: "GET" })
@@ -249,7 +257,7 @@ export const getLighthouseUsage = createServerFn({ method: "GET" })
   .handler(async ({ data, context }): Promise<LighthouseUsageReport> => {
     await assertPlatformOwner(context as AuthCtx);
     const admin = adminLoose();
-    const days = data.days ?? 30;
+    const days = data.days ?? 7;
     const to = new Date();
     const from = new Date(to.getTime() - days * 24 * 60 * 60 * 1000);
     const fromIso = from.toISOString();
@@ -263,6 +271,7 @@ export const getLighthouseUsage = createServerFn({ method: "GET" })
       to: toIso,
       recent: [],
       migrationHint: null,
+      firmCount: 0,
     };
 
     const pageSize = 1000;
@@ -306,52 +315,95 @@ export const getLighthouseUsage = createServerFn({ method: "GET" })
       clientId: (r.client_id as string | null) ?? null,
     }));
 
-    const firmIds = [...new Set(mapped.map((r) => r.firmId).filter((id): id is string => Boolean(id)))];
     const clientIds = [
       ...new Set(mapped.map((r) => r.clientId).filter((id): id is string => Boolean(id))),
     ];
+    const [firmsRes, clientsRes, profilesRes, itRes] = await Promise.all([
+      admin.from("firms").select("id, name, is_internal, owner_user_id"),
+      clientIds.length
+        ? admin.from("clients").select("id, name, is_demo").in("id", clientIds.slice(0, 200))
+        : Promise.resolve({ data: [] as Array<Record<string, unknown>>, error: null }),
+      admin.from("profiles").select("id, full_name, email").limit(1000),
+      admin.from("milon_it_members").select("email"),
+    ]);
+    const itEmails = ((itRes.data ?? []) as Array<{ email?: string | null }>).map((row) =>
+      String(row.email ?? ""),
+    );
+    const ctx = { internalEmails: mergeInternalEmails(ownerEmailAllowlist(), itEmails) };
+    const emailByUser = new Map<string, string>();
     const entityLabels: Record<string, string> = {};
-
-    if (firmIds.length) {
-      const { data: firms } = await admin.from("firms").select("id, name").in("id", firmIds.slice(0, 200));
-      for (const f of (firms ?? []) as Array<{ id: string; name: string | null }>) {
-        const name = (f.name ?? "").trim() || "Firm";
-        entityLabels[`firm:${f.id}`] = name;
-        entityLabels[f.id] = name;
+    const excludedUsers = new Set<string>();
+    for (const profile of (profilesRes.data ?? []) as Array<{
+      id: string;
+      full_name: string | null;
+      email: string | null;
+    }>) {
+      const id = String(profile.id);
+      emailByUser.set(id, String(profile.email ?? ""));
+      const name = (profile.full_name ?? "").trim() || (profile.email ?? "").trim();
+      if (name) entityLabels[`user:${id}`] = name;
+      if (isExcludedFromInstrument({ name: profile.full_name, email: profile.email }, ctx)) {
+        excludedUsers.add(id);
       }
     }
-    if (clientIds.length) {
-      const { data: clients } = await admin
-        .from("clients")
-        .select("id, name")
-        .in("id", clientIds.slice(0, 200));
-      for (const c of (clients ?? []) as Array<{ id: string; name: string | null }>) {
-        const name = (c.name ?? "").trim() || "Client";
-        entityLabels[`client:${c.id}`] = name;
-        entityLabels[c.id] = name;
+    const firmRows = (firmsRes.data ?? []) as Array<{
+      id: string;
+      name: string | null;
+      is_internal?: boolean | null;
+      owner_user_id?: string | null;
+    }>;
+    const firmSubjects = firmRows.map((firm) => ({
+      name: firm.name,
+      isInternal: Boolean(firm.is_internal),
+      ownerEmail: emailByUser.get(String(firm.owner_user_id ?? "")) ?? null,
+    }));
+    const excludedFirms = new Set<string>();
+    for (const firm of firmRows) {
+      const id = String(firm.id);
+      const name = (firm.name ?? "").trim() || "Firm";
+      entityLabels[`firm:${id}`] = name;
+      entityLabels[id] = name;
+      if (
+        isExcludedFromInstrument(
+          {
+            name: firm.name,
+            isInternal: Boolean(firm.is_internal),
+            ownerEmail: emailByUser.get(String(firm.owner_user_id ?? "")) ?? null,
+          },
+          ctx,
+        )
+      ) {
+        excludedFirms.add(id);
       }
     }
-
-    const userIds = [...new Set(mapped.map((r) => r.userId).filter(Boolean))].slice(0, 200);
-    if (userIds.length) {
-      const { data: profiles } = await admin
-        .from("profiles")
-        .select("id, full_name, email")
-        .in("id", userIds);
-      for (const profile of (profiles ?? []) as Array<{
-        id: string;
-        full_name: string | null;
-        email: string | null;
-      }>) {
-        const name = (profile.full_name ?? "").trim() || (profile.email ?? "").trim();
-        if (!name) continue;
-        entityLabels[`user:${profile.id}`] = name;
+    const excludedClients = new Set<string>();
+    for (const client of (clientsRes.data ?? []) as Array<{
+      id: string;
+      name: string | null;
+      is_demo?: boolean | null;
+    }>) {
+      const id = String(client.id);
+      const name = (client.name ?? "").trim() || "Client";
+      entityLabels[`client:${id}`] = name;
+      entityLabels[id] = name;
+      if (isExcludedFromInstrument({ name: client.name, isDemo: Boolean(client.is_demo) }, ctx)) {
+        excludedClients.add(id);
       }
     }
+    const visible = mapped.filter((row) => {
+      if (row.firmId && excludedFirms.has(row.firmId)) return false;
+      if (row.userId && excludedUsers.has(row.userId)) return false;
+      if (row.clientId && excludedClients.has(row.clientId)) return false;
+      return true;
+    });
 
-    const rollup = rollupUsage(mapped, { fromIso, toIso, entityLabels });
-    if (exactCount != null) rollup.totals.events = exactCount;
-    const recent = mapped.slice(0, 25).map((r) => ({
+    const rollup = rollupUsage(visible, { fromIso, toIso, entityLabels });
+    rollup.entities = rollup.entities.filter(
+      (entity) => !isExcludedFromInstrument({ name: entity.label }, ctx),
+    );
+    const firmCount = realFirmCount(firmSubjects, ctx);
+    rollup.totals.events = visible.length;
+    const recent = visible.slice(0, 25).map((r) => ({
       at: r.occurredAt,
       persona: r.persona,
       personaLabel: PERSONA_LABELS[r.persona],
@@ -367,5 +419,6 @@ export const getLighthouseUsage = createServerFn({ method: "GET" })
       to: toIso,
       recent,
       migrationHint: null,
+      firmCount,
     };
   });

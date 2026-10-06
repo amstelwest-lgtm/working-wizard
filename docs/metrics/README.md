@@ -115,7 +115,17 @@ Raw `analytics.events` store event keys, ids, and non-financial properties. No a
 ## Founder instrument (Phase 3)
 
 - `/founder/metrics` — platform owner only (`assertPlatformOwner`, not IT). Linked from `/ops` for owners.
-- Order on the page: one question / one number → call list → loop + interpretation → cohort tables → H1–H5 → signals → experiments.
+- Glance order: practices that sent a real report (rolling 14 days, no verdict under n=5) → one activation funnel (client, upload, report, assign, done) → contacted and replied → new signups in 7 days → revenue received this month → review inbox. Then one next call, the review link when something is due, and the conversation-signal form.
+- Test and internal firms are left out in `src/lib/metrics/internal-exclusion.ts` (name rules, Ben Accountants, the Milōn team, My practice placeholders, `is_internal` / `is_demo` / `is_test` / `is_bot`). Cohort percentages still come from the SQL views, which already drop `is_internal`.
+- Cohorts stay hidden until an unaffiliated week has n≥5. The assignment-week table is not on the page. Experiments stay, collapsed.
+
+## What the glance no longer shows
+
+These used to sit on the instrument as static prose. They are not a number:
+
+- In the number: a sent report, a finished task, a real upload, a new client, a human opening a task link.
+- Tracked, not the headline: sign-off, invites, a live ledger connection, saved forecasts and budgets.
+- Still missing: extraction corrections, referrals, a clean paid-conversion view, and owner-only businesses with no firm. Do not invent those rates.
 - Weekly digest: `GET /api/metrics-digest` without a secret writes nothing and returns no numbers. `GET`/`POST` with `CRON_SECRET` or `MILON_DIGEST_SECRET` sends. Vercel cron: Monday 06:00 UTC. Founder **Send digest** button also works.
 - Experiments require a written prediction before a result. Pivot needs a `pivot_type`.
 - Retention: `select public.analytics_purge_old_events(24);` deletes raw events only. Snapshots stay. Do not schedule until you have read the count.
