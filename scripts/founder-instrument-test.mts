@@ -24,6 +24,12 @@ import {
   realFirmCount,
 } from "../src/lib/metrics/internal-exclusion";
 import { isPilotFlagVisible, PILOT_FLAG_KEYS } from "../src/lib/ops-pilot-flags";
+import {
+  buildDueQueue,
+  buildReviewInbox,
+  lighthouseReviewPulse,
+  type AgentLead,
+} from "../src/lib/lighthouse-agent";
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
@@ -61,6 +67,30 @@ assert(isExcludedFromInstrument({ name: "QA Test Co" }), "QA Test Co is excluded
 assert(isExcludedFromInstrument({ name: "E2E Practice" }), "E2E in the name is excluded");
 assert(!isExcludedFromInstrument({ name: "Testa" }), "Testa is kept");
 assert(!isExcludedFromInstrument({ name: "Contest" }), "Contest is kept");
+assert(isExcludedFromInstrument({ name: "Smoke Owner" }), "Smoke Owner is excluded");
+assert(!isExcludedFromInstrument({ name: "Smokey Books" }), "smoke inside another word is kept");
+assert(!isExcludedFromInstrument({ name: "smokestack" }), "smokestack is kept");
+assert(
+  exclusionReason({ name: "James Fleming", email: "team@trymilon.co.za" }) === "email",
+  "trymilon.co.za is an internal domain",
+);
+assert(
+  exclusionReason({ name: "Milōn", email: "hello@trymilon.com" }) === "email",
+  "trymilon.com is an internal domain",
+);
+assert(
+  !isExcludedFromInstrument({ name: "James Fleming", email: "james@harbour.co" }),
+  "an external person with a normal name stays",
+);
+assert(!isExcludedFromInstrument({ name: "theo firm" }), "theo firm is not a name rule");
+assert(
+  exclusionReason({ name: "theo firm", ownerEmail: "amstel.west@gmail.com" }, internal) === "email",
+  "a founder-owned firm is excluded by owner email",
+);
+assert(
+  !isExcludedFromInstrument({ name: "theo firm", ownerEmail: "ada@harbour.co" }, internal),
+  "theo firm with an external owner stays",
+);
 assert(
   !isExcludedFromInstrument({ name: "Square Books" }),
   "qa inside another word is not enough",
@@ -260,6 +290,68 @@ assert(glance.revenueLabel === "R0", "revenue received");
 assert(glance.review.inbox === 2 && glance.review.dueNow === 1, "review inbox and due now");
 assert(glance.review.href === REVIEW_HREF && REVIEW_HREF === "/ops?tab=agent", "review links to the agent tab");
 
+const reviewNow = new Date("2026-10-06T13:00:00Z");
+const reviewLead: AgentLead = {
+  id: "harbour",
+  name: "Ada",
+  company: "Harbour & Co",
+  email: "ada@harbour.co",
+  stage: "contacted",
+  doNotContact: false,
+  nextTouchOn: "2026-10-06",
+  nextFollowUpAt: null,
+  lastTouchAt: null,
+  sequenceStep: 0,
+  country: "US",
+  region: "NY",
+  timezone: "America/New_York",
+  touches: [
+    {
+      id: "draft-1",
+      stepNo: 1,
+      angle: "observation",
+      subject: "First",
+      body: null,
+      status: "draft",
+      sentAt: null,
+    },
+    {
+      id: "draft-2",
+      stepNo: 2,
+      angle: "value",
+      subject: "Second",
+      body: null,
+      status: "approved",
+      sentAt: null,
+    },
+  ],
+};
+const reviewLeads = [reviewLead];
+const pulse = lighthouseReviewPulse(reviewLeads, reviewNow);
+assert(
+  pulse.inbox === buildReviewInbox(reviewLeads).length && pulse.inbox === 2,
+  "review pulse counts pending review drafts",
+);
+assert(
+  pulse.dueNow === buildDueQueue(reviewLeads, reviewNow).filter((row) => row.open).length &&
+    pulse.dueNow === 1,
+  "review pulse counts due-now the same way as the agent queue",
+);
+const metricsSrc = read("src/lib/metrics.functions.ts");
+const panelSrc = read("src/components/lighthouse-panel.tsx");
+const lighthouseSrc = read("src/lib/lighthouse.functions.ts");
+assert(metricsSrc.includes("lighthouseReviewPulse("), "glance review count calls lighthouseReviewPulse");
+assert(panelSrc.includes("lighthouseReviewPulse("), "agent tab review count calls lighthouseReviewPulse");
+assert(
+  metricsSrc.includes("loadLighthouseDashboardLeads("),
+  "glance loads leads through the agent query",
+);
+assert(
+  lighthouseSrc.includes("await loadLighthouseDashboardLeads(admin)"),
+  "the agent tab loads leads through the same function",
+);
+assert(!metricsSrc.includes('.in("lead_id"'), "glance does not use a separate touch id filter");
+
 const empty = buildGlance({
   activation: [oldWeek],
   loop: { assigned: 0, completed: 0 },
@@ -322,6 +414,21 @@ const guardAt = ops.lastIndexOf("import.meta.env.PROD", checkoutAt);
 assert(checkoutAt > 0 && guardAt !== -1 && checkoutAt - guardAt < 2000, "test checkout is hidden on prod");
 assert(!usage.includes("Recent movement"), "recent movement feed is gone");
 assert(usage.includes("Most active"), "most active stays");
+const accessSrc = read("src/lib/lighthouse-access.functions.ts");
+const queriesSrc = read("src/lib/lighthouse-it.functions.ts");
+const usageSrc = read("src/lib/product-usage.functions.ts");
+assert(
+  accessSrc.includes("isExcludedFromInstrument") && accessSrc.includes("ownerEmail"),
+  "access drops firms through the exclusion helper",
+);
+assert(
+  queriesSrc.includes("isExcludedFromInstrument") && queriesSrc.includes("ownerEmail"),
+  "queries drop firms through the exclusion helper",
+);
+assert(
+  usageSrc.includes("isExcludedFromInstrument") && usageSrc.includes("email: emailByUser.get(userId)"),
+  "most active filters people through the exclusion helper",
+);
 assert(usage.includes("<details"), "product usage breakdown stays collapsed");
 assert(system.includes("<FunnelHealthPanel />"), "dry-run preflight sits on System");
 assert(read("src/lib/owner-ops.functions.ts").includes("realFirmCount"), "signups use the shared firm count");

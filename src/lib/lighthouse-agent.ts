@@ -162,6 +162,22 @@ export function buildReviewInbox(leads: AgentLead[]): ReviewItem[] {
   });
 }
 
+export type LighthouseReviewPulse = {
+  inbox: number;
+  dueNow: number;
+};
+
+/**
+ * Pending review drafts plus rows that are due inside an open send window.
+ * The founder glance and the Agent tab both read this.
+ */
+export function lighthouseReviewPulse(leads: AgentLead[], now = new Date()): LighthouseReviewPulse {
+  return {
+    inbox: buildReviewInbox(leads).length,
+    dueNow: buildDueQueue(leads, now).filter((row) => row.open).length,
+  };
+}
+
 export type CadenceStrip = {
   lastTouch: string;
   delivery: string;

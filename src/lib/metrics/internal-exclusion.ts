@@ -31,12 +31,12 @@ export const INSTRUMENT_EXCLUSION_RULES = [
   "Flag: firms.is_internal, clients.is_demo, an analytics is_bot stamp, or is_test when the row has that field. There is no is_test column today; it is honored if one appears.",
   "Known E2E account: the name folds to Ben Accountants.",
   "Known team firm: the name folds to “the milon team” or contains “milon team” (Milōn included).",
-  "Name contains the word “test” or the word “qa”, or contains “e2e” or “delete me”, after accents are folded and case is ignored.",
+  "Name contains the word “test”, the word “qa”, or the word “smoke”, or contains “e2e” or “delete me”, after accents are folded and case is ignored.",
   "Placeholder: the name is “My practice” when the owner email is missing, or that email is internal or test.",
-  "Email: the profile or owner address is on the list passed in (platform-owner allowlist, milon_it_members, analytics founder emails), the mailbox looks like test/qa/e2e/“delete me”, or the domain is milonfinance.com or milon.it.",
+  "Email: the profile or owner address is on the list passed in (platform-owner allowlist, milon_it_members, analytics founder emails), the mailbox looks like test/qa/e2e/“delete me”, or the domain is milonfinance.com, milon.it, trymilon.com, or trymilon.co.za.",
 ] as const;
 
-const INTERNAL_DOMAINS = new Set(["milonfinance.com", "milon.it"]);
+const INTERNAL_DOMAINS = new Set(["milonfinance.com", "milon.it", "trymilon.com", "trymilon.co.za"]);
 
 export function foldInstrumentText(value: string | null | undefined): string {
   return (value ?? "")
@@ -87,7 +87,7 @@ function nameReason(folded: string): ExclusionReason | null {
     return "known-team";
   }
   if (folded.includes("delete me") || folded.includes("e2e")) return "name";
-  if (/(^| )(?:test|qa)( |$)/.test(folded)) return "name";
+  if (/(^| )(?:test|qa|smoke)( |$)/.test(folded)) return "name";
   return null;
 }
 

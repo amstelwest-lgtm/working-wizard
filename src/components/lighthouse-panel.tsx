@@ -55,6 +55,7 @@ import {
   buildDueQueue,
   buildReviewInbox,
   cadenceOf,
+  lighthouseReviewPulse,
   firmCardTitle,
   formatOpsCount,
   formatOpsPercent,
@@ -275,9 +276,9 @@ export function LighthousePanel({
 
   const queue = buildDueQueue(dash.leads, now);
   const inbox = buildReviewInbox(dash.leads);
+  const reviewPulse = lighthouseReviewPulse(dash.leads, now);
   const mix = attentionMix(dash.leads, now);
   const clocks = zoneClocks(dash.leads, now);
-  const dueNow = queue.filter((row) => row.open);
   const capLeft = Math.max(0, dash.settings.dailySendCap - dash.sentToday);
   const dryRun = dash.capability.sendAllowlistEnforced;
   const cadenceLead = dash.leads.find((lead) => queue.some((row) => row.leadId === lead.id)) ?? null;
@@ -396,7 +397,7 @@ export function LighthousePanel({
                 {nextUp.label}
               </button>
               <p className="text-sm text-[var(--ops-ink-soft)]">
-                {formatOpsCount(dueNow.length)} due now
+                {formatOpsCount(reviewPulse.dueNow)} due now
               </p>
             </div>
             <p className="mt-2 text-[12px] text-[var(--ops-ink-soft)]">{windowLine}</p>
@@ -467,9 +468,9 @@ export function LighthousePanel({
             className="rounded-2xl border border-[var(--ops-line)] bg-[var(--ops-card)] p-4"
           >
             <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--ops-ink-dim)]">
-              Review inbox · {formatOpsCount(inbox.length)}
+              Review inbox · {formatOpsCount(reviewPulse.inbox)}
             </div>
-            {inbox.length === 0 ? (
+            {reviewPulse.inbox === 0 ? (
               <p className="text-sm text-[var(--ops-ink-dim)]">No drafts waiting for review.</p>
             ) : (
               <ul className="space-y-2">
