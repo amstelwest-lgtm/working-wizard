@@ -688,6 +688,8 @@ function stripeFor(input: {
   onUpdate: (params: UpdateCall) => unknown | Promise<unknown>;
   beforeUpdateSub?: () => unknown;
   afterUpdateSub?: () => unknown;
+  productId?: string;
+  couponRetrieve?: (id: string) => Promise<unknown>;
 }) {
   let updates = 0;
   const calls: UpdateCall[] = [];
@@ -716,7 +718,7 @@ function stripeFor(input: {
               unit_amount: 9900,
               currency: "usd",
               recurring: { interval: "month" },
-              product: "prod_solo",
+              product: input.productId ?? "prod_solo",
             },
           ],
         }),
@@ -727,6 +729,7 @@ function stripeFor(input: {
       invoices: {
         list: async () => ({ data: input.invoices ?? [] }),
       },
+      ...(input.couponRetrieve ? { coupons: { retrieve: input.couponRetrieve } } : {}),
     },
   };
 }
@@ -858,6 +861,90 @@ assert(
   JSON.stringify(usOtherUpgrade.calls[0]?.discounts) ===
     JSON.stringify([{ promotion_code: "promo_free" }]),
   "another voucher is unaffected by the FOUNDING rule",
+);
+
+const BEN_PROMO_ID = "promo_1UNRGyGXDN6PFbnzX8zUFjgr";
+const BEN_CUSTOMER = "cus_VIlgPYllDAilft";
+const BEN_PRODUCT = "prod_VGnVsFM8alfRNY";
+const priorSetup = firmSetupCheckoutSessionParams({
+  origin: "https://www.milonfinance.com",
+  customerId: BEN_CUSTOMER,
+  userId: "user_1",
+  subscriptionId: "sub_starter",
+  lookupKey: "milon_solo_monthly",
+  band: "solo",
+  interval: "month",
+  price: { unit_amount: 9900, currency: "usd", recurring: { interval: "month" } },
+  saMarket: false,
+  promotionCodeId: BEN_PROMO_ID,
+  promotionCode: "BEN-SOLO-E2E",
+  voucherPreview: "$1 for your first month, then $99/mo",
+});
+const priorMeta = priorSetup.metadata ?? {};
+assert(
+  JSON.stringify(Object.keys(priorMeta).sort()) ===
+    JSON.stringify([
+      "milon_interval",
+      "milon_lookup_key",
+      "milon_plan",
+      "milon_promotion_code",
+      "milon_promotion_code_id",
+      "milon_setup_upgrade",
+      "milon_subscription_id",
+      "milon_user_id",
+    ]),
+  "setup Checkout metadata has no new fields, so a session opened before this deploy still parses",
+);
+assert(
+  priorMeta.milon_promotion_code === "BEN-SOLO-E2E" &&
+    priorMeta.milon_promotion_code_id === BEN_PROMO_ID &&
+    readFirmSetupUpgrade(priorMeta)?.promotionCode === "BEN-SOLO-E2E",
+  "the pre-deploy metadata still names the BEN-SOLO-E2E promotion code",
+);
+const benUpgrade = stripeFor({
+  promos: [
+    {
+      id: BEN_PROMO_ID,
+      code: "BEN-SOLO-E2E",
+      active: true,
+      customer: BEN_CUSTOMER,
+      max_redemptions: 1,
+      times_redeemed: 0,
+      restrictions: { first_time_transaction: false },
+      promotion: { type: "coupon", coupon: "r7GdhcFy" },
+    },
+  ],
+  productId: BEN_PRODUCT,
+  couponRetrieve: async () => soloCoupon,
+  onUpdate: () =>
+    upgradedSub({ id: "in_ben", amount_due: 100, total: 100, status: "paid", paid: true }),
+});
+const openedBefore = {
+  mode: "setup" as const,
+  customer: BEN_CUSTOMER,
+  setup_intent: { payment_method: "pm_card" },
+  metadata: { ...priorMeta },
+};
+const benResult = await completeFirmSetupUpgrade(openedBefore, benUpgrade.stripe as never, {
+  firmMarket: { country: "US" },
+});
+assert(
+  benResult?.band === "solo" && benResult.updated && benResult.notice == null,
+  "a US firm BEN-SOLO-E2E setup session completes on Save",
+);
+assert(
+  !String(benResult?.notice ?? "").includes("South African"),
+  "BEN-SOLO-E2E is not rejected as South Africa only",
+);
+assert(
+  JSON.stringify(benUpgrade.calls[0]?.discounts) ===
+    JSON.stringify([{ promotion_code: BEN_PROMO_ID }]),
+  "BEN-SOLO-E2E reaches the subscription update as discounts[{promotion_code}]",
+);
+assert(
+  !JSON.stringify(benUpgrade.calls[0]).includes("MILON_ZA_50") &&
+    !JSON.stringify(benUpgrade.calls[0]).includes("FOUNDING50"),
+  "the US BEN-SOLO-E2E update has no SA coupon and no FOUNDING50",
 );
 
 const wrong = stripeFor({
