@@ -69,11 +69,13 @@ import {
 } from "@/lib/lighthouse-agent";
 import { LIGHTHOUSE_FROM_EMAIL } from "@/lib/lighthouse-from";
 import {
+  applyNormalisedAfterSave,
   displayedLeadMarket,
   formatPhoneDisplay,
   heldColdApproveReason,
   inferredTargetCountry,
   isTargetNotContacted,
+  reseedDrawerField,
   shouldFlushContactOnPointerDown,
   storedLeadMarket,
   type LighthouseConversationKind,
@@ -966,8 +968,11 @@ export function LighthousePanel({
               website: websiteShown,
               country: saved.country ?? country ?? row.country,
             });
-            pendingLeadPatches.current.delete(leadId);
-            await refresh();
+            // The tick must not wait on the list refetch. Keep the patch until
+            // that refetch lands so a slower in-flight load cannot wipe it.
+            void refresh().finally(() => {
+              pendingLeadPatches.current.delete(leadId);
+            });
             return { phone: phoneShown, website: websiteShown };
           }}
           onConversationHeld={async (fields) => {
@@ -1717,6 +1722,23 @@ function LeadDrawer({
   const websiteRef = useRef(website);
   const appliedPhone = useRef(phone);
   const appliedWebsite = useRef(website);
+  const phoneFocused = useRef(false);
+  const websiteFocused = useRef(false);
+  const subjectRef = useRef(subject);
+  const bodyRef = useRef(body);
+  const appliedSubject = useRef(subject);
+  const appliedBody = useRef(body);
+  const subjectFocused = useRef(false);
+  const bodyFocused = useRef(false);
+  const theirMessageRef = useRef(theirMessage);
+  const appliedTheirMessage = useRef(theirMessage);
+  const theirMessageFocused = useRef(false);
+  const heldOnRef = useRef(heldOn);
+  const kindRef = useRef(kind);
+  const appliedHeldOn = useRef(heldOn);
+  const appliedKind = useRef(kind);
+  const heldOnFocused = useRef(false);
+  const kindFocused = useRef(false);
   const contactTimer = useRef<number | null>(null);
   const contactGen = useRef(0);
   const contactChain = useRef<Promise<void>>(Promise.resolve());
@@ -1735,10 +1757,33 @@ function LeadDrawer({
     stepNo: existing?.stepNo ?? activeStep,
   });
 
+  const seenDraftLead = useRef(lead.id);
+  const seenDraftStep = useRef(activeStep);
   useEffect(() => {
     const t = lead.touches.find((x) => x.stepNo === activeStep) ?? null;
-    setSubject(t?.subject ?? "");
-    setBody(t?.body ?? "");
+    const contextChanged = seenDraftLead.current !== lead.id || seenDraftStep.current !== activeStep;
+    seenDraftLead.current = lead.id;
+    seenDraftStep.current = activeStep;
+    const nextSubject = reseedDrawerField({
+      current: subjectRef.current,
+      applied: appliedSubject.current,
+      server: t?.subject ?? "",
+      focused: subjectFocused.current,
+      contextChanged,
+    });
+    const nextBody = reseedDrawerField({
+      current: bodyRef.current,
+      applied: appliedBody.current,
+      server: t?.body ?? "",
+      focused: bodyFocused.current,
+      contextChanged,
+    });
+    subjectRef.current = nextSubject.value;
+    appliedSubject.current = nextSubject.applied;
+    bodyRef.current = nextBody.value;
+    appliedBody.current = nextBody.applied;
+    setSubject(nextSubject.value);
+    setBody(nextBody.value);
     setTouchId(t?.id ?? "");
   }, [activeStep, lead]);
 
@@ -1776,19 +1821,28 @@ function LeadDrawer({
         });
         if (!applyUi || !contactMounted.current || leadIdRef.current !== leadId) return;
         if (gen !== contactGen.current) return;
-        if (saved) {
-          setPhone(saved.phone);
-          setWebsite(saved.website);
-          phoneRef.current = saved.phone;
-          websiteRef.current = saved.website;
-          appliedPhone.current = saved.phone;
-          appliedWebsite.current = saved.website;
-        } else {
-          appliedPhone.current = phoneNext;
-          appliedWebsite.current = websiteNext;
+        const phoneNow = applyNormalisedAfterSave({
+          current: phoneRef.current,
+          sent: phoneNext,
+          normalised: saved?.phone ?? phoneNext,
+        });
+        const websiteNow = applyNormalisedAfterSave({
+          current: websiteRef.current,
+          sent: websiteNext,
+          normalised: saved?.website ?? websiteNext,
+        });
+        if (phoneNow.accept) {
+          phoneRef.current = phoneNow.value;
+          appliedPhone.current = phoneNow.value;
+          setPhone(phoneNow.value);
         }
-        if (phoneDirty) setPhoneSaved(true);
-        if (websiteDirty) setWebsiteSaved(true);
+        if (websiteNow.accept) {
+          websiteRef.current = websiteNow.value;
+          appliedWebsite.current = websiteNow.value;
+          setWebsite(websiteNow.value);
+        }
+        if (phoneDirty && phoneNow.accept) setPhoneSaved(true);
+        if (websiteDirty && websiteNow.accept) setWebsiteSaved(true);
       } catch (e) {
         if (!applyUi || !contactMounted.current || leadIdRef.current !== leadId) return;
         if (gen !== contactGen.current) return;
@@ -1820,35 +1874,78 @@ function LeadDrawer({
       seenLead.current = lead.id;
       clearContactTimer();
       if (dirty) void persistRef.current(previousId, pendingPhone, pendingWebsite, false);
-      setPhone(nextPhone);
-      setWebsite(nextWebsite);
-      phoneRef.current = nextPhone;
-      websiteRef.current = nextWebsite;
-      appliedPhone.current = nextPhone;
-      appliedWebsite.current = nextWebsite;
+      const phoneSeed = reseedDrawerField({
+        current: pendingPhone,
+        applied: appliedPhone.current,
+        server: nextPhone,
+        focused: false,
+        contextChanged: true,
+      });
+      const websiteSeed = reseedDrawerField({
+        current: pendingWebsite,
+        applied: appliedWebsite.current,
+        server: nextWebsite,
+        focused: false,
+        contextChanged: true,
+      });
+      phoneRef.current = phoneSeed.value;
+      websiteRef.current = websiteSeed.value;
+      appliedPhone.current = phoneSeed.applied;
+      appliedWebsite.current = websiteSeed.applied;
+      setPhone(phoneSeed.value);
+      setWebsite(websiteSeed.value);
       setPhoneSaved(false);
       setWebsiteSaved(false);
       return;
     }
-    const previousPhone = appliedPhone.current;
-    const previousWebsite = appliedWebsite.current;
-    setPhone((current) => {
-      if (current.trim() !== previousPhone.trim()) return current;
-      phoneRef.current = nextPhone;
-      appliedPhone.current = nextPhone;
-      return nextPhone;
+    const phoneSeed = reseedDrawerField({
+      current: phoneRef.current,
+      applied: appliedPhone.current,
+      server: nextPhone,
+      focused: phoneFocused.current,
+      contextChanged: false,
     });
-    setWebsite((current) => {
-      if (current.trim() !== previousWebsite.trim()) return current;
-      websiteRef.current = nextWebsite;
-      appliedWebsite.current = nextWebsite;
-      return nextWebsite;
+    const websiteSeed = reseedDrawerField({
+      current: websiteRef.current,
+      applied: appliedWebsite.current,
+      server: nextWebsite,
+      focused: websiteFocused.current,
+      contextChanged: false,
     });
+    if (phoneSeed.value !== phoneRef.current) setPhone(phoneSeed.value);
+    if (websiteSeed.value !== websiteRef.current) setWebsite(websiteSeed.value);
+    phoneRef.current = phoneSeed.value;
+    websiteRef.current = websiteSeed.value;
+    appliedPhone.current = phoneSeed.applied;
+    appliedWebsite.current = websiteSeed.applied;
   }, [lead.id, lead.phone, lead.phoneE164, lead.website]);
 
+  const seenHeldLead = useRef(lead.id);
   useEffect(() => {
-    setHeldOn(lead.conversationHeldAt?.slice(0, 10) || todayDateInput());
-    setKind(lead.conversationKind ?? "phone");
+    const serverHeldOn = lead.conversationHeldAt?.slice(0, 10) || todayDateInput();
+    const serverKind = lead.conversationKind ?? "phone";
+    const contextChanged = seenHeldLead.current !== lead.id;
+    seenHeldLead.current = lead.id;
+    const heldSeed = reseedDrawerField({
+      current: heldOnRef.current,
+      applied: appliedHeldOn.current,
+      server: serverHeldOn,
+      focused: heldOnFocused.current,
+      contextChanged,
+    });
+    const kindSeed = reseedDrawerField({
+      current: kindRef.current,
+      applied: appliedKind.current,
+      server: serverKind,
+      focused: kindFocused.current,
+      contextChanged,
+    });
+    heldOnRef.current = heldSeed.value;
+    appliedHeldOn.current = heldSeed.applied;
+    kindRef.current = kindSeed.value as LighthouseConversationKind;
+    appliedKind.current = kindSeed.applied as LighthouseConversationKind;
+    setHeldOn(heldSeed.value);
+    setKind(kindSeed.value as LighthouseConversationKind);
   }, [lead.id, lead.conversationHeldAt, lead.conversationKind]);
 
   useEffect(() => {
@@ -1884,10 +1981,21 @@ function LeadDrawer({
     [],
   );
 
+  const seenReplyLead = useRef(lead.id);
   useEffect(() => {
     const latest = lead.inbound[0];
     if (!latest?.body) return;
-    setTheirMessage((prev) => prev || latest.body || "");
+    const contextChanged = seenReplyLead.current !== lead.id;
+    seenReplyLead.current = lead.id;
+    if (contextChanged) {
+      theirMessageRef.current = latest.body || "";
+      appliedTheirMessage.current = theirMessageRef.current;
+      setTheirMessage(theirMessageRef.current);
+    } else if (!theirMessageFocused.current && !theirMessageRef.current.trim()) {
+      theirMessageRef.current = latest.body || "";
+      appliedTheirMessage.current = theirMessageRef.current;
+      setTheirMessage(theirMessageRef.current);
+    }
     setReplyOpen(true);
   }, [lead.id, lead.inbound]);
 
@@ -2033,14 +2141,20 @@ function LeadDrawer({
                 className={inputCls}
                 placeholder="Phone"
                 value={phone}
+                onFocus={() => {
+                  phoneFocused.current = true;
+                }}
                 onChange={(e) => {
                   const value = e.target.value;
+                  phoneRef.current = value;
                   setPhone(value);
                   setPhoneSaved(false);
                   scheduleContact(value, websiteRef.current);
                 }}
                 onBlur={(e) => {
+                  phoneFocused.current = false;
                   const value = e.currentTarget.value;
+                  phoneRef.current = value;
                   setPhone(value);
                   void persistRef.current(leadIdRef.current, value, websiteRef.current, true);
                 }}
@@ -2058,14 +2172,20 @@ function LeadDrawer({
                 className={inputCls}
                 placeholder="Website"
                 value={website}
+                onFocus={() => {
+                  websiteFocused.current = true;
+                }}
                 onChange={(e) => {
                   const value = e.target.value;
+                  websiteRef.current = value;
                   setWebsite(value);
                   setWebsiteSaved(false);
                   scheduleContact(phoneRef.current, value);
                 }}
                 onBlur={(e) => {
+                  websiteFocused.current = false;
                   const value = e.currentTarget.value;
+                  websiteRef.current = value;
                   setWebsite(value);
                   void persistRef.current(leadIdRef.current, phoneRef.current, value, true);
                 }}
@@ -2100,8 +2220,15 @@ function LeadDrawer({
               className={`${inputCls} max-w-[180px]`}
               value={heldOn}
               disabled={heldBusy}
+              onFocus={() => {
+                heldOnFocused.current = true;
+              }}
+              onBlur={() => {
+                heldOnFocused.current = false;
+              }}
               onChange={(e) => {
                 const next = e.target.value || todayDateInput();
+                heldOnRef.current = next;
                 setHeldOn(next);
                 if (lead.conversationHeld) void saveHeld({ held: true, heldAt: next, kind });
               }}
@@ -2110,8 +2237,15 @@ function LeadDrawer({
               className={`${inputCls} max-w-[160px]`}
               value={kind}
               disabled={heldBusy}
+              onFocus={() => {
+                kindFocused.current = true;
+              }}
+              onBlur={() => {
+                kindFocused.current = false;
+              }}
               onChange={(e) => {
                 const next = e.target.value as LighthouseConversationKind;
+                kindRef.current = next;
                 setKind(next);
                 if (lead.conversationHeld) void saveHeld({ held: true, heldAt: heldOn, kind: next });
               }}
@@ -2208,7 +2342,16 @@ function LeadDrawer({
                 className={`${inputCls} min-h-[100px] resize-y py-2`}
                 placeholder="Their reply is pasted here when it lands in inbound. Otherwise paste what they wrote. The draft answers their actual question over email."
                 value={theirMessage}
-                onChange={(e) => setTheirMessage(e.target.value)}
+                onFocus={() => {
+                  theirMessageFocused.current = true;
+                }}
+                onBlur={() => {
+                  theirMessageFocused.current = false;
+                }}
+                onChange={(e) => {
+                  theirMessageRef.current = e.target.value;
+                  setTheirMessage(e.target.value);
+                }}
               />
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <select
@@ -2234,6 +2377,7 @@ function LeadDrawer({
                     setReplying(true);
                     try {
                       const r = await onDraftReply(theirMessage, replyIntent);
+                      subjectRef.current = r.subject; bodyRef.current = r.body;
                       setSubject(r.subject);
                       setBody(r.body);
                       setTouchId(r.touchId);
@@ -2331,7 +2475,16 @@ function LeadDrawer({
             className={inputCls}
             placeholder="Subject"
             value={subject}
-            onChange={(e) => setSubject(e.target.value)}
+            onFocus={() => {
+              subjectFocused.current = true;
+            }}
+            onBlur={() => {
+              subjectFocused.current = false;
+            }}
+            onChange={(e) => {
+              subjectRef.current = e.target.value;
+              setSubject(e.target.value);
+            }}
           />
           <textarea
             className={`${inputCls} min-h-[260px] resize-y py-2 font-mono text-[12.5px] leading-relaxed`}
@@ -2341,7 +2494,16 @@ function LeadDrawer({
                 : "Agent draft, then edit before sending. Nothing sends without your approval."
             }
             value={body}
-            onChange={(e) => setBody(e.target.value)}
+            onFocus={() => {
+              bodyFocused.current = true;
+            }}
+            onBlur={() => {
+              bodyFocused.current = false;
+            }}
+            onChange={(e) => {
+              bodyRef.current = e.target.value;
+              setBody(e.target.value);
+            }}
           />
         </div>
 
@@ -2354,7 +2516,8 @@ function LeadDrawer({
                   setDrafting(true);
                   try {
                     const r = await onDraft(activeStep, { mode: "default" });
-                    setSubject(r.subject);
+                    subjectRef.current = r.subject; bodyRef.current = r.body;
+                      setSubject(r.subject);
                     setBody(r.body);
                     setTouchId(r.touchId);
                     toast.success("Golden copy loaded — it is in the review inbox");
@@ -2385,7 +2548,8 @@ function LeadDrawer({
                       currentSubject: subject,
                       currentBody: body,
                     });
-                    setSubject(r.subject);
+                    subjectRef.current = r.subject; bodyRef.current = r.body;
+                      setSubject(r.subject);
                     setBody(r.body);
                     setTouchId(r.touchId);
                     toast.success("Rewrite ready — it is in the review inbox");
@@ -2412,7 +2576,8 @@ function LeadDrawer({
                 setDrafting(true);
                 try {
                   const r = await onDraft(activeStep, { mode: "default" });
-                  setSubject(r.subject);
+                  subjectRef.current = r.subject; bodyRef.current = r.body;
+                      setSubject(r.subject);
                   setBody(r.body);
                   setTouchId(r.touchId);
                   toast.success("Draft ready — it is in the review inbox");
@@ -2497,7 +2662,11 @@ function LeadDrawer({
             onChange={(e) => {
               const asset = dash.assets.find((a) => a.key === e.target.value);
               if (!asset?.url) return;
-              setBody((prev) => `${prev.trimEnd()}\n\n${asset.title}: ${asset.url}`);
+              setBody((prev) => {
+                const next = `${prev.trimEnd()}\n\n${asset.title}: ${asset.url}`;
+                bodyRef.current = next;
+                return next;
+              });
               e.target.value = "";
             }}
           >
