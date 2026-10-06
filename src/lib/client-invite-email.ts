@@ -6,6 +6,7 @@
 import { getRequest } from "@tanstack/react-start/server";
 import { appRedirectOrigin } from "@/lib/app-origin";
 import { callClaudeMessages, parseClaudeJson } from "@/lib/claude-messages";
+import { redactForModel, rehydrateModelOutput } from "@/lib/redact-identifiers";
 import { inviteDraftPrompt, resolvePromptMarket } from "@/lib/market";
 
 export type InviteDraftInput = {
@@ -71,14 +72,21 @@ export async function draftOwnerInviteEmail(input: InviteDraftInput): Promise<In
   const fallback = templateInviteDraft(input);
   if (!process.env.ANTHROPIC_API_KEY) return fallback;
 
-  const prompt = inviteDraftPrompt(resolvePromptMarket(input.market), input);
+  const sealed = redactForModel(inviteDraftPrompt(resolvePromptMarket(input.market), input), {
+    clientName: input.clientName,
+    partyNames: [input.firmName, input.accountantName],
+    emails: [input.accountantEmail],
+  });
 
   try {
-    const raw = await callClaudeMessages({
-      content: [{ type: "text", text: prompt }],
-      maxTokens: 700,
-      timeoutMs: 18_000,
-    });
+    const raw = rehydrateModelOutput(
+      await callClaudeMessages({
+        content: [{ type: "text", text: sealed.text }],
+        maxTokens: 700,
+        timeoutMs: 18_000,
+      }),
+      sealed.session,
+    );
     const parsed = parseClaudeJson<{ subject?: string; body?: string }>(raw);
     const subject = String(parsed.subject ?? "").trim();
     const body = String(parsed.body ?? "").trim();

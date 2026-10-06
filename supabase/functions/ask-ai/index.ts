@@ -2,8 +2,9 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sanitize } from "./sanitizer.ts";
 import { classify } from "./classifier.ts";
 import { buildContext } from "./context-builder.ts";
-import { buildPrompt } from "./prompt.ts";
+import { buildPrompt, sealAskAiPrompt } from "./prompt.ts";
 import { callClaude } from "./anthropic.ts";
+import { rehydrateModelOutput } from "../_shared/redact-identifiers.ts";
 
 const RATE_LIMIT = 30; // questions per user per hour
 
@@ -172,7 +173,10 @@ Deno.serve(async (req: Request) => {
 
   // ── Build context (userClient — RLS enforced on tenant data reads) ────────
   const ctx = await buildContext(userClient, clientId, tier, question);
-  const { system, user: userPrompt } = buildPrompt(question, ctx, tier, audience);
+  const sealed = sealAskAiPrompt(buildPrompt(question, ctx, tier, audience), {
+    clientName: ctx.clientName ?? ctx.overview?.clientName ?? null,
+  });
+  const { system, user: userPrompt } = sealed;
 
   // ── Call Claude Sonnet 4.6 ────────────────────────────────────────────────
   let claudeResult;
@@ -213,7 +217,8 @@ Deno.serve(async (req: Request) => {
     });
   }
 
-  return respond({ answer: claudeResult.text, chips: deriveChips(question, tier) });
+  const answer = rehydrateModelOutput(claudeResult.text, sealed.session);
+  return respond({ answer, chips: deriveChips(question, tier) });
 });
 
 function deriveChips(question: string, tier: string): string[] {

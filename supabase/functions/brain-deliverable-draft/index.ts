@@ -9,6 +9,9 @@
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { paidGenerationTrialBlock } from "../_shared/starter-trial-gate.ts";
+import { rehydrateModelOutput } from "../_shared/redact-identifiers.ts";
+import { partyNamesInBrain } from "../brain-propose/prompt.ts";
+import { buildDeliverableDraftPayload } from "./prompt.ts";
 
 // --- logic (sync with src/lib/client-brain-deliverable.ts) ---
 
@@ -415,12 +418,19 @@ Deno.serve(async (req: Request) => {
     skippedReason = "empty_context";
   } else {
     try {
-      const claude = await callClaude(
-        SYSTEM,
-        `Draft one advisory pack from this client brain. Empty body and empty assumptions when evidence is missing.\n\n${contextLines.join("\n")}`,
-        { maxTokens: 1800, temperature: 0.2 },
-      );
-      payload = parseClaudeDeliverablePayload(claude.text);
+      const sealed = buildDeliverableDraftPayload({
+        system: SYSTEM,
+        contextLines,
+        subject: {
+          clientName: client?.name ?? null,
+          partyNames: partyNamesInBrain(brainSummary),
+        },
+      });
+      const claude = await callClaude(sealed.system, sealed.user, {
+        maxTokens: 1800,
+        temperature: 0.2,
+      });
+      payload = parseClaudeDeliverablePayload(rehydrateModelOutput(claude.text, sealed.session));
       adminClient
         .from("ask_ai_log")
         .update({

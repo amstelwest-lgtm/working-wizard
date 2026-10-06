@@ -23,6 +23,7 @@ import {
   type AuthCtx,
 } from "@/lib/owner-ops.guard";
 import { callClaudeMessages } from "@/lib/claude-messages";
+import { redactForModel, rehydrateModelOutput, type IdentifierSubject } from "@/lib/redact-identifiers";
 import { applyLighthouseOptOut } from "@/lib/lighthouse-optout.server";
 import {
   assertLighthouseSendRecipientAllowed,
@@ -87,12 +88,20 @@ const DRAFT_UNUSABLE = "The draft came back unusable — try again.";
 const VENDOR_DRAFT_ERROR = /claude|anthropic|openai|gemini|\bgpt-?\d*\b/i;
 
 /** User-facing draft failures stay neutral. The console never names a model vendor. */
-async function draftWithModel(prompt: string, maxTokens: number): Promise<string> {
+async function draftWithModel(
+  prompt: string,
+  maxTokens: number,
+  subject?: IdentifierSubject,
+): Promise<string> {
+  const sealed = redactForModel(prompt, subject);
   try {
-    return await callClaudeMessages({
-      content: [{ type: "text", text: prompt }],
-      maxTokens,
-    });
+    return rehydrateModelOutput(
+      await callClaudeMessages({
+        content: [{ type: "text", text: sealed.text }],
+        maxTokens,
+      }),
+      sealed.session,
+    );
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
     if (!message || VENDOR_DRAFT_ERROR.test(message)) throw new Error(DRAFT_UNUSABLE);
@@ -1692,6 +1701,11 @@ The body must be plain text with line breaks, already signed off, ready to send.
       const raw = await draftWithModel(
         prompt,
         seqKey === ACCOUNTANT_ONESHOT_SEQUENCE_KEY ? 2500 : 1200,
+        {
+          clientName: (lead.company as string | null) ?? null,
+          partyNames: [(lead.name as string | null) ?? null, senderName],
+          emails: [(lead.email as string | null) ?? null],
+        },
       );
 
       const draft = parseDraftJson(raw);
@@ -2338,7 +2352,11 @@ ${signOffLine(seqKey, senderName, senderTitle)}
 Return ONLY JSON: {"subject": "...", "body": "..."}
 The body must be plain text with line breaks, already signed off, ready to send.`;
 
-    const raw = await draftWithModel(prompt, 1200);
+    const raw = await draftWithModel(prompt, 1200, {
+      clientName: (lead.company as string | null) ?? null,
+      partyNames: [(lead.name as string | null) ?? null, senderName],
+      emails: [(lead.email as string | null) ?? null],
+    });
 
     const parsed = parseDraftJson(raw);
     if (!parsed) throw new Error(DRAFT_UNUSABLE);

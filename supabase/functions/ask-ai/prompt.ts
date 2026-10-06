@@ -1,6 +1,12 @@
 import type { AskAiContext, DisclosureTier } from "./types.ts";
 import { fmtPct } from "./deliverable-summaries.ts";
 import { formatOverviewForPrompt } from "./overview-brief.ts";
+import {
+  applyRedaction,
+  createRedactionSession,
+  type IdentifierSubject,
+  type RedactionSession,
+} from "../_shared/redact-identifiers.ts";
 
 /** Duplicated from src/lib/market/prompt.ts — Deno edge cannot import @/lib. */
 function askAiSystemBase(copyPack: "za" | "us"): string {
@@ -259,5 +265,18 @@ export function buildPrompt(
   return {
     system,
     user: `QUESTION: ${question}\n\nBUSINESS CONTEXT:\n${lines.join("\n")}`,
+  };
+}
+
+/** System + user text actually sent to the model. */
+export function sealAskAiPrompt(
+  built: { system: string; user: string },
+  subject?: IdentifierSubject,
+): { system: string; user: string; session: RedactionSession } {
+  const session = createRedactionSession(subject);
+  return {
+    system: applyRedaction(built.system, session),
+    user: applyRedaction(built.user, session),
+    session,
   };
 }

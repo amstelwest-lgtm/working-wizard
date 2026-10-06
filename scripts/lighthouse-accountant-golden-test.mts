@@ -192,7 +192,10 @@ const goldenBranch = draftSlice.slice(goldenStart, goldenElse);
 assert(!goldenBranch.includes("callClaudeMessages"), "primary golden path does not call the model");
 assert(!goldenBranch.includes("draftWithModel"), "primary golden path does not call the model helper");
 assert(draftSlice.includes("draftWithModel"), "rewrite / owner path still calls the model");
-assert(fns.includes("return await callClaudeMessages"), "the model helper still uses the shared client");
+assert(
+  /return rehydrateModelOutput\(\s*await callClaudeMessages\(/.test(fns),
+  "the model helper still uses the shared client",
+);
 assert(draftSlice.includes("REWRITE TASK"), "rewrite prompt is labeled");
 
 const sendSlice = fns.slice(fns.indexOf("export const sendLighthouseTouch"));

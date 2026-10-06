@@ -1,6 +1,7 @@
 // Extracts a structured financials JSON from an uploaded financial statement
 // (CSV text, Excel-as-CSV text, or PDF as base64) using Claude Sonnet 4.6.
 import { extractText, getDocumentProxy } from "https://esm.sh/unpdf@0.12.1";
+import { buildPdfCaption, buildTextExtractionPayload } from "./prompt.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -83,6 +84,10 @@ Deno.serve(async (req: Request) => {
     let debugTextChars = 0;
 
     if (base64 && isPdf) {
+      // Native PDF document. A text-layer extract drops scans and scrambles
+      // statement columns, so the bytes are still sent as-is. The caption is
+      // text, so a client name in the file name is stripped.
+      const caption = buildPdfCaption({ instructions: SYSTEM, fileName });
       content = [
         {
           type: "document",
@@ -90,7 +95,7 @@ Deno.serve(async (req: Request) => {
         },
         {
           type: "text",
-          text: `${SYSTEM}\n\nFile: ${fileName ?? "statement.pdf"}`,
+          text: caption.text,
         },
       ];
     } else {
@@ -113,10 +118,15 @@ Deno.serve(async (req: Request) => {
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
       debugTextChars = docText.length;
+      const sealed = buildTextExtractionPayload({
+        instructions: SYSTEM,
+        fileName,
+        text: docText,
+      });
       content = [
         {
           type: "text",
-          text: `${SYSTEM}\n\nFile: ${fileName ?? "statement"}\n\nContents:\n${docText}`,
+          text: sealed.text,
         },
       ];
     }

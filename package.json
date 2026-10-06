@@ -20,6 +20,7 @@
     "test:budget-pdf": "vite-node --config scripts/vite-test.config.ts scripts/budget-pdf-test.mts",
     "test:ask-ai-client-switch": "vite-node --config scripts/vite-test.config.ts scripts/ask-ai-client-switch-test.mts",
     "test:ask-ai-context": "vite-node --config scripts/vite-test.config.ts scripts/ask-ai-context-test.mts",
+    "test:identifier-redaction": "vite-node --config scripts/vite-test.config.ts scripts/identifier-redaction-test.mts",
     "test:accountant-ask-ai-tab": "vite-node --config scripts/vite-test.config.ts scripts/accountant-ask-ai-tab-test.mts",
     "test:onboarding": "vite-node --config scripts/vite-test.config.ts scripts/test-onboarding-rls.mts",
     "test:upload-visibility": "vite-node --config scripts/vite-test.config.ts scripts/upload-visibility-test.mts",

@@ -18,6 +18,7 @@ import {
 } from "@/lib/lighthouse-agent-chat";
 import { persistPendingLighthouseDraft } from "@/lib/lighthouse-draft-persist";
 import { callClaudeMessages } from "@/lib/claude-messages";
+import { redactForModel, rehydrateModelOutput } from "@/lib/redact-identifiers";
 import { loadLighthouseWorkbenchBook, type LighthouseLead } from "@/lib/lighthouse.functions";
 import {
   adminLoose,
@@ -167,11 +168,22 @@ export const askLighthouseAgent = createServerFn({ method: "POST" })
       snapshot,
       createdBy: gate.userId,
       complete: process.env.ANTHROPIC_API_KEY
-        ? (prompt) =>
-            callClaudeMessages({
-              content: [{ type: "text", text: prompt }],
-              maxTokens: 1200,
-            })
+        ? async (prompt) => {
+            const sealed = redactForModel(prompt, {
+              partyNames: snapshot.firms.map((firm) => firm.title),
+              emails: [
+                ...snapshot.firms.map((firm) => firm.email),
+                ...snapshot.replies.map((reply) => reply.fromEmail),
+              ],
+            });
+            return rehydrateModelOutput(
+              await callClaudeMessages({
+                content: [{ type: "text", text: sealed.text }],
+                maxTokens: 1200,
+              }),
+              sealed.session,
+            );
+          }
         : undefined,
       persistDraft: async (write) => {
         const saved = await persistPendingLighthouseDraft(admin, write, new Date(), {
