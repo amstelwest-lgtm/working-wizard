@@ -15,6 +15,7 @@ import {
   firmCardTitle,
   formatOpsCount,
   formatOpsPercent,
+  refuseColdDraft,
   zoneClocks,
   type AgentLead,
   type AgentTouch,
@@ -31,7 +32,6 @@ import { LIGHTHOUSE_FROM_EMAIL } from "@/lib/lighthouse-from";
 import { LIGHTHOUSE_REPLY_TO } from "@/lib/lighthouse-reply-to";
 import { LIGHTHOUSE_SENDER_NAME } from "@/lib/lighthouse-sender";
 import { resolveRecipientZone, type LighthouseGeo } from "@/lib/lighthouse-send-windows";
-import { coldCadenceOpen } from "@/lib/lighthouse-targets";
 
 export const LIGHTHOUSE_CHAT_FROM = `Milōn <${LIGHTHOUSE_FROM_EMAIL}>`;
 export const LIGHTHOUSE_CHAT_AUTO_SEND = false as const;
@@ -693,13 +693,71 @@ export function answerFromSnapshot(
   return { reply: parts.filter(Boolean).join("\n\n"), chips: action.chips, intent };
 }
 
+const CHAT_LEAD_ID_RE =
+  /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
+const CHAT_EMAIL_RE = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
+
+function foldLeadText(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ");
+}
+
+export type ChatLeadResolution =
+  | { status: "one"; firm: ChatFirm }
+  | { status: "none" }
+  | { status: "ambiguous"; firms: ChatFirm[] };
+
+/**
+ * Lead id, then email, then a unique firm title.
+ * A shared title (four "Milōn Dry Run" rows) is ambiguous — never a silent sibling.
+ */
+export function resolveChatLead(message: string, firms: ChatFirm[]): ChatLeadResolution {
+  const ids = message.match(CHAT_LEAD_ID_RE) ?? [];
+  const byId = firms.filter((firm) =>
+    ids.some((id) => id.toLowerCase() === firm.leadId.toLowerCase()),
+  );
+  if (byId.length === 1) return { status: "one", firm: byId[0] };
+  if (byId.length > 1) return { status: "ambiguous", firms: byId };
+
+  const emails = (message.match(CHAT_EMAIL_RE) ?? []).map((email) => email.toLowerCase());
+  const byEmail = firms.filter(
+    (firm) => firm.email && emails.includes(firm.email.trim().toLowerCase()),
+  );
+  if (byEmail.length === 1) return { status: "one", firm: byEmail[0] };
+  if (byEmail.length > 1) return { status: "ambiguous", firms: byEmail };
+
+  const text = foldLeadText(message);
+  const hits = firms.filter((firm) => {
+    const name = foldLeadText(firm.title);
+    return name.length > 1 && name !== "unnamed" && text.includes(name);
+  });
+  if (!hits.length) return { status: "none" };
+  hits.sort((a, b) => foldLeadText(b.title).length - foldLeadText(a.title).length);
+  const bestLen = foldLeadText(hits[0].title).length;
+  const bestKey = foldLeadText(hits[0].title);
+  const longest = hits.filter((firm) => foldLeadText(firm.title).length === bestLen);
+  const siblings = firms.filter((firm) => foldLeadText(firm.title) === bestKey);
+  if (siblings.length > 1 || longest.length > 1) return { status: "ambiguous", firms: siblings };
+  return { status: "one", firm: hits[0] };
+}
+
+export function ambiguousLeadReply(firms: ChatFirm[]): string {
+  const title = firms[0]?.title?.trim() || "that name";
+  const listed = firms.slice(0, 8).map((firm) => {
+    const email = firm.email?.trim() || "no email";
+    return `${email} (${firm.leadId})`;
+  });
+  const extra = firms.length > 8 ? `, and ${firms.length - 8} more` : "";
+  return `Which lead? ${firms.length} share ${title}. Say the email or the lead id: ${listed.join(", ")}${extra}.`;
+}
+
 export function firmNamedInMessage(message: string, firms: ChatFirm[]): ChatFirm | null {
-  const text = message.toLowerCase();
-  const hits = firms
-    .map((firm) => ({ firm, name: firm.title.trim().toLowerCase() }))
-    .filter((hit) => hit.name.length > 1 && hit.name !== "unnamed" && text.includes(hit.name))
-    .sort((a, b) => b.name.length - a.name.length);
-  return hits[0]?.firm ?? null;
+  const resolved = resolveChatLead(message, firms);
+  return resolved.status === "one" ? resolved.firm : null;
 }
 
 export function nextDraftStep(firm: ChatFirm): number {
@@ -1018,8 +1076,22 @@ ${input.message}`;
     return { reply, chips, draft: null, refusedAction: null };
   }
 
+  const resolved = resolveChatLead(input.message, input.snapshot.firms);
+  if (resolved.status === "ambiguous") {
+    return {
+      reply: ambiguousLeadReply(resolved.firms),
+      chips: resolved.firms.slice(0, 4).map((firm) => ({
+        kind: "firm" as const,
+        id: firm.leadId,
+        leadId: firm.leadId,
+        label: firm.email?.trim() || firm.title,
+      })),
+      draft: null,
+      refusedAction: null,
+    };
+  }
   const named =
-    firmNamedInMessage(input.message, input.snapshot.firms) ||
+    (resolved.status === "one" ? resolved.firm : null) ||
     (modelDraft
       ? input.snapshot.firms.find((firm) => firm.leadId === modelDraft?.leadId) ?? null
       : null);
@@ -1041,9 +1113,14 @@ ${input.message}`;
       refusedAction: null,
     };
   }
-  if (!coldCadenceOpen(named)) {
+  const heldRefusal = refuseColdDraft({
+    conversationHeld: named.conversationHeld,
+    company: named.title,
+    email: named.email,
+  });
+  if (heldRefusal) {
     return {
-      reply: `Call / meeting held for ${named.title}. I will not draft another cold step.`,
+      reply: heldRefusal,
       chips: [{ kind: "firm", id: named.leadId, leadId: named.leadId, label: named.title }],
       draft: null,
       refusedAction: null,
@@ -1077,15 +1154,29 @@ ${input.message}`;
     };
   }
 
-  const saved = await input.persistDraft({
-    leadId: named.leadId,
-    stepNo: nextDraftStep(named),
-    angle: "observation",
-    subject: locked.subject,
-    body: locked.body,
-    createdBy: input.createdBy,
-    action: "draft",
-  });
+  let saved: { touchId: string; status: "draft" };
+  try {
+    saved = await input.persistDraft({
+      leadId: named.leadId,
+      stepNo: nextDraftStep(named),
+      angle: "observation",
+      subject: locked.subject,
+      body: locked.body,
+      createdBy: input.createdBy,
+      action: "draft",
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (/cold emails are stopped/i.test(message)) {
+      return {
+        reply: message,
+        chips: [{ kind: "firm", id: named.leadId, leadId: named.leadId, label: named.title }],
+        draft: null,
+        refusedAction: null,
+      };
+    }
+    throw error;
+  }
   if (saved.status !== "draft") {
     throw new Error("Lighthouse chat cannot send, approve, or schedule.");
   }

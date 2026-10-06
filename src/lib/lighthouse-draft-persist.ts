@@ -6,6 +6,7 @@
  */
 
 import { assertChatMutationAllowed } from "@/lib/lighthouse-agent-chat";
+import { assertColdDraftOpen } from "@/lib/lighthouse-agent";
 
 export type PendingDraftWrite = {
   leadId: string;
@@ -55,6 +56,31 @@ type TouchAdmin = {
  * Chat sets `refuseLocked` so an approved or sent step is not rewritten.
  * The composer leaves it off and can still replace a step with a new draft.
  */
+async function heldLeadForDraft(
+  admin: TouchAdmin,
+  leadId: string,
+): Promise<void> {
+  const { data, error } = await admin
+    .from("milon_ops_leads")
+    .select("company, name, email, conversation_held")
+    .eq("id", leadId)
+    .maybeSingle();
+  if (error) throw new Error(error.message ?? "Could not read the lead.");
+  const lead = data as {
+    company?: string | null;
+    name?: string | null;
+    email?: string | null;
+    conversation_held?: boolean | null;
+  } | null;
+  if (!lead) return;
+  assertColdDraftOpen({
+    conversationHeld: Boolean(lead.conversation_held),
+    company: lead.company ?? null,
+    name: lead.name ?? null,
+    email: lead.email ?? null,
+  });
+}
+
 export async function persistPendingLighthouseDraft(
   admin: TouchAdmin,
   write: PendingDraftWrite,
@@ -65,6 +91,8 @@ export async function persistPendingLighthouseDraft(
   if (row.status !== "draft") {
     throw new Error("Lighthouse chat cannot send, approve, or schedule.");
   }
+
+  await heldLeadForDraft(admin, write.leadId);
 
   const { data: existing, error: readErr } = await admin
     .from("lighthouse_touches")
