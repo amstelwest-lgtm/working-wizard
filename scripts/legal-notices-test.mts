@@ -37,8 +37,7 @@ assert(LEGAL_ADDRESS.includes("Sunnyside"), "address is Sunnyside Pretoria");
 assert(!LEGAL_ENTITY.includes("MILŌN"), "product name is not the registered company");
 assert(/\d{4}/.test(LEGAL_EFFECTIVE), "effective date has a year");
 assert(privacy.includes("powered by"), "privacy says AI is used");
-assert(privacy.includes("our AI agent"), "privacy names our AI agent");
-assert(!/\b(claude|anthropic|openai|gpt)\b/i.test(privacy), "privacy does not name a model vendor");
+assert(privacy.includes("Claude"), "privacy names Claude");
 assert(privacy.includes("AI_IDENTIFIERS_LINE") || privacy.includes("amounts stay"), "privacy says identifiers are stripped and amounts stay");
 assert(!privacy.includes("no raw amounts"), "privacy does not claim amounts are stripped");
 assert(privacy.includes("Protection of Personal Information"), "privacy mentions POPIA");
@@ -48,8 +47,7 @@ assert(privacy.includes("not in borrowed American boilerplate"), "ZA privacy kee
 assert(privacy.includes("mk-copy-us"), "privacy has a US pack");
 
 assert(terms.includes("not a substitute"), "terms: not a substitute");
-assert(terms.includes("our AI agent"), "terms name our AI agent");
-assert(!/\b(claude|anthropic|openai|gpt)\b/i.test(terms), "terms do not name a model vendor");
+assert(terms.includes("Claude"), "terms name Claude");
 assert(terms.includes("AI_IDENTIFIERS_LINE") || terms.includes("amounts stay"), "terms: identifiers stripped, amounts stay");
 assert(!terms.includes("no raw amounts"), "terms do not claim amounts are stripped");
 assert(terms.includes("South Africa"), "terms sit under SA law");
@@ -60,10 +58,9 @@ assert(
 assert(terms.includes("IRS"), "US terms mention IRS");
 assert(terms.includes("choice of law"), "US terms do not invent a US venue");
 
-assert(ai.includes("our AI agent"), "AI notice names our AI agent");
-assert(ai.includes("processing fact"), "AI notice keeps the processing-fact line");
-assert(!/\b(claude|anthropic|openai|gpt)\b/i.test(ai), "AI notice does not name a model vendor");
-assert(!ai.includes("mk-gold"), "AI notice does not gold-highlight the model");
+assert(ai.includes("Claude"), "AI notice names Claude");
+assert(ai.includes("Anthropic"), "AI notice names the supplier");
+assert(!ai.includes("mk-gold"), "AI notice does not gold-highlight Claude");
 assert(ai.includes('heroTone="plain"'), "AI notice uses the quiet hero");
 assert(ai.includes("No company names"), "AI notice: no company names");
 assert(ai.includes("Amounts stay"), "AI notice: amounts stay");
@@ -73,8 +70,7 @@ assert(ai.includes("VAT"), "AI notice: VAT stripped");
 assert(ai.includes("EIN"), "AI notice: EIN stripped on US pack");
 
 assert(faq.includes('href="/ai"'), "FAQ links to the AI notice");
-assert(faq.includes("powered by our AI agent"), "FAQ names our AI agent");
-assert(!/\b(claude|anthropic|openai|gpt)\b/i.test(faq), "FAQ does not name a model vendor");
+assert(faq.includes("powered by Claude"), "FAQ names Claude");
 assert(faq.includes("dollar sign glued on"), "FAQ has US invert of the SA-built line");
 assert(faq.includes("LIST_PRICES"), "FAQ prices come from the marketing pack");
 

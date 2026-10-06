@@ -5712,7 +5712,7 @@ function Index() {
                     Build cash forecast from bank statements
                   </span>
                   <span className="text-xs text-slate-600 dark:text-slate-400">
-                    Milōn groups repeating cash movements; classify cadence, then publish to Cash
+                    Claude groups repeating cash movements; classify cadence, then publish to Cash
                     Forecast.
                   </span>
                 </button>

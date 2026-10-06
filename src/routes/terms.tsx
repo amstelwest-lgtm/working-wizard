@@ -33,7 +33,7 @@ function TermsPage() {
       ctaTitle={<>Privacy and the AI notice sit next to this</>}
       ctaBody={
         <>
-          How we hold figures, and how our AI agent is used, are on their own pages — not buried in this
+          How we hold figures, and how Claude is used, are on their own pages — not buried in this
           one.
         </>
       }
@@ -83,7 +83,7 @@ function TermsPage() {
 
       <h2>AI</h2>
       <p>
-        Some features use AI. They are powered by <strong>our AI agent</strong>. {AI_IDENTIFIERS_LINE} The{" "}
+        Some features use AI. They are powered by <strong>Claude</strong>. {AI_IDENTIFIERS_LINE} The{" "}
         <a href="/ai">AI notice</a> is the full version of that sentence. AI output can be wrong;
         you (or the accountant who signs a draft) remain responsible for what you send a client.
       </p>

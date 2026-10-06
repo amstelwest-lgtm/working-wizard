@@ -2455,7 +2455,7 @@ function LandingPage() {
               <circle cx="12" cy="12" r="10" />
               <polyline points="12 6 12 12 16 14" />
             </svg>
-            <span>Identifiers stripped before our AI — amounts stay</span>
+            <span>Identifiers stripped before Claude — amounts stay</span>
           </div>
           <div className="item">
             <svg
@@ -2508,7 +2508,7 @@ function LandingPage() {
             >
               <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
             </svg>
-            <span>Powered by our AI</span>
+            <span>Powered by Claude AI</span>
           </div>
         </div>
       </div>
@@ -2693,7 +2693,7 @@ function LandingPage() {
               <span className="n">03</span>
               <h3>AI prepares the next move</h3>
               <p>
-                MILŌN uses its AI agent to turn the financial analysis and business context into clear
+                MILŌN uses Claude to turn the financial analysis and business context into clear
                 recommendations, a 13-week cash forecast, and an actionable plan.
               </p>
             </div>
@@ -2752,7 +2752,7 @@ function LandingPage() {
               </p>
               <ul>
                 <li>
-                  <b>AI-assisted</b> — Our AI agent prepares the first version of the analysis.
+                  <b>AI-assisted</b> — Claude prepares the first version of the analysis.
                 </li>
                 <li>
                   <b>Accountant-controlled</b> — You review, edit and sign off before anything
@@ -3153,7 +3153,7 @@ function LandingPage() {
                       <a href="/terms" style={{ color: "inherit" }}>
                         Terms
                       </a>
-                      . AI is powered by Milōn; identifiers are stripped before model calls,
+                      . AI is powered by Claude; identifiers are stripped before model calls,
                       amounts stay.{" "}
                       <a href="/privacy" style={{ color: "inherit" }}>
                         Privacy
@@ -3456,7 +3456,7 @@ function LandingPage() {
                           <a href="/terms" style={{ color: "inherit" }}>
                             Terms
                           </a>
-                          . AI is powered by Milōn; identifiers are stripped before model calls,
+                          . AI is powered by Claude; identifiers are stripped before model calls,
                           amounts stay.{" "}
                           <a href="/privacy" style={{ color: "inherit" }}>
                             Privacy
@@ -3569,7 +3569,7 @@ function LandingPage() {
                 AI notice
               </a>
               {" · "}
-              {DUAL_MARKET_BUILT} · Powered by our AI
+              {DUAL_MARKET_BUILT} · Powered by Claude AI
             </span>
           </div>
         </div>

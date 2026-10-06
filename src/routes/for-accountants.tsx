@@ -89,7 +89,7 @@ function ForAccountantsPage() {
           me.&rdquo;
         </li>
         <li>
-          <strong>Drafted advisory reports.</strong> Our AI agent writes the first draft from the client's
+          <strong>Drafted advisory reports.</strong> Claude writes the first draft from the client's
           actual numbers. You correct, sign off, and send — the judgement stays yours.
         </li>
         <li>

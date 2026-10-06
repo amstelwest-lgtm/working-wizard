@@ -21,7 +21,7 @@ function AiNoticePage() {
       heroTone="plain"
       eyebrow="AI notice"
       title="Use of an AI model"
-      lead="Milōn uses an AI model (our AI agent). Identifiers are stripped before model calls; amounts stay. This page records what that means."
+      lead="Milōn uses an AI model (Claude, from Anthropic). Identifiers are stripped before model calls; amounts stay. This page records what that means."
       ctaTitle={<>The rest of the legal pages</>}
       ctaBody={<>Privacy covers what we store. Terms cover how the workspace may be used.</>}
       ctaLabel="Privacy ✦"
@@ -32,7 +32,7 @@ function AiNoticePage() {
       <h2>What we send — and what we do not</h2>
       <p>
         When you ask the in-app assistant a question, or when the platform needs model help to talk
-        about a business, identifiers are stripped from what leaves Milōn for our AI agent. Amounts stay,
+        about a business, identifiers are stripped from what leaves Milōn for Claude. Amounts stay,
         so workings and accountant sign-off use real figures.
       </p>
       <ul className="mk-list">
@@ -61,7 +61,7 @@ function AiNoticePage() {
 
       <h2>The model</h2>
       <p>
-        The model is our AI agent. That is a processing fact, not an endorsement
+        The model is Claude, supplied by Anthropic. That is a processing fact, not an endorsement
         line. The same statement appears in the site footer.
       </p>
 
