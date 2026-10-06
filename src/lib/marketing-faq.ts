@@ -43,7 +43,7 @@ export const HOMEPAGE_FAQ_ITEMS: FaqItem[] = [
   {
     question: "Does MILŌN replace my accountant?",
     answer:
-      "No, MILŌN works alongside your accountant to provide financial analysis, financial health insights, cash-flow forecasting, and practical recommendations. AI prepares the analysis using your financial information, while a qualified accountant reviews and signs off before advice is shown to a client. MILŌN is not an accounting ledger, audit, CPA opinion, or regulated financial advice service.",
+      "No, MILŌN works alongside your accountant to provide financial analysis, financial health insights, cash-flow forecasting, and practical recommendations. AI prepares the analysis using your financial information, while a qualified accountant reviews and signs off every advisory pack. MILŌN is not an accounting ledger, audit, CPA opinion, or regulated financial advice service.",
   },
   {
     question: "Do I need QuickBooks or Xero to use MILŌN?",
@@ -97,7 +97,7 @@ export function publicFaqUsItems(): FaqItem[] {
     },
     {
       question: "What does the AI see?",
-      answer: `We use AI. ${AI_MODEL_DISCLOSURE} ${AI_IDENTIFIERS_LINE} Where an AI drafts a report for an accountant, a human reads and signs it before a client ever sees it. The AI notice at https://milonfinance.com/ai is the public version of that sentence.`,
+      answer: `We use AI. ${AI_MODEL_DISCLOSURE} ${AI_IDENTIFIERS_LINE} Where an AI drafts a report for an accountant, a human reads and signs off every advisory pack. The AI notice at https://milonfinance.com/ai is the public version of that sentence.`,
     },
     {
       question: "Do you store card details?",

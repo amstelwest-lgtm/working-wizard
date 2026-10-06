@@ -174,8 +174,7 @@ function ForAccountantsPage() {
           <div>
             <h3>Draft, review, send</h3>
             <p>
-              The advisory report is drafted for you and waits for your sign-off. Nothing reaches a
-              client without a partner putting their name to it.
+              The advisory report is drafted for you. You review and sign off every advisory pack.
             </p>
           </div>
         </li>

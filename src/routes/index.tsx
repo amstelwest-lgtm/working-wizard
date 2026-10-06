@@ -119,8 +119,19 @@ export const Route = createFileRoute("/")({
   component: LandingPage,
   head: ({ loaderData }) => {
     const showSaPricing = loaderData?.showSaPricing === true;
+    const homeHead = pageHead(SEO_PAGES.home);
     return {
-      ...pageHead(SEO_PAGES.home),
+      ...homeHead,
+      links: [
+        ...(homeHead.links ?? []),
+        {
+          rel: "preload",
+          href: "https://fonts.gstatic.com/s/notosans/v42/o-0bIpQlx3QUlC5A4PNB6Ryti20_6n1iPHjc5a7du3mhPy0.woff2",
+          as: "font",
+          type: "font/woff2",
+          crossOrigin: "anonymous",
+        },
+      ],
       styles: [{ children: landingCss }],
       scripts: [
         {
@@ -2742,7 +2753,7 @@ function LandingPage() {
               <h3>Your accountant reviews and signs off</h3>
               <p>
                 The accountant reviews the AI-generated analysis and recommendations, makes any
-                necessary changes, and signs off before the client sees the advice.
+                necessary changes, and signs off every advisory pack.
               </p>
             </div>
             <div className="step-card">
@@ -2795,8 +2806,8 @@ function LandingPage() {
                   <b>{BRIDGE_DRAFT_LABEL}</b> — {BRIDGE_DRAFT_BODY}
                 </li>
                 <li>
-                  <b>Accountant-controlled</b> — You review, edit and sign off before anything
-                  reaches the client.
+                  <b>Accountant-controlled</b> — You review, edit and sign off every advisory
+                  pack.
                 </li>
                 <li>
                   <b>One workflow</b> — Analysis, recommendations, deliverables, actions and
@@ -2866,7 +2877,7 @@ function LandingPage() {
               <div className="was">Problems → recommendations</div>
               <div className="now">
                 AI prepares the analysis.{" "}
-                <b>The accountant reviews and signs off before advice reaches the client.</b>
+                <b>The accountant reviews and signs off every advisory pack.</b>
               </div>
             </div>
             <div className="bridge-fact">
@@ -2994,7 +3005,7 @@ function LandingPage() {
               <p>
                 Your clients already depend on you for their financial information. MILŌN gives your
                 firm an AI-powered finance function you can run across those clients — you review
-                and sign off before advice reaches them.
+                and sign off every advisory pack.
               </p>
               <div className="go">
                 See MILŌN for my clients <i>→</i>
@@ -3012,8 +3023,8 @@ function LandingPage() {
               <h3>Business Owner</h3>
               <p>
                 You shouldn&apos;t need to be a CFO to understand the financial state of your
-                business. See your health, cash, problems, recommendations, and progress — reviewed
-                by your accountant — in one workspace.
+                business. See your health, cash, problems, recommendations, and progress in one
+                workspace.
               </p>
               <div className="go">
                 Take the 90-second diagnostic <i>→</i>

@@ -26,13 +26,11 @@ export const HERO_OWNER_PREFIX = "Business owner?";
 export const HERO_OWNER_LINK = "Spark is free during early access, no card needed →";
 
 /**
- * VERIFY-1 fallback. The owner workspace renders advisory-pack sections and
- * the recommendations panel before accountant sign-off, and a cash-forecast
- * break email can reach the owner with proposed moves. Live figures are fine;
- * unsigned advice is not fully gated.
+ * VERIFY-1. Unsigned packs, recommendations, and a cash-forecast email can
+ * reach the owner before an accountant signs off, so the line does not claim
+ * that sign-off gates what the client sees.
  */
-export const HERO_SIGNOFF_POINT =
-  "You review and sign off before advice reaches your client.";
+export const HERO_SIGNOFF_POINT = "You review and sign off every advisory pack.";
 
 export const HERO_POINTS = [
   "Connect a client's QuickBooks Online or Xero file, or upload a P&L and balance sheet.",
@@ -74,7 +72,7 @@ export const ACCOUNTANTS_DRAFT_BULLET =
 export const WATCH_EYEBROW = "See it in 30 seconds";
 export const WATCH_TITLE = "Two seats. One workspace.";
 export const WATCH_SUB =
-  "The accountant runs the analysis and signs it off. The owner sees what was signed off, and what to do next.";
+  "The accountant runs the analysis and signs off every advisory pack. The owner uses the same workspace to see what to do next.";
 
 export const ACCOUNTANT_TEASER = {
   label: "For accounting firms",

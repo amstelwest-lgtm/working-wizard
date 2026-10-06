@@ -81,12 +81,24 @@ assert(faqPageJson(publicFaqItems(true)).includes(SA_ZAR_LINE), "ZA FAQ JSON-LD 
 
 assert(!/claude/i.test(HERO_LEDE), "wedge line does not name a vendor");
 assert(
-  HERO_SIGNOFF_POINT === "You review and sign off before advice reaches your client.",
-  "VERIFY-1 uses the fallback sign-off line",
+  HERO_SIGNOFF_POINT === "You review and sign off every advisory pack.",
+  "VERIFY-1 hero bullet does not claim sign-off gates the client",
 );
 assert(!/claude/i.test(TRUST_IDENTIFIERS), "VERIFY-3 trust line does not claim every AI call");
 assert(TRUST_TRAINING.includes("isn't used to train"), "VERIFY-4 training line is the confirmed wording");
 assert(AI_MODEL_DISCLOSURE === DISCLOSURE, "FAQ disclosure constant is the approved sentence");
+
+const GATE = /before advice reaches|before anything reaches|before a client ever sees|before advice is shown|before the client sees|Nothing reaches a client|waits for your sign-off|what was signed off/i;
+for (const file of [
+  "src/routes/index.tsx",
+  "src/routes/faq.tsx",
+  "src/routes/for-accountants.tsx",
+  "src/lib/landing-copy.ts",
+  "src/lib/marketing-faq.ts",
+]) {
+  const src = readFileSync(resolve(file), "utf8");
+  assert(!GATE.test(src), `${file} does not claim sign-off gates what the client sees`);
+}
 
 for (const file of ["src/routes/index.tsx", "src/routes/for-accountants.tsx", "src/lib/landing-copy.ts"]) {
   const src = readFileSync(resolve(file), "utf8");
