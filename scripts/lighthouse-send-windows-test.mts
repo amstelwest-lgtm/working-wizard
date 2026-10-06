@@ -10,11 +10,16 @@ import {
   formatOpsPercent,
   formatUsageMetric,
   firmCardTitle,
+  geoWindowLine,
+  isDryRunCohortName,
+  nextUpAction,
+  zoneClocks,
 } from "../src/lib/lighthouse-agent";
 import { pilotFlagWiring } from "../src/lib/ops-pilot-flags";
 import { disambiguateGrantLabel } from "../src/lib/lighthouse-access.functions";
 import {
   isSendWindowOpen,
+  nextWindowLine,
   nextWindowStart,
   resolveRecipientZone,
   sendBlockedReason,
@@ -92,9 +97,41 @@ assert(formatOpsCount(0) === "0", "a zero count is 0");
 assert(formatOpsPercent(0) === "0%", "a zero rate is 0%");
 assert(formatUsageMetric(0, 0) === "0", "a zero usage pair is 0, not 00u");
 assert(
-  firmCardTitle({ name: "team", company: "Milōn Dry Run", email: "team@trymilon.com" }) ===
-    "Milōn Dry Run",
+  firmCardTitle({ name: "team", company: "Acme Plumbing", email: "team@acme.com" }) ===
+    "Acme Plumbing",
   "a mailbox local-part yields the firm name",
+);
+assert(isDryRunCohortName("Milōn Dry Run"), "the dry-run cohort label is not a firm");
+assert(
+  firmCardTitle({
+    name: "Janet Killingsworth",
+    company: "Milōn Dry Run",
+    email: "janet@firm.com",
+  }) === "Janet Killingsworth",
+  "a dry-run cohort label yields the contact name",
+);
+assert(
+  firmCardTitle({ name: "team", company: "Milōn Dry Run", email: "team@trymilon.com" }) ===
+    "team@trymilon.com",
+  "a generic name under the dry-run label yields the email",
+);
+assert(
+  nextWindowLine({
+    open: false,
+    zone: null,
+    nextLabel: "Set US or South Africa",
+    countdownLabel: "—",
+  }) === null,
+  "an unset place hides the filler window line",
+);
+assert(
+  nextWindowLine({
+    open: false,
+    zone: "ET",
+    nextLabel: "Tue 08:00 ET",
+    countdownLabel: "17h 0m",
+  }) === "Next window Tue 08:00 ET (17h 0m)",
+  "a closed window shows the real next opening",
 );
 assert(
   firmCardTitle({ name: "team", company: "", email: "team@trymilon.com" }) === "team@trymilon.com",
@@ -135,6 +172,146 @@ assert(
   /if \(confirmSend\.preview\) return;[\s\S]{0,800}sendTouch\(/.test(panel),
   "preview onClick returns before sendTouch",
 );
+const tueMidday = at("2026-10-06T13:00:00.000Z");
+const tueLine = geoWindowLine(zoneClocks([], tueMidday));
+assert(tueLine.startsWith("US Open · SA opens in "), `Tue 09:00 ET window line: ${tueLine}`);
+assert(/17h/.test(tueLine), `SA countdown from 13:00Z: ${tueLine}`);
+assert(
+  geoWindowLine([
+    {
+      zone: "ET",
+      geo: "US",
+      open: true,
+      nextLabel: "Tue 08:00 ET",
+      countdownLabel: "open",
+      due: 1,
+      dueNow: 1,
+    },
+    {
+      zone: "SAST",
+      geo: "SA",
+      open: false,
+      nextLabel: "Wed 08:00 SAST",
+      countdownLabel: "17h 0m",
+      due: 0,
+      dueNow: 0,
+    },
+  ]) === "US Open · SA opens in 17h 0m",
+  "the mix line names an open US window and the SA countdown",
+);
+
+const twoDrafts = nextUpAction({
+  inbox: [
+    {
+      touchId: "t1",
+      leadId: "a",
+      title: "Acme",
+      subject: "Hi",
+      angle: "observation",
+      status: "draft",
+    },
+    {
+      touchId: "t2",
+      leadId: "b",
+      title: "Cape",
+      subject: "Hi",
+      angle: "value",
+      status: "draft",
+    },
+  ],
+  queue: [
+    {
+      leadId: "a",
+      title: "Acme Plumbing",
+      email: null,
+      zone: "ET",
+      geo: "US",
+      open: true,
+      nextLabel: "Tue 08:00 ET",
+      countdownLabel: "open",
+      stepNo: 1,
+    },
+  ],
+  hasFirms: true,
+});
+assert(
+  twoDrafts.label === "Review 2 drafts" && twoDrafts.touchId === "t1" && twoDrafts.kind === "review",
+  "pending drafts are the single next action",
+);
+assert(
+  nextUpAction({
+    inbox: [
+      {
+        touchId: "t1",
+        leadId: "a",
+        title: "Acme",
+        subject: "Hi",
+        angle: "observation",
+        status: "draft",
+      },
+    ],
+    queue: [],
+    hasFirms: true,
+  }).label === "Review 1 draft",
+  "one pending draft stays singular",
+);
+assert(
+  nextUpAction({
+    inbox: [
+      {
+        touchId: "t9",
+        leadId: "a",
+        title: "Acme",
+        subject: "Hi",
+        angle: "observation",
+        status: "approved",
+      },
+    ],
+    queue: [],
+    hasFirms: true,
+  }).label === "Open approved draft",
+  "an approved draft opens the inbox and does not send",
+);
+assert(
+  nextUpAction({
+    inbox: [],
+    queue: [
+      {
+        leadId: "late",
+        title: "Late Co",
+        email: null,
+        zone: "ET",
+        geo: "US",
+        open: false,
+        nextLabel: "Tue 08:00 ET",
+        countdownLabel: "2h 0m",
+        stepNo: 2,
+      },
+      {
+        leadId: "now",
+        title: "Acme Plumbing",
+        email: null,
+        zone: "ET",
+        geo: "US",
+        open: true,
+        nextLabel: "Tue 08:00 ET",
+        countdownLabel: "open",
+        stepNo: 1,
+      },
+    ],
+    hasFirms: true,
+  }).label === "Follow up with Acme Plumbing",
+  "the next action follows the firm whose window is open",
+);
+assert(
+  nextUpAction({ inbox: [], queue: [], hasFirms: false }).label === "Import cohort",
+  "an empty book imports a cohort",
+);
+assert(
+  nextUpAction({ inbox: [], queue: [], hasFirms: true }).label === "Run plan (dry-run)",
+  "firms with nothing due run a dry-run plan",
+);
+
 assert(panel.includes("disabled={!window?.open}"), "inbox Send now stays disabled outside the window");
 assert(
   panel.includes("disabled={sending || !approved || !windowStatus.open || lead.doNotContact}"),

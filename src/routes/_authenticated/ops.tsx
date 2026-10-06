@@ -443,7 +443,7 @@ function OwnerOpsPage() {
                   </span>
                 </li>
                 <li>
-                  ANTHROPIC:{" "}
+                  AI key:{" "}
                   <span
                     className={
                       envDiag.anthropic ? "text-[var(--ops-ok-ink)]" : "text-[var(--ops-amber)]"

@@ -31,7 +31,8 @@ import {
   type RetentionRow,
 } from "@/lib/metrics/digest";
 import { sendFounderDigest } from "@/lib/metrics/digest-mail";
-import { buildReviewInbox, zoneClocks, type AgentLead } from "@/lib/lighthouse-agent";
+import { lighthouseReviewPulse } from "@/lib/lighthouse-agent";
+import { loadLighthouseWorkbenchBook } from "@/lib/lighthouse.functions";
 import {
   isExcludedFromInstrument,
   mergeInternalEmails,
@@ -411,66 +412,9 @@ async function loadBrainCounts(): Promise<BrainFunnelCounts | null> {
 async function loadReviewPulse(): Promise<{ inbox: number; dueNow: number }> {
   const empty = { inbox: 0, dueNow: 0 };
   try {
-    const admin = analyticsAdmin();
-    const { data: leadRows, error } = await admin
-      .from("milon_ops_leads")
-      .select(
-        "id, name, company, email, stage, do_not_contact, next_touch_on, next_follow_up_at, timezone, country, region",
-      )
-      .limit(400);
-    if (error || !Array.isArray(leadRows)) return empty;
-    const ids = leadRows.map((row) => String((row as { id?: string }).id ?? "")).filter(Boolean);
-    let touchRows: Array<Record<string, unknown>> = [];
-    if (ids.length) {
-      const touchRes = await admin
-        .from("lighthouse_touches")
-        .select("id, lead_id, status, sent_at, step_no, angle, subject")
-        .in("lead_id", ids)
-        .limit(2000);
-      if (!touchRes.error && Array.isArray(touchRes.data)) {
-        touchRows = touchRes.data as Array<Record<string, unknown>>;
-      }
-    }
-    const touchesByLead = new Map<string, AgentLead["touches"]>();
-    for (const touch of touchRows) {
-      const leadId = String(touch.lead_id ?? "");
-      const list = touchesByLead.get(leadId) ?? [];
-      list.push({
-        id: String(touch.id ?? ""),
-        stepNo: Number(touch.step_no ?? 1),
-        angle: (touch.angle as string | null) ?? null,
-        subject: (touch.subject as string | null) ?? null,
-        body: null,
-        status: String(touch.status ?? ""),
-        sentAt: (touch.sent_at as string | null) ?? null,
-        deliveredAt: null,
-      });
-      touchesByLead.set(leadId, list);
-    }
-    const leads: AgentLead[] = leadRows.map((row) => {
-      const lead = row as Record<string, unknown>;
-      const id = String(lead.id ?? "");
-      return {
-        id,
-        name: (lead.name as string | null) ?? null,
-        company: (lead.company as string | null) ?? null,
-        email: (lead.email as string | null) ?? null,
-        stage: String(lead.stage ?? "sourced"),
-        doNotContact: Boolean(lead.do_not_contact),
-        nextTouchOn: (lead.next_touch_on as string | null) ?? null,
-        nextFollowUpAt: (lead.next_follow_up_at as string | null) ?? null,
-        lastTouchAt: null,
-        sequenceStep: 0,
-        timezone: (lead.timezone as string | null) ?? null,
-        country: (lead.country as string | null) ?? null,
-        region: (lead.region as string | null) ?? null,
-        touches: touchesByLead.get(id) ?? [],
-      };
-    });
-    return {
-      inbox: buildReviewInbox(leads).length,
-      dueNow: zoneClocks(leads).reduce((sum, clock) => sum + clock.dueNow, 0),
-    };
+    const book = await loadLighthouseWorkbenchBook(analyticsAdmin());
+    if (book.leadError) return empty;
+    return lighthouseReviewPulse(book.leads);
   } catch {
     return empty;
   }

@@ -11,10 +11,11 @@ import {
   assertOpsConsoleAccess,
   migrationHintFor,
   missingRelation,
+  ownerEmailAllowlist,
   type AuthCtx,
 } from "@/lib/owner-ops.guard";
 import { clientNoteProfilePath } from "@/lib/client-note-link";
-import { isExcludedFromInstrument } from "@/lib/metrics/internal-exclusion";
+import { isExcludedFromInstrument, mergeInternalEmails } from "@/lib/metrics/internal-exclusion";
 import { inviteSiteUrl } from "@/lib/client-invite-email";
 
 export const IT_QUERIES_MIGRATION = "20260901140000_milon_it_queries.sql";
@@ -108,16 +109,73 @@ export const getLighthouseItBoard = createServerFn({ method: "GET" })
     ];
     const nameById = new Map<string, string>();
     const excludedClientIds = new Set<string>();
+    const ctx = {
+      internalEmails: mergeInternalEmails(
+        ownerEmailAllowlist(),
+        members.map((member) => member.email),
+      ),
+    };
     if (clientIds.length > 0) {
       const { data: clientRows } = await admin
         .from("clients")
-        .select("id, name, is_demo")
+        .select("id, name, is_demo, owner_user_id, firm_id")
         .in("id", clientIds);
-      for (const c of clientRows ?? []) {
+      const clients = (clientRows ?? []) as Array<{
+        id: string;
+        name: string | null;
+        is_demo?: boolean | null;
+        owner_user_id?: string | null;
+        firm_id?: string | null;
+      }>;
+      const firmIds = [...new Set(clients.map((c) => String(c.firm_id ?? "")).filter(Boolean))];
+      const { data: firmRows } = firmIds.length
+        ? await admin.from("firms").select("id, name, is_internal, owner_user_id").in("id", firmIds)
+        : { data: [] as Array<Record<string, unknown>> };
+      const firms = (firmRows ?? []) as Array<{
+        id: string;
+        name: string | null;
+        is_internal?: boolean | null;
+        owner_user_id?: string | null;
+      }>;
+      const ownerIds = [
+        ...new Set(
+          [...clients.map((c) => c.owner_user_id), ...firms.map((f) => f.owner_user_id)]
+            .map((id) => String(id ?? ""))
+            .filter(Boolean),
+        ),
+      ];
+      const { data: profileRows } = ownerIds.length
+        ? await admin.from("profiles").select("id, email").in("id", ownerIds)
+        : { data: [] as Array<{ id: string; email: string | null }> };
+      const emailByUser = new Map<string, string>();
+      for (const profile of (profileRows ?? []) as Array<{ id: string; email: string | null }>) {
+        emailByUser.set(String(profile.id), String(profile.email ?? ""));
+      }
+      const excludedFirmIds = new Set(
+        firms
+          .filter((firm) =>
+            isExcludedFromInstrument(
+              {
+                name: firm.name,
+                isInternal: Boolean(firm.is_internal),
+                ownerEmail: emailByUser.get(String(firm.owner_user_id ?? "")) ?? null,
+              },
+              ctx,
+            ),
+          )
+          .map((firm) => String(firm.id)),
+      );
+      for (const c of clients) {
         const id = String(c.id);
         const name = String(c.name ?? "Client");
         nameById.set(id, name);
-        if (isExcludedFromInstrument({ name, isDemo: Boolean(c.is_demo) })) excludedClientIds.add(id);
+        const ownerEmail = emailByUser.get(String(c.owner_user_id ?? "")) ?? null;
+        if (
+          excludedFirmIds.has(String(c.firm_id ?? "")) ||
+          isExcludedFromInstrument({ name, isDemo: Boolean(c.is_demo), ownerEmail }, ctx)
+        ) {
+          excludedClientIds.add(id);
+        }
       }
     }
 
@@ -143,11 +201,7 @@ export const getLighthouseItBoard = createServerFn({ method: "GET" })
     });
 
     return {
-      queries: queries.filter(
-        (query) =>
-          !excludedClientIds.has(query.clientId) &&
-          !isExcludedFromInstrument({ name: query.clientName }),
-      ),
+      queries: queries.filter((query) => !excludedClientIds.has(query.clientId)),
       members,
       migrationHint: null,
     };
