@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Share2 } from "lucide-react";
 import { ShareModal } from "./share-modal";
-import { InstallInstructions } from "./install-instructions";
+import { LazyInstallOverlay } from "./lazy-install";
 import { useShare } from "@/hooks/use-share";
 
 export function ShareButton() {
@@ -41,7 +41,7 @@ export function ShareButton() {
         appUrl={appUrl}
       />
 
-      <InstallInstructions
+      <LazyInstallOverlay
         open={installOpen}
         onClose={() => setInstallOpen(false)}
         onShareAgain={() => {

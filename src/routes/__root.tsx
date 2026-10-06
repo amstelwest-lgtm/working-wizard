@@ -86,11 +86,15 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
 }
 
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
-  head: ({ match }) => {
+  head: ({ match, matches }) => {
     // Homepage title, description, canonical, and og:url live on `/` only.
     // Unmatched paths (including /blog and /pricing, which are not routes)
     // must not inherit that metadata — they are real 404s.
     const missing = match._notFound ? notFoundHead() : null;
+    // Landing self-hosts Bebas, Cormorant italic, and Noto. Skip the shared
+    // Google Fonts sheet (Inter, Instrument Serif, Cormorant, Noto) and
+    // Ask-AI's Inter stylesheet on `/`.
+    const onLanding = matches.some((entry) => String(entry.routeId) === "/");
     const jsonLd = {
       type: "application/ld+json",
       children: organizationGraphJson(),
@@ -107,14 +111,22 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         { name: "apple-mobile-web-app-title", content: "Milōn" },
       ],
       links: [
-        { rel: "preconnect", href: "https://fonts.googleapis.com" },
-        { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
-        {
-          rel: "stylesheet",
-          href: "https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,500;1,600&family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700&family=Noto+Sans:wght@300;400;500;600;700;800&display=swap",
-        },
+        ...(onLanding
+          ? []
+          : [
+              { rel: "preconnect" as const, href: "https://fonts.googleapis.com" },
+              {
+                rel: "preconnect" as const,
+                href: "https://fonts.gstatic.com",
+                crossOrigin: "anonymous" as const,
+              },
+              {
+                rel: "stylesheet" as const,
+                href: "https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,500;1,600&family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700&family=Noto+Sans:wght@300;400;500;600;700;800&display=swap",
+              },
+              { rel: "stylesheet" as const, href: "/ask-ai.css" },
+            ]),
         { rel: "stylesheet", href: appCss },
-        { rel: "stylesheet", href: "/ask-ai.css" },
         { rel: "manifest", href: "/manifest.json" },
         { rel: "icon", href: "/favicon.ico", sizes: "32x32" },
         { rel: "icon", href: "/icons/icon-192.png", type: "image/png", sizes: "192x192" },
