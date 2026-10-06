@@ -5,6 +5,7 @@
  */
 
 import { leadDisplayName } from "@/lib/lighthouse-due";
+import { coldCadenceOpen } from "@/lib/lighthouse-targets";
 import {
   SA_TIME_ZONE,
   US_TIME_ZONES,
@@ -36,6 +37,8 @@ export type AgentLead = RecipientPlace & {
   company?: string | null;
   stage: string;
   doNotContact: boolean;
+  /** A call or meeting was held. Cold cadence stays off. */
+  conversationHeld?: boolean;
   nextTouchOn: string | null;
   nextFollowUpAt?: string | null;
   lastTouchAt: string | null;
@@ -75,6 +78,7 @@ export function angleBucket(angle: string | null | undefined): AgentAngle {
 
 export function isLeadDue(lead: AgentLead, now = new Date()): boolean {
   if (lead.doNotContact) return false;
+  if (!coldCadenceOpen(lead)) return false;
   if (lead.stage === "won" || lead.stage === "lost") return false;
   if (lead.nextFollowUpAt) {
     const at = Date.parse(lead.nextFollowUpAt);

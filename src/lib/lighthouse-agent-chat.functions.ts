@@ -52,6 +52,7 @@ function chatLeadFromWorkbench(lead: LighthouseLead): ChatLeadInput {
     timezone: lead.timezone,
     stage: lead.stage,
     doNotContact: lead.doNotContact,
+    conversationHeld: lead.conversationHeld,
     nextTouchOn: lead.nextTouchOn,
     nextFollowUpAt: lead.nextFollowUpAt,
     lastTouchAt: lead.lastTouchAt,

@@ -45,6 +45,7 @@
     "test:lighthouse-accountant-v3": "vite-node --config scripts/vite-test.config.ts scripts/lighthouse-accountant-v3-test.mts",
     "test:lighthouse-from-lock": "vite-node --config scripts/vite-test.config.ts scripts/lighthouse-from-lock-test.mts",
     "test:lighthouse-tabs": "vite-node --config scripts/vite-test.config.ts scripts/lighthouse-tabs-test.mts",
+    "test:lighthouse-targets": "vite-node --config scripts/vite-test.config.ts scripts/lighthouse-targets-test.mts",
     "test:ops-route-state": "vite-node --config scripts/vite-test.config.ts scripts/ops-route-state-test.mts",
     "test:lighthouse-send-windows": "vite-node --config scripts/vite-test.config.ts scripts/lighthouse-send-windows-test.mts",
     "test:lighthouse-accountant-golden": "vite-node --config scripts/vite-test.config.ts scripts/lighthouse-accountant-golden-test.mts",

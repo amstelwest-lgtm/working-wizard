@@ -31,6 +31,7 @@ import { LIGHTHOUSE_FROM_EMAIL } from "@/lib/lighthouse-from";
 import { LIGHTHOUSE_REPLY_TO } from "@/lib/lighthouse-reply-to";
 import { LIGHTHOUSE_SENDER_NAME } from "@/lib/lighthouse-sender";
 import { resolveRecipientZone, type LighthouseGeo } from "@/lib/lighthouse-send-windows";
+import { coldCadenceOpen } from "@/lib/lighthouse-targets";
 
 export const LIGHTHOUSE_CHAT_FROM = `Milōn <${LIGHTHOUSE_FROM_EMAIL}>`;
 export const LIGHTHOUSE_CHAT_AUTO_SEND = false as const;
@@ -128,6 +129,7 @@ export type ChatFirm = {
   delivery: string | null;
   replyStatus: string | null;
   doNotContact: boolean;
+  conversationHeld?: boolean;
   sequenceStep: number;
   touches: AgentTouch[];
 };
@@ -162,6 +164,7 @@ export type ChatLeadInput = {
   timezone?: string | null;
   stage?: string | null;
   doNotContact?: boolean;
+  conversationHeld?: boolean;
   nextTouchOn?: string | null;
   nextFollowUpAt?: string | null;
   lastTouchAt?: string | null;
@@ -300,6 +303,7 @@ function toAgentLead(row: ChatLeadInput): AgentLead {
     timezone: row.timezone ?? null,
     stage: row.stage ?? "sourced",
     doNotContact: Boolean(row.doNotContact),
+    conversationHeld: Boolean(row.conversationHeld),
     nextTouchOn: row.nextTouchOn ?? null,
     nextFollowUpAt: row.nextFollowUpAt ?? null,
     lastTouchAt: row.lastTouchAt ?? null,
@@ -357,6 +361,7 @@ export function snapshotFromBook(
       delivery: row.lastDeliveryStatus ?? null,
       replyStatus,
       doNotContact: agent.doNotContact,
+      conversationHeld: Boolean(row.conversationHeld),
       sequenceStep: agent.sequenceStep,
       touches: agent.touches,
     };
@@ -1031,6 +1036,14 @@ ${input.message}`;
   if (named.doNotContact) {
     return {
       reply: `${named.title} is suppressed. I will not draft for them.`,
+      chips: [{ kind: "firm", id: named.leadId, leadId: named.leadId, label: named.title }],
+      draft: null,
+      refusedAction: null,
+    };
+  }
+  if (!coldCadenceOpen(named)) {
+    return {
+      reply: `Call / meeting held for ${named.title}. I will not draft another cold step.`,
       chips: [{ kind: "firm", id: named.leadId, leadId: named.leadId, label: named.title }],
       draft: null,
       refusedAction: null,
