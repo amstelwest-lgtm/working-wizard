@@ -12,8 +12,10 @@ import {
   dedupeDueToday,
   dedupeLeadsById,
   emailAlreadyTouchedAtStep,
+  leadDisplayName,
   lighthouseLeadChipLabel,
 } from "../src/lib/lighthouse-due";
+import { firmCardTitle } from "../src/lib/lighthouse-agent";
 import {
   LIGHTHOUSE_TRIAL_SITE_URL,
   lighthouseTrialSiteUrl,
@@ -68,6 +70,11 @@ assert(
 );
 assert(src.includes("LIGHTHOUSE_SENDER_NAME"), "the Team signer is shown");
 assert(src.includes("auto_send off"), "auto_send is shown locked off");
+assert(
+  src.includes("Auto-send: {s.autoSend ? \"on\" : \"off (every email needs review)\"}"),
+  "System shows auto-send from the live setting",
+);
+assert(src.includes("ops-lead-email"), "the drawer shows the email on a muted line");
 assert(
   (src.match(/auto_send off/g) ?? []).length === 1,
   "auto_send off is stated once",
@@ -191,20 +198,50 @@ const teamCom = {
   email: "team@milonfinance.com",
 };
 assert(
-  lighthouseLeadChipLabel(teamZa) === "Milōn Dry Run · team@milon.co.za",
-  "generic team chip shows firm and email",
+  leadDisplayName(teamZa) === "Milōn Dry Run",
+  "firm name wins over a mailbox local-part",
 );
 assert(
-  lighthouseLeadChipLabel(teamCom) !== lighthouseLeadChipLabel(teamZa),
-  "the two team mailboxes do not share a chip label",
+  leadDisplayName({
+    company: null,
+    firmName: "Milōn Dry Run",
+    name: "team@milon.co.za",
+    email: "team@milon.co.za",
+  }) === "Milōn Dry Run",
+  "the lighthouse book firm name wins over the raw email",
+);
+assert(
+  leadDisplayName({
+    name: "Janet Killingsworth",
+    email: "janet@example.com",
+  }) === "Janet Killingsworth",
+  "a contact name is used when there is no firm",
+);
+assert(
+  leadDisplayName({ name: "team", email: "team@milon.co.za" }) === "Milon",
+  "the email domain is prettified before the raw address",
+);
+assert(
+  leadDisplayName({ name: "theoamstel123", email: "theoamstel123@gmail.com" }) ===
+    "theoamstel123@gmail.com",
+  "a consumer mailbox falls back to the raw email",
+);
+assert(
+  lighthouseLeadChipLabel(teamZa) === leadDisplayName(teamZa) &&
+    firmCardTitle(teamZa) === leadDisplayName(teamZa),
+  "chips, cards, and the helper share one label",
+);
+assert(
+  lighthouseLeadChipLabel(teamCom) === "Milōn Dry Run",
+  "the same firm keeps one display name",
 );
 assert(
   lighthouseLeadChipLabel({
     name: "Janet Killingsworth",
     company: "Killingsworth Spencer, LLC",
     email: "info@killingsworthspencerllc.com",
-  }) === "Janet Killingsworth",
-  "a real name stays the chip label",
+  }) === "Killingsworth Spencer, LLC",
+  "the firm name wins over the contact",
 );
 
 const queued = dedupeDueToday([
