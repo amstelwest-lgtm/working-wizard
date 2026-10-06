@@ -16,7 +16,7 @@ import { BenchmarkBar } from "@/components/pdf/benchmark-bar";
 import { C, resolveTheme } from "@/components/pdf/theme";
 import { benchmarkNarrative } from "./narrative";
 import type { ClientOperatingProfile } from "@/lib/client-profile";
-import { industryBenchmarkCaption, isUsCopy, ZA_MARKET, type ResolvedMarket } from "@/lib/market";
+import { industryBenchmarkCaption, isUsCopy, spellLabor, ZA_MARKET, type ResolvedMarket } from "@/lib/market";
 import { reportKicker } from "@/lib/report-catalog";
 import { benchmarkPosition, benchmarkTrack, type MetricDirection } from "@/lib/ratios";
 
@@ -39,6 +39,8 @@ export type BenchmarkRow = {
   direction?: MetricDirection;
   healthy_min?: number | null;
   healthy_max?: number | null;
+  /** n/a — do not plot an annualised percent. */
+  unscored?: boolean;
 };
 
 export type BenchmarkReportPDFProps = {
@@ -161,13 +163,14 @@ export function BenchmarkReportPDF({
 }: BenchmarkReportPDFProps) {
   const theme = resolveTheme(accountantProfile);
 
-  const positions = benchmarkRows.map(getPosition);
+  const comparable = benchmarkRows.filter((row) => !row.unscored);
+  const positions = comparable.map(getPosition);
   const topQ = positions.filter((p) => p === "top_quartile").length;
   const above = positions.filter((p) => p === "above_median").length;
   const below = positions.filter((p) => p === "below_median").length;
 
   const figures: HeadlineFigure[] = [
-    { label: "Ratios Compared", value: `${benchmarkRows.length}`, note: industryName },
+    { label: "Ratios Compared", value: `${comparable.length}`, note: industryName },
     { label: "Top Quartile", value: `${topQ}`, direction: "up", good: topQ > 0 },
     { label: "Above Median", value: `${above}`, good: true },
     {
@@ -183,7 +186,7 @@ export function BenchmarkReportPDF({
       topQ,
       above,
       below,
-      total: benchmarkRows.length,
+      total: comparable.length,
       industryName,
     },
     operatingProfile,
@@ -233,31 +236,37 @@ export function BenchmarkReportPDF({
               <View style={{ width: 70 }} />
             </View>
             {rows.map((row, i) => {
-              const pos = getPosition(row);
-              const meta = POS_META[pos];
-              const n = normalise(row);
+              const pos = row.unscored ? null : getPosition(row);
+              const meta = pos ? POS_META[pos] : null;
+              const n = row.unscored ? null : normalise(row);
               return (
                 <View
                   key={row.ratio_key}
                   style={[S.row, { backgroundColor: i % 2 === 1 ? C.soft : C.white }]}
                 >
-                  <Text style={[S.name, { flex: 2 }]}>{row.ratio_name}</Text>
+                  <Text style={[S.name, { flex: 2 }]}>{spellLabor(row.ratio_name, market ?? ZA_MARKET)}</Text>
                   <Text style={[S.val, { flex: 1 }]}>{row.formatted_current}</Text>
                   <Text style={[S.bench, { flex: 1 }]}>{row.formatted_median}</Text>
                   <Text style={[S.bench, { flex: 1 }]}>{row.formatted_top_quartile}</Text>
                   <View style={S.barCell}>
-                    <BenchmarkBar
-                      position={n.pos}
-                      bandStart={n.bandStart}
-                      bandEnd={n.bandEnd}
-                      width={90}
-                      markerColor={
-                        pos === "below_median" ? C.red : pos === "top_quartile" ? C.green : C.blue
-                      }
-                    />
+                    {n ? (
+                      <BenchmarkBar
+                        position={n.pos}
+                        bandStart={n.bandStart}
+                        bandEnd={n.bandEnd}
+                        width={90}
+                        markerColor={
+                          pos === "below_median" ? C.red : pos === "top_quartile" ? C.green : C.blue
+                        }
+                      />
+                    ) : (
+                      <Text style={[S.bench, { width: 90 }]}>n/a</Text>
+                    )}
                   </View>
-                  <View style={[S.posChip, { backgroundColor: meta.bg }]}>
-                    <Text style={[S.posText, { color: meta.fg }]}>{meta.label}</Text>
+                  <View style={[S.posChip, { backgroundColor: meta?.bg ?? C.soft }]}>
+                    <Text style={[S.posText, { color: meta?.fg ?? C.muted }]}>
+                      {meta?.label ?? "N/A"}
+                    </Text>
                   </View>
                 </View>
               );

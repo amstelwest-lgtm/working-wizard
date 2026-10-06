@@ -547,11 +547,14 @@ export function UploadFinancials({
                 setResult({ ...result });
               }}
             />
-            {balanceCheck?.currentPeriodProfit != null && (
+            {(balanceCheck?.currentPeriodProfit != null || bs.period_profit_in_equity != null) && (
               <div className="flex items-center gap-3 py-1.5 border-b border-white/5 last:border-0">
                 <Label className="flex-1 text-xs text-foreground">Current period profit</Label>
                 <span className="w-44 text-right text-sm font-mono text-foreground">
-                  {fmt(balanceCheck.currentPeriodProfit, number)}
+                  {fmt(
+                    balanceCheck?.currentPeriodProfit ?? bs.period_profit_in_equity ?? null,
+                    number,
+                  )}
                 </span>
               </div>
             )}

@@ -39,6 +39,8 @@ export type LeverageSolvencyData = {
   total_assets: number;
   /** False when no debt schedule lines — total_debt is 0 and must not be read as “debt-free”. */
   debt_facilities_captured: boolean;
+  /** Extracted balance-sheet liabilities. Distinct from interest-bearing facilities. */
+  total_liabilities?: number | null;
   net_profit: number;
   drawings: number;
   /** Opening equity from a real prior snapshot or an entered opening balance. Null when unknown. */
@@ -239,13 +241,13 @@ export function LeverageSolvencyPDF({
       note: hasDebt ? undefined : "Capture facilities first",
     },
     {
-      label: "Total Debt",
+      label: "Interest-bearing debt",
       value: hasDebt ? fmtRandCompact(d.total_debt, m) : "—",
       note: hasDebt
         ? Number.isFinite(weightedRate)
           ? `avg. rate ${weightedRate.toFixed(1)}%`
-          : undefined
-        : "No facilities captured",
+          : "Facility schedule"
+        : "No facilities — not total liabilities",
     },
     {
       label: "Total Equity",
@@ -329,8 +331,9 @@ export function LeverageSolvencyPDF({
         <FundingBar debt={d.total_debt} equity={d.total_equity} accent={theme.accent} />
       ) : (
         <Text style={{ fontSize: 8, color: C.muted, marginBottom: 8, fontFamily: "Helvetica" }}>
-          No debt facilities captured on the client page — enter the schedule before quoting
-          leverage totals.
+          {d.total_liabilities != null && Number.isFinite(d.total_liabilities)
+            ? `Total liabilities are ${fmtRand(d.total_liabilities, m)}. Interest-bearing debt is the facility schedule, which is empty — that is not the same as debt-free. Equity multiplier is assets / equity${Number.isFinite(equityMultiplier) ? ` (${equityMultiplier.toFixed(2)}x)` : ""}.`
+            : "No debt facilities captured on the client page — enter the schedule before quoting interest-bearing debt. Equity multiplier is assets / equity and does not require a facility schedule."}
         </Text>
       )}
 
@@ -369,7 +372,10 @@ export function LeverageSolvencyPDF({
 
         <SectionHeader title="Equity Movement" color={theme.accent} />
         <Text style={{ fontSize: 7.5, fontFamily: "Helvetica", color: C.muted, marginBottom: 6 }}>
-          Closing equity = opening + period profit − drawings ± other movements.
+          {`Closing equity = opening + period profit - drawings${roll.hasPrior ? " + other movements" : ""}.`}
+          {roll.hasPrior
+            ? ""
+            : " Opening is not on file, so profit - drawings is retained this period and is not a movement in closing equity."}
         </Text>
         <View style={{ flexDirection: "row", gap: 8 }}>
           <MetricBox
@@ -377,10 +383,14 @@ export function LeverageSolvencyPDF({
             value={roll.hasPrior ? fmtRand(roll.opening ?? 0, m) : NO_PRIOR_PERIOD}
             accentColor={theme.accent}
           />
-          <MetricBox label="Net Profit" value={fmtRand(roll.profit, m)} accentColor={C.green} />
+          <MetricBox
+            label="Net Profit"
+            value={`+${fmtRand(Math.abs(roll.profit), m)}`}
+            accentColor={C.green}
+          />
           <MetricBox
             label="Drawings"
-            value={`(${fmtRand(Math.abs(roll.drawings), m)})`}
+            value={`-${fmtRand(Math.abs(roll.drawings), m)}`}
             accentColor={C.red}
           />
           {roll.hasPrior && Math.abs(roll.other) >= 1 ? (

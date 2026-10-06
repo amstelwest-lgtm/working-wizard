@@ -88,6 +88,10 @@ export function balanceSheetCheck(figures: FinancialFigures): BalanceSheetCheck 
   if (bs.equity_derived === true) {
     return { currentPeriodProfit: null, gap: round2(raw) };
   }
+  // Profit already folded into equity.total. Do not add it again.
+  if (bs.period_profit_in_equity != null && Math.abs(bs.period_profit_in_equity) > 0.005) {
+    return { currentPeriodProfit: null, gap: round2(raw) };
+  }
   const adjusted = raw + (profit ?? 0);
   const include =
     profit != null &&

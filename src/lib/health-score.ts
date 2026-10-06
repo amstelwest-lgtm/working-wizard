@@ -1,3 +1,4 @@
+import { coherentEquity, effectivePeriodMonths } from "@/lib/equity-coherence";
 import {
   bandedPillarStatus,
   computeRatios,
@@ -236,6 +237,9 @@ export function flatToRatioInputs(financials: FlatFinancials): RatioInputs {
   }
   const period = financials[PERIOD_MONTHS_KEY];
   if (period != null && period !== "") base.periodMonths = String(period);
+  else base.periodMonths = String(effectivePeriodMonths(financials as Record<string, unknown>));
+  const coherent = coherentEquity(financials as Record<string, unknown>);
+  if (coherent.equity) base.equity = coherent.equity;
   return base;
 }
 

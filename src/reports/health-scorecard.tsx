@@ -22,7 +22,7 @@ import { DuPontStrip } from "@/components/pdf/dupont";
 import { computeOverallHealth, type HealthPillarId } from "@/lib/health-score";
 import type { ClientOperatingProfile } from "@/lib/client-profile";
 import { diagnoseDuPont, healthNarrative } from "./narrative";
-import { ZA_MARKET, type ResolvedMarket } from "@/lib/market";
+import { spellLabor, ZA_MARKET, type ResolvedMarket } from "@/lib/market";
 import { reportKicker } from "@/lib/report-catalog";
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -275,10 +275,10 @@ export function HealthScorecardPDF({
   }));
   const bestPillar = pickPillarExtreme(pillarChoices, "strongest");
   const worstPillar = pickPillarExtreme(pillarChoices, "weakest");
-  const counts = scorecardCountCopy(ratioResults.length);
-  const priorAvg = ratioResults.some((r) => r.prior_period_score !== undefined)
-    ? avg(ratioResults.map((r) => r.prior_period_score ?? r.health_score))
+  const priorAvg = scoredForHealth.some((r) => r.prior_period_score !== undefined)
+    ? avg(scoredForHealth.map((r) => r.prior_period_score ?? r.health_score))
     : undefined;
+  const counts = scorecardCountCopy(scoredForHealth.length);
   const figures: HeadlineFigure[] = [
     {
       label: "Overall Score",
@@ -412,7 +412,7 @@ export function HealthScorecardPDF({
             {ratios.map((r, i) => (
               <RatioRow
                 key={r.ratio_key}
-                ratioName={r.ratio_name}
+                ratioName={spellLabor(r.ratio_name, market ?? ZA_MARKET)}
                 formattedValue={r.formatted_value}
                 healthScore={r.health_score}
                 healthTier={r.health_tier}
