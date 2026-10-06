@@ -28,6 +28,7 @@ import {
   pickNextCall,
 } from "@/lib/metrics/glance";
 import { HYPOTHESIS_PLAIN, formatValue, stallTitle, stallWho, stallWhy } from "@/lib/metrics/instrument-view";
+import { getLighthouseUsage } from "@/lib/product-usage.functions";
 import { ThemeToggle } from "@/components/theme-toggle";
 import "@/styles/ops-console.css";
 import "@/styles/founder-metrics.css";
@@ -50,12 +51,16 @@ function FounderMetricsPage() {
   const addExperiment = useServerFn(createExperiment);
   const closeExperiment = useServerFn(decideExperiment);
   const sendDigest = useServerFn(sendMetricsDigest);
+  const loadUsage = useServerFn(getLighthouseUsage);
 
   const [bundle, setBundle] = useState<Bundle | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [experimentsOpen, setExperimentsOpen] = useState(false);
+  const [activeEntities, setActiveEntities] = useState<
+    Array<{ id: string; label: string; events: number }> | null
+  >(null);
 
   const reload = useCallback(async () => {
     setBusy(true);
@@ -73,6 +78,21 @@ function FounderMetricsPage() {
   useEffect(() => {
     if (!authLoading && user) void reload();
   }, [authLoading, user, reload]);
+
+  useEffect(() => {
+    if (authLoading || !user) return;
+    let cancelled = false;
+    void loadUsage({ data: { days: 30 } })
+      .then((report) => {
+        if (!cancelled) setActiveEntities(report.entities ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) setActiveEntities([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [authLoading, user, loadUsage]);
 
   const exclusion = useMemo(
     () => ({ internalEmails: bundle?.internalEmails ?? [] }),
@@ -373,6 +393,30 @@ function FounderMetricsPage() {
           }
           rows={bundle?.signals ?? []}
         />
+
+        <details className="mb-8">
+          <summary className="fm-section cursor-pointer">Usage</summary>
+          <div className="mt-3">
+            <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--ops-ink-dim)]">
+              Most active
+            </p>
+            {activeEntities === null ? null : activeEntities.length === 0 ? (
+              <p className="mt-2 text-sm text-[var(--ops-ink-dim)]">No activity in the last 30 days</p>
+            ) : (
+              <ul className="mt-2 divide-y divide-[var(--ops-line)]">
+                {activeEntities.map((entity) => (
+                  <li
+                    key={entity.id}
+                    className="flex items-center justify-between gap-3 py-1.5 text-sm"
+                  >
+                    <span className="truncate text-[var(--ops-ink)]">{entity.label}</span>
+                    <span className="tabular-nums text-[var(--ops-ink-dim)]">{entity.events}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </details>
 
         <details
           className="mb-12"

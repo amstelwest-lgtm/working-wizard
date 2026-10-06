@@ -55,6 +55,7 @@ import {
 } from "@/lib/lighthouse-draft-cta";
 import { lighthouseResendIdempotencyKey } from "@/lib/lighthouse-resend-idempotency.server";
 import {
+  applyBookFirmName,
   dedupeDueToday,
   dedupeLeadsById,
   emailAlreadyTouchedAtStep,
@@ -641,6 +642,7 @@ export function assembleLighthouseLeads(
     for (const lead of leads) {
       const firm = byLead.get(lead.id);
       if (!firm) continue;
+      applyBookFirmName(lead, firm.name == null ? null : String(firm.name));
       if (!lead.country && firm.country) lead.country = String(firm.country);
       if (!lead.stack && firm.stack) lead.stack = String(firm.stack);
       if (!lead.trafficTag) lead.trafficTag = trafficTagOf(firm.campaign_tags);

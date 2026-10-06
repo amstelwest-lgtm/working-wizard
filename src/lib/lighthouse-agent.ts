@@ -4,7 +4,7 @@
  * falls back to the live lead columns (next_touch_on, last_touch_at, touches).
  */
 
-import { isGenericLeadName } from "@/lib/lighthouse-due";
+import { leadDisplayName } from "@/lib/lighthouse-due";
 import { coldCadenceOpen } from "@/lib/lighthouse-targets";
 import {
   SA_TIME_ZONE,
@@ -58,21 +58,14 @@ export function isDryRunCohortName(value: string | null | undefined): boolean {
   return /dry[\s-]*run/i.test((value ?? "").trim());
 }
 
-/**
- * A real firm, then a real contact name, then the email.
- * A dry-run cohort label never becomes the row title.
- */
+/** Review inbox, drawer, Next up, pipeline, and chat chips share this label. */
 export function firmCardTitle(lead: {
   name?: string | null;
   company?: string | null;
+  firmName?: string | null;
   email?: string | null;
 }): string {
-  const company = (lead.company ?? "").trim();
-  const name = (lead.name ?? "").trim();
-  const email = (lead.email ?? "").trim();
-  if (company && !isDryRunCohortName(company)) return company;
-  if (name && !isDryRunCohortName(name) && !isGenericLeadName(name, email)) return name;
-  return email || "Unnamed";
+  return leadDisplayName(lead);
 }
 
 export function angleBucket(angle: string | null | undefined): AgentAngle {

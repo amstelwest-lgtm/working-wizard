@@ -23,18 +23,86 @@ export function isGenericLeadName(
   return Boolean(local) && n === local;
 }
 
-/** Chip label. Generic names show firm plus email so two "team" rows differ. */
-export function lighthouseLeadChipLabel(lead: {
-  name?: string | null;
+const CONSUMER_EMAIL_DOMAINS = new Set([
+  "gmail.com",
+  "googlemail.com",
+  "outlook.com",
+  "hotmail.com",
+  "yahoo.com",
+  "yahoo.co.uk",
+  "icloud.com",
+  "me.com",
+  "live.com",
+  "aol.com",
+  "proton.me",
+  "protonmail.com",
+]);
+
+/** A firm or person we can show. The mailbox itself is not a name. */
+function usableLeadLabel(value: string, email: string): boolean {
+  if (!value || value.includes("@")) return false;
+  if (email && value.toLowerCase() === email.toLowerCase()) return false;
+  return !isGenericLeadName(value, email);
+}
+
+/**
+ * First domain label, title-cased. Consumer mail hosts are not firm names,
+ * so those fall through to the raw address.
+ */
+export function prettifyEmailDomain(email: string | null | undefined): string {
+  const normalized = normalizeLeadEmail(email);
+  const at = normalized.lastIndexOf("@");
+  if (at < 0) return "";
+  const domain = normalized.slice(at + 1);
+  if (!domain.includes(".") || CONSUMER_EMAIL_DOMAINS.has(domain)) return "";
+  const label = domain.split(".")[0] ?? "";
+  if (label.length < 2) return "";
+  return label
+    .split(/[-_]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+export type LeadLabelSource = {
   company?: string | null;
+  /** `lighthouse_firms.name` when the lead company column is empty. */
+  firmName?: string | null;
+  name?: string | null;
   email?: string | null;
-}): string {
-  const name = (lead.name ?? "").trim();
-  const company = (lead.company ?? "").trim();
+};
+
+/**
+ * One label for every lead surface.
+ * Firm or company, then the contact, then a prettified email domain, then the raw email.
+ */
+export function leadDisplayName(lead: LeadLabelSource): string {
   const email = (lead.email ?? "").trim();
-  if (!isGenericLeadName(name, email)) return name || company || email || "Unnamed";
-  const firm = company || name || "Unnamed";
-  return email ? `${firm} · ${email}` : firm;
+  const company = (lead.company ?? "").trim();
+  const firmName = (lead.firmName ?? "").trim();
+  const name = (lead.name ?? "").trim();
+  if (usableLeadLabel(company, email)) return company;
+  if (usableLeadLabel(firmName, email)) return firmName;
+  if (usableLeadLabel(name, email)) return name;
+  const domain = prettifyEmailDomain(email);
+  if (domain) return domain;
+  return email || "Unnamed";
+}
+
+/** Keep a real company. Otherwise take the lighthouse book firm name. */
+export function applyBookFirmName<T extends { company: string | null; email?: string | null }>(
+  lead: T,
+  bookName: string | null | undefined,
+): void {
+  const email = lead.email ?? "";
+  if (usableLeadLabel((lead.company ?? "").trim(), email)) return;
+  const book = (bookName ?? "").trim();
+  if (usableLeadLabel(book, email)) lead.company = book;
+}
+
+/** Chip, inbox, drawer, queue, and pipeline share one name. */
+export function lighthouseLeadChipLabel(lead: LeadLabelSource): string {
+  return leadDisplayName(lead);
 }
 
 export type DueQueueItem = {
