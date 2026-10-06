@@ -101,19 +101,19 @@ assert(
     "Acme Plumbing",
   "a mailbox local-part yields the firm name",
 );
-assert(isDryRunCohortName("Milōn Dry Run"), "the dry-run cohort label is not a firm");
+assert(isDryRunCohortName("Milōn Dry Run"), "a dry-run cohort still wears the badge");
 assert(
   firmCardTitle({
     name: "Janet Killingsworth",
     company: "Milōn Dry Run",
     email: "janet@firm.com",
-  }) === "Janet Killingsworth",
-  "a dry-run cohort label yields the contact name",
+  }) === "Milōn Dry Run",
+  "the company name stays the label, including a dry-run cohort",
 );
 assert(
   firmCardTitle({ name: "team", company: "Milōn Dry Run", email: "team@trymilon.com" }) ===
-    "team@trymilon.com",
-  "a generic name under the dry-run label yields the email",
+    "Milōn Dry Run",
+  "a generic mailbox under a firm name yields the firm",
 );
 assert(
   nextWindowLine({
@@ -134,8 +134,13 @@ assert(
   "a closed window shows the real next opening",
 );
 assert(
-  firmCardTitle({ name: "team", company: "", email: "team@trymilon.com" }) === "team@trymilon.com",
-  "with no firm, the card uses the email",
+  firmCardTitle({ name: "team", company: "", email: "team@trymilon.com" }) === "Trymilon",
+  "with no firm or contact, the card uses the email domain",
+);
+assert(
+  firmCardTitle({ name: "theoamstel123", email: "theoamstel123@gmail.com" }) ===
+    "theoamstel123@gmail.com",
+  "a consumer mailbox falls back to the raw email",
 );
 assert(pilotFlagWiring("signup_open") === "Not wired yet", "unreadable pilot knobs are not live");
 assert(

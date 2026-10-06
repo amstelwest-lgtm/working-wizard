@@ -1376,6 +1376,7 @@ function SystemForm({
             From {LIGHTHOUSE_SENDER_NAME} &lt;{LIGHTHOUSE_FROM_EMAIL}&gt;
           </p>
           <p>Reply-to — hello@milonfinance.com</p>
+          <p>Auto-send: {s.autoSend ? "on" : "off (every email needs review)"}</p>
           <p>Send windows enforced · US Tue–Thu 08:00–10:00 local · SA Tue–Thu 08:00–10:00 SAST</p>
         </div>
         <div className="grid gap-2 sm:grid-cols-2">
@@ -1593,14 +1594,15 @@ function LeadDrawer({
               <span className="truncate">{firmCardTitle(lead)}</span>
               {showsDryRunBadge(lead) && <DryRunBadge />}
             </h2>
+            {lead.email ? (
+              <p className="ops-lead-email text-sm text-[var(--ops-ink-dim)]">{lead.email}</p>
+            ) : null}
             <p className="text-sm text-[var(--ops-ink-dim)]">
-              {lead.email || "No email"}
               {lead.name &&
               !isGenericLeadName(lead.name, lead.email) &&
               firmCardTitle(lead) !== lead.name.trim()
-                ? ` · ${lead.name}`
+                ? `${lead.name} · `
                 : ""}
-              {" · "}
               {lead.persona === "accountant" ? "practice" : "owner"}
               {isOneshot ? " · one-shot" : ""}
               {lead.city ? ` · ${lead.city}` : ""}

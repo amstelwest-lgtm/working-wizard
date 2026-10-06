@@ -402,6 +402,32 @@ for (const killed of [
 assert(page.includes("Do this next"), "the next call stays");
 assert(page.includes("Log a conversation signal"), "the signal form stays");
 assert(page.includes("<details"), "experiments stay collapsed");
+const usageSectionAt = page.indexOf(">Usage</summary>");
+const mostActiveOnPage = page.indexOf("Most active");
+const experimentsAt = page.indexOf(">Experiments</summary>");
+assert(usageSectionAt !== -1, "founder metrics has a usage section");
+assert(
+  mostActiveOnPage > usageSectionAt && (experimentsAt === -1 || mostActiveOnPage < experimentsAt),
+  "most active renders inside the usage section",
+);
+assert(
+  page.includes("No activity in the last 30 days"),
+  "an empty usage window still renders",
+);
+assert(
+  page.lastIndexOf("<details", mostActiveOnPage) !== -1 &&
+    page.indexOf("</details>", mostActiveOnPage) !== -1,
+  "the usage section is a collapsed details block",
+);
+assert(
+  isExcludedFromInstrument({ name: "Harbour Books", email: "team@milonfinance.com" }) &&
+    isExcludedFromInstrument({ name: "the Milōn Team" }),
+  "internal firms and milonfinance.com stay out of most active",
+);
+assert(
+  !isExcludedFromInstrument({ name: "Square Books", ownerEmail: "ada@harbour.co" }, internal),
+  "a real practice is not filtered out of most active",
+);
 assert(page.includes('search={{ tab: "agent" }}'), "clear review inbox opens the agent tab");
 assert(!ops.includes("Sales engine"), "sales engine card is gone");
 assert(!ops.includes("Owned clients"), "clients are not listed twice");
