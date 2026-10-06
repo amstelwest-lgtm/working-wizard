@@ -321,7 +321,10 @@ export const getLighthouseUsage = createServerFn({ method: "GET" })
     const [firmsRes, clientsRes, profilesRes, itRes] = await Promise.all([
       admin.from("firms").select("id, name, is_internal, owner_user_id"),
       clientIds.length
-        ? admin.from("clients").select("id, name, is_demo").in("id", clientIds.slice(0, 200))
+        ? admin
+            .from("clients")
+            .select("id, name, is_demo, owner_user_id")
+            .in("id", clientIds.slice(0, 200))
         : Promise.resolve({ data: [] as Array<Record<string, unknown>>, error: null }),
       admin.from("profiles").select("id, full_name, email").limit(1000),
       admin.from("milon_it_members").select("email"),
@@ -376,20 +379,34 @@ export const getLighthouseUsage = createServerFn({ method: "GET" })
         excludedFirms.add(id);
       }
     }
-    const excludedClients = new Set<string>();
-    for (const client of (clientsRes.data ?? []) as Array<{
+    const clientRows = (clientsRes.data ?? []) as Array<{
       id: string;
       name: string | null;
       is_demo?: boolean | null;
-    }>) {
+      owner_user_id?: string | null;
+    }>;
+    const excludedClients = new Set<string>();
+    const clientById = new Map<string, (typeof clientRows)[number]>();
+    for (const client of clientRows) {
       const id = String(client.id);
+      clientById.set(id, client);
       const name = (client.name ?? "").trim() || "Client";
       entityLabels[`client:${id}`] = name;
       entityLabels[id] = name;
-      if (isExcludedFromInstrument({ name: client.name, isDemo: Boolean(client.is_demo) }, ctx)) {
+      if (
+        isExcludedFromInstrument(
+          {
+            name: client.name,
+            isDemo: Boolean(client.is_demo),
+            ownerEmail: emailByUser.get(String(client.owner_user_id ?? "")) ?? null,
+          },
+          ctx,
+        )
+      ) {
         excludedClients.add(id);
       }
     }
+    const firmById = new Map(firmRows.map((firm) => [String(firm.id), firm]));
     const visible = mapped.filter((row) => {
       if (row.firmId && excludedFirms.has(row.firmId)) return false;
       if (row.userId && excludedUsers.has(row.userId)) return false;
@@ -398,9 +415,35 @@ export const getLighthouseUsage = createServerFn({ method: "GET" })
     });
 
     const rollup = rollupUsage(visible, { fromIso, toIso, entityLabels });
-    rollup.entities = rollup.entities.filter(
-      (entity) => !isExcludedFromInstrument({ name: entity.label }, ctx),
-    );
+    rollup.entities = rollup.entities.filter((entity) => {
+      if (entity.kind === "user") {
+        const userId = entity.id.replace(/^user:/, "");
+        return !isExcludedFromInstrument(
+          { name: entity.label, email: emailByUser.get(userId) ?? null },
+          ctx,
+        );
+      }
+      if (entity.kind === "firm") {
+        const firm = firmById.get(entity.id.replace(/^firm:/, ""));
+        return !isExcludedFromInstrument(
+          {
+            name: firm?.name ?? entity.label,
+            isInternal: Boolean(firm?.is_internal),
+            ownerEmail: emailByUser.get(String(firm?.owner_user_id ?? "")) ?? null,
+          },
+          ctx,
+        );
+      }
+      const client = clientById.get(entity.id.replace(/^client:/, ""));
+      return !isExcludedFromInstrument(
+        {
+          name: client?.name ?? entity.label,
+          isDemo: Boolean(client?.is_demo),
+          ownerEmail: emailByUser.get(String(client?.owner_user_id ?? "")) ?? null,
+        },
+        ctx,
+      );
+    });
     const firmCount = realFirmCount(firmSubjects, ctx);
     rollup.totals.events = visible.length;
     const recent = visible.slice(0, 25).map((r) => ({
