@@ -1,7 +1,16 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { BackLink } from "@/components/back-link";
 import { openPracticeSettings } from "@/lib/user-roles";
-import { useEffect, useRef, useState, useCallback, useMemo, Suspense, type ReactNode } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  useCallback,
+  useMemo,
+  Suspense,
+  type ReactNode,
+} from "react";
 import { lazyPanel, TabErrorBoundary } from "@/components/lazy-panel";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
@@ -115,7 +124,14 @@ import { clientIndustryLabel } from "@/lib/profile-signals";
 import { NoteLayer } from "@/components/note-layer";
 import { useNotes } from "@/contexts/notes";
 import { accountantWorkspaceTab } from "@/lib/notes-tabs";
-import { normalizeAccountantClientTab } from "@/lib/client-route-search";
+import {
+  accountantTabSearchParam,
+  normalizeAccountantClientTab,
+} from "@/lib/client-route-search";
+import {
+  exitFirmClientMode,
+  isImpersonationForbidden,
+} from "@/lib/acting-as-client";
 import { useTrack } from "@/hooks/use-track";
 import { QboConnectCard } from "@/components/qbo-connect";
 import { XeroConnectCard } from "@/components/xero-connect";
@@ -405,7 +421,67 @@ function HealthRing({
 
 // ── route ──────────────────────────────────────────────────────────────────
 
+/** Firm client pages are the firm principal. Drop owner-board impersonation first. */
+function exitClientModeOnFirmPage() {
+  if (typeof sessionStorage === "undefined") return;
+  const actingId = exitFirmClientMode(sessionStorage);
+  if (!actingId) return;
+  void (async () => {
+    const { data } = await supabase.auth.getUser();
+    const userId = data.user?.id;
+    if (!userId) return;
+    const { data: rows } = await supabase
+      .from("impersonation_audit")
+      .select("id")
+      .eq("firm_user_id", userId)
+      .eq("client_id", actingId)
+      .is("ended_at", null)
+      .order("started_at", { ascending: false })
+      .limit(1);
+    const openId = rows?.[0]?.id;
+    if (!openId) return;
+    await supabase
+      .from("impersonation_audit")
+      .update({ ended_at: new Date().toISOString() })
+      .eq("id", openId);
+  })();
+}
+
+function ClientPageError({ error, reset }: { error: unknown; reset: () => void }) {
+  useEffect(() => {
+    exitClientModeOnFirmPage();
+  }, []);
+  if (typeof sessionStorage !== "undefined") exitFirmClientMode(sessionStorage);
+  const forbidden = isImpersonationForbidden(error);
+  return (
+    <div className="accountant-portal">
+      <EmptyState
+        className="min-h-screen"
+        title={
+          forbidden
+            ? "This client page couldn't be opened."
+            : "This page didn't finish loading."
+        }
+        action={
+          <div className="flex flex-wrap justify-center gap-2">
+            <button type="button" className="btn gold mini" onClick={() => reset()}>
+              Try again
+            </button>
+            <BackLink variant="portal" onClick={() => { window.location.href = "/dashboard"; }}>
+              Firm dashboard
+            </BackLink>
+          </div>
+        }
+      />
+    </div>
+  );
+}
+
 export const Route = createFileRoute("/_authenticated/clients/$clientId")({
+  beforeLoad: () => {
+    exitClientModeOnFirmPage();
+  },
+  errorComponent: ClientPageError,
   validateSearch: (
     search: Record<string, unknown>,
   ): {
@@ -649,6 +725,9 @@ const SPHERE_RATIO_META: Record<string, { friendly: string }> = {
 function ClientView() {
   const { clientId } = Route.useParams();
   const search = Route.useSearch();
+  useLayoutEffect(() => {
+    exitClientModeOnFirmPage();
+  }, [clientId]);
   const { user } = useAuth();
   const {
     notes: clientNotes,
@@ -1872,7 +1951,7 @@ function ClientView() {
         to: "/clients/$clientId",
         params: { clientId },
         search: (prev) => {
-          const next = { ...prev, tab };
+          const next = { ...prev, tab: accountantTabSearchParam(tab) };
           if (dest.coach) next.coach = dest.coach;
           else delete next.coach;
           if (dest.why) next.why = dest.why;
@@ -1904,7 +1983,7 @@ function ClientView() {
         to: "/clients/$clientId",
         params: { clientId },
         search: (prev) => {
-          const next = { ...prev, tab: id };
+          const next = { ...prev, tab: accountantTabSearchParam(id) };
           delete next.coach;
           delete next.why;
           delete next.focus;
@@ -2217,7 +2296,11 @@ function ClientView() {
             navigate({
               to: "/clients/$clientId",
               params: { clientId },
-              search: (prev) => ({ ...prev, tab, filter: route.search.filter }),
+              search: (prev) => ({
+                ...prev,
+                tab: accountantTabSearchParam(tab),
+                filter: route.search.filter,
+              }),
               replace: true,
             });
           }
@@ -2395,6 +2478,9 @@ function ClientView() {
                 ))}
               </nav>
               <div className="deliverable-main">
+                {generationTrialOpen ? (
+                  <TrialEndedPlanBlock firmId={client.firm_id ?? null} />
+                ) : null}
                 <WorkflowCoachStrip
                   page={coachPage}
                   intent={search.coach}
@@ -2428,10 +2514,6 @@ function ClientView() {
 
                 {needsTrialBalanceRefresh({ live: financials, snapshots }) ? (
                   <TrialBalanceRefreshPrompt onImport={() => setUploadOpen(true)} />
-                ) : null}
-
-                {generationTrialOpen ? (
-                  <TrialEndedPlanBlock firmId={client.firm_id ?? null} />
                 ) : null}
 
                 {/* ===== CLIENT BRIEFING — status → what matters → this month's workflow ===== */}

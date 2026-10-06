@@ -41,6 +41,7 @@ import { getQboStatuses } from "@/lib/qbo.functions";
 import { getXeroStatuses } from "@/lib/xero.functions";
 import { createFirmClient, getFirmClientCreateAllowance } from "@/lib/firm-clients.functions";
 import { idleStarterTrialBanner, type FirmClientCreateAllowance } from "@/lib/firm-client-cap";
+import { rememberStarterTrialGenerationBlocked } from "@/lib/starter-trial-client";
 import { browserAppOrigin } from "@/lib/app-origin";
 import { FirmBandUpgrade } from "@/components/firm-band-upgrade";
 import { useFirmVoucherCheck } from "@/hooks/use-firm-voucher";
@@ -1101,7 +1102,13 @@ function Dashboard() {
     let cancelled = false;
     void loadTrialAllowance({ data: { firmId } })
       .then((next) => {
-        if (!cancelled) setTrialAllowance(next);
+        if (cancelled) return;
+        setTrialAllowance(next);
+        rememberStarterTrialGenerationBlocked(
+          firmId,
+          next.starterTrial.expired === true ||
+            (next.allowed === false && next.code === "starter_trial_ended"),
+        );
       })
       .catch(() => {
         if (!cancelled) setTrialAllowance(null);
@@ -2140,7 +2147,9 @@ function Dashboard() {
                           {/* Reports */}
                           <button
                             className="icon-btn"
+                            type="button"
                             title="Generate report"
+                            aria-label="Generate report"
                             onClick={() =>
                               navigate({
                                 to: "/clients/$clientId",
@@ -2149,41 +2158,59 @@ function Dashboard() {
                               })
                             }
                           >
-                            <svg viewBox="0 0 24 24">
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
                               <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
                               <path d="M14 3v6h6" />
                             </svg>
+                            <span className="icon-tip" role="tooltip">
+                              Generate report
+                            </span>
                           </button>
                           {/* Invite */}
                           <button
                             className="icon-btn"
+                            type="button"
                             title="Invite client management — email + copy message"
+                            aria-label="Invite client management — email + copy message"
                             onClick={() => void openOwnerInvite(c)}
                           >
-                            <svg viewBox="0 0 24 24">
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
                               <rect x="3" y="5" width="18" height="14" rx="2" />
                               <path d="M3 7l9 6 9-6" />
                             </svg>
+                            <span className="icon-tip" role="tooltip">
+                              Invite client management
+                            </span>
                           </button>
                           <button
                             className="icon-btn"
+                            type="button"
                             title="Follow up on Action Plan"
+                            aria-label="Follow up on Action Plan"
                             onClick={() => openClientPlan(c.id, c.overdueActions > 0)}
                           >
-                            <svg viewBox="0 0 24 24">
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
                               <path d="M9 11l3 3L22 4" />
                               <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
                             </svg>
+                            <span className="icon-tip" role="tooltip">
+                              Follow up on Action Plan
+                            </span>
                           </button>
                           {/* Open / Enter as client */}
                           <button
                             className="icon-btn"
+                            type="button"
                             title="Enter as client"
+                            aria-label="Enter as client"
                             onClick={() => enterAsClient(c)}
                           >
-                            <svg viewBox="0 0 24 24">
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
                               <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3" />
                             </svg>
+                            <span className="icon-tip" role="tooltip">
+                              Enter as client
+                            </span>
                           </button>
                         </div>
                       </td>

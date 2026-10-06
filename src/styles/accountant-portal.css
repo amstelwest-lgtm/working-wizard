@@ -211,9 +211,13 @@ html[data-theme="light"] .accountant-portal .doc{background:linear-gradient(170d
 .accountant-portal .spark{width:84px;height:26px}
 .accountant-portal .spark path{fill:none;stroke-width:1.8;stroke-linecap:round}
 .accountant-portal .row-actions{display:flex;gap:8px;justify-content:flex-end}
-.accountant-portal .icon-btn{width:34px;height:34px;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--ink-dim);display:grid;place-items:center;transition:all .25s}
+.accountant-portal .icon-btn{position:relative;width:34px;height:34px;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--ink-dim);display:grid;place-items:center;transition:all .25s}
 .accountant-portal .icon-btn:hover{border-color:var(--gold);color:var(--gold);transform:translateY(-2px)}
 .accountant-portal .icon-btn svg{width:15px;height:15px;stroke:currentColor;stroke-width:1.7;fill:none;stroke-linecap:round;stroke-linejoin:round}
+.accountant-portal .icon-btn .icon-tip{position:absolute;z-index:30;right:0;bottom:calc(100% + 8px);padding:4px 8px;border-radius:8px;background:var(--ink);color:var(--bg);font-size:11px;font-weight:600;line-height:1.3;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .15s}
+.accountant-portal .icon-btn:hover .icon-tip,
+.accountant-portal .icon-btn:focus .icon-tip,
+.accountant-portal .icon-btn:focus-visible .icon-tip{opacity:1}
 @media(max-width:860px){.accountant-portal .hide-sm{display:none}}
 
 /* ===== playbook library ===== */

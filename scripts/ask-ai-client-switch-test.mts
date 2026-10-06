@@ -531,6 +531,126 @@ await test("Scenario 5c: a failed send keeps the draft", async () => {
   assert(ta?.value === "Keep this if it fails", "a failed send leaves the draft in the box");
 });
 
+function collectText(el: FakeElement): string {
+  return `${el.textContent ?? ""} ${el.children.map(collectText).join(" ")}`;
+}
+
+function installTrialEvents() {
+  const fired: string[] = [];
+  const bucket = new Map<string, Array<() => void>>();
+  const host = globalThis as typeof globalThis & {
+    addEventListener: (type: string, fn: () => void) => void;
+    dispatchEvent: (ev: Event) => boolean;
+  };
+  host.addEventListener = (type, fn) => {
+    const list = bucket.get(type) ?? [];
+    list.push(fn);
+    bucket.set(type, list);
+  };
+  host.dispatchEvent = (ev: Event) => {
+    fired.push(ev.type);
+    for (const fn of bucket.get(ev.type) ?? []) fn();
+    return true;
+  };
+  return fired;
+}
+
+await test("Scenario 6: trial create refusal keeps the previous answer", async () => {
+  const fired = installTrialEvents();
+  let n = 0;
+  (globalThis as Record<string, unknown>).fetch = async () => {
+    n += 1;
+    if (n === 1) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ answer: "Cash is fine this month.", chips: [] }),
+      };
+    }
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        answer: "Your trial has ended, choose a plan",
+        chips: [],
+        tools: [{ name: "draft_deliverable", status: "error" }],
+      }),
+    };
+  };
+
+  const container = makeContainer("qa-us");
+  mountAskAi(container, {
+    endpoint: "https://example.com/functions/v1/ask-ai",
+    botEndpoint: "https://example.com/functions/v1/milon-bot",
+    variant: "studio",
+    audience: "accountant",
+    getToken: async () => "test-token",
+  });
+
+  fillAndSend(container, "What's the cash position?");
+  await new Promise((r) => setTimeout(r, 0));
+  fillAndSend(container, "Create an action plan item to chase overdue debtors");
+  await new Promise((r) => setTimeout(r, 0));
+
+  const text = collectText(container);
+  assert(text.includes("Cash is fine this month."), "the previous Q&A answer stays in the thread");
+  assert(!text.includes("Your trial has ended, choose a plan"), "the refusal does not replace the answer");
+  assert(!/draft · failed/i.test(text), "the refusal is not a Draft · failed chip");
+  assert(fired.includes("milon-starter-trial-ended"), "the page is asked to open the plan picker");
+  assert(n === 2, "the create request still ran when billing state was unknown");
+});
+
+await test("Scenario 6b: a known ended trial refuses create without a request", async () => {
+  const fired = installTrialEvents();
+  const store = new Map<string, string>();
+  (globalThis as { sessionStorage?: Storage }).sessionStorage = {
+    getItem: (key) => (store.has(key) ? store.get(key)! : null),
+    setItem: (key, value) => {
+      store.set(key, value);
+    },
+    removeItem: (key) => {
+      store.delete(key);
+    },
+    clear: () => store.clear(),
+    key: () => null,
+    get length() {
+      return store.size;
+    },
+  };
+  sessionStorage.setItem(
+    "milon.starterTrialGenerationBlocked",
+    JSON.stringify({ firmId: "firm-ben", blocked: true }),
+  );
+  let called = 0;
+  (globalThis as Record<string, unknown>).fetch = async () => {
+    called += 1;
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({ answer: "Cash is fine this month.", chips: [] }),
+    };
+  };
+
+  const container = makeContainer("qa-us");
+  mountAskAi(container, {
+    endpoint: "https://example.com/functions/v1/ask-ai",
+    botEndpoint: "https://example.com/functions/v1/milon-bot",
+    variant: "studio",
+    audience: "accountant",
+    getToken: async () => "test-token",
+  });
+  fillAndSend(container, "What's the cash position?");
+  await new Promise((r) => setTimeout(r, 0));
+  fillAndSend(container, "Create an action plan item to chase overdue debtors");
+  await new Promise((r) => setTimeout(r, 0));
+  const after = collectText(container);
+  assert(called === 1, "create does not wait on the server when the trial block is already known");
+  assert(after.includes("Cash is fine this month."), "previous answer remains");
+  assert(!after.includes("Your trial has ended, choose a plan"), "the instant refusal is not pasted into the thread");
+  assert(fired.includes("milon-starter-trial-ended"), "the plan picker opens immediately");
+  sessionStorage.removeItem("milon.starterTrialGenerationBlocked");
+});
+
 // ── Summary ───────────────────────────────────────────────────────────────────
 
 console.log(`\n─────────────────────────────────────`);

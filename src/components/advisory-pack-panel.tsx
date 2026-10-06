@@ -27,6 +27,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { TrialEndedActionNotice, useTrialEndedAction } from "@/components/trial-ended-plan-block";
+import { STARTER_TRIAL_ENDED_MESSAGE } from "@/lib/starter-trial-constants";
+import { knownStarterTrialGenerationBlocked } from "@/lib/starter-trial-client";
 import { useTrack } from "@/hooks/use-track";
 import {
   HIGH_EDIT_RATE,
@@ -222,8 +224,12 @@ export function AdvisoryPackPanel({
     }
   };
 
-  const doGenerate = () =>
-    run(
+  const doGenerate = () => {
+    if (knownStarterTrialGenerationBlocked(firmId)) {
+      trialBlock.report(STARTER_TRIAL_ENDED_MESSAGE, "Something went wrong.");
+      return;
+    }
+    return run(
       "generate",
       async () => {
         if (!clientId) return null;
@@ -242,6 +248,7 @@ export function AdvisoryPackPanel({
       },
       "Pack generated",
     );
+  };
 
   const startEdit = (s: PackSection) => {
     setEditing(s.key);

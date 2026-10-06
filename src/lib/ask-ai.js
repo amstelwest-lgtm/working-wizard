@@ -17,6 +17,8 @@ import {
   routeMilonIntent,
 } from "./milon-bot-copy.ts";
 import { deliverableHandoff } from "./workflow-coach.ts";
+import { isStarterTrialEndedMessage } from "./starter-trial-generation.ts";
+import { knownStarterTrialGenerationBlocked } from "./starter-trial-client.ts";
 
 export {
   routeMilonIntent,
@@ -484,19 +486,46 @@ export function mountAskAi(container, options) {
     return wrap;
   }
 
+  function openTrialRefusal() {
+    errorMsg = "";
+    window.dispatchEvent(new CustomEvent("milon-starter-trial-ended"));
+  }
+
   async function submit() {
     const q = question.trim();
     if (!q || loading) return;
-      const objective = parseAgentObjective(q);
-      const createIntent = persistedCreateIntent(q);
-      creatingDeliverable = Boolean(createIntent);
-      workingObjective = Boolean(objective) && !createIntent;
-      pendingIntent = createIntent || objective ? "milon-bot" : routeMilonIntent(q);
+    const objective = parseAgentObjective(q);
+    const createIntent = persistedCreateIntent(q);
+    creatingDeliverable = Boolean(createIntent);
+    workingObjective = Boolean(objective) && !createIntent;
+    pendingIntent = createIntent || objective ? "milon-bot" : routeMilonIntent(q);
+
+    // Billing state already known: same card as Generate pack, no round trip,
+    // and the previous answer stays in the thread.
+    if (creatingDeliverable && knownStarterTrialGenerationBlocked()) {
+      openTrialRefusal();
+      creatingDeliverable = false;
+      pendingIntent = null;
+      workingObjective = false;
+      render();
+      return;
+    }
+
+    const previousAnswer = answer;
+    const previousChips = answerChips.slice();
+    const previousHints = toolHints.slice();
+    const previousRun = agentRun;
+    const previousHistory = history.slice();
+    const restoreThread = () => {
+      answer = previousAnswer;
+      answerChips = previousChips;
+      toolHints = previousHints;
+      agentRun = previousRun;
+      history = previousHistory;
+      errorMsg = "";
+    };
+
     loading = true;
-    answer = "";
-    answerChips = [];
-    toolHints = [];
-    agentRun = null;
     errorMsg = "";
     render();
 
@@ -552,16 +581,33 @@ export function mountAskAi(container, options) {
         ),
       });
 
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
+      const failureText =
+        (typeof data?.error === "string" && data.error) ||
+        (typeof data?.answer === "string" && data.answer) ||
+        "";
 
       if (res.status === 429)
         throw new Error(data.error || "Rate limit reached — try again in a moment.");
-      if (!res.ok) throw new Error(data.error || `Error ${res.status}`);
-
-      answer = data.answer || "No answer returned.";
-      if (answer.includes("Your trial has ended, choose a plan")) {
-        window.dispatchEvent(new CustomEvent("milon-starter-trial-ended"));
+      if (!res.ok) {
+        if (isStarterTrialEndedMessage(failureText)) {
+          restoreThread();
+          openTrialRefusal();
+          return;
+        }
+        throw new Error(data.error || `Error ${res.status}`);
       }
+
+      const nextAnswer = data.answer || "No answer returned.";
+      if (isStarterTrialEndedMessage(nextAnswer)) {
+        // Refusal card lives on the page. Do not replace the previous Q&A
+        // or paint "Draft · failed" under the trial sentence.
+        restoreThread();
+        openTrialRefusal();
+        return;
+      }
+
+      answer = nextAnswer;
       answerChips = data.chips || [];
       agentRun = data.run && typeof data.run === "object" ? data.run : null;
       toolHints = Array.isArray(data.tools)
@@ -575,7 +621,13 @@ export function mountAskAi(container, options) {
       // Drop the draft once the send succeeds so the box is ready for the next question.
       question = "";
     } catch (e) {
-      errorMsg = e.message || "Something went wrong.";
+      if (isStarterTrialEndedMessage(e?.message || "")) {
+        restoreThread();
+        openTrialRefusal();
+      } else {
+        restoreThread();
+        errorMsg = e.message || "Something went wrong.";
+      }
     } finally {
       loading = false;
       pendingIntent = null;
