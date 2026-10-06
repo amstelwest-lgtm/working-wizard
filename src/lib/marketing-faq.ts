@@ -18,6 +18,10 @@ export const LEDGER_CONNECT_ANSWER =
 export const AI_IDENTIFIERS_LINE =
   "Identifiers (company names, tax IDs, account numbers) are stripped before model calls; amounts stay so workings and accountant sign-off use real figures.";
 
+/** Approved disclosure. Visible /faq answer and FAQPage JSON-LD share this sentence. Not used on the homepage FAQ. */
+export const AI_MODEL_DISCLOSURE =
+  "Claude prepares draft recommendations for accountant review. Identifiers stripped. Not used to train models.";
+
 /** Monitoring seat, not a billed advisory client. Stripe does not line-item these. */
 export const WATCHLIST_DEFINITION =
   "Watchlist clients stay on your radar at no charge — they don't count toward billed seats until you activate a full workspace.";
@@ -93,7 +97,7 @@ export function publicFaqUsItems(): FaqItem[] {
     },
     {
       question: "What does the AI see?",
-      answer: `We use AI, and the AI notice names the model provider. ${AI_IDENTIFIERS_LINE} Where an AI drafts a report for an accountant, a human reads and signs it before a client ever sees it. The AI notice at https://milonfinance.com/ai is the public version of that sentence.`,
+      answer: `We use AI. ${AI_MODEL_DISCLOSURE} ${AI_IDENTIFIERS_LINE} Where an AI drafts a report for an accountant, a human reads and signs it before a client ever sees it. The AI notice at https://milonfinance.com/ai is the public version of that sentence.`,
     },
     {
       question: "Do you store card details?",

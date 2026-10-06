@@ -70,8 +70,15 @@ assert(ai.includes("VAT"), "AI notice: VAT stripped");
 assert(ai.includes("EIN"), "AI notice: EIN stripped on US pack");
 
 assert(faq.includes('href="/ai"'), "FAQ links to the AI notice");
-assert(faq.includes("the AI notice names the model provider") || faq.includes("publicFaqItems"), "FAQ points at the AI notice for the model provider");
-assert(!/claude/i.test(faq), "FAQ page source does not name the model vendor");
+assert(faq.includes("publicFaqItems"), "FAQ answers come from the shared list");
+const disclosure =
+  "Claude prepares draft recommendations for accountant review. Identifiers stripped. Not used to train models.";
+const marketingFaq = readFileSync(resolve("src/lib/marketing-faq.ts"), "utf8").replace(/\s+/g, " ");
+const privacyText = privacy.replace(/\s+/g, " ");
+assert(marketingFaq.split(disclosure).length - 1 === 1, "FAQ copy defines the disclosure once");
+assert(privacyText.split(disclosure).length - 1 === 1, "privacy contains the disclosure once");
+assert(!/claude/i.test(landing), "landing source does not name Claude");
+assert(!/claude/i.test(readFileSync(resolve("src/routes/for-accountants.tsx"), "utf8")), "for-accountants source does not name Claude");
 assert(faq.includes("dollar sign glued on"), "FAQ has US invert of the SA-built line");
 assert(readFileSync(resolve("src/lib/marketing-faq.ts"), "utf8").includes("LIST_PRICES"), "FAQ prices come from the marketing pack");
 
