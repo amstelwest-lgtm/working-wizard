@@ -8,6 +8,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { FirmBandUpgrade } from "../src/components/firm-band-upgrade";
 import { SA_FIRM_DISCOUNT_NOTE } from "../src/lib/firm-sa-market";
+import { FOUNDING_PROMOTION_CODE_ID, FOUNDING_SA_ONLY_MESSAGE } from "../src/lib/stripe-plans";
 import {
   firmSetupCheckoutMessage,
   firmSetupCheckoutSessionParams,
@@ -74,6 +75,72 @@ const baseCheck = {
   listCents: 9_900,
   nowSeconds: NOW,
 };
+
+function foundingPromo(overrides: Record<string, unknown> = {}) {
+  return promo({
+    id: FOUNDING_PROMOTION_CODE_ID,
+    code: "FOUNDING",
+    customer: null,
+    max_redemptions: 100,
+    times_redeemed: 0,
+    promotion: {
+      type: "coupon",
+      coupon: coupon({
+        id: "FOUNDING50",
+        percent_off: 50,
+        duration: "forever",
+        applies_to: null,
+      }),
+    },
+    ...overrides,
+  });
+}
+
+const usFounding = assessFirmVoucher({
+  promotionCode: foundingPromo(),
+  ...baseCheck,
+  saMarket: false,
+});
+assert(
+  !usFounding.ok &&
+    usFounding.reason === "sa_only" &&
+    usFounding.message === FOUNDING_SA_ONLY_MESSAGE,
+  "a US firm cannot use FOUNDING",
+);
+
+const usFoundingAlias = assessFirmVoucher({
+  promotionCode: foundingPromo({
+    id: "promo_alias",
+    code: "WELCOME50",
+  }),
+  ...baseCheck,
+  saMarket: false,
+});
+assert(
+  !usFoundingAlias.ok && usFoundingAlias.reason === "sa_only",
+  "a US firm cannot use another code on coupon FOUNDING50",
+);
+
+const zaFounding = assessFirmVoucher({
+  promotionCode: foundingPromo(),
+  ...baseCheck,
+  saMarket: true,
+});
+assert(
+  zaFounding.ok && zaFounding.promotionCodeId === FOUNDING_PROMOTION_CODE_ID,
+  "a ZA firm can use FOUNDING",
+);
+assert(
+  zaFounding.ok && zaFounding.preview === "$49.50/mo",
+  "FOUNDING 50% off Solo monthly previews $49.50/mo",
+);
+
+const usOther = assessFirmVoucher({
+  promotionCode: promo(),
+  ...baseCheck,
+  saMarket: false,
+});
+assert(usOther.ok && usOther.promotionCodeId === "promo_free", "a US firm can still use another code");
 
 const valid = assessFirmVoucher({ promotionCode: promo(), ...baseCheck });
 assert(valid.ok, "a matching active code is valid");
@@ -372,6 +439,98 @@ assert(
   "retrieved applies_to rejects a band other than Solo",
 );
 
+const foundingCoupon = {
+  id: "FOUNDING50",
+  valid: true,
+  percent_off: 50,
+  amount_off: null,
+  currency: null,
+  duration: "forever",
+  duration_in_months: null,
+  applies_to: null,
+};
+const usResolvedFounding = await resolveFirmVoucher(
+  {
+    promotionCodes: {
+      list: async () => ({
+        data: [
+          {
+            id: FOUNDING_PROMOTION_CODE_ID,
+            code: "FOUNDING",
+            active: true,
+            customer: null,
+            max_redemptions: 100,
+            times_redeemed: 0,
+            promotion: { type: "coupon", coupon: "FOUNDING50" },
+          },
+        ],
+      }),
+    },
+    coupons: { retrieve: async () => foundingCoupon },
+  },
+  {
+    code: "FOUNDING",
+    firmCustomerId: "cus_us",
+    productId: "prod_solo",
+    listCents: 9_900,
+    interval: "month",
+    saMarket: false,
+  },
+);
+assert(
+  !usResolvedFounding.ok &&
+    usResolvedFounding.reason === "sa_only" &&
+    usResolvedFounding.message === FOUNDING_SA_ONLY_MESSAGE,
+  "resolving FOUNDING for a US firm returns the South Africa message",
+);
+const zaResolvedFounding = await resolveFirmVoucher(
+  {
+    promotionCodes: {
+      list: async () => ({
+        data: [
+          {
+            id: FOUNDING_PROMOTION_CODE_ID,
+            code: "FOUNDING",
+            active: true,
+            customer: null,
+            max_redemptions: 100,
+            times_redeemed: 0,
+            promotion: { type: "coupon", coupon: "FOUNDING50" },
+          },
+        ],
+      }),
+    },
+    coupons: { retrieve: async () => foundingCoupon },
+  },
+  {
+    code: "FOUNDING",
+    firmCustomerId: "cus_za",
+    productId: "prod_solo",
+    listCents: 9_900,
+    interval: "month",
+    saMarket: true,
+  },
+);
+assert(
+  zaResolvedFounding.ok && zaResolvedFounding.promotionCodeId === FOUNDING_PROMOTION_CODE_ID,
+  "resolving FOUNDING for a ZA firm is accepted",
+);
+const usResolvedOther = await resolveFirmVoucher(
+  {
+    promotionCodes: { list: async () => ({ data: [promo()] }) },
+  },
+  {
+    code: "FREEMONTH",
+    firmCustomerId: "cus_firm",
+    productId: "prod_solo",
+    listCents: 9_900,
+    interval: "month",
+    saMarket: false,
+    nowSeconds: NOW,
+  },
+);
+assert(usResolvedOther.ok, "resolving another code for a US firm is unchanged");
+
 let legacyRetrieved = "";
 const legacyCoupon = await resolveFirmVoucher(
   {
@@ -633,6 +792,72 @@ assert(usPlain.calls[0]?.discounts == null, "a US firm is not given the SA coupo
 assert(
   !JSON.stringify(usPlain.calls[0]).includes("MILON_ZA_50"),
   "the US update payload has no SA coupon",
+);
+
+const usFoundingUpgrade = stripeFor({
+  promos: [foundingPromo()],
+  onUpdate: () =>
+    upgradedSub({ id: "in_us_founding", amount_due: 9900, total: 9900, status: "paid", paid: true }),
+});
+const usFoundingResult = await completeFirmSetupUpgrade(
+  session({
+    milon_promotion_code_id: FOUNDING_PROMOTION_CODE_ID,
+    milon_promotion_code: "FOUNDING",
+  }),
+  usFoundingUpgrade.stripe as never,
+  { firmMarket: { country: "US" } },
+);
+assert(
+  usFoundingResult?.notice === FOUNDING_SA_ONLY_MESSAGE,
+  "a US setup upgrade tells the firm FOUNDING is South Africa only",
+);
+assert(
+  usFoundingUpgrade.calls[0]?.discounts == null,
+  "a US setup upgrade does not apply FOUNDING",
+);
+assert(
+  !JSON.stringify(usFoundingUpgrade.calls[0]).includes("MILON_ZA_50"),
+  "rejecting FOUNDING does not attach the SA coupon to a US firm",
+);
+
+const zaFoundingUpgrade = stripeFor({
+  promos: [foundingPromo()],
+  onUpdate: () =>
+    upgradedSub({ id: "in_za_founding", amount_due: 4950, total: 4950, status: "paid", paid: true }),
+});
+const zaFoundingResult = await completeFirmSetupUpgrade(
+  session({
+    milon_promotion_code_id: FOUNDING_PROMOTION_CODE_ID,
+    milon_promotion_code: "FOUNDING",
+  }),
+  zaFoundingUpgrade.stripe as never,
+  { firmMarket: { country: "ZA" } },
+);
+assert(zaFoundingResult?.notice == null, "a ZA setup upgrade accepts FOUNDING");
+assert(
+  JSON.stringify(zaFoundingUpgrade.calls[0]?.discounts) ===
+    JSON.stringify([{ promotion_code: FOUNDING_PROMOTION_CODE_ID }]),
+  "a ZA setup upgrade applies the FOUNDING promotion code",
+);
+assert(
+  !JSON.stringify(zaFoundingUpgrade.calls[0]?.discounts ?? []).includes("MILON_ZA_50"),
+  "FOUNDING still replaces the SA coupon instead of stacking",
+);
+
+const usOtherUpgrade = stripeFor({
+  promos: [promo()],
+  onUpdate: () => upgradedSub(zeroInvoice),
+});
+const usOtherResult = await completeFirmSetupUpgrade(
+  session({ milon_promotion_code_id: "promo_free", milon_promotion_code: "FREEMONTH" }),
+  usOtherUpgrade.stripe as never,
+  { firmMarket: { country: "US" } },
+);
+assert(usOtherResult?.notice == null, "a US firm can still apply another voucher");
+assert(
+  JSON.stringify(usOtherUpgrade.calls[0]?.discounts) ===
+    JSON.stringify([{ promotion_code: "promo_free" }]),
+  "another voucher is unaffected by the FOUNDING rule",
 );
 
 const wrong = stripeFor({

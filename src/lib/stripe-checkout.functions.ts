@@ -37,6 +37,7 @@ import {
 import {
   FIRM_CHECKOUT_BANDS,
   FOUNDING_PROMO_CODE,
+  FOUNDING_SA_ONLY_MESSAGE,
   assertFoundingMonthlyOnly,
   isFirmCheckoutBand,
   isFoundingCode,
@@ -225,6 +226,10 @@ async function resolveFoundingPromotionCodeId(promo?: string | null): Promise<st
 }
 
 async function createPortalUrl(customerId: string, origin: string): Promise<string> {
+  // No configuration id: Stripe uses the Dashboard default. Session create
+  // cannot turn promotion codes off for one firm. If that default allows
+  // promotion codes, FOUNDING can still be redeemed there until the
+  // Dashboard setting is off.
   const session = await getStripe().billingPortal.sessions.create({
     customer: customerId,
     return_url: `${origin.replace(/\/$/, "")}/dashboard`,
@@ -247,6 +252,8 @@ async function createPaidCheckoutSession(input: {
   interval: FirmInterval;
   market: StripePlanMarket;
   promo?: string | null;
+  /** `isSaMarketFirm` on the firm row. Never the client market flag. */
+  saMarket: boolean;
   /** From the firm row. Never the client market flag. */
   zaCouponId?: string | null;
 }): Promise<{ url: string; kind: "checkout" | "portal" }> {
@@ -254,6 +261,9 @@ async function createPaidCheckoutSession(input: {
     throw new Error("STRIPE_SECRET_KEY is not set on this deploy.");
   }
 
+  if (isFoundingCode(input.promo) && !input.saMarket) {
+    throw new Error(FOUNDING_SA_ONLY_MESSAGE);
+  }
   assertFoundingMonthlyOnly(input.interval, input.promo);
 
   const stripe = getStripe();
@@ -298,6 +308,7 @@ async function createPaidCheckoutSession(input: {
     customerId,
     market: input.market,
     promotionCodeId,
+    allowPromotionCodes: input.saMarket,
     zaCouponId: input.zaCouponId,
     integrationIdentifier: firmIntegrationIdentifier(input.plan, input.interval),
     includeTrial,
@@ -326,6 +337,7 @@ export const createStripeCheckout = createServerFn({ method: "POST" })
     const ctx = context as unknown as BillingAuthCtx;
     const { userId, email } = await checkoutActor(ctx);
     const firmMarket = await loadCallerFirmMarket({ supabase: ctx.supabase, userId });
+    const saMarket = isSaMarketFirm({ market: firmMarket });
     return createPaidCheckoutSession({
       userId,
       email,
@@ -333,6 +345,7 @@ export const createStripeCheckout = createServerFn({ method: "POST" })
       interval: data.interval as FirmInterval,
       market: data.market as StripePlanMarket,
       promo: data.promo,
+      saMarket,
       zaCouponId: zaCouponIdForMarket(firmMarket),
     });
   });
@@ -458,7 +471,7 @@ export const validateFirmVoucher = createServerFn({ method: "POST" })
     }
     const ctx = context as unknown as BillingAuthCtx;
     const { userId, email } = await checkoutActor(ctx);
-    const { billingEmail } = await assertCallerCanUpgradeFirm({
+    const { billingEmail, market: firmMarket } = await assertCallerCanUpgradeFirm({
       supabase: ctx.supabase,
       userId,
       email,
@@ -482,10 +495,14 @@ export const validateFirmVoucher = createServerFn({ method: "POST" })
       productId: stripeProductId(price.product),
       listCents,
       interval,
+      saMarket: isSaMarketFirm({ market: firmMarket }),
     });
     if (!voucher.ok) {
       if (voucher.reason === "unavailable") throw new Error(voucher.message);
-      return { ok: false as const, message: FIRM_VOUCHER_INVALID_MESSAGE };
+      return {
+        ok: false as const,
+        message: voucher.reason === "sa_only" ? voucher.message : FIRM_VOUCHER_INVALID_MESSAGE,
+      };
     }
     return {
       ok: true as const,
@@ -561,10 +578,13 @@ export const upgradeFirmBand = createServerFn({ method: "POST" })
         productId: stripeProductId(price.product),
         listCents,
         interval,
+        saMarket: isSaMarketFirm({ market: firmMarket }),
       });
       if (!voucher.ok) {
         throw new Error(
-          voucher.reason === "unavailable" ? voucher.message : FIRM_VOUCHER_INVALID_MESSAGE,
+          voucher.reason === "unavailable" || voucher.reason === "sa_only"
+            ? voucher.message
+            : FIRM_VOUCHER_INVALID_MESSAGE,
         );
       }
       voucherPromotionCodeId = voucher.promotionCodeId;
@@ -691,6 +711,7 @@ export const upgradeFirmBand = createServerFn({ method: "POST" })
       includeTrial: false,
       replacesSubscriptionId,
       promotionCodeId: voucherPromotionCodeId,
+      allowPromotionCodes: isSaMarketFirm({ market: firmMarket }),
       zaCouponId: voucherPromotionCodeId ? null : zaCouponId,
     });
     assertNoManagedPaymentsOverride(params);

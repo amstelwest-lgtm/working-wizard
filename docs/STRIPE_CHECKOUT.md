@@ -12,7 +12,7 @@ Firm Checkout **does not** pass `managed_payments: { enabled: false }`. Leave Ma
 
 ## FOUNDING
 
-Coupon `FOUNDING50` / code `FOUNDING` is **monthly only** and must not stack with annual ~20% off. It discounts paid Solo+ invoices after the 14-day trial. It is not a free-forever coupon. Enforced in checkout create.
+Coupon `FOUNDING50` / code `FOUNDING` is **monthly only** and **South African firms only**. It must not stack with annual ~20% off. It discounts paid Solo+ invoices after the 14-day trial. It is not a free-forever coupon. A non-ZA firm is rejected with “This code is only available to South African firms.” Stripe’s hosted code box is omitted unless the firm row is South Africa.
 
 ## Env
 

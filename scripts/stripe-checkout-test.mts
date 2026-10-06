@@ -70,6 +70,7 @@ const monthly = firmCheckoutSessionParams({
   userId: "user_1",
   email: "firm@example.com",
   market: "za",
+  allowPromotionCodes: true,
   integrationIdentifier: firmIntegrationIdentifier("solo", "month", "abcdefgh"),
   includeTrial: true,
 });
@@ -83,7 +84,44 @@ assert(
 assert(!("managed_payments" in monthly) || monthly.managed_payments == null, "MP not force-disabled");
 assert(!("automatic_tax" in monthly) || monthly.automatic_tax == null, "automatic_tax omitted");
 assert(monthly.billing_address_collection === "required", "billing address required");
-assert(monthly.allow_promotion_codes === true, "monthly paid allows FOUNDING box");
+assert(
+  monthly.allow_promotion_codes === true,
+  "a server-side SA firm can see the monthly promo box",
+);
+const usMonthly = firmCheckoutSessionParams({
+  priceId: "price_test_solo_month",
+  lookupKey: "milon_solo_monthly",
+  band: "solo",
+  interval: "month",
+  origin: "https://milonfinance.com",
+  userId: "user_1",
+  email: "firm@example.com",
+  market: "za",
+  integrationIdentifier: firmIntegrationIdentifier("solo", "month", "abcdefgh"),
+  includeTrial: true,
+});
+assert(
+  usMonthly.allow_promotion_codes !== true,
+  "client market=za does not open the promo box; the server flag does",
+);
+const foundingBlocked = firmCheckoutSessionParams({
+  priceId: "price_test_solo_month",
+  lookupKey: "milon_solo_monthly",
+  band: "solo",
+  interval: "month",
+  origin: "https://milonfinance.com",
+  userId: "user_1",
+  email: "firm@example.com",
+  market: "us",
+  promotionCodeId: "promo_1UGFw2GXDN6PFbnz2FQ9EBm1",
+  integrationIdentifier: firmIntegrationIdentifier("solo", "month", "abcdefgh"),
+  includeTrial: true,
+});
+assert(
+  foundingBlocked.allow_promotion_codes !== true &&
+    !JSON.stringify(foundingBlocked.discounts ?? []).includes("promo_1UGFw2GXDN6PFbnz2FQ9EBm1"),
+  "a non-ZA session does not attach the live FOUNDING promotion code",
+);
 assert(monthly.payment_method_collection === "always", "card on file at signup");
 assert(monthly.subscription_data?.trial_period_days === 14, "first subscription is a 14-day trial");
 assert(monthly.mode === "subscription", "subscription mode");
@@ -104,6 +142,23 @@ const yearly = firmCheckoutSessionParams({
 });
 assert(yearly.adaptive_pricing?.enabled === true, "adaptive_pricing on yearly too");
 assert(yearly.allow_promotion_codes !== true, "yearly Checkout hides promotion codes");
+const yearlySa = firmCheckoutSessionParams({
+  priceId: "price_test_solo_year",
+  lookupKey: "milon_solo_yearly",
+  band: "solo",
+  interval: "year",
+  origin: "https://milonfinance.com",
+  userId: "user_1",
+  email: "firm@example.com",
+  market: "za",
+  allowPromotionCodes: true,
+  integrationIdentifier: firmIntegrationIdentifier("solo", "year", "abcdefgh"),
+  includeTrial: true,
+});
+assert(
+  yearlySa.allow_promotion_codes !== true,
+  "yearly Checkout hides the box even for an SA firm",
+);
 assert(yearly.payment_method_collection === "always", "yearly trial still collects a card");
 assert(yearly.subscription_data?.trial_period_days === 14, "chosen yearly band also trials 14 days");
 
@@ -191,12 +246,18 @@ assert(
 assert(checkoutFn.includes("resolveFirmCatalogPrice"), "checkout resolves catalog lookup_keys");
 assert(!checkoutFn.includes("price_data"), "checkout does not build inline price_data");
 assert(checkoutFn.includes("assertFoundingMonthlyOnly"), "FOUNDING guard on create");
+assert(checkoutFn.includes("FOUNDING_SA_ONLY_MESSAGE"), "non-ZA FOUNDING is rejected at checkout create");
+assert(
+  checkoutFn.includes("allowPromotionCodes: input.saMarket"),
+  "hosted promo box follows the firm row",
+);
 assert(
   STRIPE_SAAS_BUSINESS_TAX_CODE === "txcd_10103001",
   "tax_code is SaaS — business use from Stripe's canonical list",
 );
 
 const core = readFileSync(resolve("src/lib/stripe-checkout.core.ts"), "utf8");
+assert(core.includes("allowPromotionCodes"), "core gates the hosted promo box");
 assert(core.includes("adaptive_pricing: { enabled: true }"), "core sets adaptive_pricing");
 assert(core.includes('billing_address_collection: "required"'), "core collects billing address");
 assert(core.includes("subscription_data"), "plan metadata lands on the subscription");

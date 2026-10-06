@@ -88,7 +88,10 @@ async function couponExpanded(stripe: FirmVoucherStripe, promotionCode: unknown)
   try {
     retrieved = await stripe.coupons.retrieve(couponId);
   } catch (err) {
-    console.warn("[stripe] voucher coupon retrieve failed", err instanceof Error ? err.message : err);
+    console.warn(
+      "[stripe] voucher coupon retrieve failed",
+      err instanceof Error ? err.message : err,
+    );
     throw err;
   }
   const record =
@@ -115,6 +118,8 @@ export async function resolveFirmVoucher(
     listCents: number;
     interval: FirmInterval;
     nowSeconds?: number;
+    /** `isSaMarketFirm` on the firm row. Omitted is not South Africa. */
+    saMarket?: boolean;
   },
 ): Promise<FirmVoucherResult> {
   const code = normalizeVoucherCode(input.code);
@@ -171,6 +176,7 @@ export async function resolveFirmVoucher(
       hasPriorTransaction,
       listCents: input.listCents,
       nowSeconds: input.nowSeconds,
+      saMarket: input.saMarket,
     });
     return withVoucherInterval(assessed, input.interval, input.listCents);
   } catch (err) {
