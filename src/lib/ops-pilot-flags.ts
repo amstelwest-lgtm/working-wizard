@@ -21,3 +21,8 @@ const LIVE_FLAGS = new Set<string>([]);
 export function pilotFlagWiring(key: string): "Live" | "Not wired yet" {
   return LIVE_FLAGS.has(key) ? "Live" : "Not wired yet";
 }
+
+/** Unwired switches stay in settings and stay off the console until something reads them. */
+export function isPilotFlagVisible(key: string): boolean {
+  return pilotFlagWiring(key) === "Live";
+}

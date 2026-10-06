@@ -146,3 +146,35 @@
 .founder-metrics .fm-pill-ok {
   color: var(--ops-ok-ink);
 }
+
+.founder-metrics .fm-glance {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (min-width: 800px) {
+  .founder-metrics .fm-glance {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.founder-metrics .fm-glance .fm-number {
+  font-size: clamp(1.7rem, 3vw, 2.4rem);
+}
+
+.founder-metrics .fm-span {
+  grid-column: 1 / -1;
+}
+
+.founder-metrics .fm-funnel {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.founder-metrics .fm-hyp {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}

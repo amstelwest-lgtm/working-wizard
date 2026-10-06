@@ -123,11 +123,12 @@ assert(dash.includes("SQL 7"), "error copy asks for SQL 7, not a re-paste of 3�
 assert(!/Paste SQL 3–5/.test(dash), "do not tell the founder to re-paste SQL 3–5");
 assert(!/total signups|NPS|cumulative/i.test(dash), "dashboard has no vanity copy");
 assert(dash.includes("This week's learning") || dash.includes("This week"), "page leads with what to do");
-assert(dash.includes("Five readings"), "all five metrics are on the page");
-assert(dash.includes("How far each practice has gone"), "commitment ladder is shown");
-assert(dash.includes("Conversations"), "Lighthouse conversations are on the page");
-assert(dash.includes("What we watch"), "input inventory is honest");
-assert(dash.includes("The loop is theatre") || dash.includes("theatre"), "loop rules are on the page");
+assert(dash.includes("buildGlance"), "glance numbers are on the page");
+assert(dash.includes("Rolling 14 days"), "headline window is the rolling 14 days");
+assert(dash.includes("Do this next"), "one next action");
+assert(dash.includes("Signals from conversations"), "conversation signals stay");
+assert(!dash.includes("Five readings"), "five readings are merged into the funnel");
+assert(!dash.includes("What we watch"), "watch prose is not on the page");
 
 const sql5 = readFileSync(
   resolve("supabase/migrations/20260902300000_analytics_experiments_digest.sql"),
