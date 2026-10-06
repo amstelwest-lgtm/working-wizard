@@ -71,8 +71,10 @@ import { LIGHTHOUSE_FROM_EMAIL } from "@/lib/lighthouse-from";
 import {
   displayedLeadMarket,
   formatPhoneDisplay,
+  heldColdApproveReason,
   inferredTargetCountry,
   isTargetNotContacted,
+  shouldFlushContactOnPointerDown,
   storedLeadMarket,
   type LighthouseConversationKind,
 } from "@/lib/lighthouse-targets";
@@ -540,6 +542,13 @@ export function LighthousePanel({
                 {inbox.map((item) => {
                   const lead = dash.leads.find((l) => l.id === item.leadId);
                   const window = lead ? sendWindowStatus(lead, now) : null;
+                  const inboxTouch = lead?.touches.find((t) => t.id === item.touchId);
+                  const heldColdReason = lead
+                    ? heldColdApproveReason(lead, {
+                        angle: inboxTouch?.angle ?? null,
+                        stepNo: inboxTouch?.stepNo ?? item.stepNo,
+                      })
+                    : null;
                   return (
                     <li
                       key={item.touchId}
@@ -560,7 +569,9 @@ export function LighthousePanel({
                         {item.status === "draft" && (
                           <button
                             type="button"
+                            disabled={Boolean(heldColdReason)}
                             onClick={() => {
+                              if (heldColdReason) return;
                               const touch = lead?.touches.find((t) => t.id === item.touchId);
                               void runReview(
                                 item.touchId,
@@ -573,7 +584,7 @@ export function LighthousePanel({
                                   toast.error(e instanceof Error ? e.message : "Could not approve"),
                                 );
                             }}
-                            className="rounded-full bg-[var(--ops-amber-soft)] px-3 py-1 text-[11px] font-semibold text-[var(--ops-amber)]"
+                            className="rounded-full bg-[var(--ops-amber-soft)] px-3 py-1 text-[11px] font-semibold text-[var(--ops-amber)] disabled:cursor-not-allowed disabled:opacity-40"
                           >
                             Approve
                           </button>
@@ -601,8 +612,9 @@ export function LighthousePanel({
                         {item.status === "approved" && (
                           <button
                             type="button"
-                            disabled={!window?.open}
+                            disabled={!window?.open || Boolean(heldColdReason)}
                             onClick={() => {
+                              if (heldColdReason) return;
                               const touch = lead?.touches.find((t) => t.id === item.touchId);
                               if (!lead?.email || !touch) return;
                               setConfirmSend({
@@ -642,6 +654,9 @@ export function LighthousePanel({
                           </button>
                         )}
                       </div>
+                      {heldColdReason ? (
+                        <p className="mt-1 text-[11px] text-[var(--ops-ink-dim)]">{heldColdReason}</p>
+                      ) : null}
                       {item.status === "approved" && window && nextWindowLine(window) && (
                         <p className="mt-1 text-[11px] text-[var(--ops-ink-dim)]">
                           {nextWindowLine(window)}
@@ -920,19 +935,21 @@ export function LighthousePanel({
             await optOut({ data: { leadId: openLead.id } });
             await refresh();
           }}
-          onSaveContact={async (fields) => {
-            const stored = storedLeadMarket(openLead.country);
+          onSaveContact={async (leadId, fields) => {
+            const row = dash.leads.find((lead) => lead.id === leadId);
+            if (!row) return;
+            const stored = storedLeadMarket(row.country);
             const country =
               stored ??
               inferredTargetCountry({
-                ...openLead,
+                ...row,
                 country: null,
                 phone: fields.phone,
                 website: fields.website,
               });
             const saved = await saveLead({
               data: {
-                id: openLead.id,
+                id: leadId,
                 phone: fields.phone,
                 website: fields.website,
                 ...(country ? { country } : {}),
@@ -943,13 +960,13 @@ export function LighthousePanel({
               saved.phoneE164 ?? null,
             );
             const websiteShown = saved.website ?? fields.website;
-            patchLead(openLead.id, {
+            patchLead(leadId, {
               phone: saved.phone ?? fields.phone,
-              phoneE164: saved.phoneE164 ?? openLead.phoneE164,
+              phoneE164: saved.phoneE164 ?? row.phoneE164,
               website: websiteShown,
-              country: saved.country ?? country ?? openLead.country,
+              country: saved.country ?? country ?? row.country,
             });
-            pendingLeadPatches.current.delete(openLead.id);
+            pendingLeadPatches.current.delete(leadId);
             await refresh();
             return { phone: phoneShown, website: websiteShown };
           }}
@@ -1655,7 +1672,10 @@ function LeadDrawer({
   onStage: (stage: LighthouseStage) => Promise<void>;
   onSequence: (sequenceKey: "accountant_v1" | "accountant_oneshot_v1") => Promise<void>;
   onOptOut: () => Promise<void>;
-  onSaveContact: (fields: { phone: string; website: string }) => Promise<{
+  onSaveContact: (
+    leadId: string,
+    fields: { phone: string; website: string },
+  ) => Promise<{
     phone: string;
     website: string;
   } | void>;
@@ -1691,7 +1711,8 @@ function LeadDrawer({
   );
   const [kind, setKind] = useState<LighthouseConversationKind>(lead.conversationKind ?? "phone");
   const [heldBusy, setHeldBusy] = useState(false);
-  const [contactSaved, setContactSaved] = useState(false);
+  const [phoneSaved, setPhoneSaved] = useState(false);
+  const [websiteSaved, setWebsiteSaved] = useState(false);
   const phoneRef = useRef(phone);
   const websiteRef = useRef(website);
   const appliedPhone = useRef(phone);
@@ -1699,11 +1720,20 @@ function LeadDrawer({
   const contactTimer = useRef<number | null>(null);
   const contactGen = useRef(0);
   const contactChain = useRef<Promise<void>>(Promise.resolve());
+  const leadIdRef = useRef(lead.id);
+  const onSaveContactRef = useRef(onSaveContact);
+  const contactMounted = useRef(true);
+  leadIdRef.current = lead.id;
+  onSaveContactRef.current = onSaveContact;
   const windowStatus = sendWindowStatus(lead);
   const cadence = cadenceOf(lead);
   const textMatchesSaved =
     subject === (existing?.subject ?? "") && body === (existing?.body ?? "");
   const approved = existing?.status === "approved" && textMatchesSaved && Boolean(touchId);
+  const heldColdReason = heldColdApproveReason(lead, {
+    angle: existing?.angle ?? null,
+    stepNo: existing?.stepNo ?? activeStep,
+  });
 
   useEffect(() => {
     const t = lead.touches.find((x) => x.stepNo === activeStep) ?? null;
@@ -1712,25 +1742,92 @@ function LeadDrawer({
     setTouchId(t?.id ?? "");
   }, [activeStep, lead]);
 
+  const clearContactTimer = () => {
+    if (contactTimer.current != null) {
+      window.clearTimeout(contactTimer.current);
+      contactTimer.current = null;
+    }
+  };
+
+  const contactDirty = () =>
+    phoneRef.current.trim() !== appliedPhone.current.trim() ||
+    websiteRef.current.trim() !== appliedWebsite.current.trim();
+
+  const persistContact = (
+    leadId: string,
+    nextPhone: string,
+    nextWebsite: string,
+    applyUi: boolean,
+  ) => {
+    clearContactTimer();
+    const phoneNext = nextPhone.trim();
+    const websiteNext = nextWebsite.trim();
+    const phoneDirty = phoneNext !== appliedPhone.current.trim();
+    const websiteDirty = websiteNext !== appliedWebsite.current.trim();
+    phoneRef.current = nextPhone;
+    websiteRef.current = nextWebsite;
+    const gen = ++contactGen.current;
+    contactChain.current = contactChain.current.then(async () => {
+      if (!phoneDirty && !websiteDirty) return;
+      try {
+        const saved = await onSaveContactRef.current(leadId, {
+          phone: phoneNext,
+          website: websiteNext,
+        });
+        if (!applyUi || !contactMounted.current || leadIdRef.current !== leadId) return;
+        if (gen !== contactGen.current) return;
+        if (saved) {
+          setPhone(saved.phone);
+          setWebsite(saved.website);
+          phoneRef.current = saved.phone;
+          websiteRef.current = saved.website;
+          appliedPhone.current = saved.phone;
+          appliedWebsite.current = saved.website;
+        } else {
+          appliedPhone.current = phoneNext;
+          appliedWebsite.current = websiteNext;
+        }
+        if (phoneDirty) setPhoneSaved(true);
+        if (websiteDirty) setWebsiteSaved(true);
+      } catch (e) {
+        if (!applyUi || !contactMounted.current || leadIdRef.current !== leadId) return;
+        if (gen !== contactGen.current) return;
+        toast.error(e instanceof Error ? e.message : "Could not save contact");
+      }
+    });
+    return contactChain.current;
+  };
+  const persistRef = useRef(persistContact);
+  persistRef.current = persistContact;
+
+  const flushPendingContact = (applyUi: boolean) => {
+    if (!contactDirty()) return;
+    void persistRef.current(leadIdRef.current, phoneRef.current, websiteRef.current, applyUi);
+  };
+
   const seenLead = useRef(lead.id);
   useEffect(() => {
     const nextPhone = formatPhoneDisplay(lead.phone, lead.phoneE164);
     const nextWebsite = lead.website ?? "";
     const switched = seenLead.current !== lead.id;
-    seenLead.current = lead.id;
     if (switched) {
-      if (contactTimer.current != null) {
-        window.clearTimeout(contactTimer.current);
-        contactTimer.current = null;
-      }
-      contactGen.current += 1;
+      const previousId = seenLead.current;
+      const pendingPhone = phoneRef.current;
+      const pendingWebsite = websiteRef.current;
+      const dirty =
+        pendingPhone.trim() !== appliedPhone.current.trim() ||
+        pendingWebsite.trim() !== appliedWebsite.current.trim();
+      seenLead.current = lead.id;
+      clearContactTimer();
+      if (dirty) void persistRef.current(previousId, pendingPhone, pendingWebsite, false);
       setPhone(nextPhone);
       setWebsite(nextWebsite);
       phoneRef.current = nextPhone;
       websiteRef.current = nextWebsite;
       appliedPhone.current = nextPhone;
       appliedWebsite.current = nextWebsite;
-      setContactSaved(false);
+      setPhoneSaved(false);
+      setWebsiteSaved(false);
       return;
     }
     const previousPhone = appliedPhone.current;
@@ -1754,9 +1851,35 @@ function LeadDrawer({
     setKind(lead.conversationKind ?? "phone");
   }, [lead.id, lead.conversationHeldAt, lead.conversationKind]);
 
+  useEffect(() => {
+    const onPointerDown = (event: PointerEvent) => {
+      const active = document.activeElement;
+      const activeId = active instanceof HTMLElement ? active.id : "";
+      const target = event.target instanceof Element ? event.target : null;
+      const targetId = target?.closest("input, textarea, select")?.id ?? null;
+      if (
+        !shouldFlushContactOnPointerDown({
+          activeElementId: activeId || null,
+          targetElementId: targetId,
+        })
+      ) {
+        return;
+      }
+      void persistRef.current(leadIdRef.current, phoneRef.current, websiteRef.current, true);
+    };
+    document.addEventListener("pointerdown", onPointerDown, true);
+    return () => document.removeEventListener("pointerdown", onPointerDown, true);
+  }, []);
+
   useEffect(
     () => () => {
+      contactMounted.current = false;
       if (contactTimer.current != null) window.clearTimeout(contactTimer.current);
+      const dirty =
+        phoneRef.current.trim() !== appliedPhone.current.trim() ||
+        websiteRef.current.trim() !== appliedWebsite.current.trim();
+      if (!dirty) return;
+      void persistRef.current(leadIdRef.current, phoneRef.current, websiteRef.current, false);
     },
     [],
   );
@@ -1768,53 +1891,12 @@ function LeadDrawer({
     setReplyOpen(true);
   }, [lead.id, lead.inbound]);
 
-  const clearContactTimer = () => {
-    if (contactTimer.current != null) {
-      window.clearTimeout(contactTimer.current);
-      contactTimer.current = null;
-    }
-  };
-
-  const flushContact = (nextPhone: string, nextWebsite: string) => {
-    clearContactTimer();
-    phoneRef.current = nextPhone;
-    websiteRef.current = nextWebsite;
-    const gen = ++contactGen.current;
-    contactChain.current = contactChain.current.then(async () => {
-      if (gen !== contactGen.current) return;
-      const phoneNext = phoneRef.current.trim();
-      const websiteNext = websiteRef.current.trim();
-      const savedPhone = formatPhoneDisplay(lead.phone, lead.phoneE164);
-      const savedWebsite = (lead.website ?? "").trim();
-      if (phoneNext === savedPhone && websiteNext === savedWebsite) return;
-      try {
-        const saved = await onSaveContact({ phone: phoneNext, website: websiteNext });
-        if (gen !== contactGen.current) return;
-        if (saved) {
-          setPhone(saved.phone);
-          setWebsite(saved.website);
-          phoneRef.current = saved.phone;
-          websiteRef.current = saved.website;
-          appliedPhone.current = saved.phone;
-          appliedWebsite.current = saved.website;
-        }
-        setContactSaved(true);
-      } catch (e) {
-        if (gen !== contactGen.current) return;
-        setContactSaved(false);
-        toast.error(e instanceof Error ? e.message : "Could not save contact");
-      }
-    });
-    return contactChain.current;
-  };
-
   const scheduleContact = (nextPhone: string, nextWebsite: string) => {
     phoneRef.current = nextPhone;
     websiteRef.current = nextWebsite;
-    setContactSaved(false);
     clearContactTimer();
     contactTimer.current = window.setTimeout(() => {
-      void flushContact(phoneRef.current, websiteRef.current);
+      void persistRef.current(leadIdRef.current, phoneRef.current, websiteRef.current, true);
     }, 400);
   };
 
@@ -1840,22 +1922,27 @@ function LeadDrawer({
       if (document.querySelector("[data-lighthouse-confirm]")) return;
       event.preventDefault();
       event.stopPropagation();
+      flushPendingContact(false);
       onClose();
     };
     document.addEventListener("keydown", onKey, true);
     return () => document.removeEventListener("keydown", onKey, true);
   }, [onClose]);
 
-  const closeDrawer = (event: { preventDefault: () => void; stopPropagation: () => void }) => {
-    event.preventDefault();
+  const closeDrawer = (event: { stopPropagation: () => void }) => {
+    // Do not preventDefault. That keeps focus in the field and swallows blur.
     event.stopPropagation();
+    flushPendingContact(false);
     onClose();
   };
 
   return (
     <div
       className="fixed inset-0 z-[80] flex justify-end bg-black/50 backdrop-blur-sm"
-      onClick={onClose}
+      onClick={() => {
+        flushPendingContact(false);
+        onClose();
+      }}
     >
       <div
         className="flex h-full w-full max-w-2xl flex-col overflow-y-auto border-l border-[var(--ops-line)] bg-[var(--ops-bg-elevated)] p-5"
@@ -1940,43 +2027,57 @@ function LeadDrawer({
 
         <div className="mb-4">
           <div className="grid gap-2 sm:grid-cols-2">
-            <input
-              className={inputCls}
-              placeholder="Phone"
-              value={phone}
-              onChange={(e) => {
-                const value = e.target.value;
-                setPhone(value);
-                scheduleContact(value, websiteRef.current);
-              }}
-              onBlur={(e) => {
-                const value = e.currentTarget.value;
-                setPhone(value);
-                void flushContact(value, websiteRef.current);
-              }}
-            />
-            <input
-              className={inputCls}
-              placeholder="Website"
-              value={website}
-              onChange={(e) => {
-                const value = e.target.value;
-                setWebsite(value);
-                scheduleContact(phoneRef.current, value);
-              }}
-              onBlur={(e) => {
-                const value = e.currentTarget.value;
-                setWebsite(value);
-                void flushContact(phoneRef.current, value);
-              }}
-            />
+            <div>
+              <input
+                id="lighthouse-lead-phone"
+                className={inputCls}
+                placeholder="Phone"
+                value={phone}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setPhone(value);
+                  setPhoneSaved(false);
+                  scheduleContact(value, websiteRef.current);
+                }}
+                onBlur={(e) => {
+                  const value = e.currentTarget.value;
+                  setPhone(value);
+                  void persistRef.current(leadIdRef.current, value, websiteRef.current, true);
+                }}
+              />
+              {phoneSaved ? (
+                <p className="mt-1.5 flex items-center gap-1 text-[11px] text-[var(--ops-ink-dim)]">
+                  <Check className="h-3 w-3 text-[var(--ops-ok-ink)]" />
+                  Saved
+                </p>
+              ) : null}
+            </div>
+            <div>
+              <input
+                id="lighthouse-lead-website"
+                className={inputCls}
+                placeholder="Website"
+                value={website}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setWebsite(value);
+                  setWebsiteSaved(false);
+                  scheduleContact(phoneRef.current, value);
+                }}
+                onBlur={(e) => {
+                  const value = e.currentTarget.value;
+                  setWebsite(value);
+                  void persistRef.current(leadIdRef.current, phoneRef.current, value, true);
+                }}
+              />
+              {websiteSaved ? (
+                <p className="mt-1.5 flex items-center gap-1 text-[11px] text-[var(--ops-ink-dim)]">
+                  <Check className="h-3 w-3 text-[var(--ops-ok-ink)]" />
+                  Saved
+                </p>
+              ) : null}
+            </div>
           </div>
-          {contactSaved ? (
-            <p className="mt-1.5 flex items-center gap-1 text-[11px] text-[var(--ops-ink-dim)]">
-              <Check className="h-3 w-3 text-[var(--ops-ok-ink)]" />
-              Saved
-            </p>
-          ) : null}
         </div>
 
         <div className="mb-4 rounded-xl border border-[var(--ops-line)] bg-[var(--ops-card)] px-3 py-2.5">
@@ -2333,8 +2434,11 @@ function LeadDrawer({
           )}
           <button
             type="button"
-            disabled={approving || !subject || !body || lead.doNotContact || approved}
+            disabled={
+              approving || !subject || !body || lead.doNotContact || approved || Boolean(heldColdReason)
+            }
             onClick={async () => {
+              if (heldColdReason) return;
               if (!touchId) {
                 toast.error("Load or draft the touch before approving.");
                 return;
@@ -2357,9 +2461,9 @@ function LeadDrawer({
           </button>
           <button
             type="button"
-            disabled={sending || !approved || !windowStatus.open || lead.doNotContact}
+            disabled={sending || !approved || !windowStatus.open || lead.doNotContact || Boolean(heldColdReason)}
             onClick={() => {
-              if (!touchId) return;
+              if (heldColdReason || !touchId) return;
               setSending(true);
               onRequestSend(touchId, subject, body);
               setSending(false);
@@ -2369,7 +2473,10 @@ function LeadDrawer({
             <Send className="h-3.5 w-3.5" />
             Send now
           </button>
-          {approved && !windowStatus.open && (
+          {heldColdReason ? (
+            <p className="mt-2 w-full text-[11px] text-[var(--ops-ink-dim)]">{heldColdReason}</p>
+          ) : null}
+          {approved && !windowStatus.open && !heldColdReason && (
             <button
               type="button"
               onClick={() => {

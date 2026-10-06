@@ -317,10 +317,15 @@ assert(
   "firms with nothing due run a dry-run plan",
 );
 
-assert(panel.includes("disabled={!window?.open}"), "inbox Send now stays disabled outside the window");
 assert(
-  panel.includes("disabled={sending || !approved || !windowStatus.open || lead.doNotContact}"),
-  "drawer Send now stays disabled outside the window",
+  panel.includes("disabled={!window?.open || Boolean(heldColdReason)}"),
+  "inbox Send now stays disabled outside the window and when a call is held",
+);
+assert(
+  panel.includes(
+    "disabled={sending || !approved || !windowStatus.open || lead.doNotContact || Boolean(heldColdReason)}",
+  ),
+  "drawer Send now stays disabled outside the window and when a call is held",
 );
 
 console.log("lighthouse send windows ok");

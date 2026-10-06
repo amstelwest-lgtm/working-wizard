@@ -167,6 +167,55 @@ export function coldCadenceOpen(lead: { conversationHeld?: boolean | null }): bo
   return !lead.conversationHeld;
 }
 
+/**
+ * Inbound replies live on steps 6–8 with angle "reply".
+ * They are not cold-cadence mail, so a held call does not block them.
+ */
+export function isInboundReplyTouch(touch: {
+  angle?: string | null;
+  stepNo?: number | null;
+}): boolean {
+  if (String(touch.angle ?? "").trim().toLowerCase() === "reply") return true;
+  const step = Number(touch.stepNo ?? 0);
+  return step >= 6 && step <= 8;
+}
+
+/** Short reason shown when Approve or Send is disabled for a held lead. */
+export const HELD_COLD_APPROVE_REASON = "Call/meeting held, cold emails stopped";
+
+/**
+ * Null when this touch may be approved or sent.
+ * A held lead blocks cold-cadence drafts only. Existing drafts are left in place.
+ */
+export function heldColdApproveReason(
+  lead: { conversationHeld?: boolean | null },
+  touch: { angle?: string | null; stepNo?: number | null },
+): string | null {
+  if (coldCadenceOpen(lead)) return null;
+  if (isInboundReplyTouch(touch)) return null;
+  return HELD_COLD_APPROVE_REASON;
+}
+
+/** Phone and website inputs. A click outside the focused one must flush the edit. */
+export const LIGHTHOUSE_CONTACT_FIELD_IDS = ["lighthouse-lead-phone", "lighthouse-lead-website"] as const;
+
+/**
+ * True when a pointer down should save the contact fields.
+ * Clicking the focused field itself does not. Clicking plain text, another
+ * field, or a button does — even if that click never moves focus.
+ */
+export function shouldFlushContactOnPointerDown(input: {
+  activeElementId: string | null;
+  targetElementId: string | null;
+  fieldIds?: readonly string[];
+}): boolean {
+  const fields = input.fieldIds ?? LIGHTHOUSE_CONTACT_FIELD_IDS;
+  const active = input.activeElementId;
+  if (!active || !fields.includes(active)) return false;
+  if (input.targetElementId === active) return false;
+  return true;
+}
+
 /** Next cold-step date. A held conversation schedules nothing. */
 export function scheduledColdTouchOn(
   conversationHeld: boolean,
