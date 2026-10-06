@@ -45,6 +45,7 @@ import {
 import { useMarket } from "@/contexts/market";
 import { DeliverableInputConfig } from "@/components/deliverable-input-config";
 import { BudgetPdfExportButton } from "@/components/budget/budget-pdf-export";
+import { budgetSaveErrorMessage } from "@/lib/reach-error";
 
 export function BudgetPanel({
   clientId,
@@ -109,6 +110,8 @@ export function BudgetPanel({
   );
   const fetchReviewSignoffs = useServerFn(listClientReviewSignoffs);
   const skipAutosave = useRef(false);
+  const budgetDirty = useRef(false);
+  const saveGeneration = useRef(0);
   const seededFromProfile = useRef(false);
 
   useEffect(() => {
@@ -149,8 +152,10 @@ export function BudgetPanel({
           const unchanged =
             JSON.stringify(repaired) === JSON.stringify(normalizeBudgetDocument(budget));
           skipAutosave.current = unchanged;
+          budgetDirty.current = false;
           setDoc(repaired);
         } else {
+          budgetDirty.current = false;
           setDoc(null);
         }
         setLoaded(true);
@@ -214,22 +219,30 @@ export function BudgetPanel({
   }, [clientId]);
 
   useEffect(() => {
-    if (!clientId || !loaded || !doc) return;
+    if (!clientId || !loaded || !doc || !budgetDirty.current) return;
     if (skipAutosave.current) {
       skipAutosave.current = false;
       return;
     }
+    const gen = ++saveGeneration.current;
+    const snapshot = doc;
     const t = setTimeout(async () => {
       const updatedAt = new Date().toISOString();
-      const payload = { ...doc, updatedAt };
+      const payload = { ...snapshot, updatedAt };
       const { error } = await supabase
         .from("clients")
         .update({
           budget: payload as never,
           budget_updated_at: updatedAt,
-          financial_year_start_month: doc.fyStartMonth,
+          financial_year_start_month: snapshot.fyStartMonth,
         } as never)
         .eq("id", clientId);
+      const saved = () => {
+        if (saveGeneration.current !== gen) return;
+        budgetDirty.current = false;
+        setDoc(payload);
+        setBudgetUpdatedAt(updatedAt);
+      };
       if (error) {
         // Retry without fy column if missing
         const retry = await supabase
@@ -237,16 +250,15 @@ export function BudgetPanel({
           .update({ budget: payload as never, budget_updated_at: updatedAt } as never)
           .eq("id", clientId);
         if (retry.error) {
+          if (saveGeneration.current !== gen) return;
           if (!/budget|42703/.test(retry.error.message ?? "")) {
-            toast.error(`Budget save failed: ${retry.error.message}`);
+            toast.error(budgetSaveErrorMessage(retry.error.message));
           }
         } else {
-          setDoc(payload);
-          setBudgetUpdatedAt(updatedAt);
+          saved();
         }
       } else {
-        setDoc(payload);
-        setBudgetUpdatedAt(updatedAt);
+        saved();
       }
     }, 900);
     return () => clearTimeout(t);
@@ -277,6 +289,7 @@ export function BudgetPanel({
       const seeded = hasFigures ? seedBudgetFromFinancials(next, financials!) : null;
       if (seeded) next = seeded.doc;
       skipAutosave.current = false;
+      budgetDirty.current = true;
       setDoc(next);
       setUnmapped(null);
       toast.success(`Budget ready · ${BUDGET_TEMPLATES[args.templateId].label}`, {
@@ -300,6 +313,7 @@ export function BudgetPanel({
   const rebuildFromActuals = () => {
     if (!doc || !financials) return;
     const seeded = seedBudgetFromFinancials(doc, financials);
+    budgetDirty.current = true;
     setDoc(seeded.doc);
     toast.success("Budget rebuilt from the latest actuals", {
       description: seeded.changes[0],
@@ -342,6 +356,7 @@ export function BudgetPanel({
         setLowOverlapOpen(true);
         return;
       }
+      budgetDirty.current = true;
       setDoc(result.next);
       setUnmapped(result.unmapped.length ? result.unmapped : null);
       toast.success(
@@ -381,6 +396,7 @@ export function BudgetPanel({
         budgetSeasonality: doc?.qualification.seasonality ?? profile?.seasonality ?? null,
       }}
       onEngineBoundChange={(patch) => {
+        budgetDirty.current = true;
         setDoc((d) => {
           if (!d) return d;
           const wc = { ...d.wc };
@@ -451,7 +467,10 @@ export function BudgetPanel({
       </div>
       <BudgetWorkspace
         doc={doc}
-        onChange={setDoc}
+        onChange={(next) => {
+          budgetDirty.current = true;
+          setDoc(next);
+        }}
         simplified={simplified}
         actuals={actuals}
         unmappedReview={unmapped}
@@ -466,7 +485,10 @@ export function BudgetPanel({
         {!(simplified && role === "owner") && (
           <BudgetAdvancedPanel
             doc={doc}
-            onChange={setDoc}
+            onChange={(next) => {
+              budgetDirty.current = true;
+              setDoc(next);
+            }}
             financials={financials}
             businessTypeId={businessTypeId}
             role={role}
@@ -533,6 +555,7 @@ export function BudgetPanel({
               className="bg-[#d4a550] text-[#0a0e1a] hover:bg-[#c49a45]"
               onClick={() => {
                 if (!pendingChange) return;
+                budgetDirty.current = true;
                 setDoc(pendingChange.result.next);
                 setUnmapped(
                   pendingChange.result.unmapped.length ? pendingChange.result.unmapped : null,

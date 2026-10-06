@@ -16,7 +16,11 @@ import {
   type NextStepFacts,
 } from "../../../src/lib/next-step.ts";
 import { DISPLAY_TO_CAMEL } from "../ask-ai/derive-ratios.ts";
-import { buildOverviewBrief, type OverviewCopyPack } from "../ask-ai/overview-brief.ts";
+import {
+  buildOverviewBrief,
+  resolveTotalLiabilities,
+  type OverviewCopyPack,
+} from "../ask-ai/overview-brief.ts";
 import { rankNextSteps, summarizeCashForecast } from "../ask-ai/deliverable-summaries.ts";
 import type { ClientRunway } from "../../../src/lib/client-metrics.ts";
 import type { RatioRow } from "../ask-ai/types.ts";
@@ -39,6 +43,7 @@ const STATEMENT_KEYS = [
   "inventory",
   "totalAssets",
   "equity",
+  "totalLiabilities",
 ] as const;
 
 const HISTORY_RATIOS = [
@@ -113,6 +118,12 @@ export function shapeSnapshot(input: {
   for (const key of STATEMENT_KEYS) {
     if (typeof fin[key] === "number") totals[key] = fin[key];
   }
+  const rawFinancials =
+    input.financials && typeof input.financials === "object" && !Array.isArray(input.financials)
+      ? (input.financials as Record<string, unknown>)
+      : null;
+  const liabilities = resolveTotalLiabilities(rawFinancials);
+  if (liabilities) totals.totalLiabilities = liabilities.amount;
   const empty =
     !input.periodLabel && Object.keys(ratios).length === 0 && Object.keys(totals).length === 0;
   return {
@@ -121,6 +132,8 @@ export function shapeSnapshot(input: {
     period_date: input.periodDate,
     ratios,
     statement_totals: totals,
+    total_liabilities: liabilities?.amount ?? null,
+    total_liabilities_source: liabilities ? (liabilities.derived ? "derived" : "stored") : null,
     cash_runway_weeks: input.cashRunwayWeeks,
   };
 }

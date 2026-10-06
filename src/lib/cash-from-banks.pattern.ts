@@ -245,6 +245,81 @@ export function amountsSimilar(amounts: number[]): boolean {
   return amounts.every((amount) => Math.abs(Math.abs(amount) - med) <= tol);
 }
 
+function calendarMonth(iso: string): string | null {
+  return /^\d{4}-\d{2}-\d{2}/.test(iso) ? iso.slice(0, 7) : null;
+}
+
+function spanDays(dates: string[]): number {
+  const sorted = dates.filter(Boolean).sort();
+  if (sorted.length < 2) return 0;
+  const start = Date.parse(sorted[0]!);
+  const end = Date.parse(sorted[sorted.length - 1]!);
+  if (!Number.isFinite(start) || !Number.isFinite(end)) return 0;
+  return Math.round((end - start) / 86_400_000);
+}
+
+/** Population coefficient of variation. Zero when every amount matches. */
+function coefficientOfVariation(amounts: number[]): number {
+  if (amounts.length < 2) return 0;
+  const abs = amounts.map((n) => Math.abs(n));
+  const mean = abs.reduce((sum, n) => sum + n, 0) / abs.length;
+  if (!(mean > 0)) return 0;
+  const variance = abs.reduce((sum, n) => sum + (n - mean) ** 2, 0) / abs.length;
+  return Math.sqrt(variance) / mean;
+}
+
+/**
+ * Shown confidence. Same base as an equal monthly series (0.55 + 0.1 per
+ * txn, cap 0.92), then scaled by 1/(1+cv). Variation lowers the figure.
+ * It never decides whether the series is monthly.
+ */
+function confidenceWithVariation(txnCount: number, cv: number): number {
+  const base = Math.min(0.92, 0.55 + txnCount * 0.1);
+  const scaled = base / (1 + Math.max(0, cv));
+  return Math.round(Math.min(0.92, Math.max(0.35, scaled)) * 1000) / 1000;
+}
+
+/**
+ * Same counterparty across two or more calendar months, spanning at least
+ * 45 days, is monthly even when the amounts differ. Forecast amount is the
+ * median of the monthly totals. The week is the median day of each month's
+ * largest receipt.
+ */
+function monthlyFromCalendar(txns: CashStatementTransaction[]): {
+  amount: number;
+  dates: string[];
+  confidence: number;
+} | null {
+  const byMonth = new Map<string, { total: number; largest: number; date: string }>();
+  const amounts: number[] = [];
+  const allDates: string[] = [];
+  for (const txn of txns) {
+    const month = calendarMonth(txn.txn_date);
+    if (!month) continue;
+    const abs = Math.abs(txn.amount);
+    if (!Number.isFinite(abs)) continue;
+    amounts.push(abs);
+    allDates.push(txn.txn_date);
+    const prev = byMonth.get(month);
+    if (!prev) {
+      byMonth.set(month, { total: abs, largest: abs, date: txn.txn_date });
+    } else {
+      prev.total += abs;
+      if (abs > prev.largest) {
+        prev.largest = abs;
+        prev.date = txn.txn_date;
+      }
+    }
+  }
+  if (byMonth.size < 2 || spanDays(allDates) < 45) return null;
+  const totals = [...byMonth.values()].map((row) => row.total);
+  return {
+    amount: Math.round(median(totals) * 100) / 100,
+    dates: [...byMonth.values()].map((row) => row.date),
+    confidence: confidenceWithVariation(amounts.length, coefficientOfVariation(amounts)),
+  };
+}
+
 function inferCadence(
   txnCount: number,
   gaps: number[],
@@ -365,12 +440,20 @@ export function buildDraftLinesFromExtract(extract: CashBankExtract): CashForeca
     const amounts = txns.map((t) => Math.abs(t.amount));
     const dates = txns.map((t) => t.txn_date).filter(Boolean);
     const gaps = dayGaps(dates);
-    const { cadence, confidence } = inferCadence(
-      txns.length,
-      gaps,
-      bucket,
-      amountsSimilar(amounts),
-    );
+    const similar = amountsSimilar(amounts);
+    // A similar weekly series stays weekly even when it also covers two
+    // months. Everything else with a 45-day multi-month span is monthly,
+    // including receipts whose amounts vary and months with two hits.
+    const medGap = gaps.length ? median(gaps) : 0;
+    const weekly = similar && txns.length >= 3 && medGap >= 5 && medGap <= 9;
+    const calendar = weekly ? null : monthlyFromCalendar(txns);
+    const inferred = calendar
+      ? { cadence: "monthly" as const, confidence: calendar.confidence }
+      : inferCadence(txns.length, gaps, bucket, similar);
+    const cadence = inferred.cadence;
+    const confidence = inferred.confidence;
+    const forecastAmount = calendar ? calendar.amount : Math.round(median(amounts) * 100) / 100;
+    const weekDates = calendar ? calendar.dates : dates;
     const side = bucketToSide(bucket, sample.direction);
     const stripped = groupingLabel(sample);
     const name =
@@ -386,9 +469,9 @@ export function buildDraftLinesFromExtract(extract: CashBankExtract): CashForeca
       side,
       bucket,
       name,
-      amount: Math.round(median(amounts) * 100) / 100,
+      amount: forecastAmount,
       cadence,
-      start_week: defaultStartWeek(cadence, dates, extract.period_end),
+      start_week: defaultStartWeek(cadence, weekDates, extract.period_end),
       split_count: cadence.startsWith("split") ? Math.min(6, Math.max(2, txns.length)) : 3,
       status: allExcluded ? "excluded" : "proposed",
       confidence,

@@ -621,16 +621,14 @@ export function CashClassificationWorkspace({
         </div>
       )}
 
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         {onBack ? (
-          <Button variant="outline" onClick={onBack}>
+          <Button variant="outline" onClick={onBack} className="w-full sm:w-auto">
             Back
           </Button>
-        ) : (
-          <span />
-        )}
-        <div className="flex items-center gap-3">
-          <span className="text-[11px] text-slate-500">
+        ) : null}
+        <div className="flex w-full min-w-0 flex-col items-stretch gap-2 sm:w-auto sm:flex-row sm:items-center sm:justify-end">
+          <span className="text-[11px] text-slate-500 sm:text-right">
             Statement period · In {fmt(reviewTotals.inflow)}
             {" · "}
             Out {fmt(reviewTotals.outflow)}
@@ -638,7 +636,7 @@ export function CashClassificationWorkspace({
           <Button
             disabled={publishing || activeCount === 0 || policyOpen}
             onClick={requestPublish}
-            className="bg-[#b8860b] text-white hover:bg-[#9a7209]"
+            className="w-full bg-[#b8860b] text-white hover:bg-[#9a7209] sm:w-auto"
           >
             {publishing ? "Publishing…" : "Publish to Cash Forecast"}
           </Button>

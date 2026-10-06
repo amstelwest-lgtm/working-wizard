@@ -12,7 +12,10 @@ import { questionAsksForClientName } from "../_shared/redact-identifiers.ts";
  */
 
 const DEFINITIONAL = [
-  /what\s+is\s+(a|an|the)\s+/i,
+  // "What is a gross margin?" is a definition. "What is the gross margin?"
+  // asks for this client's figure, so it must still receive Overview Figures.
+  /what\s+is\s+(a|an)\s+/i,
+  /what\s+is\s+the\s+(formula|definition|meaning|difference)\b/i,
   /define\s+/i,
   /explain\s+/i,
   /how\s+(do|does|is|are)\s+.+(calculat|work|measur)/i,

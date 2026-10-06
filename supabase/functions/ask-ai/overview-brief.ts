@@ -57,6 +57,8 @@ export type OverviewBrief = {
   equity: number | null;
   totalAssets: number | null;
   totalLiabilities: number | null;
+  /** True only when total liabilities was assets minus equity, not a stored total. */
+  totalLiabilitiesDerived: boolean;
   brainHeadline: string | null;
 };
 
@@ -100,6 +102,26 @@ function asNumber(raw: unknown): number | null {
     if (Number.isFinite(n)) return n;
   }
   return null;
+}
+
+/**
+ * Stored total liabilities win. Assets minus equity is used only when no
+ * stored total is present, and that result is labelled derived. Payables are
+ * not a stand-in for the printed total.
+ */
+export function resolveTotalLiabilities(
+  financials: Record<string, unknown> | null | undefined,
+): { amount: number; derived: boolean } | null {
+  if (!financials) return null;
+  const stored =
+    asNumber(financials.totalLiabilities) ??
+    asNumber(financials.total_liabilities) ??
+    asNumber(financials.liabilities);
+  if (stored != null) return { amount: stored, derived: false };
+  const assets = asNumber(financials.totalAssets) ?? asNumber(financials.total_assets);
+  const equity = asNumber(financials.equity);
+  if (assets == null || equity == null) return null;
+  return { amount: Math.round((assets - equity) * 100) / 100, derived: true };
 }
 
 function chipLabel(status: "healthy" | "at_risk" | "critical"): "Healthy" | "Watch" | "Critical" {
@@ -268,6 +290,7 @@ export function buildOverviewBrief(input: {
     typeof financials?.periodLabel === "string" && financials.periodLabel.trim()
       ? financials.periodLabel.trim()
       : null;
+  const liabilities = resolveTotalLiabilities(financials);
 
   return {
     clientName: input.clientName?.trim() || null,
@@ -297,8 +320,8 @@ export function buildOverviewBrief(input: {
     netMargin: Number.isFinite(ratios["Net Margin"]) ? ratios["Net Margin"] : null,
     equity: asNumber(financials?.equity),
     totalAssets: asNumber(financials?.totalAssets),
-    totalLiabilities:
-      asNumber(financials?.totalLiabilities) ?? asNumber(financials?.liabilities),
+    totalLiabilities: liabilities?.amount ?? null,
+    totalLiabilitiesDerived: liabilities?.derived ?? false,
     brainHeadline: brainHeadlineFromSummary(input.brainSummary),
   };
 }
@@ -314,7 +337,8 @@ export function overviewFactLines(brief: OverviewBrief): string[] {
     lines.push(`Total assets: ${money(brief.totalAssets, brief.copyPack)}`);
   }
   if (brief.totalLiabilities != null) {
-    lines.push(`Total liabilities: ${money(brief.totalLiabilities, brief.copyPack)}`);
+    const label = brief.totalLiabilitiesDerived ? "Total liabilities (derived)" : "Total liabilities";
+    lines.push(`${label}: ${money(brief.totalLiabilities, brief.copyPack)}`);
   }
   if (brief.equity != null) lines.push(`Total equity: ${money(brief.equity, brief.copyPack)}`);
   if (brief.revenue != null) {
