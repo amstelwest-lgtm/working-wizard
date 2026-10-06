@@ -18,6 +18,9 @@ export const STRIPE_SAAS_BUSINESS_TAX_CODE = "txcd_10103001";
 
 export const FOUNDING_COUPON_ID = "FOUNDING50";
 export const FOUNDING_PROMO_CODE = "FOUNDING";
+/** Live promotion code on coupon FOUNDING50. Stripe cannot limit it by country. */
+export const FOUNDING_PROMOTION_CODE_ID = "promo_1UGFw2GXDN6PFbnz2FQ9EBm1";
+export const FOUNDING_SA_ONLY_MESSAGE = "This code is only available to South African firms.";
 
 /** Locked commercial sentence. Never rewrite as "3 free clients". */
 export const FIRM_TRIAL_DAYS = 14;
@@ -176,6 +179,20 @@ export function isFirmInterval(value: string): value is FirmInterval {
 export function isFoundingCode(value: string | null | undefined): boolean {
   const v = value?.trim().toUpperCase();
   return v === FOUNDING_PROMO_CODE || v === FOUNDING_COUPON_ID;
+}
+
+/**
+ * True for the FOUNDING code, coupon FOUNDING50, the live promotion code id,
+ * or any other promotion code whose coupon is FOUNDING50.
+ */
+export function isFoundingPromotion(input: {
+  code?: string | null;
+  couponId?: string | null;
+  promotionCodeId?: string | null;
+}): boolean {
+  if (isFoundingCode(input.code) || isFoundingCode(input.couponId)) return true;
+  const id = input.promotionCodeId?.trim() ?? "";
+  return id === FOUNDING_PROMOTION_CODE_ID;
 }
 
 /**

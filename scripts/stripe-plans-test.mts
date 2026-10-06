@@ -10,6 +10,8 @@ import {
   FIRM_TRIAL_SENTENCE,
   FOUNDING_COUPON_ID,
   FOUNDING_PROMO_CODE,
+  FOUNDING_PROMOTION_CODE_ID,
+  FOUNDING_SA_ONLY_MESSAGE,
   STRIPE_SAAS_BUSINESS_TAX_CODE,
   assertFoundingMonthlyOnly,
   firmLookupKey,
@@ -17,6 +19,7 @@ import {
   firmUsdListPrice,
   isFirmCheckoutBand,
   isFoundingCode,
+  isFoundingPromotion,
 } from "../src/lib/stripe-plans";
 
 function assert(cond: boolean, msg: string) {
@@ -67,9 +70,33 @@ assert(!ALL_FIRM_LOOKUP_KEYS.some((k) => k.startsWith("price_")), "never list pr
 
 assert(FOUNDING_COUPON_ID === "FOUNDING50", "FOUNDING coupon id");
 assert(FOUNDING_PROMO_CODE === "FOUNDING", "FOUNDING code");
+assert(
+  FOUNDING_PROMOTION_CODE_ID === "promo_1UGFw2GXDN6PFbnz2FQ9EBm1",
+  "live FOUNDING promotion code id",
+);
+assert(
+  FOUNDING_SA_ONLY_MESSAGE === "This code is only available to South African firms.",
+  "FOUNDING SA-only message",
+);
 assert(isFoundingCode("founding"), "FOUNDING is case-insensitive");
 assert(isFoundingCode("FOUNDING50"), "FOUNDING50 counts as founding");
 assert(!isFoundingCode("SAVE20"), "other codes are not founding");
+assert(
+  isFoundingPromotion({
+    code: "FOUNDING",
+    couponId: "FOUNDING50",
+    promotionCodeId: FOUNDING_PROMOTION_CODE_ID,
+  }),
+  "the live FOUNDING promotion is recognized",
+);
+assert(
+  isFoundingPromotion({ code: "WELCOME", couponId: "FOUNDING50" }),
+  "any code on FOUNDING50 is founding",
+);
+assert(
+  !isFoundingPromotion({ code: "BEN-SOLO-E2E", couponId: "r7GdhcFy" }),
+  "another coupon is not founding",
+);
 
 assertFoundingMonthlyOnly("month", "FOUNDING");
 let yearlyBlocked = false;

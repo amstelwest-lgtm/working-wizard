@@ -58,10 +58,11 @@ If the signed-in email already has an **active** Stripe subscription, Checkout c
 - Coupon id: `FOUNDING50`
 - Promotion code: `FOUNDING`
 - **Monthly only.** FOUNDING applies to monthly prices only. It must not stack with the ~20% annual catalog discount.
+- **South African firms only.** Stripe cannot restrict a promotion code by country. The server rejects `FOUNDING`, coupon `FOUNDING50`, and promotion code `promo_1UGFw2GXDN6PFbnz2FQ9EBm1` unless `isSaMarketFirm` is true on the firm row, with “This code is only available to South African firms.” A missing market is not South Africa. The client Checkout `market` field is not that switch. `MILON_ZA_50` is unchanged.
 - App enforcement:
   1. `assertFoundingMonthlyOnly` throws if FOUNDING / FOUNDING50 is passed with `interval=year`
   2. Yearly Checkout does **not** set `allow_promotion_codes`, so the code box is absent
-  3. Monthly paid Checkout sets `allow_promotion_codes: true`
+  3. Monthly Checkout sets `allow_promotion_codes` only when the firm row is South Africa. A non-ZA session omits the box. An SA coupon or an already-resolved promotion code still replaces the box.
 
 ## New firm signup — 14-day trial
 
@@ -108,6 +109,8 @@ Account: **Milon, Inc.** `acct_1UEXnwGXDN6PFbnz` (Live). This VM does not mutate
 ## Customer Portal
 
 Dashboard Customer Portal stays available for invoices and cancellation. Band changes do **not** depend on the portal `subscription_update` setting (it can stay off).
+
+Portal sessions are created with no `configuration` id, so they use the Dashboard default. The session API cannot turn promotion codes off for one firm. If that default allows promotion codes on subscription update, turn the setting off in the Dashboard (test and live). This app does not edit portal configurations. Until that setting is off, a non-SA firm can still redeem FOUNDING in the portal.
 
 Portal `return_url`, Checkout `success_url` / `cancel_url`, invite links, and auth `emailRedirectTo` / password-reset `redirectTo` all use `appRedirectOrigin` (`src/lib/app-origin.ts`). The request `Origin` is kept only for `www.milonfinance.com`, `milonfinance.com`, and `*.vercel.app`. Every other host, including `milon.co.za` and a stale `SITE_URL`, becomes `https://www.milonfinance.com`. The portal returns to `/dashboard`. An in-app upgrade returns to `/dashboard?addClient=1`, which reopens Add client.
 

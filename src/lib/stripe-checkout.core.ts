@@ -18,6 +18,7 @@ import {
   FIRM_TRIAL_DAYS,
   firmLookupKey,
   formatUsdFromCents,
+  FOUNDING_PROMOTION_CODE_ID,
   isFirmCheckoutBand,
   isFoundingCode,
   type FirmCheckoutBand,
@@ -114,6 +115,13 @@ export type FirmCheckoutSessionInput = {
   /** Stripe promotion_code id (promo_…), already resolved. */
   promotionCodeId?: string | null;
   /**
+   * Server-side South African firm (`isSaMarketFirm` on the firm row).
+   * Not the client `market` field. Stripe's hosted code box cannot be
+   * checked by country, so only these sessions may show it. A resolved
+   * promotion code or the SA coupon still replaces the box.
+   */
+  allowPromotionCodes?: boolean;
+  /**
    * SA firms only. Server passes STRIPE_ZA_COUPON_ID (default MILON_ZA_50).
    * Not a client flag. When set, this replaces the promo box so the two
    * cannot stack.
@@ -180,14 +188,19 @@ export function firmCheckoutSessionParams(
     params.customer_email = input.email;
   }
 
-  // Promo box only on monthly paid Checkout so FOUNDING cannot be typed on yearly.
-  // The coupon discounts invoices after the trial. It does not zero the plan forever.
-  if (monthlyPaid) {
+  // Hosted code box only for a server-side SA firm, and only on monthly.
+  // Non-ZA firms cannot type FOUNDING on Stripe's page. Yearly stays closed
+  // so FOUNDING cannot stack with the annual price. The coupon discounts
+  // invoices after the trial. It does not zero the plan forever.
+  if (monthlyPaid && input.allowPromotionCodes) {
     params.allow_promotion_codes = true;
   }
 
-  if (input.promotionCodeId && !input.zaCouponId?.trim()) {
-    params.discounts = [{ promotion_code: input.promotionCodeId }];
+  const promotionCodeId = input.promotionCodeId?.trim() ?? "";
+  const foundingForNonSa =
+    promotionCodeId === FOUNDING_PROMOTION_CODE_ID && !input.allowPromotionCodes;
+  if (promotionCodeId && !foundingForNonSa && !input.zaCouponId?.trim()) {
+    params.discounts = [{ promotion_code: promotionCodeId }];
     delete params.allow_promotion_codes;
   }
 

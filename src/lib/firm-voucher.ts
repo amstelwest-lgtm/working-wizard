@@ -14,7 +14,9 @@ import {
 } from "./firm-sa-market";
 import {
   FIRM_BAND_CATALOG,
+  FOUNDING_SA_ONLY_MESSAGE,
   formatUsdFromCents,
+  isFoundingPromotion,
   type FirmCheckoutBand,
   type FirmInterval,
 } from "./stripe-plans";
@@ -39,6 +41,7 @@ export type FirmVoucherRejectReason =
   | "wrong_customer"
   | "first_time_transaction"
   | "wrong_product"
+  | "sa_only"
   | "unavailable";
 
 export type VoucherCouponView = {
@@ -125,7 +128,11 @@ export function couponFromPromotionCode(promotionCode: unknown): CouponShape | s
 
 function reject(reason: FirmVoucherRejectReason): FirmVoucherResult {
   const message =
-    reason === "unavailable" ? FIRM_VOUCHER_UNAVAILABLE_MESSAGE : FIRM_VOUCHER_INVALID_MESSAGE;
+    reason === "unavailable"
+      ? FIRM_VOUCHER_UNAVAILABLE_MESSAGE
+      : reason === "sa_only"
+        ? FOUNDING_SA_ONLY_MESSAGE
+        : FIRM_VOUCHER_INVALID_MESSAGE;
   return { ok: false, message, reason };
 }
 
@@ -179,10 +186,26 @@ export function assessFirmVoucher(input: {
   hasPriorTransaction: boolean;
   listCents: number;
   nowSeconds?: number;
+  /**
+   * Server-side firm market (`isSaMarketFirm`). Omitted means not South Africa.
+   * FOUNDING / FOUNDING50 is rejected unless this is true.
+   */
+  saMarket?: boolean;
 }): FirmVoucherResult {
   const record = asRecord(input.promotionCode);
   const promotionCodeId = typeof record?.id === "string" ? record.id.trim() : "";
   if (!record || !promotionCodeId) return reject("missing");
+
+  const codeOnRecord = typeof record.code === "string" ? record.code : null;
+  const couponOrId = couponFromPromotionCode(record);
+  const couponId = typeof couponOrId === "string" ? couponOrId : (couponOrId?.id ?? null);
+  if (
+    input.saMarket !== true &&
+    isFoundingPromotion({ code: codeOnRecord, couponId, promotionCodeId })
+  ) {
+    return reject("sa_only");
+  }
+
   if (record.active === false) return reject("inactive");
 
   const now = input.nowSeconds ?? Math.floor(Date.now() / 1000);
@@ -212,7 +235,6 @@ export function assessFirmVoucher(input: {
     if (input.listCents < minimum) return reject("wrong_product");
   }
 
-  const couponOrId = couponFromPromotionCode(record);
   if (!couponOrId || typeof couponOrId === "string") return reject("missing");
   const coupon = couponOrId;
   if (coupon.valid === false) return reject("inactive");

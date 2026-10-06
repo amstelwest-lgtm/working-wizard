@@ -404,9 +404,8 @@ export async function completeFirmSetupUpgrade(
     options && "firmMarket" in options
       ? options.firmMarket
       : await firmMarketForBillingUser(intent.userId);
-  const zaCouponId = isSaMarketFirm({ market: firmMarket })
-    ? stripeZaCouponId(process.env.STRIPE_ZA_COUPON_ID)
-    : null;
+  const saMarket = isSaMarketFirm({ market: firmMarket });
+  const zaCouponId = saMarket ? stripeZaCouponId(process.env.STRIPE_ZA_COUPON_ID) : null;
   const existing = readSubscriptionDiscountRefs(sub);
   const listCents =
     typeof price.unit_amount === "number"
@@ -423,11 +422,12 @@ export async function completeFirmSetupUpgrade(
       productId: stripeProductId(price.product),
       listCents,
       interval: intent.interval,
+      saMarket,
     });
     if (decision.ok) {
       promotionCodeId = decision.promotionCodeId;
     } else {
-      notice = FIRM_VOUCHER_NOT_APPLIED_MESSAGE;
+      notice = decision.reason === "sa_only" ? decision.message : FIRM_VOUCHER_NOT_APPLIED_MESSAGE;
       console.warn("[stripe] firm voucher not applied", decision.reason);
     }
   }

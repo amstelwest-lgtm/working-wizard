@@ -826,7 +826,7 @@ const usCheckout = firmCheckoutSessionParams(checkoutBase);
 assert(usCheckout.allow_promotion_codes == null, "a promotion code replaces the promo box");
 assert(
   usCheckout.discounts?.[0] && "promotion_code" in usCheckout.discounts[0],
-  "a US checkout can still carry FOUNDING",
+  "a resolved non-FOUNDING promotion code still attaches for a US firm",
 );
 assert(
   !JSON.stringify(usCheckout.discounts ?? []).includes("MILON_ZA_50"),
