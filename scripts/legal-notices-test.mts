@@ -87,7 +87,15 @@ assert(landing.includes('href="/terms"'), "landing footer links to terms");
 assert(landing.includes('href="/ai"'), "landing footer links to AI notice");
 assert(!landing.includes('href="/faq">Privacy'), "landing no longer labels FAQ as Privacy");
 assert(landing.includes("Eish2oh (Pty) Ltd"), "landing copyright uses the registered company");
-assert(landing.includes("LIST_PRICES"), "landing prices come from the marketing pack");
+assert(landing.includes("FirmBandPricingTable"), "landing prices render through the band table");
+assert(
+  readFileSync(resolve("src/components/firm-band-pricing.tsx"), "utf8").includes("firmUsdListPrice"),
+  "band table prices come from the plan catalog",
+);
+assert(
+  readFileSync(resolve("src/lib/marketing-faq.ts"), "utf8").includes("LIST_PRICES.us.firmSolo"),
+  "homepage cost answer still reads the marketing pack",
+);
 assert(landing.includes("RegionCopy"), "landing uses RegionCopy for single-region copy");
 const draftDecl = landing.indexOf("const [draftMarket, setDraftMarket]");
 const draftDeps = landing.indexOf("}, [draftMarket");
