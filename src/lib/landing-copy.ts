@@ -156,6 +156,8 @@ export const PROOF_CARDS = [
     body: PROOF_RATIO_BODY,
     alt: "Ratio detail showing days sales outstanding with the receivables and revenue figures used to calculate it",
     base: "ratio-dso",
+    width: 1600,
+    height: 1000,
   },
   {
     id: "signoff",
@@ -163,13 +165,17 @@ export const PROOF_CARDS = [
     body: PROOF_SIGNOFF_BODY,
     alt: "Advisory report footer with the accountant's sign-off stamp showing name and date",
     base: "signoff-stamp",
+    width: 1600,
+    height: 1109,
   },
   {
-    id: "bot",
+    id: "plan",
     title: "An agent that knows its limits",
     body: PROOF_BOT_BODY,
-    alt: "Milōn Bot run showing completed analysis steps and one step waiting for accountant approval",
-    base: "bot-run",
+    alt: "Action plan ready for review with Request changes and Sign off action plan for Sample Co.",
+    base: "action-plan-review",
+    width: 1600,
+    height: 694,
   },
 ] as const;
 

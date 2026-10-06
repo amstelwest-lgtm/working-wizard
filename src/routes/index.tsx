@@ -2679,8 +2679,8 @@ function LandingPage() {
                   src={proofImageSrc(card.base, 800)}
                   srcSet={proofImageSrcSet(card.base)}
                   sizes="(min-width:1024px) 33vw, 100vw"
-                  width={1600}
-                  height={1200}
+                  width={card.width}
+                  height={card.height}
                   alt={card.alt}
                   loading="lazy"
                   decoding="async"

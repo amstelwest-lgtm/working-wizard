@@ -1,8 +1,8 @@
-"""Compose honest Sample Co. proof images for the landing #proof cards.
+"""Retired composer for the landing #proof cards.
 
-These are not live app captures. Growth/QA should replace them with
-screenshots from a Sample Co. workspace before merge if a real capture
-is available. No real client data is drawn.
+public/proof now holds real dark-theme Sample Co. captures:
+ratio-dso, signoff-stamp, and action-plan-review. Do not run this
+script to replace them.
 """
 from __future__ import annotations
 
@@ -150,9 +150,10 @@ def save_set(name: str, image: Image.Image) -> None:
 
 
 def main() -> None:
-    save_set("ratio-dso", ratio())
-    save_set("signoff-stamp", signoff())
-    save_set("bot-run", bot())
+    raise SystemExit(
+        "Refusing to overwrite real public/proof captures "
+        "(ratio-dso, signoff-stamp, action-plan-review)."
+    )
 
 
 if __name__ == "__main__":

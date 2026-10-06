@@ -2,7 +2,7 @@
  * Landing PR 2: nav, hero chart, proof, pricing, FAQ, floaters, reveal.
  * Run: pnpm test:landing-pr2
  */
-import { readFileSync, statSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 import { HOMEPAGE_FAQ_ITEMS } from "../src/lib/marketing-faq";
 import { FIRM_TRIAL_SENTENCE } from "../src/lib/stripe-plans";
@@ -62,6 +62,18 @@ assert(PROOF_SIGNOFF_BODY.includes("accountant's name and the sign-off date"), "
 assert(PROOF_SIGNOFF_BODY.includes("old sign-off no longer applies"), "VERIFY-5 sentence shipped");
 assert(PROOF_BOT_BODY.includes("won't invent figures"), "VERIFY-9 sentence shipped");
 assert(!PROOF_BOT_BODY.toLowerCase().includes("email"), "no email claim on the bot card");
+const planCard = PROOF_CARDS.find((card) => card.base === "action-plan-review");
+assert(planCard != null, "action plan capture is a proof card");
+assert(planCard!.id === "plan", "action plan card id");
+assert(planCard!.title === "An agent that knows its limits", "action plan card keeps its title");
+assert(planCard!.body === PROOF_BOT_BODY, "action plan card keeps the bot body");
+assert(
+  planCard!.alt ===
+    "Action plan ready for review with Request changes and Sign off action plan for Sample Co.",
+  "action plan alt describes the review screen",
+);
+assert(!/waiting for accountant approval|bot run|mid-flight/i.test(planCard!.alt), "card C alt is not a bot panel");
+assert(!copy.includes("bot-run"), "landing copy does not reference bot-run");
 assert(
   !PROOF_SECURITY_FACTS.some((fact) => /row-level|browse-all|the firm/i.test(fact)),
   "VERIFY-6 RLS bullet omitted",
@@ -111,6 +123,7 @@ for (const card of PROOF_CARDS) {
     const size = statSync(path).size;
     assert(size > 1000, `${card.base}-${width} is a real image`);
     if (width === 800) assert(size <= 120 * 1024, `${card.base}-800 is ${size} bytes, over 120KB`);
+    assert(!existsSync(resolve(root, "public/proof", `bot-run-${width}.webp`)), `bot-run-${width} removed`);
   }
 }
 

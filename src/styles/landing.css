@@ -1229,7 +1229,7 @@ html[data-landing="1"] .proof-card{
   background:linear-gradient(var(--glass),var(--glass));
 }
 html[data-landing="1"] .proof-shot{
-  display:block;width:100%;height:auto;aspect-ratio:4/3;object-fit:cover;object-position:top left;
+  display:block;width:100%;height:auto;
   background:#0b0e14;
 }
 html[data-landing="1"] .proof-card h3{margin:16px 16px 8px;font-size:20px;line-height:1.3}
