@@ -65,9 +65,21 @@ import { lighthouseTrialSiteUrl } from "@/lib/lighthouse-trial-site";
 import { trafficTagOf } from "@/lib/lighthouse-agent";
 import { persistPendingLighthouseDraft } from "@/lib/lighthouse-draft-persist";
 import { sendBlockedReason } from "@/lib/lighthouse-send-windows";
+import {
+  coldCadenceOpen,
+  conversationActivityType,
+  normalisePhoneE164,
+  parseLighthouseImport,
+  planLighthouseImport,
+  scheduledColdTouchOn,
+  type LighthouseConversationKind,
+  type LighthouseImportDraft,
+  type LighthouseImportExisting,
+} from "@/lib/lighthouse-targets";
 
 const MIGRATION = "20260820100000_milon_lighthouse.sql";
 const ENGAGEMENT_MIGRATION = "20260822210000_lighthouse_engagement.sql";
+const TARGETS_MIGRATION = "20261006120000_milon_ops_leads_target_list.sql";
 
 export const LIGHTHOUSE_STAGES = [
   "sourced",
@@ -114,6 +126,14 @@ export type LighthouseLead = {
   lastTouchAt: string | null;
   repliedAt: string | null;
   meetingAt: string | null;
+  phone: string | null;
+  phoneE164: string | null;
+  website: string | null;
+  /** Human confirmed a call or meeting. Stops cold cadence. Not the email-thread stage. */
+  conversationHeld: boolean;
+  conversationHeldAt: string | null;
+  conversationHeldBy: string | null;
+  conversationKind: LighthouseConversationKind | null;
   trialToken: string | null;
   trialLink: string | null;
   trialClickedAt: string | null;
@@ -662,6 +682,11 @@ export async function loadLighthouseWorkbenchBook(admin: ReturnType<typeof admin
   };
 }
 
+function conversationKindOf(value: unknown): LighthouseConversationKind | null {
+  if (value === "phone" || value === "video" || value === "in_person") return value;
+  return null;
+}
+
 function mapLead(row: Record<string, unknown>, touches: LighthouseTouch[]): LighthouseLead {
   const token = (row.trial_token as string | null) ?? null;
   return {
@@ -683,6 +708,13 @@ function mapLead(row: Record<string, unknown>, touches: LighthouseTouch[]): Ligh
     lastTouchAt: (row.last_touch_at as string | null) ?? null,
     repliedAt: (row.replied_at as string | null) ?? null,
     meetingAt: (row.meeting_at as string | null) ?? null,
+    phone: (row.phone as string | null) ?? null,
+    phoneE164: (row.phone_e164 as string | null) ?? null,
+    website: (row.website as string | null) ?? null,
+    conversationHeld: Boolean(row.conversation_held),
+    conversationHeldAt: (row.conversation_held_at as string | null) ?? null,
+    conversationHeldBy: (row.conversation_held_by as string | null) ?? null,
+    conversationKind: conversationKindOf(row.conversation_kind),
     trialToken: token,
     trialLink: trialLinkFor(token),
     trialClickedAt: (row.trial_clicked_at as string | null) ?? null,
@@ -853,6 +885,7 @@ export const getLighthouse = createServerFn({ method: "GET" })
         .filter(
           (l) =>
             !l.doNotContact &&
+            coldCadenceOpen(l) &&
             l.nextTouchOn != null &&
             l.nextTouchOn <= today &&
             !["won", "lost", "trial", "activated"].includes(l.stage),
@@ -908,6 +941,16 @@ export const upsertLighthouseLead = createServerFn({ method: "POST" })
         notes: z.string().max(4000).optional(),
         meetingAt: z.string().max(40).optional(),
         doNotContact: z.boolean().optional(),
+        phone: z.string().max(80).optional(),
+        phoneE164: z.string().max(24).optional(),
+        website: z.string().max(300).optional(),
+        country: z.enum(["US", "SA", "OTHER"]).nullable().optional(),
+        region: z.string().max(120).optional(),
+        timezone: z.string().max(80).optional(),
+        conversationHeld: z.boolean().optional(),
+        conversationHeldAt: z.string().max(40).nullable().optional(),
+        conversationHeldBy: z.string().max(80).nullable().optional(),
+        conversationKind: z.enum(["phone", "video", "in_person"]).nullable().optional(),
       })
       .parse(input),
   )
@@ -921,11 +964,41 @@ export const upsertLighthouseLead = createServerFn({ method: "POST" })
     if (data.company !== undefined) patch.company = data.company.trim() || null;
     if (data.roleTitle !== undefined) patch.role_title = data.roleTitle.trim() || null;
     if (data.city !== undefined) patch.city = data.city.trim() || null;
+    if (data.region !== undefined) patch.region = data.region.trim() || null;
+    if (data.timezone !== undefined) patch.timezone = data.timezone.trim() || null;
+    if (data.website !== undefined) patch.website = data.website.trim() || null;
+    if (data.country !== undefined) patch.country = data.country;
+    if (data.phone !== undefined) {
+      const phone = data.phone.trim() || null;
+      patch.phone = phone;
+      patch.phone_e164 = normalisePhoneE164(phone, data.country);
+    } else if (data.phoneE164 !== undefined) {
+      const raw = data.phoneE164.trim() || null;
+      patch.phone_e164 = normalisePhoneE164(raw, data.country) ?? raw;
+    }
     if (data.signal !== undefined) patch.signal = data.signal.trim() || null;
     if (data.notes !== undefined) patch.notes = data.notes.trim() || null;
     if (data.doNotContact !== undefined) patch.do_not_contact = data.doNotContact;
     if (data.meetingAt !== undefined) {
       patch.meeting_at = data.meetingAt ? new Date(data.meetingAt).toISOString() : null;
+    }
+    if (data.conversationKind !== undefined) patch.conversation_kind = data.conversationKind;
+    if (data.conversationHeldBy !== undefined) patch.conversation_held_by = data.conversationHeldBy;
+    if (data.conversationHeldAt !== undefined) {
+      patch.conversation_held_at = data.conversationHeldAt
+        ? new Date(data.conversationHeldAt).toISOString()
+        : null;
+    }
+    if (data.conversationHeld !== undefined) {
+      patch.conversation_held = data.conversationHeld;
+      if (data.conversationHeld) {
+        patch.next_touch_on = null;
+        if (data.conversationHeldAt === undefined) patch.conversation_held_at = new Date().toISOString();
+      } else {
+        patch.conversation_held_at = null;
+        patch.conversation_held_by = null;
+        patch.conversation_kind = null;
+      }
     }
     if (data.persona) {
       patch.persona = data.persona;
@@ -960,7 +1033,28 @@ export const upsertLighthouseLead = createServerFn({ method: "POST" })
     return { id: String((inserted as { id?: string } | null)?.id ?? "") };
   });
 
-/** Paste lines of "name, email, company, signal" — one lead per line. */
+function importLeadPatch(row: LighthouseImportDraft, opts: { includePersona: boolean }) {
+  const patch: Record<string, unknown> = {};
+  if (row.name) patch.name = row.name;
+  if (row.email) patch.email = row.email;
+  if (row.company) patch.company = row.company;
+  if (row.signal) patch.signal = row.signal;
+  if (row.city) patch.city = row.city;
+  if (row.region) patch.region = row.region;
+  if (row.country) patch.country = row.country;
+  if (row.website) patch.website = row.website;
+  if (row.phone) {
+    patch.phone = row.phone;
+    patch.phone_e164 = row.phoneE164;
+  }
+  if (opts.includePersona) {
+    patch.persona = row.persona;
+    patch.sequence_key = defaultSequenceKey(row.persona);
+  }
+  return patch;
+}
+
+/** Header CSV, or the old "name, email, company, signal" lines. */
 export const importLighthouseLeads = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input) =>
@@ -974,37 +1068,184 @@ export const importLighthouseLeads = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertPlatformOwner(context as AuthCtx);
     const admin = adminLoose();
+    const parsed = parseLighthouseImport(data.text).slice(0, 200);
+    const existing = await loadImportExisting(admin);
+    const plan = planLighthouseImport(parsed, existing, data.persona);
+    const empty = { inserted: 0, updated: 0, skipped: plan.skipped, imported: 0 };
+    if (!plan.insert.length && !plan.update.length) return empty;
 
-    const rows = data.text
-      .split(/\r?\n/)
-      .map((l) => l.trim())
-      .filter(Boolean)
-      .slice(0, 200)
-      .map((line) => {
-        const [name, email, company, signal] = line.split(/\s*[,;\t]\s*/);
-        return {
-          name: name?.trim() || null,
-          email: email?.trim().toLowerCase() || null,
-          company: company?.trim() || null,
-          signal: signal?.trim() || null,
-          persona: data.persona,
-          sequence_key: defaultSequenceKey(data.persona),
-          stage: "sourced",
-          source: "lighthouse_import",
-          trial_token: randomToken(),
-        };
-      })
-      .filter((r) => r.name || r.email);
-
-    if (!rows.length) return { imported: 0 };
-
-    const { error } = await admin.from("milon_ops_leads").insert(rows);
-    if (error) {
-      if (missingRelation(error.message)) throw new Error(migrationHintFor(MIGRATION));
-      throw new Error(error.message);
+    for (const item of plan.update) {
+      const patch = importLeadPatch(item.row, { includePersona: Boolean(item.row.personaFromCell) });
+      if (!Object.keys(patch).length) continue;
+      const { error } = await admin.from("milon_ops_leads").update(patch).eq("id", item.id);
+      if (error) throw new Error(importWriteError(error.message));
     }
-    return { imported: rows.length };
+
+    if (plan.insert.length) {
+      const rows = plan.insert.map((row) => ({
+        ...importLeadPatch(row, { includePersona: true }),
+        persona: row.persona,
+        sequence_key: defaultSequenceKey(row.persona),
+        stage: "sourced",
+        source: "lighthouse_import",
+        trial_token: randomToken(),
+      }));
+      const { error } = await admin.from("milon_ops_leads").insert(rows);
+      if (error) throw new Error(importWriteError(error.message));
+    }
+
+    return {
+      inserted: plan.inserted,
+      updated: plan.updated,
+      skipped: plan.skipped,
+      imported: plan.inserted + plan.updated,
+    };
   });
+
+async function loadImportExisting(
+  admin: ReturnType<typeof adminLoose>,
+): Promise<LighthouseImportExisting[]> {
+  const withWebsite = await admin
+    .from("milon_ops_leads")
+    .select("id, email, company, website")
+    .limit(5000);
+  if (!withWebsite.error) {
+    return (withWebsite.data ?? []) as LighthouseImportExisting[];
+  }
+  if (!missingRelation(withWebsite.error.message ?? "")) {
+    throw new Error(withWebsite.error.message);
+  }
+  const plain = await admin.from("milon_ops_leads").select("id, email, company").limit(5000);
+  if (plain.error) {
+    if (missingRelation(plain.error.message ?? "")) throw new Error(migrationHintFor(MIGRATION));
+    throw new Error(plain.error.message);
+  }
+  return (plain.data ?? []) as LighthouseImportExisting[];
+}
+
+function importWriteError(message: string): string {
+  if (missingRelation(message) && /country|website|phone_e164|region|conversation_/i.test(message)) {
+    return migrationHintFor(TARGETS_MIGRATION);
+  }
+  if (missingRelation(message)) return migrationHintFor(MIGRATION);
+  return message;
+}
+
+const USER_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function conversationHeldAtIso(value: string | undefined): string {
+  const v = (value ?? "").trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return `${v}T12:00:00.000Z`;
+  const parsed = v ? new Date(v) : new Date();
+  if (Number.isNaN(parsed.getTime())) return new Date().toISOString();
+  return parsed.toISOString();
+}
+
+/** Tick or clear "Call / meeting held". Held stops the cold cadence. */
+export const setConversationHeld = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) =>
+    z
+      .object({
+        leadId: z.string().uuid(),
+        held: z.boolean(),
+        heldAt: z.string().max(40).optional(),
+        kind: z.enum(["phone", "video", "in_person"]).optional(),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const { userId } = await assertOpsConsoleAccess(context as AuthCtx);
+    const admin = adminLoose();
+    const { data: existing, error: readErr } = await admin
+      .from("milon_ops_leads")
+      .select("id, conversation_held, conversation_held_at, conversation_kind")
+      .eq("id", data.leadId)
+      .maybeSingle();
+    if (readErr) {
+      if (missingRelation(readErr.message ?? "")) throw new Error(migrationHintFor(TARGETS_MIGRATION));
+      throw new Error(readErr.message);
+    }
+    if (!existing) throw new Error("Lead not found");
+
+    const kind: LighthouseConversationKind = data.kind ?? "phone";
+    const heldAt = conversationHeldAtIso(data.heldAt);
+    const prev = existing as {
+      conversation_held?: boolean | null;
+      conversation_held_at?: string | null;
+      conversation_kind?: string | null;
+    };
+
+    if (!data.held) {
+      const { error } = await admin
+        .from("milon_ops_leads")
+        .update({
+          conversation_held: false,
+          conversation_held_at: null,
+          conversation_held_by: null,
+          conversation_kind: null,
+        })
+        .eq("id", data.leadId);
+      if (error) throw new Error(importWriteError(error.message));
+      return { ok: true as const, held: false as const };
+    }
+
+    const { error } = await admin
+      .from("milon_ops_leads")
+      .update({
+        conversation_held: true,
+        conversation_held_at: heldAt,
+        conversation_held_by: userId,
+        conversation_kind: kind,
+        next_touch_on: null,
+      })
+      .eq("id", data.leadId);
+    if (error) throw new Error(importWriteError(error.message));
+
+    const prevDay = String(prev.conversation_held_at ?? "").slice(0, 10);
+    const changed =
+      !prev.conversation_held || prev.conversation_kind !== kind || prevDay !== heldAt.slice(0, 10);
+    if (changed) {
+      await recordConversationActivity(admin, {
+        kind,
+        heldAt,
+        userId,
+      });
+    }
+    return { ok: true as const, held: true as const };
+  });
+
+async function recordConversationActivity(
+  admin: ReturnType<typeof adminLoose>,
+  input: { kind: LighthouseConversationKind; heldAt: string; userId: string },
+) {
+  const row = {
+    type: conversationActivityType(input.kind),
+    created_by_kind: "human",
+    occurred_at: input.heldAt,
+    subject: "Call / meeting held",
+    body: input.kind === "phone" ? "Phone" : input.kind === "video" ? "Video" : "In person",
+    ...(USER_ID_RE.test(input.userId) ? { created_by_user_id: input.userId } : {}),
+  };
+  try {
+    const { error } = await admin.from("lighthouse_activities").insert(row);
+    if (!error) return;
+    if ("created_by_user_id" in row && row.created_by_user_id) {
+      const { created_by_user_id: _dropped, ...withoutUser } = row;
+      void _dropped;
+      const retry = await admin.from("lighthouse_activities").insert(withoutUser);
+      if (!retry.error) return;
+      console.error("lighthouse.conversation_held.activity", retry.error.message);
+      return;
+    }
+    console.error("lighthouse.conversation_held.activity", error.message);
+  } catch (err) {
+    console.error(
+      "lighthouse.conversation_held.activity",
+      err instanceof Error ? err.message : "insert failed",
+    );
+  }
+}
 
 const SYSTEM_RULES = `You write as The Milōn Team — a South African financial-health platform for SMEs and their accountants. Be direct. No fluff. Never write in founder first-person as Theo.
 
@@ -1117,6 +1358,9 @@ export const draftLighthouseTouch = createServerFn({ method: "POST" })
     const lead = leadRow as Record<string, unknown>;
     if (lead.do_not_contact) {
       throw new Error("This lead has unsubscribed — drafting is disabled for them.");
+    }
+    if (!coldCadenceOpen({ conversationHeld: Boolean(lead.conversation_held) })) {
+      throw new Error("Call / meeting held — cold cadence is stopped for this lead.");
     }
 
     const seqKey = String(lead.sequence_key ?? "owner_v1");
@@ -1610,7 +1854,10 @@ export const sendLighthouseTouch = createServerFn({ method: "POST" })
         stage: advanced,
         sequence_step: stepNo,
         last_touch_at: now.toISOString(),
-        next_touch_on: gap ? addDays(now, gap) : null,
+        next_touch_on: scheduledColdTouchOn(
+          Boolean(lead?.conversation_held),
+          gap ? addDays(now, gap) : null,
+        ),
       })
       .eq("id", String(touch.lead_id));
 

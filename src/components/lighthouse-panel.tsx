@@ -35,6 +35,7 @@ import {
   getLighthouse,
   importLighthouseLeads,
   optOutLighthouseLead,
+  setConversationHeld,
   reviewLighthouseTouch,
   sendLighthouseTouch,
   upsertLighthouseAsset,
@@ -65,6 +66,11 @@ import {
   zoneClocks,
 } from "@/lib/lighthouse-agent";
 import { LIGHTHOUSE_FROM_EMAIL } from "@/lib/lighthouse-from";
+import {
+  isTargetNotContacted,
+  storedLeadMarket,
+  type LighthouseConversationKind,
+} from "@/lib/lighthouse-targets";
 import { LIGHTHOUSE_REPLY_TO } from "@/lib/lighthouse-reply-to";
 import { LIGHTHOUSE_SENDER_NAME } from "@/lib/lighthouse-sender";
 import { sendWindowStatus } from "@/lib/lighthouse-send-windows";
@@ -138,6 +144,7 @@ export function LighthousePanel({
   const load = useServerFn(getLighthouse);
   const saveLead = useServerFn(upsertLighthouseLead);
   const importLeads = useServerFn(importLighthouseLeads);
+  const markConversation = useServerFn(setConversationHeld);
   const draftTouch = useServerFn(draftLighthouseTouch);
   const draftReply = useServerFn(draftLighthouseReply);
   const sendTouch = useServerFn(sendLighthouseTouch);
@@ -154,7 +161,8 @@ export function LighthousePanel({
   const [reviewFocus, setReviewFocus] = useState<string | null>(null);
   const [now, setNow] = useState(() => new Date());
   const [firmQuery, setFirmQuery] = useState("");
-  const [firmCountry, setFirmCountry] = useState<"all" | "US" | "SA" | "OTHER">("all");
+  const [firmCountry, setFirmCountry] = useState<"all" | "US" | "SA">("all");
+  const [firmTarget, setFirmTarget] = useState<"all" | "target">("all");
   const [firmStage, setFirmStage] = useState<string>("all");
   const [firmDue, setFirmDue] = useState<"all" | "due">("all");
   const [firmTag, setFirmTag] = useState<"all" | "warmup" | "campaign">("all");
@@ -283,11 +291,19 @@ export function LighthousePanel({
   const cadenceLead = dash.leads.find((lead) => queue.some((row) => row.leadId === lead.id)) ?? null;
   const cadence = cadenceLead ? cadenceOf(cadenceLead) : null;
   const planCandidates = dash.leads.filter(
-    (lead) => !lead.doNotContact && !lead.nextTouchOn && !lead.nextFollowUpAt && lead.stage !== "won" && lead.stage !== "lost",
+    (lead) =>
+      !lead.doNotContact &&
+      !lead.conversationHeld &&
+      !lead.nextTouchOn &&
+      !lead.nextFollowUpAt &&
+      lead.stage !== "won" &&
+      lead.stage !== "lost",
   );
   const filteredFirms = dash.leads.filter((lead) => {
     const zone = sendWindowStatus(lead, now);
-    if (firmCountry !== "all" && zone.geo !== firmCountry) return false;
+    const market = storedLeadMarket(lead.country) ?? zone.geo;
+    if (firmCountry !== "all" && market !== firmCountry) return false;
+    if (firmTarget === "target" && !isTargetNotContacted(lead)) return false;
     if (firmStage !== "all" && lead.stage !== firmStage) return false;
     if (firmDue === "due" && !queue.some((row) => row.leadId === lead.id)) return false;
     if (firmTag !== "all" && lead.trafficTag !== firmTag) return false;
@@ -295,7 +311,7 @@ export function LighthousePanel({
     if (firmSuppress === "open" && lead.doNotContact) return false;
     const needle = firmQuery.trim().toLowerCase();
     if (!needle) return true;
-    return [lead.company, lead.name, lead.email, lead.city, lead.signal]
+    return [lead.company, lead.name, lead.email, lead.city, lead.signal, lead.phone, lead.website]
       .join(" ")
       .toLowerCase()
       .includes(needle);
@@ -644,9 +660,13 @@ export function LighthousePanel({
       {importOpen && (
         <div className="mb-4 rounded-2xl border border-[var(--ops-line)] bg-[var(--ops-card)] p-4">
           <p className="mb-2 text-xs text-[var(--ops-ink-dim)]">
-            One lead per line:{" "}
+            Header CSV, any column order:{" "}
+            <code className="text-[var(--ops-amber)]/80">
+              name, email, company, persona, city, region, country, phone, website, signal
+            </code>
+            . Or one lead per line:{" "}
             <code className="text-[var(--ops-amber)]/80">name, email, company, signal</code>. The signal is
-            the specific true reason you are reaching out — it drives the whole sequence.
+            the specific true reason you are reaching out.
           </p>
           <textarea
             className={`${inputCls} min-h-[110px] resize-y py-2`}
@@ -673,7 +693,9 @@ export function LighthousePanel({
                   const r = await importLeads({
                     data: { text: importText, persona: importPersona },
                   });
-                  toast.success(`Imported ${r.imported} leads`);
+                  toast.success(
+                    `Inserted ${r.inserted}, updated ${r.updated}, skipped ${r.skipped}`,
+                  );
                   setImportText("");
                   setImportOpen(false);
                   await refresh();
@@ -717,11 +739,14 @@ export function LighthousePanel({
               value={firmQuery}
               onChange={(e) => setFirmQuery(e.target.value)}
             />
-            <select className={`${inputCls} max-w-[140px]`} value={firmCountry} onChange={(e) => setFirmCountry(e.target.value as typeof firmCountry)}>
-              <option value="all">Country</option>
+            <select className={`${inputCls} max-w-[120px]`} value={firmCountry} onChange={(e) => setFirmCountry(e.target.value as typeof firmCountry)}>
+              <option value="all">All</option>
               <option value="US">US</option>
               <option value="SA">SA</option>
-              <option value="OTHER">Other</option>
+            </select>
+            <select className={`${inputCls} max-w-[220px]`} value={firmTarget} onChange={(e) => setFirmTarget(e.target.value as typeof firmTarget)}>
+              <option value="all">Any contact</option>
+              <option value="target">Target · not contacted</option>
             </select>
             <select className={`${inputCls} max-w-[160px]`} value={firmStage} onChange={(e) => setFirmStage(e.target.value)}>
               <option value="all">Stage</option>
@@ -763,6 +788,7 @@ export function LighthousePanel({
                       </span>
                       <span className="block truncate text-[11px] text-[var(--ops-ink-dim)]">
                         {STAGE_LABELS[lead.stage]} · next {cadenceRow.nextFollowUp} · {lead.trafficTag ?? "untagged"}
+                        {lead.conversationHeld ? " · Held" : ""}
                         {lead.doNotContact ? " · suppressed" : ""}
                       </span>
                     </span>
@@ -877,6 +903,24 @@ export function LighthousePanel({
           }}
           onOptOut={async () => {
             await optOut({ data: { leadId: openLead.id } });
+            await refresh();
+          }}
+          onSaveContact={async (fields) => {
+            const country = storedLeadMarket(openLead.country);
+            await saveLead({
+              data: {
+                id: openLead.id,
+                phone: fields.phone,
+                website: fields.website,
+                ...(country ? { country } : {}),
+              },
+            });
+            await refresh();
+          }}
+          onConversationHeld={async (fields) => {
+            await markConversation({
+              data: { leadId: openLead.id, ...fields },
+            });
             await refresh();
           }}
           onRefresh={refresh}
@@ -1044,6 +1088,7 @@ function PipelineBoard({
                     ) : l.touches.some((t) => t.sentAt) ? (
                       <span>· sent</span>
                     ) : null}
+                    {l.conversationHeld && <span className="text-[var(--ops-amber)]">· Held</span>}
                     {l.nextTouchOn && <span>· next {l.nextTouchOn}</span>}
                   </div>
                 </button>
@@ -1592,6 +1637,13 @@ function SystemForm({
   );
 }
 
+function todayDateInput(): string {
+  const d = new Date();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${month}-${day}`;
+}
+
 function LeadDrawer({
   lead,
   dash,
@@ -1603,6 +1655,8 @@ function LeadDrawer({
   onStage,
   onSequence,
   onOptOut,
+  onSaveContact,
+  onConversationHeld,
   onRefresh,
 }: {
   lead: LighthouseLead;
@@ -1635,6 +1689,12 @@ function LeadDrawer({
   onStage: (stage: LighthouseStage) => Promise<void>;
   onSequence: (sequenceKey: "accountant_v1" | "accountant_oneshot_v1") => Promise<void>;
   onOptOut: () => Promise<void>;
+  onSaveContact: (fields: { phone: string; website: string }) => Promise<void>;
+  onConversationHeld: (fields: {
+    held: boolean;
+    heldAt?: string;
+    kind?: LighthouseConversationKind;
+  }) => Promise<void>;
   onRefresh: () => Promise<void>;
 }) {
   const seq = dash.sequences.find((s) => s.key === lead.sequenceKey);
@@ -1655,6 +1715,14 @@ function LeadDrawer({
   const [replyIntent, setReplyIntent] = useState<"answer" | "email" | "book" | "trial">("answer");
   const [replying, setReplying] = useState(false);
   const [approving, setApproving] = useState(false);
+  const [phone, setPhone] = useState(lead.phone ?? "");
+  const [website, setWebsite] = useState(lead.website ?? "");
+  const [held, setHeld] = useState(lead.conversationHeld);
+  const [heldOn, setHeldOn] = useState(
+    () => lead.conversationHeldAt?.slice(0, 10) || todayDateInput(),
+  );
+  const [kind, setKind] = useState<LighthouseConversationKind>(lead.conversationKind ?? "phone");
+  const [heldBusy, setHeldBusy] = useState(false);
   const windowStatus = sendWindowStatus(lead);
   const cadence = cadenceOf(lead);
   const textMatchesSaved =
@@ -1669,11 +1737,47 @@ function LeadDrawer({
   }, [activeStep, lead]);
 
   useEffect(() => {
+    setPhone(lead.phone ?? "");
+    setWebsite(lead.website ?? "");
+    setHeld(lead.conversationHeld);
+    setHeldOn(lead.conversationHeldAt?.slice(0, 10) || todayDateInput());
+    setKind(lead.conversationKind ?? "phone");
+  }, [lead.id, lead.phone, lead.website, lead.conversationHeld, lead.conversationHeldAt, lead.conversationKind]);
+
+  useEffect(() => {
     const latest = lead.inbound[0];
     if (!latest?.body) return;
     setTheirMessage((prev) => prev || latest.body || "");
     setReplyOpen(true);
   }, [lead.id, lead.inbound]);
+
+  const saveContactFields = async () => {
+    const phoneNext = phone.trim();
+    const websiteNext = website.trim();
+    if (phoneNext === (lead.phone ?? "") && websiteNext === (lead.website ?? "")) return;
+    try {
+      await onSaveContact({ phone: phoneNext, website: websiteNext });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not save contact");
+    }
+  };
+
+  const saveHeld = async (fields: {
+    held: boolean;
+    heldAt?: string;
+    kind?: LighthouseConversationKind;
+  }) => {
+    setHeldBusy(true);
+    try {
+      await onConversationHeld(fields);
+      toast.success(fields.held ? "Call / meeting marked held" : "Call / meeting cleared");
+    } catch (e) {
+      setHeld(lead.conversationHeld);
+      toast.error(e instanceof Error ? e.message : "Could not update the call flag");
+    } finally {
+      setHeldBusy(false);
+    }
+  };
 
   return (
     <div
@@ -1748,6 +1852,76 @@ function LeadDrawer({
             are both disabled for this lead, and any unsent drafts were skipped.
           </div>
         )}
+
+        <div className="mb-4 grid gap-2 sm:grid-cols-2">
+          <input
+            className={inputCls}
+            placeholder="Phone"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            onBlur={() => {
+              void saveContactFields();
+            }}
+          />
+          <input
+            className={inputCls}
+            placeholder="Website"
+            value={website}
+            onChange={(e) => setWebsite(e.target.value)}
+            onBlur={() => {
+              void saveContactFields();
+            }}
+          />
+        </div>
+
+        <div className="mb-4 rounded-xl border border-[var(--ops-line)] bg-[var(--ops-card)] px-3 py-2.5">
+          <label className="flex items-center gap-2 text-sm font-semibold text-[var(--ops-ink)]">
+            <input
+              type="checkbox"
+              className="h-4 w-4 accent-[var(--ops-amber)]"
+              checked={held}
+              disabled={heldBusy}
+              onChange={(e) => {
+                const next = e.target.checked;
+                setHeld(next);
+                void saveHeld({ held: next, heldAt: heldOn, kind });
+              }}
+            />
+            Call / meeting held
+          </label>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <input
+              type="date"
+              className={`${inputCls} max-w-[180px]`}
+              value={heldOn}
+              disabled={heldBusy}
+              onChange={(e) => {
+                const next = e.target.value || todayDateInput();
+                setHeldOn(next);
+                if (held) void saveHeld({ held: true, heldAt: next, kind });
+              }}
+            />
+            <select
+              className={`${inputCls} max-w-[160px]`}
+              value={kind}
+              disabled={heldBusy}
+              onChange={(e) => {
+                const next = e.target.value as LighthouseConversationKind;
+                setKind(next);
+                if (held) void saveHeld({ held: true, heldAt: heldOn, kind: next });
+              }}
+            >
+              <option value="phone">Phone</option>
+              <option value="video">Video</option>
+              <option value="in_person">In person</option>
+            </select>
+          </div>
+          {held && (
+            <p className="mt-2 text-[12px] text-[var(--ops-ink-dim)]">
+              Cold cadence is stopped. No further cold steps are drafted or scheduled.
+            </p>
+          )}
+        </div>
 
         {/* Stage control */}
         <div className="mb-4 flex flex-wrap gap-1.5">
@@ -1970,7 +2144,7 @@ function LeadDrawer({
           {usesGolden ? (
             <>
               <button
-                disabled={drafting || rewriting || lead.doNotContact}
+                disabled={drafting || rewriting || lead.doNotContact || lead.conversationHeld}
                 onClick={async () => {
                   setDrafting(true);
                   try {
@@ -1996,7 +2170,7 @@ function LeadDrawer({
               </button>
               <button
                 disabled={
-                  rewriting || drafting || !dash.capability.aiConfigured || lead.doNotContact
+                  rewriting || drafting || !dash.capability.aiConfigured || lead.doNotContact || lead.conversationHeld
                 }
                 onClick={async () => {
                   setRewriting(true);
@@ -2028,7 +2202,7 @@ function LeadDrawer({
             </>
           ) : (
             <button
-              disabled={drafting || !dash.capability.aiConfigured || lead.doNotContact}
+              disabled={drafting || !dash.capability.aiConfigured || lead.doNotContact || lead.conversationHeld}
               onClick={async () => {
                 setDrafting(true);
                 try {
