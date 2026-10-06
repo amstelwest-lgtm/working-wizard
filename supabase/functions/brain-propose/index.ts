@@ -7,6 +7,8 @@
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { callClaude } from "../ask-ai/anthropic.ts";
+import { rehydrateModelOutput } from "../_shared/redact-identifiers.ts";
+import { buildBrainProposePayload, partyNamesInBrain } from "./prompt.ts";
 import {
   PROPOSE_RATE_LIMIT,
   applyDraftBrainPatches,
@@ -380,17 +382,26 @@ Deno.serve(async (req: Request) => {
     try {
       const agedLists =
         collectionsSnap?.status === "applied" || payablesSnap?.status === "applied";
-      const claude = await callClaude(
-        agedLists
+      const partyNames = [
+        ...(collectionsSnap?.contacts ?? []).map((contact) => contact.name),
+        ...(payablesSnap?.suppliers ?? []).map((supplier) => supplier.name),
+        ...partyNamesInBrain(brainSummary),
+      ];
+      const sealed = buildBrainProposePayload({
+        system: agedLists
           ? systemPromptFor(audience, {
               collections: collectionsSnap?.status === "applied",
               payables: payablesSnap?.status === "applied",
             })
           : systemPromptFor(audience),
-        `Propose next steps from this client brain. Empty arrays when evidence is missing.\n\n${contextLines.join("\n")}`,
-        { maxTokens: 1400, temperature: 0.2 },
-      );
-      payload = parseClaudeProposePayload(claude.text);
+        contextLines,
+        subject: { clientName: client?.name ?? null, partyNames },
+      });
+      const claude = await callClaude(sealed.system, sealed.user, {
+        maxTokens: 1400,
+        temperature: 0.2,
+      });
+      payload = parseClaudeProposePayload(rehydrateModelOutput(claude.text, sealed.session));
       adminClient
         .from("ask_ai_log")
         .update({

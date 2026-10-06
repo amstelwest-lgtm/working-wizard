@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { CLAUDE_MODEL } from "@/lib/claude-config";
+import { redactIdentifiers } from "@/lib/redact-identifiers";
 import {
   formatDate,
   industryPulsePrompt,
@@ -605,7 +606,7 @@ export const fetchIndustryNews = createServerFn({ method: "POST" })
     if (!anthropicKey) return fallback;
 
     try {
-      const raw = await callClaude(anthropicKey, prompt);
+      const raw = await callClaude(anthropicKey, redactIdentifiers(prompt));
       const parsed = parseAiPayload(raw, industry, market);
       if (parsed) return parsed;
     } catch {

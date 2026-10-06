@@ -23,6 +23,8 @@ import { assertStarterTrialAllowsNewWork } from "@/lib/firm-client-cap.server";
  */
 
 import { CLAUDE_MODEL } from "@/lib/claude-config";
+import { buildAdvisoryModelPayload } from "@/lib/advisory-draft-prompt";
+import { rehydrateModelOutput } from "@/lib/redact-identifiers";
 import { parseOperatingProfile } from "@/lib/client-profile";
 import { profileAiContext } from "@/lib/profile-signals";
 import { assessClientMetrics, runwayDisplayLabel } from "@/lib/client-metrics";
@@ -134,15 +136,6 @@ function fmtDelta(key: string, d: number): string {
   return `${(a * 100).toFixed(1)}pp`;
 }
 
-const KIND_INSTRUCTION: Record<z.infer<typeof DeliverableKind>, string> = {
-  client_email:
-    "Draft a ready-to-send email from the accountant to the SME owner. Warm but direct. Lead with the single most important thing that changed and what it means for them in plain language (not jargon). Then 2–3 concrete actions, each tied to a real number from the brief. Close with one clear next step. No subject-line label inside the body; provide the subject separately as the first line prefixed with 'SUBJECT: '.",
-  meeting_agenda:
-    "Draft a tight agenda for this month's advisory meeting. 3–5 items, each a heading plus one line of context grounded in a real number from the brief, ordered by importance. End with a 'Decisions needed from you' section listing what the owner must decide.",
-  exec_summary:
-    "Write a single paragraph (4–6 sentences) 'state of the business' summary an owner could read in 30 seconds: where the business stands this period, the one thing that improved, the one thing to watch, and the one move to make. Plain language, specific numbers.",
-};
-
 export const draftAdvisory = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input) => InputSchema.parse(input))
@@ -212,6 +205,7 @@ export const draftAdvisory = createServerFn({ method: "POST" })
     // Signed-off interventions this period (accountant has committed to these).
     // Loose-typed table access consistent with intervention.functions.ts.
     let signoffLines: string[] = [];
+    let signoffNames: string[] = [];
     try {
       const { data: signoffs } = await (context.supabase as unknown as {
         from: (t: string) => {
@@ -223,46 +217,35 @@ export const draftAdvisory = createServerFn({ method: "POST" })
         .from("intervention_signoffs")
         .select("ratio_key, signed_off_by_name")
         .eq("client_id", data.clientId);
+      signoffNames = (signoffs ?? [])
+        .map((s) => s.signed_off_by_name)
+        .filter((name): name is string => Boolean(name?.trim()));
       signoffLines = (signoffs ?? []).map(
         (s) => `${s.ratio_key} (signed off by ${s.signed_off_by_name})`,
       );
     } catch {
       // Non-fatal — table may not be migrated in all environments.
       signoffLines = [];
+      signoffNames = [];
     }
 
-    const voice = [
-      data.accountantName ? `Accountant: ${data.accountantName}` : null,
-      data.firmName ? `Firm: ${data.firmName}` : null,
-      data.tagline ? `Firm tagline / positioning: ${data.tagline}` : null,
-    ]
-      .filter(Boolean)
-      .join("\n");
-
-    const sys = `You are drafting an advisory deliverable that will go out under a real accountant's name to their SME client. It must sound like a trusted human advisor, not an AI.
-
-HARD RULES:
-- Never invent or estimate a number. Use only the figures in the brief below. If a needed figure is missing, work with what's there rather than guessing.
-- Interpret movement with care: a ratio going "up" is not automatically good or bad — reason about what it means for THIS business (a ${client.business_type ?? "general"} SME).
-- Respect the business profile below: revenue driver, cash timing, seasonality, stock intensity, customer concentration, debt position, and the owner's stated goal. Lead with what moves that goal, and flag concentration or debt risk when the numbers support it.
-- Ground every claim in a specific figure from the brief. No generic filler advice.
-- Plain language an owner understands. No accounting jargon without a plain-language gloss.
-- Match the accountant's voice and firm positioning if provided.
-${voice ? `\nACCOUNTANT VOICE:\n${voice}` : ""}
-
-${KIND_INSTRUCTION[data.kind]}${data.steer ? `\n\nADDITIONAL STEER FROM THE ACCOUNTANT: ${data.steer}` : ""}`;
-
-    const brief = `CLIENT: ${client.name} (${client.business_type ?? "type not set"})
-${operatingContext ? `BUSINESS PROFILE: ${operatingContext}` : ""}
-CURRENT PERIOD: ${current.period_label}
-${hasPrior ? `PRIOR PERIOD: ${prior!.period_label}` : "PRIOR PERIOD: none — this is the first snapshot, so frame as a baseline, not a comparison."}
-${runwayLabel ? `CASH RUNWAY: ${runwayLabel}` : ""}
-
-WHAT MOVED (most significant first):
-${movementLines.length ? movementLines.map((l) => `- ${l}`).join("\n") : "- No material movement to report this period."}
-
-INTERVENTIONS THE ACCOUNTANT HAS SIGNED OFF THIS PERIOD:
-${signoffLines.length ? signoffLines.map((l) => `- ${l}`).join("\n") : "- None recorded yet."}`;
+    const sealed = buildAdvisoryModelPayload({
+      kind: data.kind,
+      steer: data.steer,
+      accountantName: data.accountantName,
+      firmName: data.firmName,
+      tagline: data.tagline,
+      clientName: client.name,
+      businessType: client.business_type,
+      operatingContext,
+      periodLabel: current.period_label,
+      priorPeriodLabel: prior?.period_label ?? null,
+      hasPrior,
+      runwayLabel,
+      movementLines,
+      signoffLines,
+      partyNames: signoffNames,
+    });
 
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -273,8 +256,8 @@ ${signoffLines.length ? signoffLines.map((l) => `- ${l}`).join("\n") : "- None r
       },
       body: JSON.stringify({
         model: CLAUDE_MODEL,
-        system: sys,
-        messages: [{ role: "user", content: brief }],
+        system: sealed.system,
+        messages: [{ role: "user", content: sealed.user }],
         max_tokens: 2048,
       }),
     });
@@ -288,11 +271,14 @@ ${signoffLines.length ? signoffLines.map((l) => `- ${l}`).join("\n") : "- None r
     const json = (await res.json()) as {
       content?: Array<{ type?: string; text?: string }>;
     };
-    const raw = (json.content ?? [])
-      .filter((b) => b.type === "text")
-      .map((b) => b.text ?? "")
-      .join("")
-      .trim();
+    const raw = rehydrateModelOutput(
+      (json.content ?? [])
+        .filter((b) => b.type === "text")
+        .map((b) => b.text ?? "")
+        .join("")
+        .trim(),
+      sealed.session,
+    );
 
     // For emails, split out the SUBJECT: line if present.
     let subject: string | null = null;

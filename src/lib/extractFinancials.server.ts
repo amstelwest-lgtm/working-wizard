@@ -11,6 +11,7 @@ import { type ExtractionResult } from "@/lib/financialSchema";
 import { validateFigures, isClean } from "@/lib/validateFinancials";
 import { applyBalanceSheetTotals } from "@/lib/statement-financials";
 import { callClaudeMessages, parseClaudeJson } from "@/lib/claude-messages";
+import { redactForModel, rehydrateModelOutput } from "@/lib/redact-identifiers";
 import { isUsCopy, marketInputSchema, resolvePromptMarket } from "@/lib/market";
 import { assessPortalFigures, assertUsable } from "@/lib/upload-quality";
 import { BANK_LEDGER_MESSAGE, looksLikeBankLedger } from "@/lib/bank-ledger";
@@ -187,6 +188,13 @@ export const extractFinancialsFromPDF = createServerFn({ method: "POST" })
 
     let raw: string;
     try {
+      // PDF/image documents stay as documents. Text and CSV are redacted first.
+      // A text-layer rewrite of the PDF drops scans and scrambles columns.
+      const sealedText = text
+        ? redactForModel(
+            `<statement file="${(fileName ?? "statement").replace(/"/g, "'")}">\n${text}\n</statement>\n\n${prompt}`,
+          )
+        : null;
       raw = await callClaudeMessages({
         content: pdfBase64
           ? [
@@ -196,16 +204,11 @@ export const extractFinancialsFromPDF = createServerFn({ method: "POST" })
               },
               { type: "text", text: prompt },
             ]
-          : [
-              {
-                type: "text",
-                text: `<statement file="${(fileName ?? "statement").replace(/"/g, "'")}">\n${text}\n</statement>`,
-              },
-              { type: "text", text: prompt },
-            ],
+          : [{ type: "text", text: sealedText?.text ?? prompt }],
         maxTokens: 8192,
         timeoutMs: 90_000,
       });
+      if (sealedText) raw = rehydrateModelOutput(raw, sealedText.session);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "";
       if (/claude|anthropic/i.test(msg)) {

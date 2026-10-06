@@ -15,6 +15,13 @@ import {
 import { callClaudeRound } from "./claude.ts";
 import { executeAgentTool } from "./execute.ts";
 import { hashToolArgs, summarizeToolArgs } from "./logic.ts";
+import { buildAgentTurnPayload } from "./prompt.ts";
+import {
+  applyRedaction,
+  createRedactionSession,
+  redactStructured,
+  rehydrateModelOutput,
+} from "../_shared/redact-identifiers.ts";
 
 type AdminClient = SupabaseClient;
 
@@ -28,22 +35,27 @@ export async function runMilonbotObjective(input: {
   adminClient: AdminClient;
   /** Live Overview figures. Appended to the system prompt so the loop cannot invent a score. */
   overviewBlock?: string;
+  clientName?: string | null;
 }): Promise<{ run: AgentRun; inputTokens: number; outputTokens: number; latencyMs: number }> {
   let inputTokens = 0;
   let outputTokens = 0;
   let latencyMs = 0;
   const tools = agentClaudeTools();
-  const system = input.overviewBlock
-    ? `${AGENT_SYSTEM}\n\n${input.overviewBlock}`
-    : AGENT_SYSTEM;
+  const session = createRedactionSession({ clientName: input.clientName });
+  const system = buildAgentTurnPayload({
+    system: AGENT_SYSTEM,
+    overviewBlock: input.overviewBlock,
+    user: "",
+    session,
+  }).system;
 
   const run = await runAgentLoop({
-    objective: input.objective,
+    objective: applyRedaction(input.objective, session),
     audience: input.audience,
     reason: async (ctx) => {
       const round = await callClaudeRound(
         system,
-        [{ role: "user", content: formatAgentPrompt(ctx) }],
+        [{ role: "user", content: applyRedaction(formatAgentPrompt(ctx), session) }],
         tools,
         { toolChoice: { type: "any" }, maxTokens: 700 },
       );
@@ -52,16 +64,28 @@ export async function runMilonbotObjective(input: {
       latencyMs += round.latencyMs;
       return decisionFromClaude({ text: round.text, toolUses: round.toolUses });
     },
-    execute: (name, args) =>
-      executeAgentTool(name, args, {
-        clientId: input.clientId,
-        userId: input.userId,
-        token: input.token,
-        audience: input.audience,
-        userClient: input.userClient,
-        adminClient: input.adminClient,
-      }),
+    execute: async (name, args) =>
+      redactStructured(
+        await executeAgentTool(name, args, {
+          clientId: input.clientId,
+          userId: input.userId,
+          token: input.token,
+          audience: input.audience,
+          userClient: input.userClient,
+          adminClient: input.adminClient,
+        }),
+        session,
+      ),
   });
+
+  run.objective = input.objective;
+  run.summary = rehydrateModelOutput(run.summary, session);
+  if (run.escalationReason) {
+    run.escalationReason = rehydrateModelOutput(run.escalationReason, session);
+  }
+  run.questions = run.questions.map((question) => rehydrateModelOutput(question, session));
+  for (const step of run.steps) step.detail = rehydrateModelOutput(step.detail, session);
+  for (const step of run.trace) step.detail = rehydrateModelOutput(step.detail, session);
 
   for (const step of run.steps) {
     if (!step.tool || step.status === "refused") continue;

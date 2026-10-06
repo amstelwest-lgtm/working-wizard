@@ -12,12 +12,13 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { assertStarterTrialAllowsNewWork } from "@/lib/firm-client-cap.server";
 import type { Database } from "@/integrations/supabase/types";
 import { callClaudeMessages } from "@/lib/claude-messages";
+import { rehydrateModelOutput } from "@/lib/redact-identifiers";
 import {
   fallbackWorkflow,
   sanitizeWorkflowText,
+  sealWorkflowPrompt,
   workflowAgreesWithSnapshot,
   workflowInputsHash,
-  workflowPrompt,
   type WorkflowContext,
 } from "@/lib/client-briefing";
 
@@ -154,12 +155,13 @@ export const draftMilonWorkflow = createServerFn({ method: "POST" })
 
     let result: BriefingWorkflow;
     try {
+      const sealed = sealWorkflowPrompt(ctx);
       const raw = await callClaudeMessages({
-        content: [{ type: "text", text: workflowPrompt(ctx) }],
+        content: [{ type: "text", text: sealed.text }],
         maxTokens: 300,
         timeoutMs: 30_000,
       });
-      const text = sanitizeWorkflowText(raw);
+      const text = sanitizeWorkflowText(rehydrateModelOutput(raw, sealed.session));
       const agreed = text != null && workflowAgreesWithSnapshot(text, ctx);
       result = text && agreed
         ? { text, source: "claude", generatedAt: new Date().toISOString(), inputsHash }

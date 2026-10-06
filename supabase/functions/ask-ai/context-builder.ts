@@ -128,7 +128,7 @@ export async function buildContext(
     if (error && /column ["']?(market|cash_runway_weeks)["']?/i.test(error.message ?? "")) {
       const retry = await supabase
         .from("clients")
-        .select("id, business_type, financials, operating_profile, cashflow")
+        .select("id, name, business_type, financials, operating_profile, cashflow")
         .eq("id", clientId)
         .maybeSingle();
       data = retry.data;
@@ -181,10 +181,11 @@ export async function buildContext(
   } else {
     const { data } = await supabase
       .from("clients")
-      .select("market")
+      .select("name, market")
       .eq("id", clientId)
       .maybeSingle();
     copyPack = copyPackFromMarket(data?.market);
+    clientName = typeof data?.name === "string" ? data.name : null;
   }
 
   // ── Scores ────────────────────────────────────────────────────────────────
@@ -375,6 +376,7 @@ export async function buildContext(
         });
 
   return {
+    clientName,
     profile,
     profileQuestions,
     scores,

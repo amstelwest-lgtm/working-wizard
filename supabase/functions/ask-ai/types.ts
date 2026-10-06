@@ -119,6 +119,7 @@ export interface DeliverableFill {
 }
 
 export interface AskAiContext {
+  clientName?: string | null;
   profile: ProfileRow | null;
   profileQuestions: ProfileQuestionRow[];
   scores: ScoreRow | null;

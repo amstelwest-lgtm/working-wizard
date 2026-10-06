@@ -7,6 +7,8 @@ import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supa
 import { sanitize } from "../ask-ai/sanitizer.ts";
 import { callClaudeRound, type ClaudeMessage, type ClaudeTool } from "./claude.ts";
 import { publicRun, runMilonbotObjective } from "./handler.ts";
+import { buildMilonBotChatPayload, redactToolResult } from "./prompt.ts";
+import { rehydrateModelOutput } from "../_shared/redact-identifiers.ts";
 import { loadOverviewBrief } from "./load-overview.ts";
 import { persistAdvisoryCreate, type CreateIntent } from "./persist.ts";
 import { persistedCreateIntent } from "../../../src/lib/milon-bot-copy.ts";
@@ -355,10 +357,14 @@ Deno.serve(async (req: Request) => {
   }
 
   let overviewBlock = "";
+  let clientName: string | null = null;
   if (!createIntent) {
     try {
       const brief = await loadOverviewBrief(userClient, clientId);
-      if (brief) overviewBlock = formatOverviewForPrompt(brief, audience);
+      if (brief) {
+        overviewBlock = formatOverviewForPrompt(brief, audience);
+        clientName = brief.clientName;
+      }
     } catch (e) {
       console.warn("overview brief:", (e as Error).message);
     }
@@ -416,6 +422,7 @@ Deno.serve(async (req: Request) => {
         userClient,
         adminClient,
         overviewBlock,
+        clientName,
       });
       adminClient
         .from("ask_ai_log")
@@ -445,13 +452,15 @@ Deno.serve(async (req: Request) => {
       content: sanitize(String(m.content)).slice(0, 1500),
     }));
 
-  const messages: ClaudeMessage[] = [
-    ...history,
-    {
-      role: "user",
-      content: `Audience: ${audience}. Client id is already scoped — do not ask for it.\n\n${message}`,
-    },
-  ];
+  const sealedChat = buildMilonBotChatPayload({
+    system: BOT_SYSTEM,
+    overviewBlock,
+    history,
+    message,
+    audience,
+    subject: { clientName },
+  });
+  const messages: ClaudeMessage[] = sealedChat.messages;
 
   const toolsUsed: Array<{ name: string; status: BotToolStatus }> = [];
   let inputTokens = 0;
@@ -470,8 +479,7 @@ Deno.serve(async (req: Request) => {
 
   try {
     for (let round = 0; round < BOT_MAX_TOOL_ROUNDS; round++) {
-      const system = overviewBlock ? `${BOT_SYSTEM}\n\n${overviewBlock}` : BOT_SYSTEM;
-      const claude = await callClaudeRound(system, messages, TOOLS);
+      const claude = await callClaudeRound(sealedChat.system, messages, TOOLS);
       inputTokens += claude.inputTokens;
       outputTokens += claude.outputTokens;
       latencyMs += claude.latencyMs;
@@ -524,7 +532,7 @@ Deno.serve(async (req: Request) => {
         results.push({
           type: "tool_result",
           tool_use_id: use.id,
-          content: JSON.stringify(payload),
+          content: redactToolResult(payload, sealedChat.session),
         });
       }
       messages.push({ role: "user", content: results });
@@ -564,5 +572,5 @@ Deno.serve(async (req: Request) => {
       : "I could not complete that. Try again, or use Propose / Draft on the Summary tab.";
   }
 
-  return respond({ answer, tools: toolsUsed });
+  return respond({ answer: rehydrateModelOutput(answer, sealedChat.session), tools: toolsUsed });
 });

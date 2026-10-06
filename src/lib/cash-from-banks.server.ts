@@ -8,6 +8,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { callClaudeMessages, parseClaudeJson, type ClaudeContentPart } from "@/lib/claude-messages";
+import { applyRedaction, createRedactionSession, rehydrateModelOutput } from "@/lib/redact-identifiers";
 import { INLINE_BASE64_MAX } from "@/lib/staged-upload";
 import { resolvePdfBase64 } from "@/lib/staged-upload.server";
 import { assertExtractionAllowed } from "@/lib/extraction-rate-limit.server";
@@ -159,6 +160,7 @@ export const draftCashForecastFromBankStatements = createServerFn({ method: "POS
   .handler(async ({ data, context }): Promise<CashFromBanksDraftResult> => {
     const market = resolvePromptMarket(data.market);
     const prompt = cashExtractPrompt(market);
+    const session = createRedactionSession();
     let totalBytes = 0;
     const content: ClaudeContentPart[] = [];
     for (const f of data.files) {
@@ -174,13 +176,19 @@ export const draftCashForecastFromBankStatements = createServerFn({ method: "POS
         });
         content.push({
           type: "text",
-          text: `The previous PDF is bank statement file "${f.fileName}" for account "${label}".`,
+          text: applyRedaction(
+            `The previous PDF is bank statement file "${f.fileName}" for account "${label}".`,
+            session,
+          ),
         });
       } else if (f.text) {
         totalBytes += f.text.length;
         content.push({
           type: "text",
-          text: `--- Bank statement file: ${f.fileName} | account: ${label} ---\n${f.text}`,
+          text: applyRedaction(
+            `--- Bank statement file: ${f.fileName} | account: ${label} ---\n${f.text}`,
+            session,
+          ),
         });
       } else {
         throw new Error(`File "${f.fileName}" had no readable content.`);
@@ -192,13 +200,16 @@ export const draftCashForecastFromBankStatements = createServerFn({ method: "POS
       );
     }
     await assertExtractionAllowed(context.supabase, "bank-cash", data.files.length, totalBytes);
-    content.push({ type: "text", text: prompt });
+    content.push({ type: "text", text: applyRedaction(prompt, session) });
 
-    const rawText = await callClaudeMessages({
-      content,
-      maxTokens: 8192,
-      timeoutMs: 150_000,
-    });
+    const rawText = rehydrateModelOutput(
+      await callClaudeMessages({
+        content,
+        maxTokens: 8192,
+        timeoutMs: 150_000,
+      }),
+      session,
+    );
 
     let parsed: unknown;
     try {

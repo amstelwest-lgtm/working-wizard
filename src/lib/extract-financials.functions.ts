@@ -9,6 +9,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { callClaudeMessages, parseClaudeJson } from "@/lib/claude-messages";
+import { redactForModel, redactIdentifiers, rehydrateModelOutput } from "@/lib/redact-identifiers";
 import { INLINE_BASE64_MAX } from "@/lib/staged-upload";
 import { resolvePdfBase64 } from "@/lib/staged-upload.server";
 import { assertExtractionAllowed } from "@/lib/extraction-rate-limit.server";
@@ -43,7 +44,7 @@ async function callClaudePDF(
         type: "document",
         source: { type: "base64", media_type: "application/pdf", data: base64 },
       },
-      { type: "text", text: `File name: ${fileName}\n\n${prompt}` },
+      { type: "text", text: redactIdentifiers(`File name: ${fileName}\n\n${prompt}`) },
     ],
     maxTokens: 8192,
     timeoutMs: 90_000,
@@ -391,16 +392,17 @@ async function aiExtractText(
   if (!process.env.ANTHROPIC_API_KEY) return {};
 
   try {
-    const raw = await callClaudeMessages({
-      content: [
-        {
-          type: "text",
-          text: `${textExtractionSystem(market)}\n\nFile: ${fileName}\n\nContents:\n${text.slice(0, 80_000)}`,
-        },
-      ],
-      maxTokens: 4096,
-      timeoutMs: 60_000,
-    });
+    const sealed = redactForModel(
+      `${textExtractionSystem(market)}\n\nFile: ${fileName}\n\nContents:\n${text.slice(0, 80_000)}`,
+    );
+    const raw = rehydrateModelOutput(
+      await callClaudeMessages({
+        content: [{ type: "text", text: sealed.text }],
+        maxTokens: 4096,
+        timeoutMs: 60_000,
+      }),
+      sealed.session,
+    );
     const parsed = parseClaudeJson<Record<string, unknown>>(raw);
     const out: Record<string, string> = {};
     for (const k of FIELDS) {

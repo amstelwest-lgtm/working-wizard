@@ -8,6 +8,7 @@
  */
 
 import type { ClientOperatingProfile } from "@/lib/client-profile";
+import { redactForModel, type RedactionSession } from "@/lib/redact-identifiers";
 import { GOAL_TO_PRESSURE } from "@/lib/client-profile";
 import { profileIndustryLabel, profileAiContext } from "@/lib/profile-signals";
 import type { VarianceChip } from "@/lib/prior-period";
@@ -423,7 +424,7 @@ export function workflowInputsHash(ctx: WorkflowContext): string {
   return h.toString(36);
 }
 
-export function workflowPrompt(ctx: WorkflowContext): string {
+function workflowPromptBody(ctx: WorkflowContext): string {
   const metrics = ctx.snapshot
     .filter((m) => m.key !== "updated")
     .map(
@@ -455,6 +456,14 @@ RULES:
 - Be specific to these numbers. Do not overstate: if the position is healthy, say what to build on rather than inventing a risk.
 - If you cite gross margin or operating margin, copy the percentage from the snapshot exactly. 62.5% is not 5%. Do not call a gross margin of 40% or more a collections or timing problem.
 - British/South African spelling. Plain text only, no bullet points, no headings, no quotes.`;
+}
+
+export function sealWorkflowPrompt(ctx: WorkflowContext): { text: string; session: RedactionSession } {
+  return redactForModel(workflowPromptBody(ctx), { clientName: ctx.clientName });
+}
+
+export function workflowPrompt(ctx: WorkflowContext): string {
+  return sealWorkflowPrompt(ctx).text;
 }
 
 const FORBIDDEN =
