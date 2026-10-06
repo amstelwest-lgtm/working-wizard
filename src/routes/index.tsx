@@ -23,7 +23,6 @@ import {
   applyVisitorMarketToDocument,
   draftToSelection,
   isDraftComplete,
-  LIST_PRICES,
   marketToJson,
   readVisitorDraft,
   t,
@@ -87,13 +86,23 @@ import {
   HERO_OWNER_PREFIX,
   HERO_POINTS,
   HERO_WALKTHROUGH_LABEL,
+  FAQ_MORE_LEAD,
+  FAQ_MORE_LINK,
   HOW_STEP_03,
+  NAV_TRIAL_ARIA,
+  NAV_TRIAL_LABEL,
   OWNER_TEASER,
   OWNER_TEASER_LINK,
   PRICING_H2_USD,
-  PRICING_H2_ZAR,
-  SA_FOUNDING_LINE,
-  SA_ZAR_LINE,
+  PRICING_INTRO,
+  PRICING_OWNER_BAR,
+  PRICING_OWNER_CTA,
+  PROOF_AI_LINK,
+  PROOF_CARDS,
+  PROOF_EYEBROW,
+  PROOF_H2,
+  PROOF_PRIVACY_LINK,
+  PROOF_SECURITY_FACTS,
   TRUST_AI_LINK,
   TRUST_ITEMS,
   WALKTHROUGH_URL,
@@ -101,8 +110,9 @@ import {
   WATCH_SUB,
   WATCH_TITLE,
   homepageFaqItems,
+  proofImageSrc,
+  proofImageSrcSet,
 } from "@/lib/landing-copy";
-import { WATCHLIST_DEFINITION } from "@/lib/marketing-faq";
 import { faqPageJson, pageHead, SEO_PAGES } from "@/lib/seo";
 import { OwnerInviteShell } from "@/components/owner-invite-shell";
 import { OwnerInviteSignupPanel } from "@/components/owner-invite-signup-panel";
@@ -279,6 +289,7 @@ function LandingPage() {
   /* ── sign-in modal state ── */
   const [signinOpen, setSigninOpen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [trialBarOn, setTrialBarOn] = useState(false);
   const [siEmail, setSiEmail] = useState("");
   const [siPassword, setSiPassword] = useState("");
   const [siBusy, setSiBusy] = useState(false);
@@ -545,7 +556,16 @@ function LandingPage() {
     addEventListener("scroll", onScroll, { passive: true });
     onScroll();
 
-    /* intersection reveal */
+    /* Cards below the first viewport may fade. Headings stay visible. */
+    if (!REDUCE) document.documentElement.classList.add("js-motion");
+    const fold = scrollY + innerHeight;
+    if (!REDUCE) {
+      document.querySelectorAll(".reveal,.stagger").forEach((el) => {
+        if (el.classList.contains("section-head") || el.closest(".section-head")) return;
+        const top = el.getBoundingClientRect().top + scrollY;
+        if (top > fold) el.classList.add("is-below");
+      });
+    }
     const io = new IntersectionObserver(
       (es) =>
         es.forEach((e) => {
@@ -554,9 +574,12 @@ function LandingPage() {
             io.unobserve(e.target);
           }
         }),
-      { threshold: 0.13 },
+      { threshold: 0, rootMargin: "0px 0px -10% 0px" },
     );
-    document.querySelectorAll(".reveal,.stagger").forEach((el) => io.observe(el));
+    document.querySelectorAll(".is-below").forEach((el) => io.observe(el));
+    const revealFailSafe = window.setTimeout(() => {
+      document.querySelectorAll(".reveal,.stagger").forEach((el) => el.classList.add("in"));
+    }, 1500);
 
     /* count-up — hero finals are in the DOM from first paint; below-fold may animate */
     function fmt(n: number, f?: string) {
@@ -602,26 +625,12 @@ function LandingPage() {
       });
     }
 
-    /* pillar bars */
+    /* pillar bars — final widths are in the markup; don't wait on scroll */
     const pg = document.getElementById("pillarGrid");
     if (pg) {
-      const pio = new IntersectionObserver(
-        (es) =>
-          es.forEach((e) => {
-            if (!e.isIntersecting) return;
-            pio.unobserve(pg);
-            pg.querySelectorAll(".score .bar i").forEach((b: any, i) => {
-              setTimeout(
-                () => {
-                  b.style.width = b.dataset.w;
-                },
-                350 + i * 160,
-              );
-            });
-          }),
-        { threshold: 0.3 },
-      );
-      pio.observe(pg);
+      pg.querySelectorAll(".score .bar i").forEach((b: any) => {
+        if (b.dataset.w) b.style.width = b.dataset.w;
+      });
     }
 
     /* marquee duplicate — guarded so re-running this effect (React StrictMode's
@@ -936,11 +945,45 @@ function LandingPage() {
       removeEventListener("scroll", onScroll);
       io.disconnect();
       cio.disconnect();
+      clearTimeout(revealFailSafe);
       delete (window as any).__mq_start;
       delete (window as any).__mq_pick;
       delete (window as any).__mq_plan;
     };
   }, []);
+
+  useEffect(() => {
+    const heroCta = document.querySelector("#hero .btn-gold");
+    const register = document.getElementById("register");
+    const mq = window.matchMedia("(max-width: 1023px)");
+    if (!heroCta || !register) {
+      setTrialBarOn(false);
+      return;
+    }
+    let heroIn = true;
+    let registerIn = false;
+    const sync = () => {
+      setTrialBarOn(mq.matches && !heroIn && !registerIn && !mobileNavOpen);
+    };
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.target === heroCta) heroIn = entry.isIntersecting;
+          if (entry.target === register) registerIn = entry.isIntersecting;
+        }
+        sync();
+      },
+      { threshold: 0 },
+    );
+    io.observe(heroCta);
+    io.observe(register);
+    mq.addEventListener("change", sync);
+    sync();
+    return () => {
+      io.disconnect();
+      mq.removeEventListener("change", sync);
+    };
+  }, [mobileNavOpen]);
 
   const clearOwnerSignInError = () => {
     setSiError("");
@@ -1751,6 +1794,7 @@ function LandingPage() {
   return (
     <div
       data-milon-landing=""
+      className={trialBarOn ? "has-trial-bar" : undefined}
       style={{ minHeight: "100vh", background: "var(--bg)", color: "var(--ink)" }}
     >
       {/* ── secret operator unlock (not linked in nav) ── */}
@@ -2237,15 +2281,6 @@ function LandingPage() {
             <span />
           </button>
           <div className="links">
-            <a
-              href="#register"
-              onClick={(e) => {
-                e.preventDefault();
-                goToFirmSignup();
-              }}
-            >
-              Create firm account
-            </a>
             <a href="#method" onClick={() => setMobileNavOpen(false)}>
               The MILŌN Method
             </a>
@@ -2267,8 +2302,7 @@ function LandingPage() {
             </button>
             <button
               type="button"
-              className="btn btn-ghost"
-              style={{ padding: "10px 22px", fontSize: 13 }}
+              className="btn btn-ghost nav-signin"
               onClick={() => {
                 setMobileNavOpen(false);
                 setSiError("");
@@ -2277,6 +2311,17 @@ function LandingPage() {
             >
               Sign in
             </button>
+            <a
+              className="btn btn-gold nav-trial"
+              href="#register"
+              aria-label={NAV_TRIAL_ARIA}
+              onClick={(e) => {
+                e.preventDefault();
+                goToFirmSignup({ scrollTo: "register" });
+              }}
+            >
+              {NAV_TRIAL_LABEL}
+            </a>
           </div>
         </div>
       </nav>
@@ -2441,10 +2486,12 @@ function LandingPage() {
                   <path
                     className="cash-fill"
                     d="M0 58 C40 50,70 44,105 48 C140 52,165 66,200 78 C235 90,258 96,290 92 C322 88,345 70,385 56 C425 42,470 34,520 28 L520 120 L0 120 Z"
+                    style={{ opacity: 1 }}
                   />
                   <path
                     className="cash-line"
                     d="M0 58 C40 50,70 44,105 48 C140 52,165 66,200 78 C235 90,258 96,290 92 C322 88,345 70,385 56 C425 42,470 34,520 28"
+                    style={{ strokeDashoffset: 0 }}
                   />
                   <circle className="dip-ring" cx="272" cy="94" r="4" />
                   <circle className="dip-dot" cx="272" cy="94" r="4" />
@@ -2564,10 +2611,116 @@ function LandingPage() {
         </div>
       </section>
 
+      <section id="how" style={{ paddingTop: 40, paddingBottom: 80 }}>
+        <div className="wrap">
+          <div className="section-head">
+            <span className="eyebrow">How it works</span>
+            <h2>
+              From financial statements to <span className="gold-text serif">decisions.</span>
+            </h2>
+          </div>
+          <div className="steps how-steps stagger" style={{ marginTop: 56 }}>
+            <div className="step-card">
+              <span className="n">01</span>
+              <h3>Bring in the financials</h3>
+              <p>
+                Connect QuickBooks Online or Xero, or upload the P&amp;L and balance sheet you
+                already have as a PDF, Excel file, or CSV — or simply upload a bank statement.
+              </p>
+            </div>
+            <div className="step-card">
+              <span className="n">02</span>
+              <h3>MILŌN understands the business</h3>
+              <p>
+                MILŌN analyzes 19 carefully selected financial ratios across four pillars of
+                financial health. DuPont analysis helps break profitability down to identify where
+                the underlying problem sits.
+              </p>
+            </div>
+            <div className="step-card">
+              <span className="n">03</span>
+              <h3>AI prepares the next move</h3>
+              <p>
+                {HOW_STEP_03}
+              </p>
+            </div>
+            <div className="step-card">
+              <span className="n">04</span>
+              <h3>Your accountant reviews and signs off</h3>
+              <p>
+                The accountant reviews the AI-generated analysis and recommendations, makes any
+                necessary changes, and signs off every advisory pack.
+              </p>
+            </div>
+            <div className="step-card">
+              <span className="n">05</span>
+              <h3>Actions get done</h3>
+              <p>
+                Recommendations become assigned actions that can be followed through and tracked —
+                turning financial advice into an ongoing finance workflow.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+
+      <section id="proof">
+        <div className="wrap">
+          <div className="section-head center">
+            <span className="eyebrow">{PROOF_EYEBROW}</span>
+            <h2>{PROOF_H2}</h2>
+          </div>
+          <div className="proof-grid">
+            {PROOF_CARDS.map((card) => (
+              <article className="proof-card" key={card.id}>
+                <img
+                  className="proof-shot"
+                  src={proofImageSrc(card.base, 800)}
+                  srcSet={proofImageSrcSet(card.base)}
+                  sizes="(min-width:1024px) 33vw, 100vw"
+                  width={card.width}
+                  height={card.height}
+                  alt={card.alt}
+                  loading="lazy"
+                  decoding="async"
+                />
+                <h3>{card.title}</h3>
+                <p>{card.body}</p>
+              </article>
+            ))}
+          </div>
+          <ul className="proof-facts">
+            {PROOF_SECURITY_FACTS.map((fact) => (
+              <li key={fact}>
+                <svg
+                  width="15"
+                  height="15"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+                <span>{fact}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="proof-links">
+            <a href="/ai">{PROOF_AI_LINK}</a>
+            <a href="/privacy">{PROOF_PRIVACY_LINK}</a>
+          </p>
+        </div>
+      </section>
+
       {/* ══════════════════════════ METHOD ══════════════════════════ */}
       <section id="method">
         <div className="wrap">
-          <div className="section-head center reveal">
+          <div className="section-head center">
             <span className="eyebrow">The MILŌN Method</span>
             <h2>Four pillars. One financial picture.</h2>
             <p className="sub">
@@ -2586,7 +2739,7 @@ function LandingPage() {
               <div className="score">
                 <span>Demo</span>
                 <span className="bar">
-                  <i data-w="81%" />
+                  <i data-w="81%" style={{ width: "81%" }} />
                 </span>
                 <b>81</b>
               </div>
@@ -2610,7 +2763,7 @@ function LandingPage() {
               <div className="score">
                 <span>Demo</span>
                 <span className="bar">
-                  <i data-w="61%" />
+                  <i data-w="61%" style={{ width: "61%" }} />
                 </span>
                 <b>61</b>
               </div>
@@ -2626,7 +2779,7 @@ function LandingPage() {
               <div className="score">
                 <span>Demo</span>
                 <span className="bar">
-                  <i data-w="74%" />
+                  <i data-w="74%" style={{ width: "74%" }} />
                 </span>
                 <b>74</b>
               </div>
@@ -2642,7 +2795,7 @@ function LandingPage() {
               <div className="score">
                 <span>Demo</span>
                 <span className="bar">
-                  <i data-w="82%" />
+                  <i data-w="82%" style={{ width: "82%" }} />
                 </span>
                 <b>82</b>
               </div>
@@ -2694,7 +2847,7 @@ function LandingPage() {
       {/* ══════════════════════════ THE REAL GAP + HOW IT WORKS ══════════════════════════ */}
       <section id="problem" style={{ paddingTop: 80, paddingBottom: 40 }}>
         <div className="wrap">
-          <div className="section-head reveal">
+          <div className="section-head">
             <span className="eyebrow">The real gap</span>
             <h2>
               Small businesses have the numbers.
@@ -2702,68 +2855,15 @@ function LandingPage() {
               Large businesses have the <span className="gold-text serif">finance function.</span>
             </h2>
           </div>
-          <p className="sub reveal" style={{ marginTop: 24 }}>
+          <p className="sub" style={{ marginTop: 24 }}>
             A small business can have the same financial statements as a large company without
             having the finance team behind them to interpret those numbers, spot problems early,
             forecast cash, and turn analysis into action.
           </p>
-          <p className="sub reveal" style={{ marginTop: 18 }}>
+          <p className="sub" style={{ marginTop: 18 }}>
             MILŌN gives accountants a way to install that capability for their clients — using AI to
             do the heavy analytical work while the accountant remains in control of the advice.
           </p>
-        </div>
-      </section>
-
-      <section id="how" style={{ paddingTop: 40, paddingBottom: 80 }}>
-        <div className="wrap">
-          <div className="section-head reveal">
-            <span className="eyebrow">How it works</span>
-            <h2>
-              From financial statements to <span className="gold-text serif">decisions.</span>
-            </h2>
-          </div>
-          <div className="steps how-steps stagger" style={{ marginTop: 56 }}>
-            <div className="step-card">
-              <span className="n">01</span>
-              <h3>Bring in the financials</h3>
-              <p>
-                Connect QuickBooks Online or Xero, or upload the P&amp;L and balance sheet you
-                already have as a PDF, Excel file, or CSV — or simply upload a bank statement.
-              </p>
-            </div>
-            <div className="step-card">
-              <span className="n">02</span>
-              <h3>MILŌN understands the business</h3>
-              <p>
-                MILŌN analyzes 19 carefully selected financial ratios across four pillars of
-                financial health. DuPont analysis helps break profitability down to identify where
-                the underlying problem sits.
-              </p>
-            </div>
-            <div className="step-card">
-              <span className="n">03</span>
-              <h3>AI prepares the next move</h3>
-              <p>
-                {HOW_STEP_03}
-              </p>
-            </div>
-            <div className="step-card">
-              <span className="n">04</span>
-              <h3>Your accountant reviews and signs off</h3>
-              <p>
-                The accountant reviews the AI-generated analysis and recommendations, makes any
-                necessary changes, and signs off every advisory pack.
-              </p>
-            </div>
-            <div className="step-card">
-              <span className="n">05</span>
-              <h3>Actions get done</h3>
-              <p>
-                Recommendations become assigned actions that can be followed through and tracked —
-                turning financial advice into an ongoing finance workflow.
-              </p>
-            </div>
-          </div>
         </div>
       </section>
 
@@ -2776,7 +2876,7 @@ function LandingPage() {
       {/* ══════════════════════════ ONE SHARED WORKSPACE ══════════════════════════ */}
       <section id="bridge" style={{ paddingTop: 80, paddingBottom: 80 }}>
         <div className="wrap">
-          <div className="section-head center reveal">
+          <div className="section-head center">
             <span className="eyebrow">One shared workspace</span>
             <h2>
               Your accountant&apos;s expertise. AI&apos;s analysis.{" "}
@@ -2898,7 +2998,7 @@ function LandingPage() {
       {/* ══════════════════════════ THE BIGGER IDEA ══════════════════════════ */}
       <section id="idea" style={{ paddingTop: 80, paddingBottom: 80 }}>
         <div className="wrap">
-          <div className="section-head center reveal">
+          <div className="section-head center">
             <span className="eyebrow">The bigger idea</span>
             <h2>
               Give small businesses the financial intelligence
@@ -2933,47 +3033,23 @@ function LandingPage() {
       {/* ══════════════════════════ PRICING ══════════════════════════ */}
       <section id="pricing">
         <div className="wrap">
-          <div className="section-head center reveal">
+          <div className="section-head center">
             <span className="eyebrow">Pricing for firms</span>
-            <h2>
-              {PRICING_H2_USD}
-              {showSaPricing ? <span className="gold-text"> {PRICING_H2_ZAR}</span> : null}
-            </h2>
-            <p className="sub">
-              Accounting firms start with a {FIRM_TRIAL_SENTENCE}, card on file, then a paid USD
-              band by active client count. {WATCHLIST_DEFINITION}{" "}
-              {showSaPricing ? (
-                <>
-                  {SA_ZAR_LINE} {SA_FOUNDING_LINE}{" "}
-                </>
-              ) : null}
-              AI prepares the analysis; the accountant reviews and signs off.
-            </p>
+            <h2>{PRICING_H2_USD}</h2>
+            <p className="sub">{PRICING_INTRO}</p>
           </div>
 
-          <div className="acc-pricing" id="accPricing">
-            <div className="acc-pricing-kicker">Accountant / Advisory Firm Pricing</div>
-            <p className="acc-pricing-lede">
-              White-label the whole platform. Charge your clients a monthly advisory retainer. MILŌN
-              is your engine. Billed in USD (Solo from {LIST_PRICES.us.firmSolo}/mo)
-              {showSaPricing ? `. ${SA_ZAR_LINE}` : "."}
-            </p>
-            <FirmBandPricingTable
-              interval={firmInterval}
-              onIntervalChange={setFirmInterval}
-              onSelectBand={startFirmPlan}
-              showSaPricing={showSaPricing}
-            />
-          </div>
+          <FirmBandPricingTable
+            interval={firmInterval}
+            onIntervalChange={setFirmInterval}
+            onSelectBand={startFirmPlan}
+            showSaPricing={showSaPricing}
+          />
 
           <div className="owner-spark-path">
-            <p>
-              <strong style={{ color: "var(--ink)" }}>Business owners:</strong> Spark is free during
-              early access and does not ask for a card. Your accountant can run the finance function
-              on a firm band above.
-            </p>
+            <p>{PRICING_OWNER_BAR}</p>
             <button type="button" className="btn btn-ghost" onClick={goToOwnerSpark}>
-              Business owners: start free
+              {PRICING_OWNER_CTA}
             </button>
           </div>
         </div>
@@ -2982,7 +3058,7 @@ function LandingPage() {
       {/* ══════════════════════════ PERSONA ══════════════════════════ */}
       <section id="persona">
         <div className="wrap">
-          <div className="section-head center reveal">
+          <div className="section-head center">
             <span className="eyebrow">Start here</span>
             <h2>Who are you in this story?</h2>
             <p className="sub">
@@ -3046,10 +3122,36 @@ function LandingPage() {
         </div>
       </section>
 
+      {/* ══════════════════════════ FAQ ══════════════════════════ */}
+      <section id="home-faq">
+        <div className="wrap">
+          <div className="section-head center">
+            <span className="eyebrow">Questions</span>
+            <h2>
+              Straight answers, <span className="gold-text">before you sign up.</span>
+            </h2>
+          </div>
+          <div className="home-faq">
+            {homeFaq.map((item, index) => (
+              <details key={item.question} open={index === 0}>
+                <summary>
+                  <h3>{item.question}</h3>
+                </summary>
+                <p>{item.answer}</p>
+              </details>
+            ))}
+          </div>
+          <p className="home-faq-more">
+            {FAQ_MORE_LEAD}
+            <a href="/faq">{FAQ_MORE_LINK}</a>
+          </p>
+        </div>
+      </section>
+
       {/* ══════════════════════════ REGISTER ══════════════════════════ */}
       <section id="register" style={{ paddingBottom: 80 }}>
         <div className="wrap">
-          <div className="section-head center reveal">
+          <div className="section-head center">
             <span className="eyebrow">Create a firm account</span>
             <h2>
               Accountants first.
@@ -3530,30 +3632,6 @@ function LandingPage() {
         </div>
       </section>
 
-      {/* ══════════════════════════ FAQ ══════════════════════════ */}
-      <section id="home-faq">
-        <div className="wrap">
-          <div className="section-head center reveal">
-            <span className="eyebrow">Questions</span>
-            <h2>
-              Straight answers, <span className="gold-text">before you sign up.</span>
-            </h2>
-          </div>
-          <div className="home-faq">
-            {homeFaq.map((item) => (
-              <article key={item.question}>
-                <h3>{item.question}</h3>
-                <p>{item.answer}</p>
-              </article>
-            ))}
-          </div>
-          <p className="home-faq-more">
-            More detail on cost, data, and how advisory works is on the{" "}
-            <a href="/faq">questions page</a>.
-          </p>
-        </div>
-      </section>
-
       {/* ══════════════════════════ FOOTER ══════════════════════════ */}
       <footer>
         <div className="wrap">
@@ -3589,18 +3667,7 @@ function LandingPage() {
             <a href="/privacy">Privacy</a>
             <a href="/terms">Terms</a>
             <a href="/ai">AI notice</a>
-            <button
-              onClick={() => setSigninOpen(true)}
-              style={{
-                background: "none",
-                border: "none",
-                color: "var(--ink-dim)",
-                cursor: "pointer",
-                fontSize: 13,
-                padding: 0,
-                fontFamily: "inherit",
-              }}
-            >
+            <button type="button" onClick={() => setSigninOpen(true)}>
               Sign in
             </button>
           </nav>
@@ -3627,6 +3694,24 @@ function LandingPage() {
           </div>
         </div>
       </footer>
+
+      <div
+        className={trialBarOn ? "trial-sticky is-on" : "trial-sticky"}
+        aria-hidden={trialBarOn ? undefined : true}
+      >
+        <a
+          className="btn btn-gold"
+          href="#register"
+          aria-label={NAV_TRIAL_ARIA}
+          tabIndex={trialBarOn ? undefined : -1}
+          onClick={(e) => {
+            e.preventDefault();
+            goToFirmSignup({ scrollTo: "register" });
+          }}
+        >
+          {NAV_TRIAL_LABEL}
+        </a>
+      </div>
     </div>
   );
 }

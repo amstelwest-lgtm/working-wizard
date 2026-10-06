@@ -237,7 +237,10 @@ assert(!landing.includes("health tool that diagnoses the"), "old run-on hero led
 assert(!landing.includes("Give every business"), "old give-every-business hero is gone");
 assert(landing.includes("Create firm account"), "home has a firm signup CTA");
 assert(landing.includes("{PRICING_H2_USD}"), "home pricing leads with firm bands");
-assert(PRICING_H2_USD === "USD bands by client count.", "USD band heading stays the US default");
+assert(
+  PRICING_H2_USD === "Flat USD pricing by active clients, Solo to Scale.",
+  "USD band heading is the PR2 default",
+);
 assert(!landing.includes("Start free. <span className=\"gold-text\">Scale when it pays for itself."), "home pricing no longer leads with the owner Start-free story");
 assert(landing.includes("Small businesses have the numbers"), "gap section is the strategic reposition");
 assert(landing.includes("One shared workspace"), "shared-workspace framing is visible");
@@ -283,9 +286,8 @@ assert(landing.includes("Gross Profit / Labor"), "marquee lists Gross Profit / L
 assert(landing.includes("TRUST_ITEMS"), "trust strip uses the shared fact list");
 assert(TRUST_IDENTIFIERS.includes("amounts stay"), "trust line keeps amounts");
 assert(!/claude/i.test(TRUST_IDENTIFIERS), "trust line does not name a model vendor");
-assert(landing.includes("WATCHLIST_DEFINITION"), "landing pricing defines watchlist");
 assert(landing.includes("showSaPricing"), "landing gates SA pricing on server geo");
-assert(landing.includes("SA_FOUNDING_LINE"), "landing can surface the ZA founding line");
+assert(landing.includes("FirmBandPricingTable"), "landing pricing uses the shared band table");
 assert(!landing.includes("FOUNDING_CALLOUT"), "landing does not render the ungated founding callout");
 assert(!landing.includes("raw amounts removed"), "landing FAQ does not claim amounts are stripped");
 assert(!landing.includes("End-to-end encrypted"), "landing does not claim E2E encryption");
@@ -294,21 +296,25 @@ assert(landing.includes('href="/about"'), "landing links to about");
 assert(landing.includes('href="/for-owners"'), "landing links to owners hub");
 assert(landing.includes('id="home-faq"'), "landing has a visible FAQ block");
 assert(landing.includes("faqPageJson(homepageFaqItems(showSaPricing))"), "landing emits homepage FAQ schema");
-assert(HOMEPAGE_FAQ_ITEMS.length === 5, "homepage FAQ is five questions");
+assert(HOMEPAGE_FAQ_ITEMS.length === 6, "homepage FAQ is six questions after the VERIFY-6 fallback");
 assert(
-  HOMEPAGE_FAQ_ITEMS[1].answer.includes("you do not need QuickBooks or Xero"),
+  HOMEPAGE_FAQ_ITEMS[2].answer.includes("you do not need QuickBooks or Xero"),
   "homepage FAQ still says neither ledger is required",
 );
 assert(
-  HOMEPAGE_FAQ_ITEMS[1].answer.includes("connect QuickBooks Online or Xero"),
+  HOMEPAGE_FAQ_ITEMS[2].answer.includes("connect QuickBooks Online or Xero"),
   "homepage FAQ also says both ledgers can be connected",
 );
 assert(
-  faqPageJson(HOMEPAGE_FAQ_ITEMS).includes("Does MILŌN replace my accountant?"),
+  faqPageJson(HOMEPAGE_FAQ_ITEMS).includes("Does Milōn replace the accountant?"),
   "homepage FAQ schema includes the accountant question",
 );
 assert(!faqPageJson(publicFaqUsItems()).includes("https://milonfinance.com"), "faq schema does not use the apex host");
 assert(faqPageJson(publicFaqUsItems()).includes("https://www.milonfinance.com/ai"), "faq schema points the AI notice at www");
+assert(
+  HOMEPAGE_FAQ_ITEMS[0].answer.includes("reviews and signs off every advisory pack"),
+  "homepage FAQ keeps the accountant sign-off answer",
+);
 
 const firms = readFileSync(resolve("src/routes/for-accountants.tsx"), "utf8");
 assert(firms.includes("SEO_PAGES.forAccountants"), "firm page uses spec meta");
@@ -452,8 +458,12 @@ assert(
 );
 assert(!faq.includes("raw amounts"), "faq does not claim raw amounts are stripped");
 assert(
-  HOMEPAGE_FAQ_ITEMS.some((item) => item.answer.includes(AI_IDENTIFIERS_LINE)),
-  "homepage FAQ says identifiers are stripped and amounts stay",
+  HOMEPAGE_FAQ_ITEMS.every((item) => !item.answer.includes(AI_IDENTIFIERS_LINE)),
+  "homepage FAQ does not use the identifiers-stripped line",
+);
+assert(
+  HOMEPAGE_FAQ_ITEMS.some((item) => item.answer.includes("isn't used to train third-party AI models")),
+  "homepage FAQ keeps the confirmed training answer",
 );
 assert(
   HOMEPAGE_FAQ_ITEMS.every((item) => !item.answer.includes("raw amounts")),
@@ -481,11 +491,11 @@ assert(
 );
 
 const pricingTable = readFileSync(resolve("src/components/firm-band-pricing.tsx"), "utf8");
-assert(pricingTable.includes("firm-bands-sa-note"), "firm pricing styles the ZA-only pricing notes");
+assert(pricingTable.includes("firm-trial-bar-za"), "firm pricing styles the ZA-only pricing notes");
 assert(!pricingTable.includes("firm-bands-founding"), "US HTML stylesheet does not contain the FOUNDING class name");
 assert(pricingTable.includes("SA_FOUNDING_LINE"), "firm pricing callout uses the ZA founding line");
 assert(pricingTable.includes("showSaPricing = false"), "firm pricing hides the SA discount by default");
-assert(pricingTable.includes("WATCHLIST_DEFINITION"), "firm pricing defines watchlist");
+assert(pricingTable.includes("PRICING_WATCHLIST_NOTE"), "firm pricing defines watchlist");
 
 const marqueeBlock = landing.split('id="marquee"')[1]?.split("</div>")[0] ?? "";
 const marqueeChips = marqueeBlock.match(/<span[>\s]/g) ?? [];

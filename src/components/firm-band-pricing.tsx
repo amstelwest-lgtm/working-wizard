@@ -1,11 +1,18 @@
 import { ENTERPRISE_CONTACT_HREF, firmSignupHref } from "@/lib/firm-signup-copy";
-import { SA_FOUNDING_LINE, SA_ZAR_LINE } from "@/lib/landing-copy";
-import { WATCHLIST_DEFINITION } from "@/lib/marketing-faq";
+import {
+  PRICING_TRIAL_AFTER,
+  PRICING_WATCHLIST_NOTE,
+  SA_FOUNDING_LINE,
+  SA_ZAR_LINE,
+  SOLO_CARD_NOTE,
+  SOLO_TRIAL_BUTTON,
+} from "@/lib/landing-copy";
 import {
   FIRM_BAND_TABLE,
   FIRM_TRIAL_SENTENCE,
   firmUsdListPrice,
   isFirmCheckoutBand,
+  type FirmBand,
   type FirmCheckoutBand,
   type FirmInterval,
 } from "@/lib/stripe-plans";
@@ -20,6 +27,28 @@ type Props = {
   showSaPricing?: boolean;
 };
 
+function pricedInterval(band: FirmBand, interval: FirmInterval): FirmInterval {
+  return interval === "year" && band.yearlyUsdCents == null ? "month" : interval;
+}
+
+function bandPriceLabel(band: FirmBand, interval: FirmInterval): string {
+  if (band.customQuote) return "Custom";
+  const billed = pricedInterval(band, interval);
+  if (interval === "year" && band.yearlyUsdCents == null) return "Monthly only";
+  const price = firmUsdListPrice(band.id, billed);
+  if (!price) return "Custom";
+  return billed === "year" ? `${price}/yr` : `${price}/mo`;
+}
+
+function startLabel(band: FirmBand): string {
+  return band.id === "solo" ? SOLO_TRIAL_BUTTON : `Start ${band.name}`;
+}
+
+function clientLabel(band: FirmBand, withActive: boolean): string {
+  if (band.clientLimit == null) return withActive ? "Unlimited" : "Unlimited";
+  return withActive ? `Up to ${band.clientLimit} active clients` : `Up to ${band.clientLimit}`;
+}
+
 export function FirmBandPricingTable({
   interval,
   onIntervalChange,
@@ -28,8 +57,51 @@ export function FirmBandPricingTable({
   compact = false,
   showSaPricing = false,
 }: Props) {
+  const bands = FIRM_BAND_TABLE.filter((band) => band.id !== "starter");
+
+  const startControl = (band: FirmBand, className: string) => {
+    const billed = pricedInterval(band, interval);
+    if (band.customQuote) {
+      return (
+        <a className={className} href={enterpriseHref}>
+          Talk to us
+        </a>
+      );
+    }
+    const checkoutBand = band.id !== "enterprise" && (interval === "month" || band.yearlyUsdCents != null);
+    if (checkoutBand && onSelectBand) {
+      return (
+        <button
+          type="button"
+          className={className}
+          onClick={() => onSelectBand(band.id as FirmCheckoutBand, billed)}
+        >
+          {startLabel(band)}
+        </button>
+      );
+    }
+    return (
+      <a
+        className={className}
+        href={isFirmCheckoutBand(band.id) ? firmSignupHref(band.id, billed) : firmSignupHref()}
+      >
+        Set up firm
+      </a>
+    );
+  };
+
   return (
     <div className={compact ? "firm-bands firm-bands-compact" : "firm-bands"}>
+      <div className="firm-trial-bar">
+        <p className="firm-trial-bar-lead">{FIRM_TRIAL_SENTENCE}</p>
+        <p className="firm-trial-bar-sub">{PRICING_TRIAL_AFTER}</p>
+        {showSaPricing ? (
+          <>
+            <p className="firm-trial-bar-za">{SA_ZAR_LINE}</p>
+            <p className="firm-trial-bar-za">{SA_FOUNDING_LINE}</p>
+          </>
+        ) : null}
+      </div>
       {onIntervalChange ? (
         <div className="firm-bands-toggle" role="group" aria-label="Billing interval">
           <button
@@ -48,16 +120,6 @@ export function FirmBandPricingTable({
           </button>
         </div>
       ) : null}
-      <p className="firm-bands-trial">
-        {FIRM_TRIAL_SENTENCE}. Card required. After day 14, paid Solo+.
-      </p>
-      {showSaPricing ? (
-        <>
-          <p className="firm-bands-sa-note">{SA_ZAR_LINE}</p>
-          <p className="firm-bands-sa-note">{SA_FOUNDING_LINE}</p>
-        </>
-      ) : null}
-      <p className="firm-bands-note">USD list prices. {WATCHLIST_DEFINITION}</p>
       <div className="firm-bands-table-wrap">
         <table className="firm-bands-table">
           <thead>
@@ -69,17 +131,8 @@ export function FirmBandPricingTable({
             </tr>
           </thead>
           <tbody>
-            {FIRM_BAND_TABLE.filter((band) => band.id !== "starter").map((band) => {
-              const price = band.customQuote
-                ? "Custom"
-                : interval === "year" && band.yearlyUsdCents == null
-                  ? "Monthly only"
-                  : firmUsdListPrice(
-                      band.id,
-                      interval === "year" && band.yearlyUsdCents == null ? "month" : interval,
-                    );
-              const checkoutBand =
-                band.id !== "enterprise" && (interval === "month" || band.yearlyUsdCents != null);
+            {bands.map((band) => {
+              const price = bandPriceLabel(band, interval);
               return (
                 <tr
                   key={band.id}
@@ -89,50 +142,12 @@ export function FirmBandPricingTable({
                   <td className="firm-bands-name">
                     <strong>{band.name}</strong>
                   </td>
-                  <td className="firm-bands-limit">
-                    {band.clientLimit == null ? "Unlimited" : `Up to ${band.clientLimit}`}
-                  </td>
-                  <td className="firm-bands-price">
-                    {price === "Custom" || price === "Monthly only"
-                      ? price
-                      : interval === "year"
-                        ? `${price}/yr`
-                        : `${price}/mo`}
-                  </td>
+                  <td className="firm-bands-limit">{clientLabel(band, false)}</td>
+                  <td className="firm-bands-price">{price}</td>
                   <td className="firm-bands-cta">
-                    {band.customQuote ? (
-                      <a className="btn btn-ghost" href={enterpriseHref}>
-                        Talk to us
-                      </a>
-                    ) : checkoutBand && onSelectBand ? (
-                      <button
-                        type="button"
-                        className={band.id === "solo" ? "btn btn-gold" : "btn btn-ghost"}
-                        onClick={() =>
-                          onSelectBand(
-                            band.id as FirmCheckoutBand,
-                            interval === "year" && band.yearlyUsdCents == null ? "month" : interval,
-                          )
-                        }
-                      >
-                        {band.id === "solo" ? "Start 14-day trial" : `Start ${band.name}`}
-                      </button>
-                    ) : (
-                      <a
-                        className="btn btn-ghost"
-                        href={
-                          isFirmCheckoutBand(band.id)
-                            ? firmSignupHref(
-                                band.id,
-                                interval === "year" && band.yearlyUsdCents == null
-                                  ? "month"
-                                  : interval,
-                              )
-                            : firmSignupHref()
-                        }
-                      >
-                        Set up firm
-                      </a>
+                    {startControl(
+                      band,
+                      band.id === "solo" ? "btn btn-gold" : "btn btn-ghost",
                     )}
                   </td>
                 </tr>
@@ -141,6 +156,33 @@ export function FirmBandPricingTable({
           </tbody>
         </table>
       </div>
+      <ul className="firm-band-cards">
+        {bands.map((band) => {
+          const price = bandPriceLabel(band, interval);
+          const solo = band.id === "solo";
+          const enterprise = band.customQuote;
+          return (
+            <li
+              key={band.id}
+              className={solo ? "firm-band-card is-trial" : "firm-band-card"}
+              data-band={band.id}
+            >
+              <div className="firm-band-card-top">
+                <div>
+                  <p className="firm-band-card-name">{band.name}</p>
+                  <p className="firm-band-card-limit">
+                    {enterprise ? "Unlimited · Custom" : clientLabel(band, true)}
+                  </p>
+                </div>
+                {enterprise ? null : <p className="firm-band-card-price">{price}</p>}
+              </div>
+              {startControl(band, solo ? "btn btn-gold" : "btn btn-ghost")}
+              {solo ? <p className="firm-band-card-note">{SOLO_CARD_NOTE}</p> : null}
+            </li>
+          );
+        })}
+      </ul>
+      <p className="firm-bands-watchlist">{PRICING_WATCHLIST_NOTE}</p>
     </div>
   );
 }
