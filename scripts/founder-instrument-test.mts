@@ -55,7 +55,12 @@ assert(
   "QA / test / delete me names are excluded",
 );
 assert(isExcludedFromInstrument({ name: "Test Firm 3" }), "Test Firm 3 is excluded");
+assert(isExcludedFromInstrument({ name: "Test Firm" }), "Test Firm is excluded");
+assert(isExcludedFromInstrument({ name: "test-co" }), "test-co is excluded");
+assert(isExcludedFromInstrument({ name: "QA Test Co" }), "QA Test Co is excluded");
 assert(isExcludedFromInstrument({ name: "E2E Practice" }), "E2E in the name is excluded");
+assert(!isExcludedFromInstrument({ name: "Testa" }), "Testa is kept");
+assert(!isExcludedFromInstrument({ name: "Contest" }), "Contest is kept");
 assert(
   !isExcludedFromInstrument({ name: "Square Books" }),
   "qa inside another word is not enough",

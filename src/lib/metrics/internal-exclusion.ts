@@ -31,7 +31,7 @@ export const INSTRUMENT_EXCLUSION_RULES = [
   "Flag: firms.is_internal, clients.is_demo, an analytics is_bot stamp, or is_test when the row has that field. There is no is_test column today; it is honored if one appears.",
   "Known E2E account: the name folds to Ben Accountants.",
   "Known team firm: the name folds to “the milon team” or contains “milon team” (Milōn included).",
-  "Name contains “test”, the word “qa”, “e2e”, or “delete me” after accents are folded and case is ignored.",
+  "Name contains the word “test” or the word “qa”, or contains “e2e” or “delete me”, after accents are folded and case is ignored.",
   "Placeholder: the name is “My practice” when the owner email is missing, or that email is internal or test.",
   "Email: the profile or owner address is on the list passed in (platform-owner allowlist, milon_it_members, analytics founder emails), the mailbox looks like test/qa/e2e/“delete me”, or the domain is milonfinance.com or milon.it.",
 ] as const;
@@ -86,8 +86,8 @@ function nameReason(folded: string): ExclusionReason | null {
   if (folded === "the milon team" || folded === "milon team" || folded.includes("milon team")) {
     return "known-team";
   }
-  if (folded.includes("delete me") || folded.includes("e2e") || folded.includes("test")) return "name";
-  if (/(^| )qa( |$)/.test(folded)) return "name";
+  if (folded.includes("delete me") || folded.includes("e2e")) return "name";
+  if (/(^| )(?:test|qa)( |$)/.test(folded)) return "name";
   return null;
 }
 
