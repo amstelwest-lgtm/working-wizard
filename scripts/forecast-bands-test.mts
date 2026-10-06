@@ -54,6 +54,7 @@ const rolled = rollBankDraftOpening({
   statementEnd: "2026-09-22",
   anchor: "2026-10-05",
   closing: -9150,
+  rollForward: true,
   lines: [
     { amount: 1000, cadence: "weekly", side: "inflow", status: "confirmed" },
     { amount: 200, cadence: "weekly", side: "outflow", status: "confirmed" },

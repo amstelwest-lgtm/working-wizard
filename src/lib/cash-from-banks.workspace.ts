@@ -66,6 +66,9 @@ export function mergeDraftLines(
     confidence: Math.max(...selected.map((l) => l.confidence)),
     source: "merged",
     txn_count: selected.reduce((s, l) => s + l.txn_count, 0),
+    period_total: selected.every((l) => l.period_total != null)
+      ? Math.round(selected.reduce((s, l) => s + (l.period_total ?? 0), 0) * 100) / 100
+      : undefined,
     sample_descriptions: selected.flatMap((l) => l.sample_descriptions).slice(0, 5),
   };
 
@@ -100,6 +103,16 @@ export function splitDraftLine(
   if (idx < 0) return lines;
   const line = lines[idx]!;
   const half = Math.round((line.amount / 2) * 100) / 100;
+  const aCount = Math.max(1, Math.floor(line.txn_count / 2));
+  const bCount = Math.max(1, line.txn_count - aCount);
+  const aPeriod =
+    line.period_total == null
+      ? undefined
+      : Math.round((Math.abs(line.period_total) * aCount / (aCount + bCount)) * 100) / 100;
+  const bPeriod =
+    line.period_total == null || aPeriod == null
+      ? undefined
+      : Math.round((Math.abs(line.period_total) - aPeriod) * 100) / 100;
   const a: CashForecastDraftLine = {
     ...line,
     id: newId(),
@@ -107,7 +120,8 @@ export function splitDraftLine(
     amount: half,
     source: "manual",
     status: line.status === "excluded" ? "proposed" : "confirmed",
-    txn_count: Math.max(1, Math.floor(line.txn_count / 2)),
+    txn_count: aCount,
+    period_total: aPeriod,
   };
   const b: CashForecastDraftLine = {
     ...line,
@@ -116,7 +130,8 @@ export function splitDraftLine(
     amount: Math.round((line.amount - half) * 100) / 100,
     source: "manual",
     status: line.status === "excluded" ? "proposed" : "confirmed",
-    txn_count: Math.max(1, line.txn_count - a.txn_count),
+    txn_count: bCount,
+    period_total: bPeriod,
   };
   const next = [...lines];
   next.splice(idx, 1, a, b);

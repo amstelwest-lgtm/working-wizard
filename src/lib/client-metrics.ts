@@ -602,34 +602,109 @@ function weeklyNetFromDraft(
   return counted > 0 ? net : null;
 }
 
+export type BankRollForwardItem = {
+  name: string;
+  side: "inflow" | "outflow";
+  cadence: string;
+  amount: number;
+  /** Signed weekly run-rate. Outflows are negative. */
+  weekly: number;
+  /** Signed cash this line adds across the gap. */
+  contribution: number;
+};
+
 /**
  * Move a bank closing balance from the statement date up to the forecast anchor.
  * Gap days are the days after the statement and before week 1. Recurring lines
- * supply the daily run-rate. With no recurring lines, the balance stays put and
- * the note names the gap.
+ * can supply a daily run-rate, but that estimate is opt-in: the opening the
+ * draft proposes is the bank closing balance. With no recurring lines, the
+ * balance stays put and the note names the gap.
  */
 export function rollBankDraftOpening(input: {
   statementEnd: string | null;
   anchor: string;
   closing: number;
-  lines: Array<{ amount: number; cadence: string; side: "inflow" | "outflow"; status: string }>;
-}): { opening: number; note: string | null } {
+  lines: Array<{
+    name?: string;
+    amount: number;
+    cadence: string;
+    side: "inflow" | "outflow";
+    status: string;
+  }>;
+  /** When true, apply the recurring-line estimate. Default leaves the bank closing balance. */
+  rollForward?: boolean;
+}): {
+  opening: number;
+  note: string | null;
+  gapDays: number;
+  adjustment: number;
+  items: BankRollForwardItem[];
+} {
   const end = input.statementEnd?.slice(0, 10) ?? "";
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(end)) return { opening: input.closing, note: null };
+  const unchanged = {
+    opening: input.closing,
+    note: null as string | null,
+    gapDays: 0,
+    adjustment: 0,
+    items: [] as BankRollForwardItem[],
+  };
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(end)) return unchanged;
   const span = calendarDaysBetween(end, input.anchor);
   const gapDays = span == null ? 0 : Math.max(0, span - 1);
-  if (gapDays <= 0) return { opening: input.closing, note: null };
-  const weeklyNet = weeklyNetFromDraft(input.lines);
-  if (weeklyNet == null) {
+  if (gapDays <= 0) return { ...unchanged, opening: input.closing };
+
+  const items: BankRollForwardItem[] = [];
+  for (const line of input.lines) {
+    if (line.status === "excluded") continue;
+    const weekly = weeklyEquivalent(line.amount, line.cadence);
+    if (weekly == null || weekly === 0) continue;
+    const signed = line.side === "outflow" ? -weekly : weekly;
+    items.push({
+      name: line.name?.trim() || "Recurring line",
+      side: line.side,
+      cadence: line.cadence,
+      amount: line.amount,
+      weekly: Math.round(signed * 100) / 100,
+      contribution: Math.round(((signed / 7) * gapDays) * 100) / 100,
+    });
+  }
+
+  if (items.length === 0) {
     return {
       opening: input.closing,
+      gapDays,
+      adjustment: 0,
+      items: [],
       note: `${gapDays} days sit between the bank statement (${end}) and this week (${input.anchor}). Opening cash stays the bank closing balance — those days are not in the 13 weeks.`,
     };
   }
-  const opening = Math.round((input.closing + (weeklyNet / 7) * gapDays) * 100) / 100;
+
+  const weeklyNet = items.reduce((sum, item) => sum + item.weekly, 0);
+  const adjustment = Math.round(((weeklyNet / 7) * gapDays) * 100) / 100;
+  if (items.length) {
+    const listed = items.reduce((sum, item) => sum + item.contribution, 0);
+    const drift = Math.round((adjustment - listed) * 100) / 100;
+    const last = items[items.length - 1]!;
+    last.contribution = Math.round((last.contribution + drift) * 100) / 100;
+  }
+
+  if (!input.rollForward) {
+    return {
+      opening: input.closing,
+      gapDays,
+      adjustment: 0,
+      items: [],
+      note: `Opening cash stays the bank closing balance on ${end}. ${gapDays} days sit before this week (${input.anchor}) and are not rolled in.`,
+    };
+  }
+
+  const opening = Math.round((input.closing + adjustment) * 100) / 100;
   return {
     opening,
-    note: `Opening cash was rolled forward ${gapDays} days from the bank closing balance on ${end} to this week (${input.anchor}).`,
+    gapDays,
+    adjustment,
+    items,
+    note: `Rolled forward ${gapDays} days from the bank closing balance on ${end} to this week (${input.anchor}). Recurring lines move opening cash by ${adjustment.toFixed(2)}.`,
   };
 }
 

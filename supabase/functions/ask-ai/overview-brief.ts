@@ -53,6 +53,10 @@ export type OverviewBrief = {
   grossMargin: number | null;
   operatingMargin: number | null;
   netMargin: number | null;
+  /** Balance-sheet totals the Health grid can show. Null when the file has none. */
+  equity: number | null;
+  totalAssets: number | null;
+  totalLiabilities: number | null;
   brainHeadline: string | null;
 };
 
@@ -291,6 +295,10 @@ export function buildOverviewBrief(input: {
     grossMargin: Number.isFinite(ratios["Gross Margin"]) ? ratios["Gross Margin"] : null,
     operatingMargin: Number.isFinite(ratios["Operating Margin"]) ? ratios["Operating Margin"] : null,
     netMargin: Number.isFinite(ratios["Net Margin"]) ? ratios["Net Margin"] : null,
+    equity: asNumber(financials?.equity),
+    totalAssets: asNumber(financials?.totalAssets),
+    totalLiabilities:
+      asNumber(financials?.totalLiabilities) ?? asNumber(financials?.liabilities),
     brainHeadline: brainHeadlineFromSummary(input.brainSummary),
   };
 }
@@ -302,6 +310,13 @@ export function overviewFactLines(brief: OverviewBrief): string[] {
     lines.push(`Health: ${brief.health}/100 (${brief.healthLabel})`);
   }
   if (brief.cash != null) lines.push(`Cash on file: ${money(brief.cash, brief.copyPack)}`);
+  if (brief.totalAssets != null) {
+    lines.push(`Total assets: ${money(brief.totalAssets, brief.copyPack)}`);
+  }
+  if (brief.totalLiabilities != null) {
+    lines.push(`Total liabilities: ${money(brief.totalLiabilities, brief.copyPack)}`);
+  }
+  if (brief.equity != null) lines.push(`Total equity: ${money(brief.equity, brief.copyPack)}`);
   if (brief.revenue != null) {
     lines.push(`Revenue for the period on file: ${money(brief.revenue, brief.copyPack)}`);
   }
@@ -356,7 +371,7 @@ export function formatOverviewForPrompt(
     );
   }
   lines.push(
-    "Every figure listed above is already on file. Never ask the user to supply health, cash, revenue, runway, margin, debtor days, or creditor days when that line is present.",
+    "Every figure listed above is already on file. Never ask the user to supply health, cash, revenue, runway, margin, debtor days, creditor days, total assets, total liabilities, or total equity when that line is present.",
   );
   return lines.join("\n");
 }

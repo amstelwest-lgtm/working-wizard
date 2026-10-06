@@ -57,6 +57,8 @@ interface Props {
    * When set, skip the upload step and open the classification workspace.
    */
   initialDraft?: CashFromBanksDraftResult | null;
+  /** Statement rejected by the financials upload. Pre-loaded so the user does not pick it again. */
+  initialFile?: File | null;
   /** Owner side only: archive the statements with an explicit visibility. */
   documents?: UploadDocumentsTarget | null;
 }
@@ -69,9 +71,11 @@ export function CashFromBanksDrafter({
   onPublish,
   onSaveDraft,
   initialDraft = null,
+  initialFile = null,
   documents = null,
 }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const seededFile = useRef<File | null>(null);
   const [files, setFiles] = useState<File[]>([]);
   const [working, setWorking] = useState(false);
   const [publishing, setPublishing] = useState(false);
@@ -107,6 +111,16 @@ export function CashFromBanksDrafter({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, initialDraft]);
+
+  useEffect(() => {
+    if (!open) {
+      seededFile.current = null;
+      return;
+    }
+    if (!initialFile || seededFile.current === initialFile) return;
+    seededFile.current = initialFile;
+    setFiles((prev) => (prev.some((file) => file === initialFile) ? prev : [initialFile, ...prev]));
+  }, [open, initialFile]);
 
   const reset = () => {
     setFiles([]);
@@ -338,6 +352,7 @@ export function CashFromBanksDrafter({
                 currentOpening ?? openingCashToConfirm(existingCashflow?.openingBalance, null)
               }
               bankDate={result.extract.period_end}
+              statementClosing={result.extract.closing_balance}
               publishing={publishing}
               onPublish={publish}
               onBack={() => {

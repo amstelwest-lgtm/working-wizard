@@ -67,6 +67,11 @@ export type CashForecastDraftLine = {
   confidence: number; // 0..1
   source: "ai" | "manual" | "merged";
   txn_count: number;
+  /**
+   * Sum of the source transactions on this line. The review footer uses this
+   * so a typical (median) amount × count cannot overstate the statement.
+   */
+  period_total?: number;
   sample_descriptions: string[];
 };
 

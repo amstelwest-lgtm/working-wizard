@@ -442,7 +442,10 @@ export const Route = createFileRoute("/_authenticated/clients/$clientId")({
     if (typeof search.reason === "string") out.reason = search.reason;
     if (typeof search.onboard === "string") out.onboard = search.onboard;
     if (typeof search.note === "string") out.note = search.note;
-    if (typeof search.tab === "string") out.tab = normalizeAccountantClientTab(search.tab);
+    if (typeof search.tab === "string") {
+      if (search.tab === "pillars" && search.focus !== "health") out.focus = "pillars";
+      out.tab = normalizeAccountantClientTab(search.tab);
+    }
     if (typeof search.queries === "string") out.queries = search.queries;
     if (typeof search.coach === "string" && search.coach.length <= 32) out.coach = search.coach;
     if (typeof search.why === "string" && search.why.trim()) out.why = search.why.slice(0, 180);
@@ -851,6 +854,7 @@ function ClientView() {
   const [viewMode, setViewMode] = useState<"simplified" | "complex">("simplified");
   const [cashForecastReloadToken, setCashForecastReloadToken] = useState(0);
   const [cashBankUploadToken, setCashBankUploadToken] = useState(0);
+  const [pendingBankFile, setPendingBankFile] = useState<File | null>(null);
   const [bankCashDraft, setBankCashDraft] = useState<
     import("@/lib/cash-from-banks.types").CashFromBanksDraftResult | null
   >(null);
@@ -3288,6 +3292,8 @@ function ClientView() {
                       onSignoffChange={patchSignoff("cash_forecast")}
                       reloadToken={cashForecastReloadToken}
                       openBankUploadToken={cashBankUploadToken}
+                      pendingBankFile={pendingBankFile}
+                      onPendingBankFileConsumed={() => setPendingBankFile(null)}
                       initialBankDraft={bankCashDraft}
                       onBankPublish={(payload) => {
                         setBankCashDraft(null);
@@ -3671,9 +3677,12 @@ function ClientView() {
                   onConfirm={(result, prefs, period) => {
                     void handleConfirmFinancials(result, prefs, period);
                   }}
-                  onOpenBankUpload={() => {
+                  onOpenBankUpload={(file) => {
                     setUploadOpen(false);
-                    setShowBankDrafter(true);
+                    setShowBankDrafter(false);
+                    setPendingBankFile(file);
+                    setActiveTab("cash");
+                    setCashBankUploadToken((n) => n + 1);
                   }}
                   autoPopulate={
                     autoPopulateState ? { ...autoPopulateState, role: "accountant" } : null

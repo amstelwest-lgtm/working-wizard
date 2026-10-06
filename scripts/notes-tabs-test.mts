@@ -42,6 +42,10 @@ assert(accountantWorkspaceTab("cash") === "cash", "Cash stays Cash");
 assert(accountantWorkspaceTab("next") === null, "Next moves has no accountant page");
 assert(accountantWorkspaceTab("ask") === "ask", "Milōn Bot stays on the studio");
 assert(accountantWorkspaceTab("summary") === "summary", "Summary stays Summary");
+assert(accountantWorkspaceTab("data") === "summary", "?tab=data is Client Brain");
+assert(accountantWorkspaceTab("brain") === "summary", "?tab=brain is Client Brain");
+assert(accountantWorkspaceTab("pillars") === "ratios", "?tab=pillars is Health");
+assert(ownerWorkspaceTab("data") === null, "Client Brain has no owner page");
 
 assert(ownerWorkspaceTab("profit") === "waterfall", "accountant Profit pins open owner Profit");
 assert(ownerWorkspaceTab("ratios") === "today", "accountant Health pins open owner Health");

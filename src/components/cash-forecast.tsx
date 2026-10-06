@@ -416,6 +416,8 @@ export function CashForecastPanel({
   onSignoffChange,
   reloadToken,
   openBankUploadToken,
+  pendingBankFile = null,
+  onPendingBankFileConsumed,
   onBankPublish,
   initialBankDraft = null,
 }: {
@@ -434,6 +436,9 @@ export function CashForecastPanel({
   reloadToken?: number;
   /** Bump to open the bank-statement upload dialog (e.g. accountant Cash tab header). */
   openBankUploadToken?: number;
+  /** Bank file rejected by the financial-statement upload, pre-loaded into this picker. */
+  pendingBankFile?: File | null;
+  onPendingBankFileConsumed?: () => void;
   /** Optional parent hook after a successful bank→cash publish (e.g. sync client cache). */
   onBankPublish?: (payload: CashForecastPublishPayload) => void;
   /** Pre-built cash draft from shared bank onboarding — skip re-upload. */
@@ -2071,7 +2076,11 @@ export function CashForecastPanel({
 
       <CashFromBanksDrafter
         open={showBankUpload}
-        onClose={() => setShowBankUpload(false)}
+        onClose={() => {
+          setShowBankUpload(false);
+          onPendingBankFileConsumed?.();
+        }}
+        initialFile={pendingBankFile}
         existingCashflow={existingCashflowForBanks}
         currentOpening={
           bankSeeded

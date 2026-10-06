@@ -6,7 +6,23 @@
  */
 const ACCOUNTANT_TAB_ALIASES: Record<string, string> = {
   actions: "plan",
+  action: "plan",
+  "action-plan": "plan",
+  tasks: "plan",
   health: "ratios",
+  pillars: "ratios",
+  today: "ratios",
+  "today-complex": "ratios",
+  data: "summary",
+  brain: "summary",
+  "client-brain": "summary",
+  waterfall: "profit",
+  profitability: "profit",
+  forecast: "cash",
+  "cash-forecast": "cash",
+  bot: "ask",
+  "milon-bot": "ask",
+  report: "reports",
 };
 
 export function normalizeAccountantClientTab(tab: string): string {

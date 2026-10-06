@@ -136,7 +136,7 @@ export type UploadFinancialsProps = {
   /** Per-client auto-populate state; undefined → first upload. */
   autoPopulate?: AutoPopulateDialogState | null;
   /** A bank-transaction file was dropped here. Open the bank upload instead. */
-  onOpenBankUpload?: () => void;
+  onOpenBankUpload?: (file: File) => void;
 };
 
 export function UploadFinancials({
@@ -155,6 +155,7 @@ export function UploadFinancials({
   const [acceptedQuality, setAcceptedQuality] = useState(false);
   const [periodMonth, setPeriodMonth] = useState("");
   const [periodYear, setPeriodYear] = useState("");
+  const [bankFile, setBankFile] = useState<File | null>(null);
   const [autoPrefs, setAutoPrefs] = useState<AutoPopulatePrefs>(
     autoPopulate?.prefs ?? defaultAutoPopulatePrefs(),
   );
@@ -198,6 +199,7 @@ export function UploadFinancials({
       } else {
         const text = await fileToText(file);
         if (looksLikeBankLedger(text)) {
+          setBankFile(file);
           setStatus("bank");
           return;
         }
@@ -227,6 +229,7 @@ export function UploadFinancials({
     setAcceptedQuality(false);
     setPeriodMonth("");
     setPeriodYear("");
+    setBankFile(null);
     if (inputRef.current) inputRef.current.value = "";
   }
 
@@ -252,7 +255,9 @@ export function UploadFinancials({
           {onOpenBankUpload ? (
             <Button
               type="button"
-              onClick={onOpenBankUpload}
+              onClick={() => {
+                if (bankFile) onOpenBankUpload?.(bankFile);
+              }}
               className="bg-amber-500 hover:bg-amber-400 text-black font-semibold"
             >
               Go to bank statement upload
