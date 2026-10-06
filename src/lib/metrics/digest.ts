@@ -58,12 +58,16 @@ export type RetentionRow = {
 
 export type QueueRow = {
   id: number;
+  practice_id?: string | null;
   practice_name?: string | null;
   stall_type: string;
   severity: string;
   suggested_question: string;
   status?: string;
   is_founding_practice?: boolean;
+  is_internal?: boolean | null;
+  is_test?: boolean | null;
+  owner_email?: string | null;
 };
 
 export type Traffic = "empty" | "healthy" | "watch" | "bad";

@@ -15,10 +15,18 @@ import {
   missingRelation,
   moneyZar,
   opsPassphrase,
+  ownerEmailAllowlist,
   type AuthCtx,
   type LooseAdmin,
 } from "@/lib/owner-ops.guard";
 import { lighthouseSendAllowlistEnforced } from "@/lib/lighthouse-send-allowlist";
+import { countRecentSignups } from "@/lib/metrics/glance";
+import {
+  isExcludedFromInstrument,
+  mergeInternalEmails,
+  realFirmCount,
+  type ExclusionContext,
+} from "@/lib/metrics/internal-exclusion";
 import { stripeConfigured, stripePublishableConfigured } from "@/lib/stripe.server";
 
 export { OPS_UNLOCK_KEY } from "@/lib/owner-ops.guard";
@@ -221,7 +229,6 @@ export type OpsDashboard = {
     clientMembers: number;
     firms: number;
     clients: number;
-    clientsWithOwner: number;
     last7dUsersApprox: number | null;
   };
   revenue: {
@@ -258,42 +265,128 @@ export const getOwnerOpsDashboard = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     const { email } = await assertOpsConsoleAccess(context as AuthCtx);
     const admin = adminLoose();
+    const now = new Date();
+    const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    const y = now.getFullYear();
+    const m = now.getMonth();
 
-    const { data: roles, error: rolesErr } = await admin.from("user_roles").select("role");
-    if (rolesErr) throw new Error(rolesErr.message);
+    const [rolesRes, firmsRes, clientsRes, payRes, settingsRes, leadRes, listed, itRes, profilesRes] =
+      await Promise.all([
+        admin.from("user_roles").select("user_id, role"),
+        admin.from("firms").select("id, name, is_internal, owner_user_id"),
+        admin.from("clients").select("id, name, is_demo, firm_id, owner_user_id"),
+        admin.from("milon_ops_payments").select("*").order("paid_at", { ascending: false }).limit(100),
+        admin.from("milon_ops_settings").select("key, value"),
+        admin.from("milon_ops_leads").select("*").order("created_at", { ascending: false }).limit(50),
+        admin.auth.admin.listUsers({ page: 1, perPage: 1000 }).catch(() => null),
+        admin.from("milon_it_members").select("email"),
+        admin.from("profiles").select("id, email, full_name"),
+      ]);
+
+    if (rolesRes.error) throw new Error(rolesRes.error.message);
+    if (firmsRes.error) throw new Error(firmsRes.error.message);
+    if (clientsRes.error) throw new Error(clientsRes.error.message);
+
+    const internalEmails = mergeInternalEmails(
+      ownerEmailAllowlist(),
+      ((itRes.data ?? []) as Array<{ email?: string | null }>).map((row) => String(row.email ?? "")),
+    );
+    const ctx: ExclusionContext = { internalEmails };
+    const emailByUser = new Map<string, string>();
+    const nameByUser = new Map<string, string>();
+    for (const profile of (profilesRes.data ?? []) as Array<{
+      id: string;
+      email: string | null;
+      full_name: string | null;
+    }>) {
+      emailByUser.set(String(profile.id), String(profile.email ?? ""));
+      nameByUser.set(String(profile.id), String(profile.full_name ?? ""));
+    }
+
+    const firmRows = ((firmsRes.error ? [] : firmsRes.data) ?? []) as Array<{
+      id: string;
+      name: string | null;
+      is_internal?: boolean | null;
+      owner_user_id?: string | null;
+    }>;
+    const firmSubjects = firmRows.map((firm) => ({
+      id: String(firm.id),
+      name: firm.name,
+      isInternal: Boolean(firm.is_internal),
+      ownerEmail: emailByUser.get(String(firm.owner_user_id ?? "")) ?? null,
+    }));
+    const excludedFirmIds = new Set(
+      firmSubjects.filter((firm) => isExcludedFromInstrument(firm, ctx)).map((firm) => firm.id),
+    );
+    const clientRows = ((clientsRes.error ? [] : clientsRes.data) ?? []) as Array<{
+      id: string;
+      name: string | null;
+      is_demo?: boolean | null;
+      firm_id?: string | null;
+      owner_user_id?: string | null;
+    }>;
+    const realClients = clientRows.filter(
+      (client) =>
+        !excludedFirmIds.has(String(client.firm_id ?? "")) &&
+        !isExcludedFromInstrument(
+          {
+            name: client.name,
+            isDemo: Boolean(client.is_demo),
+            ownerEmail: emailByUser.get(String(client.owner_user_id ?? "")) ?? null,
+          },
+          ctx,
+        ),
+    );
 
     let accountants = 0;
     let businessOwners = 0;
     let clientMembers = 0;
-    for (const r of (roles ?? []) as Array<{ role: string }>) {
-      if (r.role === "firm_admin" || r.role === "accountant") accountants += 1;
-      else if (r.role === "client_owner") businessOwners += 1;
-      else if (r.role === "client_member") clientMembers += 1;
+    const roleUsers = new Set<string>();
+    for (const role of (rolesRes.data ?? []) as Array<{ role: string; user_id?: string | null }>) {
+      const uid = String(role.user_id ?? "");
+      if (
+        uid &&
+        isExcludedFromInstrument({ name: nameByUser.get(uid), email: emailByUser.get(uid) }, ctx)
+      ) {
+        continue;
+      }
+      if (role.role === "firm_admin" || role.role === "accountant") accountants += 1;
+      else if (role.role === "client_owner") businessOwners += 1;
+      else if (role.role === "client_member") clientMembers += 1;
+      if (uid) roleUsers.add(uid);
     }
 
-    const [{ count: firms }, { count: clients }, { count: clientsWithOwner }] = await Promise.all([
-      admin.from("firms").select("id", { count: "exact", head: true }),
-      admin.from("clients").select("id", { count: "exact", head: true }),
-      admin
-        .from("clients")
-        .select("id", { count: "exact", head: true })
-        .not("owner_user_id", "is", null),
-    ]);
-
-    let totalUsers = ((roles ?? []) as unknown[]).length;
+    let totalUsers = roleUsers.size;
     let last7dUsersApprox: number | null = null;
-    try {
-      const listed = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
-      if (listed.data?.users) {
-        totalUsers = Math.max(totalUsers, listed.data.users.length);
-        const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-        last7dUsersApprox = listed.data.users.filter((u) => {
-          const t = u.created_at ? Date.parse(u.created_at) : 0;
-          return t >= weekAgo;
-        }).length;
-      }
-    } catch {
-      /* ignore */
+    const listedUsers = (
+      listed as {
+        data?: {
+          users?: Array<{
+            created_at?: string;
+            email?: string;
+            user_metadata?: { full_name?: string };
+          }>;
+        };
+      } | null
+    )?.data?.users;
+    if (listedUsers) {
+      const visible = listedUsers.filter(
+        (user) =>
+          !isExcludedFromInstrument(
+            { email: user.email, name: user.user_metadata?.full_name },
+            ctx,
+          ),
+      );
+      totalUsers = Math.max(totalUsers, visible.length);
+      last7dUsersApprox = countRecentSignups(
+        visible.map((user) => ({
+          createdAt: user.created_at,
+          email: user.email,
+          name: user.user_metadata?.full_name,
+        })),
+        now.getTime(),
+        ctx,
+      );
     }
 
     const payments: OpsPaymentRow[] = [];
@@ -302,16 +395,8 @@ export const getOwnerOpsDashboard = createServerFn({ method: "GET" })
     let receivedYtdCents = 0;
     let allTimeReceivedCents = 0;
     let migrationHint: string | null = null;
-    const now = new Date();
-    const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-    const y = now.getFullYear();
-    const m = now.getMonth();
-
-    const { data: payRows, error: payErr } = await admin
-      .from("milon_ops_payments")
-      .select("*")
-      .order("paid_at", { ascending: false })
-      .limit(100);
+    const payRows = payRes.data;
+    const payErr = payRes.error;
 
     if (payErr) {
       if (missingRelation(payErr.message ?? "")) {
@@ -360,7 +445,7 @@ export const getOwnerOpsDashboard = createServerFn({ method: "GET" })
     };
     let pilotNotes = "First-pilot watchlist — edit me from Ops.";
 
-    const { data: settingsRows } = await admin.from("milon_ops_settings").select("key, value");
+    const settingsRows = settingsRes.error ? null : settingsRes.data;
     if (settingsRows) {
       for (const s of settingsRows as Array<{ key: string; value: unknown }>) {
         if (s.key === "feature_flags" && s.value && typeof s.value === "object") {
@@ -374,11 +459,7 @@ export const getOwnerOpsDashboard = createServerFn({ method: "GET" })
     }
 
     let leads: OpsLeadRow[] = [];
-    const { data: leadRows } = await admin
-      .from("milon_ops_leads")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .limit(50);
+    const leadRows = leadRes.error ? null : leadRes.data;
     if (leadRows) {
       leads = (leadRows as Array<Record<string, unknown>>).map((row) => ({
         id: String(row.id),
@@ -399,9 +480,8 @@ export const getOwnerOpsDashboard = createServerFn({ method: "GET" })
         accountants,
         businessOwners,
         clientMembers,
-        firms: firms ?? 0,
-        clients: clients ?? 0,
-        clientsWithOwner: clientsWithOwner ?? 0,
+        firms: realFirmCount(firmSubjects, ctx),
+        clients: realClients.length,
         last7dUsersApprox,
       },
       revenue: {
@@ -421,7 +501,7 @@ export const getOwnerOpsDashboard = createServerFn({ method: "GET" })
       salesPlaceholder: {
         title: "AI Sales & Email Engine",
         blurb:
-          "Placeholder for your founder outbound system — Claude-drafted sequences, lead scoring, and an inbox that helps land first paying clients.",
+          "Placeholder for the outbound system — sequences, lead scoring, and an inbox.",
         phases: [
           { id: "crm", label: "Lead CRM + import", status: "next" },
           { id: "sequences", label: "AI email sequences (Resend)", status: "planned" },

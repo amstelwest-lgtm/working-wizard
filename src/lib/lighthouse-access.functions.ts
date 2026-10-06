@@ -8,10 +8,12 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { isExcludedFromInstrument, mergeInternalEmails } from "@/lib/metrics/internal-exclusion";
 import {
   adminLoose,
   assertOpsConsoleAccess,
   missingRelation,
+  ownerEmailAllowlist,
   type AuthCtx,
   type LooseAdmin,
 } from "@/lib/owner-ops.guard";
@@ -82,8 +84,8 @@ export const getLighthouseAccessBoard = createServerFn({ method: "GET" })
         .limit(500),
       rowsOrEmpty(admin, "user_roles", "user_id, role"),
       rowsOrEmpty(admin, "firm_memberships", "id, user_id, firm_id, role"),
-      rowsOrEmpty(admin, "firms", "id, name, owner_user_id, created_at"),
-      rowsOrEmpty(admin, "clients", "id, name, firm_id, owner_user_id, created_at"),
+      rowsOrEmpty(admin, "firms", "id, name, owner_user_id, created_at, is_internal"),
+      rowsOrEmpty(admin, "clients", "id, name, firm_id, owner_user_id, created_at, is_demo"),
       rowsOrEmpty(admin, "client_memberships", "id, client_id, user_id, role"),
       rowsOrEmpty(admin, "milon_it_members", "email"),
     ]);
@@ -168,9 +170,54 @@ export const getLighthouseAccessBoard = createServerFn({ method: "GET" })
     for (const p of (profiles ?? []) as Array<{ id: string; email: string | null }>) {
       emailByUser.set(String(p.id), String(p.email ?? ""));
     }
+    const internalEmails = mergeInternalEmails(ownerEmailAllowlist(), itEmails);
+    const ctx = { internalEmails };
+    const excludedFirmIds = new Set(
+      firms
+        .filter((firm) =>
+          isExcludedFromInstrument(
+            {
+              name: String(firm.name ?? ""),
+              isInternal: Boolean(firm.is_internal),
+              ownerEmail: emailByUser.get(String(firm.owner_user_id ?? "")) ?? null,
+            },
+            ctx,
+          ),
+        )
+        .map((firm) => String(firm.id)),
+    );
+    const excludedClientIds = new Set(
+      clients
+        .filter(
+          (client) =>
+            excludedFirmIds.has(String(client.firm_id ?? "")) ||
+            isExcludedFromInstrument(
+              {
+                name: String(client.name ?? ""),
+                isDemo: Boolean(client.is_demo),
+                ownerEmail: emailByUser.get(String(client.owner_user_id ?? "")) ?? null,
+              },
+              ctx,
+            ),
+        )
+        .map((client) => String(client.id)),
+    );
+    const visibleUsers = users
+      .filter((user) => !isExcludedFromInstrument({ name: user.name, email: user.email }, ctx))
+      .map((user) => ({
+        ...user,
+        firms: user.firms.filter((firm) => !excludedFirmIds.has(firm.id)),
+        ownedClients: user.ownedClients.filter((client) => !excludedClientIds.has(client.id)),
+        clientMemberships: user.clientMemberships.filter(
+          (membership) => !excludedClientIds.has(membership.clientId),
+        ),
+      }));
+    const visibleFirms = firms.filter((firm) => !excludedFirmIds.has(String(firm.id)));
+    const visibleClients = clients.filter((client) => !excludedClientIds.has(String(client.id)));
+
     return {
-      users,
-      firms: firms.map((f) => {
+      users: visibleUsers,
+      firms: visibleFirms.map((f) => {
         const id = String(f.id);
         const name = String(f.name ?? "Firm");
         return {
@@ -184,7 +231,7 @@ export const getLighthouseAccessBoard = createServerFn({ method: "GET" })
           }),
         };
       }),
-      clients: clients.map((c) => {
+      clients: visibleClients.map((c) => {
         const id = String(c.id);
         const name = String(c.name ?? "Client");
         const firm = c.firm_id ? firmName.get(String(c.firm_id)) ?? null : null;

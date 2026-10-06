@@ -14,6 +14,7 @@ import {
   type AuthCtx,
 } from "@/lib/owner-ops.guard";
 import { clientNoteProfilePath } from "@/lib/client-note-link";
+import { isExcludedFromInstrument } from "@/lib/metrics/internal-exclusion";
 import { inviteSiteUrl } from "@/lib/client-invite-email";
 
 export const IT_QUERIES_MIGRATION = "20260901140000_milon_it_queries.sql";
@@ -106,13 +107,17 @@ export const getLighthouseItBoard = createServerFn({ method: "GET" })
       ...new Set((notes ?? []).map((n: { client_id: string }) => String(n.client_id))),
     ];
     const nameById = new Map<string, string>();
+    const excludedClientIds = new Set<string>();
     if (clientIds.length > 0) {
       const { data: clientRows } = await admin
         .from("clients")
-        .select("id, name")
+        .select("id, name, is_demo")
         .in("id", clientIds);
       for (const c of clientRows ?? []) {
-        nameById.set(String(c.id), String(c.name ?? "Client"));
+        const id = String(c.id);
+        const name = String(c.name ?? "Client");
+        nameById.set(id, name);
+        if (isExcludedFromInstrument({ name, isDemo: Boolean(c.is_demo) })) excludedClientIds.add(id);
       }
     }
 
@@ -137,7 +142,15 @@ export const getLighthouseItBoard = createServerFn({ method: "GET" })
       };
     });
 
-    return { queries, members, migrationHint: null };
+    return {
+      queries: queries.filter(
+        (query) =>
+          !excludedClientIds.has(query.clientId) &&
+          !isExcludedFromInstrument({ name: query.clientName }),
+      ),
+      members,
+      migrationHint: null,
+    };
   });
 
 export const addLighthouseItMember = createServerFn({ method: "POST" })
