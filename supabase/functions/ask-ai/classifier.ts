@@ -1,4 +1,5 @@
 import type { DisclosureTier } from "./types.ts";
+import { questionAsksForClientName } from "../_shared/redact-identifiers.ts";
 
 /**
  * Classifies a question into a disclosure tier so we send the
@@ -84,9 +85,12 @@ const PILLAR_PATTERNS: Record<string, RegExp> = {
 };
 
 export function classify(question: string): DisclosureTier {
-  // Definitional questions need no client data
-  for (const re of DEFINITIONAL) {
-    if (re.test(question)) return "none";
+  // "What is the client's name?" matches the definitional pattern, but the
+  // name is client data. Keep it off the shared tier-none cache.
+  if (!questionAsksForClientName(question)) {
+    for (const re of DEFINITIONAL) {
+      if (re.test(question)) return "none";
+    }
   }
 
   // Full-context intents: comparative, priority, affordability

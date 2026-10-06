@@ -2,8 +2,10 @@ import type { AskAiContext, DisclosureTier } from "./types.ts";
 import { fmtPct } from "./deliverable-summaries.ts";
 import { formatOverviewForPrompt } from "./overview-brief.ts";
 import {
+  appendClientIdentity,
   applyRedaction,
   createRedactionSession,
+  rehydrateWorkingContext,
   type IdentifierSubject,
   type RedactionSession,
 } from "../_shared/redact-identifiers.ts";
@@ -98,6 +100,8 @@ export function buildPrompt(
   const profileQuestions = ctx.profileQuestions ?? [];
   const productLines = ctx.productLines ?? [];
   const nextSteps = ctx.nextSteps ?? [];
+  const named = ctx.clientName?.trim();
+  if (named) lines.push(`Client name: ${named}`);
   const overviewBlock = ctx.overview ? formatOverviewForPrompt(ctx.overview, audience) : "";
   if (overviewBlock) lines.push(overviewBlock);
 
@@ -268,15 +272,26 @@ export function buildPrompt(
   };
 }
 
-/** System + user text actually sent to the model. */
+/** System + user text actually sent to the model. Client names stay tokenized. */
 export function sealAskAiPrompt(
   built: { system: string; user: string },
   subject?: IdentifierSubject,
-): { system: string; user: string; session: RedactionSession } {
+): {
+  system: string;
+  user: string;
+  session: RedactionSession;
+  /** Client name restored for local reasoning. Not sent to Anthropic or the cache. */
+  workingContext: string;
+} {
   const session = createRedactionSession(subject);
+  const includeIdentity = /BUSINESS CONTEXT:/.test(built.user) && Boolean(session.clientName);
+  const system = applyRedaction(built.system, session);
+  const user = applyRedaction(built.user, session);
+  const sealedSystem = includeIdentity ? appendClientIdentity(system, session) : system;
   return {
-    system: applyRedaction(built.system, session),
-    user: applyRedaction(built.user, session),
+    system: sealedSystem,
+    user,
     session,
+    workingContext: rehydrateWorkingContext(`${sealedSystem}\n${user}`, session),
   };
 }

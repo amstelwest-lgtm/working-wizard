@@ -507,6 +507,97 @@ export function rehydrateClientName(text: string, clientName: string | null | un
   return text.split(CLIENT_TOKEN).join(name);
 }
 
+/**
+ * Local copy of a sealed prompt. The client name is restored so in-process
+ * code can reason about it. Do not send this string to Anthropic or write it
+ * to the shared ask-ai cache.
+ */
+export function rehydrateWorkingContext(text: string, session: RedactionSession): string {
+  return rehydrateClientName(text, session.clientName);
+}
+
+/** Appended after redaction. The token is the name; the raw name stays out. */
+export function clientIdentityInstruction(session: RedactionSession): string {
+  if (!session.clientName) return "";
+  return [
+    "",
+    "CLIENT IDENTITY — on file.",
+    `Client name: ${CLIENT_TOKEN}`,
+    `The token ${CLIENT_TOKEN} is this client's name. It is on file even when a tool result omits it.`,
+    `When the user asks for the client's name, or you refer to the client by name, write ${CLIENT_TOKEN} exactly.`,
+    "Quoting that token is not inventing a name. Do not say the name is missing, not on file, not provided, or not in the context.",
+    "Do not substitute a different name. Leave [EMAIL], [PHONE], [PERSON_1], [TAX_ID], and [ACCOUNT] as tokens.",
+  ].join("\n");
+}
+
+export function appendClientIdentity(system: string, session: RedactionSession): string {
+  const block = clientIdentityInstruction(session);
+  if (!block) return system;
+  const softened = system
+    .replace(
+      /Do NOT reference company names or ([^.]+)\./,
+      "Do NOT reference company names or $1, except the [CLIENT] token defined below.",
+    )
+    .replace(
+      "Never invent figures, names, GAP items, competitors, or invite links.",
+      "Never invent figures, names, GAP items, competitors, or invite links. The [CLIENT] token below is this client's name and is on file — quoting it is required, not invention.",
+    );
+  return `${softened}${block}`;
+}
+
+export function questionAsksForClientName(question: string | null | undefined): boolean {
+  const text = question ?? "";
+  return (
+    /\b(?:client|company|business|entity)(?:['’]s)?\s+name\b/i.test(text) ||
+    /\bname of (?:this|the|our) (?:client|company|business)\b/i.test(text) ||
+    /\bwhat(?:'s| is) (?:this|the) (?:client|company|business) called\b/i.test(text)
+  );
+}
+
+function nameDenialPattern(): RegExp {
+  return /\b(?:no\s+(?:business|client|company)\s+name\s+has\s+been\s+provided(?:\s+in\s+the\s+context)?|(?:the\s+)?(?:client(?:['’]s)?|business|company)(?:['’]s)?\s+name\s+is\s+not\s+(?:on\s+file|provided|available|included|in\s+(?:the\s+)?(?:context|prompt|overview|file))|(?:a\s+)?(?:business|client|company)\s+name\s+has\s+not\s+been\s+provided(?:\s+in\s+the\s+context)?)/gi;
+}
+
+/**
+ * UI answer. [CLIENT] becomes the real name. A refusal ("not on file") is
+ * replaced from the session, which never goes out on the model prompt.
+ */
+export function rehydrateForUi(text: string, session: RedactionSession, question?: string): string {
+  const name = session.clientName;
+  let out = rehydrateModelOutput(text, session);
+  if (!name) return out;
+  out = out.split(CLIENT_TOKEN).join(name);
+  out = out.replace(nameDenialPattern(), `The client's name is ${name}`);
+  if (questionAsksForClientName(question) && !out.includes(name)) {
+    const body = out.trim();
+    out = body ? `The client's name is ${name}. ${body}` : `The client's name is ${name}.`;
+  }
+  return out;
+}
+
+/**
+ * Shared ask-ai cache payload. The raw client name is put back to [CLIENT].
+ * Other placeholders are left as tokens. Never store the rehydrated UI answer.
+ */
+export function sealedCacheAnswer(text: string, session: RedactionSession): string {
+  const values = session.restore
+    .filter((row) => row.token === CLIENT_TOKEN && row.value)
+    .map((row) => row.value)
+    .sort((a, b) => b.length - a.length);
+  let out = text;
+  for (const value of values) out = out.split(value).join(CLIENT_TOKEN);
+  for (const row of session.names) {
+    if (row.token !== CLIENT_TOKEN) continue;
+    out = out.replace(namePattern(row.core), CLIENT_TOKEN);
+  }
+  return out;
+}
+
+/** Cache hits are shared across tenants. Placeholders must not reach the UI. */
+export function cacheHitIsDisplaySafe(answer: string): boolean {
+  return !/\[(?:CLIENT|EMAIL|PHONE|PERSON_\d+|TAX_ID|ACCOUNT)/.test(answer);
+}
+
 type JsonParent = Record<string, unknown> | null;
 
 function asRecord(value: unknown): Record<string, unknown> | null {
