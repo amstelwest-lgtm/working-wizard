@@ -213,7 +213,9 @@ assert(panel.includes("ACCOUNTANT_ONESHOT_SEQUENCE_KEY"), "playbook shows onesho
 assert(panel.includes("Accountant one-shot / single banger"), "oneshot path is labeled");
 assert(panel.includes("One-shot banger"), "ops can pick the one-shot path");
 assert(
-  panel.includes("disabled={drafting || rewriting || lead.doNotContact}"),
+  panel.includes(
+    "disabled={drafting || rewriting || lead.doNotContact || lead.conversationHeld}",
+  ),
   "Load golden does not require Anthropic",
 );
 
