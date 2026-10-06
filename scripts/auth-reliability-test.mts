@@ -314,7 +314,15 @@ assert(
 );
 
 const indexSrc = readFileSync(resolve("src/routes/index.tsx"), "utf8");
-assert(indexSrc.includes("ownerInvite=") && indexSrc.includes("Continue with Google"), "landing Google keeps owner invite");
+const landingAuth = [
+  indexSrc,
+  readFileSync(resolve("src/components/landing/sign-in-modal.tsx"), "utf8"),
+  readFileSync(resolve("src/components/landing/register-form.tsx"), "utf8"),
+].join("\n");
+assert(
+  landingAuth.includes("ownerInvite=") && landingAuth.includes("Continue with Google"),
+  "landing Google keeps owner invite",
+);
 assert(indexSrc.includes("peekPendingOwnerInvite"), "landing respects a Google-stashed owner invite");
 
 // ── 2) Portal force is session-scoped (main today; pairs with #140 per-tab) ─
