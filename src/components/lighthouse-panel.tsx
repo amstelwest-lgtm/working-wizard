@@ -69,6 +69,7 @@ import { LIGHTHOUSE_REPLY_TO } from "@/lib/lighthouse-reply-to";
 import { LIGHTHOUSE_SENDER_NAME } from "@/lib/lighthouse-sender";
 import { sendWindowStatus } from "@/lib/lighthouse-send-windows";
 import { FunnelHealthPanel } from "@/components/funnel-health-panel";
+import { LighthouseAgentChat } from "@/components/lighthouse-agent-chat";
 
 const inputCls = "ops-input";
 
@@ -125,7 +126,14 @@ const TAB_LABEL: Record<LighthouseTab, string> = {
   system: "System",
 };
 
-export function LighthousePanel({ initialTab }: { initialTab?: LighthouseTab }) {
+export function LighthousePanel({
+  initialTab,
+  adminKey = "ops",
+}: {
+  initialTab?: LighthouseTab;
+  /** Per-admin local thread. The signed-in user id. */
+  adminKey?: string;
+}) {
   const navigate = useNavigate();
   const load = useServerFn(getLighthouse);
   const saveLead = useServerFn(upsertLighthouseLead);
@@ -320,7 +328,8 @@ export function LighthousePanel({ initialTab }: { initialTab?: LighthouseTab }) 
       {tabBar}
 
       {tab === "agent" && (
-        <div className="mb-5 space-y-4">
+        <div className="mb-5 max-xl:pb-28 xl:grid xl:grid-cols-[minmax(0,1fr)_22rem] xl:items-start xl:gap-4">
+          <div className="min-w-0 space-y-4">
           <div className="rounded-2xl border border-[var(--ops-amber-border)] bg-[var(--ops-amber-soft)] px-4 py-3">
             <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--ops-amber)]">
               Lighthouse Agent
@@ -619,6 +628,16 @@ export function LighthousePanel({ initialTab }: { initialTab?: LighthouseTab }) 
               )}
             </div>
           )}
+          </div>
+          <LighthouseAgentChat
+            adminKey={adminKey}
+            onOpenLead={(leadId) => setOpenLeadId(leadId)}
+            onOpenReview={(touchId, leadId) => {
+              setReviewFocus(touchId);
+              setOpenLeadId(leadId);
+            }}
+            onDrafted={refresh}
+          />
         </div>
       )}
 

@@ -616,7 +616,9 @@ function OwnerOpsPage() {
           </div>
         )}
 
-        {view === "lighthouse" && <LighthousePanel initialTab={lighthouseTab} />}
+        {view === "lighthouse" && (
+          <LighthousePanel initialTab={lighthouseTab} adminKey={user?.id ?? ""} />
+        )}
         {view === "it" && (
           <>
             <div className="mb-5 flex flex-wrap gap-2">
