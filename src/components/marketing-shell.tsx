@@ -7,7 +7,6 @@
  */
 
 import { useEffect, type ReactNode } from "react";
-import { GooglePreferredSourceButton } from "@/components/google-preferred-source-button";
 import { DUAL_MARKET_FOOTER } from "@/lib/firm-signup-copy";
 import {
   applyVisitorMarketToDocument,
@@ -157,7 +156,6 @@ export function MarketingShell({
             </button>
           </span>
           <span className="mk-print-hide">Print this page to save it as a PDF.</span>
-          <GooglePreferredSourceButton defaultTheme="light" className="mk-print-hide" />
         </footer>
       </div>
     </div>
