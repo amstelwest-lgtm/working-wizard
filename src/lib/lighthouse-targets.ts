@@ -216,6 +216,38 @@ export function shouldFlushContactOnPointerDown(input: {
   return true;
 }
 
+/**
+ * Whether a drawer input may take a value from a refetch.
+ * Focused or dirty fields stay as the user left them. A lead change always re-seeds.
+ */
+export function reseedDrawerField(input: {
+  current: string;
+  applied: string;
+  server: string;
+  focused: boolean;
+  contextChanged: boolean;
+}): { value: string; applied: string } {
+  if (input.contextChanged) return { value: input.server, applied: input.server };
+  const dirty = input.current.trim() !== input.applied.trim();
+  if (input.focused || dirty) return { value: input.current, applied: input.applied };
+  return { value: input.server, applied: input.server };
+}
+
+/**
+ * After a save, show the server-normalised value only when the input still
+ * holds exactly what was sent. Keystrokes since then stay put.
+ */
+export function applyNormalisedAfterSave(input: {
+  current: string;
+  sent: string;
+  normalised: string;
+}): { value: string; accept: boolean } {
+  if (input.current.trim() !== input.sent.trim()) {
+    return { value: input.current, accept: false };
+  }
+  return { value: input.normalised, accept: true };
+}
+
 /** Next cold-step date. A held conversation schedules nothing. */
 export function scheduledColdTouchOn(
   conversationHeld: boolean,

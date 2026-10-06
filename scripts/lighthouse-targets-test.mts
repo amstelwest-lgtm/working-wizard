@@ -25,6 +25,7 @@ import {
   coldCadenceOpen,
   conversationActivityType,
   displayedLeadMarket,
+  applyNormalisedAfterSave,
   formatPhoneDisplay,
   HELD_COLD_APPROVE_REASON,
   heldColdApproveReason,
@@ -35,6 +36,7 @@ import {
   normalisePhoneE164,
   parseLighthouseImport,
   planLighthouseImport,
+  reseedDrawerField,
   resumedColdTouchOn,
   scheduledColdTouchOn,
   shouldFlushContactOnPointerDown,
@@ -305,6 +307,82 @@ const HEADER = "phone,country,name,email,company,website,city,region,persona,sig
     shouldFlushContactOnPointerDown({ activeElementId: null, targetElementId: null }) === false,
     "pointer down outside a contact field is ignored",
   );
+}
+
+{
+  const server = "https://milon-dryrun.test/";
+  const typed = "https://milon-dryrun.b2.test/";
+  const focused = reseedDrawerField({
+    current: typed,
+    applied: server,
+    server,
+    focused: true,
+    contextChanged: false,
+  });
+  assert(focused.value === typed, "a refetch leaves a focused website field untouched");
+  assert(
+    focused.value.indexOf("milon-dryrun") === focused.value.lastIndexOf("milon-dryrun"),
+    "a refetch does not splice a second copy of the URL into the edit",
+  );
+  assert(focused.applied === server, "a focused edit stays dirty against the last applied value");
+
+  const dirty = reseedDrawerField({
+    current: typed,
+    applied: server,
+    server,
+    focused: false,
+    contextChanged: false,
+  });
+  assert(dirty.value === typed, "a refetch leaves a dirty field untouched after blur");
+
+  const justFocused = reseedDrawerField({
+    current: server,
+    applied: server,
+    server: "https://milon-dryrun.test/stale",
+    focused: true,
+    contextChanged: false,
+  });
+  assert(justFocused.value === server, "a focused field is not replaced before the first keystroke");
+
+  const clean = reseedDrawerField({
+    current: server,
+    applied: server,
+    server: "https://other.test/",
+    focused: false,
+    contextChanged: false,
+  });
+  assert(clean.value === "https://other.test/", "a blurred clean field takes the server value");
+
+  const switched = reseedDrawerField({
+    current: typed,
+    applied: server,
+    server: "https://other.test/",
+    focused: true,
+    contextChanged: true,
+  });
+  assert(switched.value === "https://other.test/", "a lead change re-seeds even while focused");
+
+  const raced = applyNormalisedAfterSave({
+    current: typed,
+    sent: server,
+    normalised: server,
+  });
+  assert(raced.accept === false && raced.value === typed, "keystrokes since the save started are kept");
+  const stillThere = reseedDrawerField({
+    current: raced.value,
+    applied: server,
+    server,
+    focused: true,
+    contextChanged: false,
+  });
+  assert(stillThere.value === typed, "the post-save refetch does not race with the next keystroke");
+
+  const phone = applyNormalisedAfterSave({
+    current: "0821234567",
+    sent: "0821234567",
+    normalised: "+27 82 123 4567",
+  });
+  assert(phone.accept && phone.value === "+27 82 123 4567", "phone normalises when nothing was typed since send");
 }
 
 {
@@ -641,6 +719,14 @@ const HEADER = "phone,country,name,email,company,website,city,region,persona,sig
   assert(/websiteSaved[\s\S]{0,240}Saved/.test(panelSrc), "website save shows Saved");
   assert(panelSrc.includes("e.currentTarget.value"), "blur save reads the field, not a stale render");
   assert(panelSrc.includes("shouldFlushContactOnPointerDown"), "a click outside the field flushes the edit");
+  assert(panelSrc.includes("reseedDrawerField"), "refetch re-seeds a field only when it is idle");
+  assert(panelSrc.includes("applyNormalisedAfterSave"), "a save normalises only the value that was sent");
+  assert(panelSrc.includes("phoneFocused") && panelSrc.includes("websiteFocused"), "phone and website track focus");
+  const saveContact = panelSrc.slice(
+    panelSrc.indexOf("onSaveContact={async"),
+    panelSrc.indexOf("onConversationHeld"),
+  );
+  assert(!saveContact.includes("await refresh()"), "Saved does not wait for the list refetch");
   assert(
     panelSrc.includes('addEventListener("pointerdown", onPointerDown, true)'),
     "the flush runs on pointer down before focus can be cancelled",
