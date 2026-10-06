@@ -45,7 +45,7 @@ export const ACCOUNTANT_NOTE_TABS = [
 
 /** Same-deliverable aliases. First owner-native id, then accountant-native id. */
 const TAB_GROUPS: readonly (readonly string[])[] = [
-  ["today", "today-complex", "ratios", "health"],
+  ["today", "today-complex", "ratios", "health", "pillars"],
   ["waterfall", "profit"],
   ["tasks", "plan", "actions"],
   ["cash"],
@@ -54,7 +54,7 @@ const TAB_GROUPS: readonly (readonly string[])[] = [
   ["budget"],
   ["next"],
   ["overview"],
-  ["summary"],
+  ["summary", "data", "brain"],
   ["ask"],
   ["reports"],
   ["advisory"],
@@ -70,6 +70,7 @@ export const NOTE_TAB_LABELS: Record<string, string> = {
   "today-complex": "Health",
   ratios: "Health",
   health: "Health",
+  pillars: "Health",
   waterfall: "Profit",
   profit: "Profit",
   next: "Next moves",
@@ -84,6 +85,8 @@ export const NOTE_TAB_LABELS: Record<string, string> = {
   advisory: "Advisory",
   overview: "Overview",
   summary: "Client Brain",
+  data: "Client Brain",
+  brain: "Client Brain",
   ask: "Milōn Bot",
 };
 

@@ -2185,6 +2185,8 @@ function Index() {
   const [productMix, setProductMix] = useState<ProductMix>(emptyProductMix);
   const [showFinData, setShowFinData] = useState(false);
   const [bankLedgerBlocked, setBankLedgerBlocked] = useState(false);
+  const [rejectedBankFile, setRejectedBankFile] = useState<File | null>(null);
+  const [pendingCashBankFile, setPendingCashBankFile] = useState<File | null>(null);
   // Per-upload visibility the owner picks in the Financial Data dialog. Every
   // owner upload path (statement, bank pack, cash pack) starts from it, and
   // the drafters keep it in sync when the owner changes it inside them.
@@ -2217,6 +2219,7 @@ function Index() {
       const spreadsheetText =
         isTextFile(file) || isSpreadsheetFile(file) ? await fileToText(file) : null;
       if (spreadsheetText != null && looksLikeBankLedger(spreadsheetText)) {
+        setRejectedBankFile(file);
         setShowFinData(false);
         setBankLedgerBlocked(true);
         if (uploadRef.current) uploadRef.current.value = "";
@@ -5817,7 +5820,13 @@ function Index() {
             </DialogContent>
           </Dialog>
 
-          <Dialog open={bankLedgerBlocked} onOpenChange={setBankLedgerBlocked}>
+          <Dialog
+            open={bankLedgerBlocked}
+            onOpenChange={(open) => {
+              setBankLedgerBlocked(open);
+              if (!open) setRejectedBankFile(null);
+            }}
+          >
             <DialogContent className="max-w-md border border-amber-900/20 bg-white text-slate-950 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-50">
               <DialogHeader>
                 <DialogTitle>This is a bank statement</DialogTitle>
@@ -5829,13 +5838,23 @@ function Index() {
                 <Button
                   type="button"
                   onClick={() => {
+                    setPendingCashBankFile(rejectedBankFile);
+                    setShowBankDrafter(false);
+                    setActiveTab("cash");
+                    setShowCashFromBanks(true);
                     setBankLedgerBlocked(false);
-                    setShowBankDrafter(true);
                   }}
                 >
                   Go to bank statement upload
                 </Button>
-                <Button type="button" variant="outline" onClick={() => setBankLedgerBlocked(false)}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setRejectedBankFile(null);
+                    setBankLedgerBlocked(false);
+                  }}
+                >
                   Close
                 </Button>
               </div>
@@ -5898,8 +5917,10 @@ function Index() {
             onClose={() => {
               setShowCashFromBanks(false);
               setBankCashDraft(null);
+              setPendingCashBankFile(null);
             }}
             initialDraft={bankCashDraft}
+            initialFile={pendingCashBankFile}
             existingCashflow={existingCashflowForBanks as never}
             documents={
               effectiveClientId

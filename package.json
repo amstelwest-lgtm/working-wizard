@@ -116,6 +116,7 @@
     "test:qa-statement-fixes": "vite-node --config scripts/vite-test.config.ts scripts/qa-statement-fixes-test.mts",
     "test:accountant-qa-medium": "vite-node --config scripts/vite-test.config.ts scripts/accountant-qa-medium-test.mts",
     "test:accountant-qa-deliverables": "vite-node --config scripts/vite-test.config.ts scripts/accountant-qa-deliverables-test.mts",
+    "test:accountant-qa-retest": "vite-node --config scripts/vite-test.config.ts scripts/accountant-qa-retest-test.mts",
     "test:health-score": "vite-node --config scripts/vite-test.config.ts scripts/health-score-test.mts",
     "test:client-metrics": "vite-node --config scripts/vite-test.config.ts scripts/client-metrics-test.mts",
     "test:client-route-search": "vite-node --config scripts/vite-test.config.ts scripts/client-route-search-test.mts",

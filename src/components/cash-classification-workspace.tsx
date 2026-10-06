@@ -3,7 +3,7 @@
  * Drag lines between buckets, merge/split, edit cadence, publish with policy.
  */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Check, Combine, GripVertical, Scissors, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,6 +37,7 @@ import {
   type PublishPolicy,
 } from "@/lib/cash-from-banks.publish";
 import { useMarketFormat } from "@/contexts/market";
+import { rollBankDraftOpening } from "@/lib/client-metrics";
 
 const CADENCE_LABEL: Record<CashCadence, string> = {
   once_off: "Once-off",
@@ -69,6 +70,8 @@ type Props = {
   currentOpening?: number | null;
   /** Statement period end — the date of the bank closing balance. */
   bankDate?: string | null;
+  /** Printed closing balance. Opening cash starts here; roll-forward is opt-in. */
+  statementClosing?: number | null;
   publishing?: boolean;
   onPublish: (req: WorkspacePublishRequest) => void | Promise<void>;
   onBack?: () => void;
@@ -86,6 +89,7 @@ export function CashClassificationWorkspace({
   existingCashflow = null,
   currentOpening = null,
   bankDate = null,
+  statementClosing = null,
   publishing = false,
   onPublish,
   onBack,
@@ -97,6 +101,35 @@ export function CashClassificationWorkspace({
   const [policy, setPolicy] = useState<PublishPolicy>("replace");
   const [adoptBalances, setAdoptBalances] = useState(true);
   const [filter, setFilter] = useState<"all" | "proposed" | "confirmed" | "excluded">("all");
+  const [rollForward, setRollForward] = useState(false);
+  const rollManual = useRef(false);
+  const closing =
+    statementClosing != null && Number.isFinite(statementClosing) ? statementClosing : null;
+  const stay = useMemo(() => {
+    if (closing == null || !bankDate) return null;
+    return rollBankDraftOpening({
+      statementEnd: bankDate,
+      anchor: startDate,
+      closing,
+      lines,
+      rollForward: false,
+    });
+  }, [closing, bankDate, startDate, lines]);
+  const rolled = useMemo(() => {
+    if (closing == null || !bankDate) return null;
+    return rollBankDraftOpening({
+      statementEnd: bankDate,
+      anchor: startDate,
+      closing,
+      lines,
+      rollForward: true,
+    });
+  }, [closing, bankDate, startDate, lines]);
+
+  useEffect(() => {
+    if (!rollForward || rollManual.current || !rolled) return;
+    onOpeningBalanceChange(String(rolled.opening));
+  }, [rollForward, rolled, onOpeningBalanceChange]);
 
   const needsPolicy = existingCashflowIsMeaningful(existingCashflow);
   const replaceNotice =
@@ -186,7 +219,10 @@ export function CashClassificationWorkspace({
           <Input
             type="number"
             value={openingBalance}
-            onChange={(e) => onOpeningBalanceChange(e.target.value)}
+            onChange={(e) => {
+              rollManual.current = true;
+              onOpeningBalanceChange(e.target.value);
+            }}
             className="h-8 text-xs"
           />
         </div>
@@ -201,9 +237,48 @@ export function CashClassificationWorkspace({
         </div>
       </div>
 
-      {warnings.length > 0 && (
+      {stay && stay.gapDays > 0 && (
+        <div className="space-y-2 rounded-lg border border-amber-900/15 bg-white/70 p-2.5 text-[11px] text-slate-700 dark:border-slate-800 dark:bg-slate-900/40 dark:text-slate-200">
+          <p>{rollForward && rolled ? rolled.note : stay.note}</p>
+          {rolled && rolled.items.length > 0 && (
+            <label className="flex items-center gap-2 font-medium text-slate-800 dark:text-slate-100">
+              <input
+                type="checkbox"
+                checked={rollForward}
+                onChange={(e) => {
+                  const on = e.target.checked;
+                  rollManual.current = false;
+                  setRollForward(on);
+                  if (!on && closing != null) onOpeningBalanceChange(String(closing));
+                }}
+              />
+              Roll those days forward from recurring lines
+            </label>
+          )}
+          {rollForward && rolled && rolled.items.length > 0 && (
+            <ul className="space-y-1 text-slate-600 dark:text-slate-300">
+              {rolled.items.map((item, index) => (
+                <li key={`${item.name}-${item.side}-${index}`}>
+                  {item.name} · {item.side === "inflow" ? "Inflow" : "Outflow"} ·{" "}
+                  {CADENCE_LABEL[item.cadence as CashCadence] ?? item.cadence} · {fmt(item.amount)} ·{" "}
+                  {fmt(item.contribution)}
+                </li>
+              ))}
+              <li>
+                Each figure is that line&apos;s weekly run-rate ÷ 7 × {rolled.gapDays} days. It is an
+                estimate, not a bank transaction.
+              </li>
+            </ul>
+          )}
+        </div>
+      )}
+
+      {warnings.filter((w) => !/rolled forward \d+ days from the bank closing balance/i.test(w))
+        .length > 0 && (
         <div className="space-y-1 rounded-lg border border-amber-500/30 bg-amber-50/80 p-2.5 text-[11px] text-amber-900 dark:bg-amber-500/10 dark:text-amber-100">
-          {warnings.map((w, i) => (
+          {warnings
+            .filter((w) => !/rolled forward \d+ days from the bank closing balance/i.test(w))
+            .map((w, i) => (
             <div key={i} className="flex gap-1.5">
               <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
               <span>{w}</span>

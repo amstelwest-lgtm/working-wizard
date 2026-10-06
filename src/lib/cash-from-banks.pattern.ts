@@ -106,14 +106,113 @@ export function normalisePayeeLabel(raw: string): string {
  * when that leaves nothing, from the narration. "Salaries July" and
  * "Salaries September" are one payroll series, not three once-offs.
  */
+const PAYEE_NOISE = new Set([
+  "payment",
+  "payments",
+  "receipt",
+  "receipts",
+  "received",
+  "customer",
+  "customers",
+  "from",
+  "ach",
+  "wire",
+  "credit",
+  "debit",
+  "deposit",
+  "online",
+  "pos",
+  "purchase",
+  "transfer",
+  "subscription",
+  "monthly",
+  "eft",
+  "com",
+  "www",
+  "the",
+  "and",
+]);
+
+const PAYEE_SUFFIX = new Set([
+  "llc",
+  "inc",
+  "ltd",
+  "limited",
+  "pty",
+  "corp",
+  "corporation",
+  "co",
+  "company",
+  "plc",
+]);
+
+/**
+ * Stable counterparty key. Month names, reference tokens, and narration
+ * noise ("customer receipt", "payment", invoice numbers) drop out so
+ * "Northwind INV-1042" and "Customer receipt Northwind" are one series.
+ * Display labels still use `normalisePayeeLabel`.
+ */
+export function payeeGroupKey(raw: string): string {
+  const text = raw
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const tokens = text.split(" ").filter((token) => {
+    if (token.length <= 1) return false;
+    if (/\d/.test(token)) return false;
+    if (MONTH_TOKENS.has(token)) return false;
+    if (REF_WORDS.has(token)) return false;
+    return true;
+  });
+  const content = tokens.filter((token) => !PAYEE_NOISE.has(token));
+  const kept = (content.length ? content : tokens).slice();
+  while (kept.length > 1 && PAYEE_SUFFIX.has(kept[kept.length - 1]!)) kept.pop();
+  return kept.slice(0, 3).join(" ");
+}
+
 function groupingLabel(txn: CashStatementTransaction): string {
-  const fromPayee = normalisePayeeLabel(txn.counterparty || "");
-  const fromNarration = normalisePayeeLabel(txn.description || "");
+  const fromPayee = payeeGroupKey(txn.counterparty || "");
+  const fromNarration = payeeGroupKey(txn.description || "");
   return fromPayee || fromNarration || "unknown";
 }
 
 function normalizeKey(txn: CashStatementTransaction): string {
-  return `${txn.direction}|${txn.ai_bucket}|${groupingLabel(txn)}`;
+  const payee = groupingLabel(txn);
+  // Transfers stay on their own key. Other buckets for the same payer
+  // (a receipt tagged trading and another tagged other) are one series.
+  if (txn.ai_bucket === "transfer") return `transfer|${payee}`;
+  return `${txn.direction}|${payee}`;
+}
+
+/** Opening / closing rows are balances, not movements. */
+export function isStatementBalanceRow(txn: {
+  description?: string | null;
+  counterparty?: string | null;
+}): boolean {
+  const text = `${txn.description ?? ""} ${txn.counterparty ?? ""}`
+    .toLowerCase()
+    .replace(/[^a-z\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (/\b(opening|closing) balance\b/.test(text)) return true;
+  if (/\bbalance (brought|carried) forward\b/.test(text)) return true;
+  if (/\b(brought|carried) forward\b/.test(text)) return true;
+  return false;
+}
+
+function majorityBucket(txns: CashStatementTransaction[]): CashBucket {
+  const counts = new Map<CashBucket, number>();
+  for (const txn of txns) counts.set(txn.ai_bucket, (counts.get(txn.ai_bucket) ?? 0) + 1);
+  let best = txns[0]!.ai_bucket;
+  let n = 0;
+  for (const [bucket, count] of counts) {
+    if (count > n) {
+      best = bucket;
+      n = count;
+    }
+  }
+  return best;
 }
 
 function titleCaseLabel(label: string): string {
@@ -162,14 +261,17 @@ function inferCadence(
   }
 
   // A repeated payee is recurring only when the amount is similar and the gap
-  // is actually weekly or monthly. Two unrelated hits are not a subscription.
+  // is actually weekly or roughly monthly. Two unrelated hits are not a subscription.
   if (!similar) return { cadence: "once_off", confidence: 0.4 };
 
   const medGap = median(gaps);
   if (medGap >= 5 && medGap <= 9 && txnCount >= 3) {
     return { cadence: "weekly", confidence: Math.min(0.95, 0.55 + txnCount * 0.08) };
   }
-  if (medGap >= 25 && medGap <= 35 && txnCount >= 2) {
+  // A calendar month is 28–31 days. Customer receipts and supplier pulls
+  // slip by about a week, so 21–40 days is still monthly. Same rule for
+  // inflows and outflows.
+  if (medGap >= 21 && medGap <= 40 && txnCount >= 2) {
     return { cadence: "monthly", confidence: Math.min(0.92, 0.55 + txnCount * 0.1) };
   }
   if (medGap >= 350 && medGap <= 380) {
@@ -189,6 +291,22 @@ export function recurringReviewLabel(line: { cadence: string; txn_count: number 
   return null;
 }
 
+/** Week of the month that holds this day. 1–7 → week 1 … 22–31 → week 4. */
+export function forecastWeekForDayOfMonth(day: number): number {
+  if (day <= 7) return 1;
+  if (day <= 14) return 2;
+  if (day <= 21) return 3;
+  return 4;
+}
+
+function usualDayOfMonth(dates: string[]): number | null {
+  const days = dates
+    .map((iso) => Number(iso.slice(8, 10)))
+    .filter((day) => day >= 1 && day <= 31);
+  if (!days.length) return null;
+  return Math.round(median(days));
+}
+
 function defaultStartWeek(
   cadence: CashCadence,
   dates: string[],
@@ -197,6 +315,10 @@ function defaultStartWeek(
   if (cadence === "once_off" || cadence === "split_weeks" || cadence === "split_months") {
     // Put once-offs early so owners see them
     return 1;
+  }
+  if (cadence === "monthly" || cadence === "annual") {
+    const day = usualDayOfMonth(dates);
+    if (day != null) return forecastWeekForDayOfMonth(day);
   }
   if (!periodEnd || !dates.length) return 1;
   const last = dates.slice().sort().at(-1);
@@ -209,10 +331,6 @@ function defaultStartWeek(
   if (cadence === "weekly") {
     const rem = 7 - (daysSince % 7);
     return Math.min(13, Math.max(1, rem <= 0 ? 1 : Math.ceil(rem / 7)));
-  }
-  if (cadence === "monthly" || cadence === "annual") {
-    const rem = 30 - (daysSince % 30);
-    return Math.min(13, Math.max(1, Math.ceil(rem / 7)));
   }
   return 1;
 }
@@ -232,6 +350,7 @@ export function buildDraftLinesFromExtract(extract: CashBankExtract): CashForeca
   const groups = new Map<string, CashStatementTransaction[]>();
   for (const txn of extract.transactions) {
     if (!txn.amount || !Number.isFinite(txn.amount)) continue;
+    if (isStatementBalanceRow(txn)) continue;
     const key = normalizeKey(txn);
     const list = groups.get(key) ?? [];
     list.push(txn);
@@ -241,7 +360,7 @@ export function buildDraftLinesFromExtract(extract: CashBankExtract): CashForeca
   const lines: CashForecastDraftLine[] = [];
   for (const [, txns] of groups) {
     const sample = txns[0]!;
-    const bucket = sample.ai_bucket;
+    const bucket = majorityBucket(txns);
     const allExcluded = txns.every((t) => isExcludedBucket(t.ai_bucket, t.excluded));
     const amounts = txns.map((t) => Math.abs(t.amount));
     const dates = txns.map((t) => t.txn_date).filter(Boolean);
@@ -274,6 +393,7 @@ export function buildDraftLinesFromExtract(extract: CashBankExtract): CashForeca
       status: allExcluded ? "excluded" : "proposed",
       confidence,
       source: "ai",
+      period_total: Math.round(amounts.reduce((sum, n) => sum + n, 0) * 100) / 100,
       txn_count: txns.length,
       sample_descriptions: [...new Set(txns.map((t) => t.description).filter(Boolean))].slice(0, 3),
     });
@@ -311,20 +431,24 @@ export type ReviewCashTotals = {
 };
 
 /**
- * Bank-review footer totals. Every included line contributes amount × occurrences,
- * so a monthly receipt and a payroll series are both the full statement window.
+ * Bank-review footer totals. Each included line contributes the sum of its
+ * source transactions (`period_total`). A typical amount × count is only the
+ * fallback for a hand-built line that has no stored sum — that product
+ * overstates the statement when the amounts in a series are not identical.
  */
 export function reviewCashTotals(
   lines: Array<
-    Pick<CashForecastDraftLine, "status" | "side" | "amount" | "txn_count">
+    Pick<CashForecastDraftLine, "status" | "side" | "amount" | "txn_count" | "period_total">
   >,
 ): ReviewCashTotals {
   let inflow = 0;
   let outflow = 0;
   for (const line of lines) {
     if (line.status === "excluded") continue;
-    const occurrences = Math.max(1, line.txn_count || 1);
-    const period = Math.abs(line.amount) * occurrences;
+    const period =
+      line.period_total != null && Number.isFinite(line.period_total)
+        ? Math.abs(line.period_total)
+        : Math.abs(line.amount) * Math.max(1, line.txn_count || 1);
     if (line.side === "inflow") inflow += period;
     else outflow += period;
   }

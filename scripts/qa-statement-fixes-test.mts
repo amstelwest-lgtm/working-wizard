@@ -588,11 +588,12 @@ assert(join.includes('el.classList.add("dark")'), "join page keeps the dark canv
 
 const ask = read("src/lib/ask-ai.js");
 const submit = ask.slice(ask.indexOf("async function submit"));
-assert(submit.includes('question = ""'), "successful submit clears the composer");
+assert(submit.includes('question = ""'), "submit clears the composer");
 assert(
-  submit.indexOf('question = ""') > submit.indexOf("answer = data.answer"),
-  "the composer clears after the send succeeds",
+  submit.indexOf('question = ""') < submit.indexOf("await fetch"),
+  "the composer clears before the request, not when the answer arrives",
 );
+assert(submit.includes("question = q"), "a failed send restores the draft");
 assert(ask.includes("compositionstart"), "IME composition guard stays");
 assert(!ask.includes("e.isComposing"), "Enter does not trust the intermittent isComposing flag");
 

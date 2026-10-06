@@ -487,6 +487,7 @@ export function mountAskAi(container, options) {
   async function submit() {
     const q = question.trim();
     if (!q || loading) return;
+    question = "";
       const objective = parseAgentObjective(q);
       const createIntent = persistedCreateIntent(q);
       creatingDeliverable = Boolean(createIntent);
@@ -572,9 +573,8 @@ export function mountAskAi(container, options) {
       if (data.created && typeof onPersistedCreate === "function") {
         onPersistedCreate({ question: q, created: data.created });
       }
-      // Drop the draft once the send succeeds so the box is ready for the next question.
-      question = "";
     } catch (e) {
+      question = q;
       errorMsg = e.message || "Something went wrong.";
     } finally {
       loading = false;

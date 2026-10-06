@@ -8,6 +8,7 @@ import type {
   CashBucket,
   CashStatementTransaction,
 } from "@/lib/cash-from-banks.types";
+import { isStatementBalanceRow } from "@/lib/cash-from-banks.pattern";
 import { formatMoney, ZA_MARKET } from "@/lib/market";
 
 export type BankAccountBalance = {
@@ -85,6 +86,10 @@ function sumDirection(
     .reduce((s, t) => s + t.amount, 0);
 }
 
+function movementTransactions(txns: CashStatementTransaction[]): CashStatementTransaction[] {
+  return txns.filter((txn) => !isStatementBalanceRow(txn));
+}
+
 /** Opening + inflows − outflows (including transfers for bank tie-out). */
 export function checkBankBalanceTieOut(
   opening: number | null,
@@ -92,8 +97,9 @@ export function checkBankBalanceTieOut(
   txns: CashStatementTransaction[],
   scope: string,
 ): BalanceCheckResult {
-  const inflowTotal = sumDirection(txns, "in", { includeExcluded: true });
-  const outflowTotal = sumDirection(txns, "out", { includeExcluded: true });
+  const movements = movementTransactions(txns);
+  const inflowTotal = sumDirection(movements, "in", { includeExcluded: true });
+  const outflowTotal = sumDirection(movements, "out", { includeExcluded: true });
 
   if (opening == null || closing == null) {
     return {
@@ -139,7 +145,7 @@ export function buildMovementsTrialBalance(
   extract: CashBankExtract,
   accounts?: BankAccountBalance[],
 ): MovementsTrialBalance {
-  const txns = extract.transactions ?? [];
+  const txns = movementTransactions(extract.transactions ?? []);
   const openingCash =
     accounts && accounts.length > 0
       ? accounts.reduce((s, a) => s + (a.openingBalance ?? 0), 0)

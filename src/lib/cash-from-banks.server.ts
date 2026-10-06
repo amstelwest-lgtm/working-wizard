@@ -252,13 +252,14 @@ export const draftCashForecastFromBankStatements = createServerFn({ method: "POS
     const startDate = nextForecastStartDate(extract.period_end, {
       timeZone: market.timezone,
     });
+    // Opening cash is the bank closing balance. Rolling the gap forward is an
+    // explicit choice in the classification workspace, which lists each line.
     const rolledOpening = rollBankDraftOpening({
       statementEnd: extract.period_end,
       anchor: startDate,
       closing: resolveOpeningBalance(extract),
       lines,
     });
-    if (rolledOpening.note) warnings.push(rolledOpening.note);
 
     return {
       extract,
