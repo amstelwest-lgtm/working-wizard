@@ -197,9 +197,6 @@ export function LighthouseAgentChatView({
           <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--ops-ink-dim)]">
             Lighthouse
           </div>
-          <p className="truncate text-[11px] text-[var(--ops-ink-dim)]">
-            Drafts stay in the review inbox
-          </p>
         </div>
         <button
           type="button"

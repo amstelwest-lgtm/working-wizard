@@ -50,7 +50,15 @@ export type AgentLead = RecipientPlace & {
   touches: AgentTouch[];
 };
 
-/** Firm, then a real contact name, then the email. Never the mailbox local-part. */
+/** "Milōn Dry Run" is the cohort label, not the firm. */
+export function isDryRunCohortName(value: string | null | undefined): boolean {
+  return /dry[\s-]*run/i.test((value ?? "").trim());
+}
+
+/**
+ * A real firm, then a real contact name, then the email.
+ * A dry-run cohort label never becomes the row title.
+ */
 export function firmCardTitle(lead: {
   name?: string | null;
   company?: string | null;
@@ -59,8 +67,8 @@ export function firmCardTitle(lead: {
   const company = (lead.company ?? "").trim();
   const name = (lead.name ?? "").trim();
   const email = (lead.email ?? "").trim();
-  if (company) return company;
-  if (name && !isGenericLeadName(name, email)) return name;
+  if (company && !isDryRunCohortName(company)) return company;
+  if (name && !isDryRunCohortName(name) && !isGenericLeadName(name, email)) return name;
   return email || "Unnamed";
 }
 

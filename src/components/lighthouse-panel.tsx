@@ -59,13 +59,14 @@ import {
   formatOpsCount,
   formatOpsPercent,
   geoWindowLine,
+  isDryRunCohortName,
   nextUpAction,
   zoneClocks,
 } from "@/lib/lighthouse-agent";
 import { LIGHTHOUSE_FROM_EMAIL } from "@/lib/lighthouse-from";
 import { LIGHTHOUSE_REPLY_TO } from "@/lib/lighthouse-reply-to";
 import { LIGHTHOUSE_SENDER_NAME } from "@/lib/lighthouse-sender";
-import { sendWindowStatus } from "@/lib/lighthouse-send-windows";
+import { nextWindowLine, sendWindowStatus } from "@/lib/lighthouse-send-windows";
 import { LighthouseAgentChat } from "@/components/lighthouse-agent-chat";
 
 const inputCls = "ops-input";
@@ -339,18 +340,8 @@ export function LighthousePanel({
           <div className="min-w-0 space-y-4">
           <div>
             <p className="text-sm text-[var(--ops-ink-soft)]">
-              {dryRun ? "Dry-run cohort" : "Live cohort"} · auto_send off · {LIGHTHOUSE_SENDER_NAME} ·{" "}
-              {formatOpsCount(capLeft)} sends left today
+              {dryRun ? "Dry-run" : "Live"} · auto_send off · {formatOpsCount(capLeft)} sends left
             </p>
-            {dryRun && (
-              <p className="mt-2 text-[12px] font-semibold text-[var(--ops-amber)]">
-                Dry-run allowlist on — Send now only hits {dash.capability.sendAllowlist.length}{" "}
-                test inbox{dash.capability.sendAllowlist.length === 1 ? "" : "es"}
-                {dash.capability.sendAllowlist.length
-                  ? `: ${dash.capability.sendAllowlist.join(", ")}`
-                  : ""}
-              </p>
-            )}
             {(!dash.capability.aiConfigured ||
               !dash.capability.emailConfigured ||
               dash.sentToday >= dash.settings.dailySendCap) && (
@@ -452,12 +443,17 @@ export function LighthousePanel({
                         onClick={() => setOpenLeadId(row.leadId)}
                         className="flex w-full items-baseline justify-between gap-3 rounded-xl border border-[var(--ops-line)] px-3 py-2 text-left hover:border-[var(--ops-amber-border)]"
                       >
-                        <span className="truncate text-sm font-semibold text-[var(--ops-ink)]">
-                          {row.title}
+                        <span className="flex min-w-0 items-center gap-2">
+                          <span className="truncate text-sm font-semibold text-[var(--ops-ink)]">
+                            {row.title}
+                          </span>
+                          {queueLeadIsDryRun(dash.leads, row.leadId) && <DryRunBadge />}
                         </span>
-                        <span className="shrink-0 text-[11px] text-[var(--ops-ink-dim)]">
-                          {row.zone ?? "—"} · {row.open ? "due now" : row.countdownLabel}
-                        </span>
+                        {row.zone && row.countdownLabel !== "—" && (
+                          <span className="shrink-0 text-[11px] text-[var(--ops-ink-dim)]">
+                            {row.zone} · {row.open ? "due now" : row.countdownLabel}
+                          </span>
+                        )}
                       </button>
                     </li>
                   ))}
@@ -488,7 +484,10 @@ export function LighthousePanel({
                           : "border-[var(--ops-line)]"
                       }`}
                     >
-                      <div className="text-sm font-semibold text-[var(--ops-ink)]">{item.title}</div>
+                      <div className="flex items-center gap-2 text-sm font-semibold text-[var(--ops-ink)]">
+                        <span className="truncate">{item.title}</span>
+                        {lead && showsDryRunBadge(lead) && <DryRunBadge />}
+                      </div>
                       <div className="truncate text-[12px] text-[var(--ops-ink-dim)]">
                         {item.subject} · {item.angle} · {item.status}
                       </div>
@@ -578,9 +577,9 @@ export function LighthousePanel({
                           </button>
                         )}
                       </div>
-                      {item.status === "approved" && window && !window.open && (
+                      {item.status === "approved" && window && nextWindowLine(window) && (
                         <p className="mt-1 text-[11px] text-[var(--ops-ink-dim)]">
-                          Next window {window.nextLabel} ({window.countdownLabel})
+                          {nextWindowLine(window)}
                         </p>
                       )}
                     </li>
@@ -719,17 +718,22 @@ export function LighthousePanel({
                     className="flex w-full items-baseline justify-between gap-3 border-b border-[var(--ops-line)] px-4 py-3 text-left last:border-b-0 hover:bg-[var(--ops-amber-soft)]"
                   >
                     <span className="min-w-0">
-                      <span className="block truncate text-sm font-semibold text-[var(--ops-ink)]">
-                        {firmCardTitle(lead)}
+                      <span className="flex min-w-0 items-center gap-2">
+                        <span className="truncate text-sm font-semibold text-[var(--ops-ink)]">
+                          {firmCardTitle(lead)}
+                        </span>
+                        {showsDryRunBadge(lead) && <DryRunBadge />}
                       </span>
                       <span className="block truncate text-[11px] text-[var(--ops-ink-dim)]">
                         {STAGE_LABELS[lead.stage]} · next {cadenceRow.nextFollowUp} · {lead.trafficTag ?? "untagged"}
                         {lead.doNotContact ? " · suppressed" : ""}
                       </span>
                     </span>
-                    <span className="shrink-0 text-[11px] text-[var(--ops-ink-dim)]">
-                      {sendWindowStatus(lead, now).zone ?? "—"}
-                    </span>
+                    {sendWindowStatus(lead, now).zone ? (
+                      <span className="shrink-0 text-[11px] text-[var(--ops-ink-dim)]">
+                        {sendWindowStatus(lead, now).zone}
+                      </span>
+                    ) : null}
                   </button>
                 );
               })
@@ -916,6 +920,26 @@ export function LighthousePanel({
   );
 }
 
+function showsDryRunBadge(lead: { name?: string | null; company?: string | null }): boolean {
+  return isDryRunCohortName(lead.company) || isDryRunCohortName(lead.name);
+}
+
+function queueLeadIsDryRun(
+  leads: Array<{ id: string; name?: string | null; company?: string | null }>,
+  leadId: string,
+): boolean {
+  const lead = leads.find((row) => row.id === leadId);
+  return lead ? showsDryRunBadge(lead) : false;
+}
+
+function DryRunBadge() {
+  return (
+    <span className="shrink-0 rounded-full border border-[var(--ops-line)] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-[var(--ops-ink-dim)]">
+      Dry run
+    </span>
+  );
+}
+
 function FunnelStat({
   label,
   value,
@@ -977,12 +1001,14 @@ function PipelineBoard({
                   onClick={() => onOpen(l.id)}
                   className="w-full rounded-xl border border-[var(--ops-line)] bg-[var(--ops-card)] px-3 py-2.5 text-left transition-colors hover:border-[var(--ops-amber-border)]"
                 >
-                  <div className="truncate text-sm font-semibold text-[var(--ops-ink)]">
-                    {firmCardTitle(l)}
+                  <div className="flex items-center gap-2">
+                    <div className="truncate text-sm font-semibold text-[var(--ops-ink)]">
+                      {firmCardTitle(l)}
+                    </div>
+                    {showsDryRunBadge(l) && <DryRunBadge />}
                   </div>
                   <div className="truncate text-[11px] text-[var(--ops-ink-dim)]">
-                    {l.company || "—"}
-                    {isGenericLeadName(l.name, l.email) && l.email ? ` · ${l.email}` : ""} ·{" "}
+                    {isGenericLeadName(l.name, l.email) && l.email ? `${l.email} · ` : ""}
                     {l.persona === "accountant" ? "practice" : "owner"}
                     {l.sequenceKey === ACCOUNTANT_ONESHOT_SEQUENCE_KEY ? " · one-shot" : ""}
                   </div>
@@ -1335,7 +1361,6 @@ function SystemForm({
             From {LIGHTHOUSE_SENDER_NAME} &lt;{LIGHTHOUSE_FROM_EMAIL}&gt;
           </p>
           <p>Reply-to — hello@milonfinance.com</p>
-          <p>Signer locked · auto_send off</p>
           <p>Send windows enforced · US Tue–Thu 08:00–10:00 local · SA Tue–Thu 08:00–10:00 SAST</p>
         </div>
         <div className="grid gap-2 sm:grid-cols-2">
@@ -1531,10 +1556,18 @@ function LeadDrawer({
       >
         <div className="mb-4 flex items-start justify-between gap-3">
           <div>
-            <h2 className="text-xl font-bold text-[var(--ops-ink)]">{firmCardTitle(lead)}</h2>
+            <h2 className="flex items-center gap-2 text-xl font-bold text-[var(--ops-ink)]">
+              <span className="truncate">{firmCardTitle(lead)}</span>
+              {showsDryRunBadge(lead) && <DryRunBadge />}
+            </h2>
             <p className="text-sm text-[var(--ops-ink-dim)]">
               {lead.email || "No email"}
-              {lead.name && !isGenericLeadName(lead.name, lead.email) ? ` · ${lead.name}` : ""} ·{" "}
+              {lead.name &&
+              !isGenericLeadName(lead.name, lead.email) &&
+              firmCardTitle(lead) !== lead.name.trim()
+                ? ` · ${lead.name}`
+                : ""}
+              {" · "}
               {lead.persona === "accountant" ? "practice" : "owner"}
               {isOneshot ? " · one-shot" : ""}
               {lead.city ? ` · ${lead.city}` : ""}
@@ -1803,7 +1836,7 @@ function LeadDrawer({
             className={`${inputCls} min-h-[260px] resize-y py-2 font-mono text-[12.5px] leading-relaxed`}
             placeholder={
               usesGolden
-                ? "Load the golden copy for this step. It lands in the review inbox."
+                ? "Load the golden copy for this step."
                 : "Agent draft, then edit before sending. Nothing sends without your approval."
             }
             value={body}
@@ -1971,10 +2004,8 @@ function LeadDrawer({
               ))}
           </select>
         </div>
-        {!windowStatus.open && (
-          <p className="mt-2 text-[11px] text-[var(--ops-ink-dim)]">
-            {windowStatus.reason ?? `Next window ${windowStatus.nextLabel}`}
-          </p>
+        {nextWindowLine(windowStatus) && (
+          <p className="mt-2 text-[11px] text-[var(--ops-ink-dim)]">{nextWindowLine(windowStatus)}</p>
         )}
 
         {existing && (existing.sentAt || existing.deliveredAt || existing.clickedAt) && (
@@ -2025,7 +2056,7 @@ function LeadDrawer({
           </h3>
           {lead.touches.filter((t) => t.sentAt || t.status === "sent" || t.status === "failed" || t.status === "skipped").length === 0 ? (
             <p className="text-sm text-[var(--ops-ink-faint)]">
-              Nothing sent yet. Drafts wait in the review inbox.
+              Nothing sent yet.
             </p>
           ) : (
             <ul className="space-y-1.5">

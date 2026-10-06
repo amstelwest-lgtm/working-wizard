@@ -68,6 +68,17 @@ assert(
 );
 assert(src.includes("LIGHTHOUSE_SENDER_NAME"), "the Team signer is shown");
 assert(src.includes("auto_send off"), "auto_send is shown locked off");
+assert(
+  (src.match(/auto_send off/g) ?? []).length === 1,
+  "auto_send off is stated once",
+);
+assert(!src.includes("Dry-run allowlist on"), "the allowlist dump is not repeated on the Agent tab");
+assert(src.includes("Allowlist:"), "the allowlist lives once, on System");
+assert(src.includes("Dry run"), "a dry-run row keeps a small badge");
+assert(!src.includes("sm:grid-cols-5"), "the five timezone cards are gone");
+assert(src.includes("geoWindowLine"), "US and SA share one window line");
+assert(!src.includes("Set US or South Africa"), "the unset-window filler is not rendered");
+assert(!src.includes("Drafts wait in the review inbox"), "the inbox reminder is not repeated in the drawer");
 assert(!src.includes("setSenderName"), "founder signer name is not editable");
 assert(!src.includes("Open in mail"), "mailto bypass is gone");
 assert(!src.includes("Opt-out link copied"), "unsubscribe copy control is gone");

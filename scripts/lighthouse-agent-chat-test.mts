@@ -587,6 +587,11 @@ assert(uiSrc.includes("localStorage"), "the thread is stored in localStorage");
 assert(uiSrc.includes("Clear"), "Clear is in the chat");
 assert(uiSrc.includes("Shift+Enter"), "newline hint is in the chat");
 assert(!/claude|anthropic/i.test(uiSrc), "chat UI has no model branding");
+assert(!uiSrc.includes("Drafts stay in the review inbox"), "the chat header does not repeat the inbox line");
+assert(
+  (uiSrc.match(/review inbox/gi) ?? []).length === 1,
+  "the chat states the review inbox once",
+);
 assert(!uiSrc.includes("sendLighthouseTouch"), "chat UI does not send mail");
 assert(!uiSrc.includes("reviewLighthouseTouch"), "chat UI does not approve");
 
