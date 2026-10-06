@@ -410,7 +410,8 @@ assert(
 );
 
 const pricingTable = readFileSync(resolve("src/components/firm-band-pricing.tsx"), "utf8");
-assert(pricingTable.includes("firm-bands-founding"), "firm pricing has a visible FOUNDING callout");
+assert(pricingTable.includes("firm-bands-sa-note"), "firm pricing styles the ZA-only pricing notes");
+assert(!pricingTable.includes("firm-bands-founding"), "US HTML stylesheet does not contain the FOUNDING class name");
 assert(pricingTable.includes("SA_FOUNDING_LINE"), "firm pricing callout uses the ZA founding line");
 assert(pricingTable.includes("showSaPricing = false"), "firm pricing hides the SA discount by default");
 assert(pricingTable.includes("WATCHLIST_DEFINITION"), "firm pricing defines watchlist");
