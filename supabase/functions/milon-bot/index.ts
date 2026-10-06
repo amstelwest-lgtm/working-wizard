@@ -8,7 +8,7 @@ import { sanitize } from "../ask-ai/sanitizer.ts";
 import { callClaudeRound, type ClaudeMessage, type ClaudeTool } from "./claude.ts";
 import { publicRun, runMilonbotObjective } from "./handler.ts";
 import { buildMilonBotChatPayload, redactToolResult } from "./prompt.ts";
-import { rehydrateModelOutput } from "../_shared/redact-identifiers.ts";
+import { rehydrateForUi } from "../_shared/redact-identifiers.ts";
 import { loadOverviewBrief } from "./load-overview.ts";
 import { persistAdvisoryCreate, type CreateIntent } from "./persist.ts";
 import { persistedCreateIntent } from "../../../src/lib/milon-bot-copy.ts";
@@ -572,5 +572,8 @@ Deno.serve(async (req: Request) => {
       : "I could not complete that. Try again, or use Propose / Draft on the Summary tab.";
   }
 
-  return respond({ answer: rehydrateModelOutput(answer, sealedChat.session), tools: toolsUsed });
+  return respond({
+    answer: rehydrateForUi(answer, sealedChat.session, message),
+    tools: toolsUsed,
+  });
 });

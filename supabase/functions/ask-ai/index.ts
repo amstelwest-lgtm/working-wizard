@@ -4,7 +4,11 @@ import { classify } from "./classifier.ts";
 import { buildContext } from "./context-builder.ts";
 import { buildPrompt, sealAskAiPrompt } from "./prompt.ts";
 import { callClaude } from "./anthropic.ts";
-import { rehydrateModelOutput } from "../_shared/redact-identifiers.ts";
+import {
+  sealedCacheAnswer,
+  cacheHitIsDisplaySafe,
+  rehydrateForUi,
+} from "../_shared/redact-identifiers.ts";
 
 const RATE_LIMIT = 30; // questions per user per hour
 
@@ -128,7 +132,7 @@ Deno.serve(async (req: Request) => {
       .eq("question_hash", hash)
       .maybeSingle();
 
-    if (cached?.answer) {
+    if (cached?.answer && cacheHitIsDisplaySafe(String(cached.answer))) {
       // Atomically record cache hit + enforce rate limit.
       const { data: allowed } = await adminClient.rpc("ask_ai_record_request", {
         p_user_id: user.id,
@@ -209,7 +213,7 @@ Deno.serve(async (req: Request) => {
     const hash = await sha256(canonical);
     await adminClient.from("ask_ai_cache").upsert({
       question_hash: hash,
-      answer: claudeResult.text,
+      answer: sealedCacheAnswer(claudeResult.text, sealed.session),
       hit_count: 0,
       created_at: new Date().toISOString(),
     }).then(({ error: e }) => {
@@ -217,7 +221,7 @@ Deno.serve(async (req: Request) => {
     });
   }
 
-  const answer = rehydrateModelOutput(claudeResult.text, sealed.session);
+  const answer = rehydrateForUi(claudeResult.text, sealed.session, question);
   return respond({ answer, chips: deriveChips(question, tier) });
 });
 

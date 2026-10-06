@@ -20,7 +20,7 @@ import {
   applyRedaction,
   createRedactionSession,
   redactStructured,
-  rehydrateModelOutput,
+  rehydrateForUi,
 } from "../_shared/redact-identifiers.ts";
 
 type AdminClient = SupabaseClient;
@@ -79,13 +79,13 @@ export async function runMilonbotObjective(input: {
   });
 
   run.objective = input.objective;
-  run.summary = rehydrateModelOutput(run.summary, session);
+  run.summary = rehydrateForUi(run.summary, session, input.objective);
   if (run.escalationReason) {
-    run.escalationReason = rehydrateModelOutput(run.escalationReason, session);
+    run.escalationReason = rehydrateForUi(run.escalationReason, session);
   }
-  run.questions = run.questions.map((question) => rehydrateModelOutput(question, session));
-  for (const step of run.steps) step.detail = rehydrateModelOutput(step.detail, session);
-  for (const step of run.trace) step.detail = rehydrateModelOutput(step.detail, session);
+  run.questions = run.questions.map((question) => rehydrateForUi(question, session));
+  for (const step of run.steps) step.detail = rehydrateForUi(step.detail, session);
+  for (const step of run.trace) step.detail = rehydrateForUi(step.detail, session);
 
   for (const step of run.steps) {
     if (!step.tool || step.status === "refused") continue;

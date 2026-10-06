@@ -354,10 +354,11 @@ export function formatOverviewForPrompt(
   audience: "owner" | "accountant",
 ): string {
   const facts = overviewFactLines(brief);
-  if (facts.length === 0 && !brief.brainHeadline) return "";
+  if (facts.length === 0 && !brief.brainHeadline && !brief.clientName) return "";
   const lines = [
     "OVERVIEW FIGURES — same source as the app Overview for this client. Quote these. Do not recompute a different health score. Do not invent replacements.",
   ];
+  if (brief.clientName) lines.push(`- Client name: ${brief.clientName}`);
   if (facts.length === 0) lines.push("(no numeric overview yet)");
   else lines.push(...facts.map((line) => `- ${line}`));
   if (brief.brainHeadline) {

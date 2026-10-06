@@ -3,9 +3,11 @@
  * before they are sent back to the model.
  */
 import {
+  appendClientIdentity,
   applyRedaction,
   createRedactionSession,
   redactStructured,
+  rehydrateWorkingContext,
   type IdentifierSubject,
   type RedactionSession,
 } from "../_shared/redact-identifiers.ts";
@@ -22,10 +24,19 @@ export function buildMilonBotChatPayload(input: {
   message: string;
   audience: string;
   subject?: IdentifierSubject;
-}): { system: string; messages: BotChatTurn[]; session: RedactionSession } {
+}): {
+  system: string;
+  messages: BotChatTurn[];
+  session: RedactionSession;
+  /** Client name restored for local reasoning. Not sent to Anthropic. */
+  workingContext: string;
+} {
   const session = createRedactionSession(input.subject);
-  const system = applyRedaction(
-    input.overviewBlock ? `${input.system}\n\n${input.overviewBlock}` : input.system,
+  const system = appendClientIdentity(
+    applyRedaction(
+      input.overviewBlock ? `${input.system}\n\n${input.overviewBlock}` : input.system,
+      session,
+    ),
     session,
   );
   const messages: BotChatTurn[] = [
@@ -41,7 +52,8 @@ export function buildMilonBotChatPayload(input: {
       ),
     },
   ];
-  return { system, messages, session };
+  const outbound = [system, ...messages.map((turn) => turn.content)].join("\n");
+  return { system, messages, session, workingContext: rehydrateWorkingContext(outbound, session) };
 }
 
 export function buildAgentTurnPayload(input: {
@@ -50,13 +62,28 @@ export function buildAgentTurnPayload(input: {
   user: string;
   subject?: IdentifierSubject;
   session?: RedactionSession;
-}): { system: string; user: string; session: RedactionSession } {
+}): {
+  system: string;
+  user: string;
+  session: RedactionSession;
+  /** Client name restored for local reasoning. Not sent to Anthropic. */
+  workingContext: string;
+} {
   const session = input.session ?? createRedactionSession(input.subject);
-  const system = applyRedaction(
-    input.overviewBlock ? `${input.system}\n\n${input.overviewBlock}` : input.system,
+  const system = appendClientIdentity(
+    applyRedaction(
+      input.overviewBlock ? `${input.system}\n\n${input.overviewBlock}` : input.system,
+      session,
+    ),
     session,
   );
-  return { system, user: applyRedaction(input.user, session), session };
+  const user = applyRedaction(input.user, session);
+  return {
+    system,
+    user,
+    session,
+    workingContext: rehydrateWorkingContext(`${system}\n${user}`, session),
+  };
 }
 
 /** Tool JSON fed back into the next model turn. Numeric amounts stay numbers. */

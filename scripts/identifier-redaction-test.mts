@@ -10,11 +10,14 @@ import { workflowPrompt, type WorkflowContext } from "../src/lib/client-briefing
 import { inviteDraftPrompt } from "../src/lib/market/prompt";
 import { ZA_MARKET } from "../src/lib/market";
 import {
+  sealedCacheAnswer,
+  cacheHitIsDisplaySafe,
   redactForModel,
   redactStatementText,
   redactStructured,
   redactTextParts,
   rehydrateClientName,
+  rehydrateForUi,
   rehydrateModelOutput,
 } from "../src/lib/redact-identifiers";
 import {
@@ -22,6 +25,7 @@ import {
   formatOverviewForPrompt,
   overviewFactLines,
 } from "../supabase/functions/ask-ai/overview-brief.ts";
+import { classify } from "../supabase/functions/ask-ai/classifier.ts";
 import { buildPrompt, sealAskAiPrompt } from "../supabase/functions/ask-ai/prompt.ts";
 import type { AskAiContext } from "../supabase/functions/ask-ai/types.ts";
 import { systemPromptFor } from "../supabase/functions/brain-propose/logic.ts";
@@ -34,6 +38,7 @@ import {
   redactToolResult,
 } from "../supabase/functions/milon-bot/prompt.ts";
 import { createRedactionSession } from "../supabase/functions/_shared/redact-identifiers.ts";
+import { BOT_SYSTEM } from "../supabase/functions/milon-bot/logic.ts";
 
 function assert(cond: boolean, msg: string) {
   if (!cond) throw new Error(msg);
@@ -390,5 +395,150 @@ assert(structured.amount === 184320.5, "structured amount stays a number");
 const extractSrc = readFileSync(resolve("supabase/functions/extract-financials/index.ts"), "utf8");
 assert(extractSrc.includes('media_type: "application/pdf"'), "PDF documents are still sent as documents");
 assert(extractSrc.includes("buildTextExtractionPayload"), "text extraction goes through the redactor");
+
+// ── client name comes back in the UI, not in the outbound prompt ───────────
+const QA_NAMES = ["QA US Test LLC", "QA US Test LLC (delete me)", "New York Yankees"] as const;
+const qaQuestion = "What is this client's name and total equity?";
+
+assert(classify("What is a gross margin?") === "none", "definitional questions stay uncached-client");
+assert(classify("What is the client's name?") !== "none", "client-name questions are not shared-cache tier");
+assert(classify(qaQuestion) !== "none", "name-and-equity question is not tier none");
+assert(classify("What is this client's name?") !== "none", "this client's name is not tier none");
+
+for (const qaName of QA_NAMES) {
+  const qaBrief = buildOverviewBrief({
+    financials: { equity: 150000, totalAssets: 400000, totalLiabilities: 250000 },
+    copyPack: "us",
+    clientName: qaName,
+  });
+  const workingOverview = formatOverviewForPrompt(qaBrief, "accountant");
+  assert(workingOverview.includes(qaName), `${qaName} is in the working overview`);
+  assert(workingOverview.includes("Total equity: $150,000"), `${qaName} overview dropped equity`);
+  assert(workingOverview.includes("Total assets: $400,000"), `${qaName} overview dropped assets`);
+  assert(workingOverview.includes("Total liabilities: $250,000"), `${qaName} overview dropped liabilities`);
+
+  const qaBot = buildMilonBotChatPayload({
+    system: BOT_SYSTEM,
+    overviewBlock: workingOverview,
+    history: [{ role: "assistant", content: `The client is ${qaName}.` }],
+    message: qaQuestion,
+    audience: "accountant",
+    subject: { clientName: qaName },
+  });
+  const outbound = `${qaBot.system}\n${qaBot.messages.map((turn) => turn.content).join("\n")}`;
+  assert(!outbound.includes(qaName), `milon-bot outbound still has ${qaName}`);
+  assert(outbound.includes("[CLIENT]"), `milon-bot outbound did not mark ${qaName}`);
+  assert(outbound.includes("CLIENT IDENTITY"), `milon-bot outbound did not label ${qaName}`);
+  assert(outbound.includes("Total equity: $150,000"), `milon-bot outbound dropped equity for ${qaName}`);
+  assert(outbound.includes("Total assets: $400,000"), `milon-bot outbound dropped assets for ${qaName}`);
+  assert(outbound.includes("Total liabilities: $250,000"), `milon-bot outbound dropped liabilities for ${qaName}`);
+  assert(qaBot.workingContext.includes(qaName), `working context lost ${qaName}`);
+  assert(!qaBot.workingContext.includes("[CLIENT]"), `working context still has the client token for ${qaName}`);
+
+  const echoed = rehydrateForUi(
+    "The client's name is [CLIENT]. Total equity is $150,000.",
+    qaBot.session,
+    qaQuestion,
+  );
+  assert(echoed.includes(qaName), `echoed answer did not restore ${qaName}`);
+  assert(!echoed.includes("[CLIENT]"), `echoed answer leaked [CLIENT] for ${qaName}`);
+  assert(!echoed.includes("[PERSON_1]"), `echoed answer leaked [PERSON_1] for ${qaName}`);
+  assert(!echoed.includes("[EMAIL]"), `echoed answer leaked [EMAIL] for ${qaName}`);
+  assert(echoed.includes("$150,000"), `echoed answer dropped equity for ${qaName}`);
+
+  const denied = rehydrateForUi(
+    "The client's name is not on file. Total equity is $150,000.",
+    qaBot.session,
+    qaQuestion,
+  );
+  assert(denied.includes(qaName), `denial answer did not restore ${qaName}`);
+  assert(!denied.includes("[CLIENT]"), `denial answer leaked [CLIENT] for ${qaName}`);
+  assert(!/not on file/i.test(denied), `denial answer still says the name is missing for ${qaName}`);
+  assert(denied.includes("$150,000"), `denial answer dropped equity for ${qaName}`);
+
+  const yankeesDenial = rehydrateForUi(
+    "No business name has been provided in the context. Total equity is $150,000.",
+    qaBot.session,
+    "What is this client's name?",
+  );
+  assert(yankeesDenial.includes(qaName), `context denial did not restore ${qaName}`);
+  assert(!yankeesDenial.includes("[CLIENT]"), `context denial leaked [CLIENT] for ${qaName}`);
+  assert(yankeesDenial.includes("$150,000"), `context denial dropped equity for ${qaName}`);
+
+  const equityOnly = rehydrateForUi("Total equity is $150,000.", qaBot.session, "What is total equity?");
+  assert(equityOnly === "Total equity is $150,000.", `equity-only answer was rewritten for ${qaName}`);
+
+  const qaAsk = sealAskAiPrompt(
+    buildPrompt(
+      qaQuestion,
+      { ...askCtx, clientName: qaName, overview: qaBrief, copyPack: "us" },
+      "focused",
+      "accountant",
+    ),
+    { clientName: qaName },
+  );
+  const askOutbound = `${qaAsk.system}\n${qaAsk.user}`;
+  assert(!askOutbound.includes(qaName), `ask-ai outbound still has ${qaName}`);
+  assert(askOutbound.includes("[CLIENT]"), `ask-ai outbound did not mark ${qaName}`);
+  assert(askOutbound.includes("CLIENT IDENTITY"), `ask-ai outbound did not label ${qaName}`);
+  assert(askOutbound.includes("Total equity: $150,000"), `ask-ai outbound dropped equity for ${qaName}`);
+  assert(qaAsk.workingContext.includes(qaName), `ask-ai working context lost ${qaName}`);
+  assert(!qaAsk.workingContext.includes("[CLIENT]"), `ask-ai working context kept [CLIENT] for ${qaName}`);
+
+  const cacheFromRaw = sealedCacheAnswer(
+    `The client's name is ${qaName}. Total equity is $150,000.`,
+    qaAsk.session,
+  );
+  assert(cacheFromRaw.includes("[CLIENT]"), `cache did not placeholder ${qaName}`);
+  assert(!cacheFromRaw.includes(qaName), `cache stored the raw name ${qaName}`);
+  assert(cacheFromRaw.includes("$150,000"), `cache dropped equity for ${qaName}`);
+  assert(!cacheHitIsDisplaySafe(cacheFromRaw), `placeholder cache row would render for ${qaName}`);
+
+  const cacheFromLower = sealedCacheAnswer(
+    `Name: ${qaName.toLowerCase()}. Total equity is $150,000.`,
+    qaAsk.session,
+  );
+  assert(!cacheFromLower.toLowerCase().includes(qaName.toLowerCase()), `cache stored a case variant of ${qaName}`);
+  assert(cacheFromLower.includes("[CLIENT]"), `cache missed a case variant of ${qaName}`);
+  assert(cacheFromLower.includes("$150,000"), `case-variant cache dropped equity for ${qaName}`);
+
+  const cacheFromToken = sealedCacheAnswer(
+    "The client's name is [CLIENT]. Total equity is $150,000.",
+    qaAsk.session,
+  );
+  assert(cacheFromToken.includes("[CLIENT]"), `token cache lost the placeholder for ${qaName}`);
+  assert(!cacheFromToken.includes(qaName), `token cache stored ${qaName}`);
+
+  const shown = rehydrateForUi(cacheFromToken, qaAsk.session, qaQuestion);
+  assert(shown.includes(qaName), `UI did not rehydrate the cached placeholder for ${qaName}`);
+  assert(!shown.includes("[CLIENT]"), `UI showed [CLIENT] for ${qaName}`);
+}
+
+const definitional = sealAskAiPrompt(
+  buildPrompt("What is a gross margin?", { ...askCtx, clientName: "New York Yankees" }, "none", "owner"),
+  { clientName: "New York Yankees" },
+);
+assert(!definitional.system.includes("CLIENT IDENTITY"), "definitional prompts stay out of client identity");
+assert(!`${definitional.system}\n${definitional.user}`.includes("New York Yankees"), "definitional prompt leaked the name");
+const genericCache = sealedCacheAnswer(
+  "Gross margin is revenue minus the cost of goods, divided by revenue.",
+  definitional.session,
+);
+assert(!genericCache.includes("[CLIENT]"), "generic cache answer grew a client token");
+assert(!genericCache.includes("New York Yankees"), "generic cache answer grew a client name");
+assert(cacheHitIsDisplaySafe(genericCache), "generic cache answer is safe to show");
+
+const botIndex = readFileSync(resolve("supabase/functions/milon-bot/index.ts"), "utf8");
+const askIndex = readFileSync(resolve("supabase/functions/ask-ai/index.ts"), "utf8");
+assert(
+  botIndex.includes("callClaudeRound(sealedChat.system, messages, TOOLS)"),
+  "bot calls Anthropic with the sealed system prompt",
+);
+assert(!botIndex.includes("sealedChat.workingContext"), "bot does not send the working context to Anthropic");
+assert(botIndex.includes("rehydrateForUi"), "bot rehydrates the answer for the UI");
+assert(askIndex.includes("sealedCacheAnswer(claudeResult.text, sealed.session)"), "ask-ai cache stores placeholders");
+assert(askIndex.includes("rehydrateForUi(claudeResult.text, sealed.session, question)"), "ask-ai rehydrates the UI answer");
+assert(askIndex.includes("cacheHitIsDisplaySafe"), "ask-ai does not render a placeholder cache hit");
+assert(!askIndex.includes("workingContext"), "ask-ai does not send the working context to Anthropic");
 
 console.log("identifier redaction tests passed");
