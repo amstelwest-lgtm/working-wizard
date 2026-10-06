@@ -104,6 +104,7 @@ assert(mapped.ebt === "33000", `EBT derived, got ${mapped.ebt}`);
 assert(mapped.netIncome === "33000", `net profit derived, got ${mapped.netIncome}`);
 assert(mapped.cash === "25000", `bank cash persisted, got ${mapped.cash}`);
 assert(mapped.receivables === "18000" && mapped.payables === "10000", "AR and AP kept");
+assert(mapped.totalLiabilities === "10000", `summed liabilities persist, got ${mapped.totalLiabilities}`);
 
 const ratios = computeRatios(mapped);
 assert(Math.abs(ratios["Gross Margin"] - 0.625) < 0.0001, `GM 62.5%, got ${ratios["Gross Margin"]}`);

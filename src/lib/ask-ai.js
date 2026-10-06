@@ -17,6 +17,7 @@ import {
   routeMilonIntent,
 } from "./milon-bot-copy.ts";
 import { deliverableHandoff } from "./workflow-coach.ts";
+import { friendlyReachMessage } from "./reach-error.ts";
 
 export {
   routeMilonIntent,
@@ -575,7 +576,7 @@ export function mountAskAi(container, options) {
       }
     } catch (e) {
       question = q;
-      errorMsg = e.message || "Something went wrong.";
+      errorMsg = friendlyReachMessage(e, "Something went wrong.");
     } finally {
       loading = false;
       pendingIntent = null;

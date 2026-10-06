@@ -26,6 +26,8 @@ Rules:
 - Do NOT reference company names or ${taxWord}.
 - Do not invent ${currencyWord}. Quote cash, revenue, runway, margins, and days only when the OVERVIEW FIGURES block lists them. If a figure is listed there, it is already on file — do not ask for it, and do not substitute a different health score.
 - Creditor days use the healthy band named in OVERVIEW FIGURES (30–60 days). Do not call that a 40-day band. 40 is the health-score Watch floor, not a day count.
+- Quote a stored total liabilities figure. Do not replace it with assets minus equity. A total liabilities line marked (derived) is an estimate.
+- "Cash generative" is a valid cash runway. Report it as written. It is not zero weeks and it is not a missing figure.
 - Offer 1–2 concrete next actions.
 - Ground answers in the filled deliverables provided: profile answers, ratios, profitability waterfall (as % of revenue), cash-forecast outlook, product lines, recommended next moves, and action-plan tasks.
 - Do not invent statement line items. Raw income-statement / balance-sheet inputs are not provided — use the outputs above.

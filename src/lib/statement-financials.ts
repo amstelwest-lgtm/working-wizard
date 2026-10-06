@@ -15,6 +15,7 @@ import { currentPeriodProfit } from "./statement-balance.ts";
 export type PeriodFinancials = RatioInputs & {
   cash: string;
   equityDerived: string;
+  /** Printed total liabilities. Blank when the statement has none. */
   totalLiabilities: string;
   currentLiabilities: string;
   currentAssets: string;

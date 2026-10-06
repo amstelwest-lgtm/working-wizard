@@ -47,7 +47,9 @@ export function buildMilonBotChatPayload(input: {
     {
       role: "user",
       content: applyRedaction(
-        `Audience: ${input.audience}. Client id is already scoped — do not ask for it.\n\n${input.message}`,
+        `${
+          input.overviewBlock?.trim() ? `${input.overviewBlock.trim()}\n\n` : ""
+        }Audience: ${input.audience}. Client id is already scoped — do not ask for it.\n\n${input.message}`,
         session,
       ),
     },

@@ -77,6 +77,7 @@ assert(fnSrc.includes("context_facts"), "reads context_facts");
 assert(fnSrc.includes("brain_summary"), "reads brain_summary");
 assert(fnSrc.includes("loadOverviewBrief"), "loads the Overview brief for this client");
 assert(fnSrc.includes("formatOverviewForPrompt"), "injects overview figures into the prompt");
+assert(fnSrc.includes("buildMilonBotChatPayload"), "every turn is built by the redacting chat payload");
 assert(fnSrc.includes("persistAdvisoryCreate"), "create intent writes a real deliverable");
 assert(fnSrc.includes('mode === "create"') || fnSrc.includes("createIntent"), "create mode is handled");
 assert(fnSrc.includes("client_financial_snapshots"), "reads financials summaries");
