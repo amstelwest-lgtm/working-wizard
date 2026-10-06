@@ -51,11 +51,22 @@ export function isSaMarketFirm(
   return false;
 }
 
-export type StoredDiscountRef = { id: string | null; couponId: string | null };
+export type StoredDiscountRef = {
+  id: string | null;
+  couponId: string | null;
+  promotionCodeId?: string | null;
+};
 
 function couponIdOf(coupon: unknown): string | null {
   if (typeof coupon === "string" && coupon.trim()) return coupon.trim();
   const record = asRecord(coupon);
+  const id = record?.id;
+  return typeof id === "string" && id.trim() ? id.trim() : null;
+}
+
+function promotionCodeIdOf(value: unknown): string | null {
+  if (typeof value === "string" && value.trim()) return value.trim();
+  const record = asRecord(value);
   const id = record?.id;
   return typeof id === "string" && id.trim() ? id.trim() : null;
 }
@@ -65,8 +76,9 @@ function discountRef(value: unknown): StoredDiscountRef | null {
   if (!record) return null;
   const id = typeof record.id === "string" && record.id.trim() ? record.id.trim() : null;
   const couponId = couponIdOf(record.coupon);
-  if (!id && !couponId) return null;
-  return { id, couponId };
+  const promotionCodeId = promotionCodeIdOf(record.promotion_code);
+  if (!id && !couponId && !promotionCodeId) return null;
+  return { id, couponId, promotionCodeId };
 }
 
 /** Stripe subscription.discount and subscription.discounts, either shape. */
@@ -85,7 +97,10 @@ export function readSubscriptionDiscountRefs(sub: {
   return out;
 }
 
-export type FirmCouponDiscount = { discount: string } | { coupon: string };
+export type FirmCouponDiscount =
+  | { discount: string }
+  | { coupon: string }
+  | { promotion_code: string };
 
 /**
  * Discounts to send on subscriptions.update. Undefined when the coupon is

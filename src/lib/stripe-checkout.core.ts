@@ -8,6 +8,11 @@ import { appRedirectOrigin } from "@/lib/app-origin";
 import { firmUpgradeReturnPath } from "@/lib/firm-band-upgrade";
 import { SA_FIRM_DISCOUNT_NOTE, saDiscountedUsdCents } from "@/lib/firm-sa-market";
 import {
+  FIRM_SETUP_PROMOTION_CODE,
+  FIRM_SETUP_PROMOTION_CODE_ID,
+  normalizeVoucherCode,
+} from "@/lib/firm-voucher";
+import {
   assertFoundingMonthlyOnly,
   FIRM_BAND_CATALOG,
   FIRM_TRIAL_DAYS,
@@ -26,6 +31,8 @@ export type CatalogPrice = {
   currency?: string | null;
   recurring?: { interval?: string | null } | null;
   unit_amount?: number | null;
+  /** Stripe product id, or an expanded product. */
+  product?: string | { id?: string | null } | null;
 };
 
 export type PriceLister = {
@@ -237,6 +244,8 @@ export type FirmSetupUpgradeRequest = {
   interval: FirmInterval;
   lookupKey: string;
   userId: string;
+  promotionCodeId: string | null;
+  promotionCode: string | null;
 };
 
 /** Stripe custom_text.submit.message max length. */
@@ -254,14 +263,19 @@ export function firmSetupCheckoutMessage(input: {
   currency: string;
   interval: FirmInterval;
   saMarket: boolean;
+  /** Set when a voucher replaces the SA coupon. Shown instead of the 50% line. */
+  voucherPreview?: string | null;
 }): string {
   const currency = input.currency.trim().toLowerCase();
   const cents = input.saMarket ? saDiscountedUsdCents(input.unitAmount) : input.unitAmount;
   const amount = formatUsdFromCents(cents);
   const billed = currency === "usd" ? "USD" : currency.toUpperCase();
-  const priced = input.saMarket
-    ? `${amount}/${input.interval} (${SA_FIRM_DISCOUNT_NOTE})`
-    : `${amount}/${input.interval}`;
+  const preview = input.voucherPreview?.trim() ?? "";
+  const priced = preview
+    ? preview
+    : input.saMarket
+      ? `${amount}/${input.interval} (${SA_FIRM_DISCOUNT_NOTE})`
+      : `${amount}/${input.interval}`;
   const message = `Saving this card moves you to MILŌN ${input.bandName} at ${priced} (${input.clientLimit} clients). Billed in ${billed}, cancel anytime.`;
   return message.length <= FIRM_SETUP_CHECKOUT_TEXT_MAX
     ? message
@@ -295,6 +309,9 @@ export function firmSetupCheckoutSessionParams(input: {
     recurring?: { interval?: string | null } | null;
   };
   saMarket: boolean;
+  promotionCodeId?: string | null;
+  promotionCode?: string | null;
+  voucherPreview?: string | null;
 }): Stripe.Checkout.SessionCreateParams {
   const origin = appRedirectOrigin([input.origin]);
   const metadata: Record<string, string> = {
@@ -305,6 +322,12 @@ export function firmSetupCheckoutSessionParams(input: {
     milon_interval: input.interval,
     milon_user_id: input.userId,
   };
+  const promotionCodeId = input.promotionCodeId?.trim() ?? "";
+  const promotionCode = normalizeVoucherCode(input.promotionCode);
+  if (promotionCodeId.startsWith("promo_") && promotionCode) {
+    metadata[FIRM_SETUP_PROMOTION_CODE_ID] = promotionCodeId;
+    metadata[FIRM_SETUP_PROMOTION_CODE] = promotionCode;
+  }
   const unitAmount = input.price.unit_amount;
   const currency = input.price.currency?.trim() ?? "";
   const band = FIRM_BAND_CATALOG[input.band];
@@ -318,6 +341,7 @@ export function firmSetupCheckoutSessionParams(input: {
     currency,
     interval: setupPriceInterval(input.price.recurring?.interval, input.interval),
     saMarket: input.saMarket,
+    voucherPreview: input.voucherPreview,
   });
   return {
     mode: "setup",
@@ -346,7 +370,17 @@ export function readFirmSetupUpgrade(
   if (!subscriptionId || !lookupKey || !userId) return null;
   if (!isFirmCheckoutBand(band)) return null;
   if (interval !== "month" && interval !== "year") return null;
-  return { subscriptionId, band, interval, lookupKey, userId };
+  const promotionCodeId = metadata[FIRM_SETUP_PROMOTION_CODE_ID]?.trim() ?? "";
+  const promotionCode = normalizeVoucherCode(metadata[FIRM_SETUP_PROMOTION_CODE]);
+  return {
+    subscriptionId,
+    band,
+    interval,
+    lookupKey,
+    userId,
+    promotionCodeId: promotionCodeId.startsWith("promo_") ? promotionCodeId : null,
+    promotionCode,
+  };
 }
 
 export function assertNoManagedPaymentsOverride(params: Stripe.Checkout.SessionCreateParams): void {

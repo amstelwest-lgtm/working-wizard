@@ -22,6 +22,7 @@ import {
   firmStarterTrialCountdownCopy,
 } from "@/lib/firm-starter-trial";
 import { FirmBandUpgrade } from "@/components/firm-band-upgrade";
+import { useFirmVoucherCheck } from "@/hooks/use-firm-voucher";
 import { UPGRADE_FAILED_MESSAGE } from "@/lib/firm-band-upgrade";
 import {
   createBillingPortalSession,
@@ -77,6 +78,7 @@ function SettingsPage() {
   const loadPlan = useServerFn(getFirmPlanDisplay);
   const upgradeBand = useServerFn(upgradeFirmBand);
   const { firmId } = useAccountantProfile();
+  const onValidateVoucher = useFirmVoucherCheck(firmId);
   const [plan, setPlan] = useState<FirmPlanDisplay | null>(null);
   const [planLoading, setPlanLoading] = useState(false);
   const [upgrading, setUpgrading] = useState(false);
@@ -360,11 +362,19 @@ function SettingsPage() {
                   clientCount={plan.clientCount}
                   saDiscount={plan.saDiscount}
                   upgrading={upgrading}
-                  onUpgrade={(band, interval) => {
+                  onValidateVoucher={onValidateVoucher}
+                  onUpgrade={(band, interval, voucherCode) => {
                     if (!firmId) return;
                     setUpgrading(true);
                     setUpgradeError(null);
-                    void upgradeBand({ data: { firmId, band, interval } })
+                    void upgradeBand({
+                      data: {
+                        firmId,
+                        band,
+                        interval,
+                        voucherCode: voucherCode?.trim() || undefined,
+                      },
+                    })
                       .then(async (result) => {
                         if (result.kind === "checkout") {
                           window.location.href = result.url;

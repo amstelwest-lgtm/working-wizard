@@ -9,6 +9,7 @@ import {
   type ZarBandAmounts,
 } from "@/lib/firm-band-upgrade";
 import { SA_FIRM_DISCOUNT_NOTE } from "@/lib/firm-sa-market";
+import { FIRM_VOUCHER_INVALID_MESSAGE } from "@/lib/firm-voucher";
 import {
   FIRM_BAND_CATALOG,
   FIRM_BAND_TABLE,
@@ -19,6 +20,10 @@ import {
   type FirmCheckoutBand,
   type FirmInterval,
 } from "@/lib/stripe-plans";
+
+export type FirmVoucherCheckResult =
+  | { ok: true; promotionCodeId: string; preview: string }
+  | { ok: false; message: string };
 
 type Props = {
   currentBand: FirmBandId | null;
@@ -32,7 +37,13 @@ type Props = {
   upgrading?: boolean;
   /** Server says this signed-in firm is SA. Never set from a public page. */
   saDiscount?: boolean;
-  onUpgrade?: (band: FirmCheckoutBand, interval: FirmInterval) => void;
+  onUpgrade?: (band: FirmCheckoutBand, interval: FirmInterval, voucherCode?: string | null) => void;
+  /** Checks the code with Stripe. Absent on previews that cannot bill. */
+  onValidateVoucher?: (input: {
+    code: string;
+    band: FirmCheckoutBand;
+    interval: FirmInterval;
+  }) => Promise<FirmVoucherCheckResult>;
 };
 
 function rowPrice(
@@ -46,7 +57,11 @@ function rowPrice(
 ): string {
   if (customQuote) return "Custom";
   // Starter has no annual price. $0 on the annual toggle is $0/yr, not $0/mo.
-  if (interval === "year" && yearlyUsdCents == null && FIRM_BAND_CATALOG[bandId].monthlyUsdCents === 0) {
+  if (
+    interval === "year" &&
+    yearlyUsdCents == null &&
+    FIRM_BAND_CATALOG[bandId].monthlyUsdCents === 0
+  ) {
     return currency === "ZAR" ? "R0/yr" : "$0/yr";
   }
   const pricedInterval: FirmInterval =
@@ -69,11 +84,17 @@ export function FirmBandUpgrade({
   upgrading = false,
   saDiscount = false,
   onUpgrade,
+  onValidateVoucher,
 }: Props) {
   const [interval, setInterval] = useState<FirmInterval>(intervalFromPlan);
   const [selected, setSelected] = useState<FirmCheckoutBand | null>(() =>
     nextBandUp(currentBand, clientCount),
   );
+  const [voucherCode, setVoucherCode] = useState("");
+  const [voucherChecked, setVoucherChecked] = useState<string | null>(null);
+  const [voucherPreview, setVoucherPreview] = useState<string | null>(null);
+  const [voucherError, setVoucherError] = useState<string | null>(null);
+  const [checkingVoucher, setCheckingVoucher] = useState(false);
 
   useEffect(() => {
     setInterval(intervalFromPlan);
@@ -83,7 +104,58 @@ export function FirmBandUpgrade({
     setSelected(nextBandUp(currentBand, clientCount));
   }, [currentBand, clientCount]);
 
+  useEffect(() => {
+    setVoucherChecked(null);
+    setVoucherPreview(null);
+    setVoucherError(null);
+  }, [selected, interval]);
+
   const currentIdx = currentBand ? FIRM_BAND_IDS.indexOf(currentBand) : -1;
+  const voucherApplied = Boolean(voucherPreview && voucherChecked);
+  const showSa = saDiscount && !voucherApplied;
+
+  async function applyVoucher(): Promise<boolean> {
+    if (!selected || !onValidateVoucher) return false;
+    const code = voucherCode.trim();
+    if (!code) {
+      setVoucherError(null);
+      setVoucherPreview(null);
+      setVoucherChecked(null);
+      return false;
+    }
+    setCheckingVoucher(true);
+    setVoucherError(null);
+    try {
+      const result = await onValidateVoucher({ code, band: selected, interval });
+      if (!result.ok) {
+        setVoucherPreview(null);
+        setVoucherChecked(null);
+        setVoucherError(result.message || FIRM_VOUCHER_INVALID_MESSAGE);
+        return false;
+      }
+      setVoucherPreview(result.preview);
+      setVoucherChecked(code);
+      setVoucherError(null);
+      return true;
+    } catch (err) {
+      setVoucherPreview(null);
+      setVoucherChecked(null);
+      setVoucherError(err instanceof Error ? err.message : FIRM_VOUCHER_INVALID_MESSAGE);
+      return false;
+    } finally {
+      setCheckingVoucher(false);
+    }
+  }
+
+  async function continueUpgrade() {
+    if (!selected || !onUpgrade || upgrading || checkingVoucher) return;
+    const code = voucherCode.trim();
+    if (code && code !== voucherChecked) {
+      await applyVoucher();
+      return;
+    }
+    onUpgrade(selected, interval, code && voucherChecked === code ? code : null);
+  }
 
   return (
     <div>
@@ -92,7 +164,7 @@ export function FirmBandUpgrade({
           {usageLabel}
         </p>
       ) : null}
-      {saDiscount ? (
+      {showSa ? (
         <p className="text-muted-foreground" style={{ margin: "0 0 12px", fontSize: 12 }}>
           {SA_FIRM_DISCOUNT_NOTE}
         </p>
@@ -136,7 +208,7 @@ export function FirmBandUpgrade({
             zarByBand,
             band.customQuote,
             band.yearlyUsdCents,
-            saDiscount,
+            showSa,
           );
           return (
             <label
@@ -190,13 +262,63 @@ export function FirmBandUpgrade({
           );
         })}
       </div>
+      {canUpgrade && onValidateVoucher ? (
+        <details style={{ marginTop: 14 }}>
+          <summary className="text-muted-foreground" style={{ cursor: "pointer", fontSize: 13 }}>
+            Have a voucher code?
+          </summary>
+          <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+            <input
+              aria-label="Voucher code"
+              value={voucherCode}
+              onChange={(event) => {
+                const next = event.target.value;
+                setVoucherCode(next);
+                if (next.trim() !== voucherChecked) {
+                  setVoucherPreview(null);
+                  setVoucherError(null);
+                }
+              }}
+              disabled={upgrading || checkingVoucher}
+              autoComplete="off"
+              spellCheck={false}
+              style={{ flex: 1, fontSize: 13, padding: "6px 8px" }}
+            />
+            <button
+              type="button"
+              className="btn ghost mini"
+              disabled={upgrading || checkingVoucher || !voucherCode.trim() || !selected}
+              onClick={() => void applyVoucher()}
+            >
+              {checkingVoucher ? "Checking…" : "Apply"}
+            </button>
+          </div>
+          {voucherError ? (
+            <p
+              role="alert"
+              style={{ margin: "8px 0 0", fontSize: 12, color: "var(--risk, #9b2c2c)" }}
+            >
+              {voucherError}
+            </p>
+          ) : null}
+          {voucherPreview ? (
+            <p
+              role="status"
+              className="text-foreground"
+              style={{ margin: "8px 0 0", fontSize: 13 }}
+            >
+              {voucherPreview}
+            </p>
+          ) : null}
+        </details>
+      ) : null}
       {canUpgrade && selected && onUpgrade ? (
         <button
           className="btn gold"
           type="button"
           style={{ marginTop: 16 }}
-          disabled={upgrading}
-          onClick={() => onUpgrade(selected, interval)}
+          disabled={upgrading || checkingVoucher}
+          onClick={() => void continueUpgrade()}
         >
           {upgrading ? "Upgrading…" : upgradeButtonLabel(selected)}
         </button>

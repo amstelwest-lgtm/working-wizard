@@ -43,6 +43,7 @@ import { createFirmClient, getFirmClientCreateAllowance } from "@/lib/firm-clien
 import { idleStarterTrialBanner, type FirmClientCreateAllowance } from "@/lib/firm-client-cap";
 import { browserAppOrigin } from "@/lib/app-origin";
 import { FirmBandUpgrade } from "@/components/firm-band-upgrade";
+import { useFirmVoucherCheck } from "@/hooks/use-firm-voucher";
 import { TrialEndedPlanBlock } from "@/components/trial-ended-plan-block";
 import { FirmStarterTrialBanner } from "@/components/firm-starter-trial-banner";
 import {
@@ -309,8 +310,13 @@ function FirmClientCapNotice({
   onConfirm: () => void;
   onEndTrial: () => void;
   onCancelConfirm: () => void;
-  onUpgradeBand: (band: FirmCheckoutBand, interval: FirmInterval) => void;
+  onUpgradeBand: (
+    band: FirmCheckoutBand,
+    interval: FirmInterval,
+    voucherCode?: string | null,
+  ) => void;
 }) {
+  const onValidateVoucher = useFirmVoucherCheck(firmId);
   if (cap.code === "starter_trial_ended") {
     return (
       <TrialEndedPlanBlock
@@ -371,6 +377,7 @@ function FirmClientCapNotice({
           saDiscount={upgrade.saDiscount}
           upgrading={upgrading}
           onUpgrade={onUpgradeBand}
+          onValidateVoucher={onValidateVoucher}
         />
       ) : !cap.canEndTrial ? (
         <p style={{ margin: 0, fontSize: 13, color: "var(--ink-dim)", lineHeight: 1.55 }}>
@@ -631,10 +638,12 @@ function AddClientDialog({
                   })
                   .finally(() => setUpgrading(false));
               }}
-              onUpgradeBand={(band, interval) => {
+              onUpgradeBand={(band, interval, voucherCode) => {
                 if (!firmId) return;
                 setUpgrading(true);
-                void upgradeBand({ data: { firmId, band, interval } })
+                void upgradeBand({
+                  data: { firmId, band, interval, voucherCode: voucherCode?.trim() || undefined },
+                })
                   .then(async (result) => {
                     if (result.kind === "checkout") {
                       window.location.href = result.url;

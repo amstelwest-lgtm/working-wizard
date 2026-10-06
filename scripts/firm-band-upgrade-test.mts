@@ -906,7 +906,8 @@ for (const publicFile of [
 assert(fn.includes("isSaMarketFirm"), "checkout decides SA from the firm record");
 assert(fn.includes("STRIPE_ZA_COUPON_ID"), "the coupon id is read from the env");
 assert(fn.includes("zaCouponIdForMarket"), "the client market flag is not the coupon switch");
-assert(sync.includes("zaSubscriptionDiscounts"), "setup completion attaches the coupon once");
+assert(sync.includes("firmUpgradeDiscounts"), "setup completion attaches one discount");
+assert(sync.includes("FIRM_VOUCHER_NOT_APPLIED_MESSAGE"), "a dropped voucher is reported");
 
 const now = new Date("2026-10-05T12:00:00.000Z");
 const day10 = starterTrialClock({
