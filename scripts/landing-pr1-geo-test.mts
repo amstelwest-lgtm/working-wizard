@@ -28,7 +28,7 @@ function assert(cond: boolean, msg: string) {
 
 const LEAK = /FOUNDING|50% off|ZAR|Adaptive Pricing|claude|trymilon/i;
 const DISCLOSURE =
-  "Claude prepares draft recommendations for accountant review. Identifiers stripped. Not used to train models.";
+  "Claude prepares draft recommendations for accountant review. Identifiers are stripped from the text we send; uploaded PDF statements are read as-is to extract the figures. Not used to train models.";
 
 function count(haystack: string, needle: string): number {
   const text = haystack.replace(/\s+/g, " ");

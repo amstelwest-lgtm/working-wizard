@@ -20,7 +20,7 @@ export const AI_IDENTIFIERS_LINE =
 
 /** Approved disclosure. Visible /faq answer and FAQPage JSON-LD share this sentence. Not used on the homepage FAQ. */
 export const AI_MODEL_DISCLOSURE =
-  "Claude prepares draft recommendations for accountant review. Identifiers stripped. Not used to train models.";
+  "Claude prepares draft recommendations for accountant review. Identifiers are stripped from the text we send; uploaded PDF statements are read as-is to extract the figures. Not used to train models.";
 
 /** Monitoring seat, not a billed advisory client. Stripe does not line-item these. */
 export const WATCHLIST_DEFINITION =

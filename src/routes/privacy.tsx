@@ -129,7 +129,7 @@ function PrivacyPage() {
       </p>
 
       <h2>How AI is used</h2>
-      <p>Claude prepares draft recommendations for accountant review. Identifiers stripped. Not used to train models.</p>
+      <p>Claude prepares draft recommendations for accountant review. Identifiers are stripped from the text we send; uploaded PDF statements are read as-is to extract the figures. Not used to train models.</p>
       <p>
         Milōn uses AI. It is powered by <strong>Claude</strong> (Anthropic). {AI_IDENTIFIERS_LINE}{" "}
         <MarketCopy
