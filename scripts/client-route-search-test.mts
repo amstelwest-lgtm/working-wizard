@@ -16,6 +16,8 @@ assert(normalizeAccountantClientTab("health") === "ratios", "?tab=health opens H
 assert(normalizeAccountantClientTab("plan") === "plan", "plan stays plan");
 assert(normalizeAccountantClientTab("ratios") === "ratios", "ratios stays ratios");
 assert(normalizeAccountantClientTab("overview") === "overview", "overview stays overview");
+assert(normalizeAccountantClientTab("summary") === "overview", "?tab=summary highlights Overview");
+assert(normalizeAccountantClientTab("brain") === "summary", "?tab=brain opens Client Brain");
 assert(normalizeAccountantClientTab("cash") === "cash", "cash stays cash");
 
 const route = readFileSync(resolve("src/routes/_authenticated/clients.$clientId.tsx"), "utf8");

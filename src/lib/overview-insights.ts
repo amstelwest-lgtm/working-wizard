@@ -46,16 +46,19 @@ export function computeHealthBand(avgHealth: number): {
  * Snapshot-style figure highlights from current inputs — NOT week-over-week changes.
  * Callers must label the rail as "From your figures", never "This Week".
  */
-export function computeWeekChanges(input: {
-  revenueGrowth: number;
-  cashHealth: number;
-  profitHealth: number;
-  grossMarginRatio: number;
-}): WeekChange[] {
+export function computeWeekChanges(
+  input?: {
+    revenueGrowth?: number;
+    cashHealth?: number;
+    profitHealth?: number;
+    grossMarginRatio?: number;
+  } | null,
+): WeekChange[] {
+  if (!input || typeof input !== "object") return [];
   const changes: WeekChange[] = [];
   const { revenueGrowth, cashHealth, profitHealth, grossMarginRatio } = input;
 
-  if (isFinite(revenueGrowth)) {
+  if (typeof revenueGrowth === "number" && isFinite(revenueGrowth)) {
     const pct = Math.round(revenueGrowth * 100);
     changes.push({
       label: "Revenue growth (input)",
@@ -64,7 +67,12 @@ export function computeWeekChanges(input: {
     });
   }
 
-  if (isFinite(cashHealth) && isFinite(profitHealth)) {
+  if (
+    typeof cashHealth === "number" &&
+    typeof profitHealth === "number" &&
+    isFinite(cashHealth) &&
+    isFinite(profitHealth)
+  ) {
     const gap = Math.round(cashHealth - profitHealth);
     changes.push({
       label: "Cash vs profit health",
@@ -73,7 +81,7 @@ export function computeWeekChanges(input: {
     });
   }
 
-  if (isFinite(grossMarginRatio)) {
+  if (typeof grossMarginRatio === "number" && isFinite(grossMarginRatio)) {
     const gm = Math.round(grossMarginRatio * 1000) / 10;
     changes.push({
       label: "Gross margin",
@@ -82,7 +90,8 @@ export function computeWeekChanges(input: {
     });
   }
 
-  return changes.slice(0, 3);
+  const list = Array.isArray(changes) ? changes : [];
+  return list.slice(0, 3);
 }
 
 /**
@@ -99,13 +108,16 @@ export function computeCashTrajectory(_input: {
   return null;
 }
 
-export function computeOverviewCaption(input: {
-  hasRealFinancials: boolean;
-  avgHealth: number;
-  cashHealth: number;
-  /** Runway / shortfall override. When set, the caption uses this instead of the raw score. */
-  displayStatus?: HealthTier;
-}): string | undefined {
+export function computeOverviewCaption(
+  input?: {
+    hasRealFinancials: boolean;
+    avgHealth: number;
+    cashHealth: number;
+    /** Runway / shortfall override. When set, the caption uses this instead of the raw score. */
+    displayStatus?: HealthTier;
+  } | null,
+): string | undefined {
+  if (!input) return undefined;
   const { hasRealFinancials, avgHealth, cashHealth } = input;
   if (!hasRealFinancials || !isFinite(avgHealth)) return undefined;
   const tier = input.displayStatus ?? scoreTier(avgHealth);

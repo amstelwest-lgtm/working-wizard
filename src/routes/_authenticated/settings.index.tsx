@@ -21,6 +21,7 @@ import {
   STARTER_TRIAL_ENDED_MESSAGE,
   firmStarterTrialCountdownCopy,
 } from "@/lib/firm-starter-trial";
+import { rememberStarterTrialGenerationBlocked } from "@/lib/starter-trial-client";
 import { FirmBandUpgrade } from "@/components/firm-band-upgrade";
 import { useFirmVoucherCheck } from "@/hooks/use-firm-voucher";
 import { UPGRADE_FAILED_MESSAGE } from "@/lib/firm-band-upgrade";
@@ -160,7 +161,11 @@ function SettingsPage() {
     setPlanLoading(true);
     void loadPlan({ data: { firmId } })
       .then((next) => {
-        if (!cancelled) setPlan(next);
+        if (cancelled) return;
+        setPlan(next);
+        if (firmId && next?.starterTrial) {
+          rememberStarterTrialGenerationBlocked(firmId, next.starterTrial.expired === true);
+        }
       })
       .catch(() => {
         if (!cancelled) setPlan(null);
@@ -383,6 +388,12 @@ function SettingsPage() {
                         toast.success(result.message);
                         const next = await loadPlan({ data: { firmId } });
                         setPlan(next);
+                        if (next?.starterTrial) {
+                          rememberStarterTrialGenerationBlocked(
+                            firmId,
+                            next.starterTrial.expired === true,
+                          );
+                        }
                       })
                       .catch((ex: unknown) => {
                         const message = ex instanceof Error ? ex.message : UPGRADE_FAILED_MESSAGE;

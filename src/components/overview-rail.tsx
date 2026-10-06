@@ -113,14 +113,14 @@ export function OverviewRail({
   liveLabel,
   showLiveBadge = false,
   healthBand = null,
-  weekChanges,
+  weekChanges = [],
   cashTrajectory,
   onOpenCash,
   onOpenMoves,
   onOpenBenchmarks,
   industryPulse,
 }: OverviewRailProps) {
-  const topChanges = weekChanges.slice(0, 2);
+  const topChanges = (Array.isArray(weekChanges) ? weekChanges : []).slice(0, 2);
 
   return (
     <aside className="flex w-full flex-col gap-2.5">
