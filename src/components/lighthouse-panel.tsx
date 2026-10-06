@@ -199,6 +199,18 @@ export function LighthousePanel({
     return () => window.clearInterval(timer);
   }, []);
 
+  useEffect(() => {
+    if (!confirmSend) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
+      setConfirmSend(null);
+    };
+    document.addEventListener("keydown", onKey, true);
+    return () => document.removeEventListener("keydown", onKey, true);
+  }, [confirmSend]);
+
   const openLead = useMemo(
     () => dash?.leads.find((l) => l.id === openLeadId) ?? null,
     [dash, openLeadId],
@@ -851,7 +863,7 @@ export function LighthousePanel({
       )}
 
       {confirmSend && (
-        <div className="fixed inset-0 z-[90] grid place-items-center bg-black/50 p-4">
+        <div data-lighthouse-confirm className="fixed inset-0 z-[90] grid place-items-center bg-black/50 p-4">
           <div className="w-full max-w-md rounded-2xl border border-[var(--ops-line)] bg-[var(--ops-bg-elevated)] p-5">
             <h3 className="text-sm font-bold text-[var(--ops-ink)]">Send this email?</h3>
             <dl className="mt-3 space-y-1.5 text-[12.5px] text-[var(--ops-ink-soft)]">
@@ -1548,6 +1560,24 @@ function LeadDrawer({
     setReplyOpen(true);
   }, [lead.id, lead.inbound]);
 
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      if (document.querySelector("[data-lighthouse-confirm]")) return;
+      event.preventDefault();
+      event.stopPropagation();
+      onClose();
+    };
+    document.addEventListener("keydown", onKey, true);
+    return () => document.removeEventListener("keydown", onKey, true);
+  }, [onClose]);
+
+  const closeDrawer = (event: { preventDefault: () => void; stopPropagation: () => void }) => {
+    event.preventDefault();
+    event.stopPropagation();
+    onClose();
+  };
+
   return (
     <div
       className="fixed inset-0 z-[80] flex justify-end bg-black/50 backdrop-blur-sm"
@@ -1615,10 +1645,13 @@ function LeadDrawer({
             )}
           </div>
           <button
-            onClick={onClose}
+            type="button"
+            aria-label="Close"
+            onPointerDown={closeDrawer}
+            onClick={closeDrawer}
             className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-[var(--ops-line-strong)] text-[var(--ops-ink-dim)] hover:text-[var(--ops-ink)]"
           >
-            <X className="h-4 w-4" />
+            <X className="pointer-events-none h-4 w-4" />
           </button>
         </div>
 

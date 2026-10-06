@@ -40,6 +40,11 @@ export function LighthouseAgentChat({
   const [collapsed, setCollapsed] = useState(false);
   const threadRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
+  const messagesRef = useRef<ChatMessage[]>([]);
+  const busyRef = useRef(false);
+  const queueRef = useRef<string[]>([]);
+  const [queuedPrompts, setQueuedPrompts] = useState<string[]>([]);
+  messagesRef.current = messages;
 
   useEffect(() => {
     setMessages(readChatThread(window.localStorage, adminKey));
@@ -59,29 +64,34 @@ export function LighthouseAgentChat({
 
   const showThread = collapsed ? false : mobileOpen ? true : undefined;
 
-  const send = async (text: string) => {
-    const message = text.trim();
-    if (!message || busy) return;
+  const publish = (next: ChatMessage[]) => {
+    messagesRef.current = next;
+    setMessages(next);
+  };
+
+  const run = async (message: string) => {
+    busyRef.current = true;
     setBusy(true);
     setError("");
     setMobileOpen(true);
+    setCollapsed(false);
+    const history = messagesRef.current
+      .slice(-8)
+      .map((row) => ({ role: row.role, content: row.content }));
+    publish([
+      ...messagesRef.current,
+      { id: newChatMessageId(), role: "user", content: message, chips: [], createdAt: new Date().toISOString() },
+    ]);
     try {
-      const result = await ask({
-        data: {
-          message,
-          history: messages.slice(-8).map((row) => ({ role: row.role, content: row.content })),
-        },
-      });
-      const now = new Date().toISOString();
-      setMessages((prev) => [
-        ...prev,
-        { id: newChatMessageId(), role: "user", content: message, chips: [], createdAt: now },
+      const result = await ask({ data: { message, history } });
+      publish([
+        ...messagesRef.current,
         {
           id: newChatMessageId(),
           role: "assistant",
           content: result.reply,
           chips: result.chips ?? [],
-          createdAt: now,
+          createdAt: new Date().toISOString(),
         },
       ]);
       setInput("");
@@ -89,9 +99,27 @@ export function LighthouseAgentChat({
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not ask Lighthouse.");
     } finally {
-      setBusy(false);
-      inputRef.current?.focus();
+      const next = queueRef.current.shift();
+      setQueuedPrompts([...queueRef.current]);
+      if (next) {
+        await run(next);
+      } else {
+        busyRef.current = false;
+        setBusy(false);
+        inputRef.current?.focus();
+      }
     }
+  };
+
+  const send = (text: string) => {
+    const message = text.trim();
+    if (!message) return;
+    if (busyRef.current) {
+      queueRef.current.push(message);
+      setQueuedPrompts([...queueRef.current]);
+      return;
+    }
+    void run(message);
   };
 
   const clear = () => {
@@ -119,11 +147,13 @@ export function LighthouseAgentChat({
       onToggleMobile={() => setMobileOpen((open) => !open)}
       onToggleCollapse={() => setCollapsed((open) => !open)}
       mobileOpen={mobileOpen}
+      queuedPrompts={queuedPrompts}
       onSend={() => void send(input)}
       onPrompt={(prompt) => {
         if (prompt.startsWith("Draft a follow-up")) {
           setInput("Draft a follow-up for ");
           setMobileOpen(true);
+          setCollapsed(false);
           inputRef.current?.focus();
           return;
         }
@@ -153,6 +183,7 @@ export function LighthouseAgentChatView({
   onInput,
   onToggleMobile,
   onToggleCollapse,
+  queuedPrompts = [],
   onSend,
   onPrompt,
   onClear,
@@ -172,6 +203,7 @@ export function LighthouseAgentChatView({
   onInput: (value: string) => void;
   onToggleMobile: () => void;
   onToggleCollapse: () => void;
+  queuedPrompts?: string[];
   onSend: () => void;
   onPrompt: (prompt: string) => void;
   onClear: () => void;
@@ -223,17 +255,33 @@ export function LighthouseAgentChatView({
 
       <div className={threadClass}>
         <div className="flex flex-wrap gap-1.5 px-3 pt-3">
-          {LIGHTHOUSE_CHAT_PROMPTS.map((prompt) => (
-            <button
-              key={prompt}
-              type="button"
-              disabled={busy}
-              onClick={() => onPrompt(prompt)}
-              className="rounded-full border border-[var(--ops-line)] px-2.5 py-1 text-left text-[11px] text-[var(--ops-ink-soft)] hover:border-[var(--ops-amber-border)] disabled:opacity-50"
-            >
-              {prompt}
-            </button>
-          ))}
+          {LIGHTHOUSE_CHAT_PROMPTS.map((prompt) => {
+            const queued = queuedPrompts.includes(prompt);
+            return (
+              <button
+                key={prompt}
+                type="button"
+                title={
+                  busy
+                    ? prompt.startsWith("Draft a follow-up")
+                      ? "Thinking… click to fill the message box"
+                      : "Thinking… this sends when the answer finishes"
+                    : undefined
+                }
+                aria-disabled={busy}
+                onClick={() => onPrompt(prompt)}
+                className={`rounded-full border px-2.5 py-1 text-left text-[11px] text-[var(--ops-ink-soft)] hover:border-[var(--ops-amber-border)] ${
+                  queued
+                    ? "cursor-wait border-[var(--ops-amber-border)] text-[var(--ops-amber)]"
+                    : busy
+                      ? "cursor-wait border-[var(--ops-line)]"
+                      : "border-[var(--ops-line)]"
+                }`}
+              >
+                {queued ? `${prompt} · queued` : prompt}
+              </button>
+            );
+          })}
         </div>
         <div ref={threadRef} className="min-h-[8rem] flex-1 space-y-2 overflow-y-auto px-3 py-3">
           {messages.length === 0 && !busy && (
@@ -270,9 +318,13 @@ export function LighthouseAgentChatView({
             </div>
           ))}
           {busy && (
-            <div className="flex items-center gap-2 text-[12px] text-[var(--ops-ink-dim)]">
+            <div
+              className="flex items-center gap-2 text-[13px] font-semibold text-[var(--ops-ink)]"
+              role="status"
+              aria-live="polite"
+            >
               <Loader2 className="h-3.5 w-3.5 animate-spin text-[var(--ops-amber)]" />
-              Looking at the book…
+              Thinking…
             </div>
           )}
         </div>

@@ -839,7 +839,12 @@ for (const promptText of LIGHTHOUSE_CHAT_PROMPTS) {
   assert(htmlText.includes(promptText), `suggested prompt renders: ${promptText}`);
 }
 assert(html.includes("Clear"), "Clear renders");
-assert(html.includes("Looking at the book"), "loading state renders");
+assert(html.includes("Thinking"), "loading state says Thinking");
+assert(
+  html.includes("this sends when the answer finishes"),
+  "prompt chips stay available with a tooltip while thinking",
+);
+assert(!html.includes("disabled:opacity-50"), "prompt chips are not faded out while thinking");
 assert(html.includes("The console is locked."), "error state renders");
 assert(html.includes("Enter to send"), "Enter hint renders");
 assert(html.includes("Shift+Enter"), "Shift+Enter hint renders");

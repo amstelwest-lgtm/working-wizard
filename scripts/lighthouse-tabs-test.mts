@@ -240,4 +240,9 @@ assert(
   "an earlier step does not block the next step",
 );
 
+assert(src.includes('aria-label="Close"'), "the review drawer close control is labelled");
+assert(src.includes('event.key !== "Escape"'), "Escape closes the review drawer");
+assert(src.includes("onPointerDown={closeDrawer}"), "the close control closes on pointer down");
+assert(src.includes("pointer-events-none"), "the close icon does not steal the click");
+
 console.log("lighthouse tabs ok");
