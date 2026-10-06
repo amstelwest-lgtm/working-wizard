@@ -1,5 +1,5 @@
 import { createFileRoute, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useAuth } from "@/hooks/use-auth";
 import {
@@ -8,6 +8,7 @@ import {
   stashPendingCheckout,
 } from "@/lib/pending-checkout";
 import { getFirmBillingEntitlement } from "@/lib/stripe-checkout.functions";
+import { applyPortalTheme, resolvePortalTheme } from "@/lib/portal-theme";
 import { isFirmProductPath } from "@/lib/stripe-entitlement";
 import { firmSignupCheckoutIntent } from "@/lib/stripe-plans";
 import {
@@ -28,6 +29,10 @@ function AuthGate() {
   const checkEntitlement = useServerFn(getFirmBillingEntitlement);
   const entitledRef = useRef(false);
   const [firmGate, setFirmGate] = useState<"idle" | "checking" | "allow">("idle");
+
+  useLayoutEffect(() => {
+    applyPortalTheme(resolvePortalTheme());
+  }, []);
 
   useEffect(() => {
     if (!loading && !user) navigate({ to: "/auth", search: {} });
@@ -87,13 +92,13 @@ function AuthGate() {
 
   if (loading) {
     return (
-      <div className="min-h-screen grid place-items-center text-muted-foreground">Loading…</div>
+      <div className="min-h-screen grid place-items-center bg-background text-foreground">Loading…</div>
     );
   }
   if (!user) return null;
   if (isFirmProductPath(pathname) && firmGate !== "allow") {
     return (
-      <div className="min-h-screen grid place-items-center text-muted-foreground">
+      <div className="min-h-screen grid place-items-center bg-background text-foreground">
         Checking billing…
       </div>
     );

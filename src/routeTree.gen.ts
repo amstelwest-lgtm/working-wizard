@@ -54,7 +54,7 @@ import { Route as AuthenticatedSettingsBrandRouteImport } from './routes/_authen
 import { Route as AuthenticatedReportsDemoRouteImport } from './routes/_authenticated/reports.demo'
 import { Route as AuthenticatedFounderMetricsRouteImport } from './routes/_authenticated/founder.metrics'
 import { Route as AuthenticatedClientsClientIdRouteImport } from './routes/_authenticated/clients.$clientId'
-import { Route as AuthenticatedClientsRouteImport } from './routes/_authenticated/clients'
+import { Route as AuthenticatedClientsRouteImport } from './routes/_authenticated/clients.index'
 import { Route as LovableEmailTransactionalSendRouteImport } from './routes/lovable/email/transactional/send'
 import { Route as LovableEmailTransactionalPreviewRouteImport } from './routes/lovable/email/transactional/preview'
 import { Route as LovableEmailQueueProcessRouteImport } from './routes/lovable/email/queue/process'
@@ -291,8 +291,8 @@ const AuthenticatedClientsClientIdRoute =
     getParentRoute: () => AuthenticatedRoute,
   } as any)
 const AuthenticatedClientsRoute = AuthenticatedClientsRouteImport.update({
-  id: '/clients',
-  path: '/clients',
+  id: '/clients/',
+  path: '/clients/',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
 const LovableEmailTransactionalSendRoute =
@@ -348,7 +348,7 @@ export interface FileRoutesByFullPath {
   '/lh/unsubscribe': typeof LhUnsubscribeRoute
   '/t/$token': typeof TTokenRoute
   '/clients/$clientId': typeof AuthenticatedClientsClientIdRoute
-  '/clients': typeof AuthenticatedClientsRoute
+  '/clients/': typeof AuthenticatedClientsRoute
   '/founder/metrics': typeof AuthenticatedFounderMetricsRoute
   '/reports/demo': typeof AuthenticatedReportsDemoRoute
   '/settings/brand': typeof AuthenticatedSettingsBrandRoute
@@ -450,7 +450,7 @@ export interface FileRoutesById {
   '/lh/unsubscribe': typeof LhUnsubscribeRoute
   '/t/$token': typeof TTokenRoute
   '/_authenticated/clients/$clientId': typeof AuthenticatedClientsClientIdRoute
-  '/_authenticated/clients': typeof AuthenticatedClientsRoute
+  '/_authenticated/clients/': typeof AuthenticatedClientsRoute
   '/_authenticated/founder/metrics': typeof AuthenticatedFounderMetricsRoute
   '/_authenticated/reports/demo': typeof AuthenticatedReportsDemoRoute
   '/_authenticated/settings/brand': typeof AuthenticatedSettingsBrandRoute
@@ -502,7 +502,7 @@ export interface FileRouteTypes {
     | '/lh/unsubscribe'
     | '/t/$token'
     | '/clients/$clientId'
-    | '/clients'
+    | '/clients/'
     | '/founder/metrics'
     | '/reports/demo'
     | '/settings/brand'
@@ -603,7 +603,7 @@ export interface FileRouteTypes {
     | '/lh/unsubscribe'
     | '/t/$token'
     | '/_authenticated/clients/$clientId'
-    | '/_authenticated/clients'
+    | '/_authenticated/clients/'
     | '/_authenticated/founder/metrics'
     | '/_authenticated/reports/demo'
     | '/_authenticated/settings/brand'
@@ -979,10 +979,10 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedClientsClientIdRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/clients': {
-      id: '/_authenticated/clients'
+    '/_authenticated/clients/': {
+      id: '/_authenticated/clients/'
       path: '/clients'
-      fullPath: '/clients'
+      fullPath: '/clients/'
       preLoaderRoute: typeof AuthenticatedClientsRouteImport
       parentRoute: typeof AuthenticatedRoute
     }

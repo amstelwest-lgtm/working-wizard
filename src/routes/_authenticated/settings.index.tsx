@@ -311,7 +311,7 @@ function SettingsPage() {
 
       {isPractice && (
         <SectionCard
-          className="mb-6"
+          className="settings-plan-card mb-6"
           eyebrow={
             <span className="inline-flex items-center gap-2">
               <Palette className="h-4 w-4" />
