@@ -85,7 +85,7 @@ export function publicFaqUsItems(): FaqItem[] {
     },
     {
       question: "What does the AI see?",
-      answer: `We use AI. It is powered by Claude. ${AI_IDENTIFIERS_LINE} Where an AI drafts a report for an accountant, a human reads and signs it before a client ever sees it. The AI notice at https://milonfinance.com/ai is the public version of that sentence.`,
+      answer: `We use AI. It is powered by our AI agent. ${AI_IDENTIFIERS_LINE} Where an AI drafts a report for an accountant, a human reads and signs it before a client ever sees it. The AI notice at https://milonfinance.com/ai is the public version of that sentence.`,
     },
     {
       question: "Do you store card details?",

@@ -50,7 +50,7 @@ function PrivacyPage() {
       ctaTitle={<>Read how the AI is used</>}
       ctaBody={
         <>
-          We use Claude. {AI_IDENTIFIERS_LINE} The short notice is one page.
+          We use our AI agent. {AI_IDENTIFIERS_LINE} The short notice is one page.
         </>
       }
       ctaLabel="AI notice ✦"
@@ -130,7 +130,7 @@ function PrivacyPage() {
 
       <h2>How AI is used</h2>
       <p>
-        Milōn uses AI. It is powered by <strong>Claude</strong> (Anthropic). {AI_IDENTIFIERS_LINE}{" "}
+        Milōn uses AI. It is powered by <strong>our AI agent</strong>. {AI_IDENTIFIERS_LINE}{" "}
         <MarketCopy
           za="VAT numbers and account numbers are among the identifiers stripped"
           us="EIN / tax IDs and account numbers are among the identifiers stripped"

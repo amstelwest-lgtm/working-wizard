@@ -141,7 +141,7 @@ Deno.serve(async (req: Request) => {
     }
     if (!aiRes.ok) {
       const t = await aiRes.text();
-      return new Response(JSON.stringify({ error: `Claude: ${aiRes.status} ${t.slice(0, 300)}` }),
+      return new Response(JSON.stringify({ error: `Model error: ${aiRes.status} ${t.slice(0, 300)}` }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 

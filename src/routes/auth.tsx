@@ -693,7 +693,7 @@ function AuthPage() {
                   <a href="/terms" className="auth-entry__link">
                     Terms
                   </a>
-                  . AI is powered by Claude; financial information sent to it is anonymised.{" "}
+                  . AI is powered by Milōn; financial information sent to it is anonymised.{" "}
                   <a href="/privacy" className="auth-entry__link">
                     Privacy
                   </a>

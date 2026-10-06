@@ -199,7 +199,7 @@ assert(landing.includes("Interest Burden"), "marquee lists Interest Burden");
 assert(landing.includes("Tax Burden"), "marquee lists Tax Burden");
 assert(landing.includes("Inventory Days"), "marquee lists Inventory Days");
 assert(landing.includes("Gross Profit / Labor"), "marquee lists Gross Profit / Labor");
-assert(landing.includes("Identifiers stripped before Claude"), "trust chip is identifier-only");
+assert(landing.includes("Identifiers stripped before our AI"), "trust chip is identifier-only");
 assert(landing.includes("WATCHLIST_DEFINITION"), "landing pricing defines watchlist");
 assert(landing.includes("FOUNDING_CALLOUT"), "landing pricing surfaces FOUNDING");
 assert(!landing.includes("raw amounts removed"), "landing FAQ does not claim amounts are stripped");

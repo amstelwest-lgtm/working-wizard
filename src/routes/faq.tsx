@@ -114,7 +114,7 @@ function FaqPage() {
 
       <Qa q="What does the AI see?">
         <p>
-          We use AI. It is powered by Claude. {AI_IDENTIFIERS_LINE} Where an AI drafts a report for
+          We use AI. It is powered by our AI agent. {AI_IDENTIFIERS_LINE} Where an AI drafts a report for
           an accountant, a human reads and signs it before a client ever sees it. The{" "}
           <a href="/ai">AI notice</a> is the public version of that sentence.
         </p>

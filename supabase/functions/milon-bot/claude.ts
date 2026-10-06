@@ -70,7 +70,7 @@ export async function callClaudeRound(
   if (res.status === 429) throw new Error("Rate limit reached — try again in a moment.");
   if (!res.ok) {
     const body = await res.text().catch(() => "");
-    throw new Error(`Claude error (${res.status}): ${body.slice(0, 200)}`);
+    throw new Error(`Model error (${res.status}): ${body.slice(0, 200)}`);
   }
 
   const json = await res.json();

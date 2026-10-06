@@ -575,7 +575,7 @@ async function callClaude(apiKey: string, prompt: string): Promise<string> {
   if (res.status === 429) throw new Error("Rate limit hit — try again in a moment.");
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    throw new Error(`Claude error (${res.status}): ${text.slice(0, 200)}`);
+    throw new Error(`Model error (${res.status}): ${text.slice(0, 200)}`);
   }
   const json = (await res.json()) as {
     content?: Array<{ type: string; text?: string }>;

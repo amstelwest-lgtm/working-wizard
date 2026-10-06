@@ -188,7 +188,7 @@ export function OwnerInviteSignupPanel({
           <a href="/terms" className="underline underline-offset-2">
             Terms
           </a>
-          . AI is powered by Claude; financial information sent to it is anonymised.{" "}
+          . AI is powered by Milōn; financial information sent to it is anonymised.{" "}
           <a href="/privacy" className="underline underline-offset-2">
             Privacy
           </a>

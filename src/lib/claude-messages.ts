@@ -55,7 +55,7 @@ export async function callClaudeMessages(opts: {
     }
     if (!res.ok) {
       const body = await res.text().catch(() => "");
-      throw new Error(`Claude error (${res.status}): ${body.slice(0, 300)}`);
+      throw new Error(`Model error (${res.status}): ${body.slice(0, 300)}`);
     }
 
     const json = (await res.json()) as {
@@ -66,7 +66,7 @@ export async function callClaudeMessages(opts: {
       .map((b) => b.text ?? "")
       .join("")
       .trim();
-    if (!text) throw new Error("Claude returned an empty response.");
+    if (!text) throw new Error("The model returned an empty response.");
     return text;
   } finally {
     clearTimeout(timeout);
@@ -80,6 +80,6 @@ export function parseClaudeJson<T = unknown>(raw: string): T {
   } catch {
     const match = jsonText.match(/\{[\s\S]*\}/);
     if (match) return JSON.parse(match[0]) as T;
-    throw new Error("Could not parse JSON from Claude response");
+    throw new Error("Could not parse JSON from the model response");
   }
 }

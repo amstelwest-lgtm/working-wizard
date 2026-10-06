@@ -459,7 +459,7 @@ function SettingsPage() {
             Legal
           </span>
         }
-        description="AI is powered by Claude. Financial information sent to the model is anonymised."
+        description="AI is powered by Milōn. Financial information sent to the model is anonymised."
       >
         <div className="flex flex-col gap-2">
           <a href="/privacy" className="settings-row">
