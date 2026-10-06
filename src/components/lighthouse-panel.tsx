@@ -7,7 +7,7 @@
  * caps, the locked From / Reply-To, and the allowlist.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
@@ -57,16 +57,21 @@ import {
   buildReviewInbox,
   cadenceOf,
   lighthouseReviewPulse,
+  assertColdDraftOpen,
   firmCardTitle,
   formatOpsCount,
   formatOpsPercent,
   geoWindowLine,
   isDryRunCohortName,
   nextUpAction,
+  refuseColdDraft,
   zoneClocks,
 } from "@/lib/lighthouse-agent";
 import { LIGHTHOUSE_FROM_EMAIL } from "@/lib/lighthouse-from";
 import {
+  displayedLeadMarket,
+  formatPhoneDisplay,
+  inferredTargetCountry,
   isTargetNotContacted,
   storedLeadMarket,
   type LighthouseConversationKind,
@@ -185,16 +190,47 @@ export function LighthousePanel({
   const [importText, setImportText] = useState("");
   const [importPersona, setImportPersona] = useState<"owner" | "accountant">("owner");
   const [importBusy, setImportBusy] = useState(false);
+  const refreshGen = useRef(0);
+  const pendingLeadPatches = useRef(new Map<string, Partial<LighthouseLead>>());
+
+  const patchLead = useCallback((id: string, patch: Partial<LighthouseLead>) => {
+    pendingLeadPatches.current.set(id, {
+      ...pendingLeadPatches.current.get(id),
+      ...patch,
+    });
+    setDash((current) => {
+      if (!current) return current;
+      return {
+        ...current,
+        leads: current.leads.map((lead) => (lead.id === id ? { ...lead, ...patch } : lead)),
+      };
+    });
+  }, []);
 
   const refresh = useCallback(async () => {
+    const gen = ++refreshGen.current;
     setBusy(true);
     setErr("");
     try {
-      setDash(await load());
+      const next = await load();
+      if (gen !== refreshGen.current) return;
+      const patches = pendingLeadPatches.current;
+      setDash(
+        patches.size
+          ? {
+              ...next,
+              leads: next.leads.map((lead) => {
+                const patch = patches.get(lead.id);
+                return patch ? { ...lead, ...patch } : lead;
+              }),
+            }
+          : next,
+      );
     } catch (e) {
+      if (gen !== refreshGen.current) return;
       setErr(e instanceof Error ? e.message : "Could not load Lighthouse");
     } finally {
-      setBusy(false);
+      if (gen === refreshGen.current) setBusy(false);
     }
   }, [load]);
 
@@ -315,15 +351,14 @@ export function LighthousePanel({
   const planCandidates = dash.leads.filter(
     (lead) =>
       !lead.doNotContact &&
-      !lead.conversationHeld &&
+      !refuseColdDraft(lead) &&
       !lead.nextTouchOn &&
       !lead.nextFollowUpAt &&
       lead.stage !== "won" &&
       lead.stage !== "lost",
   );
   const filteredFirms = dash.leads.filter((lead) => {
-    const zone = sendWindowStatus(lead, now);
-    const market = storedLeadMarket(lead.country) ?? zone.geo;
+    const market = displayedLeadMarket(lead);
     if (firmCountry !== "all" && market !== firmCountry) return false;
     if (firmTarget === "target" && !isTargetNotContacted(lead)) return false;
     if (firmStage !== "all" && lead.stage !== firmStage) return false;
@@ -838,6 +873,7 @@ export function LighthousePanel({
           dash={dash}
           onClose={() => setOpenLeadId(null)}
           onDraft={async (stepNo, opts) => {
+            assertColdDraftOpen(openLead);
             const drafted = await draftTouch({
               data: {
                 leadId: openLead.id,
@@ -885,8 +921,16 @@ export function LighthousePanel({
             await refresh();
           }}
           onSaveContact={async (fields) => {
-            const country = storedLeadMarket(openLead.country);
-            await saveLead({
+            const stored = storedLeadMarket(openLead.country);
+            const country =
+              stored ??
+              inferredTargetCountry({
+                ...openLead,
+                country: null,
+                phone: fields.phone,
+                website: fields.website,
+              });
+            const saved = await saveLead({
               data: {
                 id: openLead.id,
                 phone: fields.phone,
@@ -894,12 +938,48 @@ export function LighthousePanel({
                 ...(country ? { country } : {}),
               },
             });
+            const phoneShown = formatPhoneDisplay(
+              saved.phone ?? fields.phone,
+              saved.phoneE164 ?? null,
+            );
+            const websiteShown = saved.website ?? fields.website;
+            patchLead(openLead.id, {
+              phone: saved.phone ?? fields.phone,
+              phoneE164: saved.phoneE164 ?? openLead.phoneE164,
+              website: websiteShown,
+              country: saved.country ?? country ?? openLead.country,
+            });
+            pendingLeadPatches.current.delete(openLead.id);
             await refresh();
+            return { phone: phoneShown, website: websiteShown };
           }}
           onConversationHeld={async (fields) => {
-            await markConversation({
-              data: { leadId: openLead.id, ...fields },
+            const previous = dash.leads.find((lead) => lead.id === openLead.id) ?? openLead;
+            const today = todayDateInput();
+            patchLead(openLead.id, {
+              conversationHeld: fields.held,
+              conversationHeldAt: fields.held
+                ? previous.conversationHeldAt || `${fields.heldAt ?? today}T12:00:00.000Z`
+                : null,
+              conversationKind: fields.held ? (fields.kind ?? previous.conversationKind ?? "phone") : null,
+              nextTouchOn: fields.held ? null : previous.nextTouchOn && previous.nextTouchOn >= today ? previous.nextTouchOn : today,
             });
+            try {
+              await markConversation({
+                data: { leadId: openLead.id, ...fields },
+              });
+            } catch (error) {
+              pendingLeadPatches.current.delete(openLead.id);
+              patchLead(openLead.id, {
+                conversationHeld: previous.conversationHeld,
+                conversationHeldAt: previous.conversationHeldAt,
+                conversationKind: previous.conversationKind,
+                nextTouchOn: previous.nextTouchOn,
+              });
+              pendingLeadPatches.current.delete(openLead.id);
+              throw error;
+            }
+            pendingLeadPatches.current.delete(openLead.id);
             await refresh();
           }}
           onRefresh={refresh}
@@ -1575,7 +1655,10 @@ function LeadDrawer({
   onStage: (stage: LighthouseStage) => Promise<void>;
   onSequence: (sequenceKey: "accountant_v1" | "accountant_oneshot_v1") => Promise<void>;
   onOptOut: () => Promise<void>;
-  onSaveContact: (fields: { phone: string; website: string }) => Promise<void>;
+  onSaveContact: (fields: { phone: string; website: string }) => Promise<{
+    phone: string;
+    website: string;
+  } | void>;
   onConversationHeld: (fields: {
     held: boolean;
     heldAt?: string;
@@ -1601,14 +1684,21 @@ function LeadDrawer({
   const [replyIntent, setReplyIntent] = useState<"answer" | "email" | "book" | "trial">("answer");
   const [replying, setReplying] = useState(false);
   const [approving, setApproving] = useState(false);
-  const [phone, setPhone] = useState(lead.phone ?? "");
+  const [phone, setPhone] = useState(() => formatPhoneDisplay(lead.phone, lead.phoneE164));
   const [website, setWebsite] = useState(lead.website ?? "");
-  const [held, setHeld] = useState(lead.conversationHeld);
   const [heldOn, setHeldOn] = useState(
     () => lead.conversationHeldAt?.slice(0, 10) || todayDateInput(),
   );
   const [kind, setKind] = useState<LighthouseConversationKind>(lead.conversationKind ?? "phone");
   const [heldBusy, setHeldBusy] = useState(false);
+  const [contactSaved, setContactSaved] = useState(false);
+  const phoneRef = useRef(phone);
+  const websiteRef = useRef(website);
+  const appliedPhone = useRef(phone);
+  const appliedWebsite = useRef(website);
+  const contactTimer = useRef<number | null>(null);
+  const contactGen = useRef(0);
+  const contactChain = useRef<Promise<void>>(Promise.resolve());
   const windowStatus = sendWindowStatus(lead);
   const cadence = cadenceOf(lead);
   const textMatchesSaved =
@@ -1622,13 +1712,54 @@ function LeadDrawer({
     setTouchId(t?.id ?? "");
   }, [activeStep, lead]);
 
+  const seenLead = useRef(lead.id);
   useEffect(() => {
-    setPhone(lead.phone ?? "");
-    setWebsite(lead.website ?? "");
-    setHeld(lead.conversationHeld);
+    const nextPhone = formatPhoneDisplay(lead.phone, lead.phoneE164);
+    const nextWebsite = lead.website ?? "";
+    const switched = seenLead.current !== lead.id;
+    seenLead.current = lead.id;
+    if (switched) {
+      if (contactTimer.current != null) {
+        window.clearTimeout(contactTimer.current);
+        contactTimer.current = null;
+      }
+      contactGen.current += 1;
+      setPhone(nextPhone);
+      setWebsite(nextWebsite);
+      phoneRef.current = nextPhone;
+      websiteRef.current = nextWebsite;
+      appliedPhone.current = nextPhone;
+      appliedWebsite.current = nextWebsite;
+      setContactSaved(false);
+      return;
+    }
+    const previousPhone = appliedPhone.current;
+    const previousWebsite = appliedWebsite.current;
+    setPhone((current) => {
+      if (current.trim() !== previousPhone.trim()) return current;
+      phoneRef.current = nextPhone;
+      appliedPhone.current = nextPhone;
+      return nextPhone;
+    });
+    setWebsite((current) => {
+      if (current.trim() !== previousWebsite.trim()) return current;
+      websiteRef.current = nextWebsite;
+      appliedWebsite.current = nextWebsite;
+      return nextWebsite;
+    });
+  }, [lead.id, lead.phone, lead.phoneE164, lead.website]);
+
+  useEffect(() => {
     setHeldOn(lead.conversationHeldAt?.slice(0, 10) || todayDateInput());
     setKind(lead.conversationKind ?? "phone");
-  }, [lead.id, lead.phone, lead.website, lead.conversationHeld, lead.conversationHeldAt, lead.conversationKind]);
+  }, [lead.id, lead.conversationHeldAt, lead.conversationKind]);
+
+  useEffect(
+    () => () => {
+      if (contactTimer.current != null) window.clearTimeout(contactTimer.current);
+    },
+    [],
+  );
 
   useEffect(() => {
     const latest = lead.inbound[0];
@@ -1637,15 +1768,54 @@ function LeadDrawer({
     setReplyOpen(true);
   }, [lead.id, lead.inbound]);
 
-  const saveContactFields = async () => {
-    const phoneNext = phone.trim();
-    const websiteNext = website.trim();
-    if (phoneNext === (lead.phone ?? "") && websiteNext === (lead.website ?? "")) return;
-    try {
-      await onSaveContact({ phone: phoneNext, website: websiteNext });
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Could not save contact");
+  const clearContactTimer = () => {
+    if (contactTimer.current != null) {
+      window.clearTimeout(contactTimer.current);
+      contactTimer.current = null;
     }
+  };
+
+  const flushContact = (nextPhone: string, nextWebsite: string) => {
+    clearContactTimer();
+    phoneRef.current = nextPhone;
+    websiteRef.current = nextWebsite;
+    const gen = ++contactGen.current;
+    contactChain.current = contactChain.current.then(async () => {
+      if (gen !== contactGen.current) return;
+      const phoneNext = phoneRef.current.trim();
+      const websiteNext = websiteRef.current.trim();
+      const savedPhone = formatPhoneDisplay(lead.phone, lead.phoneE164);
+      const savedWebsite = (lead.website ?? "").trim();
+      if (phoneNext === savedPhone && websiteNext === savedWebsite) return;
+      try {
+        const saved = await onSaveContact({ phone: phoneNext, website: websiteNext });
+        if (gen !== contactGen.current) return;
+        if (saved) {
+          setPhone(saved.phone);
+          setWebsite(saved.website);
+          phoneRef.current = saved.phone;
+          websiteRef.current = saved.website;
+          appliedPhone.current = saved.phone;
+          appliedWebsite.current = saved.website;
+        }
+        setContactSaved(true);
+      } catch (e) {
+        if (gen !== contactGen.current) return;
+        setContactSaved(false);
+        toast.error(e instanceof Error ? e.message : "Could not save contact");
+      }
+    });
+    return contactChain.current;
+  };
+
+  const scheduleContact = (nextPhone: string, nextWebsite: string) => {
+    phoneRef.current = nextPhone;
+    websiteRef.current = nextWebsite;
+    setContactSaved(false);
+    clearContactTimer();
+    contactTimer.current = window.setTimeout(() => {
+      void flushContact(phoneRef.current, websiteRef.current);
+    }, 400);
   };
 
   const saveHeld = async (fields: {
@@ -1658,7 +1828,6 @@ function LeadDrawer({
       await onConversationHeld(fields);
       toast.success(fields.held ? "Call / meeting marked held" : "Call / meeting cleared");
     } catch (e) {
-      setHeld(lead.conversationHeld);
       toast.error(e instanceof Error ? e.message : "Could not update the call flag");
     } finally {
       setHeldBusy(false);
@@ -1769,25 +1938,45 @@ function LeadDrawer({
           </div>
         )}
 
-        <div className="mb-4 grid gap-2 sm:grid-cols-2">
-          <input
-            className={inputCls}
-            placeholder="Phone"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            onBlur={() => {
-              void saveContactFields();
-            }}
-          />
-          <input
-            className={inputCls}
-            placeholder="Website"
-            value={website}
-            onChange={(e) => setWebsite(e.target.value)}
-            onBlur={() => {
-              void saveContactFields();
-            }}
-          />
+        <div className="mb-4">
+          <div className="grid gap-2 sm:grid-cols-2">
+            <input
+              className={inputCls}
+              placeholder="Phone"
+              value={phone}
+              onChange={(e) => {
+                const value = e.target.value;
+                setPhone(value);
+                scheduleContact(value, websiteRef.current);
+              }}
+              onBlur={(e) => {
+                const value = e.currentTarget.value;
+                setPhone(value);
+                void flushContact(value, websiteRef.current);
+              }}
+            />
+            <input
+              className={inputCls}
+              placeholder="Website"
+              value={website}
+              onChange={(e) => {
+                const value = e.target.value;
+                setWebsite(value);
+                scheduleContact(phoneRef.current, value);
+              }}
+              onBlur={(e) => {
+                const value = e.currentTarget.value;
+                setWebsite(value);
+                void flushContact(phoneRef.current, value);
+              }}
+            />
+          </div>
+          {contactSaved ? (
+            <p className="mt-1.5 flex items-center gap-1 text-[11px] text-[var(--ops-ink-dim)]">
+              <Check className="h-3 w-3 text-[var(--ops-ok-ink)]" />
+              Saved
+            </p>
+          ) : null}
         </div>
 
         <div className="mb-4 rounded-xl border border-[var(--ops-line)] bg-[var(--ops-card)] px-3 py-2.5">
@@ -1795,11 +1984,10 @@ function LeadDrawer({
             <input
               type="checkbox"
               className="h-4 w-4 accent-[var(--ops-amber)]"
-              checked={held}
+              checked={lead.conversationHeld}
               disabled={heldBusy}
               onChange={(e) => {
                 const next = e.target.checked;
-                setHeld(next);
                 void saveHeld({ held: next, heldAt: heldOn, kind });
               }}
             />
@@ -1814,7 +2002,7 @@ function LeadDrawer({
               onChange={(e) => {
                 const next = e.target.value || todayDateInput();
                 setHeldOn(next);
-                if (held) void saveHeld({ held: true, heldAt: next, kind });
+                if (lead.conversationHeld) void saveHeld({ held: true, heldAt: next, kind });
               }}
             />
             <select
@@ -1824,7 +2012,7 @@ function LeadDrawer({
               onChange={(e) => {
                 const next = e.target.value as LighthouseConversationKind;
                 setKind(next);
-                if (held) void saveHeld({ held: true, heldAt: heldOn, kind: next });
+                if (lead.conversationHeld) void saveHeld({ held: true, heldAt: heldOn, kind: next });
               }}
             >
               <option value="phone">Phone</option>
@@ -1832,7 +2020,7 @@ function LeadDrawer({
               <option value="in_person">In person</option>
             </select>
           </div>
-          {held && (
+          {lead.conversationHeld && (
             <p className="mt-2 text-[12px] text-[var(--ops-ink-dim)]">
               Cold cadence is stopped. No further cold steps are drafted or scheduled.
             </p>

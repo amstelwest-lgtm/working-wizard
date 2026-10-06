@@ -5,16 +5,34 @@
  */
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { isLeadDue, type AgentLead } from "../src/lib/lighthouse-agent";
-import { runLighthouseChatTurn, snapshotFromBook } from "../src/lib/lighthouse-agent-chat";
 import {
+  assertColdDraftOpen,
+  buildDueQueue,
+  isLeadDue,
+  nextUpAction,
+  type AgentLead,
+} from "../src/lib/lighthouse-agent";
+import {
+  ambiguousLeadReply,
+  resolveChatLead,
+  runLighthouseChatTurn,
+  snapshotFromBook,
+  type ChatFirm,
+} from "../src/lib/lighthouse-agent-chat";
+import { persistPendingLighthouseDraft } from "../src/lib/lighthouse-draft-persist";
+import {
+  COLD_SEQUENCE_DAYS,
   coldCadenceOpen,
   conversationActivityType,
+  displayedLeadMarket,
+  formatPhoneDisplay,
+  inferredTargetCountry,
   isTargetNotContacted,
   mapLighthouseCountry,
   normalisePhoneE164,
   parseLighthouseImport,
   planLighthouseImport,
+  resumedColdTouchOn,
   scheduledColdTouchOn,
 } from "../src/lib/lighthouse-targets";
 
@@ -197,7 +215,11 @@ const HEADER = "phone,country,name,email,company,website,city,region,persona,sig
   });
   assert(persisted === false, "chat does not draft a cold step after a call");
   assert(heldTurn.draft === null, "chat returns no draft for a held firm");
-  assert(/call \/ meeting held/i.test(heldTurn.reply), "chat explains that the call was held");
+  assert(
+    heldTurn.reply ===
+      "You've already spoken to Cape Books — cold emails are stopped. Untick Call / meeting held to resume.",
+    "chat tells the operator to untick Call / meeting held",
+  );
 
   const openBook = snapshotFromBook({
     leads: [
@@ -225,8 +247,289 @@ const HEADER = "phone,country,name,email,company,website,city,region,persona,sig
 }
 
 {
+  assert(formatPhoneDisplay("0821234567") === "+27 82 123 4567", "SA local displays as +27 82 123 4567");
+  assert(
+    formatPhoneDisplay("0821234567", "+27821234567") === "+27 82 123 4567",
+    "stored E.164 displays grouped",
+  );
+  assert(formatPhoneDisplay("4155550100") === "+1 415 555 0100", "US 10-digit displays grouped");
+  assert(formatPhoneDisplay("call the office") === "call the office", "unnormalised phone stays raw");
+  assert(formatPhoneDisplay("") === "", "blank phone stays blank");
+}
+
+{
+  const steps = COLD_SEQUENCE_DAYS.accountant_v1;
+  assert(
+    resumedColdTouchOn({
+      lastTouchAt: "2026-09-09T08:00:00.000Z",
+      sequenceStep: 1,
+      steps,
+      today: "2026-10-06",
+    }) === "2026-10-06",
+    "a past cadence date resumes today",
+  );
+  assert(
+    resumedColdTouchOn({
+      lastTouchAt: "2026-10-05T08:00:00.000Z",
+      sequenceStep: 1,
+      steps,
+      today: "2026-10-06",
+    }) === "2026-10-09",
+    "last touch plus the step gap stays in the future",
+  );
+  assert(
+    resumedColdTouchOn({
+      lastTouchAt: null,
+      sequenceStep: 0,
+      steps,
+      today: "2026-10-06",
+    }) === "2026-10-06",
+    "untick never leaves the next date empty",
+  );
+}
+
+{
+  assert(
+    displayedLeadMarket({ country: null, email: "team@milon.co.za" }) === "SA",
+    "a .co.za address is the SA filter",
+  );
+  assert(
+    displayedLeadMarket({ country: null, phone: "0821234567", email: "team@gmail.com" }) === "SA",
+    "an SA phone is the SA filter when country is empty",
+  );
+  assert(
+    displayedLeadMarket({ country: null, timezone: "America/New_York", email: "a@gmail.com" }) === "US",
+    "a US timezone is the US filter",
+  );
+  assert(
+    displayedLeadMarket({ country: null, website: "https://example.com", email: "a@gmail.com" }) ===
+      "OTHER",
+    "a .com site does not become US",
+  );
+  assert(
+    inferredTargetCountry({ country: null, email: "team@milon.co.za" }) === "SA",
+    "a save can persist the inferred SA country",
+  );
+  assert(
+    inferredTargetCountry({ country: "US", email: "team@milon.co.za" }) === null,
+    "a stored country is not replaced",
+  );
+}
+
+{
+  let threw = false;
+  try {
+    assertColdDraftOpen({
+      conversationHeld: true,
+      company: "Cape Books",
+      email: "aneesa@capebooks.co.za",
+    });
+  } catch (error) {
+    threw = true;
+    assert(
+      error instanceof Error && /cold emails are stopped/i.test(error.message),
+      "sequence and preview refuse a held lead",
+    );
+  }
+  assert(threw, "assertColdDraftOpen throws for a held lead");
+  assertColdDraftOpen({ conversationHeld: false, company: "Cape Books" });
+
+  const now = new Date("2026-10-06T13:00:00Z");
+  const held = {
+    id: "lead-held",
+    company: "Cape Books",
+    email: "a@capebooks.co.za",
+    country: "SA",
+    stage: "contacted",
+    doNotContact: false,
+    conversationHeld: true,
+    nextTouchOn: "2026-10-01",
+    lastTouchAt: null,
+    sequenceStep: 1,
+    touches: [],
+  } satisfies AgentLead;
+  const open = {
+    ...held,
+    id: "lead-open",
+    company: "Open Books",
+    email: "o@open.co.za",
+    conversationHeld: false,
+  } satisfies AgentLead;
+  const queue = buildDueQueue([held, open], now);
+  assert(!queue.some((row) => row.leadId === "lead-held"), "Next up queue skips a held lead");
+  const next = nextUpAction({ inbox: [], queue, hasFirms: true });
+  assert(next.leadId === "lead-open", "Next up follows the open lead");
+}
+
+{
+  const dry = (
+    id: string,
+    email: string,
+    conversationHeld: boolean,
+  ): ChatFirm => ({
+    leadId: id,
+    title: "Milōn Dry Run",
+    email,
+    geo: "SA",
+    stage: "contacted",
+    lastTouch: null,
+    nextTouchOn: "2026-09-13",
+    nextFollowUpAt: null,
+    delivery: null,
+    replyStatus: null,
+    doNotContact: false,
+    conversationHeld,
+    sequenceStep: 1,
+    touches: [],
+  });
+  const firms = [
+    dry("693c359d-b50e-4fdf-9391-f3739fc3cab4", "team@milon.co.za", true),
+    dry("11111111-1111-4111-8111-111111111111", "one@milon.co.za", false),
+    dry("22222222-2222-4222-8222-222222222222", "two@milon.co.za", false),
+    dry("33333333-3333-4333-8333-333333333333", "three@milon.co.za", false),
+  ];
+  const vague = resolveChatLead("Draft a note for Milōn Dry Run", firms);
+  assert(vague.status === "ambiguous", "a shared firm name is ambiguous");
+  if (vague.status === "ambiguous") {
+    assert(vague.firms.length === 4, "all four dry-run leads are offered");
+    assert(/team@milon.co.za/.test(ambiguousLeadReply(vague.firms)), "the ask lists the email");
+  }
+  const byEmail = resolveChatLead("Draft a note for team@milon.co.za", firms);
+  assert(byEmail.status === "one" && byEmail.firm.email === "team@milon.co.za", "email picks one lead");
+  const byId = resolveChatLead(
+    "Draft a note for 11111111-1111-4111-8111-111111111111",
+    firms,
+  );
+  assert(byId.status === "one" && byId.firm.leadId.startsWith("11111111"), "lead id picks one lead");
+
+  const book = snapshotFromBook({
+    leads: firms.map((firm) => ({
+      id: firm.leadId,
+      company: firm.title,
+      email: firm.email,
+      country: "SA",
+      stage: "contacted",
+      conversationHeld: firm.conversationHeld,
+      nextTouchOn: "2026-09-13",
+      doNotContact: false,
+      touches: [],
+    })),
+  });
+  let draftedFor: string | null = null;
+  const ambiguousTurn = await runLighthouseChatTurn({
+    message: "Draft a note for Milōn Dry Run",
+    snapshot: book,
+    createdBy: "owner",
+    persistDraft: async (write) => {
+      draftedFor = write.leadId;
+      return { touchId: "touch-x", status: "draft" as const };
+    },
+  });
+  assert(draftedFor === null, "an ambiguous firm does not draft a sibling");
+  assert(ambiguousTurn.draft === null, "an ambiguous firm returns no draft");
+  assert(/which lead/i.test(ambiguousTurn.reply), "chat asks which lead");
+
+  const heldTurn = await runLighthouseChatTurn({
+    message: "Draft a note for team@milon.co.za",
+    snapshot: book,
+    createdBy: "owner",
+    persistDraft: async () => {
+      draftedFor = "held";
+      return { touchId: "touch-y", status: "draft" as const };
+    },
+  });
+  assert(draftedFor === null, "the held dry-run lead is not drafted");
+  assert(/cold emails are stopped/i.test(heldTurn.reply), "the held email is refused");
+
+  const sibling = await runLighthouseChatTurn({
+    message: "Draft a note for one@milon.co.za",
+    snapshot: book,
+    createdBy: "owner",
+    persistDraft: async (write) => {
+      draftedFor = write.leadId;
+      return { touchId: "touch-z", status: "draft" as const };
+    },
+  });
+  assert(draftedFor === "11111111-1111-4111-8111-111111111111", "the named sibling is the draft");
+  assert(sibling.draft?.leadId === draftedFor, "the draft is for that sibling");
+}
+
+{
+  const writes: string[] = [];
+  const adminFor = (held: boolean) => ({
+    from(table: string) {
+      const api = {
+        select() {
+          return api;
+        },
+        eq() {
+          return api;
+        },
+        maybeSingle: async () => {
+          if (table === "milon_ops_leads") {
+            return {
+              data: {
+                company: "Cape Books",
+                name: "Aneesa",
+                email: "aneesa@capebooks.co.za",
+                conversation_held: held,
+              },
+              error: null,
+            };
+          }
+          return { data: null, error: null };
+        },
+        insert(row: Record<string, unknown>) {
+          writes.push(String(row.lead_id ?? ""));
+          return {
+            select() {
+              return { maybeSingle: async () => ({ data: { id: "touch-new" }, error: null }) };
+            },
+          };
+        },
+      };
+      return api;
+    },
+  });
+  let refused = false;
+  try {
+    await persistPendingLighthouseDraft(
+      adminFor(true),
+      {
+        leadId: "22222222-2222-4222-8222-222222222222",
+        stepNo: 2,
+        angle: "observation",
+        subject: "Hi",
+        body: "Hi",
+        createdBy: "owner",
+        action: "draft",
+      },
+    );
+  } catch (error) {
+    refused = true;
+    assert(error instanceof Error && /cold emails are stopped/i.test(error.message), "persist names the stop");
+  }
+  assert(refused, "the shared draft write refuses a held lead");
+  assert(writes.length === 0, "a held lead does not insert a touch");
+  const saved = await persistPendingLighthouseDraft(adminFor(false), {
+    leadId: "22222222-2222-4222-8222-222222222222",
+    stepNo: 2,
+    angle: "observation",
+    subject: "Hi",
+    body: "Hi",
+    createdBy: "owner",
+    action: "draft",
+  });
+  assert(saved.status === "draft", "an open lead can still be drafted");
+  assert(writes.length === 1, "an open lead inserts one touch");
+}
+
+{
   const fnSrc = readFileSync(resolve("src/lib/lighthouse.functions.ts"), "utf8");
   const panelSrc = readFileSync(resolve("src/components/lighthouse-panel.tsx"), "utf8");
+  const chatSrc = readFileSync(resolve("src/lib/lighthouse-agent-chat.ts"), "utf8");
+  const agentSrc = readFileSync(resolve("src/lib/lighthouse-agent.ts"), "utf8");
+  const persistSrc = readFileSync(resolve("src/lib/lighthouse-draft-persist.ts"), "utf8");
   const sql = readFileSync(
     resolve("supabase/migrations/20261006120000_milon_ops_leads_target_list.sql"),
     "utf8",
@@ -236,6 +539,31 @@ const HEADER = "phone,country,name,email,company,website,city,region,persona,sig
   const heldFn = fnSrc.slice(fnSrc.indexOf("export const setConversationHeld"));
   assert(heldFn.includes("assertOpsConsoleAccess"), "setConversationHeld itself is ops-gated");
   assert(fnSrc.includes("coldCadenceOpen"), "drafting checks the held flag");
+  assert(fnSrc.includes("assertColdDraftOpen"), "sequence drafts refuse a held lead");
+  assert(fnSrc.includes("resumedColdTouchOn"), "untick recomputes the next cold date");
+  assert(fnSrc.includes("inferredTargetCountry"), "a save persists an inferred country");
+  const heldFnBody = fnSrc.slice(
+    fnSrc.indexOf("export const setConversationHeld"),
+    fnSrc.indexOf("async function recordConversationActivity"),
+  );
+  assert(heldFnBody.includes("updated_at:"), "held writes bump updated_at");
+  assert(heldFnBody.includes("next_touch_on: nextTouchOn"), "untick writes the resumed date");
+  const replyFn = fnSrc.slice(
+    fnSrc.indexOf("export const draftLighthouseReply"),
+    fnSrc.indexOf("export const optOutLighthouseLead"),
+  );
+  assert(!replyFn.includes("assertColdDraftOpen"), "replies to inbound mail may still draft");
+  assert(!replyFn.includes("heldColdDraftRefusal"), "reply drafts do not use the cold stop");
+  assert(persistSrc.includes("assertColdDraftOpen"), "the shared draft write checks the held flag");
+  assert(chatSrc.includes("resolveChatLead"), "chat resolves a lead before drafting");
+  assert(chatSrc.includes("refuseColdDraft"), "chat refuses a held lead");
+  assert(agentSrc.includes("export function refuseColdDraft"), "Next up and preview share the stop");
+  assert(agentSrc.includes("export function assertColdDraftOpen"), "preview and sequence share the throw");
+  assert(panelSrc.includes("checked={lead.conversationHeld}"), "the checkbox reads the lead");
+  assert(panelSrc.includes("pendingLeadPatches"), "the row and checkbox share one optimistic patch");
+  assert(panelSrc.includes("displayedLeadMarket"), "the SA/US filter uses inferred country");
+  assert(/contactSaved[\s\S]{0,240}Saved/.test(panelSrc), "contact save shows Saved");
+  assert(panelSrc.includes("e.currentTarget.value"), "blur save reads the field, not a stale render");
   assert(fnSrc.includes("scheduledColdTouchOn"), "sending does not schedule a held lead");
   assert(fnSrc.includes('created_by_kind: "human"'), "a held call is recorded as a human activity");
   assert(panelSrc.includes("Call / meeting held"), "the drawer labels the checkbox");

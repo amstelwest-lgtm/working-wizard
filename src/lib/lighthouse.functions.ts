@@ -63,16 +63,20 @@ import {
   normalizeLeadEmail,
 } from "@/lib/lighthouse-due";
 import { lighthouseTrialSiteUrl } from "@/lib/lighthouse-trial-site";
-import { trafficTagOf } from "@/lib/lighthouse-agent";
+import { assertColdDraftOpen, trafficTagOf } from "@/lib/lighthouse-agent";
 import { persistPendingLighthouseDraft } from "@/lib/lighthouse-draft-persist";
-import { sendBlockedReason } from "@/lib/lighthouse-send-windows";
+import { resolveRecipientZone, sendBlockedReason, zonedYmd } from "@/lib/lighthouse-send-windows";
 import {
+  COLD_SEQUENCE_DAYS,
   coldCadenceOpen,
   conversationActivityType,
+  inferredTargetCountry,
   normalisePhoneE164,
   parseLighthouseImport,
   planLighthouseImport,
+  resumedColdTouchOn,
   scheduledColdTouchOn,
+  type ColdSequenceStep,
   type LighthouseConversationKind,
   type LighthouseImportDraft,
   type LighthouseImportExisting,
@@ -1021,14 +1025,76 @@ export const upsertLighthouseLead = createServerFn({ method: "POST" })
     }
 
     if (data.id) {
+      const { data: existingRow, error: existingErr } = await admin
+        .from("milon_ops_leads")
+        .select(
+          "country, timezone, phone, phone_e164, email, website, city, region, last_touch_at, sequence_step, sequence_key",
+        )
+        .eq("id", data.id)
+        .maybeSingle();
+      if (existingErr) throw new Error(existingErr.message);
+      const existing = (existingRow ?? {}) as {
+        country?: string | null;
+        timezone?: string | null;
+        phone?: string | null;
+        phone_e164?: string | null;
+        email?: string | null;
+        website?: string | null;
+        city?: string | null;
+        region?: string | null;
+        last_touch_at?: string | null;
+        sequence_step?: number | null;
+        sequence_key?: string | null;
+      };
+      if (data.country === undefined && !existing.country) {
+        const inferred = inferredTargetCountry({
+          country: null,
+          timezone: (patch.timezone as string | null | undefined) ?? existing.timezone ?? null,
+          phone: (patch.phone as string | null | undefined) ?? existing.phone ?? null,
+          phoneE164: (patch.phone_e164 as string | null | undefined) ?? existing.phone_e164 ?? null,
+          email: (patch.email as string | null | undefined) ?? existing.email ?? null,
+          website: (patch.website as string | null | undefined) ?? existing.website ?? null,
+          city: (patch.city as string | null | undefined) ?? existing.city ?? null,
+          region: (patch.region as string | null | undefined) ?? existing.region ?? null,
+        });
+        if (inferred) patch.country = inferred;
+      }
+      if (data.conversationHeld === false) {
+        patch.next_touch_on = await nextTouchAfterResume(admin, {
+          ...existing,
+          sequence_key:
+            (patch.sequence_key as string | null | undefined) ?? existing.sequence_key ?? null,
+        });
+      }
+      patch.updated_at = new Date().toISOString();
       const { error } = await admin.from("milon_ops_leads").update(patch).eq("id", data.id);
       if (error) throw new Error(error.message);
-      return { id: data.id };
+      return {
+        id: data.id,
+        phone: (patch.phone as string | null | undefined) ?? existing.phone ?? null,
+        phoneE164: (patch.phone_e164 as string | null | undefined) ?? existing.phone_e164 ?? null,
+        website: (patch.website as string | null | undefined) ?? existing.website ?? null,
+        country: (patch.country as string | null | undefined) ?? existing.country ?? null,
+      };
     }
 
+    if (data.country === undefined && patch.country == null) {
+      const inferred = inferredTargetCountry({
+        country: null,
+        timezone: (patch.timezone as string | null | undefined) ?? null,
+        phone: (patch.phone as string | null | undefined) ?? null,
+        phoneE164: (patch.phone_e164 as string | null | undefined) ?? null,
+        email: (patch.email as string | null | undefined) ?? null,
+        website: (patch.website as string | null | undefined) ?? null,
+        city: (patch.city as string | null | undefined) ?? null,
+        region: (patch.region as string | null | undefined) ?? null,
+      });
+      if (inferred) patch.country = inferred;
+    }
     patch.trial_token = randomToken();
     patch.stage = patch.stage ?? "sourced";
     patch.source = "lighthouse";
+    patch.updated_at = new Date().toISOString();
     const { data: inserted, error } = await admin
       .from("milon_ops_leads")
       .insert(patch)
@@ -1038,7 +1104,13 @@ export const upsertLighthouseLead = createServerFn({ method: "POST" })
       if (missingRelation(error.message)) throw new Error(migrationHintFor(MIGRATION));
       throw new Error(error.message);
     }
-    return { id: String((inserted as { id?: string } | null)?.id ?? "") };
+    return {
+      id: String((inserted as { id?: string } | null)?.id ?? ""),
+      phone: (patch.phone as string | null | undefined) ?? null,
+      phoneE164: (patch.phone_e164 as string | null | undefined) ?? null,
+      website: (patch.website as string | null | undefined) ?? null,
+      country: (patch.country as string | null | undefined) ?? null,
+    };
   });
 
 function importLeadPatch(row: LighthouseImportDraft, opts: { includePersona: boolean }) {
@@ -1141,6 +1213,73 @@ function importWriteError(message: string): string {
 
 const USER_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+function sequenceStepsOf(value: unknown, sequenceKey: string): ColdSequenceStep[] {
+  if (Array.isArray(value)) {
+    const steps = value
+      .map((step) => {
+        const row = step as { step?: unknown; day?: unknown };
+        const n = Number(row.step);
+        const day = Number(row.day);
+        if (!Number.isFinite(n) || !Number.isFinite(day)) return null;
+        return { step: n, day };
+      })
+      .filter((step): step is ColdSequenceStep => step !== null);
+    if (steps.length) return steps;
+  }
+  return COLD_SEQUENCE_DAYS[sequenceKey] ?? COLD_SEQUENCE_DAYS.owner_v1;
+}
+
+function coldTouchToday(lead: {
+  timezone?: string | null;
+  country?: string | null;
+  email?: string | null;
+  city?: string | null;
+  region?: string | null;
+}, now = new Date()): string {
+  const zone = resolveRecipientZone({
+    timezone: lead.timezone ?? null,
+    country: lead.country ?? null,
+    email: lead.email ?? null,
+    city: lead.city ?? null,
+    region: lead.region ?? null,
+  });
+  return zone.timeZone ? zonedYmd(now, zone.timeZone) : now.toISOString().slice(0, 10);
+}
+
+async function nextTouchAfterResume(
+  admin: ReturnType<typeof adminLoose>,
+  lead: {
+    last_touch_at?: string | null;
+    sequence_step?: number | null;
+    sequence_key?: string | null;
+    timezone?: string | null;
+    country?: string | null;
+    email?: string | null;
+    city?: string | null;
+    region?: string | null;
+  },
+  now = new Date(),
+): Promise<string> {
+  const sequenceKey = String(lead.sequence_key ?? "owner_v1");
+  let steps = sequenceStepsOf(null, sequenceKey);
+  try {
+    const { data, error } = await admin
+      .from("lighthouse_sequences")
+      .select("steps")
+      .eq("key", sequenceKey)
+      .maybeSingle();
+    if (!error) steps = sequenceStepsOf((data as { steps?: unknown } | null)?.steps, sequenceKey);
+  } catch {
+    steps = sequenceStepsOf(null, sequenceKey);
+  }
+  return resumedColdTouchOn({
+    lastTouchAt: lead.last_touch_at ?? null,
+    sequenceStep: Number(lead.sequence_step ?? 0),
+    steps,
+    today: coldTouchToday(lead, now),
+  });
+}
+
 function conversationHeldAtIso(value: string | undefined): string {
   const v = (value ?? "").trim();
   if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return `${v}T12:00:00.000Z`;
@@ -1167,7 +1306,9 @@ export const setConversationHeld = createServerFn({ method: "POST" })
     const admin = adminLoose();
     const { data: existing, error: readErr } = await admin
       .from("milon_ops_leads")
-      .select("id, conversation_held, conversation_held_at, conversation_kind")
+      .select(
+        "id, conversation_held, conversation_held_at, conversation_kind, last_touch_at, sequence_step, sequence_key, timezone, country, email, city, region",
+      )
       .eq("id", data.leadId)
       .maybeSingle();
     if (readErr) {
@@ -1182,9 +1323,19 @@ export const setConversationHeld = createServerFn({ method: "POST" })
       conversation_held?: boolean | null;
       conversation_held_at?: string | null;
       conversation_kind?: string | null;
+      last_touch_at?: string | null;
+      sequence_step?: number | null;
+      sequence_key?: string | null;
+      timezone?: string | null;
+      country?: string | null;
+      email?: string | null;
+      city?: string | null;
+      region?: string | null;
     };
+    const touchedAt = new Date().toISOString();
 
     if (!data.held) {
+      const nextTouchOn = await nextTouchAfterResume(admin, prev);
       const { error } = await admin
         .from("milon_ops_leads")
         .update({
@@ -1192,10 +1343,12 @@ export const setConversationHeld = createServerFn({ method: "POST" })
           conversation_held_at: null,
           conversation_held_by: null,
           conversation_kind: null,
+          next_touch_on: nextTouchOn,
+          updated_at: touchedAt,
         })
         .eq("id", data.leadId);
       if (error) throw new Error(importWriteError(error.message));
-      return { ok: true as const, held: false as const };
+      return { ok: true as const, held: false as const, nextTouchOn };
     }
 
     const { error } = await admin
@@ -1206,6 +1359,7 @@ export const setConversationHeld = createServerFn({ method: "POST" })
         conversation_held_by: userId,
         conversation_kind: kind,
         next_touch_on: null,
+        updated_at: touchedAt,
       })
       .eq("id", data.leadId);
     if (error) throw new Error(importWriteError(error.message));
@@ -1367,9 +1521,12 @@ export const draftLighthouseTouch = createServerFn({ method: "POST" })
     if (lead.do_not_contact) {
       throw new Error("This lead has unsubscribed — drafting is disabled for them.");
     }
-    if (!coldCadenceOpen({ conversationHeld: Boolean(lead.conversation_held) })) {
-      throw new Error("Call / meeting held — cold cadence is stopped for this lead.");
-    }
+    assertColdDraftOpen({
+      conversationHeld: Boolean(lead.conversation_held),
+      company: (lead.company as string | null) ?? null,
+      name: (lead.name as string | null) ?? null,
+      email: (lead.email as string | null) ?? null,
+    });
 
     const seqKey = String(lead.sequence_key ?? "owner_v1");
     const { data: seqRow } = await admin

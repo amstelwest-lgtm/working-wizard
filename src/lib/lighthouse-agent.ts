@@ -5,7 +5,7 @@
  */
 
 import { leadDisplayName } from "@/lib/lighthouse-due";
-import { coldCadenceOpen } from "@/lib/lighthouse-targets";
+import { heldColdDraftRefusal } from "@/lib/lighthouse-targets";
 import {
   SA_TIME_ZONE,
   US_TIME_ZONES,
@@ -76,9 +76,31 @@ export function angleBucket(angle: string | null | undefined): AgentAngle {
   return "observation";
 }
 
+/** Shared stop for chat, Next up, sequence, preview, and the draft write. */
+export function refuseColdDraft(lead: {
+  conversationHeld?: boolean | null;
+  company?: string | null;
+  name?: string | null;
+  email?: string | null;
+  firmName?: string | null;
+}): string | null {
+  return heldColdDraftRefusal(lead);
+}
+
+export function assertColdDraftOpen(lead: {
+  conversationHeld?: boolean | null;
+  company?: string | null;
+  name?: string | null;
+  email?: string | null;
+  firmName?: string | null;
+}): void {
+  const message = refuseColdDraft(lead);
+  if (message) throw new Error(message);
+}
+
 export function isLeadDue(lead: AgentLead, now = new Date()): boolean {
   if (lead.doNotContact) return false;
-  if (!coldCadenceOpen(lead)) return false;
+  if (refuseColdDraft(lead)) return false;
   if (lead.stage === "won" || lead.stage === "lost") return false;
   if (lead.nextFollowUpAt) {
     const at = Date.parse(lead.nextFollowUpAt);

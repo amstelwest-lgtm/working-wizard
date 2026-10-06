@@ -4,6 +4,9 @@
  * Writers live in lighthouse.functions.ts and still use milon_ops_leads.
  */
 
+import { leadDisplayName } from "@/lib/lighthouse-due";
+import { resolveRecipientZone } from "@/lib/lighthouse-send-windows";
+
 export type LighthouseTargetCountry = "US" | "SA" | "OTHER";
 export type LighthouseConversationKind = "phone" | "video" | "in_person";
 export type LighthouseTargetPersona = "owner" | "accountant";
@@ -171,6 +174,154 @@ export function scheduledColdTouchOn(
 ): string | null {
   if (conversationHeld) return null;
   return nextOn;
+}
+
+/**
+ * Human refusal for every cold / sequence draft path.
+ * Inbound replies do not use this.
+ */
+export function heldColdDraftRefusal(lead: {
+  conversationHeld?: boolean | null;
+  company?: string | null;
+  name?: string | null;
+  email?: string | null;
+  firmName?: string | null;
+}): string | null {
+  if (coldCadenceOpen(lead)) return null;
+  const firm = leadDisplayName(lead);
+  return `You've already spoken to ${firm} — cold emails are stopped. Untick Call / meeting held to resume.`;
+}
+
+export type ColdSequenceStep = { step: number; day: number };
+
+/** Day offsets the console uses when the sequence row cannot be read. */
+export const COLD_SEQUENCE_DAYS: Record<string, ColdSequenceStep[]> = {
+  owner_v1: [
+    { step: 1, day: 0 },
+    { step: 2, day: 3 },
+    { step: 3, day: 7 },
+    { step: 4, day: 12 },
+    { step: 5, day: 18 },
+  ],
+  accountant_v1: [
+    { step: 1, day: 0 },
+    { step: 2, day: 4 },
+    { step: 3, day: 9 },
+    { step: 4, day: 17 },
+    { step: 5, day: 28 },
+  ],
+  accountant_oneshot_v1: [{ step: 1, day: 0 }],
+};
+
+/**
+ * Next cold date after Call / meeting held is cleared.
+ * last_touch_at plus the gap from the sent step to the next step.
+ * A date in the past becomes `today`. Always returns a day, never null.
+ */
+export function resumedColdTouchOn(input: {
+  lastTouchAt: string | null;
+  sequenceStep: number;
+  steps: ColdSequenceStep[];
+  today: string;
+}): string {
+  const today = input.today.slice(0, 10);
+  const stepNo = Number(input.sequenceStep) || 0;
+  const sent = input.steps.find((step) => step.step === stepNo);
+  const next = input.steps.find((step) => step.step === stepNo + 1);
+  let candidate = today;
+  if (input.lastTouchAt && sent && next) {
+    const gap = Math.max(1, next.day - sent.day);
+    const base = new Date(input.lastTouchAt);
+    if (!Number.isNaN(base.getTime())) {
+      base.setUTCDate(base.getUTCDate() + gap);
+      candidate = base.toISOString().slice(0, 10);
+    }
+  }
+  if (!candidate || candidate < today) return today;
+  return candidate;
+}
+
+/** Grouped display. Raw text only when the number cannot be normalised. */
+export function formatPhoneDisplay(
+  phone: string | null | undefined,
+  phoneE164?: string | null,
+): string {
+  const raw = String(phone ?? "").trim();
+  const e164 = String(phoneE164 ?? "").trim() || normalisePhoneE164(raw) || "";
+  if (!e164) return raw;
+  return formatE164(e164);
+}
+
+function formatE164(e164: string): string {
+  const digits = e164.replace(/\D/g, "");
+  if (digits.startsWith("27") && digits.length === 11) {
+    return `+27 ${digits.slice(2, 4)} ${digits.slice(4, 7)} ${digits.slice(7)}`;
+  }
+  if (digits.startsWith("1") && digits.length === 11) {
+    return `+1 ${digits.slice(1, 4)} ${digits.slice(4, 7)} ${digits.slice(7)}`;
+  }
+  return e164.startsWith("+") ? e164 : `+${digits}`;
+}
+
+function marketFromPhone(phone: string | null | undefined): "US" | "SA" | null {
+  const e164 = normalisePhoneE164(phone);
+  if (!e164) return null;
+  if (e164.startsWith("+27")) return "SA";
+  if (e164.startsWith("+1")) return "US";
+  return null;
+}
+
+function marketFromHost(host: string | null): "US" | "SA" | null {
+  const value = String(host ?? "").toLowerCase();
+  if (!value) return null;
+  if (value.endsWith(".za")) return "SA";
+  if (value.endsWith(".us")) return "US";
+  return null;
+}
+
+/**
+ * Market shown in the US / SA filter.
+ * A stored country wins. Otherwise timezone, then phone, then website or email TLD.
+ */
+export function displayedLeadMarket(lead: {
+  country?: string | null;
+  state?: string | null;
+  region?: string | null;
+  timezone?: string | null;
+  city?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  phoneE164?: string | null;
+  website?: string | null;
+}): LighthouseTargetCountry {
+  const stored = storedLeadMarket(lead.country);
+  if (stored) return stored;
+  const zone = resolveRecipientZone(lead).geo;
+  if (zone === "US" || zone === "SA") return zone;
+  const fromPhone = marketFromPhone(lead.phoneE164 || lead.phone);
+  if (fromPhone) return fromPhone;
+  const fromSite = marketFromHost(firmHost(lead.website));
+  if (fromSite) return fromSite;
+  const fromEmail = marketFromHost(emailDomain(lead.email));
+  if (fromEmail) return fromEmail;
+  return "OTHER";
+}
+
+/** Country to write when the column is still empty and the row is in the SA/US filter. */
+export function inferredTargetCountry(lead: {
+  country?: string | null;
+  state?: string | null;
+  region?: string | null;
+  timezone?: string | null;
+  city?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  phoneE164?: string | null;
+  website?: string | null;
+}): "US" | "SA" | null {
+  if (storedLeadMarket(lead.country)) return null;
+  const market = displayedLeadMarket({ ...lead, country: null });
+  return market === "US" || market === "SA" ? market : null;
 }
 
 export function conversationActivityType(kind: LighthouseConversationKind): "call" | "meeting" {
