@@ -178,12 +178,13 @@ export function benchmarkTrack(input: {
 }
 
 /**
- * Equity below this cannot support a meaningful ROE. A one-month profit on a
- * few thousand dollars of equity annualises into a triple-digit return that
- * is not a performance signal. One floor per currency, shared by the
- * scorecard and the asset report.
+ * Equity below one currency unit cannot support a meaningful ROE.
+ * A balance the report already uses (R33,000, $8,267) is large enough —
+ * calling it "too small" while leverage and the equity multiplier use it
+ * disagrees with itself. Dust below 1 stays unscored. One floor per
+ * currency, shared by the scorecard and the asset report.
  */
-export const ROE_EQUITY_FLOOR = { USD: 10_000, ZAR: 150_000 } as const;
+export const ROE_EQUITY_FLOOR = { USD: 1, ZAR: 1 } as const;
 
 export function roeEquityFloor(currency: string | null | undefined): number {
   return currency === "USD" ? ROE_EQUITY_FLOOR.USD : ROE_EQUITY_FLOOR.ZAR;
@@ -322,10 +323,18 @@ export type RatioInputs = {
    * and are never scaled.
    */
   periodMonths?: string;
+  /**
+   * Extracted balance-sheet total. Debt-to-equity uses this, not the
+   * interest-bearing facility schedule. A stock, so it is never annualised.
+   */
+  totalLiabilities?: string;
 };
 
 /** Blob key under which the period length is stored alongside the figures. */
 export const PERIOD_MONTHS_KEY = "periodMonths";
+
+/** "1" when the accountant picked Figures cover. An unlocked "12" can still follow the statement dates. */
+export const PERIOD_MONTHS_CHOSEN_KEY = "periodMonthsChosen";
 
 const PERIOD_MONTH_LABEL: Record<number, string> = {
   12: "12 months (annual)",
@@ -457,6 +466,10 @@ export function computeRatios(v: RatioInputs): Record<string, number> {
   const ocfEbitda = ocfToEbitdaRatio(n.operatingCashflow, n.ebitda);
   const interestBurden = interestBurdenRatio(n.ebit, n.ebt);
   const taxBurden = taxBurdenRatio(n.ebt, n.netIncome);
+  const debtToEquity =
+    Number.isFinite(n.totalLiabilities) && Number.isFinite(n.equity) && n.equity !== 0
+      ? n.totalLiabilities / n.equity
+      : NaN;
 
   return {
     "Net Margin": netMargin,
@@ -466,6 +479,7 @@ export function computeRatios(v: RatioInputs): Record<string, number> {
     "Return on Assets": roa,
     "Asset Turnover": assetTurnover,
     "Equity Multiplier": equityMultiplier,
+    "Debt-to-Equity": debtToEquity,
     "Interest Burden": interestBurden,
     "Tax Burden": taxBurden,
     "Debtor Days": debtorDays,

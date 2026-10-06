@@ -8,6 +8,13 @@ export function currencySymbol(market: Pick<ResolvedMarket, "currency"> = ZA_MAR
 }
 
 /** Compact unit for prose: R1 / $1, R100 / $100. */
+/** A regular space. A no-break space collapses to "R0" in PDF text extraction. */
+const ZAR_GAP = " ";
+
+function groupedDigits(body: string): string {
+  return body.replace(/[\u00a0\u202f]/g, " ");
+}
+
 export function formatMoneyUnit(
   n: number,
   market: Pick<ResolvedMarket, "currency"> = ZA_MARKET,
@@ -15,7 +22,7 @@ export function formatMoneyUnit(
   if (!Number.isFinite(n)) return "—";
   const sign = n < 0 ? "-" : "";
   const body = String(Math.abs(n));
-  const gap = market.currency === "USD" ? "" : "\u00a0";
+  const gap = market.currency === "USD" ? "" : ZAR_GAP;
   return `${sign}${currencySymbol(market)}${gap}${body}`;
 }
 
@@ -28,15 +35,17 @@ export function formatMoney(
   const maximumFractionDigits = opts?.maximumFractionDigits ?? 0;
   const minimumFractionDigits = opts?.minimumFractionDigits ?? 0;
   const abs = Math.abs(n);
-  const body = abs.toLocaleString(market.locale, {
-    maximumFractionDigits,
-    minimumFractionDigits,
-  });
+  const body = groupedDigits(
+    abs.toLocaleString(market.locale, {
+      maximumFractionDigits,
+      minimumFractionDigits,
+    }),
+  );
   const sign = n < 0 ? "-" : "";
   if (market.currency === "USD") {
     return `${sign}$${body}`;
   }
-  return `${sign}R\u00a0${body}`;
+  return `${sign}R${ZAR_GAP}${body}`;
 }
 
 export function formatNumber(
@@ -56,7 +65,7 @@ export function formatMoneyCompact(n: number, market: MoneyMarket = ZA_MARKET): 
   const abs = Math.abs(n);
   const sign = n < 0 ? "-" : "";
   const sym = currencySymbol(market);
-  const gap = market.currency === "USD" ? "" : "\u00a0";
+  const gap = market.currency === "USD" ? "" : ZAR_GAP;
   if (abs >= 1_000_000) {
     const digits = abs >= 10_000_000 ? 0 : 1;
     return `${sign}${sym}${gap}${(abs / 1_000_000).toFixed(digits)}m`;
@@ -65,7 +74,7 @@ export function formatMoneyCompact(n: number, market: MoneyMarket = ZA_MARKET): 
     const digits = abs >= 100_000 ? 0 : 1;
     return `${sign}${sym}${gap}${(abs / 1_000).toFixed(digits)}k`;
   }
-  return `${sign}${sym}${gap}${Math.round(abs).toLocaleString(market.locale)}`;
+  return `${sign}${sym}${gap}${groupedDigits(Math.round(abs).toLocaleString(market.locale))}`;
 }
 
 /**

@@ -42,7 +42,7 @@ import { PlaybookDrawer } from "@/components/playbook-drawer";
 import { computeOverviewCaption } from "@/lib/overview-insights";
 import { PlBankDisagreeNotice } from "@/components/pl-bank-disagree-notice";
 import type { ExtractionResult } from "@/lib/financialSchema";
-import { coherentEquity, effectivePeriodMonths } from "@/lib/equity-coherence";
+import { cashFlowKnown, coherentEquity, effectivePeriodMonths } from "@/lib/equity-coherence";
 import { pickCurrentSnapshot } from "@/lib/financial-snapshots";
 import { defaultPeriodCoverage } from "@/lib/statement-period";
 import {
@@ -58,6 +58,7 @@ import { TrialBalanceRefreshPrompt } from "@/components/trial-balance-refresh-pr
 import {
   computeRatios,
   PERIOD_MONTH_OPTIONS,
+  PERIOD_MONTHS_CHOSEN_KEY,
   PERIOD_MONTHS_KEY,
   healthBandLabel,
   scoreTier,
@@ -81,6 +82,7 @@ import {
   ratioQueryLabel,
 } from "@/lib/ratio-queries";
 import { ratioActualLine } from "@/lib/ratio-actuals";
+import { presentReturn, presentScorecardRatio } from "@/lib/report-coherence";
 import { useAccountantProfile } from "@/contexts/accountant-profile";
 import { FirmSwitcher } from "@/components/firm-switcher";
 import "@/styles/accountant-portal.css";
@@ -338,6 +340,7 @@ function formatRatioValue(
   if (
     name === "Asset Turnover" ||
     name === "Equity Multiplier" ||
+    name === "Debt-to-Equity" ||
     name === "Degree of Operating Leverage" ||
     name === "OCF / EBITDA"
   ) {
@@ -1007,9 +1010,22 @@ function ClientView() {
   /** Unresolved client notes — live open-query count for triage. */
   const [openQueriesCount, setOpenQueriesCount] = useState(0);
 
-  // Computed ratios
-  const coverageMonths = effectivePeriodMonths(financials);
+  const clientMarket = useMemo(
+    () =>
+      resolveMarket(
+        parseMarketSelection(client?.market) ?? coerceMarketSelection(client?.market ?? null),
+      ),
+    [client?.market],
+  );
+  const fyStartMonth =
+    parseOperatingProfile(client?.operating_profile)?.fyStartMonth ?? clientMarket.fyStartMonthDefault;
+  // Computed ratios. An unlocked stored 12 follows the statement's year-to-date.
+  const coverageMonths = effectivePeriodMonths(financials, { fyStartMonth });
+  const partMonth = (reportDataPeriodLabel(financials) ?? "").includes("part month");
   const equityCheck = coherentEquity(financials);
+  const parsedEquity = Number(equityCheck.equity);
+  const equityAmount =
+    equityCheck.equity.trim() !== "" && Number.isFinite(parsedEquity) ? parsedEquity : null;
   const ratioInputs: RatioInputs & { totalLiabilities?: string } = {
     revenue: financials["revenue"] ?? "",
     cogs: financials["cogs"] ?? "",
@@ -1056,13 +1072,6 @@ function ClientView() {
   const ratios = computeRatios(ratioInputs);
   const ratioQueryCounts = useMemo(() => countOpenRatioQueries(clientNotes), [clientNotes]);
   const priorSnapshot = resolvePriorSnapshot(snapshots);
-  const clientMarket = useMemo(
-    () =>
-      resolveMarket(
-        parseMarketSelection(client?.market) ?? coerceMarketSelection(client?.market ?? null),
-      ),
-    [client?.market],
-  );
   const assessed = useMemo(
     () =>
       assessClientMetrics({
@@ -1734,6 +1743,7 @@ function ClientView() {
       };
       const coverage = defaultPeriodCoverage({
         periodEnd: period?.periodEnd,
+        fyStartMonth,
         preClose:
           drafted.periodProfitInEquity != null &&
           String(drafted.periodProfitInEquity).trim() !== "" &&
@@ -1742,6 +1752,7 @@ function ClientView() {
       const inputs = {
         ...drafted,
         periodMonths: String(coverage.months),
+        [PERIOD_MONTHS_CHOSEN_KEY]: "",
         periodEnd: period?.periodEnd ?? "",
         ...(coverage.periodStart ? { periodStart: coverage.periodStart } : {}),
       };
@@ -1857,6 +1868,7 @@ function ClientView() {
     },
     [
       clientId,
+      fyStartMonth,
       effectiveRunway,
       mergeCurrentBlob,
       firmId,
@@ -1992,20 +2004,35 @@ function ClientView() {
         });
       // Build ratio results from computed ratios (shared scoring + pillars)
       const ratioEntries = Object.entries(ratios)
-        .filter(([, val]) => Number.isFinite(val as number))
         .map(([name, val]) => {
-          const score = Math.round(scoreRatio(name, val as number, clientMarket));
-          const tier = scoreTier(score);
+          const presented = presentScorecardRatio({
+            name,
+            value: val as number,
+            equity: equityAmount,
+            currency: clientMarket.currency,
+            periodMonths,
+            partMonth,
+            cashFlowKnown: cashFlowKnown(financials),
+          });
+          if (!presented.include) return null;
+          const scored = presented.scoredValue;
+          const score =
+            presented.unscored || scored == null
+              ? 0
+              : Math.round(scoreRatio(name, scored, clientMarket));
           return {
             ratio_key: playbookKeyForRatioName(name),
             ratio_name: name,
             pillar: pillarForRatioName(name),
-            current_value: val as number,
+            current_value: scored ?? (Number.isFinite(val as number) ? (val as number) : Number.NaN),
             health_score: score,
-            health_tier: tier,
-            formatted_value: formatRatioValue(name, val as number, clientMarket),
+            health_tier: presented.unscored ? ("at_risk" as const) : scoreTier(score),
+            formatted_value: presented.text ?? formatRatioValue(name, (scored ?? val) as number, clientMarket),
+            annotation: presented.note,
+            unscored: presented.unscored || undefined,
           };
-        });
+        })
+        .filter((row): row is NonNullable<typeof row> => row != null);
 
       const smeData = {
         name: client.name,
@@ -2067,6 +2094,10 @@ function ClientView() {
     financialsSignoff,
     effectiveRunway,
     firmId,
+    periodMonths,
+    partMonth,
+    equityAmount,
+    clientMarket,
   ]);
 
   const handleEmailDraft = useCallback(async () => {
@@ -2929,9 +2960,10 @@ function ClientView() {
                             ) : null}
                             <select
                               value={String(periodMonths)}
-                              onChange={(e) =>
-                                handleFinancialChange(PERIOD_MONTHS_KEY, e.target.value)
-                              }
+                              onChange={(e) => {
+                                handleFinancialChange(PERIOD_MONTHS_KEY, e.target.value);
+                                handleFinancialChange(PERIOD_MONTHS_CHOSEN_KEY, "1");
+                              }}
                             >
                               {PERIOD_MONTH_OPTIONS.map((o) => (
                                 <option key={o.months} value={String(o.months)}>
@@ -3021,17 +3053,29 @@ function ClientView() {
                             <div className="ratio-rows">
                               {names.map((name) => {
                                 const val = (ratios as Record<string, number>)[name];
-                                const score = Math.round(
-                                  ratioHealthScore(name, val as number, clientMarket),
-                                );
-                                const tier = scoreTier(score);
+                                const presented =
+                                  name === "Return on Equity" || name === "Return on Assets"
+                                    ? presentReturn({
+                                        ratioName: name,
+                                        value: val,
+                                        equity: equityAmount,
+                                        currency: clientMarket.currency,
+                                        periodMonths,
+                                        partMonth,
+                                      })
+                                    : null;
+                                const scoredValue = presented ? presented.scoredValue : val;
+                                const score =
+                                  presented?.unscored || scoredValue == null || !Number.isFinite(scoredValue)
+                                    ? Number.NaN
+                                    : Math.round(ratioHealthScore(name, scoredValue, clientMarket));
+                                const finiteScore = Number.isFinite(score);
+                                const tier = finiteScore ? scoreTier(score) : "at_risk";
                                 const band = tierToBand(tier);
-                                const color = bandColor(band);
-                                const formattedVal = formatRatioValue(
-                                  name,
-                                  val as number,
-                                  clientMarket,
-                                );
+                                const color = finiteScore ? bandColor(band) : "var(--muted, #94a3b8)";
+                                const formattedVal = presented
+                                  ? presented.text
+                                  : formatRatioValue(name, val, clientMarket);
                                 const actual = ratioActualLine(name, ratioInputs, (n) =>
                                   formatMoneyCompact(n, clientMarket),
                                 );
@@ -3070,9 +3114,13 @@ function ClientView() {
                                         }}
                                       />
                                     </span>
-                                    <span className={`chip ${band}`}>
+                                    <span className={`chip ${finiteScore ? band : ""}`}>
                                       <i />
-                                      {Number.isFinite(val as number) ? bandLabel(band) : "No data"}
+                                      {presented?.unscored
+                                        ? "Not scored"
+                                        : finiteScore
+                                          ? bandLabel(band)
+                                          : "No data"}
                                     </span>
                                     <span className="arr">→</span>
                                   </button>

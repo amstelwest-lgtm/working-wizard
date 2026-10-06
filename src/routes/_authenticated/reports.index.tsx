@@ -50,6 +50,7 @@ import {
 import {
   ASSET_REPORT_NEEDS,
   cashFlowKnown,
+  effectivePeriodMonths,
   LEVERAGE_REPORT_NEEDS,
   reportScalarInputs,
 } from "@/lib/equity-coherence";
@@ -111,9 +112,12 @@ import { parseDebtSchedule, totalDebtFromSchedule } from "@/lib/debt-schedule";
 import { resolvePriorSnapshot, withPriorRatioScores } from "@/lib/prior-period";
 import { reportDataPeriodLabel, reportPeriodMonthYear, readStatementMeta } from "@/lib/statement-period";
 import {
+  debtToEquityReading,
   presentReturn,
   presentScorecardRatio,
   priorFiguresAreCopy,
+  reportDownloadGate,
+  scoredReturnHealth,
 } from "@/lib/report-coherence";
 import {
   coerceMarketSelection,
@@ -121,6 +125,7 @@ import {
   laborProductivityFileStem,
   laborProductivityTitle,
   localizeCopy,
+  spellLabor,
   parseMarketSelection,
   resolveMarket,
   t,
@@ -1212,6 +1217,7 @@ function fmtRatioVal(name: string, val: number): string {
   if (
     name === "Asset Turnover" ||
     name === "Equity Multiplier" ||
+    name === "Debt-to-Equity" ||
     name === "Degree of Operating Leverage" ||
     name === "OCF / EBITDA"
   )
@@ -1695,7 +1701,13 @@ function buildLeverageData(
 
   const liabilities = getNum(fin, "totalLiabilities");
   const d2a = debt_facilities_captured && totalAssets > 0 ? totalDebt / totalAssets : NaN;
-  const d2e = debt_facilities_captured && equity > 0 ? totalDebt / equity : NaN;
+  const deReading = debtToEquityReading({
+    totalLiabilities: Number.isFinite(liabilities) ? liabilities : null,
+    facilityDebt: totalDebt,
+    facilitiesCaptured: debt_facilities_captured,
+    equity,
+  });
+  const d2e = deReading.value;
   const em = rawRatios["Equity Multiplier"];
   const ib = rawRatios["Interest Burden"];
   const priorEquity =
@@ -1726,9 +1738,7 @@ function buildLeverageData(
       equityMultiplier: Number.isFinite(em)
         ? Math.round(scoreForRatio("Equity Multiplier", em))
         : null,
-      debtToEquity: Number.isFinite(d2e)
-        ? Math.round(Math.min(100, Math.max(0, ((2 - d2e) / 2) * 100)))
-        : null,
+      debtToEquity: Number.isFinite(d2e) ? Math.round(scoreForRatio("Debt-to-Equity", d2e)) : null,
       debtToAssets: Number.isFinite(d2a)
         ? Math.round(Math.min(100, Math.max(0, (1 - d2a) * 100)))
         : null,
@@ -1773,13 +1783,19 @@ function buildAssetData(
     roe_unscored: roeView.unscored,
     roe_text: roeView.text,
     roa_text: roaView.text,
+    roa_headline: roaView.headline,
+    roa_note: roaView.note,
+    roa_unscored: roaView.unscored,
     net_margin: nm,
     asset_turnover: at,
     equity_multiplier: em,
     capex_periods: [],
     health_scores: {
       assetTurnover: Math.round(scoreForRatio("Asset Turnover", at)),
-      roa: Number.isFinite(roa) ? Math.round(scoreForRatio("Return on Assets", roa)) : 0,
+      roa: scoredReturnHealth(
+        roaView,
+        Number.isFinite(roa) ? scoreForRatio("Return on Assets", roa) : Number.NaN,
+      ),
       // Capex / fixed-asset ratios need inputs we do not yet capture — never invent.
       fixedCapitalUtilization: null,
       assetReinvestmentRatio: null,
@@ -2172,7 +2188,8 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
 
   const rawFin = clientRow.financials as Record<string, string | number | null | object>;
   const debtRaw = (rawFin as Record<string, unknown>).debt_schedule;
-  const fin = reportScalarInputs(rawFin as Record<string, unknown>);
+  const fyStartMonth = operatingProfile?.fyStartMonth ?? market.fyStartMonthDefault;
+  const fin = reportScalarInputs(rawFin as Record<string, unknown>, { fyStartMonth });
   // Keep debt_schedule as a JSON string key so buildLeverageData can parse it
   if (debtRaw != null) {
     fin["debt_schedule"] = typeof debtRaw === "string" ? debtRaw : JSON.stringify(debtRaw);
@@ -2198,12 +2215,13 @@ async function loadClientReportData(clientId: string): Promise<ClientReportData>
     laborCost: fin["laborCost"] ?? "",
     employees: fin["employees"] ?? "",
     founderHours: fin["founderHours"] ?? "",
+    totalLiabilities: fin["totalLiabilities"] ?? "",
     periodMonths: fin["periodMonths"] ?? "",
   };
   const rawRatios = computeRatios(ratioInputs);
   const statementMeta = readStatementMeta(rawFin);
   const partMonth = Boolean(dataPeriodLabel?.includes("part month"));
-  const periodMonths = periodMonthsOf(rawFin as Record<string, unknown>);
+  const periodMonths = effectivePeriodMonths(fin, { fyStartMonth });
   const equityNow = getNum(fin, "equity");
   const snapshots: DatedSnapshot[] = (snapshotRes.data ?? []).map((s) => ({
     period_label: s.period_label,
@@ -2922,12 +2940,12 @@ function ReportCard({
   clientName?: string;
   onSignoffChange?: (next: ClientReviewSignoff | null) => void;
 }) {
-  const disabled = !isClient || dataLoading || blocked || Boolean(unavailableReason);
-  const blockedTitle = unavailableReason
-    ? unavailableReason
-    : blocked
-      ? "Upload financials before generating client reports"
-      : undefined;
+  const gate = reportDownloadGate({
+    ready: isClient,
+    loading: dataLoading,
+    blocked,
+    unavailableReason,
+  });
   const scope = REPORT_SIGNOFF_SCOPE[report.key];
   const copy = reportCopy(report, market);
   return (
@@ -2991,9 +3009,12 @@ function ReportCard({
           variant="outline"
           size="sm"
           className="flex-1 border-border bg-transparent text-foreground hover:bg-muted hover:text-foreground text-xs gap-1.5"
-          onClick={onPreview}
-          disabled={disabled || isPreviewing}
-          title={blockedTitle}
+          onClick={() => {
+            if (gate.disabled || isPreviewing) return;
+            onPreview();
+          }}
+          disabled={gate.disabled || isPreviewing}
+          title={isPreviewing ? "This report is already opening" : gate.title}
         >
           {isPreviewing ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -3005,9 +3026,14 @@ function ReportCard({
         <Button
           size="sm"
           className="flex-1 text-xs gap-1.5 bg-[#c9962b] text-white hover:bg-[#b8851f]"
-          onClick={onGenerate}
-          disabled={disabled || isGenerating}
-          title={blockedTitle}
+          onClick={() => {
+            if (gate.disabled || isGenerating) return;
+            onGenerate();
+          }}
+          disabled={gate.disabled || isGenerating}
+          title={
+            isGenerating ? "This report is already downloading" : gate.title
+          }
         >
           {isGenerating ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -3429,14 +3455,22 @@ const TIER_DOT: Record<string, string> = {
 
 // ── Playbook ratio card ─────────────────────────────────────────────────────
 
-function PlaybookRatioCard({ ratio, onClick }: { ratio: PlaybookRatio; onClick: () => void }) {
+function PlaybookRatioCard({
+  ratio,
+  name,
+  onClick,
+}: {
+  ratio: PlaybookRatio;
+  name: string;
+  onClick: () => void;
+}) {
   return (
     <button
       onClick={onClick}
       className="w-full text-left rounded-lg border border-border bg-card hover:bg-muted/60 hover:border-[#c9962b]/50 transition-colors p-3 group"
     >
       <div className="flex items-start justify-between gap-2 mb-2">
-        <p className="text-xs font-medium text-foreground leading-snug">{ratio.ratio_name}</p>
+        <p className="text-xs font-medium text-foreground leading-snug">{name}</p>
         <span
           className={`flex-shrink-0 inline-flex items-center rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${
             ratio.unscored
@@ -3613,6 +3647,11 @@ export function ReportsStudio({
     return null;
   };
   const studioBusy = dataLoading || resolvingClient;
+  const zipGate = reportDownloadGate({
+    ready: isClient,
+    loading: studioBusy,
+    blocked: blockedForClient,
+  });
 
   const patchStudioSignoff = (scope: ReviewScope) => (next: ClientReviewSignoff | null) => {
     setClientData((cd) =>
@@ -3771,6 +3810,7 @@ export function ReportsStudio({
   // ── Generate single PDF ──────────────────────────────────────────────────
 
   async function handleGenerate(report: ReportMeta) {
+    if (loadingKey) return;
     if (!assertCanGenerate()) return;
     setLoadingKey(report.key);
     try {
@@ -4123,13 +4163,12 @@ export function ReportsStudio({
             ) : (
               <Button
                 className="gap-2 bg-[#c9962b] hover:bg-[#b8851f] font-semibold text-white"
-                onClick={handleGenerateAll}
-                disabled={!isClient || studioBusy || blockedForClient}
-                title={
-                  blockedForClient
-                    ? "Upload financials before generating client reports"
-                    : undefined
-                }
+                onClick={() => {
+                  if (zipGate.disabled) return;
+                  handleGenerateAll();
+                }}
+                disabled={zipGate.disabled}
+                title={zipGate.title}
               >
                 {studioBusy ? (
                   <>
@@ -4225,19 +4264,21 @@ export function ReportsStudio({
                 {PLAYBOOK_PILLARS.map((pillar) => {
                   const ratios = playbookRatios.filter((r) => r.pillar === pillar.key);
                   if (!ratios.length) return null;
+                  const playbookMarket = clientData?.market ?? firmMarket;
                   return (
                     <div key={pillar.key}>
                       <p
                         className="text-[10px] font-semibold uppercase tracking-widest mb-2"
                         style={{ color: pillar.color }}
                       >
-                        {pillar.name}
+                        {spellLabor(pillar.name, playbookMarket)}
                       </p>
                       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                         {ratios.map((ratio) => (
                           <PlaybookRatioCard
                             key={ratio.ratio_key}
                             ratio={ratio}
+                            name={spellLabor(ratio.ratio_name, playbookMarket)}
                             onClick={() => openPlaybook(ratio)}
                           />
                         ))}
@@ -4264,7 +4305,7 @@ export function ReportsStudio({
       {/* Playbook drawer */}
       <PlaybookDrawer
         ratioKey={selectedPlaybook?.ratio_key ?? null}
-        ratioName={selectedPlaybook?.ratio_name ?? ""}
+        ratioName={spellLabor(selectedPlaybook?.ratio_name ?? "", clientData?.market ?? firmMarket)}
         healthTier={selectedPlaybook?.health_tier ?? "at_risk"}
         open={playbookOpen}
         onClose={() => setPlaybookOpen(false)}

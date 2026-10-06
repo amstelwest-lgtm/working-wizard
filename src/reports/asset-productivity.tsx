@@ -43,13 +43,17 @@ export type AssetProductivityData = {
   /** Full value-column text, including the annualised label. */
   roe_text?: string;
   roa_text?: string;
+  roa_headline?: string;
+  roa_note?: string | null;
+  roa_unscored?: boolean;
   net_margin: number;
   asset_turnover: number;
   equity_multiplier: number;
   capex_periods: CapexPeriod[];
   health_scores: {
     assetTurnover: number;
-    roa: number;
+    /** Null when the period is too short to annualise — never a fake 100. */
+    roa: number | null;
     /** Null when fixed assets / capex inputs are missing — never invent. */
     fixedCapitalUtilization: number | null;
     assetReinvestmentRatio: number | null;
@@ -240,8 +244,17 @@ export function AssetProductivityPDF({
   const dupont = diagnoseDuPont(levers);
 
   const ratioRows = [
-    { name: "Asset Turnover", value: data.ratios.assetTurnover.value, score: hs.assetTurnover },
-    { name: "Return on Assets (ROA)", value: data.roa_text ?? data.ratios.roa.value, score: hs.roa },
+    { name: "Asset Turnover", value: data.ratios.assetTurnover.value, score: hs.assetTurnover, unscored: false },
+    {
+      name: data.roa_unscored
+        ? `Return on Assets (ROA) — ${data.roa_note ?? data.roa_text ?? "not scored"}`
+        : data.roa_note
+          ? `Return on Assets (ROA) · ${data.roa_note}`
+          : "Return on Assets (ROA)",
+      value: data.roa_unscored ? (data.roa_headline ?? "n/a") : (data.roa_headline ?? data.ratios.roa.value),
+      score: hs.roa,
+      unscored: Boolean(data.roa_unscored),
+    },
     {
       name: "Fixed Capital Utilization",
       value: data.ratios.fixedCapitalUtilization.value,
@@ -257,7 +270,12 @@ export function AssetProductivityPDF({
       value: data.ratios.capexIntensity.value,
       score: hs.capexIntensity,
     },
-  ].filter((r) => r.score != null) as Array<{ name: string; value: string; score: number }>;
+  ].filter((r) => r.unscored || r.score != null) as Array<{
+    name: string;
+    value: string;
+    score: number | null;
+    unscored?: boolean;
+  }>;
 
   const roeUnscored = Boolean(data.roe_unscored);
   const roeTier = roeUnscored ? null : leverBand("Return on Equity", data.roe);
@@ -331,8 +349,9 @@ export function AssetProductivityPDF({
           key={r.name}
           ratioName={r.name}
           formattedValue={r.value}
-          healthScore={r.score}
+          healthScore={r.score ?? 0}
           healthTier={scoreTier(r.score)}
+          unscored={r.unscored}
           isAlternate={i % 2 === 1}
         />
       ))}

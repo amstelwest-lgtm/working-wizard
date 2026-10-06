@@ -13,6 +13,8 @@ import {
   formatMoney,
   formatMoneyCompact,
   formatMoneyUnit,
+  laborProductivityTitle,
+  spellLabor,
   formatNumber,
   canShowIndustryMedian,
   industryBenchmarkCaption,
@@ -161,7 +163,7 @@ assert(orRows[0].cashIn === 1000, `OR cashIn ${orRows[0].cashIn}`);
 assert(orRows[0].vatNet === 0, "OR no sales tax remittance");
 
 assert(
-  formatMoneyCompact(1_250_000, ZA_MARKET) === "R\u00a01.3m",
+  formatMoneyCompact(1_250_000, ZA_MARKET) === "R 1.3m",
   `ZA compact ${formatMoneyCompact(1_250_000, ZA_MARKET)}`,
 );
 assert(
@@ -172,8 +174,23 @@ assert(formatNumber(1299, ZA_MARKET).includes("1"), "ZA formatNumber digits");
 assert(formatNumber(1299, tx).includes("1"), "US formatNumber digits");
 assert(currencySymbol(ZA_MARKET) === "R", "ZA symbol");
 assert(currencySymbol(tx) === "$", "US symbol");
-assert(formatMoneyUnit(1, ZA_MARKET) === "R\u00a01", "ZA unit");
-assert(formatMoneyUnit(0, ZA_MARKET) === "R\u00a00", "ZA zero keeps the same gap as other rand amounts");
+assert(formatMoneyUnit(1, ZA_MARKET) === "R 1", "ZA unit");
+assert(formatMoneyUnit(0, ZA_MARKET) === "R 0", "ZA zero keeps the same gap as other rand amounts");
+assert(formatMoney(0, ZA_MARKET) === "R 0", `ZA zero money ${formatMoney(0, ZA_MARKET)}`);
+const zarWages = formatMoney(75_000, ZA_MARKET);
+assert(
+  zarWages.startsWith("R ") && zarWages.includes("75") && zarWages.includes("000"),
+  `ZA wages keep a space after R, got ${zarWages}`,
+);
+assert(!zarWages.includes("\u00a0") && !zarWages.includes("\u202f"), "ZA money uses a regular space");
+assert(!formatMoney(1299, tx).includes(" "), `US money has no space after $ (${formatMoney(1299, tx)})`);
+assert(spellLabor("Labour & staffing", tx) === "Labor & staffing", "US benchmark spells Labor");
+assert(spellLabor("Labour & staffing", ZA_MARKET) === "Labour & staffing", "ZA benchmark keeps Labour");
+assert(spellLabor("Labor & staffing", ZA_MARKET) === "Labour & staffing", "ZA rewrites a US Labor label");
+assert(laborProductivityTitle(tx) === "Labor Productivity", "US report card is Labor Productivity");
+assert(laborProductivityTitle(ZA_MARKET) === "Labour Productivity", "ZA report card is Labour Productivity");
+assert(spellLabor("Labour ROI", tx) === "Labor ROI", "US playbook spells Labor ROI");
+assert(spellLabor("Labour Productivity", ZA_MARKET) === "Labour Productivity", "ZA playbook stays Labour");
 assert(formatMoneyUnit(1, tx) === "$1", "US unit");
 assert(formatMoneyUnit(100, tx) === "$100", "US unit 100");
 assert(localizeCopy("Debtor Days", ZA_MARKET) === "Debtor Days", "ZA copy unchanged");

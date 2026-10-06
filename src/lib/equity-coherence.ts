@@ -7,7 +7,7 @@
  * equity total was plugged from assets − liabilities.
  */
 
-import { PERIOD_MONTHS_KEY, periodMonthsOf } from "@/lib/ratios";
+import { PERIOD_MONTHS_CHOSEN_KEY, PERIOD_MONTHS_KEY, periodMonthsOf } from "@/lib/ratios";
 import { defaultPeriodCoverage } from "@/lib/statement-period";
 
 export const EQUITY_CROSSCHECK_WARNING =
@@ -186,23 +186,40 @@ function blobIsPreClose(fields: Record<string, unknown>): boolean {
 }
 
 /**
- * Months the P&L covers. A stored periodMonths wins. Otherwise a dated
- * statement supplies the span: month-end pre-close is calendar YTD, a
- * part-month is 1, and anything else stays on the historical 12-month default.
+ * Months the P&L covers. A Figures-cover choice wins. Otherwise a dated
+ * statement supplies the span from the financial-year start. An unlocked
+ * stored 12 is replaced when that span is shorter and the year start is
+ * known — a September management account must not stay labelled annual.
+ * Without a year start, a stored 12 is left alone so a February year-end
+ * is not read as two months.
  */
-export function effectivePeriodMonths(fin: Record<string, unknown> | null | undefined): number {
-  const raw = fin?.[PERIOD_MONTHS_KEY];
-  if (raw != null && String(raw).trim() !== "") return periodMonthsOf(fin);
+export function effectivePeriodMonths(
+  fin: Record<string, unknown> | null | undefined,
+  opts?: { fyStartMonth?: number | null },
+): number {
+  const chosen = String(fin?.[PERIOD_MONTHS_CHOSEN_KEY] ?? "").trim() === "1";
+  if (chosen) return periodMonthsOf(fin);
+
   const start = fin?.periodStart != null ? String(fin.periodStart) : "";
   const end = fin?.periodEnd != null ? String(fin.periodEnd) : "";
-  if (start.trim() || end.trim()) {
-    return defaultPeriodCoverage({
-      periodStart: start,
-      periodEnd: end,
-      preClose: fin ? blobIsPreClose(fin) : false,
-    }).months;
-  }
-  return 12;
+  const hasDates = Boolean(start.trim() || end.trim());
+  const storedRaw = fin?.[PERIOD_MONTHS_KEY];
+  const hasStored = storedRaw != null && String(storedRaw).trim() !== "";
+  const inferred = hasDates
+    ? defaultPeriodCoverage({
+        periodStart: start,
+        periodEnd: end,
+        preClose: fin ? blobIsPreClose(fin) : false,
+        fyStartMonth: opts?.fyStartMonth,
+      }).months
+    : 12;
+
+  if (!hasStored) return inferred;
+
+  const stored = periodMonthsOf(fin);
+  const fyPassed = opts?.fyStartMonth != null && Number.isFinite(Number(opts.fyStartMonth));
+  if (stored === 12 && inferred !== 12 && fyPassed) return inferred;
+  return stored;
 }
 
 function blankUnstatedCashFlow(scalars: Record<string, string>): void {
@@ -214,6 +231,7 @@ function blankUnstatedCashFlow(scalars: Record<string, string>): void {
 /** Flat financials with coherent equity, explicit liabilities, and a blank fake OCF. */
 export function reportScalarInputs(
   financials: Record<string, unknown> | null | undefined,
+  opts?: { fyStartMonth?: number | null },
 ): Record<string, string> {
   const scalars: Record<string, string> = {};
   for (const [key, value] of Object.entries(financials ?? {})) {
@@ -224,12 +242,12 @@ export function reportScalarInputs(
     const summed = explicitLiabilityTotal(scalars);
     if (summed != null) scalars.totalLiabilities = String(summed);
   }
-  const months = effectivePeriodMonths(scalars);
+  const months = effectivePeriodMonths(scalars, opts);
   const coherent = coherentEquity(scalars);
   if (coherent.equity !== "") scalars.equity = coherent.equity;
   if (coherent.derived) scalars.equityDerived = "1";
   if (coherent.preClose) scalars.periodProfitInEquity = String(coherent.profitIncluded);
-  if (!scalars.periodMonths?.trim()) scalars.periodMonths = String(months);
+  scalars.periodMonths = String(months);
   blankUnstatedCashFlow(scalars);
   return scalars;
 }

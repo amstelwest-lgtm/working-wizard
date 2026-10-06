@@ -233,6 +233,8 @@ export function leverageNarrative(
     totalDebt: number;
     totalEquity: number;
     debtCaptured: boolean;
+    /** True when debt-to-equity is total liabilities ÷ equity, not the facility schedule. */
+    debtFromLiabilities?: boolean;
   },
   profile?: NarrativeProfile,
   market: MoneyMarket = ZA_MARKET,
@@ -246,11 +248,19 @@ export function leverageNarrative(
   const multiplierBit = emBand
     ? `The equity multiplier is ${em} (assets ÷ equity), ${emBand}.`
     : `The equity multiplier is ${em}.`;
-  const debtBit = !d.debtCaptured
-    ? " No debt facilities are on file, so debt-to-equity is not scored."
-    : d.totalDebt <= 0
-      ? ` No debt is recorded against ${fmtRandCompact(d.totalEquity, market)} of equity.`
-      : ` Debt is ${fmtRandCompact(d.totalDebt, market)} against ${fmtRandCompact(d.totalEquity, market)} of equity (${(d.debtToEquity ?? 0).toFixed(2)}× debt-to-equity, ${healthBandLabel(scoreTier(scoreRatio("Debt-to-Equity", d.debtToEquity ?? NaN)))}).`;
+  const liabilityDe =
+    d.debtFromLiabilities && d.debtToEquity != null && Number.isFinite(d.debtToEquity)
+      ? ` Debt-to-equity is ${d.debtToEquity.toFixed(2)}× on extracted total liabilities${
+          d.debtCaptured ? "." : ". Interest-bearing facilities are not on file."
+        }`
+      : null;
+  const debtBit = liabilityDe
+    ? liabilityDe
+    : !d.debtCaptured
+      ? " No debt facilities are on file, and total liabilities were not extracted, so debt-to-equity is not scored."
+      : d.totalDebt <= 0
+        ? ` No debt is recorded against ${fmtRandCompact(d.totalEquity, market)} of equity.`
+        : ` Debt is ${fmtRandCompact(d.totalDebt, market)} against ${fmtRandCompact(d.totalEquity, market)} of equity (${(d.debtToEquity ?? 0).toFixed(2)}× debt-to-equity, ${healthBandLabel(scoreTier(scoreRatio("Debt-to-Equity", d.debtToEquity ?? NaN)))}).`;
   return withCoda(multiplierBit + debtBit, profile, "leverage", market);
 }
 
@@ -374,7 +384,7 @@ export function assetNarrative(
 ): string {
   const roeTier = roe?.unscored ? null : leverBand("Return on Equity", l.roe);
   const roeBit = roe?.unscored
-    ? `${ROE_TOO_SMALL}.`
+    ? `${roe.text.replace(/\.$/, "")}.`
     : roeTier
       ? `Return on equity stands at ${roe?.text ?? fmtPct(l.roe)} — ${healthBandLabel(roeTier)}.`
       : roe?.text

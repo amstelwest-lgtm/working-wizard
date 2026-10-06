@@ -224,7 +224,26 @@ const tinyRoe = presentReturn({
   currency: "USD",
   periodMonths: 12,
 });
-assert(tinyRoe.unscored && tinyRoe.text === ROE_TOO_SMALL, "equity below the floor is not a 363% ROE");
+assert(
+  !tinyRoe.unscored && tinyRoe.text.includes("363.0%"),
+  `equity the report uses is not called too small, got ${tinyRoe.text}`,
+);
+const usedEquity = presentReturn({
+  ratioName: "Return on Equity",
+  value: 0.2,
+  equity: 33_000,
+  currency: "ZAR",
+  periodMonths: 12,
+});
+assert(!usedEquity.unscored && usedEquity.text.includes("20.0%"), "R33,000 equity is meaningful");
+const dustRoe = presentReturn({
+  ratioName: "Return on Equity",
+  value: 10,
+  equity: 0.4,
+  currency: "ZAR",
+  periodMonths: 12,
+});
+assert(dustRoe.unscored && dustRoe.text === ROE_TOO_SMALL, "dust equity stays too small to be meaningful");
 const monthRoa = presentReturn({
   ratioName: "Return on Assets",
   value: 1.41,

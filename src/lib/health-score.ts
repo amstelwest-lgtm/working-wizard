@@ -3,7 +3,6 @@ import {
   bandedPillarStatus,
   computeRatios,
   healthBandLabel,
-  PERIOD_MONTHS_KEY,
   scoreTier,
   type HealthTier,
   type RatioInputs,
@@ -80,6 +79,7 @@ export const RATIO_NAME_TO_KEY: Record<string, string> = {
   "Return on Equity": "roe",
   "Asset Turnover": "assetTurnover",
   "Equity Multiplier": "equityMultiplier",
+  "Debt-to-Equity": "debtToEquity",
   "Interest Burden": "interestBurden",
   "Tax Burden": "taxBurden",
   "Debtor Days": "debtorDays",
@@ -178,7 +178,7 @@ export const PILLAR_RATIO_NAMES: Record<HealthPillarId, readonly string[]> = {
     "Top-5 Customer Share",
   ],
   assets: ["Asset Turnover", "Return on Assets", "Inventory Days", "Sales-per-Employee Ratio"],
-  financing: ["Equity Multiplier", "Interest Burden", "Tax Burden", "Return on Equity"],
+  financing: ["Equity Multiplier", "Debt-to-Equity", "Interest Burden", "Tax Burden", "Return on Equity"],
   cash: ["Debtor Days", "Creditor Days", "Working Capital Days", "OCF / EBITDA"],
 };
 
@@ -225,8 +225,17 @@ function emptyRatioInputs(): RatioInputs {
   };
 }
 
+function fyStartForScore(market?: ScoreMarket): number | undefined {
+  if (market?.country === "US") return 1;
+  if (market?.country === "ZA") return 3;
+  return undefined;
+}
+
 /** Map a flat `clients.financials` blob into RatioInputs. */
-export function flatToRatioInputs(financials: FlatFinancials): RatioInputs {
+export function flatToRatioInputs(
+  financials: FlatFinancials,
+  opts?: { fyStartMonth?: number | null },
+): RatioInputs {
   const base = emptyRatioInputs();
   if (!financials) return base;
   const keys = Object.keys(base) as (keyof RatioInputs)[];
@@ -235,9 +244,11 @@ export function flatToRatioInputs(financials: FlatFinancials): RatioInputs {
     if (v == null || v === "") continue;
     base[k] = String(v);
   }
-  const period = financials[PERIOD_MONTHS_KEY];
-  if (period != null && period !== "") base.periodMonths = String(period);
-  else base.periodMonths = String(effectivePeriodMonths(financials as Record<string, unknown>));
+  base.periodMonths = String(
+    effectivePeriodMonths(financials as Record<string, unknown>, opts),
+  );
+  const liabilities = (financials as Record<string, unknown>).totalLiabilities;
+  if (liabilities != null && liabilities !== "") base.totalLiabilities = String(liabilities);
   const coherent = coherentEquity(financials as Record<string, unknown>);
   if (coherent.equity) base.equity = coherent.equity;
   return base;
@@ -465,7 +476,9 @@ export function scoreFromFlatFinancials(
 ): number | null {
   if (!financials && cashRunwayWeeks == null) return null;
   return computeOverallHealth({
-    ratios: financials ? computeRatios(flatToRatioInputs(financials)) : undefined,
+    ratios: financials
+      ? computeRatios(flatToRatioInputs(financials, { fyStartMonth: fyStartForScore(market) }))
+      : undefined,
     cashRunwayWeeks,
     market,
   }).overall;
@@ -478,7 +491,9 @@ export function healthFromFlatFinancials(
   market?: ScoreMarket,
 ): OverallHealth {
   return computeOverallHealth({
-    ratios: financials ? computeRatios(flatToRatioInputs(financials)) : undefined,
+    ratios: financials
+      ? computeRatios(flatToRatioInputs(financials, { fyStartMonth: fyStartForScore(market) }))
+      : undefined,
     cashRunwayWeeks,
     market,
   });
