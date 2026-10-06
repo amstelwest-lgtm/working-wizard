@@ -32,7 +32,7 @@ import {
 } from "@/lib/metrics/digest";
 import { sendFounderDigest } from "@/lib/metrics/digest-mail";
 import { lighthouseReviewPulse } from "@/lib/lighthouse-agent";
-import { loadLighthouseDashboardLeads } from "@/lib/lighthouse.functions";
+import { loadLighthouseWorkbenchBook } from "@/lib/lighthouse.functions";
 import {
   isExcludedFromInstrument,
   mergeInternalEmails,
@@ -412,8 +412,9 @@ async function loadBrainCounts(): Promise<BrainFunnelCounts | null> {
 async function loadReviewPulse(): Promise<{ inbox: number; dueNow: number }> {
   const empty = { inbox: 0, dueNow: 0 };
   try {
-    const { leads } = await loadLighthouseDashboardLeads(analyticsAdmin());
-    return lighthouseReviewPulse(leads);
+    const book = await loadLighthouseWorkbenchBook(analyticsAdmin());
+    if (book.leadError) return empty;
+    return lighthouseReviewPulse(book.leads);
   } catch {
     return empty;
   }

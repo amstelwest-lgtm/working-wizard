@@ -493,6 +493,192 @@ function addDays(from: Date, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+type BookReadError = { message?: string; code?: string } | null;
+
+function asBookError(
+  error: { message?: string; code?: string } | null | undefined,
+): BookReadError {
+  if (!error) return null;
+  return {
+    message: error.message ?? "",
+    code: typeof error.code === "string" ? error.code : undefined,
+  };
+}
+
+/** Workbench lead read. `select("*")` so an overlay-only column cannot fail the book. */
+export function lighthouseLeadQuery(admin: ReturnType<typeof adminLoose>) {
+  return admin.from("milon_ops_leads").select("*").order("created_at", { ascending: false }).limit(400);
+}
+
+/** Workbench touch read. */
+export function lighthouseTouchQuery(admin: ReturnType<typeof adminLoose>) {
+  return admin.from("lighthouse_touches").select("*").order("step_no", { ascending: true }).limit(2000);
+}
+
+/** Workbench inbound read. */
+export function lighthouseInboundQuery(admin: ReturnType<typeof adminLoose>) {
+  return admin
+    .from("lighthouse_inbound")
+    .select("id, lead_id, from_email, subject, body, received_at")
+    .order("received_at", { ascending: false })
+    .limit(400);
+}
+
+/** Workbench firm overlay. Country lives here, not as a required lead column. */
+export function lighthouseFirmsQuery(admin: ReturnType<typeof adminLoose>) {
+  return admin
+    .from("lighthouse_firms")
+    .select("legacy_lead_id, name, country, stack, campaign_tags, suppress_reason")
+    .limit(500);
+}
+
+/** Workbench contact overlay. E16 cadence columns live here. */
+export function lighthouseContactsQuery(admin: ReturnType<typeof adminLoose>) {
+  return admin
+    .from("lighthouse_contacts")
+    .select(
+      "legacy_lead_id, last_touch_at, last_delivery_status, last_engagement, next_follow_up_at, suppress",
+    )
+    .limit(500);
+}
+
+export type LighthouseBookParts = {
+  leads: LighthouseLead[];
+  touchError: BookReadError;
+  inboundError: BookReadError;
+  firmError: BookReadError;
+  contactError: BookReadError;
+};
+
+/**
+ * Map lead rows the way the workbench does: touches and inbound on the lead,
+ * then firm country / suppress and E16 contact cadence when those reads succeed.
+ */
+export function assembleLighthouseLeads(
+  rows: Array<Record<string, unknown>>,
+  touchRes: { data?: unknown; error?: { message?: string; code?: string } | null },
+  inboundRes: { data?: unknown; error?: { message?: string; code?: string } | null },
+  firmsRes: { data?: unknown; error?: { message?: string; code?: string } | null },
+  contactsRes: { data?: unknown; error?: { message?: string; code?: string } | null },
+): LighthouseBookParts {
+  const idSet = new Set(rows.map((row) => String(row.id)));
+  const touchError = asBookError(touchRes.error);
+  const inboundError = asBookError(inboundRes.error);
+  const firmError = asBookError(firmsRes.error);
+  const contactError = asBookError(contactsRes.error);
+
+  const touchesByLead = new Map<string, LighthouseTouch[]>();
+  if (!(touchError && missingRelation(touchError.message ?? "")) && touchRes.data) {
+    for (const t of touchRes.data as Array<Record<string, unknown>>) {
+      const leadId = String(t.lead_id);
+      if (!idSet.has(leadId)) continue;
+      const list = touchesByLead.get(leadId) ?? [];
+      list.push({
+        id: String(t.id),
+        stepNo: Number(t.step_no ?? 1),
+        angle: (t.angle as string | null) ?? null,
+        subject: (t.subject as string | null) ?? null,
+        body: (t.body as string | null) ?? null,
+        status: String(t.status ?? "draft"),
+        scheduledFor: (t.scheduled_for as string | null) ?? null,
+        sentAt: (t.sent_at as string | null) ?? null,
+        deliveredAt: (t.delivered_at as string | null) ?? null,
+        clickedAt: (t.clicked_at as string | null) ?? null,
+        lastClickedUrl: (t.last_clicked_url as string | null) ?? null,
+        error: (t.error as string | null) ?? null,
+      });
+      touchesByLead.set(leadId, list);
+    }
+  }
+
+  const leads = dedupeLeadsById(rows.map((r) => mapLead(r, touchesByLead.get(String(r.id)) ?? [])));
+
+  if (!(inboundError && missingRelation(inboundError.message ?? "")) && inboundRes.data) {
+    const inboundByLead = new Map<string, LighthouseInbound[]>();
+    for (const row of inboundRes.data as Array<Record<string, unknown>>) {
+      const leadId = String(row.lead_id ?? "");
+      const list = inboundByLead.get(leadId) ?? [];
+      list.push({
+        id: String(row.id),
+        fromEmail: String(row.from_email ?? ""),
+        subject: (row.subject as string | null) ?? null,
+        body: (row.body as string | null) ?? null,
+        receivedAt: String(row.received_at ?? ""),
+      });
+      inboundByLead.set(leadId, list);
+    }
+    for (const lead of leads) {
+      lead.inbound = inboundByLead.get(lead.id) ?? [];
+    }
+  }
+
+  if (!firmError && firmsRes.data) {
+    const byLead = new Map(
+      (firmsRes.data as Array<Record<string, unknown>>)
+        .filter((f) => f.legacy_lead_id)
+        .map((f) => [String(f.legacy_lead_id), f]),
+    );
+    for (const lead of leads) {
+      const firm = byLead.get(lead.id);
+      if (!firm) continue;
+      if (!lead.country && firm.country) lead.country = String(firm.country);
+      if (!lead.stack && firm.stack) lead.stack = String(firm.stack);
+      if (!lead.trafficTag) lead.trafficTag = trafficTagOf(firm.campaign_tags);
+      if (firm.suppress_reason) lead.doNotContact = true;
+    }
+  }
+  if (!contactError && contactsRes.data) {
+    const byLead = new Map(
+      (contactsRes.data as Array<Record<string, unknown>>)
+        .filter((c) => c.legacy_lead_id)
+        .map((c) => [String(c.legacy_lead_id), c]),
+    );
+    for (const lead of leads) {
+      const contact = byLead.get(lead.id);
+      if (!contact) continue;
+      if (contact.last_touch_at) lead.lastTouchAt = String(contact.last_touch_at);
+      if (contact.last_delivery_status) lead.lastDeliveryStatus = String(contact.last_delivery_status);
+      if (contact.last_engagement) lead.lastEngagement = String(contact.last_engagement);
+      if (contact.next_follow_up_at) lead.nextFollowUpAt = String(contact.next_follow_up_at);
+      if (contact.suppress) lead.doNotContact = true;
+    }
+  }
+
+  return { leads, touchError, inboundError, firmError, contactError };
+}
+
+/**
+ * Leads, touches, and inbound through the workbench queries, then the firm
+ * and contact overlays. Callers decide what a Postgres error means.
+ */
+export async function loadLighthouseWorkbenchBook(admin: ReturnType<typeof adminLoose>): Promise<
+  LighthouseBookParts & { leadError: BookReadError }
+> {
+  const { data: leadRows, error: leadErr } = await lighthouseLeadQuery(admin);
+  if (leadErr) {
+    return {
+      leadError: asBookError(leadErr),
+      leads: [],
+      touchError: null,
+      inboundError: null,
+      firmError: null,
+      contactError: null,
+    };
+  }
+  const rows = (leadRows ?? []) as Array<Record<string, unknown>>;
+  const ids = rows.map((row) => String(row.id));
+  const [touchRes, inboundRes, firmsRes, contactsRes] = await Promise.all([
+    ids.length ? lighthouseTouchQuery(admin) : Promise.resolve({ data: [], error: null }),
+    ids.length ? lighthouseInboundQuery(admin) : Promise.resolve({ data: [], error: null }),
+    lighthouseFirmsQuery(admin),
+    lighthouseContactsQuery(admin),
+  ]);
+  return {
+    leadError: null,
+    ...assembleLighthouseLeads(rows, touchRes, inboundRes, firmsRes, contactsRes),
+  };
+}
+
 function mapLead(row: Record<string, unknown>, touches: LighthouseTouch[]): LighthouseLead {
   const token = (row.trial_token as string | null) ?? null;
   return {
@@ -538,111 +724,6 @@ function mapLead(row: Record<string, unknown>, touches: LighthouseTouch[]): Ligh
   };
 }
 
-/**
- * Leads, touches, and firm/contact overlays for the Agent tab.
- * The founder glance calls this same read, then lighthouseReviewPulse.
- * Touches are not filtered with `.in(lead_id)` — a long id list was dropping the inbox to zero.
- */
-export async function loadLighthouseDashboardLeads(
-  admin: ReturnType<typeof adminLoose>,
-): Promise<{ leads: LighthouseLead[]; migrationHint: string | null; missing: boolean }> {
-  const { data: leadRows, error: leadErr } = await admin
-    .from("milon_ops_leads")
-    .select("*")
-    .order("created_at", { ascending: false })
-    .limit(400);
-
-  if (leadErr && missingRelation(leadErr.message ?? "")) {
-    return { leads: [], migrationHint: migrationHintFor(MIGRATION), missing: true };
-  }
-  if (leadErr) throw new Error(leadErr.message);
-
-  const rows = (leadRows ?? []) as Array<Record<string, unknown>>;
-  const ids = rows.map((r) => String(r.id));
-  const idSet = new Set(ids);
-
-  const [touchRes, firmsRes, contactsRes] = await Promise.all([
-    ids.length
-      ? admin.from("lighthouse_touches").select("*").order("step_no", { ascending: true }).limit(2000)
-      : Promise.resolve({ data: [] as unknown[], error: null }),
-    admin
-      .from("lighthouse_firms")
-      .select("legacy_lead_id, name, country, stack, campaign_tags, suppress_reason")
-      .limit(500),
-    admin
-      .from("lighthouse_contacts")
-      .select(
-        "legacy_lead_id, last_touch_at, last_delivery_status, last_engagement, next_follow_up_at, suppress",
-      )
-      .limit(500),
-  ]);
-
-  const touchesByLead = new Map<string, LighthouseTouch[]>();
-  let migrationHint: string | null = null;
-  if (touchRes.error && missingRelation(touchRes.error.message ?? "")) {
-    migrationHint = migrationHintFor(MIGRATION);
-  } else if (touchRes.data) {
-    for (const t of touchRes.data as Array<Record<string, unknown>>) {
-      const leadId = String(t.lead_id);
-      if (!idSet.has(leadId)) continue;
-      const list = touchesByLead.get(leadId) ?? [];
-      list.push({
-        id: String(t.id),
-        stepNo: Number(t.step_no ?? 1),
-        angle: (t.angle as string | null) ?? null,
-        subject: (t.subject as string | null) ?? null,
-        body: (t.body as string | null) ?? null,
-        status: String(t.status ?? "draft"),
-        scheduledFor: (t.scheduled_for as string | null) ?? null,
-        sentAt: (t.sent_at as string | null) ?? null,
-        deliveredAt: (t.delivered_at as string | null) ?? null,
-        clickedAt: (t.clicked_at as string | null) ?? null,
-        lastClickedUrl: (t.last_clicked_url as string | null) ?? null,
-        error: (t.error as string | null) ?? null,
-      });
-      touchesByLead.set(leadId, list);
-    }
-  }
-
-  const leads = dedupeLeadsById(
-    rows.map((r) => mapLead(r, touchesByLead.get(String(r.id)) ?? [])),
-  );
-
-  if (!firmsRes.error && firmsRes.data) {
-    const byLead = new Map(
-      (firmsRes.data as Array<Record<string, unknown>>)
-        .filter((f) => f.legacy_lead_id)
-        .map((f) => [String(f.legacy_lead_id), f]),
-    );
-    for (const lead of leads) {
-      const firm = byLead.get(lead.id);
-      if (!firm) continue;
-      if (!lead.country && firm.country) lead.country = String(firm.country);
-      if (!lead.stack && firm.stack) lead.stack = String(firm.stack);
-      if (!lead.trafficTag) lead.trafficTag = trafficTagOf(firm.campaign_tags);
-      if (firm.suppress_reason) lead.doNotContact = true;
-    }
-  }
-  if (!contactsRes.error && contactsRes.data) {
-    const byLead = new Map(
-      (contactsRes.data as Array<Record<string, unknown>>)
-        .filter((c) => c.legacy_lead_id)
-        .map((c) => [String(c.legacy_lead_id), c]),
-    );
-    for (const lead of leads) {
-      const contact = byLead.get(lead.id);
-      if (!contact) continue;
-      if (contact.last_touch_at) lead.lastTouchAt = String(contact.last_touch_at);
-      if (contact.last_delivery_status) lead.lastDeliveryStatus = String(contact.last_delivery_status);
-      if (contact.last_engagement) lead.lastEngagement = String(contact.last_engagement);
-      if (contact.next_follow_up_at) lead.nextFollowUpAt = String(contact.next_follow_up_at);
-      if (contact.suppress) lead.doNotContact = true;
-    }
-  }
-
-  return { leads, migrationHint, missing: false };
-}
-
 export const getLighthouse = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
@@ -658,8 +739,8 @@ export const getLighthouse = createServerFn({ method: "GET" })
       sendAllowlist: sendAllowlist ?? [],
     };
 
-    const loaded = await loadLighthouseDashboardLeads(admin);
-    if (loaded.missing) {
+    const book = await loadLighthouseWorkbenchBook(admin);
+    if (book.leadError && missingRelation(book.leadError.message ?? "")) {
       const empty: LighthouseDashboard = {
         leads: [],
         stageCounts: {},
@@ -679,50 +760,30 @@ export const getLighthouse = createServerFn({ method: "GET" })
         },
         capability,
         sentToday: 0,
-        migrationHint: loaded.migrationHint,
+        migrationHint: migrationHintFor(MIGRATION),
       };
       return empty;
     }
-    const leads = loaded.leads;
-    let migrationHint = loaded.migrationHint;
+    if (book.leadError) throw new Error(book.leadError.message || "Could not load Lighthouse");
+    const leads = book.leads;
+    let migrationHint: string | null = null;
+    if (book.touchError && missingRelation(book.touchError.message ?? "")) {
+      migrationHint = migrationHintFor(MIGRATION);
+    }
+    if (book.inboundError && missingRelation(book.inboundError.message ?? "")) {
+      migrationHint = migrationHint ?? migrationHintFor(ENGAGEMENT_MIGRATION);
+    }
 
-    const inboundQuery = admin
-      .from("lighthouse_inbound")
-      .select("id, lead_id, from_email, subject, body, received_at")
-      .order("received_at", { ascending: false })
-      .limit(400);
     const seqQuery = admin.from("lighthouse_sequences").select("*");
     const assetQuery = admin.from("lighthouse_assets").select("*").order("used_in_step", { ascending: true });
     const settingsQuery = admin.from("milon_ops_settings").select("key, value").eq("key", "lighthouse").maybeSingle();
 
-    const [inboundRes, seqRes, assetRes, setRes, sentToday] = await Promise.all([
-      leads.length ? inboundQuery : Promise.resolve({ data: [], error: null }),
+    const [seqRes, assetRes, setRes, sentToday] = await Promise.all([
       seqQuery,
       assetQuery,
       settingsQuery,
       countSentToday(admin).catch(() => 0),
     ]);
-
-    if (inboundRes.error && missingRelation(inboundRes.error.message ?? "")) {
-      migrationHint = migrationHint ?? migrationHintFor(ENGAGEMENT_MIGRATION);
-    } else if (inboundRes.data) {
-      const inboundByLead = new Map<string, LighthouseInbound[]>();
-      for (const row of inboundRes.data as Array<Record<string, unknown>>) {
-        const leadId = String(row.lead_id ?? "");
-        const list = inboundByLead.get(leadId) ?? [];
-        list.push({
-          id: String(row.id),
-          fromEmail: String(row.from_email ?? ""),
-          subject: (row.subject as string | null) ?? null,
-          body: (row.body as string | null) ?? null,
-          receivedAt: String(row.received_at ?? ""),
-        });
-        inboundByLead.set(leadId, list);
-      }
-      for (const lead of leads) {
-        lead.inbound = inboundByLead.get(lead.id) ?? [];
-      }
-    }
 
     const stageCounts: Record<string, number> = {};
     for (const s of LIGHTHOUSE_STAGES) stageCounts[s] = 0;

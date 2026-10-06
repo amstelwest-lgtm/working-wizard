@@ -134,6 +134,8 @@ export type ChatFirm = {
 
 export type ChatSnapshot = {
   leadTableMissing: boolean;
+  /** A read failed for a reason other than SQLSTATE 42P01. Do not call the table missing. */
+  bookUnreadable: boolean;
   missingTables: string[];
   firms: ChatFirm[];
   stageCounts: Record<string, number>;
@@ -314,14 +316,17 @@ export function snapshotFromBook(
   input: {
     leads: ChatLeadInput[] | null;
     missingTables?: string[];
+    bookUnreadable?: boolean;
   },
   now = new Date(),
 ): ChatSnapshot {
   const identity = lighthouseChatIdentity();
   const missingTables = [...(input.missingTables ?? [])];
+  const bookUnreadable = Boolean(input.bookUnreadable) && input.leads != null;
   if (input.leads == null) {
     return {
       leadTableMissing: true,
+      bookUnreadable: false,
       missingTables,
       firms: [],
       stageCounts: {},
@@ -389,6 +394,7 @@ export function snapshotFromBook(
 
   return {
     leadTableMissing: false,
+    bookUnreadable,
     missingTables,
     firms,
     stageCounts,
@@ -408,7 +414,9 @@ export function formatContextBlock(snapshot: ChatSnapshot): string {
     `Reply-To: ${snapshot.replyTo}`,
     `Signer: ${snapshot.signer}`,
   ];
-  if (snapshot.leadTableMissing) {
+  if (snapshot.bookUnreadable) {
+    lines.push("LEAD_BOOK: unread");
+  } else if (snapshot.leadTableMissing) {
     lines.push("LEAD_BOOK: missing");
   } else {
     lines.push(`FIRM_COUNT: ${formatOpsCount(snapshot.firms.length)}`);
@@ -416,6 +424,9 @@ export function formatContextBlock(snapshot: ChatSnapshot): string {
       `STAGES: ${STAGE_ORDER.map((stage) => `${stage} ${formatOpsCount(snapshot.stageCounts[stage] ?? 0)}`).join(", ")}`,
     );
   }
+  lines.push(`FOLLOW_UPS_DUE: ${formatOpsCount(snapshot.dueQueue.length)}`);
+  lines.push(`REVIEW_INBOX: ${formatOpsCount(snapshot.review.length)}`);
+  lines.push(`INBOUND_REPLIES: ${formatOpsCount(snapshot.replies.length)}`);
   if (snapshot.missingTables.length) {
     lines.push(`MISSING_TABLES: ${snapshot.missingTables.join(", ")}`);
   } else {
@@ -449,6 +460,13 @@ export function formatContextBlock(snapshot: ChatSnapshot): string {
   for (const reply of snapshot.replies.slice(0, 12)) {
     lines.push(
       `- ${reply.leadId} | ${reply.title} | ${reply.fromEmail || "—"} | ${reply.subject ?? "(no subject)"} | ${reply.receivedAt || "—"}`,
+    );
+  }
+  lines.push("E16_CADENCE:");
+  if (!snapshot.firms.length) lines.push("- none");
+  for (const firm of snapshot.firms.slice(0, 20)) {
+    lines.push(
+      `- ${firm.leadId} | last touch ${firm.lastTouch ?? "—"} | delivery ${firm.delivery ?? "—"} | engagement ${firm.replyStatus ?? "—"} | next follow-up ${firm.nextFollowUpAt ?? firm.nextTouchOn ?? "—"}`,
     );
   }
   lines.push("FIRMS:");
@@ -500,9 +518,19 @@ function stageLine(snapshot: ChatSnapshot): string {
   ).join(", ");
 }
 
+export const CHAT_TABLE_MISSING_COPY = "not in this database yet";
+export const CHAT_BOOK_UNREADABLE = "I couldn't read the lead book just now.";
+
 function missingNote(snapshot: ChatSnapshot): string {
-  if (!snapshot.missingTables.length) return "";
-  return `${snapshot.missingTables.join(", ")} ${snapshot.missingTables.length === 1 ? "is" : "are"} not in this database yet, so those fields are blank. Counts below use the rows that are actually there.`;
+  if (snapshot.bookUnreadable || !snapshot.missingTables.length) return "";
+  return `${snapshot.missingTables.join(", ")} ${snapshot.missingTables.length === 1 ? "is" : "are"} ${CHAT_TABLE_MISSING_COPY}, so those fields are blank. Counts below use the rows that are actually there.`;
+}
+
+function assistantAlreadySaid(
+  history: Array<{ role: ChatRole; content: string }> | undefined,
+  pattern: RegExp,
+): boolean {
+  return (history ?? []).some((row) => row.role === "assistant" && pattern.test(row.content));
 }
 
 export function nextAction(snapshot: ChatSnapshot): { text: string; chips: ChatChip[] } {
@@ -592,7 +620,11 @@ function mixLine(snapshot: ChatSnapshot): string {
   return `US/SA attention this week is ${formatOpsPercent(snapshot.mix.usPct)} / ${formatOpsPercent(snapshot.mix.saPct)} (${formatOpsCount(snapshot.mix.us)} US / ${formatOpsCount(snapshot.mix.sa)} SA). Target is about 80/20.`;
 }
 
-export function answerFromSnapshot(message: string, snapshot: ChatSnapshot): {
+export function answerFromSnapshot(
+  message: string,
+  snapshot: ChatSnapshot,
+  history?: Array<{ role: ChatRole; content: string }>,
+): {
   reply: string;
   chips: ChatChip[];
   intent: ChatIntent;
@@ -600,15 +632,31 @@ export function answerFromSnapshot(message: string, snapshot: ChatSnapshot): {
   const intent = chatIntent(message);
   const action = nextAction(snapshot);
   const parts: string[] = [];
+
+  if (snapshot.bookUnreadable) {
+    const already = assistantAlreadySaid(history, /couldn't read the lead book|Nothing new until the book loads/i);
+    return {
+      reply: already
+        ? "Nothing new until the book loads. I won't guess firms or counts."
+        : CHAT_BOOK_UNREADABLE,
+      chips: [],
+      intent,
+    };
+  }
+
   const note = missingNote(snapshot);
-  if (note) parts.push(note);
+  const missingAlreadySaid = assistantAlreadySaid(history, new RegExp(CHAT_TABLE_MISSING_COPY, "i"));
+  if (note && !missingAlreadySaid) parts.push(note);
 
   if (snapshot.leadTableMissing) {
-    parts.push(
-      "The lead book is missing, so there is nothing to count. I will not guess firms or numbers.",
-    );
+    const leadAlreadySaid = assistantAlreadySaid(history, /lead book is missing/i);
+    if (!leadAlreadySaid) {
+      parts.push(
+        "The lead book is missing, so there is nothing to count. I will not guess firms or numbers.",
+      );
+    }
     parts.push(action.text);
-    return { reply: parts.join("\n\n"), chips: action.chips, intent };
+    return { reply: parts.filter(Boolean).join("\n\n"), chips: action.chips, intent };
   }
 
   if (snapshot.firms.length === 0) {
@@ -912,13 +960,13 @@ export async function runLighthouseChatTurn(input: {
       refusedAction: asked,
     };
   }
-  const factual = answerFromSnapshot(input.message, input.snapshot);
+  const factual = answerFromSnapshot(input.message, input.snapshot, input.history);
   let reply = factual.reply;
   let chips = factual.chips;
   let refusedAction: ChatTurnResult["refusedAction"] = null;
   let modelDraft: { leadId: string; subject: string; body: string } | null = null;
 
-  if (input.complete && !input.snapshot.leadTableMissing) {
+  if (input.complete && !input.snapshot.leadTableMissing && !input.snapshot.bookUnreadable) {
     const history = (input.history ?? [])
       .slice(-8)
       .map((row) => `${row.role}: ${row.content}`)

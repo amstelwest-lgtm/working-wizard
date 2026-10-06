@@ -258,28 +258,27 @@ export function LighthouseUsagePanel() {
                 </div>
               );
             })}
+            {report.entities.length > 0 && (
+              <div className="rounded-2xl border border-[var(--ops-line)] bg-[var(--ops-card)] p-4">
+                <div className="mb-3 text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--ops-ink-dim)]">
+                  Most active
+                </div>
+                <div className="divide-y divide-[var(--ops-line)]">
+                  {report.entities.map((e) => (
+                    <div key={e.id} className="flex items-center gap-3 py-1.5 text-xs">
+                      <span className="w-16 shrink-0 text-[10px] uppercase tracking-wider text-[var(--ops-ink-dim)]">
+                        {PERSONA_LABELS[e.persona].slice(0, -1)}
+                      </span>
+                      <span className="flex-1 truncate text-[var(--ops-ink-soft)]">{e.label}</span>
+                      <span className="tabular-nums text-[var(--ops-amber)]">{e.events}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         ) : null}
       </details>
-
-      {report.entities.length > 0 && (
-        <div className="rounded-2xl border border-[var(--ops-line)] bg-[var(--ops-card)] p-4">
-          <div className="mb-3 text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--ops-ink-dim)]">
-            Most active
-          </div>
-          <div className="divide-y divide-[var(--ops-line)]">
-            {report.entities.map((e) => (
-              <div key={e.id} className="flex items-center gap-3 py-1.5 text-xs">
-                <span className="w-16 shrink-0 text-[10px] uppercase tracking-wider text-[var(--ops-ink-dim)]">
-                  {PERSONA_LABELS[e.persona].slice(0, -1)}
-                </span>
-                <span className="flex-1 truncate text-[var(--ops-ink-soft)]">{e.label}</span>
-                <span className="tabular-nums text-[var(--ops-amber)]">{e.events}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
     </div>
   );

@@ -343,11 +343,11 @@ const lighthouseSrc = read("src/lib/lighthouse.functions.ts");
 assert(metricsSrc.includes("lighthouseReviewPulse("), "glance review count calls lighthouseReviewPulse");
 assert(panelSrc.includes("lighthouseReviewPulse("), "agent tab review count calls lighthouseReviewPulse");
 assert(
-  metricsSrc.includes("loadLighthouseDashboardLeads("),
-  "glance loads leads through the agent query",
+  metricsSrc.includes("loadLighthouseWorkbenchBook("),
+  "glance loads leads through the workbench book",
 );
 assert(
-  lighthouseSrc.includes("await loadLighthouseDashboardLeads(admin)"),
+  lighthouseSrc.includes("await loadLighthouseWorkbenchBook(admin)"),
   "the agent tab loads leads through the same function",
 );
 assert(!metricsSrc.includes('.in("lead_id"'), "glance does not use a separate touch id filter");
@@ -414,6 +414,18 @@ const guardAt = ops.lastIndexOf("import.meta.env.PROD", checkoutAt);
 assert(checkoutAt > 0 && guardAt !== -1 && checkoutAt - guardAt < 2000, "test checkout is hidden on prod");
 assert(!usage.includes("Recent movement"), "recent movement feed is gone");
 assert(usage.includes("Most active"), "most active stays");
+const usageDetailsAt = usage.indexOf("<details");
+const usageDetailsEnd = usage.indexOf("</details>");
+const mostActiveAt = usage.indexOf("Most active");
+assert(
+  usageDetailsAt !== -1 &&
+    mostActiveAt > usageDetailsAt &&
+    usageDetailsEnd !== -1 &&
+    mostActiveAt < usageDetailsEnd,
+  "most active sits inside the collapsed usage section",
+);
+assert(!usage.slice(usageDetailsEnd).includes("Most active"), "most active is not rendered below the section");
+assert(!usage.includes("<details open"), "the usage section starts collapsed");
 const accessSrc = read("src/lib/lighthouse-access.functions.ts");
 const queriesSrc = read("src/lib/lighthouse-it.functions.ts");
 const usageSrc = read("src/lib/product-usage.functions.ts");
