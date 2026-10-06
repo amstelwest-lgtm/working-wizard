@@ -24,8 +24,16 @@ import {
   isSaMarketFirm,
   readSubscriptionDiscountRefs,
   stripeZaCouponId,
-  zaSubscriptionDiscounts,
 } from "@/lib/firm-sa-market";
+import { resolveFirmVoucher } from "@/lib/firm-voucher.server";
+import {
+  firmBandListCents,
+  firmUpgradeDiscounts,
+  firmUpgradeResultMessage,
+  FIRM_VOUCHER_INVALID_MESSAGE,
+  normalizeVoucherCode,
+  stripeProductId,
+} from "@/lib/firm-voucher";
 import {
   FIRM_CHECKOUT_BANDS,
   FOUNDING_PROMO_CODE,
@@ -428,6 +436,65 @@ async function paymentMethodOnFile(
 }
 
 /**
+ * Check a voucher before Checkout. Does not redeem it and does not change the firm.
+ * Invalid codes return an inline message. A Stripe outage is thrown so the
+ * caller can ask them to retry instead of treating a good code as bad.
+ */
+export const validateFirmVoucher = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) =>
+    z
+      .object({
+        firmId: z.string().uuid(),
+        band: z.enum(FIRM_CHECKOUT_BANDS),
+        interval: z.enum(["month", "year"]).default("month"),
+        code: z.string().trim().min(1).max(40),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    if (!stripeConfigured()) {
+      throw new Error("STRIPE_SECRET_KEY is not set on this deploy.");
+    }
+    const ctx = context as unknown as BillingAuthCtx;
+    const { userId, email } = await checkoutActor(ctx);
+    const { billingEmail } = await assertCallerCanUpgradeFirm({
+      supabase: ctx.supabase,
+      userId,
+      email,
+      firmId: data.firmId,
+    });
+    const code = normalizeVoucherCode(data.code);
+    if (!code) return { ok: false as const, message: FIRM_VOUCHER_INVALID_MESSAGE };
+    const stripe = getStripe();
+    const band = data.band as FirmCheckoutBand;
+    const interval = data.interval as FirmInterval;
+    const { price } = await resolveFirmCatalogPrice(stripe, band, interval);
+    const listCents =
+      typeof price.unit_amount === "number"
+        ? price.unit_amount
+        : (firmBandListCents(band, interval) ?? 0);
+    const sub = await findEntitlingFirmSubscription(billingEmail);
+    const firmCustomerId = sub?.customerId ?? (await findCustomerIdByEmail(billingEmail)) ?? null;
+    const voucher = await resolveFirmVoucher(stripe, {
+      code,
+      firmCustomerId,
+      productId: stripeProductId(price.product),
+      listCents,
+      interval,
+    });
+    if (!voucher.ok) {
+      if (voucher.reason === "unavailable") throw new Error(voucher.message);
+      return { ok: false as const, message: FIRM_VOUCHER_INVALID_MESSAGE };
+    }
+    return {
+      ok: true as const,
+      promotionCodeId: voucher.promotionCodeId,
+      preview: voucher.preview,
+    };
+  });
+
+/**
  * Move an existing firm onto a larger band that covers the current clients.
  * An existing subscription is updated in place. A subscription with no card
  * (a $0 Starter) opens Checkout in setup mode, then that same subscription
@@ -443,6 +510,7 @@ export const upgradeFirmBand = createServerFn({ method: "POST" })
         firmId: z.string().uuid(),
         band: z.enum(FIRM_CHECKOUT_BANDS),
         interval: z.enum(["month", "year"]).default("month"),
+        voucherCode: z.string().trim().max(40).optional(),
       })
       .parse(input),
   )
@@ -475,6 +543,33 @@ export const upgradeFirmBand = createServerFn({ method: "POST" })
 
     const stripe = getStripe();
     const { price, lookupKey } = await resolveFirmCatalogPrice(stripe, band, interval);
+    const voucherCode = normalizeVoucherCode(data.voucherCode);
+    if (data.voucherCode?.trim() && !voucherCode) {
+      throw new Error(FIRM_VOUCHER_INVALID_MESSAGE);
+    }
+    const listCents =
+      typeof price.unit_amount === "number"
+        ? price.unit_amount
+        : (firmBandListCents(band, interval) ?? 0);
+    let voucherPromotionCodeId: string | null = null;
+    let voucherPreview: string | null = null;
+    if (voucherCode) {
+      const firmCustomerId = sub?.customerId ?? (await findCustomerIdByEmail(billingEmail)) ?? null;
+      const voucher = await resolveFirmVoucher(stripe, {
+        code: voucherCode,
+        firmCustomerId,
+        productId: stripeProductId(price.product),
+        listCents,
+        interval,
+      });
+      if (!voucher.ok) {
+        throw new Error(
+          voucher.reason === "unavailable" ? voucher.message : FIRM_VOUCHER_INVALID_MESSAGE,
+        );
+      }
+      voucherPromotionCodeId = voucher.promotionCodeId;
+      voucherPreview = voucher.preview;
+    }
     const hasPaymentMethod = sub ? await paymentMethodOnFile(sub.customerId, sub) : false;
     const route = decideFirmUpgradeRoute({
       hasEntitlingSubscription: Boolean(sub),
@@ -483,7 +578,11 @@ export const upgradeFirmBand = createServerFn({ method: "POST" })
 
     let itemId = sub?.itemId ?? null;
     let existingDiscounts = sub?.discounts ?? [];
-    if (route === "update_subscription" && sub && (zaCouponId || !itemId)) {
+    if (
+      route === "update_subscription" &&
+      sub &&
+      (zaCouponId || voucherPromotionCodeId || !itemId)
+    ) {
       const fresh = await stripe.subscriptions.retrieve(sub.id, {
         expand: ["items.data.price"],
       });
@@ -500,7 +599,16 @@ export const upgradeFirmBand = createServerFn({ method: "POST" })
         lookupKey,
         metadata: sub.metadata,
         endTrial: sub.phase === "trialing",
-        discounts: zaSubscriptionDiscounts({ couponId: zaCouponId, existing: existingDiscounts }),
+        current: {
+          status: sub.phase,
+          lookupKey: sub.lookupKey,
+          unitAmount: sub.unitAmount,
+        },
+        discounts: firmUpgradeDiscounts({
+          promotionCodeId: voucherPromotionCodeId,
+          zaCouponId: voucherPromotionCodeId ? null : zaCouponId,
+          existing: existingDiscounts,
+        }),
       });
       try {
         await stripe.subscriptions.update(sub.id, params);
@@ -528,7 +636,10 @@ export const upgradeFirmBand = createServerFn({ method: "POST" })
         band,
         interval,
         price,
-        saMarket: isSaMarketFirm({ market: firmMarket }),
+        saMarket: isSaMarketFirm({ market: firmMarket }) && !voucherPromotionCodeId,
+        promotionCodeId: voucherPromotionCodeId,
+        promotionCode: voucherPromotionCodeId ? voucherCode : null,
+        voucherPreview,
       });
       assertNoManagedPaymentsOverride(params);
       let session: { url: string | null };
@@ -579,7 +690,8 @@ export const upgradeFirmBand = createServerFn({ method: "POST" })
       integrationIdentifier: firmIntegrationIdentifier(band, interval),
       includeTrial: false,
       replacesSubscriptionId,
-      zaCouponId,
+      promotionCodeId: voucherPromotionCodeId,
+      zaCouponId: voucherPromotionCodeId ? null : zaCouponId,
     });
     assertNoManagedPaymentsOverride(params);
     let session: { url: string | null };
@@ -623,11 +735,12 @@ export const finalizeFirmBandCheckout = createServerFn({ method: "POST" })
       const applied = await completeFirmSetupUpgrade(session);
       forgetEntitlement(email);
       const band = applied?.band ?? null;
-      const message =
+      const base =
         band && isFirmCheckoutBand(band)
           ? upgradeSuccessMessage(band)
           : "Plan updated. You can add another client.";
-      return { ok: true as const, message, band };
+      const message = firmUpgradeResultMessage(base, applied?.notice);
+      return { ok: true as const, message, band, notice: applied?.notice ?? null };
     }
     const synced = await syncCheckoutSessionSubscription({
       mode: session.mode,

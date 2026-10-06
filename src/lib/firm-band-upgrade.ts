@@ -31,10 +31,29 @@ export const DOWNGRADE_BELOW_USAGE_MESSAGE =
 export const MILON_DOWNGRADE_BLOCKED = "milon_downgrade_blocked";
 
 /**
- * Same proration Stripe applies when the field is omitted (end-trial update).
- * Do not switch to always_invoice here — that would change the charge timing.
+ * Proration for a paid band changing to another paid band. This is what
+ * Stripe applies when the field is omitted. Do not switch it to
+ * always_invoice — that would change the charge timing of a mid-cycle
+ * paid change.
+ *
+ * A $0 Starter (unit_amount 0 or lookup milon_starter_monthly) or a trial
+ * does not use this. Those start the paid plan today, with
+ * billing_cycle_anchor now and proration_behavior none, so the first
+ * invoice is the new price and a voucher is not spent on a $0 cycle.
  */
 export const FIRM_UPGRADE_PRORATION = "create_prorations" as const;
+
+/** True when the current subscription should start the paid plan today. */
+export function firmUpgradeBillsImmediately(input: {
+  status?: string | null;
+  lookupKey?: string | null;
+  unitAmount?: number | null;
+}): boolean {
+  if (input.status === "trialing") return true;
+  const lookup = input.lookupKey?.trim() ?? "";
+  if (lookup && lookup === FIRM_BAND_CATALOG.starter.lookup.month) return true;
+  return input.unitAmount === 0;
+}
 
 export type FirmPriceCurrency = "USD" | "ZAR";
 
@@ -408,11 +427,13 @@ export function billingCurrencyCode(input: {
 
 export type FirmSubscriptionUpgradeParams = {
   items: Array<{ id: string; price: string }>;
-  proration_behavior: typeof FIRM_UPGRADE_PRORATION;
+  proration_behavior: "none" | typeof FIRM_UPGRADE_PRORATION;
   payment_behavior: "error_if_incomplete";
+  /** Set only when a $0 Starter or a trial starts the paid plan today. */
+  billing_cycle_anchor?: "now";
   metadata: Record<string, string>;
   trial_end?: "now";
-  /** Present only when the SA coupon still needs attaching. */
+  /** Present only when the SA coupon or a voucher still needs attaching. */
   discounts?: FirmCouponDiscount[];
 };
 
@@ -425,7 +446,16 @@ export function firmSubscriptionUpgradeParams(input: {
   metadata?: Record<string, string> | null;
   /** Trial cap stays at 3 until the subscription is active. */
   endTrial: boolean;
-  /** Already-idempotent list from zaSubscriptionDiscounts. Omit when undefined. */
+  /**
+   * The subscription being updated. A $0 Starter or a trial starts the
+   * paid plan today. A paid band keeps create_prorations.
+   */
+  current?: {
+    status?: string | null;
+    lookupKey?: string | null;
+    unitAmount?: number | null;
+  } | null;
+  /** Already-idempotent list from firmUpgradeDiscounts. Omit when undefined. */
   discounts?: FirmCouponDiscount[];
 }): FirmSubscriptionUpgradeParams {
   const metadata: Record<string, string> = {};
@@ -435,13 +465,21 @@ export function firmSubscriptionUpgradeParams(input: {
   metadata.milon_plan = input.band;
   metadata.milon_interval = input.interval;
   metadata.milon_lookup_key = input.lookupKey;
+  const trialing = input.endTrial || input.current?.status === "trialing";
+  const startToday =
+    trialing ||
+    firmUpgradeBillsImmediately({
+      lookupKey: input.current?.lookupKey,
+      unitAmount: input.current?.unitAmount,
+    });
   const params: FirmSubscriptionUpgradeParams = {
     items: [{ id: input.itemId, price: input.priceId }],
-    proration_behavior: FIRM_UPGRADE_PRORATION,
+    proration_behavior: startToday ? "none" : FIRM_UPGRADE_PRORATION,
     payment_behavior: "error_if_incomplete",
     metadata,
   };
-  if (input.endTrial) params.trial_end = "now";
+  if (startToday) params.billing_cycle_anchor = "now";
+  if (trialing) params.trial_end = "now";
   if (input.discounts?.length) params.discounts = input.discounts;
   return params;
 }

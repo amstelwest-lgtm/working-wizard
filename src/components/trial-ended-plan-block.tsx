@@ -2,12 +2,10 @@ import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { FirmBandUpgrade } from "@/components/firm-band-upgrade";
+import { useFirmVoucherCheck } from "@/hooks/use-firm-voucher";
 import { UPGRADE_FAILED_MESSAGE } from "@/lib/firm-band-upgrade";
 import { STARTER_TRIAL_ENDED_MESSAGE } from "@/lib/firm-starter-trial";
-import {
-  isStarterTrialEndedMessage,
-  messageFromUnknown,
-} from "@/lib/starter-trial-generation";
+import { isStarterTrialEndedMessage, messageFromUnknown } from "@/lib/starter-trial-generation";
 import type { FirmBandId, FirmCheckoutBand, FirmInterval } from "@/lib/stripe-plans";
 import { getFirmPlanDisplay, upgradeFirmBand } from "@/lib/stripe-checkout.functions";
 
@@ -31,11 +29,19 @@ export function TrialEndedPlanCard({
   loading = false,
   upgrading = false,
   onUpgrade,
+  onValidateVoucher,
 }: {
   upgrade: TrialEndedUpgrade | null;
   loading?: boolean;
   upgrading?: boolean;
-  onUpgrade?: (band: FirmCheckoutBand, interval: FirmInterval) => void;
+  onUpgrade?: (band: FirmCheckoutBand, interval: FirmInterval, voucherCode?: string | null) => void;
+  onValidateVoucher?: (input: {
+    code: string;
+    band: FirmCheckoutBand;
+    interval: FirmInterval;
+  }) => Promise<
+    { ok: true; promotionCodeId: string; preview: string } | { ok: false; message: string }
+  >;
 }) {
   return (
     <section
@@ -62,6 +68,7 @@ export function TrialEndedPlanCard({
           saDiscount={upgrade.saDiscount}
           upgrading={upgrading}
           onUpgrade={onUpgrade}
+          onValidateVoucher={onValidateVoucher}
         />
       ) : null}
     </section>
@@ -78,11 +85,12 @@ export function TrialEndedPlanBlock({
   firmId: string | null;
   upgrade?: TrialEndedUpgrade | null;
   upgrading?: boolean;
-  onUpgrade?: (band: FirmCheckoutBand, interval: FirmInterval) => void;
+  onUpgrade?: (band: FirmCheckoutBand, interval: FirmInterval, voucherCode?: string | null) => void;
   onUpgraded?: () => void;
 }) {
   const loadPlan = useServerFn(getFirmPlanDisplay);
   const upgradeBand = useServerFn(upgradeFirmBand);
+  const onValidateVoucher = useFirmVoucherCheck(firmId);
   const [fetched, setFetched] = useState<TrialEndedUpgrade | null>(null);
   const [loading, setLoading] = useState(!upgradeFromCaller);
   const [localUpgrading, setLocalUpgrading] = useState(false);
@@ -122,14 +130,20 @@ export function TrialEndedPlanBlock({
 
   const upgrade = callerUpgrade ?? fetched;
 
-  const handleUpgrade = (band: FirmCheckoutBand, interval: FirmInterval) => {
+  const handleUpgrade = (
+    band: FirmCheckoutBand,
+    interval: FirmInterval,
+    voucherCode?: string | null,
+  ) => {
     if (onUpgrade) {
-      onUpgrade(band, interval);
+      onUpgrade(band, interval, voucherCode);
       return;
     }
     if (!firmId) return;
     setLocalUpgrading(true);
-    void upgradeBand({ data: { firmId, band, interval } })
+    void upgradeBand({
+      data: { firmId, band, interval, voucherCode: voucherCode?.trim() || undefined },
+    })
       .then((result) => {
         if (result.kind === "checkout") {
           window.location.href = result.url;
@@ -150,6 +164,7 @@ export function TrialEndedPlanBlock({
       loading={loading && !upgrade}
       upgrading={upgrading || localUpgrading}
       onUpgrade={upgrade ? handleUpgrade : undefined}
+      onValidateVoucher={onValidateVoucher}
     />
   );
 }

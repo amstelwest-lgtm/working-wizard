@@ -14,6 +14,7 @@ import {
   readSubscriptionPrice,
   shouldCancelReplacedSubscription,
   shouldRevertBlockedDowngrade,
+  UPGRADE_FAILED_MESSAGE,
   zarCentsFromPrice,
   type ZarBandAmounts,
 } from "@/lib/firm-band-upgrade";
@@ -22,8 +23,18 @@ import {
   isSaMarketFirm,
   readSubscriptionDiscountRefs,
   stripeZaCouponId,
-  zaSubscriptionDiscounts,
 } from "@/lib/firm-sa-market";
+import { resolveFirmVoucher, type FirmVoucherStripe } from "@/lib/firm-voucher.server";
+import {
+  firmBandListCents,
+  firmSetupUpdateAccepted,
+  firmUpgradeDiscounts,
+  FIRM_VOUCHER_NOT_APPLIED_MESSAGE,
+  isBenignZeroInvoiceError,
+  isPromotionCodeStripeError,
+  readFirmSetupInvoice,
+  stripeProductId,
+} from "@/lib/firm-voucher";
 import {
   ALL_FIRM_LOOKUP_KEYS,
   bandIdFromLookupKey,
@@ -40,6 +51,7 @@ type RetrievedSubscription = {
   customer?: unknown;
   discount?: unknown;
   discounts?: unknown;
+  latest_invoice?: unknown;
   items?: { data?: Array<{ id?: string; price?: unknown }> };
 };
 
@@ -48,15 +60,17 @@ type SubscriptionUpdateParams = {
   items?: Array<{ id: string; price: string }>;
   proration_behavior?: "none" | "create_prorations";
   payment_behavior?: "error_if_incomplete";
+  billing_cycle_anchor?: "now";
   trial_end?: "now";
   default_payment_method?: string;
-  discounts?: Array<{ discount: string } | { coupon: string }>;
+  discounts?: Array<{ discount: string } | { coupon: string } | { promotion_code: string }>;
+  expand?: string[];
 };
 
 type StripeLike = {
   subscriptions: {
     retrieve: (id: string, params?: { expand?: string[] }) => Promise<RetrievedSubscription>;
-    update: (id: string, params: SubscriptionUpdateParams) => Promise<unknown>;
+    update: (id: string, params: SubscriptionUpdateParams) => Promise<RetrievedSubscription>;
     cancel: (id: string) => Promise<unknown>;
   };
   prices: {
@@ -274,10 +288,7 @@ export async function syncFirmSubscriptionBand(
       email: customerEmailOf(sub.customer) ?? "",
     });
   } catch (err) {
-    console.warn(
-      "[starter-trial] mirror sync skipped",
-      err instanceof Error ? err.message : err,
-    );
+    console.warn("[starter-trial] mirror sync skipped", err instanceof Error ? err.message : err);
   }
   return { band, cancelledReplaced, downgradeBlocked };
 }
@@ -313,6 +324,37 @@ async function firmMarketForBillingUser(userId: string | null | undefined): Prom
  * the customer and subscription default, then move that same subscription
  * onto the catalog price. Does not create or cancel a subscription.
  */
+export type FirmSetupUpgradeOptions = {
+  /** When set, skips the firms.market read. Tests pass the firm market here. */
+  firmMarket?: unknown;
+};
+
+function updateAcceptance(updated: RetrievedSubscription, expectedLookupKey: string) {
+  const price = readSubscriptionPrice(updated as Parameters<typeof readSubscriptionPrice>[0]);
+  const invoice = readFirmSetupInvoice(updated.latest_invoice);
+  const accepted = firmSetupUpdateAccepted({
+    status: updated.status ?? null,
+    amountDue: invoice?.amountDue ?? null,
+    invoiceStatus: invoice?.status ?? null,
+    paid: invoice?.paid ?? false,
+  });
+  return {
+    lookupKey: price.lookupKey,
+    onPrice: price.lookupKey === expectedLookupKey,
+    ...accepted,
+  };
+}
+
+/**
+ * Setup Checkout collected a card for an existing subscription. Attach it as
+ * the customer and subscription default, then move that same subscription
+ * onto the catalog price. Does not create or cancel a subscription.
+ *
+ * A voucher stored on the Checkout session is checked again here. It replaces
+ * the SA coupon. If that check fails, the band still changes and the notice
+ * says the voucher was not used. A paid $0 invoice (100% off) is a completed
+ * upgrade: there is no PaymentIntent to confirm.
+ */
 export async function completeFirmSetupUpgrade(
   session: {
     id?: string;
@@ -322,7 +364,8 @@ export async function completeFirmSetupUpgrade(
     metadata?: Record<string, string> | null;
   },
   stripe: StripeLike = getStripe() as unknown as StripeLike,
-): Promise<{ band: string | null; updated: boolean } | null> {
+  options?: FirmSetupUpgradeOptions,
+): Promise<{ band: string | null; updated: boolean; notice: string | null } | null> {
   if (session.mode && session.mode !== "setup") return null;
   const intent = readFirmSetupUpgrade(session.metadata ?? null);
   if (!intent) return null;
@@ -357,36 +400,119 @@ export async function completeFirmSetupUpgrade(
   );
   if (!priceSnap.itemId) throw new Error("Subscription has no item to update.");
 
-  const firmMarket = await firmMarketForBillingUser(intent.userId);
+  const firmMarket =
+    options && "firmMarket" in options
+      ? options.firmMarket
+      : await firmMarketForBillingUser(intent.userId);
   const zaCouponId = isSaMarketFirm({ market: firmMarket })
     ? stripeZaCouponId(process.env.STRIPE_ZA_COUPON_ID)
     : null;
-  const discounts = zaSubscriptionDiscounts({
-    couponId: zaCouponId,
-    existing: readSubscriptionDiscountRefs(sub),
-  });
-  const already = priceSnap.lookupKey === lookupKey;
-  if (!already) {
-    const params = firmSubscriptionUpgradeParams({
-      itemId: priceSnap.itemId,
-      priceId: price.id,
-      band: intent.band,
+  const existing = readSubscriptionDiscountRefs(sub);
+  const listCents =
+    typeof price.unit_amount === "number"
+      ? price.unit_amount
+      : (firmBandListCents(intent.band, intent.interval) ?? 0);
+
+  let notice: string | null = null;
+  let promotionCodeId: string | null = null;
+  if (intent.promotionCode || intent.promotionCodeId) {
+    const decision = await resolveFirmVoucher(stripe as unknown as FirmVoucherStripe, {
+      code: intent.promotionCode,
+      promotionCodeId: intent.promotionCodeId,
+      firmCustomerId: customerId,
+      productId: stripeProductId(price.product),
+      listCents,
       interval: intent.interval,
-      lookupKey,
-      metadata: sub.metadata,
-      endTrial: sub.status === "trialing",
-      discounts,
     });
-    await stripe.subscriptions.update(intent.subscriptionId, {
-      ...params,
-      default_payment_method: paymentMethod,
+    if (decision.ok) {
+      promotionCodeId = decision.promotionCodeId;
+    } else {
+      notice = FIRM_VOUCHER_NOT_APPLIED_MESSAGE;
+      console.warn("[stripe] firm voucher not applied", decision.reason);
+    }
+  }
+
+  const discountsFor = (promo: string | null) =>
+    firmUpgradeDiscounts({
+      promotionCodeId: promo,
+      zaCouponId: promo ? null : zaCouponId,
+      existing,
     });
-  } else {
-    await stripe.subscriptions.update(intent.subscriptionId, {
+
+  const already = priceSnap.lookupKey === lookupKey;
+  const applyUpdate = async (promo: string | null) => {
+    const discounts = discountsFor(promo);
+    if (!already) {
+      const params = firmSubscriptionUpgradeParams({
+        itemId: priceSnap.itemId as string,
+        priceId: price.id,
+        band: intent.band,
+        interval: intent.interval,
+        lookupKey,
+        metadata: sub.metadata,
+        endTrial: sub.status === "trialing",
+        current: {
+          status: sub.status,
+          lookupKey: priceSnap.lookupKey,
+          unitAmount: priceSnap.unitAmount,
+        },
+        discounts,
+      });
+      return stripe.subscriptions.update(intent.subscriptionId, {
+        ...params,
+        default_payment_method: paymentMethod,
+        expand: ["latest_invoice", "items.data.price"],
+      });
+    }
+    return stripe.subscriptions.update(intent.subscriptionId, {
       default_payment_method: paymentMethod,
       ...(discounts ? { discounts } : {}),
+      expand: ["latest_invoice", "items.data.price"],
     });
+  };
+
+  const recoverZeroInvoice = async (err: unknown) => {
+    const fresh = await stripe.subscriptions.retrieve(intent.subscriptionId, {
+      expand: ["latest_invoice", "items.data.price"],
+    });
+    const landed = updateAcceptance(fresh, lookupKey);
+    if (
+      landed.zeroInvoice &&
+      landed.onPrice &&
+      (fresh.status === "active" || fresh.status === "trialing")
+    ) {
+      return fresh;
+    }
+    throw err;
+  };
+
+  let updated: RetrievedSubscription;
+  try {
+    updated = await applyUpdate(promotionCodeId);
+  } catch (err) {
+    if (promotionCodeId && isPromotionCodeStripeError(err)) {
+      notice = FIRM_VOUCHER_NOT_APPLIED_MESSAGE;
+      console.warn(
+        "[stripe] firm voucher rejected at upgrade",
+        err instanceof Error ? err.message : err,
+      );
+      try {
+        updated = await applyUpdate(null);
+      } catch (retryErr) {
+        updated = await recoverZeroInvoice(retryErr);
+      }
+    } else if (isBenignZeroInvoiceError(err)) {
+      updated = await recoverZeroInvoice(err);
+    } else {
+      throw err;
+    }
   }
+
+  const landed = updateAcceptance(updated, lookupKey);
+  if (!landed.accepted || (landed.lookupKey && !landed.onPrice)) {
+    throw new Error(UPGRADE_FAILED_MESSAGE);
+  }
+
   try {
     const { syncStarterTrialMirrorForActor } = await import("@/lib/firm-client-cap.server");
     await syncStarterTrialMirrorForActor({
@@ -395,12 +521,9 @@ export async function completeFirmSetupUpgrade(
       email: customerEmailOf(session.customer) ?? "",
     });
   } catch (err) {
-    console.warn(
-      "[starter-trial] mirror sync skipped",
-      err instanceof Error ? err.message : err,
-    );
+    console.warn("[starter-trial] mirror sync skipped", err instanceof Error ? err.message : err);
   }
-  return { band: intent.band, updated: !already };
+  return { band: intent.band, updated: !already, notice };
 }
 
 export async function syncCheckoutSessionSubscription(
