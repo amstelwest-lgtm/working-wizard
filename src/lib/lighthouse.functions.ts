@@ -63,6 +63,7 @@ import {
 } from "@/lib/lighthouse-due";
 import { lighthouseTrialSiteUrl } from "@/lib/lighthouse-trial-site";
 import { trafficTagOf } from "@/lib/lighthouse-agent";
+import { persistPendingLighthouseDraft } from "@/lib/lighthouse-draft-persist";
 import { sendBlockedReason } from "@/lib/lighthouse-send-windows";
 
 const MIGRATION = "20260820100000_milon_lighthouse.sql";
@@ -1202,43 +1203,23 @@ The body must be plain text with line breaks, already signed off, ready to send.
       body = draft.body;
     }
 
-    const scheduledFor = addDays(new Date(), 0);
-
-    const { data: existing } = await admin
-      .from("lighthouse_touches")
-      .select("id")
-      .eq("lead_id", data.leadId)
-      .eq("step_no", data.stepNo)
-      .maybeSingle();
-
-    if (existing && (existing as { id?: string }).id) {
-      const { error } = await admin
-        .from("lighthouse_touches")
-        .update({ subject, body, angle: step.angle, status: "draft", error: null })
-        .eq("id", (existing as { id: string }).id);
-      if (error) throw new Error(error.message);
-      return { subject, body, touchId: (existing as { id: string }).id };
-    }
-
-    const { data: inserted, error } = await admin
-      .from("lighthouse_touches")
-      .insert({
-        lead_id: data.leadId,
-        step_no: data.stepNo,
+    let saved: { touchId: string; status: "draft" };
+    try {
+      saved = await persistPendingLighthouseDraft(admin, {
+        leadId: data.leadId,
+        stepNo: data.stepNo,
         angle: step.angle,
         subject,
         body,
-        status: "draft",
-        scheduled_for: scheduledFor,
-        created_by: userId,
-      })
-      .select("id")
-      .maybeSingle();
-    if (error) {
-      if (missingRelation(error.message)) throw new Error(migrationHintFor(MIGRATION));
-      throw new Error(error.message);
+        createdBy: userId,
+        action: "draft",
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      if (missingRelation(message)) throw new Error(migrationHintFor(MIGRATION));
+      throw error;
     }
-    return { subject, body, touchId: String((inserted as { id?: string } | null)?.id ?? "") };
+    return { subject, body, touchId: saved.touchId };
   });
 
 export const reviewLighthouseTouch = createServerFn({ method: "POST" })
