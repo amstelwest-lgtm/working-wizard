@@ -53,6 +53,10 @@ export type EntitlingFirmSubscription = {
   /** subscription.currency only. Null when Stripe did not send a charge currency. */
   chargeCurrency: string | null;
   itemId: string | null;
+  /** Billed price lookup_key. Used to tell a $0 Starter from a paid band. */
+  lookupKey: string | null;
+  /** Billed price unit_amount in the price currency. 0 is Starter. */
+  unitAmount: number | null;
   metadata: Record<string, string>;
   hasDefaultPaymentMethod: boolean;
   discounts: StoredDiscountRef[];
@@ -221,6 +225,8 @@ export async function findEntitlingFirmSubscription(
     chargeCurrency: hit.price.chargeCurrency,
     currency: hit.price.chargeCurrency ?? hit.price.currency,
     itemId: hit.price.itemId,
+    lookupKey: hit.price.lookupKey,
+    unitAmount: hit.price.unitAmount,
     metadata: hit.metadata,
     hasDefaultPaymentMethod: Boolean(defaultPaymentMethod || defaultSource),
     discounts: readSubscriptionDiscountRefs(hit.raw as { discount?: unknown; discounts?: unknown }),

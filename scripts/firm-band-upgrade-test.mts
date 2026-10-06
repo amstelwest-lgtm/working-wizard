@@ -223,24 +223,65 @@ assert(usageBlocked, "in-app upgrade rejects a band below the current client cou
 
 const update = firmSubscriptionUpgradeParams({
   itemId: "si_test",
+  priceId: "price_test_small",
+  band: "small",
+  interval: "month",
+  lookupKey: "milon_small_monthly",
+  metadata: { milon_plan: "solo" },
+  endTrial: false,
+  current: { status: "active", lookupKey: "milon_solo_monthly", unitAmount: 9_900 },
+});
+assert(
+  update.proration_behavior === "create_prorations",
+  "a paid band changing to another paid band still prorates",
+);
+assert(update.billing_cycle_anchor == null, "a paid change keeps the existing billing date");
+assert(
+  update.payment_behavior === "error_if_incomplete",
+  "a failed card does not leave a half-upgraded plan",
+);
+assert(update.items[0]?.price === "price_test_small", "update swaps the catalog price");
+assert(update.metadata.milon_plan === "small", "metadata band updates with the price");
+assert(update.trial_end == null, "an active paid plan is not forced off a trial");
+
+const starterNow = firmSubscriptionUpgradeParams({
+  itemId: "si_starter",
   priceId: "price_test_solo",
   band: "solo",
   interval: "month",
   lookupKey: "milon_solo_monthly",
   metadata: { milon_plan: "starter" },
   endTrial: false,
+  current: { status: "active", lookupKey: "milon_starter_monthly", unitAmount: 0 },
+  discounts: [{ promotion_code: "promo_1UNRGyGXDN6PFbnzX8zUFjgr" }],
+});
+assert(starterNow.billing_cycle_anchor === "now", "a $0 Starter starts the paid plan today");
+assert(starterNow.proration_behavior === "none", "a $0 Starter has nothing to credit");
+assert(
+  starterNow.payment_behavior === "error_if_incomplete",
+  "the Starter invoice is charged immediately",
+);
+assert(starterNow.trial_end == null, "an active Starter is not a trial");
+assert(
+  starterNow.discounts?.[0] &&
+    "promotion_code" in starterNow.discounts[0] &&
+    starterNow.discounts[0].promotion_code === "promo_1UNRGyGXDN6PFbnzX8zUFjgr",
+  "a Starter upgrade can carry the voucher on the immediate invoice",
+);
+
+const starterByAmount = firmSubscriptionUpgradeParams({
+  itemId: "si_starter",
+  priceId: "price_test_solo",
+  band: "solo",
+  interval: "month",
+  lookupKey: "milon_solo_monthly",
+  endTrial: false,
+  current: { status: "active", lookupKey: null, unitAmount: 0 },
 });
 assert(
-  update.proration_behavior === "create_prorations",
-  "proration matches the existing Stripe default",
+  starterByAmount.billing_cycle_anchor === "now" && starterByAmount.proration_behavior === "none",
+  "unit_amount 0 starts the paid plan today even without the Starter lookup key",
 );
-assert(
-  update.payment_behavior === "error_if_incomplete",
-  "a failed card does not leave a half-upgraded plan",
-);
-assert(update.items[0]?.price === "price_test_solo", "update swaps the catalog price");
-assert(update.metadata.milon_plan === "solo", "metadata band updates with the price");
-assert(update.trial_end == null, "an active plan is not forced off a trial");
 
 const trialEnd = firmSubscriptionUpgradeParams({
   itemId: "si_test",
@@ -250,8 +291,15 @@ const trialEnd = firmSubscriptionUpgradeParams({
   lookupKey: "milon_small_monthly",
   metadata: { milon_plan: "solo" },
   endTrial: true,
+  current: { status: "trialing", lookupKey: "milon_solo_monthly", unitAmount: 9_900 },
 });
 assert(trialEnd.trial_end === "now", "a trial upgrade ends the trial so the new limit applies");
+assert(trialEnd.billing_cycle_anchor === "now", "a trial starts the paid plan today");
+assert(trialEnd.proration_behavior === "none", "a trial upgrade does not prorate the unpaid trial");
+assert(
+  trialEnd.payment_behavior === "error_if_incomplete",
+  "a trial upgrade charges the first invoice immediately",
+);
 
 const checkout = firmUpgradeCheckoutSessionParams({
   priceId: "price_test_solo",

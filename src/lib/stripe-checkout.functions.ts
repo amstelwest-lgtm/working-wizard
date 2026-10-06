@@ -599,6 +599,11 @@ export const upgradeFirmBand = createServerFn({ method: "POST" })
         lookupKey,
         metadata: sub.metadata,
         endTrial: sub.phase === "trialing",
+        current: {
+          status: sub.phase,
+          lookupKey: sub.lookupKey,
+          unitAmount: sub.unitAmount,
+        },
         discounts: firmUpgradeDiscounts({
           promotionCodeId: voucherPromotionCodeId,
           zaCouponId: voucherPromotionCodeId ? null : zaCouponId,

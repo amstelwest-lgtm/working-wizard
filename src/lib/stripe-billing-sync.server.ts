@@ -60,6 +60,7 @@ type SubscriptionUpdateParams = {
   items?: Array<{ id: string; price: string }>;
   proration_behavior?: "none" | "create_prorations";
   payment_behavior?: "error_if_incomplete";
+  billing_cycle_anchor?: "now";
   trial_end?: "now";
   default_payment_method?: string;
   discounts?: Array<{ discount: string } | { coupon: string } | { promotion_code: string }>;
@@ -450,6 +451,11 @@ export async function completeFirmSetupUpgrade(
         lookupKey,
         metadata: sub.metadata,
         endTrial: sub.status === "trialing",
+        current: {
+          status: sub.status,
+          lookupKey: priceSnap.lookupKey,
+          unitAmount: priceSnap.unitAmount,
+        },
         discounts,
       });
       return stripe.subscriptions.update(intent.subscriptionId, {

@@ -499,10 +499,35 @@ function session(extra: Record<string, string> = {}) {
   };
 }
 
+function paidSmallSub() {
+  return {
+    id: "sub_small",
+    status: "active",
+    metadata: { milon_plan: "small" },
+    discounts: [],
+    items: {
+      data: [
+        {
+          id: "si_small",
+          price: {
+            id: "price_small_current",
+            lookup_key: "milon_small_monthly",
+            unit_amount: 14900,
+            currency: "usd",
+            recurring: { interval: "month" },
+            product: "prod_small",
+          },
+        },
+      ],
+    },
+  };
+}
+
 function stripeFor(input: {
   promos: unknown[];
   invoices?: Array<{ amount_paid?: number; total?: number; status?: string }>;
   onUpdate: (params: UpdateCall) => unknown | Promise<unknown>;
+  beforeUpdateSub?: () => unknown;
   afterUpdateSub?: () => unknown;
 }) {
   let updates = 0;
@@ -513,7 +538,9 @@ function stripeFor(input: {
       customers: { update: async () => ({}) },
       subscriptions: {
         retrieve: async () =>
-          updates > 0 && input.afterUpdateSub ? input.afterUpdateSub() : starterSub(),
+          updates > 0 && input.afterUpdateSub
+            ? input.afterUpdateSub()
+            : (input.beforeUpdateSub ?? starterSub)(),
         update: async (_id: string, params: UpdateCall) => {
           updates += 1;
           calls.push(params);
@@ -562,6 +589,12 @@ assert(
   JSON.stringify(saVoucher.calls[0]?.discounts) ===
     JSON.stringify([{ promotion_code: "promo_free" }]),
   "the subscription update applies only the promotion code",
+);
+assert(
+  saVoucher.calls[0]?.billing_cycle_anchor === "now" &&
+    saVoucher.calls[0]?.proration_behavior === "none" &&
+    saVoucher.calls[0]?.payment_behavior === "error_if_incomplete",
+  "a Starter voucher upgrade bills the discounted price today",
 );
 assert(
   !JSON.stringify(saVoucher.calls[0]?.discounts ?? []).includes("MILON_ZA_50"),
@@ -680,6 +713,23 @@ try {
   declined = err instanceof Error && /declined/i.test(err.message);
 }
 assert(declined, "a card decline still fails the upgrade");
+
+const paidChange = stripeFor({
+  promos: [],
+  beforeUpdateSub: paidSmallSub,
+  onUpdate: () =>
+    upgradedSub({ id: "in_solo", amount_due: 5000, total: 5000, status: "paid", paid: true }),
+});
+const paidResult = await completeFirmSetupUpgrade(session(), paidChange.stripe as never, {
+  firmMarket: { country: "US" },
+});
+assert(paidResult?.updated === true, "a paid band can still move to another paid band");
+assert(
+  paidChange.calls[0]?.proration_behavior === "create_prorations" &&
+    paidChange.calls[0]?.billing_cycle_anchor == null &&
+    paidChange.calls[0]?.payment_behavior === "error_if_incomplete",
+  "a paid band keeps prorations and its billing date",
+);
 
 const setup = firmSetupCheckoutSessionParams({
   origin: "https://milonfinance.com",
