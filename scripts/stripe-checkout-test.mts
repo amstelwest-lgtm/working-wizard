@@ -243,9 +243,10 @@ assert(landing.includes("checkoutEmailRedirectTo"), "signup confirmation uses th
 assert(landing.includes("register-error"), "register errors render in the form, not only as a toast");
 assert(!landing.includes("${window.location.origin}${billingStartPath"), "signup does not emailRedirectTo /billing/start");
 const heroCta = landing.slice(landing.indexOf("hero-cta"), landing.indexOf("dash-stage"));
-assert(heroCta.includes("see MILŌN for my clients"), "hero secondary is the accountant path");
-assert(heroCta.includes("goToFirmSignup"), "hero secondary still routes to firm signup");
-assert(!heroCta.includes("__mq_start"), "hero secondary does not launch the quiz");
+assert(heroCta.includes("HERO_CTA_LABEL"), "hero primary CTA uses the shared trial label");
+assert(heroCta.includes('goToFirmSignup({ scrollTo: "register" })'), "hero primary still routes to firm signup");
+assert(!heroCta.includes("see MILŌN for my clients"), "old accountant secondary CTA is gone from the hero");
+assert(!heroCta.includes("__mq_start"), "hero primary does not launch the quiz");
 assert(landing.includes("FIRM_TRIAL_SENTENCE"), "landing states the trial sentence");
 assert(!landing.includes("3 free clients"), "landing never says 3 free clients");
 assert(!landing.includes("Starter is free"), "landing does not offer free-forever Starter");
