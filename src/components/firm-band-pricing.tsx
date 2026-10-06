@@ -53,8 +53,8 @@ export function FirmBandPricingTable({
       </p>
       {showSaPricing ? (
         <>
-          <p className="firm-bands-founding">{SA_ZAR_LINE}</p>
-          <p className="firm-bands-founding">{SA_FOUNDING_LINE}</p>
+          <p className="firm-bands-sa-note">{SA_ZAR_LINE}</p>
+          <p className="firm-bands-sa-note">{SA_FOUNDING_LINE}</p>
         </>
       ) : null}
       <p className="firm-bands-note">USD list prices. {WATCHLIST_DEFINITION}</p>
