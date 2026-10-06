@@ -24,7 +24,17 @@ import {
   publicFaqUsItems,
   WATCHLIST_DEFINITION,
 } from "../src/lib/marketing-faq";
-import { homepageFaqItems, publicFaqItems, SA_FOUNDING_LINE, SA_ZAR_LINE, TRUST_IDENTIFIERS } from "../src/lib/landing-copy";
+import {
+  HERO_BADGE,
+  HERO_H1_GOLD,
+  HERO_LEDE,
+  PRICING_H2_USD,
+  homepageFaqItems,
+  publicFaqItems,
+  SA_FOUNDING_LINE,
+  SA_ZAR_LINE,
+  TRUST_IDENTIFIERS,
+} from "../src/lib/landing-copy";
 import { visitorCopyPack } from "../src/lib/market";
 
 function assert(cond: boolean, msg: string) {
@@ -150,13 +160,20 @@ assert(
 );
 assert(landing.includes('id="bridge"'), "landing keeps the dual-audience bridge");
 assert(!landing.includes('id="features"'), "landing drops the duplicate features block");
-assert(landing.includes("AI finance function for firms"), "hero badge is the category, not the brand");
-assert(landing.includes("A full finance function in your pocket."), "hero gold line is the full tagline");
-assert(landing.includes("financial health diagnosis"), "hero lede lists diagnosis as a deliverable");
+assert(landing.includes("{HERO_BADGE}"), "hero badge comes from landing copy");
+assert(
+  HERO_BADGE === "For accounting firms and the businesses they advise",
+  "hero badge is the audience, not the brand",
+);
+assert(landing.includes("{HERO_H1_GOLD}"), "hero gold line comes from landing copy");
+assert(HERO_H1_GOLD === "plug-and-play.", "hero gold line is plug-and-play");
+assert(landing.includes("{HERO_LEDE}"), "hero lede comes from landing copy");
+assert(HERO_LEDE.includes("diagnoses the business"), "hero lede lists diagnosis as a deliverable");
 assert(!landing.includes("health tool that diagnoses the"), "old run-on hero lede is gone");
 assert(!landing.includes("Give every business"), "old give-every-business hero is gone");
 assert(landing.includes("Create firm account"), "home has a firm signup CTA");
-assert(landing.includes("USD bands by client count"), "home pricing leads with firm bands");
+assert(landing.includes("{PRICING_H2_USD}"), "home pricing leads with firm bands");
+assert(PRICING_H2_USD === "USD bands by client count.", "USD band heading stays the US default");
 assert(!landing.includes("Start free. <span className=\"gold-text\">Scale when it pays for itself."), "home pricing no longer leads with the owner Start-free story");
 assert(landing.includes("Small businesses have the numbers"), "gap section is the strategic reposition");
 assert(landing.includes("One shared workspace"), "shared-workspace framing is visible");
