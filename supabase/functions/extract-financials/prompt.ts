@@ -1,6 +1,7 @@
 /**
  * Text/CSV statement payload for extract-financials.
- * PDF document bytes are not rewritten here — see the document branch in index.ts.
+ * PDFs go through statementModelParts: a good text layer is redacted text,
+ * and a scan or low-quality extract keeps the original document bytes.
  */
 import {
   applyRedaction,
@@ -23,16 +24,4 @@ export function buildTextExtractionPayload(input: {
     text: `${instructions}\n\nFile: ${fileName}\n\nContents:\n${body}`,
     session,
   };
-}
-
-/** Caption that rides alongside a PDF document. The PDF bytes are not redacted. */
-export function buildPdfCaption(input: {
-  instructions: string;
-  fileName?: string | null;
-  subject?: IdentifierSubject;
-}): { text: string; session: RedactionSession } {
-  const session = createRedactionSession(input.subject);
-  const fileName = applyRedaction(input.fileName?.trim() || "statement.pdf", session);
-  const instructions = applyRedaction(input.instructions, session);
-  return { text: `${instructions}\n\nFile: ${fileName}`, session };
 }

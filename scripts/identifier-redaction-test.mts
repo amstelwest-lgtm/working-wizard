@@ -393,8 +393,11 @@ assert(structured.category === "Trade receivables", "structured category stays")
 assert(structured.amount === 184320.5, "structured amount stays a number");
 
 const extractSrc = readFileSync(resolve("supabase/functions/extract-financials/index.ts"), "utf8");
-assert(extractSrc.includes('media_type: "application/pdf"'), "PDF documents are still sent as documents");
+const layerSrc = readFileSync(resolve("src/lib/statement-text-layer.ts"), "utf8");
+assert(extractSrc.includes("statementModelParts"), "extract-financials chooses text or the original PDF");
 assert(extractSrc.includes("buildTextExtractionPayload"), "text extraction goes through the redactor");
+assert(layerSrc.includes('type: "document"'), "a weak text layer still sends the original document");
+assert(layerSrc.includes("data: document.base64"), "document fallback keeps the original bytes");
 
 // ── client name comes back in the UI, not in the outbound prompt ───────────
 const QA_NAMES = ["QA US Test LLC", "QA US Test LLC (delete me)", "New York Yankees"] as const;

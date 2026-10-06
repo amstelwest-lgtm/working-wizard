@@ -12,12 +12,14 @@ import { validateFigures, isClean } from "@/lib/validateFinancials";
 import { applyBalanceSheetTotals } from "@/lib/statement-financials";
 import { callClaudeMessages, parseClaudeJson } from "@/lib/claude-messages";
 import { redactForModel, rehydrateModelOutput } from "@/lib/redact-identifiers";
+import { prepareStatementContent } from "@/lib/statement-text-layer.server";
 import { isUsCopy, marketInputSchema, resolvePromptMarket } from "@/lib/market";
 import { assessPortalFigures, assertUsable } from "@/lib/upload-quality";
 import { BANK_LEDGER_MESSAGE, looksLikeBankLedger } from "@/lib/bank-ledger";
 import { INLINE_BASE64_MAX } from "@/lib/staged-upload";
 import { resolvePdfBase64 } from "@/lib/staged-upload.server";
 import { assertExtractionAllowed } from "@/lib/extraction-rate-limit.server";
+import { CONTRA_ASSET_EXTRACTION_RULE, reconcileExtractionResult } from "@/lib/contra-assets";
 
 const EXTRACTION_PROMPT = `
 You are extracting figures from a South African financial statement PDF for an
@@ -39,6 +41,8 @@ accounting platform. Follow these rules exactly:
 7. If anything is ambiguous or you had to make a judgement call, put it in
    extraction_notes as short bullets (not a paragraph). Never invent figures.
    Do not name any vendor or model.
+8. ${CONTRA_ASSET_EXTRACTION_RULE} This is the one total you may compute from
+   two printed lines. Every other figure stays as printed.
 
 Return ONLY valid JSON matching this shape (no markdown, no prose):
 {
@@ -187,28 +191,44 @@ export const extractFinancialsFromPDF = createServerFn({ method: "POST" })
     );
 
     let raw: string;
+    let sourceText: string | null = null;
+    let trustText = false;
     try {
-      // PDF/image documents stay as documents. Text and CSV are redacted first.
-      // A text-layer rewrite of the PDF drops scans and scrambles columns.
-      const sealedText = text
-        ? redactForModel(
-            `<statement file="${(fileName ?? "statement").replace(/"/g, "'")}">\n${text}\n</statement>\n\n${prompt}`,
-          )
-        : null;
-      raw = await callClaudeMessages({
-        content: pdfBase64
-          ? [
-              {
-                type: "document",
-                source: { type: "base64", media_type: mimeType, data: pdfBase64 },
-              },
-              { type: "text", text: prompt },
-            ]
-          : [{ type: "text", text: sealedText?.text ?? prompt }],
-        maxTokens: 8192,
-        timeoutMs: 90_000,
-      });
-      if (sealedText) raw = rehydrateModelOutput(raw, sealedText.session);
+      // Text and CSV are redacted first. PDF and image uploads use the text
+      // layer when it is structured, and the original bytes when it is not.
+      if (pdfBase64) {
+        const prepared = await prepareStatementContent({
+          base64: pdfBase64,
+          mediaType: mimeType,
+          fileName,
+          instructions: prompt,
+          layout: "financial",
+        });
+        sourceText = prepared.extractedText;
+        trustText = prepared.usedTextLayer;
+        raw = rehydrateModelOutput(
+          await callClaudeMessages({
+            content: prepared.parts,
+            maxTokens: 8192,
+            timeoutMs: 90_000,
+          }),
+          prepared.session,
+        );
+      } else {
+        sourceText = text ?? null;
+        trustText = true;
+        const sealedText = redactForModel(
+          `<statement file="${(fileName ?? "statement").replace(/"/g, "'")}">\n${text}\n</statement>\n\n${prompt}`,
+        );
+        raw = rehydrateModelOutput(
+          await callClaudeMessages({
+            content: [{ type: "text", text: sealedText.text }],
+            maxTokens: 8192,
+            timeoutMs: 90_000,
+          }),
+          sealedText.session,
+        );
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : "";
       if (/claude|anthropic/i.test(msg)) {
@@ -228,6 +248,7 @@ export const extractFinancialsFromPDF = createServerFn({ method: "POST" })
       );
     }
 
+    if (trustText && sourceText) extracted = reconcileExtractionResult(extracted, sourceText);
     extracted = applyBalanceSheetTotals(extracted);
     const issues = validateFigures(extracted.current_period.figures);
     assertUsable(assessPortalFigures(extracted.current_period.figures));

@@ -99,7 +99,7 @@ const LEGAL_SUFFIX =
   "|\\s+(?:l\\.l\\.c\\.|llc|pllc|inc\\.?|incorporated|ltd\\.?|limited|cc|corp\\.?|corporation|plc))?";
 
 const HEURISTIC_COMPANY =
-  /(?<![A-Za-z0-9])([A-Z][A-Za-z0-9&'.-]*(?:\s+[A-Z][A-Za-z0-9&'.-]*){0,6})\s+(\((?:Pty|Proprietary)\)\s*(?:Ltd|Limited)\.?|Pty\.?\s+Ltd\.?|Proprietary\s+Limited|L\.L\.C\.|LLC|PLLC|Inc\.?|Incorporated|Ltd\.?|Limited|CC|Corp\.?|Corporation|PLC)(?![A-Za-z0-9])/g;
+  /(?<![A-Za-z0-9])([A-Z][A-Za-z0-9&'.-]*(?:\s+(?:&|[A-Z][A-Za-z0-9&'.-]*)){0,6})\s+(\((?:Pty|Proprietary)\)\s*(?:Ltd|Limited)\.?|Pty\.?\s+Ltd\.?|Proprietary\s+Limited|L\.L\.C\.|LLC|PLLC|Inc\.?|Incorporated|Ltd\.?|Limited|CC|Corp\.?|Corporation|PLC)(?![A-Za-z0-9])/g;
 
 const PERSON_KEYS =
   /^(owner_name|ownername|contact_name|contactname|accountant_name|accountantname|signed_off_by_name|person_name|from_name)$/i;
