@@ -580,7 +580,8 @@ assert(!composerShouldSend("a", false), "a letter does not send");
 
 assert(panelSrc.includes("LighthouseAgentChat"), "Agent tab mounts the chat");
 assert(panelSrc.includes("Review inbox"), "review inbox stays");
-assert(panelSrc.includes("Today"), "due queue stays");
+assert(panelSrc.includes("Next up"), "next up stays");
+assert(panelSrc.includes("See all"), "due list stays reachable");
 assert(!panelSrc.includes('LIGHTHOUSE_TABS = ["agent", "firms", "system", "chat"]'), "chat is not a new tab");
 assert(uiSrc.includes("localStorage"), "the thread is stored in localStorage");
 assert(uiSrc.includes("Clear"), "Clear is in the chat");

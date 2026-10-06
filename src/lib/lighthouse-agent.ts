@@ -294,6 +294,71 @@ export function formatUsageMetric(events: number, uniqueUsers: number): string {
   return `${events} · ${uniqueUsers}`;
 }
 
+export type NextUpKind = "review" | "approved" | "followup" | "import" | "plan";
+
+export type NextUpAction = {
+  kind: NextUpKind;
+  label: string;
+  leadId: string | null;
+  touchId: string | null;
+};
+
+/**
+ * One next action. Pending drafts beat an approved draft, which beats the
+ * first due firm (open window first). An empty book asks for an import.
+ */
+export function nextUpAction(input: {
+  inbox: ReviewItem[];
+  queue: DueQueueRow[];
+  hasFirms: boolean;
+}): NextUpAction {
+  const pending = input.inbox.filter((item) => item.status === "draft");
+  if (pending.length > 0) {
+    const first = pending[0];
+    return {
+      kind: "review",
+      label: pending.length === 1 ? "Review 1 draft" : `Review ${pending.length} drafts`,
+      leadId: first.leadId,
+      touchId: first.touchId,
+    };
+  }
+  const approved = input.inbox.filter((item) => item.status === "approved");
+  if (approved.length > 0) {
+    const first = approved[0];
+    return {
+      kind: "approved",
+      label: "Open approved draft",
+      leadId: first.leadId,
+      touchId: first.touchId,
+    };
+  }
+  const due = input.queue.find((row) => row.open) ?? input.queue[0];
+  if (due) {
+    return {
+      kind: "followup",
+      label: `Follow up with ${due.title}`,
+      leadId: due.leadId,
+      touchId: null,
+    };
+  }
+  if (!input.hasFirms) {
+    return { kind: "import", label: "Import cohort", leadId: null, touchId: null };
+  }
+  return { kind: "plan", label: "Run plan (dry-run)", leadId: null, touchId: null };
+}
+
+/** US uses the ET countdown when every US zone is closed. SA uses SAST. */
+export function geoWindowLine(clocks: ZoneClock[]): string {
+  const us = clocks.filter((clock) => clock.geo === "US");
+  const sa = clocks.find((clock) => clock.geo === "SA");
+  const et = us.find((clock) => clock.zone === "ET") ?? us[0];
+  const usPart = us.some((clock) => clock.open)
+    ? "US Open"
+    : `US opens in ${et?.countdownLabel ?? "—"}`;
+  const saPart = sa?.open ? "SA Open" : `SA opens in ${sa?.countdownLabel ?? "—"}`;
+  return `${usPart} · ${saPart}`;
+}
+
 export function trafficTagOf(tags: unknown): "warmup" | "campaign" | null {
   if (typeof tags === "string") {
     const v = tags.trim().toLowerCase();

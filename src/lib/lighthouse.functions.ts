@@ -66,6 +66,23 @@ import { trafficTagOf } from "@/lib/lighthouse-agent";
 import { persistPendingLighthouseDraft } from "@/lib/lighthouse-draft-persist";
 import { sendBlockedReason } from "@/lib/lighthouse-send-windows";
 
+const DRAFT_UNUSABLE = "The draft came back unusable — try again.";
+const VENDOR_DRAFT_ERROR = /claude|anthropic|openai|gemini|\bgpt-?\d*\b/i;
+
+/** User-facing draft failures stay neutral. The console never names a model vendor. */
+async function draftWithModel(prompt: string, maxTokens: number): Promise<string> {
+  try {
+    return await callClaudeMessages({
+      content: [{ type: "text", text: prompt }],
+      maxTokens,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (!message || VENDOR_DRAFT_ERROR.test(message)) throw new Error(DRAFT_UNUSABLE);
+    throw error;
+  }
+}
+
 const MIGRATION = "20260820100000_milon_lighthouse.sql";
 const ENGAGEMENT_MIGRATION = "20260822210000_lighthouse_engagement.sql";
 
@@ -1192,13 +1209,13 @@ ${noCallInstruction(seqKey)}
 Return ONLY JSON: {"subject": "...", "body": "..."}
 The body must be plain text with line breaks, already signed off, ready to send.`;
 
-      const raw = await callClaudeMessages({
-        content: [{ type: "text", text: prompt }],
-        maxTokens: seqKey === ACCOUNTANT_ONESHOT_SEQUENCE_KEY ? 2500 : 1200,
-      });
+      const raw = await draftWithModel(
+        prompt,
+        seqKey === ACCOUNTANT_ONESHOT_SEQUENCE_KEY ? 2500 : 1200,
+      );
 
       const draft = parseDraftJson(raw);
-      if (!draft) throw new Error("Claude returned an unusable draft — try again.");
+      if (!draft) throw new Error(DRAFT_UNUSABLE);
       subject = draft.subject;
       body = draft.body;
     }
@@ -1393,7 +1410,7 @@ export const sendLighthouseTouch = createServerFn({ method: "POST" })
     const sentToday = await countSentToday(admin);
     if (sentToday >= dailyCap) {
       throw new Error(
-        `Daily send cap reached (${sentToday}/${dailyCap} today, SAST). Raise the cap in Settings or wait until tomorrow.`,
+        `Daily send cap reached (${sentToday}/${dailyCap} today, SAST). Raise the cap in System or wait until tomorrow.`,
       );
     }
 
@@ -1420,11 +1437,11 @@ export const sendLighthouseTouch = createServerFn({ method: "POST" })
           subject: data.subject,
           body: bodyWithFooter,
           status: "approved",
-          error: "RESEND_API_KEY not configured — approved but not sent.",
+          error: "Sending is not configured — approved but not sent.",
         })
         .eq("id", data.touchId);
       throw new Error(
-        "RESEND_API_KEY is not configured, so nothing was sent. The draft is saved as approved.",
+        "Sending is not configured, so nothing was sent. The draft is saved as approved.",
       );
     }
 
@@ -1790,13 +1807,10 @@ ${signOffLine(seqKey, senderName, senderTitle)}
 Return ONLY JSON: {"subject": "...", "body": "..."}
 The body must be plain text with line breaks, already signed off, ready to send.`;
 
-    const raw = await callClaudeMessages({
-      content: [{ type: "text", text: prompt }],
-      maxTokens: 1200,
-    });
+    const raw = await draftWithModel(prompt, 1200);
 
     const parsed = parseDraftJson(raw);
-    if (!parsed) throw new Error("Claude returned an unusable draft — try again.");
+    if (!parsed) throw new Error(DRAFT_UNUSABLE);
 
     // Replies live above the five sequence steps so they never collide with a
     // scheduled touch. The touch table caps step_no at 8.
