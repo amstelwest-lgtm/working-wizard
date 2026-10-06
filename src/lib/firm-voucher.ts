@@ -108,18 +108,19 @@ function couponRecord(value: unknown): CouponShape | null {
   return record as CouponShape;
 }
 
-/** Coupon object from the current promotion.coupon shape, or a legacy top-level coupon. */
+/**
+ * Live promotion codes point at the coupon with `promotion.coupon` when
+ * `promotion.type` is `"coupon"`. Older objects use a top-level `coupon`.
+ * Either value may be an id or an expanded coupon.
+ */
 export function couponFromPromotionCode(promotionCode: unknown): CouponShape | string | null {
   const record = asRecord(promotionCode);
   if (!record) return null;
   const promotion = asRecord(record.promotion);
-  const nested = promotion?.coupon;
-  if (nested && typeof nested === "object") return couponRecord(nested);
-  if (typeof nested === "string" && nested.trim()) return nested.trim();
-  const legacy = record.coupon;
-  if (legacy && typeof legacy === "object") return couponRecord(legacy);
-  if (typeof legacy === "string" && legacy.trim()) return legacy.trim();
-  return null;
+  const nested = promotion?.type === "coupon" ? promotion.coupon : undefined;
+  const source = nested ?? record.coupon;
+  if (typeof source === "string" && source.trim()) return source.trim();
+  return couponRecord(source);
 }
 
 function reject(reason: FirmVoucherRejectReason): FirmVoucherResult {

@@ -68,25 +68,41 @@ export async function customerHasPriorPaidTransaction(
   }
 }
 
+function couponIdOf(coupon: unknown): string | null {
+  if (typeof coupon === "string" && coupon.trim()) return coupon.trim();
+  if (!coupon || typeof coupon !== "object") return null;
+  const id = (coupon as { id?: unknown }).id;
+  return typeof id === "string" && id.trim() ? id.trim() : null;
+}
+
+/**
+ * `applies_to`, `valid`, `percent_off`, and `amount_off` come from the coupon
+ * itself. A promotion-code expand can omit them, so retrieve the coupon by id
+ * whenever the client can. Does not create or redeem anything.
+ */
 async function couponExpanded(stripe: FirmVoucherStripe, promotionCode: unknown): Promise<unknown> {
   const coupon = couponFromPromotionCode(promotionCode);
-  if (!coupon || typeof coupon !== "string") return promotionCode;
-  if (!stripe.coupons?.retrieve) return promotionCode;
+  const couponId = couponIdOf(coupon);
+  if (!couponId || !stripe.coupons?.retrieve) return promotionCode;
+  let retrieved: unknown;
   try {
-    const expanded = await stripe.coupons.retrieve(coupon);
-    const record =
-      promotionCode && typeof promotionCode === "object"
-        ? { ...(promotionCode as Record<string, unknown>) }
-        : {};
-    const promotion =
-      record.promotion && typeof record.promotion === "object"
-        ? { ...(record.promotion as Record<string, unknown>), coupon: expanded }
-        : { type: "coupon", coupon: expanded };
-    return { ...record, promotion };
+    retrieved = await stripe.coupons.retrieve(couponId);
   } catch (err) {
-    console.warn("[stripe] voucher coupon expand failed", err instanceof Error ? err.message : err);
-    return promotionCode;
+    console.warn("[stripe] voucher coupon retrieve failed", err instanceof Error ? err.message : err);
+    throw err;
   }
+  const record =
+    promotionCode && typeof promotionCode === "object"
+      ? { ...(promotionCode as Record<string, unknown>) }
+      : {};
+  const promotion =
+    record.promotion && typeof record.promotion === "object"
+      ? (record.promotion as Record<string, unknown>)
+      : null;
+  if (promotion?.type === "coupon") {
+    return { ...record, promotion: { ...promotion, coupon: retrieved } };
+  }
+  return { ...record, coupon: retrieved };
 }
 
 export async function resolveFirmVoucher(

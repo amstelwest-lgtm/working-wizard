@@ -20,6 +20,7 @@ import {
   firmUpgradeDiscounts,
   firmUpgradeResultMessage,
   firmVoucherPricePreview,
+  voucherDiscountedCents,
   FIRM_VOUCHER_INVALID_MESSAGE,
   FIRM_VOUCHER_NOT_APPLIED_MESSAGE,
   isBenignZeroInvoiceError,
@@ -253,6 +254,159 @@ const zeroHistory = await resolveFirmVoucher(
   },
 );
 assert(zeroHistory.ok, "a $0 Starter invoice is not a prior transaction");
+
+const soloCoupon = {
+  id: "r7GdhcFy",
+  valid: true,
+  percent_off: 98.99,
+  amount_off: null,
+  currency: null,
+  duration: "once",
+  duration_in_months: null,
+  applies_to: { products: ["prod_VGnVsFM8alfRNY"] },
+};
+let retrievedCouponId = "";
+const benSolo = await resolveFirmVoucher(
+  {
+    promotionCodes: {
+      list: async () => ({
+        data: [
+          {
+            id: "promo_1UNRGyGXDN6PFbnzX8zUFjgr",
+            code: "BEN-SOLO-E2E",
+            active: true,
+            customer: "cus_VIlgPYllDAilft",
+            max_redemptions: 1,
+            times_redeemed: 0,
+            restrictions: { first_time_transaction: false },
+            promotion: { type: "coupon", coupon: "r7GdhcFy" },
+          },
+        ],
+      }),
+    },
+    coupons: {
+      retrieve: async (id: string) => {
+        retrievedCouponId = id;
+        return soloCoupon;
+      },
+    },
+  },
+  {
+    code: "BEN-SOLO-E2E",
+    firmCustomerId: "cus_VIlgPYllDAilft",
+    productId: "prod_VGnVsFM8alfRNY",
+    listCents: 9_900,
+    interval: "month",
+    nowSeconds: NOW,
+  },
+);
+assert(retrievedCouponId === "r7GdhcFy", "validation retrieves coupon r7GdhcFy");
+assert(
+  benSolo.ok && benSolo.preview === "$1 for your first month, then $99/mo",
+  "98.99% off Solo $99 previews $1.00 for the first month",
+);
+assert(
+  voucherDiscountedCents(9_900, { percentOff: 98.99 }) === 100,
+  "98.99% off 9900 cents is 100 cents",
+);
+
+const benWrongCustomer = await resolveFirmVoucher(
+  {
+    promotionCodes: {
+      list: async () => ({
+        data: [
+          {
+            id: "promo_1UNRGyGXDN6PFbnzX8zUFjgr",
+            code: "BEN-SOLO-E2E",
+            active: true,
+            customer: "cus_VIlgPYllDAilft",
+            promotion: { type: "coupon", coupon: "r7GdhcFy" },
+          },
+        ],
+      }),
+    },
+    coupons: { retrieve: async () => soloCoupon },
+  },
+  {
+    code: "BEN-SOLO-E2E",
+    firmCustomerId: "cus_other",
+    productId: "prod_VGnVsFM8alfRNY",
+    listCents: 9_900,
+    interval: "month",
+    nowSeconds: NOW,
+  },
+);
+assert(!benWrongCustomer.ok && benWrongCustomer.reason === "wrong_customer", "BEN-SOLO-E2E is locked to one customer");
+
+const benWrongProduct = await resolveFirmVoucher(
+  {
+    promotionCodes: {
+      list: async () => ({
+        data: [
+          {
+            id: "promo_1UNRGyGXDN6PFbnzX8zUFjgr",
+            code: "BEN-SOLO-E2E",
+            active: true,
+            customer: "cus_VIlgPYllDAilft",
+            promotion: {
+              type: "coupon",
+              coupon: { id: "r7GdhcFy", valid: true, percent_off: 100, duration: "once" },
+            },
+          },
+        ],
+      }),
+    },
+    coupons: { retrieve: async () => soloCoupon },
+  },
+  {
+    code: "BEN-SOLO-E2E",
+    firmCustomerId: "cus_VIlgPYllDAilft",
+    productId: "prod_other",
+    listCents: 9_900,
+    interval: "month",
+    nowSeconds: NOW,
+  },
+);
+assert(
+  !benWrongProduct.ok && benWrongProduct.reason === "wrong_product",
+  "retrieved applies_to rejects a band other than Solo",
+);
+
+let legacyRetrieved = "";
+const legacyCoupon = await resolveFirmVoucher(
+  {
+    promotionCodes: {
+      list: async () => ({
+        data: [
+          {
+            id: "promo_legacy",
+            code: "LEGACY",
+            active: true,
+            customer: null,
+            promotion: { type: "other", coupon: "ignored" },
+            coupon: "r7GdhcFy",
+          },
+        ],
+      }),
+    },
+    coupons: {
+      retrieve: async (id: string) => {
+        legacyRetrieved = id;
+        return soloCoupon;
+      },
+    },
+  },
+  {
+    code: "LEGACY",
+    firmCustomerId: "cus_VIlgPYllDAilft",
+    productId: "prod_VGnVsFM8alfRNY",
+    listCents: 9_900,
+    interval: "month",
+    nowSeconds: NOW,
+  },
+);
+assert(legacyRetrieved === "r7GdhcFy", "a top-level coupon id is retrieved when promotion.type is not coupon");
+assert(legacyCoupon.ok && legacyCoupon.preview === "$1 for your first month, then $99/mo", "the legacy coupon shape uses the retrieved percent");
 
 const missing = await resolveFirmVoucher(
   { promotionCodes: { list: async () => ({ data: [] }) } },
