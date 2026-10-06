@@ -9,7 +9,9 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { callClaudeMessages, parseClaudeJson } from "@/lib/claude-messages";
-import { redactForModel, redactIdentifiers, rehydrateModelOutput } from "@/lib/redact-identifiers";
+import { redactForModel, rehydrateModelOutput } from "@/lib/redact-identifiers";
+import { reconcileModelTotals } from "@/lib/contra-assets";
+import { prepareStatementContent } from "@/lib/statement-text-layer.server";
 import { INLINE_BASE64_MAX } from "@/lib/staged-upload";
 import { resolvePdfBase64 } from "@/lib/staged-upload.server";
 import { assertExtractionAllowed } from "@/lib/extraction-rate-limit.server";
@@ -38,18 +40,44 @@ async function callClaudePDF(
   fileName: string,
   prompt: string,
 ): Promise<RawExtraction> {
-  const raw = await callClaudeMessages({
-    content: [
-      {
-        type: "document",
-        source: { type: "base64", media_type: "application/pdf", data: base64 },
-      },
-      { type: "text", text: redactIdentifiers(`File name: ${fileName}\n\n${prompt}`) },
-    ],
-    maxTokens: 8192,
-    timeoutMs: 90_000,
+  const prepared = await prepareStatementContent({
+    base64,
+    mediaType: "application/pdf",
+    fileName,
+    instructions: prompt,
+    layout: "financial",
   });
-  return parseClaudeJson<RawExtraction>(raw);
+  const raw = rehydrateModelOutput(
+    await callClaudeMessages({
+      content: prepared.parts,
+      maxTokens: 8192,
+      timeoutMs: 90_000,
+    }),
+    prepared.session,
+  );
+  const parsed = parseClaudeJson<RawExtraction>(raw);
+  if (!prepared.usedTextLayer) return parsed;
+  const sheet = parsed.current_period?.balance_sheet;
+  if (!sheet) return parsed;
+  const totals = reconcileModelTotals({
+    text: prepared.extractedText,
+    totalAssets: sheet.total_assets,
+    equity: sheet.equity,
+    ppe: sheet.fixed_assets,
+  });
+  if (!totals.adjusted) return parsed;
+  return {
+    ...parsed,
+    current_period: {
+      ...parsed.current_period,
+      balance_sheet: {
+        ...sheet,
+        total_assets: totals.totalAssets ?? sheet.total_assets,
+        equity: totals.equity ?? sheet.equity,
+        fixed_assets: totals.netPpe ?? sheet.fixed_assets,
+      },
+    },
+  };
 }
 
 // ─── Merge multiple extractions ────────────────────────────────────────────────

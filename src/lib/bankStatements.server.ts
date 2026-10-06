@@ -15,7 +15,12 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { callClaudeMessages, parseClaudeJson, type ClaudeContentPart } from "@/lib/claude-messages";
-import { applyRedaction, createRedactionSession, rehydrateModelOutput } from "@/lib/redact-identifiers";
+import {
+  applyRedaction,
+  createRedactionSession,
+  rehydrateModelOutput,
+} from "@/lib/redact-identifiers";
+import { prepareStatementContent } from "@/lib/statement-text-layer.server";
 import { bankDraftPrompt, marketInputSchema, resolvePromptMarket } from "@/lib/market";
 import { INLINE_BASE64_MAX } from "@/lib/staged-upload";
 import { resolvePdfBase64 } from "@/lib/staged-upload.server";
@@ -109,17 +114,15 @@ export const draftFinancialsFromBankStatements = createServerFn({ method: "POST"
           retain: data.retainStaged,
         });
         totalBytes += Math.ceil((base64.length * 3) / 4);
-        content.push({
-          type: "document",
-          source: { type: "base64", media_type: "application/pdf", data: base64 },
+        const prepared = await prepareStatementContent({
+          base64,
+          mediaType: "application/pdf",
+          fileName: f.fileName,
+          accountLabel: label,
+          layout: "bank",
+          session,
         });
-        content.push({
-          type: "text",
-          text: applyRedaction(
-            `The previous PDF is bank statement file "${f.fileName}" for account "${label}".`,
-            session,
-          ),
-        });
+        content.push(...prepared.parts);
       } else if (f.text) {
         totalBytes += f.text.length;
         content.push({

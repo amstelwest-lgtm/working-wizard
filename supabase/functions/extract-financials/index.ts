@@ -1,7 +1,12 @@
 // Extracts a structured financials JSON from an uploaded financial statement
 // (CSV text, Excel-as-CSV text, or PDF as base64) using Claude Sonnet 4.6.
 import { extractText, getDocumentProxy } from "https://esm.sh/unpdf@0.12.1";
-import { buildPdfCaption, buildTextExtractionPayload } from "./prompt.ts";
+import {
+  CONTRA_ASSET_EXTRACTION_RULE,
+  reconcileFlatFinancials,
+} from "../../../src/lib/contra-assets.ts";
+import { statementModelParts } from "../../../src/lib/statement-text-layer.ts";
+import { buildTextExtractionPayload } from "./prompt.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -10,10 +15,24 @@ const corsHeaders = {
 };
 
 const FIELDS = [
-  "revenue", "cogs", "ebit", "ebt", "netIncome", "ebitda",
-  "operatingCashflow", "totalAssets", "equity", "receivables",
-  "inventory", "payables", "fixedCosts", "variableCosts",
-  "top5Revenue", "laborCost", "employees", "founderHours",
+  "revenue",
+  "cogs",
+  "ebit",
+  "ebt",
+  "netIncome",
+  "ebitda",
+  "operatingCashflow",
+  "totalAssets",
+  "equity",
+  "receivables",
+  "inventory",
+  "payables",
+  "fixedCosts",
+  "variableCosts",
+  "top5Revenue",
+  "laborCost",
+  "employees",
+  "founderHours",
 ];
 
 const MODEL = Deno.env.get("CLAUDE_MODEL") || "claude-sonnet-4-6";
@@ -42,6 +61,8 @@ Keys:
 - employees (headcount)
 - founderHours (annual founder hours; usually not in statements — omit)
 
+${CONTRA_ASSET_EXTRACTION_RULE}
+
 Use the most recent period if multiple are shown. Negative numbers stay negative. Return strictly: {"revenue": 1234, "cogs": 567, ...}`;
 
 function base64ToBytes(b64: string): Uint8Array {
@@ -57,66 +78,66 @@ async function pdfToText(b64: string): Promise<string> {
     throw new Error(`PDF too large: ${(bytes.byteLength / 1024 / 1024).toFixed(1)}MB (max 15MB)`);
   }
   const pdf = await getDocumentProxy(bytes);
-  const { text } = await extractText(pdf, { mergePages: true });
-  return (Array.isArray(text) ? text.join("\n") : text).slice(0, 60_000);
+  try {
+    // mergePages replaces every newline with a space, which detaches statement rows.
+    const { text } = await extractText(pdf, { mergePages: false });
+    return Array.isArray(text) ? text.join("\n") : String(text ?? "");
+  } finally {
+    try {
+      await pdf.destroy();
+    } catch {
+      // Destroy is best-effort. A failed cleanup must not drop the text.
+    }
+  }
 }
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
-  if (req.method !== "POST") return new Response("Method not allowed", { status: 405, headers: corsHeaders });
+  if (req.method !== "POST")
+    return new Response("Method not allowed", { status: 405, headers: corsHeaders });
 
   try {
     const { mimeType, base64, text, fileName } = await req.json();
     const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
     if (!apiKey) {
-      return new Response(JSON.stringify({ error: "AI is not configured (ANTHROPIC_API_KEY missing)" }), {
-        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ error: "AI is not configured (ANTHROPIC_API_KEY missing)" }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
-    // Prefer native PDF document to Claude when we have base64 PDF.
-    // Fall back to text extraction for CSV/Excel or when PDF text path is used.
-    const isPdf =
-      mimeType === "application/pdf" ||
-      (fileName ?? "").toLowerCase().endsWith(".pdf");
+    // PDF: text layer first. A good extract is redacted and sent as text.
+    // Scans and scrambled columns fall back to the original PDF bytes.
+    const isPdf = mimeType === "application/pdf" || (fileName ?? "").toLowerCase().endsWith(".pdf");
 
     let content: Array<Record<string, unknown>>;
     let debugTextChars = 0;
+    let usedTextLayer = false;
+    let pdfText = "";
 
     if (base64 && isPdf) {
-      // Native PDF document. A text-layer extract drops scans and scrambles
-      // statement columns, so the bytes are still sent as-is. The caption is
-      // text, so a client name in the file name is stripped.
-      const caption = buildPdfCaption({ instructions: SYSTEM, fileName });
-      content = [
-        {
-          type: "document",
-          source: { type: "base64", media_type: "application/pdf", data: base64 },
-        },
-        {
-          type: "text",
-          text: caption.text,
-        },
-      ];
-    } else {
-      let docText = "";
-      if (text && text.trim().length > 0) {
-        docText = text.slice(0, 120_000);
-      } else if (base64 && isPdf) {
-        try {
-          docText = await pdfToText(base64);
-        } catch (e) {
-          return new Response(JSON.stringify({ error: `PDF parse failed: ${(e as Error).message}` }),
-            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-        }
-        if (!docText.trim()) {
-          return new Response(JSON.stringify({ error: "PDF appears to be scanned/image-only — no text could be extracted. Re-export as a text PDF or upload a CSV/Excel." }),
-            { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-        }
-      } else {
-        return new Response(JSON.stringify({ error: "No usable text or PDF provided" }),
-          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      let extracted = "";
+      try {
+        extracted = await pdfToText(base64);
+      } catch {
+        extracted = "";
       }
+      pdfText = extracted;
+      const prepared = statementModelParts({
+        extractedText: extracted,
+        document: { mediaType: "application/pdf", base64 },
+        fileName,
+        instructions: SYSTEM,
+        layout: "financial",
+      });
+      content = prepared.parts;
+      usedTextLayer = prepared.usedTextLayer;
+      debugTextChars = usedTextLayer ? prepared.quality.chars : 0;
+    } else if (text && text.trim().length > 0) {
+      const docText = text.slice(0, 120_000);
       debugTextChars = docText.length;
       const sealed = buildTextExtractionPayload({
         instructions: SYSTEM,
@@ -129,6 +150,11 @@ Deno.serve(async (req: Request) => {
           text: sealed.text,
         },
       ];
+    } else {
+      return new Response(JSON.stringify({ error: "No usable text or PDF provided" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const aiRes = await fetch("https://api.anthropic.com/v1/messages", {
@@ -146,22 +172,30 @@ Deno.serve(async (req: Request) => {
     });
 
     if (aiRes.status === 429) {
-      return new Response(JSON.stringify({ error: "Rate limit reached. Try again in a moment." }),
-        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ error: "Rate limit reached. Try again in a moment." }), {
+        status: 429,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
     if (!aiRes.ok) {
       const t = await aiRes.text();
-      return new Response(JSON.stringify({ error: `Claude: ${aiRes.status} ${t.slice(0, 300)}` }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ error: `Claude: ${aiRes.status} ${t.slice(0, 300)}` }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const aiJson = await aiRes.json();
-    const raw = ((aiJson?.content ?? []) as Array<{ type: string; text?: string }>)
-      .filter((b) => b.type === "text")
-      .map((b) => b.text ?? "")
-      .join("")
-      .trim() || "{}";
-    const cleaned = raw.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "").trim();
+    const raw =
+      ((aiJson?.content ?? []) as Array<{ type: string; text?: string }>)
+        .filter((b) => b.type === "text")
+        .map((b) => b.text ?? "")
+        .join("")
+        .trim() || "{}";
+    const cleaned = raw
+      .replace(/^```(?:json)?\s*/i, "")
+      .replace(/```\s*$/i, "")
+      .trim();
     let parsed: Record<string, unknown> = {};
     try {
       parsed = JSON.parse(cleaned);
@@ -179,13 +213,25 @@ Deno.serve(async (req: Request) => {
         if (isFinite(n)) out[k] = String(n);
       }
     }
+    if (usedTextLayer && pdfText) {
+      const reconciled = reconcileFlatFinancials(out, pdfText);
+      if (reconciled.totalAssets) out.totalAssets = reconciled.totalAssets;
+      if (reconciled.equity) out.equity = reconciled.equity;
+    }
 
-    return new Response(JSON.stringify({ financials: out, debug: { textChars: debugTextChars, model: MODEL } }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({
+        financials: out,
+        debug: { textChars: debugTextChars, textLayer: usedTextLayer, model: MODEL },
+      }),
+      {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
   } catch (e) {
     return new Response(JSON.stringify({ error: (e as Error).message }), {
-      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 });

@@ -92,6 +92,7 @@ EXTRACTION RULES:
 - South African statements may use comma as decimal separator (1.234,56) — handle both formats
 - Director remuneration is often shown in notes, not the main statement — check notes pages
 - Shareholder loans may appear as both assets and liabilities — capture both
+- Accumulated depreciation and other contra-asset balances reduce the related asset. Report property, plant and equipment and total assets at carrying amount (cost minus accumulated depreciation), not at gross cost. Do not add that contra-asset credit into equity. When a total equity line is printed, use that figure as equity.
 
 Return this EXACT JSON structure with no deviations:`;
 
@@ -125,6 +126,7 @@ EXTRACTION RULES:
 - US statements use comma thousands and period decimals (1,234.56); also handle European comma-decimals if they appear
 - Officer compensation is often shown in notes, not the main statement — check notes pages
 - Shareholder / member loans may appear as both assets and liabilities — capture both
+- Accumulated depreciation and other contra-asset balances reduce the related asset. Report property, plant and equipment and total assets at carrying amount (cost minus accumulated depreciation), not at gross cost. Do not add that contra-asset credit into equity. When a total equity line is printed, use that figure as equity.
 
 Return this EXACT JSON structure with no deviations:`;
   return `${preamble}\n\n${schemaTail.replace('"functional_currency": "ZAR"', '"functional_currency": "USD"')}`;
@@ -236,9 +238,10 @@ accounting platform. Follow these rules exactly:`;
 6. Capture the comparative (prior year) column too when it is present.
 7. If anything is ambiguous or you had to make a judgement call, say so briefly
    in extraction_notes so a human can check it.
+8. Accumulated depreciation and other contra-asset balances reduce the related asset. Report property, plant and equipment and total assets at carrying amount (cost minus accumulated depreciation), not at gross cost. Do not add that contra-asset credit into equity. When a total equity line is printed, use that figure as equity. This is the one total you may compute from two printed lines.
 ${
   isUsCopy(market)
-    ? "8. Prefer USD. Accounts receivable maps to trade_and_other_receivables; accounts payable to trade_and_other_payables. Sales tax collected is not revenue."
+    ? "9. Prefer USD. Accounts receivable maps to trade_and_other_receivables; accounts payable to trade_and_other_payables. Sales tax collected is not revenue."
     : ""
 }
 
@@ -279,6 +282,8 @@ Keys:
 - laborCost (employee costs / wages / payroll)
 - employees (headcount)
 - founderHours (annual founder hours; omit if not stated)
+
+totalAssets is the carrying amount (cost minus accumulated depreciation), not the gross cost. Do not add that contra-asset credit into equity. A printed total equity line is equity.
 
 Use the most recent period if multiple are shown. Negative numbers stay negative. Return strictly: {"revenue": 1234, "cogs": 567, ...}`;
 }
